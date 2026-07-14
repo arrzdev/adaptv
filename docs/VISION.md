@@ -57,8 +57,11 @@ beat on developer joy and correctness, not to copy.
 3. **Guardrails teach; they never mutate.** We catch misuse with a **build-time lint error** and an
    optional **dev-only runtime warning** — never by silently stripping or rewriting the consumer's
    code at runtime. Magic that mutates user code is how frameworks lose trust.
-4. **Explicit primitives over runtime magic.** A `Screen` that owns the edge-to-edge contract beats a
-   `Page` that secretly inspects and "fixes" the route root. Predictability is a feature.
+4. **No runtime magic that rewrites user code; the frame is owned _above_ the route.** Root-ness comes
+   from the framework-owned shell seeding a full-viewport, inset-aware slot (React Native's navigator
+   model) — never from a primitive inspecting the DOM or mutating the consumer's tree. A dumb-but-correct
+   `View` fills that frame; there is no self-detecting `Screen`/`Page`. Predictability is a feature.
+   (Mechanism: `ARCHITECTURE.md §0.4`, §1.)
 5. **One config source.** `nativ.config.ts` is the single source of truth. It generates the web
    manifest, `capacitor.config`, the native project settings, splash, icons, theme — the consumer never
    hand-edits a second config.

@@ -19,9 +19,14 @@ This is a **private, personal framework** (extracted from the `chopchop` app, wh
 🧭 **Continuing development?** Start with [`HANDOFF.md`](HANDOFF.md) — current state, how to develop, roadmap, and locked-in decisions.
 
 📖 **Read these first:** [`docs/VISION.md`](docs/VISION.md) (the north star + doctrine) ·
-[`docs/RENDERING.md`](docs/RENDERING.md) (rendering/delivery + the hard `createServerFn` limit) ·
-[`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) (what nativ fixes, how, and how to test each) ·
-[`docs/TESTING.md`](docs/TESTING.md) · [`docs/capacitor-internals.md`](docs/capacitor-internals.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the cross-platform contracts: shell/frame/`View`,
+storage, TanStack opacity) · [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) (config → build → deploy → native
+→ OTA, the Vite-plugin decision model + CLI) · [`docs/COORDINATION.md`](docs/COORDINATION.md) (the runtime
+app lifecycle: app state/resume, back chain, gesture controller, route lifecycle) ·
+[`docs/RENDERING.md`](docs/RENDERING.md)
+(rendering/delivery + the hard `createServerFn` limit) · [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) (what
+nativ fixes, how, and how to test each) · [`docs/TESTING.md`](docs/TESTING.md) ·
+[`docs/capacitor-internals.md`](docs/capacitor-internals.md).
 
 ---
 
@@ -110,12 +115,15 @@ a Capacitor config.
   generated files into a hidden `.nativ/` dir, re-export the router surface from `nativ` so apps import
   only `nativ`. (May need a small `pnpm patch` of `@tanstack/router-generator` for symbol recognition.)
 - **First-party `@nativ/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar +
-  theme into one native module we own (instead of composing community plugins + CLI patches).
-- **`create-nativ`** — `pnpm create nativ` scaffolder.
-- **Deployment knob** — web SSR target presets (`cloudflare` / `vercel` / `node` / `static`); today the
-  example hardcodes Cloudflare. Keep TanStack Start precisely for this deploy-anywhere flexibility.
-- **Capacitor OTA** — live-update bundle swap (download → unpack → `serverBasePath` → apply next
-  launch). Web/standalone OTA already falls out of the SW.
+  theme into one native module we own (instead of composing community plugins + CLI patches); owns the
+  Android-15/SDK-35 inset+keyboard fix. **Designed:** [`docs/NATIVE-SHELL.md`](docs/NATIVE-SHELL.md).
+- **`create-nativ`** — `pnpm create nativ` scaffolder. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §8.
+- **Deployment knob** — a first-class `web` config block (`render`/`host`/`sw`) selecting SSR target
+  presets (`cloudflare` / `vercel` / `node` / `static`); today the example hardcodes Cloudflare. Keep
+  TanStack Start precisely for this deploy-anywhere flexibility. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §1, §3–4.
+- **Capacitor OTA** — fingerprint-gated bundle swap of `dist-capacitor/`, hosted on the app's own web
+  deploy (no third-party update server), applied on next launch. Web/standalone OTA already falls out of
+  the SW. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §5.
 - **Published build** — currently ships **TypeScript source** (works via local link / bundler compile).
   For real GitHub Packages publishing, add a `dist` build (tsup/unbuild) + `.d.ts`.
 - **Primitive breadth** — `Input` / `Text` / `Modal` / `Tabs` polish.
@@ -128,7 +136,7 @@ a Capacitor config.
 src/            framework: shell · primitives (components) · capabilities · config · hooks · vite plugin · sw
   interface/    the public export barrels (map to package.json "exports")
 bin/nativ.mjs   the CLI (self-contained Node ESM; owns the native toolchain + templates)
-docs/           VISION · RENDERING · BEHAVIORS · TESTING · capacitor-internals
+docs/           VISION · ARCHITECTURE · LIFECYCLE · COORDINATION · NATIVE-SHELL · RENDERING · BEHAVIORS · TESTING · RESEARCH · capacitor-internals
 ```
 
 ## Distribution & versioning

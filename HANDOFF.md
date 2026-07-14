@@ -15,10 +15,13 @@ A **cross-platform React framework**: write React (DOM/CSS), ship the same code 
 **Read next (in order):**
 1. `README.md` — roadmap + status + quick start.
 2. `docs/VISION.md` — the north star, principles, primitive/capability API targets, sequencing.
-3. `docs/RENDERING.md` — **the hard constraint: nativ code must be isomorphic — NO `createServerFn`/server routes** (they die in a static Capacitor bundle). SSR/SPA per target, SW/OTA model.
-4. `docs/BEHAVIORS.md` — every cross-platform behavior nativ fixes, how, and how to test it.
-5. `docs/RESEARCH.md` — gaps + Ionic/Capacitor/TanStack prior art + specific issues/PRs to study before reinventing.
-6. `docs/capacitor-internals.md` — version pins + native build gotchas.
+3. `docs/ARCHITECTURE.md` — **the cross-platform contracts** (higher-up design): the doctrine/non-negotiables, the shell + edge-to-edge + one-`View` frame contract (no `Screen`), the three-tier hybrid `storage` API (sync `kv` / async `store` / async `secure`), and the TanStack-opacity plan.
+4. `docs/LIFECYCLE.md` — **the framework lifecycle end-to-end**: `nativ.config.ts` as the one knob surface, the Vite-plugin deploy decision model (SSR+SW / SPA per target, with the static-SPA-on-web override), web vs native build lineages, native APK/IPA, the OTA design (fingerprint-gated bundle swap hosted on the app's own web deploy), native opt-out, and the full CLI surface.
+5. `docs/COORDINATION.md` — **the runtime app-lifecycle spine**: `useAppState` (resume/pause — the OTA + refetch trigger), the back-handler priority chain, the full gesture controller, and route lifecycle (no DOM retention). The correct-by-construction substrate the leaf primitives compose onto.
+6. `docs/RENDERING.md` — **the hard constraint: nativ code must be isomorphic — NO `createServerFn`/server routes** (they die in a static Capacitor bundle). SSR/SPA per target, SW/OTA model.
+7. `docs/BEHAVIORS.md` — every cross-platform behavior nativ fixes, how, and how to test it.
+8. `docs/RESEARCH.md` — gaps + Ionic/Capacitor/TanStack prior art + specific issues/PRs to study before reinventing.
+9. `docs/capacitor-internals.md` — version pins + native build gotchas.
 
 ---
 
@@ -34,7 +37,7 @@ A **cross-platform React framework**: write React (DOM/CSS), ship the same code 
   - Config: flat `nativ.config.ts` (`appId`, `splashScreen`, `splashScreenInBrowser`, `splashMaskMode`, …) → generates capacitor.config + web manifest + native projects.
   - Vite plugin: web = SSR + SW; capacitor = static SPA, no SW.
   - Native build: Capacitor iOS+Android, debug `.apk` + unsigned `.ipa`.
-  - CLI `bin/nativ.mjs`: `dev`/`run`/`build`/`sync`/`assets`/`doctor` (owns the native toolchain + templates).
+  - CLI `bin/nativ.mjs`: `run`/`build`/`sync`/`assets`/`doctor` (owns the native toolchain + templates). *(No `dev`/`ota` yet — both designed in `docs/LIFECYCLE.md` §2.2, §7.4; web dev is bare `vite dev` today.)*
   - **Primitives (chopchop is the proven code-superset — nativ already has best-of-breed):** `View`, `List`, `Button`, `Link`, `ExternalLink`, `ScrollView`, `Image`, `Swipeable` (+ `isSwipeableGestureTarget`), `PullToRefresh`, `Drawer`/`Sheet` (drum wheel, `Drawer.Footer`, keyboard-avoidance), `Input`, `checkbox`, `switch`.
 
 ---
@@ -59,16 +62,16 @@ pnpm test             # vitest, 180
 
 ## 4. Roadmap — what's next (pick up here)
 
-None started; each has enough context in the docs to begin. Rough priority order:
+None started as **code**. Every item below now has a **full design** in the docs (2026-07-14 design pass) — the next step for each is TDD/implementation, not more design. Rough priority order:
 
-1. **`.nativ/` re-export barrel + hidden generated dir** — apps still import `@tanstack/*` and see `*.gen` files. Plan: generated files → hidden `.nativ/` (tsconfig path + Vite alias, both nativ-generated); re-export the router surface from `nativ` so apps import only `nativ`. The one non-trivial spot is the route generator recognizing a re-exported `createFileRoute` — that's a surgical `pnpm patch` of `@tanstack/router-generator`, OR use Virtual File Routes (`__virtual.ts`) to override generation. See `docs/RESEARCH.md` §2 (links). **Highest "feels like a real framework" win.**
-2. **First-party `@nativ/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar + theme into ONE owned native module (Swift/Kotlin), instead of composing community plugins + CLI string-patching. The wedge vs Ionic. Study Capacitor's plugin authoring + the Android-15/SDK-35 edge-to-edge+keyboard breakage in `docs/RESEARCH.md` §3 (real risk).
-3. **`create-nativ`** — `pnpm create nativ` scaffolder (a new package or a `bin`). Emits an app + native templates.
-4. **Deployment-target knob** — web SSR presets (`cloudflare`/`vercel`/`node`/`static`). Today the example hardcodes Cloudflare. **Keep TanStack Start** precisely for this deploy-anywhere flexibility (its whole value — do not fork/replace it; see `docs/RENDERING.md`).
-5. **Capacitor OTA** — live-update bundle swap (download → unpack → `serverBasePath` → apply next launch). Study Capgo `@capgo/capacitor-updater` + Capawesome + Apple §3.3.2 (JS/assets-only) in `docs/RESEARCH.md` §5. Web/standalone OTA already falls out of the SW.
-6. **Published `dist` build** — tsup/unbuild → `dist` + `.d.ts`, switch `exports` to built output, for real GitHub Packages publishing. Enables true semver consumption.
+1. **`.nativ/` re-export barrel + hidden generated dir** — apps still import `@tanstack/*` and see `*.gen` files. **Design: `docs/ARCHITECTURE.md` §3** (`.nativ/` layout, the `nativ` barrel, tsconfig/alias, `register.d.ts`; the one spike-gated call is Virtual File Routes vs `pnpm patch` for generator symbol recognition). **Highest "feels like a real framework" win.**
+2. **First-party `@nativ/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar + theme into ONE owned native module. The wedge vs Ionic. **Design: `docs/NATIVE-SHELL.md`** (scope, JS API, the Android-15/SDK-35 `WindowInsets`/IME crux, phased migration off CLI string-patching).
+3. **`create-nativ`** — `pnpm create nativ` scaffolder. **Design: `docs/LIFECYCLE.md` §8.**
+4. **Deployment-target knob** — a first-class `web` config block (`render`/`host`/`sw`) → SSR presets (`cloudflare`/`vercel`/`node`/`static`); keep TanStack Start for this. **Design: `docs/LIFECYCLE.md` §1.2, §3–4.**
+5. **Capacitor OTA** — fingerprint-gated bundle swap of `dist-capacitor/`, hosted on the app's own web deploy (no third-party server), applied next launch, resume-driven check. **Design: `docs/LIFECYCLE.md` §5.**
+6. **Published `dist` build** — tsup/unbuild → `dist` + `.d.ts`, switch `exports` to built output. (Mechanical — not separately designed.)
 
-Plus conceptual gaps flagged in `docs/RESEARCH.md` §1: page/route lifecycle hooks, app-resume lifecycle (`useAppState`), a back-button **priority handler chain**, a gesture **arbiter** (study Ionic's gesture controller).
+Conceptual gaps from `docs/RESEARCH.md` §1 are now designed in **`docs/COORDINATION.md`**: `useAppState` (resume/pause — also the OTA trigger), the back-button **priority handler chain**, the full **gesture controller**, and route lifecycle (no DOM retention). Build order there: app-state → back chain → gesture controller → route lifecycle.
 
 ---
 
@@ -82,15 +85,29 @@ Plus conceptual gaps flagged in `docs/RESEARCH.md` §1: page/route lifecycle hoo
 
 ## 6. Decisions locked in (don't re-litigate)
 
+**Foundational (pre-2026-07-14):**
 - **Single-package repo** (root = the framework). Promote to a `packages/*` monorepo only when the native plugin or `create-nativ` need separate publishing.
 - **No hard forks** of Capacitor / TanStack Router / TanStack Start. Own the *seams*, rent the stable cores. Escalate on the ownership spectrum only as needed: re-export barrel → `.nativ/` → `pnpm patch` → vendor one small module → replace a layer. (Full reasoning in the vision/rendering docs + the project memory.)
 - **Keep TanStack Start** — for its deploy-anywhere presets (roadmap #4).
 - **Isomorphic-only** — no `createServerFn`/server routes/server-only reads (breaks Capacitor). Data is consumer-wired (client token, IndexedDB/Query persister). `docs/RENDERING.md` is the authority.
 - **Splash/edge-to-edge opinions:** native splash = solid colour mask (mascot only in the React splash); React splash = installed-only (browser opt-in); mask follows app theme by default; always edge-to-edge.
 
+**Design pass (2026-07-14) — the architecture/lifecycle decisions:**
+- **Frame owned _above_ the route; one `View`, no `Screen`.** RN's navigator model: the framework shell seeds a full-viewport slot and stretches its child; `View` is a dumb-correct `flex-col` box (`min-h-0`-safe). Root-ness comes from framework-seeded context/CSS, never DOM sniffing. → `docs/ARCHITECTURE.md §1` (revises `VISION.md §2` principle 4).
+- **Storage = three tiers under `storage`.** Sync memory-backed `kv` (MMKV model — boot-hydrated on native), async `store` (a blob KV, **not** an ORM — the query/data layer stays consumer-wired), async `secure` (Keychain/Keystore on native; **best-effort only, not secure, on web**). Static-fn **and** reactive-hook per tier. → `docs/ARCHITECTURE.md §2`.
+- **TanStack opacity = opacity, not absence.** Gen files hidden in `.nativ/`; consumer imports only `nativ`. Not eliminated (typesafety needs the generated tree). → `docs/ARCHITECTURE.md §3`.
+- **Hybrid primitives push the platform branch to the lowest layer** (accessor returns native-*accurate data*, not machinery); geometry is DOM-free/unit-testable; drivers take a `ref` in, components spread state out. → `docs/ARCHITECTURE.md §4`.
+- **Deploy = a first-class `web` config block** (`render`/`host`/`sw`). `target:capacitor` is absolute (forced SPA + no SW); on web the consumer chooses (incl. static SPA+SW). → `docs/LIFECYCLE.md §1,§3`.
+- **Native OTA = self-hosted on the app's own web deploy** (no third-party server), `nativeFingerprint`-gated (JS-safe vs needs-store-build), applied next launch, resume-triggered, watchdog rollback. nativ owns the policy, rents the low-level swap. → `docs/LIFECYCLE.md §5`.
+- **App-lifecycle spine:** `useAppState` (accessor+hook; also the OTA/refetch trigger) → back **priority handler chain** → **full** Ionic-style gesture controller → route lifecycle with **no DOM retention**. → `docs/COORDINATION.md`.
+- **`@nativ/shell` = own it, phased** — phase 1 edge-to-edge + inset/IME reporting (the Android-15 fix), phase 2 absorb status-bar/splash/theme off the CLI's native-source patching. Study Capawesome's `WindowInsets` as reference, don't depend on it. → `docs/NATIVE-SHELL.md`.
+
 ## 7. Open questions to resolve as you build
 
-- `.nativ/` generator hiding: `pnpm patch` the generator vs Virtual File Routes override — prototype both, pick the least brittle.
-- OTA mechanism: wrap Capgo/Capawesome vs DIY bundle-swap.
-- Deployment presets: expose Start's adapter targets directly, or a nativ-level `deployment` config field.
-- `@nativ/shell` plugin: how much to own natively vs keep as CLI template patches.
+*(Resolved this pass, moved to §6: OTA mechanism, deployment presets, `@nativ/shell` scope.)*
+
+- **TanStack generator symbol-recognition** (`.nativ/` hiding): Virtual File Routes override vs a `pnpm patch` of `@tanstack/router-generator` — the one spike-gated call; prototype both, pick least brittle. → `docs/ARCHITECTURE.md §3.3`.
+- **KV native durability/hydration edge cases:** the boot-hydration gate, the ~1-tick write-persist lag, `useSyncExternalStore` snapshot stability + object-fallback handling. → `docs/ARCHITECTURE.md §2.1`.
+- **Plugin picks (pinned deps):** which maintained secure-storage plugin (Keychain/Keystore), and which low-level OTA swap plugin (Capawesome Live Update vs Capgo vs DIY). → `docs/ARCHITECTURE.md §2.3`, `docs/LIFECYCLE.md §5.5`.
+- **Config back-compat:** migration path from the flat `appId`/`router.render`/`sw` fields to the `web`/`native`/`ota` blocks.
+- **Six-target automation:** can the native matrix run in CI (`nativ e2e` driving sim/emulator) or stay local. → `VISION.md §9`, `docs/LIFECYCLE.md §7.2`.
