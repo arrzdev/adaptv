@@ -16,6 +16,8 @@ browser / polyfill / native.
 This is a **private, personal framework** (extracted from the `chopchop` app, where it lived as
 `@repo/nativ`). Not public — yet, maybe ever.
 
+🧭 **Continuing development?** Start with [`HANDOFF.md`](HANDOFF.md) — current state, how to develop, roadmap, and locked-in decisions.
+
 📖 **Read these first:** [`docs/VISION.md`](docs/VISION.md) (the north star + doctrine) ·
 [`docs/RENDERING.md`](docs/RENDERING.md) (rendering/delivery + the hard `createServerFn` limit) ·
 [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) (what nativ fixes, how, and how to test each) ·
