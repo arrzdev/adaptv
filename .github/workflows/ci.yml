@@ -1,0 +1,74 @@
+name: CI
+
+# Simple test-only CI: no envs, no deploys — typecheck + biome + vitest on every
+# PR and on pushes to main, with a rendered job summary.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Each check runs even if a prior one failed (if: always()), so the summary
+      # reports ALL failures at once. A failed step still fails the job.
+      - name: Typecheck
+        id: typecheck
+        run: pnpm typecheck
+
+      - name: Lint (biome)
+        id: biome
+        if: always()
+        run: pnpm biome:check
+
+      - name: Test (vitest)
+        id: test
+        if: always()
+        run: |
+          set -o pipefail
+          pnpm test 2>&1 | tee vitest-output.txt
+
+      - name: Job summary
+        if: always()
+        run: |
+          icon() { [ "$1" = "success" ] && echo "✅ pass" || echo "❌ fail"; }
+          tally=$(grep -oE 'Tests[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
+          files=$(grep -oE 'Test Files[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
+          {
+            echo "## nativ CI"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | :---: |"
+            echo "| Typecheck (\`tsc --noEmit\`) | $(icon '${{ steps.typecheck.outcome }}') |"
+            echo "| Biome (\`biome check\`) | $(icon '${{ steps.biome.outcome }}') |"
+            echo "| Tests (\`vitest\`) | $(icon '${{ steps.test.outcome }}') |"
+            echo ""
+            [ -n "$files" ] && echo "**${files}** · **${tally}**"
+            echo ""
+            echo "_Commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`._"
+          } >> "$GITHUB_STEP_SUMMARY"
