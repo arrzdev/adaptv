@@ -95,8 +95,9 @@ a Capacitor config.
 - **Build switch** — Vite plugin: web = SSR + service worker; capacitor = static SPA, no SW.
 - **Native build** — Capacitor iOS + Android, debug `.apk` + unsigned `.ipa`.
 - **Primitives** — `View`, `List` (virtualized), `Button` (press physics + haptics), `Link`
-  (internal/external split), `ExternalLink`, `ScrollView`, `Drawer`/`Sheet` (hybrid native+web keyboard
-  avoidance — the autofocus race is fixed by eager listener attach).
+  (internal/external split), `ExternalLink`, `ScrollView`, `Image`, `Swipeable`, `PullToRefresh`,
+  `Drawer`/`Sheet` (hybrid native+web keyboard avoidance — the autofocus race is fixed by eager
+  listener attach).
 
 > **The seed is green:** `pnpm typecheck` (0), `pnpm test` (180/180), `pnpm biome:check` (0). CI runs all
 > three on every PR.
@@ -115,7 +116,7 @@ a Capacitor config.
   launch). Web/standalone OTA already falls out of the SW.
 - **Published build** — currently ships **TypeScript source** (works via local link / bundler compile).
   For real GitHub Packages publishing, add a `dist` build (tsup/unbuild) + `.d.ts`.
-- **Primitive breadth** — `Input` / `Text` / `Image` / `Modal` / `Tabs` / `Swipeable` polish.
+- **Primitive breadth** — `Input` / `Text` / `Modal` / `Tabs` polish.
 
 ---
 
