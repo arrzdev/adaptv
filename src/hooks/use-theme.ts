@@ -1,7 +1,7 @@
-import tryCatch from "#nativ/utils/try-catch"
 import { useCallback, useReducer, useState } from "react"
 import { persistNativeThemePreference } from "#nativ/capabilities/native-theme"
 import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
+import tryCatch from "#nativ/utils/try-catch"
 
 export type UiThemePreference = "light" | "dark" | "system"
 

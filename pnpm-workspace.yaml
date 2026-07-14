@@ -1,0 +1,5 @@
+# Single-package repo — this file only carries pnpm settings. esbuild ships a
+# prebuilt platform binary; allow its (verification) build script so the pre-run
+# deps check doesn't flag it as unbuilt on every `pnpm <script>`.
+allowBuilds:
+  esbuild: true

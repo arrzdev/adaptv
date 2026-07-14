@@ -59,5 +59,27 @@
       "quoteStyle": "double",
       "semicolons": "asNeeded"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["*.css", "**/*.html"],
+      "linter": { "enabled": false }
+    },
+    {
+      "includes": ["src/config/**", "src/vite/**", "src/client/**"],
+      "linter": {
+        "rules": { "style": { "noRestrictedImports": "off" } }
+      }
+    },
+    {
+      "includes": [
+        "src/index.ts",
+        "src/interface/*.index.ts",
+        "src/**/index.ts"
+      ],
+      "linter": {
+        "rules": { "style": { "noRestrictedImports": "off" } }
+      }
+    }
+  ]
 }

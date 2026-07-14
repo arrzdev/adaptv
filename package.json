@@ -5,6 +5,10 @@
   "description": "Cross-platform React framework — one codebase ships as web, installable PWA, and native iOS/Android (Capacitor), correct-by-construction on every target.",
   "type": "module",
   "license": "UNLICENSED",
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=22"
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/arrzdev/nativ.git"
@@ -62,17 +66,39 @@
     "vite": "8.0.11"
   },
   "peerDependenciesMeta": {
-    "@capacitor/app": { "optional": true },
-    "@capacitor/browser": { "optional": true },
-    "@capacitor/core": { "optional": true },
-    "@capacitor/geolocation": { "optional": true },
-    "@capacitor/haptics": { "optional": true },
-    "@capacitor/keyboard": { "optional": true },
-    "@capacitor/network": { "optional": true },
-    "@capacitor/preferences": { "optional": true },
-    "@capacitor/screen-orientation": { "optional": true },
-    "@capacitor/splash-screen": { "optional": true },
-    "@capacitor/status-bar": { "optional": true }
+    "@capacitor/app": {
+      "optional": true
+    },
+    "@capacitor/browser": {
+      "optional": true
+    },
+    "@capacitor/core": {
+      "optional": true
+    },
+    "@capacitor/geolocation": {
+      "optional": true
+    },
+    "@capacitor/haptics": {
+      "optional": true
+    },
+    "@capacitor/keyboard": {
+      "optional": true
+    },
+    "@capacitor/network": {
+      "optional": true
+    },
+    "@capacitor/preferences": {
+      "optional": true
+    },
+    "@capacitor/screen-orientation": {
+      "optional": true
+    },
+    "@capacitor/splash-screen": {
+      "optional": true
+    },
+    "@capacitor/status-bar": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@tanstack/react-start": "1.167.13",
@@ -116,5 +142,11 @@
     "typescript": "5.9.3",
     "vite": "8.0.11",
     "vitest": "4.1.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@biomejs/biome"
+    ]
   }
 }
