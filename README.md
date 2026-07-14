@@ -98,11 +98,11 @@ a Capacitor config.
   (internal/external split), `ExternalLink`, `ScrollView`, `Drawer`/`Sheet` (hybrid native+web keyboard
   avoidance — the autofocus race is fixed by eager listener attach).
 
-### 🚧 In flight / not done (see [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) §status)
+> **The seed is green:** `pnpm typecheck` (0), `pnpm test` (180/180), `pnpm biome:check` (0). CI runs all
+> three on every PR.
 
-- **Config-flatten migration** — the framework side is done, but a few tests
-  (`vite/capacitor-config.test.ts`, `shell/critical-css.test.ts`) and the example app still reference
-  the pre-flatten shape. **Finish this first** — it's the one thing that's mid-refactor.
+### 🚧 Not done yet (see [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) §status + [`docs/RESEARCH.md`](docs/RESEARCH.md))
+
 - **`.nativ/` + re-export barrel** — apps still import `@tanstack/*` and see `*.gen` files. Plan: move
   generated files into a hidden `.nativ/` dir, re-export the router surface from `nativ` so apps import
   only `nativ`. (May need a small `pnpm patch` of `@tanstack/router-generator` for symbol recognition.)
@@ -149,10 +149,9 @@ No playground — dogfood against a real app (e.g. `chopchop`) via a local depen
 ## Verify
 
 ```bash
-pnpm typecheck
-pnpm biome:check
-pnpm test          # vitest (happy-dom)
+pnpm typecheck     # 0 errors
+pnpm biome:check   # 0 errors
+pnpm test          # vitest (happy-dom) — 180/180
 ```
 
-> Heads-up: `typecheck`/`test` will surface the in-flight config-flatten items above until that
-> migration is finished. Everything else is green.
+All three are green today and gated in CI on every PR (`.github/workflows/ci.yml`).

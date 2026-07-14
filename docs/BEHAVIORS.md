@@ -128,11 +128,9 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 
 ## Status of this doc's items
 
-All of §1–12 are **transported and working** (verified on both simulators during the chopchop session),
-**except** the in-flight config-flatten migration noted in the [README](../README.md#status--whats-done-vs-not):
-a few tests (`vite/capacitor-config.test.ts`, `shell/critical-css.test.ts`) still reference the
-pre-flatten config shape and need updating before `pnpm test` is fully green. The runtime behavior above
-is unaffected.
+All of §1–12 are **transported and green** — verified on both simulators during the chopchop session,
+and the seed passes the full gate (`typecheck` 0, `test` 180/180, `biome` 0). What's *not* yet built is
+tracked in the [README §status](../README.md#status--whats-done-vs-not) and [RESEARCH.md](RESEARCH.md).
 
 ## Automated gate
 
