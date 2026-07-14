@@ -1,0 +1,709 @@
+import type {
+  ComponentPropsWithoutRef,
+  HTMLAttributes,
+  ReactNode,
+  Ref,
+  RefObject,
+} from "react"
+import {
+  Children,
+  createContext,
+  forwardRef,
+  isValidElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
+import {
+  DrawerEngine,
+  useDrawerEngineContext,
+} from "#nativ/components/drawer/drawer-engine"
+import { cn } from "#nativ/utils/cn"
+
+/* =============================================================================
+ * TYPES
+ * ============================================================================= */
+
+export type DrawerRootHandle = {
+  readonly open: boolean
+  show: () => void
+  hide: () => void
+  focus: () => void
+}
+
+/** Spec alias — same handle as {@link DrawerRootHandle}. */
+export type DrawerHandle = DrawerRootHandle
+
+export type DrawerContextValue = {
+  isOpen: boolean
+  avoidKeyboard: boolean
+  /** `true` while the on-screen keyboard is up for a field inside the drawer. */
+  isKeyboardOpen: boolean
+}
+
+type DrawerActionsContextValue = {
+  show: () => void
+  hide: () => void
+}
+
+export interface DrawerOverlayProps
+  extends HTMLAttributes<HTMLButtonElement> {
+  /** Run before the drawer closes on backdrop press. */
+  onTap?: () => void
+}
+export type DrawerPortalProps = {
+  children: ReactNode
+}
+export type DrawerTriggerProps = ComponentPropsWithoutRef<"button">
+export interface DrawerShellProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode
+}
+export type DrawerHandleProps = HTMLAttributes<HTMLSpanElement>
+export type DrawerFooterProps = HTMLAttributes<HTMLDivElement>
+export type DrawerCloseProps = ComponentPropsWithoutRef<"button">
+export type DrawerTitleProps = HTMLAttributes<HTMLHeadingElement>
+export type DrawerDescriptionProps = HTMLAttributes<HTMLParagraphElement>
+
+export interface DrawerContentProps
+  extends HTMLAttributes<HTMLDivElement> {
+  /** Wrap the body in a {@link DrawerShell} flex column (default `true`). */
+  shell?: boolean
+  /** Extra classes for the inner scroll container. */
+  scrollClassName?: string
+}
+
+export type DrawerRootProps = {
+  children?: ReactNode
+  open?: boolean
+  defaultOpen?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Fired after the open (`true`) or close (`false`) animation settles. */
+  onAnimationEnd?: (open: boolean) => void
+  /** Lift content above the virtual keyboard (default `true`). */
+  avoidKeyboard?: boolean
+  /**
+   * Blur focused elements outside the drawer on open to clear ghost focus (default `true`).
+   * Panel-scoped — never blurs the drawer's own fields, so it coexists with autofocus.
+   */
+  blurInputs?: boolean
+  /**
+   * Suppress the user's drag-to-move/dismiss gesture — the drag handle and the whole-sheet
+   * swipe — while `true` (default `false`). Programmatic open/close and the keyboard-avoidance
+   * lift (a focused field still pushes the sheet up) are unaffected. Designed to be toggled live:
+   * e.g. bind it to a destructive hold-to-confirm button inside the panel so a small finger drift
+   * during the hold can't drag the sheet.
+   */
+  disableDrag?: boolean
+}
+
+export type DrawerNestedRootProps = DrawerRootProps
+
+/* =============================================================================
+ * TIER-1 NEUTRAL BASELINE
+ *
+ * Minimal gray baseline only — positioning, layout, and a visible neutral fill so
+ * unstyled usage renders. Brand cosmetics (colors, radius, padding, shadow) arrive
+ * through `className` from the app wrapper and win via twMerge.
+ * ============================================================================= */
+
+//will-change keeps the full-screen dim promoted while mounted, so it doesn't demote and
+//repaint at every fade end (that repaint stacked with the panel's settle re-raster)
+const DRAWER_OVERLAY_BASE_CLASS =
+  "inset-0 bg-black/40 will-change-[opacity]"
+const DRAWER_PANEL_BASE_CLASS =
+  "inset-x-0 flex flex-col rounded-t-xl bg-white shadow-lg outline-none"
+const DRAWER_HANDLE_REGION_CLASS =
+  "flex shrink-0 flex-col items-center pt-3 pb-2"
+const DRAWER_GRABBER_BASE_CLASS =
+  "mx-auto h-1 w-12 shrink-0 rounded-full bg-gray-600"
+//contain scopes content invalidations (e.g. the keyboard scroll spacer) to the scroller,
+//keeping them off the panel's animated layer; the scroller already clips, so paint
+//containment changes nothing visually
+const DRAWER_SCROLLER_CLASS =
+  "flex min-h-0 flex-col overflow-y-auto overscroll-y-none contain-[layout_paint_style]"
+const DRAWER_FOOTER_BASE_CLASS = "flex shrink-0 flex-col"
+
+//scroll-edge affordance: fade the scroller edge that hides more content. A CSS
+//mask (not gradient overlays) so Tier-1 stays color-agnostic — the fade reveals
+//whatever panel background the consumer painted.
+const DRAWER_EDGE_FADE_PX = 24
+
+function drawerEdgeFadeMask(
+  top: boolean,
+  bottom: boolean,
+): string | undefined {
+  if (!top && !bottom) return undefined
+  const start = top ? "transparent" : "#000"
+  const end = bottom ? "transparent" : "#000"
+  return `linear-gradient(to bottom, ${start} 0, #000 ${DRAWER_EDGE_FADE_PX}px, #000 calc(100% - ${DRAWER_EDGE_FADE_PX}px), ${end} 100%)`
+}
+const DRAWER_SHELL_LAYOUT_CLASS = "flex flex-col"
+const DRAWER_ROOT_LAYOUT_CLASS = "contents"
+
+/* =============================================================================
+ * HELPER FUNCTIONS
+ * ============================================================================= */
+
+function partitionDrawerChildren(children: ReactNode) {
+  let handle: ReactNode = null
+  let footer: ReactNode = null
+  const rest: ReactNode[] = []
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) {
+      if (child != null && child !== false) rest.push(child)
+      return
+    }
+    const name = (child.type as { displayName?: string }).displayName
+    if (name === "Drawer.Handle") {
+      handle = child
+    } else if (name === "Drawer.Footer") {
+      footer = child
+    } else {
+      rest.push(child)
+    }
+  })
+  return { handle, footer, rest }
+}
+
+function partitionDrawerRootChildren(children: ReactNode) {
+  const portal: ReactNode[] = []
+  const rest: ReactNode[] = []
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) {
+      if (child != null && child !== false) rest.push(child)
+      return
+    }
+    const name = (child.type as { displayName?: string }).displayName
+    if (name === "Drawer.Portal") {
+      Children.forEach(
+        (child.props as DrawerPortalProps).children,
+        (portalChild) => {
+          if (portalChild == null || portalChild === false) return
+          portal.push(portalChild)
+        },
+      )
+      return
+    }
+    rest.push(child)
+  })
+  return { portal, rest }
+}
+
+function activeBlur() {
+  const activeEl = document.activeElement as HTMLElement
+  if (activeEl && typeof activeEl.blur === "function") {
+    activeEl.blur()
+  }
+}
+
+/* =============================================================================
+ * CONTEXTS
+ * ============================================================================= */
+
+const DrawerScopeContext = createContext(0)
+const DrawerContext = createContext<DrawerContextValue | null>(null)
+const DrawerActionsContext =
+  createContext<DrawerActionsContextValue | null>(null)
+
+export function useDrawer() {
+  const ctx = useContext(DrawerContext)
+  if (!ctx) throw new Error("useDrawer must be used within <Drawer>.")
+  return ctx
+}
+
+function useDrawerActions() {
+  const ctx = useContext(DrawerActionsContext)
+  if (!ctx)
+    throw new Error("useDrawerActions must be used within <Drawer>.")
+  return ctx
+}
+
+/* =============================================================================
+ * COMPOUND PARTS
+ *
+ * Each part renders its own DOM node and pulls behavior/refs from the engine
+ * context, applying `className` directly — so brand styling lives 100% at the
+ * call site (no styles baked into Tier 1 beyond the neutral baseline).
+ * ============================================================================= */
+
+function DrawerOverlay({
+  className,
+  onTap,
+  onClick,
+  onPointerDown,
+  ...props
+}: DrawerOverlayProps) {
+  const engine = useDrawerEngineContext()
+  //A dismiss must come from a tap that STARTED on the backdrop. The tap that
+  //OPENS the drawer fires its trailing (ghost) click after the backdrop has
+  //already mounted under the pointer — with no pointerdown of its own on the
+  //backdrop. Honouring that click dismissed the drawer the instant it opened
+  //whenever the trigger sat under the backdrop (e.g. a top-of-screen button
+  //while the sheet rises from the bottom) — the "button does nothing" bug.
+  const pointerStartedOnBackdrop = useRef(false)
+
+  //data-dragging (and data-state during a gesture close) is flipped imperatively by the
+  //engine — no re-render mid-gesture; the render values cover mount and open-driven renders
+  return (
+    <button
+      {...props}
+      ref={engine.backdropRef}
+      type="button"
+      aria-label="Close drawer"
+      aria-hidden={!engine.open}
+      tabIndex={engine.open ? 0 : -1}
+      data-pwa-drawer-overlay=""
+      data-state={engine.backdropState}
+      data-animate="false"
+      data-dragging="false"
+      style={{
+        ["--pwa-drawer-overlay-duration" as string]: `${engine.overlayDuration}s`,
+        animationDuration: `${engine.overlayDuration}s`,
+      }}
+      className={cn(
+        engine.backdropPosition,
+        engine.backdropZ,
+        DRAWER_OVERLAY_BASE_CLASS,
+        //The overlay only renders while the drawer is mounted (open, opening, or closing), so
+        //it always intercepts taps — even while invisible mid-close. Keying pointer-events off
+        //`open` let a tap during the close animation fall through to the trigger and reopen
+        //(the open/close flash). A backdrop tap while closing is harmless: onBackdropClick ->
+        //requestClose no-ops when already closing.
+        className,
+      )}
+      onPointerDown={(event) => {
+        onPointerDown?.(event)
+        pointerStartedOnBackdrop.current = true
+      }}
+      onClick={(event) => {
+        onClick?.(event)
+        if (event.defaultPrevented) return
+        //ignore the opening tap's ghost click (no pointerdown on the backdrop)
+        if (!pointerStartedOnBackdrop.current) return
+        pointerStartedOnBackdrop.current = false
+        onTap?.()
+        engine.onBackdropClick()
+      }}
+    />
+  )
+}
+DrawerOverlay.displayName = "Drawer.Overlay"
+
+function DrawerContent({
+  children,
+  className,
+  shell = true,
+  scrollClassName,
+  ...props
+}: DrawerContentProps) {
+  const engine = useDrawerEngineContext()
+  const { handle, footer, rest } = partitionDrawerChildren(children)
+  const body = shell ? <DrawerShell>{rest}</DrawerShell> : rest
+
+  //which scroller edges hide more content (drives the edge fade mask)
+  const [edgeFade, setEdgeFade] = useState({ top: false, bottom: false })
+  const { scrollerRef, isPanelAnimatingRef, subscribePanelSettle } = engine
+
+  const syncEdgeFade = useCallback(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    // Deferred while a panel animation is in flight: flipping the mask repaints the whole
+    // scroller inside the GPU layer the compositor is animating. Overflow can't change during
+    // a pure transform anyway; the settle subscription below flushes one sync afterwards.
+    if (isPanelAnimatingRef.current) return
+    const top = scroller.scrollTop > 1
+    const bottom =
+      scroller.scrollTop <
+      scroller.scrollHeight - scroller.clientHeight - 1
+    setEdgeFade((prev) =>
+      prev.top === top && prev.bottom === bottom ? prev : { top, bottom },
+    )
+  }, [scrollerRef, isPanelAnimatingRef])
+
+  //paint the initial mask into the panel's very first frame — computed post-paint (the old
+  //ResizeObserver initial callback) it flipped on the scroller a few frames into the open,
+  //repainting the layer mid-animation. Runs before the engine's open effect arms the gate.
+  useLayoutEffect(() => {
+    syncEdgeFade()
+  }, [syncEdgeFade])
+
+  //content can grow without the scroller box changing (an inline picker
+  //expanding under a max-height cap), so watch the content box too
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const observer = new ResizeObserver(syncEdgeFade)
+    observer.observe(scroller)
+    if (scroller.firstElementChild)
+      observer.observe(scroller.firstElementChild)
+    return () => observer.disconnect()
+  }, [scrollerRef, syncEdgeFade])
+
+  //flush the deferred sync the moment the panel settles
+  useEffect(
+    () => subscribePanelSettle(syncEdgeFade),
+    [subscribePanelSettle, syncEdgeFade],
+  )
+
+  const edgeFadeMask = drawerEdgeFadeMask(edgeFade.top, edgeFade.bottom)
+
+  return (
+    <div
+      {...props}
+      ref={engine.panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-hidden={!engine.open}
+      data-pwa-drawer=""
+      data-open={engine.open}
+      style={engine.panelStyle}
+      className={cn(
+        engine.panelPosition,
+        engine.panelZ,
+        DRAWER_PANEL_BASE_CLASS,
+        className,
+      )}
+    >
+      <div ref={engine.contentRef} className={engine.contentLayoutClass}>
+        <div
+          className={cn(
+            DRAWER_HANDLE_REGION_CLASS,
+            !engine.isDragDisabled &&
+              "touch-none cursor-grab active:cursor-grabbing",
+          )}
+          onPointerDown={engine.onHandlePointerDown}
+          onPointerMove={engine.onHandlePointerMove}
+          onPointerUp={engine.onHandlePointerUp}
+          onPointerCancel={engine.onHandlePointerCancel}
+        >
+          {handle ?? (
+            <span aria-hidden className={DRAWER_GRABBER_BASE_CLASS} />
+          )}
+        </div>
+        <div
+          ref={engine.scrollerRef}
+          onScroll={syncEdgeFade}
+          className={cn(DRAWER_SCROLLER_CLASS, scrollClassName)}
+          style={{
+            transition: engine.contentPaddingTransition,
+            maskImage: edgeFadeMask,
+            WebkitMaskImage: edgeFadeMask,
+          }}
+        >
+          {body}
+          {engine.keyboardScrollSpace > 0 && (
+            <div
+              aria-hidden
+              className="shrink-0"
+              style={{ height: engine.keyboardScrollSpace }}
+            />
+          )}
+        </div>
+        {footer}
+      </div>
+      <div
+        aria-hidden
+        className="shrink-0"
+        style={{ height: engine.excessHeight }}
+      />
+    </div>
+  )
+}
+DrawerContent.displayName = "Drawer.Content"
+
+function DrawerPortal({ children }: DrawerPortalProps) {
+  return <>{children}</>
+}
+DrawerPortal.displayName = "Drawer.Portal"
+
+function DrawerTrigger({
+  className,
+  onClick,
+  type = "button",
+  ...props
+}: DrawerTriggerProps) {
+  const { show } = useDrawerActions()
+
+  return (
+    <button
+      type={type}
+      data-drawer-trigger
+      className={className}
+      onClick={(event) => {
+        onClick?.(event)
+        if (event.defaultPrevented) return
+        show()
+      }}
+      {...props}
+    />
+  )
+}
+DrawerTrigger.displayName = "Drawer.Trigger"
+
+function DrawerShell({ className, children, ...props }: DrawerShellProps) {
+  return (
+    <div className={cn(DRAWER_SHELL_LAYOUT_CLASS, className)} {...props}>
+      {children}
+    </div>
+  )
+}
+DrawerShell.displayName = "Drawer.Shell"
+
+function DrawerDragHandle({
+  className,
+  children,
+  ...props
+}: DrawerHandleProps) {
+  if (children) {
+    return <>{children}</>
+  }
+
+  return (
+    <span
+      aria-hidden
+      className={cn(DRAWER_GRABBER_BASE_CLASS, className)}
+      {...props}
+    />
+  )
+}
+DrawerDragHandle.displayName = "Drawer.Handle"
+
+/**
+ * Pinned action region rendered BELOW the content scroller (sibling, not child).
+ * Must be a direct child of `Drawer.Content`. When the drawer hits its max-height
+ * cap the scroller shrinks and scrolls while the footer stays visible; the
+ * keyboard lift carries it up with the panel. Tier 2 owns padding (incl. the
+ * bottom safe-area inset) via `className`.
+ */
+function DrawerFooter({
+  className,
+  children,
+  ...props
+}: DrawerFooterProps) {
+  return (
+    <div className={cn(DRAWER_FOOTER_BASE_CLASS, className)} {...props}>
+      {children}
+    </div>
+  )
+}
+DrawerFooter.displayName = "Drawer.Footer"
+
+function DrawerClose({
+  className,
+  onClick,
+  type = "button",
+  ...props
+}: DrawerCloseProps) {
+  const { hide } = useDrawerActions()
+
+  return (
+    <button
+      type={type}
+      className={className}
+      onClick={(event) => {
+        onClick?.(event)
+        if (event.defaultPrevented) return
+        hide()
+      }}
+      {...props}
+    />
+  )
+}
+DrawerClose.displayName = "Drawer.Close"
+
+function DrawerTitle({ className, ...props }: DrawerTitleProps) {
+  return <h2 className={className} {...props} />
+}
+DrawerTitle.displayName = "Drawer.Title"
+
+function DrawerDescription({
+  className,
+  ...props
+}: DrawerDescriptionProps) {
+  return <p className={className} {...props} />
+}
+DrawerDescription.displayName = "Drawer.Description"
+
+/* =============================================================================
+ * CORE CONTEXT ENGINE
+ * ============================================================================= */
+
+type DrawerTreeProps = DrawerRootProps & {
+  nested: boolean
+  rootRef?: RefObject<HTMLDivElement | null>
+  imperativeRef?: Ref<DrawerRootHandle>
+}
+
+function DrawerTree({
+  children,
+  nested: _nested,
+  avoidKeyboard = true,
+  blurInputs = true,
+  disableDrag = false,
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
+  onAnimationEnd,
+  rootRef,
+  imperativeRef,
+}: DrawerTreeProps) {
+  const parentScopeDepth = useContext(DrawerScopeContext)
+  const isControlled = openProp !== undefined
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen)
+  const [internalOpen, setInternalOpen] = useState(
+    () => openProp ?? defaultOpen,
+  )
+
+  const isOpen = isControlled ? Boolean(internalOpen) : uncontrolledOpen
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
+  const { portal, rest } = partitionDrawerRootChildren(children)
+
+  const triggerOpenLifecycle = useCallback(
+    (nextState: boolean) => {
+      activeBlur()
+
+      if (isControlled) {
+        setInternalOpen(nextState)
+      } else {
+        setUncontrolledOpen(nextState)
+      }
+      onOpenChange?.(nextState)
+    },
+    [isControlled, onOpenChange],
+  )
+
+  useEffect(() => {
+    if (isControlled && openProp !== internalOpen) {
+      triggerOpenLifecycle(openProp)
+    }
+  }, [openProp, isControlled, internalOpen, triggerOpenLifecycle])
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      triggerOpenLifecycle(next)
+    },
+    [triggerOpenLifecycle],
+  )
+
+  const handleSettle = useCallback(
+    (nextOpen: boolean) => {
+      onAnimationEnd?.(nextOpen)
+      if (nextOpen) return
+      if (!isControlled) return
+      onOpenChange?.(false)
+    },
+    [isControlled, onAnimationEnd, onOpenChange],
+  )
+
+  const handleRequestClose = useCallback(() => {
+    handleOpenChange(false)
+  }, [handleOpenChange])
+
+  useImperativeHandle(
+    imperativeRef,
+    () => ({
+      get open() {
+        return isOpen
+      },
+      show: () => handleOpenChange(true),
+      hide: () => handleOpenChange(false),
+      focus: () => {
+        rootRef?.current
+          ?.querySelector<HTMLButtonElement>(
+            "[data-drawer-trigger], button",
+          )
+          ?.focus()
+      },
+    }),
+    [handleOpenChange, isOpen, rootRef],
+  )
+
+  const drawerContextValue = useMemo(
+    () => ({ isOpen, avoidKeyboard, isKeyboardOpen }),
+    [isOpen, avoidKeyboard, isKeyboardOpen],
+  )
+
+  const drawerActions = useMemo(
+    () => ({
+      show: () => handleOpenChange(true),
+      hide: () => handleOpenChange(false),
+    }),
+    [handleOpenChange],
+  )
+
+  return (
+    <DrawerScopeContext.Provider value={parentScopeDepth + 1}>
+      <DrawerContext.Provider value={drawerContextValue}>
+        <DrawerActionsContext.Provider value={drawerActions}>
+          <div ref={rootRef} className={DRAWER_ROOT_LAYOUT_CLASS}>
+            {rest}
+            <DrawerEngine
+              open={isOpen}
+              onRequestClose={handleRequestClose}
+              onSettle={handleSettle}
+              onKeyboardOpenChange={setIsKeyboardOpen}
+              avoidKeyboard={avoidKeyboard}
+              blurInputs={blurInputs}
+              disableDrag={disableDrag}
+            >
+              {portal}
+            </DrawerEngine>
+          </div>
+        </DrawerActionsContext.Provider>
+      </DrawerContext.Provider>
+    </DrawerScopeContext.Provider>
+  )
+}
+
+/* =============================================================================
+ * EXPORTS EXPOSURE
+ * ============================================================================= */
+
+const DrawerRoot = forwardRef<DrawerRootHandle, DrawerRootProps>(
+  function DrawerRoot({ children, ...props }, ref) {
+    const parentScopeDepth = useContext(DrawerScopeContext)
+    const rootRef = useRef<HTMLDivElement>(null)
+    return (
+      <DrawerTree
+        nested={parentScopeDepth > 0}
+        rootRef={rootRef}
+        imperativeRef={ref}
+        {...props}
+      >
+        {children}
+      </DrawerTree>
+    )
+  },
+)
+DrawerRoot.displayName = "Drawer"
+
+const DrawerNestedRoot = forwardRef<
+  DrawerRootHandle,
+  DrawerNestedRootProps
+>(function DrawerNestedRoot(props, ref) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  return (
+    <DrawerTree nested rootRef={rootRef} imperativeRef={ref} {...props} />
+  )
+})
+DrawerNestedRoot.displayName = "Drawer.Nested"
+
+export const Drawer = Object.assign(DrawerRoot, {
+  Nested: DrawerNestedRoot,
+  Trigger: DrawerTrigger,
+  Portal: DrawerPortal,
+  Overlay: DrawerOverlay,
+  Backdrop: DrawerOverlay,
+  Content: DrawerContent,
+  Shell: DrawerShell,
+  Handle: DrawerDragHandle,
+  Footer: DrawerFooter,
+  Title: DrawerTitle,
+  Description: DrawerDescription,
+  Close: DrawerClose,
+})

@@ -1,0 +1,98 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * utils — custom variants + scroll / tap / selection helpers
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * "installed app" vs "browser tab" styling.
+ *
+ * `app:`  → installed PWA (display-mode: standalone) OR a native Capacitor build
+ *           (stamped `html[data-nativ-platform="native"]` pre-paint by
+ *           getPlatformInitScript). A native WebView reports display-mode:browser,
+ *           so the attribute branch is what catches it.
+ * `web:`  → a real browser tab only. Attribute-scoped (not `@media browser`) so a
+ *           native WebView — which also reports display-mode:browser — is excluded.
+ */
+@custom-variant app {
+  @media (display-mode: standalone) {
+    @slot;
+  }
+  &:where(html[data-nativ-platform="native"] *) {
+    @slot;
+  }
+}
+
+@custom-variant web {
+  &:where(html[data-nativ-platform="web"] *) {
+    @slot;
+  }
+}
+
+/*
+ * Press feedback hook. useGestureEngine sets `data-pressed` on the element while
+ * the pointer is down inside the press region, and clears it the moment the
+ * finger drags out — reentrant, and restored when it slides back in. This is the
+ * source of truth for press visuals (native :active can't be cleared from JS and
+ * won't re-light on touch re-entry), so prefer `pressed:` over `active:` on any
+ * gesture-engine-driven element. Pointer-only: keyboard activation never sets it.
+ */
+@custom-variant pressed (&[data-pressed]);
+
+@utility selectable {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+@utility clickable {
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+@utility hardware-boosted {
+  will-change: auto;
+}
+
+@utility non-clickable {
+  touch-action: none;
+  cursor: not-allowed;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/*
+ * Single-axis scrollers must pin the cross axis. Setting overflow on one axis
+ * forces the other from `visible` to `auto` (CSS overflow spec), so a bare
+ * single-axis scroller silently becomes scrollable both ways — a child that
+ * overflows the cross axis then rubber-bands/overscrolls the container off-axis.
+ * `hidden` clips identically to the implicit `auto` but kills the stray scroll.
+ */
+@utility scrollable-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x;
+  /* keep the local rubber-band, but never chain the overscroll to the page —
+   * lets iOS bounce natively without the JS boundary lock bleeding to the shell */
+  overscroll-behavior-x: contain;
+  @apply hardware-boosted;
+}
+
+@utility scrollable-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  @apply hardware-boosted;
+}
+
+@utility scrollable {
+  overflow: auto;
+  touch-action: auto;
+  overscroll-behavior: contain;
+}
+
+/* hide the scrollbar without disabling scroll (RN shows*ScrollIndicator={false}) */
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

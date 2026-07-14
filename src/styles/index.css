@@ -1,0 +1,17 @@
+/*
+ * PWA styles — @import "@repo/nativ/styles.css" from app main.css after tailwind + safe-area.
+ */
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+
+/* 1. Reset rules and platform patches go first */
+@import "./patches.css";
+
+/* 2. Component-owned styles (drawer keyframes + caret patch) */
+@import "./drawer.css";
+@import "./swipeable.css";
+
+/* 3. Atomic utility definitions go last to win the cascade */
+@import "./utils.css";

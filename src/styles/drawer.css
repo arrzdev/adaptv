@@ -1,0 +1,65 @@
+/*
+ * Drawer engine styles. The panel/backdrop opacity is JS-driven (see drawer-motion.ts);
+ * these rules cover the keyframe fallback for the overlay fade. The iOS caret-repaint patch
+ * is now app-wide — see hooks/use-caret-repaint.ts + styles/patches.css.
+ */
+
+/* Mirrored from vaul style.css — overlay fade on open/close */
+@keyframes pwa-drawer-overlay-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pwa-drawer-overlay-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+[data-pwa-drawer-overlay] {
+  animation-duration: var(--pwa-drawer-overlay-duration, 0.5s);
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  /* The backdrop is a <button>; suppress iOS's tap highlight and the focus ring so a tap
+     fades it out cleanly instead of flashing a highlight over the dim layer. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-pwa-drawer-overlay]:focus,
+[data-pwa-drawer-overlay]:focus-visible {
+  outline: none;
+}
+
+[data-pwa-drawer-overlay][data-state="open"] {
+  animation-name: pwa-drawer-overlay-fade-in;
+  animation-fill-mode: both;
+}
+
+[data-pwa-drawer-overlay][data-state="closed"] {
+  animation-name: pwa-drawer-overlay-fade-out;
+  animation-fill-mode: forwards;
+}
+
+[data-pwa-drawer-overlay][data-animate="false"],
+[data-pwa-drawer-overlay][data-dragging="true"] {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-pwa-drawer-overlay] {
+    animation: none !important;
+  }
+}
+
+[data-pwa-drawer] :is(input, textarea, [contenteditable]) {
+  -webkit-text-size-adjust: none !important;
+  text-size-adjust: none !important;
+}
