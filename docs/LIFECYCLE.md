@@ -450,16 +450,38 @@ generator by hand. It reads the same `nativ.config.ts`.
 | Command | Pipeline |
 |---|---|
 | `nativ doctor` | check toolchain (JDK, Android SDK, Xcode, pod) + that the app has the base Capacitor plugins installed (Cap only auto-discovers **direct** deps) |
-| `nativ run <ios\|android> [--target id]` | build SPA (`NATIV_TARGET=capacitor`) → brand icons/splash → `cap sync` → `cap run` on device/sim |
-| `nativ sync [ios\|android]` | build SPA → brand assets → `cap sync` (no launch) |
-| `nativ build android` | …sync → `gradlew assembleDebug` → **debug `.apk`** |
-| `nativ build ios --ipa` | …sync → `scripts/build-ipa.sh` → **unsigned `.ipa`** (sideload / re-sign) |
-| `nativ assets [ios\|android]` | regenerate launcher icons (`./assets/logo.png`) + the colour-driven splash mask |
+| `nativ run <ios\|android\|all> [--target id] [--latest] [--verbose]` | build SPA (`NATIV_TARGET=capacitor`) → brand icons/splash → `cap sync` → `cap run` on device/sim. `all` = both, **in parallel** |
+| `nativ build <ios\|android\|all> [--output path] [--verbose]` | …sync → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**). Artifact lands at `--output` or `.nativ/<app>.apk`\|`.ipa` |
+
+`sync` and `assets` are no longer standalone commands — they're internal steps of `run`/`build`.
+
+**Native projects live in `.nativ/`.** `cap add`/`sync`/`run` are pointed at `.nativ/ios` and
+`.nativ/android` via `android.path`/`ios.path` in the generated `capacitor.config.json` (relative to the
+app root, where `cap` reads it). So *everything* nativ generates — the route tree and both native
+projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. A legacy app-root
+`ios/`/`android/` is migrated into `.nativ/` on the next run.
+
+**Device targeting.** nativ owns the picker (rather than Capacitor's opaque one) so it can cache your
+choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and
+writes the pick to `.nativ/devices.json`. `--target <id>` selects directly (and caches); `--latest`
+reuses the cached device (falling back to the picker if none). *Listing requires the platform to exist,
+so `run` prepares the native project **before** resolving the target.*
+
+**Branded output.** Every long-running step (vite/cap/gradle/xcode/pod) is **captured**, not inherited —
+rendered as calm phased steps (a small custom spinner renderer; `@clack/prompts` only for the device
+picker) with a spinner + elapsed time. Inner
+logs are hidden unless a step fails (then a log tail is shown) or `--verbose` is passed (full raw
+passthrough). `run all` renders the two platforms as concurrent columns; a non-TTY / CI shell degrades to
+plain prefixed lines.
 
 Every native build runs the same spine: **`buildWeb(capacitor)` → `generateAssets` → `capSync` → (launch
 / package)**. Icons come from `@capacitor/assets`; the splash is colour-driven (Android launch theme +
 `colors.xml`/`colors-night.xml`; iOS colour asset + solid storyboard) and re-applied idempotently every
 sync (`BEHAVIORS.md §3`).
+
+> **`nativ run web`** is reserved for a future Vite dev/preview wrapper (nativ is Vite-based). For now
+> use the app's `vite dev` / `vite preview`. Web *deploy* stays out of the CLI by design — it's the
+> host's tool, driven by `web.host`.
 
 ### 7.2 Testing native builds
 
@@ -472,9 +494,10 @@ flagged in `VISION.md §9`.
 
 - **Android:** debug `.apk` is fully automated. Release signing (keystore) is the user's — a `nativ build
   android --release` that reads a keystore from config/env is a reasonable ⚠︎ future add.
-- **iOS:** only the **unsigned** `.ipa` is automatable (`--ipa`); signed TestFlight/App Store builds stay
-  in Xcode ▸ Archive (signing identities/provisioning are Apple-account state nativ shouldn't hold). nativ
-  stops at the artifact — it does not own fastlane (⚠︎ open question in `VISION.md §9`).
+- **iOS:** only the **unsigned** `.ipa` is automatable (`nativ build ios` → `scripts/build-ipa.sh`);
+  signed TestFlight/App Store builds stay in Xcode ▸ Archive (signing identities/provisioning are
+  Apple-account state nativ shouldn't hold). nativ stops at the artifact — it does not own fastlane
+  (⚠︎ open question in `VISION.md §9`).
 
 ### 7.4 ⚠︎ Delta — designed additions
 
