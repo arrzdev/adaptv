@@ -2,6 +2,7 @@ import type { ComponentPropsWithRef, CSSProperties, Ref } from "react"
 import { useCallback, useRef } from "react"
 import { useScrollDirectionLock } from "#nativ/hooks/use-scroll-direction-lock"
 import { cn } from "#nativ/utils/cn"
+import { mergeStyles } from "#nativ/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -148,13 +149,19 @@ export function ScrollView({
       ? "scrollable-x"
       : "scrollable-y"
 
-  const scrollNodeClass = cn(
-    SCROLL_VIEW_BASE_CLASS,
-    !horizontal && SCROLL_VIEW_COLUMN_CLASS,
-    scrollClass,
-    hideScrollbar && "scrollbar-hidden",
+  //`scrollClass` is LOCKED, not base: the scroll axis is owned by the `horizontal`
+  //and `scrollEnabled` PROPS (L6 — behaviour is props, presentation is className),
+  //so a consumer's `overflow-hidden` must not be able to silently defeat it. The
+  //failure is invisible until someone cannot scroll.
+  const scrollNodeClass = mergeStyles({
+    base: [
+      SCROLL_VIEW_BASE_CLASS,
+      !horizontal && SCROLL_VIEW_COLUMN_CLASS,
+      hideScrollbar && "scrollbar-hidden",
+    ],
     className,
-  )
+    locked: scrollClass,
+  })
 
   if (edgeFades && !horizontal) {
     return (
@@ -162,14 +169,16 @@ export function ScrollView({
         <div
           ref={mergeRef}
           data-scroll-view={axis}
-          className={cn(
-            "relative z-0",
-            SCROLL_VIEW_BASE_CLASS,
-            SCROLL_VIEW_COLUMN_CLASS,
-            scrollClass,
-            hideScrollbar && "scrollbar-hidden",
+          className={mergeStyles({
+            base: [
+              "relative z-0",
+              SCROLL_VIEW_BASE_CLASS,
+              SCROLL_VIEW_COLUMN_CLASS,
+              hideScrollbar && "scrollbar-hidden",
+            ],
             className,
-          )}
+            locked: scrollClass,
+          })}
           {...props}
         >
           {children}

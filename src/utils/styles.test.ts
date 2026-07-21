@@ -56,3 +56,67 @@ describe("mergeStyles", () => {
     expect(out).not.toContain("hidden")
   })
 })
+
+describe("the custom behaviour groups must conflict with what they EXPAND to", () => {
+  //`scrollable-y` is a Tailwind `@utility` that expands to overflow-y, overflow-x,
+  //touch-action AND overscroll-behavior-y. tailwind-merge only drops a class it
+  //knows conflicts — and a custom group it has never heard of conflicts with
+  //nothing by default.
+  //
+  //The consequence is subtle and bad: BOTH classes survive the merge, so which one
+  //applies is decided by the order the rules happen to appear in the compiled
+  //stylesheet — not by the order the caller wrote them. `locked` then silently
+  //stops being a guarantee, which is the entire point of the layer.
+  it("lets a locked scroll utility beat a consumer overflow class", () => {
+    const out = mergeStyles({
+      className: "overflow-hidden",
+      locked: "scrollable-y",
+    })
+    expect(out).toContain("scrollable-y")
+    expect(out).not.toContain("overflow-hidden")
+  })
+
+  it("lets a locked overflow class beat a consumer scroll utility", () => {
+    //the inverse must hold too: `scrollEnabled={false}` renders `overflow-hidden`
+    //as the locked layer and must win over a consumer `scrollable-y`
+    const out = mergeStyles({
+      className: "scrollable-y",
+      locked: "overflow-hidden",
+    })
+    expect(out).toContain("overflow-hidden")
+    expect(out).not.toContain("scrollable-y")
+  })
+
+  it("resolves the scroll utility against touch-action too", () => {
+    //`scrollable-y` sets `touch-action: pan-y`; a stray `touch-none` would kill
+    //the scroll it is supposed to guarantee
+    const out = mergeStyles({
+      className: "touch-none",
+      locked: "scrollable-y",
+    })
+    expect(out).toContain("scrollable-y")
+    expect(out).not.toContain("touch-none")
+  })
+
+  it("lets a locked clickable beat a consumer touch-action", () => {
+    //`clickable` sets `touch-action: pan-x pan-y pinch-zoom` (the WebKit 240917
+    //workaround); a consumer `touch-none` must not silently undo it
+    const out = mergeStyles({
+      className: "touch-none",
+      locked: "clickable",
+    })
+    expect(out).toContain("clickable")
+    expect(out).not.toContain("touch-none")
+  })
+
+  it("keeps non-conflicting classes from every layer", () => {
+    const out = mergeStyles({
+      base: "rounded",
+      className: "bg-red-500",
+      locked: "scrollable-y",
+    })
+    expect(out).toContain("rounded")
+    expect(out).toContain("bg-red-500")
+    expect(out).toContain("scrollable-y")
+  })
+})

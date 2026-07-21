@@ -1,23 +1,24 @@
 import { registerRoute } from "workbox-routing"
 import { createStaticAssetMatcher } from "#nativ/sw/sw.matchers"
-import { createStaticStaleWhileRevalidateStrategy } from "#nativ/sw/sw.strategies"
+import { createStaticAssetStrategy } from "#nativ/sw/sw.strategies"
 import type { StaticAssetsRouteOptions } from "#nativ/sw/sw.types"
 
 /**
- * Runtime cache for hashed build assets. Precache covers install;
- * this handles any same-origin `/assets/*` and resource fetches.
+ * Runtime cache for hashed build assets. Precache covers install; this handles any
+ * same-origin `/assets/*` and resource fetch that the manifest missed.
+ *
+ * Cache-first, not stale-while-revalidate: the filename IS the version, so a
+ * cached entry can never be stale and revalidating it is guaranteed-useless
+ * traffic. → sw.strategies.ts
  */
 export function registerStaticAssetsRoute(
   options: StaticAssetsRouteOptions,
 ) {
-  const strategy = createStaticStaleWhileRevalidateStrategy(
-    options.buildTag,
-    {
-      cacheBucket: options.cacheBucket,
-      expiration: options.expiration,
-      matchOptions: options.matchOptions,
-    },
-  )
+  const strategy = createStaticAssetStrategy(options.buildTag, {
+    cacheBucket: options.cacheBucket,
+    expiration: options.expiration,
+    matchOptions: options.matchOptions,
+  })
 
   registerRoute(
     ({ url, request }) =>

@@ -97,6 +97,38 @@ nativBack()                         // platform-agnostic programmatic back for i
 - `nativBack()` unifies the Android hardware button, an in-app back button, and (when installed) the
   otherwise-inert OS gesture into one path.
 
+> ### ✅ BUILT — controller + React binding; one primitive migrated
+>
+> `capabilities/gesture-controller.ts` (16 tests) is the pure arbiter; `hooks/use-gesture-capture.ts`
+> (6 tests) is the React binding, giving each mounted instance its own identity so two `Swipeable` rows
+> on one screen genuinely compete rather than aliasing into a single gesture.
+>
+> **`Swipeable` is migrated** and is the pattern for the rest. The integration point matters more than
+> the wiring: capture is requested **at the moment the swipe locks**, not on `pointerdown`. A
+> pointerdown is also how a *tap* starts, so claiming there would starve every other gesture on the
+> screen for the duration of every touch. Both lock points — the mouse path and the imperative touch
+> path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs back instead of
+> being left mid-translate with no pointer to finish it.
+>
+> `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > SwipeableRow 200 > Scroll 100`.
+>
+> **All three primitives are migrated.** Each claims the arbiter at the point where its gesture becomes
+> unambiguous, which differs per primitive and is the part worth getting right:
+>
+> | Primitive | Claims at | Why not earlier |
+> |---|---|---|
+> | `Swipeable` | the horizontal **lock** | a pointerdown is also how a tap starts; claiming there starves every other gesture for the duration of every touch |
+> | `Drawer` (handle) | **pointerdown** | there is nothing else a handle press could mean, so it commits immediately |
+> | `Drawer` (whole sheet) | the scroll **takeover** | a touch on the sheet usually means scrolling its content |
+> | `EdgeSwipeGestures` | **touchstart inside the edge strip** | it only decides at touchend, but waiting would be too late to stop a row swipe running under the same finger. The strip is a few pixels wide, so holding the pointer there is narrow enough not to starve anything — and suppressing an in-content gesture under an edge touch is the intended outcome |
+>
+> Every one wires `onLost` so a pre-empted gesture resets rather than being stranded mid-translate with
+> no pointer left to finish it — the drawer snaps back, the row springs back.
+>
+> ⏳ **Still owed: device tuning.** The priority *numbers* are reasoned, not felt. The ordering wants
+> confirming on hardware with a drawer, a swipeable row and a scroller on one screen — exactly the kind
+> of judgement a unit test cannot make.
+
 ### Delta
 `use-android-back-button.ts` currently hardcodes `router.back()`/`exitApp()` with no interception point.
 Refactor it into: (a) the shared chain + registry, (b) the default floor handler, (c) overlays registering

@@ -36,6 +36,23 @@ that opinion **is** the product.
 6. **Don't reinvent the solved.** Gestures, viewport hacks, composition animations — Ionic stress-tested
    these for years. Study their solution and their open issues (`RESEARCH.md`), adopt the hard-won edge
    cases, and diverge only where nativ's model genuinely differs. Rent the stable core; own the seam.
+7. **Mechanisms live at the JS layer; platform config stays dumb.** Anything a user can *see* belongs in
+   React — styleable, themeable, testable, i18n-able, and identical on all six targets. The platform
+   layer beneath it (native splash screen, service worker, inset plugin) does the minimum required to
+   get the app booted and then gets out of the way. **Where a behaviour could live in either place, it
+   goes in React**, because a platform-level implementation can only ever cover the targets that have
+   that platform — which forces a second implementation for the others and guarantees they drift.
+
+   | Concern | Dumb platform layer | Real behaviour |
+   |---|---|---|
+   | Splash | native launch screen = flat colour mask | `splashScreen` component, self-unmounting |
+   | Offline | SW serves a bootable shell | offline UI rendered in place by the failing route |
+   | Insets | plugin reports raw numbers | `View safe="…"` |
+   | Back | OS event → priority chain | overlay/route handlers in React |
+
+   The test to apply: *"if I implemented this in the platform layer, how many targets would it cover?"*
+   If the answer is fewer than six, it belongs in React. → `RENDERING.md §3.0` works this through for
+   the offline case, which is the fullest worked example.
 
 ---
 
@@ -198,6 +215,30 @@ simple async blob store for framework-level offline needs, and (b) guarantee the
 offer the Query-persister wiring — **not** to grow into a database. This keeps nativ from ballooning and
 respects the consumer-wired-data doctrine.
 
+> ### ✅ BUILT — and it deviates from the Dexie call above, deliberately
+>
+> `storage.store` ships on **raw IndexedDB, not Dexie**. 11 tests, run against a real IndexedDB
+> implementation (`fake-indexeddb`) rather than a mock.
+>
+> **Why the deviation:** every reason to reach for Dexie — queries, indexes, schema migrations, live
+> queries — is explicitly out of scope per the boundary stated directly above. What is left is
+> `get`/`set`/`remove`/`keys`/`clear` over a single object store: about eighty lines against the
+> platform API. Taking the dependency would make every consumer ship a query engine to get a blob KV,
+> including the many that never touch this tier. **The scope boundary and the dependency choice have to
+> agree**, and this is the option that agrees with it. If nativ ever genuinely needs queries, that is a
+> decision to revisit *with* Dexie — not a reason to pre-pay for it now.
+>
+> **Structured clone, not JSON** — `Date`, `Map`, `Set` and `Blob` survive a round trip. That is the
+> substantive difference from `storage.kv`, which JSON-encodes and silently turns a `Date` into a
+> string (a bug that surfaces much later, at the first `.getTime()`).
+>
+> **Degrades to memory** when IndexedDB is absent — SSR, Safari private mode, some embedded webviews.
+> The framework's own offline path depends on this tier, so throwing there would turn missing storage
+> into a boot failure. `isPersistent()` reports which mode is in play.
+>
+> `useStore` has a loading state and `useKv` does not; that asymmetry is inherent, not an oversight —
+> the backing store is genuinely asynchronous.
+
 ### 2.3 `storage.secure` — secrets, **async**
 
 ```ts
@@ -249,6 +290,62 @@ export const Route = createFileRoute("/settings")({ component: Settings })
   (nativ's wrapped one, `create-root-route.tsx`), `Link` (nativ's primitive), `Outlet`, `redirect`,
   `useRouter`, `useNavigate`, `useParams`, `useSearch`, `notFound`, … — typed identically.
 
+> ### ✅ CORRECTED (2026-07-20) — most of `.nativ/` was codegen used as tape
+>
+> An audit of what was actually in each generated file, prompted by the owner asking why they exist:
+>
+> | File | Was | Now |
+> |---|---|---|
+> | `routeTree.gen.ts` | TanStack's output, derived from the app's real route files | **kept** — legitimately generated |
+> | `router.gen.tsx` | the whole `createRouter` call, including framework opinions (`notFoundMode`, history) | **thinned to a call** into `createNativRouter` |
+| `root.gen.tsx` | `createRootRoute(<config>)` + static imports of the app's screens — almost entirely framework code | **deleted** → `src/routes/root-route.tsx` in the package, with the app-specific half served as `virtual:nativ/root-route` |
+> | `sw.gen.ts` | 38 lines of **pure framework code**, byte-identical per app | **deleted** → `src/sw/default-worker.ts`, a real module |
+> | `register.d.ts` | 9 lines, **zero** app-specific content | **deleted** → shipped as `@arrzdev/nativ/route-globals` |
+>
+> **The principle that was being violated:** emitting a framework opinion into every consumer means
+> changing it requires every app to rebuild before the change takes effect. That is not a generated
+> file, it is a *distributed copy*. `notFoundMode: "root"` belongs in nativ, not stamped into a repo.
+>
+> Generating a **service worker** per app is the clearest example — nothing in it varied except a render
+> mode and a build tag, both of which are what build-time constants are for.
+>
+> **`.nativ/` is now ONE file:**
+>
+> ```
+> .nativ/
+>   routeTree.gen.ts   TanStack's output, derived from the app's real route files
+> ```
+>
+> `router.gen.tsx` went too. The justification for keeping it — *"Start needs a module PATH exporting
+> `getRouter`"* — was true but weak: the path does not have to be **in the consumer's tree**. It is now
+> `src/routes/router-entry.tsx` in the package, reaching the app's two variable inputs through:
+>
+> - **`#nativ-route-tree`** → aliased for the bundler *and* mapped in the app's `tsconfig.paths`. Both
+>   are required: the route tree's concrete **type** must flow into the `Register` augmentation, and a
+>   bundler-only alias builds fine while silently collapsing typed routing to `any`.
+> - **`virtual:nativ/router-config`** → the `createRouter` options. Values only, so no types needed.
+>
+> `stamp.ts` now generates nothing at all — it is pure project wiring (one `.gitignore` line, two
+> tsconfig entries), all of it idempotent and applied to files the consumer owns.
+>
+> The root route is now resolved by the route DSL through `NATIV_ROOT_ROUTE_FILE`, computed as a
+> relative path from the app's routes folder into the **installed package**. That path looks unlovely in
+> the generated tree, but it is derived from the module's real resolved location rather than guessed
+> from a package name — so it is correct under pnpm symlinks, hoisted `node_modules`, and workspace
+> links alike.
+>
+> ### Config surface removed in the same pass
+>
+> - **`providers` thunk — deleted.** App-wide providers are a **layout route**: declare one in
+>   `routerConfig` and wrap `<Outlet />`. That is the router's own composition model — it nests, it
+>   scopes, and the providers sit where anyone reading the route tree can see them. A config thunk was a
+>   second, weaker way to express the same thing. Verified in project-zero.
+> - **`generatedRouteTree` — deleted.** It lived in `.nativ/` and nativ *already ignored* whatever the
+>   consumer set. A config field that is silently overridden is worse than no field: it lies.
+> - **`virtualRouteConfig` → `routerConfig`.** nativ *always* uses the declarative route config; it is
+>   the framework's opinion, not a mode the consumer selects, so the name should not leak TanStack's
+>   "virtual file routes" implementation detail.
+
 ### 3.2 `.nativ/` — the hidden generated dir
 
 Everything the plugin stamps today at the app root (`router.gen`, and TanStack's `routeTree.gen.ts`)
@@ -269,6 +366,26 @@ Wiring (both nativ-generated, so the consumer writes neither):
   `dist/`).
 - `router.generatedRouteTree` (already a config field) is pointed into `.nativ/`; the plugin's existing
   `stampGeneratedFiles` step writes there instead of the app root — a relocation, not new machinery.
+
+> ### ✅ BUILT — `.nativ/` relocation (2026-07-20), verified against project-zero
+>
+> `src/vite/nativ-dir.ts` owns the layout; `stamp.ts` writes there; the plugin points Start's
+> `generatedRouteTree` and router `entry` at it; the `.gitignore` entry is appended idempotently so the
+> consumer wires nothing.
+>
+> **Result in the real app:** `.nativ/` holds `routeTree.gen.ts` + `router.gen.tsx`, and the app's `src/`
+> tree contains **exactly one** generated file.
+>
+> **Correction to this section, found by building rather than reasoning:** the design listed
+> `__root.gen.tsx` as relocatable. It is not. The virtual-file-routes config references it by a path
+> *relative to `routesDirectory`*, and TanStack's generator walks that tree to find it — so it is a route
+> file nativ happens to author, not a build output. It stays beside the routes (gitignored there).
+> Removing it from `.nativ/` is a correctness fix, not a compromise.
+>
+> **Path-resolution trap, measured against Start 1.167.13:** BOTH the router `entry` and
+> `generatedRouteTree` resolve relative to **`src/`**, not the app root. A root-relative path does not
+> error — the generator silently writes to `src/<path>`, so the route tree lands where nothing imports it
+> and the build fails much later with an unresolved-import error pointing at a different file.
 
 ### 3.3 The one hard spot — generator symbol recognition (spike-gated)
 
@@ -330,6 +447,34 @@ platform-agnostic and identical on every target. The shipped `useKeyboard` → `
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### 4.1 🔒 Permission-gated capabilities: four states, and the accessor never rejects
+
+Established while fixing the geolocation exemplar (**2026-07-20, built + tested**). Every
+permission-gated capability uses this shape:
+
+```ts
+type Permission = "granted" | "denied" | "prompt" | "unavailable"
+```
+
+**`"unavailable"` is not a permission.** It means the capability cannot be used at all right now, so
+prompting is pointless — and callers must branch on it *differently*: `"denied"` sends the user to
+**app** settings; `"unavailable"` sends them to **system** settings, or nowhere if the platform simply
+lacks the API. A three-state model silently collapses these and produces a "grant permission" button
+that cannot work.
+
+Concretely, the case that forced it: **`@capacitor/geolocation`'s `checkPermissions()` throws when
+system location services are switched off** — a device state arriving through a permission-shaped API.
+
+**Two rules follow, and they apply to every capability:**
+
+1. **An accessor must never reject.** It returns state, including failure state. An accessor that throws
+   pushes a `try/catch` into every call site — exactly the per-platform burden doctrine §0.2 exists to
+   absorb.
+2. **Distinguish "can't ask" from "haven't asked."** The web branch is the sharp case: a missing
+   `navigator.geolocation` is `"unavailable"` (asking cannot help), but a missing
+   `navigator.permissions` is `"prompt"` — older Safari/Firefox can *request* geolocation while being
+   unable to *query* it. Collapsing those two strands the user on old browsers.
+
 Consequences that become **rules** for every new primitive:
 - **Reactive → hook, imperative → API** (`VISION.md §6`): one-shot reads are async fns; live watches are
   hooks over a `subscribe`/`get` accessor (so **non-React** consumers — the OTA updater, auth — can
@@ -344,7 +489,160 @@ Consequences that become **rules** for every new primitive:
 
 ---
 
-## 5. Where this doc sits
+## 5. What becomes a primitive — selection & sourcing
+
+§4 says *how* a primitive is built. This says **which things earn one, in what order, and whether we
+write it or wrap it.** It is the answer to `VISION.md §9`'s "which 8–10 primitives are the 80/20?"
+
+### 5.1 Two independent reasons something becomes a primitive
+
+**A. Forced — cross-platform divergence.** If correct behaviour requires a *different implementation
+per target*, it must be a primitive. Otherwise every consumer writes the platform branch, and most will
+write it wrong. `Drawer` is the archetype: native keyboard avoidance needs the Capacitor keyboard plugin
+(real OS height, will-show/hide events, easing); web needs `visualViewport` heuristics. Same component,
+two mechanisms, and **the consumer must never see the seam.**
+
+> This is doctrine §0.2 and §0.5 restated as a *selection rule*: if the answer to "does the consumer
+> have to know what platform they're on?" is yes, nativ has failed and the thing belongs in the
+> framework.
+
+**B. Elective — it's a genuinely useful building block.** No divergence required. `View`'s `min-h-0`
+safety, `Button`'s press physics, `List`'s virtualisation wrapper. These earn their place by being the
+correct-by-construction version of something people otherwise get subtly wrong.
+
+**A is obligatory; B is a judgement call.** When unsure about B, don't ship it — an unbuilt primitive
+costs nothing, a wrong one is a permanent API.
+
+### 5.2 🔒 Ship the whole ladder, not just the top rung
+
+**A primitive is not one export.** Every layer of §4's stack is independently useful, so every layer is
+independently exported:
+
+```
+useKeyboard()            → { isOpen, height }   ← the accessor. THE hybrid branch lives here.
+useKeyboardAvoidance()   → { space, behavior }  ← headless driver, platform-agnostic
+<AvoidKeyboard>                                 ← the ergonomic wrapper
+```
+
+The consumer picks their altitude. Someone building a bespoke chat composer takes `useKeyboard` and owns
+the layout; someone who just wants a form that doesn't get covered takes `<AvoidKeyboard>`. **Both get
+the cross-platform correctness, because it lives at the bottom.**
+
+Exporting only the component is the common framework mistake — it forces an eject-to-nothing cliff the
+moment a design doesn't fit. **Rule: if a primitive has a non-trivial hybrid layer, that layer ships as
+a public hook.**
+
+### 5.3 Demand signals — how to decide *what* to build next
+
+Do not derive the roadmap from `VISION.md §3` alone. That's a catalogue of ~100 *problems*, not a
+priority order, and treating it as a backlog is the scope risk that has under-resourced every comparable
+project.
+
+Three sources, all of which are **filtered demand** — someone already paid to discover these are real:
+
+| Signal | Reads as | Caveat |
+|---|---|---|
+| **Ionic's component list** | 10 years of "the community asked for this" | Some is Ionic-specific ceremony (`ion-content`); some is stale (MD2) |
+| **React Native / Expo's API surface** | the same, for the native-first audience | RN solves some things nativ gets free from the DOM |
+| **Popular Capacitor / Ionic / Expo packages** | what people actually install to fill gaps | **A popular package is a gap in the framework** — that's the strongest signal on this list |
+
+That last row is the sharpest tool: *if thousands of apps install a package to do X, X is missing.*
+
+**These tell you _what_. `PRIOR-ART.md` tells you _how_** — it's the ported implementation detail
+(gesture arbitration, the input shims, the back-button chain), not the selection question. Two distinct
+uses of the same prior art; don't conflate them.
+
+### 5.4 🔒 Wrap by default — but popularity is not health
+
+Doctrine §0.6 says don't reinvent the solved. Applied to third-party libs: **default to wrapping a
+battle-tested one**, and treat writing our own as the thing that needs justification.
+
+**⚠︎ But download count is the *worst* available health signal**, because it's dominated by inertia and
+transitive deps. Two verified examples, both of which look like obvious "approved" picks:
+
+| Library | Downloads | Reality |
+|---|---|---|
+| **`vaul`** (drawers) | 37M/week | **Dead.** README says unmaintained (2025-10); npm `latest` is **Dec 2024**; fixes merged to `main` in Jul 2025 were never published. Its open bugs are exactly the iOS/nested/keyboard class nativ cares about. |
+| **`@use-gesture/react`** | 5.6M/week | **~2 years dormant**, no deprecation notice, crash fixes unmerged, broken against its own sibling `react-spring` v10. |
+
+Both would have passed a "is it popular?" test. Neither survives a health check.
+
+**The check, before adopting anything:**
+1. **Last publish date** — and whether `main` has unpublished commits (vaul's tell).
+2. **Open-issue ratio vs stars**, and whether the *open* ones are in your use case.
+3. **What the maintainer says** — an unmaintained notice in a README outranks any metric.
+4. **Does it work on all six targets**, or silently only on web?
+
+### 5.5 🔒 "Don't depend on it" ≠ "ignore it" — dead libraries are prime source material
+
+**Health decides whether you can `npm install` it. It says nothing about whether the code is worth
+reading.** These are independent questions and collapsing them throws away the most valuable thing a
+dormant library has: *someone already fought every edge case, and the fixes are sitting there in the
+diff history.*
+
+A frozen library is arguably **better** to read than a live one — no churn, and every hard-won
+workaround is visible and stable.
+
+**So there are three verdicts, not two:**
+
+| Verdict | Means | Health matters? |
+|---|---|---|
+| ✅ **Wrap** | take the dependency | **yes — decisive** |
+| 📖 **Read / port** | study the source, take the technique, attribute it | **no** |
+| ⛔ **Ignore** | nothing to learn | n/a |
+
+`vaul` and `@use-gesture` are **📖, not ⛔.** Don't depend on them; absolutely do read them.
+
+#### The worked example is already in this repo
+
+`src/components/drawer/` is the proof, and its history is the pattern: **started as vaul → patched and
+fixed on top → migrated to fully custom.** vaul is *not* a dependency today; what survives is the
+hard-won tuning, and the source already documents it —
+
+```ts
+/**
+ * Tuning mirrors [vaul](https://github.com/emilkowalski/vaul/blob/3e97aac6a38e4481bade71d7233ed6002e80f9b0/src/constants.ts)
+ * + its `helpers.ts`, the feel we settled on while drafting.
+ */
+// …and inline: "vaul: moved upwards — reset, don't close"
+//              "@see vaul `dampenValue` in helpers.ts"
+```
+
+That is exactly the convention `PRIOR-ART.md §0` prescribes for the Ionic port, arrived at independently
+— which is a good sign it's the right one. **Generalise it: "we outgrew this library" is the expected
+end state of a wrap, not a failure of one.** Wrap to learn the shape, then own it when the divergence
+demands more than the library was built for.
+
+**⚠︎ Two gaps to close on the existing attribution** (`DECISIONS.md` B27):
+
+1. **The links point at `main`, not a pinned SHA.** `PRIOR-ART.md §0` is explicit — a `main` link rots,
+   and the reader loses the ability to diff what changed. Repin them.
+2. **There is no `THIRD_PARTY_LICENSES`.** vaul is MIT. The current references look like
+   technique-and-constant sourcing rather than substantial copying, so the notice requirement is
+   arguably not triggered — but the file costs nothing, removes the ambiguity permanently, and is
+   already required for the upcoming Ionic port anyway.
+
+### 5.6 Current standing verdicts
+
+From the research pass — re-check health before relying on the ✅ row.
+
+- ✅ **Wrap:** `motion` (12.42.2, active — use `LazyMotion` + `m`, not the full barrel),
+  `@tanstack/react-virtual`, `embla-carousel` (pin 8.x), `vite-plugin-pwa`.
+- 📖 **Read, don't depend:** **`vaul`** (dead, but the sheet physics/snap-point/nested-scroll
+  arbitration are the reference — and nativ's `Drawer` already descends from it), **`@use-gesture`**
+  (dormant, still instructive on pointer normalisation), **Ionic** (`PRIOR-ART.md` — the whole port
+  list), **Framework7** (alive, one-maintainer — closest prior art for web-first native-feel UI).
+- 🔨 **Must build, nothing exists:** **keyboard-aware layout.** Verified — npm has no credible
+  cross-platform option; everything is React Native (`react-native-keyboard-controller`) or a raw native
+  shell (`@capacitor/keyboard`). Everyone hand-rolls it. Clearest differentiator available, and it's
+  already `useKeyboard`'s job.
+- 📖 **Port, don't wrap:** gesture *arbitration*. `motion`'s `drag` covers ~80%; the single-winner
+  controller that stops a drawer drag, a swipeable row and a scroll from fighting has no standalone
+  library — Ionic's is the reference. → `PRIOR-ART.md §3`.
+
+---
+
+## 6. Where this doc sits
 
 - `VISION.md` — the north star and principles. **§2 principle 4 is revised by §0.4 here.**
 - `LIFECYCLE.md` — how these contracts get built, shipped, and updated (config → build → deploy → OTA →

@@ -1,4 +1,8 @@
 import { useEffect, useRef } from "react"
+import {
+  GesturePriority,
+  useGestureCapture,
+} from "#nativ/hooks/use-gesture-capture"
 
 /* =============================================================================
  * TYPES
@@ -17,7 +21,7 @@ export interface EdgeSwipeGesturesProps {
   right?: () => void
   /**
    * Off switch. When `false`, no listeners are attached and nothing fires. Gate
-   * this to the installed app (e.g. `isInstalledApp()` from `@repo/nativ/utils`) so
+   * this to the installed app (e.g. `isInstalledApp()` from `@arrzdev/nativ/utils`) so
    * it doesn't double-fire with the browser's own edge-swipe nav in a tab. Covers
    * both the standalone PWA and a native Capacitor build.
    * @default true
@@ -57,7 +61,7 @@ const DEFAULT_THRESHOLD_PX = 56
  *
  * @example
  * ```tsx
- * import { isInstalledApp } from "@repo/nativ/utils"
+ * import { isInstalledApp } from "@arrzdev/nativ/utils"
  * <EdgeSwipeGestures enabled={isInstalledApp()} left={() => navigate({ to: "/" })} />
  * ```
  */
@@ -73,6 +77,16 @@ export function EdgeSwipeGestures({
   const rightRef = useRef(right)
   leftRef.current = left
   rightRef.current = right
+
+  //Highest band: an edge swipe is system-level navigation the user expects to
+  //win from anywhere. `onLost` cannot fire in practice (nothing outranks it),
+  //but it is wired so a future higher-priority gesture cannot strand this one.
+  const capture = useGestureCapture({
+    priority: GesturePriority.EdgeSwipe,
+    enabled,
+  })
+  const captureRef = useRef(capture)
+  captureRef.current = capture
 
   useEffect(() => {
     if (!enabled || typeof document === "undefined") return
@@ -92,6 +106,16 @@ export function EdgeSwipeGestures({
       if (touch.clientX <= edgeZone) edge = "left"
       else if (touch.clientX >= width - edgeZone) edge = "right"
       else edge = null
+
+      //Claim the shared arbiter as soon as a touch STARTS in an edge strip.
+      //This recogniser only decides at touchend, but waiting until then would be
+      //too late to stop a row swipe or drawer drag running underneath the same
+      //finger. The condition is deliberately narrow — a few edge pixels — so
+      //holding the pointer here does not starve ordinary gestures, and
+      //suppressing a row swipe under an edge touch is the intended outcome:
+      //system-level back navigation outranks in-content gestures.
+      if (edge !== null && !captureRef.current.request()) edge = null
+
       startX = touch.clientX
       startY = touch.clientY
     }
@@ -99,6 +123,7 @@ export function EdgeSwipeGestures({
     function onTouchEnd(event: TouchEvent) {
       const startedFrom = edge
       edge = null
+      if (startedFrom !== null) captureRef.current.release()
       const touch = event.changedTouches[0]
       if (!startedFrom || !touch) return
 
@@ -111,6 +136,7 @@ export function EdgeSwipeGestures({
     }
 
     function onTouchCancel() {
+      if (edge !== null) captureRef.current.release()
       edge = null
     }
 

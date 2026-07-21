@@ -22,11 +22,21 @@ function resolveStrategyPlugins(
   ]
 }
 
+/**
+ * Cache match options.
+ *
+ * **`ignoreVary` is deliberately NOT defaulted on.** The previous code forced
+ * `ignoreVary: true` on every strategy. On content-hashed assets that is harmless
+ * and useful; on *documents* it defeats `Vary: Cookie` — the one HTTP mechanism
+ * that would partition a per-user response — so user A's server-rendered HTML
+ * could be served to user B on the same device. A privacy bug, not a tuning knob.
+ * → `DECISIONS.md` B5/B25, `RENDERING.md §3.2`
+ *
+ * Opt in per rule where it is provably safe; {@link createHashedAssetStrategy}
+ * is the one place nativ does.
+ */
 function resolveMatchOptions(options: StrategyFactoryOptions) {
-  return {
-    ignoreVary: true,
-    ...options.matchOptions,
-  }
+  return { ...options.matchOptions }
 }
 
 /**
@@ -66,27 +76,34 @@ export function createCacheFirstStrategy(
   })
 }
 
-export function createPagesNetworkFirstStrategy(
-  buildTag: string,
-  options: Omit<NetworkFirstStrategyOptions, "cacheName"> & {
-    cacheBucket?: string
-  } = {},
+/**
+ * The strategy for **content-hashed build assets**.
+ *
+ * Cache-first, not stale-while-revalidate: the filename *is* the version, so a
+ * changed file arrives under a changed URL and a cached entry can never be stale.
+ * SWR here revalidates every asset on every load — guaranteed-useless traffic.
+ *
+ * This is also the one place `ignoreVary` is safe: with the version in the URL,
+ * response headers cannot make two entries meaningfully different, and honouring
+ * `Vary: Accept-Encoding` just causes redundant misses.
+ */
+export function createHashedAssetStrategy(
+  options: StrategyFactoryOptions,
 ): Strategy {
-  const cacheBucket = options.cacheBucket ?? "pages"
-  return createNetworkFirstStrategy({
+  return createCacheFirstStrategy({
     ...options,
-    cacheName: createCacheName(buildTag, cacheBucket),
+    matchOptions: { ignoreVary: true, ...options.matchOptions },
   })
 }
 
-export function createStaticStaleWhileRevalidateStrategy(
+export function createStaticAssetStrategy(
   buildTag: string,
   options: Omit<StrategyFactoryOptions, "cacheName"> & {
     cacheBucket?: string
   } = {},
 ): Strategy {
   const cacheBucket = options.cacheBucket ?? "static"
-  return createStaleWhileRevalidateStrategy({
+  return createHashedAssetStrategy({
     ...options,
     cacheName: createCacheName(buildTag, cacheBucket),
   })

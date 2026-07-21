@@ -18,8 +18,10 @@ import type {
   OmitGestureEngineHandlers,
 } from "#nativ/hooks/use-gesture-engine"
 import { useGestureEngine } from "#nativ/hooks/use-gesture-engine"
+import { useHapticTick } from "#nativ/hooks/use-haptic-tick"
 import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
 import { cn } from "#nativ/utils/cn"
+import { mergeStyles } from "#nativ/utils/styles"
 
 // Buttons are small touch targets, so widen the reentrant press region well past
 // the engine's default margin — a normal thumb-roll on release (~35px, measured on
@@ -83,9 +85,18 @@ export type ButtonProps = OmitGestureEngineHandlers<
   /** Fired on pointer/keyboard release via {@link useGestureEngine}. */
   onClick?: ComponentProps<"button">["onClick"]
   /**
-   * Fire a haptic on press-down (the moment of contact) — native engine on a
-   * Capacitor build, `navigator.vibrate` / iOS polyfill on web. `true` = light;
-   * pass a weight for a firmer tap. Default off.
+   * Fire a haptic on press-down (the moment of contact). `true` = light; pass a
+   * weight for a firmer tap. Default off.
+   *
+   * Backend per platform: the native engine on a Capacitor build,
+   * `navigator.vibrate` on Android/Chrome web, and — on iOS web, which has
+   * neither — an invisible `<input switch>` transducer mounted on this button so
+   * the user's real finger triggers the system tick.
+   *
+   * ⚠︎ On iOS web the weight is ignored: the system tick is the only haptic
+   * WebKit exposes, and there is no way to vary it. The prop still takes a weight
+   * because the other five targets honour it.
+   * @see src/capabilities/haptic-tick.ts
    */
   haptic?: ImpactWeight | boolean
 }
@@ -467,6 +478,25 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
   const isDisabled = Boolean(disabled)
   const hasFixedWidth = buttonHasFixedWidth(className)
 
+  //iOS web can only produce a haptic from a real finger landing on a real
+  //`<input switch>`, so the `haptic` prop mounts a transducer overlay in addition
+  //to firing the imperative engine below. The overlay is inert (and costs nothing)
+  //on every platform that has a genuine haptic engine.
+  //@see src/capabilities/haptic-tick.ts
+  const attachHaptic = useHapticTick(
+    !isDisabled && resolveButtonHaptic(haptic) !== null,
+  )
+
+  //one host node, two owners: the imperative handle above and the transducer.
+  //Compose rather than pick — dropping either silently breaks focus() or haptics.
+  const setButtonRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      buttonRef.current = el
+      attachHaptic(el)
+    },
+    [attachHaptic],
+  )
+
   const gestureEngineHandlers = useGestureEngine({
     disabled: isDisabled,
     pressOutset: BUTTON_PRESS_OUTSET_PX,
@@ -486,20 +516,25 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
   return (
     <ButtonContext.Provider value={{ isDisabled, hasFixedWidth }}>
       <button
-        ref={buttonRef}
+        ref={setButtonRef}
         type="button"
         disabled={disabled}
         aria-disabled={disabled || undefined}
         {...props}
         {...gestureEngineHandlers}
-        className={cn(
-          BUTTON_ROOT_LAYOUT_CLASS,
-          BUTTON_ROOT_SURFACE_CLASS,
-          disabled
+        //The interaction utility is LOCKED, the look is not. `clickable` carries
+        //the `touch-action` longhand that keeps `pointercancel` alive on iOS
+        //(WebKit 240917) — a consumer `touch-none` silently stranding the gesture
+        //state machine is exactly the class of bug nativ exists to absorb. And a
+        //DISABLED button must not be tappable no matter what className says.
+        //Layout and surface stay overridable: restyling a button is the point.
+        className={mergeStyles({
+          base: [BUTTON_ROOT_LAYOUT_CLASS, BUTTON_ROOT_SURFACE_CLASS],
+          className,
+          locked: disabled
             ? BUTTON_ROOT_NON_INTERACTION_CLASS
             : BUTTON_ROOT_INTERACTION_CLASS,
-          className,
-        )}
+        })}
       >
         <ButtonContentRow
           buttonRef={buttonRef}

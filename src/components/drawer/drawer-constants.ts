@@ -1,7 +1,18 @@
 /**
  * Drag/animation constants and the internal transition shape for the drawer engine.
- * Tuning mirrors [vaul](https://github.com/emilkowalski/vaul/blob/main/src/constants.ts)
- * + its `helpers.ts`, the feel we settled on while drafting.
+ *
+ * Tuning mirrors [vaul `src/constants.ts`](https://github.com/emilkowalski/vaul/blob/3e97aac6a38e4481bade71d7233ed6002e80f9b0/src/constants.ts)
+ * + its [`helpers.ts`](https://github.com/emilkowalski/vaul/blob/3e97aac6a38e4481bade71d7233ed6002e80f9b0/src/helpers.ts)
+ * — the feel we settled on while drafting.
+ *
+ * Why: nativ's Drawer began as a wrap of vaul and diverged into an independent
+ * implementation; what survived the migration is the *tuning*, so the lineage is
+ * recorded here rather than in a dependency. MIT © 2023 Emil Kowalski — see
+ * `THIRD_PARTY_LICENSES`.
+ *
+ * The SHA is pinned deliberately (`PRIOR-ART.md §0`): vaul is unmaintained, so
+ * `main` is frozen *today*, but a force-push, rename or archive would break every
+ * link — and, worse, destroy the ability to diff what we changed.
  */
 
 export const DRAWER_TRANSITIONS = {

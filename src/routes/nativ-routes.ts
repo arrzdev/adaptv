@@ -10,7 +10,20 @@ import {
  * The generated root route file nativ stamps (gitignored, like
  * `routeTree.gen.ts`). Consumers never write it.
  */
-const GENERATED_ROOT_FILE = "layouts/__root.gen.tsx"
+/**
+ * Where the generated root route lives, **relative to `routesDirectory`**.
+ *
+ * The generator resolves virtual route files against `routesDirectory`, so this
+ * escapes upward into `.nativ/`. That keeps the consumer's routes tree free of
+ * framework artifacts: they write route files, nativ writes the root, and the
+ * two never sit in the same folder.
+ *
+ * Set by nativ's Vite plugin, which is the only place that knows both
+ * `routesDirectory` and the app root. The fallback is the legacy in-tree
+ * location, so a stale setup still resolves rather than failing cryptically.
+ */
+const GENERATED_ROOT_FILE =
+  process.env.NATIV_ROOT_ROUTE_FILE ?? "layouts/__root.gen.tsx"
 
 type RootChildren = Parameters<typeof upstreamRootRoute>[1]
 type VirtualRootRoute = ReturnType<typeof upstreamRootRoute>

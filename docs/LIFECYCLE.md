@@ -60,6 +60,31 @@ generated root. One file, two consumers, identical data.
 | `appId?: string` | **presence enables the native lineage**; absence = web-only (§6) |
 | `styles`, `themeColor`, `icons`, `orientation`, `splashScreen`, `splashMaskMode`, `patches`, … | manifest, head, splash, native project, WebKit fixes |
 
+> ### ✅ BUILT (2026-07-20) — the `web` block resolves; static emit is wired but blocked on a shell
+>
+> `src/config/web-config.ts` resolves the block once in `nativ()` and shares it via `NativContext`, so
+> `render`/`host`/SW settings cannot drift between the router wiring, the manifest and the SW build.
+> 16 tests.
+>
+> - **`web.render` now defaults to `"ssr"`**, resolving the doc-vs-code conflict (`DECISIONS.md §3.3`):
+>   the legacy `router.render` defaulted to `"spa"` while the docs said `"ssr"`. Both legacy fields still
+>   work as escape hatches, with the `web` block winning.
+> - **`target: "capacitor"` is an override, not a default** (L12) — SPA + no SW + static host, unconditionally.
+> - **`nativStaticHostPlugin`** emits `index.html`, `404.html`, `.nojekyll` and `_redirects`
+>   (`DECISIONS.md` B26). It gates on the **`ssr` environment**, because `closeBundle` fires once per
+>   environment and the client build finishes first — running then looks for a shell that has not been
+>   written yet and fails with a misleading error.
+>
+> ⛔ **`host: "static"` still cannot complete, and the reason corrects an assumption in this doc.**
+> Measured in project-zero: with `spa: { enabled: true }` and the Cloudflare adapter, **Start emitted no
+> HTML at all** — no `_shell.html`, no `index.html`. So "copy Start's shell" is not a foundation nativ
+> can stand on, and `RENDERING.md §3.1.2`'s requirement that nativ **generate** its own user-agnostic
+> shell is load-bearing rather than belt-and-braces. The emit plugin is built and wired; it has nothing
+> to copy. It now fails with an accurate message naming the real cause. → CORE 5.
+>
+> The same missing shell is why the **SSR precache fallback** currently binds to an `/index.html` that
+> does not exist — one gap, two symptoms.
+
 ### 1.2 ⚠︎ Delta — a first-class `web` deployment block
 
 Today the deploy shape is expressed as two low-level fields (`router.render` + `sw`) and the web adapter
@@ -69,19 +94,35 @@ hatches:
 
 ```ts
 export default defineApp({
-  // …
+  // Screen thunks — statically imported by the plugin, NOT lazy chunks (§3.3, RENDERING.md §3.1.2)
+  splashScreen:     () => import("@/components/splash-screen"),
+  offlineComponent: () => import("@/components/offline"),
+
   web: {
-    render: "ssr",                 // "ssr" (default — first paint, per RENDERING.md) | "spa"
+    render: "ssr",                 // "ssr" (DEFAULT — see DECISIONS.md §6.3) | "spa"
     host: "cloudflare",            // "cloudflare" | "vercel" | "node" | "static"  → picks the Start adapter
-    sw: true,                      // default true
+    sw: {
+      enabled: true,               // default true; `false` for no SW
+      // Public, user-agnostic routes precached AS DOCUMENTS so they cold-load
+      // instantly and work offline. NEVER list a route rendering per-user content
+      // — Cache Storage is per-origin, not per-user. → RENDERING.md §3.2
+      precacheDocuments: ["/", "/pricing"],
+      register: "prompt",          // "prompt" (default) | "autoUpdate" | "manual" → RENDERING.md §3.4
+    },
   },
   native: { appId: "com.acme.app" },   // omit the whole block → web-only (§6)
   ota: { channel: "production" },       // ⚠︎ §5 — omit → no OTA
 })
 ```
 
-- `web.render` defaults to **`"ssr"`** to match `RENDERING.md`'s "SSR by default" (⚠︎ the code currently
-  defaults `router.render` to `"spa"` — reconcile: `web.render` resolves `router.render`).
+- `web.render` defaults to **`"ssr"`** — settled in `DECISIONS.md §6.3` on the asymmetry argument
+  (defaulting to SPA silently kills SEO and is discovered late; defaulting to SSR costs a config flip).
+  ⚠︎ the legacy code defaults `router.render` to `"spa"`; `web.render` resolves it.
+- **`offlineComponent`** mirrors `splashScreen` exactly: one consumer-owned component with optional
+  props, rendered by **nativ** when the app can't boot far enough for a route to exist, and by the
+  **consumer** when a mounted route's data is unavailable. → `RENDERING.md §3.1.2`.
+- **`web.sw.precacheDocuments`** is empty by default. Route *chunks* are always precached (that's what
+  makes navigation instant); this allowlist is only for public HTML documents.
 - `web.host` maps to a TanStack Start deploy preset — this is *precisely* why nativ keeps Start (roadmap
   #4): rent its deploy-anywhere adapters instead of owning CD. `host: "static"` + `render: "spa"` is the
   fully-static PWA path (§3.2).
@@ -194,9 +235,33 @@ default public folder*, and the app pulls it — **no third-party update server*
 ### 5.1 The core insight
 
 The Capacitor SPA (`dist-capacitor/`) is **pure JS/CSS/assets — zero native code**. So an OTA update *is*
-simply shipping a newer `dist-capacitor/` to the installed app. Apple §3.3.2 explicitly permits
-JS/asset-only OTA; a change that touches native code/plugins does **not** qualify and needs a store build.
-The entire safety problem reduces to: **"is this new bundle native-compatible with the installed shell?"**
+simply shipping a newer `dist-capacitor/` to the installed app. The entire safety problem reduces to:
+**"is this new bundle native-compatible with the installed shell?"**
+
+**⚠︎ Policy correction (verified 2026-07-20).** Earlier drafts of this doc and `RESEARCH.md §5` cited
+"Apple §3.3.2." That citation is **wrong on two counts**:
+
+- There is **no §3.3.2 in the App Store Review Guidelines.** The relevant Review Guideline is **2.5.2**
+  ("Apps should be self-contained in their bundles… nor may they download, install, or execute code
+  which introduces or changes features or functionality of the app").
+- In the **Developer Program License Agreement** (v. 2026-06-18), **§3.3.2 is now "Regulatory
+  Compliance"** (FDA/FAA/FCC) — nothing to do with code. The interpreted-code rule moved to
+  **§3.3.1(B) "Executable Code."**
+
+And §3.3.1(B) was **rewritten in a more permissive direction**: the historic requirement that
+interpreted code run in "Apple's built-in WebKit framework or JavaScriptCore" has been **deleted
+entirely** (0 occurrences of "WebKit" or "JavaScriptCore" in the 117-page agreement). The rule is now
+purely behavioural — downloaded interpreted code is fine so long as it (a) doesn't change the app's
+primary advertised purpose, (b) doesn't bypass signing/sandbox/OS security, and (c) doesn't create a
+storefront for other apps.
+
+**Google Play** names the exemption verbatim: the no-self-update rule *"does not apply to code that
+runs in a virtual machine or an interpreter… (such as **JavaScript in a webview** or browser)"* — with
+the standing obligation that OTA content must not itself violate Play policy.
+
+> **Net: nativ's OTA design is squarely inside both stores' rules, and the 2026 DPLA rewrite made
+> Apple's position clearer and slightly broader, not narrower.** The hard line is unchanged: web
+> assets only. No `.dylib`/`.framework`/`dex`/`JAR`/`.so`, ever — the packer must reject them.
 
 ### 5.2 The channel lives in the app's own web deploy
 
@@ -222,8 +287,36 @@ manifest.
 - **fingerprint matches** → the JS bundle is compatible with the installed shell → OTA is safe: download,
   verify `sha256`, unpack to a data dir, set as the pending bundle, **apply on next launch**.
 - **fingerprint differs** → native surface changed → OTA is **refused**; the updater surfaces "update
-  available in the App Store" instead of hot-swapping. This is what keeps nativ inside Apple §3.3.2 and
-  prevents a JS bundle from running against an incompatible native shell.
+  available in the App Store" instead of hot-swapping. This is what keeps nativ inside **DPLA §3.3.1(B)**
+  (per the §5.1 correction — *not* "§3.3.2", which is Regulatory Compliance) and prevents a JS bundle
+  from running against an incompatible native shell.
+
+> ### ✅ BUILT (2026-07-20) — `src/ota/policy.ts` + `updater.ts`, 14 tests
+>
+> **Policy is pure and fully tested; the mechanism is rented.** `decideUpdate`, `selectBootBundle`,
+> `selectPrunableBundles` and the watchdog predicate take plain data — no plugin, no filesystem, no
+> network — because *when to apply*, *what may be trusted* and *what to roll back to* are exactly the
+> decisions whose failure modes are ugly, and they should be verifiable without a device.
+>
+> Guarded in tests, each for a specific failure:
+> - **Native-fingerprint mismatch → refuse.** Not a version check, a *compatibility* check: a bundle
+>   calling a plugin the installed binary lacks crashes on a user's device, and OTA bundles never pass
+>   review or a staged rollout, so nothing upstream catches it.
+> - **Unsigned manifest → refuse** (default). An update channel is a remote-code-execution channel into
+>   every installed app.
+> - **Pruning never deletes the last known-good.** That retention *is* rollback; removing it turns a bad
+>   deploy into a bricked app with no recovery path.
+> - **A pending bundle that never pings is failed**, and boot falls back. Silence must read as failure,
+>   because a bundle that cannot boot cannot update itself out of that state.
+>
+> `startOtaUpdates` checks on launch **and on resume** — the resume path matters more, since a mobile
+> app is backgrounded far more often than cold-started, and a launch-only check can leave a user stale
+> for days. It is a direct consumer of the coordination layer's `onResume`, which exists precisely
+> because a native WebView resume is not a browser focus event.
+>
+> ⏳ **Device verification owed.** The download/unpack/pointer-flip is Capawesome's, and the full
+> install → boot → ping → prune cycle can only be exercised on hardware. `markBundleReady()` must be
+> called after first paint; forgetting it looks exactly like an update that silently never applies.
 
 ### 5.4 Applying, safety, rollback
 
@@ -236,14 +329,98 @@ manifest.
 - **Integrity** — `sha256` in the manifest is verified before unpack; the manifest should be signed (an
   app-held public key) so a compromised CDN can't push arbitrary JS.
 
+### 5.4b ⚠︎ "Replace in place" is the one thing not to do
+
+A natural way to describe this is *"hit the URL, replace the build in place, next launch is fresh."*
+The first and last parts are right; **the middle one must not be literal.**
+
+```
+   ❌ overwrite the running bundle dir        ✅ write a NEW dir, then flip a pointer
+      bundles/current/  ← unpack over it        bundles/<buildTagA>/   ← last known good
+                                                bundles/<buildTagB>/   ← newly downloaded
+                                                pointer = B (applied at next cold start)
+```
+
+Three reasons the pointer-flip is required, not stylistic:
+
+1. **The running bundle is memory-mapped and actively serving.** Overwriting files under a live
+   WebView produces torn reads and undefined behaviour — some chunks old, some new.
+2. **Rollback becomes impossible.** §5.4's watchdog reverts to the last-known-good bundle if a fresh one
+   fails to ping "app ready." That only works if the previous bundle still physically exists. Overwriting
+   destroys the thing you roll back *to*, which converts a bad deploy into a **bricked app with no
+   recovery path** — the exact failure OTA must never have.
+3. **Interrupted downloads.** Unpacking over the live directory means a connection drop mid-write leaves
+   a half-replaced app. Writing to a new dir makes the swap atomic: it either flipped or it didn't.
+
+So: download → verify `sha256` → unpack to `bundles/<buildTag>/` → mark pending → **flip at next cold
+start** → keep the previous dir until the new one proves itself. Retain ≥1 known-good bundle; prune
+older ones on successful boot.
+
+### 5.4c Minify, don't obfuscate
+
+The production build already minifies — that's the win, and it's free. **Obfuscation is a separate
+thing and not worth it here:**
+
+- **It buys no secrecy.** The same bundle is already served publicly to every browser visiting the web
+  app. The OTA zip is not exposing anything that wasn't public.
+- **It costs the thing OTA needs most: debuggability.** OTA ships code that never touched a reviewer or
+  a store rollout. When a bundle boots wrong in the field, the watchdog log and the stack trace are all
+  you have — obfuscation makes them unreadable exactly when it matters.
+- Source maps then have to be uploaded and matched per bundle to undo the damage.
+
+Ship minified + content-hashed. If a secret is in the bundle, obfuscation doesn't protect it — moving it
+server-side does.
+
+### 5.4d 🔴 Signing is not optional — the blast radius is categorically different
+
+`§5.4` says the manifest *"should be"* signed. **Make that a must**, because the failure mode is not
+comparable to a normal web compromise:
+
+| Compromise | Web deploy | OTA channel |
+|---|---|---|
+| Attacker controls | what a visitor sees this session | **code inside every installed app** |
+| Persistence | gone on next deploy | **survives; the app re-applies it every launch** |
+| Sandbox | browser | the app's own origin, with **every granted native permission** — camera, location, secure storage, biometrics |
+| User can escape by | closing the tab | **reinstalling the app** |
+
+A hijacked DNS record or a compromised CDN edge is enough. `sha256` in the manifest protects against
+*corruption*, not *substitution* — the attacker rewrites both the bundle and its hash. **Only a
+signature the app verifies with a public key baked into the store binary breaks that.**
+
+Practical shape: sign the manifest with an offline private key; embed the public key in the native
+shell (so it can only change via a store release); verify before unpack; refuse and keep the current
+bundle on mismatch. Support a second "next" public key in the shell so the signing key can be rotated
+across one store release without bricking updates.
+
 ### 5.5 Own the policy, rent the swap
 
 Per doctrine (`ARCHITECTURE.md §0.6`: rent stable cores, own seams) and `RESEARCH.md §5` ("don't DIY the
 bundle-swap blindly"): nativ **owns** the channel convention, the manifest schema, the `nativeFingerprint`
 gate, the watchdog/rollback policy, and the resume-driven check; nativ **rents** the low-level
-`WebView.setServerBasePath` bundle-swap from a maintained plugin (Capawesome Live Update or Capgo) rather
-than hand-rolling the native file juggling. If neither fits, the DIY path (download → unpack → data dir →
-`serverBasePath` → apply next launch) is the fallback — but start by wrapping.
+`WebView.setServerBasePath` bundle-swap rather than hand-rolling the native file juggling.
+
+**🔒 Plugin pick: `@capawesome/capacitor-live-update` (MIT, 8.3.0)** — per `DECISIONS.md` **O8**.
+
+| Option | License | Status |
+|---|---|---|
+| **`@capawesome/capacitor-live-update` 8.3.0** | **MIT** | ✅ **Pick.** Genuinely backend-free, and the **strongest signature story (RSA PEM + SHA-256)** — which is decisive now that §5.4d makes signing mandatory rather than optional. |
+| `@capgo/capacitor-updater` 8.51.2 | **AGPL / commercial dual** | Healthier raw metrics (810★, 2 open issues) and its CLI already does fingerprint detection — but **AGPL is disqualifying for a framework that ships to consumers.** Fallback only, under the commercial licence. |
+| `@capacitor/live-updates` (Appflow) | — | ❌ **Ruled out** — no new sales since 2025-02-11, sunsets 2027-12-31. |
+
+**Two traps that must be encoded, not discovered:**
+
+1. **Capawesome defaults `readyTimeout` to `0`, which means rollback is _disabled_.** nativ must force a
+   non-zero value — otherwise §5.4's watchdog silently doesn't exist and a bad bundle bricks the app.
+2. **iOS persistence requires conforming to `Library/NoCloud/ionic_built_snapshots/<id>/`.** Deviate and
+   the bundle silently fails to persist across cold launch — it appears to work in testing and fails in
+   the field.
+
+**What nativ still owns regardless of the pick:** the `.well-known` channel convention, the manifest
+schema, the `nativeFingerprint` computation, signature verification (§5.4d), the boot watchdog, and the
+resume-driven check. The plugin is only the file-juggling + `serverBasePath` layer, which keeps the swap
+replaceable — if Capgo's licensing or health changes, the seam is one module wide. If neither plugin
+fits, the DIY path (download → verify → unpack to a new dir → flip pointer → apply next launch) is the
+documented fallback.
 
 ---
 

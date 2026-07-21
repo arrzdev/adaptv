@@ -21,13 +21,18 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs"
+import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
+import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
 
 const CWD = process.cwd()
-const CAP_WEB_DIR = "dist-capacitor/client"
+//the framework package root — bin/ is directly under it. Lets the CLI load
+//nativ's own pure modules (doctor, privacy-manifest) rather than duplicate them.
+const NATIV_ROOT = fileURLToPath(new URL("..", import.meta.url))
+const CAP_WEB_DIR = "dist/client"
 
 /* =============================================================================
  * tiny output helpers
@@ -580,7 +585,54 @@ function generateAssets(appRoot, config, platforms) {
   ok("launcher icon branded")
 }
 
+/**
+ * Scaffold the native project if it isn't there yet.
+ *
+ * Capacitor's `sync` requires `ios/` or `android/` to already exist — it does not
+ * create them. `cap add` does, and it needs the corresponding `@capacitor/<plat>`
+ * package installed. A first-time `nativ run ios` should just work, so this
+ * bootstraps rather than erroring out.
+ */
+function capAddIfMissing(appRoot, platform, env) {
+  const dir = path.join(appRoot, platform)
+  if (existsSync(dir)) return
+  //resolve rather than probe a fixed path — a hoisted node_modules (pnpm
+  //`node-linker=hoisted`, or npm/yarn) puts `@capacitor/<plat>` at the workspace
+  //root, not under the app. `require.resolve` finds it wherever the linker did.
+  let platformInstalled = false
+  try {
+    createRequire(path.join(appRoot, "package.json")).resolve(
+      `@capacitor/${platform}/package.json`,
+    )
+    platformInstalled = true
+  } catch {
+    platformInstalled = false
+  }
+  if (!platformInstalled) {
+    die(
+      `@capacitor/${platform} is not installed. Add the native platform package:\n` +
+        `    pnpm --filter <your-app> add @capacitor/${platform}`,
+    )
+  }
+  step(`cap add ${platform} (first run — scaffolding native project)`)
+  const { cmd, pre } = capCmd(appRoot)
+  //iOS: force CocoaPods, never SPM. Capacitor's SPM path resolves plugins against
+  //the `capacitor-swift-pm` binary xcframework, whose Swift module the plugin
+  //sources fail to compile against under Xcode 16 (`CAPPluginCall has no member
+  //'reject'`, `CAPBridgeProtocol has no 'viewController'`). CocoaPods builds every
+  //plugin from source against one consistent `Capacitor` pod and compiles cleanly.
+  //Verified: SPM fails at every version cohort; CocoaPods → BUILD SUCCEEDED.
+  const pkgMgr =
+    platform === "ios" ? ["--packagemanager", "CocoaPods"] : []
+  sh(cmd, [...pre, "add", platform, ...pkgMgr], {
+    cwd: appRoot,
+    env,
+    label: `cap add ${platform}`,
+  })
+}
+
 function capSync(appRoot, platform, env) {
+  capAddIfMissing(appRoot, platform, env)
   step(`cap sync ${platform}`)
   const { cmd, pre } = capCmd(appRoot)
   sh(cmd, [...pre, "sync", platform], {
@@ -616,7 +668,71 @@ function checkTool(label, argv, { optional = false } = {}) {
   return found
 }
 
-function doctor(appRoot) {
+/**
+ * Load a nativ source module (TS) and return its exports. Same esbuild trick as
+ * loadConfig, so the CLI can call the framework's own pure functions (doctor,
+ * privacy-manifest) instead of duplicating them here.
+ */
+async function loadNativModule(relFromSrc) {
+  const abs = path.join(NATIV_ROOT, "src", relFromSrc)
+  const result = await esbuild({
+    entryPoints: [abs],
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "node",
+    target: "es2022",
+    // the pure modules we load import only from #nativ/* and node builtins; the
+    // alias resolves those to src so the bundle is self-contained
+    alias: { "#nativ": path.join(NATIV_ROOT, "src") },
+  })
+  const source = result.outputFiles?.[0]?.text
+  if (!source) die(`failed to bundle ${relFromSrc}`)
+  const url = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
+  return import(url)
+}
+
+/** Read a file if present, else undefined — for the doctor's pure checks. */
+function readIf(p) {
+  return existsSync(p) ? readFileSync(p, "utf8") : undefined
+}
+
+/** Project-level checks (the silent failures), from src/native/doctor.ts. */
+async function runProjectChecks(appRoot) {
+  log("\nProject checks")
+  const { runDoctor, formatDiagnostics } =
+    await loadNativModule("native/doctor.ts")
+  let deps = []
+  try {
+    const pkg = JSON.parse(
+      readFileSync(path.join(appRoot, "package.json"), "utf8"),
+    )
+    deps = [
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.devDependencies ?? {}),
+    ]
+  } catch {}
+  const diagnostics = runDoctor({
+    iosInfoPlist: readIf(path.join(appRoot, "ios/App/App/Info.plist")),
+    capacitorConfig: readIf(path.join(appRoot, "capacitor.config.json")),
+    androidBuildGradle: readIf(
+      path.join(appRoot, "android/app/build.gradle"),
+    ),
+    hasPrivacyManifest: existsSync(
+      path.join(appRoot, "ios/App/App/PrivacyInfo.xcprivacy"),
+    ),
+    dependencies: deps,
+  })
+  if (diagnostics.length === 0) {
+    log(`  ${c.green("✔")} no issues found`)
+  } else {
+    for (const line of formatDiagnostics(diagnostics).split("\n")) {
+      log(`  ${line}`)
+    }
+  }
+}
+
+async function doctor(appRoot) {
   log(c.bold("nativ doctor"))
   log(
     c.dim("  toolchain for building native iOS / Android from this app\n"),
@@ -675,6 +791,7 @@ function doctor(appRoot) {
   log(
     `  ${existsSync(path.join(appRoot, "assets/logo.png")) ? c.green("✔") : c.yellow("○")} assets/logo.png (launcher-icon source)`,
   )
+  await runProjectChecks(appRoot)
   log("")
 }
 
@@ -818,7 +935,7 @@ async function main() {
 
   switch (command) {
     case "doctor":
-      return doctor(appRoot)
+      return await doctor(appRoot)
     case "run":
       return cmdRun(appRoot, assertPlatform(rest[0]), flags.target)
     case "build":

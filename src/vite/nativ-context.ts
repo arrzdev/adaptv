@@ -1,4 +1,5 @@
 import type { NativAppConfig } from "#nativ/config/app-config"
+import type { ResolvedWebConfig } from "#nativ/config/web-config"
 
 export type LoadedAppConfig = {
   config: NativAppConfig
@@ -14,6 +15,12 @@ export type LoadedAppConfig = {
 export type NativContext = {
   appRoot: string
   loaded: LoadedAppConfig | null
+  /**
+   * The resolved `web` block. Set once by `nativ()` and read by every downstream
+   * plugin, so `render`/`host`/SW settings cannot drift between the router
+   * wiring, the manifest and the service-worker build.
+   */
+  web?: ResolvedWebConfig
 }
 
 export function createNativContext(appRoot: string): NativContext {

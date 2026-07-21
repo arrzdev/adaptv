@@ -24,7 +24,7 @@ Every team that wants "one app, everywhere" faces the same fork:
 **nativ takes the second fork and refuses its downsides.** The render target stays the DOM (so the
 whole React/CSS/web ecosystem just works). Native capability comes through **Capacitor as a thin
 seam**. And on top sits a layer of **primitives that are correct-by-construction** — a `View` that
-can't scroll wrong, a `Screen` that's edge-to-edge by default, a `Button` with real press physics and
+can't scroll wrong and is edge-to-edge by default, a `Button` with real press physics and
 haptics, capability APIs that transparently pick browser / polyfill / native. The developer writes
 ordinary React; nativ makes it behave like a native app on six targets.
 
@@ -60,7 +60,7 @@ beat on developer joy and correctness, not to copy.
 4. **No runtime magic that rewrites user code; the frame is owned _above_ the route.** Root-ness comes
    from the framework-owned shell seeding a full-viewport, inset-aware slot (React Native's navigator
    model) — never from a primitive inspecting the DOM or mutating the consumer's tree. A dumb-but-correct
-   `View` fills that frame; there is no self-detecting `Screen`/`Page`. Predictability is a feature.
+   `View` fills that frame; there is no `Screen`/`Page` at all. Predictability is a feature.
    (Mechanism: `ARCHITECTURE.md §0.4`, §1.)
 5. **One config source.** `nativ.config.ts` is the single source of truth. It generates the web
    manifest, `capacitor.config`, the native project settings, splash, icons, theme — the consumer never
@@ -169,7 +169,7 @@ Shell (framework layer over TanStack Start)
    • splash policy, memory history, hardware back, status bar, safe-area 
    ▼
 Primitives  ── the consumer-facing API ─────────────────────────────────
-   View · Screen · Button · List · Link · Text · Image · Input           
+   View · Button · List · Link · Text · Image · Input · Offline        
    Swipeable · Drawer/Sheet · Modal · Tabs · AvoidKeyboard               
    ▼
 Capabilities  ── platform-branching device access ─────────────────────
@@ -209,21 +209,17 @@ Behavior via props. Scrolling, edge-fades, and safe-area are props, not classes.
 - `safe`: `"top" | "bottom" | "x" | "all"` — safe-area padding that resolves per target.
 - **Lint:** `overflow-*`, `scrollable-*`, `min-h-0` in `className` on a `<View>` → build error: "use `scroll`."
 
-### `Screen` — the route root contract
-Owns edge-to-edge + the shell flex-chain. A route's root should be a `Screen`. Explicit, not auto-detected.
+### ~~`Screen`~~ — removed (see L5)
 
-```tsx
-export default function TodosRoute() {
-  return (
-    <Screen>                                  {/* edge-to-edge, safe-area aware, correct chain */}
-      <Screen.Header>{/* pt-safe, sits under nothing */}</Screen.Header>
-      <View scroll="y" fades="top" className="flex-1">{list}</View>
-      <Screen.Footer>{/* pb-safe-or-2, above the keyboard */}</Screen.Footer>
-    </Screen>
-  )
-}
-```
-- **Lint:** a file in `routesDirectory` whose root element isn't a `Screen`/`View` → warning with a fix hint. (Warn, don't rewrite.)
+**`Screen` was deleted 2026-07-20.** It duplicated what the shell already owns.
+
+The frame is seeded **above** the route: the shell provides a full-viewport slot and stretches its
+child, exactly as React Navigation's navigator does. A route's root is therefore just a `View` — a
+dumb-correct `flex-col` box — and there is no second component whose job is "be the root."
+
+The failure it avoids is real: with both a shell frame *and* a `Screen`, "who owns edge-to-edge" has
+two answers, and a route nested one level deeper silently gets a different one. Root-ness must never be
+inferred from position in the DOM. → `ARCHITECTURE.md §1`
 
 ### `Button` — real press physics
 Wraps the gesture engine (exists: `useGestureEngine`, `pressed:` variant). Press feedback that survives finger re-entry, optional haptic, disabled states, keyboard-activatable.
@@ -363,7 +359,7 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 ## 8. Developer experience
 
 - **Six-target testing** discipline and commands: `TESTING.md`.
-- **Enforcement**: build-time lint rules (className-behavior misuse, non-`Screen` route roots), dev-only
+- **Enforcement**: build-time lint rules (className-behavior misuse, non-`View` route roots), dev-only
   runtime warnings, and types that make illegal states unrepresentable.
 - **Debugging native**: WebView inspection (`chrome://inspect`, Safari ▸ Develop), device log sink.
 - **Version safety**: nativ pins a known-good Capacitor set (core/plugins/framework/Xcode) so consumers
@@ -382,7 +378,14 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 - **Secure storage / auth** — how opinionated should nativ be about the bearer-token + biometric flow?
 - **Testing automation** — can the six-target matrix run in CI (sims/emulators) or stay local?
 - **Distribution** — does nativ own signing config + fastlane, or stop at the unsigned artifact?
-- **Scope discipline** — which 8–10 primitives are the 80/20? (View, Screen, Button, List, Link, Input,
+- ✅ **Scope discipline — ANSWERED, see `ARCHITECTURE.md §5`.** The method: a primitive is *forced* when
+  cross-platform divergence means the consumer would otherwise write the branch (Drawer), or *elective*
+  when it's a genuinely better building block (View's `min-h-0` safety). Ship **every layer** of the §4
+  ladder as a public export, not just the component. Prioritise from **filtered demand** — Ionic's
+  component list, RN/Expo's API surface, and especially *popular Capacitor packages, since a popular
+  package is a gap in the framework*. Wrap by default, but **health-check first: popularity is not
+  health** (`vaul` has 37M downloads/week and is dead). *(Original question below, for context.)*
+- ~~which 8–10 primitives are the 80/20?~~ (View, Button, List, Link, Input,
   Swipeable, Drawer, Text, Image — everything else composes from these.)
 
 ---
@@ -395,7 +398,7 @@ document the pattern → repeat. ChopChop is the forcing function; every primiti
 1. **Native keyboard avoidance** — `useKeyboard` gains a `@capacitor/keyboard` branch; the drawer and
    `AvoidKeyboard` stop misbehaving on native. (Real pain now; proves the capacitor-aware-primitive loop.)
 2. **`capacitor.config` from `nativ.config`** — kill the second config file.
-3. **`View` / `Screen` contract** — props-not-className, edge-to-edge default, the lint rule. The spine.
+3. **`View` contract** — props-not-className, edge-to-edge default, the lint rule. The spine.
 4. Then **Button → List → Swipeable → Drawer-on-AvoidKeyboard → Link → Input**, each verified on six targets.
 
 The measure of success: a developer writes ordinary React with these primitives and gets a browser app,

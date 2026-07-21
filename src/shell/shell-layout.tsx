@@ -1,9 +1,11 @@
 import { HeadContent, Scripts } from "@tanstack/react-router"
 import type { ComponentType, ReactNode } from "react"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { initNativeKeyboard } from "#nativ/capabilities/keyboard"
 import { persistNativeThemePreference } from "#nativ/capabilities/native-theme"
 import { hideNativeSplash } from "#nativ/capabilities/splash"
+import type { OfflineProps } from "#nativ/components/offline"
+import { Offline } from "#nativ/components/offline"
 import { OrientationGuard } from "#nativ/components/orientation-guard"
 import type { NativPatches } from "#nativ/config/app-config"
 import type {
@@ -15,12 +17,16 @@ import { useAndroidBackButton } from "#nativ/hooks/use-android-back-button"
 import { useCaretRepaint } from "#nativ/hooks/use-caret-repaint"
 import { useFreezeViewport } from "#nativ/hooks/use-freeze-viewport"
 import { useGlobalFpsSentinel } from "#nativ/hooks/use-global-fps-sentinel"
+import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
 import { useRegisterPwaServiceWorker } from "#nativ/hooks/use-register-pwa-service-worker"
 import { useStatusBar } from "#nativ/hooks/use-status-bar"
 import { useSuppressTextMagnifier } from "#nativ/hooks/use-suppress-text-magnifier"
 import { useSyncTheme } from "#nativ/hooks/use-sync-theme"
 import { readPreference, useTheme } from "#nativ/hooks/use-theme"
+import { installPreloadErrorRecovery } from "#nativ/shell/preload-error-recovery"
+import { initKv } from "#nativ/storage/kv"
 import { cn } from "#nativ/utils/cn"
+import { applyPlatformStamp } from "#nativ/utils/platform"
 
 const DOCUMENT_SHELL_CLASS = "m-0 h-dvh touch-none overscroll-none"
 
@@ -117,6 +123,8 @@ type RoutingShellProps = {
   manifestPath?: string
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
   serviceWorker?: PwaServiceWorkerRuntimeConfig
+  /** Rendered in place of the app when a route chunk is unrecoverably missing. */
+  offlineComponent?: ComponentType<OfflineProps>
   shellClassName?: string
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link NativPatches}. */
   patches?: NativPatches
@@ -130,6 +138,7 @@ export function RoutingShell({
   manifestPath = "/manifest.json",
   orientationGuardComponent,
   serviceWorker,
+  offlineComponent,
   shellClassName,
   patches,
   children,
@@ -139,6 +148,14 @@ export function RoutingShell({
   const textMagnifier = patches?.textMagnifier ?? true
   const viewportFreeze = patches?.viewportFreeze ?? true
   const gpuBoost = patches?.gpuBoost ?? true
+
+  //Restore the `<html>` platform/OS stamp that React strips when it reconciles the
+  //document on the SPA/native client path. Without it every `app:` variant is inert —
+  //most visibly safe-area padding, so content slides under the status bar. Layout
+  //effect (pre-paint) and behind the splash, so there is no visible reflow.
+  useIsomorphicLayoutEffect(() => {
+    applyPlatformStamp()
+  }, [])
 
   const [resolvedAppearance] = useTheme()
   useSyncTheme({ themeColorLight, themeColorDark })
@@ -169,6 +186,11 @@ export function RoutingShell({
   //[autofocus] drawer opened later never races the async listener registration
   //(the missed-first-event bug that left autofocus sheets stuck behind the keyboard).
   useEffect(() => {
+    //Native KV hydration is async, so it runs HERE — eagerly at boot, behind the
+    //splash — rather than lazily at first read. A component reading a flag during
+    //render must never see an empty map and then flip. (Web already hydrated
+    //synchronously at module load, so this is a no-op there.)
+    void initKv()
     hideNativeSplash()
     initNativeKeyboard()
     //seed native storage with the current theme preference so the OS splash colour
@@ -179,6 +201,25 @@ export function RoutingShell({
   //null when ready (self-unmount) — nativ just mounts it. CSS gates it off in a
   //browser tab (see the critical-css splash policy) unless the app opts in.
   const SplashScreenComponent = splashScreenComponent
+
+  //Nativ's own offline call site: a route chunk 404'd and the one-shot reload
+  //guard is already spent, so reloading cannot help and there is no route left to
+  //render its own offline UI. Without this the user gets a blank screen.
+  //RENDERING.md §3.1.2
+  const OfflineComponent = offlineComponent ?? Offline
+  const [bootFailed, setBootFailed] = useState(false)
+  useEffect(
+    () => installPreloadErrorRecovery(() => setBootFailed(true)),
+    [],
+  )
+
+  if (bootFailed) {
+    return (
+      <AppShell className={shellClassName}>
+        <OfflineComponent />
+      </AppShell>
+    )
+  }
 
   return (
     <>

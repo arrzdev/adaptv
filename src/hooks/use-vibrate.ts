@@ -4,7 +4,7 @@ import { haptics } from "#nativ/capabilities/haptics"
 
 //A React convenience over the `haptics` API — the app-facing semantic aliases plus
 //`hapticPointerHandlers` for tap feedback. For plain fire-and-forget feedback,
-//import `haptics` from `@repo/nativ/capabilities` directly (the hook-vs-API rule:
+//import `haptics` from `@arrzdev/nativ/capabilities` directly (the hook-vs-API rule:
 //imperative → API). This hook exists for the pointer-handler ergonomics.
 
 type VibrateKind =
