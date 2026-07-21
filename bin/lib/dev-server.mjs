@@ -21,17 +21,34 @@ export function startDevServer(appRoot, { args = [], onLine } = {}) {
   const pre = local ? [] : ["--yes", "vite"]
 
   return new Promise((resolve, reject) => {
+    // detached → its own process group, so stop() can kill vite AND its children
+    // (the cloudflare/inspector workers that otherwise survive SIGINT and hold ports).
     const child = spawn(cmd, [...pre, ...args], {
       cwd: appRoot,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     })
+    const stop = () => {
+      try {
+        process.kill(-child.pid, "SIGINT")
+      } catch {
+        try {
+          child.kill("SIGINT")
+        } catch {}
+      }
+    }
 
     let ready = false
+    const buffer = []
     const handle = (buf) => {
       const text = strip(buf.toString())
       for (const line of text.split("\n")) {
-        if (line.trim()) onLine?.(line.trim())
+        const l = line.trim()
+        if (!l) continue
+        buffer.push(l)
+        if (buffer.length > 200) buffer.shift()
+        onLine?.(l)
       }
       if (ready) return
       // Vite prints e.g. "➜  Local:   http://localhost:5173/"
@@ -46,11 +63,7 @@ export function startDevServer(appRoot, { args = [], onLine } = {}) {
         host: url.hostname,
         port: url.port || (url.protocol === "https:" ? "443" : "80"),
         child,
-        stop: () => {
-          try {
-            child.kill("SIGINT")
-          } catch {}
-        },
+        stop,
       })
     }
 
@@ -58,11 +71,17 @@ export function startDevServer(appRoot, { args = [], onLine } = {}) {
     child.stderr.on("data", handle)
     child.on("error", reject)
     child.on("exit", (code) => {
-      if (!ready) {
-        reject(
-          new Error(`vite dev exited (code ${code}) before it was ready`),
-        )
-      }
+      if (ready) return
+      // surface WHY vite couldn't start (e.g. a port already in use), preferring the
+      // error lines from its output over the generic exit message.
+      const errs = buffer.filter((l) =>
+        /error|EADDRINUSE|in use|fail|cannot|not found/i.test(l),
+      )
+      const err = new Error(
+        `vite dev exited (code ${code}) before it was ready`,
+      )
+      err.tail = (errs.length ? errs : buffer).slice(-15).join("\n")
+      reject(err)
     })
   })
 }
