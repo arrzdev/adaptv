@@ -1,113 +1,230 @@
 # nativ — development handoff
 
-Start-here doc for continuing **nativ** development in a fresh session, independently of the app-unification work. Read this + the linked docs and you have full context. Last updated **2026-07-14**.
+Start-here doc for continuing **nativ** development in a fresh session. Read this + the linked docs and
+you have full context. Last updated **2026-07-21**.
+
+---
+
+## 0. Read this first
+
+**→ [`docs/DECISIONS.md`](docs/DECISIONS.md) is the entry point.** It is the decision register: what's
+🔒 locked, 📐 designed, 🔀 conflicted, ❓ open — plus every doc-vs-code conflict, 26 recorded bugs and
+findings, the positioning read, and the time-sensitive items. **If you read one file, read that one.**
+
+Then, in order:
+
+1. `docs/VISION.md` — north star, principles, the §3 problem catalogue (which is also the main risk).
+2. `docs/ARCHITECTURE.md` — the cross-platform contracts. **§0 doctrine is the spine**, and principle
+   **7 ("mechanisms live at the JS layer; platform config stays dumb")** is the newest and most
+   cross-cutting.
+3. `docs/RENDERING.md` — the isomorphism boundary + the full delivery/SW/offline model.
+4. `docs/LIFECYCLE.md` — config → build → deploy → OTA → CLI.
+5. `docs/COORDINATION.md` — app state, back chain, gestures, route lifecycle.
+6. Reference as needed: `STYLING.md` · `FACADE.md` · `ANIMATION.md` · `NATIVE-SHELL.md` ·
+   `PRIOR-ART.md` · `BEHAVIORS.md` · `TESTING.md` · `COOKBOOK.md` · `capacitor-internals.md`.
+
+`RESEARCH.md` is now largely superseded — `PRIOR-ART.md` replaced its §4 stub with the actual Ionic
+port list, and `DECISIONS.md` absorbed the rest.
 
 ---
 
 ## 1. What nativ is (30 seconds)
 
-A **cross-platform React framework**: write React (DOM/CSS), ship the same code as desktop web (SSR), an installable PWA, and native iOS/Android (Capacitor) — correct on every target, no per-platform babysitting. Capacitor is a thin seam; on top are **correct-by-construction primitives** + capability hooks that pick browser/polyfill/native. "Expo's ambition on Capacitor's mechanism," web-first. Beats Ionic on correctness + DX by being opinionated end-to-end.
+A **cross-platform React framework**: write React (DOM/CSS), ship the same code as desktop web (SSR), an
+installable PWA, and native iOS/Android (Capacitor) — correct on every target, no per-platform
+babysitting. Capacitor is a thin seam; on top are correct-by-construction primitives and capability
+hooks that pick browser/polyfill/native. *"Expo's ambition on Capacitor's mechanism,"* web-first.
 
-- **Repo:** `arrzdev/nativ` (private, GitHub). Local: `~/Documents/Github/nativ`.
-- **Package:** `@arrzdev/nativ`, single-package (repo root IS the framework — not a `packages/*` monorepo).
-- **Extracted from** chopchop's `packages/nativ` (which is the "gold"/source of truth for the framework).
+- **Repo:** `arrzdev/nativ` (private). Local: `~/Documents/Github/nativ`.
+- **Package:** `@arrzdev/nativ`, single-package (repo root IS the framework).
+- **Extracted from** chopchop's `packages/nativ`.
 
-**Read next (in order):**
-1. `README.md` — roadmap + status + quick start.
-2. `docs/VISION.md` — the north star, principles, primitive/capability API targets, sequencing.
-3. `docs/ARCHITECTURE.md` — **the cross-platform contracts** (higher-up design): the doctrine/non-negotiables, the shell + edge-to-edge + one-`View` frame contract (no `Screen`), the three-tier hybrid `storage` API (sync `kv` / async `store` / async `secure`), and the TanStack-opacity plan.
-4. `docs/LIFECYCLE.md` — **the framework lifecycle end-to-end**: `nativ.config.ts` as the one knob surface, the Vite-plugin deploy decision model (SSR+SW / SPA per target, with the static-SPA-on-web override), web vs native build lineages, native APK/IPA, the OTA design (fingerprint-gated bundle swap hosted on the app's own web deploy), native opt-out, and the full CLI surface.
-5. `docs/COORDINATION.md` — **the runtime app-lifecycle spine**: `useAppState` (resume/pause — the OTA + refetch trigger), the back-handler priority chain, the full gesture controller, and route lifecycle (no DOM retention). The correct-by-construction substrate the leaf primitives compose onto.
-6. `docs/RENDERING.md` — **the hard constraint: nativ code must be isomorphic — NO `createServerFn`/server routes** (they die in a static Capacitor bundle). SSR/SPA per target, SW/OTA model.
-7. `docs/BEHAVIORS.md` — every cross-platform behavior nativ fixes, how, and how to test it.
-8. `docs/RESEARCH.md` — gaps + Ionic/Capacitor/TanStack prior art + specific issues/PRs to study before reinventing.
-9. `docs/capacitor-internals.md` — version pins + native build gotchas.
+> **⚠︎ `src/` is the chopchop lift, not a spec.** Most of it will be refactored for the standalone
+> package. When a doc describes current code, it is describing *the starting point* — read the bug
+> entries in `DECISIONS.md` as **patterns not to carry forward**, not as a defect backlog.
+> **chopchop's `packages/nativ` is now dead** — the standalone repo is strictly ahead (0 files missing,
+> 88/110 byte-identical, standalone newer on 21 of the 22 that differ). Delete it when convenient.
 
 ---
 
-## 2. Current state (2026-07-14) — GREEN
+## 2. Current state — GREEN
 
-- **CI live + green:** `.github/workflows/ci.yml` runs `install → typecheck → biome → vitest` on every push/PR, with a `$GITHUB_STEP_SUMMARY` table. No envs/deploys. Both pushes so far passed.
-- **Gate:** `pnpm typecheck` (0) · `pnpm biome:check` (0) · `pnpm test` (**180 vitest**, 24 files).
-- **Built + working** (transported + verified on both simulators during the extraction session):
-  - Platform foundation (`isNativePlatform`/`isInstalledApp`/`getOS`, pre-paint `data-nativ-platform`/`data-nativ-os` stamp, `app:`/`web:` variants).
-  - Shell (root document, critical CSS, memory-history-when-installed, edge-to-edge, safe-area).
-  - Capabilities (browser/polyfill/native behind `isNativePlatform`): haptics, keyboard, network, status bar, geolocation, Android back, native-theme, splash, external-link browser.
-  - Splash: colour-driven mask, `splashMaskMode` (preferences/system/light/dark), theme-aware both platforms, self-unmounting React splash, Android-12 icon stripped.
-  - Config: flat `nativ.config.ts` (`appId`, `splashScreen`, `splashScreenInBrowser`, `splashMaskMode`, …) → generates capacitor.config + web manifest + native projects.
-  - Vite plugin: web = SSR + SW; capacitor = static SPA, no SW.
-  - Native build: Capacitor iOS+Android, debug `.apk` + unsigned `.ipa`.
-  - CLI `bin/nativ.mjs`: `run`/`build`/`sync`/`assets`/`doctor` (owns the native toolchain + templates). *(No `dev`/`ota` yet — both designed in `docs/LIFECYCLE.md` §2.2, §7.4; web dev is bare `vite dev` today.)*
-  - **Primitives (chopchop is the proven code-superset — nativ already has best-of-breed):** `View`, `List`, `Button`, `Link`, `ExternalLink`, `ScrollView`, `Image`, `Swipeable` (+ `isSwipeableGestureTarget`), `PullToRefresh`, `Drawer`/`Sheet` (drum wheel, `Drawer.Footer`, keyboard-avoidance), `Input`, `checkbox`, `switch`.
+- **CI:** `install → typecheck → biome → vitest` on every push/PR. `pnpm typecheck` (0) ·
+  `pnpm biome:check` (0) · `pnpm test` (**383 vitest**, 45 files).
+- **Verified end-to-end against a real Vite 8 / Rolldown build**, not only in unit tests: the whole
+  browser surface (every primitive, hook, capability, both storage tiers, the shell) bundles clean at
+  **618 modules**, and the `createServerFn` ban fails that same build with exit 1.
 
----
+### 2.1 Built in the 2026-07-20 implementation pass
 
-## 3. How to develop it
+**The headline: a consumer app's source tree is now free of framework artifacts.** Audited in
+project-zero:
+
+```
+src/          no *.gen.*  ·  no sw.ts  ·  no @tanstack/react-router
+.nativ/       register.d.ts  root.gen.tsx  routeTree.gen.ts  router.gen.tsx  sw.gen.ts
+```
+
+A route file is `export const Route = createFileRoute({ … })` — no import at all.
+
+| Area | What landed |
+|---|---|
+| **TanStack opacity** | Achieved via **two `pnpm patch`es** (L19): `start-plugin-core` (un-omit `verboseFileRoutes`; `moduleDeclaration` reads `NATIV_START_PKG`) and `router-generator` (`getTargetTemplate` reads `NATIV_ROUTER_PKG` — one lever for every import *and* `declare module` it emits). → `FACADE.md §2.6a–c` |
+| **`.nativ/`** | All five generated files hidden there. nativ emits the `.gitignore` entry, the tsconfig `include`, and `register.d.ts` (ambient route factories — needed because the import now exists only at build time). |
+| **Generated SW** | A normal app authors **no service worker**. nativ generates it from `web.sw`. Escape hatch: write `src/sw.ts`. |
+| **Generated shell** | `dist/client/index.html`, generated from config, never captured from a response. Unblocked `host: "static"` *and* the SSR precache fallback. |
+| **`web` config block** | `render`/`host`/`sw` resolved once, shared via context. `render` defaults to **`"ssr"`**, resolving the doc-vs-code conflict. |
+| **The wedge** | `createServerFn` ban — verified against a real Rolldown build, catches imports *and* `server:{handlers}`. |
+| **Service worker** | Rebuilt per `RENDERING §3`; B1–B6, B25 fixed; `warm-routes` **deleted** (credentialed HTML into a URL-keyed cache). |
+| **Coordination spine** | All four contracts. `Swipeable` migrated onto the gesture arbiter. |
+| **Storage** | All three tiers. `store` on **raw IndexedDB, not Dexie** — every reason to want Dexie is out of the stated scope. |
+| **Haptics** | Split into imperative + declarative (iOS 26.5 killed programmatic `<input switch>`). |
+
+### 2.2 Corrections found by building rather than reasoning
+
+Recorded because each was a confident wrong assumption:
+
+- **The root route CAN live outside `routesDirectory`.** I had concluded it couldn't; the generator
+  resolves the virtual root by path and accepts one that escapes the tree. That was the last framework
+  artifact in the consumer's source.
+- **Start emits no HTML at all**, even in SPA mode — so "copy Start's shell" was never a foundation.
+- **Router entry *and* `generatedRouteTree` resolve relative to `src/`**, not the app root. A
+  root-relative path does not error; the generator silently writes to `src/<path>`.
+- **A checker that cannot read what it checks reports success.** Two patch-verification attempts passed
+  silently (`ERR_PACKAGE_PATH_NOT_EXPORTED`, then `MODULE_NOT_FOUND` — the packages are transitive and
+  unresolvable under pnpm's strict layout). The shipped guard asserts the *outcome* instead.
+- **B8 was deeper than reported:** `cn` never declared `conflictingClassGroups`, so `locked` was inert
+  **everywhere**, including in the two components that used `mergeStyles`.
+
+### 2.3 Built in the 2026-07-21 native + PWA pass
+
+**First real device run.** Drove the whole framework end-to-end on an **iOS simulator** and an **Android
+emulator** via project-zero chopchop — the "no shipped app has run against it" gap in §4 item 2 is now
+closed for iOS (renders, routes, styled, native plugin bridge live, safe areas correct, splash hands off
+and self-dismisses).
+
+| Area | What landed |
+|---|---|
+| **iOS native build** | `nativ run ios` builds + launches on the simulator. The earlier Swift-compile wall (`CAPPluginCall has no member 'reject'`, +16 more) was **not** upstream/version — it was Capacitor's **SPM** path (the binary `capacitor-swift-pm` xcframework). Fix: the CLI forces **CocoaPods** (`cap add ios --packagemanager CocoaPods`), which builds every plugin from source against one `Capacitor` pod → BUILD SUCCEEDED. Also: peerDeps `^8` (not exact pins, which dual-installed core), `webDir: dist/client`, `cap add` auto-scaffold, platform check via `require.resolve`. `bin/nativ.mjs`. |
+| **SPA/native render** | The capacitor (and any `render:"spa"`) build white-screened with `Invariant failed`: Start's default client entry is `hydrateStart`, which hard-requires a `window.$_TSR` bootstrap that a **no-server SPA never has**. nativ now ships its **own** client entry — `src/routes/client-entry.tsx`, a plain TanStack **Router** `hydrateRoot` — wired as Start's `client.entry` **for the `spa` target only** (web `ssr` keeps Start's entry). Also fixed the generated shell's `href="/"` stylesheet (manifest → assets-dir fallback in `shell-emit.ts`). |
+| **Safe-area on native** | React strips the pre-paint `data-nativ-platform` stamp when it reconciles `<html>` on the SPA client path, silently disabling every `app:` variant (visible symptom: content under the status bar; `env()` was fine). `applyPlatformStamp()` re-applies it from a layout effect. `src/utils/platform.ts`, `src/shell/shell-layout.tsx`. |
+
+### 2.4 Investigated, NOT shipped (honest negatives)
+
+- **Android standalone-PWA bottom nav bar is not web-controllable.** Measured objectively (adb screencap
+  + pixel sampling): the **status bar** follows `theme-color` (nativ's existing handling already does
+  this — app dark → `#0a0a0c`, app light → `#eeeeec`), but the **bottom nav bar stays pure `rgb(0,0,0)`
+  black regardless of app theme or OS**. `color-scheme` meta / manifest colours moved nothing. A
+  `color-scheme` "fix" was tried and reverted — it's a platform limit for the standalone PWA, not a nativ
+  bug. The native Capacitor build controls both bars; the installed-PWA nav bar does not.
+- **Emulator caveat that cost real time:** the preinstalled image was an **Android 17 preview + Chrome
+  149 (dev build)** that ignores `theme-color`/`color-scheme` for standalone PWAs *entirely* and never
+  mints a WebAPK. Stable **Chrome 124 (Android 15, AVD `stable35`)** honours `theme-color`. **Test PWA
+  chrome on a stable Chrome, never a dev build.**
+- **iOS device (not simulator)** and **Android on-device native bars** remain unverified.
+
+## 3. How to develop
 
 ```bash
 cd ~/Documents/Github/nativ
-pnpm install          # pnpm 11; esbuild build-script allowed via pnpm-workspace.yaml `allowBuilds`
-pnpm typecheck        # 0
-pnpm biome:check      # 0
-pnpm test             # vitest, 180
+pnpm install          # pnpm 11
+pnpm typecheck && pnpm biome:check && pnpm test
 ```
 
-- **pnpm-11 quirks already handled** (don't undo): `pnpm-workspace.yaml` has `allowBuilds: esbuild: true`; `.npmrc` has `verify-deps-before-run=false`. Without these, every `pnpm <script>` fails on the esbuild build-script gate.
-- **Ships TypeScript source** (exports point at `src/interface/*.index.ts`). Works when a consumer's bundler compiles it. Real GitHub Packages publishing needs a `dist` build (tsup/unbuild) + `.d.ts` — **not done yet** (roadmap #6).
-- **Test against a real app** via a local link (no playground by design): in the app's `package.json`, `"@arrzdev/nativ": "link:../nativ"` (or `file:`). Dogfood target is chopchop once it's wired as project-0 (pending — see §5).
-- **Testing discipline:** TDD; six-target discipline in `docs/TESTING.md` (`docs/BEHAVIORS.md` has how-to-test per behavior). iOS sim + Android emulator available for native verification.
-- **Distribution/versioning:** private GitHub Packages; consumers pin per-project and a deploy builds from the lockfile — **updates never auto-propagate** (bump + commit lockfile per project). `.npmrc` in a consumer needs `@arrzdev:registry=https://npm.pkg.github.com` + a `GITHUB_TOKEN`.
+- **pnpm-11 quirks already handled** (don't undo): `allowBuilds: esbuild: true` in
+  `pnpm-workspace.yaml`; `verify-deps-before-run=false` in `.npmrc`.
+- **Ships TypeScript source today.** The dist build is designed and settled — `tsdown`, **two builds**
+  (`platform: 'browser'` for React, `platform: 'node'` for `/vite` + `/sw` + `/config`) →
+  `DECISIONS.md §6.2`, which also lists four traps that bite this exact package shape.
+- **Test against a real app** via `"@arrzdev/nativ": "link:../nativ"` (no playground by design).
+- **chopchop IS wired as project-0**, at `.project-zero/chopchop` (gitignored; excluded from both
+  `vitest.config.ts` and `biome.json` so its suites never enter the framework's gate).
+  Its `@repo/nativ` is a pnpm `overrides` link to this repo, and its vendored `packages/nativ` is
+  **deleted** (dead per L17). Rebuild it with:
+
+  ```bash
+  cd .project-zero/chopchop/apps/frontend && npx vite build
+  ```
+
+  **It builds green** — client 2584 modules, SSR 2624, and a real `sw.js` with 51 precache entries.
+  Three consumer migrations were needed, and each is the intended path rather than a workaround:
+  `Screen` → `<View fill>` (L5), and `registerIncrementalNavigationRoute` +
+  `registerInstallRouteWarmer` → a single `registerNavigationRoute({ mode: "ssr" })`. The new SW file
+  is roughly half the size of the old one — worth reading as the migration example.
 
 ---
 
-## 4. Roadmap — what's next (pick up here)
+## 4. ⏰ Do these first
 
-None started as **code**. Every item below now has a **full design** in the docs (2026-07-14 design pass) — the next step for each is TDD/implementation, not more design. Rough priority order:
+**Items 3 and 4 of the previous list are DONE** (the four shipped-code fixes; the `createServerFn` ban).
+What remains, in order:
 
-1. **`.nativ/` re-export barrel + hidden generated dir** — apps still import `@tanstack/*` and see `*.gen` files. **Design: `docs/ARCHITECTURE.md` §3** (`.nativ/` layout, the `nativ` barrel, tsconfig/alias, `register.d.ts`; the one spike-gated call is Virtual File Routes vs `pnpm patch` for generator symbol recognition). **Highest "feels like a real framework" win.**
-2. **First-party `@nativ/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar + theme into ONE owned native module. The wedge vs Ionic. **Design: `docs/NATIVE-SHELL.md`** (scope, JS API, the Android-15/SDK-35 `WindowInsets`/IME crux, phased migration off CLI string-patching).
-3. **`create-nativ`** — `pnpm create nativ` scaffolder. **Design: `docs/LIFECYCLE.md` §8.**
-4. **Deployment-target knob** — a first-class `web` config block (`render`/`host`/`sw`) → SSR presets (`cloudflare`/`vercel`/`node`/`static`); keep TanStack Start for this. **Design: `docs/LIFECYCLE.md` §1.2, §3–4.**
-5. **Capacitor OTA** — fingerprint-gated bundle swap of `dist-capacitor/`, hosted on the app's own web deploy (no third-party server), applied next launch, resume-driven check. **Design: `docs/LIFECYCLE.md` §5.**
-6. **Published `dist` build** — tsup/unbuild → `dist` + `.d.ts`, switch `exports` to built output. (Mechanical — not separately designed.)
+1. **Android target API 36 by 2026-08-31** (~6 weeks). Edge-to-edge becomes unconditional — the opt-out
+   is gone, and `setStatusBarColor`/`setNavigationBarColor` are dead. Status-bar tinting becomes purely
+   a CSS problem. **Settle the safe-area contract before anything else**, and note Capacitor hard-gates
+   on the viewport meta literally containing `viewport-fit=cover`. → `DECISIONS.md §6.0`.
+2. **Wire chopchop as project-0.** ✅ **Done for iOS** (2026-07-21, §2.3): chopchop builds *and runs* on
+   the iOS simulator — renders, routes, styled, native bridge live, safe areas correct. Still owed:
+   the same run on **Android** (emulator has `adb`/`stable35` now) and on **real hardware**.
+3. **Emit the SSR app shell + the static-host files.** `render:"ssr"` currently has **no artifact** for
+   the precache fallback to bind to — TanStack Start emits `_shell.html` only in SPA mode — so the SSR
+   offline path is designed and coded but cannot actually be exercised yet. Same task covers
+   `index.html`/`404.html`/`.nojekyll`, without which `host:"static"` is not deployable. → `DECISIONS.md` B26.
+4. **Redesign `@nativ/shell` before building it.** Capacitor 8 ships `SystemBars` in core, registered
+   unconditionally, already owning Android insets + IME. The original phase-1 plan would install a
+   second inset listener on the same view hierarchy — that collision *is* keyboard bugs #61/#68.
+   → `NATIVE-SHELL.md §0.0`.
+5. **Migrate `Drawer`/`Swipeable`/edge-swipe onto the gesture controller.** The arbiter exists and is
+   tested; no primitive requests capture from it yet, so they still arbitrate alone.
 
-Conceptual gaps from `docs/RESEARCH.md` §1 are now designed in **`docs/COORDINATION.md`**: `useAppState` (resume/pause — also the OTA trigger), the back-button **priority handler chain**, the full **gesture controller**, and route lifecycle (no DOM retention). Build order there: app-state → back chain → gesture controller → route lifecycle.
+### 4.1 Owed device verification — cannot be closed by unit tests
+
+| What | Why a test can't settle it |
+|---|---|
+| **iOS-web haptics** (`haptic-tick.ts`) | The 13 tests pin structure and lifecycle, which is all a DOM can prove. Whether the tick *fires* needs physical iOS ≥ 26.5 — simulators produce no haptics. |
+| **`clickable` longhand** (B13) | Every engine except the broken one treats the shorthand and longhand identically; only a real iOS device shows the `pointercancel` difference. |
+| **Gesture controller priorities** | The arbitration logic is proven; the *numbers* are a feel judgement on a real screen with a drawer, a swipeable row and a scroller together. |
+| **`theme-color` / status-bar tint** (B17) | The iOS 26 behaviour is derived from the rendered background, so it is only observable on device. |
+
+## 5. Decisions locked in (don't re-litigate)
+
+**Foundational:** single-package repo · **no hard forks** of Capacitor/TanStack (own the seams, rent the
+cores) · keep TanStack Start for its deploy adapters · **isomorphic-only** (no `createServerFn`) ·
+always edge-to-edge · splash = solid colour mask natively, mascot only in the React splash.
+
+**Resolved in the 2026-07-20 pass** — full reasoning in `DECISIONS.md`:
+
+| Area | Decision |
+|---|---|
+| **Styling** | `className` + `data-*` state + `@layer`; **boolean** attributes (`data-drawer-open`), not `data-state="open"`; unprefixed CSS vars; `render` prop over `asChild`; tailwind-merge-aware merge as the **default**. No `--nativ-*` palette. → `STYLING.md` |
+| **`createServerFn` ban** | Unbypassable Vite `resolveId` hook (**backstop**) + a linter as the **primary DX surface** — a bundler error gives no editor squiggles. Safety and TanStack-opacity are **orthogonal**; opacity deferred. → `FACADE.md` |
+| **Rendering** | `web.render` defaults to **`"ssr"`** (asymmetry: SPA silently kills SEO and is found late). SSR does **not** restrict route-chunk precaching. → `DECISIONS.md §6.3`, `RENDERING.md §3` |
+| **Offline** | No `offline.html`, **no `/offline` route** — offline UI renders **in place** via a config-registered `offlineComponent`. → `RENDERING.md §3.0–3.1.2` |
+| **SW** | Precache **all route chunks**, never credentialed documents; `precacheDocuments` allowlist for public pages only. `prompt` default, nav preload on. → `RENDERING.md §3.2` |
+| **Animation** | Keep `motion`; CSS for enter/exit; **`transform`/`opacity` only** — the iOS 60Hz JS ceiling makes composited-only a *correctness* rule. Overlays are ordinary positioned elements, not the top layer. → `ANIMATION.md` |
+| **OTA** | Self-hosted on the app's own deploy; **pointer-flip, never in-place**; minify but don't obfuscate; **signing is mandatory**; plugin = **`@capgo/capacitor-updater`** (Appflow is ruled out — Ionic killed commercial products Feb 2025). → `LIFECYCLE.md §5` |
+| **Ionic port** | MIT, attribution convention settled (pinned-SHA permalink + a `Why:` line). Ranked port list. → `PRIOR-ART.md` |
+| **Dist build** | `tsdown`, two builds, copy CSS rather than build it, pin TS 5.9.x. → `DECISIONS.md §6.2` |
 
 ---
 
-## 5. Relationship to the app repos (context you need)
+## 6. Still open
 
-- **chopchop is the gold/source.** nativ was extracted from chopchop's `packages/nativ`. For shared **primitives**, chopchop is the proven **code-superset** across chopchop/veralens/escolhe — so nativ already holds the best-of-breed (verified this session via 3-way diff). The drawer keyboard patch people remember (`maxKeyboardLiftRef`) was **superseded** by moving de-jitter into `useKeyboard` (CH #87) — nativ has the better version.
-- **A cross-project unification is finalizing** (separate from nativ dev): 3 open PRs converge chopchop/veralens/escolhe to the union (primitives, dev tooling, skills, conventions, a security fix) — chopchop #92, veralens #22, escolhe #4. Not blocking nativ.
-- **chopchop-as-project-0 wiring is PENDING the user's explicit command.** Do NOT wire chopchop to consume `@arrzdev/nativ` until the user says go. When they do: replace chopchop's workspace `packages/nativ` with the external dep (`link:` during dev), keep a `pnpm link` loop.
+- **Biome vs oxlint** for the lint rules — oxlint delivers editor squiggles today but its JS plugins are
+  alpha; Biome is conservative. Prototype both. → `FACADE.md §2.6b`.
+- **Six-target CI** — can the native matrix run in CI, or stay local? → `VISION.md §9`.
+- **TanStack opacity** (deferred, not dropped) — the 2026-07-05 spike evidence is recorded in
+  `FACADE.md` so it isn't rediscovered a third time.
+- **`storage.secure` backend** — `@capacitor/preferences` is **plaintext** and cannot hold tokens;
+  `@aparajita/capacitor-secure-storage` is the maintained candidate. → `DECISIONS.md` B23.
 
 ---
 
-## 6. Decisions locked in (don't re-litigate)
+## 7. Relationship to the app repos
 
-**Foundational (pre-2026-07-14):**
-- **Single-package repo** (root = the framework). Promote to a `packages/*` monorepo only when the native plugin or `create-nativ` need separate publishing.
-- **No hard forks** of Capacitor / TanStack Router / TanStack Start. Own the *seams*, rent the stable cores. Escalate on the ownership spectrum only as needed: re-export barrel → `.nativ/` → `pnpm patch` → vendor one small module → replace a layer. (Full reasoning in the vision/rendering docs + the project memory.)
-- **Keep TanStack Start** — for its deploy-anywhere presets (roadmap #4).
-- **Isomorphic-only** — no `createServerFn`/server routes/server-only reads (breaks Capacitor). Data is consumer-wired (client token, IndexedDB/Query persister). `docs/RENDERING.md` is the authority.
-- **Splash/edge-to-edge opinions:** native splash = solid colour mask (mascot only in the React splash); React splash = installed-only (browser opt-in); mask follows app theme by default; always edge-to-edge.
-
-**Design pass (2026-07-14) — the architecture/lifecycle decisions:**
-- **Frame owned _above_ the route; one `View`, no `Screen`.** RN's navigator model: the framework shell seeds a full-viewport slot and stretches its child; `View` is a dumb-correct `flex-col` box (`min-h-0`-safe). Root-ness comes from framework-seeded context/CSS, never DOM sniffing. → `docs/ARCHITECTURE.md §1` (revises `VISION.md §2` principle 4).
-- **Storage = three tiers under `storage`.** Sync memory-backed `kv` (MMKV model — boot-hydrated on native), async `store` (a blob KV, **not** an ORM — the query/data layer stays consumer-wired), async `secure` (Keychain/Keystore on native; **best-effort only, not secure, on web**). Static-fn **and** reactive-hook per tier. → `docs/ARCHITECTURE.md §2`.
-- **TanStack opacity = opacity, not absence.** Gen files hidden in `.nativ/`; consumer imports only `nativ`. Not eliminated (typesafety needs the generated tree). → `docs/ARCHITECTURE.md §3`.
-- **Hybrid primitives push the platform branch to the lowest layer** (accessor returns native-*accurate data*, not machinery); geometry is DOM-free/unit-testable; drivers take a `ref` in, components spread state out. → `docs/ARCHITECTURE.md §4`.
-- **Deploy = a first-class `web` config block** (`render`/`host`/`sw`). `target:capacitor` is absolute (forced SPA + no SW); on web the consumer chooses (incl. static SPA+SW). → `docs/LIFECYCLE.md §1,§3`.
-- **Native OTA = self-hosted on the app's own web deploy** (no third-party server), `nativeFingerprint`-gated (JS-safe vs needs-store-build), applied next launch, resume-triggered, watchdog rollback. nativ owns the policy, rents the low-level swap. → `docs/LIFECYCLE.md §5`.
-- **App-lifecycle spine:** `useAppState` (accessor+hook; also the OTA/refetch trigger) → back **priority handler chain** → **full** Ionic-style gesture controller → route lifecycle with **no DOM retention**. → `docs/COORDINATION.md`.
-- **`@nativ/shell` = own it, phased** — phase 1 edge-to-edge + inset/IME reporting (the Android-15 fix), phase 2 absorb status-bar/splash/theme off the CLI's native-source patching. Study Capawesome's `WindowInsets` as reference, don't depend on it. → `docs/NATIVE-SHELL.md`.
-
-## 7. Open questions to resolve as you build
-
-*(Resolved this pass, moved to §6: OTA mechanism, deployment presets, `@nativ/shell` scope.)*
-
-- **TanStack generator symbol-recognition** (`.nativ/` hiding): Virtual File Routes override vs a `pnpm patch` of `@tanstack/router-generator` — the one spike-gated call; prototype both, pick least brittle. → `docs/ARCHITECTURE.md §3.3`.
-- **KV native durability/hydration edge cases:** the boot-hydration gate, the ~1-tick write-persist lag, `useSyncExternalStore` snapshot stability + object-fallback handling. → `docs/ARCHITECTURE.md §2.1`.
-- **Plugin picks (pinned deps):** which maintained secure-storage plugin (Keychain/Keystore), and which low-level OTA swap plugin (Capawesome Live Update vs Capgo vs DIY). → `docs/ARCHITECTURE.md §2.3`, `docs/LIFECYCLE.md §5.5`.
-- **Config back-compat:** migration path from the flat `appId`/`router.render`/`sw` fields to the `web`/`native`/`ota` blocks.
-- **Six-target automation:** can the native matrix run in CI (`nativ e2e` driving sim/emulator) or stay local. → `VISION.md §9`, `docs/LIFECYCLE.md §7.2`.
+- **chopchop was the gold source; it no longer is.** See the §1 note — the standalone repo is ahead.
+- A cross-project unification (chopchop/veralens/escolhe) is separate and not blocking.
+- Distribution: private GitHub Packages or a local `link:`. Consumers pin per project; a deploy builds
+  from the lockfile, so **updates never auto-propagate**. Note `create-nativ` is unclaimed on npm —
+  publish the *scaffolder* publicly and keep the framework private, or the PAT chicken-and-egg bites.
+  → `DECISIONS.md §5.0`.

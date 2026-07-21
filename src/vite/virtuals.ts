@@ -49,7 +49,17 @@ export function registerSW(options = {}) {
 
   async function register() {
     try {
-      registration = await navigator.serviceWorker.register("/sw.js")
+      //BASE_URL, never a hardcoded "/sw.js" — a subpath deploy (GitHub Pages, or
+      //any non-root base) registers the wrong URL and silently gets no SW at all.
+      //DECISIONS.md B1 / B26.
+      //
+      //updateViaCache:"none" is required, not tuning: browsers otherwise serve the
+      //SW SCRIPT ITSELF from HTTP cache (capped at 24h), so a deploy can go
+      //unnoticed for a day. RENDERING.md §3.3.
+      const swUrl = (import.meta.env.BASE_URL || "/") + "sw.js"
+      registration = await navigator.serviceWorker.register(swUrl, {
+        updateViaCache: "none",
+      })
       if (onRegistered) onRegistered(registration)
       if (!navigator.serviceWorker.controller && onOfflineReady) onOfflineReady()
 

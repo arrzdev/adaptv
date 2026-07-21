@@ -25,7 +25,11 @@ export type CapacitorConfigJson = {
 }
 
 //the SPA build output (see the `capacitor` vite target) that the WebView loads.
-const CAPACITOR_WEB_DIR = "dist-capacitor/client"
+//Start controls the client environment's output dir and emits the SPA to
+//`dist/client`; a plugin-level `build.outDir` is overridden. The lineages are
+//kept separate in TIME — the CLI runs a fresh `NATIV_TARGET=capacitor` build
+//before every `cap sync`, so a web build's server bundle is never synced.
+const CAPACITOR_WEB_DIR = "dist/client"
 
 export function buildCapacitorConfig(
   config: NativAppConfig,

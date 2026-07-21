@@ -1,0 +1,65 @@
+diff --git a/dist/esm/constants.js b/dist/esm/constants.js
+index 590506ccc2a0c764a908f1f0e672ce7ed9d26579..bc9a0900bfe657c19c69240ba9ede328cb935138 100644
+--- a/dist/esm/constants.js
++++ b/dist/esm/constants.js
+@@ -3,9 +3,16 @@ var VITE_ENVIRONMENT_NAMES = {
+ 	server: "ssr",
+ 	client: "client"
+ };
++//nativ: the consumer's app should never see @tanstack/* identifiers — not in
++//imports, not in generated files, and not in the script tags of the served HTML.
++//These ids are emitted into the document, so they are renamed at the source.
+ var ENTRY_POINTS = {
+-	client: "virtual:tanstack-start-client-entry",
+-	server: "virtual:tanstack-start-server-entry",
++	client: "virtual:nativ/client-entry",
++	server: "virtual:nativ/server-entry",
++	//NOT renamed: these are package subpath imports declared in
++	//@tanstack/start-server-core's own package.json "imports" map, so renaming
++	//them here breaks resolution ("Missing specifier"). They are also internal —
++	//unlike the virtual: ids above, they never appear in the served HTML.
+ 	start: "#tanstack-start-entry",
+ 	router: "#tanstack-router-entry"
+ };
+diff --git a/dist/esm/schema.js b/dist/esm/schema.js
+index 49f9a87fecf55724b27d90c15a0bc3517a4cc812..8439649ce6844ac8d4f6e47ebcf658bb9e630b1b 100644
+--- a/dist/esm/schema.js
++++ b/dist/esm/schema.js
+@@ -4,8 +4,7 @@ import { z } from "zod";
+ //#region src/schema.ts
+ var tsrConfig = configSchema.omit({
+ 	autoCodeSplitting: true,
+-	target: true,
+-	verboseFileRoutes: true
++	target: true
+ }).partial();
+ var patternSchema = z.union([z.string(), z.instanceof(RegExp)]);
+ var importProtectionBehaviorSchema = z.enum(["error", "mock"]);
+diff --git a/dist/esm/start-router-plugin/plugin.js b/dist/esm/start-router-plugin/plugin.js
+index f6fbd955e4738800d9c330664b26951ee3661254..65e55191159c1655e71dd8fa47dd03573a44200c 100644
+--- a/dist/esm/start-router-plugin/plugin.js
++++ b/dist/esm/start-router-plugin/plugin.js
+@@ -11,6 +11,12 @@ function isServerOnlyNode(node) {
+ 	if (!node?.createFileRouteProps) return false;
+ 	return node.createFileRouteProps.has("server") && node.createFileRouteProps.size === 1;
+ }
++//nativ: allow the Start register-declaration specifier to be overridden so the
++//generated route tree points at the framework barrel instead of @tanstack/*.
++//Set by @arrzdev/nativ's vite plugin. Absent => upstream behaviour, unchanged.
++function nativStartPkg(framework) {
++	return (typeof process !== "undefined" && process.env && process.env.NATIV_START_PKG) || `@tanstack/${framework}-start`;
++}
+ function moduleDeclaration({ startFilePath, routerFilePath, corePluginOpts, generatedRouteTreePath }) {
+ 	function getImportPath(absolutePath) {
+ 		let relativePath = path.relative(path.dirname(generatedRouteTreePath), absolutePath);
+@@ -20,8 +26,8 @@ function moduleDeclaration({ startFilePath, routerFilePath, corePluginOpts, gene
+ 	}
+ 	const result = [`import type { getRouter } from '${getImportPath(routerFilePath)}'`];
+ 	if (startFilePath) result.push(`import type { startInstance } from '${getImportPath(startFilePath)}'`);
+-	else result.push(`import type { createStart } from '@tanstack/${corePluginOpts.framework}-start'`);
+-	result.push(`declare module '@tanstack/${corePluginOpts.framework}-start' {
++	else result.push(`import type { createStart } from '${nativStartPkg(corePluginOpts.framework)}'`);
++	result.push(`declare module '${nativStartPkg(corePluginOpts.framework)}' {
+   interface Register {
+     ssr: true
+     router: Awaited<ReturnType<typeof getRouter>>`);

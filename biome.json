@@ -11,7 +11,8 @@
       "!!**/*.tsbuildinfo",
       "!!**/*.css",
       "!!**/*.log",
-      "!!**/.DS_Store"
+      "!!**/.DS_Store",
+      "!!**/.project-zero"
     ],
     "ignoreUnknown": true
   },
@@ -63,12 +64,18 @@
   "overrides": [
     {
       "includes": ["*.css", "**/*.html"],
-      "linter": { "enabled": false }
+      "linter": {
+        "enabled": false
+      }
     },
     {
       "includes": ["src/config/**", "src/vite/**", "src/client/**"],
       "linter": {
-        "rules": { "style": { "noRestrictedImports": "off" } }
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
       }
     },
     {
@@ -78,7 +85,11 @@
         "src/**/index.ts"
       ],
       "linter": {
-        "rules": { "style": { "noRestrictedImports": "off" } }
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
       }
     }
   ]

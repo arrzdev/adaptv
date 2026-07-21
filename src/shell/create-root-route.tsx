@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router"
 import type { ComponentType, ReactNode } from "react"
 import { UiNotFound } from "#nativ/components/not-found"
+import type { OfflineProps } from "#nativ/components/offline"
 import type { NativPatches } from "#nativ/config/app-config"
 import type {
   OrientationGuardProps,
@@ -44,6 +45,16 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
    */
   RootDocument?: ComponentType<RootDocumentProps>
   notFoundComponent?: NotFoundRouteComponent
+  /**
+   * The app's offline UI. Rendered by nativ when the app cannot boot far enough
+   * for a route to exist — a route chunk fails to load (`vite:preloadError` with
+   * the reload guard already spent), or the route tree itself cannot resolve.
+   *
+   * The **same** component is what the consumer renders from a route whose data
+   * is unavailable; every prop is optional so one component serves both call
+   * sites. Defaults to nativ's `Offline`. → `RENDERING.md §3.1.2`
+   */
+  offlineComponent?: ComponentType<OfflineProps>
   /** Built app stylesheet URL (`import appCss from "…/main.css?url"`). */
   stylesEntryPoint?: string
   /** Extra inline scripts rendered by `<Scripts/>`. */
@@ -105,6 +116,7 @@ export function createRootRoute(
   const {
     RootDocument: RootDocumentOverride,
     notFoundComponent,
+    offlineComponent,
     stylesEntryPoint,
     splashScreenComponent,
     splashScreenInBrowser = false,
@@ -180,6 +192,7 @@ export function createRootRoute(
           manifestPath={manifestPath}
           orientationGuardComponent={orientationGuardComponent}
           serviceWorker={serviceWorker}
+          offlineComponent={offlineComponent}
           shellClassName={shellClassName}
           patches={patches}
         >

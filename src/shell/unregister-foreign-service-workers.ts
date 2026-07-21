@@ -1,10 +1,12 @@
-const DEV_SW_PATH = "dev-sw.js?dev-sw"
-const PROD_SW_PATH = "sw.js"
+//nativ emits exactly one worker, `sw.js`, in dev and prod alike. There used to be
+//a `dev-sw.js?dev-sw` special case here — vite-plugin-pwa's dev filename — which
+//nativ has never produced. It made every dev-registered worker look FOREIGN, so
+//the cleanup pass would unregister the app's own worker. → DECISIONS.md B6
+const SW_PATH = "sw.js"
 
 function getExpectedServiceWorkerScriptUrl(): string {
   const base = import.meta.env.BASE_URL
-  const path = import.meta.env.DEV ? DEV_SW_PATH : PROD_SW_PATH
-  return new URL(`${base}${path}`, window.location.origin).href
+  return new URL(`${base}${SW_PATH}`, window.location.origin).href
 }
 
 function scriptUrlsMatch(a: string, b: string): boolean {

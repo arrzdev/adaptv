@@ -41,6 +41,10 @@ import {
   willAnimateDrawerKeyboardOffset,
 } from "#nativ/components/drawer/drawer-motion"
 import { useFreezeViewport } from "#nativ/hooks/use-freeze-viewport"
+import {
+  GesturePriority,
+  useGestureCapture,
+} from "#nativ/hooks/use-gesture-capture"
 import { dismissVirtualKeyboard } from "#nativ/hooks/use-keyboard"
 import { clamp } from "#nativ/utils/clamp"
 import { cn } from "#nativ/utils/cn"
@@ -237,6 +241,26 @@ export function DrawerEngine({
   const isGestureClosingRef = useRef(false)
   const pointerStartRef = useRef(0)
   const dragStartTimeRef = useRef<number | null>(null)
+
+  //Shared gesture arbitration. `blocksScroll` because `touch-action` cannot be
+  //changed mid-touch on iOS, so holding the scroller still is the only reliable
+  //way to stop a scroll the drag took over from.
+  const capture = useGestureCapture({
+    priority: GesturePriority.DrawerDrag,
+    blocksScroll: true,
+    //Pre-empted (an edge swipe outranks a drawer drag) — snap back rather than
+    //leaving the sheet mid-translate with no pointer left to finish it.
+    //`dragActionsRef` is declared further down; this closure only runs on a real
+    //pre-emption, long after render, so the forward reference is safe.
+    onLost: () => {
+      isPointerDraggingRef.current = false
+      dragStartTimeRef.current = null
+      dragActionsRef.current?.snapOpen()
+    },
+  })
+  const captureRef = useRef(capture)
+  captureRef.current = capture
+
   // Gesture state is refs + imperative dataset writes, NOT React state: a re-render at drag
   // commit / gesture-close start (when the animation is starting) is exactly the main-thread
   // work that delays the first frame on iOS.
@@ -1069,6 +1093,10 @@ export function DrawerEngine({
         stopDrawerBackdropAnimation(backdropRef.current)
         backdropRef.current.style.transition = "none"
       }
+      //Claim the shared arbiter before taking the pointer. The handle drag
+      //commits immediately (there is nothing else a handle press could mean), so
+      //unlike the sheet path below there is no lock to wait for.
+      if (!captureRef.current.request()) return
       pointerStartRef.current = event.clientY
       dragStartTimeRef.current = Date.now()
       isPointerDraggingRef.current = true
@@ -1202,6 +1230,11 @@ export function DrawerEngine({
       }
       // Anchor the sheet at the current finger position so it doesn't jump by any scroll distance
       // already consumed before the takeover.
+      //
+      //Claim the arbiter HERE, at the takeover — not at touchstart. A touch on
+      //the sheet usually means scrolling its content; claiming on contact would
+      //hold the pointer for every scroll and starve the other gestures.
+      captureRef.current.request()
       pointerStartRef.current = clientY
       dragStartTimeRef.current = Date.now()
     }
@@ -1287,6 +1320,7 @@ export function DrawerEngine({
       isPointerDraggingRef.current = false
       syncBackdropGestureAttributes()
       dragStartTimeRef.current = null
+      captureRef.current.release()
 
       const actions = dragActionsRef.current
       const metrics = actions?.getMetrics()

@@ -1,12 +1,17 @@
 import { useCallback, useReducer, useState } from "react"
 import { persistNativeThemePreference } from "#nativ/capabilities/native-theme"
 import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
+import {
+  PREFERENCE_ATTR,
+  UI_THEME_STORAGE_KEY,
+} from "#nativ/shell/theme-init-script"
 import tryCatch from "#nativ/utils/try-catch"
 
-export type UiThemePreference = "light" | "dark" | "system"
+//the pre-paint script lives in a React-free module so the Vite plugin can use it
+//at build time; re-exported here so runtime call sites are unchanged
+export { getUiThemeInitScript } from "#nativ/shell/theme-init-script"
 
-export const UI_THEME_STORAGE_KEY = "ui-theme-preference" as const
-const PREFERENCE_ATTR = "data-ui-theme"
+export type UiThemePreference = "light" | "dark" | "system"
 
 function readStoredPreference(): UiThemePreference | null {
   if (typeof window === "undefined") return null
@@ -81,21 +86,6 @@ export function applyUiThemePreference(preference: UiThemePreference) {
  * `<html>` class / `color-scheme` / background, and seeds the one
  * `theme-color` meta that {@link useSyncTheme} keeps in sync afterwards.
  */
-export function getUiThemeInitScript({
-  themeColorLight,
-  themeColorDark,
-  defaultThemePreference = "system",
-}: {
-  themeColorLight: string
-  themeColorDark: string
-  defaultThemePreference?: UiThemePreference
-}): string {
-  const key = UI_THEME_STORAGE_KEY
-  const attr = PREFERENCE_ATTR
-  const overrideId = "theme-color-class-override"
-  const fallbackPreference = defaultThemePreference
-  return `(function(){var k=${JSON.stringify(key)},a=${JSON.stringify(attr)},i=${JSON.stringify(overrideId)},l=${JSON.stringify(themeColorLight)},d=${JSON.stringify(themeColorDark)},df=${JSON.stringify(fallbackPreference)},r=document.documentElement,p=null;try{p=localStorage.getItem(k)}catch(e){}if(p!=="light"&&p!=="dark"&&p!=="system"){p=r.getAttribute(a)}if(p!=="light"&&p!=="dark"&&p!=="system"){p=df}var v=p==="light"?"light":p==="dark"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var shellBg=v==="dark"?d:l;r.classList.remove("light","dark");r.classList.add(v);r.style.colorScheme=v;r.style.backgroundColor=shellBg;r.setAttribute(a,p);var m=document.getElementById(i);if(!m){m=document.createElement("meta");m.id=i;m.name="theme-color";document.head.appendChild(m)}m.content=shellBg;m.removeAttribute("media")})();`
-}
 
 export function initUiTheme(
   preference: UiThemePreference = readPreference(),

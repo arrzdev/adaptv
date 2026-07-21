@@ -10,6 +10,108 @@
 
 ---
 
+## ⚠︎ 0.0 STOP — the premise changed. Read this before anything below. (2026-07-20)
+
+**Capacitor 8 ships a core plugin called `SystemBars` that has already taken over inset + IME handling
+on Android, and it is registered unconditionally.** Everything below §1 was designed against a blank
+slate that no longer exists.
+
+`com.getcapacitor.plugin.SystemBars` lives **inside `@capacitor/android` itself** and is registered in
+`Bridge.registerAllPlugins()` alongside `CapacitorHttp`/`CapacitorCookies`/`WebView`. You cannot
+exclude it. Consequences, all verified against source:
+
+1. **`@capacitor/keyboard`'s `resizeOnFullScreen` is dead code on Capacitor 8.**
+   `possiblyResizeChildOfContent()` — its only consumer — early-returns when
+   `Class.forName("com.getcapacitor.plugin.SystemBars")` resolves, which it **always** does. Shipped in
+   keyboard 8.0.3 via [PR #62](https://github.com/ionic-team/capacitor-keyboard/pull/62).
+
+2. **The two plugins collide, and it's an open bug.**
+   [capacitor-keyboard#68](https://github.com/ionic-team/capacitor-keyboard/issues/68): setting
+   `SystemBars.insetsHandling: "disable"` **plus** `Keyboard.resizeOnFullScreen: true` means *nothing*
+   resizes the WebView. And [#61](https://github.com/ionic-team/capacitor-keyboard/issues/61) — a grey
+   bar the height of the top inset appearing above the keyboard — has been open ~12 months across
+   `capacitor#8095` → `#8398`, with users pinning to 8.0.0/8.0.1 to escape it.
+
+3. **The maintainer's official position kills the current architecture.** jcesarmobile,
+   [capacitor-plugins#2517](https://github.com/ionic-team/capacitor-plugins/issues/2517), 2026-06-25:
+   *"If you are using edge to edge, remove status bar plugin, Capacitor 8 ships with SystemBars plugin."*
+   That issue was opened because **Google Play Console now warns** about deprecated edge-to-edge APIs,
+   with stack traces pointing at `StatusBar.setStatusBarColorDeprecated`.
+
+4. **`@capacitor/status-bar` is half-dead on modern Android — silently.**
+   `shouldSetStatusBarColor()` gates on **device** `Build.VERSION.SDK_INT`: `true` below API 35,
+   `hasOptOut` at 35, **`false` at 36+**. So `setBackgroundColor` **resolves successfully and does
+   nothing** on API 36+. Worse, `setOverlaysWebView` isn't gated at all — it still calls the
+   no-op'd `setSystemUiVisibility`/`setStatusBarColor`, so `setOverlaysWebView(false)` also **resolves
+   successfully and does nothing** on API 35+. *Under enforced edge-to-edge, `overlaysWebView` is
+   permanently `true` and there is no way back.* `getInfo().color` reads the deprecated
+   `Window.getStatusBarColor()` and returns `"#000000"` regardless of what's on screen.
+
+5. **The only supported way to tint a status bar in 2026 is to draw it yourself** — a fixed-position
+   scrim in the web layer, sized by `env(safe-area-inset-top)`, with `SystemBars.setStyle()` choosing
+   light/dark *icons* to contrast it. Native background colour is gone with no replacement.
+
+### What `SystemBars` already does for us
+
+Its Android inset pipeline installs `ViewCompat.setOnApplyWindowInsetsListener` on the WebView's parent
+and branches on WebView version, working around three Chromium bugs:
+
+| Constant | Bug | Workaround |
+|---|---|---|
+| `WEBVIEW_VERSION_WITH_SAFE_AREA_FIX = 140` | [crbug/40699457](https://issues.chromium.org/issues/40699457) — `env(safe-area-inset-*)` wrong below WebView 140 | inject CSS vars manually below 140 |
+| `WEBVIEW_VERSION_WITH_SAFE_AREA_KEYBOARD_FIX = 144` | [crbug/457682720](https://issues.chromium.org/issues/457682720) — bottom inset wrong while IME visible | force bottom to `0` below 144 |
+| — | [crbug/461332423](https://issues.chromium.org/issues/461332423) — returning `WindowInsetsCompat.CONSUMED` **breaks safe-area recalculation** | build zeroed insets instead of consuming |
+
+It injects `--safe-area-inset-{top,right,bottom,left}` on `document.documentElement` (Android only; iOS
+relies on native `env()`), configurable via `insetsHandling: "css" | "disable"`.
+
+**Two behaviours to design around:** the values are **integer-truncated dp** (`(int)(px/density)`), so
+they disagree with `env(safe-area-inset-*)` by up to 1px; and **`--safe-area-inset-bottom` is forced to
+`0` whenever the IME is visible** — the variable is not a stable geometric fact.
+
+### 🔒 Revised decision: layer on `SystemBars`, do not replace it
+
+The original plan — "phase 1 owns edge-to-edge + inset/IME reporting" — would mean **a second
+`setOnApplyWindowInsetsListener` on the same view hierarchy as an unavoidable core plugin.** That
+collision is *literally* bugs #61 and #68. Owning it harder makes it worse, not better.
+
+So:
+
+- **Rent `SystemBars` for the Android inset pipeline.** It already carries three Chromium workarounds
+  nativ would otherwise have to discover, maintain, and version-gate itself. Consume its CSS vars;
+  do not install a competing listener.
+- **`@nativ/shell`'s Android job shrinks** to: normalising units (dp vs points vs truncated-int),
+  papering over the IME-forces-bottom-to-zero quirk, and giving nativ one accessor whose shape is
+  identical on both platforms.
+- **Drop `@capacitor/status-bar`** for edge-to-edge apps, per the maintainer's own guidance. Replace
+  its tinting role with the web-layer scrim (point 5) plus `SystemBars.setStyle()`.
+- **Own the keyboard height**, and report it **continuously**, not on discrete show/hide events —
+  changing an `<input type>` to `tel` or opening the emoji keyboard resizes the IME while firing **no
+  events at all** ([#26](https://github.com/ionic-team/capacitor-keyboard/issues/26),
+  [#29](https://github.com/ionic-team/capacitor-keyboard/issues/29)).
+- **Never assume `keyboardWillHide` precedes `keyboardDidHide`.** On iOS 26 the order inverts when the
+  keyboard hides without animation ([#32](https://github.com/ionic-team/capacitor-keyboard/issues/32)).
+- **Do not build on `visualViewport` on native.** Ionic's own source refuses to, with the reason in a
+  comment: *"the Ionic webview manipulates how it resizes such that the Visual Viewport API is not
+  reliable here."* Every Capacitor resize strategy shrinks the WebView rather than overlaying it, so
+  the keyboard becomes invisible to `visualViewport`. Web-target fallback only.
+- **`interactive-widget` is Android-only.** MDN BCD: `webview_android` 108 ✅, `webview_ios` **`false`**.
+  It cannot be part of a cross-platform abstraction without a separate iOS path.
+
+### ⚠︎ Timing risk
+
+**Capacitor 9 is in alpha** (`@capacitor/core@9.0.0-alpha.6`) and `SystemBars.java` carries a
+`// TODO: In Cap 9, add an additional option "full"` beside `insetsHandling`. **The inset contract is
+going to change again.** Do not freeze `@nativ/shell`'s public API against Capacitor 8's shape without
+reading the Cap 9 alpha first.
+
+> **Net effect on the roadmap: `@nativ/shell` gets smaller and less risky, but stops being "the wedge
+> vs Ionic"** — Capacitor core now solves the part that was going to be nativ's differentiator. The
+> real remaining wedge is the *unified cross-platform accessor* (§4) and everything above the native
+> seam, not the seam itself.
+
+---
+
 ## 0. Why own a native module
 
 Today the native shell is **assembled from parts**:

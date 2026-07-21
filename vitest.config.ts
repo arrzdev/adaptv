@@ -13,5 +13,12 @@ export default defineConfig({
   },
   test: {
     environment: "happy-dom",
+    //unmounts every Testing Library render between tests — see vitest.setup.ts
+    setupFiles: ["./vitest.setup.ts"],
+    //`.project-zero/` holds a local copy of a real consumer app used to exercise
+    //nativ end-to-end. It has its own suites (and its own vitest/playwright
+    //configs), which must never be collected into the framework's gate — they
+    //would fail here for reasons that say nothing about nativ.
+    exclude: ["**/node_modules/**", "**/dist/**", ".project-zero/**"],
   },
 })

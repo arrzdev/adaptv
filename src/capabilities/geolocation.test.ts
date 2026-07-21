@@ -78,6 +78,45 @@ describe("geolocation — native", () => {
   })
 })
 
+describe("geolocation — device-level unavailability", () => {
+  //@capacitor/geolocation documents that checkPermissions() THROWS when system
+  //location services are switched off. That's a device state, not a permission
+  //state — the accessor must surface it, never reject. This file is the exemplar
+  //for every permission-gated capability, so the shape matters more than the fix.
+  it("returns 'unavailable' when native checkPermissions throws", async () => {
+    forceNative(true)
+    vi.mocked(Geolocation.checkPermissions).mockRejectedValueOnce(
+      new Error("Location services are not enabled"),
+    )
+    await expect(checkGeoPermission()).resolves.toBe("unavailable")
+  })
+
+  it("returns 'unavailable' when native requestPermissions throws", async () => {
+    forceNative(true)
+    vi.mocked(Geolocation.requestPermissions).mockRejectedValueOnce(
+      new Error("Location services are not enabled"),
+    )
+    await expect(requestGeoPermission()).resolves.toBe("unavailable")
+  })
+
+  it("reports 'unavailable' on web when the geolocation API is absent", async () => {
+    //no navigator.geolocation at all — asking cannot help, so it is not "prompt"
+    forceNative(false)
+    stubNavigatorProp("geolocation", undefined)
+    stubNavigatorProp("permissions", undefined)
+    await expect(checkGeoPermission()).resolves.toBe("unavailable")
+  })
+
+  it("still reports 'prompt' when only the Permissions API is missing", async () => {
+    //older browsers can't QUERY geolocation permission but can still request it,
+    //so the correct answer is "you may ask", not "unavailable"
+    forceNative(false)
+    stubNavigatorProp("geolocation", { getCurrentPosition: () => {} })
+    stubNavigatorProp("permissions", undefined)
+    await expect(checkGeoPermission()).resolves.toBe("prompt")
+  })
+})
+
 describe("geolocation — web", () => {
   it("reads position from navigator.geolocation", async () => {
     forceNative(false)
@@ -96,6 +135,10 @@ describe("geolocation — web", () => {
 
   it("reads permission from the Permissions API", async () => {
     forceNative(false)
+    //geolocation must be present too: no real browser ships the Permissions API
+    //without it, and checkGeoPermission short-circuits to "unavailable" when the
+    //underlying API is missing (asking cannot help).
+    stubNavigatorProp("geolocation", { getCurrentPosition: () => {} })
     stubNavigatorProp("permissions", {
       query: () => Promise.resolve({ state: "denied" }),
     })

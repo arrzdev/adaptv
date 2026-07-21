@@ -1,5 +1,6 @@
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
-import type { ComponentType, ReactNode } from "react"
+import type { ComponentType } from "react"
+import type { OfflineProps } from "#nativ/components/offline"
 import type {
   OrientationGuardProps,
   OrientationLock,
@@ -66,14 +67,23 @@ export type NativRouterConfig = {
   render?: "spa" | "ssr"
   /** Server entry (relative to the app root) for `render: "ssr"`. Optional — Start's built-in is used otherwise. */
   serverEntry?: string
-  /** Generated route-tree file, relative to the app root (e.g. `"./routing/routeTree.gen.ts"`). */
-  generatedRouteTree: string
-  /** Routes directory, relative to the app root (e.g. `"./routing"`). */
-  routesDirectory: string
-  /** Virtual route-config module — the `rootRoute([...])` DSL (e.g. `"./src/routing/config.ts"`). */
-  virtualRouteConfig: string
-  /** Quote style for generated code. Default `"double"`. */
-  quoteStyle?: "single" | "double"
+  /**
+   * Where the app's route files live, relative to `src/`. **Default
+   * `"./routing"`** (i.e. `src/routing`). Only set this if your routes live
+   * somewhere else — it exists because a routes folder is genuinely the app
+   * author's to place, not because nativ needs you to declare a default.
+   */
+  routesDirectory?: string
+  /**
+   * The app's route config — the `rootRoute([...])` DSL. **Default
+   * `"./src/routing/config.ts"`.**
+   *
+   * Named `routerConfig`, not `virtualRouteConfig`: nativ **always** uses the
+   * declarative route config. It is the framework's opinion, not a mode the
+   * consumer selects, so the name should not leak the underlying TanStack
+   * "virtual file routes" implementation detail.
+   */
+  routerConfig?: string
   /**
    * When the app runs installed / standalone (home-screen PWA), use in-memory
    * router history instead of browser history. The OS edge-swipe-back then has
@@ -89,10 +99,8 @@ export type NativRouterConfig = {
 export const ROUTER_BUILD_KEYS = [
   "render",
   "serverEntry",
-  "generatedRouteTree",
   "routesDirectory",
-  "virtualRouteConfig",
-  "quoteStyle",
+  "routerConfig",
 ] as const
 
 /**
@@ -112,6 +120,47 @@ export type NativThemeColor =
  * - `"light"` / `"dark"` — a fixed colour, independent of theme + system.
  */
 export type SplashMaskMode = "preferences" | "system" | "light" | "dark"
+
+/** Object form of `sw` — the entry plus service-worker build options. */
+export type NativSwOptions = {
+  /** App-relative entry path. Default `"./src/sw.ts"`. */
+  entry?: string
+  /**
+   * **Public, user-agnostic routes only** — precached as documents so they
+   * cold-load instantly and work offline. Empty by default, and that default is a
+   * safety property: Cache Storage is keyed by URL and scoped per-ORIGIN, not
+   * per-user, so precaching a personalized document serves one user's HTML to the
+   * next. → `RENDERING.md §3.2`
+   */
+  precacheDocuments?: string[]
+}
+
+/** The `web` deployment block — intent-level. → `LIFECYCLE.md §1.2` */
+export type NativWebConfig = {
+  /**
+   * Rendering mode. **Defaults to `"ssr"`.**
+   *
+   * The default is an asymmetry argument, not a performance one: a wrong SPA
+   * default silently kills SEO and is discovered late, by someone reading a
+   * ranking report. A wrong SSR default costs one config flip, immediately, by
+   * the person who wanted SPA. → `DECISIONS.md §6.3`
+   */
+  render?: "ssr" | "spa"
+  /** Deploy target — maps to a TanStack Start deploy preset. Default `"node"`. */
+  host?: "cloudflare" | "vercel" | "node" | "static"
+  sw?: {
+    /** Default `true`. `false` ships without a service worker. */
+    enabled?: boolean
+    /**
+     * **Public, user-agnostic routes only**, precached as documents. Empty by
+     * default — Cache Storage is per-ORIGIN, not per-user, so precaching a
+     * personalized document serves one user's HTML to the next.
+     */
+    precacheDocuments?: string[]
+    /** How a waiting worker is applied. Default `"prompt"`. → `RENDERING.md §3.4` */
+    register?: "prompt" | "autoUpdate" | "manual"
+  }
+}
 
 export type NativAppConfig = {
   /** App name — manifest `name`, and the head `<title>` unless `title` overrides. */
@@ -153,12 +202,18 @@ export type NativAppConfig = {
   /** App stylesheet entry (e.g. `"./src/styles/main.css"`) — built and linked in the head. */
   styles: string
   /**
-   * Service worker entry — app-authored for full flexibility. Default
-   * `"./src/sw.ts"`. Pass `false` to ship without a service worker. nativ only
-   * bundles it, injects the precache manifest, and provides the derived
-   * `__NATIV_BUILD_TAG__` constant.
+   * Service worker. nativ bundles the entry, injects the precache manifest, and
+   * provides the derived `__NATIV_BUILD_TAG__` constant.
+   *
+   * - `string` — the app-authored entry path (default `"./src/sw.ts"`).
+   * - `false` — ship without a service worker.
+   * - object — the entry plus SW build options, notably `precacheDocuments`.
+   *
+   * Forced to `false` on the Capacitor target, unconditionally (L12): the bundle
+   * is already on-device, iOS cannot register a worker on a custom-scheme origin
+   * at all, and a stale worker actively breaks OTA. → `RENDERING.md §3.5`
    */
-  sw?: string | false
+  sw?: string | false | NativSwOptions
   /** Extra fields merged verbatim into the generated web manifest. */
   manifestExtra?: Record<string, unknown>
 
@@ -204,8 +259,44 @@ export type NativAppConfig = {
   orientationGuardScreen?: ScreenThunk<OrientationGuardProps>
   /** Full-screen 404. */
   notFoundScreen?: () => Promise<{ default: NotFoundRouteComponent }>
-  /** App-wide provider tree, mounted by the shell around the router outlet. */
-  providers?: ScreenThunk<{ children: ReactNode }>
+  /**
+   * The app's offline UI. **One component, two call sites** — nativ renders it
+   * when the app can't boot far enough for a route to exist (a route chunk fails
+   * to load, or the route tree can't resolve), and the consumer renders the *same*
+   * component from a route whose data is unavailable. Every prop is optional,
+   * which is what lets one component serve both. → `RENDERING.md §3.1.2`
+   *
+   * ```ts
+   * offlineComponent: () => import("@/components/offline")
+   * ```
+   *
+   * ⚠︎ Like every screen thunk, this is **never executed**: the Vite plugin reads
+   * the literal specifier and emits a *static* import in the generated root. That
+   * is load-bearing here rather than incidental — if this resolved to its own lazy
+   * chunk, then in exactly the situation it exists for (chunks unavailable) the
+   * chunk carrying the offline UI would be unavailable too, and the user would get
+   * a blank screen instead. `stamp.test.ts` guards it.
+   *
+   * Defaults to nativ's own `Offline` component.
+   */
+  offlineComponent?: ScreenThunk<OfflineProps>
+  //NOTE: there is deliberately no `providers` field. An app-wide provider tree is
+  //just a layout route — declare one in `routerConfig` and wrap `<Outlet />`:
+  //
+  //  export const routes = rootRoute([
+  //    layout("layouts/providers.layout.tsx", [ index("pages/home.tsx") ]),
+  //  ])
+  //
+  //That is the router's own composition model, it nests and scopes properly, and
+  //it puts providers where the consumer can see them. A config thunk would be a
+  //second, weaker way to express the same thing.
+
+  /**
+   * Deployment intent — rendering mode, host, service worker. Prefer this over
+   * the lower-level `router.render` / `sw` fields, which remain as escape
+   * hatches. → {@link NativWebConfig}
+   */
+  web?: NativWebConfig
 
   /**
    * Router config — one block for all routing wiring: rendering mode + bundle
