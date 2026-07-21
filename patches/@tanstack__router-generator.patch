@@ -1,0 +1,24 @@
+diff --git a/dist/esm/template.js b/dist/esm/template.js
+index 52aba62b57bdc1b8a6687b789b3f95027da0dfe7..99ab67bb6465ff384cdc24ac814ca0c195f222be 100644
+--- a/dist/esm/template.js
++++ b/dist/esm/template.js
+@@ -3,11 +3,18 @@ import { format } from "./utils.js";
+ function fillTemplate(config, template, values) {
+ 	return format(template.replace(/%%(\w+)%%/g, (_, key) => values[key] || ""), config);
+ }
++//nativ: allow the emitted router package specifier to be overridden, so every
++//import AND  the generator writes points at the framework barrel
++//instead of @tanstack/*. Set by @arrzdev/nativ's vite plugin. Absent => upstream
++//behaviour, unchanged.
++function nativRouterPkg(fallback) {
++	return (typeof process !== "undefined" && process.env && process.env.NATIV_ROUTER_PKG) || fallback;
++}
+ function getTargetTemplate(config) {
+ 	const target = config.target;
+ 	switch (target) {
+ 		case "react": return {
+-			fullPkg: "@tanstack/react-router",
++			fullPkg: nativRouterPkg("@tanstack/react-router"),
+ 			subPkg: "react-router",
+ 			rootRoute: {
+ 				template: () => [

@@ -18,6 +18,9 @@ This is a **private, personal framework** (extracted from the `chopchop` app, wh
 
 🧭 **Continuing development?** Start with [`HANDOFF.md`](HANDOFF.md) — current state, how to develop, roadmap, and locked-in decisions.
 
+🧭 **Start with [`docs/DECISIONS.md`](docs/DECISIONS.md)** — the decision register (🔒 locked / 📐 designed /
+🔀 conflicted / ❓ open), every doc-vs-code conflict, the recorded bugs, and the time-sensitive items.
+
 📖 **Read these first:** [`docs/VISION.md`](docs/VISION.md) (the north star + doctrine) ·
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the cross-platform contracts: shell/frame/`View`,
 storage, TanStack opacity) · [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) (config → build → deploy → native
@@ -27,6 +30,12 @@ app lifecycle: app state/resume, back chain, gesture controller, route lifecycle
 (rendering/delivery + the hard `createServerFn` limit) · [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) (what
 nativ fixes, how, and how to test each) · [`docs/TESTING.md`](docs/TESTING.md) ·
 [`docs/capacitor-internals.md`](docs/capacitor-internals.md).
+
+**Reference:** [`STYLING.md`](docs/STYLING.md) (how consumers restyle primitives) ·
+[`FACADE.md`](docs/FACADE.md) (the `createServerFn` ban) · [`ANIMATION.md`](docs/ANIMATION.md) (the
+motion substrate + the iOS 60Hz ceiling) · [`PRIOR-ART.md`](docs/PRIOR-ART.md) (what we port from Ionic,
+and the attribution convention) · [`COOKBOOK.md`](docs/COOKBOOK.md) (consumer recipes — offline UI, auth
+guards, offline-first data).
 
 ---
 

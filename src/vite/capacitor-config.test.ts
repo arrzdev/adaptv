@@ -10,9 +10,8 @@ const BASE: NativAppConfig = {
   styles: "./src/styles/main.css",
   appId: "com.chopchop.app",
   router: {
-    generatedRouteTree: "./routing/routeTree.gen.ts",
     routesDirectory: "./routing",
-    virtualRouteConfig: "./src/routing/config.ts",
+    routerConfig: "./src/routing/config.ts",
   },
 }
 
@@ -21,7 +20,7 @@ describe("buildCapacitorConfig", () => {
     const c = buildCapacitorConfig(BASE)
     expect(c.appId).toBe("com.chopchop.app")
     expect(c.appName).toBe("ChopChop")
-    expect(c.webDir).toBe("dist-capacitor/client")
+    expect(c.webDir).toBe("dist/client")
   })
 
   it("honours an explicit appName", () => {

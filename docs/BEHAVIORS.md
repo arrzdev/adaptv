@@ -88,11 +88,22 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** installed Android (5/6): the top fade sits under the status-bar strip, never over the title.
   `<View safe="bottom" className="pb-0">` keeps the safe padding. *(Shipped to chopchop in PR #91.)*
 
-### 7. Haptics — native / web / iOS-18 polyfill
-- **How:** `src/capabilities/haptics.ts` — native engine (`@capacitor/haptics`) on Capacitor,
-  `navigator.vibrate` on Android web, an `<input switch>` polyfill on iOS 18 web (fires synchronously
-  inside the tap). `Button haptic={…}` fires on press-down; `useVibrate` gives the semantic aliases.
-- **Test:** tap a `haptic` button — a tactile tick on device (native + Android web). Device-only feel.
+### 7. Haptics — two surfaces, because iOS web forces it
+- **How:** *imperative* — `src/capabilities/haptics.ts`: native engine (`@capacitor/haptics`) on
+  Capacitor, `navigator.vibrate` on Android/Chrome web. **A documented no-op on iOS web.**
+  *Declarative* — `src/capabilities/haptic-tick.ts` + `useHapticTick`: mounts an invisible, full-size
+  `<input type="checkbox" switch>` on a tap target so the user's **real finger** fires the system tick.
+  `Button haptic={…}` routes through both, so it works on all six targets; `useVibrate` gives the
+  semantic aliases over the imperative API.
+- **Why two:** iOS Safari has no `navigator.vibrate` and never will (WebKit's standards position on the
+  Vibration API is formally `oppose`). Its one route to the Taptic Engine is the switch tick — and
+  **Apple patched programmatic `.click()` in iOS 26.5**, so it now requires an actual touch. You cannot
+  synthesise a finger, so no imperative call can reach it. The mechanism is inherently declarative.
+  → `DECISIONS.md` B10.
+- **Limits on iOS web:** system tick only — no weights, no notification patterns, no intensity.
+  Requires System Haptics enabled (undetectable). Costs one DOM node per tap target.
+- **Test:** tap a `haptic` button — a tactile tick on device. **Physical hardware only**; simulators
+  produce no haptics, and the iOS-web path specifically needs iOS ≥ 26.5 to be a meaningful test.
 
 ### 8. External links
 - **How:** `src/components/link.tsx` routes `isExternalUrl(to)` to `ExternalLink` → system browser

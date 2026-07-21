@@ -1,0 +1,23 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.2/schema.json",
+  "linter": {
+    "rules": {
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@tanstack/react-start": {
+                "importNames": ["createServerFn", "createMiddleware"],
+                "message": "Server functions need a server, and a Capacitor build has none — this works in dev and in an SSR deploy, then fails on iOS and Android. Move the logic to your API and call it over the network, or use a route `loader`, which is isomorphic. See docs/RENDERING.md §2."
+              },
+              "@tanstack/react-start/server": {
+                "message": "The server-only entrypoint (getRequest, setCookie, setResponseHeaders, …) cannot run in a nativ app — a Capacitor build has no server. See docs/RENDERING.md §2."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

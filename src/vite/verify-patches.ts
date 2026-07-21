@@ -1,0 +1,131 @@
+/**
+ * Fail loudly when nativ's dependency patches are not applied.
+ * → `DECISIONS.md §2.6a` (L19), `§2.6b`
+ *
+ * ## Why this exists
+ *
+ * nativ's TanStack opacity rests on two `pnpm patch`es. They are declared in
+ * `pnpm-workspace.yaml` under `patchedDependencies` — and pnpm honours that key
+ * **only in the root manifest of the project being installed**. A library cannot
+ * carry its own patches into a consumer's install.
+ *
+ * So in a real consumer app, without the same declaration, both patches are
+ * simply absent. And the failure is **silent**: the generator goes back to
+ * writing `@tanstack/react-router` imports into route files, the facade quietly
+ * reverts, and the app still builds. Someone would eventually notice their
+ * "opaque" framework leaking TanStack everywhere and have no idea why.
+ *
+ * A silent revert is much worse than a hard failure, so this turns it into one.
+ */
+
+import { readFileSync } from "node:fs"
+
+export type PatchStatus = {
+  ok: boolean
+  /** Human-readable names of the patches that are missing. */
+  missing: string[]
+}
+
+/**
+ * Detect whether the patches took, by inspecting the *behaviour* they enable
+ * rather than by reading pnpm's metadata.
+ *
+ * Checking the installed source is the honest test: it is true exactly when the
+ * feature works, and it cannot be fooled by a stale lockfile, a partial install,
+ * or a hoisting layout that resolved a different copy of the package than the
+ * one that was patched.
+ */
+export function checkPatches(sources: {
+  /** Contents of `start-plugin-core/dist/esm/schema.js`. */
+  startSchema?: string
+  /** Contents of `router-generator/dist/esm/template.js`. */
+  generatorTemplate?: string
+}): PatchStatus {
+  const missing: string[] = []
+
+  //patched => `verboseFileRoutes` no longer appears in the `.omit()` list
+  if (sources.startSchema?.includes("verboseFileRoutes: true")) {
+    missing.push("@tanstack/start-plugin-core")
+  }
+
+  //patched => the target template reads nativ's env override
+  if (
+    sources.generatorTemplate !== undefined &&
+    !sources.generatorTemplate.includes("NATIV_ROUTER_PKG")
+  ) {
+    missing.push("@tanstack/router-generator")
+  }
+
+  return { ok: missing.length === 0, missing }
+}
+
+/** The message shown when a patch is missing. States the fix, not just the fault. */
+export function describeMissingPatches(missing: string[]): string {
+  return [
+    `[nativ] Required dependency patches are not applied: ${missing.join(", ")}.`,
+    "",
+    "Without them the route generator writes `@tanstack/react-router` imports into your",
+    "route files and nativ's framework facade silently stops working — the build still",
+    "succeeds, which is why this is an error rather than a warning.",
+    "",
+    "pnpm only applies `patchedDependencies` from the root manifest of the project being",
+    "installed, so a library cannot carry its patches to you. Add this to your",
+    "`pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
+    "",
+    "  patchedDependencies:",
+    "    '@tanstack/start-plugin-core': node_modules/@arrzdev/nativ/patches/@tanstack__start-plugin-core.patch",
+    "    '@tanstack/router-generator': node_modules/@arrzdev/nativ/patches/@tanstack__router-generator.patch",
+    "",
+    "then run `pnpm install`. If it still reports missing, delete `node_modules` first —",
+    "pnpm does not always re-apply patches on an incremental install.",
+  ].join("\n")
+}
+
+/* ============================================================================
+ * Wiring
+ * ========================================================================== */
+
+/**
+ * Verify the invariant **on the generated output**, which is the only reliable
+ * signal available.
+ *
+ * Two earlier attempts checked the patched dependency *files* and both failed
+ * silently, for the same underlying reason: `@tanstack/start-plugin-core` and
+ * `@tanstack/router-generator` are **transitive** dependencies of
+ * `@tanstack/react-start`, so under pnpm's strict, non-hoisted layout they are
+ * not resolvable by name — not from the app root, and not from nativ either
+ * (`MODULE_NOT_FOUND` for both). A checker that cannot read the thing it checks
+ * reports success, which is worse than no checker at all.
+ *
+ * So this asserts the property we actually care about — *is the generated route
+ * tree free of `@tanstack`?* — rather than a proxy for it. It cannot be fooled by
+ * a resolution quirk, a stale lockfile, or a future refactor of the patches,
+ * because it tests the outcome instead of the mechanism.
+ */
+export function assertRouteTreeIsOpaque(routeTreePath: string): void {
+  let source: string
+  try {
+    source = readFileSync(routeTreePath, "utf8")
+  } catch {
+    //not generated yet on this pass — nothing to assert
+    return
+  }
+  if (!source.includes("@tanstack/")) return
+
+  throw new Error(
+    [
+      "[nativ] The generated route tree still imports from `@tanstack/*`.",
+      `  ${routeTreePath}`,
+      "",
+      "That means nativ's dependency patches are not applied to this install. The build",
+      "would otherwise SUCCEED with the framework facade silently disabled — your route",
+      "files would carry `@tanstack/react-router` imports again — which is why this is an",
+      "error rather than a warning.",
+      "",
+      describeMissingPatches([
+        "@tanstack/start-plugin-core",
+        "@tanstack/router-generator",
+      ]),
+    ].join("\n"),
+  )
+}

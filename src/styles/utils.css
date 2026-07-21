@@ -42,8 +42,22 @@
   user-select: text !important;
 }
 
+/*
+ * Tap target. The `touch-action` value is the expanded longhand ON PURPOSE.
+ *
+ * WebKit 240917 (NEW, filed 2022): `pointercancel` is not dispatched on an element
+ * with `touch-action: manipulation`. The longhand `pan-x pan-y pinch-zoom` is
+ * spec-identical — same computed behaviour, same double-tap-zoom suppression — and
+ * DOES dispatch it. Ionic hit this and documents the same workaround in content.scss.
+ * @see https://bugs.webkit.org/show_bug.cgi?id=240917
+ *
+ * Why it matters here: `pointercancel` is how a gesture learns a scroll took over.
+ * Anything both tappable and gesture-driven — a Button inside Swipeable, a drawer
+ * handle — strands its gesture state machine on iOS under the shorthand. Do not
+ * "simplify" this back; src/styles/utils.test.ts guards it.
+ */
 @utility clickable {
-  touch-action: manipulation;
+  touch-action: pan-x pan-y pinch-zoom;
   cursor: pointer;
 }
 

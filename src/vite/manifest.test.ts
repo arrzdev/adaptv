@@ -14,9 +14,8 @@ const BASE: NativAppConfig = {
   icons: "./__no_icons__",
   router: {
     clientEntry: "../entrypoint/client",
-    generatedRouteTree: "./routing/routeTree.gen.ts",
     routesDirectory: "./routing",
-    virtualRouteConfig: "./src/routing/config.ts",
+    routerConfig: "./src/routing/config.ts",
   },
 }
 

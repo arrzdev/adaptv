@@ -82,6 +82,24 @@ export function resolvePlatformTag(): PlatformTag {
 }
 
 /**
+ * Re-apply the `data-nativ-platform` / `data-nativ-os` stamp on `<html>`.
+ *
+ * The pre-paint init script ({@link getPlatformInitScript}) sets these before the
+ * first frame, but React does not render them (they can't be server-rendered — the
+ * server has no `window` — without a hydration mismatch). On the SPA/native client
+ * path React reconciles `<html>` and **drops** the script-applied attributes, which
+ * silently disables every `app:` / `web:` variant and the attribute-scoped critical
+ * CSS — most visibly `env()` safe-area padding, leaving content under the status bar.
+ * Call this from a layout effect at the root so the stamp is restored before paint.
+ */
+export function applyPlatformStamp(): void {
+  if (typeof document === "undefined") return
+  const root = document.documentElement
+  root.dataset.nativPlatform = resolvePlatformTag()
+  root.dataset.nativOs = getOS()
+}
+
+/**
  * Blocking inline `<head>` script — runs before first paint. Stamps
  * `document.documentElement`:
  *   • `data-nativ-platform` → `native` / `standalone` / `web` (drives the `app:` /

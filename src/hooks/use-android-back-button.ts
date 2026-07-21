@@ -2,29 +2,70 @@ import { App } from "@capacitor/app"
 import type { PluginListenerHandle } from "@capacitor/core"
 import { useRouter } from "@tanstack/react-router"
 import { useEffect } from "react"
+import {
+  BackPriority,
+  registerBackHandler,
+  runBackChain,
+} from "#nativ/capabilities/back-chain"
 import { getOS, isNativePlatform } from "#nativ/utils/platform"
 
 /**
- * Wire the Android hardware back button to the router: navigate back if there's
- * history, otherwise exit the app. Android-native only — no-op on iOS and web (where
- * there's no hardware back). Mount once at the root, inside the router context.
+ * Install the single platform back listener and the chain's **floor handler**.
+ * Mount once at the root, inside the router context.
  *
- * Pairs with {@link standaloneMemoryHistory}: installed builds use in-memory history
- * so the OS gesture is inert and the app owns navigation.
+ * This used to *be* the whole back story — it hardcoded
+ * `canGoBack() ? back() : exitApp()` with no interception point, so an open
+ * drawer had no way to claim the press and back navigated out from under it.
+ * That behaviour is now the lowest-priority entry in a shared chain: overlays
+ * register above it and consume the press first. → `COORDINATION.md §2`
+ *
+ * Android-native only for the *hardware* button (iOS and web have none), but the
+ * chain itself is cross-platform and drives {@link nativBack} everywhere.
  */
 export function useAndroidBackButton(): void {
   const router = useRouter()
+
+  //The floor handler is registered on EVERY platform, not just Android: it is what
+  //`nativBack()` falls through to for an in-app back affordance, and an installed
+  //PWA has no browser chrome to provide one.
+  useEffect(
+    () =>
+      registerBackHandler(() => {
+        if (router.history.canGoBack()) {
+          router.history.back()
+          return true
+        }
+        //nothing left to go back to. Exiting is only meaningful on native — a web
+        //tab must NOT be closed out from under the user, so defer instead and let
+        //the browser do whatever it normally would.
+        if (!isNativePlatform()) return false
+        void App.exitApp()
+        return true
+      }, BackPriority.RouterBack),
+    [router],
+  )
+
   useEffect(() => {
     if (!isNativePlatform() || getOS() !== "android") return
     let handle: PluginListenerHandle | undefined
     void App.addListener("backButton", () => {
-      if (router.history.canGoBack()) router.history.back()
-      else void App.exitApp()
+      runBackChain()
     }).then((h) => {
       handle = h
     })
     return () => {
       void handle?.remove()
     }
-  }, [router])
+  }, [])
+}
+
+/**
+ * Programmatic back — the same path the Android hardware button takes.
+ *
+ * Unifies three things that would otherwise diverge: the hardware button, an
+ * in-app back affordance, and (when installed) the OS edge gesture that memory
+ * history renders inert. Returns `true` if something handled it.
+ */
+export function nativBack(): boolean {
+  return runBackChain()
 }

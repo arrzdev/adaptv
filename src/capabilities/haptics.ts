@@ -1,7 +1,24 @@
 //Haptics — imperative device feedback, platform-branched. NATIVE uses the real
 //engine (@capacitor/haptics); WEB approximates the taxonomy with navigator.vibrate
-//patterns + the iOS-18 <input switch> polyfill. Exposed as a plain API (not a hook):
-//firing feedback is fire-and-forget — see the hook-vs-API rule in VISION.md.
+//patterns. Exposed as a plain API (not a hook): firing feedback is fire-and-forget
+//— see the hook-vs-API rule in VISION.md.
+//
+//⚠︎ THIS API IS A NO-OP ON iOS WEB, AND THAT IS NOT FIXABLE HERE.
+//
+//iOS Safari has no navigator.vibrate and never will (WebKit's standards position
+//on the Vibration API is formally `oppose`). Its one route to the Taptic Engine is
+//the system tick fired when a `switch`-styled checkbox is toggled BY A REAL FINGER
+//— Apple patched programmatic .click() in iOS 26.5. You cannot synthesise a touch,
+//so no imperative call can reach it.
+//
+//That is a shape mismatch, not a missing feature: the mechanism is inherently
+//declarative. For tap-triggered feedback use `attachHapticTick` /
+//`useHapticTick` (#nativ/capabilities/haptic-tick), which every nativ primitive
+//with a `haptic` prop already routes through — so `Button haptic="light"` works on
+//all six targets while `haptics.impact()` silently does nothing on one of them.
+//
+//Use this API for feedback NOT tied to a tap (a completed upload, a countdown).
+//Accept that iOS web won't feel it. @see docs/DECISIONS.md B10
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
 import { installVibratePolyfill } from "#nativ/utils/install-vibrate-polyfill"
 import { isNativePlatform } from "#nativ/utils/platform"

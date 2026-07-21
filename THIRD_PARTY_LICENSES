@@ -1,0 +1,79 @@
+Third-party notices for @arrzdev/nativ
+======================================
+
+nativ studies and, in places, ports logic from other open-source projects. This file carries the
+required notices. Per-file provenance comments (a pinned-SHA permalink plus a `Why:` line) are the
+convention — see docs/PRIOR-ART.md §0.
+
+None of the projects below are runtime dependencies of nativ. They are listed because nativ's source
+either ports their logic or derives tuning constants and techniques from it.
+
+
+-------------------------------------------------------------------------------
+vaul — https://github.com/emilkowalski/vaul
+-------------------------------------------------------------------------------
+
+Used by: src/components/drawer/*
+
+nativ's Drawer began as a wrap of vaul, was patched on top, and is now an independent
+implementation. What remains is derived tuning (drag dampening, the iOS sheet easing curve,
+snap-point and nested-scroll arbitration behaviour), documented inline at each site.
+
+MIT License
+
+Copyright (c) 2023 Emil Kowalski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+-------------------------------------------------------------------------------
+Ionic Framework — https://github.com/ionic-team/ionic-framework
+-------------------------------------------------------------------------------
+
+Used by: (pending — see docs/PRIOR-ART.md for the ranked port list)
+
+Reference commit for all ports: 6251eb85db0e5b43b9e09604248dc8451e1664c0 (@ionic/core v8.8.14)
+
+MIT License
+
+Copyright (c) 2015-present Drifty Co.
+http://drifty.com/
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+Note: if normalize.css (core/src/css/normalize.scss) is ever ported, it carries its own notice —
+normalize.css v3.0.2 | MIT License | git.io/normalize | Copyright (c) Nicolas Gallagher and
+Jonathan Neal. It is the only third-party header inside ionic-framework/core/src.

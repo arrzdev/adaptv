@@ -13,6 +13,10 @@ import {
   useRef,
   useState,
 } from "react"
+import {
+  GesturePriority,
+  useGestureCapture,
+} from "#nativ/hooks/use-gesture-capture"
 import { willOpenVirtualKeyboard } from "#nativ/hooks/use-keyboard"
 import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
 import { cn } from "#nativ/utils/cn"
@@ -206,13 +210,13 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
  * ============================================================================= */
 
 export const SWIPEABLE_LEFT_ACTIONS_SLOT = Symbol.for(
-  "@repo/nativ:swipeable.left-actions",
+  "@arrzdev/nativ:swipeable.left-actions",
 )
 export const SWIPEABLE_RIGHT_ACTIONS_SLOT = Symbol.for(
-  "@repo/nativ:swipeable.right-actions",
+  "@arrzdev/nativ:swipeable.right-actions",
 )
 export const SWIPEABLE_CONTENT_SLOT = Symbol.for(
-  "@repo/nativ:swipeable.content",
+  "@arrzdev/nativ:swipeable.content",
 )
 
 type SwipeableSlotProps = {
@@ -487,6 +491,24 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
     const samplesRef = useRef<{ x: number; t: number }[]>([])
     const lockRef = useRef<null | "h" | "v">(null)
     const pointerIdRef = useRef<number | null>(null)
+
+    //Shared gesture arbitration: a row swipe competes with edge-swipe-back, a
+    //drawer drag and the scroller for the same pointer. `blocksScroll` because
+    //`touch-action` cannot be changed mid-touch on iOS, so holding the scroller
+    //still is the only reliable way to stop a scroll the swipe took over from.
+    const capture = useGestureCapture({
+      priority: GesturePriority.SwipeableRow,
+      blocksScroll: true,
+      enabled,
+      //pre-empted by a higher-priority gesture — end the drag so the row springs
+      //back instead of being left mid-translate with no pointer to finish it
+      onLost: () => {
+        capturedRef.current = false
+        handlersRef.current.endDrag()
+      },
+    })
+    const captureRef = useRef(capture)
+    captureRef.current = capture
     const capturedRef = useRef(false)
 
     const [openSide, setOpenSide] = useState<OpenSide>(false)
@@ -951,12 +973,19 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           //preventDefault above, is what makes swipe-vs-tap reliable on touch.
           const id = pointerIdRef.current
           if (id !== null && !capturedRef.current) {
+            //Claim the SHARED arbiter first. Only at lock — a pointerdown is
+            //also how a tap starts, and claiming there would starve every other
+            //gesture on the screen for the duration of every touch.
+            if (!captureRef.current.request()) return
             node.setPointerCapture?.(id)
             capturedRef.current = true
           }
         }
       }
-      const onEnd = () => handlersRef.current.endDrag()
+      const onEnd = () => {
+        captureRef.current.release()
+        handlersRef.current.endDrag()
+      }
 
       node.addEventListener("touchstart", onStart, { passive: true })
       node.addEventListener("touchmove", onMove, { passive: false })
@@ -998,6 +1027,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         pointerIdRef.current !== e.pointerId
       )
         return
+      if (!captureRef.current.request()) return
       e.currentTarget.setPointerCapture?.(e.pointerId)
       capturedRef.current = true
     }
@@ -1008,6 +1038,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       if (pointerIdRef.current === e.pointerId) {
         pointerIdRef.current = null
         capturedRef.current = false
+        captureRef.current.release()
       }
       //touch ends through the imperative touchend/touchcancel listeners
       if (e.pointerType === "touch") return

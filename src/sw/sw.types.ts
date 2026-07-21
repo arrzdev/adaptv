@@ -1,6 +1,4 @@
 import type { WorkboxPlugin } from "workbox-core/types"
-import type { Strategy } from "workbox-strategies"
-import type { NavigationRouteMatchOptions } from "#nativ/sw/sw.navigation-match"
 
 export type PrecacheManifestEntry = {
   url: string
@@ -36,17 +34,6 @@ export type NetworkFirstStrategyOptions = StrategyFactoryOptions & {
   networkTimeoutSeconds?: number
 }
 
-export type IncrementalNavigationRouteOptions =
-  NavigationRouteMatchOptions & {
-    buildTag: string
-    cacheBucket?: string
-    strategy?: Strategy
-    networkTimeoutSeconds?: number
-    expiration?: CacheExpirationOptions
-    offlineFallbackPath?: string
-    matchOptions?: CacheMatchOptions
-  }
-
 export type StaticAssetsRouteOptions = {
   buildTag: string
   cacheBucket?: string
@@ -55,15 +42,13 @@ export type StaticAssetsRouteOptions = {
   matchOptions?: CacheMatchOptions
 }
 
-export type WarmRoutesOnInstallOptions = {
-  buildTag: string
-  cacheBucket?: string
-  routes: readonly string[]
-  /** Also prefetched on install (skip when the page is precached via `__WB_MANIFEST`). */
-  offlineFallbackPath?: string
-}
-
 export type ServiceWorkerLifecycleOptions = {
   claimClients?: boolean
   skipWaitingOnMessage?: boolean
+  /**
+   * The build tag this worker was stamped with (`__NATIV_BUILD_TAG__`). Enables
+   * the activate-time sweep of previous builds' runtime caches (B2). Omit to
+   * skip sweeping.
+   */
+  buildTag?: string
 }

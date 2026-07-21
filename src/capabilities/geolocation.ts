@@ -10,7 +10,17 @@ export type GeoCoords = {
   longitude: number
   accuracy: number
 }
-export type GeoPermission = "granted" | "denied" | "prompt"
+/**
+ * Permission state, normalised across platforms.
+ *
+ * `"unavailable"` is NOT a permission — it means the capability cannot be used at
+ * all right now, so prompting is pointless. Callers must branch on it separately:
+ * `"denied"` sends the user to APP settings, `"unavailable"` to SYSTEM settings
+ * (or nowhere, if the platform simply lacks the API).
+ *
+ * Every permission-gated capability in nativ uses this four-state shape.
+ */
+export type GeoPermission = "granted" | "denied" | "prompt" | "unavailable"
 
 export type GeoOptions = {
   highAccuracy?: boolean
@@ -20,16 +30,34 @@ export type GeoOptions = {
 function normalize(state: string): GeoPermission {
   if (state === "granted") return "granted"
   if (state === "denied") return "denied"
+  //android also reports "prompt-with-rationale" — still "you may ask"
   return "prompt"
 }
 
-/** Current permission without prompting. */
+/** Web only: can we ask at all? Absent API ⇒ prompting cannot help. */
+function webGeolocationPresent(): boolean {
+  return typeof navigator !== "undefined" && !!navigator.geolocation
+}
+
+/**
+ * Current permission without prompting. Never rejects — an accessor that throws
+ * forces every caller into a try/catch, which is exactly the per-platform burden
+ * nativ exists to absorb (doctrine §0.2).
+ */
 export async function checkGeoPermission(): Promise<GeoPermission> {
   if (isNativePlatform()) {
-    const status = await Geolocation.checkPermissions()
-    return normalize(status.location)
+    try {
+      const status = await Geolocation.checkPermissions()
+      return normalize(status.location)
+    } catch {
+      //@capacitor/geolocation THROWS here when system location services are
+      //switched off — a device state, not a permission state. Surface it.
+      return "unavailable"
+    }
   }
-  if (typeof navigator === "undefined" || !navigator.permissions) {
+  if (!webGeolocationPresent()) return "unavailable"
+  if (!navigator.permissions) {
+    //can request but not query (older Safari/Firefox) ⇒ "you may ask"
     return "prompt"
   }
   try {
@@ -38,6 +66,7 @@ export async function checkGeoPermission(): Promise<GeoPermission> {
     })
     return normalize(status.state)
   } catch {
+    //query unsupported for this name — asking still works
     return "prompt"
   }
 }
@@ -83,13 +112,20 @@ export function getCurrentPosition(
  */
 export async function requestGeoPermission(): Promise<GeoPermission> {
   if (isNativePlatform()) {
-    const status = await Geolocation.requestPermissions()
-    return normalize(status.location)
+    try {
+      const status = await Geolocation.requestPermissions()
+      return normalize(status.location)
+    } catch {
+      //same device-level failure as checkGeoPermission — prompting cannot help
+      return "unavailable"
+    }
   }
+  if (!webGeolocationPresent()) return "unavailable"
   try {
     await getCurrentPosition()
     return "granted"
   } catch {
+    //denied, timed out, or position-unavailable — re-read the settled state
     return checkGeoPermission()
   }
 }

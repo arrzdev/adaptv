@@ -2,7 +2,7 @@
   "name": "@arrzdev/nativ",
   "version": "0.1.0",
   "private": true,
-  "description": "Cross-platform React framework — one codebase ships as web, installable PWA, and native iOS/Android (Capacitor), correct-by-construction on every target.",
+  "description": "Cross-platform React framework \u2014 one codebase ships as web, installable PWA, and native iOS/Android (Capacitor), correct-by-construction on every target.",
   "type": "module",
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.1.1",
@@ -29,14 +29,24 @@
     "biome:fix": "biome check --write ."
   },
   "imports": {
-    "#nativ/*": "./src/*"
+    "#nativ/*": [
+      "./src/*",
+      "./src/*.ts",
+      "./src/*.tsx"
+    ]
   },
   "exports": {
+    "./package.json": "./package.json",
+    "./biome-shared.json": "./biome-shared.json",
     "./shell": "./src/interface/shell.index.ts",
+    "./router": "./src/interface/router.index.ts",
+    "./route-globals": "./src/interface/route-globals.d.ts",
     "./config": "./src/interface/config.index.ts",
     "./components": "./src/interface/components.index.ts",
     "./hooks": "./src/interface/hooks.index.ts",
     "./capabilities": "./src/interface/capabilities.index.ts",
+    "./storage": "./src/interface/storage.index.ts",
+    "./ota": "./src/interface/ota.index.ts",
     "./routes": "./src/interface/routes.index.ts",
     "./utils": "./src/interface/utils.index.ts",
     "./sw": "./src/interface/sw.index.ts",
@@ -44,17 +54,17 @@
     "./styles.css": "./src/styles/index.css"
   },
   "peerDependencies": {
-    "@capacitor/app": "8.1.0",
-    "@capacitor/browser": "8.0.0",
-    "@capacitor/core": "8.0.2",
-    "@capacitor/geolocation": "8.0.0",
-    "@capacitor/haptics": "8.0.2",
-    "@capacitor/keyboard": "8.0.5",
-    "@capacitor/network": "8.0.1",
-    "@capacitor/preferences": "8.0.1",
-    "@capacitor/screen-orientation": "8.0.1",
-    "@capacitor/splash-screen": "8.0.1",
-    "@capacitor/status-bar": "8.0.2",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/geolocation": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/network": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
+    "@capacitor/screen-orientation": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
     "@tanstack/react-router": "1.168.8",
     "clsx": "2.1.1",
     "motion": "12.35.0",
@@ -117,8 +127,8 @@
     "@biomejs/biome": "2.3.2",
     "@capacitor/app": "8.1.0",
     "@capacitor/browser": "8.0.0",
-    "@capacitor/cli": "8.0.2",
-    "@capacitor/core": "8.0.2",
+    "@capacitor/cli": "8.4.2",
+    "@capacitor/core": "8.4.2",
     "@capacitor/geolocation": "8.0.0",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/keyboard": "8.0.5",
@@ -132,6 +142,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "clsx": "2.1.1",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "20.10.6",
     "motion": "12.35.0",
     "react": "19.2.3",
@@ -147,6 +158,16 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "@biomejs/biome"
-    ]
-  }
+    ],
+    "overrides": {
+      "@capacitor/core": "8.4.2"
+    }
+  },
+  "files": [
+    "src",
+    "patches",
+    "bin",
+    "biome-shared.json",
+    "THIRD_PARTY_LICENSES"
+  ]
 }
