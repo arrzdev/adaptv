@@ -20,9 +20,12 @@ export function patchServerUrl(appRoot, url) {
 }
 
 /**
- * Add a debug-only iOS ATS exception (`NSAllowsLocalNetworking`) so the WebView can
- * load the http dev server. No-op (returns null) if the plist is missing or already
- * declares ATS. Returns a revert fn restoring the original plist.
+ * Add a DEBUG-ONLY iOS ATS exception so the WebView (and the app's fetches) can use
+ * cleartext http during live-reload — both the dev server and a local/LAN http
+ * backend. Uses `NSAllowsArbitraryLoads` because `NSAllowsLocalNetworking` does not
+ * reliably cover a raw LAN IP (e.g. http://192.168.1.x). Reverted on exit, and it
+ * only ever touches the live-reload session — release builds are untouched. No-op
+ * (returns null) if the plist is missing or already declares ATS.
  */
 export function patchIosAts(appRoot) {
   const plist = path.join(nativeDir(appRoot, "ios"), "App/App/Info.plist")
@@ -32,6 +35,7 @@ export function patchIosAts(appRoot) {
   const pb = (cmd) =>
     spawnSync("/usr/libexec/PlistBuddy", ["-c", cmd, plist])
   pb("Add :NSAppTransportSecurity dict")
+  pb("Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true")
   pb("Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true")
   return () => writeFileSync(plist, original)
 }
