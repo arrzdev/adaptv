@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs"
 import path from "node:path"
 import type { NativAppConfig } from "#nativ/config/app-config.ts"
+import { NATIV_DIR } from "#nativ/vite/nativ-dir.ts"
 
 //The Capacitor config, generated from nativ.config.ts. Consumers never hand-write
 //this — `appId` in nativ.config is all it takes (mirrors how the web manifest is
@@ -11,6 +12,11 @@ export type CapacitorConfigJson = {
   appId: string
   appName: string
   webDir: string
+  //The native projects live inside the hidden `.nativ/` dir (git-ignored, regenerated),
+  //not at the app root — everything nativ generates sits in one disposable place. These
+  //paths are relative to this config file (the app root), which `cap` reads from CWD.
+  android: { path: string }
+  ios: { path: string }
   plugins: {
     SplashScreen: {
       launchAutoHide: boolean
@@ -43,6 +49,8 @@ export function buildCapacitorConfig(
     appId: config.appId,
     appName: config.appName ?? config.name,
     webDir: CAPACITOR_WEB_DIR,
+    android: { path: `${NATIV_DIR}/android` },
+    ios: { path: `${NATIV_DIR}/ios` },
     plugins: {
       SplashScreen: {
         //Hold the OS launch splash until the app explicitly hands off: RoutingShell calls

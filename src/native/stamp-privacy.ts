@@ -9,12 +9,13 @@ import {
   renderPrivacyManifest,
   resolveRequiredReasons,
 } from "#nativ/native/privacy-manifest.ts"
+import { NATIV_DIR } from "#nativ/vite/nativ-dir.ts"
 
 /** App roots already stamped this process — see the note in the function. */
 const stamped = new Set<string>()
 
 /**
- * Write `ios/App/App/PrivacyInfo.xcprivacy` from the app's installed
+ * Write `.nativ/ios/App/App/PrivacyInfo.xcprivacy` from the app's installed
  * dependencies. → `DECISIONS.md §5.0.1`
  *
  * Runs on the capacitor build, alongside the capacitor.config stamp, because the
@@ -30,10 +31,10 @@ export function stampPrivacyManifest(appRoot: string): string | null {
   //implementation logs the same line three times. Report only the first write.
   if (stamped.has(appRoot)) return null
 
-  const iosAppDir = path.resolve(appRoot, "ios/App/App")
+  const iosAppDir = path.resolve(appRoot, NATIV_DIR, "ios/App/App")
   //no iOS project yet — nothing to stamp, and creating the tree would be worse
   //than doing nothing (it would look like a half-initialised native project)
-  if (!existsSync(path.resolve(appRoot, "ios/App"))) return null
+  if (!existsSync(path.resolve(appRoot, NATIV_DIR, "ios/App"))) return null
 
   let dependencies: string[] = []
   try {
