@@ -19,13 +19,13 @@ export type Diagnostic = {
 }
 
 export type DoctorInput = {
-  /** Raw `ios/App/App/Info.plist`, if present. */
+  /** Raw `.nativ/ios/App/App/Info.plist`, if present. */
   iosInfoPlist?: string
   /** Raw generated `capacitor.config.json`, if present. */
   capacitorConfig?: string
-  /** `android/app/build.gradle`, for the target SDK check. */
+  /** `.nativ/android/app/build.gradle`, for the target SDK check. */
   androidBuildGradle?: string
-  /** Whether `ios/App/PrivacyInfo.xcprivacy` exists. */
+  /** Whether `.nativ/ios/App/App/PrivacyInfo.xcprivacy` exists. */
   hasPrivacyManifest?: boolean
   /** Installed dependency names, for the privacy-manifest obligation. */
   dependencies?: readonly string[]
@@ -65,7 +65,7 @@ function checkAppBoundDomains(input: DoctorInput): Diagnostic | null {
       "silently fall back to its web implementation — no error, no crash, just an app " +
       "that quietly has no native capabilities.",
     fix:
-      "Remove WKAppBoundDomains from ios/App/App/Info.plist. nativ never adds it, and the " +
+      "Remove WKAppBoundDomains from .nativ/ios/App/App/Info.plist. nativ never adds it, and the " +
       "usual reason for adding it (relaxing ITP's storage cap) does not work — WebKit's " +
       "isAppBoundITPRelaxationEnabled is a constexpr false. If you genuinely need it, also " +
       "set ios.limitsNavigationsToAppBoundDomains: true in nativ.config.ts.",
@@ -119,11 +119,11 @@ function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
 
   return {
     severity: "error",
-    title: "ios/App/PrivacyInfo.xcprivacy is missing",
+    title: ".nativ/ios/App/App/PrivacyInfo.xcprivacy is missing",
     detail:
       "Installed plugins touch Apple required-reason APIs. The manifest is not checked at " +
       "build time — App Store Connect rejects the upload with a generic message, days later.",
-    fix: "Run `nativ sync ios`, which generates it from the installed plugin set.",
+    fix: "Run `nativ run ios` (or `nativ build ios`), which regenerates it from the installed plugin set.",
   }
 }
 

@@ -172,13 +172,14 @@ found` trap). The frontend scripts are thin aliases:
 pnpm --filter @repo/frontend native:doctor   # nativ doctor  — check JDK/SDK/Xcode/pod, print ✓/✗
 pnpm --filter @repo/frontend cap:android      # nativ run android — build SPA → brand assets → sync → launch
 pnpm --filter @repo/frontend cap:ios          # nativ run ios
-pnpm --filter @repo/frontend cap:ios:ipa      # nativ build ios --ipa  (unsigned archive)
-pnpm --filter @repo/frontend cap:sync         # nativ sync android     (build + assets + cap sync, no launch)
-# nativ assets [ios|android]                  # regenerate launcher icons + splash only
+pnpm --filter @repo/frontend cap:all          # nativ run all      — both platforms, in parallel
+pnpm --filter @repo/frontend cap:ios:ipa      # nativ build ios    — unsigned archive → .nativ/<app>.ipa
 ```
 
 Each `run` does: `vite build` (`NATIV_TARGET=capacitor`) + stamp `index.html` → brand assets →
-`cap sync <platform>` → `cap run <platform>`. Add `--target <id>` to skip the device picker.
+`cap sync <platform>` → `cap run <platform>`. The picker is nativ's own and caches to
+`.nativ/devices.json`: `--target <id>` selects directly, `--latest` reuses the cached device. `sync` and
+`assets` are internal steps now, not separate commands.
 
 Toolchain (the CLI resolves these; you just install them):
 - **Android** — SDK + a JDK (Android Studio bundles one at `/Applications/Android Studio.app/Contents/jbr/Contents/Home`).
@@ -197,9 +198,12 @@ finds it.
 
 **Generated, nativ-owned, gitignored (never hand-edit):** `capacitor.config.json` is stamped from
 `nativ.config.ts`'s flat `appId` — and *only* for the capacitor target, so a plain web `dev`/`build`
-never materialises it. The `android/` + `ios/` projects and `dist-capacitor/` + native build artifacts
-(`Pods/`, `DerivedData/`, `.gradle/`, `build/`) are all gitignored. Treat them like `node_modules`:
-regenerated, not authored.
+never materialises it. It sets `android.path`/`ios.path` to `.nativ/android` / `.nativ/ios`, so the
+native projects live **inside the hidden `.nativ/` dir** (alongside the generated route tree) rather than
+at the app root — `capacitor.config.json` itself stays at the root, where `cap` reads it. Those projects
+plus `dist-capacitor/` and native build artifacts (`Pods/`, `DerivedData/`, `.gradle/`, `build/`) are all
+under the already-gitignored `.nativ/` / gitignored. Treat them like `node_modules`: regenerated, not
+authored. A legacy app-root `ios/`/`android/` is moved into `.nativ/` on the next `nativ run`.
 
 ## App icons + splash — branded, never the Capacitor default
 
@@ -225,12 +229,13 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
 - **Backend URL is COMPILE-TIME.** `VITE_BACKEND_URL` (`env/.env`) is baked into the bundle. For a
   real device use a **deployed HTTPS** URL — a LAN `http://…` dev IP is unreachable (wrong network
   **and** iOS App Transport Security blocks cleartext; the Capacitor Info.plist has no ATS exception).
-- **Android `.apk`** — `cap:android` self-signs a debug APK at `android/app/build/outputs/apk/debug/`.
+- **Android `.apk`** — `nativ build android` self-signs a debug APK (Gradle builds it at
+  `.nativ/android/app/build/outputs/apk/debug/`; nativ copies it to `--output` or `.nativ/<app>.apk`).
 - **iOS `.ipa`** — a simulator run makes only `App.app` (simulator slice), never an `.ipa`. `.ipa` is a
   device artifact needing code signing. For **sideloading** (kravasign / AltStore / Sideloadly, which
-  re-sign at install), build an **unsigned** `.ipa`: `pnpm --filter @repo/frontend cap:ios:ipa` →
-  `apps/frontend/ios/App/build/ChopChop-unsigned.ipa` (Release device archive, `CODE_SIGNING_ALLOWED=NO`,
-  packaged `Payload/App.app`; see `scripts/build-ipa.sh`). For **TestFlight / App Store**, sign via
+  re-sign at install), build an **unsigned** `.ipa`: `nativ build ios` runs `scripts/build-ipa.sh`
+  (Release device archive, `CODE_SIGNING_ALLOWED=NO`, packaged `Payload/App.app`) against the project in
+  `.nativ/ios`, then places the `.ipa` at `--output` or `.nativ/<app>.ipa`. For **TestFlight / App Store**, sign via
   Xcode ▸ Archive ▸ Distribute with your own certificate — never automate the user's credentials.
 - **OTA ("update over the air").** The bundle is a snapshot baked into the store build, so by default an
   update = a new store version (App Store review each time). Capacitor's OTA story is **Live Updates**

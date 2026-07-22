@@ -23,6 +23,12 @@ describe("buildCapacitorConfig", () => {
     expect(c.webDir).toBe("dist/client")
   })
 
+  it("relocates the native projects into the hidden .nativ/ dir", () => {
+    const c = buildCapacitorConfig(BASE)
+    expect(c.android.path).toBe(".nativ/android")
+    expect(c.ios.path).toBe(".nativ/ios")
+  })
+
   it("honours an explicit appName", () => {
     const c = buildCapacitorConfig({ ...BASE, appName: "Chop" })
     expect(c.appName).toBe("Chop")
