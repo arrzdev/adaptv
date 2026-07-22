@@ -79,6 +79,45 @@ export function footer(hint) {
   out(`\n  ${hint}\n\n`)
 }
 
+/**
+ * The persistent "watching" line for a live-reload session: a steady dot when idle,
+ * a spinner + the changed files while an HMR update is applying. Raw dev-server
+ * output is NOT printed — `hmr(files)` drives this line instead. Returns `{ hmr, stop }`.
+ */
+export function liveWatcher() {
+  const idle = () =>
+    `  ${c.green("◉")} ${c.dim("live — watching for changes · Ctrl-C to stop")}`
+  if (!isTTY) {
+    out(`${idle()}\n`)
+    return { hmr: () => {}, stop: () => {} }
+  }
+  let frame = 0
+  let changed = null
+  let clearAt = 0
+  const draw = () => {
+    if (changed && Date.now() < clearAt) {
+      out(
+        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.dim(`hot-reload · ${changed}`)}`,
+      )
+    } else {
+      changed = null
+      out(`\r\x1b[2K${idle()}`)
+    }
+  }
+  draw()
+  const anim = setInterval(draw, 80)
+  return {
+    hmr: (files) => {
+      changed = files
+      clearAt = Date.now() + 1000
+    },
+    stop: () => {
+      clearInterval(anim)
+      out("\r\x1b[2K\n")
+    },
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* device picker (clack)                                                       */
 /* -------------------------------------------------------------------------- */
