@@ -15,7 +15,10 @@ const strip = (s) => s.replace(ANSI, "")
  * caller can stream HMR logs). Resolves `{ localUrl, networkUrl, host, port, stop() }`;
  * rejects if Vite exits before becoming ready.
  */
-export function startDevServer(appRoot, { args = [], onLine } = {}) {
+export function startDevServer(
+  appRoot,
+  { args = [], env = {}, onLine } = {},
+) {
   const local = localBin(appRoot, "vite")
   const cmd = local ?? "npx"
   const pre = local ? [] : ["--yes", "vite"]
@@ -25,7 +28,7 @@ export function startDevServer(appRoot, { args = [], onLine } = {}) {
     // (the cloudflare/inspector workers that otherwise survive SIGINT and hold ports).
     const child = spawn(cmd, [...pre, ...args], {
       cwd: appRoot,
-      env: process.env,
+      env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     })
