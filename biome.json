@@ -91,6 +91,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["bin/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
     }
   ]
 }

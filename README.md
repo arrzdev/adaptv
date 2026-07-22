@@ -76,16 +76,37 @@ Subpath exports: `/shell` `/config` `/components` `/hooks` `/capabilities` `/rou
 ### The CLI
 
 ```bash
-nativ doctor              # check the native toolchain (JDK, SDK, Xcode, pod)
-nativ run ios|android     # build SPA → sync → launch on sim/emulator
-nativ build ios|android   # produce the .ipa / .apk
-nativ sync                # regenerate + sync both native projects
-nativ assets              # brand launcher icons + native splash from ./assets
+nativ doctor                       # check the native toolchain (JDK, SDK, Xcode, pod)
+nativ run   ios|android|all        # build SPA → sync → launch on a sim/emulator/device
+nativ build ios|android|all        # build SPA → sync → produce the .ipa / .apk
+
+# run flags
+#   --target <id>   launch on a specific device/simulator id (skips the picker)
+#   --latest        reuse the last device you picked for this platform
+# build flags
+#   --output <path> where to write the artifact (default: .nativ/<app>.apk|.ipa)
+# both
+#   --verbose       show the full underlying tool logs (raw passthrough)
+#   --force         rebuild even when nothing changed (bypasses the build cache)
 ```
+
+`run` shows a branded device picker (arrow keys) and **remembers your choice per platform** in
+`.nativ/devices.json`, so the next `nativ run ios --latest` skips straight to the same device (shown as
+a `· latest` tag on the launch line). `run all` builds both platforms **in parallel** with a clean
+two-column progress board; the inner cap/gradle/xcode/pod logs are captured and only surfaced on failure
+(or with `--verbose`).
+
+**Build cache** — a source fingerprint (`.nativ/build-cache.json`) lets a re-launch **skip the web build
+and sync** when nothing that affects the bundle changed (`✓ web build · cached`), so an unchanged
+re-run goes almost straight to launch. `--force` rebuilds unconditionally.
 
 The CLI owns the native toolchain env and **owns the native project templates** (it patches
 `MainActivity` / `AppDelegate` / launch storyboard / colour resources) so the consumer never touches
-a Capacitor config.
+a Capacitor config. The native projects live inside the hidden, git-ignored **`.nativ/`** dir
+(`.nativ/ios`, `.nativ/android`) — regenerated artifacts, like `dist/`, not app source.
+
+> `nativ run web` is reserved for a future Vite dev/preview wrapper; for now use your app's
+> `vite dev` / `vite preview`. Web *deploy* stays your host's tool.
 
 ---
 
