@@ -97,14 +97,13 @@ export async function nativ(
     options.target ??
     (process.env.NATIV_TARGET === "capacitor" ? "capacitor" : "web")
   //The nativ CLI's live-reload dev server (`nativ run ios|android`) sets this: the
-  //bundle is served into a native WebView, so it needs the NATIVE shape — a client
-  //SPA (SSR can't hydrate in a WebView) with NO service worker (a registered SW
-  //caches the app inside the WKWebView and serves stale content forever, which
-  //silently breaks hot reload). We keep the plain `web` target otherwise, so an
-  //SSR/cloudflare dev pipeline still starts; only render + sw are forced.
+  //bundle is served into a native WebView, which can't hydrate SSR — so force a
+  //client SPA. (The service worker is handled at runtime: it never registers in
+  //dev — see service-worker-shell.ts — so no build-time override is needed here.)
+  //The plain `web` target is kept otherwise, so an SSR/cloudflare dev pipeline
+  //still starts.
   if (target === "web" && process.env.NATIV_DEV_NATIVE === "1") {
     context.loaded.config.router.render = "spa"
-    context.loaded.config.sw = false
   }
   //One resolution, used by every downstream plugin — so `render`, `host` and the
   //SW settings cannot drift between the router wiring, the manifest and the SW
