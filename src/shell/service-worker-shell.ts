@@ -105,12 +105,12 @@ export function registerPwaServiceWorkerRuntime(
   const mode = resolveUpdateMode(register)
   if (mode === null) return
 
-  //SW is production/preview only — Vite dev URLs are not cache-stable. DESTROY any
-  //worker+cache here, not just foreign ones: a nativ SW registered in a prior
-  //prod/preview session on the same origin (or dragged in by a live-reload dev
-  //server) otherwise survives into `dev` and silently serves the OLD bundle —
-  //breaking hot reload with no error anywhere. Dev must always be SW-free.
+  //SW is production/preview only — Vite dev URLs are not cache-stable
   if (import.meta.env.DEV) {
+    //DESTROY any worker+cache in dev, not just foreign ones: a nativ SW registered
+    //in a prior prod/preview session on the same origin (or dragged in by a
+    //live-reload dev server) otherwise survives into dev and silently serves the
+    //OLD bundle inside the WebView, breaking hot reload. Dev is always SW-free.
     void destroyServiceWorkers()
     return
   }

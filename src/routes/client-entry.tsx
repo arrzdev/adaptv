@@ -2,6 +2,7 @@ import { RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import { hydrateRoot } from "react-dom/client"
 import { getRouter } from "#nativ/routes/router-entry"
+import { installNativeLiveReloadRecovery } from "#nativ/shell/native-live-reload-client"
 
 /**
  * The SPA client entry. **Framework code, wired as Start's `client.entry` for the
@@ -27,6 +28,9 @@ import { getRouter } from "#nativ/routes/router-entry"
  * the body's boot-scaffold `<div id="root">` is reconciled away without a warning.
  */
 const router = getRouter()
+
+//native dev only: recover the live-reload socket when the WebView's OS drops it.
+installNativeLiveReloadRecovery()
 
 hydrateRoot(
   document,
