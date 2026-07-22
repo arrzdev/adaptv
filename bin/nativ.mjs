@@ -375,6 +375,11 @@ async function runLive(appRoot, platforms, opts) {
       async (report) => {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
+          // native WebViews need a client SPA with no service worker (a SW caches
+          // the app inside the WebView and blocks hot reload). nativ's plugin reads
+          // this and forces render:spa + sw:false for the dev server. `run web` (no
+          // native surface) keeps the app's normal web config.
+          env: webOnly ? {} : { NATIV_DEV_NATIVE: "1" },
           onLine: (l) => onDevLine?.(l),
         })
         report(devServer.localUrl)
