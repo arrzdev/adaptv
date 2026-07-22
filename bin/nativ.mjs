@@ -61,6 +61,7 @@ import {
   c,
   footer,
   header,
+  liveWatcher,
   log,
   runLanes,
   runLine,
@@ -256,10 +257,14 @@ async function runLive(appRoot, platforms, opts) {
   const verbose = opts.verbose
   const cleanups = [] // revert fns, unwound LIFO on exit
   let devServer = null
-  let streaming = false // gate vite output → terminal (on once we're watching)
+  let onDevLine = null // set once we're watching; parses HMR events
+  let watcher = null // the live "watching / hot-reload" status line
   let tearing = false
 
   const teardown = () => {
+    try {
+      watcher?.stop()
+    } catch {}
     while (cleanups.length) {
       try {
         cleanups.pop()()
@@ -360,9 +365,7 @@ async function runLive(appRoot, platforms, opts) {
       async (report) => {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
-          onLine: (l) => {
-            if (streaming) line(c.dim(`  vite │ ${l}`))
-          },
+          onLine: (l) => onDevLine?.(l),
         })
         report(devServer.localUrl)
         return devServer.localUrl
@@ -414,11 +417,30 @@ async function runLive(appRoot, platforms, opts) {
       }
     }
 
-    // watch: stream Vite output, hold until Ctrl-C.
-    footer(
-      `${c.green("✓ live")}  ${c.dim(`· ${url} · ${since(t0)} · edit & save to hot-reload · Ctrl-C to stop`)}`,
+    // watch: a single live line (spinner on HMR), not a stream of raw vite logs.
+    line("")
+    line(
+      `  ${c.green("✓ live")}  ${c.dim(`ready in ${since(t0)} · ${url}`)}`,
     )
-    streaming = true
+    watcher = liveWatcher()
+    onDevLine = (l) => {
+      if (verbose) {
+        line(c.dim(`  vite │ ${l}`))
+        return
+      }
+      // "[vite] (client) hmr update /src/a.tsx, /src/b.css?direct" → flash the line
+      const m = l.match(/hmr update (.+)/i)
+      if (m) {
+        const files = [
+          ...new Set(
+            m[1]
+              .split(",")
+              .map((f) => f.trim().split("?")[0].split("/").pop()),
+          ),
+        ].join(", ")
+        watcher.hmr(files)
+      }
+    }
     await new Promise(() => {}) // resolved only by the SIGINT handler (process.exit)
   } catch (err) {
     reportError("run", err)
