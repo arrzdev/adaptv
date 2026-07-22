@@ -80,15 +80,14 @@ export function footer(hint) {
 }
 
 /**
- * The persistent "watching" line for a live-reload session: a steady dot when idle,
- * a spinner + the changed files while an HMR update is applying. Raw dev-server
- * output is NOT printed — `hmr(files)` drives this line instead. Returns `{ hmr, stop }`.
+ * The single live-reload status line. Idle: `✓ live · <url>`. While an HMR update
+ * applies, the ✓ turns into a spinner and the changed files show. One line, redrawn
+ * in place — raw dev-server output is suppressed (driven by `hmr(files)` instead).
  */
-export function liveWatcher() {
-  const idle = () =>
-    `  ${c.green("◉")} ${c.dim("live — watching for changes · Ctrl-C to stop")}`
+export function liveWatcher(url) {
+  const done = `  ${c.green("✓")} ${c.bold("live")}  ${c.dim(url)}`
   if (!isTTY) {
-    out(`${idle()}\n`)
+    out(`${done}\n`)
     return { hmr: () => {}, stop: () => {} }
   }
   let frame = 0
@@ -97,11 +96,11 @@ export function liveWatcher() {
   const draw = () => {
     if (changed && Date.now() < clearAt) {
       out(
-        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.dim(`hot-reload · ${changed}`)}`,
+        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("live")}  ${c.dim(`↻ ${changed}`)}`,
       )
     } else {
       changed = null
-      out(`\r\x1b[2K${idle()}`)
+      out(`\r\x1b[2K${done}`)
     }
   }
   draw()
@@ -109,7 +108,7 @@ export function liveWatcher() {
   return {
     hmr: (files) => {
       changed = files
-      clearAt = Date.now() + 1000
+      clearAt = Date.now() + 900
     },
     stop: () => {
       clearInterval(anim)

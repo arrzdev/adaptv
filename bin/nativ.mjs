@@ -417,12 +417,9 @@ async function runLive(appRoot, platforms, opts) {
       }
     }
 
-    // watch: a single live line (spinner on HMR), not a stream of raw vite logs.
+    // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     line("")
-    line(
-      `  ${c.green("✓ live")}  ${c.dim(`ready in ${since(t0)} · ${url}`)}`,
-    )
-    watcher = liveWatcher()
+    watcher = liveWatcher(url)
     onDevLine = (l) => {
       if (verbose) {
         line(c.dim(`  vite │ ${l}`))
