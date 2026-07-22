@@ -510,9 +510,93 @@ export async function capRun(
   { report } = {},
 ) {
   const { cmd, pre } = capCmd(appRoot)
+  // Force a clean relaunch: kill any running instance first, so the WebView loads
+  // FRESH from the (now-live) dev server. Without this a still-running app can be
+  // re-fronted with its stale page intact — e.g. an iOS WebView left black because it
+  // launched earlier with no server keeps showing black instead of reloading. `cap
+  // run` reinstall + launch doesn't reliably force this, so nativ does it explicitly.
+  terminateApp(appRoot, platform, target, env)
   const args = [...pre, "run", platform]
   if (target) args.push("--target", target)
   await run(cmd, args, { cwd: appRoot, env, report })
+}
+
+/**
+ * adb serials of every connected device/emulator (state `device`). Used so adb calls
+ * target a specific `-s <serial>`: with more than one emulator running, a bare `adb`
+ * command is ambiguous and fails — which silently breaks `adb reverse` (→ the emulator
+ * can't reach the host, → black screen).
+ */
+export function androidDevices(env) {
+  const r = spawnSync("adb", ["devices"], { env, encoding: "utf8" })
+  if (r.status !== 0 || !r.stdout) return []
+  return r.stdout
+    .split("\n")
+    .slice(1)
+    .map((l) => l.trim().split(/\s+/))
+    .filter((p) => p.length >= 2 && p[1] === "device")
+    .map((p) => p[0])
+}
+
+/** The app id from capacitor.config.json, or null if unreadable. */
+function readAppId(appRoot) {
+  try {
+    return (
+      JSON.parse(
+        readFileSync(path.join(appRoot, "capacitor.config.json"), "utf8"),
+      ).appId ?? null
+    )
+  } catch {
+    return null
+  }
+}
+
+/** Best-effort kill of the app so the next launch is a clean, fresh load. */
+function terminateApp(appRoot, platform, target, env) {
+  const appId = readAppId(appRoot)
+  if (!appId) return
+  if (platform === "ios" && target) {
+    spawnSync("xcrun", ["simctl", "terminate", target, appId])
+  } else if (platform === "android") {
+    // target each device explicitly — a bare `adb shell` throws with >1 emulator.
+    for (const s of androidDevices(env)) {
+      spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
+        env,
+      })
+    }
+  }
+}
+
+/**
+ * Reload the Android app's WebView WITHOUT rebuilding — force-stop + relaunch on each
+ * device. `cap run` resets the emulator's `adb reverse` while installing/launching, so
+ * the app it just launched has no route to the dev server and shows a black WebView
+ * with no JS to recover. After re-asserting the reverse, nativ relaunches the app so it
+ * loads with a working route. (iOS shares the host loopback — nothing to do there.)
+ */
+export function relaunchAndroidApp(appRoot, env) {
+  const appId = readAppId(appRoot)
+  if (!appId) return
+  for (const s of androidDevices(env)) {
+    spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
+      env,
+    })
+    spawnSync(
+      "adb",
+      [
+        "-s",
+        s,
+        "shell",
+        "monkey",
+        "-p",
+        appId,
+        "-c",
+        "android.intent.category.LAUNCHER",
+        "1",
+      ],
+      { env, stdio: "ignore" },
+    )
+  }
 }
 
 /* =============================================================================
