@@ -26,7 +26,7 @@ import {
   readFileSync,
   statSync,
 } from "node:fs"
-import { homedir, networkInterfaces } from "node:os"
+import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
@@ -36,7 +36,7 @@ import {
   readCache as readBuildCache,
   writeCache as writeBuildCache,
 } from "./lib/cache.mjs"
-import { startDevServer } from "./lib/dev-server.mjs"
+import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import { resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import {
@@ -56,6 +56,7 @@ import {
   NATIV_DIR,
   nativeDir,
   platformEnv,
+  relaunchAndroidApp,
 } from "./lib/native.mjs"
 import {
   c,
@@ -145,16 +146,6 @@ async function loadNativModule(relFromSrc) {
 function reportError(label, err) {
   log.error(`${label} failed — ${err?.message ?? String(err)}`)
   tail(err?.tail)
-}
-
-/** The machine's first non-internal IPv4 (LAN) address, or null. */
-function lanIp() {
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) return a.address
-    }
-  }
-  return null
 }
 
 /** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.nativ/`. */
@@ -292,7 +283,13 @@ async function runLive(appRoot, platforms, opts) {
     teardown()
     process.exit(0)
   }
+  // Revert on ANY termination we can catch — not just Ctrl-C. A plain `kill` (SIGTERM)
+  // or a closed terminal (SIGHUP) otherwise skips teardown and leaves the committed
+  // capacitor.config pinned at the dev `server.url`. (SIGKILL can't be caught; the
+  // next run self-heals by stripping a stale live-reload server block — patchServerUrl.)
   process.on("SIGINT", onSigint)
+  process.on("SIGTERM", onSigint)
+  process.on("SIGHUP", onSigint)
 
   const envs = {}
   const envFor = (p) => {
@@ -355,6 +352,8 @@ async function runLive(appRoot, platforms, opts) {
     if (!webOnly && ready.length === 0) {
       teardown()
       process.off("SIGINT", onSigint)
+      process.off("SIGTERM", onSigint)
+      process.off("SIGHUP", onSigint)
       footer(c.red("✖ could not prepare any platform"))
       process.exitCode = 1
       return
@@ -382,17 +381,38 @@ async function runLive(appRoot, platforms, opts) {
           env: webOnly ? {} : { NATIV_DEV_NATIVE: "1" },
           onLine: (l) => onDevLine?.(l),
         })
+        // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
+        // launching the WebViews. iOS WKWebView won't survive that reload if it attaches
+        // mid-optimize — it drops the HMR socket for good. Web reconnects fine, so skip.
+        if (!webOnly) {
+          report(`${devServer.localUrl} · warming`)
+          const stable = await warmDevServer(devServer.localUrl, {
+            onLine: (l) => onDevLine?.(l),
+          })
+          // Fail SAFE: if the detected URL never serves the app, something else holds
+          // the port (a stray `nativ run`/`pnpm dev`, or another server on the same
+          // port). Don't point the native apps at a stranger — abort with a clear fix.
+          if (!stable) {
+            throw new Error(
+              `dev server at ${devServer.localUrl} isn't responding — another process ` +
+                "is likely using that port. Stop it, or run on a free port: " +
+                "`nativ run … -- --port <n>`.",
+            )
+          }
+        }
         report(devServer.localUrl)
         return devServer.localUrl
       },
       { verbose },
     )
-    // Point native WebViews at the machine's LAN address rather than `localhost`:
-    // iOS's WKWebView (esp. in the Simulator) is flaky opening websockets to
-    // localhost, which silently kills HMR. The LAN IP goes over a real interface
-    // that both the simulator and a real device can reach. Falls back to localhost.
+    // Both native surfaces reach the dev server over `localhost`: the iOS Simulator
+    // shares the host loopback directly, and the Android emulator is bridged with
+    // `adb reverse` (below). The host's LAN IP does NOT work for the Android emulator
+    // (its NAT can't route back to the host's own LAN address), so localhost is the
+    // one address both can use. (Real physical devices — a v2 concern — need the LAN
+    // IP + `--host`; not handled here.)
     const port = devServer.port
-    const url = `http://${lanIp() ?? "localhost"}:${port}`
+    const url = `http://localhost:${port}`
 
     if (!webOnly) {
       // point the native projects at the dev server, and remember how to undo it.
@@ -401,10 +421,6 @@ async function runLive(appRoot, platforms, opts) {
         const revert = patchIosAts(appRoot)
         if (revert) cleanups.push(revert)
       }
-      if (ready.includes("android")) {
-        cleanups.push(androidReverse(port, envFor("android")))
-      }
-
       // sync (copies the patched config) + launch each platform against the server.
       const launchOne = async (platform, report) => {
         report("sync")
@@ -415,6 +431,16 @@ async function runLive(appRoot, platforms, opts) {
         await capRun(appRoot, platform, target.id, envFor(platform), {
           report,
         })
+        if (platform === "android") {
+          // `cap run` resets the emulator's `adb reverse` while installing/launching,
+          // so the app it just launched has no route to the dev server (black WebView,
+          // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
+          // app so its WebView loads with a working route. Must be post-launch — doing
+          // it before cap run is wiped by cap run itself.
+          report("linking dev server")
+          cleanups.push(androidReverse(port, envFor("android")))
+          relaunchAndroidApp(appRoot, envFor("android"))
+        }
         return `${target.name}${tag} · live`
       }
       if (single) {
