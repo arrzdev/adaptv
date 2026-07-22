@@ -26,7 +26,7 @@ import {
   readFileSync,
   statSync,
 } from "node:fs"
-import { homedir } from "node:os"
+import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
@@ -145,6 +145,16 @@ async function loadNativModule(relFromSrc) {
 function reportError(label, err) {
   log.error(`${label} failed — ${err?.message ?? String(err)}`)
   tail(err?.tail)
+}
+
+/** The machine's first non-internal IPv4 (LAN) address, or null. */
+function lanIp() {
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family === "IPv4" && !a.internal) return a.address
+    }
+  }
+  return null
 }
 
 /** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.nativ/`. */
@@ -372,8 +382,12 @@ async function runLive(appRoot, platforms, opts) {
       },
       { verbose },
     )
-    const url = devServer.localUrl
+    // Point native WebViews at the machine's LAN address rather than `localhost`:
+    // iOS's WKWebView (esp. in the Simulator) is flaky opening websockets to
+    // localhost, which silently kills HMR. The LAN IP goes over a real interface
+    // that both the simulator and a real device can reach. Falls back to localhost.
     const port = devServer.port
+    const url = `http://${lanIp() ?? "localhost"}:${port}`
 
     if (!webOnly) {
       // point the native projects at the dev server, and remember how to undo it.
