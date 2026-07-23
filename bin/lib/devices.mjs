@@ -1,4 +1,4 @@
-// Device targeting for `adaptv run`. adaptv owns device selection (rather than letting
+// Device targeting for `adaptv dev`. adaptv owns device selection (rather than letting
 // Capacitor's opaque picker handle it) so it can CACHE the choice: pick once with the
 // arrow keys, then `--latest` reuses it. The cache lives in `.adaptv/devices.json`
 // (git-ignored with the rest of `.adaptv/`). → plan Part 3.

@@ -123,7 +123,7 @@ function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
     detail:
       "Installed plugins touch Apple required-reason APIs. The manifest is not checked at " +
       "build time — App Store Connect rejects the upload with a generic message, days later.",
-    fix: "Run `adaptv run ios` (or `adaptv build ios`), which regenerates it from the installed plugin set.",
+    fix: "Run `adaptv build ios` (or `adaptv preview ios`), which regenerates it from the installed plugin set.",
   }
 }
 
