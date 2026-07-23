@@ -510,15 +510,24 @@ export async function capRun(
   { report } = {},
 ) {
   const { cmd, pre } = capCmd(appRoot)
-  // Force a clean relaunch: kill any running instance first, so the WebView loads
-  // FRESH from the (now-live) dev server. Without this a still-running app can be
-  // re-fronted with its stale page intact — e.g. an iOS WebView left black because it
-  // launched earlier with no server keeps showing black instead of reloading. `cap
-  // run` reinstall + launch doesn't reliably force this, so adaptv does it explicitly.
-  terminateApp(appRoot, platform, target, env)
+  // Do NOT terminate the app before building — that would kill it for the whole build (the
+  // dev asked to rebuild, not to stare at a home screen for 15s). Build + install with the
+  // current app still running; the caller relaunches ONCE at the end (only if it was
+  // actually running) to load the fresh install.
   const args = [...pre, "run", platform]
   if (target) args.push("--target", target)
   await run(cmd, args, { cwd: appRoot, env, report })
+}
+
+/**
+ * Bring the simulator/emulator to the foreground so the (re)launched app is actually
+ * visible without the dev alt-tabbing to find it. No-op on a physical device (there's no
+ * host window to raise). Android emulators have no reliable CLI to raise their host window,
+ * so this is iOS-only for now; the app is already fronted inside the device by the launch.
+ */
+export function foregroundDevice(platform, target, env) {
+  if (isPhysicalTarget(platform, target, env)) return
+  if (platform === "ios") spawnSync("open", ["-a", "Simulator"])
 }
 
 /**
@@ -850,22 +859,6 @@ function readAppId(appRoot) {
     )
   } catch {
     return null
-  }
-}
-
-/** Best-effort kill of the app so the next launch is a clean, fresh load. */
-function terminateApp(appRoot, platform, target, env) {
-  const appId = readAppId(appRoot)
-  if (!appId) return
-  if (platform === "ios" && target) {
-    spawnSync("xcrun", ["simctl", "terminate", target, appId])
-  } else if (platform === "android") {
-    // target each device explicitly — a bare `adb shell` throws with >1 emulator.
-    for (const s of androidDevices(env)) {
-      spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
-        env,
-      })
-    }
   }
 }
 
