@@ -238,21 +238,37 @@ export async function select(message, options) {
   let idx = 0
   let top = 0
 
+  // Clip a plain string to `max` VISIBLE chars. EVERY emitted row must fit the terminal
+  // width — a line that wraps takes two physical rows, which breaks the fixed-row cursor
+  // rewind below and cascades the whole menu on each keypress on a narrow terminal.
+  const clip = (s, max) => {
+    const a = [...s]
+    return a.length > max
+      ? `${a.slice(0, Math.max(0, max - 1)).join("")}…`
+      : s
+  }
   const paint = () => {
     if (idx < top) top = idx
     else if (idx >= top + visible) top = idx - visible + 1
-    out(`  ${c.bold(message)}${c.dim("   ↑↓ move · ↵ select")}\n`)
+    const w = Math.max(24, width())
+    const nav = "   ↑↓ move · ↵ select"
+    out(
+      message.length + nav.length <= w - 2
+        ? `  ${c.bold(message)}${c.dim(nav)}\n`
+        : `  ${c.bold(clip(message, w - 2))}\n`,
+    )
     const end = top + visible
     for (let i = top; i < end; i++) {
       const o = options[i]
       const on = i === idx
       const cursor = on ? c.cyan("›") : " "
-      const label = on ? o.label : c.dim(o.label)
-      const hint = o.hint ? c.dim(`  ${o.hint}`) : ""
-      out(`  ${cursor} ${label}${hint}\n`)
+      const text = clip(`${o.label}${o.hint ? `  ${o.hint}` : ""}`, w - 4)
+      out(`  ${cursor} ${on ? text : c.dim(text)}\n`)
     }
     if (windowed)
-      out(`  ${c.dim(`  ${top + 1}–${end} of ${options.length}`)}\n`)
+      out(
+        `  ${c.dim(clip(`  ${top + 1}–${end} of ${options.length}`, w - 2))}\n`,
+      )
   }
   // `\r` first so the cursor is at column 0 before moving up: a terminal that doesn't
   // reset the column on `\n` would otherwise leave the cursor mid-line, and `\x1b[0J`
@@ -305,13 +321,24 @@ function bar(percent) {
 }
 
 /** Shorten/prettify a captured line for the live sub-detail. */
+// Normalise a streamed tool line (Capacitor/xcodebuild/gradle) to the house voice: no
+// status emoji, lowercase start, the platform word dropped (the lane already says it),
+// and "in 2.52ms" → "· 2.52ms". Proper nouns mid-line (iPhone, Xcode, Gradle) are left as
+// they are — only the first letter is lowercased.
 export function prettyLine(line) {
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
     const pct = Math.min(100, Number(m[1]))
     return `${bar(pct)} ${pct}%`
   }
-  return line.replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "").trim()
+  const s = line
+    .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
+    .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
+    .replace(/\b(ios|android)\b\s*/gi, "") // redundant with the platform lane
+    .replace(/\s+in\s+([\d.]+\s*(?:ms|s|m))\b/i, " · $1") // "in 2.52ms" → "· 2.52ms"
+    .replace(/\s{2,}/g, " ")
+    .trim()
+  return s ? s[0].toLowerCase() + s.slice(1) : s
 }
 
 /* -------------------------------------------------------------------------- */
