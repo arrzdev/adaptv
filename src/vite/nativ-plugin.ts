@@ -371,13 +371,26 @@ function nativOpacityCheckPlugin(appRoot: string): PluginOption {
  * buttons and a spinner that never resolves — and **`vite build` passes**, because
  * the build reads from disk instead of going through the dev server's sandbox.
  */
-function nativFsAllowPlugin(): PluginOption {
+/**
+ * APPEND a root to Vite's resolved `server.fs.allow`, never REPLACE it. Returning
+ * `server.fs.allow` from a plugin's `config()` suppresses Vite's computed default (the
+ * app's own workspace root), which then makes the app's generated files unreadable — and
+ * only in the cloudflare/workerd SSR environment, whose `fetchModule` honours the
+ * allow-list strictly, so every request 500s with "Failed to load url". The client
+ * transform hides it. Pushing in `configResolved` keeps the default AND adds nativ's own
+ * root. Idempotent so repeated resolves don't duplicate the entry. → offline PR.
+ */
+export function addFsAllowRoot(allow: string[], root: string): void {
+  if (!allow.includes(root)) allow.push(root)
+}
+
+export function nativFsAllowPlugin(): PluginOption {
   //the package root — two levels up from src/vite/
   const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
   return {
     name: "nativ:fs-allow",
-    config() {
-      return { server: { fs: { allow: [packageRoot] } } }
+    configResolved(resolved) {
+      addFsAllowRoot(resolved.server.fs.allow, packageRoot)
     },
   }
 }
