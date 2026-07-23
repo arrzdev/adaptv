@@ -1,10 +1,14 @@
-// Single-instance lock for `adaptv dev`. Exactly one long-lived dev server may run per
+// Single-instance guard for `adaptv dev`. Exactly one long-lived dev server may run per
 // app: two would collide on the Vite port (7171), the cloudflare inspector port (9220),
 // and — worst — the GLOBAL `adb reverse` mapping, where either run's teardown silently
-// wipes the route for both. A pidfile in `.adaptv/` makes a second `dev` fail fast with a
-// clear message instead of a cryptic port error, lets teardown remove only the adb
-// mapping THIS run owns, and lets `preview`/`build` refuse while a dev run holds the
-// (mutated) capacitor.config.json.
+// wipes the route for both. A pidfile in `.adaptv/` (hidden, git-ignored) makes a second
+// `dev` fail fast, lets teardown remove only the adb mapping THIS run owns, and lets
+// `preview`/`build` refuse while a dev run holds the (mutated) capacitor.config.json.
+//
+// It is fully self-managing: a lock left by a killed run is reclaimed automatically (dead
+// pid, OR a live pid the OS reused for some unrelated program), so the dev never touches
+// the file.
+import { spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { ADAPTV_DIR } from "./native.mjs"
@@ -18,8 +22,25 @@ function pidAlive(pid) {
     process.kill(pid, 0)
     return true
   } catch (err) {
-    // ESRCH → no such process (stale). EPERM → alive but owned by another user.
-    return err.code === "EPERM"
+    return err.code === "EPERM" // EPERM → alive but another user's; ESRCH → gone
+  }
+}
+
+/**
+ * Is this pid a REAL running adaptv dev? Alive AND its command is actually adaptv — the
+ * command check guards against a reused pid (the OS handing this number to an unrelated
+ * program later), so a stale lock always auto-reclaims and no one ever edits the file.
+ */
+function isLiveDev(pid) {
+  if (!pidAlive(pid)) return false
+  try {
+    const r = spawnSync("ps", ["-p", String(pid), "-o", "command="], {
+      encoding: "utf8",
+    })
+    if (r.status !== 0) return false
+    return /adaptv/i.test(r.stdout ?? "")
+  } catch {
+    return true // can't check → assume live (safer than launching a second server)
   }
 }
 
@@ -32,10 +53,10 @@ export function readDevLock(appRoot) {
   }
 }
 
-/** The lock, but only if a DIFFERENT, still-alive process holds it (else it's stale/ours). */
+/** The lock, but only if a DIFFERENT, genuinely-running adaptv dev holds it. */
 export function activeDevLock(appRoot) {
   const lock = readDevLock(appRoot)
-  if (lock && lock.pid !== process.pid && pidAlive(lock.pid)) return lock
+  if (lock && lock.pid !== process.pid && isLiveDev(lock.pid)) return lock
   return null
 }
 
@@ -45,24 +66,15 @@ function writeDevLock(appRoot, data) {
 }
 
 /**
- * Claim the dev lock for this process. Throws (with a `.tail` recovery hint) if another
- * LIVE dev run holds it; silently reclaims a STALE lock left by a previous run that was
- * SIGKILL'd before it could release. Port/url are filled in later by `updateDevLock` once
- * the server binds — they're what the error message reports to the next run.
+ * Claim the dev lock. Throws a terse error if another dev is genuinely running; silently
+ * reclaims a stale one. Port/url are filled in by `updateDevLock` once the server binds.
  */
 export function acquireDevLock(appRoot) {
   const held = activeDevLock(appRoot)
   if (held) {
-    const where = held.url
-      ? ` on ${held.url}`
-      : held.port
-        ? ` on port ${held.port}`
-        : ""
-    const err = new Error(
-      `another \`adaptv dev\` is already running (pid ${held.pid})${where} — one dev server per app. Stop it first.`,
+    throw new Error(
+      `another dev server is already running (pid ${held.pid})`,
     )
-    err.tail = `If that process is gone, remove the stale lock: rm ${path.join(ADAPTV_DIR, "dev.lock")}`
-    throw err
   }
   writeDevLock(appRoot, { pid: process.pid, startedAt: Date.now() })
 }
@@ -73,7 +85,7 @@ export function updateDevLock(appRoot, { port, url }) {
     pid: process.pid,
     startedAt: Date.now(),
   }
-  if (lock.pid !== process.pid) return // not ours — don't clobber another run's lock
+  if (lock.pid !== process.pid) return
   writeDevLock(appRoot, { ...lock, port, url })
 }
 
@@ -87,17 +99,13 @@ export function releaseDevLock(appRoot) {
 }
 
 /**
- * Guard a config-mutating one-shot command (`preview`/`build`) against a live `dev` run.
- * Both regenerate capacitor.config.json from scratch, which would strip the running dev
- * server's `server.url` out from under it. Throws with a clear message if `dev` is active.
+ * Guard a config-mutating one-shot command (`preview`/`build`) against a live `dev` run —
+ * both regenerate capacitor.config.json, which would break the running server.
  */
 export function assertNoActiveDevLock(appRoot, command) {
   const held = activeDevLock(appRoot)
   if (!held) return
-  const where = held.url ? ` (${held.url})` : ""
-  const err = new Error(
-    `an \`adaptv dev\` run is active (pid ${held.pid})${where} — stop it before \`${command}\`. It rewrites capacitor.config.json, which would break the running dev server.`,
+  throw new Error(
+    `a dev server is running (pid ${held.pid}); stop it before ${command}`,
   )
-  err.tail = `If that process is gone, remove the stale lock: rm ${path.join(ADAPTV_DIR, "dev.lock")}`
-  throw err
 }

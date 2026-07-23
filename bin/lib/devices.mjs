@@ -19,6 +19,11 @@ function readCache(appRoot) {
   }
 }
 
+/** The remembered `{ id, name }` for a platform (`--latest`), or null. */
+export function cachedDevice(appRoot, platform) {
+  return readCache(appRoot)[platform] ?? null
+}
+
 function writeCache(appRoot, platform, device) {
   const cache = readCache(appRoot)
   cache[platform] = device
