@@ -96,7 +96,7 @@ export async function adaptv(
   const target =
     options.target ??
     (process.env.ADAPTV_TARGET === "capacitor" ? "capacitor" : "web")
-  //The adaptv CLI's live-reload dev server (`adaptv run ios|android`) sets this: the
+  //The adaptv CLI's live-reload dev server (`adaptv dev ios|android`) sets this: the
   //bundle is served into a native WebView, which can't hydrate SSR — so force a
   //client SPA. (The service worker is handled at runtime — it never registers in
   //dev, see service-worker-shell.ts — so no build-time override is needed.) The

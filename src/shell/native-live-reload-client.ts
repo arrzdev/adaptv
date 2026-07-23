@@ -5,7 +5,7 @@ import { getOS, isNativePlatform } from "#adaptv/utils/platform"
  *
  * ## The problem this fixes
  *
- * `adaptv run ios|android` serves the SPA into a native WebView and relies on Vite's
+ * `adaptv dev ios|android` serves the SPA into a native WebView and relies on Vite's
  * HMR WebSocket for hot reload. That socket is fragile inside a WebView:
  *
  * - **iOS WKWebView** closes the HMR socket with a **CLEAN** close code when it
