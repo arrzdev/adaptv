@@ -48,11 +48,20 @@ const SUSPEND_DROP_MS = 3000
 const OFFLINE_PAGE = "nativ-offline.html"
 
 /**
- * Consecutive failed reachability polls (1.5s apart) before we give up on the dev server
- * and show the offline screen. Long enough that a restart or a blip doesn't eject you
- * mid-edit, short enough that a dead server doesn't leave you staring at a frozen app.
+ * Consecutive failed reachability polls before we hand off to the offline screen.
+ *
+ * This has to be FAST, not merely eventual. The socket drops within ~100ms of the server
+ * dying, but the user is often already reaching for the next tap — and once they navigate
+ * into a dead server the WebView commits a browser error page, which destroys this script
+ * and makes recovery impossible. Measured: socket dropped at T+0.1s, navigation at T+1.0s.
+ * So we confirm with a second probe (cheap insurance against a one-off blip) and go, all
+ * inside ~0.6s — comfortably ahead of a human. A server that's merely restarting costs a
+ * brief offline screen that reconnects itself, which is the right trade against a dead end.
  */
-const OFFLINE_AFTER_FAILURES = 4
+const OFFLINE_AFTER_FAILURES = 2
+/** Poll fast while deciding the server is gone, then back off to a reconnect cadence. */
+const DECIDING_POLL_MS = 300
+const RECONNECT_POLL_MS = 1500
 
 export function installNativeLiveReloadRecovery(): void {
   if (!import.meta.hot) return
@@ -129,7 +138,12 @@ export function installNativeLiveReloadRecovery(): void {
       // touching the network, and a hidden app must not be ejected to the offline screen.
       if (document.visibilityState === "visible") failures += 1
       if (failures >= OFFLINE_AFTER_FAILURES && goOffline()) return
-      window.setTimeout(tick, 1500)
+      window.setTimeout(
+        tick,
+        failures < OFFLINE_AFTER_FAILURES
+          ? DECIDING_POLL_MS
+          : RECONNECT_POLL_MS,
+      )
     }
     void tick()
   }
