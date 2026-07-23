@@ -600,34 +600,76 @@ export function isAppInstalled(appRoot, platform, target, env) {
   return false
 }
 
-/**
- * Launch an already-installed app WITHOUT building, syncing, or reinstalling.
- *
- * The fast path behind the run cache: in live-reload the binary is only a shell pointing
- * at the dev server, so when nothing native changed there is nothing to rebuild — start
- * it and let it reconnect. Terminate first so the WebView loads fresh rather than being
- * re-fronted with a stale page. Returns false if it couldn't launch, so the caller can
- * fall back to the full path.
- */
-export function launchInstalledApp(appRoot, platform, target, env) {
+/** Is the app currently RUNNING on the target device (not merely installed)? */
+export function isAppRunning(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   if (platform === "ios") {
     if (!target) return false
-    spawnSync("xcrun", ["simctl", "terminate", target, appId])
+    const r = spawnSync(
+      "xcrun",
+      ["simctl", "spawn", target, "launchctl", "list"],
+      { encoding: "utf8" },
+    )
+    return r.status === 0 && (r.stdout ?? "").includes(appId)
+  }
+  if (platform === "android") {
+    const serial = androidSerialForTarget(target, env)
+    if (!serial) return false
+    const r = spawnSync("adb", ["-s", serial, "shell", "pidof", appId], {
+      env,
+      encoding: "utf8",
+    })
+    return r.status === 0 && (r.stdout ?? "").trim().length > 0
+  }
+  return false
+}
+
+/**
+ * Launch an already-installed app WITHOUT building, syncing, or reinstalling.
+ *
+ * The fast path behind the run cache: in live-reload the binary is only a shell pointing
+ * at the dev server, so when nothing native changed there is nothing to rebuild.
+ *
+ * Critically, an app that is ALREADY RUNNING is only brought to the front — never killed.
+ * It has by then almost certainly reconnected on its own: the offline screen polls for
+ * the dev server and navigates the moment it answers, so the user watches it go
+ * "offline → live". Killing and relaunching on top of that produced a jarring second
+ * reopen of an app that was already showing exactly what they wanted.
+ *
+ * (The old forced terminate existed to rescue a WebView left black by a launch with no
+ * server. The offline screen + reconnect watchdog now cover that case, and `r` remains
+ * the explicit escape hatch for a genuinely wedged app.)
+ */
+export function launchInstalledApp(appRoot, platform, target, env) {
+  const appId = readAppId(appRoot)
+  if (!appId) return false
+  const running = isAppRunning(appRoot, platform, target, env)
+  if (platform === "ios") {
+    if (!target) return false
+    // `simctl launch` on a running app activates it in place; only a stopped app needs
+    // a clean start, and terminating one that isn't running is a no-op anyway.
+    if (!running)
+      spawnSync("xcrun", ["simctl", "terminate", target, appId])
     const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
       encoding: "utf8",
     })
     return r.status === 0
   }
   if (platform === "android") {
-    // force-stop + LAUNCHER intent, on the TARGET device only — exactly one relaunch,
-    // since no `cap run` ran to reset `adb reverse` and force a second.
     const serial = androidSerialForTarget(target, env)
     if (!serial) return false
-    spawnSync("adb", ["-s", serial, "shell", "am", "force-stop", appId], {
-      env,
-    })
+    // Same rule: the LAUNCHER intent alone re-fronts an existing task without
+    // restarting it. force-stop ONLY when there's nothing live to preserve.
+    if (!running) {
+      spawnSync(
+        "adb",
+        ["-s", serial, "shell", "am", "force-stop", appId],
+        {
+          env,
+        },
+      )
+    }
     const r = spawnSync(
       "adb",
       [
