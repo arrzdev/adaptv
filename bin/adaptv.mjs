@@ -592,8 +592,9 @@ async function runLive(appRoot, platforms, opts) {
     // in a state you don't trust is reason enough, and having to kill the run to get a
     // clean install is exactly the friction this removes.
     let rebuilding = false
+    let reloading = false
     const rebuild = async () => {
-      if (rebuilding || webOnly || !launchAll) return
+      if (rebuilding || reloading || webOnly || !launchAll) return
       rebuilding = true
       watcher.stop() // clears the watch row; cursor stays on it
       // Walk back over the blank separator + one row per platform so the SETTLED
@@ -606,7 +607,56 @@ async function runLive(appRoot, platforms, opts) {
       watcher = liveWatcher() // fresh line, which also clears any pending notice
       rebuilding = false
     }
-    cleanups.push(onKeys({ onRebuild: rebuild, onQuit: onSigint }))
+
+    // `r` = reload: relaunch the installed app so its WebView reconnects to the dev
+    // server. Instant next to a native rebuild (no sync/gradle/xcode), and the fix for a
+    // wedged JS bundle — a fresh document from the dev server, no reinstall. Distinct from
+    // `R`, which reinstalls the binary for a genuine native change.
+    const reloadOne = (platform, report) => {
+      const target = targets[platform]
+      report(`reload → ${target.name}`)
+      const ok = launchInstalledApp(
+        appRoot,
+        platform,
+        target.id,
+        envFor(platform),
+        { restart: true },
+      )
+      if (!ok)
+        throw new Error(
+          "couldn't relaunch the app — is it still installed? press R to rebuild.",
+        )
+      return `${target.name} · reloaded`
+    }
+    const reload = async () => {
+      if (reloading || rebuilding || webOnly || ready.length === 0) return
+      reloading = true
+      watcher.stop()
+      if (!rewindLines(1 + ready.length)) line("")
+      if (single) {
+        try {
+          await runLine(ready[0], (r) => reloadOne(ready[0], r), {
+            verbose,
+          })
+        } catch (err) {
+          reportError(ready[0], err)
+        }
+      } else {
+        const res = await runLanes(
+          ready.map((p) => ({ label: p, run: (r) => reloadOne(p, r) })),
+          { verbose },
+        )
+        res.forEach((r, i) => {
+          if (!r.ok) reportError(ready[i], r.error)
+        })
+      }
+      line("")
+      watcher = liveWatcher()
+      reloading = false
+    }
+    cleanups.push(
+      onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
+    )
 
     // Native changes can't hot-reload: a new plugin, an edited Info.plist or
     // AndroidManifest, or hand-written Swift/Kotlin all live in the BINARY, so the
@@ -616,7 +666,7 @@ async function runLive(appRoot, platforms, opts) {
     // behind the dev's back: a reinstall costs ~15s and drops app state, so it's their call.
     if (!webOnly && ready.length > 0) {
       const poll = setInterval(() => {
-        if (rebuilding) return
+        if (rebuilding || reloading) return
         const now = snapshotNativeFp(appRoot, ready)
         const changed = ready.filter((p) => now[p] !== nativeFp?.[p])
         if (changed.length === 0) return
