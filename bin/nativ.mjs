@@ -72,6 +72,7 @@ import {
   liveWatcher,
   log,
   onKeys,
+  rewindLines,
   runLanes,
   runLine,
   since,
@@ -573,8 +574,11 @@ async function runLive(appRoot, platforms, opts) {
     const rebuild = async () => {
       if (rebuilding || webOnly || !launchAll) return
       rebuilding = true
-      watcher.stop()
-      line("")
+      watcher.stop() // clears the watch row; cursor stays on it
+      // Walk back over the blank separator + one row per platform so the SETTLED
+      // platform lines animate again in place, rather than a second copy appearing
+      // below them. Off a TTY there's no cursor to move, so just append.
+      if (!rewindLines(1 + ready.length)) line("")
       await launchAll({ force: true })
       nativeFp = snapshotNativeFp(appRoot, ready)
       line("")
