@@ -1,6 +1,6 @@
-# Testing nativ across targets
+# Testing adaptv across targets
 
-nativ ships one app to **six** runtime targets. A change to a shell/primitive/capability isn't
+adaptv ships one app to **six** runtime targets. A change to a shell/primitive/capability isn't
 "done" until it behaves on all of them — they diverge exactly where the hard cross-platform bugs live
 (safe-area, edge-to-edge, keyboard, gestures, splash, history/back).
 
@@ -16,7 +16,7 @@ nativ ships one app to **six** runtime targets. A change to a shell/primitive/ca
 | 6 | **Native — iOS (ipa) & Android (apk)** | Capacitor WebView | **rebuild** (`cap:ios` / `cap:android`) |
 
 `app:` = installed (standalone **or** native) · `web:` = browser tab. Detect in JS with
-`isNativePlatform()` / `isInstalledApp()` / `getOS()` from `@repo/nativ/utils` — never `display-mode`.
+`isNativePlatform()` / `isInstalledApp()` / `getOS()` from `@repo/adaptv/utils` — never `display-mode`.
 
 ## Web / standalone (targets 1–5): one dev server
 
@@ -64,7 +64,7 @@ See [`.claude/skills/stack/capacitor.md`](../../.claude/skills/stack/capacitor.m
 | Back / history | native hardware-back + memory history vs browser back |
 | Gestures (press, swipe, edge-swipe) | touch vs pointer vs native gesture |
 
-## Definition of done for a nativ change
+## Definition of done for a adaptv change
 
 1. Web-safe: `pnpm typecheck` · `pnpm biome:check` · web SSR build all green.
 2. Verified on the target(s) the change touches — and its two *neighbours* (a fix for native keyboard

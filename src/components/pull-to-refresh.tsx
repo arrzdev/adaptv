@@ -15,10 +15,10 @@ import {
   useRef,
   useState,
 } from "react"
-import { isSwipeableGestureTarget } from "#nativ/components/swipeable"
-import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
-import { cn } from "#nativ/utils/cn"
-import tryCatch from "#nativ/utils/try-catch"
+import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { cn } from "#adaptv/utils/cn"
+import tryCatch from "#adaptv/utils/try-catch"
 
 /* =============================================================================
  * TYPES

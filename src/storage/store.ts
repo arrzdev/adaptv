@@ -6,7 +6,7 @@
  *
  * This is an **async large-value KV. It is not a query engine and not an ORM.**
  * A real query layer — indexes, where-clauses, migrations — stays consumer-owned,
- * because `RENDERING.md` already makes the data layer the consumer's. nativ's job
+ * because `RENDERING.md` already makes the data layer the consumer's. adaptv's job
  * is to (a) provide the simple async blob store the framework itself needs for
  * offline, and (b) guarantee the substrate exists. Not to grow into a database.
  *
@@ -20,7 +20,7 @@
  * Taking the dependency would mean every consumer ships a query engine to get a
  * blob KV, including the many that never touch this tier. The scope boundary and
  * the dependency choice have to agree; this is the one that agrees with it. If
- * nativ ever needs real queries, that is a decision to revisit *with* Dexie, not
+ * adaptv ever needs real queries, that is a decision to revisit *with* Dexie, not
  * a reason to pre-pay for it.
  *
  * Values are stored via **structured clone**, not JSON — so `Date`, `Map`, `Set`
@@ -28,14 +28,14 @@
  * which JSON-encodes and silently turns a `Date` into a string.
  */
 
-const DB_NAME = "nativ-store"
+const DB_NAME = "adaptv-store"
 const STORE_NAME = "kv"
 const DB_VERSION = 1
 
 /**
  * In-memory fallback.
  *
- * IndexedDB is genuinely absent in several places nativ runs: during SSR, in
+ * IndexedDB is genuinely absent in several places adaptv runs: during SSR, in
  * Safari private mode historically, and inside some embedded webviews. Throwing
  * there would make the tier unusable for the framework's own offline needs, so it
  * degrades to memory — correct for the session, just not durable.
@@ -119,7 +119,7 @@ export const store = {
     await transact("readwrite", (s) => s.delete(key))
   },
 
-  /** Drop every key in nativ's store. Never touches other databases. */
+  /** Drop every key in adaptv's store. Never touches other databases. */
   async clear(): Promise<void> {
     memory.clear()
     if (!(await hasIndexedDb())) return

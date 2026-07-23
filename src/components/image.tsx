@@ -14,8 +14,8 @@ import {
   useRef,
   useState,
 } from "react"
-import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
-import { cn } from "#nativ/utils/cn"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { cn } from "#adaptv/utils/cn"
 
 /* =============================================================================
  * TYPES

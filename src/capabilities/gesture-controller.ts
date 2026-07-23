@@ -45,7 +45,7 @@ type Holder = {
 export type GestureController = ReturnType<typeof createGestureController>
 
 /**
- * Create a gesture controller. nativ uses one shared instance
+ * Create a gesture controller. adaptv uses one shared instance
  * ({@link gestureController}); this factory exists so tests get a clean arbiter
  * instead of leaking capture state between cases.
  */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { secure } from "#nativ/storage/secure"
+import { secure } from "#adaptv/storage/secure"
 
 beforeEach(() => {
   localStorage.clear()
@@ -40,8 +40,8 @@ describe("secure — web is best-effort, and says so", () => {
   it("namespaces its keys away from the kv tier", async () => {
     vi.stubGlobal("Capacitor", undefined)
     await secure.set("token", "abc")
-    expect(localStorage.getItem("nativ:secure:token")).toBe("abc")
-    expect(localStorage.getItem("nativ:kv:token")).toBeNull()
+    expect(localStorage.getItem("adaptv:secure:token")).toBe("abc")
+    expect(localStorage.getItem("adaptv:kv:token")).toBeNull()
   })
 
   it("throws rather than silently losing a secret it could not persist", async () => {

@@ -1,4 +1,4 @@
-import type { ServiceWorkerUpdateMode } from "#nativ/config/types"
+import type { ServiceWorkerUpdateMode } from "#adaptv/config/types"
 
 /**
  * Normalise the `register` config to an update mode, or `null` for "don't

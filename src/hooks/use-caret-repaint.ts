@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { willOpenVirtualKeyboard } from "#nativ/hooks/use-keyboard"
+import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 
 /*
  * App-wide iOS caret-repaint patch.

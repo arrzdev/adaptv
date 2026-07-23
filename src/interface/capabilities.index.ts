@@ -1,5 +1,5 @@
 //Platform-branching device capability accessors (no React). Hooks in
-//`@arrzdev/nativ/hooks` wrap these; import them directly for non-React wiring —
+//`@arrzdev/adaptv/hooks` wrap these; import them directly for non-React wiring —
 //e.g. feeding `getOnline`/`subscribeOnline` into TanStack Query's `onlineManager`.
 export * from "../capabilities/app-state"
 export * from "../capabilities/back-chain"

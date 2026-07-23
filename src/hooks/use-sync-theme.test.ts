@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { useSyncTheme } from "#nativ/hooks/use-sync-theme"
+import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
 
 const LIGHT = "#eeeeec"
 const DARK = "#0a0a0c"

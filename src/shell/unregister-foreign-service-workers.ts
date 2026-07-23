@@ -1,6 +1,6 @@
-//nativ emits exactly one worker, `sw.js`, in dev and prod alike. There used to be
+//adaptv emits exactly one worker, `sw.js`, in dev and prod alike. There used to be
 //a `dev-sw.js?dev-sw` special case here — vite-plugin-pwa's dev filename — which
-//nativ has never produced. It made every dev-registered worker look FOREIGN, so
+//adaptv has never produced. It made every dev-registered worker look FOREIGN, so
 //the cleanup pass would unregister the app's own worker. → DECISIONS.md B6
 const SW_PATH = "sw.js"
 

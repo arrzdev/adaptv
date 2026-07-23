@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react"
 import type { ReactElement } from "react"
 import { describe, expect, it } from "vitest"
-import { View } from "#nativ/components/view"
+import { View } from "#adaptv/components/view"
 
 function classOf(ui: ReactElement): string {
   const { container } = render(ui)

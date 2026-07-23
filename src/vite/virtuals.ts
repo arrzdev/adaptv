@@ -1,17 +1,17 @@
 import type { Plugin } from "vite"
 
-const REGISTER_ID = "virtual:nativ/pwa-register"
+const REGISTER_ID = "virtual:adaptv/pwa-register"
 const RESOLVED_REGISTER_ID = `\0${REGISTER_ID}`
 
 /**
- * Provides `virtual:nativ/pwa-register` — the `registerSW` the shell imports.
- * Replaces vite-plugin-pwa's `virtual:pwa-register` so nativ owns the whole SW
+ * Provides `virtual:adaptv/pwa-register` — the `registerSW` the shell imports.
+ * Replaces vite-plugin-pwa's `virtual:pwa-register` so adaptv owns the whole SW
  * story and drops that dependency. autoUpdate-only: a waiting worker is
  * activated on demand and the page reloads once it takes control.
  */
-export function nativPwaRegisterPlugin(): Plugin {
+export function adaptvPwaRegisterPlugin(): Plugin {
   return {
-    name: "nativ:pwa-register",
+    name: "adaptv:pwa-register",
     resolveId(id) {
       if (id === REGISTER_ID) return RESOLVED_REGISTER_ID
       return null

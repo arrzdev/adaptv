@@ -1,5 +1,5 @@
 import { createMemoryHistory } from "@tanstack/react-router"
-import { isInstalledApp } from "#nativ/utils/platform"
+import { isInstalledApp } from "#adaptv/utils/platform"
 
 /**
  * History for `createRouter`: in-memory when installed (standalone PWA **or** a

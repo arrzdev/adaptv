@@ -1,9 +1,9 @@
-# nativ — cookbook
+# adaptv — cookbook
 
-> Worked examples for **consumer apps**. Everything here is a *pattern*, not framework surface — nativ
+> Worked examples for **consumer apps**. Everything here is a *pattern*, not framework surface — adaptv
 > does not depend on any of it, and a consumer can ignore all of it.
 >
-> The distinction matters: `RENDERING.md` and `ARCHITECTURE.md` describe what nativ **guarantees**.
+> The distinction matters: `RENDERING.md` and `ARCHITECTURE.md` describe what adaptv **guarantees**.
 > This file describes what a sensible app **does with those guarantees**. If a recipe here starts
 > looking mandatory, that's a signal it belongs in the framework instead.
 >
@@ -26,17 +26,17 @@
 
 ## 1. Offline UI, rendered in place
 
-### The framework contract (what nativ guarantees)
+### The framework contract (what adaptv guarantees)
 
 Exactly two things — see `RENDERING.md §3.1.1`:
 
 1. **`useIsOffline()`** — one accurate connectivity signal. `@capacitor/network` on native,
-   `navigator.onLine` + `online`/`offline` events on web. nativ owns this because
+   `navigator.onLine` + `online`/`offline` events on web. adaptv owns this because
    **`navigator.onLine` alone lies** — it reports whether a network interface exists, not whether
    anything is reachable.
-2. **`offlineComponent`** — your component, registered in `nativ.config.ts`, with optional props.
+2. **`offlineComponent`** — your component, registered in `adaptv.config.ts`, with optional props.
 
-nativ decides **nothing** about when your data is missing. That's yours.
+adaptv decides **nothing** about when your data is missing. That's yours.
 
 ### The component
 
@@ -44,12 +44,12 @@ One component, two call sites. All props optional, which is what lets it serve b
 
 ```tsx
 // src/components/offline.tsx
-import { View, Button } from "@arrzdev/nativ/components"
+import { View, Button } from "@arrzdev/adaptv/components"
 
 export type OfflineProps = {
-  /** nativ passes `location.reload`; you pass `refetch` / a router invalidate. */
+  /** adaptv passes `location.reload`; you pass `refetch` / a router invalidate. */
   onRetry?: () => void
-  /** Present when nativ rendered this after a chunk-load or route-resolution failure. */
+  /** Present when adaptv rendered this after a chunk-load or route-resolution failure. */
   error?: Error
 }
 
@@ -67,7 +67,7 @@ export function Offline({ onRetry, error }: OfflineProps) {
 ```
 
 ```ts
-// nativ.config.ts
+// adaptv.config.ts
 export default defineApp({
   offlineComponent: () => import("@/components/offline"),
 })
@@ -111,12 +111,12 @@ function Product() {
 Better than a boolean check because **recovery is automatic**: Query resumes the parked fetch on
 reconnect and the route swaps to real content — no retry logic, no navigation.
 
-For `paused` to be trustworthy, feed nativ's signal into Query's `onlineManager`. Opt-in, only if you
+For `paused` to be trustworthy, feed adaptv's signal into Query's `onlineManager`. Opt-in, only if you
 use Query:
 
 ```ts
 import { onlineManager } from "@tanstack/react-query"
-import { subscribeNetwork } from "@arrzdev/nativ/capabilities"
+import { subscribeNetwork } from "@arrzdev/adaptv/capabilities"
 
 onlineManager.setEventListener((setOnline) =>
   subscribeNetwork(({ connected }) => setOnline(connected)),

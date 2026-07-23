@@ -48,17 +48,17 @@ export function resolvePrecacheDocuments(
   for (const path of paths) {
     if (!path.startsWith("/")) {
       throw new Error(
-        `[nativ] precacheDocuments: "${path}" must start with "/" — it names an app route, not a URL or a relative path.`,
+        `[adaptv] precacheDocuments: "${path}" must start with "/" — it names an app route, not a URL or a relative path.`,
       )
     }
     if (path.includes("?") || path.includes("#")) {
       throw new Error(
-        `[nativ] precacheDocuments: "${path}" must not contain a query or hash — those are not separate documents.`,
+        `[adaptv] precacheDocuments: "${path}" must not contain a query or hash — those are not separate documents.`,
       )
     }
     if (DYNAMIC_SEGMENT.test(path)) {
       throw new Error(
-        `[nativ] precacheDocuments: "${path}" is a dynamic route. There is no single artifact to precache, and per-item routes are usually per-user — which is exactly what this allowlist exists to keep out of a shared cache.`,
+        `[adaptv] precacheDocuments: "${path}" is a dynamic route. There is no single artifact to precache, and per-item routes are usually per-user — which is exactly what this allowlist exists to keep out of a shared cache.`,
       )
     }
     //dedupe: Workbox precache is all-or-nothing, and a duplicate URL with a

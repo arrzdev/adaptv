@@ -1,32 +1,32 @@
 import { HeadContent, Scripts } from "@tanstack/react-router"
 import type { ComponentType, ReactNode } from "react"
 import { useEffect, useState } from "react"
-import { initNativeKeyboard } from "#nativ/capabilities/keyboard"
-import { persistNativeThemePreference } from "#nativ/capabilities/native-theme"
-import { hideNativeSplash } from "#nativ/capabilities/splash"
-import type { OfflineProps } from "#nativ/components/offline"
-import { Offline } from "#nativ/components/offline"
-import { OrientationGuard } from "#nativ/components/orientation-guard"
-import type { NativPatches } from "#nativ/config/app-config"
+import { initNativeKeyboard } from "#adaptv/capabilities/keyboard"
+import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
+import { hideNativeSplash } from "#adaptv/capabilities/splash"
+import type { OfflineProps } from "#adaptv/components/offline"
+import { Offline } from "#adaptv/components/offline"
+import { OrientationGuard } from "#adaptv/components/orientation-guard"
+import type { AdaptvPatches } from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
   PwaServiceWorkerRuntimeConfig,
   SplashScreenProps,
-} from "#nativ/config/types"
-import { useAndroidBackButton } from "#nativ/hooks/use-android-back-button"
-import { useCaretRepaint } from "#nativ/hooks/use-caret-repaint"
-import { useFreezeViewport } from "#nativ/hooks/use-freeze-viewport"
-import { useGlobalFpsSentinel } from "#nativ/hooks/use-global-fps-sentinel"
-import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
-import { useRegisterPwaServiceWorker } from "#nativ/hooks/use-register-pwa-service-worker"
-import { useStatusBar } from "#nativ/hooks/use-status-bar"
-import { useSuppressTextMagnifier } from "#nativ/hooks/use-suppress-text-magnifier"
-import { useSyncTheme } from "#nativ/hooks/use-sync-theme"
-import { readPreference, useTheme } from "#nativ/hooks/use-theme"
-import { installPreloadErrorRecovery } from "#nativ/shell/preload-error-recovery"
-import { initKv } from "#nativ/storage/kv"
-import { cn } from "#nativ/utils/cn"
-import { applyPlatformStamp } from "#nativ/utils/platform"
+} from "#adaptv/config/types"
+import { useAndroidBackButton } from "#adaptv/hooks/use-android-back-button"
+import { useCaretRepaint } from "#adaptv/hooks/use-caret-repaint"
+import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
+import { useGlobalFpsSentinel } from "#adaptv/hooks/use-global-fps-sentinel"
+import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
+import { useRegisterPwaServiceWorker } from "#adaptv/hooks/use-register-pwa-service-worker"
+import { useStatusBar } from "#adaptv/hooks/use-status-bar"
+import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnifier"
+import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
+import { readPreference, useTheme } from "#adaptv/hooks/use-theme"
+import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
+import { initKv } from "#adaptv/storage/kv"
+import { cn } from "#adaptv/utils/cn"
+import { applyPlatformStamp } from "#adaptv/utils/platform"
 
 const DOCUMENT_SHELL_CLASS = "m-0 h-dvh touch-none overscroll-none"
 
@@ -126,8 +126,8 @@ type RoutingShellProps = {
   /** Rendered in place of the app when a route chunk is unrecoverably missing. */
   offlineComponent?: ComponentType<OfflineProps>
   shellClassName?: string
-  /** Native-feel WebKit fixes; each defaults to `true`. See {@link NativPatches}. */
-  patches?: NativPatches
+  /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
+  patches?: AdaptvPatches
   children: ReactNode
 }
 
@@ -198,11 +198,11 @@ export function RoutingShell({
     void persistNativeThemePreference(readPreference())
   }, [])
   //The splash owns its own lifecycle: it renders while the app boots and returns
-  //null when ready (self-unmount) — nativ just mounts it. CSS gates it off in a
+  //null when ready (self-unmount) — adaptv just mounts it. CSS gates it off in a
   //browser tab (see the critical-css splash policy) unless the app opts in.
   const SplashScreenComponent = splashScreenComponent
 
-  //Nativ's own offline call site: a route chunk 404'd and the one-shot reload
+  //Adaptv's own offline call site: a route chunk 404'd and the one-shot reload
   //guard is already spent, so reloading cannot help and there is no route left to
   //render its own offline UI. Without this the user gets a blank screen.
   //RENDERING.md §3.1.2

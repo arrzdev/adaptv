@@ -3,7 +3,7 @@
 //  • web/PWA → navigator.permissions + navigator.geolocation
 //Both normalise to one shape so callers never branch on platform.
 import { Geolocation } from "@capacitor/geolocation"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type GeoCoords = {
   latitude: number
@@ -18,7 +18,7 @@ export type GeoCoords = {
  * `"denied"` sends the user to APP settings, `"unavailable"` to SYSTEM settings
  * (or nowhere, if the platform simply lacks the API).
  *
- * Every permission-gated capability in nativ uses this four-state shape.
+ * Every permission-gated capability in adaptv uses this four-state shape.
  */
 export type GeoPermission = "granted" | "denied" | "prompt" | "unavailable"
 
@@ -42,7 +42,7 @@ function webGeolocationPresent(): boolean {
 /**
  * Current permission without prompting. Never rejects — an accessor that throws
  * forces every caller into a try/catch, which is exactly the per-platform burden
- * nativ exists to absorb (doctrine §0.2).
+ * adaptv exists to absorb (doctrine §0.2).
  */
 export async function checkGeoPermission(): Promise<GeoPermission> {
   if (isNativePlatform()) {

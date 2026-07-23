@@ -1,5 +1,5 @@
 {
-  "name": "@arrzdev/nativ",
+  "name": "@arrzdev/adaptv",
   "version": "0.1.0",
   "private": true,
   "description": "Cross-platform React framework \u2014 one codebase ships as web, installable PWA, and native iOS/Android (Capacitor), correct-by-construction on every target.",
@@ -11,10 +11,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/arrzdev/nativ.git"
+    "url": "git+ssh://git@github.com/arrzdev/adaptv.git"
   },
   "bin": {
-    "nativ": "./bin/nativ.mjs"
+    "adaptv": "./bin/adaptv.mjs"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -29,7 +29,7 @@
     "biome:fix": "biome check --write ."
   },
   "imports": {
-    "#nativ/*": [
+    "#adaptv/*": [
       "./src/*",
       "./src/*.ts",
       "./src/*.tsx"

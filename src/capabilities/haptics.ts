@@ -13,15 +13,15 @@
 //
 //That is a shape mismatch, not a missing feature: the mechanism is inherently
 //declarative. For tap-triggered feedback use `attachHapticTick` /
-//`useHapticTick` (#nativ/capabilities/haptic-tick), which every nativ primitive
+//`useHapticTick` (#adaptv/capabilities/haptic-tick), which every adaptv primitive
 //with a `haptic` prop already routes through — so `Button haptic="light"` works on
 //all six targets while `haptics.impact()` silently does nothing on one of them.
 //
 //Use this API for feedback NOT tied to a tap (a completed upload, a countdown).
 //Accept that iOS web won't feel it. @see docs/DECISIONS.md B10
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
-import { installVibratePolyfill } from "#nativ/utils/install-vibrate-polyfill"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type ImpactWeight = "light" | "medium" | "heavy"
 export type NotifyType = "success" | "warning" | "error"

@@ -2,13 +2,13 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import type { Plugin as EsbuildPlugin } from "esbuild"
 import { build as esbuild } from "esbuild"
-import type { NativAppConfig } from "#nativ/config/app-config"
-import type { LoadedAppConfig } from "#nativ/vite/nativ-context"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import type { LoadedAppConfig } from "#adaptv/vite/adaptv-context"
 
-export const APP_CONFIG_BASENAME = "nativ.config.ts"
+export const APP_CONFIG_BASENAME = "adaptv.config.ts"
 
 /**
- * Load `nativ.config.ts` in Node as data. We bundle it with esbuild so
+ * Load `adaptv.config.ts` in Node as data. We bundle it with esbuild so
  * `defineApp` inlines, but mark every dynamic import (`() => import(...)`)
  * external — the component thunks must NOT be resolved or executed here. The
  * bundle therefore has zero static imports and evaluates cleanly from a
@@ -21,7 +21,7 @@ export async function loadAppConfig(
   const configPath = path.resolve(appRoot, APP_CONFIG_BASENAME)
   if (!existsSync(configPath)) {
     throw new Error(
-      `[nativ] ${APP_CONFIG_BASENAME} not found at ${appRoot}. Create it with defineApp({ ... }).`,
+      `[adaptv] ${APP_CONFIG_BASENAME} not found at ${appRoot}. Create it with defineApp({ ... }).`,
     )
   }
 
@@ -39,14 +39,14 @@ export async function loadAppConfig(
 
   const output = result.outputFiles?.[0]
   if (!output) {
-    throw new Error(`[nativ] failed to bundle ${APP_CONFIG_BASENAME}`)
+    throw new Error(`[adaptv] failed to bundle ${APP_CONFIG_BASENAME}`)
   }
 
   const module = await importFromSource(output.text)
-  const config = module.default as NativAppConfig | undefined
+  const config = module.default as AdaptvAppConfig | undefined
   if (!config || typeof config !== "object") {
     throw new Error(
-      `[nativ] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
+      `[adaptv] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
     )
   }
 
@@ -63,7 +63,7 @@ export async function loadAppConfig(
  * inert. Static imports (i.e. `defineApp`) still bundle normally.
  */
 const externalizeDynamicImports: EsbuildPlugin = {
-  name: "nativ-externalize-dynamic-imports",
+  name: "adaptv-externalize-dynamic-imports",
   setup(build) {
     build.onResolve({ filter: /.*/ }, (args) => {
       if (args.kind === "dynamic-import") return { external: true }

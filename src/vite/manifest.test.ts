@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
-import type { NativAppConfig } from "#nativ/config/app-config"
-import { resolveThemeColors } from "#nativ/config/app-config"
-import { buildManifest, parseIconSize } from "#nativ/vite/manifest"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import { resolveThemeColors } from "#adaptv/config/app-config"
+import { buildManifest, parseIconSize } from "#adaptv/vite/manifest"
 
-const BASE: NativAppConfig = {
+const BASE: AdaptvAppConfig = {
   name: "ChopChop",
   description: "A focused task list.",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },

@@ -1,6 +1,6 @@
 import type { ComponentPropsWithRef, MouseEvent } from "react"
-import { openExternal } from "#nativ/capabilities/browser"
-import { mergeStyles } from "#nativ/utils/styles"
+import { openExternal } from "#adaptv/capabilities/browser"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 const EXTERNAL_LINK_BASE_CLASS = "text-left no-underline"
 

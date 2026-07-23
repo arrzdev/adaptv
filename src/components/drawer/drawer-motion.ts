@@ -1,8 +1,8 @@
 import type { MotionValue, Transition } from "motion/react"
 import { animate } from "motion/react"
-import type { DrawerTransition } from "#nativ/components/drawer/drawer-constants"
-import { beginCaretHold } from "#nativ/hooks/use-caret-repaint"
-import { clamp } from "#nativ/utils/clamp"
+import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
+import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
+import { clamp } from "#adaptv/utils/clamp"
 
 const TRANSITION_END_FALLBACK_MS = 32
 

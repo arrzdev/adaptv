@@ -4,7 +4,7 @@ import type {
   PwaServiceWorkerRuntimeConfig,
   ResolvedSwBuildConfig,
   SwConfig,
-} from "#nativ/config/types.ts"
+} from "#adaptv/config/types.ts"
 
 export const DEFAULT_SW_ENTRY = "./src/sw.ts"
 

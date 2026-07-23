@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { renderAppShell } from "#nativ/vite/app-shell"
+import { renderAppShell } from "#adaptv/vite/app-shell"
 
 const opts = {
   lang: "en",

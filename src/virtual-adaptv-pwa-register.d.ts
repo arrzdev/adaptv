@@ -1,4 +1,4 @@
-declare module "virtual:nativ/pwa-register" {
+declare module "virtual:adaptv/pwa-register" {
   export type RegisterSWOptions = {
     immediate?: boolean
     onNeedRefresh?: () => void

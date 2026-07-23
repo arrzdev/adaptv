@@ -4,7 +4,7 @@
 //on web a new tab. Internal route paths ("/settings") are NOT external — route them
 //through the router (Link), not this.
 import { Browser } from "@capacitor/browser"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 /**
  * Whether `href` points outside the app's client router — a URI scheme

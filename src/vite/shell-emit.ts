@@ -6,13 +6,13 @@ import {
 } from "node:fs"
 import path from "node:path"
 import type { Plugin } from "vite"
-import { resolveThemeColors } from "#nativ/config/app-config.ts"
-import { getCriticalShellCss } from "#nativ/shell/critical-css.ts"
-import { getUiThemeInitScript } from "#nativ/shell/theme-init-script.ts"
-import { getPlatformInitScript } from "#nativ/utils/platform.ts"
-import { renderAppShell } from "#nativ/vite/app-shell.ts"
-import type { NativContext } from "#nativ/vite/nativ-context.ts"
-import { requireAppConfig } from "#nativ/vite/nativ-context.ts"
+import { resolveThemeColors } from "#adaptv/config/app-config.ts"
+import { getCriticalShellCss } from "#adaptv/shell/critical-css.ts"
+import { getUiThemeInitScript } from "#adaptv/shell/theme-init-script.ts"
+import { getPlatformInitScript } from "#adaptv/utils/platform.ts"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
+import { renderAppShell } from "#adaptv/vite/app-shell.ts"
 
 type ViteManifest = Record<
   string,
@@ -60,9 +60,9 @@ function resolveStylesHref(
  * response, which is what makes it user-agnostic by construction rather than by
  * discipline. See `app-shell.ts`.
  */
-export function nativShellEmitPlugin(context: NativContext): Plugin {
+export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
   return {
-    name: "nativ:shell-emit",
+    name: "adaptv:shell-emit",
     apply: "build",
     config() {
       //the emitted shell has to reference hashed filenames, and the manifest is
@@ -116,7 +116,7 @@ export function nativShellEmitPlugin(context: NativContext): Plugin {
       })
 
       writeFileSync(path.join(clientDir, "index.html"), html)
-      console.log("[nativ] wrote dist/client/index.html (app shell)")
+      console.log("[adaptv] wrote dist/client/index.html (app shell)")
     },
   }
 }

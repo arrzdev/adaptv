@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react"
 import {
   GesturePriority,
   useGestureCapture,
-} from "#nativ/hooks/use-gesture-capture"
+} from "#adaptv/hooks/use-gesture-capture"
 
 /* =============================================================================
  * TYPES
@@ -21,7 +21,7 @@ export interface EdgeSwipeGesturesProps {
   right?: () => void
   /**
    * Off switch. When `false`, no listeners are attached and nothing fires. Gate
-   * this to the installed app (e.g. `isInstalledApp()` from `@arrzdev/nativ/utils`) so
+   * this to the installed app (e.g. `isInstalledApp()` from `@arrzdev/adaptv/utils`) so
    * it doesn't double-fire with the browser's own edge-swipe nav in a tab. Covers
    * both the standalone PWA and a native Capacitor build.
    * @default true
@@ -61,7 +61,7 @@ const DEFAULT_THRESHOLD_PX = 56
  *
  * @example
  * ```tsx
- * import { isInstalledApp } from "@arrzdev/nativ/utils"
+ * import { isInstalledApp } from "@arrzdev/adaptv/utils"
  * <EdgeSwipeGestures enabled={isInstalledApp()} left={() => navigate({ to: "/" })} />
  * ```
  */

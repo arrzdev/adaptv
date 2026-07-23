@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
-import { cn } from "#nativ/utils/cn"
+import { cn } from "#adaptv/utils/cn"
 
 export type PwaSplashOverlayProps = {
   /** Classes for the full-viewport coverage box (the painted backdrop). */
@@ -33,7 +33,7 @@ export function PwaSplashOverlay({
 }: PwaSplashOverlayProps) {
   return (
     <div
-      data-nativ-splash
+      data-adaptv-splash
       className={cn(
         "fixed inset-0 z-[100] bg-background hardware-boosted",
         className,

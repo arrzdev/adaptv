@@ -10,7 +10,7 @@
  * on desktop in 129. iOS Safari has exactly one route to the Taptic Engine — the
  * system tick fired when a `switch`-styled checkbox is toggled.
  *
- * nativ used to reach that route by mounting a hidden switch and calling
+ * adaptv used to reach that route by mounting a hidden switch and calling
  * `.click()` on it. **Apple patched programmatic triggering in iOS 26.5** (June
  * 2026) with no release-note mention; `element.click()` no longer fires the
  * haptic. Confirmed against `ios-haptics@3.1.1` and its issue #8. The only
@@ -19,15 +19,15 @@
  * ## The architectural consequence
  *
  * A generic imperative `haptics.impact()` is **unimplementable on iOS web** — you
- * cannot synthesise a finger. That is why nativ has two haptic surfaces and not
+ * cannot synthesise a finger. That is why adaptv has two haptic surfaces and not
  * one:
  *
- * - {@link import("#nativ/capabilities/haptics").haptics} — imperative, fire-and-
+ * - {@link import("#adaptv/capabilities/haptics").haptics} — imperative, fire-and-
  *   forget. Real on native (`@capacitor/haptics`) and on Android/Chrome web
  *   (`navigator.vibrate`). A documented **no-op on iOS web**.
  * - `attachHapticTick` (this file) — declarative, attach-to-element. The only
  *   thing that works on iOS web, and therefore the path every *tap-triggered*
- *   haptic in nativ goes through.
+ *   haptic in adaptv goes through.
  *
  * `Button haptic="…"` was already declarative at the consumer's level, so it
  * routes here transparently and keeps working on all six targets.
@@ -43,10 +43,10 @@
  * can only be confirmed on physical iOS ≥ 26.5 hardware; simulators do not
  * produce haptics.
  */
-import { isIOS, isNativePlatform } from "#nativ/utils/platform"
+import { isIOS, isNativePlatform } from "#adaptv/utils/platform"
 
 /** Marks the injected node so attach is idempotent and detach is exact. */
-export const HAPTIC_TICK_ATTR = "data-nativ-haptic-tick"
+export const HAPTIC_TICK_ATTR = "data-adaptv-haptic-tick"
 
 /**
  * Whether the switch-overlay trick is the right mechanism *here*.
@@ -102,7 +102,7 @@ function createOverlay(): HTMLInputElement {
  *
  * Safe to call unconditionally: on every platform with a real haptic engine this
  * injects nothing and returns a no-op detach. That is the point — callers never
- * branch on platform, which is the burden nativ exists to absorb (doctrine §0.2).
+ * branch on platform, which is the burden adaptv exists to absorb (doctrine §0.2).
  *
  * The overlay is a **child** of the host, so a tap that lands on it bubbles to the
  * host and the host's own click handler still runs — no event forwarding, no lost

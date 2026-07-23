@@ -1,4 +1,4 @@
-import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
+import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 
 const THEME_COLOR_CLASS_OVERRIDE_ID = "theme-color-class-override"
 

@@ -1,11 +1,11 @@
-import { getOS, isNativePlatform } from "#nativ/utils/platform"
+import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 /**
  * Keep a native WebView's live-reload connection alive across the OS tearing it down.
  *
  * ## The problem this fixes
  *
- * `nativ run ios|android` serves the SPA into a native WebView and relies on Vite's
+ * `adaptv run ios|android` serves the SPA into a native WebView and relies on Vite's
  * HMR WebSocket for hot reload. That socket is fragile inside a WebView:
  *
  * - **iOS WKWebView** closes the HMR socket with a **CLEAN** close code when it
@@ -45,7 +45,7 @@ const SUSPEND_DROP_MS = 3000
  * ⚠︎ Must match `OFFLINE_PAGE` in `bin/lib/offline-page.mjs`, which generates the file
  * and points Capacitor's `server.errorPath` at it.
  */
-const OFFLINE_PAGE = "nativ-offline.html"
+const OFFLINE_PAGE = "adaptv-offline.html"
 
 /**
  * Consecutive failed reachability polls before we hand off to the offline screen.
@@ -101,7 +101,7 @@ export function installNativeLiveReloadRecovery(): void {
    * `server.url` whenever live-reload is configured (`Bridge.java`), so there it reports
    * the DEV SERVER and navigating to it just fails again. Hence: use the injected value
    * only when it isn't the origin we're already on, and otherwise fall back to the
-   * scheme+host nativ itself configures — which is exactly how Capacitor's own
+   * scheme+host adaptv itself configures — which is exactly how Capacitor's own
    * `getErrorUrl()` sidesteps the same trap.
    */
   const localOrigin = (): string | null => {

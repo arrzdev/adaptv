@@ -16,7 +16,7 @@ export type ScreenLifecycle = {
  * popped from the stack, which is why both need an explicit lifecycle API: mount
  * and "enter" genuinely diverge there.
  *
- * nativ does not retain. It uses memory history plus client routing, so a React
+ * adaptv does not retain. It uses memory history plus client routing, so a React
  * **unmount is the natural leave** and a mount is the natural enter. That keeps
  * the model predictable and avoids the retained-DOM state bugs Ionic documents —
  * a stale screen still mounted, still holding timers, still subscribed.

@@ -6,11 +6,11 @@ import {
   assertRouteTreeIsOpaque,
   checkPatches,
   describeMissingPatches,
-} from "#nativ/vite/verify-patches"
+} from "#adaptv/vite/verify-patches"
 
 const PATCHED_SCHEMA = `var tsrConfig = configSchema.omit({ autoCodeSplitting: true, target: true }).partial();`
 const UNPATCHED_SCHEMA = `var tsrConfig = configSchema.omit({ autoCodeSplitting: true, target: true, verboseFileRoutes: true }).partial();`
-const PATCHED_TEMPLATE = `function nativRouterPkg(f){return process.env.NATIV_ROUTER_PKG || f}`
+const PATCHED_TEMPLATE = `function adaptvRouterPkg(f){return process.env.ADAPTV_ROUTER_PKG || f}`
 const UNPATCHED_TEMPLATE = `fullPkg: "@tanstack/react-router",`
 
 describe("checkPatches — detects behaviour, not pnpm metadata", () => {
@@ -71,7 +71,7 @@ describe("describeMissingPatches", () => {
     //a diagnostic that only names the fault sends people reading framework source
     const message = describeMissingPatches(["@tanstack/router-generator"])
     expect(message).toContain("patchedDependencies:")
-    expect(message).toContain("@arrzdev/nativ/patches/")
+    expect(message).toContain("@arrzdev/adaptv/patches/")
     expect(message).toContain("pnpm install")
   })
 
@@ -86,27 +86,27 @@ describe("assertRouteTreeIsOpaque — the outcome-based check", () => {
   //Two earlier versions checked the patched dependency FILES and both passed
   //silently, because those packages are transitive deps of @tanstack/react-start
   //and pnpm's strict layout makes them unresolvable by name — from the app root
-  //AND from nativ. A checker that cannot read what it checks reports success,
+  //AND from adaptv. A checker that cannot read what it checks reports success,
   //which is worse than having none. This one tests the outcome instead.
-  it("passes on a tree that references only nativ", () => {
-    const file = join(tmpdir(), `nativ-opaque-ok-${process.pid}.ts`)
+  it("passes on a tree that references only adaptv", () => {
+    const file = join(tmpdir(), `adaptv-opaque-ok-${process.pid}.ts`)
     writeFileSync(
       file,
-      'import type { CreateFileRoute } from "@arrzdev/nativ/router"',
+      'import type { CreateFileRoute } from "@arrzdev/adaptv/router"',
     )
     expect(() => assertRouteTreeIsOpaque(file)).not.toThrow()
     rmSync(file, { force: true })
   })
 
   it("throws when the tree still references @tanstack", () => {
-    const file = join(tmpdir(), `nativ-opaque-bad-${process.pid}.ts`)
+    const file = join(tmpdir(), `adaptv-opaque-bad-${process.pid}.ts`)
     writeFileSync(file, 'import type { X } from "@tanstack/react-router"')
     expect(() => assertRouteTreeIsOpaque(file)).toThrow(/@tanstack/)
     rmSync(file, { force: true })
   })
 
   it("names the fix in the failure, not just the fault", () => {
-    const file = join(tmpdir(), `nativ-opaque-fix-${process.pid}.ts`)
+    const file = join(tmpdir(), `adaptv-opaque-fix-${process.pid}.ts`)
     writeFileSync(file, 'import "@tanstack/react-start"')
     expect(() => assertRouteTreeIsOpaque(file)).toThrow(
       /patchedDependencies/,

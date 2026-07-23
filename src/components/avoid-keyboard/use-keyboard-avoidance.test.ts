@@ -3,7 +3,7 @@ import {
   computeScrollIntoViewTop,
   resolveAvoidanceSpace,
   resolveReservedSpace,
-} from "#nativ/components/avoid-keyboard/use-keyboard-avoidance"
+} from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 
 /* =============================================================================
  * resolveAvoidanceSpace

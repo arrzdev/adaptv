@@ -1,4 +1,4 @@
-# nativ — the vision
+# adaptv — the vision
 
 > A cross-platform UI framework where you write **React with JS/HTML/CSS**, and the same code ships
 > as a **desktop web app, an installable PWA, and native iOS/Android apps** — and *actually feels
@@ -21,12 +21,12 @@ Every team that wants "one app, everywhere" faces the same fork:
   inherit every place the web *doesn't* behave like an app: safe-areas, keyboard, scroll physics,
   gestures, back navigation, splash, permissions, offline.
 
-**nativ takes the second fork and refuses its downsides.** The render target stays the DOM (so the
+**adaptv takes the second fork and refuses its downsides.** The render target stays the DOM (so the
 whole React/CSS/web ecosystem just works). Native capability comes through **Capacitor as a thin
 seam**. And on top sits a layer of **primitives that are correct-by-construction** — a `View` that
 can't scroll wrong and is edge-to-edge by default, a `Button` with real press physics and
 haptics, capability APIs that transparently pick browser / polyfill / native. The developer writes
-ordinary React; nativ makes it behave like a native app on six targets.
+ordinary React; adaptv makes it behave like a native app on six targets.
 
 It's **Expo's ambition with Capacitor's mechanism** — and, unlike Expo, the web is not a second-class
 target, it's the *primary* one.
@@ -38,9 +38,9 @@ target, it's the *primary* one.
 | **Expo / RN** | native views | native modules | RN-flavored | strong, but not web |
 | **Ionic** | web components | Capacitor | weakly | adaptive styling, not "can't-break-it" |
 | **Tamagui** | RN + web | RN | yes | strong, but RN-anchored |
-| **nativ** | **DOM** | **Capacitor** | **yes (TanStack-native)** | **correct-by-construction** |
+| **adaptv** | **DOM** | **Capacitor** | **yes (TanStack-native)** | **correct-by-construction** |
 
-nativ's wedge is the empty cell: **React/DOM-first, opinionated primitives that make the wrong thing
+adaptv's wedge is the empty cell: **React/DOM-first, opinionated primitives that make the wrong thing
 impossible, Capacitor for the native 10%.** Ionic is the closest existing thing and it's the thing to
 beat on developer joy and correctness, not to copy.
 
@@ -62,7 +62,7 @@ beat on developer joy and correctness, not to copy.
    model) — never from a primitive inspecting the DOM or mutating the consumer's tree. A dumb-but-correct
    `View` fills that frame; there is no `Screen`/`Page` at all. Predictability is a feature.
    (Mechanism: `ARCHITECTURE.md §0.4`, §1.)
-5. **One config source.** `nativ.config.ts` is the single source of truth. It generates the web
+5. **One config source.** `adaptv.config.ts` is the single source of truth. It generates the web
    manifest, `capacitor.config`, the native project settings, splash, icons, theme — the consumer never
    hand-edits a second config.
 6. **Reactive → hook, imperative → API.** Subscribed state is a hook (`useKeyboard`, `useNetwork`);
@@ -73,14 +73,14 @@ beat on developer joy and correctness, not to copy.
 8. **Platform-adaptive defaults, escape hatches available.** Edge-to-edge, momentum scroll, press
    feedback are *on by default* and *right per platform*; every one is overridable.
 9. **Lean on the ecosystem.** Wrap TanStack Virtual, `motion`, TanStack Router, Dexie — don't
-   re-implement solved problems. nativ is the *cross-platform correctness layer*, not a NIH museum.
+   re-implement solved problems. adaptv is the *cross-platform correctness layer*, not a NIH museum.
 
 ---
 
 ## 3. The problem space (the real scope)
 
 The holy grail is hard because "the web in an app" diverges from "a native app" in dozens of specific,
-nasty places. This is the catalog nativ exists to solve — grouped, and deliberately longer than what's
+nasty places. This is the catalog adaptv exists to solve — grouped, and deliberately longer than what's
 obvious, because the long tail is the actual work.
 
 ### Layout & viewport
@@ -134,7 +134,7 @@ obvious, because the long tail is the actual work.
 - One app → **SSR web** (default) + **static SPA** (native), auto per target; service worker on/off per target; `VITE_BACKEND_URL` is compile-time.
 - Code signing; unsigned `.ipa` for sideloading vs signed TestFlight/App Store; debug `.apk`.
 - **OTA / live updates** — the bundle is a snapshot; JS/web-only updates can ship over-the-air (Capgo / `@capacitor/live-updates`, Apple 3.3.2); native changes need a store submission.
-- **Version pinning hell** — Capacitor core vs plugins vs the SPM framework (`capacitor-swift-pm`) vs Xcode toolchain (prebuilt Swift binaries). nativ should *own* a known-good version set so consumers never fight this.
+- **Version pinning hell** — Capacitor core vs plugins vs the SPM framework (`capacitor-swift-pm`) vs Xcode toolchain (prebuilt Swift binaries). adaptv should *own* a known-good version set so consumers never fight this.
 
 ### Performance
 - Bundle size / code-splitting; first paint + hydration cost; 60fps gestures and transitions; GPU compositing (`will-change`), jank on low-end Android; memory; image decode.
@@ -150,19 +150,19 @@ obvious, because the long tail is the actual work.
 ### Developer experience
 - Testing across **six targets** (see `TESTING.md`); hot reload for web/standalone, rebuild for native; debugging the native WebView; surfacing device logs without manual handoff; **lint rules that enforce the correctness contract**; clear error messages.
 
-That list is the moat. Nobody solves all of it well; nativ's job is to solve it *once*, correctly, behind primitives.
+That list is the moat. Nobody solves all of it well; adaptv's job is to solve it *once*, correctly, behind primitives.
 
 ---
 
 ## 4. Architecture (the layers)
 
 ```
-nativ.config.ts  ── single source of truth ─────────────────────────────┐
+adaptv.config.ts  ── single source of truth ─────────────────────────────┐
    │ generates: web manifest · capacitor.config · native projects · splash · icons · theme
    ▼
 Build targets (vite plugin)                                             
    • web  → SSR + service worker         (pnpm build)                    
-   • native → static SPA + no SW         (NATIV_TARGET=capacitor)        
+   • native → static SPA + no SW         (ADAPTV_TARGET=capacitor)        
    ▼
 Shell (framework layer over TanStack Start)                             
    • root document, pre-paint theme/platform stamp, critical CSS         
@@ -181,8 +181,8 @@ Enforcement
    build-time lint rules · dev-only runtime warnings · types            
 ```
 
-Platform truth lives in **one** place (`@repo/nativ/utils`: `isNativePlatform` / `isInstalledApp` /
-`getOS`), stamped pre-paint onto `<html data-nativ-platform data-nativ-os>` so CSS and primitives
+Platform truth lives in **one** place (`@repo/adaptv/utils`: `isNativePlatform` / `isInstalledApp` /
+`getOS`), stamped pre-paint onto `<html data-adaptv-platform data-adaptv-os>` so CSS and primitives
 resolve from the first frame. Nothing keys off `display-mode` (a native WebView lies about it).
 
 ---
@@ -299,7 +299,7 @@ stays mounted for exit animation.
 **Imperative → API** (plain functions, tree-shakeable, work outside React):
 
 ```ts
-import { haptics, share, splash, clipboard, storage } from "@repo/nativ/capabilities"
+import { haptics, share, splash, clipboard, storage } from "@repo/adaptv/capabilities"
 
 haptics.impact("light")                 // navigator.vibrate / iOS polyfill / @capacitor/haptics
 await share({ title, url })             // Web Share API / native share sheet
@@ -332,7 +332,7 @@ else { @capacitor/<plugin> }` → export; wrap in a hook only if it's reactive.
 ## 7. Configuration — one file
 
 ```ts
-// nativ.config.ts — generates the web manifest, capacitor.config, native project settings.
+// adaptv.config.ts — generates the web manifest, capacitor.config, native project settings.
 export default defineApp({
   name: "ChopChop",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
@@ -344,7 +344,7 @@ export default defineApp({
 
   native: {                                 // PROPOSED — replaces a hand-written capacitor.config
     appId: "com.chopchop.app",
-    edgeToEdge: true,                        // nativ opinionates this on
+    edgeToEdge: true,                        // adaptv opinionates this on
     plugins: ["haptics", "keyboard", "status-bar", "network", "geolocation", "app"],
   },
   router: { render: "ssr", /* auto → spa for the capacitor target */ },
@@ -362,7 +362,7 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 - **Enforcement**: build-time lint rules (className-behavior misuse, non-`View` route roots), dev-only
   runtime warnings, and types that make illegal states unrepresentable.
 - **Debugging native**: WebView inspection (`chrome://inspect`, Safari ▸ Develop), device log sink.
-- **Version safety**: nativ pins a known-good Capacitor set (core/plugins/framework/Xcode) so consumers
+- **Version safety**: adaptv pins a known-good Capacitor set (core/plugins/framework/Xcode) so consumers
   never hit the SPM/CocoaPods/toolchain skew (documented in `stack/capacitor`).
 
 ---
@@ -373,11 +373,11 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
   Tailwind; behavior via props, looks via `className`.)
 - **Lint delivery** — a Biome plugin, an ESLint rule, or a Vite transform for the correctness rules?
 - **`List` virtualization** — wrap TanStack Virtual vs a bespoke engine for pull-to-refresh + sticky.
-- **Navigation model** — how much of tabs/modals/sheets stacking does nativ own vs TanStack Router?
-- **OTA** — bundle a live-update client (Capgo/`@capacitor/live-updates`) as a first-class nativ feature?
-- **Secure storage / auth** — how opinionated should nativ be about the bearer-token + biometric flow?
+- **Navigation model** — how much of tabs/modals/sheets stacking does adaptv own vs TanStack Router?
+- **OTA** — bundle a live-update client (Capgo/`@capacitor/live-updates`) as a first-class adaptv feature?
+- **Secure storage / auth** — how opinionated should adaptv be about the bearer-token + biometric flow?
 - **Testing automation** — can the six-target matrix run in CI (sims/emulators) or stay local?
-- **Distribution** — does nativ own signing config + fastlane, or stop at the unsigned artifact?
+- **Distribution** — does adaptv own signing config + fastlane, or stop at the unsigned artifact?
 - ✅ **Scope discipline — ANSWERED, see `ARCHITECTURE.md §5`.** The method: a primitive is *forced* when
   cross-platform divergence means the consumer would otherwise write the branch (Drawer), or *elective*
   when it's a genuinely better building block (View's `min-h-0` safety). Ship **every layer** of the §4
@@ -397,7 +397,7 @@ document the pattern → repeat. ChopChop is the forcing function; every primiti
 
 1. **Native keyboard avoidance** — `useKeyboard` gains a `@capacitor/keyboard` branch; the drawer and
    `AvoidKeyboard` stop misbehaving on native. (Real pain now; proves the capacitor-aware-primitive loop.)
-2. **`capacitor.config` from `nativ.config`** — kill the second config file.
+2. **`capacitor.config` from `adaptv.config`** — kill the second config file.
 3. **`View` contract** — props-not-className, edge-to-edge default, the lint rule. The spine.
 4. Then **Button → List → Swipeable → Drawer-on-AvoidKeyboard → Link → Input**, each verified on six targets.
 

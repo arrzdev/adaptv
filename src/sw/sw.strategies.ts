@@ -4,13 +4,13 @@ import {
   NetworkFirst,
   StaleWhileRevalidate,
 } from "workbox-strategies"
-import { createCacheName } from "#nativ/sw/sw.cache-name"
-import { createExpirationPlugins } from "#nativ/sw/sw.expiration"
-import { createCacheOkResponsesPlugin } from "#nativ/sw/sw.plugins"
+import { createCacheName } from "#adaptv/sw/sw.cache-name"
+import { createExpirationPlugins } from "#adaptv/sw/sw.expiration"
+import { createCacheOkResponsesPlugin } from "#adaptv/sw/sw.plugins"
 import type {
   NetworkFirstStrategyOptions,
   StrategyFactoryOptions,
-} from "#nativ/sw/sw.types"
+} from "#adaptv/sw/sw.types"
 
 function resolveStrategyPlugins(
   options: StrategyFactoryOptions,
@@ -33,7 +33,7 @@ function resolveStrategyPlugins(
  * → `DECISIONS.md` B5/B25, `RENDERING.md §3.2`
  *
  * Opt in per rule where it is provably safe; {@link createHashedAssetStrategy}
- * is the one place nativ does.
+ * is the one place adaptv does.
  */
 function resolveMatchOptions(options: StrategyFactoryOptions) {
   return { ...options.matchOptions }

@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from "react"
-import { getOnline, subscribeOnline } from "#nativ/capabilities/network"
+import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
 
 /**
  * Connectivity, phrased the way UI code asks the question.
  *
- * One of exactly **two** obligations nativ takes on for the offline story — the
- * other is shipping an `Offline` component. nativ owns connectivity *truth*; it
+ * One of exactly **two** obligations adaptv takes on for the offline story — the
+ * other is shipping an `Offline` component. adaptv owns connectivity *truth*; it
  * never decides when to render offline UI, because that depends on a data layer
- * nativ deliberately does not assume. → `RENDERING.md §3.1.1`
+ * adaptv deliberately does not assume. → `RENDERING.md §3.1.1`
  *
  * Backed by the accessor pair, so it is accurate on every target:
  * `@capacitor/network` on native, `navigator.onLine` + `online`/`offline` events

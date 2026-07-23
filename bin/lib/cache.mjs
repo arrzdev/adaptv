@@ -5,7 +5,7 @@
 // The fingerprint is a hash of every app file's path + size + mtime (a superset of the
 // SPA inputs). Over-inclusive on purpose: an unrelated edit just triggers a rebuild
 // (safe), whereas a missed edit would launch stale code (never acceptable). `--force`
-// bypasses it. State lives in `.nativ/build-cache.json` (git-ignored with `.nativ/`).
+// bypasses it. State lives in `.adaptv/build-cache.json` (git-ignored with `.adaptv/`).
 import { createHash } from "node:crypto"
 import {
   mkdirSync,
@@ -15,13 +15,13 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
-import { NATIV_DIR } from "./native.mjs"
+import { ADAPTV_DIR } from "./native.mjs"
 
 // Directories that never affect the built bundle (deps, outputs, VCS, caches, the
 // native projects themselves). Skipped wholesale while walking.
 const SKIP_DIRS = new Set([
   "node_modules",
-  NATIV_DIR,
+  ADAPTV_DIR,
   "dist",
   "ios",
   "android",
@@ -41,7 +41,7 @@ const SKIP_DIRS = new Set([
 const SKIP_FILES = new Set(["capacitor.config.json", ".DS_Store"])
 
 const cacheFile = (appRoot) =>
-  path.join(appRoot, NATIV_DIR, "build-cache.json")
+  path.join(appRoot, ADAPTV_DIR, "build-cache.json")
 
 /** A hash of the app's source tree (path + size + mtime of every non-skipped file). */
 export function fingerprint(appRoot) {
@@ -141,7 +141,7 @@ export function nativeFingerprint(appRoot, platform) {
     h.update("deps:absent\n")
   }
 
-  const nativeRoot = path.join(appRoot, NATIV_DIR, platform)
+  const nativeRoot = path.join(appRoot, ADAPTV_DIR, platform)
   const walk = (dir) => {
     let entries
     try {
@@ -176,6 +176,6 @@ export function readCache(appRoot) {
 }
 
 export function writeCache(appRoot, cache) {
-  mkdirSync(path.join(appRoot, NATIV_DIR), { recursive: true })
+  mkdirSync(path.join(appRoot, ADAPTV_DIR), { recursive: true })
   writeFileSync(cacheFile(appRoot), `${JSON.stringify(cache, null, 2)}\n`)
 }

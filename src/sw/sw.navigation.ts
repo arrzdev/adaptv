@@ -7,8 +7,8 @@ import { NetworkOnly } from "workbox-strategies"
 import type {
   NavigationMode,
   NavigationPolicy,
-} from "#nativ/sw/sw.navigation-policy"
-import { resolveNavigationPolicy } from "#nativ/sw/sw.navigation-policy"
+} from "#adaptv/sw/sw.navigation-policy"
+import { resolveNavigationPolicy } from "#adaptv/sw/sw.navigation-policy"
 
 export type NavigationRouteOptions = {
   /** `web.render` for a web build, or `"capacitor"` for the native target. */

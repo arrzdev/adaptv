@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   useKeyboard,
   willOpenVirtualKeyboard,
-} from "#nativ/hooks/use-keyboard"
+} from "#adaptv/hooks/use-keyboard"
 
 const INNER_HEIGHT = 800
 const DEBOUNCE_MS = 50

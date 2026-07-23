@@ -1,8 +1,8 @@
-# nativ — rendering, delivery & the isomorphism boundary
+# adaptv — rendering, delivery & the isomorphism boundary
 
 > The contract that lets **one codebase** run correctly as SSR web, standalone PWA, and a native
 > Capacitor app. Captures *why* the boundaries are where they are, and the **hard limitation** that
-> falls out of it: nativ code must be **isomorphic** — no server-only logic (`createServerFn`, server
+> falls out of it: adaptv code must be **isomorphic** — no server-only logic (`createServerFn`, server
 > routes, request/cookie reads) if you want it to run on all targets.
 >
 > Locked understanding as of 2026-07-14. Pairs with `VISION.md` §"Build, distribution & updates" and
@@ -14,7 +14,7 @@
 
 1. **Capacitor → must be a static SPA.** The WebView loads a static `index.html` from the on-device
    bundle. There is **no server in the app**, so nothing can server-render and no server function can
-   be called. This is why nativ forces `render:"spa"` + `sw:false` for the capacitor target.
+   be called. This is why adaptv forces `render:"spa"` + `sw:false` for the capacitor target.
 2. **Web + standalone → SSR is fine (and the default).** A standalone PWA is just the installed web
    app; it loads over the network (or the SW cache) from the same SSR server. **Only Capacitor needs
    the SPA build.** Web can be SSR *or* SPA — a per-app config choice, SSR by default.
@@ -28,8 +28,8 @@ app it does little beyond the very first load.
 
 | Target | Build | Server render | Service worker | Delivery / update |
 |---|---|---|---|---|
-| Desktop web | SSR (default) or SPA | yes (SSR) | nativ-owned | SW revalidate |
-| Standalone PWA | same as web | yes (SSR) | nativ-owned | SW revalidate |
+| Desktop web | SSR (default) or SPA | yes (SSR) | adaptv-owned | SW revalidate |
+| Standalone PWA | same as web | yes (SSR) | adaptv-owned | SW revalidate |
 | Native iOS/Android | **SPA (forced)** | **no** | **off** | live-update bundle swap |
 
 ---
@@ -78,46 +78,46 @@ pattern for a client-auth, offline-first app:
 
 ---
 
-## 3. Delivery — nativ owns the service worker
+## 3. Delivery — adaptv owns the service worker
 
 > **Resolved 2026-07-20.** This section previously said "precache assets + a navigation-fallback to
 > the app shell" while `src/sw/` implemented NetworkFirst-on-documents + install-time route warming.
 > Those are different architectures. The decision below supersedes both.
 
 **"Cache every page" is the wrong framing.** You don't cache page *HTML*; you precache the **JS/CSS
-route chunks** (Workbox precache manifest — nativ builds this). Combined with client-side routing +
+route chunks** (Workbox precache manifest — adaptv builds this). Combined with client-side routing +
 `defaultPreload:"viewport"`, every route is instantly available offline **without** caching documents.
 
 > ### ✅ BUILT — the consumer authors no service worker (2026-07-20)
 >
-> `src/sw.ts` no longer exists in a normal app. nativ generates the worker into `.nativ/sw.gen.ts` from
+> `src/sw.ts` no longer exists in a normal app. adaptv generates the worker into `.adaptv/sw.gen.ts` from
 > the `web.sw` block and bundles that. **Verified: chopchop builds with no service-worker file at all**,
 > shipping a real `sw.js` with 51 precache entries.
 >
 > **Why generation rather than a template to copy:** every decision a normal worker makes is *already*
-> stated in `nativ.config.ts` — the render mode picks the navigation strategy, `sw.register` picks the
+> stated in `adaptv.config.ts` — the render mode picks the navigation strategy, `sw.register` picks the
 > update policy, `precacheDocuments` picks the allowlist. An app-authored worker restates all of it in a
 > lower-level vocabulary and then drifts. This is not hypothetical: chopchop's hand-written worker was
 > still calling `registerInstallRouteWarmer` long after that function became the B25 privacy bug. A
 > generated worker cannot fall behind, and cannot resurrect a removed API by copy-paste.
 >
 > Same principle as the splash screen, the offline component and the root route: **the consumer declares
-> intent, nativ writes the machinery.**
+> intent, adaptv writes the machinery.**
 >
 > **The escape hatch is unchanged and still wins** — write `src/sw.ts` (or point `web.sw.entry` at one)
-> and nativ bundles yours instead. That is for genuinely app-specific behaviour like push handling, not
+> and adaptv bundles yours instead. That is for genuinely app-specific behaviour like push handling, not
 > for restating config.
 
-> ### ✅ BUILT — nativ generates the app shell (2026-07-20)
+> ### ✅ BUILT — adaptv generates the app shell (2026-07-20)
 >
-> `dist/client/index.html` is now emitted by `nativShellEmitPlugin` from `renderAppShell`. **Verified in
+> `dist/client/index.html` is now emitted by `adaptvShellEmitPlugin` from `renderAppShell`. **Verified in
 > project-zero**, and it unblocked both features that were waiting on it: `host: "static"` now writes
 > `index.html`/`404.html`/`.nojekyll`/`_redirects`, and the SSR precache fallback finally has a real
 > file to bind to.
 >
 > **Measured, and it corrects an assumption:** TanStack Start emits **no HTML at all** in this
 > configuration — not `_shell.html`, not `index.html`, even with `spa: { enabled: true }`. So "copy
-> Start's shell" was never a foundation. `RENDERING.md §3.1.2`'s requirement that nativ *generate* one
+> Start's shell" was never a foundation. `RENDERING.md §3.1.2`'s requirement that adaptv *generate* one
 > is load-bearing.
 >
 > **Generated, never captured.** The shortcut — render a page at build time and save the HTML — is wrong
@@ -141,7 +141,7 @@ The SW is a **delivery mechanism, not a place where product behaviour lives.** A
 *see* belongs in React, where it is styleable, testable, themeable, i18n-able, and identical on all six
 targets. The SW's only job is to get the app booted; from that point the app decides everything.
 
-This is the same move nativ already made for the splash screen, and it should be read as one pattern:
+This is the same move adaptv already made for the splash screen, and it should be read as one pattern:
 
 | Concern | Dumb platform layer | Real behaviour |
 |---|---|---|
@@ -197,13 +197,13 @@ exactly the same way. One mechanism, six targets.
 
 ### 3.1.1 🔒 The framework contract (library-neutral)
 
-nativ must not assume a data library. The data layer is consumer-wired (§2), and a consumer may use
+adaptv must not assume a data library. The data layer is consumer-wired (§2), and a consumer may use
 TanStack Query, SWR, plain `fetch`, or nothing at all. So the contract is exactly two things:
 
-- **nativ owns connectivity truth.** One accurate signal — `@capacitor/network` on native,
+- **adaptv owns connectivity truth.** One accurate signal — `@capacitor/network` on native,
   `navigator.onLine` + `online`/`offline` events on web, because **`navigator.onLine` alone lies**
   (it reports an interface, not reachability). Surfaced as `useIsOffline()`. That's it.
-- **nativ ships a default `Offline` component** — themed, safe-area-aware, with the same override shape
+- **adaptv ships a default `Offline` component** — themed, safe-area-aware, with the same override shape
   as `notFound` and `splashScreen`. It never decides *when* to render it.
 
 **The consumer decides what to render, and the predicate is theirs.** Worth flagging in the docs though:
@@ -223,7 +223,7 @@ have anything to show?"*, however the app's data layer expresses that.
 >
 > Better than a boolean check because recovery is automatic — Query resumes the parked fetch on
 > reconnect and the route swaps to real content with no retry logic and no navigation. For this to be
-> trustworthy, nativ should offer an **opt-in** helper that feeds its connectivity signal into Query's
+> trustworthy, adaptv should offer an **opt-in** helper that feeds its connectivity signal into Query's
 > `onlineManager` — available if you use Query, invisible if you don't.
 
 This belongs in the **[cookbook](COOKBOOK.md)** — `§1` there has the full worked example, alongside the
@@ -235,7 +235,7 @@ mapping). Not framework surface.
 Same thunk shape as `splashScreen`, so there is one component and one registration:
 
 ```ts
-// nativ.config.ts
+// adaptv.config.ts
 export default defineApp({
   splashScreen:     () => import("@/components/splash-screen"),
   offlineComponent: () => import("@/components/offline"),
@@ -251,10 +251,10 @@ export function Offline({ onRetry, error }: OfflineProps) { … }
 
 | Renders it | When | `onRetry` |
 |---|---|---|
-| **nativ** | the app can't boot far enough for a route to exist — route chunk fails to load (`vite:preloadError`), or the route tree itself can't resolve | `location.reload()` |
+| **adaptv** | the app can't boot far enough for a route to exist — route chunk fails to load (`vite:preloadError`), or the route tree itself can't resolve | `location.reload()` |
 | **the consumer** | the route mounted fine but its *data* is unavailable (§3.1.1) | whatever refetches — `refetch`, a mutation, a router invalidate |
 
-Optional props are what let one component serve both: nativ supplies a sensible default `onRetry`, the
+Optional props are what let one component serve both: adaptv supplies a sensible default `onRetry`, the
 consumer supplies a real one. Nothing is duplicated and there is no framework-flavoured offline screen
 that looks different from the app's own.
 
@@ -266,21 +266,21 @@ always** (no SW, bundle is on-device, so React always boots).
 
 **⛔ The one case nothing can fix: the first-ever load, while offline, on web.** No document is cached,
 so no JS runs, so no React component can render — the user gets the browser's own error page. This is
-inherent to service workers, not a nativ gap: a SW must install online at least once before it can
+inherent to service workers, not a adaptv gap: a SW must install online at least once before it can
 serve anything. Note it **cannot occur on native** (the bundle ships with the app) and is near-absent on
 standalone PWA (installing implies a successful visit). It is a browser-first-visit-only edge.
 
 **⚠︎ The constraint that will bite: the offline component must be in the eager bundle, never lazily
 imported.** If `offlineComponent` resolved to its own lazy chunk, then in exactly the situation you need
 it — chunks unavailable — that chunk is unavailable too, and you get a blank screen instead of the
-offline UI. nativ's existing thunk handling already does the right thing: the Vite plugin reads the
+offline UI. adaptv's existing thunk handling already does the right thing: the Vite plugin reads the
 thunk's specifier and **emits a static import in the generated root** rather than executing the dynamic
 import (`LIFECYCLE.md §1`). That behaviour is load-bearing here, not incidental — it must be preserved
 for `offlineComponent`, and is worth an explicit test.
 
 There is one hard mechanical constraint: **a TanStack Start SSR build emits no shell artifact.**
 `_shell.html` is produced **only in SPA mode**, so in `render:"ssr"` there is nothing in `dist/client`
-to bind the fallback to. nativ must emit a dedicated static shell at build time for the SSR case — and
+to bind the fallback to. adaptv must emit a dedicated static shell at build time for the SSR case — and
 it must be **generated, never a captured response**, so it is user-agnostic by construction rather than
 by luck (§3.2).
 
@@ -352,7 +352,7 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   analogue of installing a native app — but it should be a deliberate choice, so `sw.precacheRoutes`
   stays configurable rather than implicit.
 
-### 3.3 🔒 Everything else the nativ SW does
+### 3.3 🔒 Everything else the adaptv SW does
 
 - **Precache every route chunk** (§3.2) — this *is* the offline story, and the reason navigation in a
   standalone PWA feels native. Once booted, the app navigates entirely offline with zero document
@@ -369,8 +369,8 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
 - **Navigation denylist** borrows Angular ngsw's heuristic — *anything containing a dot is a file, not
   a navigation* (`/\/[^/?]+\.[^/]+$/`), plus `/api/` and `/_serverFn/`. Workbox's `NavigationRoute` has
   no such default, so without it you intercept file requests that happen to arrive with `mode:navigate`.
-- **Activate-time cache sweep.** Buckets are namespaced `nativ:<bucket>:<buildTag>`; on `activate`,
-  every `nativ:`-prefixed cache not ending in the current tag is deleted. `cleanupOutdatedCaches()`
+- **Activate-time cache sweep.** Buckets are namespaced `adaptv:<bucket>:<buildTag>`; on `activate`,
+  every `adaptv:`-prefixed cache not ending in the current tag is deleted. `cleanupOutdatedCaches()`
   does **not** do this — it only removes precaches written by *older Workbox versions* — so without
   the sweep every deploy mints buckets that are never freed.
 
@@ -385,11 +385,11 @@ top of that also drops unsaved form state.
 register?: "prompt" | "autoUpdate" | "manual"   // default "prompt"
 ```
 
-- **`prompt` (default)** — the new SW installs and **waits**; old chunks stay reachable. nativ exposes
+- **`prompt` (default)** — the new SW installs and **waits**; old chunks stay reachable. adaptv exposes
   `useServiceWorkerUpdate() → { updateAvailable, applyUpdate() }`. Nothing happens without user intent.
 - **`autoUpdate`** — applies automatically, but **only at a safe moment**: on `visibilitychange` back
   to visible, or the next top-level navigation. Never mid-interaction.
-- **`manual`** — nativ registers; the app owns everything.
+- **`manual`** — adaptv registers; the app owns everything.
 
 Three supporting requirements, all unconditional:
 
@@ -414,8 +414,8 @@ Three supporting requirements, all unconditional:
 - **It is actively hostile to OTA (§4).** A stale SW that precached the old bundle keeps serving it:
   the app "updates," `serverBasePath` moves, and the WebView shows old code. This alone settles it.
 
-So `sw:false` under `target:"capacitor"` is **absolute and non-overridable** — and nativ additionally
-nukes any registration + caches when `NATIV_TARGET === "capacitor"`, because a SW registered during a
+So `sw:false` under `target:"capacitor"` is **absolute and non-overridable** — and adaptv additionally
+nukes any registration + caches when `ADAPTV_TARGET === "capacitor"`, because a SW registered during a
 `server.url` live-reload dev session would otherwise silently poison the installed app.
 
 ### 3.6 🔒 Stay on Workbox
@@ -423,14 +423,14 @@ nukes any registration + caches when `NATIV_TARGET === "capacitor"`, because a S
 Serwist (the maintained `next-pwa` successor) is the obvious alternative and was evaluated. It's
 TypeScript-first and ESM-native, but it **does not solve the SSR navigation problem any better** —
 that's an architectural decision, not a library feature — and it reportedly broke against TanStack
-Start's build for the same reason vite-plugin-pwa does. nativ's `src/sw/*` factory functions are
+Start's build for the same reason vite-plugin-pwa does. adaptv's `src/sw/*` factory functions are
 already a clean abstraction seam that would contain a future swap. Re-evaluate **only** if Workbox is
 confirmed unmaintained.
 
 Likewise **stay off `vite-plugin-pwa`**: its build hook never fires when every Vite environment is
-`build.ssr` (nativ's code already documents this, and it's independently confirmed in
-[TanStack/router#4770](https://github.com/TanStack/router/discussions/4770)), and nativ needs a
-post-client-build hook to compute `__NATIV_BUILD_TAG__` that the plugin doesn't offer. But
+`build.ssr` (adaptv's code already documents this, and it's independently confirmed in
+[TanStack/router#4770](https://github.com/TanStack/router/discussions/4770)), and adaptv needs a
+post-client-build hook to compute `__ADAPTV_BUILD_TAG__` that the plugin doesn't offer. But
 **reimplement three things it gave us**: correct `BASE_URL` handling in `registerSW` (P0 — see the
 bug list), an opt-in dev-mode SW (`sw.dev`), and a `sw:"destroy"` self-destroying kill switch so a
 broken SW has a remediation path.
@@ -439,13 +439,13 @@ broken SW has a remediation path.
 
 ## 4. Over-the-air updates
 
-- **Web + standalone (free, built-in):** new deploy → nativ SW revalidates shell/assets → next load is
+- **Web + standalone (free, built-in):** new deploy → adaptv SW revalidates shell/assets → next load is
   fresh. This is the SW's job; no extra mechanism.
 - **Capacitor (NOT free):** Capacitor does **not** check an upstream dir and swap the dist on its
   own. You need a live-update mechanism: `@capacitor/live-updates` (Appflow), Capgo, or DIY (download a
   zip → unpack to a data dir → point the WebView `serverBasePath` there → apply on next launch). App
   Store rules **allow** JS/CSS/asset OTA (no native-code change), so the vision is valid — but it's a
-  component **nativ must provide/wrap**, not something Capacitor gives for free.
+  component **adaptv must provide/wrap**, not something Capacitor gives for free.
 
 ---
 
@@ -455,8 +455,8 @@ broken SW has a remediation path.
   Loaders/beforeLoad OK **as long as they're isomorphic**.
 - **Data** (consumer-wired): remote via absolute URL and/or offline-first via IndexedDB / TanStack
   Query persister. **Never `createServerFn`** if you want Capacitor.
-- **Delivery/OTA:** web + standalone → nativ-owned SW (precache + shell fallback + SWR). Capacitor →
-  live-update bundle swap (a mechanism nativ wraps).
+- **Delivery/OTA:** web + standalone → adaptv-owned SW (precache + shell fallback + SWR). Capacitor →
+  live-update bundle swap (a mechanism adaptv wraps).
 
 > **The one boundary that keeps a single codebase on all six targets: don't ban loaders — ban
 > server-only calls.**
@@ -465,4 +465,4 @@ broken SW has a remediation path.
 - [ ] No `createServerFn`, no server routes, no server-only request/cookie reads.
 - [ ] Loaders/beforeLoad fetch absolute URLs or read local storage — never assume a server.
 - [ ] Data + auth token live client-side; data layer (Query + persister) is consumer-owned.
-- [ ] Let nativ own the service worker and (eventually) the Capacitor live-update path.
+- [ ] Let adaptv own the service worker and (eventually) the Capacitor live-update path.

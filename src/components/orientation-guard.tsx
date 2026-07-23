@@ -2,9 +2,9 @@ import type { ComponentType } from "react"
 import type {
   OrientationGuardProps,
   OrientationLock,
-} from "#nativ/config/types"
-import { useManifestOrientation } from "#nativ/hooks/use-manifest-orientation"
-import { useMediaQuery } from "#nativ/hooks/use-media-query"
+} from "#adaptv/config/types"
+import { useManifestOrientation } from "#adaptv/hooks/use-manifest-orientation"
+import { useMediaQuery } from "#adaptv/hooks/use-media-query"
 
 // Coarse-pointer only, so a desktop window in a landscape aspect ratio is never
 // guarded — only touch devices physically rotated away from the lock.

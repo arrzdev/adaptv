@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { Link } from "#nativ/components/link"
+import { Link } from "#adaptv/components/link"
 
 // Stub TanStack Router: a minimal useRouter + an internal-link marker so we can tell
 // the internal (RouterLink) path from the external (ExternalLink) hand-off.

@@ -1,9 +1,9 @@
-# nativ — the facade: what nativ exports, and what it forbids
+# adaptv — the facade: what adaptv exports, and what it forbids
 
 > How much of TanStack the consumer sees, and how the isomorphism boundary
 > (`RENDERING.md`) stops being an honour-system rule and becomes a **build failure**.
 >
-> Resolves the contradiction between `chopchop/HANDOFF-nativ.md` (2026-07-06, "the honest split")
+> Resolves the contradiction between `chopchop/HANDOFF-adaptv.md` (2026-07-06, "the honest split")
 > and `ARCHITECTURE.md §3` (2026-07-14, "opacity, not absence"). Decided **2026-07-20**, backed by
 > live experiments against the pinned toolchain (TS 5.9.3, Biome 2.3.2, Vite 8.0.11 / Rolldown
 > 1.0.0-rc.18, `@tanstack/react-start` 1.167.13, pnpm 11.1.1).
@@ -31,23 +31,23 @@ spike-gated typing problem. Unbundle them and both get easy answers:
 
 ## 1. 🔒 Decision: a **curated** barrel, not a pass-through, not a disguise
 
-nativ re-exports **only what it endorses.** Three rules:
+adaptv re-exports **only what it endorses.** Three rules:
 
 1. **Never `export * from "@tanstack/react-router"`.** The deleted pass-through seam from chopchop
    stays deleted — a star-export re-exports tomorrow's unsafe API automatically, which is exactly the
-   failure mode nativ exists to prevent. Every symbol in a nativ barrel is there because someone
+   failure mode adaptv exists to prevent. Every symbol in a adaptv barrel is there because someone
    decided it should be.
 2. **`@tanstack/react-router` stays a named engine dependency** (the Expo↔react-native model). The
    consumer's `package.json` lists it; route files import `createFileRoute` from it. This is the
    07-06 "honest split," and it holds — the 07-05 evidence against barrel-based type hiding is real
    and unrefuted (§3.1).
-3. **`createServerFn` and friends are simply never exported by nativ, *and* are hard-banned from
+3. **`createServerFn` and friends are simply never exported by adaptv, *and* are hard-banned from
    consumer source by the build** (§2). Not re-exporting is not enough on its own — the consumer can
    always import the package directly.
 
-**What "stop re-exporting `createServerFn`" concretely means:** nativ has no root `.` export today
+**What "stop re-exporting `createServerFn`" concretely means:** adaptv has no root `.` export today
 and no barrel that forwards TanStack Start. There is nothing to remove. The work is (a) keeping it
-that way as barrels grow, and (b) adding the enforcement in §2, because *absence from nativ's barrel
+that way as barrels grow, and (b) adding the enforcement in §2, because *absence from adaptv's barrel
 was never the thing stopping anyone.*
 
 ---
@@ -56,7 +56,7 @@ was never the thing stopping anyone.*
 
 > ### ✅ BUILT (2026-07-20) — `src/vite/ban-server-apis.ts`, 27 unit tests
 >
-> Shipped as the **first entry** in the array `nativ()` returns, `enforce: "pre"`. Decision logic is
+> Shipped as the **first entry** in the array `adaptv()` returns, `enforce: "pre"`. Decision logic is
 > factored into pure functions (`isBannedServerModule`, `isApplicationSource`, `describeServerApiBan`,
 > `findServerRouteHandlers`) so it is testable without standing up a bundler; the hooks are wrappers.
 >
@@ -81,12 +81,12 @@ was never the thing stopping anyone.*
 > shape that would otherwise be completely invisible.
 >
 > **Linter surface shipped** as `biome-shared.json` at the package root, reachable as
-> `"extends": ["@arrzdev/nativ/biome-shared.json"]` (Biome's `extends` resolves bare npm specifiers).
+> `"extends": ["@arrzdev/adaptv/biome-shared.json"]` (Biome's `extends` resolves bare npm specifiers).
 > §2.6b's Biome-vs-oxlint call remains open — but it is a question about *which linter*, and the
 > backstop no longer depends on the answer.
 >
 > **Latent break fixed in passing:** the `exports` map did not expose `./package.json`, which
-> `DECISIONS.md §5.0.3` flagged as blocking `require.resolve("@arrzdev/nativ/package.json")` — the exact
+> `DECISIONS.md §5.0.3` flagged as blocking `require.resolve("@arrzdev/adaptv/package.json")` — the exact
 > call Capacitor makes when detecting a plugin. Added alongside the lint config.
 
 ### 2.1 What must be banned (corrected inventory)
@@ -106,23 +106,23 @@ was never the thing stopping anyone.*
 >
 > This matters mechanically: **a config-object property is not an importable symbol**, so no
 > import-restriction technique — TypeScript, Biome `noRestrictedImports`, or a `resolveId` block —
-> can ever catch it. It needs an AST rule (§2.4) *or*, better, refusal at nativ's own route-stamping
-> layer, which nativ already owns. `RENDERING.md` should be corrected.
+> can ever catch it. It needs an AST rule (§2.4) *or*, better, refusal at adaptv's own route-stamping
+> layer, which adaptv already owns. `RENDERING.md` should be corrected.
 
 ### 2.2 Layer 1 (mandatory) — the Vite plugin. **This is the real gate.**
 
-Baked into the array `nativ()` returns from `src/vite/nativ-plugin.ts`, `enforce: "pre"`, ahead of
+Baked into the array `adaptv()` returns from `src/vite/adaptv-plugin.ts`, `enforce: "pre"`, ahead of
 `tanstackStart()`. The consumer cannot disable it, misconfigure it away, or forget to run it — it is
 not a devDependency they opt into, it is inside the framework's own plugin.
 
 ```js
 function banServerApis() {
   return {
-    name: "nativ:ban-server-apis",
+    name: "adaptv:ban-server-apis",
     enforce: "pre",
     async resolveId(source, importer) {
       if (!/^@tanstack\/react-start(\/server)?$/.test(source)) return null
-      // let nativ's own internals and any other dependency resolve normally
+      // let adaptv's own internals and any other dependency resolve normally
       if (!importer || importer.includes(`${path.sep}node_modules${path.sep}`)) return null
       this.error(
         { message: `"${source}" is banned in application source — it needs a server, and a Capacitor build has none. See docs/RENDERING.md.` },
@@ -140,17 +140,17 @@ line/column and renders a caret code frame:
 
 ```
 ✗ Build failed in 16ms
-[plugin nativ:ban-server-apis] .../src/main.ts:1:9
-RolldownError: "createServerFn" is a nativ server-only API and cannot be used in app code.
+[plugin adaptv:ban-server-apis] .../src/main.ts:1:9
+RolldownError: "createServerFn" is a adaptv server-only API and cannot be used in app code.
 1: import { createServerFn } from "@tanstack/react-start"
             ^
 ```
 
 **Why importer-scoped `resolveId` and not `resolve.alias`:** a blanket alias applies to *every*
-resolution in the module graph with no visibility into the importer. It happens to be safe for nativ
-today (exactly one `@tanstack/react-start` reference in `src/`, in `nativ-plugin.ts`, which is a
+resolution in the module graph with no visibility into the importer. It happens to be safe for adaptv
+today (exactly one `@tanstack/react-start` reference in `src/`, in `adaptv-plugin.ts`, which is a
 Node-side config-time import that never enters the bundle graph) — but that's incidental. It breaks
-silently the day nativ legitimately re-exports something client-safe.
+silently the day adaptv legitimately re-exports something client-safe.
 
 Use a `transform` hook variant for **symbol-level** bans where the consumer should still reach other
 helpers on the same subpath.
@@ -169,7 +169,7 @@ supports per-symbol banning today on the pinned Biome 2.3.2:
         "message": "Server functions need a server; a Capacitor build has none. See docs/RENDERING.md."
       },
       "@tanstack/react-start/server": {
-        "message": "The server-only entrypoint is banned in nativ apps."
+        "message": "The server-only entrypoint is banned in adaptv apps."
       }
     }
   } } } } }
@@ -180,8 +180,8 @@ supports per-symbol banning today on the pinned Biome 2.3.2:
 non-banned names on the same import line are untouched; `biome check` exits 1.
 
 **Distribution — the useful detail:** Biome's `extends` **does** resolve bare npm package
-specifiers. Verified: `"extends": ["@arrzdev/nativ/biome-shared.json"]` resolves from
-`node_modules` with no relative path. So nativ ships `biome-shared.json` in its package and the
+specifiers. Verified: `"extends": ["@arrzdev/adaptv/biome-shared.json"]` resolves from
+`node_modules` with no relative path. So adaptv ships `biome-shared.json` in its package and the
 consumer adds one line. (`plugins` does **not** get this — see §2.4.)
 
 ### 2.4 Layer 3 — one GritQL plugin, for the gap nothing else reaches
@@ -192,7 +192,7 @@ Biome 2.x linter plugins are shipped and documented (no experimental banner). A 
 language js
 
 `createServerFn($args)` where {
-  register_diagnostic(span = $args, message = "createServerFn is banned in nativ apps.")
+  register_diagnostic(span = $args, message = "createServerFn is banned in adaptv apps.")
 }
 ```
 
@@ -206,13 +206,13 @@ rules structurally cannot see. Two documented limits, both reproduced:
   still fires the rule. GritQL matches syntax, not resolved bindings. Write patterns that also match
   the sibling import to cut false positives.
 - **No package-name resolution for `plugins`.** A bare specifier fails with `Cannot read file`; an
-  explicit `./node_modules/@arrzdev/nativ/plugins/ban-server-apis.grit` works. So nativ can ship the
+  explicit `./node_modules/@arrzdev/adaptv/plugins/ban-server-apis.grit` works. So adaptv can ship the
   file, but the consumer's `biome.json` must reference it by an explicit `node_modules/`-qualified path.
 
 ### 2.5 Layer 4 — `never`-typed barrel entries, as free DX polish only
 
 ```ts
-export * from "@tanstack/react-start"          // ← nativ does NOT do this (§1), shown for contrast
+export * from "@tanstack/react-start"          // ← adaptv does NOT do this (§1), shown for contrast
 export declare const createServerFn: never     // shadows the star export; call site → TS2349
 ```
 
@@ -229,8 +229,8 @@ pipeline, which does not type-check at all.** Ship it as autocomplete steering, 
 | Mechanism | Verdict |
 |---|---|
 | `@deprecated` JSDoc | **Nothing.** Verified in the TS 5.9.3 compiler source: diagnostic 6385 is `Category.Suggestion` — language-service only. `tsc` exits 0. No flag in 5.9 **or 6.0.x** escalates it. Cosmetic. |
-| Declaration merging / `declare module` to poison an export | **Don't use.** With `skipLibCheck: false` → `TS2451 Cannot redeclare block-scoped variable`, firing in the vendored `.d.ts` for the wrong reason. With `skipLibCheck: true` — **which is nativ's own tsconfig default** — the override is **silently ignored** and TS resolves the real type. Proven with a marker-type probe. Zero protection, zero warning. The TS Handbook documents this as out of scope. |
-| `exports` map restriction | **No jurisdiction.** Node's docs: *"the `exports` field of package A has no effect on how package B is resolved."* It gates `nativ/<subpath>` only, never a direct `@tanstack/react-start` import. |
+| Declaration merging / `declare module` to poison an export | **Don't use.** With `skipLibCheck: false` → `TS2451 Cannot redeclare block-scoped variable`, firing in the vendored `.d.ts` for the wrong reason. With `skipLibCheck: true` — **which is adaptv's own tsconfig default** — the override is **silently ignored** and TS resolves the real type. Proven with a marker-type probe. Zero protection, zero warning. The TS Handbook documents this as out of scope. |
+| `exports` map restriction | **No jurisdiction.** Node's docs: *"the `exports` field of package A has no effect on how package B is resolved."* It gates `adaptv/<subpath>` only, never a direct `@tanstack/react-start` import. |
 | Relying on pnpm strictness | **Fragile side effect, not a mechanism.** Under default pnpm a consumer that never declares `@tanstack/react-start` genuinely cannot resolve it — but npm≥7/Yarn Classic hoist transitive deps (phantom dependency), and `node-linker=hoisted`/`shamefully-hoist` re-breaks it under pnpm too. Keep `@tanstack/react-start` a plain `dependency` (as it is) for the minor assist; never rely on it. |
 | `pnpm patch` of `@tanstack/react-start` | **Reserve, don't wire up.** Version-pinned (pnpm 11 removed `ignorePatchFailures`, so drift now hard-fails installs), and it mutates a package the consumer legitimately needs in client-safe form. Backstop only, if TanStack ever forces a required side-effect import. |
 | `vite-plugin-checker` | **Skip.** It's a `tsc --noEmit` wrapper, so it inherits every §2.5 weakness. Peer range is `vite: ^2.0.0`, with no Rolldown compatibility statement anywhere. The native `resolveId` hook already gives a hard, dependency-free failure. |
@@ -258,11 +258,11 @@ backstop for people who don't run it. §2.2's claim that the hook can't be disab
 stands — that's exactly why it's the backstop and not the whole answer.
 
 **Verified alternative to §2.3–2.4's Biome plan: oxlint JS plugins, built and run end-to-end.** Both
-nativ rules were implemented and executed against a real fixture:
+adaptv rules were implemented and executed against a real fixture:
 
 ```
-fixture.tsx:3:10:  error nativ(no-server-fn-import): Import from `nativ`, not @tanstack/react-start.
-fixture.tsx:36:11: error nativ(no-overflow-on-view): 'overflow-hidden' is not allowed on <View>.
+fixture.tsx:3:10:  error adaptv(no-server-fn-import): Import from `adaptv`, not @tanstack/react-start.
+fixture.tsx:36:11: error adaptv(no-overflow-on-view): 'overflow-hidden' is not allowed on <View>.
 EXIT=1                                             # 0.31s wall, including process start
 ```
 
@@ -298,12 +298,12 @@ the DX gap: oxlint ships `--lsp` plus an official VS Code extension, with Zed/Je
 > One idea from the research that **does not transfer**: the `server-only` package pattern (React team;
 > `exports` conditions route to a module that throws, zero parsing). It works because the consumer
 > *deliberately imports* `server-only` and the bundler picks the throwing branch in the wrong
-> environment. nativ's problem is banning a **third-party** import it doesn't own, so there is no
+> environment. adaptv's problem is banning a **third-party** import it doesn't own, so there is no
 > `exports` map to hijack. Noted here so it isn't proposed again.
 
 ### 2.7 The shipping list
 
-- `src/vite/nativ-plugin.ts` — add the `resolveId` ban plugin to `nativ()`'s array, before `tanstackStart()`.
+- `src/vite/adaptv-plugin.ts` — add the `resolveId` ban plugin to `adaptv()`'s array, before `tanstackStart()`.
 - `biome-shared.json` at the package root, added to `files` + `exports`.
 - `plugins/ban-server-apis.grit` — the call-shape rule **plus** a `createFileRoute($opts)`-where-`$opts`-has-`server` pattern.
 - Correct `RENDERING.md §2`'s `createServerFileRoute` entry to `server: { handlers }`.
@@ -314,12 +314,12 @@ the DX gap: oxlint ships `--lsp` plus an official VS Code extension, with Zed/Je
 
 ### 3.1 Why the obvious approach doesn't work (tested 2026-07-05, still true)
 
-Augmenting nativ's re-export barrel — `declare module "@repo/nativ/react-router" { interface Register … }`
+Augmenting adaptv's re-export barrel — `declare module "@repo/adaptv/react-router" { interface Register … }`
 — **does not merge into `@tanstack`'s interface.** TypeScript binds augmentation to the *declaration
 site*, and `Link`/`useRouter` read `@tanstack`'s own `FileRoutesByPath`/`Register`. Probe:
 `"__marker__" extends keyof Register` resolved **`false`**.
 
-**Consequence: a re-implemented generator pointed at a nativ barrel would silently break typed
+**Consequence: a re-implemented generator pointed at a adaptv barrel would silently break typed
 routing** — no error, just `to="/anything"` accepting garbage. This is the single most important fact
 in the whole facade question and it must not be re-discovered a third time.
 
@@ -328,14 +328,14 @@ in the whole facade question and it must not be re-discovered a third time.
 It presents the decision as **"Virtual File Routes vs `pnpm patch` of `@tanstack/router-generator`."**
 Neither is the mechanism. The actual, spike-proven path (Path X) is:
 
-1. The nativ seam declares its **own** `Register` + `FileRoutesByPath` and re-types the three
+1. The adaptv seam declares its **own** `Register` + `FileRoutesByPath` and re-types the three
    route-aware symbols (`useRouter`, `useNavigate`, `createFileRoute`) to default to
    `RegisteredRouter<Register>`. This is **not a fork** — it reuses TanStack's own generics, which are
    all router-parameterised.
 2. `verboseFileRoutes: false` to remove the source import, **plus replacing TanStack's
-   `route-autoimport-plugin`** (it injects a hardcoded `@tanstack/react-router`) with a nativ one.
+   `route-autoimport-plugin`** (it injects a hardcoded `@tanstack/react-router`) with a adaptv one.
 3. **Post-process `routeTree.gen.ts` on disk** after the generator writes it — rewrite the import,
-   drop `createStart`, fold the react-start `Register` augmentation into nativ's single one. Guard on
+   drop `createStart`, fold the react-start `Register` augmentation into adaptv's single one. Guard on
    "contains @tanstack" to avoid a rewrite loop.
 
 **Spike proof** against real `@tanstack/react-router@1.168.8`: `Link({to:"/settings"})` compiles;
@@ -347,27 +347,27 @@ The known blocker is operational, not technical: the generator **re-adds** the `
 `vite dev` reverted every edit during the original attempt. Land this with the dev server **off**, in
 an isolated worktree.
 
-### 3.3 🔒 Decision: Tier 1 now, Tier 2 only if nativ goes public
+### 3.3 🔒 Decision: Tier 1 now, Tier 2 only if adaptv goes public
 
 | | Scope | Cost | Status |
 |---|---|---|---|
-| **Tier 1 — curated barrel** | nativ exports only what it endorses; TanStack is a named engine dep; unsafe APIs banned at build time (§2) | ~zero | **ship now** |
+| **Tier 1 — curated barrel** | adaptv exports only what it endorses; TanStack is a named engine dep; unsafe APIs banned at build time (§2) | ~zero | **ship now** |
 | **Tier 2 — full opacity** | consumer's source and `package.json` never mention `@tanstack/*` | a permanent re-typed-hook surface + a generator post-processor to maintain across every TanStack upgrade | **deferred** |
 
 Tier 2's cost is *recurring* and lands on the exact seam TanStack changes most often. It buys
 branding, not correctness — and it was already tried once and abandoned. Revisit **only** when
-"the consumer never sees @tanstack, ever" becomes a hard product requirement (i.e. nativ ships
+"the consumer never sees @tanstack, ever" becomes a hard product requirement (i.e. adaptv ships
 publicly as a branded framework).
 
-**Roadmap consequence: `.nativ/` + the barrel drops from #1.** It was #1 on a "feels like a real
-framework" argument that Tier 1 largely satisfies for free. The genuine #1 is `@nativ/shell` (the
+**Roadmap consequence: `.adaptv/` + the barrel drops from #1.** It was #1 on a "feels like a real
+framework" argument that Tier 1 largely satisfies for free. The genuine #1 is `@adaptv/shell` (the
 Android-15 inset/IME crux) — the only item that is both high-risk and blocking real device
 correctness.
 
-### 3.4 What still ships from `.nativ/`
+### 3.4 What still ships from `.adaptv/`
 
 The *hiding* is deferred; the **tidiness** is not. Relocating generated files
-(`routeTree.gen.ts`, `router.gen.tsx`, `register.d.ts`) into a git-ignored `.nativ/` needs **none** of
+(`routeTree.gen.ts`, `router.gen.tsx`, `register.d.ts`) into a git-ignored `.adaptv/` needs **none** of
 the type gymnastics above — it's a `router.generatedRouteTree` path change plus tsconfig `paths` and
 a Vite alias. Consumers stop seeing `*.gen` files at the app root. **Do this; it's cheap and
 independent.**

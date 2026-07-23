@@ -1,4 +1,4 @@
-// The Vite dev server for live-reload runs. nativ starts `vite` (so vite.config —
+// The Vite dev server for live-reload runs. adaptv starts `vite` (so vite.config —
 // port, host, plugins — all apply) and DETECTS the URL it actually bound from Vite's
 // own startup banner, instead of requiring a --port. That way the port can come from
 // a --port flag (passed through after `--`), vite.config's `server.port`, or Vite's
@@ -140,7 +140,7 @@ export function startDevServer(
       const errs = buffer.filter((l) =>
         /error|EADDRINUSE|in use|fail|cannot|not found/i.test(l),
       )
-      // A busy port is the common case (a second `nativ run`, the app's own
+      // A busy port is the common case (a second `adaptv run`, the app's own
       // `pnpm dev`, or a stale process). Name it plainly instead of a raw stack.
       // greedy up to the LAST colon so we grab the port (9220), not an IP octet (127).
       const inUse = buffer
@@ -149,8 +149,8 @@ export function startDevServer(
       const err = new Error(
         inUse
           ? `port ${inUse[1]} is already in use — another dev server is running ` +
-              "(another `nativ run`, the app's `pnpm dev`, or a stale process). " +
-              "Stop it, then retry. Only one nativ dev server can run at a time."
+              "(another `adaptv run`, the app's `pnpm dev`, or a stale process). " +
+              "Stop it, then retry. Only one adaptv dev server can run at a time."
           : `vite dev exited (code ${code}) before it was ready`,
       )
       err.tail = (errs.length ? errs : buffer).slice(-15).join("\n")

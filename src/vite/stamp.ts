@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import type { NativContext } from "#nativ/vite/nativ-context.ts"
-import { NATIV_DIR, nextGitignore } from "#nativ/vite/nativ-dir.ts"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { ADAPTV_DIR, nextGitignore } from "#adaptv/vite/adaptv-dir.ts"
 
 /**
  * Project wiring for the generated directory.
@@ -16,17 +16,17 @@ import { NATIV_DIR, nextGitignore } from "#nativ/vite/nativ-dir.ts"
  * entries. All three touch files the *consumer* owns, so all three are
  * idempotent and never reformat anything.
  *
- * `.nativ/` now holds exactly one file — TanStack's generated route tree, which
+ * `.adaptv/` now holds exactly one file — TanStack's generated route tree, which
  * genuinely is derived from the app's own route files.
  */
 
-//An app can eject either surface by writing the real file; nativ then defers.
+//An app can eject either surface by writing the real file; adaptv then defers.
 //The eject paths stay in the app's OWN src tree — ejecting means "this is my
 //file now", so it belongs with their code.
 const ROOT_EJECT_REL = "routing/layouts/_root.tsx"
 const ROUTER_EJECT_REL = "router.tsx"
 
-const ROUTE_TREE_ALIAS = "#nativ-route-tree"
+const ROUTE_TREE_ALIAS = "#adaptv-route-tree"
 
 export type EjectState = {
   root: boolean
@@ -34,7 +34,7 @@ export type EjectState = {
 }
 
 /** Ensure the app's ignore + tsconfig wiring is present. Returns eject state. */
-export function stampGeneratedFiles(context: NativContext): EjectState {
+export function stampGeneratedFiles(context: AdaptvContext): EjectState {
   if (!context.loaded) return { root: false, router: false }
   const srcDir = path.resolve(context.appRoot, "src")
 
@@ -43,7 +43,7 @@ export function stampGeneratedFiles(context: NativContext): EjectState {
 
   //the consumer must not wire the hidden dir up by hand — a path mapping or
   //ignore entry that has to stay in sync with a framework internal is exactly
-  //the per-project babysitting nativ exists to remove
+  //the per-project babysitting adaptv exists to remove
   ensureGitignored(context.appRoot)
   ensureTsconfigWiring(context.appRoot)
 
@@ -51,12 +51,12 @@ export function stampGeneratedFiles(context: NativContext): EjectState {
 }
 
 /**
- * Add everything nativ generates (`NATIV_GITIGNORED`) to the app's `.gitignore`.
+ * Add everything adaptv generates (`ADAPTV_GITIGNORED`) to the app's `.gitignore`.
  *
  * Appends rather than rewrites, and only adds the entries that are actually missing —
  * this runs on every config load, so it must never reorder or reformat a file the
  * consumer owns. Checking per-entry (rather than bailing when the first one is present)
- * is what lets an app that already ignores `.nativ/` pick up a later addition.
+ * is what lets an app that already ignores `.adaptv/` pick up a later addition.
  */
 function ensureGitignored(appRoot: string): void {
   const gitignorePath = path.resolve(appRoot, ".gitignore")
@@ -72,15 +72,15 @@ function ensureGitignored(appRoot: string): void {
 }
 
 /**
- * Give the app's tsconfig what nativ's package modules need.
+ * Give the app's tsconfig what adaptv's package modules need.
  *
  * Two entries, each for a specific failure:
  *
- * 1. **`include` → nativ's ambient route types.** With `verboseFileRoutes: false`
+ * 1. **`include` → adaptv's ambient route types.** With `verboseFileRoutes: false`
  *    the route factory has no import, so TypeScript must be told where the name
  *    comes from — otherwise every route file reports `Cannot find name
  *    'createFileRoute'` in a project whose *build* passes.
- * 2. **`paths` → `#nativ-route-tree`.** nativ's router entry is a package module
+ * 2. **`paths` → `#adaptv-route-tree`.** adaptv's router entry is a package module
  *    and cannot reach the app's route tree relatively. Aliasing for the bundler
  *    alone is not enough: the route tree's concrete **type** has to flow into the
  *    `Register` augmentation, and a bundler-only alias builds fine while silently
@@ -93,8 +93,8 @@ function ensureGitignored(appRoot: string): void {
 function ensureTsconfigWiring(appRoot: string): void {
   const tsconfigPath = path.resolve(appRoot, "tsconfig.json")
   const includes = [
-    "node_modules/@arrzdev/nativ/src/interface/route-globals.d.ts",
-    `${NATIV_DIR}/**/*.ts`,
+    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
+    `${ADAPTV_DIR}/**/*.ts`,
   ]
 
   try {
@@ -120,7 +120,7 @@ function ensureTsconfigWiring(appRoot: string): void {
       if (pathsMatch) {
         raw = raw.replace(
           pathsMatch[1],
-          `${pathsMatch[1]}\n      ${JSON.stringify(ROUTE_TREE_ALIAS)}: ["./${NATIV_DIR}/routeTree.gen.ts"],`,
+          `${pathsMatch[1]}\n      ${JSON.stringify(ROUTE_TREE_ALIAS)}: ["./${ADAPTV_DIR}/routeTree.gen.ts"],`,
         )
       }
     }

@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { HAPTIC_TICK_ATTR } from "#nativ/capabilities/haptic-tick"
-import { Button, resolveButtonHaptic } from "#nativ/components/button"
+import { HAPTIC_TICK_ATTR } from "#adaptv/capabilities/haptic-tick"
+import { Button, resolveButtonHaptic } from "#adaptv/components/button"
 
 describe("resolveButtonHaptic", () => {
   it("maps `true` to a light tap", () => {

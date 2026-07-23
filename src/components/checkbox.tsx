@@ -18,9 +18,9 @@ import {
   useRef,
   useState,
 } from "react"
-import { useGestureEngine } from "#nativ/hooks/use-gesture-engine"
-import { cn } from "#nativ/utils/cn"
-import { dynamicValues } from "#nativ/utils/dynamic-values"
+import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
+import { cn } from "#adaptv/utils/cn"
+import { dynamicValues } from "#adaptv/utils/dynamic-values"
 
 /* =============================================================================
  * TYPES

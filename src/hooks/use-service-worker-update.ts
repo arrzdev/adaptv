@@ -3,7 +3,7 @@ import {
   applyServiceWorkerUpdate,
   getServiceWorkerUpdateAvailable,
   subscribeServiceWorkerUpdate,
-} from "#nativ/shell/service-worker-shell"
+} from "#adaptv/shell/service-worker-shell"
 
 export type ServiceWorkerUpdate = {
   /** A new version has installed and is waiting. */
