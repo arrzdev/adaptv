@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
-import { homedir } from "node:os"
+import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { exec } from "./exec.mjs"
 
@@ -536,6 +536,57 @@ export function androidDevices(env) {
     .map((l) => l.trim().split(/\s+/))
     .filter((p) => p.length >= 2 && p[1] === "device")
     .map((p) => p[0])
+}
+
+// A canonical simulator UUID: 8-4-4-4-12 hex. Physical iOS device udids don't match
+// (they're 40-hex or the newer 8-16 `00008030-001A…` shape).
+const IOS_SIM_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Is the resolved target a PHYSICAL device (vs a simulator/emulator)? This decides the
+ * dev-server networking: a sim/emulator reaches the host over localhost (shared loopback /
+ * `adb reverse`), a physical device needs the host's LAN IP.
+ *
+ * iOS: simulators have canonical UUID ids; anything else is a real device.
+ * Android: booted emulators are `emulator-NNNN`, and an AVD *name* (e.g. `Pixel_10`) is a
+ * not-yet-booted emulator — neither is a real device. A physical device is a serial that
+ * shows up in `adb devices` and isn't `emulator-`-prefixed.
+ */
+export function isPhysicalTarget(platform, id, env) {
+  if (!id) return false
+  if (platform === "ios") return !IOS_SIM_UUID.test(id)
+  return androidDevices(env).includes(id) && !id.startsWith("emulator-")
+}
+
+// Virtual bridges / VPN / link-local interfaces that aren't a real LAN address.
+const SKIP_IFACE =
+  /^(lo|utun|tun|tap|ppp|docker|veth|vboxnet|bridge|llw|awdl|gif|stf|ap\d)/i
+
+/**
+ * Best-effort LAN IPv4 for external-device live-reload — the address a phone on the same
+ * Wi-Fi uses to reach this machine. Prefers `en0` (typical Wi-Fi/Ethernet on macOS), then
+ * other `enN`, skipping loopback, link-local (169.254.x), VPN and container bridges.
+ * Returns null if nothing routable is found (caller errors with guidance).
+ */
+export function lanIp() {
+  const rank = (name) => {
+    if (name === "en0") return 0
+    if (/^en\d+$/.test(name)) return 1 + Number(name.slice(2))
+    return 100
+  }
+  const candidates = []
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    if (SKIP_IFACE.test(name)) continue
+    for (const a of addrs ?? []) {
+      const fam = a.family === "IPv4" || a.family === 4
+      if (!fam || a.internal) continue
+      if (a.address.startsWith("169.254.")) continue
+      candidates.push({ name, address: a.address })
+    }
+  }
+  candidates.sort((a, b) => rank(a.name) - rank(b.name))
+  return candidates[0]?.address ?? null
 }
 
 /**

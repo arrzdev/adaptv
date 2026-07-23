@@ -11,6 +11,8 @@
 //   dev/preview flags:
 //               --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
+//               --host [ip]     (dev only) serve on the LAN IP for a PHYSICAL device — auto
+//                               when the target is a real device; pass an ip to pin it
 //               --force         reinstall even when nothing native changed (dev/preview skip
 //                               the rebuild and just relaunch the installed app otherwise)
 //               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
@@ -48,6 +50,7 @@ import {
   androidReverse,
   healDevAtsLeftover,
   patchIosAts,
+  patchIosLocalNetwork,
   patchServerUrl,
 } from "./lib/live-reload.mjs"
 import {
@@ -67,6 +70,8 @@ import {
   generateAssets,
   iosEnv,
   isAppInstalled,
+  isPhysicalTarget,
+  lanIp,
   launchInstalledApp,
   nativeDir,
   platformEnv,
@@ -431,6 +436,40 @@ async function runLive(appRoot, platforms, opts) {
       })
     }
 
+    // External (LAN-IP) vs local networking. `capacitor.config`'s `server.url` is a single
+    // value shared by every attached platform, so the mode is per-RUN, not per-device: if
+    // any target is a physical device — or the dev forced it with `--host` — the whole run
+    // serves from the machine's LAN IP so a phone on the same Wi-Fi can reach it. Otherwise
+    // it's localhost (sim shares the host loopback; emulator is bridged with `adb reverse`).
+    const forcedHost = opts.host // true | "<ip>" | undefined
+    const anyPhysical =
+      !webOnly &&
+      ready.some((p) => isPhysicalTarget(p, targets[p].id, envFor(p)))
+    const external = !!forcedHost || anyPhysical
+    // The Android emulator can't reach a LAN IP (its NAT can't route back to the host's own
+    // LAN address), so it's fundamentally incompatible with external mode — flag it up front
+    // instead of leaving a silent black screen.
+    if (
+      external &&
+      ready.includes("android") &&
+      !isPhysicalTarget("android", targets.android.id, envFor("android"))
+    ) {
+      throw new Error(
+        "the Android emulator can't reach an external dev server (its NAT can't route to your LAN IP). " +
+          "Use a physical Android device, or run android without `--host` (and not alongside a physical iOS device).",
+      )
+    }
+    let lanHost = null
+    if (external) {
+      lanHost = typeof forcedHost === "string" ? forcedHost : lanIp()
+      if (!lanHost) {
+        throw new Error(
+          "couldn't detect a LAN IP for external mode — pass one explicitly: " +
+            "`adaptv dev … --host <ip>` (find it with `ipconfig getifaddr en0`).",
+        )
+      }
+    }
+
     // start the Vite dev server and detect the URL it bound.
     await runLine(
       "dev server",
@@ -442,6 +481,8 @@ async function runLive(appRoot, platforms, opts) {
           // this and forces render:spa + sw:false for the dev server. `run web` (no
           // native surface) keeps the app's normal web config.
           env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
+          // External mode binds every interface (0.0.0.0) so the LAN IP is reachable.
+          host: external,
           onLine: (l) => onDevLine?.(l),
         })
         // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
@@ -468,14 +509,20 @@ async function runLive(appRoot, platforms, opts) {
       },
       { verbose },
     )
-    // Both native surfaces reach the dev server over `localhost`: the iOS Simulator
-    // shares the host loopback directly, and the Android emulator is bridged with
-    // `adb reverse` (below). The host's LAN IP does NOT work for the Android emulator
-    // (its NAT can't route back to the host's own LAN address), so localhost is the
-    // one address both can use. (Real physical devices — a v2 concern — need the LAN
-    // IP + `--host`; not handled here.)
+    // The address the native WebViews load from. Local mode: `localhost` (the iOS Simulator
+    // shares the host loopback; the Android emulator is bridged with `adb reverse` below).
+    // External mode: the machine's LAN IP, reachable by a physical device on the same Wi-Fi.
     const port = devServer.port
-    const url = `http://localhost:${port}`
+    const url = external
+      ? `http://${lanHost}:${port}`
+      : `http://localhost:${port}`
+    if (external) {
+      log.info(`external — devices load from ${c.bold(url)}`)
+      if (ready.includes("ios"))
+        log.info(
+          "ios: approve the one-time Local Network prompt on the device the first time it launches.",
+        )
+    }
     // Record the bound port + url in the lock, so a second `dev` (or a `preview`/`build`)
     // can name exactly what's holding the port in its refusal message.
     updateDevLock(appRoot, { port, url })
@@ -490,6 +537,13 @@ async function runLive(appRoot, platforms, opts) {
       if (ready.includes("ios")) {
         const revert = patchIosAts(appRoot)
         if (revert) cleanups.push(revert)
+        // External mode reaches the dev server over the LAN, which iOS 14+ gates behind a
+        // Local Network permission — declare it so the OS prompts instead of silently
+        // blocking. Reverted on teardown, like the ATS exception.
+        if (external) {
+          const revertLN = patchIosLocalNetwork(appRoot)
+          if (revertLN) cleanups.push(revertLN)
+        }
       }
       // sync (copies the patched config) + launch each platform against the server.
       //
@@ -520,8 +574,10 @@ async function runLive(appRoot, platforms, opts) {
           isAppInstalled(appRoot, platform, target.id, env)
 
         if (cached) {
-          // Android first needs the route back to the host — no `cap run` will set it.
-          if (platform === "android") {
+          // Android emulator first needs the localhost route back to the host — no `cap
+          // run` will set it. In external mode a physical device reaches the LAN IP
+          // directly, so there's no `adb reverse` to (re-)assert.
+          if (platform === "android" && !external) {
             report("linking dev server")
             cleanups.push(androidReverse(port, env))
           }
@@ -536,12 +592,13 @@ async function runLive(appRoot, platforms, opts) {
         await capSync(appRoot, platform, env, { report })
         report(`launch → ${target.name}`)
         await capRun(appRoot, platform, target.id, env, { report })
-        if (platform === "android") {
+        if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
           // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
           // app so its WebView loads with a working route. Must be post-launch — doing
-          // it before cap run is wiped by cap run itself.
+          // it before cap run is wiped by cap run itself. External mode reaches the LAN IP
+          // directly (no reverse), so none of this applies.
           report("linking dev server")
           cleanups.push(androidReverse(port, env))
           relaunchAndroidApp(appRoot, env, target.id)
@@ -1104,7 +1161,7 @@ function usage() {
   line(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
 
 ${c.bold("Usage")}
-  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
+  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
   adaptv preview <ios|android|all>      [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
   adaptv doctor
@@ -1115,8 +1172,10 @@ ${c.dim("`adaptv dev all -- --port 4000`.")}
 ${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
 ${c.dim("build = static .ipa/.apk artifacts.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
-${c.dim("relaunch when nothing native changed; --force reinstalls anyway. Native projects")}
-${c.dim("live in .adaptv/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
+${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
+${c.dim("--host serves the dev server on your LAN IP for a PHYSICAL device (auto-enabled when")}
+${c.dim("the target is a real device); pass an ip to pin it, e.g. `--host 192.168.1.50`.")}
+${c.dim("Native projects live in .adaptv/ (git-ignored). Toolchain env auto-resolved.")}`)
 }
 
 function parseFlags(argv) {
@@ -1132,7 +1191,14 @@ function parseFlags(argv) {
     }
     if (a === "--target") flags.target = argv[++i]
     else if (a === "--output" || a === "-o") flags.output = argv[++i]
-    else if (a.startsWith("--")) flags[a.slice(2)] = true
+    else if (a === "--host") {
+      // `--host` forces external (LAN) mode; an optional IP pins the interface
+      // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
+      const next = argv[i + 1]
+      if (next && /^\d{1,3}(\.\d{1,3}){3}$/.test(next))
+        flags.host = argv[++i]
+      else flags.host = true
+    } else if (a.startsWith("--")) flags[a.slice(2)] = true
     else rest.push(a)
   }
   flags.viteArgs = passthrough
@@ -1175,6 +1241,7 @@ async function main() {
         verbose: !!flags.verbose,
         force: !!flags.force,
         viteArgs: flags.viteArgs,
+        host: flags.host, // true | "<ip>" | undefined — external (LAN) mode
       })
     }
 
