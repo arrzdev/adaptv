@@ -41,6 +41,7 @@ import { resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import {
   androidReverse,
+  healDevAtsLeftover,
   patchIosAts,
   patchServerUrl,
 } from "./lib/live-reload.mjs"
@@ -137,6 +138,30 @@ async function loadNativModule(relFromSrc) {
   if (!source) throw new Error(`failed to bundle ${relFromSrc}`)
   const url = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
   return import(url)
+}
+
+/**
+ * Regenerate `capacitor.config.json` from `nativ.config.ts`, from scratch, before any
+ * command touches it.
+ *
+ * nativ OWNS this file (it's stamped from nativ.config.ts, the consumer never hand-writes
+ * it) and it's git-ignored — so the only correct baseline is a fresh one. Regenerating
+ * makes every command deterministic and, more importantly, makes stale dev state
+ * impossible: `dev` mutates this file in place (`server.url`, `errorPath`,
+ * `androidScheme`, splash auto-hide) and a run killed with SIGKILL can't revert. Without
+ * this, the next `build` would happily package an app pointing at a dead dev server.
+ *
+ * The Capacitor CLI hard-requires the file in the directory it runs from — `loadConfig()`
+ * reads `capacitor.config.{ts,js,json}` from `process.cwd()` and there is no `--config`
+ * flag (`CAPACITOR_CONFIG` is an env var it EXPORTS to platform hooks, not an input) — so
+ * it can't live in `.nativ/` with everything else. Regenerating is the next best thing.
+ * → config-artifact PR.
+ */
+async function regenerateCapacitorConfig(appRoot, config) {
+  const { stampCapacitorConfig } = await loadNativModule(
+    "vite/capacitor-config.ts",
+  )
+  stampCapacitorConfig(config, appRoot)
 }
 
 /* =============================================================================
@@ -304,6 +329,9 @@ async function runLive(appRoot, platforms, opts) {
     const prepared = new Set()
 
     if (!webOnly) {
+      // Fresh capacitor.config.json before anything reads or patches it, so a run
+      // killed without teardown can never leave dev fields behind for the next command.
+      await regenerateCapacitorConfig(appRoot, config)
       // cap sync copies the web bundle even though the WebView loads from the dev
       // server, so make sure one exists (content is irrelevant here).
       if (!existsSync(path.join(appRoot, CAP_WEB_DIR, "index.html"))) {
@@ -504,6 +532,9 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   const t0 = Date.now()
   const config = await loadConfig(appRoot)
+  // Fresh capacitor.config.json FIRST — a release build must never inherit dev fields
+  // (`server.url` etc.) left by a `dev` run that was killed before it could revert.
+  await regenerateCapacitorConfig(appRoot, config)
   const verbose = opts.verbose
   const ctx = { targets: {}, output: opts.output }
   const done = {}
@@ -568,6 +599,21 @@ async function pipeline(kind, appRoot, platforms, opts) {
       report,
     })
     warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
+    // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run
+    // killed without teardown can leave an ATS exception in it. Strip ours before it
+    // gets packaged; only warn about one we didn't add.
+    if (platform === "ios") {
+      const ats = healDevAtsLeftover(appRoot)
+      if (ats.healed) {
+        warnings.push(
+          "ios: removed a leftover dev ATS exception (NSAllowsArbitraryLoads) from Info.plist — a `nativ dev` run must have been killed before it could revert.",
+        )
+      } else if (ats.warn) {
+        warnings.push(
+          "ios: Info.plist declares NSAppTransportSecurity and nativ did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
+        )
+      }
+    }
     prepared.add(platform)
   }
   if (single) {

@@ -1,10 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { NativContext } from "#nativ/vite/nativ-context.ts"
-import {
-  NATIV_DIR,
-  nativDirGitignoreEntry,
-} from "#nativ/vite/nativ-dir.ts"
+import { NATIV_DIR, nextGitignore } from "#nativ/vite/nativ-dir.ts"
 
 /**
  * Project wiring for the generated directory.
@@ -54,10 +51,12 @@ export function stampGeneratedFiles(context: NativContext): EjectState {
 }
 
 /**
- * Add `.nativ/` to the app's `.gitignore` if it isn't already covered.
+ * Add everything nativ generates (`NATIV_GITIGNORED`) to the app's `.gitignore`.
  *
- * Appends rather than rewrites, and is a no-op when present — this runs on every
- * config load, so it must never reorder or reformat a file the consumer owns.
+ * Appends rather than rewrites, and only adds the entries that are actually missing —
+ * this runs on every config load, so it must never reorder or reformat a file the
+ * consumer owns. Checking per-entry (rather than bailing when the first one is present)
+ * is what lets an app that already ignores `.nativ/` pick up a later addition.
  */
 function ensureGitignored(appRoot: string): void {
   const gitignorePath = path.resolve(appRoot, ".gitignore")
@@ -65,19 +64,8 @@ function ensureGitignored(appRoot: string): void {
     const current = existsSync(gitignorePath)
       ? readFileSync(gitignorePath, "utf8")
       : ""
-    if (
-      current
-        .split(/\r?\n/)
-        .some((line) => line.trim() === `${NATIV_DIR}/`)
-    ) {
-      return
-    }
-    const prefix =
-      current.length > 0 && !current.endsWith("\n") ? "\n" : ""
-    writeFileSync(
-      gitignorePath,
-      `${current}${prefix}\n${nativDirGitignoreEntry()}\n`,
-    )
+    const next = nextGitignore(current)
+    if (next !== null) writeFileSync(gitignorePath, next)
   } catch {
     //a read-only or absent working tree is not a reason to fail the build
   }
