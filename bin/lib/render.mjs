@@ -325,6 +325,8 @@ export async function select(message, options) {
       } else if (key === "\x03" || key === "q") {
         // NOT bare Esc: an arrow key can arrive as Esc then `[A` in two chunks, and
         // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
+        // The caller registers a process 'exit' hook that tears down anything already
+        // started (e.g. the dev server running behind this picker), so exiting here is safe.
         done(() => process.exit(130))
       }
     }
@@ -364,12 +366,22 @@ const PAST_TENSE = {
   launching: "launched",
 }
 
-// Normalise a streamed tool line (Capacitor/xcodebuild/gradle) to the house voice: no
-// status emoji, the platform word dropped (the lane already says it), "in 2.52ms" →
-// "· 2.52ms", the verb put in past tense (the line is a completed sub-op), and the first
-// letter lowercased (proper nouns like iPhone/Xcode/Gradle are left alone). Returns "" for
-// a line with no useful content — e.g. a bare phase header like "update ios" collapses to
-// a lone verb and is dropped rather than shown as a meaningless "update".
+// Product/device nouns kept capitalised after the whole line is lowercased. Everything else
+// goes lowercase — the rule is: uppercase only where it genuinely means something.
+const PROPER = [
+  [/\biphone\b/gi, "iPhone"],
+  [/\bipad\b/gi, "iPad"],
+  [/\bipod\b/gi, "iPod"],
+  [/\bios\b/gi, "iOS"],
+  [/\bmacos\b/gi, "macOS"],
+]
+
+// Normalise a streamed tool line (Capacitor/xcodebuild/gradle) into the house voice: strip
+// status emoji, drop the platform word (the lane already says it), "in 2.52ms" → "· 2.52ms",
+// cut path/target clauses ("from … to …", "-> …", "to <device>", "in <path>"), lowercase
+// (keeping iOS/iPhone/…), and put the verb in past tense (the line is a completed sub-op).
+// Returns "" for anything with no real content — a lone phase-header verb ("update ios") or
+// a bare `pkg@version` dump — so it's shown as nothing rather than noise.
 export function prettyLine(line) {
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
@@ -380,24 +392,25 @@ export function prettyLine(line) {
     .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
     .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
     .replace(/\bin\s+([\d.]+\s*(?:[µμ]s|ms|us|s|m))\b/i, "· $1") // "in 2.52ms" → "· 2.52ms"
-    .replace(/\s+from\s+\S+\s+to\s+\S+/i, "") // "from <path> to <path>" — noise
-    .replace(/\s+to\s+\S.*$/i, "") // trailing "to <device>" — the device settles on the ✓ line
-    .replace(/\s+in\s+\S*\/\S+/i, "") // "in <a/path>" — noise (paths, not the time above)
-    .replace(/(^|\s)(?:ios|android)(?=\s|$)/gi, "$1") // standalone platform word (NOT in a path)
-    .replace(/\bApp(\.app)?\b/g, "app") // Capacitor's generic "App" target → plain "app"
+    .replace(/\s*->\s*\S.*$/, "") // "-> <rest>" arrow clause
+    .replace(/\s+from\s+\S+\s+to\s+\S+/i, "") // "from <path> to <path>"
+    .replace(/\s+to\s+\S.*$/i, "") // trailing "to <device/path>"
+    .replace(/\s+in\s+\S*\/\S+/i, "") // "in <a/path>" (a path, not the time above)
+    .replace(/(^|[\s(])(?:ios|android)(?=[\s:.,)]|$)/gi, "$1") // platform word, even before punctuation
+    .replace(/\bApp(\.app)?\b/g, "app") // Capacitor's generic "App" target → "app"
+    .replace(/[\s:;,.]+$/, "") // trailing punctuation
+    .replace(/\s+(?:for|to|from|of|on|in|with|the|a|an)$/i, "") // dangling word left behind
     .replace(/\s{2,}/g, " ")
     .trim()
   if (!s) return ""
   if (/^@?[\w-]+\/[\w.-]+@[\w.-]+$/.test(s)) return "" // a bare `pkg@version` line
-  const first = s.match(/^(\w+)/)?.[1]
-  if (first) {
-    const past = PAST_TENSE[first.toLowerCase()]
-    if (past) s = past + s.slice(first.length)
-  }
-  s = s[0].toLowerCase() + s.slice(1)
-  // Drop lines that carry no real action — a lone verb with no object ("update",
-  // "run", "sync"), even when it has a `· time`. Nothing useful to show.
-  if (/^\w+(\s+·.*)?$/.test(s)) return ""
+  s = s.toLowerCase()
+  for (const [re, rep] of PROPER) s = s.replace(re, rep)
+  const first = s.match(/^([a-z]+)/)?.[1]
+  if (first && PAST_TENSE[first])
+    s = PAST_TENSE[first] + s.slice(first.length)
+  // Drop lines with no real action — a lone verb ("update", "run"), even with a `· time`.
+  if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
   return s
 }
 
