@@ -321,24 +321,62 @@ function bar(percent) {
 }
 
 /** Shorten/prettify a captured line for the live sub-detail. */
+// Gerund → past tense: cap prints "✔ Updating … in Nms" once the sub-op is DONE, so the
+// honest voice is "updated … · Nms". Unknown verbs pass through unchanged (still readable).
+const PAST_TENSE = {
+  updating: "updated",
+  copying: "copied",
+  building: "built",
+  running: "ran",
+  syncing: "synced",
+  generating: "generated",
+  installing: "installed",
+  creating: "created",
+  finding: "found",
+  deploying: "deployed",
+  cleaning: "cleaned",
+  downloading: "downloaded",
+  resolving: "resolved",
+  writing: "wrote",
+  adding: "added",
+  launching: "launched",
+}
+
 // Normalise a streamed tool line (Capacitor/xcodebuild/gradle) to the house voice: no
-// status emoji, lowercase start, the platform word dropped (the lane already says it),
-// and "in 2.52ms" → "· 2.52ms". Proper nouns mid-line (iPhone, Xcode, Gradle) are left as
-// they are — only the first letter is lowercased.
+// status emoji, the platform word dropped (the lane already says it), "in 2.52ms" →
+// "· 2.52ms", the verb put in past tense (the line is a completed sub-op), and the first
+// letter lowercased (proper nouns like iPhone/Xcode/Gradle are left alone). Returns "" for
+// a line with no useful content — e.g. a bare phase header like "update ios" collapses to
+// a lone verb and is dropped rather than shown as a meaningless "update".
 export function prettyLine(line) {
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
     const pct = Math.min(100, Number(m[1]))
     return `${bar(pct)} ${pct}%`
   }
-  const s = line
+  let s = line
     .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
     .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
-    .replace(/\b(ios|android)\b\s*/gi, "") // redundant with the platform lane
-    .replace(/\s+in\s+([\d.]+\s*(?:ms|s|m))\b/i, " · $1") // "in 2.52ms" → "· 2.52ms"
+    .replace(/\bin\s+([\d.]+\s*(?:[µμ]s|ms|us|s|m))\b/i, "· $1") // "in 2.52ms" → "· 2.52ms"
+    .replace(/\s+from\s+\S+\s+to\s+\S+/i, "") // "from <path> to <path>" — noise
+    .replace(/\s+to\s+\S.*$/i, "") // trailing "to <device>" — the device settles on the ✓ line
+    .replace(/\s+in\s+\S*\/\S+/i, "") // "in <a/path>" — noise (paths, not the time above)
+    .replace(/(^|\s)(?:ios|android)(?=\s|$)/gi, "$1") // standalone platform word (NOT in a path)
+    .replace(/\bApp(\.app)?\b/g, "app") // Capacitor's generic "App" target → plain "app"
     .replace(/\s{2,}/g, " ")
     .trim()
-  return s ? s[0].toLowerCase() + s.slice(1) : s
+  if (!s) return ""
+  if (/^@?[\w-]+\/[\w.-]+@[\w.-]+$/.test(s)) return "" // a bare `pkg@version` line
+  const first = s.match(/^(\w+)/)?.[1]
+  if (first) {
+    const past = PAST_TENSE[first.toLowerCase()]
+    if (past) s = past + s.slice(first.length)
+  }
+  s = s[0].toLowerCase() + s.slice(1)
+  // Drop lines that carry no real action — a lone verb with no object ("update",
+  // "run", "sync"), even when it has a `· time`. Nothing useful to show.
+  if (/^\w+(\s+·.*)?$/.test(s)) return ""
+  return s
 }
 
 /* -------------------------------------------------------------------------- */
