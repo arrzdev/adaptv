@@ -33,6 +33,30 @@ const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "
 const out = (s) => process.stdout.write(s)
 const width = () => process.stdout.columns || 80
 
+// Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
+// closing with a reset if it was cut. A single-row status line redrawn with `\r\x1b[2K`
+// MUST fit one physical row — otherwise it wraps and each frame stacks a new copy.
+function clipAnsi(s, max) {
+  let vis = 0
+  let res = ""
+  for (let i = 0; i < s.length; ) {
+    // Pass an ANSI colour escape (ESC `[` … `m`) through untouched — it has zero width.
+    if (s[i] === "\x1b" && s[i + 1] === "[") {
+      let j = i + 2
+      while (j < s.length && s[j] !== "m") j++
+      res += s.slice(i, j + 1)
+      i = j + 1
+      continue
+    }
+    if (vis >= max) return `${res}\x1b[0m`
+    const ch = String.fromCodePoint(s.codePointAt(i))
+    res += ch
+    i += ch.length
+    vis++
+  }
+  return res
+}
+
 const elapsed = (start) => {
   const ms = Date.now() - start
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
@@ -109,22 +133,20 @@ export function liveWatcher({ keys = true } = {}) {
   let clearAt = 0
   let notice = null
   const draw = () => {
+    let s
     if (changed && Date.now() < clearAt) {
-      out(
-        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`,
-      )
-      return
+      s = `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
+    } else {
+      changed = null
+      // A pending native change outranks the idle hint — it's the one thing the dev has to
+      // act on, and it stays put until they do.
+      s = notice
+        ? `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
+        : idleLine
     }
-    changed = null
-    if (notice) {
-      // A pending native change outranks the idle hint — it's the one thing the dev
-      // has to act on, and it stays put until they do.
-      out(
-        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`,
-      )
-      return
-    }
-    out(`\r\x1b[2K${idleLine}`)
+    // Clip to the terminal width so this stays ONE physical row — a wrapped status line
+    // redrawn in place stacks a copy every frame (the cascade).
+    out(`\r\x1b[2K${clipAnsi(s, Math.max(10, width()))}`)
   }
   draw()
   const anim = setInterval(draw, 80)
