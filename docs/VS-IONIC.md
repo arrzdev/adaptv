@@ -63,11 +63,20 @@ reverse` — all generated and reverted by the CLI. Ionic leaves more of this to
 
 ---
 
-## The gap: physical devices (the LAN-IP path)
+## Physical devices (the LAN-IP path) — implemented
 
-Today adaptv works on the **iOS Simulator** (shares the host loopback → `localhost`) and the
-**Android emulator** (`adb reverse tcp:7171` → `localhost`). It does **not** yet work on a
-physical device. Ionic does, via `ionic capacitor run ios -l --external`.
+adaptv works on the **iOS Simulator** (shares the host loopback → `localhost`) and the
+**Android emulator** (`adb reverse tcp:7171` → `localhost`), and now on **physical devices**
+too — the equivalent of Ionic's `ionic capacitor run ios -l --external`, but auto-detected.
+
+**How it works now:** adaptv branches on **device class**, not a flag. When the resolved
+target is a physical device it switches the whole run to the LAN-IP path automatically;
+`--host [ip]` forces it (and pins the interface for VPN/multi-NIC machines). Under the hood:
+Vite is started with `--host` (binds `0.0.0.0`), `server.url` becomes `http://<LAN_IP>:<port>`,
+and on iOS `NSLocalNetworkUsageDescription` is patched into `Info.plist` (reverted on
+teardown, like the ATS exception) so iOS prompts for Local Network access instead of silently
+blocking. The Android emulator is rejected up front with a clear message (its NAT can't reach
+a LAN IP). Everything below is the reasoning that shaped it.
 
 ### What `--external` actually does
 - **Android**: forwards the dev-server port (the same idea as our `adb reverse`), so
@@ -129,11 +138,17 @@ Everything we already built rides along for free: the offline screen, the reconn
 watchdog, and config self-heal all key off *whatever host the app loaded from*, LAN IP
 included.
 
-### Testing note
-This path **cannot be validated on the Simulator or emulator** — by construction they can't
-use the LAN IP (loopback/NAT), and the iOS sim doesn't enforce Local Network permission. It
-needs a real device on the same Wi-Fi. Treat sim "success" as meaningless for this feature;
-the only valid test is a physical phone.
+### What's validated, and the one thing that isn't
+The full external path *was* validated on the iOS **Simulator** by forcing it with `--host`:
+the sim can reach the host's LAN IP, so `server.url` = the LAN IP, Vite bound to `0.0.0.0`
+(reachable at `http://<LAN_IP>:<port>`), the app loads from the LAN URL, **and HMR works over
+it** (edits propagate with no reinstall). The `Info.plist` key is patched and reverted on
+teardown, local mode is unchanged, and the Android-emulator case errors clearly.
+
+The **only** thing a simulator can't exercise is the iOS 14+ Local Network permission *prompt*
+(the sim doesn't enforce it) — so the final confirmation is: run `adaptv dev ios --host` with a
+real iPhone on the same Wi-Fi, approve the one-time prompt, and confirm live reload. Everything
+up to that prompt is already proven.
 
 ---
 

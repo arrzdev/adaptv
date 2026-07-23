@@ -114,6 +114,27 @@ function iosPlistPath(appRoot) {
 }
 
 /**
+ * Add `NSLocalNetworkUsageDescription` for external (physical-device) live-reload. iOS 14+
+ * gates any Local Network access behind a runtime prompt, and without this key the OS
+ * SILENTLY blocks the WebView from reaching the dev server on the LAN — the app just never
+ * loads. (The Simulator does NOT enforce this, which is why it "works on the sim, fails on
+ * the device".) Only needed when the dev server is on the LAN IP, so it's applied for
+ * external runs and reverted on teardown. No-op if the app already declares the key.
+ */
+export function patchIosLocalNetwork(appRoot) {
+  const plist = iosPlistPath(appRoot)
+  if (!existsSync(plist)) return null
+  const original = readFileSync(plist, "utf8")
+  if (original.includes("NSLocalNetworkUsageDescription")) return null
+  spawnSync("/usr/libexec/PlistBuddy", [
+    "-c",
+    'Add :NSLocalNetworkUsageDescription string "Development live-reload connects to the adaptv dev server on your local network."',
+    plist,
+  ])
+  return () => writeFileSync(plist, original)
+}
+
+/**
  * Strip a dev ATS exception the CLI left behind, before a release build packages it.
  *
  * Returns one of:
