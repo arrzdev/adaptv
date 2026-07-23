@@ -79,6 +79,44 @@ export function footer(hint) {
   out(`\n  ${hint}\n\n`)
 }
 
+/**
+ * The single live-reload status line. Idle: `✓ live · <url>`. While an HMR update
+ * applies, the ✓ turns into a spinner and the changed files show. One line, redrawn
+ * in place — raw dev-server output is suppressed (driven by `hmr(files)` instead).
+ */
+export function liveWatcher(url) {
+  const done = `  ${c.green("✓")} ${c.bold("live")}  ${c.dim(url)}`
+  if (!isTTY) {
+    out(`${done}\n`)
+    return { hmr: () => {}, stop: () => {} }
+  }
+  let frame = 0
+  let changed = null
+  let clearAt = 0
+  const draw = () => {
+    if (changed && Date.now() < clearAt) {
+      out(
+        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("live")}  ${c.dim(`↻ ${changed}`)}`,
+      )
+    } else {
+      changed = null
+      out(`\r\x1b[2K${done}`)
+    }
+  }
+  draw()
+  const anim = setInterval(draw, 80)
+  return {
+    hmr: (files) => {
+      changed = files
+      clearAt = Date.now() + 900
+    },
+    stop: () => {
+      clearInterval(anim)
+      out("\r\x1b[2K\n")
+    },
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* device picker (clack)                                                       */
 /* -------------------------------------------------------------------------- */

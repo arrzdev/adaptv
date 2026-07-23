@@ -96,6 +96,14 @@ export async function nativ(
   const target =
     options.target ??
     (process.env.NATIV_TARGET === "capacitor" ? "capacitor" : "web")
+  //The nativ CLI's live-reload dev server (`nativ run ios|android`) sets this: the
+  //bundle is served into a native WebView, which can't hydrate SSR — so force a
+  //client SPA. (The service worker is handled at runtime — it never registers in
+  //dev, see service-worker-shell.ts — so no build-time override is needed.) The
+  //plain `web` target is kept otherwise, so an SSR/cloudflare dev pipeline still runs.
+  if (target === "web" && process.env.NATIV_DEV_NATIVE === "1") {
+    context.loaded.config.router.render = "spa"
+  }
   //One resolution, used by every downstream plugin — so `render`, `host` and the
   //SW settings cannot drift between the router wiring, the manifest and the SW
   //build. The capacitor target is an OVERRIDE inside this call, not a default.
@@ -363,13 +371,26 @@ function nativOpacityCheckPlugin(appRoot: string): PluginOption {
  * buttons and a spinner that never resolves — and **`vite build` passes**, because
  * the build reads from disk instead of going through the dev server's sandbox.
  */
-function nativFsAllowPlugin(): PluginOption {
+/**
+ * APPEND a root to Vite's resolved `server.fs.allow`, never REPLACE it. Returning
+ * `server.fs.allow` from a plugin's `config()` suppresses Vite's computed default (the
+ * app's own workspace root), which then makes the app's generated files unreadable — and
+ * only in the cloudflare/workerd SSR environment, whose `fetchModule` honours the
+ * allow-list strictly, so every request 500s with "Failed to load url". The client
+ * transform hides it. Pushing in `configResolved` keeps the default AND adds nativ's own
+ * root. Idempotent so repeated resolves don't duplicate the entry. → offline PR.
+ */
+export function addFsAllowRoot(allow: string[], root: string): void {
+  if (!allow.includes(root)) allow.push(root)
+}
+
+export function nativFsAllowPlugin(): PluginOption {
   //the package root — two levels up from src/vite/
   const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
   return {
     name: "nativ:fs-allow",
-    config() {
-      return { server: { fs: { allow: [packageRoot] } } }
+    configResolved(resolved) {
+      addFsAllowRoot(resolved.server.fs.allow, packageRoot)
     },
   }
 }
