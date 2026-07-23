@@ -155,6 +155,21 @@ export function liveWatcher({ keys = true } = {}) {
  * be forwarded by hand — otherwise the run becomes unkillable. No-op off a TTY (CI,
  * piped output), where there's no one to press anything.
  */
+/**
+ * Move the cursor back up `n` rows and clear everything below it.
+ *
+ * Lets a re-run redraw the SAME rows instead of appending a second copy of the story:
+ * pressing `r` should walk the platform lines back to a spinner, not print a fresh pair
+ * underneath the settled ones. `runLine`/`runLanes` both draw downward from wherever the
+ * cursor is and leave it on the row below, so rewinding onto the first platform row is
+ * all they need. Returns false off a TTY, where the caller should just append.
+ */
+export function rewindLines(n) {
+  if (!isTTY || n <= 0) return false
+  out(`\x1b[${n}A\x1b[0J`)
+  return true
+}
+
 /** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
 const CTRL_C = "\u0003"
 
