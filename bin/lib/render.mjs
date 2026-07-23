@@ -91,7 +91,7 @@ export function footer(hint) {
  */
 export function liveWatcher({ keys = true } = {}) {
   const hint = keys
-    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} rebuild   ${c.bold("ctrl-c")} stop`)}`
+    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} reload   ${c.bold("R")} rebuild   ${c.bold("ctrl-c")} stop`)}`
     : ""
   const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
@@ -173,7 +173,7 @@ export function rewindLines(n) {
 /** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
 const CTRL_C = "\u0003"
 
-export function onKeys({ onRebuild, onQuit }) {
+export function onKeys({ onReload, onRebuild, onQuit }) {
   const stdin = process.stdin
   if (!stdin.isTTY || typeof stdin.setRawMode !== "function")
     return () => {}
@@ -185,7 +185,13 @@ export function onKeys({ onRebuild, onQuit }) {
       onQuit?.()
       return
     }
-    if (key === "r" || key === "R") void onRebuild?.()
+    // `r` = reload the WebView (relaunch the app — instant, the 90% action).
+    // `R`/`b` = full native rebuild (reinstall — for a plugin/native change).
+    if (key === "r") {
+      void onReload?.()
+      return
+    }
+    if (key === "R" || key === "b") void onRebuild?.()
   }
   stdin.on("data", handler)
   return () => {

@@ -641,15 +641,23 @@ export function isAppRunning(appRoot, platform, target, env) {
  * server. The offline screen + reconnect watchdog now cover that case, and `r` remains
  * the explicit escape hatch for a genuinely wedged app.)
  */
-export function launchInstalledApp(appRoot, platform, target, env) {
+export function launchInstalledApp(
+  appRoot,
+  platform,
+  target,
+  env,
+  { restart = false } = {},
+) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   const running = isAppRunning(appRoot, platform, target, env)
+  // `restart` forces a fresh start of an already-running app, so its WebView reloads
+  // from the dev server — the cheap `r` reload (no native rebuild).
   if (platform === "ios") {
     if (!target) return false
-    // `simctl launch` on a running app activates it in place; only a stopped app needs
-    // a clean start, and terminating one that isn't running is a no-op anyway.
-    if (!running)
+    // `simctl launch` on a running app activates it in place; only a stopped app (or a
+    // requested restart) needs a terminate first. Terminating a stopped app is a no-op.
+    if (restart || !running)
       spawnSync("xcrun", ["simctl", "terminate", target, appId])
     const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
       encoding: "utf8",
@@ -660,8 +668,8 @@ export function launchInstalledApp(appRoot, platform, target, env) {
     const serial = androidSerialForTarget(target, env)
     if (!serial) return false
     // Same rule: the LAUNCHER intent alone re-fronts an existing task without
-    // restarting it. force-stop ONLY when there's nothing live to preserve.
-    if (!running) {
+    // restarting it. force-stop when there's nothing live to preserve, or on `restart`.
+    if (restart || !running) {
       spawnSync(
         "adb",
         ["-s", serial, "shell", "am", "force-stop", appId],
