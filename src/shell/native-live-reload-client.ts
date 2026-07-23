@@ -1,4 +1,4 @@
-import { isNativePlatform } from "#nativ/utils/platform"
+import { getOS, isNativePlatform } from "#nativ/utils/platform"
 
 /**
  * Keep a native WebView's live-reload connection alive across the OS tearing it down.
@@ -40,6 +40,20 @@ import { isNativePlatform } from "#nativ/utils/platform"
 //the socket with a silent clean close. Used only as the no-token fallback.
 const SUSPEND_DROP_MS = 3000
 
+/**
+ * The generated offline screen, served from the LOCAL origin.
+ * ⚠︎ Must match `OFFLINE_PAGE` in `bin/lib/offline-page.mjs`, which generates the file
+ * and points Capacitor's `server.errorPath` at it.
+ */
+const OFFLINE_PAGE = "nativ-offline.html"
+
+/**
+ * Consecutive failed reachability polls (1.5s apart) before we give up on the dev server
+ * and show the offline screen. Long enough that a restart or a blip doesn't eject you
+ * mid-edit, short enough that a dead server doesn't leave you staring at a frozen app.
+ */
+const OFFLINE_AFTER_FAILURES = 4
+
 export function installNativeLiveReloadRecovery(): void {
   if (!import.meta.hot) return
   if (!isNativePlatform()) return
@@ -63,13 +77,58 @@ export function installNativeLiveReloadRecovery(): void {
     return true
   }
 
+  /**
+   * Hand off to the offline screen once the dev server is definitively gone.
+   *
+   * Capacitor's `server.errorPath` only fires for MAIN-FRAME load failures, so it cannot
+   * cover the common case: the server dies, you navigate in-app, and a lazy route chunk
+   * fails. That's a subresource — errorPath never runs, and Android drops you on
+   * Chrome's raw `net::ERR_CONNECTION_REFUSED` page (iOS keeps the current document, so
+   * it merely freezes). Since this watchdog is the thing that already knows the server
+   * is gone, it takes the app there deliberately instead of waiting to be rescued.
+   *
+   * Finding the local origin is the fiddly part. `window.WEBVIEW_SERVER_URL` looks like
+   * the answer and IS correct on iOS — but Android overwrites its `localUrl` with
+   * `server.url` whenever live-reload is configured (`Bridge.java`), so there it reports
+   * the DEV SERVER and navigating to it just fails again. Hence: use the injected value
+   * only when it isn't the origin we're already on, and otherwise fall back to the
+   * scheme+host nativ itself configures — which is exactly how Capacitor's own
+   * `getErrorUrl()` sidesteps the same trap.
+   */
+  const localOrigin = (): string | null => {
+    const injected = (window as { WEBVIEW_SERVER_URL?: string })
+      .WEBVIEW_SERVER_URL
+    if (injected && !location.href.startsWith(injected)) return injected
+    // Defaults Capacitor uses for the local server, with the `androidScheme: "http"`
+    // that `patchServerUrl` sets for the dev session. Keep in sync with it.
+    const os = getOS()
+    if (os === "android") return "http://localhost"
+    if (os === "ios") return "capacitor://localhost"
+    return null
+  }
+
+  const goOffline = (): boolean => {
+    const base = localOrigin()
+    if (!base) return false
+    const target = `${base.replace(/\/$/, "")}/${OFFLINE_PAGE}`
+    if (location.href === target) return true
+    reloading = true // stop every other timer from racing this navigation
+    location.replace(target)
+    return true
+  }
+
   // Once we know the channel dropped, keep trying until we actually reload — the server
   // may still be restarting, or we may be backgrounded. Idempotent across triggers.
   const recover = (): void => {
     if (recovering || reloading) return
     recovering = true
+    let failures = 0
     const tick = async (): Promise<void> => {
       if (await tryReload()) return
+      // Only count polls we actually made: while backgrounded `tryReload` bails without
+      // touching the network, and a hidden app must not be ejected to the offline screen.
+      if (document.visibilityState === "visible") failures += 1
+      if (failures >= OFFLINE_AFTER_FAILURES && goOffline()) return
       window.setTimeout(tick, 1500)
     }
     void tick()
