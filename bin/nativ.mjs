@@ -2,16 +2,17 @@
 // The nativ CLI — owns the whole native (Capacitor) lifecycle so a consumer never
 // touches Capacitor, the toolchain env, or the asset generator by hand:
 //
-//   nativ doctor                 check the local toolchain (JDK, Android SDK, Xcode, pod)
-//   nativ run  ios|android|all   build the SPA → brand assets → sync → launch on a device
-//   nativ build ios|android|all  build the SPA → brand assets → sync → package (.ipa/.apk)
+//   nativ doctor                    check the local toolchain (JDK, Android SDK, Xcode, pod)
+//   nativ run  web|ios|android|all  live-reload dev: one Vite dev server, web + native
+//                                   WebViews all attached, hot-reloading on save
+//   nativ build ios|android|all     static artifacts: build SPA → sync → package (.ipa/.apk)
 //
 //   run  flags: --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
+//               -- <vite args>  forwarded to the vite dev server (e.g. `-- --port 4000`)
 //   build flags: --output <path> where to write the artifact (default: .nativ/)
+//               --force         rebuild even if unchanged (web build + sync are cached)
 //   both:        --verbose      show the full underlying tool logs (raw passthrough)
-//               --force         rebuild even if unchanged (web build + sync are cached
-//                               by a source fingerprint and skipped when nothing changed)
 //
 // Native projects live inside the hidden, git-ignored `.nativ/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
@@ -35,8 +36,14 @@ import {
   readCache as readBuildCache,
   writeCache as writeBuildCache,
 } from "./lib/cache.mjs"
+import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import { resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
+import {
+  androidReverse,
+  patchIosAts,
+  patchServerUrl,
+} from "./lib/live-reload.mjs"
 import {
   buildWeb,
   CAP_WEB_DIR,
@@ -49,11 +56,13 @@ import {
   NATIV_DIR,
   nativeDir,
   platformEnv,
+  relaunchAndroidApp,
 } from "./lib/native.mjs"
 import {
   c,
   footer,
   header,
+  liveWatcher,
   log,
   runLanes,
   runLine,
@@ -231,7 +240,258 @@ function newestIpa(appRoot) {
   return best?.full ?? null
 }
 
-/** Shared orchestration for `run` and `build`. */
+/**
+ * `run` — the live-reload dev command. Starts ONE Vite dev server and points the web
+ * + native WebViews at it, so an edit hot-reloads every surface. `platforms` is empty
+ * for `run web` (dev server only). Runs until Ctrl-C, then reverts every change
+ * (capacitor.config server block, the iOS ATS exception, the adb reverse) and stops
+ * Vite. Static artifacts stay on `nativ build`.
+ */
+async function runLive(appRoot, platforms, opts) {
+  const webOnly = platforms.length === 0
+  const single = platforms.length === 1
+  const t0 = Date.now()
+  header(
+    `run ${webOnly ? "web" : single ? platforms[0] : "all"}  ${c.dim("· live reload")}`,
+  )
+
+  const verbose = opts.verbose
+  const cleanups = [] // revert fns, unwound LIFO on exit
+  let devServer = null
+  let onDevLine = null // set once we're watching; parses HMR events
+  let watcher = null // the live "watching / hot-reload" status line
+  let tearing = false
+
+  const teardown = () => {
+    try {
+      watcher?.stop()
+    } catch {}
+    while (cleanups.length) {
+      try {
+        cleanups.pop()()
+      } catch {}
+    }
+    try {
+      devServer?.stop()
+    } catch {}
+  }
+  const onSigint = () => {
+    if (tearing) return
+    tearing = true
+    line("")
+    log.info("stopping — reverting live-reload config…")
+    teardown()
+    process.exit(0)
+  }
+  // Revert on ANY termination we can catch — not just Ctrl-C. A plain `kill` (SIGTERM)
+  // or a closed terminal (SIGHUP) otherwise skips teardown and leaves the committed
+  // capacitor.config pinned at the dev `server.url`. (SIGKILL can't be caught; the
+  // next run self-heals by stripping a stale live-reload server block — patchServerUrl.)
+  process.on("SIGINT", onSigint)
+  process.on("SIGTERM", onSigint)
+  process.on("SIGHUP", onSigint)
+
+  const envs = {}
+  const envFor = (p) => {
+    if (!envs[p]) envs[p] = platformEnv(p)
+    return envs[p]
+  }
+
+  try {
+    const config = webOnly ? null : await loadConfig(appRoot)
+    const warnings = []
+    const prepared = new Set()
+
+    if (!webOnly) {
+      // cap sync copies the web bundle even though the WebView loads from the dev
+      // server, so make sure one exists (content is irrelevant here).
+      if (!existsSync(path.join(appRoot, CAP_WEB_DIR, "index.html"))) {
+        await runLine(
+          "web bundle (first run)",
+          (r) => buildWeb(appRoot, { report: r }),
+          { verbose },
+        )
+      }
+      // prepare native projects (must exist before device listing + sync).
+      const prepareOne = async (platform, report) => {
+        await capAddIfMissing(appRoot, platform, envFor(platform), {
+          report,
+        })
+        const res = await generateAssets(appRoot, config, [platform], {
+          report,
+        })
+        warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
+        prepared.add(platform)
+      }
+      if (single) {
+        try {
+          await runLine(
+            `prepare ${platforms[0]}`,
+            (r) => prepareOne(platforms[0], r),
+            { verbose },
+          )
+        } catch (err) {
+          reportError(`prepare ${platforms[0]}`, err)
+        }
+      } else {
+        const res = await runLanes(
+          platforms.map((p) => ({
+            label: `prepare ${p}`,
+            run: (r) => prepareOne(p, r),
+          })),
+          { verbose },
+        )
+        res.forEach((r, i) => {
+          if (!r.ok) reportError(`prepare ${platforms[i]}`, r.error)
+        })
+      }
+      for (const w of warnings) log.warn(w)
+    }
+
+    const ready = platforms.filter((p) => prepared.has(p))
+    if (!webOnly && ready.length === 0) {
+      teardown()
+      process.off("SIGINT", onSigint)
+      process.off("SIGTERM", onSigint)
+      process.off("SIGHUP", onSigint)
+      footer(c.red("✖ could not prepare any platform"))
+      process.exitCode = 1
+      return
+    }
+
+    // resolve device targets (sequential pickers, up front).
+    const targets = {}
+    for (const p of ready) {
+      targets[p] = await resolveTarget(appRoot, p, envFor(p), {
+        target: opts.target,
+        latest: opts.latest,
+      })
+    }
+
+    // start the Vite dev server and detect the URL it bound.
+    await runLine(
+      "dev server",
+      async (report) => {
+        devServer = await startDevServer(appRoot, {
+          args: opts.viteArgs,
+          // native WebViews need a client SPA with no service worker (a SW caches
+          // the app inside the WebView and blocks hot reload). nativ's plugin reads
+          // this and forces render:spa + sw:false for the dev server. `run web` (no
+          // native surface) keeps the app's normal web config.
+          env: webOnly ? {} : { NATIV_DEV_NATIVE: "1" },
+          onLine: (l) => onDevLine?.(l),
+        })
+        // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
+        // launching the WebViews. iOS WKWebView won't survive that reload if it attaches
+        // mid-optimize — it drops the HMR socket for good. Web reconnects fine, so skip.
+        if (!webOnly) {
+          report(`${devServer.localUrl} · warming`)
+          const stable = await warmDevServer(devServer.localUrl, {
+            onLine: (l) => onDevLine?.(l),
+          })
+          // Fail SAFE: if the detected URL never serves the app, something else holds
+          // the port (a stray `nativ run`/`pnpm dev`, or another server on the same
+          // port). Don't point the native apps at a stranger — abort with a clear fix.
+          if (!stable) {
+            throw new Error(
+              `dev server at ${devServer.localUrl} isn't responding — another process ` +
+                "is likely using that port. Stop it, or run on a free port: " +
+                "`nativ run … -- --port <n>`.",
+            )
+          }
+        }
+        report(devServer.localUrl)
+        return devServer.localUrl
+      },
+      { verbose },
+    )
+    // Both native surfaces reach the dev server over `localhost`: the iOS Simulator
+    // shares the host loopback directly, and the Android emulator is bridged with
+    // `adb reverse` (below). The host's LAN IP does NOT work for the Android emulator
+    // (its NAT can't route back to the host's own LAN address), so localhost is the
+    // one address both can use. (Real physical devices — a v2 concern — need the LAN
+    // IP + `--host`; not handled here.)
+    const port = devServer.port
+    const url = `http://localhost:${port}`
+
+    if (!webOnly) {
+      // point the native projects at the dev server, and remember how to undo it.
+      cleanups.push(patchServerUrl(appRoot, url))
+      if (ready.includes("ios")) {
+        const revert = patchIosAts(appRoot)
+        if (revert) cleanups.push(revert)
+      }
+      // sync (copies the patched config) + launch each platform against the server.
+      const launchOne = async (platform, report) => {
+        report("sync")
+        await capSync(appRoot, platform, envFor(platform), { report })
+        const target = targets[platform]
+        const tag = target.source === "latest" ? " · latest" : ""
+        report(`launch → ${target.name}${tag}`)
+        await capRun(appRoot, platform, target.id, envFor(platform), {
+          report,
+        })
+        if (platform === "android") {
+          // `cap run` resets the emulator's `adb reverse` while installing/launching,
+          // so the app it just launched has no route to the dev server (black WebView,
+          // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
+          // app so its WebView loads with a working route. Must be post-launch — doing
+          // it before cap run is wiped by cap run itself.
+          report("linking dev server")
+          cleanups.push(androidReverse(port, envFor("android")))
+          relaunchAndroidApp(appRoot, envFor("android"))
+        }
+        return `${target.name}${tag} · live`
+      }
+      if (single) {
+        try {
+          await runLine(platforms[0], (r) => launchOne(platforms[0], r), {
+            verbose,
+          })
+        } catch (err) {
+          reportError(platforms[0], err)
+        }
+      } else {
+        const res = await runLanes(
+          ready.map((p) => ({ label: p, run: (r) => launchOne(p, r) })),
+          { verbose },
+        )
+        res.forEach((r, i) => {
+          if (!r.ok) reportError(ready[i], r.error)
+        })
+      }
+    }
+
+    // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
+    line("")
+    watcher = liveWatcher(url)
+    onDevLine = (l) => {
+      if (verbose) {
+        line(c.dim(`  vite │ ${l}`))
+        return
+      }
+      // "[vite] (client) hmr update /src/a.tsx, /src/b.css?direct" → flash the line
+      const m = l.match(/hmr update (.+)/i)
+      if (m) {
+        const files = [
+          ...new Set(
+            m[1]
+              .split(",")
+              .map((f) => f.trim().split("?")[0].split("/").pop()),
+          ),
+        ].join(", ")
+        watcher.hmr(files)
+      }
+    }
+    await new Promise(() => {}) // resolved only by the SIGINT handler (process.exit)
+  } catch (err) {
+    reportError("run", err)
+    teardown()
+    process.exit(1)
+  }
+}
+
+/** Shared orchestration for `build` (static artifacts). */
 async function pipeline(kind, appRoot, platforms, opts) {
   const verb = kind === "run" ? "run" : "build"
   const single = platforms.length === 1
@@ -609,25 +869,33 @@ function usage() {
 
 ${c.bold("Usage")}
   nativ doctor
-  nativ run   <ios|android|all>  [--target <id>] [--latest] [--verbose] [--force]
-  nativ build <ios|android|all>  [--output <path>] [--verbose] [--force]
+  nativ run   <web|ios|android|all>  [--target <id>] [--latest] [--verbose] [-- <vite args>]
+  nativ build <ios|android|all>      [--output <path>] [--verbose] [--force]
 
-${c.dim("--latest reuses the last device you picked; --force rebuilds even when nothing")}
-${c.dim("changed (the web build + sync are skipped when the source is unchanged).")}
-${c.dim("Native projects live in .nativ/ (git-ignored). Toolchain env")}
-${c.dim("(ANDROID_HOME / JAVA_HOME / pod / LANG) is auto-resolved.")}`)
+${c.dim("run = live-reload dev: one Vite dev server, web + native WebViews all attached,")}
+${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
+${c.dim("`nativ run all -- --port 4000`. build = static .ipa/.apk artifacts.")}
+${c.dim("--latest reuses the last device you picked. Native projects live in .nativ/")}
+${c.dim("(git-ignored). Toolchain env (ANDROID_HOME / JAVA_HOME / pod / LANG) auto-resolved.")}`)
 }
 
 function parseFlags(argv) {
   const flags = {}
   const rest = []
+  let passthrough = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
+    // a lone `--` ends nativ's flags; the rest is forwarded to vite (dev server).
+    if (a === "--") {
+      passthrough = argv.slice(i + 1)
+      break
+    }
     if (a === "--target") flags.target = argv[++i]
     else if (a === "--output" || a === "-o") flags.output = argv[++i]
     else if (a.startsWith("--")) flags[a.slice(2)] = true
     else rest.push(a)
   }
+  flags.viteArgs = passthrough
   return { flags, rest }
 }
 
@@ -648,21 +916,12 @@ async function main() {
       return await doctor(appRoot)
 
     case "run": {
-      if (rest[0] === "web") {
-        header("run web")
-        log.info(
-          "not implemented yet — nativ is Vite-based, so for now use your",
-        )
-        log.info(
-          "app's `vite dev` / `vite preview`. Web deploy stays your host's tool.",
-        )
-        line("")
-        return
-      }
-      const platforms = targetsFor(rest[0])
-      if (!platforms) {
+      // `run` is the live-reload dev command: one Vite dev server, web + native
+      // WebViews all pointed at it. `web` = the dev server alone (no native).
+      const platforms = rest[0] === "web" ? [] : targetsFor(rest[0])
+      if (platforms === null) {
         throw new Error(
-          `unknown run target "${rest[0] ?? ""}" — expected ios, android, or all.`,
+          `unknown run target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
         )
       }
       if (platforms.length > 1 && flags.target) {
@@ -670,11 +929,11 @@ async function main() {
           "--target can't be used with `run all` (it's per-platform). Use --latest, or run each platform.",
         )
       }
-      return pipeline("run", appRoot, platforms, {
+      return runLive(appRoot, platforms, {
         target: flags.target,
         latest: !!flags.latest,
         verbose: !!flags.verbose,
-        force: !!flags.force,
+        viteArgs: flags.viteArgs,
       })
     }
 
