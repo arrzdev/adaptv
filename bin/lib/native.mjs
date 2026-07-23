@@ -538,6 +538,116 @@ export function androidDevices(env) {
     .map((p) => p[0])
 }
 
+/**
+ * The adb serial for the device `cap run --target <id>` means, or null if it can't be
+ * pinned down.
+ *
+ * `--target` is an AVD NAME (e.g. `Pixel_10`), not a serial (`emulator-5554`), so any
+ * per-device question has to be translated first. Getting this wrong is not academic:
+ * checking "is the app installed" across ALL connected emulators means a second, idle
+ * emulator that has never seen the app makes the answer `false` forever, and the run
+ * cache can never hit. Returns null when ambiguous so callers fall back to the safe path.
+ */
+export function androidSerialForTarget(target, env) {
+  const serials = androidDevices(env)
+  if (serials.length === 0) return null
+  if (serials.length === 1) return serials[0]
+  if (!target) return null
+  if (serials.includes(target)) return target // already a serial
+  for (const s of serials) {
+    const r = spawnSync("adb", ["-s", s, "emu", "avd", "name"], {
+      env,
+      encoding: "utf8",
+    })
+    const name = (r.stdout ?? "").split("\n")[0]?.trim()
+    if (name && name === target) return s
+  }
+  return null
+}
+
+/**
+ * Is the app ALREADY installed on the target device?
+ *
+ * The run cache can't be trusted on its own — it has no idea you wiped the simulator or
+ * deleted the app from the launcher. This asks the device directly, which is cheap, and
+ * is what makes "skip the build" safe rather than merely fast. Any doubt answers `false`
+ * so the caller falls back to a full build; a wasted rebuild is free, a skipped one that
+ * should have happened is a debugging nightmare.
+ */
+export function isAppInstalled(appRoot, platform, target, env) {
+  const appId = readAppId(appRoot)
+  if (!appId) return false
+  if (platform === "ios") {
+    if (!target) return false
+    const r = spawnSync(
+      "xcrun",
+      ["simctl", "get_app_container", target, appId],
+      { encoding: "utf8" },
+    )
+    return r.status === 0
+  }
+  if (platform === "android") {
+    // Ask ONLY the device this run targets — see `androidSerialForTarget`.
+    const serial = androidSerialForTarget(target, env)
+    if (!serial) return false
+    const r = spawnSync(
+      "adb",
+      ["-s", serial, "shell", "pm", "list", "packages", appId],
+      { env, encoding: "utf8" },
+    )
+    return r.status === 0 && (r.stdout ?? "").includes(`package:${appId}`)
+  }
+  return false
+}
+
+/**
+ * Launch an already-installed app WITHOUT building, syncing, or reinstalling.
+ *
+ * The fast path behind the run cache: in live-reload the binary is only a shell pointing
+ * at the dev server, so when nothing native changed there is nothing to rebuild — start
+ * it and let it reconnect. Terminate first so the WebView loads fresh rather than being
+ * re-fronted with a stale page. Returns false if it couldn't launch, so the caller can
+ * fall back to the full path.
+ */
+export function launchInstalledApp(appRoot, platform, target, env) {
+  const appId = readAppId(appRoot)
+  if (!appId) return false
+  if (platform === "ios") {
+    if (!target) return false
+    spawnSync("xcrun", ["simctl", "terminate", target, appId])
+    const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
+      encoding: "utf8",
+    })
+    return r.status === 0
+  }
+  if (platform === "android") {
+    // force-stop + LAUNCHER intent, on the TARGET device only — exactly one relaunch,
+    // since no `cap run` ran to reset `adb reverse` and force a second.
+    const serial = androidSerialForTarget(target, env)
+    if (!serial) return false
+    spawnSync("adb", ["-s", serial, "shell", "am", "force-stop", appId], {
+      env,
+    })
+    const r = spawnSync(
+      "adb",
+      [
+        "-s",
+        serial,
+        "shell",
+        "monkey",
+        "-p",
+        appId,
+        "-c",
+        "android.intent.category.LAUNCHER",
+        "1",
+      ],
+      { env, stdio: "ignore" },
+    )
+    return r.status === 0
+  }
+  return false
+}
+
 /** The app id from capacitor.config.json, or null if unreadable. */
 function readAppId(appRoot) {
   try {
