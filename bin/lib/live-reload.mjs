@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { androidDevices, nativeDir } from "./native.mjs"
+import { OFFLINE_PAGE } from "./offline-page.mjs"
 
 /**
  * Patch `capacitor.config.json`'s `server` block so both platforms load from the dev
@@ -14,12 +15,22 @@ import { androidDevices, nativeDir } from "./native.mjs"
  * the committed config at a dev URL forever (and break `nativ build`). Stripping first
  * both self-heals that and guarantees a clean revert now.
  *
- * NOTE: a Capacitor `server.errorPath` (a local "dev server offline" page) does NOT
- * work here — with a remote `server.url` set, Capacitor fires errorPath and serves the
- * bundled file, but the remote-configured WebView renders nothing (verified: even a
- * solid-colour static page shows black on iOS + Android, empty a11y tree). A real
- * offline screen needs the local-first "dev client" model (load the bundle, navigate
- * to the dev server) — a separate change. → live-reload PR notes.
+ * A `server.errorPath` gives us a graceful offline screen: Capacitor loads it from the
+ * LOCAL asset handler (`capacitor://localhost` / `http://localhost`, always registered,
+ * independent of the remote `url`) whenever the main-frame load fails — i.e. the dev
+ * server is down. The offline file itself is generated + synced separately
+ * (`installOfflinePage`).
+ *
+ * We ALSO force the splash to auto-hide for the dev session. An app can set
+ * `SplashScreen.launchAutoHide:false` (this one does) so its own custom splash controls
+ * the handoff — but that relies on app JS calling `SplashScreen.hide()`. The offline
+ * errorPath page can't: iOS could (the bridge is injected) but ANDROID DOES NOT INJECT
+ * the bridge into an errorPath page, so `SplashScreen.hide()` is unreachable and the OS
+ * splash sits on top of the (correctly rendered) offline screen — it only *looks* black.
+ * Overriding `launchAutoHide:true` here makes the OS clear the splash on its own, so the
+ * offline screen shows on both platforms. Normal live-reload loads are unaffected: the
+ * app still calls `hideNativeSplash()` on first paint, which clears it earlier. The
+ * revert restores the app's original splash config along with the server block.
  */
 export function patchServerUrl(appRoot, url) {
   const file = path.join(appRoot, "capacitor.config.json")
@@ -28,14 +39,41 @@ export function patchServerUrl(appRoot, url) {
   // The clean baseline: drop everything live-reload adds; drop `server` if it empties.
   const clean = structuredClone(cfg)
   if (clean.server) {
-    for (const k of ["url", "cleartext", "errorPath"])
+    // every field live-reload owns — stripping them is also what self-heals a config
+    // left behind by a hard-killed run (SIGKILL can't revert). Safe to strip wholesale
+    // because nativ GENERATES capacitor.config.json from nativ.config.ts; a consumer
+    // never hand-writes these.
+    for (const k of ["url", "cleartext", "errorPath", "androidScheme"])
       delete clean.server[k]
     if (Object.keys(clean.server).length === 0) delete clean.server
   }
   const cleanText = `${JSON.stringify(clean, null, 2)}\n`
 
   const patched = structuredClone(clean)
-  patched.server = { ...(clean.server ?? {}), url, cleartext: true }
+  patched.server = {
+    ...(clean.server ?? {}),
+    url,
+    cleartext: true,
+    errorPath: OFFLINE_PAGE,
+  }
+  // Serve the LOCAL origin over http for the dev session. Capacitor's Android default is
+  // `https://localhost`, a secure origin — which mixed-content-blocks every request from
+  // the offline errorPath page to the cleartext dev server, and Android can't fall back
+  // to the native `CapacitorHttp` because it never injects the bridge into that page
+  // (Bridge.loadWebView scopes `addDocumentStartJavaScript` to the appUrl origin and
+  // nulls the local-server injector). With `http`, the offline page's origin matches the
+  // dev server's scheme, so a plain `fetch` reachability probe works and Android can
+  // auto-reconnect. Safe here precisely BECAUSE live-reload is on: the app itself runs
+  // from the dev-server origin, so this local origin only ever serves the offline page —
+  // no app storage or secure-context API rides on it. Reverted with everything else.
+  patched.server.androidScheme = "http"
+  // Force the OS splash to auto-hide (see doc above) — preserve any other splash options.
+  patched.plugins = { ...(patched.plugins ?? {}) }
+  patched.plugins.SplashScreen = {
+    ...(patched.plugins.SplashScreen ?? {}),
+    launchAutoHide: true,
+    launchShowDuration: 1200,
+  }
   writeFileSync(file, `${JSON.stringify(patched, null, 2)}\n`)
   return () => writeFileSync(file, cleanText)
 }

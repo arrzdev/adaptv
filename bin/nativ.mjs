@@ -58,6 +58,7 @@ import {
   platformEnv,
   relaunchAndroidApp,
 } from "./lib/native.mjs"
+import { installOfflinePage } from "./lib/offline-page.mjs"
 import {
   c,
   footer,
@@ -417,6 +418,10 @@ async function runLive(appRoot, platforms, opts) {
     if (!webOnly) {
       // point the native projects at the dev server, and remember how to undo it.
       cleanups.push(patchServerUrl(appRoot, url))
+      // Generate the offline screen into the web dir BEFORE sync so `cap sync` copies it
+      // into each platform's public/. Capacitor's `server.errorPath` (set above) loads
+      // it locally when the dev server is unreachable, instead of a black WebView.
+      cleanups.push(installOfflinePage(appRoot, { url }))
       if (ready.includes("ios")) {
         const revert = patchIosAts(appRoot)
         if (revert) cleanups.push(revert)
