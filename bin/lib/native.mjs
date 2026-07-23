@@ -590,6 +590,97 @@ export function lanIp() {
 }
 
 /**
+ * Turn a known `cap run` / xcodebuild / gradle failure into actionable adaptv guidance — a
+ * friendly one-liner plus fix steps — instead of a wall of raw build log. `text` is the
+ * combined error message + captured output. Returns `{ msg, fix: [...] }`, or null when we
+ * don't recognise it (the caller then falls back to the raw output). Pure + patterns-only,
+ * so it's unit-tested without a device.
+ */
+export function explainLaunchFailure(platform, text = "") {
+  const t = String(text)
+
+  // Device the run targeted isn't in the current list (disconnected / locked / a stale
+  // saved pick / an id that changed). Platform-agnostic.
+  const invalid = t.match(/Invalid target ID:\s*([^\s.]+)/i)
+  if (invalid)
+    return {
+      msg: `device "${invalid[1]}" isn't available right now`,
+      fix: [
+        "It's disconnected, locked, or a stale saved pick.",
+        `Reconnect + unlock it, or run \`adaptv dev ${platform}\` to pick from the current list.`,
+      ],
+    }
+
+  if (platform === "ios") {
+    if (
+      /requires a development team|Signing for .* requires|No signing certificate|Code Sign(ing)? Error/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "iOS code signing isn't set up for a device build",
+        fix: [
+          "open .adaptv/ios/App/App.xcworkspace → App target → Signing & Capabilities → pick your Team",
+          "(add your Apple ID in Xcode → Settings → Accounts — a free one works)",
+        ],
+      }
+    if (/Developer Mode|enable-developer-mode|DVTDeviceOperation/i.test(t))
+      return {
+        msg: "Developer Mode is off on the device",
+        fix: [
+          "On the iPhone: Settings → Privacy & Security → Developer Mode → On, then restart.",
+        ],
+      }
+    if (/device is locked|please unlock|is locked/i.test(t))
+      return {
+        msg: "the device is locked",
+        fix: ["Unlock it and keep it unlocked while installing."],
+      }
+    if (
+      /Unable to install|failed to install|not eligible|ineligible/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "couldn't install on the device",
+        fix: [
+          "Unlock it and tap 'Trust' on the phone; after install, trust the cert under Settings → General → VPN & Device Management.",
+        ],
+      }
+  }
+
+  if (platform === "android") {
+    if (
+      /signatures do not match|INSTALL_FAILED_UPDATE_INCOMPATIBLE|INSTALL_FAILED_VERSION_DOWNGRADE/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "Android install blocked by a signature/version conflict",
+        fix: ["Uninstall the app from the device, then re-run."],
+      }
+    if (/INSTALL_FAILED_INSUFFICIENT_STORAGE/i.test(t))
+      return {
+        msg: "the device is out of storage",
+        fix: ["Free some space on the device and re-run."],
+      }
+    if (
+      /no devices.{0,3}emulators found|no connected devices|device offline/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "no Android device or emulator is reachable",
+        fix: [
+          "Boot an emulator or connect a device (USB debugging on), then re-run.",
+        ],
+      }
+  }
+
+  return null
+}
+
+/**
  * The adb serial for the device `cap run --target <id>` means, or null if it can't be
  * pinned down.
  *

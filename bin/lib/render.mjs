@@ -90,7 +90,9 @@ export function footer(hint) {
  */
 export function liveWatcher({ keys = true } = {}) {
   const hint = keys
-    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} reload js   ${c.bold("b")} rebuild app   ${c.bold("ctrl-c")} stop`)}`
+    ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
+      // keys, where the bold's reset bleeds and the key ends up gray.
+      `  ${c.dim("·")}  ${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${c.bold("ctrl-c")}${c.dim(" stop")}`
     : ""
   const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
@@ -118,7 +120,7 @@ export function liveWatcher({ keys = true } = {}) {
       // A pending native change outranks the idle hint — it's the one thing the dev
       // has to act on, and it stays put until they do.
       out(
-        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim(`press ${c.bold("b")} to rebuild`)}`,
+        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`,
       )
       return
     }

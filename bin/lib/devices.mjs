@@ -84,7 +84,14 @@ export async function resolveTarget(
     const known = (await listTargets(appRoot, platform, env)).find(
       (t) => t.id === target,
     )
-    const device = { id: target, name: known?.name ?? target }
+    // Validate BEFORE caching — otherwise a typo'd `--target` gets remembered and every
+    // later `--latest` fails against a device that was never real.
+    if (!known) {
+      throw new Error(
+        `unknown ${platform} device "${target}". Run \`adaptv dev ${platform}\` to pick from the current list.`,
+      )
+    }
+    const device = { id: target, name: known.name ?? target }
     writeCache(appRoot, platform, device)
     return { ...device, source: "target" }
   }
