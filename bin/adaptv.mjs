@@ -588,9 +588,10 @@ async function runLive(appRoot, platforms, opts) {
     line("")
     watcher = liveWatcher()
 
-    // `r` reinstalls on demand — always, not only after a change is detected. A device
+    // `b` reinstalls on demand — always, not only after a change is detected. A device
     // in a state you don't trust is reason enough, and having to kill the run to get a
-    // clean install is exactly the friction this removes.
+    // clean install is exactly the friction this removes. `r` is the cheap sibling: it
+    // just reloads the running app's JS (no reinstall).
     let rebuilding = false
     let reloading = false
     const rebuild = async () => {
@@ -624,7 +625,7 @@ async function runLive(appRoot, platforms, opts) {
       )
       if (!ok)
         throw new Error(
-          "couldn't relaunch the app — is it still installed? press R to rebuild.",
+          "couldn't relaunch the app — is it still installed? press b to rebuild.",
         )
       return `${target.name} · reloaded`
     }
