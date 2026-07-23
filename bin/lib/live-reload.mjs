@@ -85,9 +85,18 @@ export function patchServerUrl(appRoot, url) {
  * reliably cover a raw LAN IP (e.g. http://192.168.1.x). Reverted on exit, and it
  * only ever touches the live-reload session — release builds are untouched. No-op
  * (returns null) if the plist is missing or already declares ATS.
+ *
+ * A `NativDevAtsPatch` marker goes in alongside. Unlike `capacitor.config.json`, this
+ * plist is patched IN PLACE and never regenerated, so a run killed with SIGKILL leaves
+ * the exception behind — and shipping `NSAllowsArbitraryLoads` is both a real hole and
+ * something App Review asks about. The marker is what makes cleanup safe: it says "nativ
+ * added this", so `healDevAtsLeftover` can strip it without ever touching an ATS block
+ * the app legitimately owns. → config-artifact PR.
  */
+export const ATS_MARKER = "NativDevAtsPatch"
+
 export function patchIosAts(appRoot) {
-  const plist = path.join(nativeDir(appRoot, "ios"), "App/App/Info.plist")
+  const plist = iosPlistPath(appRoot)
   if (!existsSync(plist)) return null
   const original = readFileSync(plist, "utf8")
   if (original.includes("NSAppTransportSecurity")) return null
@@ -96,7 +105,34 @@ export function patchIosAts(appRoot) {
   pb("Add :NSAppTransportSecurity dict")
   pb("Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true")
   pb("Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true")
+  pb(`Add :${ATS_MARKER} bool true`)
   return () => writeFileSync(plist, original)
+}
+
+function iosPlistPath(appRoot) {
+  return path.join(nativeDir(appRoot, "ios"), "App/App/Info.plist")
+}
+
+/**
+ * Strip a dev ATS exception the CLI left behind, before a release build packages it.
+ *
+ * Returns one of:
+ * - `{ healed: true }`  — our marker was there; the exception + marker were removed.
+ * - `{ warn: true }`    — ATS is declared but NOT by us. Never auto-edit that: the app
+ *                         may legitimately need it. Surface it and let the dev decide.
+ * - `{}`                — nothing to do.
+ */
+export function healDevAtsLeftover(appRoot) {
+  const plist = iosPlistPath(appRoot)
+  if (!existsSync(plist)) return {}
+  const text = readFileSync(plist, "utf8")
+  if (!text.includes("NSAppTransportSecurity")) return {}
+  if (!text.includes(ATS_MARKER)) return { warn: true }
+  const pb = (cmd) =>
+    spawnSync("/usr/libexec/PlistBuddy", ["-c", cmd, plist])
+  pb("Delete :NSAppTransportSecurity")
+  pb(`Delete :${ATS_MARKER}`)
+  return { healed: true }
 }
 
 /** Set the `adb reverse tcp:<port>` mapping on every connected device. */
