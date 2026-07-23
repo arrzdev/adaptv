@@ -80,28 +80,50 @@ export function footer(hint) {
 }
 
 /**
- * The single live-reload status line. Idle: `✓ live · <url>`. While an HMR update
- * applies, the ✓ turns into a spinner and the changed files show. One line, redrawn
- * in place — raw dev-server output is suppressed (driven by `hmr(files)` instead).
+ * The single live status line for a `run`. While an HMR update applies the ✓ turns into
+ * a spinner and the changed files show; raw dev-server output is suppressed (driven by
+ * `hmr(files)` instead).
+ *
+ * Deliberately does NOT repeat the dev server URL — it's already on the `dev server`
+ * line two rows up, and echoing it here just costs a line to say nothing new. What
+ * belongs here is what CHANGES: hot-reload activity, a pending native change, and the
+ * keys available at any moment.
  */
-export function liveWatcher(url) {
-  const done = `  ${c.green("✓")} ${c.bold("live")}  ${c.dim(url)}`
+export function liveWatcher({ keys = true } = {}) {
+  const hint = keys
+    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} rebuild   ${c.bold("ctrl-c")} stop`)}`
+    : ""
+  const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
-    out(`${done}\n`)
-    return { hmr: () => {}, stop: () => {} }
+    out(`${idleLine}\n`)
+    return {
+      hmr: () => {},
+      notice: () => {},
+      clearNotice: () => {},
+      stop: () => {},
+    }
   }
   let frame = 0
   let changed = null
   let clearAt = 0
+  let notice = null
   const draw = () => {
     if (changed && Date.now() < clearAt) {
       out(
-        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("live")}  ${c.dim(`↻ ${changed}`)}`,
+        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`,
       )
-    } else {
-      changed = null
-      out(`\r\x1b[2K${done}`)
+      return
     }
+    changed = null
+    if (notice) {
+      // A pending native change outranks the idle hint — it's the one thing the dev
+      // has to act on, and it stays put until they do.
+      out(
+        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim(`press ${c.bold("r")} to rebuild`)}`,
+      )
+      return
+    }
+    out(`\r\x1b[2K${idleLine}`)
   }
   draw()
   const anim = setInterval(draw, 80)
@@ -110,10 +132,53 @@ export function liveWatcher(url) {
       changed = files
       clearAt = Date.now() + 900
     },
+    notice: (text) => {
+      notice = text
+    },
+    clearNotice: () => {
+      notice = null
+    },
     stop: () => {
       clearInterval(anim)
-      out("\r\x1b[2K\n")
+      out("\r\x1b[2K")
     },
+  }
+}
+
+/**
+ * Raw-mode key handling for the run loop — Expo-style, and available the WHOLE time
+ * rather than only once something is detected: `r` to reinstall on demand is useful
+ * whenever a device gets into a state you don't trust, not just after nativ notices a
+ * native change.
+ *
+ * Raw mode means the terminal stops translating ctrl-c into SIGINT for us, so it has to
+ * be forwarded by hand — otherwise the run becomes unkillable. No-op off a TTY (CI,
+ * piped output), where there's no one to press anything.
+ */
+/** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
+const CTRL_C = "\u0003"
+
+export function onKeys({ onRebuild, onQuit }) {
+  const stdin = process.stdin
+  if (!stdin.isTTY || typeof stdin.setRawMode !== "function")
+    return () => {}
+  stdin.setRawMode(true)
+  stdin.resume()
+  stdin.setEncoding("utf8")
+  const handler = (key) => {
+    if (key === CTRL_C || key === "q") {
+      onQuit?.()
+      return
+    }
+    if (key === "r" || key === "R") void onRebuild?.()
+  }
+  stdin.on("data", handler)
+  return () => {
+    stdin.off("data", handler)
+    try {
+      stdin.setRawMode(false)
+    } catch {}
+    stdin.pause()
   }
 }
 

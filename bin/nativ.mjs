@@ -71,6 +71,7 @@ import {
   header,
   liveWatcher,
   log,
+  onKeys,
   runLanes,
   runLine,
   since,
@@ -167,6 +168,13 @@ async function regenerateCapacitorConfig(appRoot, config) {
     "vite/capacitor-config.ts",
   )
   stampCapacitorConfig(config, appRoot)
+}
+
+/** The native fingerprint of each ready platform, keyed by platform. */
+function snapshotNativeFp(appRoot, platforms) {
+  return Object.fromEntries(
+    platforms.map((p) => [p, nativeFingerprint(appRoot, p)]),
+  )
 }
 
 /* =============================================================================
@@ -291,6 +299,8 @@ async function runLive(appRoot, platforms, opts) {
   let devServer = null
   let onDevLine = null // set once we're watching; parses HMR events
   let watcher = null // the live "watching / hot-reload" status line
+  let launchAll = null // replays the launch lines (used by the `r` key)
+  let nativeFp = null // last-known native fingerprint per platform
   let tearing = false
 
   const teardown = () => {
@@ -472,14 +482,17 @@ async function runLive(appRoot, platforms, opts) {
       const cacheKey = (platform) =>
         `${platform}:${targets[platform]?.id ?? "default"}`
 
-      const launchOne = async (platform, report) => {
+      const launchOne = async (
+        platform,
+        report,
+        { force = opts.force } = {},
+      ) => {
         const target = targets[platform]
-        const tag = target.source === "latest" ? " · latest" : ""
         const env = envFor(platform)
         const key = cacheKey(platform)
         const prev = runCache.run[key]
         const cached =
-          !opts.force &&
+          !force &&
           prev?.url === url &&
           prev?.fp === nativeFingerprint(appRoot, platform) &&
           isAppInstalled(appRoot, platform, target.id, env)
@@ -490,16 +503,16 @@ async function runLive(appRoot, platforms, opts) {
             report("linking dev server")
             cleanups.push(androidReverse(port, env))
           }
-          report(`launch → ${target.name}${tag} · cached`)
+          report(`launch → ${target.name} · cached`)
           if (launchInstalledApp(appRoot, platform, target.id, env)) {
-            return `${target.name}${tag} · live · cached`
+            return `${target.name} · cached`
           }
           // couldn't launch it after all — fall through and rebuild.
         }
 
         report("sync")
         await capSync(appRoot, platform, env, { report })
-        report(`launch → ${target.name}${tag}`)
+        report(`launch → ${target.name}`)
         await capRun(appRoot, platform, target.id, env, { report })
         if (platform === "android") {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
@@ -518,30 +531,77 @@ async function runLive(appRoot, platforms, opts) {
           fp: nativeFingerprint(appRoot, platform),
         }
         writeBuildCache(appRoot, runCache)
-        return `${target.name}${tag} · live`
+        return `${target.name}`
       }
-      if (single) {
-        try {
-          await runLine(platforms[0], (r) => launchOne(platforms[0], r), {
-            verbose,
-          })
-        } catch (err) {
-          reportError(platforms[0], err)
+      // Hoisted so the `r` key can replay exactly the same launch lines mid-run.
+      launchAll = async ({ force } = {}) => {
+        if (single) {
+          try {
+            await runLine(
+              platforms[0],
+              (r) => launchOne(platforms[0], r, { force }),
+              { verbose },
+            )
+          } catch (err) {
+            reportError(platforms[0], err)
+          }
+          return
         }
-      } else {
         const res = await runLanes(
-          ready.map((p) => ({ label: p, run: (r) => launchOne(p, r) })),
+          ready.map((p) => ({
+            label: p,
+            run: (r) => launchOne(p, r, { force }),
+          })),
           { verbose },
         )
         res.forEach((r, i) => {
           if (!r.ok) reportError(ready[i], r.error)
         })
       }
+      await launchAll({ force: opts.force })
+      nativeFp = snapshotNativeFp(appRoot, ready)
     }
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     line("")
-    watcher = liveWatcher(url)
+    watcher = liveWatcher()
+
+    // `r` reinstalls on demand — always, not only after a change is detected. A device
+    // in a state you don't trust is reason enough, and having to kill the run to get a
+    // clean install is exactly the friction this removes.
+    let rebuilding = false
+    const rebuild = async () => {
+      if (rebuilding || webOnly || !launchAll) return
+      rebuilding = true
+      watcher.stop()
+      line("")
+      await launchAll({ force: true })
+      nativeFp = snapshotNativeFp(appRoot, ready)
+      line("")
+      watcher = liveWatcher() // fresh line, which also clears any pending notice
+      rebuilding = false
+    }
+    cleanups.push(onKeys({ onRebuild: rebuild, onQuit: onSigint }))
+
+    // Native changes can't hot-reload: a new plugin, an edited Info.plist or
+    // AndroidManifest, or hand-written Swift/Kotlin all live in the BINARY, so the
+    // running app simply won't have them. Left undetected the symptom is a bridge call
+    // that fails with no explanation. Poll the same fingerprint the run cache uses (it
+    // already covers config, deps and native sources) and surface it — but never rebuild
+    // behind the dev's back: a reinstall costs ~15s and drops app state, so it's their call.
+    if (!webOnly && ready.length > 0) {
+      const poll = setInterval(() => {
+        if (rebuilding) return
+        const now = snapshotNativeFp(appRoot, ready)
+        const changed = ready.filter((p) => now[p] !== nativeFp?.[p])
+        if (changed.length === 0) return
+        nativeFp = now // re-arm, so one edit notices once
+        watcher.notice(`native change · ${changed.join(", ")}`)
+      }, 3000)
+      poll.unref?.()
+      cleanups.push(() => clearInterval(poll))
+    }
+
     onDevLine = (l) => {
       if (verbose) {
         line(c.dim(`  vite │ ${l}`))
