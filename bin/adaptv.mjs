@@ -51,6 +51,12 @@ import {
   patchServerUrl,
 } from "./lib/live-reload.mjs"
 import {
+  acquireDevLock,
+  assertNoActiveDevLock,
+  releaseDevLock,
+  updateDevLock,
+} from "./lib/lock.mjs"
+import {
   ADAPTV_DIR,
   buildWeb,
   CAP_WEB_DIR,
@@ -318,6 +324,11 @@ async function runLive(appRoot, platforms, opts) {
     try {
       devServer?.stop()
     } catch {}
+    // Release the single-instance lock last, once the port + adb mapping it names are
+    // actually gone — so a queued second run never reclaims it before this one is clear.
+    try {
+      releaseDevLock(appRoot)
+    } catch {}
   }
   const onSigint = () => {
     if (tearing) return
@@ -342,6 +353,11 @@ async function runLive(appRoot, platforms, opts) {
   }
 
   try {
+    // Refuse a second concurrent dev run BEFORE touching anything (ports, config, adb).
+    // A stale lock from a SIGKILL'd run is reclaimed automatically; a live one errors with
+    // a clear message instead of the cryptic port-9220 collision it used to hit.
+    acquireDevLock(appRoot)
+
     const config = webOnly ? null : await loadConfig(appRoot)
     const warnings = []
     const prepared = new Set()
@@ -460,6 +476,9 @@ async function runLive(appRoot, platforms, opts) {
     // IP + `--host`; not handled here.)
     const port = devServer.port
     const url = `http://localhost:${port}`
+    // Record the bound port + url in the lock, so a second `dev` (or a `preview`/`build`)
+    // can name exactly what's holding the port in its refusal message.
+    updateDevLock(appRoot, { port, url })
 
     if (!webOnly) {
       // point the native projects at the dev server, and remember how to undo it.
@@ -525,7 +544,7 @@ async function runLive(appRoot, platforms, opts) {
           // it before cap run is wiped by cap run itself.
           report("linking dev server")
           cleanups.push(androidReverse(port, env))
-          relaunchAndroidApp(appRoot, env)
+          relaunchAndroidApp(appRoot, env, target.id)
         }
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
@@ -640,6 +659,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const verb = kind
   const single = platforms.length === 1
   header(`${verb} ${single ? platforms[0] : "all"}`)
+
+  // A live `dev` run owns capacitor.config.json (its server.url etc.); regenerating it
+  // here would break that run. Refuse until it's stopped.
+  assertNoActiveDevLock(appRoot, kind)
 
   const t0 = Date.now()
   const config = await loadConfig(appRoot)

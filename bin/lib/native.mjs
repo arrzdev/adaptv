@@ -726,10 +726,15 @@ function terminateApp(appRoot, platform, target, env) {
  * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
  */
-export function relaunchAndroidApp(appRoot, env) {
+export function relaunchAndroidApp(appRoot, env, target) {
   const appId = readAppId(appRoot)
   if (!appId) return
-  for (const s of androidDevices(env)) {
+  // Only the device this run targets — never every connected emulator. A second, idle
+  // emulator must not be force-stopped and relaunched. Fall back to all devices only when
+  // the target can't be resolved (ambiguous), matching the prior best-effort behaviour.
+  const serial = androidSerialForTarget(target, env)
+  const serials = serial ? [serial] : androidDevices(env)
+  for (const s of serials) {
     spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
       env,
     })
