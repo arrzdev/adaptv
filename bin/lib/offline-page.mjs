@@ -145,6 +145,12 @@ function renderOfflineHtml(devUrl) {
     var DEV_URL = ${url};
     var navigating = false;
     var splashHidden = false;
+    // Consecutive answers that were reachable but NOT 2xx/3xx (e.g. a 500 Vite throws
+    // while it re-optimizes deps on the first request). We wait those out rather than
+    // navigating into a broken boot — but give up waiting after this many, so a genuinely
+    // 500-ing app still lets the dev back in to see the error.
+    var notReadyTries = 0;
+    var NOT_READY_LIMIT = 5;
 
     // Platform for the command hint. Prefer the bridge; fall back to the local origin's
     // scheme, which is set even before the bridge is injected (iOS = capacitor:, Android
@@ -197,8 +203,12 @@ function renderOfflineHtml(devUrl) {
         http
           .request({ url: DEV_URL, method: "HEAD", connectTimeout: 2500, readTimeout: 2500 })
           .then(function (res) {
-            // any HTTP answer (even a 500 while Vite boots) means the server is back
-            if (res && typeof res.status === "number" && res.status > 0) go();
+            var s = res && typeof res.status === "number" ? res.status : 0;
+            // 2xx/3xx = the app is actually serving → reconnect. A 5xx/4xx means the
+            // server answered but isn't ready (Vite still booting): wait it out, but
+            // reconnect anyway once it persists, so a real app error isn't a dead end.
+            if (s >= 200 && s < 400) { go(); return; }
+            if (s > 0 && ++notReadyTries >= NOT_READY_LIMIT) go();
           })
           .catch(function () {});
         return;
