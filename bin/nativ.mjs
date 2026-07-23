@@ -9,6 +9,8 @@
 //
 //   run  flags: --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
+//               --force         reinstall even when nothing native changed (run skips
+//                               the rebuild and just relaunches the installed app)
 //               -- <vite args>  forwarded to the vite dev server (e.g. `-- --port 4000`)
 //   build flags: --output <path> where to write the artifact (default: .nativ/)
 //               --force         rebuild even if unchanged (web build + sync are cached)
@@ -33,6 +35,7 @@ import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
 import {
   fingerprint,
+  nativeFingerprint,
   readCache as readBuildCache,
   writeCache as writeBuildCache,
 } from "./lib/cache.mjs"
@@ -54,6 +57,8 @@ import {
   capSync,
   generateAssets,
   iosEnv,
+  isAppInstalled,
+  launchInstalledApp,
   NATIV_DIR,
   nativeDir,
   platformEnv,
@@ -455,15 +460,47 @@ async function runLive(appRoot, platforms, opts) {
         if (revert) cleanups.push(revert)
       }
       // sync (copies the patched config) + launch each platform against the server.
+      //
+      // …unless nothing NATIVE changed. In live-reload the installed app is only a shell
+      // pointing at the dev server, so when the native inputs and the dev URL are
+      // unchanged AND the device confirms it's still installed, there is nothing to
+      // rebuild: launch it and let it reconnect. That turns a ~15s build+install into a
+      // ~1s launch, and drops Android from two relaunches to one (no `cap run` to reset
+      // `adb reverse`). Every uncertainty falls through to the full path.
+      const runCache = readBuildCache(appRoot)
+      runCache.run ??= {}
+      const cacheKey = (platform) =>
+        `${platform}:${targets[platform]?.id ?? "default"}`
+
       const launchOne = async (platform, report) => {
-        report("sync")
-        await capSync(appRoot, platform, envFor(platform), { report })
         const target = targets[platform]
         const tag = target.source === "latest" ? " · latest" : ""
+        const env = envFor(platform)
+        const key = cacheKey(platform)
+        const prev = runCache.run[key]
+        const cached =
+          !opts.force &&
+          prev?.url === url &&
+          prev?.fp === nativeFingerprint(appRoot, platform) &&
+          isAppInstalled(appRoot, platform, target.id, env)
+
+        if (cached) {
+          // Android first needs the route back to the host — no `cap run` will set it.
+          if (platform === "android") {
+            report("linking dev server")
+            cleanups.push(androidReverse(port, env))
+          }
+          report(`launch → ${target.name}${tag} · cached`)
+          if (launchInstalledApp(appRoot, platform, target.id, env)) {
+            return `${target.name}${tag} · live · cached`
+          }
+          // couldn't launch it after all — fall through and rebuild.
+        }
+
+        report("sync")
+        await capSync(appRoot, platform, env, { report })
         report(`launch → ${target.name}${tag}`)
-        await capRun(appRoot, platform, target.id, envFor(platform), {
-          report,
-        })
+        await capRun(appRoot, platform, target.id, env, { report })
         if (platform === "android") {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
@@ -471,9 +508,16 @@ async function runLive(appRoot, platforms, opts) {
           // app so its WebView loads with a working route. Must be post-launch — doing
           // it before cap run is wiped by cap run itself.
           report("linking dev server")
-          cleanups.push(androidReverse(port, envFor("android")))
-          relaunchAndroidApp(appRoot, envFor("android"))
+          cleanups.push(androidReverse(port, env))
+          relaunchAndroidApp(appRoot, env)
         }
+        // Record AFTER the build: `cap sync` rewrites files in the native project, so a
+        // fingerprint taken before it would never match on the next run.
+        runCache.run[key] = {
+          url,
+          fp: nativeFingerprint(appRoot, platform),
+        }
+        writeBuildCache(appRoot, runCache)
         return `${target.name}${tag} · live`
       }
       if (single) {
@@ -920,14 +964,15 @@ function usage() {
 
 ${c.bold("Usage")}
   nativ doctor
-  nativ run   <web|ios|android|all>  [--target <id>] [--latest] [--verbose] [-- <vite args>]
+  nativ run   <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
   nativ build <ios|android|all>      [--output <path>] [--verbose] [--force]
 
 ${c.dim("run = live-reload dev: one Vite dev server, web + native WebViews all attached,")}
 ${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
 ${c.dim("`nativ run all -- --port 4000`. build = static .ipa/.apk artifacts.")}
-${c.dim("--latest reuses the last device you picked. Native projects live in .nativ/")}
-${c.dim("(git-ignored). Toolchain env (ANDROID_HOME / JAVA_HOME / pod / LANG) auto-resolved.")}`)
+${c.dim("--latest reuses the last device you picked. run skips the rebuild and just")}
+${c.dim("relaunches when nothing native changed; --force reinstalls anyway. Native projects")}
+${c.dim("live in .nativ/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
 }
 
 function parseFlags(argv) {
@@ -984,6 +1029,7 @@ async function main() {
         target: flags.target,
         latest: !!flags.latest,
         verbose: !!flags.verbose,
+        force: !!flags.force,
         viteArgs: flags.viteArgs,
       })
     }
