@@ -3,13 +3,12 @@
 // Deliberately NOT a task-tree framework: a single custom spinner renderer so the
 // output reads like a modern build tool (Vite/Expo), not a log dump. One glyph set
 // (✓ / ✖ / a braille spinner), aligned lines, dim timings. Concurrent work (`run
-// all`) shows one live line per platform. @clack/prompts is used ONLY for the
-// arrow-key device picker.
+// all`) shows one live line per platform. The arrow-key device picker is ours too
+// (see `select` below) — no third-party prompt frame, so it matches every other line.
 //
 //   - TTY      → animated spinner lines, redrawn in place
 //   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
-import * as p from "@clack/prompts"
 
 /* -------------------------------------------------------------------------- */
 /* colour (a tiny ANSI helper; honours NO_COLOR)                              */
@@ -91,7 +90,7 @@ export function footer(hint) {
  */
 export function liveWatcher({ keys = true } = {}) {
   const hint = keys
-    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} reload   ${c.bold("R")} rebuild   ${c.bold("ctrl-c")} stop`)}`
+    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} reload js   ${c.bold("b")} rebuild app   ${c.bold("ctrl-c")} stop`)}`
     : ""
   const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
@@ -119,7 +118,7 @@ export function liveWatcher({ keys = true } = {}) {
       // A pending native change outranks the idle hint — it's the one thing the dev
       // has to act on, and it stays put until they do.
       out(
-        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim(`press ${c.bold("r")} to rebuild`)}`,
+        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim(`press ${c.bold("b")} to rebuild`)}`,
       )
       return
     }
@@ -185,13 +184,14 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
       onQuit?.()
       return
     }
-    // `r` = reload the WebView (relaunch the app — instant, the 90% action).
-    // `R`/`b` = full native rebuild (reinstall — for a plugin/native change).
+    // Two distinct lowercase keys (NOT r/R — a shift typo shouldn't swap a 0.4s reload
+    // for a 15s reinstall): `r` = reload the JS (refresh the running app), `b` = rebuild
+    // the native app (reinstall the binary — for a plugin / native change).
     if (key === "r") {
       void onReload?.()
       return
     }
-    if (key === "R" || key === "b") void onRebuild?.()
+    if (key === "b") void onRebuild?.()
   }
   stdin.on("data", handler)
   return () => {
@@ -204,20 +204,92 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* device picker (clack)                                                       */
+/* device picker (house style — matches the renderer, no third-party frame)    */
 /* -------------------------------------------------------------------------- */
 
 /**
- * A single-select picker. `options` is an array of `{ value, label, hint? }`.
- * Returns the chosen value, or exits on cancel.
+ * A single-select arrow-key picker, drawn in the SAME visual language as the rest of the
+ * CLI (2-space indent, a `›` cursor, dim hints) instead of a third-party prompt frame with
+ * its own gutter and bullets. Two things matter here:
+ *
+ *  - it aligns with the surrounding `✓ step` / `! warn` lines, and
+ *  - it ERASES itself the instant you choose, leaving NO prompt residue — the picked
+ *    device only ever appears in the caller's own line (e.g. `✓ ios  iPhone 16 Pro`).
+ *
+ * `options` is `[{ value, label, hint? }]`. Long lists scroll in a fixed window so the
+ * cursor-rewind maths stays inside one screenful. Non-TTY (CI, piped): can't prompt, so
+ * take the first option — callers pass `--target`/`--latest` for a deterministic
+ * non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
  */
 export async function select(message, options) {
-  const value = await p.select({ message, options })
-  if (p.isCancel(value)) {
-    p.cancel("cancelled.")
-    process.exit(130)
+  if (!options?.length) return undefined
+  const stdin = process.stdin
+  if (!isTTY || !stdin.isTTY || typeof stdin.setRawMode !== "function")
+    return options[0].value
+
+  const WINDOW = 8
+  const windowed = options.length > WINDOW
+  const visible = Math.min(WINDOW, options.length)
+  // Fixed line count per frame: header + visible rows (+ a "N of M" footer when scrolling).
+  const rows = 1 + visible + (windowed ? 1 : 0)
+
+  let idx = 0
+  let top = 0
+
+  const paint = () => {
+    if (idx < top) top = idx
+    else if (idx >= top + visible) top = idx - visible + 1
+    out(`  ${c.bold(message)}${c.dim("   ↑↓ move · ↵ select")}\n`)
+    const end = top + visible
+    for (let i = top; i < end; i++) {
+      const o = options[i]
+      const on = i === idx
+      const cursor = on ? c.cyan("›") : " "
+      const label = on ? o.label : c.dim(o.label)
+      const hint = o.hint ? c.dim(`  ${o.hint}`) : ""
+      out(`  ${cursor} ${label}${hint}\n`)
+    }
+    if (windowed)
+      out(`  ${c.dim(`  ${top + 1}–${end} of ${options.length}`)}\n`)
   }
-  return value
+  // `\r` first so the cursor is at column 0 before moving up: a terminal that doesn't
+  // reset the column on `\n` would otherwise leave the cursor mid-line, and `\x1b[0J`
+  // would only clear from there — leaving the start of the header behind.
+  const erase = () => out(`\r\x1b[${rows}A\x1b[0J`)
+
+  paint()
+  return await new Promise((resolve) => {
+    stdin.setRawMode(true)
+    stdin.resume()
+    stdin.setEncoding("utf8")
+    const done = (fn) => {
+      stdin.off("data", onData)
+      try {
+        stdin.setRawMode(false)
+      } catch {}
+      stdin.pause()
+      erase()
+      fn()
+    }
+    const onData = (key) => {
+      if (key === "\x1b[A" || key === "\x1bOA" || key === "k") {
+        idx = (idx - 1 + options.length) % options.length
+        erase()
+        paint()
+      } else if (key === "\x1b[B" || key === "\x1bOB" || key === "j") {
+        idx = (idx + 1) % options.length
+        erase()
+        paint()
+      } else if (key === "\r" || key === "\n") {
+        done(() => resolve(options[idx].value))
+      } else if (key === "\x03" || key === "q") {
+        // NOT bare Esc: an arrow key can arrive as Esc then `[A` in two chunks, and
+        // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
+        done(() => process.exit(130))
+      }
+    }
+    stdin.on("data", onData)
+  })
 }
 
 /* -------------------------------------------------------------------------- */
