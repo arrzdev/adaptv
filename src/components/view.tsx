@@ -1,5 +1,5 @@
 import type { ComponentPropsWithRef } from "react"
-import { mergeStyles } from "#nativ/utils/styles"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES

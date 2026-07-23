@@ -5,11 +5,11 @@
 //applies a per-app night mode the OS honours for the next launch's splash.
 //No-op off native. Stored via @capacitor/preferences (Android SharedPreferences
 //"CapacitorStorage" / iOS UserDefaults) under a stable key the native launch reads.
-import type { UiThemePreference } from "#nativ/hooks/use-theme"
-import { isNativePlatform } from "#nativ/utils/platform"
+import type { UiThemePreference } from "#adaptv/hooks/use-theme"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 /** Native storage key the launch code (MainActivity / AppDelegate) reads. */
-export const NATIVE_THEME_PREF_KEY = "nativ-theme"
+export const NATIVE_THEME_PREF_KEY = "adaptv-theme"
 
 /** Persist the theme preference to native storage (native only; fire-and-forget). */
 export async function persistNativeThemePreference(

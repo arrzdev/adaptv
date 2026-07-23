@@ -1,4 +1,4 @@
-# nativ — the decision register
+# adaptv — the decision register
 
 > **The single answer to "what's decided and what isn't."** Every architectural call the framework
 > rests on, with a status, the evidence behind it, and where the full design lives.
@@ -37,31 +37,31 @@ Verified by reading the tree, not by trusting the docs.
 | `vite/` | 15 | plugin, config loader, capacitor-config, manifest, stamping, sw-build, build-tag, virtuals |
 | `shell/` | 10 | root route, critical CSS, head, launch-viewport, standalone history, foreign-SW unregister |
 | `styles/` | 5 CSS files | `patches.css`, `utils.css`, `drawer.css`, `swipeable.css`, `index.css` |
-| `bin/nativ.mjs` | 845 lines | full native toolchain CLI |
+| `bin/adaptv.mjs` | 845 lines | full native toolchain CLI |
 
-**Conclusion: nativ is substantially more built than `README.md` claims.** The README's "not done"
-list is stale on primitives; it's accurate on `.nativ/`, `@nativ/shell`, `create-nativ`, OTA, and the
+**Conclusion: adaptv is substantially more built than `README.md` claims.** The README's "not done"
+list is stale on primitives; it's accurate on `.adaptv/`, `@adaptv/shell`, `create-adaptv`, OTA, and the
 dist build.
 
 ### 1.2 Migration from chopchop is COMPLETE — verified
 
-File-level diff of `chopchop/packages/nativ/src` (110 files) against `nativ/src` (145 files):
+File-level diff of `chopchop/packages/adaptv/src` (110 files) against `adaptv/src` (145 files):
 
-- **0 files exist in chopchop that are missing from nativ.**
-- 34 files exist only in standalone nativ (the whole `capabilities/` layer, `View`, `List`, `Link`,
+- **0 files exist in chopchop that are missing from adaptv.**
+- 34 files exist only in standalone adaptv (the whole `capabilities/` layer, `View`, `List`, `Link`,
   `ExternalLink`, `critical-css`, `capacitor-config`, `utils/styles.ts`, `platform.test.ts`).
-- 88 of the 110 shared files are **byte-identical**; 22 diverged — and standalone nativ is the
+- 88 of the 110 shared files are **byte-identical**; 22 diverged — and standalone adaptv is the
   *longer/newer* side on 21 of 22 (`platform.ts` 8→96 lines, `app-config.ts` 208→244,
-  `shell-layout.tsx` 172→193, `button.tsx` 507→528, `nativ-plugin.ts` 132→158, `utils.css` 85→98).
+  `shell-layout.tsx` 172→193, `button.tsx` 507→528, `adaptv-plugin.ts` 132→158, `utils.css` 85→98).
 
 > **🔒 LOCKED — there is no un-migrated "gold" left in chopchop.** The standalone repo is strictly
-> ahead. `chopchop/packages/nativ` should be treated as **dead** and deleted when chopchop is wired
+> ahead. `chopchop/packages/adaptv` should be treated as **dead** and deleted when chopchop is wired
 > as project-0. The one file where chopchop is longer (`create-root-route.tsx`, 211→203) is a
 > refactor, not a loss — but diff it once before deleting.
 
 ### 1.3 The "patches" question — answered
 
-The user's "old pwa/nativ package patches" = the `patches` block in `nativ.config.ts`, and **all of
+The user's "old pwa/adaptv package patches" = the `patches` block in `adaptv.config.ts`, and **all of
 it is migrated and live**:
 
 | Patch | Config flag (default `true`) | Implementation |
@@ -84,27 +84,27 @@ suppression on anchors, native focus-ring reset, `type=search` decoration remova
 
 Every piece of the custom-splash-over-masked-native-splash design is in the repo:
 
-- **Android:** `Theme.SplashScreen` + `windowSplashScreenBackground` → `@color/nativSplashBackground`,
+- **Android:** `Theme.SplashScreen` + `windowSplashScreenBackground` → `@color/adaptvSplashBackground`,
   with `values/colors.xml` + `values-night/colors.xml`, and a **transparent `splash_icon.xml`
   drawable** to strip the Android-12 system splash icon. `postSplashScreenTheme` hands off.
-  (`bin/nativ.mjs:368` `patchAndroidSplash`)
-- **iOS:** a `NativSplash` colorset + a **solid-colour `LaunchScreen.storyboard`** (no image, so
+  (`bin/adaptv.mjs:368` `patchAndroidSplash`)
+- **iOS:** a `AdaptvSplash` colorset + a **solid-colour `LaunchScreen.storyboard`** (no image, so
   there's no first-frame resolve flicker), plus an `AppDelegate` override when the mask follows the
-  app preference. (`bin/nativ.mjs:487`)
+  app preference. (`bin/adaptv.mjs:487`)
 - **Theme tracking:** `persistNativeThemePreference` seeds native storage with the app's theme so the
   *next* launch's OS splash colour is already right (1-launch, no "open it twice"), applied at
   startup **and** live via a SharedPreferences listener.
 - **Handoff:** `launchShowDuration`/`launchAutoHide` hold the OS splash; `RoutingShell` calls
   `hideNativeSplash()` after first paint → no gap, no double-splash.
 - **Policy:** `splashMaskMode: preferences | system | light | dark`.
-- **Browser gate:** critical CSS hides `[data-nativ-splash]` on `html[data-nativ-platform="web"]`
+- **Browser gate:** critical CSS hides `[data-adaptv-splash]` on `html[data-adaptv-platform="web"]`
   unless `splashScreenInBrowser` — pre-paint, so no flash and no hydration mismatch.
 - **The subtle one:** `getLaunchViewportInitScript()` measures resolved `100vh` with a hidden probe
   and freezes `--pwa-launch-height`, defeating the **iOS standalone cold-start ICB expansion** that
   re-centres a splash downward mid-launch.
 
-> 🔒 **LOCKED — splash is done and is one of nativ's strongest assets.** No migration work remains.
-> The only delta is that `@nativ/shell` (§4.3) should eventually absorb the CLI's native-source
+> 🔒 **LOCKED — splash is done and is one of adaptv's strongest assets.** No migration work remains.
+> The only delta is that `@adaptv/shell` (§4.3) should eventually absorb the CLI's native-source
 > string-patching.
 
 ---
@@ -113,24 +113,24 @@ Every piece of the custom-splash-over-masked-native-splash design is in the repo
 
 | # | Decision | Where |
 |---|---|---|
-| L1 | **Single-package repo.** Root *is* the framework. Promote to `packages/*` only when the native plugin or `create-nativ` need separate publishing. | HANDOFF §6 |
-| L2 | **No hard forks.** Rent stable cores, own the seams. Escalation ladder: re-export barrel → `.nativ/` → `pnpm patch` → vendor one module → replace a layer. | ARCHITECTURE §0.6 |
-| L19 | **`pnpm patch` is a first-class tool, not a last resort.** When a dependency structurally blocks something nativ needs, patching it is the *correct* move for a framework built on other libraries — not a smell to be avoided. Supersedes §2.6's "reserve, don't wire up" for `pnpm patch` specifically. Decided by the owner, 2026-07-20. | §2.6a below |
+| L1 | **Single-package repo.** Root *is* the framework. Promote to `packages/*` only when the native plugin or `create-adaptv` need separate publishing. | HANDOFF §6 |
+| L2 | **No hard forks.** Rent stable cores, own the seams. Escalation ladder: re-export barrel → `.adaptv/` → `pnpm patch` → vendor one module → replace a layer. | ARCHITECTURE §0.6 |
+| L19 | **`pnpm patch` is a first-class tool, not a last resort.** When a dependency structurally blocks something adaptv needs, patching it is the *correct* move for a framework built on other libraries — not a smell to be avoided. Supersedes §2.6's "reserve, don't wire up" for `pnpm patch` specifically. Decided by the owner, 2026-07-20. | §2.6a below |
 | L3 | **Isomorphic-only.** No `createServerFn`, no server routes, no server-only request/cookie reads. Loaders/`beforeLoad` are *Router* features and are allowed. **Ban server-only calls, not loaders.** | RENDERING §2 |
 | L4 | **Edge-to-edge is always on**, never a toggle. The consumer picks which edges a surface pads (`View safe=…`), never whether edge-to-edge happens. | ARCHITECTURE §1.4 |
 | L5 | **Frame owned above the route; one `View`, no `Screen`.** RN's navigator model — the shell seeds a full-viewport slot and stretches its child; `View` is a dumb-correct `flex-col` box. Root-ness never comes from DOM sniffing. | ARCHITECTURE §1 |
 | L6 | **Behavior is props, presentation is `className`.** `<View scroll="y">`, not `className="overflow-y-auto"`. | VISION §2.2 |
 | L7 | **Guardrails teach, never mutate.** Catch misuse with a build-time error + dev-only runtime warning — never silently rewrite consumer code. | VISION §2.3 |
-| L8 | **One config source.** `nativ.config.ts` generates the manifest, `capacitor.config`, native projects, splash, icons, theme. No second config file. | VISION §2.5 |
+| L8 | **One config source.** `adaptv.config.ts` generates the manifest, `capacitor.config`, native projects, splash, icons, theme. No second config file. | VISION §2.5 |
 | L9 | **Reactive → hook, imperative → API.** Live watches are hooks over a `subscribe`/`get` accessor (so non-React consumers can subscribe); one-shot reads are async fns. | VISION §2.6 |
 | L10 | **Storage = three tiers** under `storage`: sync `kv` (MMKV model), async `store` (blob KV, **not** an ORM), async `secure` (Keychain/Keystore native; **best-effort, not secure, on web**). | ARCHITECTURE §2 |
 | L11 | **Hybrid primitives push the platform branch to the lowest layer.** The accessor is the only hybrid file; it returns native-*accurate data*, not machinery. Geometry is DOM-free and unit-tested. | ARCHITECTURE §4 |
 | L12 | **`target:capacitor` is absolute** — always `render:"spa"` + `sw:false`, regardless of config. Only the CLI sets it. | LIFECYCLE §3.1 |
 | L13 | **Native OTA is self-hosted** on the app's own web deploy (no Appflow/Capgo backend), `nativeFingerprint`-gated, applied next launch, resume-triggered, watchdog rollback. Own the policy, rent the swap. | LIFECYCLE §5 |
-| L14 | **Two build lineages that never cross.** `dist-capacitor/` materialises only under `NATIV_TARGET=capacitor`. A web build can never ship the native bundle. | LIFECYCLE §0, §6 |
+| L14 | **Two build lineages that never cross.** `dist-capacitor/` materialises only under `ADAPTV_TARGET=capacitor`. A web build can never ship the native bundle. | LIFECYCLE §0, §6 |
 | L15 | **Native opt-out is `native.appId` presence.** No appId → no capacitor config, no native projects, Capacitor plugins are optional peers. | LIFECYCLE §6 |
 | L16 | **Splash doctrine** — native splash = solid colour mask (mascot lives only in the React splash); React splash = installed-only (browser opt-in); mask follows app theme by default. | §1.4 above |
-| L17 | **Migration from chopchop is complete**; `chopchop/packages/nativ` is dead. | §1.2 above |
+| L17 | **Migration from chopchop is complete**; `chopchop/packages/adaptv` is dead. | §1.2 above |
 | L18 | **App-lifecycle spine build order:** `useAppState` → back priority chain → gesture controller → route lifecycle (no DOM retention). | COORDINATION |
 
 ---
@@ -149,7 +149,7 @@ doc you read.
 - **And only 2 of 19 components use it** (`view.tsx`, `external-link.tsx`). The other 17 use bare
   `cn()`, so the "consumer can't break structural classes" guarantee is **not actually enforced**.
 - No doc in `docs/` mentions `mergeStyles` at all.
-- There is **no theming token layer** — no `--nativ-*` custom properties, no colour system, no
+- There is **no theming token layer** — no `--adaptv-*` custom properties, no colour system, no
   per-component style hooks. Consumers restyle by throwing Tailwind classes at primitives and hoping
   tailwind-merge resolves correctly.
 
@@ -160,23 +160,23 @@ doc you read.
 
 | Source | Date | Decision |
 |---|---|---|
-| `chopchop/HANDOFF-nativ.md` "FINAL DECISION" | 2026-07-06 | **The honest split.** TanStack is a *named engine dependency* (the Expo↔react-native model). Import `@tanstack/*` directly for anything nativ doesn't wrap. The pure pass-through barrel was **deleted**. |
-| `nativ/docs/ARCHITECTURE.md §3` | 2026-07-14 | **Opacity, not absence.** Consumer imports only `nativ`; generated files hidden in `.nativ/`. Roadmap **#1**, "the biggest 'feels like a real framework' win." |
+| `chopchop/HANDOFF-adaptv.md` "FINAL DECISION" | 2026-07-06 | **The honest split.** TanStack is a *named engine dependency* (the Expo↔react-native model). Import `@tanstack/*` directly for anything adaptv doesn't wrap. The pure pass-through barrel was **deleted**. |
+| `adaptv/docs/ARCHITECTURE.md §3` | 2026-07-14 | **Opacity, not absence.** Consumer imports only `adaptv`; generated files hidden in `.adaptv/`. Roadmap **#1**, "the biggest 'feels like a real framework' win." |
 
 The 07-06 decision is backed by **tested evidence** the 07-14 doc doesn't acknowledge:
 
-- **TESTED 2026-07-05:** augmenting the nativ re-export barrel (`declare module "@repo/nativ/react-router"`)
+- **TESTED 2026-07-05:** augmenting the adaptv re-export barrel (`declare module "@repo/adaptv/react-router"`)
   does **not** merge into `@tanstack`'s interface. TS binds augmentation to the *declaration site*.
   Probe: `"__marker__" extends keyof Register` → **`false`**. A re-implemented generator targeting
-  nativ would **silently break typed routing**.
+  adaptv would **silently break typed routing**.
 - **OBSERVED LIVE:** the router plugin *auto-maintains* the `createFileRoute` import — edit it to the
-  nativ seam and the plugin re-adds the `@tanstack` line (duplicate import).
-- **BUT — Path X was spike-proven** against real `@tanstack/react-router` 1.168.8: if the nativ seam
+  adaptv seam and the plugin re-adds the `@tanstack` line (duplicate import).
+- **BUT — Path X was spike-proven** against real `@tanstack/react-router` 1.168.8: if the adaptv seam
   declares its **own** `Register` + `FileRoutesByPath` and re-types `useRouter`/`useNavigate`/
   `createFileRoute` to default to `RegisteredRouter<Register>`, typed routing works end-to-end
   (`Link({to:"/nope"})` correctly errors `TS2322`). Feasibility is *settled*; only the wiring is unbuilt.
 - The identified wiring: `verboseFileRoutes:false` + replace TanStack's `route-autoimport-plugin`
-  (it injects a hardcoded `@tanstack/react-router`) with a nativ one + post-process
+  (it injects a hardcoded `@tanstack/react-router`) with a adaptv one + post-process
   `routeTree.gen.ts` on disk after the generator writes it.
 
 `ARCHITECTURE.md §3.3` frames the spike as **"Virtual File Routes vs `pnpm patch`"** — but the
@@ -185,7 +185,7 @@ chopchop evidence says *neither* is the mechanism. The real mechanism is the aut
 
 > ### 🔬 SPIKE RESULT (2026-07-20) — reproduced against project-zero, and it is worse than recorded
 >
-> Switching one real route file to `import { createFileRoute } from "@repo/nativ/router"` and building
+> Switching one real route file to `import { createFileRoute } from "@repo/adaptv/router"` and building
 > **fails**, with the file on disk ending up holding two imports of the same binding. Three separate
 > mechanisms are involved, and the 07-05 note only identified the first:
 >
@@ -204,19 +204,19 @@ chopchop evidence says *neither* is the mechanism. The real mechanism is the aut
 >
 > **Status:** `src/vite/router-autoimport.ts` ships the analysis + pure decision functions (17 tests) but
 > is **deliberately not wired** — wiring it in this state breaks every route file. The curated barrel
-> (`@arrzdev/nativ/router`) ships and is usable today for everything *except* `createFileRoute`.
+> (`@arrzdev/adaptv/router`) ships and is usable today for everything *except* `createFileRoute`.
 
 > ### 🚧 BLOCKER FOUND (2026-07-20) — Start structurally forbids the one lever that works
 >
 > **Requirement (owner, explicit): zero `@tanstack/*` imports anywhere in a consumer app — route files,
-> `.nativ/router.gen.tsx`, and `.nativ/routeTree.gen.ts` alike. Everything points at `nativ`.**
+> `.adaptv/router.gen.tsx`, and `.adaptv/routeTree.gen.ts` alike. Everything points at `adaptv`.**
 >
 > The generator's own import policy is the right lever, and it exists. Read from
 > `@tanstack/router-generator/dist/esm/transform/transform.js`: route-file imports are maintained by a
 > `{ required, banned }` policy, and the **`verboseFileRoutes === false`** branch *bans*
 > `createFileRoute`/`createLazyFileRoute` from `@tanstack/<target>-router` and requires nothing. That is
-> precisely what nativ wants — the generator would strip the import, and nativ's replacement autoimport
-> plugin would supply the binding from the nativ barrel instead.
+> precisely what adaptv wants — the generator would strip the import, and adaptv's replacement autoimport
+> plugin would supply the binding from the adaptv barrel instead.
 >
 > `@tanstack/router-plugin` even gates its autoimport plugin on it:
 > `if (userConfig.verboseFileRoutes === false) result.push(...routeAutoImport)`.
@@ -242,7 +242,7 @@ chopchop evidence says *neither* is the mechanism. The real mechanism is the aut
 > | Path | Cost |
 > |---|---|
 > | **A — `pnpm patch` `@tanstack/start-plugin-core`** to stop omitting `verboseFileRoutes`. A one-line, surgical patch of a schema `.omit()` list. L2's escalation ladder explicitly allows patching as a rung, but §2.6 currently says "reserve, don't wire up", and pnpm 11 hard-fails installs on patch drift. | one line to maintain per Start upgrade |
-> | **B — post-process on disk** after the generator writes, rewriting `@tanstack/react-router` → the nativ barrel in route files and `routeTree.gen.ts`. No patch, but it is a *fight*: the generator rewrites on every run, so nativ must always run after it and win. | ongoing race, must be re-won each build |
+> | **B — post-process on disk** after the generator writes, rewriting `@tanstack/react-router` → the adaptv barrel in route files and `routeTree.gen.ts`. No patch, but it is a *fight*: the generator rewrites on every run, so adaptv must always run after it and win. | ongoing race, must be re-won each build |
 >
 > **A is the honest recommendation** — it removes the fight at the source, and the patch is one line
 > against a schema list rather than against behaviour. This is now the gating decision for the whole
@@ -250,8 +250,8 @@ chopchop evidence says *neither* is the mechanism. The real mechanism is the aut
 >
 > **Shipped meanwhile:** `src/vite/router-autoimport.ts` (analysis + pure decision functions + the
 > `TSR_ROUTES_BY_ID_MAP` gate that stops the double-fire on code-splitter virtual modules, 17 tests),
-> wired into `nativ()` and harmless today — with `verboseFileRoutes` stuck at `true` the generator keeps
-> supplying the import, so nativ's plugin correctly does nothing.
+> wired into `adaptv()` and harmless today — with `verboseFileRoutes` stuck at `true` the generator keeps
+> supplying the import, so adaptv's plugin correctly does nothing.
 
 > **Resolution owed: `docs/FACADE.md`** — pick one, fold in the 07-05/07-06 evidence, and correct
 > `ARCHITECTURE.md §3.3`'s framing of the spike. See §5.
@@ -261,7 +261,7 @@ chopchop evidence says *neither* is the mechanism. The real mechanism is the aut
 - `RENDERING.md §1`: "Web can be SSR *or* SPA — a per-app config choice, **SSR by default**."
 - `LIFECYCLE.md §1.2` flags this itself: "⚠︎ the code currently defaults `router.render` to `spa`."
 - Code confirms: `src/config/app-config.ts:66` — *"Rendering mode. Default `"spa"`"*; and
-  `src/vite/nativ-plugin.ts:107` — `const isSpa = (router.render ?? "spa") === "spa"`.
+  `src/vite/adaptv-plugin.ts:107` — `const isSpa = (router.render ?? "spa") === "spa"`.
 
 > **Resolution owed:** pick one and make code + docs agree. See §5 — recommendation is **SPA-default**,
 > against the current docs.
@@ -298,13 +298,13 @@ Full designs exist; the next step is TDD, not more design.
 
 | # | Item | Design | Risk |
 |---|---|---|---|
-| D1 | `.nativ/` hidden generated dir + `nativ` barrel | ARCHITECTURE §3 | blocked on §3.2 |
-| D2 | First-party `@nativ/shell` Capacitor plugin (edge-to-edge + insets/IME, then splash/status-bar/theme) | NATIVE-SHELL | **HIGH** — the Android-15/SDK-35 inset+keyboard crux |
-| D3 | `create-nativ` scaffolder | LIFECYCLE §8 | low |
+| D1 | `.adaptv/` hidden generated dir + `adaptv` barrel | ARCHITECTURE §3 | blocked on §3.2 |
+| D2 | First-party `@adaptv/shell` Capacitor plugin (edge-to-edge + insets/IME, then splash/status-bar/theme) | NATIVE-SHELL | **HIGH** — the Android-15/SDK-35 inset+keyboard crux |
+| D3 | `create-adaptv` scaffolder | LIFECYCLE §8 | low |
 | D4 | `web` config block (`render`/`host`/`sw`) → Start deploy presets | LIFECYCLE §1.2, §3–4 | low |
 | D5 | Capacitor OTA (fingerprint-gated self-hosted bundle swap) | LIFECYCLE §5 | medium — plugin pick open |
-| D6 | `nativ dev [--host ios\|android]` with device live-reload | LIFECYCLE §2.2 | low |
-| D7 | `nativ ota build` / `ota status` | LIFECYCLE §7.4 | medium |
+| D6 | `adaptv dev [--host ios\|android]` with device live-reload | LIFECYCLE §2.2 | low |
+| D7 | `adaptv ota build` / `ota status` | LIFECYCLE §7.4 | medium |
 | D8 | `useAppState` accessor + hook | COORDINATION | low |
 | D9 | Back-button priority handler chain | COORDINATION | low |
 | D10 | Global gesture controller (single-capture arbitration) | COORDINATION | medium |
@@ -317,14 +317,14 @@ Full designs exist; the next step is TDD, not more design.
 
 | # | Question | Resolution | Status |
 |---|---|---|---|
-| O1 | **Styling & theming API** | **`className` + 3-layer `mergeStyles` precedence · `data-nativ`/`data-part` two-axis state namespace · custom properties for runtime values ONLY · `@layer` so consumer CSS always wins · tokens = the consumer's Tailwind `@theme`. No `--nativ-color-*`, no `::part()`.** Rationale: Ionic's `--ion-*` system exists to cross a *shadow boundary* nativ doesn't have. → `STYLING.md` | ✅ **CLOSED** |
+| O1 | **Styling & theming API** | **`className` + 3-layer `mergeStyles` precedence · `data-adaptv`/`data-part` two-axis state namespace · custom properties for runtime values ONLY · `@layer` so consumer CSS always wins · tokens = the consumer's Tailwind `@theme`. No `--adaptv-color-*`, no `::part()`.** Rationale: Ionic's `--ion-*` system exists to cross a *shadow boundary* adaptv doesn't have. → `STYLING.md` | ✅ **CLOSED** |
 | O2 | **TanStack facade** | **Tier 1 (curated barrel, TanStack as a named engine dep) ships now; Tier 2 (full opacity) deferred.** Key insight: safety and opacity are **orthogonal** — you don't need to hide TanStack to ban `createServerFn`. → `FACADE.md §1, §3` | ✅ **CLOSED** |
-| O3 | **Enforcing the `createServerFn` ban** | **Layered, with a Vite `resolveId` hook inside `nativ()` as the unbypassable backstop** (verified live), + Biome `noRestrictedImports` shipped via `extends`, + one GritQL rule for the `server:{handlers}` config-shape gap. Rejected with reasons: `@deprecated`, declaration merging, `exports` maps, pnpm strictness. → `FACADE.md §2` | ✅ **CLOSED** |
+| O3 | **Enforcing the `createServerFn` ban** | **Layered, with a Vite `resolveId` hook inside `adaptv()` as the unbypassable backstop** (verified live), + Biome `noRestrictedImports` shipped via `extends`, + one GritQL rule for the `server:{handlers}` config-shape gap. Rejected with reasons: `@deprecated`, declaration merging, `exports` maps, pnpm strictness. → `FACADE.md §2` | ✅ **CLOSED** |
 | O4 | **Render default + deploy presets** | Web = SSR **or** static SPA+SW, consumer's choice; capacitor = SPA forced. Static deploy emits `index.html`/`404.html`/`.nojekyll`/`_redirects`/`_headers`. → `RENDERING.md §3`, `LIFECYCLE.md §1.2`. **Default settled: `ssr`** — see §6.3 | ✅ **CLOSED** |
 | O5 | **SW architecture** | **Navigation strategy is a pure function of `render`**: ssr → `NetworkOnly` + precache fallback (never cache documents — it's a cross-user data leak); spa → `NavigationRoute`→shell; capacitor → no SW + active unregister. `prompt` default, nav preload on, activate-time cache sweep, `vite:preloadError` net. Stay on Workbox. → `RENDERING.md §3` | ✅ **CLOSED** |
 | O6 | **What to port from Ionic** + attribution | Partially answered (theming: **don't** copy — §O1; keyboard: use native events not `visualViewport`, per Ionic's own source comment). The **gesture controller / iOS input shims / back-button chain** inventory is still in flight. | 🔄 **in progress** |
 | O7 | **Lint delivery** | **Biome 2.x — `noRestrictedImports` for imports, GritQL plugins for AST shapes.** Verified working end-to-end on the pinned 2.3.2. Note: `extends` resolves bare npm specifiers; `plugins` does **not** (needs an explicit `node_modules/` path). GritQL has no binding resolution — syntax matching only. → `FACADE.md §2.3–2.4` | ✅ **CLOSED** |
-| O8 | **Plugin picks — OTA** | **Capawesome `@capawesome/capacitor-live-update` (MIT, 8.3.0), self-hosted.** Genuinely backend-free; strongest signature story (RSA PEM + SHA-256). Appflow is **dead** (no new sales since 2025-02-11, sunsets 2027-12-31) — `@capacitor/live-updates` disqualified. **nativ must force `readyTimeout`** (Capawesome defaults it to `0` = rollback disabled) and **conform to `Library/NoCloud/ionic_built_snapshots/<id>/` on iOS** or persistence silently fails on cold launch. → `LIFECYCLE.md §5` | ✅ **CLOSED** |
+| O8 | **Plugin picks — OTA** | **Capawesome `@capawesome/capacitor-live-update` (MIT, 8.3.0), self-hosted.** Genuinely backend-free; strongest signature story (RSA PEM + SHA-256). Appflow is **dead** (no new sales since 2025-02-11, sunsets 2027-12-31) — `@capacitor/live-updates` disqualified. **adaptv must force `readyTimeout`** (Capawesome defaults it to `0` = rollback disabled) and **conform to `Library/NoCloud/ionic_built_snapshots/<id>/` on iOS** or persistence silently fails on cold launch. → `LIFECYCLE.md §5` | ✅ **CLOSED** |
 | O8b | **Plugin picks — secure storage** | **`@aparajita/capacitor-secure-storage` 8.0.0** (MIT, 2026-02-10) — `KeychainSwift` on iOS, `AndroidKeyStore` + `AES/GCM/NoPadding` on Android. **`@capacitor/preferences` is plaintext** (`UserDefaults`/`SharedPreferences`, verified in source) and must never hold tokens. → B23 | ✅ **CLOSED** |
 | O9 | **Capability scope** | in flight | 🔄 **in progress** |
 | O10 | **Animation & transition substrate** | Partially: **`@starting-style` + `transition-behavior: allow-discrete` are usable (iOS 18 floor)** but **`overlay` is Chromium-only and unrequested in WebKit** — so top-layer `<dialog>`/popover exits break on iOS *permanently*. → build overlays as ordinary positioned elements with a JS presence hook, not the top layer. View Transitions can't do interruptible/gesture-driven. **Navigation API is now Baseline (Safari 26.2, Firefox 147)** but gives no gesture-progress surface, and `allowsBackForwardNavigationGestures` is `false` in Capacitor — so swipe-back is hand-built either way. | ✅ **CLOSED** by `ANIMATION.md` |
@@ -339,28 +339,28 @@ Full designs exist; the next step is TDD, not more design.
 
 | # | Question | Resolution |
 |---|---|---|
-| O10 | **Animation substrate** | **Keep `motion`; nativ builds no engine.** CSS (`@starting-style` + `allow-discrete`) for enter/exit, `motion` for gesture/interruptible/layout. Accelerated set is `transform`/`opacity`/`filter`/`backdrop-filter` only. **`composite:"add"` is banned** — Baseline-available, but it silently kills the Chromium compositor. **Overlays are ordinary positioned elements, not the top layer** — `overlay` is Chromium-only with no WebKit bug, so `<dialog>`/popover exits break on iOS permanently. → `ANIMATION.md` |
-| O12 | **Ship source vs dist / publishing** | **Stay on raw source + git dependency until there's a second consumer.** Shipping source means no build step → no `prepare` script → **no pnpm-11 `allowBuilds` entry needed**, which is git-dep's main friction. Move to GitHub Packages when `create-nativ` ships (a scaffolder needs a registry). Note **`create-nativ` is unclaimed on npm** — so publish the *scaffolder* publicly (it's just prompts + file copying) and keep `@arrzdev/nativ` private; that fixes the chicken-and-egg where you'd need a PAT configured before you could run the tool that configures your PAT. |
+| O10 | **Animation substrate** | **Keep `motion`; adaptv builds no engine.** CSS (`@starting-style` + `allow-discrete`) for enter/exit, `motion` for gesture/interruptible/layout. Accelerated set is `transform`/`opacity`/`filter`/`backdrop-filter` only. **`composite:"add"` is banned** — Baseline-available, but it silently kills the Chromium compositor. **Overlays are ordinary positioned elements, not the top layer** — `overlay` is Chromium-only with no WebKit bug, so `<dialog>`/popover exits break on iOS permanently. → `ANIMATION.md` |
+| O12 | **Ship source vs dist / publishing** | **Stay on raw source + git dependency until there's a second consumer.** Shipping source means no build step → no `prepare` script → **no pnpm-11 `allowBuilds` entry needed**, which is git-dep's main friction. Move to GitHub Packages when `create-adaptv` ships (a scaffolder needs a registry). Note **`create-adaptv` is unclaimed on npm** — so publish the *scaffolder* publicly (it's just prompts + file copying) and keep `@arrzdev/adaptv` private; that fixes the chicken-and-egg where you'd need a PAT configured before you could run the tool that configures your PAT. |
 | O16 | **Signing/distribution** | **Stop at the artifact.** Confirmed: no fastlane. |
 | — | **IAP / monetization** | **EXCLUDE from core.** RevenueCat already *is* the vendor-neutral abstraction (`@revenuecat/purchases-capacitor` 13.2.3, ~weekly releases); the hard parts are server-side; and the legal surface moves in *weeks* — US link-out commission is being actively litigated right now (9th Cir. affirmed contempt but **vacated** the 0% ban, remanded to set a "reasonable" rate). A framework release would encode a legal snapshot that expires before the release does. Document the regional matrix, don't wrap it. |
 
-### 5.0.0 🔒 Package name — `@arrzdev/nativ` (decided 2026-07-20)
+### 5.0.0 🔒 Package name — `@arrzdev/adaptv` (decided 2026-07-20)
 
 The scope is **not** a style choice: **GitHub Packages requires the npm scope to match the repository
-owner.** Publishing `arrzdev/nativ` to `npm.pkg.github.com` means the package must be `@arrzdev/*`.
-There is no configuration that publishes `nativ` or `@nativ/router` from that account.
+owner.** Publishing `arrzdev/adaptv` to `npm.pkg.github.com` means the package must be `@arrzdev/*`.
+There is no configuration that publishes `adaptv` or `@adaptv/router` from that account.
 
 Checked while deciding:
-- **`nativ` is taken on the public npm registry** (v0.8.10), so plain `nativ/router` was never available.
-- `@nativ/*` appears unclaimed, but taking it means going **public** (npm private scopes are paid) and
+- **`adaptv` is taken on the public npm registry** (v0.8.10), so plain `adaptv/router` was never available.
+- `@adaptv/*` appears unclaimed, but taking it means going **public** (npm private scopes are paid) and
   adopting a multi-package layout — which conflicts with **L1** (single-package repo). The equivalent
-  under a `@nativ` scope would be `@nativ/nativ/router`, which is worse than what we have.
+  under a `@adaptv` scope would be `@adaptv/adaptv/router`, which is worse than what we have.
 
 A handle in the specifier is normal for a private/org package — Expo apps import `@expo/*`, Ionic apps
-`@ionic/*`. If a public identity is ever wanted, that is the moment to register `@nativ` and re-scope;
+`@ionic/*`. If a public identity is ever wanted, that is the moment to register `@adaptv` and re-scope;
 the `routerSpecifier` plugin option already makes that a one-line change for consumers mid-migration.
 
-> ⚠︎ Unchanged and still worth doing: **`create-nativ` is unclaimed on npm.** Publish the *scaffolder*
+> ⚠︎ Unchanged and still worth doing: **`create-adaptv` is unclaimed on npm.** Publish the *scaffolder*
 > publicly even while the framework stays private, or a new user needs a GitHub PAT configured before
 > they can run the tool that configures their PAT.
 
@@ -368,7 +368,7 @@ the `routerSpecifier` plugin option already makes that a one-line change for con
 
 **Not one of the 22 official Capacitor plugins ships a `PrivacyInfo.xcprivacy`** — verified by grepping the full `ionic-team/capacitor-plugins` tree (0 matches for "privacy" across 1,188 files). `@capacitor/core` *does* ship two (both empty declarations). Meanwhile **Capacitor is on Apple's commonly-used-third-party-SDK list**, and `@capacitor/preferences` uses `UserDefaults` — a required-reason API — with its README pushing the obligation onto the app: *"you must create a `PrivacyInfo.xcprivacy` file in `/ios/App`… the required dictionary key is `NSPrivacyAccessedAPICategoryUserDefaults` and the recommended reason is `CA92.1`."*
 
-So the obligation lands on the app, is **derivable from the dependency list**, is currently satisfied by hand-editing XML, and **fails silently at submission**. → **`nativ sync` should generate `ios/App/PrivacyInfo.xcprivacy` from the installed plugin set.** Unglamorous, mechanical, and worth more than most of the primitive work on the roadmap.
+So the obligation lands on the app, is **derivable from the dependency list**, is currently satisfied by hand-editing XML, and **fails silently at submission**. → **`adaptv sync` should generate `ios/App/PrivacyInfo.xcprivacy` from the installed plugin set.** Unglamorous, mechanical, and worth more than most of the primitive work on the roadmap.
 
 > ### ✅ BUILT (2026-07-20) — `src/native/privacy-manifest.ts` + `stamp-privacy.ts`, 9 tests
 >
@@ -382,10 +382,10 @@ So the obligation lands on the app, is **derivable from the dependency list**, i
 > human can read and correct beats anything inferred from source.
 >
 > **Data collection is deliberately left empty.** `NSPrivacyCollectedDataTypes` depends on what the app
-> does with analytics, accounts and telemetry, which nativ cannot know. A guessed declaration is worse
+> does with analytics, accounts and telemetry, which adaptv cannot know. A guessed declaration is worse
 > than none — it is a false statement to Apple and to users. The generated file says so in a comment.
 >
-> **Also built: `nativ doctor` project checks** (`src/native/doctor.ts`, 13 tests). Selection criterion
+> **Also built: `adaptv doctor` project checks** (`src/native/doctor.ts`, 13 tests). Selection criterion
 > for every rule: *the broken state still builds, and often still runs*. Currently covers the
 > `WKAppBoundDomains` trap (B22 — the bridge is never injected, `getPlatform()` returns `"web"`, every
 > plugin silently falls back to web), the Android target-API-36 deadline, and the missing privacy
@@ -401,11 +401,11 @@ So `useFreezeViewport` is **not** replaceable by a declarative primitive yet on 
 
 ### 5.0.3 Platform findings that validate or correct existing code
 
-**✅ Validated — the `display-mode` decision was right, for a reason nativ didn't know.** `utils.css`
+**✅ Validated — the `display-mode` decision was right, for a reason adaptv didn't know.** `utils.css`
 avoids `@media (display-mode: standalone)` as the sole signal because "a native WebView lies about it."
 It's worse than that: **in an installed iOS web app with `display: standalone`, `display-mode: standalone`
 is `false` and `display-mode: fullscreen` is `true`** — [WebKit 264218](https://bugs.webkit.org/show_bug.cgi?id=264218),
-NEW/unassigned since 2023. The pre-paint `data-nativ-platform` stamp is the correct primary signal on
+NEW/unassigned since 2023. The pre-paint `data-adaptv-platform` stamp is the correct primary signal on
 *both* counts. Keep `window.navigator.standalone` as a fallback (non-standard, undocumented, still works).
 
 **⚠︎ iOS 26 changed installability entirely.** Every home-screen add now opens as a web app —
@@ -414,7 +414,7 @@ the manifest anyway (icons, `theme_color`, `id`, `scope` still honoured, and Web
 requirement is unclear post-26).
 
 **⚠︎ Storage isolation has an auth consequence.** On install, Safari copies **cookies only** — not
-localStorage, IndexedDB, CacheStorage, or SW registrations. Since nativ's model is a **client-held
+localStorage, IndexedDB, CacheStorage, or SW registrations. Since adaptv's model is a **client-held
 bearer token** (`RENDERING.md §2`), a token in `storage.kv`/`storage.secure` means **the user is logged
 out on first launch of the installed PWA**. If preserving session across install matters, the token must
 be in a cookie at install time. This belongs in `ARCHITECTURE.md §2.3`'s threat-model note.
@@ -425,11 +425,11 @@ be in a cookie at install time. This belongs in `ARCHITECTURE.md §2.3`'s threat
 - **There is no official IndexedDB persister** (`@tanstack/query-indexeddb-persister` → 404). The
   documented path is `createAsyncStoragePersister` + the `idb-keyval` recipe.
 - **The default `gcTime` (5 min) / `maxAge` (24 h) combination is already wrong out of the box** —
-  `gcTime` must be ≥ `maxAge` or GC discards the cache early. nativ should set this in its wiring, not
+  `gcTime` must be ≥ `maxAge` or GC discards the cache early. adaptv should set this in its wiring, not
   leave it to the consumer.
 - IDB uses **structured clone**, so `Date`/`Map`/`Set`/`Blob` survive; the localStorage path
   JSON-serializes and silently turns `Date` into a string. Another reason `storage.store` is Dexie/IDB.
-- Wire **`buster`** to nativ's existing `buildTag` — free, and it prevents hydrating stale-shaped data
+- Wire **`buster`** to adaptv's existing `buildTag` — free, and it prevents hydrating stale-shaped data
   into new components after a deploy.
 - **Dexie is at 4.4.4 — there is no Dexie 5.** `ARCHITECTURE.md §2.2`'s Dexie choice stands.
 
@@ -437,7 +437,7 @@ be in a cookie at install time. This belongs in `ARCHITECTURE.md §2.3`'s threat
 Verified by grepping the whole Capacitor repo: **zero** occurrences of `NSAppTransportSecurity`,
 `CFBundleURLTypes`, `network_security_config`, or a VIEW intent-filter. Consequences:
 - **iOS 17+ broke LAN-IP dev.** ATS stopped permitting bare IP addresses by default, so
-  `nativ dev --host ios` against `http://192.168.x.x` fails on modern iOS. Fix is an `NSExceptionDomains`
+  `adaptv dev --host ios` against `http://192.168.x.x` fails on modern iOS. Fix is an `NSExceptionDomains`
   entry keyed on the **bare IP with no port**, debug-config only. Never `NSAllowsArbitraryLoads`.
 - **Never write `NSAllowsLocalNetworking` alongside `NSAllowsArbitraryLoads`** — the latter is silently
   ignored on iOS 10+ whenever the former is present.
@@ -445,18 +445,18 @@ Verified by grepping the whole Capacitor repo: **zero** occurrences of `NSAppTra
   true` (the default origin is `https://localhost`, so plain HTTP is *mixed content*), and no
   `network_security_config.xml` — because if one exists, `server.cleartext` becomes a **silent no-op**.
 - `getLaunchUrl()` means **different things per platform** (iOS: last URL, and it double-resolves;
-  Android: launch intent URI) and `appUrlOpen` payloads differ. nativ must normalise both.
+  Android: launch intent URI) and `appUrlOpen` payloads differ. adaptv must normalise both.
 - **OAuth must go through `@capacitor/browser`** (SFSafariViewController / Custom Tabs), never the
   Capacitor WebView — Google returns `disallowed_useragent` for embedded user-agents per RFC 8252 §8.12.
   Document the SSO asymmetry: Android Custom Tabs share Chrome's cookie jar; iOS SFSafariViewController
   does not.
 
-**⚠︎ `@nativ/shell` can ship inside `@arrzdev/nativ` — no separate package needed.** Capacitor detects
+**⚠︎ `@adaptv/shell` can ship inside `@arrzdev/adaptv` — no separate package needed.** Capacitor detects
 plugins by (a) the package being a direct dep of the app and (b) a `capacitor` key in its
 `package.json`. It never scans `node_modules`. But two traps: the native name is **derived, not chosen**
-(`fixName("@arrzdev/nativ")` → **`ArrzdevNativ`** for the podspec `s.name` and SPM product; Gradle module
-is `arrzdev-nativ`), and resolution needs `require.resolve("@arrzdev/nativ/package.json")` to work —
-**nativ's `exports` map does not currently expose `./package.json`**, which is a latent break.
+(`fixName("@arrzdev/adaptv")` → **`ArrzdevAdaptv`** for the podspec `s.name` and SPM product; Gradle module
+is `arrzdev-adaptv`), and resolution needs `require.resolve("@arrzdev/adaptv/package.json")` to work —
+**adaptv's `exports` map does not currently expose `./package.json`**, which is a latent break.
 
 Also: **most of the CLI's splash string-patching can become real Android resources** shipped in the
 plugin AAR (the splash-screen plugin already proves resource merging works). Only the manifest
@@ -468,14 +468,14 @@ source patching entirely.
 
 | Finding | Impact |
 |---|---|
-| **Capacitor 8 ships a core `SystemBars` plugin** that already owns Android insets + IME, registered unconditionally. | **`@nativ/shell` is redesigned: layer on it, don't replace it.** A second inset listener *is* the collision behind keyboard bugs #61/#68. The plugin gets smaller and less risky — but stops being "the wedge vs Ionic." → `NATIVE-SHELL.md §0.0` |
+| **Capacitor 8 ships a core `SystemBars` plugin** that already owns Android insets + IME, registered unconditionally. | **`@adaptv/shell` is redesigned: layer on it, don't replace it.** A second inset listener *is* the collision behind keyboard bugs #61/#68. The plugin gets smaller and less risky — but stops being "the wedge vs Ionic." → `NATIVE-SHELL.md §0.0` |
 | **`@capacitor/status-bar` is silently half-dead on API 35+**: `setBackgroundColor` and `setOverlaysWebView` both *resolve successfully and do nothing*. Maintainer: *"if you are using edge to edge, remove status bar plugin."* Google Play now warns about it. | Drop the dependency; tint via a web-layer scrim + `SystemBars.setStyle()`. |
-| **`Keyboard.resizeOnFullScreen` is dead code on Capacitor 8** — its only consumer early-returns whenever `SystemBars` is present, which is always. | Remove from any nativ config surface. |
+| **`Keyboard.resizeOnFullScreen` is dead code on Capacitor 8** — its only consumer early-returns whenever `SystemBars` is present, which is always. | Remove from any adaptv config surface. |
 | **Apple's OTA rule is not §3.3.2.** Review Guideline **2.5.2**; DPLA **§3.3.1(B)**, and the "WebKit/JavaScriptCore" phrasing was **deleted** — the rule is now purely behavioural and *more* permissive. | `LIFECYCLE.md §5.1` corrected; `RESEARCH.md §5` still needs the fix. |
 | **`createServerFileRoute` does not exist** in the pinned `@tanstack/react-start@1.167.13` — replaced by a `server` property on `createFileRoute`'s options. | A config-object property, so **no import-restriction technique can catch it**. Needs the GritQL rule. `RENDERING.md §2` is stale. |
-| **TanStack Start SPA mode emits `_shell.html`, not `index.html`.** GitHub Pages' Jekyll **strips `_`-prefixed files**; Cloudflare Workers Assets looks for `/index.html`. | nativ must emit `index.html` as a copy, plus `.nojekyll`. |
-| **Capacitor 9 is in alpha** with a `// TODO: In Cap 9, add "full"` beside `SystemBars.insetsHandling`. | The inset contract changes again — don't freeze `@nativ/shell`'s API against Cap 8. |
-| **Ionic's CLI is frozen** (no release since 2025-03-18; its React starter pins Vite **5** vs current 8.1.5, React Router **5**, vitest 0.34) while `@ionic/react` ships nightly. The non-Ionic Capacitor+Vite+React niche has **nothing above 30 stars**. | The market gap nativ targets is real and currently unfilled. |
+| **TanStack Start SPA mode emits `_shell.html`, not `index.html`.** GitHub Pages' Jekyll **strips `_`-prefixed files**; Cloudflare Workers Assets looks for `/index.html`. | adaptv must emit `index.html` as a copy, plus `.nojekyll`. |
+| **Capacitor 9 is in alpha** with a `// TODO: In Cap 9, add "full"` beside `SystemBars.insetsHandling`. | The inset contract changes again — don't freeze `@adaptv/shell`'s API against Cap 8. |
+| **Ionic's CLI is frozen** (no release since 2025-03-18; its React starter pins Vite **5** vs current 8.1.5, React Router **5**, vitest 0.34) while `@ionic/react` ships nightly. The non-Ionic Capacitor+Vite+React niche has **nothing above 30 stars**. | The market gap adaptv targets is real and currently unfilled. |
 
 ---
 
@@ -490,7 +490,7 @@ Filed here so they don't get lost in the design discussion.
 | B3 | `onNeedRefresh` immediately calls `updateSW(true)` → `skipWaiting` + reload **mid-session**. Documented failure mode: the new worker's precache no longer lists the old build's chunks, so an open tab's next lazy route import misses cache *and* 404s. Data loss if a form is open. | `src/vite/virtuals.ts` | **high** |
 | B4 | No `vite:preloadError` handler anywhere in `src/` — nothing catches the stale-chunk failure B3 causes. | — | **high** |
 | B5 | `sw.warm-routes.ts` fetches HTML documents with `credentials: "same-origin"` into a shared cache, and strategies force `ignoreVary: true` — authenticated SSR HTML can be served to the wrong state. | `src/sw/sw.warm-routes.ts` | **privacy** |
-| B6 | Dead reference to vite-plugin-pwa's `dev-sw.js?dev-sw` filename — nativ doesn't use vite-plugin-pwa. | `src/shell/unregister-foreign-service-workers.ts` | cosmetic |
+| B6 | Dead reference to vite-plugin-pwa's `dev-sw.js?dev-sw` filename — adaptv doesn't use vite-plugin-pwa. | `src/shell/unregister-foreign-service-workers.ts` | cosmetic |
 | B7 | `Screen` shipped despite being documented as removed. | `src/components/screen.tsx` + barrel | consistency |
 | B8 | `mergeStyles` used by 2 of 19 components — the structural-class guarantee is unenforced. | `src/components/*` | **contract** |
 
@@ -503,7 +503,7 @@ Filed here so they don't get lost in the design discussion.
 Extensions available to 2026-11-01. Consequences, all verified against `developer.android.com`:
 
 - **Android 16 (API 36) removes the edge-to-edge opt-out entirely.** `R.attr#windowOptOutEdgeToEdgeEnforcement`
-  is *"deprecated and disabled."* Every nativ app shipping after that date is unconditionally edge-to-edge.
+  is *"deprecated and disabled."* Every adaptv app shipping after that date is unconditionally edge-to-edge.
 - **`Window#setStatusBarColor`, `setNavigationBarColor` (gesture nav), `setDecorFitsSystemWindows`, and
   `navigationBarDividerColor` are deprecated AND disabled — no effect.**
 - `@capacitor/status-bar`'s own README now says it plainly: for apps targeting **Android 16 with
@@ -511,7 +511,7 @@ Extensions available to 2026-11-01. Consequences, all verified against `develope
 
 **So `setBackgroundColor` is now: never on iOS, and dead on Android 15/16+.** Coloring the status-bar
 area is **purely a CSS problem on both platforms** — `viewport-fit=cover` plus a background painted
-under the inset. That is the only portable approach left, and it's the one nativ should own.
+under the inset. That is the only portable approach left, and it's the one adaptv should own.
 
 > **Capacitor 8 ships `SystemBars` in core** (no separate package) with `setStyle`/`show`/`hide` and a
 > `SystemBarType` of `StatusBar` **or `NavigationBar`** — so Android nav-bar icon styling is now
@@ -529,7 +529,7 @@ padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 **Why:** `viewport-fit=cover` is `safari_ios: 11` but **`webview_android: 135`**. Below WebView 135 the
 insets are zero or wrong. `env()` alone is broken on a large installed Android base.
 
-### B10 — **iOS 26.5 (June 2026) broke nativ's shipped haptics polyfill**
+### B10 — **iOS 26.5 (June 2026) broke adaptv's shipped haptics polyfill**
 
 `src/utils/install-vibrate-polyfill.ts` mounts a hidden `<input type="checkbox" switch>` and calls
 `.click()` to trigger the iOS system tick. **Apple patched programmatic triggering in iOS 26.5** — no
@@ -542,9 +542,9 @@ styles, no notification patterns, no intensity — WebKit-only, and it needs Sys
 
 > **🔒 Architectural consequence, and it cannot be retrofitted: a generic imperative `haptics.impact()`
 > is unimplementable on iOS web.** Only a *declarative, attach-to-this-element* API can work there.
-> If nativ's haptics API stays imperative, iOS web can never be added later. Decide now.
+> If adaptv's haptics API stays imperative, iOS web can never be added later. Decide now.
 >
-> ### ✅ RESOLVED (build pass) — nativ ships **two** haptic surfaces, not one
+> ### ✅ RESOLVED (build pass) — adaptv ships **two** haptic surfaces, not one
 >
 > Splitting them is the only honest option: they have genuinely different reach, and collapsing them
 > would mean either lying about iOS web or dropping non-tap haptics everywhere else.
@@ -575,7 +575,7 @@ styles, no notification patterns, no intensity — WebKit-only, and it needs Sys
 > declined Oct 2025), and **Firefox desktop removed `navigator.vibrate` in 129**. There is no path
 > to a real web haptics API.
 
-### B11 — nativ's own geolocation exemplar has a bug that will propagate
+### B11 — adaptv's own geolocation exemplar has a bug that will propagate
 
 `@capacitor/geolocation` documents that `checkPermissions()` **throws if system location services are
 disabled** — a *device* state, not a permission state. `src/capabilities/geolocation.ts:29` calls it
@@ -593,7 +593,7 @@ permission-gated capability, **fix it before the pattern is copied.**
 
 **[WebKit 240917](https://bugs.webkit.org/show_bug.cgi?id=240917) (NEW, 2022): `pointercancel` is not dispatched when `touch-action: manipulation`.** The expanded longhand `pan-x pan-y pinch-zoom` — spec-identical — **does** work. Ionic hit this too and documents it in `content.scss` with the same workaround.
 
-This matters because `pointercancel` is how a gesture knows a scroll took over. Any nativ surface that is both tappable (`clickable`) and gesture-driven — `Button` inside `Swipeable`, a drawer handle — will strand its gesture state machine on iOS. **Fix: write the longhand in `clickable`.**
+This matters because `pointercancel` is how a gesture knows a scroll took over. Any adaptv surface that is both tappable (`clickable`) and gesture-driven — `Button` inside `Swipeable`, a drawer handle — will strand its gesture state machine on iOS. **Fix: write the longhand in `clickable`.**
 
 Two companions from the same bug family, both affecting `use-gesture-engine.ts`:
 
@@ -602,7 +602,7 @@ Two companions from the same bug family, both affecting `use-gesture-engine.ts`:
 
 **Two MDN corrections worth knowing** (both verified against engine source): Safari **has** been passive-by-default for `touchstart`/`touchmove` since **iOS 11.3**, contra MDN; and **`document.documentElement` IS in the root-target set** in all three engines, so reaching for `<html>` to escape the rule doesn't work. `preventDefault()` in a passive listener fails **silently** — console warning, never an exception.
 
-### B20 — accessibility: two decisions nativ must own, because nothing above the shell can
+### B20 — accessibility: two decisions adaptv must own, because nothing above the shell can
 
 **1. Modal backdrops use `inert`, never `aria-hidden` — and `aria-modal` contains nothing.**
 
@@ -611,11 +611,11 @@ Both engines fail the same way, independently documented:
 - **Chromium [397294118](https://issues.chromium.org/issues/397294118)** — `role="dialog"` + `aria-modal="true"` does **not** contain TalkBack either.
 - **WebKit [201887](https://bugs.webkit.org/show_bug.cgi?id=201887)** (NEW since 2019, reconfirmed 2022) — *"content with `aria-hidden` attributes is read in Safari by VoiceOver"*, including a11y-dialog modals.
 
-`inert` is Baseline widely-available (Safari 15.5+), removes elements from the a11y tree, and blocks focus, find-in-page and selection. **Since `ANIMATION.md §4.1` already decided against the top layer, nativ's `Drawer`/`Sheet`/`Modal` must apply `inert` to the background themselves** — there's no `<dialog>` doing it implicitly. Verify on device: at least one report in 201887 has `inert` *also* failing in Safari.
+`inert` is Baseline widely-available (Safari 15.5+), removes elements from the a11y tree, and blocks focus, find-in-page and selection. **Since `ANIMATION.md §4.1` already decided against the top layer, adaptv's `Drawer`/`Sheet`/`Modal` must apply `inert` to the background themselves** — there's no `<dialog>` doing it implicitly. Verify on device: at least one report in 201887 has `inert` *also* failing in Safari.
 
-**2. The SPA route announcer is nativ's job, and the naive implementation is actively harmful.**
+**2. The SPA route announcer is adaptv's job, and the naive implementation is actively harmful.**
 
-**No router ships one.** [TanStack Router #918](https://github.com/TanStack/router/issues/918) has been open since Jan 2024 with no maintainer resolution; React Router's [#5210](https://github.com/ReactTraining/react-router/issues/5210) became a proposal in 2023 and never shipped. Next.js and Nuxt both ship announcers — TanStack does not. **nativ owns the shell, so nativ owns this.**
+**No router ships one.** [TanStack Router #918](https://github.com/TanStack/router/issues/918) has been open since Jan 2024 with no maintainer resolution; React Router's [#5210](https://github.com/ReactTraining/react-router/issues/5210) became a proposal in 2023 and never shipped. Next.js and Nuxt both ship announcers — TanStack does not. **adaptv owns the shell, so adaptv owns this.**
 
 The evidence on *how*, from Gatsby's user testing with real screen-reader users: **focus a heading** won — *"would save time and make it clear what happened"*; focusing the app root was **unanimously rejected** as *"very overwhelming"*; live-region-only was *"quite useless"* for magnification users.
 
@@ -630,7 +630,7 @@ The evidence on *how*, from Gatsby's user testing with real screen-reader users:
 - **Async-loaded WKWebView content desyncs the AX tree** — Apple Developer Forums FB21257352 (Dec 2025); Apple DTS acknowledged *"could be a bug"*, no fix. Directly relevant to a JS-framework-in-WKWebView architecture.
 - **TalkBack `aria-live` regressed on Android 16** — Chromium [430807431](https://issues.chromium.org/issues/430807431): confirmed working on Android 15, broken on 16.
 
-One structural note in nativ's favour: WKWebView bridges the web a11y tree automatically via a remote-token handshake, re-registered on process relaunch. **No host-app setup is needed** — the documented hazard is the opposite (an ancestor native view returning an empty `accessibilityElements` array hides the whole web tree). Since nativ's WebView is the root view, this is a non-issue here.
+One structural note in adaptv's favour: WKWebView bridges the web a11y tree automatically via a remote-token handshake, re-registered on process relaunch. **No host-app setup is needed** — the documented hazard is the opposite (an ancestor native view returning an empty `accessibilityElements` array hides the whole web tree). Since adaptv's WebView is the root view, this is a non-issue here.
 
 ### B17 — `theme-color` went inert on iOS 26, and `useSyncTheme` depends on it
 
@@ -644,10 +644,10 @@ One structural note in nativ's favour: WKWebView bridges the web a11y tree autom
 
 Corroborated three ways: caniuse commit *"Safari 26 doesn't use theme-color anymore (#7366)"* (2025-08-30); [WebKit 301756](https://bugs.webkit.org/show_bug.cgi?id=301756), where the reporter notes Safari *"now automatically derives the top bar tint from the html or body background color after dropping support for `theme-color`"*; and an Apple WebKit engineer confirming the new model in that thread — a solid tint extension is *"only needed in cases where there's a viewport-constrained (fixed or sticky) element near one of the edges of the viewport."*
 
-**So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** nativ's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism nativ *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
+**So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** adaptv's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism adaptv *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
 
 > **⚠︎ Read B25–B26 as design constraints, not a defect list.** `src/` is the code lifted from
-> chopchop's `packages/nativ`; most of it is expected to be refactored for the standalone package. The
+> chopchop's `packages/adaptv`; most of it is expected to be refactored for the standalone package. The
 > value of these entries is **the pattern to avoid carrying forward**, not the line numbers.
 
 ### B27 — the Drawer's vaul attribution links point at `main`, and will rot
@@ -727,7 +727,7 @@ is not offline-only.
 
 **Lower severity, same report:** unbounded cache growth (`pages-<tag>`/`static-<tag>` minted per deploy,
 never swept — `cleanupOutdatedCaches()` doesn't touch them); no `updateViaCache: 'none'` on `register()`;
-no defensive unregister when `NATIV_TARGET === 'capacitor'` (a SW registered via dev `server.url`
+no defensive unregister when `ADAPTV_TARGET === 'capacitor'` (a SW registered via dev `server.url`
 silently poisons the installed app **and breaks OTA**); `/assets/*` uses SWR where `CacheFirst` is
 correct since filenames are content-hashed; and a dead `dev-sw.js?dev-sw` special-case in
 `unregister-foreign-service-workers.ts` left over from `vite-plugin-pwa`.
@@ -740,11 +740,11 @@ correct since filenames are content-hashed; and a dead `dev-sw.js?dev-sw` specia
 > sections `[CUTOFF]` and relied on training knowledge rather than fetched sources for the Workbox,
 > vite-plugin-pwa and Serwist *ecosystem* claims — treat those as weaker than `RENDERING.md §3`, which
 > was written from an agent that read shipped bundles. **The bug list above is the durable part**, because
-> every P0 in it was re-verified against nativ's own source before being recorded here.
+> every P0 in it was re-verified against adaptv's own source before being recorded here.
 
 ### B21 — ⚠︎ the Android WebView floor is **Chromium 119**, not 140. This corrects B18.
 
-B18 says the safe-area inset bug is *"fixed in WebView 140."* True — but **a large part of nativ's
+B18 says the safe-area inset bug is *"fixed in WebView 140."* True — but **a large part of adaptv's
 install base can never reach 140**, because WebView updates stop permanently at the Chromium version
 whose `min_sdk_version` still covers that OS.
 
@@ -762,7 +762,7 @@ versions can still update to the last supported WebView release but will not be 
 updates."* WebView is **not** a Mainline module — it's a plain Play Store APK, so a device without Play
 Services is frozen at its system image entirely.
 
-**Capacitor 8's `minSdk` is 24 → nativ ships to devices capped at Chromium 119.** Capacitor 9 alpha
+**Capacitor 8's `minSdk` is 24 → adaptv ships to devices capped at Chromium 119.** Capacitor 9 alpha
 raises `minSdk` to 26, which lifts the floor to **138** — the single biggest web-platform win in v9.
 
 **Consequences that change earlier entries:**
@@ -773,7 +773,7 @@ raises `minSdk` to 26, which lifts the floor to **138** — the single biggest w
   spec-correct fix (Chrome 144) does not.** `ANIMATION.md`'s CSS enter/exit path survives; the
   scroll-containment story on old Android does not.
 - **Capacitor's `minWebViewVersion` default of 60 is functionally dead** — Chromium 60 shipped in 2017,
-  so the built-in gate can never fire on any device that runs Capacitor 8. **nativ should set it
+  so the built-in gate can never fire on any device that runs Capacitor 8. **adaptv should set it
   explicitly and ship an `errorPath` page** — the only supported way to fail gracefully instead of
   white-screening. Caveat from the docs: *"On Android the html file won't have access to Capacitor
   plugins."*
@@ -790,11 +790,11 @@ issues #4721, #5764, #4913 and plugin failures like geolocation's *"Origin does 
 **And the reason people add the key mostly doesn't exist.** The widely-repeated claim that app-bound
 domains relax ITP's 7-day storage cap is contradicted by WebKit source: `isAppBoundITPRelaxationEnabled`
 is a `constexpr` **`false`**, verified unchanged at four points from 2021 to today. The one real benefit
-is Service Workers without an Apple-granted entitlement — which nativ doesn't need, since
+is Service Workers without an Apple-granted entitlement — which adaptv doesn't need, since
 `RENDERING.md §3.5` already forbids service workers on Capacitor.
 
-> **Decision: nativ must never add `WKAppBoundDomains`, and `create-nativ` should not scaffold it.** If a
-> consumer adds it, `nativ doctor` should detect the plist key without the config flag and fail loudly —
+> **Decision: adaptv must never add `WKAppBoundDomains`, and `create-adaptv` should not scaffold it.** If a
+> consumer adds it, `adaptv doctor` should detect the plist key without the config flag and fail loudly —
 > it is the highest-severity silent failure in the whole Capacitor surface.
 
 One useful undocumented detail: `localhost` is **auto-app-bound** in WebKit
@@ -847,13 +847,13 @@ budget, no state between runs, no DOM. Note `@capawesome/capacitor-background-ta
 implementation is literally a no-op (`// No-op for now. Android support will be added in a later
 version.`) despite advertising Android support.
 
-### B18 — safe-area root cause identified, plus a hard gate nativ must satisfy
+### B18 — safe-area root cause identified, plus a hard gate adaptv must satisfy
 
 The "insets are 0 on Android" problem is **upstream Chromium, not Capacitor**: [crbug 40699457](https://issues.chromium.org/issues/40699457), *"safe-area-inset-* values are always 0px in webview"* — **WebView-specific** (not Chrome Android), affecting **WebView < 140 regardless of OS version**. Fixed in WebView 140; a **second threshold at 144** covers the keyboard/IME case, so WebView 140–143 is only partially fixed.
 
 **Two undocumented details read from `SystemBars.java` at tag 8.4.2:**
 
-1. **`hasViewportCover` is a hard gate.** Capacitor runs JS to verify the viewport meta *literally contains* `viewport-fit=cover`. Without it, `shouldPassthroughInsets` is false and Capacitor **silently falls back to native padding even on WebView 140+**. nativ's shell must emit it unconditionally — this is a silent-failure trap.
+1. **`hasViewportCover` is a hard gate.** Capacitor runs JS to verify the viewport meta *literally contains* `viewport-fit=cover`. Without it, `shouldPassthroughInsets` is false and Capacitor **silently falls back to native padding even on WebView 140+**. adaptv's shell must emit it unconditionally — this is a silent-failure trap.
 2. The CSS-variable ordering in §6.0 is confirmed correct: **variable first, `env()` as fallback** — the inverse of what most people write.
 
 ### B19 — two smaller corrections worth not rediscovering
@@ -881,7 +881,7 @@ claim it was fixed in 26.1: **"No, there are still plenty of bugs here."**
 aWebView.scrollView.bounces = false
 ```
 
-with **no config key** — `grep` across `ios/` returns exactly that one hit. So **root rubber-band is already dead under Capacitor iOS**, and alive only in iOS Safari / installed PWA. nativ's CSS strategy is *required for web*, redundant-but-harmless on native. `useFreezeViewport` should feature-detect the shell rather than assume uniform behaviour.
+with **no config key** — `grep` across `ios/` returns exactly that one hit. So **root rubber-band is already dead under Capacitor iOS**, and alive only in iOS Safari / installed PWA. adaptv's CSS strategy is *required for web*, redundant-but-harmless on native. `useFreezeViewport` should feature-detect the shell rather than assume uniform behaviour.
 
 ### B15 — iOS swipe-back is a genuinely clean field under Capacitor
 
@@ -895,7 +895,7 @@ content, and `shouldReceiveTouch:` returns `YES` unconditionally. Neither `preve
 `touch-action` gates it. **So `edge-swipe-gestures.tsx` should be gated on `isInstalledApp()`** — free
 rein on native, structurally impossible in a browser tab.
 
-### B16 — cheap iOS insurance if nativ ever uses Popover
+### B16 — cheap iOS insurance if adaptv ever uses Popover
 
 Light dismiss was broken on iOS until **18.3** ([WebKit 267688](https://bugs.webkit.org/show_bug.cgi?id=267688),
 fixed 2025-01-27) — which is *why* the Popover API's Baseline is Jan 2025 rather than Apr 2024. At an
@@ -905,7 +905,7 @@ iOS 18 floor, **18.0–18.2 are affected**. One-line mitigation from the bug thr
 document.body.addEventListener('pointerdown', () => {})
 ```
 
-Moot under `ANIMATION.md §4.1` (nativ doesn't use the top layer), but worth knowing if that's revisited.
+Moot under `ANIMATION.md §4.1` (adaptv doesn't use the top layer), but worth knowing if that's revisited.
 
 ### B12 — two Capacitor web impls are actively wrong, not merely limited
 
@@ -927,7 +927,7 @@ abstracts the hybrid heavy-lifting."
 I previously leaned SPA (client-held token + offline-first ⇒ SSR buys little). **That reasoning was
 scoped too narrowly — to the authenticated app, ignoring everything around it.**
 
-The case that decides it: someone picks nativ *because* they want one codebase everywhere, and that app
+The case that decides it: someone picks adaptv *because* they want one codebase everywhere, and that app
 has a public surface — a landing page, pricing, docs, a shareable product page. **Defaulting to SPA
 kills SEO for all of it**, and the failure is silent and discovered late, after the marketing page is
 already ranking badly.
@@ -945,7 +945,7 @@ restrict route-chunk precaching — warm routes and instant navigation are ident
 choosing SSR costs nothing on the app side.
 
 **⚠︎ The one real build-step consequence:** TanStack Start emits `_shell.html` **only in SPA mode**, so
-`render:"ssr"` has no artifact for the SW's offline fallback to bind to. nativ must **generate** a
+`render:"ssr"` has no artifact for the SW's offline fallback to bind to. adaptv must **generate** a
 static, user-agnostic shell for the SSR case. Generated, never a captured response — so it's
 user-agnostic by construction rather than by luck. This is the single piece of offline behaviour that
 cannot move up to the JS layer (§3.0).
@@ -955,7 +955,7 @@ legacy, and the resolved default is `ssr`.
 
 ## 6.2 🔒 The dist build — empirically settled
 
-Tested by building a replica of nativ's exact package shape and consuming it from a real Vite 8 app.
+Tested by building a replica of adaptv's exact package shape and consuming it from a real Vite 8 app.
 
 **Shipping source works better than folklore claims — and still loses.** Vite 8's Rolldown scanner
 *does* pre-bundle raw `.ts`/`.tsx` from `node_modules` (verified in `.vite/deps/_metadata.json`), and
@@ -966,7 +966,7 @@ the CSS subpath resolves fine. But three things break hard:
    `UNRESOLVED_IMPORT` warning to a build error. **Every internal import must be relative.**
 2. **JSX in a `.ts` file is a hard failure**, fixable only by the consumer via `oxc.include`.
 3. **`skipLibCheck` does not save consumers.** It skips `.d.ts`, not `.ts` reached through `exports` —
-   so consumers inherit nativ's tsconfig assumptions and typecheck its source. This is the decisive one.
+   so consumers inherit adaptv's tsconfig assumptions and typecheck its source. This is the decisive one.
 
 Also: **Fast Refresh never reaches library components** either way (`@vitejs/plugin-react` skips
 `node_modules`), so "ship source for better DX" doesn't buy what people think.
@@ -980,7 +980,7 @@ dist-by-default with source behind a custom condition.
 
 **Tool: `tsdown` 0.22.12.** `tsup`'s own README now opens with *"This project is not actively maintained
 anymore. Please consider using tsdown instead."*; Vite's docs point at tsdown for *"non-browser
-libraries, or … advanced build flows"* — which is exactly nativ's `/vite` and `/sw` entries; and tsdown
+libraries, or … advanced build flows"* — which is exactly adaptv's `/vite` and `/sw` entries; and tsdown
 is VoidZero/Rolldown-org software, aligned with the consumer toolchain. **Honest caveat: it's still 0.x
 and tsup still out-downloads it 26M vs 10M/month.** Pin exactly; don't float the range.
 
@@ -1000,7 +1000,7 @@ and tsup still out-downloads it 26M vs 10M/month.** Pin exactly; don't float the
   `publint: true` + `attw: true` police it. Put `clean: true` on the *first* build object only.
 - **Don't build the CSS.** `@tsdown/css` is experimental and carries an **exact-version** peer dep on
   tsdown (`0.22.7` requires exactly `0.22.7`), emits a useless empty `styles.js` shim, and would run
-  nativ's hand-authored stylesheet through a second minifier before the consumer's own pipeline.
+  adaptv's hand-authored stylesheet through a second minifier before the consumer's own pipeline.
   Use `copy: [{ from: 'src/styles.css', to: 'dist/styles.css' }]` + a static export.
 
 **Two smaller settled points:** `sideEffects: ["**/*.css"]` — `*.css` and `**/*.css` are *identical*
@@ -1043,14 +1043,14 @@ release; the modular rewrite is deferred to v10 with no date. They ship **two th
 iOS 26 Liquid Glass theme.
 
 **Capacitor itself is healthy** — 110 open issues, well-groomed, Cap 9 in alpha. That asymmetry is close
-to ideal for nativ: the native bridge is funded and thriving; the UI-layer competitor is not.
+to ideal for adaptv: the native bridge is funded and thriving; the UI-layer competitor is not.
 
 ### Three things that should temper the thesis
 
-1. **nativ is not first.** [Capstart](https://github.com/AdrienADV/capstart) shipped 2026-02-14,
+1. **adaptv is not first.** [Capstart](https://github.com/AdrienADV/capstart) shipped 2026-02-14,
    explicitly supports TanStack Start, was pushed *yesterday* — and after five months has **26 stars and
    289 downloads/month**. That is the most direct read on *organic* demand available, and it's
-   discouraging. Whatever nativ ships must have an answer for why it wins where Capstart hasn't.
+   discouraging. Whatever adaptv ships must have an answer for why it wins where Capstart hasn't.
 2. **The space has no cultural energy.** The top on-topic HN thread in 18 months
    ([Ask HN: Webview vs React Native](https://news.ycombinator.com/item?id=46371761), Dec 2025) got
    **1 point and 3 comments**. Industry momentum in 2025–26 went the *other* way — Snapchat open-sourced
@@ -1063,24 +1063,24 @@ to ideal for nativ: the native bridge is funded and thriving; the UI-layer compe
 
 ### Dependency health — two traps in the obvious picks
 
-**`vaul` is dead, and nativ's `Drawer` cannot depend on it.** On 2025-10-03 Emil Kowalski replaced the
+**`vaul` is dead, and adaptv's `Drawer` cannot depend on it.** On 2025-10-03 Emil Kowalski replaced the
 README with *"This repo is unmaintained. I might come back to it at some point, but not in the near
 future."* Worse: npm `latest` is **1.1.2 from December 2024**, while fixes merged to `main` in July 2025
 were **never published**. Permanently open: iOS buttons unclickable when tapping text (#652), nested
 drawers inconsistent on Android 12+ (#646), back-gesture handling (#645), snap-point scroll (#635) —
-i.e. *exactly* the iOS/nested/keyboard class nativ cares about. Its 37M weekly downloads are shadcn
+i.e. *exactly* the iOS/nested/keyboard class adaptv cares about. Its 37M weekly downloads are shadcn
 inertia, not health. **Read its source before it bit-rots; don't depend on it.**
 
 **`@use-gesture/react` is dormant with no deprecation notice** — last publish 2024-03-21, ~2 years, crash
 fixes sitting unmerged, and broken against its own sibling `react-spring` v10. 5.6M downloads/week makes
-it look alive. It isn't. nativ already peer-deps `motion`; keep it that way and build only the
+it look alive. It isn't. adaptv already peer-deps `motion`; keep it that way and build only the
 pinch/wheel remainder `motion`'s `drag` doesn't cover.
 
 **Safe picks, confirmed healthy:** `motion` 12.42.2, `@tanstack/react-virtual` (pushed today),
 `embla-carousel` (pin 8.x — v9 has been in RC since January), `vite-plugin-pwa` — and note the last one
-insulates nativ from the Workbox maintenance question entirely, which matters given `RENDERING.md §3.6`
+insulates adaptv from the Workbox maintenance question entirely, which matters given `RENDERING.md §3.6`
 picks Workbox. The vite-pwa org began a from-scratch ESM Workbox reimplementation in Oct 2025; if it
-lands, nativ inherits it free.
+lands, adaptv inherits it free.
 
 ### App Store 4.2 — rejection is never "it's a WebView"
 
@@ -1093,7 +1093,7 @@ fixing **white-flicker on launch** and iPhone X+ header glitches.
 > **Native plugins are not sufficient. Perceived nativeness of the UI is what the reviewer scores** —
 > and reviewers literally screenshot the chrome.
 
-Most of the mitigations are things nativ already owns, which is the point — **the framework should make
+Most of the mitigations are things adaptv already owns, which is the point — **the framework should make
 apps pass 4.2 by default**: local-first bundle (make a remote-URL shell loud to opt into — that's 4.2.2
 on sight), no browser chrome ever, native splash with **no white launch flash** (already solved — §1.4),
 correct safe areas, external links through `SFSafariViewController` by default with a lint rule on
@@ -1140,7 +1140,7 @@ STYLING.md     ⚠︎ TO WRITE — the styling & theming contract (O1)
 FACADE.md      ⚠︎ TO WRITE — TanStack opacity + the server-only ban (O2, O3)
 PRIOR-ART.md   ⚠︎ TO WRITE — the Ionic/Capacitor port list + attribution (O6)
 BEHAVIORS.md   the per-fix catalogue
-NATIVE-SHELL.md the @nativ/shell plugin design
+NATIVE-SHELL.md the @adaptv/shell plugin design
 TESTING.md     six-target discipline
 RESEARCH.md    upstream issues to watch
 capacitor-internals.md version pins + native gotchas

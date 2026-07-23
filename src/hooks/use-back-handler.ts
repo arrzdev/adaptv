@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react"
-import type { BackHandler } from "#nativ/capabilities/back-chain"
+import type { BackHandler } from "#adaptv/capabilities/back-chain"
 import {
   BackPriority,
   registerBackHandler,
-} from "#nativ/capabilities/back-chain"
+} from "#adaptv/capabilities/back-chain"
 
 /**
  * Intercept the back press while this component is mounted.

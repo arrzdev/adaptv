@@ -1,9 +1,9 @@
 import { useEffect, useRef, useSyncExternalStore } from "react"
-import type { AppState } from "#nativ/capabilities/app-state"
+import type { AppState } from "#adaptv/capabilities/app-state"
 import {
   getAppState,
   subscribeAppState,
-} from "#nativ/capabilities/app-state"
+} from "#adaptv/capabilities/app-state"
 
 /**
  * Reactive foreground state — `"active"` or `"background"`.

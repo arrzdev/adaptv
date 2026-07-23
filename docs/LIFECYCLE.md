@@ -1,6 +1,6 @@
-# nativ — the framework lifecycle
+# adaptv — the framework lifecycle
 
-> How a nativ app goes from **one config + one codebase** to **six running targets** and stays updated:
+> How a adaptv app goes from **one config + one codebase** to **six running targets** and stays updated:
 > configure → develop → build → deploy (SSR+SW / SPA per target) → native APK/IPA → over-the-air updates.
 > The Vite plugin's decision model, the CLI surface, and the seams that keep it all driven by one file.
 >
@@ -13,42 +13,42 @@
 
 ## 0. The shape of the lifecycle
 
-One `nativ.config.ts` + one React codebase fan out into **two build lineages** that never cross:
+One `adaptv.config.ts` + one React codebase fan out into **two build lineages** that never cross:
 
 ```
-                          nativ.config.ts  (single source of truth)
+                          adaptv.config.ts  (single source of truth)
                                    │
           ┌────────────────────────┴───────────────────────────┐
           ▼                                                     ▼
-   WEB lineage  (vite build)                        NATIVE lineage  (nativ CLI)
+   WEB lineage  (vite build)                        NATIVE lineage  (adaptv CLI)
    target = "web"                                   target = "capacitor"
    render = ssr | spa   · SW on/off                 render = spa (forced) · SW off (forced)
    → dist/  (server + client + sw.js)               → dist-capacitor/client  (static SPA shell)
           │                                                     │
    deploy to a host (CF/Vercel/Node) or static      cap sync → android/ · ios/  →  APK / IPA
           │                                                     │
-   SW revalidate = free OTA for web/PWA             nativ OTA = bundle-swap of dist-capacitor  ⚠︎
+   SW revalidate = free OTA for web/PWA             adaptv OTA = bundle-swap of dist-capacitor  ⚠︎
 ```
 
 The two lineages share **everything above the build** (routes, components, capabilities, the shell) and
 **nothing below it**. The native SPA (`dist-capacitor/`) is produced **only** by the CLI and is **never**
 emitted by a plain `vite build` — so a web deploy can't accidentally build or ship the Capacitor bundle
 (this separation already holds: `capacitor.config.json` + `dist-capacitor/` materialize only under
-`NATIV_TARGET=capacitor`).
+`ADAPTV_TARGET=capacitor`).
 
 The five stages: **1. Configure · 2. Develop · 3. Build · 4. Deploy · 5. Update.**
 
 ---
 
-## 1. Configure — `nativ.config.ts` is the only knob surface
+## 1. Configure — `adaptv.config.ts` is the only knob surface
 
 Everything downstream is derived from `defineApp({...})`. The consumer never hand-writes
 `capacitor.config`, a web manifest, a TanStack Start config, a service worker registration, or a native
-project setting — nativ generates each from this file (doctrine §1: configure *intent*, not mechanism).
+project setting — adaptv generates each from this file (doctrine §1: configure *intent*, not mechanism).
 
 Both readers (the Vite plugin's `loadAppConfig`, the CLI's `loadConfig`) bundle it with esbuild to a
 `data:` URL with **dynamic imports left external**, so the screen thunks (`splashScreen: () =>
-import(...)`) never execute at build time — nativ reads their specifier and emits a static import in the
+import(...)`) never execute at build time — adaptv reads their specifier and emits a static import in the
 generated root. One file, two consumers, identical data.
 
 ### 1.1 What drives the lifecycle (today)
@@ -62,7 +62,7 @@ generated root. One file, two consumers, identical data.
 
 > ### ✅ BUILT (2026-07-20) — the `web` block resolves; static emit is wired but blocked on a shell
 >
-> `src/config/web-config.ts` resolves the block once in `nativ()` and shares it via `NativContext`, so
+> `src/config/web-config.ts` resolves the block once in `adaptv()` and shares it via `AdaptvContext`, so
 > `render`/`host`/SW settings cannot drift between the router wiring, the manifest and the SW build.
 > 16 tests.
 >
@@ -70,15 +70,15 @@ generated root. One file, two consumers, identical data.
 >   the legacy `router.render` defaulted to `"spa"` while the docs said `"ssr"`. Both legacy fields still
 >   work as escape hatches, with the `web` block winning.
 > - **`target: "capacitor"` is an override, not a default** (L12) — SPA + no SW + static host, unconditionally.
-> - **`nativStaticHostPlugin`** emits `index.html`, `404.html`, `.nojekyll` and `_redirects`
+> - **`adaptvStaticHostPlugin`** emits `index.html`, `404.html`, `.nojekyll` and `_redirects`
 >   (`DECISIONS.md` B26). It gates on the **`ssr` environment**, because `closeBundle` fires once per
 >   environment and the client build finishes first — running then looks for a shell that has not been
 >   written yet and fails with a misleading error.
 >
 > ⛔ **`host: "static"` still cannot complete, and the reason corrects an assumption in this doc.**
 > Measured in project-zero: with `spa: { enabled: true }` and the Cloudflare adapter, **Start emitted no
-> HTML at all** — no `_shell.html`, no `index.html`. So "copy Start's shell" is not a foundation nativ
-> can stand on, and `RENDERING.md §3.1.2`'s requirement that nativ **generate** its own user-agnostic
+> HTML at all** — no `_shell.html`, no `index.html`. So "copy Start's shell" is not a foundation adaptv
+> can stand on, and `RENDERING.md §3.1.2`'s requirement that adaptv **generate** its own user-agnostic
 > shell is load-bearing rather than belt-and-braces. The emit plugin is built and wired; it has nothing
 > to copy. It now fails with an accurate message naming the real cause. → CORE 5.
 >
@@ -119,34 +119,34 @@ export default defineApp({
   (defaulting to SPA silently kills SEO and is discovered late; defaulting to SSR costs a config flip).
   ⚠︎ the legacy code defaults `router.render` to `"spa"`; `web.render` resolves it.
 - **`offlineComponent`** mirrors `splashScreen` exactly: one consumer-owned component with optional
-  props, rendered by **nativ** when the app can't boot far enough for a route to exist, and by the
+  props, rendered by **adaptv** when the app can't boot far enough for a route to exist, and by the
   **consumer** when a mounted route's data is unavailable. → `RENDERING.md §3.1.2`.
 - **`web.sw.precacheDocuments`** is empty by default. Route *chunks* are always precached (that's what
   makes navigation instant); this allowlist is only for public HTML documents.
-- `web.host` maps to a TanStack Start deploy preset — this is *precisely* why nativ keeps Start (roadmap
+- `web.host` maps to a TanStack Start deploy preset — this is *precisely* why adaptv keeps Start (roadmap
   #4): rent its deploy-anywhere adapters instead of owning CD. `host: "static"` + `render: "spa"` is the
   fully-static PWA path (§3.2).
 - `native.appId` presence is the **native opt-in/opt-out** switch (§6). `ota` presence enables §5.
 
 ---
 
-## 2. Develop — `nativ dev`
+## 2. Develop — `adaptv dev`
 
 ### 2.1 Web / PWA dev (today)
 
-`vite dev` (through the `nativ()` plugin) runs the app with HMR. The plugin's `configureServer` watcher
-re-loads `nativ.config.ts` (and any module it imports) on change and full-reloads. Standalone-PWA and
+`vite dev` (through the `adaptv()` plugin) runs the app with HMR. The plugin's `configureServer` watcher
+re-loads `adaptv.config.ts` (and any module it imports) on change and full-reloads. Standalone-PWA and
 mobile-browser dev = the same dev server opened on a phone / simulator over the LAN.
 
-### 2.2 ⚠︎ Delta — `nativ dev` as the unified entry, with device live-reload
+### 2.2 ⚠︎ Delta — `adaptv dev` as the unified entry, with device live-reload
 
-There is **no `nativ dev` command today** (contra a stale HANDOFF note); web dev is bare `vite dev`.
+There is **no `adaptv dev` command today** (contra a stale HANDOFF note); web dev is bare `vite dev`.
 **Recommended:**
 
 ```bash
-nativ dev                    # = vite dev (web/PWA HMR)
-nativ dev --host ios         # vite dev + cap run ios with server.url → the dev server (live-reload on device)
-nativ dev --host android     # same for Android
+adaptv dev                    # = vite dev (web/PWA HMR)
+adaptv dev --host ios         # vite dev + cap run ios with server.url → the dev server (live-reload on device)
+adaptv dev --host android     # same for Android
 ```
 
 `--host` uses Capacitor's live-reload (`server.url` → the LAN dev-server URL) so a real device/emulator
@@ -158,9 +158,9 @@ WebView, while JS edits hot-reload.
 
 ## 3. The Vite plugin — the deploy decision model
 
-One `nativ()` call in `vite.config.ts`. It is an **async plugin factory**: it loads the config first (so
+One `adaptv()` call in `vite.config.ts`. It is an **async plugin factory**: it loads the config first (so
 Start is configured from it and the generated root/router exist before any hook), then returns the plugin
-array (`nativ()` + TanStack Start + React + manifest + SW-build + PWA-register virtuals).
+array (`adaptv()` + TanStack Start + React + manifest + SW-build + PWA-register virtuals).
 
 ### 3.1 The decision matrix (target × render × sw)
 
@@ -168,7 +168,7 @@ The single most important table in the lifecycle — how one codebase resolves t
 
 | `target` | `web.render` | `web.sw` | → render | → service worker | → server? | Output dir |
 |---|---|---|---|---|---|---|
-| `web` | `ssr` | `true` | **SSR** | yes (nativ-owned) | yes (adapter) | `dist/` (server + client + `sw.js`) |
+| `web` | `ssr` | `true` | **SSR** | yes (adaptv-owned) | yes (adapter) | `dist/` (server + client + `sw.js`) |
 | `web` | `spa` | `true` | **SPA** prerender | yes | no | `dist/client/` (static + `sw.js`) |
 | `web` | `spa` | `false` | **SPA** prerender | no | no | `dist/client/` (static) |
 | `capacitor` | — *forced* — | — *forced* — | **SPA** | **off** | no | `dist-capacitor/client/` |
@@ -176,12 +176,12 @@ The single most important table in the lifecycle — how one codebase resolves t
 **Precedence (the rule the consumer asked for):**
 1. **`target = "capacitor"` is absolute** — always `render:"spa"` + `sw:false`, no matter what the config
    says. A WebView has no server to SSR into, and the on-device bundle *is* the offline shell, so a SW
-   would fight it (`RENDERING.md §1`). Only the nativ CLI ever sets this target (`NATIV_TARGET=capacitor`).
+   would fight it (`RENDERING.md §1`). Only the adaptv CLI ever sets this target (`ADAPTV_TARGET=capacitor`).
 2. **For `target = "web"`, the consumer's `web.render` / `web.sw` win.** So "I want a static SPA + SW on
    the web anyway" (deploy to a CDN, no server) is just `web: { render: "spa", host: "static", sw: true }`
    — fully supported, no native involvement.
 
-This already works mechanically today via `options.target ?? NATIV_TARGET` + `config.router.render` +
+This already works mechanically today via `options.target ?? ADAPTV_TARGET` + `config.router.render` +
 `config.sw`; the delta is only the nicer `web` config surface (§1.2) feeding it.
 
 ### 3.2 Static deploy — the "SPA + SW, no server" path
@@ -192,12 +192,12 @@ updates via SW revalidate — deployable to any static host (`host:"static"`), n
 correct path for devs who "just want to deploy statically," and it's a per-app choice that never touches
 the native lineage.
 
-### 3.3 Generated files & the `.nativ/` future
+### 3.3 Generated files & the `.adaptv/` future
 
 The plugin **stamps** the generated root route + router entry (`router.gen`) unless the app ejects
 (`src/router.tsx` / `src/client.tsx`). Today these land at the app root; the `ARCHITECTURE.md §3` plan
-relocates them (and the TanStack `*.gen` route tree) into a hidden `.nativ/` dir so the consumer's source
-imports only `nativ`. That's a build-plumbing change layered on top of this same stamping step.
+relocates them (and the TanStack `*.gen` route tree) into a hidden `.adaptv/` dir so the consumer's source
+imports only `adaptv`. That's a build-plumbing change layered on top of this same stamping step.
 
 ---
 
@@ -205,23 +205,23 @@ imports only `nativ`. That's a build-plumbing change layered on top of this same
 
 ### 4.1 Build
 
-`vite build` (via `nativ()`), driven by §3.1 for `target:"web"`:
+`vite build` (via `adaptv()`), driven by §3.1 for `target:"web"`:
 - **SSR:** emits the server bundle + `dist/client/` + `dist/client/sw.js` (the SW build runs on the SSR
   environment's `closeBundle`, bundles the app-authored `src/sw.ts`, injects the Workbox precache
-  manifest + a content-hashed `__NATIV_BUILD_TAG__` so the cache namespace tracks the deployed assets).
+  manifest + a content-hashed `__ADAPTV_BUILD_TAG__` so the cache namespace tracks the deployed assets).
 - **SPA/static:** emits `dist/client/` (+ `sw.js`) only, no server.
 
 ### 4.2 Deploy
 
-nativ deliberately **does not own web CD** — `web.host` selects a TanStack Start adapter and the actual
+adaptv deliberately **does not own web CD** — `web.host` selects a TanStack Start adapter and the actual
 deploy is the host's own tool (`wrangler deploy`, `vercel`, a Node process, or copying `dist/client/` to
-a bucket). Renting Start's adapters is the whole reason to keep it (roadmap #4); nativ's job stops at
+a bucket). Renting Start's adapters is the whole reason to keep it (roadmap #4); adaptv's job stops at
 producing the correct adapter output. (⚠︎ delta: today the example hardcodes the Cloudflare adapter in
 `vite.config.ts`; the target is `web.host` selecting it.)
 
 ### 4.3 OTA for web is free
 
-A new deploy → the nativ SW revalidates the shell + assets (`autoUpdate`) → the next load is fresh. No
+A new deploy → the adaptv SW revalidates the shell + assets (`autoUpdate`) → the next load is fresh. No
 extra mechanism; this is the SW's job (`RENDERING.md §3`). Only the **native** lineage needs a real OTA
 system — §5.
 
@@ -259,27 +259,27 @@ storefront for other apps.
 runs in a virtual machine or an interpreter… (such as **JavaScript in a webview** or browser)"* — with
 the standing obligation that OTA content must not itself violate Play policy.
 
-> **Net: nativ's OTA design is squarely inside both stores' rules, and the 2026 DPLA rewrite made
+> **Net: adaptv's OTA design is squarely inside both stores' rules, and the 2026 DPLA rewrite made
 > Apple's position clearer and slightly broader, not narrower.** The hard line is unchanged: web
 > assets only. No `.dylib`/`.framework`/`dex`/`JAR`/`.so`, ever — the packer must reject them.
 
 ### 5.2 The channel lives in the app's own web deploy
 
-nativ hosts OTA on the **same origin the web app already deploys to** — no Appflow/Capgo backend:
+adaptv hosts OTA on the **same origin the web app already deploys to** — no Appflow/Capgo backend:
 
 ```
-https://app.acme.com/.well-known/nativ/ota/<channel>/
+https://app.acme.com/.well-known/adaptv/ota/<channel>/
    manifest.json          → { buildTag, nativeFingerprint, url, sha256, minShell, createdAt }
    bundle-<buildTag>.zip   → the gzipped dist-capacitor/client
 ```
 
-`nativ ota build` (§7) produces the zip + manifest and drops them under the web app's `public/` so the
+`adaptv ota build` (§7) produces the zip + manifest and drops them under the web app's `public/` so the
 **ordinary web deploy carries them** — literally "the build is saved on every deployment." Channels:
 `production` / `staging` / per-PR preview.
 
 ### 5.3 The safety gate — `nativeFingerprint`
 
-The crux (the thing Capgo's CLI gets right, `RESEARCH.md §5`). At build time nativ computes a
+The crux (the thing Capgo's CLI gets right, `RESEARCH.md §5`). At build time adaptv computes a
 **`nativeFingerprint`** = hash of the native surface: the installed Capacitor plugin set + versions +
 core version + `appId` + any custom native code. It's baked into **both** the store binary and every OTA
 manifest.
@@ -287,7 +287,7 @@ manifest.
 - **fingerprint matches** → the JS bundle is compatible with the installed shell → OTA is safe: download,
   verify `sha256`, unpack to a data dir, set as the pending bundle, **apply on next launch**.
 - **fingerprint differs** → native surface changed → OTA is **refused**; the updater surfaces "update
-  available in the App Store" instead of hot-swapping. This is what keeps nativ inside **DPLA §3.3.1(B)**
+  available in the App Store" instead of hot-swapping. This is what keeps adaptv inside **DPLA §3.3.1(B)**
   (per the §5.1 correction — *not* "§3.3.2", which is Regulatory Compliance) and prevents a JS bundle
   from running against an incompatible native shell.
 
@@ -395,8 +395,8 @@ across one store release without bricking updates.
 ### 5.5 Own the policy, rent the swap
 
 Per doctrine (`ARCHITECTURE.md §0.6`: rent stable cores, own seams) and `RESEARCH.md §5` ("don't DIY the
-bundle-swap blindly"): nativ **owns** the channel convention, the manifest schema, the `nativeFingerprint`
-gate, the watchdog/rollback policy, and the resume-driven check; nativ **rents** the low-level
+bundle-swap blindly"): adaptv **owns** the channel convention, the manifest schema, the `nativeFingerprint`
+gate, the watchdog/rollback policy, and the resume-driven check; adaptv **rents** the low-level
 `WebView.setServerBasePath` bundle-swap rather than hand-rolling the native file juggling.
 
 **🔒 Plugin pick: `@capawesome/capacitor-live-update` (MIT, 8.3.0)** — per `DECISIONS.md` **O8**.
@@ -409,13 +409,13 @@ gate, the watchdog/rollback policy, and the resume-driven check; nativ **rents**
 
 **Two traps that must be encoded, not discovered:**
 
-1. **Capawesome defaults `readyTimeout` to `0`, which means rollback is _disabled_.** nativ must force a
+1. **Capawesome defaults `readyTimeout` to `0`, which means rollback is _disabled_.** adaptv must force a
    non-zero value — otherwise §5.4's watchdog silently doesn't exist and a bad bundle bricks the app.
 2. **iOS persistence requires conforming to `Library/NoCloud/ionic_built_snapshots/<id>/`.** Deviate and
    the bundle silently fails to persist across cold launch — it appears to work in testing and fails in
    the field.
 
-**What nativ still owns regardless of the pick:** the `.well-known` channel convention, the manifest
+**What adaptv still owns regardless of the pick:** the `.well-known` channel convention, the manifest
 schema, the `nativeFingerprint` computation, signature verification (§5.4d), the boot watchdog, and the
 resume-driven check. The plugin is only the file-juggling + `serverBasePath` layer, which keeps the swap
 replaceable — if Capgo's licensing or health changes, the seam is one module wide. If neither plugin
@@ -428,42 +428,42 @@ documented fallback.
 
 **Omit `native.appId` and the app is web-only, full stop:**
 - No `capacitor.config.json` is stamped, no `android/` or `ios/` project, no `dist-capacitor/`.
-- The `nativ` CLI's native commands (`run`/`build`/`sync`/`assets`) refuse fast: *"needs an `appId`."*
+- The `adaptv` CLI's native commands (`run`/`build`/`sync`/`assets`) refuse fast: *"needs an `appId`."*
 - `vite build` produces the normal web/PWA output (`dist/`) exactly as in §4 — SSR or static SPA per §3.
 - The Capacitor plugins are **optional peer deps**, so a web-only app never installs them.
 
 And the inverse guarantee the goal asks for: **a web build never produces or serves the Capacitor SPA.**
-`dist-capacitor/` + `capacitor.config.json` materialize *only* under `NATIV_TARGET=capacitor`, which only
+`dist-capacitor/` + `capacitor.config.json` materialize *only* under `ADAPTV_TARGET=capacitor`, which only
 the CLI sets — so the two lineages stay physically separate (the one exception is opt-in OTA §5.2, where
 you *deliberately* emit the bundle into the web deploy's public path).
 
 ---
 
-## 7. The CLI — `bin/nativ.mjs`
+## 7. The CLI — `bin/adaptv.mjs`
 
 The CLI owns the **entire native toolchain** so the consumer never touches Capacitor, the env
 (`ANDROID_HOME`/`JAVA_HOME`/`pod`/`LANG` are auto-resolved — explicit env still wins), or the asset
-generator by hand. It reads the same `nativ.config.ts`.
+generator by hand. It reads the same `adaptv.config.ts`.
 
 ### 7.1 Commands (today)
 
 | Command | Pipeline |
 |---|---|
-| `nativ doctor` | check toolchain (JDK, Android SDK, Xcode, pod) + that the app has the base Capacitor plugins installed (Cap only auto-discovers **direct** deps) |
-| `nativ run <ios\|android\|all> [--target id] [--latest] [--verbose]` | build SPA (`NATIV_TARGET=capacitor`) → brand icons/splash → `cap sync` → `cap run` on device/sim. `all` = both, **in parallel** |
-| `nativ build <ios\|android\|all> [--output path] [--verbose]` | …sync → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**). Artifact lands at `--output` or `.nativ/<app>.apk`\|`.ipa` |
+| `adaptv doctor` | check toolchain (JDK, Android SDK, Xcode, pod) + that the app has the base Capacitor plugins installed (Cap only auto-discovers **direct** deps) |
+| `adaptv run <ios\|android\|all> [--target id] [--latest] [--verbose]` | build SPA (`ADAPTV_TARGET=capacitor`) → brand icons/splash → `cap sync` → `cap run` on device/sim. `all` = both, **in parallel** |
+| `adaptv build <ios\|android\|all> [--output path] [--verbose]` | …sync → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**). Artifact lands at `--output` or `.adaptv/<app>.apk`\|`.ipa` |
 
 `sync` and `assets` are no longer standalone commands — they're internal steps of `run`/`build`.
 
-**Native projects live in `.nativ/`.** `cap add`/`sync`/`run` are pointed at `.nativ/ios` and
-`.nativ/android` via `android.path`/`ios.path` in the generated `capacitor.config.json` (relative to the
-app root, where `cap` reads it). So *everything* nativ generates — the route tree and both native
+**Native projects live in `.adaptv/`.** `cap add`/`sync`/`run` are pointed at `.adaptv/ios` and
+`.adaptv/android` via `android.path`/`ios.path` in the generated `capacitor.config.json` (relative to the
+app root, where `cap` reads it). So *everything* adaptv generates — the route tree and both native
 projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. A legacy app-root
-`ios/`/`android/` is migrated into `.nativ/` on the next run.
+`ios/`/`android/` is migrated into `.adaptv/` on the next run.
 
-**Device targeting.** nativ owns the picker (rather than Capacitor's opaque one) so it can cache your
+**Device targeting.** adaptv owns the picker (rather than Capacitor's opaque one) so it can cache your
 choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and
-writes the pick to `.nativ/devices.json`. `--target <id>` selects directly (and caches); `--latest`
+writes the pick to `.adaptv/devices.json`. `--target <id>` selects directly (and caches); `--latest`
 reuses the cached device (falling back to the picker if none). *Listing requires the platform to exist,
 so `run` prepares the native project **before** resolving the target.*
 
@@ -479,48 +479,48 @@ Every native build runs the same spine: **`buildWeb(capacitor)` → `generateAss
 `colors.xml`/`colors-night.xml`; iOS colour asset + solid storyboard) and re-applied idempotently every
 sync (`BEHAVIORS.md §3`).
 
-> **`nativ run web`** is reserved for a future Vite dev/preview wrapper (nativ is Vite-based). For now
+> **`adaptv run web`** is reserved for a future Vite dev/preview wrapper (adaptv is Vite-based). For now
 > use the app's `vite dev` / `vite preview`. Web *deploy* stays out of the CLI by design — it's the
 > host's tool, driven by `web.host`.
 
 ### 7.2 Testing native builds
 
-The native test loop is `nativ run <platform>` onto a simulator/emulator (both available locally),
-against the six-target discipline in `TESTING.md`. ⚠︎ *Future:* a `nativ e2e` that drives the sim/emulator
+The native test loop is `adaptv run <platform>` onto a simulator/emulator (both available locally),
+against the six-target discipline in `TESTING.md`. ⚠︎ *Future:* a `adaptv e2e` that drives the sim/emulator
 (Maestro/Appium or the simulator MCP) so the native matrix can run in CI — out of scope for this pass,
 flagged in `VISION.md §9`.
 
 ### 7.3 Signing & distribution
 
-- **Android:** debug `.apk` is fully automated. Release signing (keystore) is the user's — a `nativ build
+- **Android:** debug `.apk` is fully automated. Release signing (keystore) is the user's — a `adaptv build
   android --release` that reads a keystore from config/env is a reasonable ⚠︎ future add.
-- **iOS:** only the **unsigned** `.ipa` is automatable (`nativ build ios` → `scripts/build-ipa.sh`);
+- **iOS:** only the **unsigned** `.ipa` is automatable (`adaptv build ios` → `scripts/build-ipa.sh`);
   signed TestFlight/App Store builds stay in Xcode ▸ Archive (signing identities/provisioning are
-  Apple-account state nativ shouldn't hold). nativ stops at the artifact — it does not own fastlane
+  Apple-account state adaptv shouldn't hold). adaptv stops at the artifact — it does not own fastlane
   (⚠︎ open question in `VISION.md §9`).
 
 ### 7.4 ⚠︎ Delta — designed additions
 
 | Command | Purpose |
 |---|---|
-| `nativ dev [--host ios\|android]` | §2.2 — unified dev entry with device live-reload |
-| `nativ ota build [--channel c]` | §5 — build `dist-capacitor` + compute `buildTag`/`nativeFingerprint` + write manifest + zip into the web `public/.well-known/nativ/ota/<channel>/` |
-| `nativ ota status` | inspect the current channel manifest vs the installed build |
+| `adaptv dev [--host ios\|android]` | §2.2 — unified dev entry with device live-reload |
+| `adaptv ota build [--channel c]` | §5 — build `dist-capacitor` + compute `buildTag`/`nativeFingerprint` + write manifest + zip into the web `public/.well-known/adaptv/ota/<channel>/` |
+| `adaptv ota status` | inspect the current channel manifest vs the installed build |
 
 Web deploy stays **out** of the CLI on purpose (§4.2) — it's the host's tool, driven by `web.host`.
 
 ---
 
-## 8. ⚠︎ `create-nativ` — scaffolding (roadmap #3)
+## 8. ⚠︎ `create-adaptv` — scaffolding (roadmap #3)
 
-`pnpm create nativ` (a separate package / `bin`) emits a ready app so the lifecycle starts from a correct
+`pnpm create adaptv` (a separate package / `bin`) emits a ready app so the lifecycle starts from a correct
 baseline, not hand-assembly:
-- `nativ.config.ts` (with a `web` block, optional `native.appId`, optional `ota`).
-- `vite.config.ts` with a single `nativ()` call.
+- `adaptv.config.ts` (with a `web` block, optional `native.appId`, optional `ota`).
+- `vite.config.ts` with a single `adaptv()` call.
 - A `routing/` dir + one example `View`-rooted route (§`ARCHITECTURE.md §1`).
 - `src/sw.ts`, `src/styles/main.css`, `assets/logo.png` placeholder.
-- Scripts wired to `nativ dev` / `vite build` / `nativ run`.
-- Optionally scaffolds `android/`/`ios/` on first `nativ sync` rather than at create time (keeps the repo
+- Scripts wired to `adaptv dev` / `vite build` / `adaptv run`.
+- Optionally scaffolds `android/`/`ios/` on first `adaptv sync` rather than at create time (keeps the repo
   lean; native projects are regenerable from config).
 
 ---
@@ -528,21 +528,21 @@ baseline, not hand-assembly:
 ## 9. Lifecycle at a glance
 
 ```
-CONFIGURE   nativ.config.ts  ── web{render,host,sw} · native{appId} · ota{channel}
+CONFIGURE   adaptv.config.ts  ── web{render,host,sw} · native{appId} · ota{channel}
                 │
-DEVELOP     nativ dev [--host ios|android]        (HMR; live-reload on device)
+DEVELOP     adaptv dev [--host ios|android]        (HMR; live-reload on device)
                 │
 BUILD  ┌── web:      vite build ──────────────→ dist/         (SSR+SW | static SPA+SW)
-       └── native:   nativ run|build|sync ─────→ dist-capacitor/ → cap → APK | IPA
+       └── native:   adaptv run|build|sync ─────→ dist-capacitor/ → cap → APK | IPA
                 │
 DEPLOY ┌── web:      host tool (wrangler/vercel/node/static bucket)
        └── native:   sideload IPA/APK · TestFlight/Store (Xcode signing)
                 │
 UPDATE ┌── web/PWA:  SW revalidate                (free)
-       └── native:   nativ ota build → manifest+bundle rides the web deploy;
+       └── native:   adaptv ota build → manifest+bundle rides the web deploy;
                      app checks on launch/resume → fingerprint-gated swap → apply next launch
 ```
 
 **The invariant:** one config, one codebase; two build lineages that never cross; each target gets the
-delivery + update mechanism that is correct for it, chosen by nativ, tunable only where the choice is
+delivery + update mechanism that is correct for it, chosen by adaptv, tunable only where the choice is
 legitimately the developer's (`web.render`/`host`/`sw`, `ota.channel`, native opt-out).

@@ -1,6 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { EdgeSwipeGestures } from "#nativ/components/edge-swipe-gestures"
+import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
 
 afterEach(cleanup)
 

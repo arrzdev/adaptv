@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   resolveUpdateMode,
   shouldApplyUpdateNow,
-} from "#nativ/shell/sw-update-mode"
+} from "#adaptv/shell/sw-update-mode"
 
 describe("resolveUpdateMode — the default is the decision", () => {
   //B3: `autoUpdate` was the only mode and applied skipWaiting + reload

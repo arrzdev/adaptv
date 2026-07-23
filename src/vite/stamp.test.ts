@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { NativAppConfig } from "#nativ/config/app-config"
-import { renderRootRouteModule } from "#nativ/vite/root-route-module"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import { renderRootRouteModule } from "#adaptv/vite/root-route-module"
 
 /**
  * Build a screen thunk WITHOUT writing a literal `import()` in this file.
@@ -8,7 +8,7 @@ import { renderRootRouteModule } from "#nativ/vite/root-route-module"
  * `extractThunkSpecifier` reads the specifier out of `thunk.toString()`, so the
  * text is all that matters — and a real dynamic import here would be statically
  * analysed by Vite and fail to resolve, since `@/…` is the *consumer's* alias and
- * does not exist inside nativ.
+ * does not exist inside adaptv.
  */
 function screenThunk(specifier: string) {
   return new Function(
@@ -16,7 +16,7 @@ function screenThunk(specifier: string) {
   ) as never
 }
 
-function config(extra: Partial<NativAppConfig> = {}): NativAppConfig {
+function config(extra: Partial<AdaptvAppConfig> = {}): AdaptvAppConfig {
   return {
     name: "Probe",
     description: "d",
@@ -27,7 +27,7 @@ function config(extra: Partial<NativAppConfig> = {}): NativAppConfig {
       routerConfig: "./src/routes.config.ts",
     },
     ...extra,
-  } as NativAppConfig
+  } as AdaptvAppConfig
 }
 
 describe("renderRootRouteModule — screen thunks become STATIC imports", () => {
@@ -58,7 +58,7 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
   })
 
   it("omits the field entirely when the app does not override it", () => {
-    //absent, not `undefined` — so nativ's own default applies
+    //absent, not `undefined` — so adaptv's own default applies
     const source = renderRootRouteModule(config())
     expect(source).not.toContain("offlineComponent")
   })
@@ -73,14 +73,14 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
   })
 })
 
-describe("nativ generates no router entry at all", () => {
-  //`.nativ/router.gen.tsx` used to hold `getRouter`, and the justification was
+describe("adaptv generates no router entry at all", () => {
+  //`.adaptv/router.gen.tsx` used to hold `getRouter`, and the justification was
   //"Start needs a module PATH exporting it". True — but the path does not have to
   //be in the consumer's tree. It is now a package module reached through the
-  //`#nativ-route-tree` alias, so `.nativ/` holds exactly one file: TanStack's
+  //`#adaptv-route-tree` alias, so `.adaptv/` holds exactly one file: TanStack's
   //generated route tree, which genuinely is derived from the app's route files.
   it("does not export a router-entry generator any more", async () => {
-    const stamp = await import("#nativ/vite/stamp")
+    const stamp = await import("#adaptv/vite/stamp")
     expect("renderRouterGen" in stamp).toBe(false)
   })
 })

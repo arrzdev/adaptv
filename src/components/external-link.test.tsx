@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ExternalLink } from "#nativ/components/external-link"
+import { ExternalLink } from "#adaptv/components/external-link"
 
 afterEach(() => {
   cleanup()

@@ -1,7 +1,7 @@
 /**
  * The generated app shell. → `RENDERING.md §3.1.2`, `LIFECYCLE.md §1.2`
  *
- * ## Why nativ generates this rather than reusing Start's
+ * ## Why adaptv generates this rather than reusing Start's
  *
  * Measured against a real app: TanStack Start emits **no HTML at all** in this
  * configuration — no `_shell.html`, no `index.html` — even with

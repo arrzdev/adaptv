@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
-import type { NativAppConfig } from "#nativ/config/app-config"
-import { buildCapacitorConfig } from "#nativ/vite/capacitor-config"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import { buildCapacitorConfig } from "#adaptv/vite/capacitor-config"
 
-const BASE: NativAppConfig = {
+const BASE: AdaptvAppConfig = {
   name: "ChopChop",
   description: "A focused task list.",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
@@ -23,10 +23,10 @@ describe("buildCapacitorConfig", () => {
     expect(c.webDir).toBe("dist/client")
   })
 
-  it("relocates the native projects into the hidden .nativ/ dir", () => {
+  it("relocates the native projects into the hidden .adaptv/ dir", () => {
     const c = buildCapacitorConfig(BASE)
-    expect(c.android.path).toBe(".nativ/android")
-    expect(c.ios.path).toBe(".nativ/ios")
+    expect(c.android.path).toBe(".adaptv/android")
+    expect(c.ios.path).toBe(".adaptv/ios")
   })
 
   it("honours an explicit appName", () => {

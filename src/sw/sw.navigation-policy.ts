@@ -46,13 +46,13 @@ export function resolveNavigationPolicy(
  * ========================================================================== */
 
 /**
- * Runtime buckets nativ owns. A cache is only ever deleted if it starts with one
+ * Runtime buckets adaptv owns. A cache is only ever deleted if it starts with one
  * of these *and* carries a build tag that is not the current one.
  */
-const NATIV_RUNTIME_BUCKETS = ["static", "pages", "documents"] as const
+const ADAPTV_RUNTIME_BUCKETS = ["static", "pages", "documents"] as const
 
 /**
- * Whether `cacheName` is one of nativ's runtime caches from a **previous** build.
+ * Whether `cacheName` is one of adaptv's runtime caches from a **previous** build.
  *
  * Runtime buckets are namespaced `<bucket>-<buildTag>`, so every deploy mints new
  * ones — but only `cleanupOutdatedCaches()` ran, and that purges *precaches*
@@ -61,14 +61,14 @@ const NATIV_RUNTIME_BUCKETS = ["static", "pages", "documents"] as const
  * error. → `DECISIONS.md` B2
  *
  * Deliberately conservative: an unrecognised bucket is never touched. Deleting a
- * cache nativ does not own would break whatever created it — another app on the
+ * cache adaptv does not own would break whatever created it — another app on the
  * same origin, a third-party worker, or Workbox's own precache bookkeeping.
  */
 export function isStaleRuntimeCache(
   cacheName: string,
   currentBuildTag: string,
 ): boolean {
-  for (const bucket of NATIV_RUNTIME_BUCKETS) {
+  for (const bucket of ADAPTV_RUNTIME_BUCKETS) {
     const prefix = `${bucket}-`
     //require the separator so `staticky-…` is not read as the `static` bucket
     if (!cacheName.startsWith(prefix)) continue

@@ -1,11 +1,11 @@
-// The "dev server offline" screen. During `nativ run`, the native WebViews load from
+// The "dev server offline" screen. During `adaptv run`, the native WebViews load from
 // the Vite dev server (`server.url`). When that server isn't running — the app opened
-// with no `nativ run`, or the process was killed — the WebView's load fails and, with
+// with no `adaptv run`, or the process was killed — the WebView's load fails and, with
 // nothing to show, it paints black. Capacitor's `server.errorPath` is its answer: on a
 // main-frame load failure it loads a LOCAL file (served by the always-registered
 // `capacitor://localhost` / `http://localhost` asset handler, independent of the remote
 // `server.url`). We point errorPath at this generated page so the dev sees a branded
-// "run `nativ run`" screen instead of black, and it auto-reconnects the moment the
+// "run `adaptv run`" screen instead of black, and it auto-reconnects the moment the
 // server is back.
 //
 // Why this file is GENERATED per run (not shipped static): the dev server URL is only
@@ -17,10 +17,10 @@ import path from "node:path"
 import { CAP_WEB_DIR } from "./native.mjs"
 
 /** The errorPath filename, relative to the web dir root. Shared with `patchServerUrl`. */
-export const OFFLINE_PAGE = "nativ-offline.html"
+export const OFFLINE_PAGE = "adaptv-offline.html"
 
 /**
- * Write the offline screen into `<appRoot>/<webDir>/nativ-offline.html`, with the dev
+ * Write the offline screen into `<appRoot>/<webDir>/adaptv-offline.html`, with the dev
  * server `url` baked in so the page can navigate back to it. Returns a revert fn that
  * deletes the file (the next `cap sync` then drops it from `public/`).
  */
@@ -78,7 +78,7 @@ function renderOfflineHtml(devUrl) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
-<title>nativ · dev build</title>
+<title>adaptv · dev build</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -132,12 +132,12 @@ function renderOfflineHtml(devUrl) {
 </head>
 <body>
   <div class="wrap">
-    <div class="mark"><span class="dot"></span>nativ</div>
+    <div class="mark"><span class="dot"></span>adaptv</div>
     <div>
       <h1>Development build</h1>
       <p>The dev server isn't running.</p>
     </div>
-    <div class="cmd"><span class="sigil">$</span><span><span class="run">nativ run</span> <span id="platform">ios</span></span></div>
+    <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv run</span> <span id="platform">ios</span></span></div>
     <div class="status"><span class="spin"></span><span>Waiting for the dev server…</span></div>
   </div>
 <script>
@@ -187,7 +187,7 @@ function renderOfflineHtml(devUrl) {
     //     the request isn't mixed content. That's the Android case: the CLI sets
     //     \`server.androidScheme:"http"\` for the dev session precisely so this works
     //     (Android never gets the bridge here, so route 1 is unavailable).
-    // Neither available -> do nothing; the next \`nativ run\` relaunches the app.
+    // Neither available -> do nothing; the next \`adaptv run\` relaunches the app.
     function probe() {
       hideSplash();
       paintPlatform();

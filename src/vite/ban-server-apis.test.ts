@@ -1,12 +1,12 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import {
+  adaptvBanServerApisPlugin,
   describeServerApiBan,
   findServerRouteHandlers,
   isApplicationSource,
   isBannedServerModule,
-  nativBanServerApisPlugin,
-} from "#nativ/vite/ban-server-apis"
+} from "#adaptv/vite/ban-server-apis"
 
 const APP = path.join("/app", "src", "routes", "index.tsx")
 const DEP = path.join("/app", "node_modules", "some-lib", "dist", "i.js")
@@ -24,7 +24,7 @@ describe("isBannedServerModule", () => {
   })
 
   it("leaves the Vite plugin subpath alone — it runs at config time", () => {
-    //nativ's own plugin imports this; it never enters the browser bundle graph
+    //adaptv's own plugin imports this; it never enters the browser bundle graph
     expect(isBannedServerModule("@tanstack/react-start/plugin/vite")).toBe(
       false,
     )
@@ -43,7 +43,7 @@ describe("isApplicationSource — the ban applies to app code only", () => {
     expect(isApplicationSource(APP)).toBe(true)
   })
 
-  it("exempts dependencies — nativ must not break the ecosystem", () => {
+  it("exempts dependencies — adaptv must not break the ecosystem", () => {
     //TanStack Start's own internals import these constantly. Banning them there
     //would make the framework unusable rather than safe.
     expect(isApplicationSource(DEP)).toBe(false)
@@ -54,8 +54,10 @@ describe("isApplicationSource — the ban applies to app code only", () => {
   })
 
   it("exempts virtual modules, which have no file to blame", () => {
-    expect(isApplicationSource("\0virtual:nativ/pwa-register")).toBe(false)
-    expect(isApplicationSource("virtual:nativ/pwa-register")).toBe(false)
+    expect(isApplicationSource("\0virtual:adaptv/pwa-register")).toBe(
+      false,
+    )
+    expect(isApplicationSource("virtual:adaptv/pwa-register")).toBe(false)
   })
 
   it("exempts a nested node_modules (pnpm's real on-disk shape)", () => {
@@ -168,7 +170,7 @@ function fakeContext(sink: Reported[]) {
 }
 
 function callResolveId(source: string, importer: string | undefined) {
-  const plugin = nativBanServerApisPlugin()
+  const plugin = adaptvBanServerApisPlugin()
   const sink: Reported[] = []
   const hook = plugin.resolveId as unknown as (
     this: unknown,
@@ -184,7 +186,7 @@ function callResolveId(source: string, importer: string | undefined) {
 }
 
 function callTransform(code: string, id: string) {
-  const plugin = nativBanServerApisPlugin()
+  const plugin = adaptvBanServerApisPlugin()
   const sink: Reported[] = []
   const hook = plugin.transform as unknown as (
     this: unknown,
@@ -199,13 +201,13 @@ function callTransform(code: string, id: string) {
   return sink
 }
 
-describe("nativBanServerApisPlugin", () => {
+describe("adaptvBanServerApisPlugin", () => {
   it("runs before Start so the ban wins the specifier", () => {
     //enforce:"pre" is load-bearing: without it tanstackStart() can resolve
     //@tanstack/react-start first and the hook never sees it
-    const plugin = nativBanServerApisPlugin()
+    const plugin = adaptvBanServerApisPlugin()
     expect(plugin.enforce).toBe("pre")
-    expect(plugin.name).toBe("nativ:ban-server-apis")
+    expect(plugin.name).toBe("adaptv:ban-server-apis")
   })
 
   it("fails the build on a banned import from app source", () => {

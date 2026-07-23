@@ -1,8 +1,8 @@
-# nativ — the `@nativ/shell` native plugin
+# adaptv — the `@adaptv/shell` native plugin
 
 > The first-party Capacitor plugin (Swift + Kotlin) that **owns the native shell** — edge-to-edge, real
 > inset reporting, status/nav bar, colour-driven splash, and theme sync — collapsing today's mix of
-> community plugins + CLI native-source string-patching into **one module nativ controls**. This is the
+> community plugins + CLI native-source string-patching into **one module adaptv controls**. This is the
 > native layer of `ARCHITECTURE.md §1.1` and **the wedge vs Ionic** (roadmap #2).
 >
 > Design, not built. The hard part is the **Android-15 / SDK-35 inset + keyboard breakage** (`RESEARCH.md
@@ -78,10 +78,10 @@ collision is *literally* bugs #61 and #68. Owning it harder makes it worse, not 
 So:
 
 - **Rent `SystemBars` for the Android inset pipeline.** It already carries three Chromium workarounds
-  nativ would otherwise have to discover, maintain, and version-gate itself. Consume its CSS vars;
+  adaptv would otherwise have to discover, maintain, and version-gate itself. Consume its CSS vars;
   do not install a competing listener.
-- **`@nativ/shell`'s Android job shrinks** to: normalising units (dp vs points vs truncated-int),
-  papering over the IME-forces-bottom-to-zero quirk, and giving nativ one accessor whose shape is
+- **`@adaptv/shell`'s Android job shrinks** to: normalising units (dp vs points vs truncated-int),
+  papering over the IME-forces-bottom-to-zero quirk, and giving adaptv one accessor whose shape is
   identical on both platforms.
 - **Drop `@capacitor/status-bar`** for edge-to-edge apps, per the maintainer's own guidance. Replace
   its tinting role with the web-layer scrim (point 5) plus `SystemBars.setStyle()`.
@@ -102,11 +102,11 @@ So:
 
 **Capacitor 9 is in alpha** (`@capacitor/core@9.0.0-alpha.6`) and `SystemBars.java` carries a
 `// TODO: In Cap 9, add an additional option "full"` beside `insetsHandling`. **The inset contract is
-going to change again.** Do not freeze `@nativ/shell`'s public API against Capacitor 8's shape without
+going to change again.** Do not freeze `@adaptv/shell`'s public API against Capacitor 8's shape without
 reading the Cap 9 alpha first.
 
-> **Net effect on the roadmap: `@nativ/shell` gets smaller and less risky, but stops being "the wedge
-> vs Ionic"** — Capacitor core now solves the part that was going to be nativ's differentiator. The
+> **Net effect on the roadmap: `@adaptv/shell` gets smaller and less risky, but stops being "the wedge
+> vs Ionic"** — Capacitor core now solves the part that was going to be adaptv's differentiator. The
 > real remaining wedge is the *unified cross-platform accessor* (§4) and everything above the native
 > seam, not the seam itself.
 
@@ -118,20 +118,20 @@ Today the native shell is **assembled from parts**:
 - Community plugins: `@capacitor/status-bar`, `@capacitor/splash-screen`.
 - The CLI **string-patches native project source** on every sync — `patchAndroidSplash` (writes
   `colors.xml` / `values-night` / launch `styles.xml` / a themed or plain `MainActivity.java`) and
-  `patchIosTheme` (writes the `NativSplash` colorset, the launch storyboard, and an `AppDelegate.swift`
-  override) — see `bin/nativ.mjs`.
+  `patchIosTheme` (writes the `AdaptvSplash` colorset, the launch storyboard, and an `AppDelegate.swift`
+  override) — see `bin/adaptv.mjs`.
 - The generated `capacitor.config.json` sets `StatusBar.overlaysWebView` + `SplashScreen` blocks.
 
 It works and is green — but it's fragile: patching native source with regexes, community-plugin version
 skew, and **no owned place to fix the Android-15 inset/keyboard breakage** that the current approach will
 hit (`RESEARCH.md §3`). Doctrine (`ARCHITECTURE.md §0.6`): *rent stable cores, own seams.* Edge-to-edge +
-insets **is** the seam — and roadmap #2 names it the wedge — so nativ should **own** it as a real plugin.
+insets **is** the seam — and roadmap #2 names it the wedge — so adaptv should **own** it as a real plugin.
 
 ---
 
 ## 1. Scope — what the plugin owns
 
-| Concern | Today | In `@nativ/shell` |
+| Concern | Today | In `@adaptv/shell` |
 |---|---|---|
 | Edge-to-edge draw | `StatusBar.overlaysWebView` + SDK defaults | owned on both platforms, incl. the SDK-35 forced-E2E path |
 | **Inset reporting** | `env(safe-area-inset-*)` (web) only; Android IME unreliable | the plugin reports **real** insets (status, nav, cutout, **keyboard/IME**) to the WebView, uniform cross-platform |
@@ -139,8 +139,8 @@ insets **is** the seam — and roadmap #2 names it the wedge — so nativ should
 | Splash mask | CLI string-patches launch theme / storyboard / colors | plugin config, still **colour-driven + theme-aware**, hold-until-ready handoff |
 | Theme sync | CLI-patched `UiModeManager` / `overrideUserInterfaceStyle` | plugin API — no native-source patching |
 
-The **JS layer above the plugin does not change**: nativ's shell consumes the plugin and keeps exposing
-the same `--nativ-safe-*` CSS vars and the same hooks (`useStatusBar`, `useKeyboard`, splash). The
+The **JS layer above the plugin does not change**: adaptv's shell consumes the plugin and keeps exposing
+the same `--adaptv-safe-*` CSS vars and the same hooks (`useStatusBar`, `useKeyboard`, splash). The
 primitives are untouched; only the native implementation underneath them is replaced. That's the whole
 point — own the native seam without disturbing the contracts in `ARCHITECTURE.md §1`.
 
@@ -149,7 +149,7 @@ point — own the native seam without disturbing the contracts in `ARCHITECTURE.
 ## 2. The JS API — one plugin surface
 
 ```ts
-import { Shell } from "@nativ/shell"
+import { Shell } from "@adaptv/shell"
 
 await Shell.configure({ edgeToEdge: true, statusBar: { style: "theme" }, splash: { … } })
 await Shell.setTheme("dark" | "light" | "system")     // replaces the CLI MainActivity/AppDelegate patch
@@ -157,8 +157,8 @@ await Shell.hideSplash()                                // hold-until-ready hand
 Shell.addListener("insetsChange", ({ top, bottom, left, right, keyboard }) => { … })
 ```
 
-nativ's shell subscribes to `insetsChange` and writes the values to CSS custom properties
-(`--nativ-safe-top`, …, `--nativ-keyboard`), so `View safe="…"` and `useKeyboard` read one uniform source
+adaptv's shell subscribes to `insetsChange` and writes the values to CSS custom properties
+(`--adaptv-safe-top`, …, `--adaptv-keyboard`), so `View safe="…"` and `useKeyboard` read one uniform source
 on every target. On web the same vars resolve from `env(safe-area-inset-*)` / `visualViewport` — identical
 shape, different origin (the layer-1 hybrid split of `ARCHITECTURE.md §4`).
 
@@ -178,7 +178,7 @@ and devices `< API 35` need explicit layout margins to keep prior behaviour. The
 - **For `< API 35`**, apply explicit layout margins to preserve old behaviour (what the community fix
   plugin does).
 - **Study before writing:** Capawesome's `android-edge-to-edge-support` `WindowInsets` handling and the
-  linked issues (`RESEARCH.md §3`) — adopt their hard-won handling, diverge where nativ's single-module
+  linked issues (`RESEARCH.md §3`) — adopt their hard-won handling, diverge where adaptv's single-module
   design differs. This is the "study Ionic/Capacitor prior art before reinventing" doctrine applied.
 
 iOS is comparatively calm (safe-area insets are stable), but the plugin still owns the status-bar
@@ -197,8 +197,8 @@ already green. So:
 - **Phase 2 — absorb the rest.** Move status-bar styling, the colour-driven splash mask, and the theme
   override into the plugin's native code. The CLI **stops string-patching native source**
   (`patchAndroidSplash`/`patchIosTheme` retire); the generated `capacitor.config` replaces its
-  `StatusBar`/`SplashScreen` blocks with a single `@nativ/shell` block; the splash mask colours flow from
-  `nativ.config.ts` → the plugin config. `BEHAVIORS.md §3/§5/§6` get re-pointed at the plugin.
+  `StatusBar`/`SplashScreen` blocks with a single `@adaptv/shell` block; the splash mask colours flow from
+  `adaptv.config.ts` → the plugin config. `BEHAVIORS.md §3/§5/§6` get re-pointed at the plugin.
 
 Net end state: the CLI installs + syncs one plugin and passes it config; the plugin owns every native
 behaviour; **no regex patching of native projects.**
@@ -210,7 +210,7 @@ behaviour; **no regex patching of native projects.**
 Per `RESEARCH.md §3` you *could* just depend on the Capawesome edge-to-edge plugin. But roadmap #2
 explicitly makes this **the wedge vs Ionic**, and a rented native shell can't be the differentiator — so
 **own it**, using the community plugin's `WindowInsets` handling as the reference implementation to study,
-not as a runtime dependency. (Contrast with OTA in `LIFECYCLE.md §5.5`, where nativ *rents* the low-level
+not as a runtime dependency. (Contrast with OTA in `LIFECYCLE.md §5.5`, where adaptv *rents* the low-level
 bundle-swap — there the swap isn't the wedge; here the native shell is.)
 
 ---
@@ -219,7 +219,7 @@ bundle-swap — there the swap isn't the wedge; here the native shell is.)
 
 Native-only, and specifically at the **API 34 ↔ 35 boundary** — the plugin's inset/keyboard behaviour
 must be verified on both an API-34 and an API-35 emulator (the breakage line), plus the six-target
-discipline (`TESTING.md`). Manual `nativ run` today; a future `nativ e2e` (`LIFECYCLE.md §7.2`) could
+discipline (`TESTING.md`). Manual `adaptv run` today; a future `adaptv e2e` (`LIFECYCLE.md §7.2`) could
 automate it.
 
 **Status:** not built (roadmap #2). Highest native-risk item; the Android-15 `WindowInsets`/IME handling

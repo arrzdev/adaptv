@@ -1,7 +1,7 @@
 //Native keyboard accessor. On a Capacitor build the OS reports the keyboard with
 //EXACT height + will-show/will-hide events — none of the web visualViewport
 //heuristics (dismiss/height confirms, field-switch transient filtering) are needed.
-//Resize mode is set to `None` so the OS doesn't push the webview; nativ lifts
+//Resize mode is set to `None` so the OS doesn't push the webview; adaptv lifts
 //content itself from the reported height (matching the web path — see the
 //suppress-native-then-reimplement rule).
 //
@@ -13,7 +13,7 @@
 //sheet never lifts. A single app-lifetime subscription set up at startup is always
 //live by the time any drawer opens, so autofocus and tap-to-focus behave the same.
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type KeyboardInfo = {
   isOpen: boolean

@@ -1,5 +1,5 @@
 import type { ClassValue } from "clsx"
-import { cn } from "#nativ/utils/cn"
+import { cn } from "#adaptv/utils/cn"
 
 export type StyleLayers = {
   /** Base / default look — the primitive's neutral styling. Overridable. */
@@ -25,7 +25,7 @@ export type StyleLayers = {
  *
  * The consumer can restyle the neutral defaults, but can't break the structural
  * classes the primitive owns. Precedence rides on tailwind-merge's last-wins
- * conflict resolution (including nativ's custom `scrollable-*` / `clickable` groups).
+ * conflict resolution (including adaptv's custom `scrollable-*` / `clickable` groups).
  */
 export function mergeStyles({
   base,

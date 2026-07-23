@@ -1,11 +1,11 @@
-import { selectStaleCaches } from "#nativ/sw/sw.navigation-policy"
-import { serviceWorkerScope } from "#nativ/sw/sw.scope"
-import type { ServiceWorkerLifecycleOptions } from "#nativ/sw/sw.types"
+import { selectStaleCaches } from "#adaptv/sw/sw.navigation-policy"
+import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
+import type { ServiceWorkerLifecycleOptions } from "#adaptv/sw/sw.types"
 
 /**
  * Delete previous builds' runtime caches. → `DECISIONS.md` B2
  *
- * `cleanupOutdatedCaches()` only purges *precaches*, so nativ's runtime buckets
+ * `cleanupOutdatedCaches()` only purges *precaches*, so adaptv's runtime buckets
  * (`static-<tag>`, `pages-<tag>`, `documents-<tag>`) accumulated one full set per
  * deploy, forever, ending in a quota error on a frequently-deployed app.
  *
@@ -46,7 +46,7 @@ export function registerClientsClaimOnActivate() {
 
 /**
  * Sweep previous builds' runtime caches on activate. Pass the build tag the
- * worker was stamped with (`__NATIV_BUILD_TAG__`).
+ * worker was stamped with (`__ADAPTV_BUILD_TAG__`).
  */
 export function registerRuntimeCacheSweep(buildTag: string) {
   const sw = serviceWorkerScope()

@@ -8,7 +8,7 @@
 //on every target. `useNetworkStatus` is a thin `useSyncExternalStore` over this.
 import type { PluginListenerHandle } from "@capacitor/core"
 import { Network } from "@capacitor/network"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 const listeners = new Set<() => void>()
 let nativeConnected = true

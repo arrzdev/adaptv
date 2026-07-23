@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { createGestureController } from "#nativ/capabilities/gesture-controller"
+import { createGestureController } from "#adaptv/capabilities/gesture-controller"
 
 let controller: ReturnType<typeof createGestureController>
 

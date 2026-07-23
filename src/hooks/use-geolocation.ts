@@ -3,12 +3,12 @@ import type {
   GeoCoords,
   GeoOptions,
   GeoPermission,
-} from "#nativ/capabilities/geolocation"
+} from "#adaptv/capabilities/geolocation"
 import {
   checkGeoPermission,
   getCurrentPosition,
   requestGeoPermission,
-} from "#nativ/capabilities/geolocation"
+} from "#adaptv/capabilities/geolocation"
 
 export type UseGeolocationResult = {
   coords: GeoCoords | null

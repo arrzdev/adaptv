@@ -4,4 +4,4 @@ export {
   physical,
   rootRoute,
   route,
-} from "../routes/nativ-routes.ts"
+} from "../routes/adaptv-routes.ts"

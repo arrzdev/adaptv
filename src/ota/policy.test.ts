@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { Bundle, UpdateManifest } from "#nativ/ota/policy"
+import type { Bundle, UpdateManifest } from "#adaptv/ota/policy"
 import {
   decideUpdate,
   hasProvenItself,
   selectBootBundle,
   selectPrunableBundles,
-} from "#nativ/ota/policy"
+} from "#adaptv/ota/policy"
 
 const SHA = "a".repeat(64)
 

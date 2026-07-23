@@ -1,15 +1,15 @@
 import { useCallback, useReducer, useState } from "react"
-import { persistNativeThemePreference } from "#nativ/capabilities/native-theme"
-import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
+import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
+import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import {
   PREFERENCE_ATTR,
   UI_THEME_STORAGE_KEY,
-} from "#nativ/shell/theme-init-script"
-import tryCatch from "#nativ/utils/try-catch"
+} from "#adaptv/shell/theme-init-script"
+import tryCatch from "#adaptv/utils/try-catch"
 
 //the pre-paint script lives in a React-free module so the Vite plugin can use it
 //at build time; re-exported here so runtime call sites are unchanged
-export { getUiThemeInitScript } from "#nativ/shell/theme-init-script"
+export { getUiThemeInitScript } from "#adaptv/shell/theme-init-script"
 
 export type UiThemePreference = "light" | "dark" | "system"
 

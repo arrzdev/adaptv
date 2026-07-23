@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react"
 import { act } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { useIsOffline } from "#nativ/hooks/use-is-offline"
+import { useIsOffline } from "#adaptv/hooks/use-is-offline"
 
 const restores: Array<() => void> = []
 

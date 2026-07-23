@@ -1,10 +1,10 @@
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 import type { Plugin } from "vite"
-import type { NativAppConfig } from "#nativ/config/app-config.ts"
-import { resolveThemeColors } from "#nativ/config/app-config.ts"
-import type { NativContext } from "#nativ/vite/nativ-context.ts"
-import { requireAppConfig } from "#nativ/vite/nativ-context.ts"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import { resolveThemeColors } from "#adaptv/config/app-config.ts"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
 
 const DEFAULT_ICONS_DIR = "./public/favicons"
 const MANIFEST_PATH = "/manifest.json"
@@ -30,13 +30,13 @@ export type WebManifest = {
 } & Record<string, unknown>
 
 /**
- * Generates `/manifest.json` from `nativ.config.ts` — served in dev, emitted at
+ * Generates `/manifest.json` from `adaptv.config.ts` — served in dev, emitted at
  * build — so the manifest is never a hand-maintained file that drifts from the
  * app's identity/theme config.
  */
-export function nativManifestPlugin(context: NativContext): Plugin {
+export function adaptvManifestPlugin(context: AdaptvContext): Plugin {
   return {
-    name: "nativ:manifest",
+    name: "adaptv:manifest",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (req.url !== MANIFEST_PATH) return next()
@@ -64,9 +64,9 @@ export function nativManifestPlugin(context: NativContext): Plugin {
   }
 }
 
-/** Serialized web app manifest, generated from `nativ.config.ts` — no hand-maintained JSON. */
+/** Serialized web app manifest, generated from `adaptv.config.ts` — no hand-maintained JSON. */
 export function buildManifest(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
   appRoot: string,
 ): WebManifest {
   const theme = resolveThemeColors(config.themeColor)
@@ -93,7 +93,7 @@ export function buildManifest(
 }
 
 function collectIcons(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
   appRoot: string,
 ): WebManifestIcon[] {
   const iconsDirRel = config.icons ?? DEFAULT_ICONS_DIR

@@ -1,6 +1,6 @@
 import type { RefObject } from "react"
 import { useEffect } from "react"
-import { isIOS } from "#nativ/utils/platform"
+import { isIOS } from "#adaptv/utils/platform"
 
 export type ScrollAxis = "x" | "y"
 

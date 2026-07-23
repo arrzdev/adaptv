@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+  adaptvRouteAutoImportPlugin,
   detectRouteFactory,
   importsRouteFactory,
-  nativRouteAutoImportPlugin,
   resolveAutoImport,
   stripTanStackAutoImport,
   TANSTACK_AUTOIMPORT_PLUGIN,
-} from "#nativ/vite/router-autoimport"
+} from "#adaptv/vite/router-autoimport"
 
 describe("stripTanStackAutoImport", () => {
   it("removes the upstream plugin by name", () => {
@@ -49,12 +49,12 @@ describe("stripTanStackAutoImport", () => {
 })
 
 describe("importsRouteFactory", () => {
-  it("sees an import from the nativ barrel", () => {
+  it("sees an import from the adaptv barrel", () => {
     //the whole bug: upstream only accepts ITS specifier, so a re-export is
     //invisible to it and it adds a duplicate binding
     expect(
       importsRouteFactory(
-        'import { createFileRoute } from "@arrzdev/nativ/router"',
+        'import { createFileRoute } from "@arrzdev/adaptv/router"',
         "createFileRoute",
       ),
     ).toBe(true)
@@ -71,7 +71,7 @@ describe("importsRouteFactory", () => {
   })
 
   it("sees it in a multi-symbol, multiline import", () => {
-    const code = `import {\n  Outlet,\n  createFileRoute,\n} from "@arrzdev/nativ/router"`
+    const code = `import {\n  Outlet,\n  createFileRoute,\n} from "@arrzdev/adaptv/router"`
     expect(importsRouteFactory(code, "createFileRoute")).toBe(true)
   })
 
@@ -101,17 +101,17 @@ describe("detectRouteFactory", () => {
 })
 
 describe("resolveAutoImport", () => {
-  it("adds the nativ import when the factory is unbound", () => {
+  it("adds the adaptv import when the factory is unbound", () => {
     const statement = resolveAutoImport(
       'export const R = createFileRoute("/x")({})',
     )
-    expect(statement).toContain("@arrzdev/nativ/router")
+    expect(statement).toContain("@arrzdev/adaptv/router")
     expect(statement).toContain("createFileRoute")
   })
 
   it("adds NOTHING when already imported — this is the duplicate-binding bug", () => {
     const code =
-      'import { createFileRoute } from "@arrzdev/nativ/router"\nconst R = createFileRoute("/x")({})'
+      'import { createFileRoute } from "@arrzdev/adaptv/router"\nconst R = createFileRoute("/x")({})'
     expect(resolveAutoImport(code)).toBeNull()
   })
 
@@ -126,7 +126,7 @@ describe("resolveAutoImport", () => {
   })
 })
 
-describe("nativRouteAutoImportPlugin", () => {
+describe("adaptvRouteAutoImportPlugin", () => {
   const ROUTE_ID = "/app/src/routing/x.tsx"
 
   /**
@@ -147,7 +147,7 @@ describe("nativRouteAutoImportPlugin", () => {
   }
 
   function transform(code: string, id = ROUTE_ID) {
-    const plugin = nativRouteAutoImportPlugin()
+    const plugin = adaptvRouteAutoImportPlugin()
     const hook = plugin.transform as unknown as (
       this: unknown,
       c: string,
@@ -157,7 +157,7 @@ describe("nativRouteAutoImportPlugin", () => {
   }
 
   it("runs before everything else, like the plugin it replaces", () => {
-    expect(nativRouteAutoImportPlugin().enforce).toBe("pre")
+    expect(adaptvRouteAutoImportPlugin().enforce).toBe("pre")
   })
 
   it("refuses any file the generator has not registered as a route", () => {
@@ -177,7 +177,7 @@ describe("nativRouteAutoImportPlugin", () => {
         'export const R = createFileRoute("/x")({})',
         "C:\\app\\src\\routing\\x.tsx",
       )
-      expect(result?.code).toContain("@arrzdev/nativ/router")
+      expect(result?.code).toContain("@arrzdev/adaptv/router")
     })
   })
 
@@ -186,13 +186,13 @@ describe("nativRouteAutoImportPlugin", () => {
       const result = transform(
         'export const R = createFileRoute("/x")({})',
       )
-      expect(result?.code).toContain('from "@arrzdev/nativ/router"')
+      expect(result?.code).toContain('from "@arrzdev/adaptv/router"')
     })
   })
 
   it("leaves an already-correct route file untouched", () => {
     const code =
-      'import { createFileRoute } from "@arrzdev/nativ/router"\nconst R = createFileRoute("/x")({})'
+      'import { createFileRoute } from "@arrzdev/adaptv/router"\nconst R = createFileRoute("/x")({})'
     expect(transform(code)).toBeNull()
   })
 

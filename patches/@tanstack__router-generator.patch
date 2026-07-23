@@ -6,19 +6,19 @@ index 52aba62b57bdc1b8a6687b789b3f95027da0dfe7..99ab67bb6465ff384cdc24ac814ca0c1
  function fillTemplate(config, template, values) {
  	return format(template.replace(/%%(\w+)%%/g, (_, key) => values[key] || ""), config);
  }
-+//nativ: allow the emitted router package specifier to be overridden, so every
++//adaptv: allow the emitted router package specifier to be overridden, so every
 +//import AND  the generator writes points at the framework barrel
-+//instead of @tanstack/*. Set by @arrzdev/nativ's vite plugin. Absent => upstream
++//instead of @tanstack/*. Set by @arrzdev/adaptv's vite plugin. Absent => upstream
 +//behaviour, unchanged.
-+function nativRouterPkg(fallback) {
-+	return (typeof process !== "undefined" && process.env && process.env.NATIV_ROUTER_PKG) || fallback;
++function adaptvRouterPkg(fallback) {
++	return (typeof process !== "undefined" && process.env && process.env.ADAPTV_ROUTER_PKG) || fallback;
 +}
  function getTargetTemplate(config) {
  	const target = config.target;
  	switch (target) {
  		case "react": return {
 -			fullPkg: "@tanstack/react-router",
-+			fullPkg: nativRouterPkg("@tanstack/react-router"),
++			fullPkg: adaptvRouterPkg("@tanstack/react-router"),
  			subPkg: "react-router",
  			rootRoute: {
  				template: () => [

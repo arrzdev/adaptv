@@ -3,7 +3,7 @@ import {
   clearPreloadErrorGuard,
   PRELOAD_ERROR_GUARD_KEY,
   shouldReloadAfterPreloadError,
-} from "#nativ/shell/preload-error-recovery"
+} from "#adaptv/shell/preload-error-recovery"
 
 beforeEach(() => {
   sessionStorage.clear()

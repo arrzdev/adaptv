@@ -27,17 +27,17 @@
  * settings. **Never put a token here**; that is what `storage.secure` is for.
  */
 import { Preferences } from "@capacitor/preferences"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 /**
- * Namespace for every nativ-managed key.
+ * Namespace for every adaptv-managed key.
  *
- * nativ shares `localStorage` with the consumer's app, so `clear()` must be able
+ * adaptv shares `localStorage` with the consumer's app, so `clear()` must be able
  * to tell its own keys apart. A blind `localStorage.clear()` would wipe the app's
  * data — framework-caused data loss, and exactly the kind of thing nobody finds
  * until production.
  */
-export const KV_PREFIX = "nativ:kv:"
+export const KV_PREFIX = "adaptv:kv:"
 
 const map = new Map<string, unknown>()
 const listeners = new Map<string, Set<() => void>>()
@@ -150,7 +150,7 @@ export const kv = {
     emit(key)
   },
 
-  /** Drop every nativ-managed key. Never touches the consumer's own storage. */
+  /** Drop every adaptv-managed key. Never touches the consumer's own storage. */
   clear(): void {
     const keys = [...map.keys()]
     map.clear()

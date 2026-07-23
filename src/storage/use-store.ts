@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { store } from "#nativ/storage/store"
+import { store } from "#adaptv/storage/store"
 
 export type StoreValue<T> = {
   data: T | undefined

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { NativAppConfig } from "#nativ/config/app-config"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import {
   resolveWebConfig,
   staticHostFiles,
-} from "#nativ/config/web-config"
+} from "#adaptv/config/web-config"
 
-function config(extra: Partial<NativAppConfig> = {}): NativAppConfig {
+function config(extra: Partial<AdaptvAppConfig> = {}): AdaptvAppConfig {
   return {
     name: "Probe",
     description: "d",
@@ -16,7 +16,7 @@ function config(extra: Partial<NativAppConfig> = {}): NativAppConfig {
       routerConfig: "./routes.config.ts",
     },
     ...extra,
-  } as NativAppConfig
+  } as AdaptvAppConfig
 }
 
 describe("resolveWebConfig — render default", () => {

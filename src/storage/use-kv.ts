@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react"
-import { kv, subscribeKv } from "#nativ/storage/kv"
+import { kv, subscribeKv } from "#adaptv/storage/kv"
 
 /**
  * Reactive `storage.kv` binding — `useState` for a persisted value.

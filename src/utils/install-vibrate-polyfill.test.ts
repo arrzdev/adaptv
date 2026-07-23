@@ -27,7 +27,7 @@ afterEach(() => {
  */
 async function freshInstall() {
   vi.resetModules()
-  const mod = await import("#nativ/utils/install-vibrate-polyfill")
+  const mod = await import("#adaptv/utils/install-vibrate-polyfill")
   mod.installVibratePolyfill()
   return mod
 }

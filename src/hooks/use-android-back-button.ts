@@ -6,8 +6,8 @@ import {
   BackPriority,
   registerBackHandler,
   runBackChain,
-} from "#nativ/capabilities/back-chain"
-import { getOS, isNativePlatform } from "#nativ/utils/platform"
+} from "#adaptv/capabilities/back-chain"
+import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 /**
  * Install the single platform back listener and the chain's **floor handler**.
@@ -20,13 +20,13 @@ import { getOS, isNativePlatform } from "#nativ/utils/platform"
  * register above it and consume the press first. → `COORDINATION.md §2`
  *
  * Android-native only for the *hardware* button (iOS and web have none), but the
- * chain itself is cross-platform and drives {@link nativBack} everywhere.
+ * chain itself is cross-platform and drives {@link adaptvBack} everywhere.
  */
 export function useAndroidBackButton(): void {
   const router = useRouter()
 
   //The floor handler is registered on EVERY platform, not just Android: it is what
-  //`nativBack()` falls through to for an in-app back affordance, and an installed
+  //`adaptvBack()` falls through to for an in-app back affordance, and an installed
   //PWA has no browser chrome to provide one.
   useEffect(
     () =>
@@ -66,6 +66,6 @@ export function useAndroidBackButton(): void {
  * in-app back affordance, and (when installed) the OS edge gesture that memory
  * history renders inert. Returns `true` if something handled it.
  */
-export function nativBack(): boolean {
+export function adaptvBack(): boolean {
   return runBackChain()
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { sweepStaleRuntimeCaches } from "#nativ/sw/sw.lifecycle"
+import { sweepStaleRuntimeCaches } from "#adaptv/sw/sw.lifecycle"
 
 const TAG = "myapp-2f9c1a"
 

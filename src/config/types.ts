@@ -69,7 +69,7 @@ type PwaServiceWorkerRuntimeConfigBase = {
  * |---|---|
  * | `"prompt"` (default) | the new worker installs and **waits**; old chunks stay reachable. Nothing happens without user intent. |
  * | `"autoUpdate"` | applied automatically, but only at a safe moment — on `visibilitychange` back to visible. Never mid-interaction. |
- * | `"manual"` | nativ registers; the app owns everything after that. |
+ * | `"manual"` | adaptv registers; the app owns everything after that. |
  */
 export type ServiceWorkerUpdateMode = "prompt" | "autoUpdate" | "manual"
 

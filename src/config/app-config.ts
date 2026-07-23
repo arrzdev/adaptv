@@ -1,23 +1,26 @@
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import type { ComponentType } from "react"
-import type { OfflineProps } from "#nativ/components/offline"
+import type { OfflineProps } from "#adaptv/components/offline"
 import type {
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
-} from "#nativ/config/types"
-import type { UiThemePreference } from "#nativ/hooks/use-theme"
-import type { UiOpenGraphConfig, UiTwitterConfig } from "#nativ/shell/head"
+} from "#adaptv/config/types"
+import type { UiThemePreference } from "#adaptv/hooks/use-theme"
+import type {
+  UiOpenGraphConfig,
+  UiTwitterConfig,
+} from "#adaptv/shell/head"
 
 /* =============================================================================
  * TYPES
  * ============================================================================= */
 
 /**
- * A screen reference for `nativ.config.ts` — a thunk around a literal dynamic
+ * A screen reference for `adaptv.config.ts` — a thunk around a literal dynamic
  * import: `splashScreen: () => import("@/components/splash-screen")`.
  *
- * The thunk is NEVER executed at build time. The nativ vite plugin extracts the
+ * The thunk is NEVER executed at build time. The adaptv vite plugin extracts the
  * literal specifier and emits a static import in the generated root, so the
  * screen loads synchronously at first paint (no lazy chunk). The referenced
  * module must have a matching `default` export.
@@ -27,10 +30,10 @@ export type ScreenThunk<Props> = () => Promise<{
 }>
 
 /**
- * Native-feel WebKit fixes nativ applies app-wide. **Every one defaults to
+ * Native-feel WebKit fixes adaptv applies app-wide. **Every one defaults to
  * `true`** — set a field to `false` only to opt out of that specific fix.
  */
-export type NativPatches = {
+export type AdaptvPatches = {
   /**
    * Repaint a focused input's caret when it moves (scroll / drawer / keyboard)
    * so iOS never leaves a detached "ghost" caret behind. Default `true`.
@@ -55,14 +58,14 @@ export type NativPatches = {
 }
 
 /**
- * The `router` block in `nativ.config.ts` — the one place all routing wiring lives:
+ * The `router` block in `adaptv.config.ts` — the one place all routing wiring lives:
  * the rendering mode, the build-time route-generator paths, AND any runtime
- * `createRouter` option. nativ routes each key it recognizes to the right TanStack
+ * `createRouter` option. adaptv routes each key it recognizes to the right TanStack
  * Start layer; every other key is spread into the generated `createRouter`. The
  * generator paths are required — no magic codebase-specific directories. (The client
- * entry is nativ-generated — no config; eject by writing `src/client.tsx`.)
+ * entry is adaptv-generated — no config; eject by writing `src/client.tsx`.)
  */
-export type NativRouterConfig = {
+export type AdaptvRouterConfig = {
   /** Rendering mode. Default `"spa"` (prerender a static shell + hydrate); `"ssr"` server-renders each route. */
   render?: "spa" | "ssr"
   /** Server entry (relative to the app root) for `render: "ssr"`. Optional — Start's built-in is used otherwise. */
@@ -71,14 +74,14 @@ export type NativRouterConfig = {
    * Where the app's route files live, relative to `src/`. **Default
    * `"./routing"`** (i.e. `src/routing`). Only set this if your routes live
    * somewhere else — it exists because a routes folder is genuinely the app
-   * author's to place, not because nativ needs you to declare a default.
+   * author's to place, not because adaptv needs you to declare a default.
    */
   routesDirectory?: string
   /**
    * The app's route config — the `rootRoute([...])` DSL. **Default
    * `"./src/routing/config.ts"`.**
    *
-   * Named `routerConfig`, not `virtualRouteConfig`: nativ **always** uses the
+   * Named `routerConfig`, not `virtualRouteConfig`: adaptv **always** uses the
    * declarative route config. It is the framework's opinion, not a mode the
    * consumer selects, so the name should not leak the underlying TanStack
    * "virtual file routes" implementation detail.
@@ -95,7 +98,7 @@ export type NativRouterConfig = {
   memoryHistoryInStandalone?: boolean
 } & Record<string, unknown>
 
-/** `router` keys nativ consumes itself (render / entries / generator paths) — never spread into `createRouter`. */
+/** `router` keys adaptv consumes itself (render / entries / generator paths) — never spread into `createRouter`. */
 export const ROUTER_BUILD_KEYS = [
   "render",
   "serverEntry",
@@ -108,7 +111,7 @@ export const ROUTER_BUILD_KEYS = [
  * given it is used for BOTH appearances — the `theme-color` meta and the
  * launch-gap background stay that single color regardless of light/dark.
  */
-export type NativThemeColor =
+export type AdaptvThemeColor =
   | { light: string; dark?: string }
   | { light?: string; dark: string }
 
@@ -122,7 +125,7 @@ export type NativThemeColor =
 export type SplashMaskMode = "preferences" | "system" | "light" | "dark"
 
 /** Object form of `sw` — the entry plus service-worker build options. */
-export type NativSwOptions = {
+export type AdaptvSwOptions = {
   /** App-relative entry path. Default `"./src/sw.ts"`. */
   entry?: string
   /**
@@ -136,7 +139,7 @@ export type NativSwOptions = {
 }
 
 /** The `web` deployment block — intent-level. → `LIFECYCLE.md §1.2` */
-export type NativWebConfig = {
+export type AdaptvWebConfig = {
   /**
    * Rendering mode. **Defaults to `"ssr"`.**
    *
@@ -162,7 +165,7 @@ export type NativWebConfig = {
   }
 }
 
-export type NativAppConfig = {
+export type AdaptvAppConfig = {
   /** App name — manifest `name`, and the head `<title>` unless `title` overrides. */
   name: string
   /** Manifest `short_name` (home-screen label). Default: `name`. */
@@ -178,7 +181,7 @@ export type NativAppConfig = {
    * and the `theme-color` meta all use EXACTLY these values. Provide `light`,
    * `dark`, or both; a missing side falls back to the other (single-color app).
    */
-  themeColor: NativThemeColor
+  themeColor: AdaptvThemeColor
   /**
    * Manifest `background_color` — the backdrop the OS paints behind an installed
    * PWA while it cold-starts. Default: the resolved light theme color. Only set
@@ -202,8 +205,8 @@ export type NativAppConfig = {
   /** App stylesheet entry (e.g. `"./src/styles/main.css"`) — built and linked in the head. */
   styles: string
   /**
-   * Service worker. nativ bundles the entry, injects the precache manifest, and
-   * provides the derived `__NATIV_BUILD_TAG__` constant.
+   * Service worker. adaptv bundles the entry, injects the precache manifest, and
+   * provides the derived `__ADAPTV_BUILD_TAG__` constant.
    *
    * - `string` — the app-authored entry path (default `"./src/sw.ts"`).
    * - `false` — ship without a service worker.
@@ -213,7 +216,7 @@ export type NativAppConfig = {
    * is already on-device, iOS cannot register a worker on a custom-scheme origin
    * at all, and a stale worker actively breaks OTA. → `RENDERING.md §3.5`
    */
-  sw?: string | false | NativSwOptions
+  sw?: string | false | AdaptvSwOptions
   /** Extra fields merged verbatim into the generated web manifest. */
   manifestExtra?: Record<string, unknown>
 
@@ -223,12 +226,12 @@ export type NativAppConfig = {
   twitter?: UiTwitterConfig
   /** Initial theme when the user has no saved preference. Default: `"system"`. */
   defaultThemePreference?: UiThemePreference
-  /** Toggle nativ's native-feel WebKit fixes. All default `true`; opt out per fix. */
-  patches?: NativPatches
+  /** Toggle adaptv's native-feel WebKit fixes. All default `true`; opt out per fix. */
+  patches?: AdaptvPatches
 
   /**
    * Native (Capacitor) app id, reverse-domain (e.g. `"com.chopchop.app"`). Setting it
-   * enables native iOS/Android builds — nativ generates the entire Capacitor project
+   * enables native iOS/Android builds — adaptv generates the entire Capacitor project
    * from this one field; you never touch a Capacitor config. Web-only apps omit it.
    */
   appId?: string
@@ -236,7 +239,7 @@ export type NativAppConfig = {
   appName?: string
 
   /**
-   * Boot splash overlay — your own React component. nativ renders it while the app is
+   * Boot splash overlay — your own React component. adaptv renders it while the app is
    * **installed** (native app or home-screen PWA); it **self-dismisses by returning
    * `null`** when ready (no `hide` prop). A browser tab gets the page instantly with no
    * splash unless {@link splashScreenInBrowser}. The OS launch splash is a flat mask
@@ -260,7 +263,7 @@ export type NativAppConfig = {
   /** Full-screen 404. */
   notFoundScreen?: () => Promise<{ default: NotFoundRouteComponent }>
   /**
-   * The app's offline UI. **One component, two call sites** — nativ renders it
+   * The app's offline UI. **One component, two call sites** — adaptv renders it
    * when the app can't boot far enough for a route to exist (a route chunk fails
    * to load, or the route tree can't resolve), and the consumer renders the *same*
    * component from a route whose data is unavailable. Every prop is optional,
@@ -277,7 +280,7 @@ export type NativAppConfig = {
    * chunk carrying the offline UI would be unavailable too, and the user would get
    * a blank screen instead. `stamp.test.ts` guards it.
    *
-   * Defaults to nativ's own `Offline` component.
+   * Defaults to adaptv's own `Offline` component.
    */
   offlineComponent?: ScreenThunk<OfflineProps>
   //NOTE: there is deliberately no `providers` field. An app-wide provider tree is
@@ -294,33 +297,33 @@ export type NativAppConfig = {
   /**
    * Deployment intent — rendering mode, host, service worker. Prefer this over
    * the lower-level `router.render` / `sw` fields, which remain as escape
-   * hatches. → {@link NativWebConfig}
+   * hatches. → {@link AdaptvWebConfig}
    */
-  web?: NativWebConfig
+  web?: AdaptvWebConfig
 
   /**
    * Router config — one block for all routing wiring: rendering mode + bundle
    * entries, build-time route-generator paths, and any runtime `createRouter`
-   * option. See {@link NativRouterConfig}.
+   * option. See {@link AdaptvRouterConfig}.
    */
-  router: NativRouterConfig
+  router: AdaptvRouterConfig
 }
 
 /* =============================================================================
  * DEFINE
  * ============================================================================= */
 
-/** Identity helper for `nativ.config.ts` — full typing + a stable anchor for tooling. */
-export function defineApp<const T extends NativAppConfig>(config: T): T {
+/** Identity helper for `adaptv.config.ts` — full typing + a stable anchor for tooling. */
+export function defineApp<const T extends AdaptvAppConfig>(config: T): T {
   return config
 }
 
 /**
- * Resolve a (possibly partial) {@link NativThemeColor} to concrete light + dark
+ * Resolve a (possibly partial) {@link AdaptvThemeColor} to concrete light + dark
  * colors. A missing side falls back to the provided one — a single-color app uses
  * that one color for both appearances (meta + launch-gap background).
  */
-export function resolveThemeColors(themeColor: NativThemeColor): {
+export function resolveThemeColors(themeColor: AdaptvThemeColor): {
   light: string
   dark: string
 } {
@@ -328,7 +331,7 @@ export function resolveThemeColors(themeColor: NativThemeColor): {
   const dark = themeColor.dark ?? themeColor.light
   if (!light || !dark) {
     throw new Error(
-      "nativ.config.ts: `themeColor` needs at least one of `light` / `dark`.",
+      "adaptv.config.ts: `themeColor` needs at least one of `light` / `dark`.",
     )
   }
   return { light, dark }

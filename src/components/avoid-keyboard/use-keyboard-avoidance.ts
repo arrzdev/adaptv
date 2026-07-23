@@ -1,11 +1,11 @@
 import type { RefObject } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { beginCaretHold } from "#nativ/hooks/use-caret-repaint"
+import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
 import {
   useKeyboard,
   willOpenVirtualKeyboard,
-} from "#nativ/hooks/use-keyboard"
-import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
+} from "#adaptv/hooks/use-keyboard"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 
 /* =============================================================================
  * TYPES

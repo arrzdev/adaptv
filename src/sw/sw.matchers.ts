@@ -1,4 +1,4 @@
-import { serviceWorkerScope } from "#nativ/sw/sw.scope"
+import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
 
 export type StaticAssetMatchOptions = {
   excludePathPrefixes?: string[]

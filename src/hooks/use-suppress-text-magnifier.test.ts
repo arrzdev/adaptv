@@ -1,6 +1,6 @@
 import { cleanup, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useSuppressTextMagnifier } from "#nativ/hooks/use-suppress-text-magnifier"
+import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnifier"
 
 /* =============================================================================
  * SYNTHETIC TOUCH EVENTS

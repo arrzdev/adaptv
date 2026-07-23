@@ -3,7 +3,7 @@ import {
   attachHapticTick,
   HAPTIC_TICK_ATTR,
   supportsHapticTick,
-} from "#nativ/capabilities/haptic-tick"
+} from "#adaptv/capabilities/haptic-tick"
 
 const restores: Array<() => void> = []
 

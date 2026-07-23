@@ -1,12 +1,12 @@
-# nativ — behaviors it fixes (and how to test them)
+# adaptv — behaviors it fixes (and how to test them)
 
-The cross-platform bugs nativ already solves, **how** each is done (where in the code), and **how you
+The cross-platform bugs adaptv already solves, **how** each is done (where in the code), and **how you
 verify** it's working. Pairs with [`TESTING.md`](TESTING.md) (the six-target discipline) and
 [`capacitor-internals.md`](capacitor-internals.md) (deep native details + version pins).
 
 ## The six targets
 
-nativ ships one codebase to six runtimes; the hard bugs live where they diverge.
+adaptv ships one codebase to six runtimes; the hard bugs live where they diverge.
 
 | # | Target | What it is |
 |---|--------|-----------|
@@ -28,14 +28,14 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   check silently takes the *web* branch on native (wrong safe-area, history, splash).
 - **How:** `src/utils/platform.ts` — `isNativePlatform` / `isInstalledApp` / `getOS` off the Capacitor
   global (no import → web builds need nothing). A pre-paint script stamps
-  `html[data-nativ-platform="native|standalone|web"]` + `data-nativ-os` before first frame.
-- **Test:** on native (6), `document.documentElement.dataset.nativPlatform === "native"`. Safe-area /
+  `html[data-adaptv-platform="native|standalone|web"]` + `data-adaptv-os` before first frame.
+- **Test:** on native (6), `document.documentElement.dataset.adaptvPlatform === "native"`. Safe-area /
   splash / memory-history branches all resolve to the installed path.
 
 ### 2. `app:` / `web:` style variants
 - **Problem:** `@media (display-mode: …)` can't tell a native WebView from a browser tab.
-- **How:** `src/styles/utils.css` — `app:` = standalone media query **OR** `data-nativ-platform=native`;
-  `web:` = `data-nativ-platform=web` only (attribute-scoped, so native is excluded).
+- **How:** `src/styles/utils.css` — `app:` = standalone media query **OR** `data-adaptv-platform=native`;
+  `web:` = `data-adaptv-platform=web` only (attribute-scoped, so native is excluded).
 - **Test:** an element with `web:hidden app:block` is hidden in a tab (1–3), shown when installed (4–6).
 
 ### 3. Splash — installed-only, colour-driven, theme-aware, no double
@@ -46,14 +46,14 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     `splashScreenInBrowser`. Gated by the critical-CSS splash gate keyed on the platform stamp.
   - The React splash **self-unmounts** (returns `null` when ready) — `RoutingShell` just mounts it.
   - Native mask is **colour-driven**, not an image: Android launch theme + `colors.xml` /
-    `colors-night.xml`; iOS `NativSplash` colour asset + a solid launch storyboard. Mascot lives *only*
+    `colors-night.xml`; iOS `AdaptvSplash` colour asset + a solid launch storyboard. Mascot lives *only*
     in the React splash → appears once.
   - `splashMaskMode`: `preferences` (follows `useTheme`) / `system` / `light` / `dark`. For
-    `preferences`, the CLI writes a per-app night override (Android `UiModeManager` in a nativ-owned
+    `preferences`, the CLI writes a per-app night override (Android `UiModeManager` in a adaptv-owned
     `MainActivity`; iOS `AppDelegate.overrideUserInterfaceStyle`) so the splash tracks the app theme, not
     the device — on the **next** launch (1-launch, no "open twice").
   - Android-12 system splash: transparent `windowSplashScreenAnimatedIcon` → flat colour, no icon.
-  - Code: `bin/nativ.mjs` (`patchAndroidSplash` / `patchIosTheme` / `resolveSplashMask`),
+  - Code: `bin/adaptv.mjs` (`patchAndroidSplash` / `patchIosTheme` / `resolveSplashMask`),
     `src/capabilities/splash.ts`, `src/capabilities/native-theme.ts`, `src/shell/critical-css.ts`.
 - **Test:** cold-start installed (4–6): solid mask colour → React splash fades the mascot in on the same
   colour → app (mascot once). Toggle the app to dark on a light device → the mask is dark next launch,

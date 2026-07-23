@@ -1,4 +1,4 @@
-// The presentation layer for the nativ CLI — one calm, quiet visual language.
+// The presentation layer for the adaptv CLI — one calm, quiet visual language.
 //
 // Deliberately NOT a task-tree framework: a single custom spinner renderer so the
 // output reads like a modern build tool (Vite/Expo), not a log dump. One glyph set
@@ -50,9 +50,9 @@ export function since(start) {
 /* static output — header, log lines, summary                                 */
 /* -------------------------------------------------------------------------- */
 
-/** The command banner: `  nativ  run android`. */
+/** The command banner: `  adaptv  run android`. */
 export function header(title) {
-  out(`\n  ${c.bold(c.magenta("nativ"))}  ${c.dim(title)}\n\n`)
+  out(`\n  ${c.bold(c.magenta("adaptv"))}  ${c.dim(title)}\n\n`)
 }
 
 export const log = {
@@ -148,7 +148,7 @@ export function liveWatcher({ keys = true } = {}) {
 /**
  * Raw-mode key handling for the run loop — Expo-style, and available the WHOLE time
  * rather than only once something is detected: `r` to reinstall on demand is useful
- * whenever a device gets into a state you don't trust, not just after nativ notices a
+ * whenever a device gets into a state you don't trust, not just after adaptv notices a
  * native change.
  *
  * Raw mode means the terminal stops translating ctrl-c into SIGINT for us, so it has to

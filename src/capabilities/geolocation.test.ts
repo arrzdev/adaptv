@@ -4,7 +4,7 @@ import {
   checkGeoPermission,
   getCurrentPosition,
   requestGeoPermission,
-} from "#nativ/capabilities/geolocation"
+} from "#adaptv/capabilities/geolocation"
 
 vi.mock("@capacitor/geolocation", () => ({
   Geolocation: {

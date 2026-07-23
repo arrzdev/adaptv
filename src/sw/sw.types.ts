@@ -46,7 +46,7 @@ export type ServiceWorkerLifecycleOptions = {
   claimClients?: boolean
   skipWaitingOnMessage?: boolean
   /**
-   * The build tag this worker was stamped with (`__NATIV_BUILD_TAG__`). Enables
+   * The build tag this worker was stamped with (`__ADAPTV_BUILD_TAG__`). Enables
    * the activate-time sweep of previous builds' runtime caches (B2). Omit to
    * skip sweeping.
    */

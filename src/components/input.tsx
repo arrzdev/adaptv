@@ -15,8 +15,8 @@ import {
   useMemo,
   useRef,
 } from "react"
-import { cn } from "#nativ/utils/cn"
-import { isTouchDevice } from "#nativ/utils/is-touch-device"
+import { cn } from "#adaptv/utils/cn"
+import { isTouchDevice } from "#adaptv/utils/is-touch-device"
 
 /* =============================================================================
  * TYPES

@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
-import { ScrollView } from "#nativ/components/scroll-view"
+import { ScrollView } from "#adaptv/components/scroll-view"
 
 function scrollNode(container: HTMLElement): HTMLElement {
   const node = container.querySelector("[data-scroll-view]")

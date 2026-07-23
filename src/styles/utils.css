@@ -6,7 +6,7 @@
  * "installed app" vs "browser tab" styling.
  *
  * `app:`  → installed PWA (display-mode: standalone) OR a native Capacitor build
- *           (stamped `html[data-nativ-platform="native"]` pre-paint by
+ *           (stamped `html[data-adaptv-platform="native"]` pre-paint by
  *           getPlatformInitScript). A native WebView reports display-mode:browser,
  *           so the attribute branch is what catches it.
  * `web:`  → a real browser tab only. Attribute-scoped (not `@media browser`) so a
@@ -16,13 +16,13 @@
   @media (display-mode: standalone) {
     @slot;
   }
-  &:where(html[data-nativ-platform="native"] *) {
+  &:where(html[data-adaptv-platform="native"] *) {
     @slot;
   }
 }
 
 @custom-variant web {
-  &:where(html[data-nativ-platform="web"] *) {
+  &:where(html[data-adaptv-platform="web"] *) {
     @slot;
   }
 }

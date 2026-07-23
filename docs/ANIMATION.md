@@ -1,6 +1,6 @@
-# nativ — the animation & transition substrate
+# adaptv — the animation & transition substrate
 
-> What nativ animates with, and why it does **not** build an animation engine. Covers the four
+> What adaptv animates with, and why it does **not** build an animation engine. Covers the four
 > candidate substrates (CSS, WAAPI, `motion`, View Transitions), what actually runs off the main
 > thread, and the specific traps that look like good ideas.
 >
@@ -13,10 +13,10 @@
 
 | # | Decision |
 |---|---|
-| A1 | **`motion` stays the animation substrate.** nativ does not build an engine. Already a peer dep. |
+| A1 | **`motion` stays the animation substrate.** adaptv does not build an engine. Already a peer dep. |
 | A2 | **CSS is the default for enter/exit**; `motion` is for gesture-driven, interruptible, and layout animation. |
 | A3 | **The accelerated property set is `transform` / `opacity` / `filter` / `backdrop-filter`.** Everything else is main-thread; treat acceleration as progressive enhancement, never as a guarantee. |
-| A4 | **`composite: "add"` is forbidden** in nativ primitives — it silently disables the Chromium compositor. |
+| A4 | **`composite: "add"` is forbidden** in adaptv primitives — it silently disables the Chromium compositor. |
 | A5 | **Overlays are ordinary positioned elements, not the top layer.** `overlay` is Chromium-only and unrequested in WebKit — `<dialog>`/popover exits break on iOS permanently. |
 | A6 | **View Transitions are opt-in polish, never the mechanism** for gesture-driven navigation. |
 | A7 | **Ship `LazyMotion` + `m`**, not the full `motion/react` barrel. |
@@ -42,14 +42,14 @@ constexpr auto kCompositableProperties = std::to_array<CSSPropertyID>(
 **WAAPI, CSS animations, and CSS transitions all funnel through the same
 `CheckCanStartAnimationOnCompositor` path in Blink.** WAAPI gets no acceleration advantage over CSS,
 and no penalty. *The substrate choice is orthogonal to acceleration* — which is the single most
-useful fact here, because it means nativ can pick a substrate on ergonomics alone.
+useful fact here, because it means adaptv can pick a substrate on ergonomics alone.
 
 **Things that silently drop you to the main thread** (each is a named failure reason in Blink):
 a non-`replace` composite mode · animating a property set `!important` · blur-type filters near
 edges (`kFilterRelatedPropertyMayMovePixels`) · mixed keyframe value types · a transform on an
 inline box · `CSSPropertyID`s outside the list above.
 
-> **Rule for every nativ primitive: animate `transform` and `opacity`.** If a design needs
+> **Rule for every adaptv primitive: animate `transform` and `opacity`.** If a design needs
 > `height`/`width`/`background-color` animated, that is a design change, not an optimisation task.
 
 ### 1.1 🔒 The iOS 60Hz ceiling — the real reason this rule is non-negotiable
@@ -92,7 +92,7 @@ longhand, not `manipulation`, on gesture surfaces).
 
 WAAPI is the best *imperative control* surface on the platform (`play`/`pause`/`reverse`/`cancel`,
 `currentTime` scrubbing, `updatePlaybackRate()`, `ready`/`finished` promises, `getAnimations()`), and
-it's Baseline Widely Available since 2023-03-16. But four gaps make it unusable as nativ's only layer:
+it's Baseline Widely Available since 2023-03-16. But four gaps make it unusable as adaptv's only layer:
 
 1. **No velocity readback.** There is no `animation.currentValue`. `getComputedStyle()` gives you a
    position, but velocity needs two samples across frames — and reading computed style on a
@@ -119,7 +119,7 @@ kEffectHasNonReplaceCompositeMode = 1 << 4,
 ```
 
 **Using any composite mode other than `replace` silently disables compositor acceleration.** You get
-free blending and lose the GPU. On low-end Android — the exact device class nativ's `gpuBoost`
+free blending and lose the GPU. On low-end Android — the exact device class adaptv's `gpuBoost`
 sentinel exists for — that is the wrong trade.
 
 `iterationComposite` is worse: **Chrome has never shipped it** ([crbug 41133485](https://crbug.com/41133485)),
@@ -129,7 +129,7 @@ Baseline limited, zero developer signal. Treat as nonexistent.
 
 ## 3. 🔒 Keep `motion` — and understand its hybrid engine
 
-nativ already peer-depends on `motion` (12.35.0; current is **12.42.2**, 2026-06-30 — `framer-motion`
+adaptv already peer-depends on `motion` (12.35.0; current is **12.42.2**, 2026-06-30 — `framer-motion`
 ships in lockstep at the identical version and `motion` is a re-export shell over it).
 
 The marketing line is "hybrid engine." The real decision function is
@@ -154,11 +154,11 @@ sampling it twice (at `sampleTime` and `sampleTime - 10ms`), and feeding both in
 *"under CPU load, WAAPI's currentTime may not reflect actual elapsed time, causing incorrect sampling
 and visual jumps."* That is roughly the whole argument for renting rather than building.
 
-**Two consequences that become nativ rules:**
+**Two consequences that become adaptv rules:**
 
 - **Any per-frame JS observation forces the main thread.** `onUpdate` and `MotionValue` subscribers
   are exactly the reactivity that costs you acceleration. This tension is fundamental, not a motion
-  quirk — so nativ primitives should prefer `data-*` + CSS over `onUpdate` where the value is only
+  quirk — so adaptv primitives should prefer `data-*` + CSS over `onUpdate` where the value is only
   needed for styling.
 - **`acceleratedValues` means "hand off to WAAPI", not "guaranteed compositor."** `clipPath` is on
   motion's list but is paint-worklet-gated in Chromium (§1).
@@ -201,18 +201,18 @@ Two hard facts:
 
 ### 4.1 🔒 Therefore: overlays are ordinary positioned elements
 
-nativ's `Drawer`/`Sheet`/`Modal` do **not** use `<dialog>` or the Popover API's top layer. They are
-ordinary positioned elements with nativ-owned z-index and a JS presence hook. This:
+adaptv's `Drawer`/`Sheet`/`Modal` do **not** use `<dialog>` or the Popover API's top layer. They are
+ordinary positioned elements with adaptv-owned z-index and a JS presence hook. This:
 
 - sidesteps the permanent iOS `overlay` gap,
 - sidesteps `dialog[closedby]` being Safari-absent (STP only),
 - and keeps interruptible, gesture-driven dismissal possible — which the top layer does not help with
   anyway.
 
-The cost is re-implementing focus trapping and inert-ing, which `<dialog>` gives free. Accepted: nativ
+The cost is re-implementing focus trapping and inert-ing, which `<dialog>` gives free. Accepted: adaptv
 already owns a back-handler priority chain (`COORDINATION.md`) that a native `<dialog>` would fight.
 
-**What nativ ships instead of a presence library:** a thin hook that defers unmount by one frame plus
+**What adaptv ships instead of a presence library:** a thin hook that defers unmount by one frame plus
 `transitionend`/`animationend`, letting CSS own the interpolation via `@starting-style` +
 `allow-discrete`. React removes nodes synchronously during commit — there is no CSS hook for removal,
 and a CSSWG search confirms **none is even proposed** (the live issues, #12351/#11263/#10356, are all
@@ -228,7 +228,7 @@ degrades cleanly on Safari without a separate stylesheet branch.
 Baseline **newly available 2025-10-14** (Chrome 111 · Safari 18 · Firefox 144). Cross-document is
 Chromium-only; element-scoped is Chrome 147+ (~3 months old).
 
-**Why it cannot be nativ's route-transition mechanism:**
+**Why it cannot be adaptv's route-transition mechanism:**
 
 - It **does not support interruptible or gesture-driven animation** — the whole point of a native-feel
   swipe-back.
@@ -256,7 +256,7 @@ The Navigation API is now Baseline (**Safari 26.2**, 2025-12-12; **Firefox 147**
   (0 hits across `ionic-team/capacitor`). So there is no system swipe-back in a stock Capacitor iOS
   app at all — no competing UA animation, and nothing to intercept.
 
-> **So: nativ's edge-swipe is Pointer Events + transform, driven by touch delta, committing via the
+> **So: adaptv's edge-swipe is Pointer Events + transform, driven by touch delta, committing via the
 > router at gesture end.** Which is what `edge-swipe-gestures.tsx` already does. The Navigation API
 > changes nothing here — and with memory history (installed/native), there are no WKWebView history
 > entries for a gesture to traverse anyway.
@@ -265,7 +265,7 @@ The Navigation API is now Baseline (**Safari 26.2**, 2025-12-12; **Firefox 147**
 
 ## 6. Acceptance
 
-- [ ] No nativ primitive animates a property outside `transform`/`opacity`/`filter`/`backdrop-filter`.
+- [ ] No adaptv primitive animates a property outside `transform`/`opacity`/`filter`/`backdrop-filter`.
 - [ ] No `composite: "add"` / `iterationComposite` anywhere.
 - [ ] `Drawer`/`Sheet`/`Modal` use no `<dialog>`, no Popover top layer, no `overlay`.
 - [ ] Exit animations verified on **iOS 18** (the `display`-transition floor) and in Firefox (where

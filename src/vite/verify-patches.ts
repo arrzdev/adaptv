@@ -1,10 +1,10 @@
 /**
- * Fail loudly when nativ's dependency patches are not applied.
+ * Fail loudly when adaptv's dependency patches are not applied.
  * → `DECISIONS.md §2.6a` (L19), `§2.6b`
  *
  * ## Why this exists
  *
- * nativ's TanStack opacity rests on two `pnpm patch`es. They are declared in
+ * adaptv's TanStack opacity rests on two `pnpm patch`es. They are declared in
  * `pnpm-workspace.yaml` under `patchedDependencies` — and pnpm honours that key
  * **only in the root manifest of the project being installed**. A library cannot
  * carry its own patches into a consumer's install.
@@ -48,10 +48,10 @@ export function checkPatches(sources: {
     missing.push("@tanstack/start-plugin-core")
   }
 
-  //patched => the target template reads nativ's env override
+  //patched => the target template reads adaptv's env override
   if (
     sources.generatorTemplate !== undefined &&
-    !sources.generatorTemplate.includes("NATIV_ROUTER_PKG")
+    !sources.generatorTemplate.includes("ADAPTV_ROUTER_PKG")
   ) {
     missing.push("@tanstack/router-generator")
   }
@@ -62,10 +62,10 @@ export function checkPatches(sources: {
 /** The message shown when a patch is missing. States the fix, not just the fault. */
 export function describeMissingPatches(missing: string[]): string {
   return [
-    `[nativ] Required dependency patches are not applied: ${missing.join(", ")}.`,
+    `[adaptv] Required dependency patches are not applied: ${missing.join(", ")}.`,
     "",
     "Without them the route generator writes `@tanstack/react-router` imports into your",
-    "route files and nativ's framework facade silently stops working — the build still",
+    "route files and adaptv's framework facade silently stops working — the build still",
     "succeeds, which is why this is an error rather than a warning.",
     "",
     "pnpm only applies `patchedDependencies` from the root manifest of the project being",
@@ -73,8 +73,8 @@ export function describeMissingPatches(missing: string[]): string {
     "`pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
     "",
     "  patchedDependencies:",
-    "    '@tanstack/start-plugin-core': node_modules/@arrzdev/nativ/patches/@tanstack__start-plugin-core.patch",
-    "    '@tanstack/router-generator': node_modules/@arrzdev/nativ/patches/@tanstack__router-generator.patch",
+    "    '@tanstack/start-plugin-core': node_modules/@arrzdev/adaptv/patches/@tanstack__start-plugin-core.patch",
+    "    '@tanstack/router-generator': node_modules/@arrzdev/adaptv/patches/@tanstack__router-generator.patch",
     "",
     "then run `pnpm install`. If it still reports missing, delete `node_modules` first —",
     "pnpm does not always re-apply patches on an incremental install.",
@@ -93,7 +93,7 @@ export function describeMissingPatches(missing: string[]): string {
  * silently, for the same underlying reason: `@tanstack/start-plugin-core` and
  * `@tanstack/router-generator` are **transitive** dependencies of
  * `@tanstack/react-start`, so under pnpm's strict, non-hoisted layout they are
- * not resolvable by name — not from the app root, and not from nativ either
+ * not resolvable by name — not from the app root, and not from adaptv either
  * (`MODULE_NOT_FOUND` for both). A checker that cannot read the thing it checks
  * reports success, which is worse than no checker at all.
  *
@@ -114,10 +114,10 @@ export function assertRouteTreeIsOpaque(routeTreePath: string): void {
 
   throw new Error(
     [
-      "[nativ] The generated route tree still imports from `@tanstack/*`.",
+      "[adaptv] The generated route tree still imports from `@tanstack/*`.",
       `  ${routeTreePath}`,
       "",
-      "That means nativ's dependency patches are not applied to this install. The build",
+      "That means adaptv's dependency patches are not applied to this install. The build",
       "would otherwise SUCCEED with the framework facade silently disabled — your route",
       "files would carry `@tanstack/react-router` imports again — which is why this is an",
       "error rather than a warning.",

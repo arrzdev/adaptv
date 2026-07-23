@@ -18,7 +18,7 @@
  *
  * The surviving technique needs a real finger on a real element, which is a
  * fundamentally *declarative* mechanism and cannot be expressed as a patched
- * imperative call. It lives in `#nativ/capabilities/haptic-tick`.
+ * imperative call. It lives in `#adaptv/capabilities/haptic-tick`.
  *
  * So: this file is now a `navigator.vibrate` wrapper and nothing more. On any
  * platform without `navigator.vibrate` — which is every iOS browser, permanently,

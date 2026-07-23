@@ -15,7 +15,7 @@
 //accessor is the fix. → `COORDINATION.md §1`
 import { App } from "@capacitor/app"
 import type { PluginListenerHandle } from "@capacitor/core"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type AppState = "active" | "background"
 

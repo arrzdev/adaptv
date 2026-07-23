@@ -1,7 +1,7 @@
 /**
  * The isomorphism ban, enforced at build time.
  *
- * nativ's central promise is that one codebase runs on six targets. Server
+ * adaptv's central promise is that one codebase runs on six targets. Server
  * functions break that promise silently: `createServerFn` works perfectly in
  * `vite dev`, works in an SSR deploy, and **dies on a Capacitor build**, which has
  * no server at all — the app is a folder of files on the device. The failure lands
@@ -13,7 +13,7 @@
  *
  * This module is the **backstop**, not the primary surface. A bundler error gives
  * no editor squiggles — there is no LSP in the picture, and a file the running page
- * never imports is never checked. The linter config nativ ships is the surface
+ * never imports is never checked. The linter config adaptv ships is the surface
  * developers should actually feel; this is what catches everyone who doesn't run
  * it, and it is the one layer a consumer cannot disable, misconfigure, or forget,
  * because it lives inside the framework's own plugin array.
@@ -30,7 +30,7 @@ import type { Plugin } from "vite"
  * Whole subpaths rather than named symbols: everything on them needs a request or
  * a response, so there is no client-safe surface worth threading a per-symbol
  * allowance for. `@tanstack/react-router` is deliberately absent — routing is
- * isomorphic, and `loader`/`beforeLoad` are Router features that nativ endorses.
+ * isomorphic, and `loader`/`beforeLoad` are Router features that adaptv endorses.
  * **Ban server-only calls, not loaders.**
  */
 const BANNED_MODULES = new Set([
@@ -47,7 +47,7 @@ export function isBannedServerModule(source: string): boolean {
  * Whether an importer is application source, i.e. code the ban governs.
  *
  * Dependencies are exempt and must stay exempt: TanStack Start's own internals
- * import these constantly, and banning them there would make nativ unusable
+ * import these constantly, and banning them there would make adaptv unusable
  * rather than safe. The `node_modules` test is a path-segment test so it also
  * catches pnpm's nested `.pnpm/<pkg>/node_modules/<pkg>` layout.
  *
@@ -67,7 +67,7 @@ export function isApplicationSource(
   importer: string | undefined,
 ): boolean {
   if (!importer) return false
-  //virtual modules (nativ's own, and other plugins') have no file to blame, and
+  //virtual modules (adaptv's own, and other plugins') have no file to blame, and
   //a caret frame pointing into generated code helps nobody
   if (importer.startsWith("\0") || importer.includes("virtual:"))
     return false
@@ -192,7 +192,7 @@ export function findServerRouteHandlers(code: string): number | null {
  * ========================================================================== */
 
 /**
- * The unbypassable backstop. Baked into the array `nativ()` returns, so it is not
+ * The unbypassable backstop. Baked into the array `adaptv()` returns, so it is not
  * a devDependency a consumer opts into — it is inside the framework's own plugin.
  *
  * `enforce: "pre"` puts it ahead of `tanstackStart()`, so the ban is decided
@@ -203,9 +203,9 @@ export function findServerRouteHandlers(code: string): number | null {
  * `this.error()` takes a character offset, derives line/column itself, and renders
  * a caret frame. Dev returns a structured 500 the overlay renders; build exits 1.
  */
-export function nativBanServerApisPlugin(): Plugin {
+export function adaptvBanServerApisPlugin(): Plugin {
   return {
-    name: "nativ:ban-server-apis",
+    name: "adaptv:ban-server-apis",
     enforce: "pre",
 
     resolveId(source, importer) {
@@ -224,7 +224,7 @@ export function nativBanServerApisPlugin(): Plugin {
       this.error(
         {
           message:
-            "`server: { handlers }` on a route is server-only and cannot be used in a nativ app.\n" +
+            "`server: { handlers }` on a route is server-only and cannot be used in a adaptv app.\n" +
             "It needs a server to run, and a Capacitor build has none.\n" +
             "Move the handler to your API and call it over the network, or use the " +
             "route's `loader`, which is isomorphic and fully supported.\n" +

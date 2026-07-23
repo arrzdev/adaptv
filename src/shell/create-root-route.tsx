@@ -4,26 +4,26 @@ import {
   Outlet,
 } from "@tanstack/react-router"
 import type { ComponentType, ReactNode } from "react"
-import { UiNotFound } from "#nativ/components/not-found"
-import type { OfflineProps } from "#nativ/components/offline"
-import type { NativPatches } from "#nativ/config/app-config"
+import { UiNotFound } from "#adaptv/components/not-found"
+import type { OfflineProps } from "#adaptv/components/offline"
+import type { AdaptvPatches } from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
   PwaServiceWorkerRuntimeConfig,
   SplashScreenProps,
-} from "#nativ/config/types"
-import type { UiThemePreference } from "#nativ/hooks/use-theme"
-import { getUiThemeInitScript } from "#nativ/hooks/use-theme"
-import { getCriticalShellCss } from "#nativ/shell/critical-css"
-import type { PwaHeadConfig } from "#nativ/shell/head"
-import { pwaHead } from "#nativ/shell/head"
-import { getLaunchViewportInitScript } from "#nativ/shell/launch-viewport"
-import type { RootDocumentProps } from "#nativ/shell/shell-layout"
+} from "#adaptv/config/types"
+import type { UiThemePreference } from "#adaptv/hooks/use-theme"
+import { getUiThemeInitScript } from "#adaptv/hooks/use-theme"
+import { getCriticalShellCss } from "#adaptv/shell/critical-css"
+import type { PwaHeadConfig } from "#adaptv/shell/head"
+import { pwaHead } from "#adaptv/shell/head"
+import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport"
+import type { RootDocumentProps } from "#adaptv/shell/shell-layout"
 import {
   createRootDocument,
   RoutingShell,
-} from "#nativ/shell/shell-layout"
-import { getPlatformInitScript } from "#nativ/utils/platform"
+} from "#adaptv/shell/shell-layout"
+import { getPlatformInitScript } from "#adaptv/utils/platform"
 export type RootHeadScript = {
   id: string
   children: string
@@ -46,13 +46,13 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
   RootDocument?: ComponentType<RootDocumentProps>
   notFoundComponent?: NotFoundRouteComponent
   /**
-   * The app's offline UI. Rendered by nativ when the app cannot boot far enough
+   * The app's offline UI. Rendered by adaptv when the app cannot boot far enough
    * for a route to exist — a route chunk fails to load (`vite:preloadError` with
    * the reload guard already spent), or the route tree itself cannot resolve.
    *
    * The **same** component is what the consumer renders from a route whose data
    * is unavailable; every prop is optional so one component serves both call
-   * sites. Defaults to nativ's `Offline`. → `RENDERING.md §3.1.2`
+   * sites. Defaults to adaptv's `Offline`. → `RENDERING.md §3.1.2`
    */
   offlineComponent?: ComponentType<OfflineProps>
   /** Built app stylesheet URL (`import appCss from "…/main.css?url"`). */
@@ -78,8 +78,8 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
    * `register: "autoUpdate"`.
    */
   serviceWorker?: PwaServiceWorkerRuntimeConfig
-  /** Native-feel WebKit fixes; each defaults to `true`. See {@link NativPatches}. */
-  patches?: NativPatches
+  /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
+  patches?: AdaptvPatches
 }
 
 function buildRootRouteHead({

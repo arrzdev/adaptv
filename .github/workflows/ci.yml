@@ -60,7 +60,7 @@ jobs:
           tally=$(grep -oE 'Tests[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
           files=$(grep -oE 'Test Files[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
           {
-            echo "## nativ CI"
+            echo "## adaptv CI"
             echo ""
             echo "| Check | Result |"
             echo "| --- | :---: |"
