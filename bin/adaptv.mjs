@@ -72,9 +72,11 @@ import {
   capRun,
   capSync,
   explainLaunchFailure,
+  foregroundDevice,
   generateAssets,
   iosEnv,
   isAppInstalled,
+  isAppRunning,
   isPhysicalTarget,
   lanIp,
   launchInstalledApp,
@@ -642,6 +644,7 @@ async function runLive(appRoot, platforms, opts) {
           }
           report(`launch → ${target.name} · cached`)
           if (launchInstalledApp(appRoot, platform, target.id, env)) {
+            foregroundDevice(platform, target.id, env)
             launched.add(platform)
             return `${target.name} · cached`
           }
@@ -650,19 +653,28 @@ async function runLive(appRoot, platforms, opts) {
 
         report("sync")
         await capSync(appRoot, platform, env, { report })
+        // Was the app already up? If so, it survives the build (capRun no longer kills it)
+        // and only cap run's re-front touched it, so we relaunch the fresh install once.
+        const wasRunning = isAppRunning(appRoot, platform, target.id, env)
         report(`launch → ${target.name}`)
         await capRun(appRoot, platform, target.id, env, { report })
         if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
           // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
-          // app so its WebView loads with a working route. Must be post-launch — doing
-          // it before cap run is wiped by cap run itself. External mode reaches the LAN IP
+          // app so its WebView loads with a working route. External mode reaches the LAN IP
           // directly (no reverse), so none of this applies.
           report("linking dev server")
           cleanups.push(androidReverse(port, env))
           relaunchAndroidApp(appRoot, env, target.id)
+        } else if (platform === "ios" && wasRunning) {
+          // The old process kept running through the build; load the fresh install now
+          // (one relaunch, at the end — not a kill-then-wait-15s at the start).
+          launchInstalledApp(appRoot, platform, target.id, env, {
+            restart: true,
+          })
         }
+        foregroundDevice(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
         runCache.run[key] = {
@@ -763,6 +775,7 @@ async function runLive(appRoot, platforms, opts) {
         throw new Error(
           "couldn't relaunch the app — is it still installed? press b to rebuild.",
         )
+      foregroundDevice(platform, target.id, envFor(platform))
       return `${target.name} · reloaded`
     }
     const reload = async () => {
