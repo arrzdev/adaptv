@@ -35,7 +35,7 @@ const DB_VERSION = 1
 /**
  * In-memory fallback.
  *
- * IndexedDB is genuinely absent in several places adaptv runs: during SSR, in
+ * IndexedDB is genuinely absent in several places adaptv devs: during SSR, in
  * Safari private mode historically, and inside some embedded webviews. Throwing
  * there would make the tier unusable for the framework's own offline needs, so it
  * degrades to memory — correct for the session, just not durable.

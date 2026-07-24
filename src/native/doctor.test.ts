@@ -72,7 +72,7 @@ describe("runDoctor — privacy manifest (§5.0.1)", () => {
       dependencies: ["@capacitor/preferences"],
     })
     expect(d?.severity).toBe("error")
-    expect(d?.fix).toContain("adaptv run ios")
+    expect(d?.fix).toContain("adaptv build ios")
   })
 
   it("is quiet when no installed plugin creates the obligation", () => {

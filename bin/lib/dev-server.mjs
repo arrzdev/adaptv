@@ -140,7 +140,7 @@ export function startDevServer(
       const errs = buffer.filter((l) =>
         /error|EADDRINUSE|in use|fail|cannot|not found/i.test(l),
       )
-      // A busy port is the common case (a second `adaptv run`, the app's own
+      // A busy port is the common case (a second `adaptv dev`, the app's own
       // `pnpm dev`, or a stale process). Name it plainly instead of a raw stack.
       // greedy up to the LAST colon so we grab the port (9220), not an IP octet (127).
       const inUse = buffer
@@ -149,7 +149,7 @@ export function startDevServer(
       const err = new Error(
         inUse
           ? `port ${inUse[1]} is already in use — another dev server is running ` +
-              "(another `adaptv run`, the app's `pnpm dev`, or a stale process). " +
+              "(another `adaptv dev`, the app's `pnpm dev`, or a stale process). " +
               "Stop it, then retry. Only one adaptv dev server can run at a time."
           : `vite dev exited (code ${code}) before it was ready`,
       )

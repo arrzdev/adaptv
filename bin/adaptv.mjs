@@ -2,19 +2,21 @@
 // The adaptv CLI — owns the whole native (Capacitor) lifecycle so a consumer never
 // touches Capacitor, the toolchain env, or the asset generator by hand:
 //
-//   adaptv doctor                    check the local toolchain (JDK, Android SDK, Xcode, pod)
-//   adaptv run  web|ios|android|all  live-reload dev: one Vite dev server, web + native
-//                                   WebViews all attached, hot-reloading on save
-//   adaptv build ios|android|all     static artifacts: build SPA → sync → package (.ipa/.apk)
+//   adaptv doctor                     check the local toolchain (JDK, Android SDK, Xcode, pod)
+//   adaptv dev  web|ios|android|all   live reload: one Vite dev server, web + native
+//                                    WebViews all attached, hot-reloading on save
+//   adaptv preview ios|android|all    static build → install → launch on a device (no reload)
+//   adaptv build ios|android|all      static artifacts: build SPA → sync → package (.ipa/.apk)
 //
-//   run  flags: --target <id>   launch on a specific device/simulator id
+//   dev/preview flags:
+//               --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
-//               --force         reinstall even when nothing native changed (run skips
-//                               the rebuild and just relaunches the installed app)
-//               -- <vite args>  forwarded to the vite dev server (e.g. `-- --port 4000`)
+//               --force         reinstall even when nothing native changed (dev/preview skip
+//                               the rebuild and just relaunch the installed app otherwise)
+//               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
 //   build flags: --output <path> where to write the artifact (default: .adaptv/)
 //               --force         rebuild even if unchanged (web build + sync are cached)
-//   both:        --verbose      show the full underlying tool logs (raw passthrough)
+//   all:         --verbose      show the full underlying tool logs (raw passthrough)
 //
 // Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
@@ -281,18 +283,18 @@ function newestIpa(appRoot) {
 }
 
 /**
- * `run` — the live-reload dev command. Starts ONE Vite dev server and points the web
+ * `dev` — the live-reload command. Starts ONE Vite dev server and points the web
  * + native WebViews at it, so an edit hot-reloads every surface. `platforms` is empty
- * for `run web` (dev server only). Runs until Ctrl-C, then reverts every change
+ * for `dev web` (dev server only). Runs until Ctrl-C, then reverts every change
  * (capacitor.config server block, the iOS ATS exception, the adb reverse) and stops
- * Vite. Static artifacts stay on `adaptv build`.
+ * Vite. Static installs stay on `adaptv preview`; artifacts on `adaptv build`.
  */
 async function runLive(appRoot, platforms, opts) {
   const webOnly = platforms.length === 0
   const single = platforms.length === 1
   const t0 = Date.now()
   header(
-    `run ${webOnly ? "web" : single ? platforms[0] : "all"}  ${c.dim("· live reload")}`,
+    `dev ${webOnly ? "web" : single ? platforms[0] : "all"}  ${c.dim("· live reload")}`,
   )
 
   const verbose = opts.verbose
@@ -435,13 +437,13 @@ async function runLive(appRoot, platforms, opts) {
             onLine: (l) => onDevLine?.(l),
           })
           // Fail SAFE: if the detected URL never serves the app, something else holds
-          // the port (a stray `adaptv run`/`pnpm dev`, or another server on the same
+          // the port (a stray `adaptv dev`/`pnpm dev`, or another server on the same
           // port). Don't point the native apps at a stranger — abort with a clear fix.
           if (!stable) {
             throw new Error(
               `dev server at ${devServer.localUrl} isn't responding — another process ` +
                 "is likely using that port. Stop it, or run on a free port: " +
-                "`adaptv run … -- --port <n>`.",
+                "`adaptv dev … -- --port <n>`.",
             )
           }
         }
@@ -634,7 +636,8 @@ async function runLive(appRoot, platforms, opts) {
 
 /** Shared orchestration for `build` (static artifacts). */
 async function pipeline(kind, appRoot, platforms, opts) {
-  const verb = kind === "run" ? "run" : "build"
+  // kind is "preview" (static build → install → launch) or "build" (produce artifacts).
+  const verb = kind
   const single = platforms.length === 1
   header(`${verb} ${single ? platforms[0] : "all"}`)
 
@@ -755,7 +758,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   // 3. resolve device targets (run only) — sequential prompts, up front, so the
   //    parallel launch phase never has two pickers competing for the terminal.
-  if (kind === "run") {
+  if (kind === "preview") {
     for (const p of ready) {
       ctx.targets[p] = await resolveTarget(appRoot, p, envFor(p), {
         target: opts.target,
@@ -781,7 +784,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
     } else {
       report("sync · cached")
     }
-    if (kind === "run") {
+    if (kind === "preview") {
       const target = ctx.targets[platform]
       const tag = target.source === "latest" ? " · latest" : ""
       report(`launch → ${target.name}${tag}`)
@@ -816,7 +819,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
       } else {
         skip("sync")
       }
-      if (kind === "run") {
+      if (kind === "preview") {
         const target = ctx.targets[p]
         await runLine(
           launchLabel(target),
@@ -849,7 +852,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const ok = platforms.every((p) => p in done)
   finish(
     ok
-      ? kind === "run"
+      ? kind === "preview"
         ? c.green("✓ launched")
         : c.green("✓ artifacts ready")
       : c.red("✖ one or more platforms failed"),
@@ -1027,15 +1030,18 @@ function usage() {
   line(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
 
 ${c.bold("Usage")}
+  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
+  adaptv preview <ios|android|all>      [--target <id>] [--latest] [--force] [--verbose]
+  adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
   adaptv doctor
-  adaptv run   <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
-  adaptv build <ios|android|all>      [--output <path>] [--verbose] [--force]
 
-${c.dim("run = live-reload dev: one Vite dev server, web + native WebViews all attached,")}
+${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
 ${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
-${c.dim("`adaptv run all -- --port 4000`. build = static .ipa/.apk artifacts.")}
-${c.dim("--latest reuses the last device you picked. run skips the rebuild and just")}
-${c.dim("relaunches when nothing native changed; --force reinstalls anyway. Native projects")}
+${c.dim("`adaptv dev all -- --port 4000`.")}
+${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
+${c.dim("build = static .ipa/.apk artifacts.")}
+${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
+${c.dim("relaunch when nothing native changed; --force reinstalls anyway. Native projects")}
 ${c.dim("live in .adaptv/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
 }
 
@@ -1075,18 +1081,18 @@ async function main() {
     case "doctor":
       return await doctor(appRoot)
 
-    case "run": {
-      // `run` is the live-reload dev command: one Vite dev server, web + native
+    case "dev": {
+      // `dev` is the live-reload command: one Vite dev server, web + native
       // WebViews all pointed at it. `web` = the dev server alone (no native).
       const platforms = rest[0] === "web" ? [] : targetsFor(rest[0])
       if (platforms === null) {
         throw new Error(
-          `unknown run target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
+          `unknown dev target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
         )
       }
       if (platforms.length > 1 && flags.target) {
         throw new Error(
-          "--target can't be used with `run all` (it's per-platform). Use --latest, or run each platform.",
+          "--target can't be used with `dev all` (it's per-platform). Use --latest, or dev each platform.",
         )
       }
       return runLive(appRoot, platforms, {
@@ -1095,6 +1101,28 @@ async function main() {
         verbose: !!flags.verbose,
         force: !!flags.force,
         viteArgs: flags.viteArgs,
+      })
+    }
+
+    case "preview": {
+      // `preview` = static build → install → launch on a device (no live reload).
+      // Native only; there's no `preview web` (that's plain `vite preview`, unwrapped).
+      const platforms = targetsFor(rest[0])
+      if (!platforms) {
+        throw new Error(
+          `unknown preview target "${rest[0] ?? ""}" — expected ios, android, or all.`,
+        )
+      }
+      if (platforms.length > 1 && flags.target) {
+        throw new Error(
+          "--target can't be used with `preview all` (it's per-platform). Use --latest, or preview each platform.",
+        )
+      }
+      return pipeline("preview", appRoot, platforms, {
+        target: flags.target,
+        latest: !!flags.latest,
+        verbose: !!flags.verbose,
+        force: !!flags.force,
       })
     }
 
@@ -1110,6 +1138,14 @@ async function main() {
         verbose: !!flags.verbose,
         force: !!flags.force,
       })
+    }
+
+    case "run": {
+      // Retired in favour of dev/preview — don't silently redefine it.
+      const hint = rest[0] && rest[0] !== "web" ? rest[0] : "ios"
+      throw new Error(
+        `\`run\` was split into \`dev\` and \`preview\` — did you mean \`adaptv dev ${hint}\`? (live reload = dev; static build → install = preview)`,
+      )
     }
 
     case undefined:
