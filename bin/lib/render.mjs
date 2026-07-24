@@ -62,6 +62,10 @@ const elapsed = (start) => {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
+/** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
+ *  native build streams nothing, so past this the last finished phase is stale. */
+const IDLE_MS = 1200
+
 /** A human total duration from `start` (e.g. "8s", "1m 12s"). */
 export function since(start) {
   const s = Math.round((Date.now() - start) / 1000)
@@ -345,27 +349,6 @@ function bar(percent) {
 }
 
 /** Shorten/prettify a captured line for the live sub-detail. */
-// Gerund → past tense: cap prints "✔ Updating … in Nms" once the sub-op is DONE, so the
-// honest voice is "updated … · Nms". Unknown verbs pass through unchanged (still readable).
-const PAST_TENSE = {
-  updating: "updated",
-  copying: "copied",
-  building: "built",
-  running: "ran",
-  syncing: "synced",
-  generating: "generated",
-  installing: "installed",
-  creating: "created",
-  finding: "found",
-  deploying: "deployed",
-  cleaning: "cleaned",
-  downloading: "downloaded",
-  resolving: "resolved",
-  writing: "wrote",
-  adding: "added",
-  launching: "launched",
-}
-
 // Product/device nouns kept capitalised after the whole line is lowercased. Everything else
 // goes lowercase — the rule is: uppercase only where it genuinely means something.
 const PROPER = [
@@ -379,7 +362,8 @@ const PROPER = [
 // Normalise a streamed tool line (Capacitor/xcodebuild/gradle) into the house voice: strip
 // status emoji, drop the platform word (the lane already says it), "in 2.52ms" → "· 2.52ms",
 // cut path/target clauses ("from … to …", "-> …", "to <device>", "in <path>"), lowercase
-// (keeping iOS/iPhone/…), and put the verb in past tense (the line is a completed sub-op).
+// (keeping iOS/iPhone/…), and LEAVE the verb in the present ("building", "installing") so
+// the live line reads as what's happening right now — the settled ✓ line is the retrospective.
 // Returns "" for anything with no real content — a lone phase-header verb ("update ios") or
 // a bare `pkg@version` dump — so it's shown as nothing rather than noise.
 export function prettyLine(line) {
@@ -391,7 +375,7 @@ export function prettyLine(line) {
   let s = line
     .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
     .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
-    .replace(/\bin\s+([\d.]+\s*(?:[µμ]s|ms|us|s|m))\b/i, "· $1") // "in 2.52ms" → "· 2.52ms"
+    .replace(/\bin\s+[\d.]+\s*(?:[µμ]s|ms|us|s|m)\b/i, "") // drop "in 2.52ms" — the duration belongs on the settled ✓ line, not the live one
     .replace(/\s*->\s*\S.*$/, "") // "-> <rest>" arrow clause
     .replace(/\s+from\s+\S+\s+to\s+\S+/i, "") // "from <path> to <path>"
     .replace(/\s+to\s+\S.*$/i, "") // trailing "to <device/path>"
@@ -406,10 +390,7 @@ export function prettyLine(line) {
   if (/^@?[\w-]+\/[\w.-]+@[\w.-]+$/.test(s)) return "" // a bare `pkg@version` line
   s = s.toLowerCase()
   for (const [re, rep] of PROPER) s = s.replace(re, rep)
-  const first = s.match(/^([a-z]+)/)?.[1]
-  if (first && PAST_TENSE[first])
-    s = PAST_TENSE[first] + s.slice(first.length)
-  // Drop lines with no real action — a lone verb ("update", "run"), even with a `· time`.
+  // Drop lines with no real action — a lone verb ("building", "running"), even with a `· time`.
   if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
   return s
 }
@@ -438,13 +419,19 @@ const stripLen = (s) => s.replace(ANSI, "").length
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
  * ✖) if it throws. In `verbose`, streams the raw lines instead of animating.
  */
-export async function runLine(label, fn, { verbose = false } = {}) {
+export async function runLine(
+  label,
+  fn,
+  { verbose = false, idle = "" } = {},
+) {
   const start = Date.now()
   let detail = ""
+  let lastAt = start // when the live detail last changed — drives the idle fallback
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
     detail = pretty
+    lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
   }
 
@@ -469,8 +456,17 @@ export async function runLine(label, fn, { verbose = false } = {}) {
 
   let frame = 0
   const draw = () => {
+    // Live line = just the current phase (no per-step timer — the total lands on the ✓
+    // line). Nothing yet → "preparing". Once there's been output and the stream goes quiet
+    // for a beat — the long opaque native build, which cap emits nothing during — fall back
+    // to the caller's present-tense `idle` label instead of freezing on the last phase.
+    const phase = !detail
+      ? "preparing"
+      : idle && Date.now() - lastAt > IDLE_MS
+        ? idle
+        : detail
     out(
-      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, detail)}`,
+      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, phase)}`,
     )
   }
   draw()
@@ -499,6 +495,8 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     detail: "",
     status: "run",
     start: Date.now(),
+    lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
+    idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
     time: "",
   }))
 
@@ -510,6 +508,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       const pretty = prettyLine(line)
       if (!pretty) return
       state[i].detail = pretty
+      state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
     }
     return Promise.resolve()
@@ -560,7 +559,16 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           : s.status === "fail"
             ? c.red("✖")
             : c.cyan(FRAMES[frame % FRAMES.length])
-      const right = s.status === "run" ? s.detail : settledRight(s)
+      // live: just the current phase (nothing yet → "preparing"; idle fallback for the
+      // silent build); the total lands on the settled line.
+      const right =
+        s.status === "run"
+          ? !s.detail
+            ? "preparing"
+            : s.idle && Date.now() - s.lastAt > IDLE_MS
+              ? s.idle
+              : s.detail
+          : settledRight(s)
       out(`\x1b[2K${compose(glyph, s.label, right)}\n`)
     }
     drawn = state.length

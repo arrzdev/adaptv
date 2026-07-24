@@ -510,20 +510,31 @@ export async function capRun(
   { report } = {},
 ) {
   const { cmd, pre } = capCmd(appRoot)
+  // `--no-sync`: `cap run` syncs → builds → deploys, but the caller ALWAYS runs `cap sync`
+  // first (and caches it), so letting run sync again just copies the web assets + re-updates
+  // plugins a second time — duplicate work AND a duplicate "updating plugins" line. Skip it;
+  // build + deploy only.
+  //
   // Do NOT terminate the app before building — that would kill it for the whole build (the
   // dev asked to rebuild, not to stare at a home screen for 15s). Build + install with the
   // current app still running; the caller relaunches ONCE at the end (only if it was
   // actually running) to load the fresh install.
-  const args = [...pre, "run", platform]
+  const args = [...pre, "run", platform, "--no-sync"]
   if (target) args.push("--target", target)
   await run(cmd, args, { cwd: appRoot, env, report })
 }
 
 /**
- * Bring the simulator/emulator to the foreground so the (re)launched app is actually
- * visible without the dev alt-tabbing to find it. No-op on a physical device (there's no
- * host window to raise). Android emulators have no reliable CLI to raise their host window,
- * so this is iOS-only for now; the app is already fronted inside the device by the launch.
+ * Bring the iOS Simulator to the foreground so the (re)launched app is actually visible
+ * without the dev alt-tabbing to find it. iOS only, and deliberately so: iOS builds already
+ * require macOS, so `open -a Simulator` is a safe, permission-free standard command there.
+ *
+ * The Android emulator is left alone on purpose. It has no `.app` to `open`, and neither adb
+ * nor the emulator expose a "raise window" command — the only options are OS-specific
+ * window-manager hacks (AppleScript on macOS, wmctrl on Linux, …) that need extra
+ * permissions, which a framework has no business doing and which don't exist uniformly
+ * across the Linux/Windows hosts where Android dev also runs. The app is still fronted
+ * *inside* the emulator by the launch; raising the emulator window stays the dev's own.
  */
 export function foregroundDevice(platform, target, env) {
   if (isPhysicalTarget(platform, target, env)) return
@@ -859,6 +870,86 @@ function readAppId(appRoot) {
     )
   } catch {
     return null
+  }
+}
+
+/** Read a file, apply one regex replacement, write back only if it changed. Best-effort. */
+function subInFile(file, re, replacement) {
+  try {
+    const before = readFileSync(file, "utf8")
+    const after = before.replace(re, replacement)
+    if (after !== before) writeFileSync(file, after)
+  } catch {}
+}
+
+/** `$` in a String.replace replacement is special ($1, $$…) — neutralise it for literals. */
+const escDollar = (s) => s.replace(/\$/g, "$$$$")
+
+/**
+ * Patch the native project's INSTALL identity in place, idempotently. `dev` + `preview`
+ * builds take `<appId>.dev` / "<name> (dev)" so they install ALONGSIDE a real release build
+ * instead of overwriting it — and get their own storage sandbox (which is what stops a dev
+ * session's leftover WebView state from surfacing in a release install); `build` uses the
+ * release identity.
+ *
+ * The install id lives in the native project (iOS pbxproj bundle id, Android
+ * `applicationId`), NOT capacitor.config.json — but the CLI's own install-detection + launch
+ * read the ROOT capacitor.config.json appId (readAppId), and `cap sync` copies that file into
+ * the native project, so it's kept in step too. The Android `namespace` / iOS code identity
+ * stay on the base id (namespace = code package, applicationId = install identity — the two
+ * are allowed to differ), so generated sources (MainActivity, R) never move.
+ *
+ * Replace-to-target regexes: whatever the files currently hold, they land on the intended
+ * value — so switching variants (or re-running) is always safe.
+ */
+export function patchNativeIdentity(appRoot, config, platform, { dev }) {
+  const baseId = config?.appId
+  if (!baseId) return
+  const baseName = config.appName ?? config.name ?? baseId
+  const id = dev ? `${baseId}.dev` : baseId
+  const name = dev ? `${baseName} (dev)` : baseName
+
+  // Keep the root config (read by readAppId + copied by `cap sync`) matching the install id.
+  try {
+    const file = path.join(appRoot, "capacitor.config.json")
+    const cfg = JSON.parse(readFileSync(file, "utf8"))
+    if (cfg.appId !== id || cfg.appName !== name) {
+      cfg.appId = id
+      cfg.appName = name
+      writeFileSync(file, `${JSON.stringify(cfg, null, 2)}\n`)
+    }
+  } catch {}
+
+  const nd = nativeDir(appRoot, platform)
+  if (platform === "ios") {
+    // bundle id (Debug + Release configs) + the home-screen display name.
+    subInFile(
+      path.join(nd, "App/App.xcodeproj/project.pbxproj"),
+      /PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,
+      `PRODUCT_BUNDLE_IDENTIFIER = ${escDollar(id)};`,
+    )
+    subInFile(
+      path.join(nd, "App/App/Info.plist"),
+      /(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
+  } else {
+    subInFile(
+      path.join(nd, "app/build.gradle"),
+      /applicationId\s+"[^"]*"/,
+      `applicationId "${escDollar(id)}"`,
+    )
+    const strings = path.join(nd, "app/src/main/res/values/strings.xml")
+    subInFile(
+      strings,
+      /(<string name="app_name">)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
+    subInFile(
+      strings,
+      /(<string name="title_activity_main">)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
   }
 }
 
