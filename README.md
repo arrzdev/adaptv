@@ -70,43 +70,49 @@ import { adaptv } from "@arrzdev/adaptv/vite"
 import { defineApp } from "@arrzdev/adaptv/config"
 ```
 
-Subpath exports: `/shell` `/config` `/components` `/hooks` `/capabilities` `/routes` `/utils` `/sw`
-`/vite` `/styles.css`.
+Subpath exports: `/shell` `/router` `/route-globals` `/config` `/components` `/hooks` `/capabilities`
+`/storage` `/ota` `/routes` `/utils` `/sw` `/vite` `/styles.css`.
 
 ### The CLI
 
 ```bash
-adaptv doctor                       # check the native toolchain (JDK, SDK, Xcode, pod)
-adaptv run   ios|android|all        # build SPA → sync → launch on a sim/emulator/device
-adaptv build ios|android|all        # build SPA → sync → produce the .ipa / .apk
+adaptv doctor                          # check the native toolchain (JDK, SDK, Xcode, pod)
+adaptv dev     web|ios|android|all     # live reload: one Vite dev server, native WebViews attached
+adaptv preview ios|android|all         # build SPA → sync → install → launch (static, no reload)
+adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
 
-# run flags
+# dev / preview flags
 #   --target <id>   launch on a specific device/simulator id (skips the picker)
 #   --latest        reuse the last device you picked for this platform
+#   --host [ip]     (dev) serve on the LAN IP for a PHYSICAL device — auto when the target is
+#                   a real device; pass an ip to pin it
+#   --force         reinstall even when nothing native changed (otherwise dev/preview skip the
+#                   rebuild and just relaunch the installed app)
+#   -- <vite args>  (dev) forwarded to the Vite dev server (e.g. `-- --port 4000`)
 # build flags
-#   --output <path> where to write the artifact (default: .adaptv/<app>.apk|.ipa)
-# both
+#   --output <path> where to write the artifact (default: .adaptv/)
+#   --force         rebuild even when unchanged (the web build + sync are cached)
+# all commands
 #   --verbose       show the full underlying tool logs (raw passthrough)
-#   --force         rebuild even when nothing changed (bypasses the build cache)
 ```
 
-`run` shows a branded device picker (arrow keys) and **remembers your choice per platform** in
-`.adaptv/devices.json`, so the next `adaptv run ios --latest` skips straight to the same device (shown as
-a `· latest` tag on the launch line). `run all` builds both platforms **in parallel** with a clean
-two-column progress board; the inner cap/gradle/xcode/pod logs are captured and only surfaced on failure
-(or with `--verbose`).
+`dev` and `preview` show a branded device picker (arrow keys) and **remember your choice per platform**
+in `.adaptv/devices.json`, so the next `adaptv dev ios --latest` skips straight to the same device (shown
+as a `· latest` tag on the launch line). The `all` target drives both platforms **in parallel** with a
+clean two-column progress board; the inner cap/gradle/xcode/pod logs are captured and only surfaced on
+failure (or with `--verbose`).
 
-**Build cache** — a source fingerprint (`.adaptv/build-cache.json`) lets a re-launch **skip the web build
+**Build cache** — a source fingerprint (`.adaptv/build-cache.json`) lets a re-run **skip the web build
 and sync** when nothing that affects the bundle changed (`✓ web build · cached`), so an unchanged
-re-run goes almost straight to launch. `--force` rebuilds unconditionally.
+`preview`/`build` goes almost straight to launch. `--force` rebuilds unconditionally.
 
 The CLI owns the native toolchain env and **owns the native project templates** (it patches
 `MainActivity` / `AppDelegate` / launch storyboard / colour resources) so the consumer never touches
 a Capacitor config. The native projects live inside the hidden, git-ignored **`.adaptv/`** dir
 (`.adaptv/ios`, `.adaptv/android`) — regenerated artifacts, like `dist/`, not app source.
 
-> `adaptv run web` is reserved for a future Vite dev/preview wrapper; for now use your app's
-> `vite dev` / `vite preview`. Web *deploy* stays your host's tool.
+> `adaptv dev web` runs the Vite dev server on its own (no native WebView); web *deploy* stays your
+> host's tool.
 
 ---
 
@@ -126,47 +132,48 @@ a Capacitor config. The native projects live inside the hidden, git-ignored **`.
   storyboard). `splashMaskMode`: `preferences` (follows the app's `useTheme`) / `system` / `light` /
   `dark`. Self-unmounting React splash (returns `null` when ready), no double-splash, Android-12
   system-splash icon stripped, theme-aware on both platforms.
-- **Config** — flat `adaptv.config.ts` (`appId`, `splashScreen`, `splashScreenInBrowser`,
-  `splashMaskMode`, `splashMask*Color`, …) generates the Capacitor config, the web manifest, and the
-  native projects.
+- **Config** — flat `adaptv.config.ts` (`appId`, `appName`, splash options, and a first-class `web`
+  deployment block — `render` `"spa"`/`"ssr"`, `host` `cloudflare`/`vercel`/`node`/`static`, `sw`)
+  generates the Capacitor config, the web manifest, and the native projects.
 - **Build switch** — Vite plugin: web = SSR + service worker; capacitor = static SPA, no SW.
 - **Native build** — Capacitor iOS + Android, debug `.apk` + unsigned `.ipa`.
 - **Primitives** — `View`, `List` (virtualized), `Button` (press physics + haptics), `Link`
   (internal/external split), `ExternalLink`, `ScrollView`, `Image`, `Swipeable`, `PullToRefresh`,
-  `Drawer`/`Sheet` (hybrid native+web keyboard avoidance — the autofocus race is fixed by eager
-  listener attach).
+  `Drawer`/`Sheet`, `Input`, `TextArea`, `Checkbox`, `Switch`, `WheelColumn`, and `AvoidKeyboard`
+  (hybrid native+web keyboard avoidance — the autofocus race is fixed by eager listener attach).
+- **Router facade** — a curated re-export of TanStack Router from `adaptv/router` (no `export *`, no
+  server-only APIs); generated `*.gen` files live under `.adaptv/`, so apps import `adaptv`, not
+  `@tanstack/*`.
+- **Storage** — the three-tier `adaptv/storage` namespace (`local` / `secure` / `preferences`),
+  platform-correct across web and native.
+- **OTA** — self-hosted, pointer-flip bundle swaps via `adaptv/ota` (pure, testable policy + updater).
+- **Live reload** — `adaptv dev` runs one Vite dev server with the native WebViews attached and
+  hot-reloading on save, including over the LAN to a physical device (`--host`).
 
-> **The seed is green:** `pnpm typecheck` (0), `pnpm test` (180/180), `pnpm biome:check` (0). CI runs all
+> **The seed is green:** `pnpm typecheck` (0), `pnpm test` (515/515), `pnpm biome:check` (0). CI runs all
 > three on every PR.
 
 ### 🚧 Not done yet (see [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) §status + [`docs/RESEARCH.md`](docs/RESEARCH.md))
 
-- **`.adaptv/` + re-export barrel** — apps still import `@tanstack/*` and see `*.gen` files. Plan: move
-  generated files into a hidden `.adaptv/` dir, re-export the router surface from `adaptv` so apps import
-  only `adaptv`. (May need a small `pnpm patch` of `@tanstack/router-generator` for symbol recognition.)
 - **First-party `@adaptv/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar +
   theme into one native module we own (instead of composing community plugins + CLI patches); owns the
   Android-15/SDK-35 inset+keyboard fix. **Designed:** [`docs/NATIVE-SHELL.md`](docs/NATIVE-SHELL.md).
 - **`create-adaptv`** — `pnpm create adaptv` scaffolder. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §8.
-- **Deployment knob** — a first-class `web` config block (`render`/`host`/`sw`) selecting SSR target
-  presets (`cloudflare` / `vercel` / `node` / `static`); today the example hardcodes Cloudflare. Keep
-  TanStack Start precisely for this deploy-anywhere flexibility. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §1, §3–4.
-- **Capacitor OTA** — fingerprint-gated bundle swap of `dist-capacitor/`, hosted on the app's own web
-  deploy (no third-party update server), applied on next launch. Web/standalone OTA already falls out of
-  the SW. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §5.
 - **Published build** — currently ships **TypeScript source** (works via local link / bundler compile).
   For real GitHub Packages publishing, add a `dist` build (tsup/unbuild) + `.d.ts`.
-- **Primitive breadth** — `Input` / `Text` / `Modal` / `Tabs` polish.
+- **Primitive breadth** — `Text` / `Modal` / `Tabs` polish.
 
 ---
 
 ## Repo layout
 
 ```
-src/            framework: shell · primitives (components) · capabilities · config · hooks · vite plugin · sw
+src/            framework: shell · components · capabilities · config · hooks · routes · storage · ota · native · vite plugin · sw
   interface/    the public export barrels (map to package.json "exports")
 bin/adaptv.mjs   the CLI (self-contained Node ESM; owns the native toolchain + templates)
-docs/           VISION · ARCHITECTURE · LIFECYCLE · COORDINATION · NATIVE-SHELL · RENDERING · BEHAVIORS · TESTING · RESEARCH · capacitor-internals
+  lib/          CLI internals: dev-server · devices · cache · build · doctor · privacy-manifest
+docs/           VISION · ARCHITECTURE · DECISIONS · LIFECYCLE · COORDINATION · NATIVE-SHELL · RENDERING · BEHAVIORS ·
+                TESTING · RESEARCH · STYLING · FACADE · ANIMATION · PRIOR-ART · COOKBOOK · VS-IONIC · capacitor-internals
 ```
 
 ## Distribution & versioning
@@ -192,7 +199,7 @@ No playground — dogfood against a real app (e.g. `chopchop`) via a local depen
 ```bash
 pnpm typecheck     # 0 errors
 pnpm biome:check   # 0 errors
-pnpm test          # vitest (happy-dom) — 180/180
+pnpm test          # vitest (happy-dom) — 515/515
 ```
 
 All three are green today and gated in CI on every PR (`.github/workflows/ci.yml`).
