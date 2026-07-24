@@ -1,11 +1,11 @@
-// The "dev server offline" screen. During `adaptv run`, the native WebViews load from
+// The "dev server offline" screen. During `adaptv dev`, the native WebViews load from
 // the Vite dev server (`server.url`). When that server isn't running — the app opened
-// with no `adaptv run`, or the process was killed — the WebView's load fails and, with
+// with no `adaptv dev`, or the process was killed — the WebView's load fails and, with
 // nothing to show, it paints black. Capacitor's `server.errorPath` is its answer: on a
 // main-frame load failure it loads a LOCAL file (served by the always-registered
 // `capacitor://localhost` / `http://localhost` asset handler, independent of the remote
 // `server.url`). We point errorPath at this generated page so the dev sees a branded
-// "run `adaptv run`" screen instead of black, and it auto-reconnects the moment the
+// "run `adaptv dev`" screen instead of black, and it auto-reconnects the moment the
 // server is back.
 //
 // Why this file is GENERATED per run (not shipped static): the dev server URL is only
@@ -137,7 +137,7 @@ function renderOfflineHtml(devUrl) {
       <h1>Development build</h1>
       <p>The dev server isn't running.</p>
     </div>
-    <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv run</span> <span id="platform">ios</span></span></div>
+    <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
     <div class="status"><span class="spin"></span><span>Waiting for the dev server…</span></div>
   </div>
 <script>
@@ -187,7 +187,7 @@ function renderOfflineHtml(devUrl) {
     //     the request isn't mixed content. That's the Android case: the CLI sets
     //     \`server.androidScheme:"http"\` for the dev session precisely so this works
     //     (Android never gets the bridge here, so route 1 is unavailable).
-    // Neither available -> do nothing; the next \`adaptv run\` relaunches the app.
+    // Neither available -> do nothing; the next \`adaptv dev\` relaunches the app.
     function probe() {
       hideSplash();
       paintPlatform();

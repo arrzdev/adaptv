@@ -148,7 +148,7 @@ function setAndroidReverse(serials, port, env) {
 /**
  * KEEP an `adb reverse tcp:<port>` mapping alive for the whole run so an emulator's
  * `localhost:<port>` always reaches the host dev server. Setting it once isn't enough:
- * the mapping is global to the adb server, so ANY other `adaptv run` tearing down (even
+ * the mapping is global to the adb server, so ANY other `adaptv dev` tearing down (even
  * a stale/orphaned one) runs `adb reverse --remove tcp:<port>` and silently kills the
  * route for THIS run too — the app keeps rendering but stops hot-reloading. So we set
  * it, then re-assert it on a short interval (only re-adding when it's actually missing,

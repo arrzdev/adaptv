@@ -50,7 +50,7 @@ export function since(start) {
 /* static output — header, log lines, summary                                 */
 /* -------------------------------------------------------------------------- */
 
-/** The command banner: `  adaptv  run android`. */
+/** The command banner: `  adaptv  dev android`. */
 export function header(title) {
   out(`\n  ${c.bold(c.magenta("adaptv"))}  ${c.dim(title)}\n\n`)
 }
