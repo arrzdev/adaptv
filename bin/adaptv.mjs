@@ -81,6 +81,7 @@ import {
   lanIp,
   launchInstalledApp,
   nativeDir,
+  patchNativeIdentity,
   platformEnv,
   relaunchAndroidApp,
 } from "./lib/native.mjs"
@@ -96,7 +97,6 @@ import {
   runLanes,
   runLine,
   since,
-  skip,
   tail,
 } from "./lib/render.mjs"
 
@@ -329,10 +329,7 @@ function newestIpa(appRoot) {
 async function runLive(appRoot, platforms, opts) {
   const webOnly = platforms.length === 0
   const single = platforms.length === 1
-  const t0 = Date.now()
-  header(
-    `dev ${webOnly ? "web" : single ? platforms[0] : "all"}  ${c.dim("· live reload")}`,
-  )
+  header(`dev ${webOnly ? "web" : single ? platforms[0] : "all"}`)
 
   const verbose = opts.verbose
   const cleanups = [] // revert fns, unwound LIFO on exit
@@ -497,7 +494,7 @@ async function runLive(appRoot, platforms, opts) {
     // has to pick a device. Bind for the LAN when external is even possible; a
     // simulator/emulator-only run stays on localhost.
     await runLine(
-      "dev server",
+      "server",
       async (report) => {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
@@ -603,6 +600,15 @@ async function runLive(appRoot, platforms, opts) {
           if (revertLN) cleanups.push(revertLN)
         }
       }
+      // dev shares the `.dev` install identity with `preview` (separate icon + storage
+      // sandbox, coexists with a release build). Patch it AFTER the dev server's own
+      // capacitor.config.json stamp (which writes the base id), and before sync/build reads
+      // the native project. Idempotent, so a first-run `cap add` created with the base id is
+      // corrected here too.
+      for (const p of ready) {
+        patchNativeIdentity(appRoot, config, p, { dev: true })
+      }
+
       // sync (copies the patched config) + launch each platform against the server.
       //
       // …unless nothing NATIVE changed. In live-reload the installed app is only a shell
@@ -639,10 +645,10 @@ async function runLive(appRoot, platforms, opts) {
           // run` will set it. In external mode a physical device reaches the LAN IP
           // directly, so there's no `adb reverse` to (re-)assert.
           if (platform === "android" && !external) {
-            report("linking dev server")
+            report("linking server")
             cleanups.push(androidReverse(port, env))
           }
-          report(`launch → ${target.name} · cached`)
+          report("launching device")
           if (launchInstalledApp(appRoot, platform, target.id, env)) {
             foregroundDevice(platform, target.id, env)
             launched.add(platform)
@@ -656,7 +662,7 @@ async function runLive(appRoot, platforms, opts) {
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
         const wasRunning = isAppRunning(appRoot, platform, target.id, env)
-        report(`launch → ${target.name}`)
+        report("launching device")
         await capRun(appRoot, platform, target.id, env, { report })
         if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
@@ -664,7 +670,7 @@ async function runLive(appRoot, platforms, opts) {
           // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
           // app so its WebView loads with a working route. External mode reaches the LAN IP
           // directly (no reverse), so none of this applies.
-          report("linking dev server")
+          report("linking server")
           cleanups.push(androidReverse(port, env))
           relaunchAndroidApp(appRoot, env, target.id)
         } else if (platform === "ios" && wasRunning) {
@@ -692,7 +698,7 @@ async function runLive(appRoot, platforms, opts) {
             await runLine(
               platforms[0],
               (r) => launchOne(platforms[0], r, { force }),
-              { verbose },
+              { verbose, idle: "building app" },
             )
           } catch (err) {
             reportLaunchError(platforms[0], err)
@@ -703,6 +709,7 @@ async function runLive(appRoot, platforms, opts) {
           ready.map((p) => ({
             label: p,
             run: (r) => launchOne(p, r, { force }),
+            idle: "building app",
           })),
           { verbose },
         )
@@ -763,7 +770,7 @@ async function runLive(appRoot, platforms, opts) {
     // `R`, which reinstalls the binary for a genuine native change.
     const reloadOne = (platform, report) => {
       const target = targets[platform]
-      report(`reload → ${target.name}`)
+      report("reloading device")
       const ok = launchInstalledApp(
         appRoot,
         platform,
@@ -890,7 +897,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const finish = (hint) => {
     flushWarnings()
     // per-platform outcome is on the step/lane lines; footer is just the total.
-    footer(`${hint}  ${c.dim(`· ${since(t0)} total`)}`)
+    footer(`${hint} ${c.dim(`· ${since(t0)}`)}`)
     if (!platforms.every((p) => p in done)) process.exitCode = 1
   }
 
@@ -903,10 +910,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   let fp = fingerprint(appRoot)
 
   // 1. barrier: build the SPA once (shared by every platform). If it fails, abort —
-  //    never fall through and ship a stale bundle.
-  if (!opts.force && distReady && buildCache.web === fp) {
-    skip("web build")
-  } else {
+  //    never fall through and ship a stale bundle. A CACHED build is SILENT — like `dev`
+  //    never prints the web bundle build when it's already there — so the asset/config
+  //    warnings from prepare stay the first thing under the header, not a cache line on top.
+  if (opts.force || !distReady || buildCache.web !== fp) {
     try {
       await runLine("web build", (r) => buildWeb(appRoot, { report: r }), {
         verbose,
@@ -929,6 +936,13 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const prepared = new Set()
   const prepareOne = async (platform, report) => {
     await capAddIfMissing(appRoot, platform, envFor(platform), { report })
+    // `preview` shares the `.dev` install identity with `dev` (own icon + storage sandbox,
+    // coexists with a release build); `build` uses the release id. Patch after the web
+    // build's capacitor.config.json stamp, before sync. Idempotent → also flips a project
+    // back to the release id when this is a `build`.
+    patchNativeIdentity(appRoot, config, platform, {
+      dev: kind === "preview",
+    })
     const res = await generateAssets(appRoot, config, [platform], {
       report,
     })
@@ -950,27 +964,26 @@ async function pipeline(kind, appRoot, platforms, opts) {
     }
     prepared.add(platform)
   }
-  if (single) {
+  // Show a per-platform prepare step ONLY on a first run — when the native project doesn't
+  // exist yet (`cap add` + CocoaPods is slow and worth watching). On later runs prepare is a
+  // sub-10ms no-op, so do the work silently rather than print a "✓ prepare 5ms" line that
+  // says nothing. Sequential (like `dev`): first-run prepares are rare, so it costs nothing,
+  // and it keeps asset/config warnings in order instead of interleaved under live lanes.
+  for (const platform of platforms) {
+    const fresh = !existsSync(nativeDir(appRoot, platform))
     try {
-      await runLine(
-        `prepare ${platforms[0]}`,
-        (r) => prepareOne(platforms[0], r),
-        { verbose },
-      )
+      if (fresh) {
+        await runLine(
+          `prepare ${platform}`,
+          (r) => prepareOne(platform, r),
+          { verbose },
+        )
+      } else {
+        await prepareOne(platform, () => {})
+      }
     } catch (err) {
-      reportError(`prepare ${platforms[0]}`, err)
+      reportError(`prepare ${platform}`, err)
     }
-  } else {
-    const res = await runLanes(
-      platforms.map((p) => ({
-        label: `prepare ${p}`,
-        run: (r) => prepareOne(p, r),
-      })),
-      { verbose },
-    )
-    res.forEach((r, i) => {
-      if (!r.ok) reportError(`prepare ${platforms[i]}`, r.error)
-    })
   }
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()
@@ -994,28 +1007,66 @@ async function pipeline(kind, appRoot, platforms, opts) {
   //    one live line per platform, run concurrently. Sync is skipped when this exact
   //    bundle was already synced to the platform (cache hit).
   buildCache.sync ??= {}
-  const syncNeeded = (p) => opts.force || buildCache.sync[p] !== fp
-  // the device's "· latest" tag rides on the launch label rather than its own line.
-  const launchLabel = (t) =>
-    `launch → ${t.name}${t.source === "latest" ? c.dim(" · latest") : ""}`
+  // The sync key folds in the install identity: `preview` (`.dev`) and `build` (release id)
+  // produce a different capacitor.config.json, so a `preview`↔`build` switch must re-sync
+  // even though the web fingerprint is unchanged (it deliberately skips capacitor.config.json).
+  const syncTag = `${fp}:${kind === "preview" ? "dev" : "release"}`
+  const syncNeeded = (p) => opts.force || buildCache.sync[p] !== syncTag
+  // `preview` run cache: when NOTHING that lands on the device changed since the last
+  // preview on it — the web bundle+identity (`syncTag`) AND the native project
+  // (`nativeFingerprint`: config/plugins/pbxproj; it skips the synced `public/`, which
+  // `syncTag` already covers) — skip the whole build+install and just relaunch (~1s vs a
+  // full `cap run`). Keyed under a `preview:` prefix so it never crosses dev's run cache.
+  buildCache.run ??= {}
+  // `cap run` re-syncs and touches native files, so — like dev's run cache — this id must
+  // be STORED after the build; a next run's pre-build hash then matches when nothing changed.
+  const runIdOf = (platform) =>
+    `${syncTag}:${nativeFingerprint(appRoot, platform)}`
+  const previewLaunch = async (platform, target, report) => {
+    const env = envFor(platform)
+    const key = `preview:${platform}:${target.id}`
+    const cached =
+      !opts.force &&
+      buildCache.run[key]?.id === runIdOf(platform) &&
+      isAppInstalled(appRoot, platform, target.id, env)
+    if (cached) {
+      // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
+      // (e.g. a prior `dev` session's offline screen) must not linger on screen.
+      report("relaunching device")
+      launchInstalledApp(appRoot, platform, target.id, env, {
+        restart: true,
+      })
+      foregroundDevice(platform, target.id, env)
+      done[platform] = `launched on ${target.name}`
+      return `${target.name} · cached`
+    }
+    report("launching device")
+    // `cap run` installs + activates, but only FOREGROUNDS an already-running app — its old
+    // WebView (e.g. the dev offline screen) would stay. Restart it after the build so the
+    // freshly-installed bundle is what's shown.
+    const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+    await capRun(appRoot, platform, target.id, env, { report })
+    if (wasRunning) {
+      launchInstalledApp(appRoot, platform, target.id, env, {
+        restart: true,
+      })
+    }
+    foregroundDevice(platform, target.id, env)
+    buildCache.run[key] = { id: runIdOf(platform) }
+    done[platform] = `launched on ${target.name}`
+    return target.name
+  }
 
   const tailOne = async (platform, report) => {
     if (syncNeeded(platform)) {
       report("sync")
       await capSync(appRoot, platform, envFor(platform), { report })
-      buildCache.sync[platform] = fp
+      buildCache.sync[platform] = syncTag
     } else {
       report("sync · cached")
     }
     if (kind === "preview") {
-      const target = ctx.targets[platform]
-      const tag = target.source === "latest" ? " · latest" : ""
-      report(`launch → ${target.name}${tag}`)
-      await capRun(appRoot, platform, target.id, envFor(platform), {
-        report,
-      })
-      done[platform] = `launched on ${target.name}${tag}`
-      return done[platform]
+      return previewLaunch(platform, ctx.targets[platform], report)
     }
     report("package")
     done[platform] = await packageArtifact(
@@ -1038,24 +1089,25 @@ async function pipeline(kind, appRoot, platforms, opts) {
           (r) => capSync(appRoot, p, envFor(p), { report: r }),
           { verbose },
         )
-        buildCache.sync[p] = fp
-      } else {
-        skip("sync")
+        buildCache.sync[p] = syncTag
       }
+      // a cached sync is silent (like the `all` lanes and `dev`) — no "· sync cached" line.
       if (kind === "preview") {
         const target = ctx.targets[p]
+        // Label is the platform (e.g. `ios`); the device name settles as the detail —
+        // same shape as `dev` and the `all` lanes, no "launch →" arrow.
         await runLine(
-          launchLabel(target),
-          (r) => capRun(appRoot, p, target.id, envFor(p), { report: r }),
-          { verbose },
+          p,
+          (r) => previewLaunch(p, target, r),
+          // cap streams nothing during xcodebuild/gradle — fall back to "building app".
+          { verbose, idle: "building app" },
         )
-        done[p] = `launched on ${target.name}`
       } else {
         done[p] = await runLine(
           "package",
           (r) =>
             packageArtifact(appRoot, config, p, envFor(p), ctx.output, r),
-          { verbose },
+          { verbose, idle: "building app" },
         )
       }
     } catch (err) {
@@ -1063,7 +1115,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
     }
   } else {
     const res = await runLanes(
-      ready.map((p) => ({ label: p, run: (r) => tailOne(p, r) })),
+      ready.map((p) => ({
+        label: p,
+        run: (r) => tailOne(p, r),
+        idle: "building app",
+      })),
       { verbose },
     )
     res.forEach((r, i) => {
@@ -1073,11 +1129,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
   writeBuildCache(appRoot, buildCache)
 
   const ok = platforms.every((p) => p in done)
+  // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an
+  // all-green phrase. Failure stays red.
   finish(
     ok
-      ? kind === "preview"
-        ? c.green("✓ launched")
-        : c.green("✓ artifacts ready")
+      ? `${c.green("✓")} ${c.bold(kind === "preview" ? "launched" : "artifacts ready")}`
       : c.red("✖ one or more platforms failed"),
   )
 }
