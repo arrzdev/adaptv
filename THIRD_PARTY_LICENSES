@@ -1,11 +1,11 @@
-Third-party notices for @arrzdev/nativ
+Third-party notices for @arrzdev/adaptv
 ======================================
 
-nativ studies and, in places, ports logic from other open-source projects. This file carries the
+adaptv studies and, in places, ports logic from other open-source projects. This file carries the
 required notices. Per-file provenance comments (a pinned-SHA permalink plus a `Why:` line) are the
 convention — see docs/PRIOR-ART.md §0.
 
-None of the projects below are runtime dependencies of nativ. They are listed because nativ's source
+None of the projects below are runtime dependencies of adaptv. They are listed because adaptv's source
 either ports their logic or derives tuning constants and techniques from it.
 
 
@@ -15,7 +15,7 @@ vaul — https://github.com/emilkowalski/vaul
 
 Used by: src/components/drawer/*
 
-nativ's Drawer began as a wrap of vaul, was patched on top, and is now an independent
+adaptv's Drawer began as a wrap of vaul, was patched on top, and is now an independent
 implementation. What remains is derived tuning (drag dampening, the iOS sheet easing curve,
 snap-point and nested-scroll arbitration behaviour), documented inline at each site.
 

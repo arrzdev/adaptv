@@ -41,7 +41,7 @@
             "patterns": [
               {
                 "group": ["./*", "../*"],
-                "message": "Use the #nativ/* self-alias, not ./ or ../."
+                "message": "Use the #adaptv/* self-alias, not ./ or ../."
               }
             ]
           }

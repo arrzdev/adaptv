@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mergeStyles } from "#nativ/utils/styles"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 // The primitive styling contract (VISION.md): three layers, precedence
 //   base (overridable defaults)  <  className (consumer)  <  locked (structural)
@@ -31,7 +31,7 @@ describe("mergeStyles", () => {
     expect(out).not.toContain("touch-auto")
   })
 
-  it("resolves nativ's custom behavior groups (scrollable-*)", () => {
+  it("resolves adaptv's custom behavior groups (scrollable-*)", () => {
     // a consumer scrollable-y is overridden by a locked scrollable-x
     const out = mergeStyles({
       className: "scrollable-y",

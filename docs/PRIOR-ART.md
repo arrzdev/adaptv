@@ -1,7 +1,7 @@
-# nativ — prior art: what we port from Ionic, and how we attribute it
+# adaptv — prior art: what we port from Ionic, and how we attribute it
 
 > Doctrine `ARCHITECTURE.md §0.6` says *"don't reinvent the solved — study their solution, adopt the
-> hard-won edge cases."* This is the concrete list: what nativ **ports**, what it **studies**, what it
+> hard-won edge cases."* This is the concrete list: what adaptv **ports**, what it **studies**, what it
 > **skips**, and the attribution convention for ported code.
 >
 > Source: `@ionic/core` **v8.8.14**, commit **`6251eb85db0e5b43b9e09604248dc8451e1664c0`** (2026-07-17,
@@ -16,7 +16,7 @@ by `"license": "MIT"` in `core/package.json@8.8.14`. No CLA, no patent grant, no
 
 MIT requires only: *"The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software."* **Porting substantial logic counts as a substantial
-portion.** nativ's own `package.json` says `UNLICENSED`, which is fine — MIT permits relicensing
+portion.** adaptv's own `package.json` says `UNLICENSED`, which is fine — MIT permits relicensing
 derivative work under any terms, including proprietary, as long as the notice travels with the code.
 
 ### 🔒 The convention
@@ -50,20 +50,20 @@ If that file is ported, carry his notice too. It's the only third-party header a
 
 | # | Item | Verdict | Why this rank |
 |---|---|---|---|
-| 1 | `structure.scss` — `transform: translateZ(0)` on `body` | **PORT** | **One line.** WebKit doesn't always promote body to its own layer on load; the first scroll then triggers a repaint that *halts scrolling until the next gesture*. Ionic's comment notes the lazy-loaded build masks this via hydration repaint — **nativ has no hydration repaint either**, so the first swipe on every page dead-drops without it. |
+| 1 | `structure.scss` — `transform: translateZ(0)` on `body` | **PORT** | **One line.** WebKit doesn't always promote body to its own layer on load; the first scroll then triggers a repaint that *halts scrolling until the next gesture*. Ionic's comment notes the lazy-loaded build masks this via hydration repaint — **adaptv has no hydration repaint either**, so the first swipe on every page dead-drops without it. |
 | 2 | Safe-area block from `core.scss` | **PORT** | `env()` appears **5 times in the entire css directory**, all here. The critical line is `var(--safe-area-inset-top, env(safe-area-inset-top))` — the Capacitor bridge, because Android WebView reports **zero** `env()` insets in edge-to-edge mode and `SystemBars` writes `--safe-area-inset-*` directly. Documented nowhere obvious. |
-| 3 | `utils/hardware-back-button.ts` | **PORT** | ~140 lines, one dependency, solves Android back outright. nativ has no equivalent. → §2. |
+| 3 | `utils/hardware-back-button.ts` | **PORT** | ~140 lines, one dependency, solves Android back outright. adaptv has no equivalent. → §2. |
 | 4 | `utils/gesture/` (index, controller, pointer-events, recognizers) | **PORT** | The foundation for drawer/sheet/swipe-back, and the priority table saves weeks of conflict tuning. → §3. |
 | 5 | `utils/lock-controller.ts` | **PORT** | 12 lines. Prevents double-tap `present()`/`dismiss()` races leaving an overlay stuck half-open. Wrap call sites in `try/finally` — Ionic doesn't, and a missed unlock deadlocks that component permanently. |
 | 6 | `utils/animation/cubic-bezier.ts` | **PORT verbatim** | 105 lines of pure math, zero deps. Inverts a bezier (given progress, find time) via **Cardano's formula** — closed-form, not Newton-Raphson. A drag gives you *position*; `progressStep` wants *time*, and on a non-linear curve those differ. A day to derive. |
-| 7 | `swipe-back.ts` + ios/md transition constants | **PORT the numbers** | nativ has `edge-swipe-gestures.tsx` — diff against these. → §4. |
+| 7 | `swipe-back.ts` + ios/md transition constants | **PORT the numbers** | adaptv has `edge-swipe-gestures.tsx` — diff against these. → §4. |
 | 8 | modal `gestures/sheet.ts` + `swipe-to-close.ts` | **PORT** | Not in the original scope; the highest-value unlisted find. Directly upgrades `src/components/drawer/`. → §5. |
 | 9 | `utils/tap-click/index.ts` | **PORT** | Three magic numbers + the `pointercancel` strategy, tuned over years. → §6. |
-| 10 | `utils/focus-trap.ts` + `utils/focus-controller/` | **PORT** | A11y correctness nativ lacks today. Bring the CSS with it — `focus-controller` needs matching `outline: none` rules in `core.scss:412-426` or every route change paints a focus ring. |
+| 10 | `utils/focus-trap.ts` + `utils/focus-controller/` | **PORT** | A11y correctness adaptv lacks today. Bring the CSS with it — `focus-controller` needs matching `outline: none` rules in `core.scss:412-426` or every route change paints a focus ring. |
 | 11 | `utils/keyboard/keyboard.ts` | **PORT the three guards** | → §7. Audit `src/hooks/use-keyboard.ts` against all three. |
 | 12 | `utils/platform.ts` heuristics | **PORT** | Diff against `src/utils/platform.test.ts`. → §8. |
 | 13 | `input-shims/hacks/common.ts` (clone/relocate) | **STUDY** | → §9. May already be covered by `useFreezeViewport` — test before porting. |
-| 14 | `input-blurring`, `focus-visible`, `listener.ts` | **SKIP** | Deprecated upstream, superseded by native `:focus-visible`, or a Zone.js escape hatch nativ has no use for. |
+| 14 | `input-blurring`, `focus-visible`, `listener.ts` | **SKIP** | Deprecated upstream, superseded by native `:focus-visible`, or a Zone.js escape hatch adaptv has no use for. |
 
 ---
 
@@ -169,7 +169,7 @@ the cone" → gesture aborts. That's what lets a vertical scroller and a horizon
 
 > **⚠︎ Fix rather than copy:** Ionic has **two competing refcounts** on `body.backdrop-no-scroll` —
 > one in `gesture-controller.ts`, one in `overlays.ts` — that don't know about each other. Unify them
-> in nativ. And Ionic's lock is `overflow: hidden` on body, which only works because `ion-content` is
+> in adaptv. And Ionic's lock is `overflow: hidden` on body, which only works because `ion-content` is
 > the real scroller; see §10.
 
 ---
@@ -261,7 +261,7 @@ export const calculateSpringStep = (t: number) =>
 - Listeners are **capture-phase**, plus a document listener for `ionGestureCaptured` (§3).
 
 This is the same problem `src/hooks/use-gesture-engine.ts` + the `pressed:` variant already solve —
-**diff the timings.** nativ's reentrant `data-pressed` (clears on drag-out, restores on re-entry) is
+**diff the timings.** adaptv's reentrant `data-pressed` (clears on drag-out, restores on re-entry) is
 arguably better than Ionic's; the 100/150 pair and the `pointercancel` strategy are the parts to adopt.
 
 `ripple-effect`: `PADDING = 10`, `INITIAL_ORIGIN_SCALE = 0.5`, peak opacity **0.16**, scale 225ms /
@@ -269,7 +269,7 @@ fade-in 75ms / fade-out 150ms, `cubic-bezier(.4, 0, .2, 1)`. Port the math and C
 
 ---
 
-## 7. Keyboard — three guards nativ must be checked against
+## 7. Keyboard — three guards adaptv must be checked against
 
 `utils/keyboard/keyboard.ts`. **`KEYBOARD_THRESHOLD = 150`px.**
 
@@ -318,7 +318,7 @@ the keyboard opens" feature needs exactly this, or you animate before layout set
 depends on it. `isAndroidTablet = isAndroid && !/mobile/i` — phones put "Mobile" in the UA, tablets don't.
 
 Results are stamped as `plt-*` classes on `<html>` so CSS can branch without JS — the same idea as
-nativ's `data-nativ-platform` stamp, and a reason to consider adding `data-nativ-form-factor`.
+adaptv's `data-adaptv-platform` stamp, and a reason to consider adding `data-adaptv-form-factor`.
 
 ---
 
@@ -348,10 +348,10 @@ between fields flickers the page. That's the right shape for `resolveAvoidanceSp
 
 `hide-caret.ts` is 35 lines: on scroll start relocate off-screen, on scroll end restore. **The bug:**
 iOS paints the caret in the compositor, not the scrolling layer, so a focused input's caret stays
-pinned mid-air over moving content. nativ's `use-caret-repaint` is the equivalent — **Ionic's is
+pinned mid-air over moving content. adaptv's `use-caret-repaint` is the equivalent — **Ionic's is
 broader** (covers user-initiated scrolling, not just programmatic).
 
-> **VERDICT: STUDY.** nativ's `useFreezeViewport` may already pin the layout viewport enough that the
+> **VERDICT: STUDY.** adaptv's `useFreezeViewport` may already pin the layout viewport enough that the
 > clone/relocate dance is unnecessary. **Test before porting** — but if you see headers jumping on
 > focus, this is the fix. Port the **numbers** (15 / 50 / 4 / 0.3 / 150–400ms) into
 > `computeScrollIntoViewTop` regardless.

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react"
-import { getOnline, subscribeOnline } from "#nativ/capabilities/network"
+import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
 
 /**
  * Reactive network reachability — `true` when online. Backed by the connectivity

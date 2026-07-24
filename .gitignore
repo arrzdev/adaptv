@@ -9,6 +9,6 @@ coverage/
 .DS_Store
 ._*
 
-# project-zero: a local copy of chopchop used to exercise nativ against a real app.
+# project-zero: a local copy of chopchop used to exercise adaptv against a real app.
 # Not part of the framework; never committed.
 .project-zero/

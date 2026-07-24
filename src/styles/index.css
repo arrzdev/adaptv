@@ -1,5 +1,5 @@
 /*
- * PWA styles — @import "@arrzdev/nativ/styles.css" from app main.css after tailwind + safe-area.
+ * PWA styles — @import "@arrzdev/adaptv/styles.css" from app main.css after tailwind + safe-area.
  */
 @source "../**/*.{ts,tsx}";
 

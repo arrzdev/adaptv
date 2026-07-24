@@ -1,10 +1,10 @@
 import type { RefObject } from "react"
 import { useEffect, useRef } from "react"
-import { beginCaretHold } from "#nativ/hooks/use-caret-repaint"
+import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
 import {
   useKeyboard,
   willOpenVirtualKeyboard,
-} from "#nativ/hooks/use-keyboard"
+} from "#adaptv/hooks/use-keyboard"
 
 /**
  * Headroom (px) the drawer can still rise before its top hits the max-height cap:

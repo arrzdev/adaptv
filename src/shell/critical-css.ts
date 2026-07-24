@@ -9,8 +9,8 @@
  *   gated to **installed** contexts: it covers the overscan when a standalone PWA /
  *   native WebView's initial containing block paints small then expands on launch. A
  *   browser tab has no such resize, so it gets no bleed element.
- * - **Splash gate** (opinionated) — the custom React splash (`[data-nativ-splash]`)
- *   shows when the app is INSTALLED (`data-nativ-platform` `native` or `standalone`);
+ * - **Splash gate** (opinionated) — the custom React splash (`[data-adaptv-splash]`)
+ *   shows when the app is INSTALLED (`data-adaptv-platform` `native` or `standalone`);
  *   a plain browser tab (`web`) serves the pages instantly with no splash, unless the
  *   app opts into `splashScreenInBrowser`. Gated off the pre-paint platform stamp, so
  *   the overlay never paints where it's suppressed — no hydration mismatch, no flash.
@@ -27,12 +27,12 @@ export function getCriticalShellCss(
   //same bleed for a native Capacitor build (reports display-mode:browser, so the
   //media query above misses it). Theme init always stamps html.light/.dark, so key
   //dark off the class.
-  const nativeBleed = `html[data-nativ-platform="native"]::before{content:"";position:fixed;inset:calc(-1*var(--viewport-cover-bleed));z-index:-1;background-color:${themeColorLight}}html[data-nativ-platform="native"].dark::before{background-color:${themeColorDark}}`
+  const nativeBleed = `html[data-adaptv-platform="native"]::before{content:"";position:fixed;inset:calc(-1*var(--viewport-cover-bleed));z-index:-1;background-color:${themeColorLight}}html[data-adaptv-platform="native"].dark::before{background-color:${themeColorDark}}`
   //splash gate — hide the custom splash in a browser tab unless the app opts in;
   //native + standalone always show it (the OS launch splash is a flat brand colour
   //that hands off to this overlay).
   const splashGate = splashScreenInBrowser
     ? ""
-    : `html[data-nativ-platform="web"] [data-nativ-splash]{display:none!important}`
+    : `html[data-adaptv-platform="web"] [data-adaptv-splash]{display:none!important}`
   return base + bleed + nativeBleed + splashGate
 }

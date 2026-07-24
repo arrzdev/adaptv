@@ -6,14 +6,14 @@ index 590506ccc2a0c764a908f1f0e672ce7ed9d26579..bc9a0900bfe657c19c69240ba9ede328
  	server: "ssr",
  	client: "client"
  };
-+//nativ: the consumer's app should never see @tanstack/* identifiers — not in
++//adaptv: the consumer's app should never see @tanstack/* identifiers — not in
 +//imports, not in generated files, and not in the script tags of the served HTML.
 +//These ids are emitted into the document, so they are renamed at the source.
  var ENTRY_POINTS = {
 -	client: "virtual:tanstack-start-client-entry",
 -	server: "virtual:tanstack-start-server-entry",
-+	client: "virtual:nativ/client-entry",
-+	server: "virtual:nativ/server-entry",
++	client: "virtual:adaptv/client-entry",
++	server: "virtual:adaptv/server-entry",
 +	//NOT renamed: these are package subpath imports declared in
 +	//@tanstack/start-server-core's own package.json "imports" map, so renaming
 +	//them here breaks resolution ("Missing specifier"). They are also internal —
@@ -43,11 +43,11 @@ index f6fbd955e4738800d9c330664b26951ee3661254..65e55191159c1655e71dd8fa47dd0357
  	if (!node?.createFileRouteProps) return false;
  	return node.createFileRouteProps.has("server") && node.createFileRouteProps.size === 1;
  }
-+//nativ: allow the Start register-declaration specifier to be overridden so the
++//adaptv: allow the Start register-declaration specifier to be overridden so the
 +//generated route tree points at the framework barrel instead of @tanstack/*.
-+//Set by @arrzdev/nativ's vite plugin. Absent => upstream behaviour, unchanged.
-+function nativStartPkg(framework) {
-+	return (typeof process !== "undefined" && process.env && process.env.NATIV_START_PKG) || `@tanstack/${framework}-start`;
++//Set by @arrzdev/adaptv's vite plugin. Absent => upstream behaviour, unchanged.
++function adaptvStartPkg(framework) {
++	return (typeof process !== "undefined" && process.env && process.env.ADAPTV_START_PKG) || `@tanstack/${framework}-start`;
 +}
  function moduleDeclaration({ startFilePath, routerFilePath, corePluginOpts, generatedRouteTreePath }) {
  	function getImportPath(absolutePath) {
@@ -58,8 +58,8 @@ index f6fbd955e4738800d9c330664b26951ee3661254..65e55191159c1655e71dd8fa47dd0357
  	if (startFilePath) result.push(`import type { startInstance } from '${getImportPath(startFilePath)}'`);
 -	else result.push(`import type { createStart } from '@tanstack/${corePluginOpts.framework}-start'`);
 -	result.push(`declare module '@tanstack/${corePluginOpts.framework}-start' {
-+	else result.push(`import type { createStart } from '${nativStartPkg(corePluginOpts.framework)}'`);
-+	result.push(`declare module '${nativStartPkg(corePluginOpts.framework)}' {
++	else result.push(`import type { createStart } from '${adaptvStartPkg(corePluginOpts.framework)}'`);
++	result.push(`declare module '${adaptvStartPkg(corePluginOpts.framework)}' {
    interface Register {
      ssr: true
      router: Awaited<ReturnType<typeof getRouter>>`);

@@ -1,8 +1,8 @@
 export {
+  type AdaptvAppConfig,
+  type AdaptvPatches,
+  type AdaptvRouterConfig,
   defineApp,
-  type NativAppConfig,
-  type NativPatches,
-  type NativRouterConfig,
   type ScreenThunk,
 } from "../config/app-config.ts"
 export {

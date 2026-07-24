@@ -9,7 +9,7 @@
  * longer lists it, and the host no longer serves it. The import rejects, and the
  * user gets a white screen with no path out.
  *
- * Vite emits a `vite:preloadError` event for exactly this. Nothing in nativ
+ * Vite emits a `vite:preloadError` event for exactly this. Nothing in adaptv
  * listened for it, so nothing recovered.
  *
  * ## Why the guard is not optional
@@ -25,7 +25,7 @@
  * boots successfully, so a later deploy is still recoverable.
  */
 
-export const PRELOAD_ERROR_GUARD_KEY = "nativ:preload-error-reload"
+export const PRELOAD_ERROR_GUARD_KEY = "adaptv:preload-error-reload"
 
 /**
  * Whether to reload in response to a `vite:preloadError`.
@@ -59,7 +59,7 @@ export function clearPreloadErrorGuard(): void {
  * Install the `vite:preloadError` net. Returns a teardown function.
  *
  * `onUnrecoverable` fires when a chunk is missing and a reload has already been
- * tried — the point at which nativ renders the offline/error UI rather than
+ * tried — the point at which adaptv renders the offline/error UI rather than
  * leaving a blank page. Calling `event.preventDefault()` first is required: it
  * stops Vite's default of rethrowing, which would surface as an unhandled
  * rejection.

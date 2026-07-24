@@ -26,7 +26,7 @@ describe("utils.css — clickable must not use the touch-action shorthand", () =
   //does dispatch it. Ionic hit the same wall and ships the same workaround.
   //
   //This is not cosmetic: `pointercancel` is how a gesture learns that a scroll
-  //took over. Any nativ surface that is both tappable and gesture-driven — a
+  //took over. Any adaptv surface that is both tappable and gesture-driven — a
   //Button inside Swipeable, a drawer handle — strands its gesture state machine
   //on iOS if the shorthand comes back.
   it("spells touch-action as the longhand, never `manipulation`", () => {

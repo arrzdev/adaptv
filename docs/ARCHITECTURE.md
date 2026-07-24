@@ -1,4 +1,4 @@
-# nativ — architecture & the cross-platform contracts
+# adaptv — architecture & the cross-platform contracts
 
 > The **higher-up design**: the contracts the whole framework hangs off, decided before the leaf-level
 > primitives so the leaves compose onto them. Where `VISION.md` is the north star and `BEHAVIORS.md` is
@@ -15,13 +15,13 @@
 These govern every decision below. They are deliberately more opinionated than a general-purpose UI kit —
 that opinion **is** the product.
 
-1. **Opinionated by default; granular control only where it genuinely belongs to the developer.** nativ
+1. **Opinionated by default; granular control only where it genuinely belongs to the developer.** adaptv
    makes the app-lifecycle and cross-platform engineering calls. The consumer configures intent in
-   `nativ.config.ts`, not mechanism. A framework that lets you choose the wrong thing can't guarantee the
+   `adaptv.config.ts`, not mechanism. A framework that lets you choose the wrong thing can't guarantee the
    app feels right — that guarantee is the whole value.
 2. **Everything exported abstracts the hybrid heavy-lifting.** Every public API hands the consumer a
    **tier-2** simple surface and hides the `isNativePlatform()` branch underneath. The consumer never
-   writes a per-platform branch to get correct behavior; that is nativ's job, structurally.
+   writes a per-platform branch to get correct behavior; that is adaptv's job, structurally.
 3. **The shell is inherited, never authored.** Creating a root layout or a page must not require the
    consumer to write meta injection, viewport tags, critical CSS, the platform stamp, the splash gate, or
    the edge-to-edge/safe-area wiring. All of it is framework-owned and always present.
@@ -35,7 +35,7 @@ that opinion **is** the product.
    avoid-keyboard hook returns *native* machinery to do the work — the split is internal, invisible above.
 6. **Don't reinvent the solved.** Gestures, viewport hacks, composition animations — Ionic stress-tested
    these for years. Study their solution and their open issues (`RESEARCH.md`), adopt the hard-won edge
-   cases, and diverge only where nativ's model genuinely differs. Rent the stable core; own the seam.
+   cases, and diverge only where adaptv's model genuinely differs. Rent the stable core; own the seam.
 7. **Mechanisms live at the JS layer; platform config stays dumb.** Anything a user can *see* belongs in
    React — styleable, themeable, testable, i18n-able, and identical on all six targets. The platform
    layer beneath it (native splash screen, service worker, inset plugin) does the minimum required to
@@ -69,7 +69,7 @@ The full-bleed, inset-correct app frame is owned by **three cooperating layers**
 │  Draws edge-to-edge; reports the REAL insets (status bar, nav bar, cutout,  │
 │  keyboard) to the WebView.                                                  │
 │  Today: StatusBar.overlaysWebView:true + community plugins + useStatusBar.  │
-│  Target: a first-party @nativ/shell Capacitor plugin owning this in one     │
+│  Target: a first-party @adaptv/shell Capacitor plugin owning this in one     │
 │  native module, hardened against the Android-15/SDK-35 inset+keyboard       │
 │  breakage (RESEARCH.md §3, HIGH RISK). Roadmap #2.                          │
 ├─ Shell layer (framework — RN's "navigator") ──────────────────────────────┤
@@ -86,7 +86,7 @@ The full-bleed, inset-correct app frame is owned by **three cooperating layers**
 ```
 
 The key inversion, learned from React Native: **RN's `View` is not smart — it's a flex box.** The screen
-frame comes from the *navigator above the route*, and `View` just fills it. nativ already has that
+frame comes from the *navigator above the route*, and `View` just fills it. adaptv already has that
 navigator: it's the **shell**. So there is no self-detecting `Screen`; there is a framework-owned frame
 and a dumb-correct `View`.
 
@@ -122,7 +122,7 @@ child, so a route whose root `<View>` omits `fill` collapses to content height.
 **Delta:** the screen-frame element stretches its direct child via a CSS child rule, e.g.
 
 ```css
-[data-nativ-screen] > * { flex: 1 1 0%; min-height: 0; }
+[data-adaptv-screen] > * { flex: 1 1 0%; min-height: 0; }
 ```
 
 so the root `View` (or any root element) fills for free, and `fill` becomes an *inner-tree* convenience
@@ -154,7 +154,7 @@ Native specifics (status-bar tint follows theme, overlay mode, the Android-15 ri
 
 ---
 
-## 2. Surface 2 — hybrid storage (the "nativ kv")
+## 2. Surface 2 — hybrid storage (the "adaptv kv")
 
 One `storage` namespace, **three tiers**, each hiding its per-target backend behind a tier-2 API
 (doctrine §2). Matches the shape `VISION.md §6` already uses (`storage.secure.set("token", jwt)`).
@@ -165,9 +165,9 @@ One `storage` namespace, **three tiers**, each hiding its per-target backend beh
 | `storage.store` | **async** + reactive hook | IndexedDB (Dexie) | SQLite / Filesystem | large values, offline cache |
 | `storage.secure` | **async**, no hook | best-effort `localStorage` | Keychain / Keystore | tokens, secrets |
 
-All backends store **strings**; nativ JSON-encodes/decodes, so values must be JSON-serializable. All
+All backends store **strings**; adaptv JSON-encodes/decodes, so values must be JSON-serializable. All
 tiers are **SSR-safe** (reads return `undefined`/fallback on the server; hooks use a server snapshot,
-mirroring `useNetworkStatus`). nativ-managed keys carry a stable prefix so `clear()` and cross-tab sync
+mirroring `useNetworkStatus`). adaptv-managed keys carry a stable prefix so `clear()` and cross-tab sync
 never touch the consumer's own `localStorage`.
 
 ### 2.1 `storage.kv` — fast KV, **sync**, memory-backed
@@ -210,9 +210,9 @@ const { data, isLoading } = useStore<T>(key)         // reactive, async-backed
 Dexie over IndexedDB (web) / SQLite table or Filesystem (native). **Scope boundary (important):**
 `store` is an **async large-value KV**, *not* a query engine / ORM. A real query layer (indexes,
 where-clauses, migrations) is **consumer-owned** — `RENDERING.md` already makes the data layer the
-consumer's (client token + IndexedDB / TanStack Query persister). nativ's job is to (a) provide the
+consumer's (client token + IndexedDB / TanStack Query persister). adaptv's job is to (a) provide the
 simple async blob store for framework-level offline needs, and (b) guarantee the substrate exists and
-offer the Query-persister wiring — **not** to grow into a database. This keeps nativ from ballooning and
+offer the Query-persister wiring — **not** to grow into a database. This keeps adaptv from ballooning and
 respects the consumer-wired-data doctrine.
 
 > ### ✅ BUILT — and it deviates from the Dexie call above, deliberately
@@ -225,7 +225,7 @@ respects the consumer-wired-data doctrine.
 > `get`/`set`/`remove`/`keys`/`clear` over a single object store: about eighty lines against the
 > platform API. Taking the dependency would make every consumer ship a query engine to get a blob KV,
 > including the many that never touch this tier. **The scope boundary and the dependency choice have to
-> agree**, and this is the option that agrees with it. If nativ ever genuinely needs queries, that is a
+> agree**, and this is the option that agrees with it. If adaptv ever genuinely needs queries, that is a
 > decision to revisit *with* Dexie — not a reason to pre-pay for it now.
 >
 > **Structured clone, not JSON** — `Date`, `Map`, `Set` and `Blob` survive a round trip. That is the
@@ -270,7 +270,7 @@ bearer tokens).
 
 ## 3. Surface 3 — TanStack opacity
 
-**Goal: opacity, not absence.** The consumer's source imports only `nativ` and never sees `@tanstack/*`
+**Goal: opacity, not absence.** The consumer's source imports only `adaptv` and never sees `@tanstack/*`
 or a `*.gen` file. Fully *eliminating* generated files is out of scope — TanStack Router's typesafety
 rests on a generated route tree, and killing it means forking the type layer (violates doctrine §0.6's
 "rent the stable core"). So the target is: the generated files still exist, but they're **hidden** and
@@ -279,40 +279,40 @@ the consumer's imports are **branch-free of TanStack**.
 ### 3.1 The consumer experience (target)
 
 ```tsx
-// a route file — the ONLY router symbol, from nativ, no @tanstack/* anywhere in the app
-import { createFileRoute } from "nativ"
+// a route file — the ONLY router symbol, from adaptv, no @tanstack/* anywhere in the app
+import { createFileRoute } from "adaptv"
 export const Route = createFileRoute("/settings")({ component: Settings })
 ```
 
 - No `@tanstack/react-router` import in app source. No `routeTree.gen.ts` beside the routes. No
   `router.tsx`/`client.tsx` unless the app deliberately ejects (§3.4).
-- `nativ` re-exports the whole router surface the consumer touches: `createFileRoute`, `createRootRoute`
-  (nativ's wrapped one, `create-root-route.tsx`), `Link` (nativ's primitive), `Outlet`, `redirect`,
+- `adaptv` re-exports the whole router surface the consumer touches: `createFileRoute`, `createRootRoute`
+  (adaptv's wrapped one, `create-root-route.tsx`), `Link` (adaptv's primitive), `Outlet`, `redirect`,
   `useRouter`, `useNavigate`, `useParams`, `useSearch`, `notFound`, … — typed identically.
 
-> ### ✅ CORRECTED (2026-07-20) — most of `.nativ/` was codegen used as tape
+> ### ✅ CORRECTED (2026-07-20) — most of `.adaptv/` was codegen used as tape
 >
 > An audit of what was actually in each generated file, prompted by the owner asking why they exist:
 >
 > | File | Was | Now |
 > |---|---|---|
 > | `routeTree.gen.ts` | TanStack's output, derived from the app's real route files | **kept** — legitimately generated |
-> | `router.gen.tsx` | the whole `createRouter` call, including framework opinions (`notFoundMode`, history) | **thinned to a call** into `createNativRouter` |
-| `root.gen.tsx` | `createRootRoute(<config>)` + static imports of the app's screens — almost entirely framework code | **deleted** → `src/routes/root-route.tsx` in the package, with the app-specific half served as `virtual:nativ/root-route` |
+> | `router.gen.tsx` | the whole `createRouter` call, including framework opinions (`notFoundMode`, history) | **thinned to a call** into `createAdaptvRouter` |
+| `root.gen.tsx` | `createRootRoute(<config>)` + static imports of the app's screens — almost entirely framework code | **deleted** → `src/routes/root-route.tsx` in the package, with the app-specific half served as `virtual:adaptv/root-route` |
 > | `sw.gen.ts` | 38 lines of **pure framework code**, byte-identical per app | **deleted** → `src/sw/default-worker.ts`, a real module |
-> | `register.d.ts` | 9 lines, **zero** app-specific content | **deleted** → shipped as `@arrzdev/nativ/route-globals` |
+> | `register.d.ts` | 9 lines, **zero** app-specific content | **deleted** → shipped as `@arrzdev/adaptv/route-globals` |
 >
 > **The principle that was being violated:** emitting a framework opinion into every consumer means
 > changing it requires every app to rebuild before the change takes effect. That is not a generated
-> file, it is a *distributed copy*. `notFoundMode: "root"` belongs in nativ, not stamped into a repo.
+> file, it is a *distributed copy*. `notFoundMode: "root"` belongs in adaptv, not stamped into a repo.
 >
 > Generating a **service worker** per app is the clearest example — nothing in it varied except a render
 > mode and a build tag, both of which are what build-time constants are for.
 >
-> **`.nativ/` is now ONE file:**
+> **`.adaptv/` is now ONE file:**
 >
 > ```
-> .nativ/
+> .adaptv/
 >   routeTree.gen.ts   TanStack's output, derived from the app's real route files
 > ```
 >
@@ -320,15 +320,15 @@ export const Route = createFileRoute("/settings")({ component: Settings })
 > `getRouter`"* — was true but weak: the path does not have to be **in the consumer's tree**. It is now
 > `src/routes/router-entry.tsx` in the package, reaching the app's two variable inputs through:
 >
-> - **`#nativ-route-tree`** → aliased for the bundler *and* mapped in the app's `tsconfig.paths`. Both
+> - **`#adaptv-route-tree`** → aliased for the bundler *and* mapped in the app's `tsconfig.paths`. Both
 >   are required: the route tree's concrete **type** must flow into the `Register` augmentation, and a
 >   bundler-only alias builds fine while silently collapsing typed routing to `any`.
-> - **`virtual:nativ/router-config`** → the `createRouter` options. Values only, so no types needed.
+> - **`virtual:adaptv/router-config`** → the `createRouter` options. Values only, so no types needed.
 >
 > `stamp.ts` now generates nothing at all — it is pure project wiring (one `.gitignore` line, two
 > tsconfig entries), all of it idempotent and applied to files the consumer owns.
 >
-> The root route is now resolved by the route DSL through `NATIV_ROOT_ROUTE_FILE`, computed as a
+> The root route is now resolved by the route DSL through `ADAPTV_ROOT_ROUTE_FILE`, computed as a
 > relative path from the app's routes folder into the **installed package**. That path looks unlovely in
 > the generated tree, but it is derived from the module's real resolved location rather than guessed
 > from a package name — so it is correct under pnpm symlinks, hoisted `node_modules`, and workspace
@@ -340,47 +340,47 @@ export const Route = createFileRoute("/settings")({ component: Settings })
 >   `routerConfig` and wrap `<Outlet />`. That is the router's own composition model — it nests, it
 >   scopes, and the providers sit where anyone reading the route tree can see them. A config thunk was a
 >   second, weaker way to express the same thing. Verified in project-zero.
-> - **`generatedRouteTree` — deleted.** It lived in `.nativ/` and nativ *already ignored* whatever the
+> - **`generatedRouteTree` — deleted.** It lived in `.adaptv/` and adaptv *already ignored* whatever the
 >   consumer set. A config field that is silently overridden is worse than no field: it lies.
-> - **`virtualRouteConfig` → `routerConfig`.** nativ *always* uses the declarative route config; it is
+> - **`virtualRouteConfig` → `routerConfig`.** adaptv *always* uses the declarative route config; it is
 >   the framework's opinion, not a mode the consumer selects, so the name should not leak TanStack's
 >   "virtual file routes" implementation detail.
 
-### 3.2 `.nativ/` — the hidden generated dir
+### 3.2 `.adaptv/` — the hidden generated dir
 
 Everything the plugin stamps today at the app root (`router.gen`, and TanStack's `routeTree.gen.ts`)
-moves into a single hidden, git-ignored `.nativ/`:
+moves into a single hidden, git-ignored `.adaptv/`:
 
 ```
-.nativ/
+.adaptv/
   routeTree.gen.ts     the generated route tree (relocated via router.generatedRouteTree)
   router.gen.tsx       the stamped router entry (already produced; just relocated)
   register.d.ts        the `declare module "@tanstack/react-router" { interface Register … }`
                        augmentation — typesafety preserved, just hidden
 ```
 
-Wiring (both nativ-generated, so the consumer writes neither):
-- `tsconfig.json` `paths` + a Vite `resolve.alias` point the internal route imports at `.nativ/`, and the
-  tsconfig `include`s `.nativ/register.d.ts` so inference lights up.
-- `.nativ/` is added to `.gitignore` and treated as a build artifact (regenerated on `dev`/`build`, like
+Wiring (both adaptv-generated, so the consumer writes neither):
+- `tsconfig.json` `paths` + a Vite `resolve.alias` point the internal route imports at `.adaptv/`, and the
+  tsconfig `include`s `.adaptv/register.d.ts` so inference lights up.
+- `.adaptv/` is added to `.gitignore` and treated as a build artifact (regenerated on `dev`/`build`, like
   `dist/`).
-- `router.generatedRouteTree` (already a config field) is pointed into `.nativ/`; the plugin's existing
+- `router.generatedRouteTree` (already a config field) is pointed into `.adaptv/`; the plugin's existing
   `stampGeneratedFiles` step writes there instead of the app root — a relocation, not new machinery.
 
-> ### ✅ BUILT — `.nativ/` relocation (2026-07-20), verified against project-zero
+> ### ✅ BUILT — `.adaptv/` relocation (2026-07-20), verified against project-zero
 >
-> `src/vite/nativ-dir.ts` owns the layout; `stamp.ts` writes there; the plugin points Start's
+> `src/vite/adaptv-dir.ts` owns the layout; `stamp.ts` writes there; the plugin points Start's
 > `generatedRouteTree` and router `entry` at it; the `.gitignore` entry is appended idempotently so the
 > consumer wires nothing.
 >
-> **Result in the real app:** `.nativ/` holds `routeTree.gen.ts` + `router.gen.tsx`, and the app's `src/`
+> **Result in the real app:** `.adaptv/` holds `routeTree.gen.ts` + `router.gen.tsx`, and the app's `src/`
 > tree contains **exactly one** generated file.
 >
 > **Correction to this section, found by building rather than reasoning:** the design listed
 > `__root.gen.tsx` as relocatable. It is not. The virtual-file-routes config references it by a path
 > *relative to `routesDirectory`*, and TanStack's generator walks that tree to find it — so it is a route
-> file nativ happens to author, not a build output. It stays beside the routes (gitignored there).
-> Removing it from `.nativ/` is a correctness fix, not a compromise.
+> file adaptv happens to author, not a build output. It stays beside the routes (gitignored there).
+> Removing it from `.adaptv/` is a correctness fix, not a compromise.
 >
 > **Path-resolution trap, measured against Start 1.167.13:** BOTH the router `entry` and
 > `generatedRouteTree` resolve relative to **`src/`**, not the app root. A root-relative path does not
@@ -390,20 +390,20 @@ Wiring (both nativ-generated, so the consumer writes neither):
 ### 3.3 The one hard spot — generator symbol recognition (spike-gated)
 
 TanStack's route generator matches route files by the `createFileRoute`/`createRootRoute` **identifier
-imported from `@tanstack/react-router`**. If the consumer imports nativ's *re-exported* `createFileRoute`,
+imported from `@tanstack/react-router`**. If the consumer imports adaptv's *re-exported* `createFileRoute`,
 the generator may not recognize the file. This is the single non-trivial decision, and it wants a
 **prototype-both-and-measure spike**, not an armchair pick:
 
 - **Option A — Virtual File Routes** (preferred to try first). `@tanstack/virtual-file-routes` is
-  **already a dependency**, and `router.virtualRouteConfig` is already a config field. VFR lets nativ
+  **already a dependency**, and `router.virtualRouteConfig` is already a config field. VFR lets adaptv
   *override the generation convention and relocate output* via a `__virtual.ts` config — the supported
   hook, no patching. If it can also satisfy the re-exported-symbol case, this is the whole answer.
-- **Option B — `pnpm patch` `@tanstack/router-generator`** to teach it nativ's re-exported symbol. A
+- **Option B — `pnpm patch` `@tanstack/router-generator`** to teach it adaptv's re-exported symbol. A
   surgical, well-scoped patch (`RESEARCH.md §2`), but a patch to maintain across upgrades — the fallback
   if VFR can't cover it.
 
 Recommendation: spike A first; fall to B only if VFR can't recognize the re-exported symbol. Everything
-*except* this recognition question (the `.nativ/` relocation, the barrel, the tsconfig/alias, the
+*except* this recognition question (the `.adaptv/` relocation, the barrel, the tsconfig/alias, the
 `register.d.ts`) is buildable today with no patch.
 
 ### 3.4 Ejection stays intact
@@ -481,7 +481,7 @@ Consequences that become **rules** for every new primitive:
   subscribe too, e.g. `useAppState`'s accessor drives the OTA check).
 - **A primitive returns a _value_, never platform-specific machinery-to-attach.** The native-ness is
   native-*accurate data* surfaced by layer 1 (the real keyboard height, real reachability), consumed
-  uniformly above. This is what lets the consumer — and nativ's own mid-layers — stay branch-free.
+  uniformly above. This is what lets the consumer — and adaptv's own mid-layers — stay branch-free.
 - **Geometry/decisions are extracted DOM-free** (layer between 1 and 2) so they're pure-unit-testable
   and shared across targets. No primitive hides math inside an effect.
 - A driver that must drive a DOM node takes a **`ref` in** (layer 2) rather than returning a props-bag —
@@ -503,7 +503,7 @@ write it wrong. `Drawer` is the archetype: native keyboard avoidance needs the C
 two mechanisms, and **the consumer must never see the seam.**
 
 > This is doctrine §0.2 and §0.5 restated as a *selection rule*: if the answer to "does the consumer
-> have to know what platform they're on?" is yes, nativ has failed and the thing belongs in the
+> have to know what platform they're on?" is yes, adaptv has failed and the thing belongs in the
 > framework.
 
 **B. Elective — it's a genuinely useful building block.** No divergence required. `View`'s `min-h-0`
@@ -543,7 +543,7 @@ Three sources, all of which are **filtered demand** — someone already paid to 
 | Signal | Reads as | Caveat |
 |---|---|---|
 | **Ionic's component list** | 10 years of "the community asked for this" | Some is Ionic-specific ceremony (`ion-content`); some is stale (MD2) |
-| **React Native / Expo's API surface** | the same, for the native-first audience | RN solves some things nativ gets free from the DOM |
+| **React Native / Expo's API surface** | the same, for the native-first audience | RN solves some things adaptv gets free from the DOM |
 | **Popular Capacitor / Ionic / Expo packages** | what people actually install to fill gaps | **A popular package is a gap in the framework** — that's the strongest signal on this list |
 
 That last row is the sharpest tool: *if thousands of apps install a package to do X, X is missing.*
@@ -562,7 +562,7 @@ transitive deps. Two verified examples, both of which look like obvious "approve
 
 | Library | Downloads | Reality |
 |---|---|---|
-| **`vaul`** (drawers) | 37M/week | **Dead.** README says unmaintained (2025-10); npm `latest` is **Dec 2024**; fixes merged to `main` in Jul 2025 were never published. Its open bugs are exactly the iOS/nested/keyboard class nativ cares about. |
+| **`vaul`** (drawers) | 37M/week | **Dead.** README says unmaintained (2025-10); npm `latest` is **Dec 2024**; fixes merged to `main` in Jul 2025 were never published. Its open bugs are exactly the iOS/nested/keyboard class adaptv cares about. |
 | **`@use-gesture/react`** | 5.6M/week | **~2 years dormant**, no deprecation notice, crash fixes unmerged, broken against its own sibling `react-spring` v10. |
 
 Both would have passed a "is it popular?" test. Neither survives a health check.
@@ -629,7 +629,7 @@ From the research pass — re-check health before relying on the ✅ row.
 - ✅ **Wrap:** `motion` (12.42.2, active — use `LazyMotion` + `m`, not the full barrel),
   `@tanstack/react-virtual`, `embla-carousel` (pin 8.x), `vite-plugin-pwa`.
 - 📖 **Read, don't depend:** **`vaul`** (dead, but the sheet physics/snap-point/nested-scroll
-  arbitration are the reference — and nativ's `Drawer` already descends from it), **`@use-gesture`**
+  arbitration are the reference — and adaptv's `Drawer` already descends from it), **`@use-gesture`**
   (dormant, still instructive on pointer normalisation), **Ionic** (`PRIOR-ART.md` — the whole port
   list), **Framework7** (alive, one-maintainer — closest prior art for web-first native-feel UI).
 - 🔨 **Must build, nothing exists:** **keyboard-aware layout.** Verified — npm has no credible

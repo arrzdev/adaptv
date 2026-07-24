@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   documentPathToArtifact,
   resolvePrecacheDocuments,
-} from "#nativ/config/precache-documents"
+} from "#adaptv/config/precache-documents"
 
 describe("documentPathToArtifact", () => {
   it("maps the root to index.html", () => {

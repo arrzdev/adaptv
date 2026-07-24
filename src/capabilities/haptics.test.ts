@@ -1,7 +1,7 @@
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { haptics } from "#nativ/capabilities/haptics"
-import { installVibratePolyfill } from "#nativ/utils/install-vibrate-polyfill"
+import { haptics } from "#adaptv/capabilities/haptics"
+import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
 
 // Capacitor's Haptics is a registerPlugin proxy (no own methods to spyOn), so mock
 // the module with fakes and mirror the real string-enum values.
@@ -22,7 +22,7 @@ vi.mock("@capacitor/haptics", () => ({
 // Isolate haptics from the polyfill (its own unit): it wraps navigator.vibrate with
 // a cancel-then-vibrate wrapper + has a persistent `installed` flag. Here we only
 // assert haptics WIRES it; the wrapper behaviour is covered by the polyfill's tests.
-vi.mock("#nativ/utils/install-vibrate-polyfill", () => ({
+vi.mock("#adaptv/utils/install-vibrate-polyfill", () => ({
   installVibratePolyfill: vi.fn(),
 }))
 

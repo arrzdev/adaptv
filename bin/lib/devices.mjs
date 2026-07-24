@@ -1,15 +1,15 @@
-// Device targeting for `nativ run`. nativ owns device selection (rather than letting
+// Device targeting for `adaptv run`. adaptv owns device selection (rather than letting
 // Capacitor's opaque picker handle it) so it can CACHE the choice: pick once with the
-// arrow keys, then `--latest` reuses it. The cache lives in `.nativ/devices.json`
-// (git-ignored with the rest of `.nativ/`). → plan Part 3.
+// arrow keys, then `--latest` reuses it. The cache lives in `.adaptv/devices.json`
+// (git-ignored with the rest of `.adaptv/`). → plan Part 3.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { capture } from "./exec.mjs"
-import { capCmd, NATIV_DIR } from "./native.mjs"
+import { ADAPTV_DIR, capCmd } from "./native.mjs"
 import { log, select } from "./render.mjs"
 
 const cacheFile = (appRoot) =>
-  path.join(appRoot, NATIV_DIR, "devices.json")
+  path.join(appRoot, ADAPTV_DIR, "devices.json")
 
 function readCache(appRoot) {
   try {
@@ -22,7 +22,7 @@ function readCache(appRoot) {
 function writeCache(appRoot, platform, device) {
   const cache = readCache(appRoot)
   cache[platform] = device
-  mkdirSync(path.join(appRoot, NATIV_DIR), { recursive: true })
+  mkdirSync(path.join(appRoot, ADAPTV_DIR), { recursive: true })
   writeFileSync(cacheFile(appRoot), `${JSON.stringify(cache, null, 2)}\n`)
 }
 

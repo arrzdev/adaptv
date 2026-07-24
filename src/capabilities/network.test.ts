@@ -1,6 +1,6 @@
 import { Network } from "@capacitor/network"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { getOnline, subscribeOnline } from "#nativ/capabilities/network"
+import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
 
 vi.mock("@capacitor/network", () => ({
   Network: {

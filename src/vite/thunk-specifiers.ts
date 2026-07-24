@@ -11,7 +11,7 @@ export function extractThunkSpecifier(
 ): string {
   if (typeof thunk !== "function") {
     throw new Error(
-      `[nativ] config field "${field}" must be a thunk: () => import("...")`,
+      `[adaptv] config field "${field}" must be a thunk: () => import("...")`,
     )
   }
 
@@ -20,12 +20,12 @@ export function extractThunkSpecifier(
 
   if (matches.length === 0) {
     throw new Error(
-      `[nativ] config field "${field}" must be () => import("<module>") with a literal specifier (got: ${source})`,
+      `[adaptv] config field "${field}" must be () => import("<module>") with a literal specifier (got: ${source})`,
     )
   }
   if (matches.length > 1) {
     throw new Error(
-      `[nativ] config field "${field}" must contain exactly one dynamic import (found ${matches.length})`,
+      `[adaptv] config field "${field}" must contain exactly one dynamic import (found ${matches.length})`,
     )
   }
 

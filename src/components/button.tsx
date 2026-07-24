@@ -11,17 +11,17 @@ import {
   useRef,
   useState,
 } from "react"
-import type { ImpactWeight } from "#nativ/capabilities/haptics"
-import { haptics } from "#nativ/capabilities/haptics"
+import type { ImpactWeight } from "#adaptv/capabilities/haptics"
+import { haptics } from "#adaptv/capabilities/haptics"
 import type {
   GestureEvent,
   OmitGestureEngineHandlers,
-} from "#nativ/hooks/use-gesture-engine"
-import { useGestureEngine } from "#nativ/hooks/use-gesture-engine"
-import { useHapticTick } from "#nativ/hooks/use-haptic-tick"
-import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
-import { cn } from "#nativ/utils/cn"
-import { mergeStyles } from "#nativ/utils/styles"
+} from "#adaptv/hooks/use-gesture-engine"
+import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
+import { useHapticTick } from "#adaptv/hooks/use-haptic-tick"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 // Buttons are small touch targets, so widen the reentrant press region well past
 // the engine's default margin — a normal thumb-roll on release (~35px, measured on
@@ -525,7 +525,7 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
         //The interaction utility is LOCKED, the look is not. `clickable` carries
         //the `touch-action` longhand that keeps `pointercancel` alive on iOS
         //(WebKit 240917) — a consumer `touch-none` silently stranding the gesture
-        //state machine is exactly the class of bug nativ exists to absorb. And a
+        //state machine is exactly the class of bug adaptv exists to absorb. And a
         //DISABLED button must not be tappable no matter what className says.
         //Layout and surface stay overridable: restyling a button is the point.
         className={mergeStyles({

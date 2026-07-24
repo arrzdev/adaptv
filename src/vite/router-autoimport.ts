@@ -6,7 +6,7 @@
  * A route file is supposed to read:
  *
  * ```ts
- * import { createFileRoute } from "@arrzdev/nativ/router"
+ * import { createFileRoute } from "@arrzdev/adaptv/router"
  * export const Route = createFileRoute("/settings")({ … })
  * ```
  *
@@ -15,7 +15,7 @@
  *
  * ```ts
  * import { createFileRoute } from "@tanstack/react-router"   // ← added by TanStack
- * import { createFileRoute } from "@arrzdev/nativ/router"    // ← what we wrote
+ * import { createFileRoute } from "@arrzdev/adaptv/router"    // ← what we wrote
  * ```
  *
  * The cause is `tanstack-router:autoimport` (in `@tanstack/router-plugin`). It
@@ -37,11 +37,11 @@
  * maintains route-file imports via a `{ required, banned }` policy, and the
  * `verboseFileRoutes === false` branch **bans** `createFileRoute` /
  * `createLazyFileRoute` from `@tanstack/<target>-router` and requires nothing. So
- * instead of fighting the generator, nativ asks it to strip the import — leaving
+ * instead of fighting the generator, adaptv asks it to strip the import — leaving
  * route files on disk with **no router import at all**, which is exactly the goal:
  * the consumer's source contains zero `@tanstack/*`.
  *
- * **2. This plugin supplies the binding at build time**, from nativ's specifier.
+ * **2. This plugin supplies the binding at build time**, from adaptv's specifier.
  *
  * ## The gate that makes it safe
  *
@@ -55,11 +55,11 @@
  */
 import type { Plugin, PluginOption } from "vite"
 
-/** The upstream plugin nativ replaces. */
+/** The upstream plugin adaptv replaces. */
 export const TANSTACK_AUTOIMPORT_PLUGIN = "tanstack-router:autoimport"
 
-/** The specifier nativ's route files import the route factory from. */
-export const NATIV_ROUTER_SPECIFIER = "@arrzdev/nativ/router"
+/** The specifier adaptv's route files import the route factory from. */
+export const ADAPTV_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
 
 const ROUTE_FACTORIES = ["createFileRoute", "createLazyFileRoute"] as const
 
@@ -92,7 +92,7 @@ export function stripTanStackAutoImport(
  * Whether `code` already binds `factory`, from any module.
  *
  * Source-agnostic on purpose. The upstream plugin only accepts its own specifier,
- * which is what makes it fight a re-export; nativ accepts either, so a route file
+ * which is what makes it fight a re-export; adaptv accepts either, so a route file
  * that still imports from `@tanstack/react-router` keeps working untouched. That
  * matters for migration: an app can move route files over one at a time.
  */
@@ -122,7 +122,7 @@ export function detectRouteFactory(code: string): string | null {
  */
 export function resolveAutoImport(
   code: string,
-  specifier: string = NATIV_ROUTER_SPECIFIER,
+  specifier: string = ADAPTV_ROUTER_SPECIFIER,
 ): string | null {
   const factory = detectRouteFactory(code)
   if (factory === null) return null
@@ -153,16 +153,16 @@ export function normalizeId(id: string): string {
 }
 
 /**
- * nativ's replacement autoimport plugin.
+ * adaptv's replacement autoimport plugin.
  *
  * `enforce: "pre"` mirrors the upstream ordering — the binding has to exist
  * before anything else parses the module.
  */
-export function nativRouteAutoImportPlugin(
-  specifier: string = NATIV_ROUTER_SPECIFIER,
+export function adaptvRouteAutoImportPlugin(
+  specifier: string = ADAPTV_ROUTER_SPECIFIER,
 ): Plugin {
   return {
-    name: "nativ:route-autoimport",
+    name: "adaptv:route-autoimport",
     enforce: "pre",
     transform(code, id) {
       if (!/\.(m|c)?(j|t)sx?$/.test(id)) return null

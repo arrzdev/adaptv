@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-// The nativ CLI — owns the whole native (Capacitor) lifecycle so a consumer never
+// The adaptv CLI — owns the whole native (Capacitor) lifecycle so a consumer never
 // touches Capacitor, the toolchain env, or the asset generator by hand:
 //
-//   nativ doctor                    check the local toolchain (JDK, Android SDK, Xcode, pod)
-//   nativ run  web|ios|android|all  live-reload dev: one Vite dev server, web + native
+//   adaptv doctor                    check the local toolchain (JDK, Android SDK, Xcode, pod)
+//   adaptv run  web|ios|android|all  live-reload dev: one Vite dev server, web + native
 //                                   WebViews all attached, hot-reloading on save
-//   nativ build ios|android|all     static artifacts: build SPA → sync → package (.ipa/.apk)
+//   adaptv build ios|android|all     static artifacts: build SPA → sync → package (.ipa/.apk)
 //
 //   run  flags: --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
 //               --force         reinstall even when nothing native changed (run skips
 //                               the rebuild and just relaunches the installed app)
 //               -- <vite args>  forwarded to the vite dev server (e.g. `-- --port 4000`)
-//   build flags: --output <path> where to write the artifact (default: .nativ/)
+//   build flags: --output <path> where to write the artifact (default: .adaptv/)
 //               --force         rebuild even if unchanged (web build + sync are cached)
 //   both:        --verbose      show the full underlying tool logs (raw passthrough)
 //
-// Native projects live inside the hidden, git-ignored `.nativ/` dir (relocated from the
+// Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
 // the local `cap` / `capacitor-assets` binaries directly, so it works from a bare shell.
 import { spawnSync } from "node:child_process"
@@ -49,6 +49,7 @@ import {
   patchServerUrl,
 } from "./lib/live-reload.mjs"
 import {
+  ADAPTV_DIR,
   buildWeb,
   CAP_WEB_DIR,
   capAddIfMissing,
@@ -59,7 +60,6 @@ import {
   iosEnv,
   isAppInstalled,
   launchInstalledApp,
-  NATIV_DIR,
   nativeDir,
   platformEnv,
   relaunchAndroidApp,
@@ -81,19 +81,19 @@ import {
 } from "./lib/render.mjs"
 
 const CWD = process.cwd()
-//the framework package root — bin/ is directly under it. Lets the CLI load nativ's
+//the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
 //own pure modules (doctor, privacy-manifest) rather than duplicate them.
-const NATIV_ROOT = fileURLToPath(new URL("..", import.meta.url))
+const ADAPTV_ROOT = fileURLToPath(new URL("..", import.meta.url))
 
 /* =============================================================================
- * config loading (esbuild-bundled `nativ.config.ts`)
+ * config loading (esbuild-bundled `adaptv.config.ts`)
  * ============================================================================= */
 
 async function loadConfig(appRoot) {
-  const configPath = path.join(appRoot, "nativ.config.ts")
+  const configPath = path.join(appRoot, "adaptv.config.ts")
   if (!existsSync(configPath)) {
     throw new Error(
-      `no nativ.config.ts in ${appRoot} — run from an app root.`,
+      `no adaptv.config.ts in ${appRoot} — run from an app root.`,
     )
   }
   const result = await esbuild({
@@ -115,23 +115,23 @@ async function loadConfig(appRoot) {
     ],
   })
   const source = result.outputFiles?.[0]?.text
-  if (!source) throw new Error("failed to bundle nativ.config.ts")
+  if (!source) throw new Error("failed to bundle adaptv.config.ts")
   const url = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
   const mod = await import(url)
   const config = mod.default
   if (!config?.appId) {
-    throw new Error("nativ.config.ts needs an `appId` for native builds.")
+    throw new Error("adaptv.config.ts needs an `appId` for native builds.")
   }
   return config
 }
 
 /**
- * Load a nativ source module (TS) and return its exports. Same esbuild trick as
+ * Load a adaptv source module (TS) and return its exports. Same esbuild trick as
  * loadConfig, so the CLI can call the framework's own pure functions (doctor,
  * privacy-manifest) instead of duplicating them here.
  */
-async function loadNativModule(relFromSrc) {
-  const abs = path.join(NATIV_ROOT, "src", relFromSrc)
+async function loadAdaptvModule(relFromSrc) {
+  const abs = path.join(ADAPTV_ROOT, "src", relFromSrc)
   const result = await esbuild({
     entryPoints: [abs],
     bundle: true,
@@ -139,7 +139,7 @@ async function loadNativModule(relFromSrc) {
     format: "esm",
     platform: "node",
     target: "es2022",
-    alias: { "#nativ": path.join(NATIV_ROOT, "src") },
+    alias: { "#adaptv": path.join(ADAPTV_ROOT, "src") },
   })
   const source = result.outputFiles?.[0]?.text
   if (!source) throw new Error(`failed to bundle ${relFromSrc}`)
@@ -148,10 +148,10 @@ async function loadNativModule(relFromSrc) {
 }
 
 /**
- * Regenerate `capacitor.config.json` from `nativ.config.ts`, from scratch, before any
+ * Regenerate `capacitor.config.json` from `adaptv.config.ts`, from scratch, before any
  * command touches it.
  *
- * nativ OWNS this file (it's stamped from nativ.config.ts, the consumer never hand-writes
+ * adaptv OWNS this file (it's stamped from adaptv.config.ts, the consumer never hand-writes
  * it) and it's git-ignored — so the only correct baseline is a fresh one. Regenerating
  * makes every command deterministic and, more importantly, makes stale dev state
  * impossible: `dev` mutates this file in place (`server.url`, `errorPath`,
@@ -161,11 +161,11 @@ async function loadNativModule(relFromSrc) {
  * The Capacitor CLI hard-requires the file in the directory it runs from — `loadConfig()`
  * reads `capacitor.config.{ts,js,json}` from `process.cwd()` and there is no `--config`
  * flag (`CAPACITOR_CONFIG` is an env var it EXPORTS to platform hooks, not an input) — so
- * it can't live in `.nativ/` with everything else. Regenerating is the next best thing.
+ * it can't live in `.adaptv/` with everything else. Regenerating is the next best thing.
  * → config-artifact PR.
  */
 async function regenerateCapacitorConfig(appRoot, config) {
-  const { stampCapacitorConfig } = await loadNativModule(
+  const { stampCapacitorConfig } = await loadAdaptvModule(
     "vite/capacitor-config.ts",
   )
   stampCapacitorConfig(config, appRoot)
@@ -188,7 +188,7 @@ function reportError(label, err) {
   tail(err?.tail)
 }
 
-/** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.nativ/`. */
+/** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/`. */
 async function packageArtifact(
   appRoot,
   config,
@@ -242,9 +242,9 @@ async function packageArtifact(
   return dest
 }
 
-/** Resolve where an artifact should land: a `--output` path/dir, or `.nativ/<default>`. */
+/** Resolve where an artifact should land: a `--output` path/dir, or `.adaptv/<default>`. */
 function resolveOutput(appRoot, output, defaultName) {
-  const base = path.join(appRoot, NATIV_DIR)
+  const base = path.join(appRoot, ADAPTV_DIR)
   if (!output) {
     mkdirSync(base, { recursive: true })
     return path.join(base, defaultName)
@@ -263,7 +263,7 @@ function resolveOutput(appRoot, output, defaultName) {
 function newestIpa(appRoot) {
   const roots = [
     appRoot,
-    path.join(appRoot, NATIV_DIR),
+    path.join(appRoot, ADAPTV_DIR),
     nativeDir(appRoot, "ios"),
     path.join(nativeDir(appRoot, "ios"), "App/build"),
   ]
@@ -285,7 +285,7 @@ function newestIpa(appRoot) {
  * + native WebViews at it, so an edit hot-reloads every surface. `platforms` is empty
  * for `run web` (dev server only). Runs until Ctrl-C, then reverts every change
  * (capacitor.config server block, the iOS ATS exception, the adb reverse) and stops
- * Vite. Static artifacts stay on `nativ build`.
+ * Vite. Static artifacts stay on `adaptv build`.
  */
 async function runLive(appRoot, platforms, opts) {
   const webOnly = platforms.length === 0
@@ -420,10 +420,10 @@ async function runLive(appRoot, platforms, opts) {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
           // native WebViews need a client SPA with no service worker (a SW caches
-          // the app inside the WebView and blocks hot reload). nativ's plugin reads
+          // the app inside the WebView and blocks hot reload). adaptv's plugin reads
           // this and forces render:spa + sw:false for the dev server. `run web` (no
           // native surface) keeps the app's normal web config.
-          env: webOnly ? {} : { NATIV_DEV_NATIVE: "1" },
+          env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
           onLine: (l) => onDevLine?.(l),
         })
         // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
@@ -435,13 +435,13 @@ async function runLive(appRoot, platforms, opts) {
             onLine: (l) => onDevLine?.(l),
           })
           // Fail SAFE: if the detected URL never serves the app, something else holds
-          // the port (a stray `nativ run`/`pnpm dev`, or another server on the same
+          // the port (a stray `adaptv run`/`pnpm dev`, or another server on the same
           // port). Don't point the native apps at a stranger — abort with a clear fix.
           if (!stable) {
             throw new Error(
               `dev server at ${devServer.localUrl} isn't responding — another process ` +
                 "is likely using that port. Stop it, or run on a free port: " +
-                "`nativ run … -- --port <n>`.",
+                "`adaptv run … -- --port <n>`.",
             )
           }
         }
@@ -714,11 +714,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
       const ats = healDevAtsLeftover(appRoot)
       if (ats.healed) {
         warnings.push(
-          "ios: removed a leftover dev ATS exception (NSAllowsArbitraryLoads) from Info.plist — a `nativ dev` run must have been killed before it could revert.",
+          "ios: removed a leftover dev ATS exception (NSAllowsArbitraryLoads) from Info.plist — a `adaptv dev` run must have been killed before it could revert.",
         )
       } else if (ats.warn) {
         warnings.push(
-          "ios: Info.plist declares NSAppTransportSecurity and nativ did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
+          "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
         )
       }
     }
@@ -860,7 +860,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
  * doctor
  * ============================================================================= */
 
-const NATIV_BASE_PLUGINS = [
+const ADAPTV_BASE_PLUGINS = [
   "@capacitor/app",
   "@capacitor/browser",
   "@capacitor/core",
@@ -907,7 +907,7 @@ function checkAppPlugins(appRoot) {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"))
   const deps = { ...pkg.dependencies, ...pkg.devDependencies }
   const missing = []
-  for (const name of NATIV_BASE_PLUGINS) {
+  for (const name of ADAPTV_BASE_PLUGINS) {
     const present = name in deps
     line(`  ${present ? c.green("✔") : c.red("✖")} ${name}`)
     if (!present) missing.push(name)
@@ -926,7 +926,7 @@ function checkAppPlugins(appRoot) {
 async function runProjectChecks(appRoot) {
   line("\nProject checks")
   const { runDoctor, formatDiagnostics } =
-    await loadNativModule("native/doctor.ts")
+    await loadAdaptvModule("native/doctor.ts")
   let deps = []
   try {
     const pkg = JSON.parse(
@@ -957,7 +957,7 @@ async function runProjectChecks(appRoot) {
 }
 
 async function doctor(appRoot) {
-  line(`\n${c.bold(c.magenta(" nativ "))} ${c.bold("doctor")}`)
+  line(`\n${c.bold(c.magenta(" adaptv "))} ${c.bold("doctor")}`)
   line(
     c.dim("  toolchain for building native iOS / Android from this app\n"),
   )
@@ -1007,10 +1007,10 @@ async function doctor(appRoot) {
 
   line("\nProject")
   line(
-    `  ${existsSync(nativeDir(appRoot, "android")) ? c.green("✔") : c.yellow("○")} ${NATIV_DIR}/android project`,
+    `  ${existsSync(nativeDir(appRoot, "android")) ? c.green("✔") : c.yellow("○")} ${ADAPTV_DIR}/android project`,
   )
   line(
-    `  ${existsSync(nativeDir(appRoot, "ios")) ? c.green("✔") : c.yellow("○")} ${NATIV_DIR}/ios project`,
+    `  ${existsSync(nativeDir(appRoot, "ios")) ? c.green("✔") : c.yellow("○")} ${ADAPTV_DIR}/ios project`,
   )
   line(
     `  ${existsSync(path.join(appRoot, "assets/logo.png")) ? c.green("✔") : c.yellow("○")} assets/logo.png (launcher-icon source)`,
@@ -1024,19 +1024,19 @@ async function doctor(appRoot) {
  * ============================================================================= */
 
 function usage() {
-  line(`${c.bold("nativ")} — native (Capacitor) lifecycle for a nativ app
+  line(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
 
 ${c.bold("Usage")}
-  nativ doctor
-  nativ run   <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
-  nativ build <ios|android|all>      [--output <path>] [--verbose] [--force]
+  adaptv doctor
+  adaptv run   <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
+  adaptv build <ios|android|all>      [--output <path>] [--verbose] [--force]
 
 ${c.dim("run = live-reload dev: one Vite dev server, web + native WebViews all attached,")}
 ${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
-${c.dim("`nativ run all -- --port 4000`. build = static .ipa/.apk artifacts.")}
+${c.dim("`adaptv run all -- --port 4000`. build = static .ipa/.apk artifacts.")}
 ${c.dim("--latest reuses the last device you picked. run skips the rebuild and just")}
 ${c.dim("relaunches when nothing native changed; --force reinstalls anyway. Native projects")}
-${c.dim("live in .nativ/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
+${c.dim("live in .adaptv/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
 }
 
 function parseFlags(argv) {
@@ -1045,7 +1045,7 @@ function parseFlags(argv) {
   let passthrough = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    // a lone `--` ends nativ's flags; the rest is forwarded to vite (dev server).
+    // a lone `--` ends adaptv's flags; the rest is forwarded to vite (dev server).
     if (a === "--") {
       passthrough = argv.slice(i + 1)
       break

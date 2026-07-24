@@ -6,7 +6,7 @@
 //  Style.Dark  = light content (for a DARK background)
 //  Style.Light = dark content  (for a LIGHT background)
 import { StatusBar, Style } from "@capacitor/status-bar"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type StatusBarAppearance = "light" | "dark"
 

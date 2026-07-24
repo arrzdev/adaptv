@@ -1,6 +1,6 @@
 import { SplashScreen } from "@capacitor/splash-screen"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { hideNativeSplash } from "#nativ/capabilities/splash"
+import { hideNativeSplash } from "#adaptv/capabilities/splash"
 
 vi.mock("@capacitor/splash-screen", () => ({
   SplashScreen: { hide: vi.fn(() => Promise.resolve()) },

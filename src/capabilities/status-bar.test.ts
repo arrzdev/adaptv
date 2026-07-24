@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   applyStatusBar,
   enableEdgeToEdge,
-} from "#nativ/capabilities/status-bar"
+} from "#adaptv/capabilities/status-bar"
 
 vi.mock("@capacitor/status-bar", () => ({
   StatusBar: {

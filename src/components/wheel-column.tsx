@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { clamp } from "#nativ/utils/clamp"
-import { cn } from "#nativ/utils/cn"
+import { clamp } from "#adaptv/utils/clamp"
+import { cn } from "#adaptv/utils/cn"
 
 /* =============================================================================
  * CONSTANTS

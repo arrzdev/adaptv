@@ -30,7 +30,7 @@ async function freshAppState(native: boolean) {
     "Capacitor",
     native ? { isNativePlatform: () => true } : undefined,
   )
-  return import("#nativ/capabilities/app-state")
+  return import("#adaptv/capabilities/app-state")
 }
 
 beforeEach(() => {

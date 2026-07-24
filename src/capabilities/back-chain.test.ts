@@ -3,7 +3,7 @@ import {
   BackPriority,
   registerBackHandler,
   runBackChain,
-} from "#nativ/capabilities/back-chain"
+} from "#adaptv/capabilities/back-chain"
 
 const cleanups: Array<() => void> = []
 

@@ -1,6 +1,6 @@
 import type { WorkboxPlugin } from "workbox-core/types"
 import { ExpirationPlugin } from "workbox-expiration"
-import type { CacheExpirationOptions } from "#nativ/sw/sw.types"
+import type { CacheExpirationOptions } from "#adaptv/sw/sw.types"
 
 export function createExpirationPlugins(
   expiration: CacheExpirationOptions | undefined,

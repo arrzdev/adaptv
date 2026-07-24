@@ -13,7 +13,7 @@
  *
  * ## Why this tier exists at all
  *
- * nativ's auth model is a **client-held bearer token**, and that is not a
+ * adaptv's auth model is a **client-held bearer token**, and that is not a
  * workaround — cookie-based auth is architecturally unsupported in a native
  * WebView. WebKit closed the hybrid-app cookie bug as *deliberate*
  * ([213510](https://bugs.webkit.org/show_bug.cgi?id=213510)), third-party cookies
@@ -31,9 +31,9 @@
  * The native backend is `@aparajita/capacitor-secure-storage` (MIT), imported
  * **lazily** so a web-only app never needs it installed.
  */
-import { isNativePlatform } from "#nativ/utils/platform"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
-const SECURE_PREFIX = "nativ:secure:"
+const SECURE_PREFIX = "adaptv:secure:"
 
 type SecureStoragePlugin = {
   get(options: { key: string }): Promise<{ value: string | null }>
@@ -72,8 +72,8 @@ function loadPlugin(): Promise<SecureStoragePlugin | null> {
 
 function missingPlugin(): Error {
   return new Error(
-    "[nativ] storage.secure needs `@aparajita/capacitor-secure-storage` on a native build. " +
-      "Install it and run `nativ sync`. (@capacitor/preferences is NOT a substitute — it stores plaintext.)",
+    "[adaptv] storage.secure needs `@aparajita/capacitor-secure-storage` on a native build. " +
+      "Install it and run `adaptv sync`. (@capacitor/preferences is NOT a substitute — it stores plaintext.)",
   )
 }
 

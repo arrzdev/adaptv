@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import {
   hasNativeKeyboard,
   subscribeNativeKeyboard,
-} from "#nativ/capabilities/keyboard"
+} from "#adaptv/capabilities/keyboard"
 
 //---- Text-input detection ----------------
 

@@ -6,14 +6,14 @@ import path from "node:path"
  * Service-worker cache namespace, derived once per production build. Replaces a
  * hand-bumped constant: a content hash of the client bundle changes exactly when
  * the deployable assets change, so caches invalidate on real deploys and never
- * on a no-op rebuild. `NATIV_BUILD_TAG` overrides it (e.g. to pin across a
+ * on a no-op rebuild. `ADAPTV_BUILD_TAG` overrides it (e.g. to pin across a
  * multi-worker deploy).
  */
 export async function computeBuildTag(
   clientDir: string,
   slug: string,
 ): Promise<string> {
-  const override = process.env.NATIV_BUILD_TAG
+  const override = process.env.ADAPTV_BUILD_TAG
   if (override) return override
 
   const files = await collectFiles(clientDir)

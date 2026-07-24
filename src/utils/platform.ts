@@ -74,7 +74,7 @@ export function isInstalledApp(): boolean {
   return isNativePlatform() || isStandaloneDisplay()
 }
 
-/** Coarse runtime tag used for the pre-paint `<html data-nativ-platform>` stamp. */
+/** Coarse runtime tag used for the pre-paint `<html data-adaptv-platform>` stamp. */
 export function resolvePlatformTag(): PlatformTag {
   if (isNativePlatform()) return "native"
   if (isStandaloneDisplay()) return "standalone"
@@ -82,7 +82,7 @@ export function resolvePlatformTag(): PlatformTag {
 }
 
 /**
- * Re-apply the `data-nativ-platform` / `data-nativ-os` stamp on `<html>`.
+ * Re-apply the `data-adaptv-platform` / `data-adaptv-os` stamp on `<html>`.
  *
  * The pre-paint init script ({@link getPlatformInitScript}) sets these before the
  * first frame, but React does not render them (they can't be server-rendered — the
@@ -95,20 +95,20 @@ export function resolvePlatformTag(): PlatformTag {
 export function applyPlatformStamp(): void {
   if (typeof document === "undefined") return
   const root = document.documentElement
-  root.dataset.nativPlatform = resolvePlatformTag()
-  root.dataset.nativOs = getOS()
+  root.dataset.adaptvPlatform = resolvePlatformTag()
+  root.dataset.adaptvOs = getOS()
 }
 
 /**
  * Blocking inline `<head>` script — runs before first paint. Stamps
  * `document.documentElement`:
- *   • `data-nativ-platform` → `native` / `standalone` / `web` (drives the `app:` /
+ *   • `data-adaptv-platform` → `native` / `standalone` / `web` (drives the `app:` /
  *     `web:` Tailwind variants + attribute-scoped critical CSS, incl. the splash
  *     policy — the custom splash shows when installed, a browser tab opts in)
- *   • `data-nativ-os` → `ios` / `android` / `web` (OS-specific styling)
+ *   • `data-adaptv-os` → `ios` / `android` / `web` (OS-specific styling)
  * Both resolve from the very first frame, before the app stylesheet loads. Mirrors
  * {@link resolvePlatformTag} / {@link getOS} in plain JS (can't import this module).
  */
 export function getPlatformInitScript(): string {
-  return `(function(){try{var C=window.Capacitor;var n=!!(C&&C.isNativePlatform&&C.isNativePlatform());var s=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;var ua=navigator.userAgent||'';var os=(n&&C.getPlatform)?C.getPlatform():((/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))?'ios':(/Android/i.test(ua)?'android':'web'));var r=document.documentElement;r.dataset.nativPlatform=n?'native':(s?'standalone':'web');r.dataset.nativOs=os;}catch(e){}})();`
+  return `(function(){try{var C=window.Capacitor;var n=!!(C&&C.isNativePlatform&&C.isNativePlatform());var s=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;var ua=navigator.userAgent||'';var os=(n&&C.getPlatform)?C.getPlatform():((/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1))?'ios':(/Android/i.test(ua)?'android':'web'));var r=document.documentElement;r.dataset.adaptvPlatform=n?'native':(s?'standalone':'web');r.dataset.adaptvOs=os;}catch(e){}})();`
 }

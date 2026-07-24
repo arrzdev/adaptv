@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { beforeEach, describe, expect, it } from "vitest"
-import { store } from "#nativ/storage/store"
+import { store } from "#adaptv/storage/store"
 
 beforeEach(async () => {
   await store.clear()

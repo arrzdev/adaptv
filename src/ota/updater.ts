@@ -1,7 +1,7 @@
-import { onResume } from "#nativ/capabilities/app-state"
-import type { UpdateManifest } from "#nativ/ota/policy"
-import { decideUpdate } from "#nativ/ota/policy"
-import { isNativePlatform } from "#nativ/utils/platform"
+import { onResume } from "#adaptv/capabilities/app-state"
+import type { UpdateManifest } from "#adaptv/ota/policy"
+import { decideUpdate } from "#adaptv/ota/policy"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type OtaOptions = {
   /** Where the manifest is published — the app's own deploy, no third-party backend. */

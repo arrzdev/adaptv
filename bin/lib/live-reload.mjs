@@ -12,7 +12,7 @@ import { OFFLINE_PAGE } from "./offline-page.mjs"
  * server (`url`) over cleartext http. The revert restores a CLEAN config — the
  * live-reload fields stripped — NOT the raw file: if a previous run was hard-killed
  * without teardown it may have left `server.url` behind, and restoring that would pin
- * the committed config at a dev URL forever (and break `nativ build`). Stripping first
+ * the committed config at a dev URL forever (and break `adaptv build`). Stripping first
  * both self-heals that and guarantees a clean revert now.
  *
  * A `server.errorPath` gives us a graceful offline screen: Capacitor loads it from the
@@ -41,7 +41,7 @@ export function patchServerUrl(appRoot, url) {
   if (clean.server) {
     // every field live-reload owns — stripping them is also what self-heals a config
     // left behind by a hard-killed run (SIGKILL can't revert). Safe to strip wholesale
-    // because nativ GENERATES capacitor.config.json from nativ.config.ts; a consumer
+    // because adaptv GENERATES capacitor.config.json from adaptv.config.ts; a consumer
     // never hand-writes these.
     for (const k of ["url", "cleartext", "errorPath", "androidScheme"])
       delete clean.server[k]
@@ -86,14 +86,14 @@ export function patchServerUrl(appRoot, url) {
  * only ever touches the live-reload session — release builds are untouched. No-op
  * (returns null) if the plist is missing or already declares ATS.
  *
- * A `NativDevAtsPatch` marker goes in alongside. Unlike `capacitor.config.json`, this
+ * A `AdaptvDevAtsPatch` marker goes in alongside. Unlike `capacitor.config.json`, this
  * plist is patched IN PLACE and never regenerated, so a run killed with SIGKILL leaves
  * the exception behind — and shipping `NSAllowsArbitraryLoads` is both a real hole and
- * something App Review asks about. The marker is what makes cleanup safe: it says "nativ
+ * something App Review asks about. The marker is what makes cleanup safe: it says "adaptv
  * added this", so `healDevAtsLeftover` can strip it without ever touching an ATS block
  * the app legitimately owns. → config-artifact PR.
  */
-export const ATS_MARKER = "NativDevAtsPatch"
+export const ATS_MARKER = "AdaptvDevAtsPatch"
 
 export function patchIosAts(appRoot) {
   const plist = iosPlistPath(appRoot)
@@ -148,7 +148,7 @@ function setAndroidReverse(serials, port, env) {
 /**
  * KEEP an `adb reverse tcp:<port>` mapping alive for the whole run so an emulator's
  * `localhost:<port>` always reaches the host dev server. Setting it once isn't enough:
- * the mapping is global to the adb server, so ANY other `nativ run` tearing down (even
+ * the mapping is global to the adb server, so ANY other `adaptv run` tearing down (even
  * a stale/orphaned one) runs `adb reverse --remove tcp:<port>` and silently kills the
  * route for THIS run too — the app keeps rendering but stops hot-reloading. So we set
  * it, then re-assert it on a short interval (only re-adding when it's actually missing,

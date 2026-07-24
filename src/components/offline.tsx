@@ -1,6 +1,6 @@
-import { Button } from "#nativ/components/button"
-import { View } from "#nativ/components/view"
-import { cn } from "#nativ/utils/cn"
+import { Button } from "#adaptv/components/button"
+import { View } from "#adaptv/components/view"
+import { cn } from "#adaptv/utils/cn"
 
 /**
  * Props for the offline UI. **Every one is optional**, and that is the design:
@@ -9,11 +9,11 @@ import { cn } from "#nativ/utils/cn"
  *
  * | Rendered by | When | `onRetry` |
  * |---|---|---|
- * | **nativ** | the app can't boot far enough for a route to exist — a route chunk fails (`vite:preloadError`), or the route tree can't resolve | defaults to `location.reload()` |
+ * | **adaptv** | the app can't boot far enough for a route to exist — a route chunk fails (`vite:preloadError`), or the route tree can't resolve | defaults to `location.reload()` |
  * | **the consumer** | the route mounted fine but its *data* is unavailable | whatever refetches — `refetch`, a mutation, a router invalidate |
  */
 export type OfflineProps = {
-  /** Recovery action. Defaults to a full reload, which is all nativ can do. */
+  /** Recovery action. Defaults to a full reload, which is all adaptv can do. */
   onRetry?: () => void
   /** The failure, when there was one. Never rendered by default — see below. */
   error?: unknown
@@ -33,7 +33,7 @@ export type OfflineProps = {
  * the app forever. Worse, it could only ever exist on **web** — the native target
  * has no service worker to serve it, so the same product behaviour would need a
  * second implementation. Mechanisms belong at the JS layer; the platform layer
- * stays dumb. (Same move nativ already made for the splash screen.)
+ * stays dumb. (Same move adaptv already made for the splash screen.)
  *
  * ## Why it renders in place rather than redirecting to `/offline`
  *
@@ -44,7 +44,7 @@ export type OfflineProps = {
  * per-route judgement — a product page can show cached data with a banner while
  * checkout hard-blocks — which one global offline screen cannot.
  *
- * Consumers override this wholesale via `offlineComponent` in `nativ.config.ts`.
+ * Consumers override this wholesale via `offlineComponent` in `adaptv.config.ts`.
  */
 export function Offline({
   onRetry,
@@ -59,7 +59,7 @@ export function Offline({
       onRetry()
       return
     }
-    //nativ's own call site: the app never booted, so there is nothing to refetch
+    //adaptv's own call site: the app never booted, so there is nothing to refetch
     //and a reload is the only meaningful recovery available.
     location.reload()
   }

@@ -3,7 +3,7 @@ import {
   isStaleRuntimeCache,
   resolveNavigationPolicy,
   selectStaleCaches,
-} from "#nativ/sw/sw.navigation-policy"
+} from "#adaptv/sw/sw.navigation-policy"
 
 describe("resolveNavigationPolicy — a pure function of render mode", () => {
   //RENDERING §3.1. The whole point of making this a *function* is that the SW
@@ -75,7 +75,7 @@ describe("isStaleRuntimeCache — B2, unbounded cache growth", () => {
 describe("selectStaleCaches", () => {
   const TAG = "myapp-2f9c1a"
 
-  it("selects exactly the stale nativ buckets from a real cache list", () => {
+  it("selects exactly the stale adaptv buckets from a real cache list", () => {
     const names = [
       `static-${TAG}`,
       "static-myapp-old111",

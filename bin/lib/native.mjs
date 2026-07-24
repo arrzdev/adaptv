@@ -1,6 +1,6 @@
-// Native-project mechanics for the nativ CLI: where the Capacitor projects live,
+// Native-project mechanics for the adaptv CLI: where the Capacitor projects live,
 // the colour-driven splash/icon patchers, the SPA build, and the `cap` wrappers.
-// Extracted from bin/nativ.mjs so the entry file stays a thin dispatcher. Every
+// Extracted from bin/adaptv.mjs so the entry file stays a thin dispatcher. Every
 // long-running command streams through the captured `exec` (see exec.mjs) so its
 // output can be rendered as calm steps instead of a raw log dump.
 import { spawnSync } from "node:child_process"
@@ -19,11 +19,11 @@ import { homedir } from "node:os"
 import path from "node:path"
 import { exec } from "./exec.mjs"
 
-/** The hidden generated dir (mirrors src/vite/nativ-dir.ts — kept in sync by hand). */
-export const NATIV_DIR = ".nativ"
-/** Absolute path to a platform's native project, now under `.nativ/`. */
+/** The hidden generated dir (mirrors src/vite/adaptv-dir.ts — kept in sync by hand). */
+export const ADAPTV_DIR = ".adaptv"
+/** Absolute path to a platform's native project, now under `.adaptv/`. */
 export const nativeDir = (appRoot, platform) =>
-  path.join(appRoot, NATIV_DIR, platform)
+  path.join(appRoot, ADAPTV_DIR, platform)
 
 /**
  * Delete a platform project's transient build caches. Xcode bakes the project's
@@ -119,7 +119,7 @@ const ANDROID_TRANSPARENT_ICON = `<?xml version="1.0" encoding="utf-8"?>
 function androidColorsXml(hex) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="nativSplashBackground">${hex}</color>
+    <color name="adaptvSplashBackground">${hex}</color>
 </resources>
 `
 }
@@ -128,8 +128,8 @@ function androidLaunchStyles(platform) {
   return `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:windowBackground">@color/nativSplashBackground</item>
-        <item name="${p}windowSplashScreenBackground">@color/nativSplashBackground</item>
+        <item name="android:windowBackground">@color/adaptvSplashBackground</item>
+        <item name="${p}windowSplashScreenBackground">@color/adaptvSplashBackground</item>
         <item name="${p}windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
@@ -159,28 +159,28 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
 
-    private SharedPreferences.OnSharedPreferenceChangeListener nativThemeListener;
+    private SharedPreferences.OnSharedPreferenceChangeListener adaptvThemeListener;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        applyNativTheme(true);
+        applyAdaptvTheme(true);
         super.onCreate(savedInstanceState);
         // uiMode is in the activity's configChanges, so applying live does NOT reload
         // the WebView; kept as a field so the listener isn't garbage-collected.
         SharedPreferences prefs = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
-        nativThemeListener = (sp, key) -> {
-            if ("nativ-theme".equals(key)) {
-                applyNativTheme(false);
+        adaptvThemeListener = (sp, key) -> {
+            if ("adaptv-theme".equals(key)) {
+                applyAdaptvTheme(false);
             }
         };
-        prefs.registerOnSharedPreferenceChangeListener(nativThemeListener);
+        prefs.registerOnSharedPreferenceChangeListener(adaptvThemeListener);
     }
 
     // AppCompatDelegate only at startup (before super.onCreate) — calling it live
     // recreates the activity; the live path only touches UiModeManager.
-    private void applyNativTheme(boolean atStartup) {
+    private void applyAdaptvTheme(boolean atStartup) {
         SharedPreferences prefs = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
-        String pref = prefs.getString("nativ-theme", "system");
+        String pref = prefs.getString("adaptv-theme", "system");
         int appCompatMode = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
         int uiMode = UiModeManager.MODE_NIGHT_AUTO;
         if ("dark".equals(pref)) {
@@ -220,8 +220,8 @@ export function patchAndroidSplash(appRoot, mask, appId) {
   const stylesPath = path.join(res, "values/styles.xml")
   if (existsSync(stylesPath)) {
     const base = `    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:windowBackground">@color/nativSplashBackground</item>
-        <item name="windowSplashScreenBackground">@color/nativSplashBackground</item>
+        <item name="android:windowBackground">@color/adaptvSplashBackground</item>
+        <item name="windowSplashScreenBackground">@color/adaptvSplashBackground</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>`
@@ -281,7 +281,7 @@ function iosColorsetJson(mask) {
       idiom: "universal",
     })
   }
-  return `${JSON.stringify({ colors, info: { author: "nativ", version: 1 } }, null, 2)}\n`
+  return `${JSON.stringify({ colors, info: { author: "adaptv", version: 1 } }, null, 2)}\n`
 }
 
 function iosLaunchStoryboard(lightHex) {
@@ -302,7 +302,7 @@ function iosLaunchStoryboard(lightHex) {
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <viewLayoutGuide key="safeArea" id="Bcu-3y-fUX"/>
-                        <color key="backgroundColor" name="NativSplash"/>
+                        <color key="backgroundColor" name="AdaptvSplash"/>
                     </view>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
@@ -310,7 +310,7 @@ function iosLaunchStoryboard(lightHex) {
         </scene>
     </scenes>
     <resources>
-        <namedColor name="NativSplash">
+        <namedColor name="AdaptvSplash">
             <color red="${r}" green="${g}" blue="${b}" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </namedColor>
     </resources>
@@ -324,7 +324,7 @@ export function patchIosTheme(appRoot, mask) {
   if (!existsSync(iosApp)) return
   const colorsetDir = path.join(
     iosApp,
-    "Assets.xcassets/NativSplash.colorset",
+    "Assets.xcassets/AdaptvSplash.colorset",
   )
   mkdirSync(colorsetDir, { recursive: true })
   writeFileSync(
@@ -342,7 +342,7 @@ export function patchIosTheme(appRoot, mask) {
   if (existsSync(appDelegate)) {
     let src = readFileSync(appDelegate, "utf8")
     src = src.replace(
-      /\n +\/\/ nativ: follow the persisted[\s\S]*?\.unspecified\)/,
+      /\n +\/\/ adaptv: follow the persisted[\s\S]*?\.unspecified\)/,
       "",
     )
     const marker =
@@ -351,9 +351,9 @@ export function patchIosTheme(appRoot, mask) {
       src = src.replace(
         marker,
         `${marker}
-        // nativ: follow the persisted app theme (not system) for the splash + app.
-        let nativThemePref = UserDefaults.standard.string(forKey: "CapacitorStorage.nativ-theme") ?? "system"
-        window?.overrideUserInterfaceStyle = nativThemePref == "dark" ? .dark : (nativThemePref == "light" ? .light : .unspecified)`,
+        // adaptv: follow the persisted app theme (not system) for the splash + app.
+        let adaptvThemePref = UserDefaults.standard.string(forKey: "CapacitorStorage.adaptv-theme") ?? "system"
+        window?.overrideUserInterfaceStyle = adaptvThemePref == "dark" ? .dark : (adaptvThemePref == "light" ? .light : .unspecified)`,
       )
     }
     writeFileSync(appDelegate, src)
@@ -418,8 +418,8 @@ export async function generateAssets(
 
 /** Build the static SPA for the Capacitor target and stamp its `index.html`. */
 export async function buildWeb(appRoot, { report } = {}) {
-  report?.("building SPA (NATIV_TARGET=capacitor)")
-  const env = { ...process.env, NATIV_TARGET: "capacitor" }
+  report?.("building SPA (ADAPTV_TARGET=capacitor)")
+  const env = { ...process.env, ADAPTV_TARGET: "capacitor" }
   const vite = localBin(appRoot, "vite")
   if (vite) await run(vite, ["build"], { cwd: appRoot, env, report })
   else
@@ -441,7 +441,7 @@ export async function buildWeb(appRoot, { report } = {}) {
 
 /**
  * Scaffold the native project if it isn't there yet. Also migrates a legacy
- * app-root `ios/`/`android/` (pre-`.nativ/` layout) into `.nativ/` so existing
+ * app-root `ios/`/`android/` (pre-`.adaptv/` layout) into `.adaptv/` so existing
  * projects keep working after the relocation.
  */
 export async function capAddIfMissing(
@@ -463,7 +463,7 @@ export async function capAddIfMissing(
     // project fails to build ("PCH was compiled with module cache path .../ios/...").
     // They're regenerated on the next build/sync; only the source needs to move.
     purgeBuildArtifacts(dir, platform)
-    report?.(`migrated ./${platform} → ${NATIV_DIR}/${platform}`)
+    report?.(`migrated ./${platform} → ${ADAPTV_DIR}/${platform}`)
     return
   }
 
@@ -514,7 +514,7 @@ export async function capRun(
   // FRESH from the (now-live) dev server. Without this a still-running app can be
   // re-fronted with its stale page intact — e.g. an iOS WebView left black because it
   // launched earlier with no server keeps showing black instead of reloading. `cap
-  // run` reinstall + launch doesn't reliably force this, so nativ does it explicitly.
+  // run` reinstall + launch doesn't reliably force this, so adaptv does it explicitly.
   terminateApp(appRoot, platform, target, env)
   const args = [...pre, "run", platform]
   if (target) args.push("--target", target)
@@ -723,7 +723,7 @@ function terminateApp(appRoot, platform, target, env) {
  * Reload the Android app's WebView WITHOUT rebuilding — force-stop + relaunch on each
  * device. `cap run` resets the emulator's `adb reverse` while installing/launching, so
  * the app it just launched has no route to the dev server and shows a black WebView
- * with no JS to recover. After re-asserting the reverse, nativ relaunches the app so it
+ * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
  */
 export function relaunchAndroidApp(appRoot, env) {

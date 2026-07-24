@@ -1,9 +1,9 @@
-import type { StatusBarAppearance } from "#nativ/capabilities/status-bar"
+import type { StatusBarAppearance } from "#adaptv/capabilities/status-bar"
 import {
   applyStatusBar,
   enableEdgeToEdge,
-} from "#nativ/capabilities/status-bar"
-import { useIsomorphicLayoutEffect } from "#nativ/hooks/use-isomorphic-layout-effect"
+} from "#adaptv/capabilities/status-bar"
+import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 
 /**
  * Keep the native status bar in sync with the app's resolved theme, and put the app

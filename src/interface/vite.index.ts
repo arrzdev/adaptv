@@ -1,1 +1,1 @@
-export { type NativOptions, nativ } from "../vite/nativ-plugin.ts"
+export { type AdaptvOptions, adaptv } from "../vite/adaptv-plugin.ts"

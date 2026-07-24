@@ -1,6 +1,6 @@
 import { Browser } from "@capacitor/browser"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { isExternalUrl, openExternal } from "#nativ/capabilities/browser"
+import { isExternalUrl, openExternal } from "#adaptv/capabilities/browser"
 
 vi.mock("@capacitor/browser", () => ({
   Browser: { open: vi.fn(() => Promise.resolve()) },

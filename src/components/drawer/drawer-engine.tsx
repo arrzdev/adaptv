@@ -22,13 +22,13 @@ import {
   DRAWER_SHRINK_TRANSITION,
   dampenDrawerPull,
   resolveDrawerDragRelease,
-} from "#nativ/components/drawer/drawer-constants"
+} from "#adaptv/components/drawer/drawer-constants"
 import {
   measureHeightAvailableUntilMaxHeightCap,
   resolveDrawerKeyboardLift,
   useDrawerKeyboardAvoidance,
-} from "#nativ/components/drawer/drawer-keyboard"
-import type { DrawerMotionAnimation } from "#nativ/components/drawer/drawer-motion"
+} from "#adaptv/components/drawer/drawer-keyboard"
+import type { DrawerMotionAnimation } from "#adaptv/components/drawer/drawer-motion"
 import {
   animateDrawerKeyboardOffset,
   animateDrawerY,
@@ -39,15 +39,15 @@ import {
   stopDrawerKeyboardOffsetAnimation,
   transitionDrawerBackdropOpacity,
   willAnimateDrawerKeyboardOffset,
-} from "#nativ/components/drawer/drawer-motion"
-import { useFreezeViewport } from "#nativ/hooks/use-freeze-viewport"
+} from "#adaptv/components/drawer/drawer-motion"
+import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
 import {
   GesturePriority,
   useGestureCapture,
-} from "#nativ/hooks/use-gesture-capture"
-import { dismissVirtualKeyboard } from "#nativ/hooks/use-keyboard"
-import { clamp } from "#nativ/utils/clamp"
-import { cn } from "#nativ/utils/cn"
+} from "#adaptv/hooks/use-gesture-capture"
+import { dismissVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
+import { clamp } from "#adaptv/utils/clamp"
+import { cn } from "#adaptv/utils/cn"
 
 //Unmount as soon as the close settles (the snappy close ends with the panel off-screen, so
 //there's no last frame to wait for). Keeping the panel mounted past that left the overlay

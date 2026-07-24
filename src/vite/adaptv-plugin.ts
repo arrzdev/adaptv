@@ -4,55 +4,55 @@ import { fileURLToPath } from "node:url"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import type { PluginOption } from "vite"
-import type { NativAppConfig } from "#nativ/config/app-config.ts"
-import type { ResolvedWebConfig } from "#nativ/config/web-config.ts"
-import { resolveWebConfig } from "#nativ/config/web-config.ts"
-import { stampPrivacyManifest } from "#nativ/native/stamp-privacy.ts"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import type { ResolvedWebConfig } from "#adaptv/config/web-config.ts"
+import { resolveWebConfig } from "#adaptv/config/web-config.ts"
+import { stampPrivacyManifest } from "#adaptv/native/stamp-privacy.ts"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { createAdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir.ts"
 import {
   APP_CONFIG_BASENAME,
   loadAppConfig,
-} from "#nativ/vite/app-config-loader.ts"
-import { nativBanServerApisPlugin } from "#nativ/vite/ban-server-apis.ts"
-import { stampCapacitorConfig } from "#nativ/vite/capacitor-config.ts"
+} from "#adaptv/vite/app-config-loader.ts"
+import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
+import { stampCapacitorConfig } from "#adaptv/vite/capacitor-config.ts"
 import {
+  adaptvManifestPlugin,
   buildManifest,
-  nativManifestPlugin,
-} from "#nativ/vite/manifest.ts"
-import type { NativContext } from "#nativ/vite/nativ-context.ts"
-import { createNativContext } from "#nativ/vite/nativ-context.ts"
-import { resolveGeneratedPaths } from "#nativ/vite/nativ-dir.ts"
-import { nativRootRoutePlugin } from "#nativ/vite/root-route-module.ts"
+} from "#adaptv/vite/manifest.ts"
+import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import {
-  nativRouteAutoImportPlugin,
+  adaptvRouteAutoImportPlugin,
   stripTanStackAutoImport,
-} from "#nativ/vite/router-autoimport.ts"
-import { nativShellEmitPlugin } from "#nativ/vite/shell-emit.ts"
-import { stampGeneratedFiles } from "#nativ/vite/stamp.ts"
-import { nativStaticHostPlugin } from "#nativ/vite/static-host.ts"
-import { nativSwBuildPlugin } from "#nativ/vite/sw-build.ts"
-import { assertRouteTreeIsOpaque } from "#nativ/vite/verify-patches.ts"
-import { nativPwaRegisterPlugin } from "#nativ/vite/virtuals.ts"
+} from "#adaptv/vite/router-autoimport.ts"
+import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
+import { stampGeneratedFiles } from "#adaptv/vite/stamp.ts"
+import { adaptvStaticHostPlugin } from "#adaptv/vite/static-host.ts"
+import { adaptvSwBuildPlugin } from "#adaptv/vite/sw-build.ts"
+import { assertRouteTreeIsOpaque } from "#adaptv/vite/verify-patches.ts"
+import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 
 /** Default specifier for every generated import. Overridable for aliased installs. */
-const DEFAULT_ROUTER_SPECIFIER = "@arrzdev/nativ/router"
+const DEFAULT_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
 
-export type NativOptions = {
-  /** App root holding `nativ.config.ts`. Default: `process.cwd()`. */
+export type AdaptvOptions = {
+  /** App root holding `adaptv.config.ts`. Default: `process.cwd()`. */
   appRoot?: string
   /**
    * Build target. `"capacitor"` produces the native shell bundle — forces a static
    * SPA (`render: "spa"`) and disables the service worker (`sw: false`), since a
    * Capacitor WebView loads on-device files (no server to SSR, and the bundle is the
    * offline shell). `"web"` (default) is the untouched SSR/PWA build. Falls back to
-   * the `NATIV_TARGET` env var, so `NATIV_TARGET=capacitor vite build` works too.
+   * the `ADAPTV_TARGET` env var, so `ADAPTV_TARGET=capacitor vite build` works too.
    */
   target?: "web" | "capacitor"
   /**
    * The specifier route files import the route factory from. Default
-   * `"@arrzdev/nativ/router"`.
+   * `"@arrzdev/adaptv/router"`.
    *
    * Exists because the package is not always reachable under its published name:
-   * a monorepo may alias it (`@arrzdev/nativ`), and the injected import has to be
+   * a monorepo may alias it (`@arrzdev/adaptv`), and the injected import has to be
    * something the consumer's own resolver can actually follow. Getting it wrong
    * fails loudly at build time with an unresolved import, which is the right
    * failure mode.
@@ -61,28 +61,28 @@ export type NativOptions = {
 }
 
 /**
- * The nativ framework plugin — one call in an app's `vite.config.ts`. Reads
- * `nativ.config.ts` (single source of truth) and wires the whole PWA:
+ * The adaptv framework plugin — one call in an app's `vite.config.ts`. Reads
+ * `adaptv.config.ts` (single source of truth) and wires the whole PWA:
  *
  * - stamps the generated root route + router (unless the app ejects by writing
  *   `layouts/_root.tsx` / `router.tsx`)
  * - drives TanStack Start — route tree + entries; the client entry is Start's
  *   default (StrictMode), ejectable by writing `src/client.tsx`
  * - generates the web manifest and the service-worker precache + build tag
- * - serves `virtual:nativ/pwa-register` for the shell
+ * - serves `virtual:adaptv/pwa-register` for the shell
  *
  * Takes no arguments — the build config (`render`, `router` paths) lives in
- * `nativ.config.ts` too. It is an ASYNC plugin factory: it loads
+ * `adaptv.config.ts` too. It is an ASYNC plugin factory: it loads
  * the config first (so Start is configured from it and the generated files exist
  * before any hook), then returns the plugin array. Vite awaits plugin promises and
- * flattens nested arrays, so `plugins: [cloudflare(), nativ(), tailwindcss()]`
+ * flattens nested arrays, so `plugins: [cloudflare(), adaptv(), tailwindcss()]`
  * needs no `await` and no spread.
  */
-export async function nativ(
-  options: NativOptions = {},
+export async function adaptv(
+  options: AdaptvOptions = {},
 ): Promise<PluginOption[]> {
   const appRoot = options.appRoot ?? process.cwd()
-  const context = createNativContext(appRoot)
+  const context = createAdaptvContext(appRoot)
   const routerEjected = existsSync(path.resolve(appRoot, "src/router.tsx"))
   const clientEjected = existsSync(path.resolve(appRoot, "src/client.tsx"))
 
@@ -95,13 +95,13 @@ export async function nativ(
   //generated root/router, manifest, and SW-build plugin all follow suit.
   const target =
     options.target ??
-    (process.env.NATIV_TARGET === "capacitor" ? "capacitor" : "web")
-  //The nativ CLI's live-reload dev server (`nativ run ios|android`) sets this: the
+    (process.env.ADAPTV_TARGET === "capacitor" ? "capacitor" : "web")
+  //The adaptv CLI's live-reload dev server (`adaptv run ios|android`) sets this: the
   //bundle is served into a native WebView, which can't hydrate SSR — so force a
   //client SPA. (The service worker is handled at runtime — it never registers in
   //dev, see service-worker-shell.ts — so no build-time override is needed.) The
   //plain `web` target is kept otherwise, so an SSR/cloudflare dev pipeline still runs.
-  if (target === "web" && process.env.NATIV_DEV_NATIVE === "1") {
+  if (target === "web" && process.env.ADAPTV_DEV_NATIVE === "1") {
     context.loaded.config.router.render = "spa"
   }
   //One resolution, used by every downstream plugin — so `render`, `host` and the
@@ -116,7 +116,7 @@ export async function nativ(
     //generate capacitor.config.json from the config's `appId` — cap reads this; the
     //consumer never hand-writes a Capacitor config. Stamped ONLY for the
     //native target so a plain web `dev`/`build` never materialises it in the app
-    //root; the `nativ` CLI always builds this target before invoking cap.
+    //root; the `adaptv` CLI always builds this target before invoking cap.
     stampCapacitorConfig(context.loaded.config, appRoot)
     //Apple's required-reason API manifest, derived from the installed plugins.
     //Not one of the 22 official Capacitor plugins ships one, the obligation lands
@@ -124,27 +124,27 @@ export async function nativ(
     //→ DECISIONS.md §5.0.1
     const privacyManifest = stampPrivacyManifest(appRoot)
     if (privacyManifest) {
-      console.log(`[nativ] wrote ${privacyManifest}`)
+      console.log(`[adaptv] wrote ${privacyManifest}`)
     }
   }
 
   //The route generator emits every import AND every `declare module` in
-  //routeTree.gen.ts against a single package specifier. nativ patches it to read
+  //routeTree.gen.ts against a single package specifier. adaptv patches it to read
   //this env var (patches/@tanstack__router-generator.patch), so the generated
-  //tree points at the nativ barrel instead of @tanstack/* — the last place
+  //tree points at the adaptv barrel instead of @tanstack/* — the last place
   //`@tanstack` leaked into the consumer's tree. → DECISIONS.md §2.6a (L19)
   const routerPkg = options.routerSpecifier ?? DEFAULT_ROUTER_SPECIFIER
-  process.env.NATIV_ROUTER_PKG = routerPkg
+  process.env.ADAPTV_ROUTER_PKG = routerPkg
   //same for the Start register-declaration Start injects into the route tree
   //footer (patches/@tanstack__start-plugin-core.patch)
-  process.env.NATIV_START_PKG = routerPkg
+  process.env.ADAPTV_START_PKG = routerPkg
 
   //Tell the virtual-route DSL where the generated root lives. It sits in
-  //`.nativ/`, but the generator resolves virtual route files against
+  //`.adaptv/`, but the generator resolves virtual route files against
   //`routesDirectory`, so the DSL needs a path relative to THAT — which only this
   //layer knows. Without it the consumer's routes tree would have to host a
   //framework artifact.
-  //Where the route DSL finds nativ's root route.
+  //Where the route DSL finds adaptv's root route.
   //
   //`routesDirectory` is resolved against `src/`, not the app root — same base as
   //the router entry and the route tree (measured against Start 1.167.13) — so
@@ -153,7 +153,7 @@ export async function nativ(
   //install layout (pnpm symlinks, hoisted node_modules, a workspace link),
   //because it is computed from the module's real resolved location rather than
   //guessed from a package name.
-  process.env.NATIV_ROOT_ROUTE_FILE = path
+  process.env.ADAPTV_ROOT_ROUTE_FILE = path
     .relative(
       path.resolve(
         appRoot,
@@ -172,19 +172,19 @@ export async function nativ(
     //FIRST, and `enforce: "pre"` — the isomorphism ban has to win the specifier
     //before tanstackStart() can resolve it. This is the one layer a consumer
     //cannot disable, misconfigure, or forget to install. → FACADE.md §2.2
-    nativBanServerApisPlugin(),
-    nativConfigLoaderPlugin(context),
-    nativManifestPlugin(context),
-    nativPwaRegisterPlugin(),
-    nativRootRoutePlugin(context, options.routerSpecifier),
-    nativRouteTreeAliasPlugin(appRoot),
-    nativFsAllowPlugin(),
-    //nativ supplies the route factory binding, from ITS specifier. Paired with
+    adaptvBanServerApisPlugin(),
+    adaptvConfigLoaderPlugin(context),
+    adaptvManifestPlugin(context),
+    adaptvPwaRegisterPlugin(),
+    adaptvRootRoutePlugin(context, options.routerSpecifier),
+    adaptvRouteTreeAliasPlugin(appRoot),
+    adaptvFsAllowPlugin(),
+    //adaptv supplies the route factory binding, from ITS specifier. Paired with
     //`verboseFileRoutes: false` below, which makes the generator STRIP the
     //`@tanstack/react-router` import from route files rather than maintain it.
     //Together: zero `@tanstack/*` in the consumer's source.
     //→ src/vite/router-autoimport.ts
-    nativRouteAutoImportPlugin(options.routerSpecifier),
+    adaptvRouteAutoImportPlugin(options.routerSpecifier),
     //Start's plugins, minus its own autoimport — upstream hardcodes the
     //`@tanstack/<target>-router` specifier and would re-add that import.
     stripTanStackAutoImport([
@@ -199,19 +199,19 @@ export async function nativ(
       ) as PluginOption,
     ]),
     viteReact(),
-    nativSwBuildPlugin(context),
+    adaptvSwBuildPlugin(context),
     //Assert the opacity invariant on the generated tree once the build is done.
     //If the patches did not reach this install the build would otherwise SUCCEED
     //with the facade silently disabled. → src/vite/verify-patches.ts
-    nativShellEmitPlugin(context),
-    nativStaticHostPlugin(context),
-    nativOpacityCheckPlugin(appRoot),
+    adaptvShellEmitPlugin(context),
+    adaptvStaticHostPlugin(context),
+    adaptvOpacityCheckPlugin(appRoot),
   ]
 }
 
-/** TanStack Start options — mapped from the loaded `nativ.config.ts`; nativ adds the stamped router entry. */
+/** TanStack Start options — mapped from the loaded `adaptv.config.ts`; adaptv adds the stamped router entry. */
 function deriveStartOptions(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
   routerEjected: boolean,
   clientEjected: boolean,
   appRoot: string,
@@ -235,11 +235,11 @@ function deriveStartOptions(
     ...(isSpa ? { spa: { enabled: true } } : {}),
     //Client entry, in precedence order:
     //  1. app ejected → their `src/client.tsx`.
-    //  2. SPA target → nativ's OWN client entry (a package module, like the router
+    //  2. SPA target → adaptv's OWN client entry (a package module, like the router
     //     entry). Start's default is `hydrateStart`, which requires a `window.$_TSR`
     //     bootstrap that only a server/prerender injects — a no-server SPA has none,
     //     so `hydrateStart` throws `Invariant failed` and the app white-screens.
-    //     nativ's entry does a plain TanStack Router client render instead.
+    //     adaptv's entry does a plain TanStack Router client render instead.
     //  3. SSR web → Start's built-in default (server provides `$_TSR`; leave it).
     ...(clientEjected
       ? { client: { entry: "./client" } }
@@ -258,25 +258,25 @@ function deriveStartOptions(
       ? { server: { entry: router.serverEntry } }
       : {}),
     router: {
-      //Always into `.nativ/`, never wherever the config pointed. The route tree
+      //Always into `.adaptv/`, never wherever the config pointed. The route tree
       //is a build artifact, and letting an app place it next to its routes is
       //what made the generator visible in the first place. ARCHITECTURE §3.2
       generatedRouteTree: fromSrc(gen.routeTree),
       routesDirectory: router.routesDirectory ?? "./routing",
-      //Formatting of files nobody opens (they live in `.nativ/`) is nativ's call,
+      //Formatting of files nobody opens (they live in `.adaptv/`) is adaptv's call,
       //not a config knob. Hardcoded.
       quoteStyle: "double" as const,
       //THE lever for TanStack opacity, and it is not a verbosity setting despite
       //the name. Read from the generator's transform source: `false` switches its
       //import policy from "require `createFileRoute` from @tanstack/<target>-router"
       //to "BAN it" — so the generator strips the import from route files instead of
-      //writing it. nativ's autoimport plugin then supplies the binding from the
-      //nativ barrel at build time. Not overridable: the whole facade rests on it.
+      //writing it. adaptv's autoimport plugin then supplies the binding from the
+      //adaptv barrel at build time. Not overridable: the whole facade rests on it.
       verboseFileRoutes: false,
       virtualRouteConfig: router.routerConfig ?? "./src/routing/config.ts",
-      //nativ's OWN entry module — a real file in the package, not one written
+      //adaptv's OWN entry module — a real file in the package, not one written
       //into the consumer's tree. It reaches the app's route tree through the
-      //`#nativ-route-tree` alias. Ejectable by writing `src/router.tsx`.
+      //`#adaptv-route-tree` alias. Ejectable by writing `src/router.tsx`.
       ...(routerEjected
         ? {}
         : {
@@ -291,15 +291,15 @@ function deriveStartOptions(
 }
 
 /**
- * Dev watcher: on a change to `nativ.config.ts` (or a module it imports), re-load
+ * Dev watcher: on a change to `adaptv.config.ts` (or a module it imports), re-load
  * the config, re-stamp the generated files, and full-reload. The initial load +
- * stamp happen in the `nativ()` factory. Changing a BUILD option (`render` or the
+ * stamp happen in the `adaptv()` factory. Changing a BUILD option (`render` or the
  * `router` paths) still needs a dev-server restart — those configure Start, which
  * is instantiated once at startup.
  */
-function nativConfigLoaderPlugin(context: NativContext): PluginOption {
+function adaptvConfigLoaderPlugin(context: AdaptvContext): PluginOption {
   return {
-    name: "nativ:config-watcher",
+    name: "adaptv:config-watcher",
     configureServer(server) {
       const configPath = path.resolve(context.appRoot, APP_CONFIG_BASENAME)
       const watched = context.loaded?.watchFiles ?? [configPath]
@@ -323,11 +323,11 @@ function nativConfigLoaderPlugin(context: NativContext): PluginOption {
 
 /**
  * Fails the build if the generated route tree still references `@tanstack/*` —
- * the signal that nativ's dependency patches did not reach this install.
+ * the signal that adaptv's dependency patches did not reach this install.
  */
-function nativOpacityCheckPlugin(appRoot: string): PluginOption {
+function adaptvOpacityCheckPlugin(appRoot: string): PluginOption {
   return {
-    name: "nativ:opacity-check",
+    name: "adaptv:opacity-check",
     apply: "build",
     closeBundle() {
       assertRouteTreeIsOpaque(resolveGeneratedPaths(appRoot).routeTree)
@@ -336,9 +336,9 @@ function nativOpacityCheckPlugin(appRoot: string): PluginOption {
 }
 
 /**
- * Resolve `#nativ-route-tree` to the app's generated route tree.
+ * Resolve `#adaptv-route-tree` to the app's generated route tree.
  *
- * nativ's router entry is a package module, so it cannot use a relative import to
+ * adaptv's router entry is a package module, so it cannot use a relative import to
  * reach a file in the consumer's project. The app's `tsconfig.paths` carries the
  * same mapping (written by the stamper) so the route tree's concrete TYPE reaches
  * the `Register` augmentation — a bundler-only alias builds fine while silently
@@ -358,12 +358,12 @@ function nativOpacityCheckPlugin(appRoot: string): PluginOption {
  * collide with another plugin's resolution.
  */
 /**
- * Let Vite's dev server read files from nativ's own package.
+ * Let Vite's dev server read files from adaptv's own package.
  *
- * nativ ships modules the app must load at runtime — the router entry, the root
+ * adaptv ships modules the app must load at runtime — the router entry, the root
  * route — and TanStack Start's default client/server entries resolve out of
- * nativ's `node_modules` too, because nativ is the package that depends on Start.
- * When nativ is linked (a workspace, `file:`, or `pnpm link`), all of that lives
+ * adaptv's `node_modules` too, because adaptv is the package that depends on Start.
+ * When adaptv is linked (a workspace, `file:`, or `pnpm link`), all of that lives
  * **outside the app root**, and Vite's `fs.allow` sandbox refuses to serve it.
  *
  * The symptom is brutal to diagnose: `virtual:tanstack-start-client-entry` 404s,
@@ -377,31 +377,31 @@ function nativOpacityCheckPlugin(appRoot: string): PluginOption {
  * app's own workspace root), which then makes the app's generated files unreadable — and
  * only in the cloudflare/workerd SSR environment, whose `fetchModule` honours the
  * allow-list strictly, so every request 500s with "Failed to load url". The client
- * transform hides it. Pushing in `configResolved` keeps the default AND adds nativ's own
+ * transform hides it. Pushing in `configResolved` keeps the default AND adds adaptv's own
  * root. Idempotent so repeated resolves don't duplicate the entry. → offline PR.
  */
 export function addFsAllowRoot(allow: string[], root: string): void {
   if (!allow.includes(root)) allow.push(root)
 }
 
-export function nativFsAllowPlugin(): PluginOption {
+export function adaptvFsAllowPlugin(): PluginOption {
   //the package root — two levels up from src/vite/
   const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
   return {
-    name: "nativ:fs-allow",
+    name: "adaptv:fs-allow",
     configResolved(resolved) {
       addFsAllowRoot(resolved.server.fs.allow, packageRoot)
     },
   }
 }
 
-function nativRouteTreeAliasPlugin(appRoot: string): PluginOption {
+function adaptvRouteTreeAliasPlugin(appRoot: string): PluginOption {
   const routeTree = resolveGeneratedPaths(appRoot).routeTree
   return {
-    name: "nativ:route-tree-alias",
+    name: "adaptv:route-tree-alias",
     enforce: "pre",
     resolveId(source) {
-      if (source === "#nativ-route-tree") return routeTree
+      if (source === "#adaptv-route-tree") return routeTree
       return null
     },
   }
