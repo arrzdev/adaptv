@@ -71,17 +71,21 @@ export async function warmDevServer(
  */
 export function startDevServer(
   appRoot,
-  { args = [], env = {}, onLine } = {},
+  { args = [], env = {}, onLine, host = false } = {},
 ) {
   const local = localBin(appRoot, "vite")
   const cmd = local ?? "npx"
   const pre = local ? [] : ["--yes", "vite"]
+  // `--host` (external mode): bind every interface (0.0.0.0) so a physical device on the
+  // same Wi-Fi can reach the dev server on this machine's LAN IP. Off by default — the
+  // sim/emulator path uses localhost + `adb reverse`, which needs no LAN exposure.
+  const hostArgs = host ? ["--host"] : []
   // `--strictPort`: fail FAST if the dev port is taken instead of silently hopping to
   // the next one. A native run pins the WebViews to one detected URL, so a silent port
   // change would point them at the wrong (or a stranger's) server — better to error
   // clearly (see the EADDRINUSE message below) and let the dev free the port or pass
   // `-- --port <n>`. Appended last so it wins over anything in the passthrough.
-  const viteArgs = [...pre, ...args, "--strictPort"]
+  const viteArgs = [...pre, ...args, ...hostArgs, "--strictPort"]
 
   return new Promise((resolve, reject) => {
     // detached → its own process group, so stop() can kill vite AND its children

@@ -43,7 +43,8 @@ const SUSPEND_DROP_MS = 3000
 /**
  * The generated offline screen, served from the LOCAL origin.
  * ⚠︎ Must match `OFFLINE_PAGE` in `bin/lib/offline-page.mjs`, which generates the file
- * and points Capacitor's `server.errorPath` at it.
+ * and points Capacitor's `server.errorPath` at it. Enforced by
+ * `offline-page-name.test.ts` so the two can't drift.
  */
 const OFFLINE_PAGE = "adaptv-offline.html"
 

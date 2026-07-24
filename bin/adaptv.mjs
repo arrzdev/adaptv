@@ -11,6 +11,8 @@
 //   dev/preview flags:
 //               --target <id>   launch on a specific device/simulator id
 //               --latest        reuse the last device picked for this platform
+//               --host [ip]     (dev only) serve on the LAN IP for a PHYSICAL device — auto
+//                               when the target is a real device; pass an ip to pin it
 //               --force         reinstall even when nothing native changed (dev/preview skip
 //                               the rebuild and just relaunch the installed app otherwise)
 //               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
@@ -42,14 +44,25 @@ import {
   writeCache as writeBuildCache,
 } from "./lib/cache.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
-import { resolveTarget } from "./lib/devices.mjs"
+import {
+  cachedDevice,
+  listTargets,
+  resolveTarget,
+} from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
   patchIosAts,
+  patchIosLocalNetwork,
   patchServerUrl,
 } from "./lib/live-reload.mjs"
+import {
+  acquireDevLock,
+  assertNoActiveDevLock,
+  releaseDevLock,
+  updateDevLock,
+} from "./lib/lock.mjs"
 import {
   ADAPTV_DIR,
   buildWeb,
@@ -58,11 +71,17 @@ import {
   capCmd,
   capRun,
   capSync,
+  explainLaunchFailure,
+  foregroundDevice,
   generateAssets,
   iosEnv,
   isAppInstalled,
+  isAppRunning,
+  isPhysicalTarget,
+  lanIp,
   launchInstalledApp,
   nativeDir,
+  patchNativeIdentity,
   platformEnv,
   relaunchAndroidApp,
 } from "./lib/native.mjs"
@@ -78,7 +97,6 @@ import {
   runLanes,
   runLine,
   since,
-  skip,
   tail,
 } from "./lib/render.mjs"
 
@@ -190,6 +208,25 @@ function reportError(label, err) {
   tail(err?.tail)
 }
 
+/**
+ * Explain a launch failure UNDER the `✖ <platform>` line that runLine already printed —
+ * so there's exactly one ✖, no raw xcodebuild/gradle dump (that's what --verbose is for),
+ * and a recognised cause (iOS signing, an unavailable device, Developer Mode off, …) reads
+ * as an actionable hint. Unknown failures show just their first line.
+ */
+function reportLaunchError(platform, err) {
+  const e = explainLaunchFailure(
+    platform,
+    `${err?.message ?? ""}\n${err?.tail ?? ""}`,
+  )
+  if (e) {
+    line(`      ${e.msg}`)
+    for (const step of e.fix) line(c.dim(`      ${step}`))
+  } else {
+    line(c.dim(`      ${(err?.message ?? String(err)).split("\n")[0]}`))
+  }
+}
+
 /** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/`. */
 async function packageArtifact(
   appRoot,
@@ -292,10 +329,7 @@ function newestIpa(appRoot) {
 async function runLive(appRoot, platforms, opts) {
   const webOnly = platforms.length === 0
   const single = platforms.length === 1
-  const t0 = Date.now()
-  header(
-    `dev ${webOnly ? "web" : single ? platforms[0] : "all"}  ${c.dim("· live reload")}`,
-  )
+  header(`dev ${webOnly ? "web" : single ? platforms[0] : "all"}`)
 
   const verbose = opts.verbose
   const cleanups = [] // revert fns, unwound LIFO on exit
@@ -306,7 +340,10 @@ async function runLive(appRoot, platforms, opts) {
   let nativeFp = null // last-known native fingerprint per platform
   let tearing = false
 
+  let tornDown = false
   const teardown = () => {
+    if (tornDown) return // idempotent — called from SIGINT, the catch, AND the exit hook
+    tornDown = true
     try {
       watcher?.stop()
     } catch {}
@@ -318,12 +355,18 @@ async function runLive(appRoot, platforms, opts) {
     try {
       devServer?.stop()
     } catch {}
+    // Release the single-instance lock last, once the port + adb mapping it names are
+    // actually gone — so a queued second run never reclaims it before this one is clear.
+    try {
+      releaseDevLock(appRoot)
+    } catch {}
   }
   const onSigint = () => {
     if (tearing) return
     tearing = true
+    // Quiet teardown — no implementation chatter. It reverts the capacitor.config server
+    // block, the iOS ATS/Local-Network exceptions, and the adb reverse, then exits.
     line("")
-    log.info("stopping — reverting live-reload config…")
     teardown()
     process.exit(0)
   }
@@ -334,11 +377,28 @@ async function runLive(appRoot, platforms, opts) {
   process.on("SIGINT", onSigint)
   process.on("SIGTERM", onSigint)
   process.on("SIGHUP", onSigint)
+  // Safety net: whatever ends this process — Ctrl-C at the picker, a thrown error, a plain
+  // exit — run the (idempotent, sync) teardown so the dev server, adb mapping, config
+  // patches and lock never leak. onSigint/catch also call it; the guard makes that a no-op.
+  process.on("exit", () => {
+    try {
+      teardown()
+    } catch {}
+  })
 
   const envs = {}
   const envFor = (p) => {
     if (!envs[p]) envs[p] = platformEnv(p)
     return envs[p]
+  }
+
+  // Refuse a second concurrent dev run BEFORE touching anything (ports, config, adb) — and
+  // show it as a plain message, not a "run failed" stack. A stale lock auto-reclaims.
+  try {
+    acquireDevLock(appRoot)
+  } catch (err) {
+    log.error(err.message)
+    process.exit(1)
   }
 
   try {
@@ -370,27 +430,26 @@ async function runLive(appRoot, platforms, opts) {
         warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
         prepared.add(platform)
       }
-      if (single) {
+      // Show a per-platform prepare step ONLY on a first run — when the native project
+      // doesn't exist yet (`cap add` + CocoaPods is slow and worth watching). On later runs
+      // prepare is a sub-10ms no-op, so do the work silently rather than print a
+      // "✓ prepare 5ms" line that says nothing. (First-run prepares are rare, so doing them
+      // sequentially instead of concurrently costs nothing in practice.)
+      for (const platform of platforms) {
+        const fresh = !existsSync(nativeDir(appRoot, platform))
         try {
-          await runLine(
-            `prepare ${platforms[0]}`,
-            (r) => prepareOne(platforms[0], r),
-            { verbose },
-          )
+          if (fresh) {
+            await runLine(
+              `prepare ${platform}`,
+              (r) => prepareOne(platform, r),
+              { verbose },
+            )
+          } else {
+            await prepareOne(platform, () => {})
+          }
         } catch (err) {
-          reportError(`prepare ${platforms[0]}`, err)
+          reportError(`prepare ${platform}`, err)
         }
-      } else {
-        const res = await runLanes(
-          platforms.map((p) => ({
-            label: `prepare ${p}`,
-            run: (r) => prepareOne(p, r),
-          })),
-          { verbose },
-        )
-        res.forEach((r, i) => {
-          if (!r.ok) reportError(`prepare ${platforms[i]}`, r.error)
-        })
       }
       for (const w of warnings) log.warn(w)
     }
@@ -406,26 +465,45 @@ async function runLive(appRoot, platforms, opts) {
       return
     }
 
-    // resolve device targets (sequential pickers, up front).
-    const targets = {}
-    for (const p of ready) {
-      targets[p] = await resolveTarget(appRoot, p, envFor(p), {
-        target: opts.target,
-        latest: opts.latest,
-      })
+    // Decide whether the dev server must be reachable over the LAN (bind 0.0.0.0) BEFORE
+    // asking which device — so a broken app surfaces on the `dev server` line without first
+    // forcing a device pick. The LAN is needed when the run COULD land on a physical device:
+    // --host, a physical --target, a cached physical (--latest), or a physical device sitting
+    // in the picker's list. Over-binding when a simulator is ultimately picked is harmless
+    // (localhost still works); a false negative would break a physical launch.
+    const forcedHost = opts.host // true | "<ip>" | undefined
+    let externalPossible = !!forcedHost
+    if (!webOnly && !externalPossible) {
+      for (const p of ready) {
+        const env = envFor(p)
+        const physicalInPlay = opts.target
+          ? isPhysicalTarget(p, opts.target, env)
+          : opts.latest
+            ? isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
+            : (await listTargets(appRoot, p, env)).some((t) =>
+                isPhysicalTarget(p, t.id, env),
+              )
+        if (physicalInPlay) {
+          externalPossible = true
+          break
+        }
+      }
     }
 
-    // start the Vite dev server and detect the URL it bound.
+    // Start the Vite dev server FIRST — an app/config problem shows up here, before the dev
+    // has to pick a device. Bind for the LAN when external is even possible; a
+    // simulator/emulator-only run stays on localhost.
     await runLine(
-      "dev server",
+      "server",
       async (report) => {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
           // native WebViews need a client SPA with no service worker (a SW caches
           // the app inside the WebView and blocks hot reload). adaptv's plugin reads
-          // this and forces render:spa + sw:false for the dev server. `run web` (no
+          // this and forces render:spa + sw:false for the dev server. `dev web` (no
           // native surface) keeps the app's normal web config.
           env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
+          host: externalPossible,
           onLine: (l) => onDevLine?.(l),
         })
         // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
@@ -447,19 +525,62 @@ async function runLive(appRoot, platforms, opts) {
             )
           }
         }
-        report(devServer.localUrl)
         return devServer.localUrl
       },
       { verbose },
     )
-    // Both native surfaces reach the dev server over `localhost`: the iOS Simulator
-    // shares the host loopback directly, and the Android emulator is bridged with
-    // `adb reverse` (below). The host's LAN IP does NOT work for the Android emulator
-    // (its NAT can't route back to the host's own LAN address), so localhost is the
-    // one address both can use. (Real physical devices — a v2 concern — need the LAN
-    // IP + `--host`; not handled here.)
+
+    // Now resolve the device — AFTER the server is confirmed up, so the picker never appears
+    // for a run that was going to fail at the dev server anyway.
+    const targets = {}
+    for (const p of ready) {
+      targets[p] = await resolveTarget(appRoot, p, envFor(p), {
+        target: opts.target,
+        latest: opts.latest,
+      })
+    }
+
+    // `capacitor.config`'s `server.url` is a single value shared by every attached platform,
+    // so the mode is per-RUN: external (the machine's LAN IP) if the PICKED device is
+    // physical or --host forced it, else localhost (sim shares loopback; emulator uses
+    // `adb reverse`). Vite is already bound for the LAN if it was possible, so only the URL
+    // is decided here.
+    const anyPhysical =
+      !webOnly &&
+      ready.some((p) => isPhysicalTarget(p, targets[p].id, envFor(p)))
+    const external = !!forcedHost || anyPhysical
+    // The Android emulator can't reach a LAN IP (its NAT can't route back to the host's own
+    // LAN address), so it's fundamentally incompatible with external mode.
+    if (
+      external &&
+      ready.includes("android") &&
+      !isPhysicalTarget("android", targets.android.id, envFor("android"))
+    ) {
+      throw new Error(
+        "the Android emulator can't reach an external dev server (its NAT can't route to your LAN IP). " +
+          "Use a physical Android device, or run android without `--host` (and not alongside a physical iOS device).",
+      )
+    }
+    let lanHost = null
+    if (external) {
+      lanHost = typeof forcedHost === "string" ? forcedHost : lanIp()
+      if (!lanHost) {
+        throw new Error(
+          "couldn't detect a LAN IP for external mode — pass one explicitly: " +
+            "`adaptv dev … --host <ip>` (find it with `ipconfig getifaddr en0`).",
+        )
+      }
+    }
     const port = devServer.port
-    const url = `http://localhost:${port}`
+    const url = external
+      ? `http://${lanHost}:${port}`
+      : `http://localhost:${port}`
+    // The dev-server line shows localhost (the binding); a physical device actually loads
+    // over the LAN, so surface that address once — it's the only place it appears now.
+    if (external) log.info(`device loads from ${c.bold(url)}`)
+    // Record the bound port + url in the lock, so a second `dev` (or a `preview`/`build`)
+    // can name exactly what's holding the port in its refusal message.
+    updateDevLock(appRoot, { port, url })
 
     if (!webOnly) {
       // point the native projects at the dev server, and remember how to undo it.
@@ -471,7 +592,23 @@ async function runLive(appRoot, platforms, opts) {
       if (ready.includes("ios")) {
         const revert = patchIosAts(appRoot)
         if (revert) cleanups.push(revert)
+        // External mode reaches the dev server over the LAN, which iOS 14+ gates behind a
+        // Local Network permission — declare it so the OS prompts instead of silently
+        // blocking. Reverted on teardown, like the ATS exception.
+        if (external) {
+          const revertLN = patchIosLocalNetwork(appRoot)
+          if (revertLN) cleanups.push(revertLN)
+        }
       }
+      // dev shares the `.dev` install identity with `preview` (separate icon + storage
+      // sandbox, coexists with a release build). Patch it AFTER the dev server's own
+      // capacitor.config.json stamp (which writes the base id), and before sync/build reads
+      // the native project. Idempotent, so a first-run `cap add` created with the base id is
+      // corrected here too.
+      for (const p of ready) {
+        patchNativeIdentity(appRoot, config, p, { dev: true })
+      }
+
       // sync (copies the patched config) + launch each platform against the server.
       //
       // …unless nothing NATIVE changed. In live-reload the installed app is only a shell
@@ -484,6 +621,9 @@ async function runLive(appRoot, platforms, opts) {
       runCache.run ??= {}
       const cacheKey = (platform) =>
         `${platform}:${targets[platform]?.id ?? "default"}`
+      // Platforms that actually got onto a device — so a run where every native launch
+      // failed (e.g. iOS signing) exits instead of pretending to "watch" nothing.
+      const launched = new Set()
 
       const launchOne = async (
         platform,
@@ -501,13 +641,17 @@ async function runLive(appRoot, platforms, opts) {
           isAppInstalled(appRoot, platform, target.id, env)
 
         if (cached) {
-          // Android first needs the route back to the host — no `cap run` will set it.
-          if (platform === "android") {
-            report("linking dev server")
+          // Android emulator first needs the localhost route back to the host — no `cap
+          // run` will set it. In external mode a physical device reaches the LAN IP
+          // directly, so there's no `adb reverse` to (re-)assert.
+          if (platform === "android" && !external) {
+            report("linking server")
             cleanups.push(androidReverse(port, env))
           }
-          report(`launch → ${target.name} · cached`)
+          report("launching device")
           if (launchInstalledApp(appRoot, platform, target.id, env)) {
+            foregroundDevice(platform, target.id, env)
+            launched.add(platform)
             return `${target.name} · cached`
           }
           // couldn't launch it after all — fall through and rebuild.
@@ -515,18 +659,28 @@ async function runLive(appRoot, platforms, opts) {
 
         report("sync")
         await capSync(appRoot, platform, env, { report })
-        report(`launch → ${target.name}`)
+        // Was the app already up? If so, it survives the build (capRun no longer kills it)
+        // and only cap run's re-front touched it, so we relaunch the fresh install once.
+        const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+        report("launching device")
         await capRun(appRoot, platform, target.id, env, { report })
-        if (platform === "android") {
+        if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
           // no JS to recover). Re-assert the reverse AFTER cap run, then relaunch the
-          // app so its WebView loads with a working route. Must be post-launch — doing
-          // it before cap run is wiped by cap run itself.
-          report("linking dev server")
+          // app so its WebView loads with a working route. External mode reaches the LAN IP
+          // directly (no reverse), so none of this applies.
+          report("linking server")
           cleanups.push(androidReverse(port, env))
-          relaunchAndroidApp(appRoot, env)
+          relaunchAndroidApp(appRoot, env, target.id)
+        } else if (platform === "ios" && wasRunning) {
+          // The old process kept running through the build; load the fresh install now
+          // (one relaunch, at the end — not a kill-then-wait-15s at the start).
+          launchInstalledApp(appRoot, platform, target.id, env, {
+            restart: true,
+          })
         }
+        foregroundDevice(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
         runCache.run[key] = {
@@ -534,6 +688,7 @@ async function runLive(appRoot, platforms, opts) {
           fp: nativeFingerprint(appRoot, platform),
         }
         writeBuildCache(appRoot, runCache)
+        launched.add(platform)
         return `${target.name}`
       }
       // Hoisted so the `r` key can replay exactly the same launch lines mid-run.
@@ -543,10 +698,10 @@ async function runLive(appRoot, platforms, opts) {
             await runLine(
               platforms[0],
               (r) => launchOne(platforms[0], r, { force }),
-              { verbose },
+              { verbose, idle: "building app" },
             )
           } catch (err) {
-            reportError(platforms[0], err)
+            reportLaunchError(platforms[0], err)
           }
           return
         }
@@ -554,27 +709,48 @@ async function runLive(appRoot, platforms, opts) {
           ready.map((p) => ({
             label: p,
             run: (r) => launchOne(p, r, { force }),
+            idle: "building app",
           })),
           { verbose },
         )
         res.forEach((r, i) => {
-          if (!r.ok) reportError(ready[i], r.error)
+          if (!r.ok) reportLaunchError(ready[i], r.error)
         })
       }
       await launchAll({ force: opts.force })
       nativeFp = snapshotNativeFp(appRoot, ready)
+
+      // Nothing made it onto a device? Then there's nothing to hot-reload — don't pretend
+      // to "watch". The dev server did come up, but `dev <platform>` is about the device,
+      // so surface the failure (e.g. iOS signing) and exit non-zero. Fix it and re-run.
+      if (launched.size === 0) {
+        teardown()
+        process.off("SIGINT", onSigint)
+        process.off("SIGTERM", onSigint)
+        process.off("SIGHUP", onSigint)
+        const what = `dev ${single ? platforms[0] : "all"}`
+        footer(
+          verbose
+            ? c.red(`✖ ${what} failed`)
+            : `${c.red(`✖ ${what} failed`)}${c.dim(" · run with --verbose for the full output")}`,
+        )
+        process.exitCode = 1
+        return
+      }
     }
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     line("")
     watcher = liveWatcher()
 
-    // `r` reinstalls on demand — always, not only after a change is detected. A device
+    // `b` reinstalls on demand — always, not only after a change is detected. A device
     // in a state you don't trust is reason enough, and having to kill the run to get a
-    // clean install is exactly the friction this removes.
+    // clean install is exactly the friction this removes. `r` is the cheap sibling: it
+    // just reloads the running app's JS (no reinstall).
     let rebuilding = false
+    let reloading = false
     const rebuild = async () => {
-      if (rebuilding || webOnly || !launchAll) return
+      if (rebuilding || reloading || webOnly || !launchAll) return
       rebuilding = true
       watcher.stop() // clears the watch row; cursor stays on it
       // Walk back over the blank separator + one row per platform so the SETTLED
@@ -587,7 +763,57 @@ async function runLive(appRoot, platforms, opts) {
       watcher = liveWatcher() // fresh line, which also clears any pending notice
       rebuilding = false
     }
-    cleanups.push(onKeys({ onRebuild: rebuild, onQuit: onSigint }))
+
+    // `r` = reload: relaunch the installed app so its WebView reconnects to the dev
+    // server. Instant next to a native rebuild (no sync/gradle/xcode), and the fix for a
+    // wedged JS bundle — a fresh document from the dev server, no reinstall. Distinct from
+    // `R`, which reinstalls the binary for a genuine native change.
+    const reloadOne = (platform, report) => {
+      const target = targets[platform]
+      report("reloading device")
+      const ok = launchInstalledApp(
+        appRoot,
+        platform,
+        target.id,
+        envFor(platform),
+        { restart: true },
+      )
+      if (!ok)
+        throw new Error(
+          "couldn't relaunch the app — is it still installed? press b to rebuild.",
+        )
+      foregroundDevice(platform, target.id, envFor(platform))
+      return `${target.name} · reloaded`
+    }
+    const reload = async () => {
+      if (reloading || rebuilding || webOnly || ready.length === 0) return
+      reloading = true
+      watcher.stop()
+      if (!rewindLines(1 + ready.length)) line("")
+      if (single) {
+        try {
+          await runLine(ready[0], (r) => reloadOne(ready[0], r), {
+            verbose,
+          })
+        } catch (err) {
+          reportError(ready[0], err)
+        }
+      } else {
+        const res = await runLanes(
+          ready.map((p) => ({ label: p, run: (r) => reloadOne(p, r) })),
+          { verbose },
+        )
+        res.forEach((r, i) => {
+          if (!r.ok) reportError(ready[i], r.error)
+        })
+      }
+      line("")
+      watcher = liveWatcher()
+      reloading = false
+    }
+    cleanups.push(
+      onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
+    )
 
     // Native changes can't hot-reload: a new plugin, an edited Info.plist or
     // AndroidManifest, or hand-written Swift/Kotlin all live in the BINARY, so the
@@ -597,7 +823,7 @@ async function runLive(appRoot, platforms, opts) {
     // behind the dev's back: a reinstall costs ~15s and drops app state, so it's their call.
     if (!webOnly && ready.length > 0) {
       const poll = setInterval(() => {
-        if (rebuilding) return
+        if (rebuilding || reloading) return
         const now = snapshotNativeFp(appRoot, ready)
         const changed = ready.filter((p) => now[p] !== nativeFp?.[p])
         if (changed.length === 0) return
@@ -641,6 +867,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const single = platforms.length === 1
   header(`${verb} ${single ? platforms[0] : "all"}`)
 
+  // A live `dev` run owns capacitor.config.json (its server.url etc.); regenerating it
+  // here would break that run. Refuse until it's stopped.
+  assertNoActiveDevLock(appRoot, kind)
+
   const t0 = Date.now()
   const config = await loadConfig(appRoot)
   // Fresh capacitor.config.json FIRST — a release build must never inherit dev fields
@@ -667,7 +897,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const finish = (hint) => {
     flushWarnings()
     // per-platform outcome is on the step/lane lines; footer is just the total.
-    footer(`${hint}  ${c.dim(`· ${since(t0)} total`)}`)
+    footer(`${hint} ${c.dim(`· ${since(t0)}`)}`)
     if (!platforms.every((p) => p in done)) process.exitCode = 1
   }
 
@@ -680,10 +910,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   let fp = fingerprint(appRoot)
 
   // 1. barrier: build the SPA once (shared by every platform). If it fails, abort —
-  //    never fall through and ship a stale bundle.
-  if (!opts.force && distReady && buildCache.web === fp) {
-    skip("web build")
-  } else {
+  //    never fall through and ship a stale bundle. A CACHED build is SILENT — like `dev`
+  //    never prints the web bundle build when it's already there — so the asset/config
+  //    warnings from prepare stay the first thing under the header, not a cache line on top.
+  if (opts.force || !distReady || buildCache.web !== fp) {
     try {
       await runLine("web build", (r) => buildWeb(appRoot, { report: r }), {
         verbose,
@@ -706,6 +936,13 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const prepared = new Set()
   const prepareOne = async (platform, report) => {
     await capAddIfMissing(appRoot, platform, envFor(platform), { report })
+    // `preview` shares the `.dev` install identity with `dev` (own icon + storage sandbox,
+    // coexists with a release build); `build` uses the release id. Patch after the web
+    // build's capacitor.config.json stamp, before sync. Idempotent → also flips a project
+    // back to the release id when this is a `build`.
+    patchNativeIdentity(appRoot, config, platform, {
+      dev: kind === "preview",
+    })
     const res = await generateAssets(appRoot, config, [platform], {
       report,
     })
@@ -727,27 +964,26 @@ async function pipeline(kind, appRoot, platforms, opts) {
     }
     prepared.add(platform)
   }
-  if (single) {
+  // Show a per-platform prepare step ONLY on a first run — when the native project doesn't
+  // exist yet (`cap add` + CocoaPods is slow and worth watching). On later runs prepare is a
+  // sub-10ms no-op, so do the work silently rather than print a "✓ prepare 5ms" line that
+  // says nothing. Sequential (like `dev`): first-run prepares are rare, so it costs nothing,
+  // and it keeps asset/config warnings in order instead of interleaved under live lanes.
+  for (const platform of platforms) {
+    const fresh = !existsSync(nativeDir(appRoot, platform))
     try {
-      await runLine(
-        `prepare ${platforms[0]}`,
-        (r) => prepareOne(platforms[0], r),
-        { verbose },
-      )
+      if (fresh) {
+        await runLine(
+          `prepare ${platform}`,
+          (r) => prepareOne(platform, r),
+          { verbose },
+        )
+      } else {
+        await prepareOne(platform, () => {})
+      }
     } catch (err) {
-      reportError(`prepare ${platforms[0]}`, err)
+      reportError(`prepare ${platform}`, err)
     }
-  } else {
-    const res = await runLanes(
-      platforms.map((p) => ({
-        label: `prepare ${p}`,
-        run: (r) => prepareOne(p, r),
-      })),
-      { verbose },
-    )
-    res.forEach((r, i) => {
-      if (!r.ok) reportError(`prepare ${platforms[i]}`, r.error)
-    })
   }
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()
@@ -771,28 +1007,66 @@ async function pipeline(kind, appRoot, platforms, opts) {
   //    one live line per platform, run concurrently. Sync is skipped when this exact
   //    bundle was already synced to the platform (cache hit).
   buildCache.sync ??= {}
-  const syncNeeded = (p) => opts.force || buildCache.sync[p] !== fp
-  // the device's "· latest" tag rides on the launch label rather than its own line.
-  const launchLabel = (t) =>
-    `launch → ${t.name}${t.source === "latest" ? c.dim(" · latest") : ""}`
+  // The sync key folds in the install identity: `preview` (`.dev`) and `build` (release id)
+  // produce a different capacitor.config.json, so a `preview`↔`build` switch must re-sync
+  // even though the web fingerprint is unchanged (it deliberately skips capacitor.config.json).
+  const syncTag = `${fp}:${kind === "preview" ? "dev" : "release"}`
+  const syncNeeded = (p) => opts.force || buildCache.sync[p] !== syncTag
+  // `preview` run cache: when NOTHING that lands on the device changed since the last
+  // preview on it — the web bundle+identity (`syncTag`) AND the native project
+  // (`nativeFingerprint`: config/plugins/pbxproj; it skips the synced `public/`, which
+  // `syncTag` already covers) — skip the whole build+install and just relaunch (~1s vs a
+  // full `cap run`). Keyed under a `preview:` prefix so it never crosses dev's run cache.
+  buildCache.run ??= {}
+  // `cap run` re-syncs and touches native files, so — like dev's run cache — this id must
+  // be STORED after the build; a next run's pre-build hash then matches when nothing changed.
+  const runIdOf = (platform) =>
+    `${syncTag}:${nativeFingerprint(appRoot, platform)}`
+  const previewLaunch = async (platform, target, report) => {
+    const env = envFor(platform)
+    const key = `preview:${platform}:${target.id}`
+    const cached =
+      !opts.force &&
+      buildCache.run[key]?.id === runIdOf(platform) &&
+      isAppInstalled(appRoot, platform, target.id, env)
+    if (cached) {
+      // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
+      // (e.g. a prior `dev` session's offline screen) must not linger on screen.
+      report("relaunching device")
+      launchInstalledApp(appRoot, platform, target.id, env, {
+        restart: true,
+      })
+      foregroundDevice(platform, target.id, env)
+      done[platform] = `launched on ${target.name}`
+      return `${target.name} · cached`
+    }
+    report("launching device")
+    // `cap run` installs + activates, but only FOREGROUNDS an already-running app — its old
+    // WebView (e.g. the dev offline screen) would stay. Restart it after the build so the
+    // freshly-installed bundle is what's shown.
+    const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+    await capRun(appRoot, platform, target.id, env, { report })
+    if (wasRunning) {
+      launchInstalledApp(appRoot, platform, target.id, env, {
+        restart: true,
+      })
+    }
+    foregroundDevice(platform, target.id, env)
+    buildCache.run[key] = { id: runIdOf(platform) }
+    done[platform] = `launched on ${target.name}`
+    return target.name
+  }
 
   const tailOne = async (platform, report) => {
     if (syncNeeded(platform)) {
       report("sync")
       await capSync(appRoot, platform, envFor(platform), { report })
-      buildCache.sync[platform] = fp
+      buildCache.sync[platform] = syncTag
     } else {
       report("sync · cached")
     }
     if (kind === "preview") {
-      const target = ctx.targets[platform]
-      const tag = target.source === "latest" ? " · latest" : ""
-      report(`launch → ${target.name}${tag}`)
-      await capRun(appRoot, platform, target.id, envFor(platform), {
-        report,
-      })
-      done[platform] = `launched on ${target.name}${tag}`
-      return done[platform]
+      return previewLaunch(platform, ctx.targets[platform], report)
     }
     report("package")
     done[platform] = await packageArtifact(
@@ -815,24 +1089,25 @@ async function pipeline(kind, appRoot, platforms, opts) {
           (r) => capSync(appRoot, p, envFor(p), { report: r }),
           { verbose },
         )
-        buildCache.sync[p] = fp
-      } else {
-        skip("sync")
+        buildCache.sync[p] = syncTag
       }
+      // a cached sync is silent (like the `all` lanes and `dev`) — no "· sync cached" line.
       if (kind === "preview") {
         const target = ctx.targets[p]
+        // Label is the platform (e.g. `ios`); the device name settles as the detail —
+        // same shape as `dev` and the `all` lanes, no "launch →" arrow.
         await runLine(
-          launchLabel(target),
-          (r) => capRun(appRoot, p, target.id, envFor(p), { report: r }),
-          { verbose },
+          p,
+          (r) => previewLaunch(p, target, r),
+          // cap streams nothing during xcodebuild/gradle — fall back to "building app".
+          { verbose, idle: "building app" },
         )
-        done[p] = `launched on ${target.name}`
       } else {
         done[p] = await runLine(
           "package",
           (r) =>
             packageArtifact(appRoot, config, p, envFor(p), ctx.output, r),
-          { verbose },
+          { verbose, idle: "building app" },
         )
       }
     } catch (err) {
@@ -840,7 +1115,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
     }
   } else {
     const res = await runLanes(
-      ready.map((p) => ({ label: p, run: (r) => tailOne(p, r) })),
+      ready.map((p) => ({
+        label: p,
+        run: (r) => tailOne(p, r),
+        idle: "building app",
+      })),
       { verbose },
     )
     res.forEach((r, i) => {
@@ -850,11 +1129,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
   writeBuildCache(appRoot, buildCache)
 
   const ok = platforms.every((p) => p in done)
+  // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an
+  // all-green phrase. Failure stays red.
   finish(
     ok
-      ? kind === "preview"
-        ? c.green("✓ launched")
-        : c.green("✓ artifacts ready")
+      ? `${c.green("✓")} ${c.bold(kind === "preview" ? "launched" : "artifacts ready")}`
       : c.red("✖ one or more platforms failed"),
   )
 }
@@ -1030,7 +1309,7 @@ function usage() {
   line(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
 
 ${c.bold("Usage")}
-  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose] [-- <vite args>]
+  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
   adaptv preview <ios|android|all>      [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
   adaptv doctor
@@ -1041,8 +1320,10 @@ ${c.dim("`adaptv dev all -- --port 4000`.")}
 ${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
 ${c.dim("build = static .ipa/.apk artifacts.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
-${c.dim("relaunch when nothing native changed; --force reinstalls anyway. Native projects")}
-${c.dim("live in .adaptv/ (git-ignored). Toolchain env auto-resolved (ANDROID_HOME etc).")}`)
+${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
+${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
+${c.dim("automatically). --host <ip> only overrides that IP if detection guesses wrong (VPN /")}
+${c.dim("multiple adapters). Native projects live in .adaptv/. Toolchain env auto-resolved.")}`)
 }
 
 function parseFlags(argv) {
@@ -1058,7 +1339,14 @@ function parseFlags(argv) {
     }
     if (a === "--target") flags.target = argv[++i]
     else if (a === "--output" || a === "-o") flags.output = argv[++i]
-    else if (a.startsWith("--")) flags[a.slice(2)] = true
+    else if (a === "--host") {
+      // `--host` forces external (LAN) mode; an optional IP pins the interface
+      // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
+      const next = argv[i + 1]
+      if (next && /^\d{1,3}(\.\d{1,3}){3}$/.test(next))
+        flags.host = argv[++i]
+      else flags.host = true
+    } else if (a.startsWith("--")) flags[a.slice(2)] = true
     else rest.push(a)
   }
   flags.viteArgs = passthrough
@@ -1101,6 +1389,7 @@ async function main() {
         verbose: !!flags.verbose,
         force: !!flags.force,
         viteArgs: flags.viteArgs,
+        host: flags.host, // true | "<ip>" | undefined — external (LAN) mode
       })
     }
 
