@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
-import { homedir } from "node:os"
+import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { exec } from "./exec.mjs"
 
@@ -510,15 +510,35 @@ export async function capRun(
   { report } = {},
 ) {
   const { cmd, pre } = capCmd(appRoot)
-  // Force a clean relaunch: kill any running instance first, so the WebView loads
-  // FRESH from the (now-live) dev server. Without this a still-running app can be
-  // re-fronted with its stale page intact — e.g. an iOS WebView left black because it
-  // launched earlier with no server keeps showing black instead of reloading. `cap
-  // run` reinstall + launch doesn't reliably force this, so adaptv does it explicitly.
-  terminateApp(appRoot, platform, target, env)
-  const args = [...pre, "run", platform]
+  // `--no-sync`: `cap run` syncs → builds → deploys, but the caller ALWAYS runs `cap sync`
+  // first (and caches it), so letting run sync again just copies the web assets + re-updates
+  // plugins a second time — duplicate work AND a duplicate "updating plugins" line. Skip it;
+  // build + deploy only.
+  //
+  // Do NOT terminate the app before building — that would kill it for the whole build (the
+  // dev asked to rebuild, not to stare at a home screen for 15s). Build + install with the
+  // current app still running; the caller relaunches ONCE at the end (only if it was
+  // actually running) to load the fresh install.
+  const args = [...pre, "run", platform, "--no-sync"]
   if (target) args.push("--target", target)
   await run(cmd, args, { cwd: appRoot, env, report })
+}
+
+/**
+ * Bring the iOS Simulator to the foreground so the (re)launched app is actually visible
+ * without the dev alt-tabbing to find it. iOS only, and deliberately so: iOS builds already
+ * require macOS, so `open -a Simulator` is a safe, permission-free standard command there.
+ *
+ * The Android emulator is left alone on purpose. It has no `.app` to `open`, and neither adb
+ * nor the emulator expose a "raise window" command — the only options are OS-specific
+ * window-manager hacks (AppleScript on macOS, wmctrl on Linux, …) that need extra
+ * permissions, which a framework has no business doing and which don't exist uniformly
+ * across the Linux/Windows hosts where Android dev also runs. The app is still fronted
+ * *inside* the emulator by the launch; raising the emulator window stays the dev's own.
+ */
+export function foregroundDevice(platform, target, env) {
+  if (isPhysicalTarget(platform, target, env)) return
+  if (platform === "ios") spawnSync("open", ["-a", "Simulator"])
 }
 
 /**
@@ -536,6 +556,148 @@ export function androidDevices(env) {
     .map((l) => l.trim().split(/\s+/))
     .filter((p) => p.length >= 2 && p[1] === "device")
     .map((p) => p[0])
+}
+
+// A canonical simulator UUID: 8-4-4-4-12 hex. Physical iOS device udids don't match
+// (they're 40-hex or the newer 8-16 `00008030-001A…` shape).
+const IOS_SIM_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Is the resolved target a PHYSICAL device (vs a simulator/emulator)? This decides the
+ * dev-server networking: a sim/emulator reaches the host over localhost (shared loopback /
+ * `adb reverse`), a physical device needs the host's LAN IP.
+ *
+ * iOS: simulators have canonical UUID ids; anything else is a real device.
+ * Android: booted emulators are `emulator-NNNN`, and an AVD *name* (e.g. `Pixel_10`) is a
+ * not-yet-booted emulator — neither is a real device. A physical device is a serial that
+ * shows up in `adb devices` and isn't `emulator-`-prefixed.
+ */
+export function isPhysicalTarget(platform, id, env) {
+  if (!id) return false
+  if (platform === "ios") return !IOS_SIM_UUID.test(id)
+  return androidDevices(env).includes(id) && !id.startsWith("emulator-")
+}
+
+// Virtual bridges / VPN / link-local interfaces that aren't a real LAN address.
+const SKIP_IFACE =
+  /^(lo|utun|tun|tap|ppp|docker|veth|vboxnet|bridge|llw|awdl|gif|stf|ap\d)/i
+
+/**
+ * Best-effort LAN IPv4 for external-device live-reload — the address a phone on the same
+ * Wi-Fi uses to reach this machine. Prefers `en0` (typical Wi-Fi/Ethernet on macOS), then
+ * other `enN`, skipping loopback, link-local (169.254.x), VPN and container bridges.
+ * Returns null if nothing routable is found (caller errors with guidance).
+ */
+export function lanIp() {
+  const rank = (name) => {
+    if (name === "en0") return 0
+    if (/^en\d+$/.test(name)) return 1 + Number(name.slice(2))
+    return 100
+  }
+  const candidates = []
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    if (SKIP_IFACE.test(name)) continue
+    for (const a of addrs ?? []) {
+      const fam = a.family === "IPv4" || a.family === 4
+      if (!fam || a.internal) continue
+      if (a.address.startsWith("169.254.")) continue
+      candidates.push({ name, address: a.address })
+    }
+  }
+  candidates.sort((a, b) => rank(a.name) - rank(b.name))
+  return candidates[0]?.address ?? null
+}
+
+/**
+ * Turn a known `cap run` / xcodebuild / gradle failure into actionable adaptv guidance — a
+ * friendly one-liner plus fix steps — instead of a wall of raw build log. `text` is the
+ * combined error message + captured output. Returns `{ msg, fix: [...] }`, or null when we
+ * don't recognise it (the caller then falls back to the raw output). Pure + patterns-only,
+ * so it's unit-tested without a device.
+ */
+export function explainLaunchFailure(platform, text = "") {
+  const t = String(text)
+
+  // Device the run targeted isn't in the current list (disconnected / locked / a stale
+  // saved pick / an id that changed). Platform-agnostic.
+  const invalid = t.match(/Invalid target ID:\s*([^\s.]+)/i)
+  if (invalid)
+    return {
+      msg: `device "${invalid[1]}" isn't available right now`,
+      fix: [
+        "It's disconnected, locked, or a stale saved pick.",
+        `Reconnect + unlock it, or run \`adaptv dev ${platform}\` to pick from the current list.`,
+      ],
+    }
+
+  if (platform === "ios") {
+    if (
+      /requires a development team|Signing for .* requires|No signing certificate|Code Sign(ing)? Error/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "iOS code signing isn't set up for a device build",
+        fix: [
+          "open .adaptv/ios/App/App.xcworkspace → App target → Signing & Capabilities → pick your Team",
+          "(add your Apple ID in Xcode → Settings → Accounts — a free one works)",
+        ],
+      }
+    if (/Developer Mode|enable-developer-mode|DVTDeviceOperation/i.test(t))
+      return {
+        msg: "Developer Mode is off on the device",
+        fix: [
+          "On the iPhone: Settings → Privacy & Security → Developer Mode → On, then restart.",
+        ],
+      }
+    if (/device is locked|please unlock|is locked/i.test(t))
+      return {
+        msg: "the device is locked",
+        fix: ["Unlock it and keep it unlocked while installing."],
+      }
+    if (
+      /Unable to install|failed to install|not eligible|ineligible/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "couldn't install on the device",
+        fix: [
+          "Unlock it and tap 'Trust' on the phone; after install, trust the cert under Settings → General → VPN & Device Management.",
+        ],
+      }
+  }
+
+  if (platform === "android") {
+    if (
+      /signatures do not match|INSTALL_FAILED_UPDATE_INCOMPATIBLE|INSTALL_FAILED_VERSION_DOWNGRADE/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "Android install blocked by a signature/version conflict",
+        fix: ["Uninstall the app from the device, then re-run."],
+      }
+    if (/INSTALL_FAILED_INSUFFICIENT_STORAGE/i.test(t))
+      return {
+        msg: "the device is out of storage",
+        fix: ["Free some space on the device and re-run."],
+      }
+    if (
+      /no devices.{0,3}emulators found|no connected devices|device offline/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "no Android device or emulator is reachable",
+        fix: [
+          "Boot an emulator or connect a device (USB debugging on), then re-run.",
+        ],
+      }
+  }
+
+  return null
 }
 
 /**
@@ -641,15 +803,23 @@ export function isAppRunning(appRoot, platform, target, env) {
  * server. The offline screen + reconnect watchdog now cover that case, and `r` remains
  * the explicit escape hatch for a genuinely wedged app.)
  */
-export function launchInstalledApp(appRoot, platform, target, env) {
+export function launchInstalledApp(
+  appRoot,
+  platform,
+  target,
+  env,
+  { restart = false } = {},
+) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   const running = isAppRunning(appRoot, platform, target, env)
+  // `restart` forces a fresh start of an already-running app, so its WebView reloads
+  // from the dev server — the cheap `r` reload (no native rebuild).
   if (platform === "ios") {
     if (!target) return false
-    // `simctl launch` on a running app activates it in place; only a stopped app needs
-    // a clean start, and terminating one that isn't running is a no-op anyway.
-    if (!running)
+    // `simctl launch` on a running app activates it in place; only a stopped app (or a
+    // requested restart) needs a terminate first. Terminating a stopped app is a no-op.
+    if (restart || !running)
       spawnSync("xcrun", ["simctl", "terminate", target, appId])
     const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
       encoding: "utf8",
@@ -660,8 +830,8 @@ export function launchInstalledApp(appRoot, platform, target, env) {
     const serial = androidSerialForTarget(target, env)
     if (!serial) return false
     // Same rule: the LAUNCHER intent alone re-fronts an existing task without
-    // restarting it. force-stop ONLY when there's nothing live to preserve.
-    if (!running) {
+    // restarting it. force-stop when there's nothing live to preserve, or on `restart`.
+    if (restart || !running) {
       spawnSync(
         "adb",
         ["-s", serial, "shell", "am", "force-stop", appId],
@@ -703,19 +873,83 @@ function readAppId(appRoot) {
   }
 }
 
-/** Best-effort kill of the app so the next launch is a clean, fresh load. */
-function terminateApp(appRoot, platform, target, env) {
-  const appId = readAppId(appRoot)
-  if (!appId) return
-  if (platform === "ios" && target) {
-    spawnSync("xcrun", ["simctl", "terminate", target, appId])
-  } else if (platform === "android") {
-    // target each device explicitly — a bare `adb shell` throws with >1 emulator.
-    for (const s of androidDevices(env)) {
-      spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
-        env,
-      })
+/** Read a file, apply one regex replacement, write back only if it changed. Best-effort. */
+function subInFile(file, re, replacement) {
+  try {
+    const before = readFileSync(file, "utf8")
+    const after = before.replace(re, replacement)
+    if (after !== before) writeFileSync(file, after)
+  } catch {}
+}
+
+/** `$` in a String.replace replacement is special ($1, $$…) — neutralise it for literals. */
+const escDollar = (s) => s.replace(/\$/g, "$$$$")
+
+/**
+ * Patch the native project's INSTALL identity in place, idempotently. `dev` + `preview`
+ * builds take `<appId>.dev` / "<name> (dev)" so they install ALONGSIDE a real release build
+ * instead of overwriting it — and get their own storage sandbox (which is what stops a dev
+ * session's leftover WebView state from surfacing in a release install); `build` uses the
+ * release identity.
+ *
+ * The install id lives in the native project (iOS pbxproj bundle id, Android
+ * `applicationId`), NOT capacitor.config.json — but the CLI's own install-detection + launch
+ * read the ROOT capacitor.config.json appId (readAppId), and `cap sync` copies that file into
+ * the native project, so it's kept in step too. The Android `namespace` / iOS code identity
+ * stay on the base id (namespace = code package, applicationId = install identity — the two
+ * are allowed to differ), so generated sources (MainActivity, R) never move.
+ *
+ * Replace-to-target regexes: whatever the files currently hold, they land on the intended
+ * value — so switching variants (or re-running) is always safe.
+ */
+export function patchNativeIdentity(appRoot, config, platform, { dev }) {
+  const baseId = config?.appId
+  if (!baseId) return
+  const baseName = config.appName ?? config.name ?? baseId
+  const id = dev ? `${baseId}.dev` : baseId
+  const name = dev ? `${baseName} (dev)` : baseName
+
+  // Keep the root config (read by readAppId + copied by `cap sync`) matching the install id.
+  try {
+    const file = path.join(appRoot, "capacitor.config.json")
+    const cfg = JSON.parse(readFileSync(file, "utf8"))
+    if (cfg.appId !== id || cfg.appName !== name) {
+      cfg.appId = id
+      cfg.appName = name
+      writeFileSync(file, `${JSON.stringify(cfg, null, 2)}\n`)
     }
+  } catch {}
+
+  const nd = nativeDir(appRoot, platform)
+  if (platform === "ios") {
+    // bundle id (Debug + Release configs) + the home-screen display name.
+    subInFile(
+      path.join(nd, "App/App.xcodeproj/project.pbxproj"),
+      /PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,
+      `PRODUCT_BUNDLE_IDENTIFIER = ${escDollar(id)};`,
+    )
+    subInFile(
+      path.join(nd, "App/App/Info.plist"),
+      /(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
+  } else {
+    subInFile(
+      path.join(nd, "app/build.gradle"),
+      /applicationId\s+"[^"]*"/,
+      `applicationId "${escDollar(id)}"`,
+    )
+    const strings = path.join(nd, "app/src/main/res/values/strings.xml")
+    subInFile(
+      strings,
+      /(<string name="app_name">)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
+    subInFile(
+      strings,
+      /(<string name="title_activity_main">)[^<]*(<\/string>)/,
+      `$1${escDollar(name)}$2`,
+    )
   }
 }
 
@@ -726,10 +960,15 @@ function terminateApp(appRoot, platform, target, env) {
  * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
  */
-export function relaunchAndroidApp(appRoot, env) {
+export function relaunchAndroidApp(appRoot, env, target) {
   const appId = readAppId(appRoot)
   if (!appId) return
-  for (const s of androidDevices(env)) {
+  // Only the device this run targets — never every connected emulator. A second, idle
+  // emulator must not be force-stopped and relaunched. Fall back to all devices only when
+  // the target can't be resolved (ambiguous), matching the prior best-effort behaviour.
+  const serial = androidSerialForTarget(target, env)
+  const serials = serial ? [serial] : androidDevices(env)
+  for (const s of serials) {
     spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
       env,
     })

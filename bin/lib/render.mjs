@@ -3,13 +3,12 @@
 // Deliberately NOT a task-tree framework: a single custom spinner renderer so the
 // output reads like a modern build tool (Vite/Expo), not a log dump. One glyph set
 // (✓ / ✖ / a braille spinner), aligned lines, dim timings. Concurrent work (`run
-// all`) shows one live line per platform. @clack/prompts is used ONLY for the
-// arrow-key device picker.
+// all`) shows one live line per platform. The arrow-key device picker is ours too
+// (see `select` below) — no third-party prompt frame, so it matches every other line.
 //
 //   - TTY      → animated spinner lines, redrawn in place
 //   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
-import * as p from "@clack/prompts"
 
 /* -------------------------------------------------------------------------- */
 /* colour (a tiny ANSI helper; honours NO_COLOR)                              */
@@ -34,10 +33,38 @@ const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "
 const out = (s) => process.stdout.write(s)
 const width = () => process.stdout.columns || 80
 
+// Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
+// closing with a reset if it was cut. A single-row status line redrawn with `\r\x1b[2K`
+// MUST fit one physical row — otherwise it wraps and each frame stacks a new copy.
+function clipAnsi(s, max) {
+  let vis = 0
+  let res = ""
+  for (let i = 0; i < s.length; ) {
+    // Pass an ANSI colour escape (ESC `[` … `m`) through untouched — it has zero width.
+    if (s[i] === "\x1b" && s[i + 1] === "[") {
+      let j = i + 2
+      while (j < s.length && s[j] !== "m") j++
+      res += s.slice(i, j + 1)
+      i = j + 1
+      continue
+    }
+    if (vis >= max) return `${res}\x1b[0m`
+    const ch = String.fromCodePoint(s.codePointAt(i))
+    res += ch
+    i += ch.length
+    vis++
+  }
+  return res
+}
+
 const elapsed = (start) => {
   const ms = Date.now() - start
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
+
+/** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
+ *  native build streams nothing, so past this the last finished phase is stale. */
+const IDLE_MS = 1200
 
 /** A human total duration from `start` (e.g. "8s", "1m 12s"). */
 export function since(start) {
@@ -91,7 +118,9 @@ export function footer(hint) {
  */
 export function liveWatcher({ keys = true } = {}) {
   const hint = keys
-    ? `  ${c.dim("·")}  ${c.dim(`${c.bold("r")} rebuild   ${c.bold("ctrl-c")} stop`)}`
+    ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
+      // keys, where the bold's reset bleeds and the key ends up gray.
+      `  ${c.dim("·")}  ${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${c.bold("ctrl-c")}${c.dim(" stop")}`
     : ""
   const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
@@ -108,22 +137,20 @@ export function liveWatcher({ keys = true } = {}) {
   let clearAt = 0
   let notice = null
   const draw = () => {
+    let s
     if (changed && Date.now() < clearAt) {
-      out(
-        `\r\x1b[2K  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`,
-      )
-      return
+      s = `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
+    } else {
+      changed = null
+      // A pending native change outranks the idle hint — it's the one thing the dev has to
+      // act on, and it stays put until they do.
+      s = notice
+        ? `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
+        : idleLine
     }
-    changed = null
-    if (notice) {
-      // A pending native change outranks the idle hint — it's the one thing the dev
-      // has to act on, and it stays put until they do.
-      out(
-        `\r\x1b[2K  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim(`press ${c.bold("r")} to rebuild`)}`,
-      )
-      return
-    }
-    out(`\r\x1b[2K${idleLine}`)
+    // Clip to the terminal width so this stays ONE physical row — a wrapped status line
+    // redrawn in place stacks a copy every frame (the cascade).
+    out(`\r\x1b[2K${clipAnsi(s, Math.max(10, width()))}`)
   }
   draw()
   const anim = setInterval(draw, 80)
@@ -173,7 +200,7 @@ export function rewindLines(n) {
 /** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
 const CTRL_C = "\u0003"
 
-export function onKeys({ onRebuild, onQuit }) {
+export function onKeys({ onReload, onRebuild, onQuit }) {
   const stdin = process.stdin
   if (!stdin.isTTY || typeof stdin.setRawMode !== "function")
     return () => {}
@@ -185,7 +212,14 @@ export function onKeys({ onRebuild, onQuit }) {
       onQuit?.()
       return
     }
-    if (key === "r" || key === "R") void onRebuild?.()
+    // Two distinct lowercase keys (NOT r/R — a shift typo shouldn't swap a 0.4s reload
+    // for a 15s reinstall): `r` = reload the JS (refresh the running app), `b` = rebuild
+    // the native app (reinstall the binary — for a plugin / native change).
+    if (key === "r") {
+      void onReload?.()
+      return
+    }
+    if (key === "b") void onRebuild?.()
   }
   stdin.on("data", handler)
   return () => {
@@ -198,20 +232,110 @@ export function onKeys({ onRebuild, onQuit }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* device picker (clack)                                                       */
+/* device picker (house style — matches the renderer, no third-party frame)    */
 /* -------------------------------------------------------------------------- */
 
 /**
- * A single-select picker. `options` is an array of `{ value, label, hint? }`.
- * Returns the chosen value, or exits on cancel.
+ * A single-select arrow-key picker, drawn in the SAME visual language as the rest of the
+ * CLI (2-space indent, a `›` cursor, dim hints) instead of a third-party prompt frame with
+ * its own gutter and bullets. Two things matter here:
+ *
+ *  - it aligns with the surrounding `✓ step` / `! warn` lines, and
+ *  - it ERASES itself the instant you choose, leaving NO prompt residue — the picked
+ *    device only ever appears in the caller's own line (e.g. `✓ ios  iPhone 16 Pro`).
+ *
+ * `options` is `[{ value, label, hint? }]`. Long lists scroll in a fixed window so the
+ * cursor-rewind maths stays inside one screenful. Non-TTY (CI, piped): can't prompt, so
+ * take the first option — callers pass `--target`/`--latest` for a deterministic
+ * non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
  */
 export async function select(message, options) {
-  const value = await p.select({ message, options })
-  if (p.isCancel(value)) {
-    p.cancel("cancelled.")
-    process.exit(130)
+  if (!options?.length) return undefined
+  const stdin = process.stdin
+  if (!isTTY || !stdin.isTTY || typeof stdin.setRawMode !== "function")
+    return options[0].value
+
+  const WINDOW = 8
+  const windowed = options.length > WINDOW
+  const visible = Math.min(WINDOW, options.length)
+  // Fixed line count per frame: header + visible rows (+ a "N of M" footer when scrolling).
+  const rows = 1 + visible + (windowed ? 1 : 0)
+
+  let idx = 0
+  let top = 0
+
+  // Clip a plain string to `max` VISIBLE chars. EVERY emitted row must fit the terminal
+  // width — a line that wraps takes two physical rows, which breaks the fixed-row cursor
+  // rewind below and cascades the whole menu on each keypress on a narrow terminal.
+  const clip = (s, max) => {
+    const a = [...s]
+    return a.length > max
+      ? `${a.slice(0, Math.max(0, max - 1)).join("")}…`
+      : s
   }
-  return value
+  const paint = () => {
+    if (idx < top) top = idx
+    else if (idx >= top + visible) top = idx - visible + 1
+    const w = Math.max(24, width())
+    const nav = "   ↑↓ move · ↵ select"
+    out(
+      message.length + nav.length <= w - 2
+        ? `  ${c.bold(message)}${c.dim(nav)}\n`
+        : `  ${c.bold(clip(message, w - 2))}\n`,
+    )
+    const end = top + visible
+    for (let i = top; i < end; i++) {
+      const o = options[i]
+      const on = i === idx
+      const cursor = on ? c.cyan("›") : " "
+      const text = clip(`${o.label}${o.hint ? `  ${o.hint}` : ""}`, w - 4)
+      out(`  ${cursor} ${on ? text : c.dim(text)}\n`)
+    }
+    if (windowed)
+      out(
+        `  ${c.dim(clip(`  ${top + 1}–${end} of ${options.length}`, w - 2))}\n`,
+      )
+  }
+  // `\r` first so the cursor is at column 0 before moving up: a terminal that doesn't
+  // reset the column on `\n` would otherwise leave the cursor mid-line, and `\x1b[0J`
+  // would only clear from there — leaving the start of the header behind.
+  const erase = () => out(`\r\x1b[${rows}A\x1b[0J`)
+
+  paint()
+  return await new Promise((resolve) => {
+    stdin.setRawMode(true)
+    stdin.resume()
+    stdin.setEncoding("utf8")
+    const done = (fn) => {
+      stdin.off("data", onData)
+      try {
+        stdin.setRawMode(false)
+      } catch {}
+      stdin.pause()
+      erase()
+      fn()
+    }
+    const onData = (key) => {
+      if (key === "\x1b[A" || key === "\x1bOA" || key === "k") {
+        idx = (idx - 1 + options.length) % options.length
+        erase()
+        paint()
+      } else if (key === "\x1b[B" || key === "\x1bOB" || key === "j") {
+        idx = (idx + 1) % options.length
+        erase()
+        paint()
+      } else if (key === "\r" || key === "\n") {
+        done(() => resolve(options[idx].value))
+      } else if (key === "\x03" || key === "q") {
+        // NOT bare Esc: an arrow key can arrive as Esc then `[A` in two chunks, and
+        // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
+        // The caller registers a process 'exit' hook that tears down anything already
+        // started (e.g. the dev server running behind this picker), so exiting here is safe.
+        done(() => process.exit(130))
+      }
+    }
+    stdin.on("data", onData)
+  })
 }
 
 /* -------------------------------------------------------------------------- */
@@ -225,13 +349,50 @@ function bar(percent) {
 }
 
 /** Shorten/prettify a captured line for the live sub-detail. */
+// Product/device nouns kept capitalised after the whole line is lowercased. Everything else
+// goes lowercase — the rule is: uppercase only where it genuinely means something.
+const PROPER = [
+  [/\biphone\b/gi, "iPhone"],
+  [/\bipad\b/gi, "iPad"],
+  [/\bipod\b/gi, "iPod"],
+  [/\bios\b/gi, "iOS"],
+  [/\bmacos\b/gi, "macOS"],
+]
+
+// Normalise a streamed tool line (Capacitor/xcodebuild/gradle) into the house voice: strip
+// status emoji, drop the platform word (the lane already says it), "in 2.52ms" → "· 2.52ms",
+// cut path/target clauses ("from … to …", "-> …", "to <device>", "in <path>"), lowercase
+// (keeping iOS/iPhone/…), and LEAVE the verb in the present ("building", "installing") so
+// the live line reads as what's happening right now — the settled ✓ line is the retrospective.
+// Returns "" for anything with no real content — a lone phase-header verb ("update ios") or
+// a bare `pkg@version` dump — so it's shown as nothing rather than noise.
 export function prettyLine(line) {
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
     const pct = Math.min(100, Number(m[1]))
     return `${bar(pct)} ${pct}%`
   }
-  return line.replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "").trim()
+  let s = line
+    .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
+    .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
+    .replace(/\bin\s+[\d.]+\s*(?:[µμ]s|ms|us|s|m)\b/i, "") // drop "in 2.52ms" — the duration belongs on the settled ✓ line, not the live one
+    .replace(/\s*->\s*\S.*$/, "") // "-> <rest>" arrow clause
+    .replace(/\s+from\s+\S+\s+to\s+\S+/i, "") // "from <path> to <path>"
+    .replace(/\s+to\s+\S.*$/i, "") // trailing "to <device/path>"
+    .replace(/\s+in\s+\S*\/\S+/i, "") // "in <a/path>" (a path, not the time above)
+    .replace(/(^|[\s(])(?:ios|android)(?=[\s:.,)]|$)/gi, "$1") // platform word, even before punctuation
+    .replace(/\bApp(\.app)?\b/g, "app") // Capacitor's generic "App" target → "app"
+    .replace(/[\s:;,.]+$/, "") // trailing punctuation
+    .replace(/\s+(?:for|to|from|of|on|in|with|the|a|an)$/i, "") // dangling word left behind
+    .replace(/\s{2,}/g, " ")
+    .trim()
+  if (!s) return ""
+  if (/^@?[\w-]+\/[\w.-]+@[\w.-]+$/.test(s)) return "" // a bare `pkg@version` line
+  s = s.toLowerCase()
+  for (const [re, rep] of PROPER) s = s.replace(re, rep)
+  // Drop lines with no real action — a lone verb ("building", "running"), even with a `· time`.
+  if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
+  return s
 }
 
 /* -------------------------------------------------------------------------- */
@@ -258,13 +419,19 @@ const stripLen = (s) => s.replace(ANSI, "").length
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
  * ✖) if it throws. In `verbose`, streams the raw lines instead of animating.
  */
-export async function runLine(label, fn, { verbose = false } = {}) {
+export async function runLine(
+  label,
+  fn,
+  { verbose = false, idle = "" } = {},
+) {
   const start = Date.now()
   let detail = ""
+  let lastAt = start // when the live detail last changed — drives the idle fallback
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
     detail = pretty
+    lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
   }
 
@@ -289,8 +456,17 @@ export async function runLine(label, fn, { verbose = false } = {}) {
 
   let frame = 0
   const draw = () => {
+    // Live line = just the current phase (no per-step timer — the total lands on the ✓
+    // line). Nothing yet → "preparing". Once there's been output and the stream goes quiet
+    // for a beat — the long opaque native build, which cap emits nothing during — fall back
+    // to the caller's present-tense `idle` label instead of freezing on the last phase.
+    const phase = !detail
+      ? "preparing"
+      : idle && Date.now() - lastAt > IDLE_MS
+        ? idle
+        : detail
     out(
-      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, detail)}`,
+      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, phase)}`,
     )
   }
   draw()
@@ -319,6 +495,8 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     detail: "",
     status: "run",
     start: Date.now(),
+    lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
+    idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
     time: "",
   }))
 
@@ -330,6 +508,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       const pretty = prettyLine(line)
       if (!pretty) return
       state[i].detail = pretty
+      state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
     }
     return Promise.resolve()
@@ -380,7 +559,16 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           : s.status === "fail"
             ? c.red("✖")
             : c.cyan(FRAMES[frame % FRAMES.length])
-      const right = s.status === "run" ? s.detail : settledRight(s)
+      // live: just the current phase (nothing yet → "preparing"; idle fallback for the
+      // silent build); the total lands on the settled line.
+      const right =
+        s.status === "run"
+          ? !s.detail
+            ? "preparing"
+            : s.idle && Date.now() - s.lastAt > IDLE_MS
+              ? s.idle
+              : s.detail
+          : settledRight(s)
       out(`\x1b[2K${compose(glyph, s.label, right)}\n`)
     }
     drawn = state.length
