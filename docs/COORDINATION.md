@@ -1,4 +1,4 @@
-# nativ — the runtime coordination layer
+# adaptv — the runtime coordination layer
 
 > The **app-runtime lifecycle** and the shared arbiters that make overlapping cross-platform behaviours
 > resolve *deterministically*: app state (resume/pause), the hardware/soft **back** chain, the **gesture**
@@ -25,10 +25,10 @@ without a shared arbiter the wrong one wins.**
 - A **navigation** must run enter/leave deterministically — but React mount/unmount and the OS lifecycle
   disagree about when a screen "left."
 
-Today nativ handles each in isolation (`useAndroidBackButton` hardcodes routing; `useGestureEngine` vetoes
+Today adaptv handles each in isolation (`useAndroidBackButton` hardcodes routing; `useGestureEngine` vetoes
 via pointer capture; there is no app-state hook at all). The coordination layer makes these **shared,
 priority-ordered contracts** instead of per-primitive discipline. Doctrine: *study how Ionic arbitrates
-(gesture controller, `ionBackButton`, page lifecycle), adopt the hard-won semantics, diverge where nativ's
+(gesture controller, `ionBackButton`, page lifecycle), adopt the hard-won semantics, diverge where adaptv's
 memory-history + DOM model differs* (`ARCHITECTURE.md §0.6`).
 
 ---
@@ -85,7 +85,7 @@ listener *and* imperative code):
 
 ```ts
 useBackHandler(handler, priority)   // register/unregister on mount/unmount; handler → true (handled) | false (defer)
-nativBack()                         // platform-agnostic programmatic back for in-app affordances
+adaptvBack()                         // platform-agnostic programmatic back for in-app affordances
 ```
 
 - The shell installs **one** `App.backButton` listener that walks registered handlers **high→low
@@ -94,7 +94,7 @@ nativBack()                         // platform-agnostic programmatic back for i
   `useAndroidBackButton` behaviour, refactored to be the *floor* of the chain rather than the whole thing.
 - **Priority bands:** overlays (`Drawer`/`Modal`/`Sheet`, registered while open) > transient UI (menus,
   search) > in-app back affordance > router back > app exit.
-- `nativBack()` unifies the Android hardware button, an in-app back button, and (when installed) the
+- `adaptvBack()` unifies the Android hardware button, an in-app back button, and (when installed) the
   otherwise-inert OS gesture into one path.
 
 > ### ✅ BUILT — controller + React binding; one primitive migrated
@@ -138,7 +138,7 @@ high-priority handlers. Reference: Ionic `ionBackButton` priority model (`RESEAR
 
 ## 3. Gestures — the controller (full Ionic-style)
 
-**Decided: the full controller, not a minimal arbiter** — if nativ owns gesture arbitration it should own
+**Decided: the full controller, not a minimal arbiter** — if adaptv owns gesture arbitration it should own
 the real semantics rather than grow into them. It's pure logic, so the extra scope is mostly extra test
 cases, not extra runtime risk.
 
@@ -179,7 +179,7 @@ events, the existing reentrant engine).
 ## 4. Route / screen lifecycle
 
 ### Decided principle: **no DOM retention** (`ARCHITECTURE.md §0.4`)
-RN's navigator and Ionic both *keep popped pages in the DOM* until popped. nativ does **not**: it uses
+RN's navigator and Ionic both *keep popped pages in the DOM* until popped. adaptv does **not**: it uses
 memory-history + client routing, so a React **unmount is the natural "leave."** This keeps the model
 predictable and avoids the retained-DOM state bugs Ionic documents (`RESEARCH.md §4`).
 
@@ -190,7 +190,7 @@ Map lifecycle to what already exists, thinly:
 - A route component **mount** = **enter**; **unmount** = **leave**. `useScreenLifecycle({ onEnter,
   onLeave })` is sugar over mount/unmount + the route match, for symmetry with the mental model — not a
   new retention mechanism.
-- **Resume is not enter** — that's §1's job. Ionic's page hooks famously *don't* fire on resume; nativ
+- **Resume is not enter** — that's §1's job. Ionic's page hooks famously *don't* fire on resume; adaptv
   keeps them separate on purpose (route lifecycle = navigation; app state = foreground).
 
 If a future screen genuinely needs to survive back (retain scroll/state), that's a **deliberate opt-in**

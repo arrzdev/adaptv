@@ -3,7 +3,7 @@ import {
   createCacheFirstStrategy,
   createHashedAssetStrategy,
   createNetworkFirstStrategy,
-} from "#nativ/sw/sw.strategies"
+} from "#adaptv/sw/sw.strategies"
 
 /** Workbox stores the options we care about on the strategy instance. */
 function matchOptionsOf(strategy: unknown): Record<string, unknown> {

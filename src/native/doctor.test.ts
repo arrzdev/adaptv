@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatDiagnostics, runDoctor } from "#nativ/native/doctor"
+import { formatDiagnostics, runDoctor } from "#adaptv/native/doctor"
 
 describe("runDoctor — WKAppBoundDomains (B22)", () => {
   //The highest-severity silent failure in the Capacitor surface: the bridge is
@@ -72,7 +72,7 @@ describe("runDoctor — privacy manifest (§5.0.1)", () => {
       dependencies: ["@capacitor/preferences"],
     })
     expect(d?.severity).toBe("error")
-    expect(d?.fix).toContain("nativ run ios")
+    expect(d?.fix).toContain("adaptv run ios")
   })
 
   it("is quiet when no installed plugin creates the obligation", () => {

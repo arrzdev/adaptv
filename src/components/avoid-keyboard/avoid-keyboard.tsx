@@ -1,8 +1,8 @@
 import type { CSSProperties, HTMLAttributes, Ref } from "react"
 import { forwardRef, useCallback, useRef } from "react"
-import type { AvoidKeyboardBehavior } from "#nativ/components/avoid-keyboard/use-keyboard-avoidance"
-import { useKeyboardAvoidance } from "#nativ/components/avoid-keyboard/use-keyboard-avoidance"
-import { cn } from "#nativ/utils/cn"
+import type { AvoidKeyboardBehavior } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
+import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
+import { cn } from "#adaptv/utils/cn"
 
 /* =============================================================================
  * TYPES

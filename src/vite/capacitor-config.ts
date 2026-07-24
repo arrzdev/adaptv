@@ -1,19 +1,19 @@
 import { writeFileSync } from "node:fs"
 import path from "node:path"
-import type { NativAppConfig } from "#nativ/config/app-config.ts"
-import { NATIV_DIR } from "#nativ/vite/nativ-dir.ts"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import { ADAPTV_DIR } from "#adaptv/vite/adaptv-dir.ts"
 
-//The Capacitor config, generated from nativ.config.ts. Consumers never hand-write
-//this — `appId` in nativ.config is all it takes (mirrors how the web manifest is
+//The Capacitor config, generated from adaptv.config.ts. Consumers never hand-write
+//this — `appId` in adaptv.config is all it takes (mirrors how the web manifest is
 //generated).
 
-/** The subset of `capacitor.config.json` nativ owns. */
+/** The subset of `capacitor.config.json` adaptv owns. */
 export type CapacitorConfigJson = {
   appId: string
   appName: string
   webDir: string
-  //The native projects live inside the hidden `.nativ/` dir (git-ignored, regenerated),
-  //not at the app root — everything nativ generates sits in one disposable place. These
+  //The native projects live inside the hidden `.adaptv/` dir (git-ignored, regenerated),
+  //not at the app root — everything adaptv generates sits in one disposable place. These
   //paths are relative to this config file (the app root), which `cap` reads from CWD.
   android: { path: string }
   ios: { path: string }
@@ -33,24 +33,24 @@ export type CapacitorConfigJson = {
 //the SPA build output (see the `capacitor` vite target) that the WebView loads.
 //Start controls the client environment's output dir and emits the SPA to
 //`dist/client`; a plugin-level `build.outDir` is overridden. The lineages are
-//kept separate in TIME — the CLI runs a fresh `NATIV_TARGET=capacitor` build
+//kept separate in TIME — the CLI runs a fresh `ADAPTV_TARGET=capacitor` build
 //before every `cap sync`, so a web build's server bundle is never synced.
 const CAPACITOR_WEB_DIR = "dist/client"
 
 export function buildCapacitorConfig(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
 ): CapacitorConfigJson {
   if (!config.appId) {
     throw new Error(
-      "nativ.config.ts: `appId` is required to generate capacitor.config (native build)",
+      "adaptv.config.ts: `appId` is required to generate capacitor.config (native build)",
     )
   }
   return {
     appId: config.appId,
     appName: config.appName ?? config.name,
     webDir: CAPACITOR_WEB_DIR,
-    android: { path: `${NATIV_DIR}/android` },
-    ios: { path: `${NATIV_DIR}/ios` },
+    android: { path: `${ADAPTV_DIR}/android` },
+    ios: { path: `${ADAPTV_DIR}/ios` },
     plugins: {
       SplashScreen: {
         //Hold the OS launch splash until the app explicitly hands off: RoutingShell calls
@@ -81,7 +81,7 @@ export function buildCapacitorConfig(
  * reads this generated file — the consumer never hand-writes one.
  */
 export function stampCapacitorConfig(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
   appRoot: string,
 ): void {
   if (!config.appId) return

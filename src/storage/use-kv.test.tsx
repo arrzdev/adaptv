@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it } from "vitest"
-import { kv } from "#nativ/storage/kv"
-import { useKv } from "#nativ/storage/use-kv"
+import { kv } from "#adaptv/storage/kv"
+import { useKv } from "#adaptv/storage/use-kv"
 
 beforeEach(() => {
   kv.clear()

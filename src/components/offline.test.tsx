@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { Offline } from "#nativ/components/offline"
+import { Offline } from "#adaptv/components/offline"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -9,7 +9,7 @@ afterEach(() => {
 /**
  * Press the retry button the way a finger does.
  *
- * `fireEvent.click` does NOT work here: nativ's `Button` commits on gesture
+ * `fireEvent.click` does NOT work here: adaptv's `Button` commits on gesture
  * release via `useGestureEngine` (`onPointerUp`), not on the DOM `click` event —
  * that is deliberate, so a press survives a thumb-roll and can be cancelled by a
  * scroll take-over. A synthetic `click` bypasses the whole state machine.
@@ -29,12 +29,12 @@ function pressRetry(): void {
 }
 
 describe("Offline — one component, two call sites", () => {
-  //RENDERING §3.1.2. nativ renders this when the app can't boot far enough for a
+  //RENDERING §3.1.2. adaptv renders this when the app can't boot far enough for a
   //route to exist; the consumer renders the SAME component when a route mounted
   //fine but its data is unavailable. Every prop is optional, which is what lets
   //one component serve both without a framework-flavoured screen that looks
   //different from the app's own.
-  it("renders with no props at all — nativ's call site passes nothing", () => {
+  it("renders with no props at all — adaptv's call site passes nothing", () => {
     render(<Offline />)
     expect(screen.getByRole("alert")).toBeTruthy()
   })
@@ -54,7 +54,7 @@ describe("Offline — one component, two call sites", () => {
   })
 
   it("falls back to reloading when no onRetry is given", () => {
-    //nativ's own call site: the app never booted, so there is nothing to refetch
+    //adaptv's own call site: the app never booted, so there is nothing to refetch
     //and a reload is the only meaningful recovery
     const reload = vi.fn()
     vi.stubGlobal("location", { reload })

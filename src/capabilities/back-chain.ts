@@ -35,7 +35,7 @@ export const BackPriority = {
   Transient: 300,
   /** In-app back affordance (a header back button). */
   Affordance: 200,
-  /** Router history back. nativ's default floor handler. */
+  /** Router history back. adaptv's default floor handler. */
   RouterBack: 100,
   /** Exit the app. Only reachable when there is no history left. */
   ExitApp: 0,

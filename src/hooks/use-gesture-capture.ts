@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef } from "react"
-import type { CaptureOptions } from "#nativ/capabilities/gesture-controller"
-import { gestureController } from "#nativ/capabilities/gesture-controller"
+import type { CaptureOptions } from "#adaptv/capabilities/gesture-controller"
+import { gestureController } from "#adaptv/capabilities/gesture-controller"
 
 export type GestureCapture = {
   /** Ask to own the pointer. `false` means a higher-priority gesture holds it. */

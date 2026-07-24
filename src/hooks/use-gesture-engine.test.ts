@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { useGestureEngine } from "#nativ/hooks/use-gesture-engine"
+import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 
 /* =============================================================================
  * SYNTHETIC EVENTS — the engine only reads these fields off the events it's

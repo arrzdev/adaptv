@@ -1,12 +1,12 @@
-import { registerSW } from "virtual:nativ/pwa-register"
-import type { PwaServiceWorkerRuntimeConfig } from "#nativ/config/types"
-import { installPreloadErrorRecovery } from "#nativ/shell/preload-error-recovery"
+import { registerSW } from "virtual:adaptv/pwa-register"
+import type { PwaServiceWorkerRuntimeConfig } from "#adaptv/config/types"
+import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import {
   resolveUpdateMode,
   shouldApplyUpdateNow,
-} from "#nativ/shell/sw-update-mode"
-import { unregisterForeignServiceWorkers } from "#nativ/shell/unregister-foreign-service-workers"
-import { isNativePlatform } from "#nativ/utils/platform"
+} from "#adaptv/shell/sw-update-mode"
+import { unregisterForeignServiceWorkers } from "#adaptv/shell/unregister-foreign-service-workers"
+import { isNativePlatform } from "#adaptv/utils/platform"
 
 /** Set when a new worker is installed and waiting. Read by `useServiceWorkerUpdate`. */
 let updateAvailable = false
@@ -92,7 +92,7 @@ export function registerPwaServiceWorkerRuntime(
 ): void {
   const { register, unregisterForeign = true } = serviceWorker ?? {}
 
-  //The stale-chunk net is unconditional: it must be armed even when nativ never
+  //The stale-chunk net is unconditional: it must be armed even when adaptv never
   //registers a worker, because the failure is a *deploy* artifact, not a SW one.
   installPreloadErrorRecovery()
 
@@ -107,7 +107,7 @@ export function registerPwaServiceWorkerRuntime(
 
   //SW is production/preview only — Vite dev URLs are not cache-stable
   if (import.meta.env.DEV) {
-    //DESTROY any worker+cache in dev, not just foreign ones: a nativ SW registered
+    //DESTROY any worker+cache in dev, not just foreign ones: a adaptv SW registered
     //in a prior prod/preview session on the same origin (or dragged in by a
     //live-reload dev server) otherwise survives into dev and silently serves the
     //OLD bundle inside the WebView, breaking hot reload. Dev is always SW-free.

@@ -1,10 +1,10 @@
 import { Link as RouterLink, useRouter } from "@tanstack/react-router"
 import type { MouseEvent, ReactNode } from "react"
 import { forwardRef, useEffect } from "react"
-import { isExternalUrl } from "#nativ/capabilities/browser"
-import { ExternalLink } from "#nativ/components/external-link"
-import { useGestureEngine } from "#nativ/hooks/use-gesture-engine"
-import { cn } from "#nativ/utils/cn"
+import { isExternalUrl } from "#adaptv/capabilities/browser"
+import { ExternalLink } from "#adaptv/components/external-link"
+import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
+import { cn } from "#adaptv/utils/cn"
 
 /* =============================================================================
  * TYPES

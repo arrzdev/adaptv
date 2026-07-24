@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { HAPTIC_TICK_ATTR } from "#nativ/capabilities/haptic-tick"
-import { useHapticTick } from "#nativ/hooks/use-haptic-tick"
+import { HAPTIC_TICK_ATTR } from "#adaptv/capabilities/haptic-tick"
+import { useHapticTick } from "#adaptv/hooks/use-haptic-tick"
 
 const restores: Array<() => void> = []
 

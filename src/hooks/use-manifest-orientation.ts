@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
-import type { OrientationLock } from "#nativ/config/types"
-import tryCatch from "#nativ/utils/try-catch"
+import type { OrientationLock } from "#adaptv/config/types"
+import tryCatch from "#adaptv/utils/try-catch"
 
 function normalizeOrientation(value: unknown): OrientationLock {
   if (typeof value !== "string") return "any"

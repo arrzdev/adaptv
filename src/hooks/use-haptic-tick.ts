@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react"
-import { attachHapticTick } from "#nativ/capabilities/haptic-tick"
+import { attachHapticTick } from "#adaptv/capabilities/haptic-tick"
 
 /**
  * Attach the iOS-web haptic transducer to an element. Returns a ref callback.

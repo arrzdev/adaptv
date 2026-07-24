@@ -7,7 +7,7 @@ import {
   isNativePlatform,
   isStandaloneDisplay,
   resolvePlatformTag,
-} from "#nativ/utils/platform"
+} from "#adaptv/utils/platform"
 
 // ---- global stubs ----------------------------------------------------------
 // platform.ts reads three ambient signals: the Capacitor global, navigator
@@ -60,8 +60,8 @@ afterEach(() => {
   for (const restore of restores.splice(0)) restore()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
-  delete document.documentElement.dataset.nativPlatform
-  delete document.documentElement.dataset.nativOs
+  delete document.documentElement.dataset.adaptvPlatform
+  delete document.documentElement.dataset.adaptvOs
 })
 
 // ---- isNativePlatform ------------------------------------------------------
@@ -216,7 +216,7 @@ describe("resolvePlatformTag", () => {
 
 // ---- getPlatformInitScript -------------------------------------------------
 // The script is a string (it runs pre-hydration and can't import this module), so
-// we assert the CONTRACT: eval'ing it stamps <html data-nativ-platform/-os> to the
+// we assert the CONTRACT: eval'ing it stamps <html data-adaptv-platform/-os> to the
 // same values resolvePlatformTag/getOS would produce.
 describe("getPlatformInitScript", () => {
   function run(): void {
@@ -226,8 +226,8 @@ describe("getPlatformInitScript", () => {
   it("is a self-invoking guarded script", () => {
     const src = getPlatformInitScript()
     expect(src.startsWith("(function")).toBe(true)
-    expect(src).toContain("nativPlatform")
-    expect(src).toContain("nativOs")
+    expect(src).toContain("adaptvPlatform")
+    expect(src).toContain("adaptvOs")
   })
 
   it("stamps 'web' in a plain browser tab", () => {
@@ -238,8 +238,8 @@ describe("getPlatformInitScript", () => {
       maxTouchPoints: 0,
     })
     run()
-    expect(document.documentElement.dataset.nativPlatform).toBe("web")
-    expect(document.documentElement.dataset.nativOs).toBe("web")
+    expect(document.documentElement.dataset.adaptvPlatform).toBe("web")
+    expect(document.documentElement.dataset.adaptvOs).toBe("web")
   })
 
   it("stamps 'native' + the Capacitor OS on a native build", () => {
@@ -248,8 +248,8 @@ describe("getPlatformInitScript", () => {
       getPlatform: () => "ios",
     })
     run()
-    expect(document.documentElement.dataset.nativPlatform).toBe("native")
-    expect(document.documentElement.dataset.nativOs).toBe("ios")
+    expect(document.documentElement.dataset.adaptvPlatform).toBe("native")
+    expect(document.documentElement.dataset.adaptvOs).toBe("ios")
   })
 
   it("never throws even if globals are missing (guarded)", () => {

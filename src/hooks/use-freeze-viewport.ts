@@ -2,8 +2,8 @@ import { useLayoutEffect } from "react"
 import {
   getVirtualKeyboardApi,
   willOpenVirtualKeyboard,
-} from "#nativ/hooks/use-keyboard"
-import { isIOS } from "#nativ/utils/platform"
+} from "#adaptv/hooks/use-keyboard"
+import { isIOS } from "#adaptv/utils/platform"
 
 /*
  * Freezes the layout viewport while an overlay (drawer, chat composer, …) is up so the

@@ -8,16 +8,16 @@
  * intent-level block instead, and keeps the old fields working as escape hatches
  * so existing apps keep building.
  */
-import type { NativAppConfig } from "#nativ/config/app-config.ts"
-import { resolvePrecacheDocuments } from "#nativ/config/precache-documents.ts"
-import type { ServiceWorkerUpdateMode } from "#nativ/config/types.ts"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import { resolvePrecacheDocuments } from "#adaptv/config/precache-documents.ts"
+import type { ServiceWorkerUpdateMode } from "#adaptv/config/types.ts"
 
 /** Where the web build is deployed. Maps to a TanStack Start deploy preset. */
-export type NativHost = "cloudflare" | "vercel" | "node" | "static"
+export type AdaptvHost = "cloudflare" | "vercel" | "node" | "static"
 
 export type ResolvedWebConfig = {
   render: "ssr" | "spa"
-  host: NativHost
+  host: AdaptvHost
   sw: {
     enabled: boolean
     precacheDocuments: string[]
@@ -35,7 +35,7 @@ export type ResolvedWebConfig = {
  * turn either back on.
  */
 export function resolveWebConfig(
-  config: NativAppConfig,
+  config: AdaptvAppConfig,
   target: "web" | "capacitor" = "web",
 ): ResolvedWebConfig {
   const web = config.web ?? {}

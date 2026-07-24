@@ -1,7 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useRef } from "react"
-import { ScrollView } from "#nativ/components/scroll-view"
+import { ScrollView } from "#adaptv/components/scroll-view"
 
 /* =============================================================================
  * TYPES

@@ -20,7 +20,7 @@ function forceNative(native: boolean): void {
 async function load() {
   vi.resetModules()
   const { Keyboard } = await import("@capacitor/keyboard")
-  const sut = await import("#nativ/capabilities/keyboard")
+  const sut = await import("#adaptv/capabilities/keyboard")
   const listenerFor = (event: string) =>
     vi
       .mocked(Keyboard.addListener)

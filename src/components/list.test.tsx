@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { List } from "#nativ/components/list"
+import { List } from "#adaptv/components/list"
 
 // happy-dom has no layout, so the real virtualizer would window 0 rows. Mock it to a
 // fixed 2-row window; the actual windowing is verified on-device (see the QA doc).

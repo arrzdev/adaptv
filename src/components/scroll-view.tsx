@@ -1,8 +1,8 @@
 import type { ComponentPropsWithRef, CSSProperties, Ref } from "react"
 import { useCallback, useRef } from "react"
-import { useScrollDirectionLock } from "#nativ/hooks/use-scroll-direction-lock"
-import { cn } from "#nativ/utils/cn"
-import { mergeStyles } from "#nativ/utils/styles"
+import { useScrollDirectionLock } from "#adaptv/hooks/use-scroll-direction-lock"
+import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   renderPrivacyManifest,
   resolveRequiredReasons,
-} from "#nativ/native/privacy-manifest"
+} from "#adaptv/native/privacy-manifest"
 
 describe("resolveRequiredReasons", () => {
   //The obligation is derivable from the dependency list, currently satisfied by
@@ -80,14 +80,14 @@ describe("renderPrivacyManifest", () => {
     expect(xml).toContain("<string>CA92.1</string>")
   })
 
-  it("declares no tracking — nativ never adds any", () => {
+  it("declares no tracking — adaptv never adds any", () => {
     expect(renderPrivacyManifest([])).toContain(
       "<key>NSPrivacyTracking</key>\n\t<false/>",
     )
   })
 
   it("leaves data collection EMPTY and says why", () => {
-    //nativ cannot know what the app does with analytics or accounts. A guessed
+    //adaptv cannot know what the app does with analytics or accounts. A guessed
     //declaration is worse than none: it is a false statement to Apple and users.
     const xml = renderPrivacyManifest([])
     expect(xml).toContain(

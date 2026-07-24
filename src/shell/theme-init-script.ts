@@ -1,7 +1,7 @@
 /**
  * The pre-paint theme script — a pure string generator, with no React.
  *
- * Lifted out of `hooks/use-theme.ts` because nativ's Vite plugin needs it at
+ * Lifted out of `hooks/use-theme.ts` because adaptv's Vite plugin needs it at
  * BUILD time to emit the app shell, and a Node-side plugin must not pull in a
  * React hooks module (it imports `react` and, transitively, the Capacitor
  * native-theme accessor). Keeping the generator here makes the config-time and

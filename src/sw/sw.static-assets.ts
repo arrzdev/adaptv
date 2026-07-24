@@ -1,7 +1,7 @@
 import { registerRoute } from "workbox-routing"
-import { createStaticAssetMatcher } from "#nativ/sw/sw.matchers"
-import { createStaticAssetStrategy } from "#nativ/sw/sw.strategies"
-import type { StaticAssetsRouteOptions } from "#nativ/sw/sw.types"
+import { createStaticAssetMatcher } from "#adaptv/sw/sw.matchers"
+import { createStaticAssetStrategy } from "#adaptv/sw/sw.strategies"
+import type { StaticAssetsRouteOptions } from "#adaptv/sw/sw.types"
 
 /**
  * Runtime cache for hashed build assets. Precache covers install; this handles any

@@ -1,5 +1,5 @@
 /**
- * `nativ doctor` — detect the silent failures. → `DECISIONS.md` B22, B21, §6.0
+ * `adaptv doctor` — detect the silent failures. → `DECISIONS.md` B22, B21, §6.0
  *
  * Every check here shares one property: **the broken state still builds, and
  * often still runs.** That is the whole selection criterion. A misconfiguration
@@ -19,13 +19,13 @@ export type Diagnostic = {
 }
 
 export type DoctorInput = {
-  /** Raw `.nativ/ios/App/App/Info.plist`, if present. */
+  /** Raw `.adaptv/ios/App/App/Info.plist`, if present. */
   iosInfoPlist?: string
   /** Raw generated `capacitor.config.json`, if present. */
   capacitorConfig?: string
-  /** `.nativ/android/app/build.gradle`, for the target SDK check. */
+  /** `.adaptv/android/app/build.gradle`, for the target SDK check. */
   androidBuildGradle?: string
-  /** Whether `.nativ/ios/App/App/PrivacyInfo.xcprivacy` exists. */
+  /** Whether `.adaptv/ios/App/App/PrivacyInfo.xcprivacy` exists. */
   hasPrivacyManifest?: boolean
   /** Installed dependency names, for the privacy-manifest obligation. */
   dependencies?: readonly string[]
@@ -65,10 +65,10 @@ function checkAppBoundDomains(input: DoctorInput): Diagnostic | null {
       "silently fall back to its web implementation — no error, no crash, just an app " +
       "that quietly has no native capabilities.",
     fix:
-      "Remove WKAppBoundDomains from .nativ/ios/App/App/Info.plist. nativ never adds it, and the " +
+      "Remove WKAppBoundDomains from .adaptv/ios/App/App/Info.plist. adaptv never adds it, and the " +
       "usual reason for adding it (relaxing ITP's storage cap) does not work — WebKit's " +
       "isAppBoundITPRelaxationEnabled is a constexpr false. If you genuinely need it, also " +
-      "set ios.limitsNavigationsToAppBoundDomains: true in nativ.config.ts.",
+      "set ios.limitsNavigationsToAppBoundDomains: true in adaptv.config.ts.",
   }
 }
 
@@ -100,9 +100,9 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
 }
 
 //No `viewport-fit=cover` check: Capacitor hard-gates safe-area insets on that
-//exact string, but nativ GENERATES the viewport meta in its app shell, so it
+//exact string, but adaptv GENERATES the viewport meta in its app shell, so it
 //cannot be wrong. A doctor rule for a value the framework owns would only ever
-//fire on a bug in nativ itself — and it would report it as the user's problem.
+//fire on a bug in adaptv itself — and it would report it as the user's problem.
 
 /** The privacy manifest — §5.0.1. Fails at submission, not at build. */
 function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
@@ -119,11 +119,11 @@ function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
 
   return {
     severity: "error",
-    title: ".nativ/ios/App/App/PrivacyInfo.xcprivacy is missing",
+    title: ".adaptv/ios/App/App/PrivacyInfo.xcprivacy is missing",
     detail:
       "Installed plugins touch Apple required-reason APIs. The manifest is not checked at " +
       "build time — App Store Connect rejects the upload with a generic message, days later.",
-    fix: "Run `nativ run ios` (or `nativ build ios`), which regenerates it from the installed plugin set.",
+    fix: "Run `adaptv run ios` (or `adaptv build ios`), which regenerates it from the installed plugin set.",
   }
 }
 
@@ -153,7 +153,7 @@ export function formatDiagnostics(
   diagnostics: readonly Diagnostic[],
 ): string {
   if (diagnostics.length === 0) {
-    return "[nativ] doctor: no issues found."
+    return "[adaptv] doctor: no issues found."
   }
   return diagnostics
     .map((d) =>

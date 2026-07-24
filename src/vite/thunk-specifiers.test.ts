@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { extractThunkSpecifier } from "#nativ/vite/thunk-specifiers"
+import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers"
 
 //a stand-in thunk whose source we control — extraction only reads .toString(),
 //so this exercises the parser without depending on how the runtime prints an

@@ -8,8 +8,8 @@
  * | `storage.store` | **async** + hook | IndexedDB | SQLite / Filesystem | large values, offline cache |
  * | `storage.secure` | **async**, no hook | best-effort `localStorage` — **not secure** | Keychain / Keystore | tokens, secrets |
  *
- * All backends store strings; nativ JSON-encodes, so values must be
- * JSON-serializable. All tiers are SSR-safe. nativ-managed keys carry a stable
+ * All backends store strings; adaptv JSON-encodes, so values must be
+ * JSON-serializable. All tiers are SSR-safe. adaptv-managed keys carry a stable
  * prefix, so `clear()` and cross-tab sync never touch the consumer's own storage.
  *
  * `storage.store` is an async large-value KV, deliberately **not** a query engine
@@ -20,15 +20,15 @@
  * Values there survive **structured clone**, so `Date`/`Map`/`Set`/`Blob` round
  * trip — unlike `kv`, which JSON-encodes and turns a `Date` into a string.
  */
-export { initKv, KV_PREFIX, kv, subscribeKv } from "#nativ/storage/kv"
-export { secure } from "#nativ/storage/secure"
-export { store } from "#nativ/storage/store"
-export { useKv } from "#nativ/storage/use-kv"
-export { useStore } from "#nativ/storage/use-store"
+export { initKv, KV_PREFIX, kv, subscribeKv } from "#adaptv/storage/kv"
+export { secure } from "#adaptv/storage/secure"
+export { store } from "#adaptv/storage/store"
+export { useKv } from "#adaptv/storage/use-kv"
+export { useStore } from "#adaptv/storage/use-store"
 
-import { kv } from "#nativ/storage/kv"
-import { secure } from "#nativ/storage/secure"
-import { store } from "#nativ/storage/store"
+import { kv } from "#adaptv/storage/kv"
+import { secure } from "#adaptv/storage/secure"
+import { store } from "#adaptv/storage/store"
 
 /** The `storage` namespace. Import the tiers directly for better tree-shaking. */
 export const storage = { kv, store, secure }

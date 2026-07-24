@@ -16,10 +16,10 @@ import {
 import {
   GesturePriority,
   useGestureCapture,
-} from "#nativ/hooks/use-gesture-capture"
-import { willOpenVirtualKeyboard } from "#nativ/hooks/use-keyboard"
-import { useReducedMotion } from "#nativ/hooks/use-reduced-motion"
-import { cn } from "#nativ/utils/cn"
+} from "#adaptv/hooks/use-gesture-capture"
+import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { cn } from "#adaptv/utils/cn"
 
 /**
  * True when `target` sits inside a swipeable row root (`[data-swipeable-root]`).
@@ -210,13 +210,13 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
  * ============================================================================= */
 
 export const SWIPEABLE_LEFT_ACTIONS_SLOT = Symbol.for(
-  "@arrzdev/nativ:swipeable.left-actions",
+  "@arrzdev/adaptv:swipeable.left-actions",
 )
 export const SWIPEABLE_RIGHT_ACTIONS_SLOT = Symbol.for(
-  "@arrzdev/nativ:swipeable.right-actions",
+  "@arrzdev/adaptv:swipeable.right-actions",
 )
 export const SWIPEABLE_CONTENT_SLOT = Symbol.for(
-  "@arrzdev/nativ:swipeable.content",
+  "@arrzdev/adaptv:swipeable.content",
 )
 
 type SwipeableSlotProps = {

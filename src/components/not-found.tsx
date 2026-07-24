@@ -1,5 +1,5 @@
-import { Link } from "#nativ/components/link"
-import { cn } from "#nativ/utils/cn"
+import { Link } from "#adaptv/components/link"
+import { cn } from "#adaptv/utils/cn"
 
 export type UiNotFoundProps = {
   /** Router path for the home action. Default `/`. */

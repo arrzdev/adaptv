@@ -9,7 +9,7 @@ async function freshKv(native = false) {
     "Capacitor",
     native ? { isNativePlatform: () => true } : undefined,
   )
-  return import("#nativ/storage/kv")
+  return import("#adaptv/storage/kv")
 }
 
 beforeEach(() => {
@@ -86,7 +86,7 @@ describe("kv — durability on web", () => {
   })
 
   it("namespaces its keys so clear() cannot touch consumer data", async () => {
-    //nativ shares localStorage with the app. A blind clear() would wipe the
+    //adaptv shares localStorage with the app. A blind clear() would wipe the
     //consumer's own keys — data loss caused by a framework internal.
     const { kv } = await freshKv()
     localStorage.setItem("app-owned", "keep me")

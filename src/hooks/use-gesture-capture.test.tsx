@@ -1,11 +1,11 @@
 import { render } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { gestureController } from "#nativ/capabilities/gesture-controller"
-import type { GestureCapture } from "#nativ/hooks/use-gesture-capture"
+import { gestureController } from "#adaptv/capabilities/gesture-controller"
+import type { GestureCapture } from "#adaptv/hooks/use-gesture-capture"
 import {
   GesturePriority,
   useGestureCapture,
-} from "#nativ/hooks/use-gesture-capture"
+} from "#adaptv/hooks/use-gesture-capture"
 
 function Probe({
   priority,

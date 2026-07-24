@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { Plugin } from "vite"
-import { staticHostFiles } from "#nativ/config/web-config.ts"
-import type { NativContext } from "#nativ/vite/nativ-context.ts"
+import { staticHostFiles } from "#adaptv/config/web-config.ts"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 
 /**
  * Emit the files a static host needs. -> `DECISIONS.md` B26, `LIFECYCLE.md 1.2`
@@ -16,9 +16,9 @@ import type { NativContext } from "#nativ/vite/nativ-context.ts"
  * user-specific by construction. Copying the generated shell keeps it
  * user-agnostic because it was generated that way.
  */
-export function nativStaticHostPlugin(context: NativContext): Plugin {
+export function adaptvStaticHostPlugin(context: AdaptvContext): Plugin {
   return {
-    name: "nativ:static-host",
+    name: "adaptv:static-host",
     apply: "build",
     //Only after the LAST environment. `closeBundle` fires once per environment,
     //and the client build finishes first — running then would look for a shell
@@ -46,15 +46,15 @@ export function nativStaticHostPlugin(context: NativContext): Plugin {
       if (shell === null) {
         //MEASURED, not assumed: with `spa: { enabled: true }` and the Cloudflare
         //adapter, Start emitted NO html at all - not `_shell.html`, not
-        //`index.html`. So "copy Start's shell" is not a foundation nativ can
-        //stand on, and `RENDERING.md 3.1.2`'s instruction that nativ must
+        //`index.html`. So "copy Start's shell" is not a foundation adaptv can
+        //stand on, and `RENDERING.md 3.1.2`'s instruction that adaptv must
         //GENERATE its own shell is load-bearing rather than belt-and-braces.
         throw new Error(
-          '[nativ] host: "static" needs an app shell, and the build produced none ' +
+          '[adaptv] host: "static" needs an app shell, and the build produced none ' +
             "(no dist/client/_shell.html, no dist/client/index.html).\n" +
             "TanStack Start does not reliably emit one - it was not written here even " +
             'with `web.render: "spa"`.\n' +
-            "nativ must generate a user-agnostic shell itself; that is not built yet. " +
+            "adaptv must generate a user-agnostic shell itself; that is not built yet. " +
             'Until it is, use `host: "node"` or `host: "cloudflare"`.',
         )
       }
@@ -65,7 +65,7 @@ export function nativStaticHostPlugin(context: NativContext): Plugin {
         writeFileSync(path.join(clientDir, name), contents)
       }
       console.log(
-        "[nativ] static host: wrote index.html, 404.html, .nojekyll, _redirects",
+        "[adaptv] static host: wrote index.html, 404.html, .nojekyll, _redirects",
       )
     },
   }
