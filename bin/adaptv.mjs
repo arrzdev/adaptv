@@ -330,7 +330,7 @@ async function packageArtifact(
 
   if (platform === "android") {
     const androidDir = nativeDir(appRoot, "android")
-    report("assembling debug APK (gradle)")
+    report("packaging")
     await exec(path.join(androidDir, "gradlew"), ["assembleDebug"], {
       cwd: androidDir,
       env,
@@ -373,7 +373,7 @@ async function packageIpa(appRoot, name, env, output, report) {
     )
   const derived = path.join(iosDir, "DerivedData/build")
 
-  report("building unsigned device app (xcodebuild)")
+  report("building app")
   await exec(
     "xcodebuild",
     [

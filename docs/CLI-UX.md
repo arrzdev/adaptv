@@ -22,6 +22,12 @@ adaptv's business, not theirs. The consumer does not know adaptv runs on Capacit
 `bin/lib/render.mjs` states the intent in its header: *"rendered as calm steps instead of a raw
 log dump."* Hold every change to that.
 
+**The default is SMALL.** Steps are short, direct and few, drawn from a closed vocabulary of
+lowercase phrases. The default output is not "everything, tidied" — it is the handful of things
+a dev acts on. Anyone who wants the full stream has `--verbose`, and that is the *only* place
+detail belongs. Every time this file has grown a rule, the cause was the same: something true
+was printed because it was true, without asking whether the dev needed it.
+
 ---
 
 ## 1. Structure
@@ -128,6 +134,43 @@ Unrecognised lines keep the last known phase or are hard-truncated — they neve
 > anything with source-code punctuation (`{}[]|^~<>@$#"`) is a compiler diagnostic's context, not a
 > phase.
 
+**R22 — A phase says WHAT IS HAPPENING, never WHAT IT IS HAPPENING TO.** `compiling`, not
+`compiling · CapacitorSplashScreen`. No target names, no task names, no pod names, no
+camelCase identifiers of any kind — those are the tool narrating itself.
+> Violated by: `compiling · Capacitor`, `processing resources · CapacitorCordova`,
+> `linking · CapacitorStatusBar`, `gradle · parseDebugLocalResources`,
+> `installing pods · CapacitorHaptics`.
+>
+> The subject is what made the line move: one iOS build produced **91 distinct phases and
+> rewrote the row 140 times in 13s, the longest 56 columns** — a strobe, not a status. Naming
+> the pod also answers a question nobody asked; a build compiles what it compiles. Dropping it
+> gave **12 phases, longest 24 columns**, and one shared vocabulary for iOS and Android, so the
+> two platforms read as the same command instead of two tools talking about themselves.
+
+**R23 — The live line SAMPLES the stream; it does not follow it.** A phase holds the row for
+`PHASE_DWELL_MS` before another may replace it, and the row then adopts whatever is current at
+that moment — never a backlog. `nextPhase()` in `render.mjs` is that rule, pure and tested.
+> Even with R22 applied, xcodebuild alternates compiling↔processing resources as it walks the
+> pods: still **105 rewrites in 13s (~8/sec)**. Sampling brings the same build to **17 (~1.3/sec)**.
+> Nothing is hidden — a phase too short to read was never information, and `--verbose` is
+> untouched.
+
+**R24 — The phase vocabulary is CLOSED.** A new tool verb is mapped into the existing list; it
+does not get a new phrase invented for it, and it never passes through raw. The whole list:
+> `preparing build` · `configuring` · `resolving dependencies` · `downloading dependencies` ·
+> `installing dependencies` · `compiling` · `compiling assets` · `compiling interface` ·
+> `linking` · `processing resources` · `running build script` · `generating debug symbols` ·
+> `extracting app metadata` · `checking` · `optimizing` · `signing` · `packaging` ·
+> `installing` · `cleaning` · `building`
+>
+> An unrecognised gradle task maps to `building`, not to its own name. If a genuinely new
+> activity appears, add ONE phrase here and to the tables in `tool-log.mjs` — the list staying
+> short is the point, and it is what keeps iOS and Android speaking the same language.
+
+**R25 — `·` separates a thing from its metadata.** `adaptv · build ios`,
+`✓ ios  .adaptv/ChopChop.ipa · 5.0s`, `· cached`. It is never used to bolt an identifier onto
+a phase — that was R22's bug wearing a separator.
+
 **R12 — `--verbose` is the raw escape hatch.** It streams unfiltered tool output. Every rule in
 §3 applies to the calm path only; never "fix" noise by making `--verbose` quieter.
 
@@ -208,6 +251,8 @@ Tests do not cover any of this. Run it and read it:
 - [ ] the **device picker** path (`rm -f .adaptv/devices.json`, no `--target`)
 - [ ] `--verbose` still streams raw output
 - [ ] no line wraps at a normal terminal width
+- [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,
+      or you can read an identifier in it, R22/R23 are broken
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:

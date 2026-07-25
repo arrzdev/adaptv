@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { flushNotices } from "./render.mjs"
+import { flushNotices, nextPhase, prettyLine } from "./render.mjs"
 
 //Built rather than written as a literal: a raw ESC inside a regex trips
 //lint/suspicious/noControlCharactersInRegex.
@@ -68,5 +68,72 @@ describe("flushNotices — severity and repetition", () => {
     captureOut(() => flushNotices(notices))
     expect(notices).toHaveLength(0)
     expect(captureOut(() => flushNotices(notices))).toHaveLength(0)
+  })
+})
+
+describe("nextPhase — the live line samples the stream, it does not follow it", () => {
+  it("shows the first phase immediately", () => {
+    expect(
+      nextPhase({ detail: "", pending: "compiling", shownAt: 0 }, 0),
+    ).toEqual({
+      detail: "compiling",
+      shownAt: 0,
+    })
+  })
+
+  it("holds a phase for its dwell before another may replace it", () => {
+    const row = { detail: "compiling", pending: "linking", shownAt: 1000 }
+    //too soon — the row keeps what it has
+    expect(nextPhase(row, 1300).detail).toBe("compiling")
+    //dwell elapsed — the newest phase takes the row
+    expect(nextPhase(row, 1700).detail).toBe("linking")
+  })
+
+  it("adopts whatever is newest at the window boundary, not what queued first", () => {
+    //xcodebuild alternates compiling↔processing resources per pod; sampling means the row
+    //takes the current phase when its turn comes, never replays a backlog.
+    let row = {
+      detail: "compiling",
+      pending: "processing resources",
+      shownAt: 0,
+    }
+    row = { ...row, ...nextPhase(row, 800), pending: "linking" }
+    expect(row.detail).toBe("processing resources")
+    expect(nextPhase(row, 1000).detail).toBe("processing resources") //still its turn
+    expect(nextPhase(row, 1600).detail).toBe("linking")
+  })
+
+  it("never rewrites the row for a phase that has not changed", () => {
+    const row = { detail: "compiling", pending: "compiling", shownAt: 0 }
+    expect(nextPhase(row, 99999)).toEqual({
+      detail: "compiling",
+      shownAt: 0,
+    })
+  })
+})
+
+describe("prettyLine — the vocabulary is closed (R24)", () => {
+  it("drops a bundle listing", () => {
+    //Reached the live line during every web build: a filename, a hash and two sizes.
+    expect(
+      prettyLine(
+        "dist/client/assets/preload-helper-rov5cbgt.js  1.19 kB │ gzip: 0.68 kB",
+      ),
+    ).toBe("")
+  })
+
+  it("drops a line of the dev's own source quoted by a compiler warning", () => {
+    //xcodebuild echoes the offending source under a warning, so `self?.tmpWindow = nil`
+    //became the phase — the build appearing to narrate the app's internals.
+    expect(prettyLine("self?.tmpWindow = nil")).toBe("")
+    expect(prettyLine("2576 modules transformed.")).toBe("")
+  })
+
+  it("keeps a line that already reads like a phase", () => {
+    expect(prettyLine("rendering chunks...")).toBe("rendering chunks")
+    expect(prettyLine("computing gzip size...")).toBe(
+      "computing gzip size",
+    )
+    expect(prettyLine("launching device")).toBe("launching device")
   })
 })

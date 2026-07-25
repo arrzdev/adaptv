@@ -16,6 +16,11 @@ The CLI narrates the **developer's intent**, not adaptv's implementation. A dev 
 asks them something only they can decide. The consumer doesn't know adaptv runs on Capacitor and
 TanStack (`DECISIONS.md` L20) — the output must never teach them otherwise.
 
+**The default is SMALL.** Short, direct, few steps, from a CLOSED vocabulary of lowercase
+phrases. The default is not "everything, tidied" — it is the handful of things a dev acts on.
+Detail belongs in `--verbose` and nowhere else. Every rule below exists because something true
+got printed *because it was true*, without asking whether the dev needed it.
+
 ## The rules, compressed
 
 Full text + the violating output that produced each rule: `docs/CLI-UX.md`.
@@ -28,6 +33,16 @@ interleave platforms in an `all` run; a step that did nothing prints nothing.
 with no glyph. Don't announce what the next thing already says (no preamble before a picker).
 Errors are terse and name the fix (`missing \`appId\` in adaptv.config.ts`), not wrapped in
 step-failure scaffolding.
+
+**Live phases** — a phase says WHAT IS HAPPENING, never WHAT IT IS HAPPENING TO: `compiling`,
+never `compiling · CapacitorSplashScreen` or `gradle · parseDebugLocalResources`. No target,
+task, or pod names; no camelCase identifiers. The vocabulary is CLOSED (`preparing build`,
+`compiling`, `linking`, `processing resources`, `packaging`, … — full list in `docs/CLI-UX.md`
+R24); map a new tool verb into it rather than inventing a phrase or passing one through. The row
+also SAMPLES the stream instead of following it (`nextPhase()`), so a phase holds for a beat
+before another replaces it — subjects plus unthrottled updates once made one 13s build rewrite
+its row 140 times. `·` separates a thing from its metadata (`adaptv · build ios`, `… · 5.0s`),
+never an identifier from a phase.
 
 **Noise** — never print adaptv's own plumbing (its base Capacitor plugins, cap internals); name
 only what the dev caused. Never print absolute paths — app-root-relative only. Never exceed the
@@ -44,8 +59,9 @@ truncate an error whose remaining lines carry the instructions.
 
 Run these and READ the output — `dev ios` (first run *and* warm), `preview ios`, `build all`
 including a forced failure, an `all` run (interleaving), the device picker
-(`rm -f .adaptv/devices.json`, no `--target`), and `--verbose`. Then
-`pnpm typecheck && pnpm biome:check && pnpm test`.
+(`rm -f .adaptv/devices.json`, no `--target`), and `--verbose`. **Watch a native build for 10s**:
+if the phase text moves more than ~once a second, or you can read an identifier in it, the live
+line is wrong. Then `pnpm typecheck && pnpm biome:check && pnpm test`.
 
 Capture through a pty so live-line rendering is real:
 `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv <cmd>`
