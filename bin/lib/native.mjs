@@ -17,13 +17,62 @@ import {
 import { createRequire } from "node:module"
 import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { exec } from "./exec.mjs"
+import {
+  classListChanged,
+  mergeClassList,
+  podsNeedInstall,
+} from "./native-state.mjs"
+
+// The framework package root (bin/lib/native.mjs → up two). adaptv OWNS Capacitor:
+// the `cap` CLI, both native platforms, and every plugin are adaptv's OWN deps, so
+// the toolchain resolves from HERE, never from the consumer's app (which declares no
+// @capacitor/* at all). → the whole point: a consumer never touches Capacitor.
+export const ADAPTV_ROOT = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+)
 
 /** The hidden generated dir (mirrors src/vite/adaptv-dir.ts — kept in sync by hand). */
 export const ADAPTV_DIR = ".adaptv"
 /** Absolute path to a platform's native project, now under `.adaptv/`. */
 export const nativeDir = (appRoot, platform) =>
   path.join(appRoot, ADAPTV_DIR, platform)
+/** The generated Capacitor config, carried in the `ADAPTV_CAPACITOR_CONFIG` env var —
+ * adaptv's patched `@capacitor/cli` reads it in-memory, so NO `capacitor.config.json` exists
+ * in the consumer's project (cap runs at the app root and inherits this env via platformEnv,
+ * which spreads `process.env`). Returns null when unset (web-only, or config not yet built). */
+export function capConfigFromEnv() {
+  try {
+    return JSON.parse(process.env.ADAPTV_CAPACITOR_CONFIG ?? "")
+  } catch {
+    return null
+  }
+}
+/** Merge run-time overrides into the env-carried config — the `.dev` install identity
+ * (dev/preview) and the live-reload `server` block (dev) — replacing the old in-place file
+ * mutation. Ephemeral: it dies with the process, so a killed run leaves no stale state. */
+export function updateCapacitorEnv(overrides) {
+  process.env.ADAPTV_CAPACITOR_CONFIG = JSON.stringify({
+    ...(capConfigFromEnv() ?? {}),
+    ...overrides,
+  })
+}
+
+/** Overlay the LIVE env-carried config onto a spawn env. The per-platform env is MEMOIZED
+ * (built once, before the config is finalized — the dev server `url` and the `.dev` identity
+ * are layered on later), and the config now travels IN that env, so cap must always receive
+ * the CURRENT `ADAPTV_CAPACITOR_CONFIG`, never the stale snapshot. */
+function withLiveCapConfig(env) {
+  return process.env.ADAPTV_CAPACITOR_CONFIG
+    ? {
+        ...env,
+        ADAPTV_CAPACITOR_CONFIG: process.env.ADAPTV_CAPACITOR_CONFIG,
+      }
+    : env
+}
 
 /**
  * Delete a platform project's transient build caches. Xcode bakes the project's
@@ -55,12 +104,15 @@ export function localBin(appRoot, name) {
   return existsSync(p) ? p : null
 }
 
-/** Resolve `cap` (Capacitor CLI); prefer the local install, fall back to npx. */
-export function capCmd(appRoot) {
-  const local = localBin(appRoot, "cap")
-  return local
-    ? { cmd: local, pre: [] }
-    : { cmd: "npx", pre: ["--yes", "@capacitor/cli"] }
+/** Invoke `cap` through adaptv's shim (bin/lib/cap.mjs) — it guarantees the in-memory
+ * `ADAPTV_CAPACITOR_CONFIG` behaviour on BOTH a patched install (dev/link) and an unpatched
+ * one (published, where pnpm won't carry adaptv's patch). adaptv owns `@capacitor/cli`, so
+ * the shim can always resolve it. → bin/lib/cap.mjs, DECISIONS.md L20. */
+export function capCmd(_appRoot) {
+  return {
+    cmd: process.execPath,
+    pre: [path.join(ADAPTV_ROOT, "bin", "lib", "cap.mjs")],
+  }
 }
 
 /** Run a captured command; each raw line goes to `report`. Throws on failure. */
@@ -448,10 +500,21 @@ export async function capAddIfMissing(
   appRoot,
   platform,
   env,
-  { report } = {},
+  { report, plugins } = {},
 ) {
   const dir = nativeDir(appRoot, platform)
-  if (existsSync(dir)) return
+  if (existsSync(dir)) {
+    // Project already scaffolded — but still verify adaptv's plugin pods are declared AND
+    // that the CocoaPods sandbox is in sync. This has to happen on EVERY prepare, not only
+    // when the project is created: `cap sync` is skipped by the build cache on an unchanged
+    // run, so a project left half-installed (Ctrl-C during CocoaPods → `Pods/` with no
+    // lockfiles) would otherwise never be repaired and every build would fail with
+    // "The sandbox is not in sync with the Podfile.lock". Cheap when healthy: two stats and
+    // a string compare, then an early return.
+    if (platform === "ios")
+      await injectIosPluginPods(appRoot, env, { report, plugins })
+    return
+  }
 
   // one-time migration: an older layout scaffolded at the app root.
   const legacy = path.join(appRoot, platform)
@@ -467,22 +530,29 @@ export async function capAddIfMissing(
     return
   }
 
+  // adaptv ships @capacitor/<platform> as its OWN dependency — resolve it from the
+  // framework, not the app. If it's missing here, that's an adaptv packaging bug, not
+  // something the consumer can fix.
   let platformInstalled = false
-  try {
-    createRequire(path.join(appRoot, "package.json")).resolve(
-      `@capacitor/${platform}/package.json`,
-    )
-    platformInstalled = true
-  } catch {
-    platformInstalled = false
+  for (const base of [ADAPTV_ROOT, appRoot]) {
+    try {
+      createRequire(path.join(base, "package.json")).resolve(
+        `@capacitor/${platform}/package.json`,
+      )
+      platformInstalled = true
+      break
+    } catch {}
   }
   if (!platformInstalled) {
     throw new Error(
-      `@capacitor/${platform} is not installed. Add the native platform package:\n` +
-        `    pnpm --filter <your-app> add @capacitor/${platform}`,
+      `@capacitor/${platform} is missing from adaptv's install — reinstall adaptv ` +
+        `(this is a framework packaging issue, not something to add to your app).`,
     )
   }
-  report?.(`cap add ${platform} (first run — scaffolding native project)`)
+  // Phrased as a SUB-ACTION, not a step: this now reports onto the platform's own line
+  // (`ios` / `android`), so it has to read like something that line is doing right now —
+  // and never name `cap`, which is adaptv's plumbing, not the dev's concern.
+  report?.("scaffolding native project (first run)")
   const { cmd, pre } = capCmd(appRoot)
   //iOS: force CocoaPods, never SPM (SPM's binary xcframework fails to compile the
   //plugin sources under Xcode 16; CocoaPods builds from source, BUILD SUCCEEDED).
@@ -490,15 +560,193 @@ export async function capAddIfMissing(
     platform === "ios" ? ["--packagemanager", "CocoaPods"] : []
   await run(cmd, [...pre, "add", platform, ...pkgMgr], {
     cwd: appRoot,
-    env,
+    env: withLiveCapConfig(env),
     report,
   })
+  //`cap add` writes a core-only Podfile (Capacitor can't discover adaptv's plugins);
+  //inject them now so a first run that skips the (cached) sync still gets them.
+  if (platform === "ios")
+    await injectIosPluginPods(appRoot, env, { report, plugins })
 }
 
 /** `cap sync <platform>` (copies web assets + updates native deps). */
-export async function capSync(appRoot, platform, env, { report } = {}) {
+/** The Capacitor packages adaptv ships that carry NATIVE code — `@capacitor/ios`
+ * (the core pods) plus every plugin. Derived from adaptv's own manifest so it can
+ * never drift from what's installed. Excludes the JS-only core, the CLI, and the
+ * other platform. */
+function adaptvCapacitorNativePkgs() {
+  const pkg = JSON.parse(
+    readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+  )
+  const skip = new Set([
+    "@capacitor/cli",
+    "@capacitor/core",
+    "@capacitor/android",
+  ])
+  return Object.keys(pkg.dependencies ?? {}).filter(
+    (n) => n.startsWith("@capacitor/") && !skip.has(n),
+  )
+}
+
+/** Scan a plugin package's iOS sources for its registered class name(s) — mirrors
+ * @capacitor/cli's `findPluginClasses` (`@objc(Name)` for Swift, `CAP_PLUGIN(Name` for
+ * ObjC). These are the entries the runtime needs in `packageClassList` to REGISTER a plugin. */
+function scanIosPluginClasses(pluginDir) {
+  const names = []
+  const stack = [path.join(pluginDir, "ios")]
+  while (stack.length) {
+    const dir = stack.pop()
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) stack.push(p)
+      else if (e.name.endsWith(".swift") || e.name.endsWith(".m")) {
+        const src = readFileSync(p, "utf8")
+        for (const re of [
+          /@objc\(([A-Za-z0-9_-]+)\)/,
+          /CAP_PLUGIN\(([A-Za-z0-9_-]+)/,
+        ]) {
+          const m = src.match(re)
+          if (m && !names.includes(m[1])) names.push(m[1])
+        }
+      }
+    }
+  }
+  return names
+}
+
+/** Add class names to the native project's `packageClassList` (the runtime plugin registry).
+ * `cap sync` rebuilds it from the app's DISCOVERED plugins only — adaptv's plugins aren't app
+ * deps, so without this they compile but never register ("<X> plugin is not implemented"). */
+function addToIosPackageClassList(appRoot, classNames) {
+  if (classNames.length === 0) return
+  const file = path.join(
+    nativeDir(appRoot, "ios"),
+    "App",
+    "App",
+    "capacitor.config.json",
+  )
+  if (!existsSync(file)) return
+  const cfg = JSON.parse(readFileSync(file, "utf8"))
+  const existing = cfg.packageClassList ?? []
+  const merged = mergeClassList(existing, classNames)
+  if (!classListChanged(existing, merged)) return
+  cfg.packageClassList = merged
+  writeFileSync(file, `${JSON.stringify(cfg, null, "\t")}\n`)
+}
+
+/**
+ * Capacitor discovers plugins from the CONSUMER's `package.json` — but adaptv owns
+ * the plugins (they're adaptv's deps, not the app's), so `cap sync` only ever writes
+ * the core pod into the Podfile. adaptv owns the native project, so it injects its own
+ * plugin pods here — resolved from adaptv's install, keyed by each package's
+ * `.podspec` — then re-runs `pod install`. Runs after every sync (which regenerates
+ * the Podfile), so it is self-healing rather than a one-time patch.
+ */
+async function injectIosPluginPods(
+  appRoot,
+  env,
+  { report, plugins = [] } = {},
+) {
+  const podfile = path.join(nativeDir(appRoot, "ios"), "App", "Podfile")
+  if (!existsSync(podfile)) return
+  // adaptv's OWN plugins resolve from the framework; consumer-registered extras
+  // (adaptv.config.ts `plugins`) resolve from the app, where the consumer `pnpm add`ed
+  // them. Try both roots per package so either location works.
+  const reqAdaptv = createRequire(path.join(ADAPTV_ROOT, "package.json"))
+  const reqApp = createRequire(path.join(appRoot, "package.json"))
+  const resolvePkgDir = (name) => {
+    for (const req of [reqApp, reqAdaptv]) {
+      try {
+        return path.dirname(req.resolve(`${name}/package.json`))
+      } catch {}
+    }
+    return null
+  }
+  const podfileDir = path.dirname(podfile)
+  const pods = []
+  const seen = new Set()
+  const classNames = []
+  for (const name of [...adaptvCapacitorNativePkgs(), ...plugins]) {
+    const dir = resolvePkgDir(name)
+    if (!dir) {
+      report?.(
+        `! plugin ${name} not found — skipped (did you install it?)`,
+      )
+      continue
+    }
+    const rel = path.relative(podfileDir, dir)
+    for (const spec of readdirSync(dir).filter((f) =>
+      f.endsWith(".podspec"),
+    )) {
+      const podName = spec.replace(/\.podspec$/, "")
+      if (seen.has(podName)) continue //dedupe (a base plugin also listed in config)
+      seen.add(podName)
+      pods.push(`  pod '${podName}', :path => '${rel}'`)
+    }
+    //@capacitor/ios is the core runtime, not a registrable plugin — skip it here.
+    if (name !== "@capacitor/ios")
+      for (const cn of scanIosPluginClasses(dir))
+        if (!classNames.includes(cn)) classNames.push(cn)
+  }
+  //ALWAYS re-assert the runtime registry (cap rewrites it from app deps each sync), even when
+  //the Podfile is unchanged — otherwise adaptv's plugins compile but don't register.
+  addToIosPackageClassList(appRoot, classNames)
+  if (pods.length === 0) return
+  const src = readFileSync(podfile, "utf8")
+  const next = src.replace(
+    /def capacitor_pods[\s\S]*?\n\s*end/,
+    `def capacitor_pods\n${pods.join("\n")}\nend`,
+  )
+  // Run `pod install` when the Podfile changed OR when the sandbox is out of sync with it.
+  // The second case is not theoretical: a Ctrl-C (or a killed run) during CocoaPods leaves
+  // `Pods/` behind without its lockfiles, and every later xcodebuild then hard-fails with
+  // "The sandbox is not in sync with the Podfile.lock" — a dead end the dev can only escape
+  // by running `pod install` by hand. Since adaptv owns this project, it repairs it instead.
+  const changed = next !== src
+  if (
+    !podsNeedInstall({
+      podfileChanged: changed,
+      hasPodfileLock: existsSync(path.join(podfileDir, "Podfile.lock")),
+      hasManifestLock: existsSync(
+        path.join(podfileDir, "Pods", "Manifest.lock"),
+      ),
+    })
+  )
+    return
+  if (changed) writeFileSync(podfile, next)
+  //Only mention the plugins the CONSUMER registered (adaptv.config.ts `plugins`). The base
+  //set adaptv ships is framework plumbing — a dev reading these logs shouldn't have to know
+  //adaptv wires Capacitor pods at all, only that THEIR plugin got wired.
+  if (plugins.length > 0) {
+    const names = plugins
+      .map((p) => p.replace(/^@capacitor\//, ""))
+      .join(", ")
+    report?.(`linking plugins · ${names}`)
+  }
+  await run("pod", ["install"], { cwd: podfileDir, env, report })
+}
+
+export async function capSync(
+  appRoot,
+  platform,
+  env,
+  { report, plugins } = {},
+) {
   const { cmd, pre } = capCmd(appRoot)
-  await run(cmd, [...pre, "sync", platform], { cwd: appRoot, env, report })
+  await run(cmd, [...pre, "sync", platform], {
+    cwd: appRoot,
+    env: withLiveCapConfig(env),
+    report,
+  })
+  //Capacitor's discovery can't see adaptv-owned plugins; adaptv adds them itself.
+  if (platform === "ios")
+    await injectIosPluginPods(appRoot, env, { report, plugins })
 }
 
 /** `cap run <platform> --target <id>` (build + install + launch). */
@@ -521,7 +769,11 @@ export async function capRun(
   // actually running) to load the fresh install.
   const args = [...pre, "run", platform, "--no-sync"]
   if (target) args.push("--target", target)
-  await run(cmd, args, { cwd: appRoot, env, report })
+  await run(cmd, args, {
+    cwd: appRoot,
+    env: withLiveCapConfig(env),
+    report,
+  })
 }
 
 /**
@@ -860,17 +1112,9 @@ export function launchInstalledApp(
   return false
 }
 
-/** The app id from capacitor.config.json, or null if unreadable. */
-function readAppId(appRoot) {
-  try {
-    return (
-      JSON.parse(
-        readFileSync(path.join(appRoot, "capacitor.config.json"), "utf8"),
-      ).appId ?? null
-    )
-  } catch {
-    return null
-  }
+/** The effective app id (may be the `.dev` variant) from the env-carried config, or null. */
+function readAppId(_appRoot) {
+  return capConfigFromEnv()?.appId ?? null
 }
 
 /** Read a file, apply one regex replacement, write back only if it changed. Best-effort. */
@@ -909,16 +1153,8 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
   const id = dev ? `${baseId}.dev` : baseId
   const name = dev ? `${baseName} (dev)` : baseName
 
-  // Keep the root config (read by readAppId + copied by `cap sync`) matching the install id.
-  try {
-    const file = path.join(appRoot, "capacitor.config.json")
-    const cfg = JSON.parse(readFileSync(file, "utf8"))
-    if (cfg.appId !== id || cfg.appName !== name) {
-      cfg.appId = id
-      cfg.appName = name
-      writeFileSync(file, `${JSON.stringify(cfg, null, 2)}\n`)
-    }
-  } catch {}
+  // Keep the env-carried config (read by readAppId + copied by `cap sync`) on the install id.
+  updateCapacitorEnv({ appId: id, appName: name })
 
   const nd = nativeDir(appRoot, platform)
   if (platform === "ios") {
