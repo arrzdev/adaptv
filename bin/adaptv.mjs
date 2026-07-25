@@ -40,12 +40,6 @@ import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
-import {
-  fingerprint,
-  nativeFingerprint,
-  readCache as readBuildCache,
-  writeCache as writeBuildCache,
-} from "./lib/cache.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import {
   cachedDevice,
@@ -53,6 +47,7 @@ import {
   resolveTarget,
 } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
+import { fingerprint, nativeFingerprint } from "./lib/fingerprint.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -113,6 +108,7 @@ import {
   spacer,
   wasReported,
 } from "./lib/render.mjs"
+import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, gradleCause } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
@@ -793,7 +789,7 @@ async function runLive(appRoot, platforms, opts) {
       // rebuild: launch it and let it reconnect. That turns a ~15s build+install into a
       // ~1s launch, and drops Android from two relaunches to one (no `cap run` to reset
       // `adb reverse`). Every uncertainty falls through to the full path.
-      const runCache = readBuildCache(appRoot)
+      const runCache = readBuildState(appRoot)
       runCache.run ??= {}
       const cacheKey = (platform) =>
         `${platform}:${targets[platform]?.id ?? "default"}`
@@ -866,7 +862,7 @@ async function runLive(appRoot, platforms, opts) {
           url,
           fp: nativeFingerprint(appRoot, platform),
         }
-        writeBuildCache(appRoot, runCache)
+        writeBuildState(appRoot, runCache)
         launched.add(platform)
         return `${target.name}`
       }
@@ -1094,7 +1090,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   // build fingerprint cache — skip the web build + sync when nothing that affects the
   // bundle changed. `--force` (or a missing dist) always rebuilds.
-  const buildCache = readBuildCache(appRoot)
+  const buildCache = readBuildState(appRoot)
   const distReady = existsSync(
     path.join(appRoot, CAP_WEB_DIR, "index.html"),
   )
@@ -1120,7 +1116,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
     fp = fingerprint(appRoot)
     buildCache.web = fp
     buildCache.sync = {} // a new bundle invalidates every platform's sync
-    writeBuildCache(appRoot, buildCache)
+    writeBuildState(appRoot, buildCache)
   }
 
   // 2. prepare native projects — must precede device listing (`cap run --list`
@@ -1347,7 +1343,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
     })),
     { verbose },
   )
-  writeBuildCache(appRoot, buildCache)
+  writeBuildState(appRoot, buildCache)
 
   const ok = platforms.every((p) => p in done)
   // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an

@@ -1,34 +1,24 @@
 // Device targeting for `adaptv dev`. adaptv owns device selection (rather than letting
-// Capacitor's opaque picker handle it) so it can CACHE the choice: pick once with the
-// arrow keys, then `--latest` reuses it. The cache lives in `.adaptv/devices.json`
-// (git-ignored with the rest of `.adaptv/`). → plan Part 3.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import path from "node:path"
+// Capacitor's opaque picker handle it) so it can REMEMBER the choice: pick once with the
+// arrow keys, then `--latest` reuses it. The pick lives in the `devices` section of
+// `.adaptv/state.json` (git-ignored with the rest of `.adaptv/`). → plan Part 3.
 import { capture } from "./exec.mjs"
-import { ADAPTV_DIR, capCmd } from "./native.mjs"
+import { capCmd } from "./native.mjs"
 import { select } from "./render.mjs"
+import { readSection, writeSection } from "./state.mjs"
 
-const cacheFile = (appRoot) =>
-  path.join(appRoot, ADAPTV_DIR, "devices.json")
-
-function readCache(appRoot) {
-  try {
-    return JSON.parse(readFileSync(cacheFile(appRoot), "utf8"))
-  } catch {
-    return {}
-  }
-}
+const readDevices = (appRoot) => readSection(appRoot, "devices")
 
 /** The remembered `{ id, name }` for a platform (`--latest`), or null. */
 export function cachedDevice(appRoot, platform) {
-  return readCache(appRoot)[platform] ?? null
+  return readDevices(appRoot)[platform] ?? null
 }
 
-function writeCache(appRoot, platform, device) {
-  const cache = readCache(appRoot)
-  cache[platform] = device
-  mkdirSync(path.join(appRoot, ADAPTV_DIR), { recursive: true })
-  writeFileSync(cacheFile(appRoot), `${JSON.stringify(cache, null, 2)}\n`)
+function rememberDevice(appRoot, platform, device) {
+  writeSection(appRoot, "devices", {
+    ...readDevices(appRoot),
+    [platform]: device,
+  })
 }
 
 /**
@@ -68,7 +58,7 @@ async function pickAndCache(appRoot, platform, env) {
     targets.map((t) => ({ value: t.id, label: t.name, hint: t.api })),
   )
   const device = { id, name: targets.find((t) => t.id === id)?.name ?? id }
-  writeCache(appRoot, platform, device)
+  rememberDevice(appRoot, platform, device)
   return { ...device, source: "picked" }
 }
 
@@ -97,12 +87,12 @@ export async function resolveTarget(
       )
     }
     const device = { id: target, name: known.name ?? target }
-    writeCache(appRoot, platform, device)
+    rememberDevice(appRoot, platform, device)
     return { ...device, source: "target" }
   }
 
   if (latest) {
-    const cached = readCache(appRoot)[platform]
+    const cached = cachedDevice(appRoot, platform)
     if (cached?.id) {
       // Remembered — but a saved pick goes stale: the simulator was shut down, the emulator
       // never started, the phone was unplugged. Returning it anyway pushed the problem to

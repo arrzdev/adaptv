@@ -101,14 +101,18 @@ adaptv build   ios|android|all         # build SPA → sync → produce the .ipa
 ```
 
 `dev` and `preview` show a branded device picker (arrow keys) and **remember your choice per platform**
-in `.adaptv/devices.json`, so the next `adaptv dev ios --latest` skips straight to the same device (shown
+in `.adaptv/state.json`, so the next `adaptv dev ios --latest` skips straight to the same device (shown
 as a `· latest` tag on the launch line). The `all` target drives both platforms **in parallel** with a
 clean two-column progress board; the inner cap/gradle/xcode/pod logs are captured and only surfaced on
 failure (or with `--verbose`).
 
-**Build cache** — a source fingerprint (`.adaptv/build-cache.json`) lets a re-run **skip the web build
+**Build cache** — a source fingerprint lets a re-run **skip the web build
 and sync** when nothing that affects the bundle changed (`✓ web build · cached`), so an unchanged
 `preview`/`build` goes almost straight to launch. `--force` rebuilds unconditionally.
+
+Everything the CLI remembers between runs — that fingerprint, what is already synced/installed, your
+device picks — lives in the single git-ignored **`.adaptv/state.json`**. Deleting it costs one rebuild
+and one picker prompt, nothing else.
 
 The CLI owns the native toolchain env and **owns the native project templates** (it patches
 `MainActivity` / `AppDelegate` / launch storyboard / colour resources) so the consumer never touches

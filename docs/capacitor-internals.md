@@ -178,7 +178,7 @@ pnpm --filter @repo/frontend cap:ios:ipa      # adaptv build ios    — unsigned
 
 Each `run` does: `vite build` (`ADAPTV_TARGET=capacitor`) + stamp `index.html` → brand assets →
 `cap sync <platform>` → `cap run <platform>`. The picker is adaptv's own and caches to
-`.adaptv/devices.json`: `--target <id>` selects directly, `--latest` reuses the cached device. `sync` and
+`.adaptv/state.json`: `--target <id>` selects directly, `--latest` reuses the cached device. `sync` and
 `assets` are internal steps now, not separate commands.
 
 Toolchain (the CLI resolves these; you just install them):
