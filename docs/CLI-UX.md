@@ -277,7 +277,7 @@ Tests do not cover any of this. Run it and read it:
 - [ ] `adaptv dev ios` — **first run** (`rm -rf .adaptv/ios`) and a warm run
 - [ ] `adaptv preview ios` and `adaptv build all` — including a genuine **failure** (force one)
 - [ ] an `all` run, to check platforms don't interleave
-- [ ] the **device picker** path (`rm -f .adaptv/devices.json`, no `--target`)
+- [ ] the **device picker** path (`rm -f .adaptv/state.json`, no `--target`)
 - [ ] `--verbose` still streams raw output
 - [ ] no line wraps at a normal terminal width
 - [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,

@@ -463,7 +463,8 @@ projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. A
 
 **Device targeting.** adaptv owns the picker (rather than Capacitor's opaque one) so it can cache your
 choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and
-writes the pick to `.adaptv/devices.json`. `--target <id>` selects directly (and caches); `--latest`
+writes the pick to `.adaptv/state.json` (the one file the CLI remembers anything in, under `devices`).
+`--target <id>` selects directly (and caches); `--latest`
 reuses the cached device (falling back to the picker if none). *Listing requires the platform to exist,
 so `run` prepares the native project **before** resolving the target.*
 
