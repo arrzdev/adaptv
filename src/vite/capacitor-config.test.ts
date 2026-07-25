@@ -60,7 +60,8 @@ describe("buildCapacitorConfig", () => {
     //The native half of the safe-area contract (DECISIONS.md §6.0): Capacitor 8 core
     //injects the CSS vars styles/safe-area.css consumes var-first, working around
     //broken env() in Android WebView < 140.
-    const systemBars = buildCapacitorConfig(BASE).plugins.SystemBars
+    const systemBars = buildCapacitorConfig(BASE).plugins
+      .SystemBars as Record<string, unknown>
     expect(systemBars.insetsHandling).toBe("css")
     expect(systemBars.style).toBe("DEFAULT")
   })
