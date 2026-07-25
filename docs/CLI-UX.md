@@ -115,7 +115,7 @@ caused is named.
 
 **R9 — Never print absolute paths.** Artifact and file paths are app-root-relative.
 > Violated by: `✓ android /Users/arrz/Documents/Github/project-zero/apps/front…`.
-> Want: `✓ android .adaptv/app-debug.apk`.
+> Want: `✓ android .adaptv/builds/app-debug.apk`.
 
 **R10 — Never exceed the terminal width, never wrap.** `compose()` in `render.mjs` clips the dim
 right-hand detail; `clipAnsi()` clips a whole pre-coloured row (both preserve ANSI codes). A
@@ -168,7 +168,7 @@ does not get a new phrase invented for it, and it never passes through raw. The 
 > short is the point, and it is what keeps iOS and Android speaking the same language.
 
 **R25 — `·` separates a thing from its metadata.** `adaptv · build ios`,
-`✓ ios  .adaptv/ChopChop.ipa · 5.0s`, `· cached`. It is never used to bolt an identifier onto
+`✓ ios  .adaptv/builds/ChopChop.ipa · 5.0s`, `· cached`. It is never used to bolt an identifier onto
 a phase — that was R22's bug wearing a separator.
 
 **R12 — `--verbose` is the raw escape hatch.** It streams unfiltered tool output. Every rule in

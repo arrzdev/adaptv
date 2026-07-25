@@ -17,7 +17,7 @@
 //               --force         reinstall even when nothing native changed (dev/preview skip
 //                               the rebuild and just relaunch the installed app otherwise)
 //               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
-//   build flags: --output <path> where to write the artifact (default: .adaptv/)
+//   build flags: --output <path> where to write the artifact (default: .adaptv/builds/)
 //               --force         rebuild even if unchanged (web build + sync are cached)
 //   all:         --verbose      show the full underlying tool logs (raw passthrough)
 //
@@ -63,6 +63,7 @@ import {
 } from "./lib/lock.mjs"
 import {
   ADAPTV_DIR,
+  BUILDS_DIR,
   buildWeb,
   CAP_WEB_DIR,
   capAddIfMissing,
@@ -306,7 +307,7 @@ function toolErrorParts(raw) {
 const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
 
 /**
- * Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/`.
+ * Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/builds/`.
  * Returns the artifact path relative to the app root — that string becomes the step's
  * settled detail, and an absolute path there is just noise the renderer has to truncate.
  *
@@ -434,9 +435,15 @@ function shortPath(appRoot, target) {
   return rel && !rel.startsWith("..") ? rel : target
 }
 
-/** Resolve where an artifact should land: a `--output` path/dir, or `.adaptv/<default>`. */
+/**
+ * Resolve where an artifact should land: a `--output` path/dir, or `.adaptv/builds/<default>`.
+ *
+ * Artifacts get their OWN directory rather than sitting next to `ios/`, `android/` and the
+ * cache files at the top of `.adaptv/`: those are adaptv's working state, an `.ipa`/`.apk` is
+ * the thing the dev came for. One place to look, one place to delete.
+ */
 function resolveOutput(appRoot, output, defaultName) {
-  const base = path.join(appRoot, ADAPTV_DIR)
+  const base = path.join(appRoot, ADAPTV_DIR, BUILDS_DIR)
   if (!output) {
     mkdirSync(base, { recursive: true })
     return path.join(base, defaultName)

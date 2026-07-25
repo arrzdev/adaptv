@@ -94,7 +94,7 @@ adaptv build   ios|android|all         # build SPA → sync → produce the .ipa
 #                   rebuild and just relaunch the installed app)
 #   -- <vite args>  (dev) forwarded to the Vite dev server (e.g. `-- --port 4000`)
 # build flags
-#   --output <path> where to write the artifact (default: .adaptv/)
+#   --output <path> where to write the artifact (default: .adaptv/builds/)
 #   --force         rebuild even when unchanged (the web build + sync are cached)
 # all commands
 #   --verbose       show the full underlying tool logs (raw passthrough)
