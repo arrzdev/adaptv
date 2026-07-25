@@ -34,6 +34,14 @@ with no glyph. Don't announce what the next thing already says (no preamble befo
 Errors are terse and name the fix (`missing \`appId\` in adaptv.config.ts`), not wrapped in
 step-failure scaffolding.
 
+**The engine** — `bin/lib/render.mjs` owns EVERY byte the CLI prints. Commands state intent
+(`header`, `runLine`/`runLanes`, `addresses`, `flushNotices`, `liveWatcher`, `section`,
+`check`, `spacer`, `detail`) and the engine decides how it looks; `rawOut()` is the only
+exception, for `--verbose`. Need a new kind of line? **Add a primitive** — never draw it in
+the command. `bin/lib/engine.test.mjs` fails the build on a direct stdout write or a second
+glyph set (`✔ ✗ ⚠`). Nearly every rule in the doc exists because one idea had two
+implementations and they drifted.
+
 **Live phases** — a phase says WHAT IS HAPPENING, never WHAT IT IS HAPPENING TO: `compiling`,
 never `compiling · CapacitorSplashScreen` or `gradle · parseDebugLocalResources`. No target,
 task, or pod names; no camelCase identifiers. The vocabulary is CLOSED (`preparing build`,
