@@ -110,6 +110,18 @@ export function fail(label, reason, detail = []) {
   noteFailurePrinted()
 }
 
+/** The blank line that used to come from the closing footer — kept so a finished command
+ * still ends with breathing room instead of the shell prompt hugging the last step. */
+export function spacer() {
+  out("\n")
+}
+
+/** One dim, indented line hanging under a settled step — the same shape failure detail
+ * uses, so an extra address reads as part of that step rather than a new event. */
+export function detail(line) {
+  out(`    ${c.dim(line)}\n`)
+}
+
 /** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
 function detailBlock(detail) {
   for (const d of detail ?? []) out(`    ${c.dim(d)}\n`)
@@ -167,18 +179,26 @@ export const wasReported = (err) =>
  * keys available at any moment.
  */
 export function liveWatcher({ keys = true } = {}) {
-  // Only offer the keys when they can actually be read. Printing `r reload js` while raw
-  // mode is unavailable is the CLI lying: the dev presses r, nothing happens, and there is
-  // nothing on screen to explain why. Say what's wrong and how to get them back instead.
-  const live = keys && keysAvailable()
-  const hint = live
-    ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
-      // keys, where the bold's reset bleeds and the key ends up gray.
-      `  ${c.dim("·")}  ${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${c.bold("ctrl-c")}${c.dim(" stop")}`
-    : keys
-      ? `  ${c.dim("·")}  ${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
-      : ""
-  const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
+  // Offer a key ONLY when pressing it would do something. Two ways this lied before:
+  //   - `r`/`b` are NATIVE actions (relaunch the app on the device, reinstall the binary).
+  //     On `dev web` their handlers return immediately, yet the hint still offered them —
+  //     so the dev pressed them, nothing happened, and the CLI looked wedged. On web the
+  //     browser reloads itself; there is no binary to rebuild.
+  //   - raw mode may be unavailable (stdin isn't a TTY), in which case NO key arrives.
+  // ctrl-c always works, so it is always worth saying.
+  const stop = `${c.bold("ctrl-c")}${c.dim(" stop")}`
+  //no leading separator: this row IS the hints now, not a suffix on `✓ watching`
+  const dot = "  "
+  const hint = !keys
+    ? `${dot}${stop}` //web: nothing to reload or rebuild from here
+    : keysAvailable()
+      ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
+        // keys, where the bold's reset bleeds and the key ends up gray.
+        `${dot}${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${stop}`
+      : `${dot}${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
+  // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
+  // and the row still animates on HMR — the spinner is what says "working", not a word.
+  const idleLine = hint.trimEnd() || `  ${c.dim("ctrl-c stop")}`
   if (!isTTY) {
     out(`${idleLine}\n`)
     return {

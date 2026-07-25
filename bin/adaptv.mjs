@@ -93,6 +93,7 @@ import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import {
   c,
+  detail,
   fail,
   footer,
   header,
@@ -103,10 +104,12 @@ import {
   runLanes,
   runLine,
   since,
+  spacer,
   wasReported,
 } from "./lib/render.mjs"
 import { gradleCause } from "./lib/tool-log.mjs"
 
+const out2 = (t) => process.stdout.write(t)
 const CWD = process.cwd()
 //the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
 //own pure modules (doctor, privacy-manifest) rather than duplicate them.
@@ -734,6 +737,10 @@ async function runLive(appRoot, platforms, opts) {
     // The dev-server line shows localhost (the binding); a physical device actually loads
     // over the LAN, so surface that address once — it's the only place it appears now.
     if (external) log.info(`device loads from ${c.bold(url)}`)
+    // Vite reports a Network address only when it actually bound one (external mode). Show
+    // it when it exists and stay silent otherwise — printing an address that nothing serves
+    // is the same lie as offering a key that does nothing.
+    if (devServer?.networkUrl) detail(`network  ${devServer.networkUrl}`)
     // Record the bound port + url in the lock, so a second `dev` (or a `preview`/`build`)
     // can name exactly what's holding the port in its refusal message.
     updateDevLock(appRoot, { port, url })
@@ -909,7 +916,7 @@ async function runLive(appRoot, platforms, opts) {
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     line("")
-    watcher = liveWatcher()
+    watcher = liveWatcher({ keys: !webOnly })
 
     // `b` reinstalls on demand — always, not only after a change is detected. A device
     // in a state you don't trust is reason enough, and having to kill the run to get a
@@ -928,7 +935,7 @@ async function runLive(appRoot, platforms, opts) {
       await launchAll({ force: true })
       nativeFp = snapshotNativeFp(appRoot, ready)
       line("")
-      watcher = liveWatcher() // fresh line, which also clears any pending notice
+      watcher = liveWatcher({ keys: !webOnly }) // fresh line, which also clears any pending notice
       rebuilding = false
     }
 
@@ -978,7 +985,7 @@ async function runLive(appRoot, platforms, opts) {
         )
       }
       line("")
-      watcher = liveWatcher()
+      watcher = liveWatcher({ keys: !webOnly })
       reloading = false
     }
     cleanups.push(
@@ -1085,9 +1092,15 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   const finish = (hint) => {
     flushWarnings()
-    // per-platform outcome is on the step/lane lines; footer is just the total.
-    footer(`${hint} ${c.dim(`· ${since(t0)}`)}`)
-    if (!platforms.every((p) => p in done)) process.exitCode = 1
+    // Only a FAILURE gets a closing line. On success every platform already settled its own
+    // line naming what it produced or where it launched, so a total underneath adds a row
+    // that says nothing new. A failure still needs one: it is the command's verdict, and for
+    // `all` it is the only place that says more than one platform went wrong.
+    const failed = !platforms.every((p) => p in done)
+    if (failed) {
+      footer(`${hint} ${c.dim(`· ${since(t0)}`)}`)
+      process.exitCode = 1
+    } else spacer()
   }
 
   // build fingerprint cache — skip the web build + sync when nothing that affects the
@@ -1638,7 +1651,6 @@ function targetsFor(arg) {
  * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (LIFECYCLE §0, L14).
  */
 async function previewWeb(appRoot, opts) {
-  const t0 = Date.now()
   header("preview web")
   const verbose = !!opts.verbose
   const viteBin = localBin(appRoot, "vite")
@@ -1676,11 +1688,13 @@ async function previewWeb(appRoot, opts) {
   const onData = (buf) => {
     const text = String(buf)
     if (verbose) process.stdout.write(text)
-    const m = text.match(/https?:\/\/[^\s]+/)
-    if (m && !announced) {
+    const local = text.match(/Local:\s+(https?:\/\/\S+)/)
+    const net = text.match(/Network:\s+(https?:\/\/\S+)/)
+    if (local && !announced) {
       announced = true
-      log.success(`server  ${c.dim(m[0])}`)
-      footer(c.dim("ctrl-c to stop"))
+      log.success(`server  ${c.dim(local[1].replace(/\/$/, ""))}`)
+      if (net) detail(`network  ${net[1].replace(/\/$/, "")}`)
+      out2(`  ${c.dim("ctrl-c stop")}\n`)
     }
   }
   child.stdout.on("data", onData)
@@ -1707,7 +1721,6 @@ async function previewWeb(appRoot, opts) {
       resolve()
     })
   })
-  footer(c.dim(`stopped · ${since(t0)}`))
 }
 
 async function main() {
