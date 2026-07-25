@@ -43,16 +43,17 @@ describe("buildCapacitorConfig", () => {
   })
 
   it("holds the launch splash until the app hands off (no auto-hide gap)", () => {
-    const splash = buildCapacitorConfig(BASE).plugins.SplashScreen
+    const splash = buildCapacitorConfig(BASE).plugins
+      .SplashScreen as Record<string, unknown>
     expect(splash.launchAutoHide).toBe(false)
     expect(splash.showSpinner).toBe(false)
     expect(splash.androidScaleType).toBe("CENTER_CROP")
   })
 
   it("edge-to-edge (StatusBar overlay) is always on", () => {
-    expect(
-      buildCapacitorConfig(BASE).plugins.StatusBar.overlaysWebView,
-    ).toBe(true)
+    const statusBar = buildCapacitorConfig(BASE).plugins
+      .StatusBar as Record<string, unknown>
+    expect(statusBar.overlaysWebView).toBe(true)
   })
 
   it("configures SystemBars insetsHandling:css so Android injects --safe-area-inset-*", () => {

@@ -128,15 +128,11 @@ const NATIVE_SKIP_FILES = new Set([".DS_Store", "local.properties"])
  */
 export function nativeFingerprint(appRoot, platform) {
   const h = createHash("sha1")
-  const add = (label, file) => {
-    try {
-      h.update(`${label}:${readFileSync(file, "utf8")}\n`)
-    } catch {
-      h.update(`${label}:absent\n`)
-    }
-  }
-  // The config carries appId, plugin settings, and the dev server URL/port.
-  add("capacitor", path.join(appRoot, "capacitor.config.json"))
+  // The config carries appId, plugin settings, and the dev server URL/port. It lives in the
+  // env now (no file) — fold the raw JSON straight in.
+  h.update(
+    `capacitor:${process.env.ADAPTV_CAPACITOR_CONFIG ?? "absent"}\n`,
+  )
   // Declared deps = the native plugin set. Content, not mtime: an install can rewrite
   // package.json without changing what it declares.
   try {

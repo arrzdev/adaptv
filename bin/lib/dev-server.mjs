@@ -141,9 +141,18 @@ export function startDevServer(
       if (ready) return
       // surface WHY vite couldn't start (e.g. a port already in use), preferring the
       // error lines from its output over the generic exit message.
-      const errs = buffer.filter((l) =>
+      //
+      // Anchored on the FIRST error line and kept as a BLOCK, not filtered
+      // line-by-line: a multi-line error carries its actionable half on
+      // continuation lines that match none of these keywords. adaptv's own
+      // removed-config-key guard is the case in point — a per-line filter kept
+      // "sets 1 key that adaptv no longer reads:" and dropped every line telling
+      // you which key and what to do instead, i.e. the only part worth printing.
+      const firstErr = buffer.findIndex((l) =>
         /error|EADDRINUSE|in use|fail|cannot|not found/i.test(l),
       )
+      const errs =
+        firstErr === -1 ? [] : buffer.slice(firstErr, firstErr + 20)
       // A busy port is the common case (a second `adaptv dev`, the app's own
       // `pnpm dev`, or a stale process). Name it plainly instead of a raw stack.
       // greedy up to the LAST colon so we grab the port (9220), not an IP octet (127).
@@ -157,7 +166,9 @@ export function startDevServer(
               "Stop it, then retry. Only one adaptv dev server can run at a time."
           : `vite dev exited (code ${code}) before it was ready`,
       )
-      err.tail = (errs.length ? errs : buffer).slice(-15).join("\n")
+      //an error block is kept from its START (the headline plus what follows);
+      //the generic fallback still shows the tail, where a crash usually lands.
+      err.tail = (errs.length ? errs : buffer.slice(-15)).join("\n")
       reject(err)
     })
   })

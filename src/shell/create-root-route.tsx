@@ -3,7 +3,7 @@ import {
   createRootRoute as createTanStackRootRoute,
   Outlet,
 } from "@tanstack/react-router"
-import type { ComponentType, ReactNode } from "react"
+import type { ComponentType } from "react"
 import { UiNotFound } from "#adaptv/components/not-found"
 import type { OfflineProps } from "#adaptv/components/offline"
 import type { AdaptvPatches } from "#adaptv/config/app-config"
@@ -109,10 +109,14 @@ function buildRootRouteHead({
   }
 }
 
-export function createRootRoute(
-  config: CreateRootRouteConfig,
-  shellChildren?: (outlet: ReactNode) => ReactNode,
-) {
+//NOTE: this used to take a second `shellChildren?: (outlet) => ReactNode` param,
+//which existed only so the removed `providers` config thunk could wrap the
+//outlet. Nothing has passed it since; an app-wide provider tree is a layout
+//route now (see AdaptvAppConfig's note), so a wrapper callback here would just
+//be a second, weaker way to express the same thing. Removed rather than left
+//dead — an ejected caller still passing one now gets a loud arity error instead
+//of a silently-dropped provider tree.
+export function createRootRoute(config: CreateRootRouteConfig) {
   const {
     RootDocument: RootDocumentOverride,
     notFoundComponent,
@@ -196,7 +200,7 @@ export function createRootRoute(
           shellClassName={shellClassName}
           patches={patches}
         >
-          {shellChildren ? shellChildren(outlet) : outlet}
+          {outlet}
         </RoutingShell>
       </RootDocument>
     )

@@ -26,12 +26,14 @@
 import { spawnSync } from "node:child_process"
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
+  rmSync,
   statSync,
 } from "node:fs"
+import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
@@ -85,9 +87,11 @@ import {
   platformEnv,
   relaunchAndroidApp,
 } from "./lib/native.mjs"
+import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import {
   c,
+  fail,
   footer,
   header,
   liveWatcher,
@@ -97,8 +101,9 @@ import {
   runLanes,
   runLine,
   since,
-  tail,
+  wasReported,
 } from "./lib/render.mjs"
+import { gradleCause } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
 //the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
@@ -140,7 +145,7 @@ async function loadConfig(appRoot) {
   const mod = await import(url)
   const config = mod.default
   if (!config?.appId) {
-    throw new Error("adaptv.config.ts needs an `appId` for native builds.")
+    throw new Error("missing `appId` in adaptv.config.ts")
   }
   return config
 }
@@ -168,27 +173,22 @@ async function loadAdaptvModule(relFromSrc) {
 }
 
 /**
- * Regenerate `capacitor.config.json` from `adaptv.config.ts`, from scratch, before any
- * command touches it.
+ * Publish the Capacitor config to the `ADAPTV_CAPACITOR_CONFIG` env var, generated fresh
+ * from `adaptv.config.ts`, before any native command runs. adaptv's patched `@capacitor/cli`
+ * reads config from this env (not a file), so there is NO `capacitor.config.json` anywhere in
+ * the consumer's project — cap bakes the only copy into the native project itself.
  *
- * adaptv OWNS this file (it's stamped from adaptv.config.ts, the consumer never hand-writes
- * it) and it's git-ignored — so the only correct baseline is a fresh one. Regenerating
- * makes every command deterministic and, more importantly, makes stale dev state
- * impossible: `dev` mutates this file in place (`server.url`, `errorPath`,
- * `androidScheme`, splash auto-hide) and a run killed with SIGKILL can't revert. Without
- * this, the next `build` would happily package an app pointing at a dead dev server.
- *
- * The Capacitor CLI hard-requires the file in the directory it runs from — `loadConfig()`
- * reads `capacitor.config.{ts,js,json}` from `process.cwd()` and there is no `--config`
- * flag (`CAPACITOR_CONFIG` is an env var it EXPORTS to platform hooks, not an input) — so
- * it can't live in `.adaptv/` with everything else. Regenerating is the next best thing.
- * → config-artifact PR.
+ * Being in the env (not a file) also makes stale dev state impossible for free: `dev` layers
+ * the `server`/identity overrides onto this same env (`updateCapacitorEnv`), and it all dies
+ * with the process — a SIGKILL'd run can't leave a config pointing at a dead dev server.
  */
-async function regenerateCapacitorConfig(appRoot, config) {
-  const { stampCapacitorConfig } = await loadAdaptvModule(
+async function setCapacitorConfigEnv(config) {
+  const { capacitorConfigJson } = await loadAdaptvModule(
     "vite/capacitor-config.ts",
   )
-  stampCapacitorConfig(config, appRoot)
+  const json = capacitorConfigJson(config)
+  if (json) process.env.ADAPTV_CAPACITOR_CONFIG = json
+  else delete process.env.ADAPTV_CAPACITOR_CONFIG
 }
 
 /** The native fingerprint of each ready platform, keyed by platform. */
@@ -202,32 +202,113 @@ function snapshotNativeFp(appRoot, platforms) {
  * run / build pipelines
  * ============================================================================= */
 
-/** Log a failed step's message + captured tail (visible even without --verbose). */
-function reportError(label, err) {
-  log.error(`${label} failed — ${err?.message ?? String(err)}`)
-  tail(err?.tail)
-}
+/** How much captured tool output a failed line expands into — enough to name the problem,
+ *  not a log dump (that's `--verbose`). Generous rather than tight: the lines are already
+ *  filtered to the ones that explain the failure, and cutting a diagnostic off mid-
+ *  instructions is the one failure mode worse than a few lines too many (CLI-UX R15). */
+const DETAIL_LINES = 10
+// ANSI escape (ESC = char 27), built without a literal control char in the source. Tool
+// output arrives coloured, and a reason rendered inline has to measure as what it prints.
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 
 /**
- * Explain a launch failure UNDER the `✖ <platform>` line that runLine already printed —
- * so there's exactly one ✖, no raw xcodebuild/gradle dump (that's what --verbose is for),
- * and a recognised cause (iOS signing, an unavailable device, Developer Mode off, …) reads
- * as an actionable hint. Unknown failures show just their first line.
+ * Describe a failure the way the renderer wants it: a concise `reason` shown INLINE on
+ * that step's own `✖ <label>` line, plus `detail` lines dim underneath. This is the ONLY
+ * place a failure is put into words — every step/lane carries its own outcome, so nothing
+ * prints a second `✖ <label> failed — …` afterwards (that duplicated the glyph and, for
+ * `all`, separated a platform's reason from its line by the other platform's).
+ *
+ * A recognised cause wins (iOS signing, an unavailable device, Developer Mode off, …):
+ * its message is the reason and its fix steps are the detail. Otherwise the first line of
+ * the captured tail is — for xcodebuild/gradle `err.message` is only "exited with code
+ * 65", while `err.tail` is already filtered down to the lines that name the error.
  */
-function reportLaunchError(platform, err) {
-  const e = explainLaunchFailure(
-    platform,
-    `${err?.message ?? ""}\n${err?.tail ?? ""}`,
-  )
-  if (e) {
-    line(`      ${e.msg}`)
-    for (const step of e.fix) line(c.dim(`      ${step}`))
-  } else {
-    line(c.dim(`      ${(err?.message ?? String(err)).split("\n")[0]}`))
+function explainFailure(label) {
+  return (err) => {
+    const known = explainLaunchFailure(
+      label,
+      `${err?.message ?? ""}\n${err?.tail ?? ""}`,
+    )
+    if (known) return { reason: known.msg, detail: known.fix }
+
+    const lines = String(err?.tail ?? "")
+      .split("\n")
+      .map((l) => l.replace(ANSI, "").trim())
+      .filter(Boolean)
+      // `** BUILD FAILED **` & friends only restate the ✖ that's already printing.
+      .filter((l) => !/^\*{2}.*\*{2}$/.test(l))
+    // Gradle never says `error:` — it nests the cause under `* What went wrong:`, so the
+    // generic pass below would settle for `> Task :app:… FAILED` (the task, not the cause).
+    // Ask the gradle-aware extractor first; the boilerplate it skips is exactly what was
+    // being dumped as a 7-line block under the ✖.
+    const gradle = gradleCause(lines)
+    if (gradle)
+      return {
+        reason: gradle,
+        detail: lines
+          .filter(
+            (l) =>
+              /^\s*Execution failed for task/i.test(l) &&
+              !l.includes(gradle),
+          )
+          .slice(0, 1),
+      }
+    // `exec` narrows the tail to error-ISH lines, but the ones that actually say `error:`
+    // are what a dev reads; the rest are trailers ("The following build commands failed:").
+    const errors = lines.filter((l) => /\berror\s*:/i.test(l))
+    const picked = errors.length ? errors : lines
+    if (picked.length === 0)
+      return {
+        reason: String(err?.message ?? err).split("\n")[0],
+        detail: [],
+      }
+    const { message, where } = toolErrorParts(picked[0])
+    return {
+      reason: message,
+      detail: [
+        where && `at ${where}`,
+        ...picked.slice(1, 1 + DETAIL_LINES).map(shortenLocator),
+      ].filter(Boolean),
+    }
   }
 }
 
-/** Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/`. */
+/**
+ * Split a compiler/tool error into what to say and where. clang/swift/gradle prefix the
+ * message with an ABSOLUTE `file:line:col: error:` locator — long enough on its own to
+ * overflow the line and push the actual message off the end, which is how the reason
+ * became unreadable. So the message goes INLINE (it's what's read first) and a short
+ * `file:line:col` goes on the dim line under it.
+ */
+function toolErrorParts(raw) {
+  const m = raw.match(
+    /^(\S+?):(\d+)(?::(\d+))?:\s*(?:fatal\s+)?error:\s*(.+)$/i,
+  )
+  if (m)
+    return {
+      message: m[4],
+      where: `${path.basename(m[1])}:${m[2]}${m[3] ? `:${m[3]}` : ""}`,
+    }
+  // no locator — strip any `<tool>: error:` prefix and keep the sentence.
+  return {
+    message: raw.replace(/^.*?\berror\s*:\s*/i, "") || raw,
+    where: "",
+  }
+}
+
+/** Same idea for a detail line: keep the filename, drop the directories. */
+const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
+
+/**
+ * Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/`.
+ * Returns the artifact path relative to the app root — that string becomes the step's
+ * settled detail, and an absolute path there is just noise the renderer has to truncate.
+ *
+ * Both artifacts are UNSIGNED/debug on purpose: adaptv owns the whole native toolchain
+ * and the consumer owns none of it (DECISIONS §2 L20 — they never name, install or script
+ * Capacitor/Xcode), so packaging cannot be delegated to a script in their repo. A signing
+ * identity is the one input adaptv cannot invent, so it stays theirs: Xcode ▸ Archive.
+ */
 async function packageArtifact(
   appRoot,
   config,
@@ -257,28 +338,94 @@ async function packageArtifact(
       throw new Error("gradle produced no app-debug.apk")
     const dest = resolveOutput(appRoot, output, `${name}.apk`)
     copyFileSync(built, dest)
-    return dest
+    return shortPath(appRoot, dest)
   }
 
-  // iOS: unsigned .ipa via the app's build-ipa.sh (signing stays the user's).
-  const script = path.join(appRoot, "scripts/build-ipa.sh")
-  if (!existsSync(script)) {
+  return await packageIpa(appRoot, name, env, output, report)
+}
+
+/**
+ * Build the unsigned iOS `.ipa` — entirely inside adaptv, from the project it owns at
+ * `.adaptv/ios`.
+ *
+ * There is no `xcodebuild` action that emits an unsigned .ipa: `-exportArchive` insists on
+ * an export identity, which is exactly what we don't have. So do what the format actually
+ * is — an .ipa is a zip whose only requirement is a top-level `Payload/<App>.app`. Build
+ * the device slice with signing switched off, drop the product into `Payload/`, zip it.
+ * The result installs on a simulator or via a re-signing pipeline (fastlane, `codesign`),
+ * which is the point: a shippable artifact without adaptv ever touching the user's certs.
+ *
+ * DerivedData lives under `.adaptv/ios/` so nothing leaks into the app root — and it's in
+ * the native fingerprint's skip list, so a build never invalidates its own cache.
+ */
+async function packageIpa(appRoot, name, env, output, report) {
+  const iosDir = nativeDir(appRoot, "ios")
+  const workspace = path.join(iosDir, "App/App.xcworkspace")
+  if (!existsSync(workspace))
     throw new Error(
-      "scripts/build-ipa.sh not found (needed for the unsigned .ipa). Signed builds: Xcode ▸ Archive.",
+      "no .adaptv/ios/App/App.xcworkspace — the iOS project isn't prepared.",
     )
-  }
-  report("archiving unsigned .ipa")
-  await exec("bash", [script], {
-    cwd: appRoot,
+  const derived = path.join(iosDir, "DerivedData/build")
+
+  report("building unsigned device app (xcodebuild)")
+  await exec(
+    "xcodebuild",
+    [
+      "-workspace",
+      workspace,
+      "-scheme",
+      "App",
+      "-configuration",
+      "Release",
+      "-sdk",
+      "iphoneos",
+      "-derivedDataPath",
+      derived,
+      "build",
+      // All four: `CODE_SIGNING_ALLOWED=NO` alone still lets targets that pin an identity
+      // (Pods, and any plugin with an entitlements file) fail the build.
+      "CODE_SIGNING_ALLOWED=NO",
+      "CODE_SIGNING_REQUIRED=NO",
+      "CODE_SIGN_IDENTITY=",
+      "CODE_SIGN_ENTITLEMENTS=",
+    ],
+    { cwd: iosDir, env, onLine: (l) => report(l) },
+  )
+
+  const app = path.join(derived, "Build/Products/Release-iphoneos/App.app")
+  if (!existsSync(app))
+    throw new Error(
+      "xcodebuild produced no Release-iphoneos/App.app to package.",
+    )
+
+  report("packaging .ipa")
+  // Stage fresh every time: a leftover Payload from an earlier build would be zipped in
+  // alongside the new one (zip merges into an existing archive rather than replacing it).
+  const stage = path.join(iosDir, "DerivedData/payload")
+  rmSync(stage, { recursive: true, force: true })
+  mkdirSync(path.join(stage, "Payload"), { recursive: true })
+  // Symlinks verbatim + modes preserved: an .app's embedded frameworks are symlinked, and
+  // a dereferenced or chmod-ed copy is not a loadable bundle.
+  cpSync(app, path.join(stage, "Payload/App.app"), {
+    recursive: true,
+    verbatimSymlinks: true,
+  })
+  const dest = resolveOutput(appRoot, output, `${name}.ipa`)
+  rmSync(dest, { force: true })
+  // `-y` stores symlinks as symlinks (see above); `-q` because zip's per-file chatter says
+  // nothing the "packaging .ipa" phase doesn't already.
+  await exec("zip", ["-qry", dest, "Payload"], {
+    cwd: stage,
     env,
     onLine: (l) => report(l),
   })
-  const ipa = newestIpa(appRoot)
-  if (!ipa)
-    throw new Error("build-ipa.sh produced no .ipa I could locate.")
-  const dest = resolveOutput(appRoot, output, `${name}.ipa`)
-  if (path.resolve(ipa) !== path.resolve(dest)) copyFileSync(ipa, dest)
-  return dest
+  return shortPath(appRoot, dest)
+}
+
+/** A path as the user would type it: relative to the app root when it's inside it. */
+function shortPath(appRoot, target) {
+  const rel = path.relative(appRoot, target)
+  return rel && !rel.startsWith("..") ? rel : target
 }
 
 /** Resolve where an artifact should land: a `--output` path/dir, or `.adaptv/<default>`. */
@@ -296,27 +443,6 @@ function resolveOutput(appRoot, output, defaultName) {
   const dest = isDir ? path.join(abs, defaultName) : abs
   mkdirSync(path.dirname(dest), { recursive: true })
   return dest
-}
-
-/** Find the most recently produced `.ipa` under the app (best-effort). */
-function newestIpa(appRoot) {
-  const roots = [
-    appRoot,
-    path.join(appRoot, ADAPTV_DIR),
-    nativeDir(appRoot, "ios"),
-    path.join(nativeDir(appRoot, "ios"), "App/build"),
-  ]
-  let best = null
-  for (const root of roots) {
-    if (!existsSync(root)) continue
-    for (const entry of readdirSync(root)) {
-      if (!entry.endsWith(".ipa")) continue
-      const full = path.join(root, entry)
-      const mtime = statSync(full).mtimeMs
-      if (!best || mtime > best.mtime) best = { full, mtime }
-    }
-  }
-  return best?.full ?? null
 }
 
 /**
@@ -401,15 +527,31 @@ async function runLive(appRoot, platforms, opts) {
     process.exit(1)
   }
 
+  // A config problem (missing file / no appId) is a plain user error — show it as a clean
+  // one-liner and stop, exactly like the dev-lock check above, not a "run failed" step
+  // report. `dev web` needs no config.
+  let config = null
+  if (!webOnly) {
+    try {
+      config = await loadConfig(appRoot)
+    } catch (err) {
+      log.error(err.message)
+      process.exit(1)
+    }
+  }
+
   try {
-    const config = webOnly ? null : await loadConfig(appRoot)
     const warnings = []
     const prepared = new Set()
+    // Per-platform scaffolding time, billed to that platform's launch line further down
+    // (it runs before the line exists — see the prepare loop). Declared out here because
+    // the launch phase lives in a separate `if (!webOnly)` block.
+    const prepareMs = {}
 
     if (!webOnly) {
       // Fresh capacitor.config.json before anything reads or patches it, so a run
       // killed without teardown can never leave dev fields behind for the next command.
-      await regenerateCapacitorConfig(appRoot, config)
+      await setCapacitorConfigEnv(config)
       // cap sync copies the web bundle even though the WebView loads from the dev
       // server, so make sure one exists (content is irrelevant here).
       if (!existsSync(path.join(appRoot, CAP_WEB_DIR, "index.html"))) {
@@ -423,6 +565,7 @@ async function runLive(appRoot, platforms, opts) {
       const prepareOne = async (platform, report) => {
         await capAddIfMissing(appRoot, platform, envFor(platform), {
           report,
+          plugins: config?.plugins,
         })
         const res = await generateAssets(appRoot, config, [platform], {
           report,
@@ -430,28 +573,39 @@ async function runLive(appRoot, platforms, opts) {
         warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
         prepared.add(platform)
       }
-      // Show a per-platform prepare step ONLY on a first run — when the native project
-      // doesn't exist yet (`cap add` + CocoaPods is slow and worth watching). On later runs
-      // prepare is a sub-10ms no-op, so do the work silently rather than print a
-      // "✓ prepare 5ms" line that says nothing. (First-run prepares are rare, so doing them
-      // sequentially instead of concurrently costs nothing in practice.)
+      // Scaffolding the native project has to happen HERE, before the device picker: the
+      // device list comes from `cap run <platform> --list`, which needs the project to
+      // exist. But it is NOT a step of its own — it's the first thing that platform does.
+      // So on a first run (`cap add` + CocoaPods is slow and worth watching) it renders on
+      // a TRANSIENT line under the platform's OWN label, which is erased rather than
+      // settled; the seconds it took are then folded into that platform's real line below
+      // (`prepareMs` → `offsetMs`). The dev sees one `ios` line that begins at "preparing"
+      // and settles once — no separate "native project" step to learn. On later runs it's
+      // a sub-10ms no-op, done with no line at all.
       for (const platform of platforms) {
         const fresh = !existsSync(nativeDir(appRoot, platform))
+        const t0 = Date.now()
         try {
           if (fresh) {
-            await runLine(
-              `prepare ${platform}`,
-              (r) => prepareOne(platform, r),
-              { verbose },
-            )
+            await runLine(platform, (r) => prepareOne(platform, r), {
+              verbose,
+              transient: true,
+            })
           } else {
             await prepareOne(platform, () => {})
           }
         } catch (err) {
-          reportError(`prepare ${platform}`, err)
+          // The transient line was erased and this platform never reaches the launch
+          // lanes, so its ONE line is printed here — same shape as a settled ✖.
+          const { reason, detail } = explainFailure(platform)(err)
+          fail(platform, `native project — ${reason}`, detail)
         }
+        prepareMs[platform] = Date.now() - t0
       }
-      for (const w of warnings) log.warn(w)
+      for (const w of warnings) {
+        if (typeof w === "string") log.warn(w)
+        else log.info(w.note) //adaptv already handled it — inform, don't alarm
+      }
     }
 
     const ready = platforms.filter((p) => prepared.has(p))
@@ -658,7 +812,10 @@ async function runLive(appRoot, platforms, opts) {
         }
 
         report("sync")
-        await capSync(appRoot, platform, env, { report })
+        await capSync(appRoot, platform, env, {
+          report,
+          plugins: config?.plugins,
+        })
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
         const wasRunning = isAppRunning(appRoot, platform, target.id, env)
@@ -691,33 +848,42 @@ async function runLive(appRoot, platforms, opts) {
         launched.add(platform)
         return `${target.name}`
       }
-      // Hoisted so the `r` key can replay exactly the same launch lines mid-run.
-      launchAll = async ({ force } = {}) => {
+      // Hoisted so the `r` key can replay exactly the same launch lines mid-run. `offsets`
+      // carries the scaffolding time each platform already spent above (the transient
+      // "preparing" line), so the settled line reports the platform's WHOLE first-run cost.
+      // A replay (`b`) passes none — that work isn't repeated, so it mustn't be re-billed.
+      launchAll = async ({ force, offsets = {} } = {}) => {
         if (single) {
           try {
             await runLine(
               platforms[0],
               (r) => launchOne(platforms[0], r, { force }),
-              { verbose, idle: "building app" },
+              {
+                verbose,
+                idle: "building app",
+                offsetMs: offsets[platforms[0]] ?? 0,
+                explain: explainFailure(platforms[0]),
+              },
             )
-          } catch (err) {
-            reportLaunchError(platforms[0], err)
+          } catch {
+            // the ✖ line already states why — see explainFailure.
           }
           return
         }
-        const res = await runLanes(
+        // Each lane carries its own outcome (explain → the inline reason + hint), so a
+        // failure needs nothing printed after the lanes settle.
+        await runLanes(
           ready.map((p) => ({
             label: p,
             run: (r) => launchOne(p, r, { force }),
             idle: "building app",
+            offsetMs: offsets[p] ?? 0,
+            explain: explainFailure(p),
           })),
           { verbose },
         )
-        res.forEach((r, i) => {
-          if (!r.ok) reportLaunchError(ready[i], r.error)
-        })
       }
-      await launchAll({ force: opts.force })
+      await launchAll({ force: opts.force, offsets: prepareMs })
       nativeFp = snapshotNativeFp(appRoot, ready)
 
       // Nothing made it onto a device? Then there's nothing to hot-reload — don't pretend
@@ -794,18 +960,20 @@ async function runLive(appRoot, platforms, opts) {
         try {
           await runLine(ready[0], (r) => reloadOne(ready[0], r), {
             verbose,
+            explain: explainFailure(ready[0]),
           })
-        } catch (err) {
-          reportError(ready[0], err)
+        } catch {
+          // the ✖ line already states why — see explainFailure.
         }
       } else {
-        const res = await runLanes(
-          ready.map((p) => ({ label: p, run: (r) => reloadOne(p, r) })),
+        await runLanes(
+          ready.map((p) => ({
+            label: p,
+            run: (r) => reloadOne(p, r),
+            explain: explainFailure(p),
+          })),
           { verbose },
         )
-        res.forEach((r, i) => {
-          if (!r.ok) reportError(ready[i], r.error)
-        })
       }
       line("")
       watcher = liveWatcher()
@@ -854,7 +1022,14 @@ async function runLive(appRoot, platforms, opts) {
     }
     await new Promise(() => {}) // resolved only by the SIGINT handler (process.exit)
   } catch (err) {
-    reportError("run", err)
+    // Anything that escaped a step's own line (the dev server, a teardown-time throw) —
+    // still ONE ✖, same shape, so the whole CLI reports failure identically.
+    // A step that already settled its own ✖ owns the report — printing again here is a
+    // second glyph for one failure (and pastes Node's raw text beside the calm reason).
+    if (!wasReported(err)) {
+      const { reason, detail } = explainFailure("dev")(err)
+      fail("dev", reason, detail)
+    }
     teardown()
     process.exit(1)
   }
@@ -872,10 +1047,17 @@ async function pipeline(kind, appRoot, platforms, opts) {
   assertNoActiveDevLock(appRoot, kind)
 
   const t0 = Date.now()
-  const config = await loadConfig(appRoot)
+  // A config problem is a plain user error — clean one-liner, not a "run failed" report.
+  let config
+  try {
+    config = await loadConfig(appRoot)
+  } catch (err) {
+    log.error(err.message)
+    process.exit(1)
+  }
   // Fresh capacitor.config.json FIRST — a release build must never inherit dev fields
   // (`server.url` etc.) left by a `dev` run that was killed before it could revert.
-  await regenerateCapacitorConfig(appRoot, config)
+  await setCapacitorConfigEnv(config)
   const verbose = opts.verbose
   const ctx = { targets: {}, output: opts.output }
   const done = {}
@@ -888,9 +1070,14 @@ async function pipeline(kind, appRoot, platforms, opts) {
   }
 
   // print any collected warnings, then clear them (so they surface once, near the
-  // step that produced them — not dumped at the very end).
+  // step that produced them — not dumped at the very end). An entry may be a plain
+  // string (a real `!` warning the dev may need to act on) or `{ note }` — something
+  // adaptv already handled, printed dim so it informs without implying a problem.
   const flushWarnings = () => {
-    for (const w of warnings) log.warn(w)
+    for (const w of warnings) {
+      if (typeof w === "string") log.warn(w)
+      else log.info(w.note)
+    }
     warnings.length = 0
   }
 
@@ -917,9 +1104,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     try {
       await runLine("web build", (r) => buildWeb(appRoot, { report: r }), {
         verbose,
+        explain: explainFailure("web build"),
       })
-    } catch (err) {
-      reportError("web build", err)
+    } catch {
+      // the ✖ web build line already states why; the footer just says nothing shipped.
       return finish(
         c.red("✖ web build failed — nothing was rebuilt or launched"),
       )
@@ -935,7 +1123,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   //    refuses until the platform exists) and sync.
   const prepared = new Set()
   const prepareOne = async (platform, report) => {
-    await capAddIfMissing(appRoot, platform, envFor(platform), { report })
+    await capAddIfMissing(appRoot, platform, envFor(platform), {
+      report,
+      plugins: config?.plugins,
+    })
     // `preview` shares the `.dev` install identity with `dev` (own icon + storage sandbox,
     // coexists with a release build); `build` uses the release id. Patch after the web
     // build's capacitor.config.json stamp, before sync. Idempotent → also flips a project
@@ -953,9 +1144,11 @@ async function pipeline(kind, appRoot, platforms, opts) {
     if (platform === "ios") {
       const ats = healDevAtsLeftover(appRoot)
       if (ats.healed) {
-        warnings.push(
-          "ios: removed a leftover dev ATS exception (NSAllowsArbitraryLoads) from Info.plist — a `adaptv dev` run must have been killed before it could revert.",
-        )
+        // A note, NOT a warning: this is adaptv's own leftover and adaptv just removed it.
+        // Nothing is wrong and there is nothing for the dev to do, so it doesn't get a `!`.
+        warnings.push({
+          note: "ios: cleaned up a dev ATS exception left by an interrupted `adaptv dev`.",
+        })
       } else if (ats.warn) {
         warnings.push(
           "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
@@ -964,26 +1157,33 @@ async function pipeline(kind, appRoot, platforms, opts) {
     }
     prepared.add(platform)
   }
-  // Show a per-platform prepare step ONLY on a first run — when the native project doesn't
-  // exist yet (`cap add` + CocoaPods is slow and worth watching). On later runs prepare is a
-  // sub-10ms no-op, so do the work silently rather than print a "✓ prepare 5ms" line that
-  // says nothing. Sequential (like `dev`): first-run prepares are rare, so it costs nothing,
-  // and it keeps asset/config warnings in order instead of interleaved under live lanes.
+  // Scaffolding is the first thing a platform does, NOT a step of its own — so on a first
+  // run (`cap add` + CocoaPods is slow and worth watching) it renders on a TRANSIENT line
+  // under the platform's OWN label, erased rather than settled, and the time it took is
+  // folded into that platform's real line below (`prepareMs` → `offsetMs`). On later runs
+  // it's a sub-10ms no-op with no line at all. Sequential (like `dev`): first-run prepares
+  // are rare, so it costs nothing, and it keeps asset/config warnings in order instead of
+  // interleaved under live lanes.
+  const prepareMs = {}
   for (const platform of platforms) {
     const fresh = !existsSync(nativeDir(appRoot, platform))
+    const startedAt = Date.now()
     try {
       if (fresh) {
-        await runLine(
-          `prepare ${platform}`,
-          (r) => prepareOne(platform, r),
-          { verbose },
-        )
+        await runLine(platform, (r) => prepareOne(platform, r), {
+          verbose,
+          transient: true,
+        })
       } else {
         await prepareOne(platform, () => {})
       }
     } catch (err) {
-      reportError(`prepare ${platform}`, err)
+      // The transient line was erased and this platform never reaches the sync/package
+      // lanes, so its ONE line is printed here — same shape as a settled ✖.
+      const { reason, detail } = explainFailure(platform)(err)
+      fail(platform, `native project — ${reason}`, detail)
     }
+    prepareMs[platform] = Date.now() - startedAt
   }
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()
@@ -1011,7 +1211,39 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // produce a different capacitor.config.json, so a `preview`↔`build` switch must re-sync
   // even though the web fingerprint is unchanged (it deliberately skips capacitor.config.json).
   const syncTag = `${fp}:${kind === "preview" ? "dev" : "release"}`
-  const syncNeeded = (p) => opts.force || buildCache.sync[p] !== syncTag
+  // …but the cache key can't see what's actually BAKED into the native project, and a `dev`
+  // run bakes dev-only fields (`server.url` → the live-reload origin) into exactly that file.
+  // So a preview after a dev run could hit a cache hit, skip the sync, and install an app
+  // still pointing at a dev server that isn't running — the user sees the offline screen
+  // instead of their app. Compare the baked config against what this command intends and
+  // re-sync when they disagree; it self-corrects no matter which command dirtied it.
+  const bakedConfigPath = (p) =>
+    p === "ios"
+      ? path.join(nativeDir(appRoot, p), "App/App/capacitor.config.json")
+      : path.join(
+          nativeDir(appRoot, p),
+          "app/src/main/assets/capacitor.config.json",
+        )
+  const bakedConfigStale = (p) => {
+    try {
+      return configIsStale(
+        JSON.parse(readFileSync(bakedConfigPath(p), "utf8")),
+        JSON.parse(process.env.ADAPTV_CAPACITOR_CONFIG ?? "{}"),
+      )
+    } catch {
+      return true //unreadable / not synced yet → sync
+    }
+  }
+  const syncNeeded = (p) =>
+    opts.force || buildCache.sync[p] !== syncTag || bakedConfigStale(p)
+  // Snapshot staleness NOW — after prepare, before any sync. The sync repairs the project's
+  // config, but the app ALREADY INSTALLED on the device is whatever the last command put
+  // there; a dirty config at this point means that install is a `dev` shell, so the launch
+  // step must reinstall rather than relaunch it. Checking after the sync would always read
+  // "clean" and happily relaunch the stale binary.
+  const staleAtStart = Object.fromEntries(
+    platforms.map((p) => [p, bakedConfigStale(p)]),
+  )
   // `preview` run cache: when NOTHING that lands on the device changed since the last
   // preview on it — the web bundle+identity (`syncTag`) AND the native project
   // (`nativeFingerprint`: config/plugins/pbxproj; it skips the synced `public/`, which
@@ -1025,8 +1257,15 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const previewLaunch = async (platform, target, report) => {
     const env = envFor(platform)
     const key = `preview:${platform}:${target.id}`
+    // `preview` and `dev` deliberately SHARE the `.dev` install identity, so "an app is
+    // installed" cannot tell them apart — after a `dev` run the installed binary is a
+    // live-reload shell pointing at a dev server. Taking the fast path there relaunches
+    // THAT, and the user gets the "dev server isn't running" screen instead of their app.
+    // The baked config is the tell (dev bakes `server.url`), so never reuse an install when
+    // it disagrees with what this command intends — rebuild and reinstall instead.
     const cached =
       !opts.force &&
+      !staleAtStart[platform] &&
       buildCache.run[key]?.id === runIdOf(platform) &&
       isAppInstalled(appRoot, platform, target.id, env)
     if (cached) {
@@ -1060,7 +1299,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   const tailOne = async (platform, report) => {
     if (syncNeeded(platform)) {
       report("sync")
-      await capSync(appRoot, platform, envFor(platform), { report })
+      await capSync(appRoot, platform, envFor(platform), {
+        report,
+        plugins: config?.plugins,
+      })
       buildCache.sync[platform] = syncTag
     } else {
       report("sync · cached")
@@ -1086,8 +1328,12 @@ async function pipeline(kind, appRoot, platforms, opts) {
       if (syncNeeded(p)) {
         await runLine(
           "sync",
-          (r) => capSync(appRoot, p, envFor(p), { report: r }),
-          { verbose },
+          (r) =>
+            capSync(appRoot, p, envFor(p), {
+              report: r,
+              plugins: config?.plugins,
+            }),
+          { verbose, explain: explainFailure(p) },
         )
         buildCache.sync[p] = syncTag
       }
@@ -1100,41 +1346,55 @@ async function pipeline(kind, appRoot, platforms, opts) {
           p,
           (r) => previewLaunch(p, target, r),
           // cap streams nothing during xcodebuild/gradle — fall back to "building app".
-          { verbose, idle: "building app" },
+          // offsetMs: this line owns the scaffolding that ran (transiently) above it.
+          {
+            verbose,
+            idle: "building app",
+            offsetMs: prepareMs[p] ?? 0,
+            explain: explainFailure(p),
+          },
         )
       } else {
         done[p] = await runLine(
           "package",
           (r) =>
             packageArtifact(appRoot, config, p, envFor(p), ctx.output, r),
-          { verbose, idle: "building app" },
+          {
+            verbose,
+            idle: "building app",
+            offsetMs: prepareMs[p] ?? 0,
+            explain: explainFailure(p),
+          },
         )
       }
-    } catch (err) {
-      reportError(p, err)
+    } catch {
+      // the ✖ line already states why — see explainFailure.
     }
   } else {
-    const res = await runLanes(
+    // Each lane carries its own outcome (explain → the inline reason + hint), so a
+    // failure needs nothing printed after the lanes settle.
+    await runLanes(
       ready.map((p) => ({
         label: p,
         run: (r) => tailOne(p, r),
         idle: "building app",
+        offsetMs: prepareMs[p] ?? 0,
+        explain: explainFailure(p),
       })),
       { verbose },
     )
-    res.forEach((r, i) => {
-      if (!r.ok) reportError(ready[i], r.error)
-    })
   }
   writeBuildCache(appRoot, buildCache)
 
   const ok = platforms.every((p) => p in done)
   // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an
   // all-green phrase. Failure stays red.
+  // Which platform failed and why is already on that platform's own line, so the footer
+  // states only the command's outcome — `✖ build failed`, not a second inventory of it.
   finish(
     ok
       ? `${c.green("✓")} ${c.bold(kind === "preview" ? "launched" : "artifacts ready")}`
-      : c.red("✖ one or more platforms failed"),
+      : c.red(`✖ ${verb} failed`),
   )
 }
 
@@ -1180,27 +1440,31 @@ function readIf(p) {
   return existsSync(p) ? readFileSync(p, "utf8") : undefined
 }
 
-function checkAppPlugins(appRoot) {
-  const pkgPath = path.join(appRoot, "package.json")
-  if (!existsSync(pkgPath)) {
-    line(`  ${c.red("✖")} package.json not found`)
-    return
-  }
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"))
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+function checkAppPlugins(_appRoot) {
+  // adaptv OWNS the Capacitor plugins — they're its own dependencies, resolved from
+  // the framework, never added to the consumer's app. So verify adaptv's install, not
+  // the app's package.json.
+  const resolveFromAdaptv = createRequire(
+    path.join(ADAPTV_ROOT, "package.json"),
+  )
   const missing = []
   for (const name of ADAPTV_BASE_PLUGINS) {
-    const present = name in deps
+    let present = true
+    try {
+      resolveFromAdaptv.resolve(`${name}/package.json`)
+    } catch {
+      present = false
+    }
     line(`  ${present ? c.green("✔") : c.red("✖")} ${name}`)
     if (!present) missing.push(name)
   }
   if (missing.length) {
     line(
       c.yellow(
-        `\n  install the missing plugins so the native hooks work:`,
+        `\n  ${missing.length} plugin(s) missing from adaptv's install — reinstall adaptv:`,
       ),
     )
-    line(c.dim(`    pnpm --filter ${pkg.name} add ${missing.join(" ")}`))
+    line(c.dim(`    pnpm install`))
   }
 }
 
@@ -1223,7 +1487,7 @@ async function runProjectChecks(appRoot) {
   const android = nativeDir(appRoot, "android")
   const diagnostics = runDoctor({
     iosInfoPlist: readIf(path.join(ios, "App/App/Info.plist")),
-    capacitorConfig: readIf(path.join(appRoot, "capacitor.config.json")),
+    capacitorConfig: process.env.ADAPTV_CAPACITOR_CONFIG ?? undefined,
     androidBuildGradle: readIf(path.join(android, "app/build.gradle")),
     hasPrivacyManifest: existsSync(
       path.join(ios, "App/App/PrivacyInfo.xcprivacy"),
@@ -1284,7 +1548,7 @@ async function doctor(appRoot) {
       { optional: true },
     )
 
-  line("\nPlugins (installed in this app — Capacitor auto-discovers them)")
+  line("\nPlugins (shipped by adaptv — the consumer installs none)")
   checkAppPlugins(appRoot)
 
   line("\nProject")
@@ -1318,7 +1582,9 @@ ${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attac
 ${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
 ${c.dim("`adaptv dev all -- --port 4000`.")}
 ${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
-${c.dim("build = static .ipa/.apk artifacts.")}
+${c.dim("build = static artifacts: an UNSIGNED .ipa and a debug .apk, both built by adaptv.")}
+${c.dim("Signing is the one thing adaptv can't do for you — for TestFlight/App Store, open")}
+${c.dim(".adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
 ${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
 ${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
@@ -1451,7 +1717,11 @@ async function main() {
 }
 
 main().catch((err) => {
-  log.error(err?.message ?? String(err))
-  if (err?.tail) line(c.dim(err.tail))
+  // Same rule at the top level: if a step already rendered this failure, exit quietly
+  // rather than appending Node's raw message under the calm one.
+  if (!wasReported(err)) {
+    log.error(err?.message ?? String(err))
+    if (err?.tail) line(c.dim(err.tail))
+  }
   process.exit(1)
 })

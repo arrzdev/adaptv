@@ -31,6 +31,10 @@ app lifecycle: app state/resume, back chain, gesture controller, route lifecycle
 adaptv fixes, how, and how to test each) · [`docs/TESTING.md`](docs/TESTING.md) ·
 [`docs/capacitor-internals.md`](docs/capacitor-internals.md).
 
+⌨️ **Changing the CLI?** [`docs/CLI-UX.md`](docs/CLI-UX.md) is the **output contract** — read it
+before touching `bin/`. Every rule there exists because the output broke it once; the test suite
+can't catch any of them, so the manual checklist at the end is the gate.
+
 **Reference:** [`STYLING.md`](docs/STYLING.md) (how consumers restyle primitives) ·
 [`FACADE.md`](docs/FACADE.md) (the `createServerFn` ban) · [`ANIMATION.md`](docs/ANIMATION.md) (the
 motion substrate + the iOS 60Hz ceiling) · [`PRIOR-ART.md`](docs/PRIOR-ART.md) (what we port from Ionic,

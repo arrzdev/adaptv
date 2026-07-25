@@ -230,6 +230,25 @@ export type AdaptvAppConfig = {
   patches?: AdaptvPatches
 
   /**
+   * Extra Capacitor-compatible native plugins, by package name — **additive** to the
+   * base set adaptv ships for its primitives. adaptv is compatible with any Capacitor
+   * plugin: `pnpm add` it, list it here, and use its JS API in your code. adaptv wires
+   * the native side (iOS pods / Android gradle) into the project it owns — you never
+   * touch a Capacitor config or a native project. Per-plugin native settings go in
+   * {@link pluginConfig}.
+   *
+   * @example plugins: ["@capacitor/camera", "@capacitor-community/barcode-scanner"]
+   */
+  plugins?: string[]
+  /**
+   * Native runtime settings for plugins, keyed by the plugin's Capacitor class name
+   * (e.g. `Camera`, `PushNotifications`) — merged into the generated native config.
+   * adaptv sets sensible defaults for the plugins its primitives use; this is for the
+   * rest.
+   */
+  pluginConfig?: Record<string, Record<string, unknown>>
+
+  /**
    * Native (Capacitor) app id, reverse-domain (e.g. `"com.chopchop.app"`). Setting it
    * enables native iOS/Android builds — adaptv generates the entire Capacitor project
    * from this one field; you never touch a Capacitor config. Web-only apps omit it.

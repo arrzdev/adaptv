@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { capture } from "./exec.mjs"
 import { ADAPTV_DIR, capCmd } from "./native.mjs"
-import { log, select } from "./render.mjs"
+import { select } from "./render.mjs"
 
 const cacheFile = (appRoot) =>
   path.join(appRoot, ADAPTV_DIR, "devices.json")
@@ -105,9 +105,8 @@ export async function resolveTarget(
     const cached = readCache(appRoot)[platform]
     // the "latest" tag is surfaced on the launch line, not as its own log line.
     if (cached?.id) return { ...cached, source: "latest" }
-    log.warn(
-      `${platform}: no cached device yet — pick one (it'll be remembered).`,
-    )
+    // No cache yet — fall through to the picker. The picker itself makes the ask
+    // obvious ("Choose a <platform> device"), so announcing it first is noise.
   }
 
   return pickAndCache(appRoot, platform, env)

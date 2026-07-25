@@ -4,7 +4,12 @@
 import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { androidDevices, nativeDir } from "./native.mjs"
+import {
+  androidDevices,
+  capConfigFromEnv,
+  nativeDir,
+  updateCapacitorEnv,
+} from "./native.mjs"
 import { OFFLINE_PAGE } from "./offline-page.mjs"
 
 /**
@@ -32,30 +37,8 @@ import { OFFLINE_PAGE } from "./offline-page.mjs"
  * app still calls `hideNativeSplash()` on first paint, which clears it earlier. The
  * revert restores the app's original splash config along with the server block.
  */
-export function patchServerUrl(appRoot, url) {
-  const file = path.join(appRoot, "capacitor.config.json")
-  const cfg = JSON.parse(readFileSync(file, "utf8"))
-
-  // The clean baseline: drop everything live-reload adds; drop `server` if it empties.
-  const clean = structuredClone(cfg)
-  if (clean.server) {
-    // every field live-reload owns — stripping them is also what self-heals a config
-    // left behind by a hard-killed run (SIGKILL can't revert). Safe to strip wholesale
-    // because adaptv GENERATES capacitor.config.json from adaptv.config.ts; a consumer
-    // never hand-writes these.
-    for (const k of ["url", "cleartext", "errorPath", "androidScheme"])
-      delete clean.server[k]
-    if (Object.keys(clean.server).length === 0) delete clean.server
-  }
-  const cleanText = `${JSON.stringify(clean, null, 2)}\n`
-
-  const patched = structuredClone(clean)
-  patched.server = {
-    ...(clean.server ?? {}),
-    url,
-    cleartext: true,
-    errorPath: OFFLINE_PAGE,
-  }
+export function patchServerUrl(_appRoot, url) {
+  const base = capConfigFromEnv() ?? {}
   // Serve the LOCAL origin over http for the dev session. Capacitor's Android default is
   // `https://localhost`, a secure origin — which mixed-content-blocks every request from
   // the offline errorPath page to the cleartext dev server, and Android can't fall back
@@ -64,18 +47,31 @@ export function patchServerUrl(appRoot, url) {
   // nulls the local-server injector). With `http`, the offline page's origin matches the
   // dev server's scheme, so a plain `fetch` reachability probe works and Android can
   // auto-reconnect. Safe here precisely BECAUSE live-reload is on: the app itself runs
-  // from the dev-server origin, so this local origin only ever serves the offline page —
-  // no app storage or secure-context API rides on it. Reverted with everything else.
-  patched.server.androidScheme = "http"
-  // Force the OS splash to auto-hide (see doc above) — preserve any other splash options.
-  patched.plugins = { ...(patched.plugins ?? {}) }
-  patched.plugins.SplashScreen = {
-    ...(patched.plugins.SplashScreen ?? {}),
-    launchAutoHide: true,
-    launchShowDuration: 1200,
+  // from the dev-server origin, so this local origin only ever serves the offline page.
+  const server = {
+    url,
+    cleartext: true,
+    errorPath: OFFLINE_PAGE,
+    androidScheme: "http",
   }
-  writeFileSync(file, `${JSON.stringify(patched, null, 2)}\n`)
-  return () => writeFileSync(file, cleanText)
+  // Force the OS splash to auto-hide (see doc above) — preserve any other splash options.
+  const plugins = {
+    ...(base.plugins ?? {}),
+    SplashScreen: {
+      ...(base.plugins?.SplashScreen ?? {}),
+      launchAutoHide: true,
+      launchShowDuration: 1200,
+    },
+  }
+  updateCapacitorEnv({ server, plugins })
+  // Revert to the clean generated baseline. The env config is ephemeral (dies with the
+  // process), so this only matters for a mode switch inside one run — but keep it exact.
+  return () => {
+    const cur = capConfigFromEnv() ?? {}
+    delete cur.server
+    cur.plugins = base.plugins
+    process.env.ADAPTV_CAPACITOR_CONFIG = JSON.stringify(cur)
+  }
 }
 
 /**
