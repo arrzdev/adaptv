@@ -27,6 +27,10 @@ export type CapacitorConfigJson = {
       overlaysWebView: boolean
       style: string
     }
+    SystemBars: {
+      insetsHandling: "css"
+      style: string
+    }
   }
 }
 
@@ -67,8 +71,23 @@ export function buildCapacitorConfig(
       },
       StatusBar: {
         //edge-to-edge is always on (opinionated): content draws under the status bar,
-        //the shell's safe-area utilities pad it back.
+        //the shell's safe-area utilities pad it back. NOTE: `@capacitor/status-bar`'s
+        //overlaysWebView/backgroundColor are dead on Android API 35+/36 (per the plugin
+        //README and DECISIONS.md §6.0). SystemBars below now owns edge-to-edge + insets;
+        //this block survives only for iOS + older Android until @adaptv/shell (roadmap #4).
         overlaysWebView: true,
+        style: "DEFAULT",
+      },
+      SystemBars: {
+        //Capacitor 8 core (bundled in @capacitor/android, registered unconditionally).
+        //`css` injects `--safe-area-inset-*` on `document.documentElement` on Android —
+        //the values the locked safe-area contract consumes var-first, because
+        //`env(safe-area-inset-*)` reads 0/wrong in WebView < 140 (crbug/40699457). This
+        //is the native half that makes styles/safe-area.css real on Android.
+        insetsHandling: "css",
+        //`DEFAULT` derives light/dark bar icons from the device/content — the supported
+        //2026 replacement for the dead StatusBar.setBackgroundColor. applyStatusBar()
+        //(capabilities/status-bar.ts) refines it per resolved theme at runtime.
         style: "DEFAULT",
       },
     },
