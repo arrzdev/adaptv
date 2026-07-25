@@ -6,18 +6,17 @@ import {
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 
 /**
- * Keep the native status bar in sync with the app's resolved theme, and put the app
- * edge-to-edge (content under the status bar, safe-area padding). No-op on web — the
- * browser owns the bar there. Mount once near the root with the resolved appearance.
+ * Keep the native system bars' icon style in sync with the app's resolved theme, and
+ * put the app edge-to-edge (content under the bars, safe-area padding). No-op on web —
+ * the browser owns the bars there. Mount once near the root with the resolved appearance.
+ * The bar background comes from CSS (the rendered html/body colour under the inset), not
+ * a native call — so this takes no colour.
  */
-export function useStatusBar(
-  appearance: StatusBarAppearance,
-  backgroundColor?: string,
-): void {
+export function useStatusBar(appearance: StatusBarAppearance): void {
   useIsomorphicLayoutEffect(() => {
     enableEdgeToEdge()
   }, [])
   useIsomorphicLayoutEffect(() => {
-    applyStatusBar(appearance, backgroundColor)
-  }, [appearance, backgroundColor])
+    applyStatusBar(appearance)
+  }, [appearance])
 }

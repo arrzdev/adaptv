@@ -261,7 +261,11 @@ export function pwaHead(config: PwaHeadConfig) {
         ? { ...tag, content: viewportContent }
         : { ...tag },
     ),
-    { name: "color-scheme", content: "light dark" },
+    //NB: no static `color-scheme` meta — the head init script (theme-init-script.ts)
+    //owns it, pinned to the RESOLVED app theme (single value when the app forces
+    //light/dark, `light dark` only in "system" mode). A static `light dark` lets the
+    //*system* theme drive Chrome's WebAPK bar canvas, which is what tinted the Android
+    //standalone-PWA nav/status gutters off the device theme instead of the app theme.
     ...getMsApplicationMeta(themeColorLight),
     { title },
     ...extraMeta,

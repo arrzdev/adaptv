@@ -79,11 +79,12 @@ const DRAWER_PANEL_Z = "z-[51]"
 
 // Cap the visible content. Installed PWA: full viewport minus the top safe area so the
 // panel never grows under the notch. Browser tab: 97dvh — leaves a sliver up top and
-// dodges browser chrome (safe-area-inset-top is 0 in a tab anyway). The keyboard lift
-// clamps against this same cap. (Viewport math is Tier-1's job — not a cosmetic.)
+// dodges browser chrome (the top inset is 0 in a tab anyway). The keyboard lift clamps
+// against this same cap. (Viewport math is Tier-1's job — not a cosmetic.) `--safe-top`
+// is the contract var (styles/safe-area.css).
 const DRAWER_CONTENT_LAYOUT_CLASS = cn(
   "flex min-h-0 shrink-0 flex-col",
-  "app:max-h-[calc(100vh-env(safe-area-inset-top))] web:max-h-[97dvh]",
+  "app:max-h-[calc(100vh-var(--safe-top))] web:max-h-[97dvh]",
 )
 
 const OVERLAY_DURATION = DEFAULT_DRAWER_TRANSITION.duration

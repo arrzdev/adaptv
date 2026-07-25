@@ -57,15 +57,14 @@ const EDGE_FADE_BAND_CLASS = "pointer-events-none absolute inset-x-0 z-20"
 // (`p-safe-offset-2` = inset + 0.5rem) — never over the page header.
 //
 // The old `max(2rem, …)` floor assumed a large inset (iOS notch). On Android an
-// installed PWA's status bar is a separate strip, so `env(safe-area-inset-top)` is
-// 0 and the floor forced a 32px band that sat ON TOP of the title + action buttons
-// (they render ~8px from the top). Tracking the inset (+0.5rem to match the content
+// installed PWA's status bar is a separate strip, so the top inset is 0 and the
+// floor forced a 32px band that sat ON TOP of the title + action buttons (they
+// render ~8px from the top). Tracking the inset (+0.5rem to match the content
 // padding) keeps iOS unchanged and shrinks the band to a soft ~8px edge on Android,
-// clear of the header.
-const TOP_FADE_HEIGHT =
-  "web:h-4 app:h-[calc(env(safe-area-inset-top,0px)+0.5rem)]"
+// clear of the header. `--safe-*` are the contract vars (styles/safe-area.css).
+const TOP_FADE_HEIGHT = "web:h-4 app:h-[calc(var(--safe-top)+0.5rem)]"
 const BOTTOM_FADE_HEIGHT =
-  "web:h-[calc(env(safe-area-inset-bottom,0px)+1.125rem)] app:h-[calc(env(safe-area-inset-bottom,0px)+0.625rem)]"
+  "web:h-[calc(var(--safe-bottom)+1.125rem)] app:h-[calc(var(--safe-bottom)+0.625rem)]"
 
 const smoothMask: CSSProperties = {
   maskSize: "100% 100%",

@@ -141,12 +141,16 @@ export function computeScrollIntoViewTop({
  * DOM HELPERS
  * ============================================================================= */
 
-/** Measure `env(safe-area-inset-bottom)` in px (0 when unsupported or no inset). */
+/** Measure the safe-area bottom inset in px (0 when unsupported or no inset). Reads
+ * the `--safe-bottom` contract var (styles/safe-area.css), so it picks up Capacitor's
+ * injected value on Android WebView < 140 rather than the bare — and there, wrong —
+ * native inset. An undefined var makes the probe height invalid → 0, which matches the
+ * "0 when unsupported" contract. */
 function readSafeAreaInsetBottom(): number {
   if (typeof document === "undefined") return 0
   const probe = document.createElement("div")
   probe.style.cssText =
-    "position:fixed;left:0;bottom:0;width:0;visibility:hidden;pointer-events:none;height:env(safe-area-inset-bottom,0px)"
+    "position:fixed;left:0;bottom:0;width:0;visibility:hidden;pointer-events:none;height:var(--safe-bottom)"
   document.documentElement.appendChild(probe)
   const inset = probe.getBoundingClientRect().height
   probe.remove()

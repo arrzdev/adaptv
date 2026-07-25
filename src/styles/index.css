@@ -6,12 +6,16 @@
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant light (&:where(.light, .light *));
 
-/* 1. Reset rules and platform patches go first */
+/* 1. The safe-area inset contract (reroutes tailwindcss-safe-area var-first). Must
+ *    load after the plugin — which it does: the app imports this bundle after it. */
+@import "./safe-area.css";
+
+/* 2. Reset rules and platform patches */
 @import "./patches.css";
 
-/* 2. Component-owned styles (drawer keyframes + caret patch) */
+/* 3. Component-owned styles (drawer keyframes + caret patch) */
 @import "./drawer.css";
 @import "./swipeable.css";
 
-/* 3. Atomic utility definitions go last to win the cascade */
+/* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";
