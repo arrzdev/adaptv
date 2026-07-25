@@ -159,12 +159,11 @@ export function RoutingShell({
 
   const [resolvedAppearance] = useTheme()
   useSyncTheme({ themeColorLight, themeColorDark })
-  //native only — keep the OS status bar in sync with the theme + go edge-to-edge,
-  //and route the Android hardware back button through the router. No-ops on web.
-  useStatusBar(
-    resolvedAppearance,
-    resolvedAppearance === "dark" ? themeColorDark : themeColorLight,
-  )
+  //native only — keep the OS system bars' icons in sync with the theme + go
+  //edge-to-edge, and route the Android hardware back button through the router. No-ops
+  //on web. The bar background is CSS-driven (html/body colour under the inset), so this
+  //takes no colour — see capabilities/status-bar.ts.
+  useStatusBar(resolvedAppearance)
   useAndroidBackButton()
   //watch the frame rate and GPU-promote animating layers when frames drop
   useGlobalFpsSentinel({ enabled: gpuBoost })

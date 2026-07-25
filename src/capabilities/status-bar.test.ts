@@ -1,17 +1,24 @@
-import { StatusBar, Style } from "@capacitor/status-bar"
+import { SystemBars, SystemBarsStyle } from "@capacitor/core"
+import { StatusBar } from "@capacitor/status-bar"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   applyStatusBar,
   enableEdgeToEdge,
 } from "#adaptv/capabilities/status-bar"
 
+vi.mock("@capacitor/core", () => ({
+  SystemBars: {
+    setStyle: vi.fn(() => Promise.resolve()),
+  },
+  SystemBarsStyle: { Dark: "DARK", Light: "LIGHT", Default: "DEFAULT" },
+}))
+
 vi.mock("@capacitor/status-bar", () => ({
   StatusBar: {
-    setStyle: vi.fn(() => Promise.resolve()),
+    //kept only to prove applyStatusBar never touches the dead colour call
     setBackgroundColor: vi.fn(() => Promise.resolve()),
     setOverlaysWebView: vi.fn(() => Promise.resolve()),
   },
-  Style: { Dark: "DARK", Light: "LIGHT", Default: "DEFAULT" },
 }))
 
 function forceNative(native: boolean): void {
@@ -27,26 +34,28 @@ afterEach(() => {
 })
 
 describe("applyStatusBar", () => {
-  it("is a no-op on web (browser owns the bar)", () => {
+  it("is a no-op on web (browser owns the bars)", () => {
     forceNative(false)
-    applyStatusBar("dark", "#000000")
-    expect(StatusBar.setStyle).not.toHaveBeenCalled()
+    applyStatusBar("dark")
+    expect(SystemBars.setStyle).not.toHaveBeenCalled()
   })
 
-  it("maps appearance → Style (Dark = light content for a dark bg)", () => {
+  it("maps appearance → SystemBarsStyle (Dark = light content for a dark bg)", () => {
     forceNative(true)
     applyStatusBar("dark")
-    expect(StatusBar.setStyle).toHaveBeenCalledWith({ style: Style.Dark })
+    expect(SystemBars.setStyle).toHaveBeenCalledWith({
+      style: SystemBarsStyle.Dark,
+    })
     applyStatusBar("light")
-    expect(StatusBar.setStyle).toHaveBeenCalledWith({ style: Style.Light })
+    expect(SystemBars.setStyle).toHaveBeenCalledWith({
+      style: SystemBarsStyle.Light,
+    })
   })
 
-  it("applies a background color when given", () => {
+  it("never calls the dead StatusBar.setBackgroundColor (bar bg is CSS-driven)", () => {
     forceNative(true)
-    applyStatusBar("light", "#eeeeec")
-    expect(StatusBar.setBackgroundColor).toHaveBeenCalledWith({
-      color: "#eeeeec",
-    })
+    applyStatusBar("light")
+    expect(StatusBar.setBackgroundColor).not.toHaveBeenCalled()
   })
 })
 
