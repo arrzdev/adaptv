@@ -5,7 +5,8 @@
 //   adaptv doctor                     check the local toolchain (JDK, Android SDK, Xcode, pod)
 //   adaptv dev  web|ios|android|all   live reload: one Vite dev server, web + native
 //                                    WebViews all attached, hot-reloading on save
-//   adaptv preview ios|android|all    static build → install → launch on a device (no reload)
+//   adaptv preview web|ios|android|all  the real build: web served locally, native installed
+//                                    and launched on a device (no live reload)
 //   adaptv build ios|android|all      static artifacts: build SPA → sync → package (.ipa/.apk)
 //
 //   dev/preview flags:
@@ -23,7 +24,7 @@
 // Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
 // the local `cap` / `capacitor-assets` binaries directly, so it works from a bare shell.
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import {
   copyFileSync,
   cpSync,
@@ -82,6 +83,7 @@ import {
   isPhysicalTarget,
   lanIp,
   launchInstalledApp,
+  localBin,
   nativeDir,
   patchNativeIdentity,
   platformEnv,
@@ -1574,7 +1576,7 @@ function usage() {
 
 ${c.bold("Usage")}
   adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
-  adaptv preview <ios|android|all>      [--target <id>] [--latest] [--force] [--verbose]
+  adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
   adaptv doctor
 
@@ -1626,6 +1628,88 @@ function targetsFor(arg) {
   return null
 }
 
+/**
+ * `adaptv preview web` — the app's real web build, served locally.
+ *
+ * The web counterpart of `preview ios|android`: what a user would actually get, rather than
+ * the dev server. Wrapped by adaptv (instead of leaving the dev to remember `vite build &&
+ * vite preview`) so every target is reached the same way and the web build goes through the
+ * same adaptv plugin pipeline — SSR/SPA choice, manifest, service worker — that a deploy does.
+ * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (LIFECYCLE §0, L14).
+ */
+async function previewWeb(appRoot, opts) {
+  const t0 = Date.now()
+  header("preview web")
+  const verbose = !!opts.verbose
+  const viteBin = localBin(appRoot, "vite")
+  const spawnVite = (args, extra) =>
+    viteBin
+      ? [viteBin, args, extra]
+      : ["npx", ["--yes", "vite", ...args], extra]
+
+  try {
+    await runLine(
+      "web build",
+      async (report) => {
+        const [cmd, args] = spawnVite(["build"])
+        await exec(cmd, args, {
+          cwd: appRoot,
+          env: process.env,
+          onLine: (l) => report(l),
+        })
+      },
+      { verbose },
+    )
+  } catch {
+    //`runLine` already rendered the ✖ with the reason — just stop.
+    process.exit(1)
+  }
+
+  // `vite preview` is long-running: stream it until Ctrl-C, surfacing just its URL.
+  const [cmd, args] = spawnVite(["preview"])
+  const child = spawn(cmd, args, {
+    cwd: appRoot,
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+  let announced = false
+  const onData = (buf) => {
+    const text = String(buf)
+    if (verbose) process.stdout.write(text)
+    const m = text.match(/https?:\/\/[^\s]+/)
+    if (m && !announced) {
+      announced = true
+      log.success(`server  ${c.dim(m[0])}`)
+      footer(c.dim("ctrl-c to stop"))
+    }
+  }
+  child.stdout.on("data", onData)
+  child.stderr.on("data", onData)
+  const stop = () => {
+    try {
+      child.kill("SIGINT")
+    } catch {}
+  }
+  process.on("SIGINT", () => {
+    stop()
+    process.exit(0)
+  })
+  process.on("SIGTERM", () => {
+    stop()
+    process.exit(0)
+  })
+  await new Promise((resolve) => {
+    child.on("close", (code) => {
+      if (code && code !== 0) {
+        log.error(`vite preview exited with code ${code}`)
+        process.exit(1)
+      }
+      resolve()
+    })
+  })
+  footer(c.dim(`stopped · ${since(t0)}`))
+}
+
 async function main() {
   const [command, ...raw] = process.argv.slice(2)
   const { flags, rest } = parseFlags(raw)
@@ -1660,12 +1744,14 @@ async function main() {
     }
 
     case "preview": {
-      // `preview` = static build → install → launch on a device (no live reload).
-      // Native only; there's no `preview web` (that's plain `vite preview`, unwrapped).
+      // `preview` = the real build, run the way a user would get it. `web` serves the web
+      // build locally; the native targets install and launch it on a device (no live reload).
+      if (rest[0] === "web")
+        return await previewWeb(appRoot, { verbose: !!flags.verbose })
       const platforms = targetsFor(rest[0])
       if (!platforms) {
         throw new Error(
-          `unknown preview target "${rest[0] ?? ""}" — expected ios, android, or all.`,
+          `unknown preview target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
         )
       }
       if (platforms.length > 1 && flags.target) {
