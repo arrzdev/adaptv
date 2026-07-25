@@ -437,15 +437,20 @@ export async function generateAssets(
   const dir = path.resolve(appRoot, icon.dir)
   const logo = path.join(dir, "logo.png")
   if (!existsSync(logo)) {
-    warnings.push(
-      `no ${icon.dir}/logo.png — kept existing launcher icons.`,
-    )
+    //A NOTE, not a warning (R5): the dev never asked for generated icons, and the app
+    //keeps the icons it already has. Nothing is broken and there is nothing to do, so
+    //it must not carry a `!` on every single build for the rest of the project's life.
+    warnings.push({
+      note: `no ${icon.dir}/logo.png — using the launcher icons already in the project.`,
+    })
     return { warnings }
   }
   const bin = localBin(appRoot, "capacitor-assets")
   if (!bin) {
+    //Stays a `!`: there IS a logo.png, so the dev asked for generated icons and is not
+    //getting them. Only they can fix that, which is what a warning is for.
     warnings.push(
-      "@capacitor/assets not installed — kept existing launcher icons (add: pnpm add -D @capacitor/assets).",
+      `${icon.dir}/logo.png is present but @capacitor/assets is not installed — keeping the existing launcher icons (add: pnpm add -D @capacitor/assets).`,
     )
     return { warnings }
   }

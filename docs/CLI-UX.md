@@ -45,6 +45,37 @@ its own line, never after another platform's. Collect and group; don't emit as y
 > print dim detail under itself, and that is only possible when nothing follows it. Live rows keep
 > their original order — reshuffling mid-run would be noise.
 
+**R20 — One platform is not a different rendering.** `build ios`, `build android` and
+`build all` are the same command with a different argument, so they must produce the same
+shape: shared work (the web bundle, the dev server) as its own line, then ONE line per
+platform. A single platform is a one-lane run, never a separate code path that exposes
+internals as top-level steps.
+> Violated by all three at once:
+> ```
+> adaptv  build ios          adaptv  build android      adaptv  build all
+> ! ios: no logo.png …       ! android: no logo.png …   ! ios: no logo.png …
+> ✓ package  …ipa · 6.7s     ✓ sync  281ms              ! android: no logo.png …
+>                            ✓ package  …apk · 2.6s     ✓ ios  …ipa · 5.0s
+>                                                       ✓ android  …apk · 727ms
+> ```
+> Three shapes for one command. Worse, `sync` was a top-level step whose line appears only
+> on a cache MISS — so whether `build android` showed it depended on which platform you had
+> built last, which reads as a bug in the build rather than a cache doing its job. The fix is
+> structural, not cosmetic: `single` and `all` now share one `runLanes` call, so they cannot
+> drift again. Sub-actions render on the lane and vanish (R1).
+
+**R21 — An app-level fact is stated once.** Something true of the whole app — an icon source,
+a config key — is discovered once per platform, and must not be printed once per platform or
+prefixed with a platform that has nothing to do with it.
+> Violated by: `! ios: no ./assets/logo.png …` immediately followed by
+> `! android: no ./assets/logo.png …`. One missing file, reported as two problems, neither of
+> which is about iOS or Android. `flushNotices()` in `render.mjs` dedupes, and every command
+> shares it rather than keeping its own copy of the loop.
+>
+> That warning also broke R5: adaptv kept the existing launcher icons and carried on, so
+> there is nothing to do — it is a dim note. The `@capacitor/assets` one stays a `!`, because
+> there a `logo.png` IS present and is being silently ignored, which only the dev can fix.
+
 **R4 — A step that did nothing prints nothing.** A sub-10ms no-op must not print `✓ … 5ms`.
 Only surface a step when it genuinely took time or the dev needs to know it happened.
 

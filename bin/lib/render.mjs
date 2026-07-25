@@ -94,6 +94,28 @@ export const log = {
   error: (m) => out(`  ${c.red("✖")} ${m}\n`),
 }
 
+/**
+ * Print collected notices once each, then empty the list.
+ *
+ * An entry is either a plain string — a real `!` the dev may need to act on — or
+ * `{ note }`, something adaptv already handled and is only mentioning (R5).
+ *
+ * Deduped, because the same app-level fact (an icon source, a config key) is
+ * discovered once per platform: printing it per platform reads as several separate
+ * problems when it is one. Shared by every command so they cannot drift apart.
+ */
+export function flushNotices(notices) {
+  const seen = new Set()
+  for (const n of notices) {
+    const text = typeof n === "string" ? n : n.note
+    if (seen.has(text)) continue
+    seen.add(text)
+    if (typeof n === "string") log.warn(text)
+    else log.info(text)
+  }
+  notices.length = 0
+}
+
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
   out(`  ${c.green("✓")} ${label}  ${c.dim(`· ${note}`)}\n`)
