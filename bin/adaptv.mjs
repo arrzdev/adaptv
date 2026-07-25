@@ -92,25 +92,29 @@ import {
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import {
+  addresses,
   c,
+  check,
   detail,
   fail,
   flushNotices,
   footer,
   header,
+  helpText,
   liveWatcher,
   log,
   onKeys,
+  rawOut,
   rewindLines,
   runLanes,
   runLine,
+  section,
   since,
   spacer,
   wasReported,
 } from "./lib/render.mjs"
-import { gradleCause } from "./lib/tool-log.mjs"
+import { errorTail, gradleCause } from "./lib/tool-log.mjs"
 
-const out2 = (t) => process.stdout.write(t)
 const CWD = process.cwd()
 //the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
 //own pure modules (doctor, privacy-manifest) rather than duplicate them.
@@ -498,7 +502,7 @@ async function runLive(appRoot, platforms, opts) {
     tearing = true
     // Quiet teardown — no implementation chatter. It reverts the capacitor.config server
     // block, the iOS ATS/Local-Network exceptions, and the adb reverse, then exits.
-    line("")
+    spacer()
     teardown()
     process.exit(0)
   }
@@ -654,7 +658,10 @@ async function runLive(appRoot, platforms, opts) {
     // has to pick a device. Bind for the LAN when external is even possible; a
     // simulator/emulator-only run stays on localhost.
     await runLine(
-      "server",
+      //`web` — the same name the platform lanes use, because that is what is being served.
+      //The URL moves off this row into the address block below (R27), so the row no longer
+      //grows with the port and both addresses get a label instead of only one.
+      "web",
       async (report) => {
         devServer = await startDevServer(appRoot, {
           args: opts.viteArgs,
@@ -685,10 +692,15 @@ async function runLive(appRoot, platforms, opts) {
             )
           }
         }
-        return devServer.localUrl
+        //no detail: the addresses are rendered as their own aligned block under this row.
+        return ""
       },
       { verbose },
     )
+    addresses({
+      local: devServer.localUrl,
+      network: devServer.networkUrl,
+    })
 
     // Now resolve the device — AFTER the server is confirmed up, so the picker never appears
     // for a run that was going to fail at the dev server anyway.
@@ -901,7 +913,7 @@ async function runLive(appRoot, platforms, opts) {
     }
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
-    line("")
+    spacer()
     watcher = liveWatcher({ keys: !webOnly })
 
     // `b` reinstalls on demand — always, not only after a change is detected. A device
@@ -917,10 +929,10 @@ async function runLive(appRoot, platforms, opts) {
       // Walk back over the blank separator + one row per platform so the SETTLED
       // platform lines animate again in place, rather than a second copy appearing
       // below them. Off a TTY there's no cursor to move, so just append.
-      if (!rewindLines(1 + ready.length)) line("")
+      if (!rewindLines(1 + ready.length)) spacer()
       await launchAll({ force: true })
       nativeFp = snapshotNativeFp(appRoot, ready)
-      line("")
+      spacer()
       watcher = liveWatcher({ keys: !webOnly }) // fresh line, which also clears any pending notice
       rebuilding = false
     }
@@ -950,7 +962,7 @@ async function runLive(appRoot, platforms, opts) {
       if (reloading || rebuilding || webOnly || ready.length === 0) return
       reloading = true
       watcher.stop()
-      if (!rewindLines(1 + ready.length)) line("")
+      if (!rewindLines(1 + ready.length)) spacer()
       if (single) {
         try {
           await runLine(ready[0], (r) => reloadOne(ready[0], r), {
@@ -970,7 +982,7 @@ async function runLive(appRoot, platforms, opts) {
           { verbose },
         )
       }
-      line("")
+      spacer()
       watcher = liveWatcher({ keys: !webOnly })
       reloading = false
     }
@@ -999,7 +1011,7 @@ async function runLive(appRoot, platforms, opts) {
 
     onDevLine = (l) => {
       if (verbose) {
-        line(c.dim(`  vite │ ${l}`))
+        detail(`vite │ ${l}`)
         return
       }
       // "[vite] (client) hmr update /src/a.tsx, /src/b.css?direct" → flash the line
@@ -1367,19 +1379,13 @@ const ADAPTV_BASE_PLUGINS = [
   "@capacitor/status-bar",
 ]
 
-const line = (s = "") => process.stdout.write(`${s}\n`)
-
 function checkTool(label, argv, { optional = false } = {}) {
   const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" })
   const found = r.status === 0
   const detail = found
     ? (r.stdout || r.stderr || "").trim().split("\n")[0]
     : ""
-  line(
-    `  ${found ? c.green("✔") : optional ? c.yellow("○") : c.red("✖")} ${label}${
-      detail ? c.dim(`  ${detail}`) : ""
-    }`,
-  )
+  check(found, label, detail, { optional })
   return found
 }
 
@@ -1406,22 +1412,19 @@ function checkAppPlugins(_appRoot) {
     } catch {
       present = false
     }
-    line(`  ${present ? c.green("✔") : c.red("✖")} ${name}`)
+    check(present, name)
     if (!present) missing.push(name)
   }
   if (missing.length) {
-    line(
-      c.yellow(
-        `\n  ${missing.length} plugin(s) missing from adaptv's install — reinstall adaptv:`,
-      ),
+    log.warn(
+      `${missing.length} plugin(s) missing from adaptv's install — reinstall with \`pnpm install\``,
     )
-    line(c.dim(`    pnpm install`))
   }
 }
 
 /** Project-level checks (the silent failures), from src/native/doctor.ts. */
 async function runProjectChecks(appRoot) {
-  line("\nProject checks")
+  section("Project checks")
   const { runDoctor, formatDiagnostics } =
     await loadAdaptvModule("native/doctor.ts")
   let deps = []
@@ -1446,40 +1449,40 @@ async function runProjectChecks(appRoot) {
     dependencies: deps,
   })
   if (diagnostics.length === 0) {
-    line(`  ${c.green("✔")} no issues found`)
+    check(true, "no issues found")
   } else {
-    for (const l of formatDiagnostics(diagnostics).split("\n"))
-      line(`  ${l}`)
+    for (const l of formatDiagnostics(diagnostics).split("\n")) detail(l)
   }
 }
 
 async function doctor(appRoot) {
-  line(`\n${c.bold(c.magenta(" adaptv "))} ${c.bold("doctor")}`)
-  line(
-    c.dim("  toolchain for building native iOS / Android from this app\n"),
-  )
+  //the SAME banner every other command prints — `doctor` had its own
+  header("doctor")
+  log.info("toolchain for building native iOS / Android from this app")
 
-  line("Core")
+  section("Core")
   checkTool("node", ["node", "--version"])
   const { cmd, pre } = capCmd(appRoot)
   checkTool("capacitor cli", [cmd, ...pre, "--version"])
 
-  line("\nAndroid")
+  section("Android")
   const aEnv = { ...process.env }
   const androidHome =
     aEnv.ANDROID_HOME ??
     aEnv.ANDROID_SDK_ROOT ??
     path.join(homedir(), "Library/Android/sdk")
-  line(
-    `  ${existsSync(androidHome) ? c.green("✔") : c.red("✖")} Android SDK${c.dim(`  ${androidHome}`)}`,
-  )
+  check(existsSync(androidHome), "Android SDK", androidHome)
   const jbr = "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
   const jdk = firstExisting([
     aEnv.JAVA_HOME && path.join(aEnv.JAVA_HOME, "bin/java"),
     path.join(jbr, "bin/java"),
   ])
-  line(
-    `  ${jdk ? c.green("✔") : c.red("✖")} JDK${jdk ? c.dim(`  ${path.dirname(path.dirname(jdk))}`) : c.dim("  install Android Studio or set JAVA_HOME")}`,
+  check(
+    !!jdk,
+    "JDK",
+    jdk
+      ? path.dirname(path.dirname(jdk))
+      : "install Android Studio or set JAVA_HOME",
   )
   checkTool(
     "adb",
@@ -1489,7 +1492,7 @@ async function doctor(appRoot) {
     },
   )
 
-  line("\niOS (macOS only)")
+  section("iOS (macOS only)")
   checkTool("xcodebuild", ["xcodebuild", "-version"], { optional: true })
   const ie = iosEnv()
   checkTool("cocoapods (pod)", ["pod", "--version"], { optional: true }) ||
@@ -1499,21 +1502,31 @@ async function doctor(appRoot) {
       { optional: true },
     )
 
-  line("\nPlugins (shipped by adaptv — the consumer installs none)")
+  section("Plugins (shipped by adaptv — the consumer installs none)")
   checkAppPlugins(appRoot)
 
-  line("\nProject")
-  line(
-    `  ${existsSync(nativeDir(appRoot, "android")) ? c.green("✔") : c.yellow("○")} ${ADAPTV_DIR}/android project`,
+  section("Project")
+  check(
+    existsSync(nativeDir(appRoot, "android")),
+    `${ADAPTV_DIR}/android project`,
+    "",
+    { optional: true },
   )
-  line(
-    `  ${existsSync(nativeDir(appRoot, "ios")) ? c.green("✔") : c.yellow("○")} ${ADAPTV_DIR}/ios project`,
+  check(
+    existsSync(nativeDir(appRoot, "ios")),
+    `${ADAPTV_DIR}/ios project`,
+    "",
+    { optional: true },
   )
-  line(
-    `  ${existsSync(path.join(appRoot, "assets/logo.png")) ? c.green("✔") : c.yellow("○")} assets/logo.png (launcher-icon source)`,
+  check(
+    existsSync(path.join(appRoot, "assets/logo.png")),
+    "assets/logo.png (launcher-icon source)",
+    "",
+    { optional: true },
   )
   await runProjectChecks(appRoot)
-  line(`\n${c.green("✔ doctor complete")}\n`)
+  //no "doctor complete" footer: every row above already reported itself (R18).
+  spacer()
 }
 
 /* =============================================================================
@@ -1521,7 +1534,7 @@ async function doctor(appRoot) {
  * ============================================================================= */
 
 function usage() {
-  line(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
+  helpText(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
 
 ${c.bold("Usage")}
   adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
@@ -1586,8 +1599,20 @@ function targetsFor(arg) {
  * same adaptv plugin pipeline — SSR/SPA choice, manifest, service worker — that a deploy does.
  * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (LIFECYCLE §0, L14).
  */
+/**
+ * `preview web` — the real web build, served the way a user gets it, held until Ctrl-C.
+ *
+ * ONE line for the target (R1): the build and the server both render on it and vanish, and it
+ * settles into the address block. It used to print `✓ web build` + `✓ server <url>` and then
+ * hand-roll its own `ctrl-c stop` — a dim, unspaced copy of the row `dev` gets from
+ * `liveWatcher()`, which is exactly the drift that comes from a command drawing its own
+ * output instead of asking the renderer for it.
+ *
+ * `header: false` when `preview all` runs this after the native targets — one banner per
+ * command, not one per surface.
+ */
 async function previewWeb(appRoot, opts) {
-  header("preview web")
+  if (opts.header !== false) header("preview web")
   const verbose = !!opts.verbose
   const viteBin = localBin(appRoot, "vite")
   const spawnVite = (args, extra) =>
@@ -1595,16 +1620,67 @@ async function previewWeb(appRoot, opts) {
       ? [viteBin, args, extra]
       : ["npx", ["--yes", "vite", ...args], extra]
 
+  let child = null
+  const found = { local: "", network: "" }
   try {
     await runLine(
-      "web build",
+      "web",
       async (report) => {
-        const [cmd, args] = spawnVite(["build"])
-        await exec(cmd, args, {
+        report("building app")
+        const [bcmd, bargs] = spawnVite(["build"])
+        await exec(bcmd, bargs, {
           cwd: appRoot,
           env: process.env,
           onLine: (l) => report(l),
         })
+        // `vite preview` is long-running: wait for it to announce an address, then let this
+        // line settle and hand the terminal to the watcher.
+        report("starting server")
+        const [cmd, args] = spawnVite([
+          "preview",
+          ...(opts.viteArgs ?? []),
+        ])
+        child = spawn(cmd, args, {
+          cwd: appRoot,
+          env: process.env,
+          stdio: ["ignore", "pipe", "pipe"],
+        })
+        const seen = []
+        await new Promise((resolve, reject) => {
+          const onData = (buf) => {
+            const text = String(buf)
+            if (verbose) rawOut(text)
+            for (const l of text.split("\n")) if (l.trim()) seen.push(l)
+            const local = text.match(/Local:\s+(https?:\/\/\S+)/)
+            const net = text.match(/Network:\s+(https?:\/\/\S+)/)
+            if (net) found.network = net[1].replace(/\/$/, "")
+            if (local) {
+              found.local = local[1].replace(/\/$/, "")
+              resolve()
+            }
+          }
+          child.stdout.on("data", onData)
+          child.stderr.on("data", onData)
+          // A server that dies before announcing an address must say WHY (R13): "exited
+          // with code 1" is the one thing the dev already knows. The useful line is in its
+          // output — a taken port by far the most often, which Node states as a raw
+          // `EADDRINUSE … 127.0.0.1:41720`: true, and unreadable.
+          child.on("close", (code) => {
+            const busy = seen.join("\n").match(/EADDRINUSE[^\n]*?:(\d+)/)
+            reject(
+              Object.assign(
+                new Error(
+                  busy
+                    ? `port ${busy[1]} is already in use — stop what's holding it, or pick another: \`adaptv preview web -- --port <n>\``
+                    : `the preview server stopped${code ? ` (exit ${code})` : ""}`,
+                ),
+                { tail: busy ? [] : errorTail(seen, 6) },
+              ),
+            )
+          })
+        })
+        //the addresses are their own block under this row
+        return ""
       },
       { verbose },
     )
@@ -1613,31 +1689,16 @@ async function previewWeb(appRoot, opts) {
     process.exit(1)
   }
 
-  // `vite preview` is long-running: stream it until Ctrl-C, surfacing just its URL.
-  const [cmd, args] = spawnVite(["preview"])
-  const child = spawn(cmd, args, {
-    cwd: appRoot,
-    env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
-  })
-  let announced = false
-  const onData = (buf) => {
-    const text = String(buf)
-    if (verbose) process.stdout.write(text)
-    const local = text.match(/Local:\s+(https?:\/\/\S+)/)
-    const net = text.match(/Network:\s+(https?:\/\/\S+)/)
-    if (local && !announced) {
-      announced = true
-      log.success(`server  ${c.dim(local[1].replace(/\/$/, ""))}`)
-      if (net) detail(`network  ${net[1].replace(/\/$/, "")}`)
-      out2(`  ${c.dim("ctrl-c stop")}\n`)
-    }
-  }
-  child.stdout.on("data", onData)
-  child.stderr.on("data", onData)
+  addresses(found)
+  spacer()
+  //The SAME watcher row `dev` uses — bold key, its own line — rather than a second copy of
+  //the idea. `keys: false` because there is nothing to reload or rebuild from here (R17).
+  const watcher = liveWatcher({ keys: false })
+
   const stop = () => {
+    watcher.stop()
     try {
-      child.kill("SIGINT")
+      child?.kill("SIGINT")
     } catch {}
   }
   process.on("SIGINT", () => {
@@ -1649,9 +1710,10 @@ async function previewWeb(appRoot, opts) {
     process.exit(0)
   })
   await new Promise((resolve) => {
-    child.on("close", (code) => {
+    child?.on("close", (code) => {
+      stop()
       if (code && code !== 0) {
-        log.error(`vite preview exited with code ${code}`)
+        fail("web", `preview server exited with code ${code}`)
         process.exit(1)
       }
       resolve()
@@ -1696,7 +1758,10 @@ async function main() {
       // `preview` = the real build, run the way a user would get it. `web` serves the web
       // build locally; the native targets install and launch it on a device (no live reload).
       if (rest[0] === "web")
-        return await previewWeb(appRoot, { verbose: !!flags.verbose })
+        return await previewWeb(appRoot, {
+          verbose: !!flags.verbose,
+          viteArgs: flags.viteArgs,
+        })
       const platforms = targetsFor(rest[0])
       if (!platforms) {
         throw new Error(
@@ -1708,12 +1773,24 @@ async function main() {
           "--target can't be used with `preview all` (it's per-platform). Use --latest, or preview each platform.",
         )
       }
-      return pipeline("preview", appRoot, platforms, {
+      // `all` means every surface a user could get the app on, WEB INCLUDED — the native
+      // targets install and exit, then the web build is served and held until Ctrl-C. It
+      // used to mean "every NATIVE target", so `preview all` skipped the one surface you
+      // can look at without a device, and the command exited with nothing still running.
+      const opts = {
         target: flags.target,
         latest: !!flags.latest,
         verbose: !!flags.verbose,
         force: !!flags.force,
-      })
+      }
+      if (rest[0] === "all") {
+        await pipeline("preview", appRoot, platforms, opts)
+        return await previewWeb(appRoot, {
+          verbose: !!flags.verbose,
+          header: false, //one banner per command, not one per surface
+        })
+      }
+      return pipeline("preview", appRoot, platforms, opts)
     }
 
     case "build": {
@@ -1745,7 +1822,8 @@ async function main() {
       return usage()
 
     default:
-      line(c.red(`unknown command: ${command}\n`))
+      log.error(`unknown command: ${command}`)
+      spacer()
       usage()
       process.exit(1)
   }
@@ -1756,7 +1834,7 @@ main().catch((err) => {
   // rather than appending Node's raw message under the calm one.
   if (!wasReported(err)) {
     log.error(err?.message ?? String(err))
-    if (err?.tail) line(c.dim(err.tail))
+    if (err?.tail) detail(err.tail)
   }
   process.exit(1)
 })

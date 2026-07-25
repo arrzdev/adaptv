@@ -141,6 +141,40 @@ export function flushNotices(notices) {
   notices.length = 0
 }
 
+/**
+ * The ONE sanctioned way to put unformatted bytes on stdout: `--verbose`, whose entire
+ * purpose is raw passthrough (R12). Everything else in the CLI goes through the primitives
+ * above, so the visual language lives in one file rather than being re-invented per command.
+ */
+export function rawOut(text) {
+  out(text)
+}
+
+/** A group heading inside a report (`doctor`): breathing room, then the title. */
+export function section(title) {
+  out(`\n  ${c.bold(title)}\n`)
+}
+
+/**
+ * One checked item in a report — the SAME glyph set as every other line in the CLI.
+ * `doctor` used to draw its own rows with `✔` (a different check mark) and `○`, so the one
+ * command a dev runs when something is wrong was also the one that looked like a different
+ * program. `optional` marks a thing whose absence is fine: dim, not red.
+ */
+export function check(ok, label, note = "", { optional = false } = {}) {
+  const glyph = ok ? c.green("✓") : optional ? c.dim("○") : c.red("✖")
+  out(`  ${glyph} ${label}${note ? c.dim(`  ${note}`) : ""}\n`)
+}
+
+/**
+ * Pre-composed multi-line text: the `--help` screen. It is a page, not a step, so it is the
+ * one thing that arrives already laid out — but it still goes through the renderer so that
+ * NOTHING in the CLI writes to stdout on its own.
+ */
+export function helpText(text) {
+  out(text.endsWith("\n") ? text : `${text}\n`)
+}
+
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
   out(`  ${c.green("✓")} ${label}  ${c.dim(`· ${note}`)}\n`)
@@ -167,6 +201,30 @@ export function spacer() {
  * uses, so an extra address reads as part of that step rather than a new event. */
 export function detail(line) {
   out(`    ${c.dim(line)}\n`)
+}
+
+/**
+ * The addresses a served app answers on, as aligned dim rows under its settled line:
+ *
+ *     ✓ web  · 2.0s
+ *         local    http://localhost:41710
+ *         network  http://192.168.1.25:41710
+ *
+ * The URL used to sit ON the settled line with the network address hanging under it, which
+ * gave one address a label and the other none, and made the row grow with the port. A served
+ * app has a LIST of addresses; this renders it as one, the way every dev server does.
+ *
+ * `network` is printed only when the server reports one (R19) — adaptv binds the LAN only
+ * when a physical device needs it, so a computed address would often point at nothing.
+ */
+export function addresses({ local, network } = {}) {
+  const rows = [
+    ["local", local],
+    ["network", network],
+  ].filter(([, url]) => url)
+  const pad = Math.max(...rows.map(([k]) => k.length))
+  for (const [k, url] of rows)
+    out(`    ${c.dim(k.padEnd(pad))}  ${c.dim(url)}\n`)
 }
 
 /** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
@@ -563,8 +621,14 @@ function compose(glyph, label, right, keep = "") {
 }
 
 /** A settled line's right-hand side, split so `compose` never clips the time away. */
+// The elapsed time always arrives as `· 2.0s` — the `·` separates a row from its metadata
+// (R25), and that reading shouldn't depend on whether the row happens to carry a detail.
+// A step whose detail moved into an address block (`✓ web`) was rendering `✓ web  1.8s`
+// while its neighbours read `✓ ios  …ipa · 5.0s`.
 const settled = (left, time) =>
-  left ? { right: left, keep: ` · ${time}` } : { right: "", keep: time }
+  left
+    ? { right: left, keep: ` · ${time}` }
+    : { right: "", keep: `· ${time}` }
 
 // ANSI escape (ESC = char 27), built without a literal control char in the source.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")

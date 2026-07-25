@@ -241,6 +241,35 @@ a dead key.
 
 ---
 
+## 4b. The engine
+
+**R26 — `render.mjs` is the ENGINE; nothing else writes to stdout.** Commands describe INTENT
+(`header`, `runLine`/`runLanes`, `addresses`, `flushNotices`, `liveWatcher`, `section`,
+`check`, `spacer`, `detail`); the engine decides what that looks like. `rawOut()` is the one
+exception, for `--verbose` passthrough (R12).
+> Violated by: `preview web` printing its own `ctrl-c stop` (dim, glued to the row above)
+> while `dev` got a bold, spaced one from `liveWatcher()`; and `doctor` printing its own
+> banner with `✔`/`○` instead of `✓`/`✖` — the command you run when something is already
+> wrong was also the one that looked like a different program.
+>
+> This is the fault behind nearly every rule in this file: two implementations of one idea,
+> drifting. **`bin/lib/engine.test.mjs` enforces it** — no `process.stdout.write` /
+> `console.log` outside the engine, and no second glyph vocabulary (`✔ ✗ ⚠`) anywhere. A
+> document cannot catch this; a test can. If you need a new kind of line, ADD A PRIMITIVE to
+> the engine — never draw it in the command.
+
+**R27 — A served app's addresses are a block, not a suffix.** Aligned, labelled, one per row:
+> ```
+> ✓ web  · 2.0s
+>     local    http://localhost:41710
+>     network  http://192.168.1.25:41710
+> ```
+> Violated by: `✓ server  http://localhost:41710 · 2.0s` with `network …` hanging under it —
+> one address labelled, the other not, and the row growing with the port. The row is `web`,
+> the same name the platform lanes use, because that is what is being served. The elapsed
+> time always reads `· 2.0s` so a row whose detail moved into the block still matches its
+> neighbours.
+
 ## 5. Before you ship a CLI change
 
 Tests do not cover any of this. Run it and read it:
@@ -253,6 +282,8 @@ Tests do not cover any of this. Run it and read it:
 - [ ] no line wraps at a normal terminal width
 - [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,
       or you can read an identifier in it, R22/R23 are broken
+- [ ] `adaptv preview web` and `adaptv preview all` — the web server must come up and STAY up
+- [ ] `adaptv doctor` — same banner and glyphs as every other command
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:
