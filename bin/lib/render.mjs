@@ -167,11 +167,17 @@ export const wasReported = (err) =>
  * keys available at any moment.
  */
 export function liveWatcher({ keys = true } = {}) {
-  const hint = keys
+  // Only offer the keys when they can actually be read. Printing `r reload js` while raw
+  // mode is unavailable is the CLI lying: the dev presses r, nothing happens, and there is
+  // nothing on screen to explain why. Say what's wrong and how to get them back instead.
+  const live = keys && keysAvailable()
+  const hint = live
     ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
       // keys, where the bold's reset bleeds and the key ends up gray.
       `  ${c.dim("·")}  ${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${c.bold("ctrl-c")}${c.dim(" stop")}`
-    : ""
+    : keys
+      ? `  ${c.dim("·")}  ${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
+      : ""
   const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
   if (!isTTY) {
     out(`${idleLine}\n`)
@@ -250,10 +256,17 @@ export function rewindLines(n) {
 /** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
 const CTRL_C = "\u0003"
 
+/** Can this process read single keypresses? Raw mode needs a real TTY on stdin — under a
+ * runner that pipes stdin (turbo without `"interactive": true` on the task, a CI job, an
+ * editor's task pane) there is nothing to put in raw mode. Exported so the watcher can say
+ * so instead of advertising keys that will never arrive. */
+export const keysAvailable = () =>
+  Boolean(process.stdin.isTTY) &&
+  typeof process.stdin.setRawMode === "function"
+
 export function onKeys({ onReload, onRebuild, onQuit }) {
   const stdin = process.stdin
-  if (!stdin.isTTY || typeof stdin.setRawMode !== "function")
-    return () => {}
+  if (!keysAvailable()) return () => {}
   stdin.setRawMode(true)
   stdin.resume()
   stdin.setEncoding("utf8")
