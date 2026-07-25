@@ -67,7 +67,7 @@ truncate an error whose remaining lines carry the instructions.
 
 Run these and READ the output — `dev ios` (first run *and* warm), `preview ios`, `build all`
 including a forced failure, an `all` run (interleaving), the device picker
-(`rm -f .adaptv/devices.json`, no `--target`), and `--verbose`. **Watch a native build for 10s**:
+(`rm -f .adaptv/state.json`, no `--target`), and `--verbose`. **Watch a native build for 10s**:
 if the phase text moves more than ~once a second, or you can read an identifier in it, the live
 line is wrong. Then `pnpm typecheck && pnpm biome:check && pnpm test`.
 

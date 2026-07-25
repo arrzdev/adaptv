@@ -1,19 +1,14 @@
-// Build fingerprint cache — lets `run`/`build` skip the web build + sync when nothing
-// that affects the bundle has changed, so a re-launch goes (almost) straight to the
-// native build. → user ask: "if the web build didn't change, bypass steps, launch faster".
+// Build fingerprints — let `run`/`build` skip the web build + sync when nothing that
+// affects the bundle has changed, so a re-launch goes (almost) straight to the native
+// build. → user ask: "if the web build didn't change, bypass steps, launch faster".
 //
 // The fingerprint is a hash of every app file's path + size + mtime (a superset of the
 // SPA inputs). Over-inclusive on purpose: an unrelated edit just triggers a rebuild
 // (safe), whereas a missed edit would launch stale code (never acceptable). `--force`
-// bypasses it. State lives in `.adaptv/build-cache.json` (git-ignored with `.adaptv/`).
+// bypasses it. This module only COMPUTES the hashes; what was last seen is remembered in
+// the `build` section of `.adaptv/state.json` (see `state.mjs`).
 import { createHash } from "node:crypto"
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { ADAPTV_DIR } from "./native.mjs"
 
@@ -39,9 +34,6 @@ const SKIP_DIRS = new Set([
 // Generated files (not inputs) — excluding them keeps the fingerprint stable across
 // builds that regenerate them.
 const SKIP_FILES = new Set(["capacitor.config.json", ".DS_Store"])
-
-const cacheFile = (appRoot) =>
-  path.join(appRoot, ADAPTV_DIR, "build-cache.json")
 
 /**
  * A hash of the app's source tree — path + size + **mtime** of every non-skipped file.
@@ -173,17 +165,4 @@ export function nativeFingerprint(appRoot, platform) {
   }
   walk(nativeRoot)
   return h.digest("hex")
-}
-
-export function readCache(appRoot) {
-  try {
-    return JSON.parse(readFileSync(cacheFile(appRoot), "utf8"))
-  } catch {
-    return {}
-  }
-}
-
-export function writeCache(appRoot, cache) {
-  mkdirSync(path.join(appRoot, ADAPTV_DIR), { recursive: true })
-  writeFileSync(cacheFile(appRoot), `${JSON.stringify(cache, null, 2)}\n`)
 }
