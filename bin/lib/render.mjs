@@ -9,6 +9,7 @@
 //   - TTY      → animated spinner lines, redrawn in place
 //   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
+import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
 
 /* -------------------------------------------------------------------------- */
 /* colour (a tiny ANSI helper; honours NO_COLOR)                              */
@@ -57,8 +58,12 @@ function clipAnsi(s, max) {
   return res
 }
 
-const elapsed = (start) => {
-  const ms = Date.now() - start
+// `offset` adds work that was done for this step BEFORE its line existed — the native
+// scaffolding, which runs ahead of the dev server (the device list needs the project) but
+// belongs to the platform's own line. Without it a first run would report only the launch
+// and quietly lose the seconds the dev actually waited.
+const elapsed = (start, offset = 0) => {
+  const ms = Date.now() - start + offset
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
@@ -94,10 +99,46 @@ export function skip(label, note = "cached") {
   out(`  ${c.green("✓")} ${label}  ${c.dim(`· ${note}`)}\n`)
 }
 
-/** Print a captured-log tail (on failure), indented + dimmed. */
-export function tail(text) {
-  if (!text) return
-  for (const l of text.split("\n")) out(`    ${c.dim(l)}\n`)
+/**
+ * A failure that has no live line of its own to settle (a transient step, or a crash
+ * before any step started): the SAME one-line shape a settled ✖ uses, so every failure in
+ * the CLI reads identically — `✖ <label>  <reason>` plus dim detail underneath.
+ */
+export function fail(label, reason, detail = []) {
+  out(`${compose(c.red("✖"), label, reason)}\n`)
+  detailBlock(detail)
+  noteFailurePrinted()
+}
+
+/** The blank line that used to come from the closing footer — kept so a finished command
+ * still ends with breathing room instead of the shell prompt hugging the last step. */
+export function spacer() {
+  out("\n")
+}
+
+/** One dim, indented line hanging under a settled step — the same shape failure detail
+ * uses, so an extra address reads as part of that step rather than a new event. */
+export function detail(line) {
+  out(`    ${c.dim(line)}\n`)
+}
+
+/** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
+function detailBlock(detail) {
+  for (const d of detail ?? []) out(`    ${c.dim(d)}\n`)
+}
+
+/**
+ * Normalise whatever a step threw into the two things a failed line renders: a `reason`
+ * shown INLINE on the ✖ line, and `detail` lines under it. `explain` is the CLI's
+ * error interpreter (recognised causes → an actionable hint); without one we fall back to
+ * the error's first line, which is at least never empty.
+ */
+function explained(explain, err) {
+  const e = explain?.(err)
+  const reason = String(e?.reason ?? err?.message ?? err)
+    .split("\n")[0]
+    .trim()
+  return { reason, detail: e?.detail ?? [] }
 }
 
 /** The closing line — a single outcome + total. Per-platform detail rides on the
@@ -105,6 +146,27 @@ export function tail(text) {
 export function footer(hint) {
   out(`\n  ${hint}\n\n`)
 }
+
+/** Has ANY ✖ already been rendered this run?
+ *
+ * Deliberately a run-scoped flag, not a mark on the error: one failure can surface as two
+ * DIFFERENT error objects — the dev server rejects with a friendly "port 41720 is already
+ * in use", while Node separately emits a raw `EADDRINUSE` on the socket — and an outer
+ * catch receiving the second one would print a duplicate ✖ with the ugly text. The CLI
+ * exits on its first failure, so "something already reported" is the honest question. */
+let failuresPrinted = 0
+export const noteFailurePrinted = () => {
+  failuresPrinted++
+}
+export const anyFailurePrinted = () => failuresPrinted > 0
+/** Kept for call sites that mark an error directly; both feed the same question. */
+export function markReported(err) {
+  if (err && typeof err === "object") err.adaptvReported = true
+  noteFailurePrinted()
+  return err
+}
+export const wasReported = (err) =>
+  Boolean(err?.adaptvReported) || anyFailurePrinted()
 
 /**
  * The single live status line for a `run`. While an HMR update applies the ✓ turns into
@@ -117,12 +179,26 @@ export function footer(hint) {
  * keys available at any moment.
  */
 export function liveWatcher({ keys = true } = {}) {
-  const hint = keys
-    ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
-      // keys, where the bold's reset bleeds and the key ends up gray.
-      `  ${c.dim("·")}  ${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${c.bold("ctrl-c")}${c.dim(" stop")}`
-    : ""
-  const idleLine = `  ${c.green("✓")} ${c.bold("watching")}${hint}`
+  // Offer a key ONLY when pressing it would do something. Two ways this lied before:
+  //   - `r`/`b` are NATIVE actions (relaunch the app on the device, reinstall the binary).
+  //     On `dev web` their handlers return immediately, yet the hint still offered them —
+  //     so the dev pressed them, nothing happened, and the CLI looked wedged. On web the
+  //     browser reloads itself; there is no binary to rebuild.
+  //   - raw mode may be unavailable (stdin isn't a TTY), in which case NO key arrives.
+  // ctrl-c always works, so it is always worth saying.
+  const stop = `${c.bold("ctrl-c")}${c.dim(" stop")}`
+  //no leading separator: this row IS the hints now, not a suffix on `✓ watching`
+  const dot = "  "
+  const hint = !keys
+    ? `${dot}${stop}` //web: nothing to reload or rebuild from here
+    : keysAvailable()
+      ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
+        // keys, where the bold's reset bleeds and the key ends up gray.
+        `${dot}${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${stop}`
+      : `${dot}${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
+  // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
+  // and the row still animates on HMR — the spinner is what says "working", not a word.
+  const idleLine = hint.trimEnd() || `  ${c.dim("ctrl-c stop")}`
   if (!isTTY) {
     out(`${idleLine}\n`)
     return {
@@ -200,10 +276,17 @@ export function rewindLines(n) {
 /** ctrl-c as a raw byte: in raw mode the terminal no longer turns it into SIGINT. */
 const CTRL_C = "\u0003"
 
+/** Can this process read single keypresses? Raw mode needs a real TTY on stdin — under a
+ * runner that pipes stdin (turbo without `"interactive": true` on the task, a CI job, an
+ * editor's task pane) there is nothing to put in raw mode. Exported so the watcher can say
+ * so instead of advertising keys that will never arrive. */
+export const keysAvailable = () =>
+  Boolean(process.stdin.isTTY) &&
+  typeof process.stdin.setRawMode === "function"
+
 export function onKeys({ onReload, onRebuild, onQuit }) {
   const stdin = process.stdin
-  if (!stdin.isTTY || typeof stdin.setRawMode !== "function")
-    return () => {}
+  if (!keysAvailable()) return () => {}
   stdin.setRawMode(true)
   stdin.resume()
   stdin.setEncoding("utf8")
@@ -372,6 +455,15 @@ export function prettyLine(line) {
     const pct = Math.min(100, Number(m[1]))
     return `${bar(pct)} ${pct}%`
   }
+  // xcodebuild/gradle/CocoaPods narrate in build-system vocabulary — a verb plus two
+  // absolute paths, several a second. Say what the step MEANS instead; `null` = not a line
+  // tool-log knows, so fall through to the generic cleanup below.
+  const phase = phaseLabel(line)
+  if (phase !== null) return phase
+  // …and an unrecognised line still carrying an absolute path is tool-internal by
+  // construction. Showing a clipped slice of somebody's home directory is worse than
+  // showing nothing: "" keeps the live line on its last real phase. `--verbose` has it all.
+  if (isRawToolNoise(line)) return ""
   let s = line
     .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
     .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
@@ -399,16 +491,24 @@ export function prettyLine(line) {
 /* the spinner renderer                                                        */
 /* -------------------------------------------------------------------------- */
 
-/** Compose one aligned line, clipping the dim right-hand detail to the width. */
-function compose(glyph, label, right) {
+/**
+ * Compose one aligned line, clipping the dim right-hand detail to the width. `keep` is a
+ * suffix that must survive that clip — the elapsed time, which is fixed-width and would
+ * otherwise be the first thing an over-long artifact path or failure reason ate.
+ */
+function compose(glyph, label, right, keep = "") {
   const base = 2 + 1 + 1 + stripLen(label) + 2 // indent + glyph + gap + label + gap
   const budget = Math.max(6, width() - base - 1)
+  const room = Math.max(6, budget - keep.length)
   const clipped =
-    right && right.length > budget
-      ? `${right.slice(0, budget - 1)}…`
-      : right
-  return `  ${glyph} ${label}${clipped ? `  ${c.dim(clipped)}` : ""}`
+    right && right.length > room ? `${right.slice(0, room - 1)}…` : right
+  const detail = `${clipped}${keep}`
+  return `  ${glyph} ${label}${detail ? `  ${c.dim(detail)}` : ""}`
 }
+
+/** A settled line's right-hand side, split so `compose` never clips the time away. */
+const settled = (left, time) =>
+  left ? { right: left, keep: ` · ${time}` } : { right: "", keep: time }
 
 // ANSI escape (ESC = char 27), built without a literal control char in the source.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
@@ -418,11 +518,26 @@ const stripLen = (s) => s.replace(ANSI, "").length
  * Run one step as a single spinner line. `fn(report)` does the work; `report(line)`
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
  * ✖) if it throws. In `verbose`, streams the raw lines instead of animating.
+ *
+ * `transient` runs the step as live feedback ONLY: the row is erased instead of settling
+ * into a ✓. It's for work that the dev should watch happen but that is not a step of its
+ * own — the native scaffolding, whose cost is folded (via `offsetMs`) into the platform
+ * line printed further down under the SAME label. One label, one settled line.
+ *
+ * A failure settles as `✖ <label>  <reason> · <time>`: the ✖ line CARRIES its own reason,
+ * so the caller only has to swallow the rejection — printing a second `✖ … failed — …`
+ * afterwards is what used to double every glyph. `explain(err)` supplies that reason.
  */
 export async function runLine(
   label,
   fn,
-  { verbose = false, idle = "" } = {},
+  {
+    verbose = false,
+    idle = "",
+    transient = false,
+    offsetMs = 0,
+    explain,
+  } = {},
 ) {
   const start = Date.now()
   let detail = ""
@@ -437,19 +552,34 @@ export async function runLine(
 
   // a step's return value, when it's a string, is its final detail (e.g. an artifact
   // path) — shown before the elapsed time on the ✓ line.
-  const doneRight = (r) => {
-    const t = elapsed(start)
-    return typeof r === "string" && r ? `${r} · ${t}` : t
-  }
+  const doneRight = (r) =>
+    settled(typeof r === "string" ? r : "", elapsed(start, offsetMs))
+  const failRight = (reason) => settled(reason, elapsed(start, offsetMs))
+  const flat = ({ right, keep }) => `${right}${keep}`
 
   if (verbose || !isTTY) {
-    out(`  ${c.dim("·")} ${label}\n`)
+    // A transient step prints NOTHING here: there's no cursor to erase a line with off a
+    // TTY, and a start/settle pair is exactly the extra step this mode exists to avoid.
+    // `--verbose` still streams the raw tool output through `report` — that's its contract.
+    if (!transient) out(`  ${c.dim("·")} ${label}\n`)
     try {
       const r = await fn(report)
-      out(`  ${c.green("✓")} ${label}  ${c.dim(doneRight(r))}\n`)
+      if (!transient)
+        out(`  ${c.green("✓")} ${label}  ${c.dim(flat(doneRight(r)))}\n`)
       return r
     } catch (err) {
-      out(`  ${c.red("✖")} ${label}\n`)
+      if (!transient) {
+        const { reason, detail: why } = explained(explain, err)
+        out(
+          `  ${c.red("✖")} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
+        )
+        detailBlock(why)
+        // This failure now OWNS a ✖ on screen. An outer catch that reports again would
+        // print a second glyph for one failure — and, for a rethrow that reaches the
+        // top level, a raw Node message beside the calm one we just wrote
+        // (`✖ server port 41720 …` followed by `✖ dev listen EADDRINUSE …`).
+        markReported(err)
+      }
       throw err
     }
   }
@@ -474,20 +604,42 @@ export async function runLine(
   try {
     const r = await fn(report)
     clearInterval(timer)
-    out(`\r\x1b[2K${compose(c.green("✓"), label, doneRight(r))}\n`)
+    // transient → erase the row (no ✓). `\r\x1b[2K` leaves the cursor at column 0 of a
+    // now-blank row, so whatever prints next simply takes it over: the live line is
+    // replaced by the next real step rather than pushing it down a row.
+    const done = doneRight(r)
+    out(
+      transient
+        ? "\r\x1b[2K"
+        : `\r\x1b[2K${compose(c.green("✓"), label, done.right, done.keep)}\n`,
+    )
     return r
   } catch (err) {
     clearInterval(timer)
-    out(`\r\x1b[2K${compose(c.red("✖"), label, "")}\n`)
+    // A failed transient step is still reported — by the caller, via `fail()`, which owns
+    // the label. Marking the row too would just double the ✖.
+    if (transient) {
+      out("\r\x1b[2K")
+      throw err
+    }
+    const { reason, detail: why } = explained(explain, err)
+    const bad = failRight(reason)
+    out(`\r\x1b[2K${compose(c.red("✖"), label, bad.right, bad.keep)}\n`)
+    detailBlock(why)
     throw err
   }
 }
 
 /**
  * Run several lanes concurrently, each as ONE live line (used for `run all`). A lane
- * is `{ label, run: async (report) => detailString }`; `report(line)` updates that
- * lane's live detail, and the resolved string becomes its final detail. Never rejects
- * — returns `[{ ok, error }]` per lane so one platform failing doesn't stop the render.
+ * is `{ label, run: async (report) => detailString, offsetMs?, explain? }`; `report(line)`
+ * updates that lane's live detail, and the resolved string becomes its final detail. Never
+ * rejects — returns `[{ ok, error }]` per lane so one platform failing doesn't stop the render.
+ *
+ * A lane OWNS its outcome: on failure its line settles to `✖ <label>  <reason> · <time>`
+ * (from `lane.explain(err)`), so exactly one line per platform carries everything about
+ * that platform. Nothing may print a per-platform failure afterwards — that's what made
+ * the old output interleave two platforms and show two ✖ for one failure.
  */
 export async function runLanes(lanes, { verbose = false } = {}) {
   const state = lanes.map((l) => ({
@@ -497,7 +649,10 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     start: Date.now(),
     lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
     idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
+    offsetMs: l.offsetMs ?? 0, // work done for this lane before it had a line (scaffolding)
     time: "",
+    reason: "", // inline failure cause, shown on this lane's own ✖ line
+    why: [], // the dim lines printed under it (a fix hint / captured tail)
   }))
 
   const results = new Array(lanes.length)
@@ -517,42 +672,65 @@ export async function runLanes(lanes, { verbose = false } = {}) {
         (detail) => {
           settle(i, {
             status: "ok",
-            time: elapsed(state[i].start),
+            time: elapsed(state[i].start, state[i].offsetMs),
             detail: detail ?? "",
           })
           results[i] = { ok: true }
         },
         (error) => {
+          const { reason, detail } = explained(lane.explain, error)
           settle(i, {
             status: "fail",
-            time: elapsed(state[i].start),
+            time: elapsed(state[i].start, state[i].offsetMs),
             detail: "",
+            reason,
+            why: detail,
           })
           results[i] = { ok: false, error }
+          noteFailurePrinted() //this lane will render a ✖ row
         },
       )
   }
 
-  // the settled right-hand side: "<detail> · <time>" on success, else just the time.
+  // the settled right-hand side: "<detail|reason> · <time>" — a lane's line states its own
+  // outcome, success or failure, so nothing downstream has to add a line to explain it.
   const settledRight = (s) =>
-    s.status === "ok" && s.detail ? `${s.detail} · ${s.time}` : s.time
+    settled(s.status === "ok" ? s.detail : s.reason, s.time)
+
+  // Settled order: successes first, failures last (stable within each group). A failing
+  // lane may print dim detail lines under itself, and those have to sit under THEIR OWN
+  // platform — which is only possible if the failures are the bottom rows. Applied to the
+  // final frame only; reshuffling live rows mid-run would be noise.
+  const settledOrder = () =>
+    state
+      .map((_, i) => i)
+      .sort(
+        (a, b) =>
+          (state[a].status === "fail" ? 1 : 0) -
+          (state[b].status === "fail" ? 1 : 0),
+      )
 
   // verbose / non-TTY: no in-place animation, just start + settle lines.
   if (verbose || !isTTY) {
     for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`)
     await Promise.all(lanes.map(runOne))
-    for (const s of state) {
+    for (const i of settledOrder()) {
+      const s = state[i]
       const glyph = s.status === "ok" ? c.green("✓") : c.red("✖")
-      out(`  ${glyph} ${s.label}  ${c.dim(settledRight(s))}\n`)
+      const r = settledRight(s)
+      out(`  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`)
+      if (s.status === "fail") detailBlock(s.why)
     }
     return results
   }
 
   let frame = 0
   let drawn = 0
+  let order = state.map((_, i) => i)
   const draw = () => {
     if (drawn > 0) out(`\x1b[${drawn}A`)
-    for (const s of state) {
+    for (const i of order) {
+      const s = state[i]
       const glyph =
         s.status === "ok"
           ? c.green("✓")
@@ -563,13 +741,16 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       // silent build); the total lands on the settled line.
       const right =
         s.status === "run"
-          ? !s.detail
-            ? "preparing"
-            : s.idle && Date.now() - s.lastAt > IDLE_MS
-              ? s.idle
-              : s.detail
+          ? {
+              right: !s.detail
+                ? "preparing"
+                : s.idle && Date.now() - s.lastAt > IDLE_MS
+                  ? s.idle
+                  : s.detail,
+              keep: "",
+            }
           : settledRight(s)
-      out(`\x1b[2K${compose(glyph, s.label, right)}\n`)
+      out(`\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`)
     }
     drawn = state.length
     frame++
@@ -579,6 +760,10 @@ export async function runLanes(lanes, { verbose = false } = {}) {
   const timer = setInterval(draw, 80)
   await Promise.all(lanes.map(runOne))
   clearInterval(timer)
+  order = settledOrder() // failures sink to the bottom rows, so their detail can follow
   draw() // final frame with all statuses settled
+  for (const i of order) {
+    if (state[i].status === "fail") detailBlock(state[i].why)
+  }
   return results
 }

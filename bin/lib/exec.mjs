@@ -7,6 +7,7 @@
 // tail. `--verbose` pipes the same lines through unfiltered (the caller wires the
 // verbose renderer). → plan Part 4.
 import { spawn } from "node:child_process"
+import { errorTail } from "./tool-log.mjs"
 
 /** Keep at most this many lines buffered for the failure tail (bounds memory). */
 const MAX_BUFFER = 800
@@ -52,21 +53,8 @@ export function exec(command, args, { cwd, env, onLine } = {}) {
   })
 }
 
-// Lines that actually name the problem (xcodebuild/gradle/pod). Tools like
-// xcodebuild print thousands of "SwiftCompile …" progress lines AFTER the real
-// error, so a plain last-N tail buries it — prefer the error lines when present.
-const ERROR_LINE =
-  /(?:\berror\b[: ]|\bfatal\b|BUILD FAILED|FAILURE:|\bfailed\b|xcodebuild: error)/i
-const NOT_ERROR = /^\s*(?:\d+\s+errors?\s+generated|0\s+error)/i
-
-/** Build the failure tail: the error lines if any, else the last {@link TAIL_LINES}. */
-function failureTail(buffer) {
-  const errors = buffer.filter(
-    (l) => ERROR_LINE.test(l) && !NOT_ERROR.test(l),
-  )
-  const picked = errors.length ? errors : buffer
-  return picked.slice(-TAIL_LINES).join("\n")
-}
+/** Build the failure tail — which lines explain it is `tool-log.mjs`'s job (and tested there). */
+const failureTail = (buffer) => errorTail(buffer, TAIL_LINES).join("\n")
 
 /**
  * Run a command purely to collect its stdout (e.g. `cap run --list --json`). Never

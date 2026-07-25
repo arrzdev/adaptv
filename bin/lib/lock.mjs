@@ -54,10 +54,41 @@ export function readDevLock(appRoot) {
 }
 
 /** The lock, but only if a DIFFERENT, genuinely-running adaptv dev holds it. */
+/** Is the dev server this lock claims actually still serving? A lock records the port once
+ * the server binds; if that port has no listener, the run behind it is defunct even though
+ * its process lingers. */
+function stillServing(rawPort) {
+  //the lock records whatever the CLI had — which is a STRING when it came from a flag.
+  const port = Number(rawPort)
+  if (!Number.isInteger(port) || port <= 0) return true //pre-bind / old lock: trust the pid
+  try {
+    const r = spawnSync(
+      "lsof",
+      ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"],
+      { encoding: "utf8" },
+    )
+    return Boolean((r.stdout ?? "").trim())
+  } catch {
+    return true //can't check → assume it is (safer than starting a second server)
+  }
+}
+
 export function activeDevLock(appRoot) {
   const lock = readDevLock(appRoot)
-  if (lock && lock.pid !== process.pid && isLiveDev(lock.pid)) return lock
-  return null
+  if (!lock || lock.pid === process.pid) return null
+  if (!isLiveDev(lock.pid)) return null //dead pid → stale, reclaim
+  // The pid is alive but its dev server is NOT listening. That happens when something took
+  // the port away — a `kill-and-takeover` (chopchop's `clearPorts`) kills the LISTENER, which
+  // is the Vite child, while the adaptv parent survives holding this lock. Refusing then
+  // would let a defunct process block every later run, and "kill the ports and take over"
+  // would silently stop working. Treat it as stale and stop the husk.
+  if (!stillServing(lock.port)) {
+    try {
+      process.kill(lock.pid, "SIGTERM")
+    } catch {}
+    return null
+  }
+  return lock
 }
 
 function writeDevLock(appRoot, data) {

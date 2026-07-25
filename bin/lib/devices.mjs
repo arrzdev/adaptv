@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { capture } from "./exec.mjs"
 import { ADAPTV_DIR, capCmd } from "./native.mjs"
-import { log, select } from "./render.mjs"
+import { select } from "./render.mjs"
 
 const cacheFile = (appRoot) =>
   path.join(appRoot, ADAPTV_DIR, "devices.json")
@@ -103,11 +103,20 @@ export async function resolveTarget(
 
   if (latest) {
     const cached = readCache(appRoot)[platform]
-    // the "latest" tag is surfaced on the launch line, not as its own log line.
-    if (cached?.id) return { ...cached, source: "latest" }
-    log.warn(
-      `${platform}: no cached device yet — pick one (it'll be remembered).`,
-    )
+    if (cached?.id) {
+      // Remembered — but a saved pick goes stale: the simulator was shut down, the emulator
+      // never started, the phone was unplugged. Returning it anyway pushed the problem to
+      // the launch, which failed the whole platform ("device isn't available right now") and
+      // told the dev to re-run a DIFFERENT command to recover. `--latest` means "don't ask me
+      // again", not "fail if my last choice is gone" — so when it isn't there, quietly fall
+      // through to the picker, which is what the dev would have had to do by hand anyway.
+      const available = await listTargets(appRoot, platform, env)
+      if (available.some((t) => t.id === cached.id))
+        // the "latest" tag is surfaced on the launch line, not as its own log line.
+        return { ...cached, source: "latest" }
+    }
+    // No usable cache — fall through to the picker. The picker itself makes the ask
+    // obvious ("Choose a <platform> device"), so announcing it first is noise.
   }
 
   return pickAndCache(appRoot, platform, env)

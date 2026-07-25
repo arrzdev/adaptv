@@ -54,6 +54,20 @@ that opinion **is** the product.
    If the answer is fewer than six, it belongs in React. → `RENDERING.md §3.0` works this through for
    the offline case, which is the fullest worked example.
 
+8. **Rent at a frozen version — pin exact, and key every patch to that version.** Renting a stable core
+   (6) only *stays* stable if the version can't move under you. So every direct dependency and peer is
+   pinned to an **exact** version — no `^`, no `~` — and the lockfile is committed; an upstream release can
+   never silently enter a fresh install. This matters most for the packages adaptv **patches**: a
+   `pnpm patch` is written against one specific version's source, so its `patchedDependencies` key carries
+   the exact version (`pkg@x.y.z`, never a bare `pkg`). If the resolved version ever drifts, pnpm fails the
+   install **loudly** ("no package matches") instead of applying the patch to code that may have changed
+   underneath it — turning a silent, shipped-to-users breakage into an install-time stop. Bumping a rented
+   core is therefore a **deliberate act**: update the pin, re-verify the patch against the new source,
+   update the version key. The more adaptv leans on patches and injection to keep its underlying packages
+   invisible to the consumer (§3, and the CLI's Capacitor ownership), the more this guardrail is what makes
+   that ownership safe rather than fragile. → `DECISIONS.md` L21 (register), L19/L20 (the patch doctrine it
+   guards).
+
 ---
 
 ## 1. Surface 1 — the shell, edge-to-edge, and the `View` contract

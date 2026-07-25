@@ -1,36 +1,31 @@
-import { writeFileSync } from "node:fs"
-import path from "node:path"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import { ADAPTV_DIR } from "#adaptv/vite/adaptv-dir.ts"
 
-//The Capacitor config, generated from adaptv.config.ts. Consumers never hand-write
-//this — `appId` in adaptv.config is all it takes (mirrors how the web manifest is
-//generated).
+//The Capacitor config, generated from adaptv.config.ts. It is NEVER written to disk:
+//adaptv's patched `@capacitor/cli` reads it in-memory from the `ADAPTV_CAPACITOR_CONFIG`
+//env var (the CLI sets it before every `cap` call), so the consumer's project carries no
+//`capacitor.config.json` at all — the only copy that exists is the one `cap` bakes into the
+//native project. `appId` in adaptv.config is all it takes.
 
 /** The subset of `capacitor.config.json` adaptv owns. */
 export type CapacitorConfigJson = {
   appId: string
   appName: string
   webDir: string
-  //The native projects live inside the hidden `.adaptv/` dir (git-ignored, regenerated),
-  //not at the app root — everything adaptv generates sits in one disposable place. These
-  //paths are relative to this config file (the app root), which `cap` reads from CWD.
+  //Native projects live under `.adaptv/`; paths are app-root-relative (cap's CWD).
   android: { path: string }
   ios: { path: string }
-  plugins: {
-    SplashScreen: {
-      launchAutoHide: boolean
-      showSpinner: boolean
-      androidScaleType: string
-    }
-    StatusBar: {
-      overlaysWebView: boolean
-      style: string
-    }
-    SystemBars: {
-      insetsHandling: "css"
-      style: string
-    }
+  //Open-ended on purpose: adaptv's own blocks are spelled out in `buildCapacitorConfig`
+  //(SplashScreen / StatusBar / SystemBars), but a consumer can add settings for any plugin
+  //they registered via `adaptv.config.ts` `pluginConfig`, which no fixed shape can enumerate.
+  plugins: Record<string, unknown>
+  //Set only by the CLI at run time (via the env config), never by the generator: the
+  //live-reload dev server (`dev`) points the native WebView at the Vite server.
+  server?: {
+    url?: string
+    cleartext?: boolean
+    errorPath?: string
+    androidScheme?: string
   }
 }
 
@@ -39,6 +34,8 @@ export type CapacitorConfigJson = {
 //`dist/client`; a plugin-level `build.outDir` is overridden. The lineages are
 //kept separate in TIME — the CLI runs a fresh `ADAPTV_TARGET=capacitor` build
 //before every `cap sync`, so a web build's server bundle is never synced.
+//cap runs with its CWD at the app root (config comes from env, not a file), so paths are
+//app-root-relative, as upstream expects. The native projects live under `.adaptv/`.
 const CAPACITOR_WEB_DIR = "dist/client"
 
 export function buildCapacitorConfig(
@@ -56,6 +53,9 @@ export function buildCapacitorConfig(
     android: { path: `${ADAPTV_DIR}/android` },
     ios: { path: `${ADAPTV_DIR}/ios` },
     plugins: {
+      //consumer-registered per-plugin native settings (adaptv.config.ts `pluginConfig`),
+      //overridable by the adaptv defaults below.
+      ...config.pluginConfig,
       SplashScreen: {
         //Hold the OS launch splash until the app explicitly hands off: RoutingShell calls
         //hideNativeSplash() once the custom React splash has painted, so there's no gap
@@ -95,15 +95,18 @@ export function buildCapacitorConfig(
 }
 
 /**
- * Stamp `capacitor.config.json` at the app root from the config, when `appId` is set
- * (native build). No-op otherwise (web-only apps ship no Capacitor config). `cap`
- * reads this generated file — the consumer never hand-writes one.
+ * The generated Capacitor config as a JSON string for the `ADAPTV_CAPACITOR_CONFIG` env var
+ * (native build), or `null` when there's no `appId` (web-only apps ship no Capacitor config).
+ * Never written to disk — adaptv's patched `@capacitor/cli` reads it from the env, so no
+ * `capacitor.config.json` exists in the consumer's project.
+ *
+ * `overrides` carry the per-run tweaks the CLI applies without a file: the `.dev` install
+ * identity (dev/preview) and the live-reload `server` block (dev).
  */
-export function stampCapacitorConfig(
+export function capacitorConfigJson(
   config: AdaptvAppConfig,
-  appRoot: string,
-): void {
-  if (!config.appId) return
-  const json = JSON.stringify(buildCapacitorConfig(config), null, 2)
-  writeFileSync(path.join(appRoot, "capacitor.config.json"), `${json}\n`)
+  overrides?: Partial<CapacitorConfigJson>,
+): string | null {
+  if (!config.appId) return null
+  return JSON.stringify({ ...buildCapacitorConfig(config), ...overrides })
 }
