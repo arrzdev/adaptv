@@ -139,6 +139,32 @@ the rest can swallow the actual instructions.
 > Violated by: `bin/lib/dev-server.mjs` filtering subprocess output line-by-line on keywords, which
 > printed `"sets 1 key that adaptv no longer reads:"` and dropped the migration steps that followed.
 
+**R17 — Never offer a key that cannot act.** A hint is a promise. `r`/`b` are NATIVE actions
+(relaunch the app on the device, reinstall the binary); on `dev web` their handlers return
+immediately, so listing them made a working CLI look frozen — the dev presses the key the CLI
+just advertised and nothing happens.
+> Violated by: `✓ watching · r reload js  b rebuild app  ctrl-c stop` on `adaptv dev web`.
+> Two conditions gate every key: does it mean anything for THIS target, and can it be read at
+> all (`keysAvailable()` — raw mode needs a TTY). Hours were spent hunting a phantom
+> input-forwarding bug that was only ever this.
+
+**R18 — Say nothing at the end that the steps already said.** On success there is no closing
+summary: every step line already names its device or artifact. A FAILURE keeps its line — that
+is the command's verdict, and for `all` it is the only place that says more than one platform
+went wrong.
+> Removed: `✓ launched · 4s`, `✓ artifacts ready · 7s`, and the `✓ watching` prefix on the
+> watcher row (it is just the keys now; the spinner already says "working").
+
+**R19 — Addresses come from the server, never from inference.** Print the network URL only when
+Vite reports one, dim under the settled line. adaptv binds the LAN only when a physical device
+needs it, so a computed `http://<lan-ip>:<port>` would often point at nothing — the same lie as
+a dead key.
+> Want:
+> ```
+> ✓ server  http://localhost:41710 · 2.0s
+>     network  http://192.168.1.25:41710
+> ```
+
 ---
 
 ## 5. Before you ship a CLI change
