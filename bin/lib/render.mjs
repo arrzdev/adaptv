@@ -70,6 +70,29 @@ const elapsed = (start, offset = 0) => {
 /** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
  *  native build streams nothing, so past this the last finished phase is stale. */
 const IDLE_MS = 1200
+// A phase must hold the line this long before another may replace it.
+//
+// The native toolchains change phase several times a second — an iOS build rewrote the live
+// line 105 times in 13s, alternating compiling↔processing resources as it walked the pods.
+// Each individual line was correct and the effect was a strobe, unreadable and stressful to
+// watch. So the line SAMPLES the stream rather than following it: whatever phase is current
+// when the window opens gets the row and keeps it. Nothing is hidden — a phase that lasts
+// less than a blink was never information, and `--verbose` still streams every line.
+const PHASE_DWELL_MS = 700
+
+/**
+ * The row's next phase: adopt `pending` only once the current one has had its dwell.
+ * Pure so the sampling rule is testable — both renderers call it from their draw loop.
+ */
+export function nextPhase({ detail, pending, shownAt }, now) {
+  if (!pending || pending === detail) return { detail, shownAt }
+  //An empty row shows its first phase AT ONCE — the dwell governs replacing a phase, not
+  //arriving at one. (Leaving this to `now - 0 >= dwell` only worked by accident of epoch
+  //arithmetic, and would have stalled the first phase under any other clock.)
+  if (!detail || now - shownAt >= PHASE_DWELL_MS)
+    return { detail: pending, shownAt: now }
+  return { detail, shownAt }
+}
 
 /** A human total duration from `start` (e.g. "8s", "1m 12s"). */
 export function since(start) {
@@ -84,7 +107,9 @@ export function since(start) {
 
 /** The command banner: `  adaptv  dev android`. */
 export function header(title) {
-  out(`\n  ${c.bold(c.magenta("adaptv"))}  ${c.dim(title)}\n\n`)
+  //`adaptv · build ios` — the separator reads as one phrase where two spaces read as a
+  //gap the eye has to bridge.
+  out(`\n  ${c.bold(c.magenta("adaptv"))} ${c.dim(`· ${title}`)}\n\n`)
 }
 
 export const log = {
@@ -92,6 +117,28 @@ export const log = {
   warn: (m) => out(`  ${c.yellow("!")} ${c.dim(m)}\n`),
   success: (m) => out(`  ${c.green("✓")} ${m}\n`),
   error: (m) => out(`  ${c.red("✖")} ${m}\n`),
+}
+
+/**
+ * Print collected notices once each, then empty the list.
+ *
+ * An entry is either a plain string — a real `!` the dev may need to act on — or
+ * `{ note }`, something adaptv already handled and is only mentioning (R5).
+ *
+ * Deduped, because the same app-level fact (an icon source, a config key) is
+ * discovered once per platform: printing it per platform reads as several separate
+ * problems when it is one. Shared by every command so they cannot drift apart.
+ */
+export function flushNotices(notices) {
+  const seen = new Set()
+  for (const n of notices) {
+    const text = typeof n === "string" ? n : n.note
+    if (seen.has(text)) continue
+    seen.add(text)
+    if (typeof n === "string") log.warn(text)
+    else log.info(text)
+  }
+  notices.length = 0
 }
 
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
@@ -449,6 +496,14 @@ const PROPER = [
 // the live line reads as what's happening right now — the settled ✓ line is the retrospective.
 // Returns "" for anything with no real content — a lone phase-header verb ("update ios") or
 // a bare `pkg@version` dump — so it's shown as nothing rather than noise.
+// R24 — the phase vocabulary is CLOSED. A line tool-log didn't recognise is shown only when
+// it ALREADY reads like one of its phrases: a short, lowercase, human clause. Everything else
+// is the tool talking about itself, and two kinds reached the live line before this gate —
+// a bundle listing (`dist/client/assets/preload-helper-rov5cbgt.js 1.19 kb │ gzip: 0.68 kb`)
+// and a line of the dev's OWN SOURCE quoted by a compiler warning (`self?.tmpwindow = nil`).
+// Both are identifiers wearing a phase's clothes; `--verbose` is where they belong.
+const HUMAN_PHRASE = /^[a-z][a-z0-9 .·'-]{0,38}$/
+
 export function prettyLine(line) {
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
@@ -484,6 +539,7 @@ export function prettyLine(line) {
   for (const [re, rep] of PROPER) s = s.replace(re, rep)
   // Drop lines with no real action — a lone verb ("building", "running"), even with a `· time`.
   if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
+  if (!HUMAN_PHRASE.test(s)) return ""
   return s
 }
 
@@ -540,14 +596,21 @@ export async function runLine(
   } = {},
 ) {
   const start = Date.now()
-  let detail = ""
+  let detail = "" // what the row currently SHOWS (updated at most once per dwell)
+  let pending = "" // the newest phase the stream has reported
+  let shownAt = 0
   let lastAt = start // when the live detail last changed — drives the idle fallback
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
-    detail = pretty
+    pending = pretty
     lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
+  }
+  // Promote the newest phase only when the current one has had its turn. Called from the
+  // draw loop, so the row adopts whatever is current at the window boundary.
+  const tick = (now) => {
+    ;({ detail, shownAt } = nextPhase({ detail, pending, shownAt }, now))
   }
 
   // a step's return value, when it's a string, is its final detail (e.g. an artifact
@@ -590,9 +653,11 @@ export async function runLine(
     // line). Nothing yet → "preparing". Once there's been output and the stream goes quiet
     // for a beat — the long opaque native build, which cap emits nothing during — fall back
     // to the caller's present-tense `idle` label instead of freezing on the last phase.
+    const now = Date.now()
+    tick(now)
     const phase = !detail
       ? "preparing"
-      : idle && Date.now() - lastAt > IDLE_MS
+      : idle && now - lastAt > IDLE_MS
         ? idle
         : detail
     out(
@@ -647,6 +712,8 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     detail: "",
     status: "run",
     start: Date.now(),
+    pending: "", // newest phase reported (promoted to `detail` once per dwell)
+    shownAt: 0,
     lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
     idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
     offsetMs: l.offsetMs ?? 0, // work done for this lane before it had a line (scaffolding)
@@ -662,7 +729,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     const report = (line) => {
       const pretty = prettyLine(line)
       if (!pretty) return
-      state[i].detail = pretty
+      state[i].pending = pretty
       state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
     }
@@ -728,6 +795,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
   let drawn = 0
   let order = state.map((_, i) => i)
   const draw = () => {
+    const now = Date.now()
     if (drawn > 0) out(`\x1b[${drawn}A`)
     for (const i of order) {
       const s = state[i]
@@ -737,6 +805,8 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           : s.status === "fail"
             ? c.red("✖")
             : c.cyan(FRAMES[frame % FRAMES.length])
+      //Same dwell as runLine — a lane samples its stream rather than following it.
+      if (s.status === "run") Object.assign(s, nextPhase(s, now))
       // live: just the current phase (nothing yet → "preparing"; idle fallback for the
       // silent build); the total lands on the settled line.
       const right =
@@ -744,7 +814,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           ? {
               right: !s.detail
                 ? "preparing"
-                : s.idle && Date.now() - s.lastAt > IDLE_MS
+                : s.idle && now - s.lastAt > IDLE_MS
                   ? s.idle
                   : s.detail,
               keep: "",

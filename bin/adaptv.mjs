@@ -95,6 +95,7 @@ import {
   c,
   detail,
   fail,
+  flushNotices,
   footer,
   header,
   liveWatcher,
@@ -329,7 +330,7 @@ async function packageArtifact(
 
   if (platform === "android") {
     const androidDir = nativeDir(appRoot, "android")
-    report("assembling debug APK (gradle)")
+    report("packaging")
     await exec(path.join(androidDir, "gradlew"), ["assembleDebug"], {
       cwd: androidDir,
       env,
@@ -372,7 +373,7 @@ async function packageIpa(appRoot, name, env, output, report) {
     )
   const derived = path.join(iosDir, "DerivedData/build")
 
-  report("building unsigned device app (xcodebuild)")
+  report("building app")
   await exec(
     "xcodebuild",
     [
@@ -575,7 +576,10 @@ async function runLive(appRoot, platforms, opts) {
         const res = await generateAssets(appRoot, config, [platform], {
           report,
         })
-        warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
+        //NOT platform-prefixed: an icon/splash source is an app-level fact, identical for
+        //every platform. Prefixing it made `all` print the same sentence once per
+        //platform, as if two different things were wrong.
+        warnings.push(...res.warnings)
         prepared.add(platform)
       }
       // Scaffolding the native project has to happen HERE, before the device picker: the
@@ -607,10 +611,7 @@ async function runLive(appRoot, platforms, opts) {
         }
         prepareMs[platform] = Date.now() - t0
       }
-      for (const w of warnings) {
-        if (typeof w === "string") log.warn(w)
-        else log.info(w.note) //adaptv already handled it — inform, don't alarm
-      }
+      flushNotices(warnings)
     }
 
     const ready = platforms.filter((p) => prepared.has(p))
@@ -862,23 +863,8 @@ async function runLive(appRoot, platforms, opts) {
       // "preparing" line), so the settled line reports the platform's WHOLE first-run cost.
       // A replay (`b`) passes none — that work isn't repeated, so it mustn't be re-billed.
       launchAll = async ({ force, offsets = {} } = {}) => {
-        if (single) {
-          try {
-            await runLine(
-              platforms[0],
-              (r) => launchOne(platforms[0], r, { force }),
-              {
-                verbose,
-                idle: "building app",
-                offsetMs: offsets[platforms[0]] ?? 0,
-                explain: explainFailure(platforms[0]),
-              },
-            )
-          } catch {
-            // the ✖ line already states why — see explainFailure.
-          }
-          return
-        }
+        // One lane per platform for ANY count — same as `build`/`preview`. Rendering one
+        // platform through a different call than two is how the two shapes drift apart.
         // Each lane carries its own outcome (explain → the inline reason + hint), so a
         // failure needs nothing printed after the lanes settle.
         await runLanes(
@@ -1078,17 +1064,8 @@ async function pipeline(kind, appRoot, platforms, opts) {
     return envs[p]
   }
 
-  // print any collected warnings, then clear them (so they surface once, near the
-  // step that produced them — not dumped at the very end). An entry may be a plain
-  // string (a real `!` warning the dev may need to act on) or `{ note }` — something
-  // adaptv already handled, printed dim so it informs without implying a problem.
-  const flushWarnings = () => {
-    for (const w of warnings) {
-      if (typeof w === "string") log.warn(w)
-      else log.info(w.note)
-    }
-    warnings.length = 0
-  }
+  // Surface warnings near the step that produced them, not dumped at the very end.
+  const flushWarnings = () => flushNotices(warnings)
 
   const finish = (hint) => {
     flushWarnings()
@@ -1152,7 +1129,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     const res = await generateAssets(appRoot, config, [platform], {
       report,
     })
-    warnings.push(...res.warnings.map((w) => `${platform}: ${w}`))
+    //NOT platform-prefixed: an icon/splash source is an app-level fact, identical for
+    //every platform. Prefixing it made `all` print the same sentence once per
+    //platform, as if two different things were wrong.
+    warnings.push(...res.warnings)
     // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run
     // killed without teardown can leave an ATS exception in it. Strip ours before it
     // gets packaged; only warn about one we didn't add.
@@ -1337,68 +1317,24 @@ async function pipeline(kind, appRoot, platforms, opts) {
     return done[platform]
   }
 
-  if (single) {
-    const p = ready[0]
-    try {
-      if (syncNeeded(p)) {
-        await runLine(
-          "sync",
-          (r) =>
-            capSync(appRoot, p, envFor(p), {
-              report: r,
-              plugins: config?.plugins,
-            }),
-          { verbose, explain: explainFailure(p) },
-        )
-        buildCache.sync[p] = syncTag
-      }
-      // a cached sync is silent (like the `all` lanes and `dev`) — no "· sync cached" line.
-      if (kind === "preview") {
-        const target = ctx.targets[p]
-        // Label is the platform (e.g. `ios`); the device name settles as the detail —
-        // same shape as `dev` and the `all` lanes, no "launch →" arrow.
-        await runLine(
-          p,
-          (r) => previewLaunch(p, target, r),
-          // cap streams nothing during xcodebuild/gradle — fall back to "building app".
-          // offsetMs: this line owns the scaffolding that ran (transiently) above it.
-          {
-            verbose,
-            idle: "building app",
-            offsetMs: prepareMs[p] ?? 0,
-            explain: explainFailure(p),
-          },
-        )
-      } else {
-        done[p] = await runLine(
-          "package",
-          (r) =>
-            packageArtifact(appRoot, config, p, envFor(p), ctx.output, r),
-          {
-            verbose,
-            idle: "building app",
-            offsetMs: prepareMs[p] ?? 0,
-            explain: explainFailure(p),
-          },
-        )
-      }
-    } catch {
-      // the ✖ line already states why — see explainFailure.
-    }
-  } else {
-    // Each lane carries its own outcome (explain → the inline reason + hint), so a
-    // failure needs nothing printed after the lanes settle.
-    await runLanes(
-      ready.map((p) => ({
-        label: p,
-        run: (r) => tailOne(p, r),
-        idle: "building app",
-        offsetMs: prepareMs[p] ?? 0,
-        explain: explainFailure(p),
-      })),
-      { verbose },
-    )
-  }
+  // ONE line per platform, whatever the count (R1) — a single platform is simply a
+  // one-lane run, not a different rendering. This used to branch: one platform printed
+  // its internals as top-level steps (`✓ sync`, `✓ package`) while `all` printed one
+  // line per platform. So `build ios`, `build android` and `build all` looked like three
+  // different commands, and because a cached sync prints nothing, whether you saw a
+  // `sync` line depended on which platform you had built last.
+  await runLanes(
+    ready.map((p) => ({
+      label: p,
+      // Each lane carries its own outcome (explain → the inline reason + hint), so a
+      // failure needs nothing printed after the lanes settle.
+      run: (r) => tailOne(p, r),
+      idle: "building app",
+      offsetMs: prepareMs[p] ?? 0,
+      explain: explainFailure(p),
+    })),
+    { verbose },
+  )
   writeBuildCache(appRoot, buildCache)
 
   const ok = platforms.every((p) => p in done)

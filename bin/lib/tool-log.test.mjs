@@ -18,14 +18,15 @@ describe("phaseLabel — xcodebuild", () => {
     ).toBe("compiling")
   })
 
-  it("names the subject only when it isn't the app's own target", () => {
-    // every Pods target is a different plugin — worth saying which one
+  it("says what is happening, never what it is happening to", () => {
+    //The subject used to be appended (`compiling · CapacitorCordova`), so the live line
+    //changed on every pod: 91 distinct phases and 140 rewrites in one 13s build. A phase
+    //names the activity; `--verbose` is where the roll call lives.
     expect(
       phaseLabel(
         "CompileC /Users/x/o/CDVPlugin.o normal arm64 objective-c (in target 'CapacitorCordova' from project 'Pods')",
       ),
-    ).toBe("compiling · CapacitorCordova")
-    // the app's own target repeats on every line — wallpaper
+    ).toBe("compiling")
     expect(
       phaseLabel(
         "Ld /Users/x/Build/App normal (in target 'App' from project 'App')",
@@ -76,26 +77,49 @@ describe("phaseLabel — xcodebuild", () => {
 })
 
 describe("phaseLabel — gradle & CocoaPods", () => {
-  it("passes a gradle task name through as the phase", () => {
+  it("maps a gradle task to the same vocabulary xcodebuild uses", () => {
+    //Gradle has hundreds of tasks and used to be echoed verbatim (`gradle ·
+    //parseDebugLocalResources`) — a raw camelCase identifier, a new one every few hundred
+    //ms. Matching the verb inside the name makes an Android build read like an iOS one.
     expect(phaseLabel("> Task :app:mergeDebugResources")).toBe(
-      "gradle · mergeDebugResources",
+      "processing resources",
     )
-    expect(
-      phaseLabel("> Task :app:compileDebugJavaWithJavac UP-TO-DATE"),
-    ).toBe("gradle · compileDebugJavaWithJavac")
+    expect(phaseLabel("> Task :app:compileDebugJavaWithJavac")).toBe(
+      "compiling",
+    )
+    expect(phaseLabel("> Task :app:packageDebug")).toBe("packaging")
+    expect(phaseLabel("> Task :app:checkDebugAarMetadata")).toBe(
+      "checking",
+    )
     expect(phaseLabel("> Configure project :capacitor-android")).toBe(
-      "gradle · configuring",
+      "configuring",
     )
+    //An unknown task still says something honest rather than leaking its name.
+    expect(phaseLabel("> Task :app:someFutureAgpTask")).toBe("building")
   })
 
-  it("names the pod being installed", () => {
+  it("shows nothing for a gradle task that did no work", () => {
+    //R4: the line keeps its last real phase rather than flickering through the dozens of
+    //up-to-date tasks gradle walks on an incremental build.
+    expect(
+      phaseLabel("> Task :app:compileDebugJavaWithJavac UP-TO-DATE"),
+    ).toBe("")
+    expect(phaseLabel("> Task :app:preBuild NO-SOURCE")).toBe("")
+    expect(phaseLabel("> Task :app:mergeDebugAssets FROM-CACHE")).toBe("")
+  })
+
+  it("does not name each dependency as it is installed", () => {
+    //One line per pod, so the names were the flicker; which dependency is being unpacked
+    //is not something a dev acts on.
     expect(phaseLabel("Installing Capacitor (8.4.2)")).toBe(
-      "installing pods · Capacitor",
+      "installing dependencies",
     )
     expect(phaseLabel("Installing CapacitorHaptics (8.0.3)")).toBe(
-      "installing pods · CapacitorHaptics",
+      "installing dependencies",
     )
-    expect(phaseLabel("Analyzing dependencies")).toBe("analyzing pods")
+    expect(phaseLabel("Analyzing dependencies")).toBe(
+      "resolving dependencies",
+    )
     expect(phaseLabel("Pod installation complete! 12 dependencies")).toBe(
       "",
     )

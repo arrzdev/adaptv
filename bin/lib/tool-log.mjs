@@ -9,9 +9,16 @@
 // absolute paths, an architecture and a target clause — hundreds of columns of it, several
 // per second. Echoing that raw contradicts the whole renderer ("calm steps, not a raw log
 // dump" — render.mjs header) and, clipped to the terminal, it degenerates into a flickering
-// slice of somebody's home directory. So: recognise the verb, say what it MEANS, name the
-// target if there is one, and show nothing at all for pure bookkeeping. `--verbose` is
-// untouched — raw passthrough is its entire purpose.
+// slice of somebody's home directory. So: recognise the verb, say what it MEANS, and show
+// nothing at all for pure bookkeeping. `--verbose` is untouched — raw passthrough is its
+// entire purpose.
+//
+// A phase names WHAT IS HAPPENING, never WHAT IT IS HAPPENING TO. The subject used to be
+// appended (`compiling · CapacitorSplashScreen`), which meant the live line changed on every
+// pod — 91 distinct phases and 140 rewrites in one iOS build, a strobe rather than a status.
+// Dropping it costs nothing a dev acts on: a build compiles what it compiles, and anyone who
+// wants the roll call has `--verbose`. It also gives iOS and Android ONE vocabulary, so the
+// two platforms read as the same command instead of two tools narrating themselves.
 
 /**
  * xcodebuild's step verbs → what they mean. First match wins, so order is significance,
@@ -82,27 +89,54 @@ const NOT_A_PHASE = [
 // every tool's incidental output.
 const NOT_PROSE = /[{}[\]|^~<>\\@$#"]/
 
+/**
+ * A gradle task name → the same coarse phase vocabulary xcodebuild maps to.
+ *
+ * Gradle has hundreds of tasks and used to be passed through verbatim
+ * (`gradle · parseDebugLocalResources`): a raw camelCase identifier, a different one every
+ * few hundred ms. Matching on the verb inside the name collapses them to a handful of
+ * phrases that hold still, and makes an Android build read like the iOS one.
+ */
+const GRADLE_TASK = [
+  [/lint|check|verify/i, "checking"],
+  [/resource|asset|manifest|aapt|parse|merge/i, "processing resources"],
+  [/compile|javac|kotlin|dex|desugar|jetify/i, "compiling"],
+  [/link/i, "linking"],
+  [/strip|minify|shrink|optimi|proguard|r8/i, "optimizing"],
+  [/sign/i, "signing"],
+  [/package|assemble|bundle|apk|aar/i, "packaging"],
+  [/install/i, "installing"],
+  [/clean/i, "cleaning"],
+  [/download|resolve|dependenc/i, "resolving dependencies"],
+]
+
+/** A gradle task that did no work — the live line keeps its last real phase (R4). */
+const GRADLE_NO_WORK = /\b(?:UP-TO-DATE|FROM-CACHE|NO-SOURCE|SKIPPED)\s*$/
+
 /** CocoaPods + gradle + Capacitor phase lines, same contract as {@link XCODE_PHASES}. */
 const TOOL_PHASES = [
-  // gradle names the task it's on: `> Task :app:mergeDebugResources` — the task name IS
-  // the phase, so pass it through rather than inventing a synonym for 200 of them.
-  // `:app:compileDebugJavaWithJavac` — the last segment is the task; the project path
-  // before it is always the same one module and says nothing.
-  [/^>\s*Task\s+(:\S+)/, (m) => `gradle · ${m[1].split(":").pop()}`],
-  [/^>\s*Configure project\b/, "gradle · configuring"],
-  [/^Starting a Gradle Daemon/, "gradle · starting daemon"],
-  [/^Installing\s+([\w.+-]+)\s*\(/, (m) => `installing pods · ${m[1]}`],
-  [/^Analyzing dependencies/, "analyzing pods"],
-  [/^Downloading dependencies/, "downloading pods"],
-  [/^Generating Pods project/, "generating pods project"],
-  [/^Integrating client project/, "integrating pods"],
+  [
+    /^>\s*Task\s+(:\S+)/,
+    (m, line) => {
+      if (GRADLE_NO_WORK.test(line)) return ""
+      const task = m[1].split(":").pop()
+      for (const [re, label] of GRADLE_TASK)
+        if (re.test(task)) return label
+      return "building"
+    },
+  ],
+  [/^>\s*Configure project\b/, "configuring"],
+  [/^Starting a Gradle Daemon/, "preparing build"],
+  //Every pod prints its own `Installing X (1.2.3)`; the NAMES are the flicker, and which
+  //dependency is being unpacked is not something a dev acts on.
+  [/^Installing\s+[\w.+-]+\s*\(/, "installing dependencies"],
+  [/^Analyzing dependencies/, "resolving dependencies"],
+  [/^Downloading dependencies/, "downloading dependencies"],
+  [/^Generating Pods project/, "installing dependencies"],
+  [/^Integrating client project/, "installing dependencies"],
   [/^Pod installation complete/, ""],
   [/^Sending stats/, ""],
 ]
-
-// `(in target 'App' from project 'Pods')` — the only human-meaningful subject in an
-// xcodebuild step line. Everything else on it is paths, arch triples and compiler ids.
-const XCODE_TARGET = /\(in target '([^']+)' from project '([^']+)'\)/
 
 /**
  * A calm phrase for one raw tool line, or `null` when the line isn't one this knows —
@@ -115,17 +149,13 @@ export function phaseLabel(raw) {
 
   for (const [re, label] of TOOL_PHASES) {
     const m = line.match(re)
-    if (m) return typeof label === "function" ? label(m) : label
+    if (m) return typeof label === "function" ? label(m, line) : label
   }
 
   for (const [re, label] of XCODE_PHASES) {
     if (!re.test(line)) continue
     if (!label) return ""
-    const t = line.match(XCODE_TARGET)
-    // Name the target only when it says something: every Pod target is "Pods", and the
-    // app's own target repeated on every line is wallpaper, so keep the pod/plugin name.
-    const subject = t && t[2] === "Pods" ? t[1] : null
-    return subject ? `${label} · ${subject}` : label
+    return label
   }
 
   // xcodebuild's own banners ("** BUILD SUCCEEDED **") restate what the ✓/✖ already says.
