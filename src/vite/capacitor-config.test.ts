@@ -55,6 +55,15 @@ describe("buildCapacitorConfig", () => {
     ).toBe(true)
   })
 
+  it("configures SystemBars insetsHandling:css so Android injects --safe-area-inset-*", () => {
+    //The native half of the safe-area contract (DECISIONS.md §6.0): Capacitor 8 core
+    //injects the CSS vars styles/safe-area.css consumes var-first, working around
+    //broken env() in Android WebView < 140.
+    const systemBars = buildCapacitorConfig(BASE).plugins.SystemBars
+    expect(systemBars.insetsHandling).toBe("css")
+    expect(systemBars.style).toBe("DEFAULT")
+  })
+
   it("throws when appId is absent", () => {
     const { appId: _drop, ...noAppId } = BASE
     expect(() => buildCapacitorConfig(noAppId)).toThrow(/appId/i)
