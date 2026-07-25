@@ -451,7 +451,7 @@ generator by hand. It reads the same `adaptv.config.ts`.
 |---|---|
 | `adaptv doctor` | check toolchain (JDK, Android SDK, Xcode, pod) + that the app has the base Capacitor plugins installed (Cap only auto-discovers **direct** deps) |
 | `adaptv run <ios\|android\|all> [--target id] [--latest] [--verbose]` | build SPA (`ADAPTV_TARGET=capacitor`) → brand icons/splash → `cap sync` → `cap run` on device/sim. `all` = both, **in parallel** |
-| `adaptv build <ios\|android\|all> [--output path] [--verbose]` | …sync → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**). Artifact lands at `--output` or `.adaptv/<app>.apk`\|`.ipa` |
+| `adaptv build <ios\|android\|all> [--output path] [--verbose]` | …sync → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**). Artifact lands at `--output` or `.adaptv/builds/<app>.apk`\|`.ipa` |
 
 `sync` and `assets` are no longer standalone commands — they're internal steps of `run`/`build`.
 
