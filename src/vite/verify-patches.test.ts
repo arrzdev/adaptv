@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from "node:fs"
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -6,6 +6,8 @@ import {
   assertRouteTreeIsOpaque,
   checkPatches,
   describeMissingPatches,
+  parsePatchFilename,
+  patchInstructions,
 } from "#adaptv/vite/verify-patches"
 
 const PATCHED_SCHEMA = `var tsrConfig = configSchema.omit({ autoCodeSplitting: true, target: true }).partial();`
@@ -79,6 +81,61 @@ describe("describeMissingPatches", () => {
     //pnpm reported "Already up to date" and skipped the patch even with --force
     //and the package directory deleted; only a full node_modules wipe worked
     expect(describeMissingPatches(["x"])).toContain("node_modules")
+  })
+})
+
+describe("patch instructions — derived from what actually shipped", () => {
+  const patchesDir = join(process.cwd(), "patches")
+
+  it("decodes a patch filename into its pnpm key", () => {
+    expect(
+      parsePatchFilename("@tanstack__router-generator@1.166.22.patch"),
+    ).toEqual({
+      key: "@tanstack/router-generator@1.166.22",
+      file: "@tanstack__router-generator@1.166.22.patch",
+    })
+    //pnpm's filename convention already carries the leading `@` — decoding only
+    //the scope separator. Prepending one produced `@@capacitor/cli`.
+    expect(parsePatchFilename("@capacitor__cli@8.4.2.patch")?.key).toBe(
+      "@capacitor/cli@8.4.2",
+    )
+  })
+
+  it("ignores unversioned patches and non-patch files (L21: keys are version-pinned)", () => {
+    expect(
+      parsePatchFilename("@tanstack__start-plugin-core.patch"),
+    ).toBeNull()
+    expect(parsePatchFilename("README.md")).toBeNull()
+  })
+
+  it("tells the consumer to install every patch adaptv actually ships", () => {
+    //Regression: the block was hardcoded and listed two patches under
+    //unversioned names. Version-keying (L21) renamed the files, so it pointed at
+    //paths that did not exist — and it never mentioned the @capacitor/cli patch,
+    //which is what lets adaptv own Capacitor without a config file (L20).
+    const shipped = readdirSync(patchesDir).filter((f) =>
+      f.endsWith(".patch"),
+    )
+    const message = describeMissingPatches(["x"])
+    expect(shipped.length).toBeGreaterThan(0)
+    for (const file of shipped) expect(message).toContain(file)
+  })
+
+  it("emits exactly the keys adaptv declares in its own pnpm-workspace.yaml", () => {
+    //The instructions and the declaration are the same fact stated twice; this
+    //fails if a patch is added, renamed or version-bumped in only one of them.
+    const yaml = readFileSync(
+      join(process.cwd(), "pnpm-workspace.yaml"),
+      "utf8",
+    )
+    const declared = [...yaml.matchAll(/^\s+'([^']+)':\s*patches\//gm)]
+      .map((m) => m[1])
+      .sort()
+    const advertised = patchInstructions(readdirSync(patchesDir))
+      .map((l) => l.trim().split("':")[0].slice(1))
+      .sort()
+    expect(declared.length).toBe(3)
+    expect(advertised).toEqual(declared)
   })
 })
 

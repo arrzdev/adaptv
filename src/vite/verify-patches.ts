@@ -18,7 +18,9 @@
  * A silent revert is much worse than a hard failure, so this turns it into one.
  */
 
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 export type PatchStatus = {
   ok: boolean
@@ -59,8 +61,68 @@ export function checkPatches(sources: {
   return { ok: missing.length === 0, missing }
 }
 
+/**
+ * The `patchedDependencies` filename convention, decoded.
+ *
+ * The filename IS the pnpm key: `@tanstack__router-generator@1.166.22.patch`
+ * means `'@tanstack/router-generator@1.166.22'`. Keeping one encoding is what
+ * makes the instructions below trustworthy — they are derived from the patches
+ * that actually shipped, so a version bump (which renames the file, per L21)
+ * updates the message on its own. They used to be hardcoded, and version-keying
+ * the patches left them naming a file that no longer existed.
+ */
+export function parsePatchFilename(
+  file: string,
+): { key: string; file: string } | null {
+  if (!file.endsWith(".patch")) return null
+  const stem = file.slice(0, -".patch".length)
+  //`@scope__name@version` → `@scope/name@version`; `name@version` → unchanged.
+  //pnpm's own convention already carries the leading `@`, so only the scope
+  //separator is decoded — prepending one produced `@@capacitor/cli`.
+  const key = stem.replace("__", "/")
+  //L21: an unversioned key would let a drifting upstream patch changed code
+  if (!/.@\d/.test(key)) return null
+  return { key, file }
+}
+
+/** The `pnpm-workspace.yaml` block a consumer must copy, built from the shipped patches. */
+export function patchInstructions(filenames: string[]): string[] {
+  return filenames
+    .map(parsePatchFilename)
+    .filter((e): e is { key: string; file: string } => e !== null)
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map(
+      (e) =>
+        `    '${e.key}': node_modules/@arrzdev/adaptv/patches/${e.file}`,
+    )
+}
+
+/**
+ * The patches this copy of adaptv ships (`patches/` is in package.json `files`).
+ *
+ * Resolved from this module first — that is the copy the consumer installed, and
+ * the only one whose contents match the code raising the error. The cwd fallback
+ * covers loaders that hand out a non-`file:` `import.meta.url` (vitest does), where
+ * resolving from the module throws and would otherwise silently advertise nothing.
+ */
+function shippedPatchFilenames(): string[] {
+  const roots: Array<() => string> = [
+    () => fileURLToPath(new URL("../../patches", import.meta.url)),
+    () => join(process.cwd(), "patches"),
+  ]
+  for (const root of roots) {
+    try {
+      return readdirSync(root())
+    } catch {}
+  }
+  return []
+}
+
 /** The message shown when a patch is missing. States the fix, not just the fault. */
-export function describeMissingPatches(missing: string[]): string {
+export function describeMissingPatches(
+  missing: string[],
+  filenames: string[] = shippedPatchFilenames(),
+): string {
   return [
     `[adaptv] Required dependency patches are not applied: ${missing.join(", ")}.`,
     "",
@@ -73,8 +135,7 @@ export function describeMissingPatches(missing: string[]): string {
     "`pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
     "",
     "  patchedDependencies:",
-    "    '@tanstack/start-plugin-core': node_modules/@arrzdev/adaptv/patches/@tanstack__start-plugin-core.patch",
-    "    '@tanstack/router-generator': node_modules/@arrzdev/adaptv/patches/@tanstack__router-generator.patch",
+    ...patchInstructions(filenames),
     "",
     "then run `pnpm install`. If it still reports missing, delete `node_modules` first —",
     "pnpm does not always re-apply patches on an incremental install.",
