@@ -37,6 +37,8 @@ export const ADAPTV_ROOT = path.join(
 
 /** The hidden generated dir (mirrors src/vite/adaptv-dir.ts — kept in sync by hand). */
 export const ADAPTV_DIR = ".adaptv"
+/** Where `adaptv build` puts its artifacts: `.adaptv/builds/<app>.ipa|.apk`. */
+export const BUILDS_DIR = "builds"
 /** Absolute path to a platform's native project, now under `.adaptv/`. */
 export const nativeDir = (appRoot, platform) =>
   path.join(appRoot, ADAPTV_DIR, platform)

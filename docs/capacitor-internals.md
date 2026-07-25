@@ -173,7 +173,7 @@ pnpm --filter @repo/frontend native:doctor   # adaptv doctor  — check JDK/SDK/
 pnpm --filter @repo/frontend cap:android      # adaptv run android — build SPA → brand assets → sync → launch
 pnpm --filter @repo/frontend cap:ios          # adaptv run ios
 pnpm --filter @repo/frontend cap:all          # adaptv run all      — both platforms, in parallel
-pnpm --filter @repo/frontend cap:ios:ipa      # adaptv build ios    — unsigned archive → .adaptv/<app>.ipa
+pnpm --filter @repo/frontend cap:ios:ipa      # adaptv build ios    — unsigned archive → .adaptv/builds/<app>.ipa
 ```
 
 Each `run` does: `vite build` (`ADAPTV_TARGET=capacitor`) + stamp `index.html` → brand assets →
@@ -230,12 +230,12 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
   real device use a **deployed HTTPS** URL — a LAN `http://…` dev IP is unreachable (wrong network
   **and** iOS App Transport Security blocks cleartext; the Capacitor Info.plist has no ATS exception).
 - **Android `.apk`** — `adaptv build android` self-signs a debug APK (Gradle builds it at
-  `.adaptv/android/app/build/outputs/apk/debug/`; adaptv copies it to `--output` or `.adaptv/<app>.apk`).
+  `.adaptv/android/app/build/outputs/apk/debug/`; adaptv copies it to `--output` or `.adaptv/builds/<app>.apk`).
 - **iOS `.ipa`** — a simulator run makes only `App.app` (simulator slice), never an `.ipa`. `.ipa` is a
   device artifact needing code signing. For **sideloading** (kravasign / AltStore / Sideloadly, which
   re-sign at install), build an **unsigned** `.ipa`: `adaptv build ios` runs `scripts/build-ipa.sh`
   (Release device archive, `CODE_SIGNING_ALLOWED=NO`, packaged `Payload/App.app`) against the project in
-  `.adaptv/ios`, then places the `.ipa` at `--output` or `.adaptv/<app>.ipa`. For **TestFlight / App Store**, sign via
+  `.adaptv/ios`, then places the `.ipa` at `--output` or `.adaptv/builds/<app>.ipa`. For **TestFlight / App Store**, sign via
   Xcode ▸ Archive ▸ Distribute with your own certificate — never automate the user's credentials.
 - **OTA ("update over the air").** The bundle is a snapshot baked into the store build, so by default an
   update = a new store version (App Store review each time). Capacitor's OTA story is **Live Updates**
