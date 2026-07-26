@@ -3,6 +3,12 @@
 # deps check doesn't flag it as unbuilt on every `pnpm <script>`.
 allowBuilds:
   esbuild: true
+  # sharp resolves a prebuilt binary from its `@img/sharp-*` optional deps, so it never
+  # needs the compile fallback. Left false deliberately: adaptv depends on sharp to render
+  # launcher icons, and a consumer install must not stall on a native build step. On a
+  # platform with no prebuilt binary the import fails and the CLI degrades to one icon
+  # warning (bin/lib/icons.mjs `loadSharp`), which is the right failure.
+  sharp: false
 # Version-PINNED patch keys (not bare names): a patch is written against a specific
 # version's code, so pin it. If the resolved version ever drifts, pnpm fails the install
 # LOUDLY (no matching version) instead of silently applying the patch to changed code —

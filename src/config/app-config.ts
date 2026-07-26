@@ -189,9 +189,22 @@ export type AdaptvAppConfig = {
    */
   backgroundColor?: string
   /**
-   * Public directory holding the icon files. Default: `"./public/favicons"`.
-   * Manifest icons are the `android-*` files; sizes are parsed from filenames
-   * (`android-icon-36x36.png`, `android-chrome-192.png`).
+   * The app's icon set — **one directory, every target**. Default:
+   * `"./public/favicons"`. Drop a standard PWA/favicon-generator output in it and adaptv
+   * takes it from there; there is no second file to maintain for native.
+   *
+   * - **Web manifest** — the `android-*` files, sized from their filenames
+   *   (`android-icon-36x36.png`, `android-chrome-192.png`); `android-maskable-*` become
+   *   `purpose: "maskable"`.
+   * - **Native launcher icons** — adaptv picks the member of the set drawn for the platform
+   *   it is building (apple art for iOS, maskable art for Android's adaptive icon) and
+   *   renders the native icons from it, falling back to the next-best source when a family
+   *   is missing. A lone `icon.png` is a perfectly good set of one.
+   *
+   * It warns only about things you can act on: an icon dir it found nothing usable in, a
+   * source too small for the platform's largest slot (1024px iOS, 432px Android — it still
+   * upscales and builds), or an opaque source where Android's adaptive foreground needs
+   * transparency.
    */
   icons?: string
   /** Manifest orientation lock; also drives the runtime rotate guard. */
