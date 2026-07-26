@@ -1,0 +1,66 @@
+{
+  "name": "@repo/synq",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#synq/*": "./src/*"
+  },
+  "exports": {
+    ".": {
+      "types": "./.tsbuild/interface/index.d.ts",
+      "default": "./src/interface/index.ts"
+    },
+    "./core": {
+      "types": "./.tsbuild/interface/core.index.d.ts",
+      "default": "./src/interface/core.index.ts"
+    },
+    "./types": {
+      "types": "./.tsbuild/interface/types.index.d.ts",
+      "default": "./src/interface/types.index.ts"
+    },
+    "./protocol": {
+      "types": "./.tsbuild/interface/protocol.index.d.ts",
+      "default": "./src/interface/protocol.index.ts"
+    },
+    "./server": {
+      "types": "./.tsbuild/interface/server.index.d.ts",
+      "default": "./src/interface/server.index.ts"
+    },
+    "./adapters/indexeddb": {
+      "types": "./.tsbuild/interface/adapters.indexeddb.index.d.ts",
+      "default": "./src/interface/adapters.indexeddb.index.ts"
+    },
+    "./adapters/memory": {
+      "types": "./.tsbuild/interface/adapters.memory.index.d.ts",
+      "default": "./src/interface/adapters.memory.index.ts"
+    },
+    "./react": {
+      "types": "./.tsbuild/interface/react.index.d.ts",
+      "default": "./src/interface/react.index.ts"
+    },
+    "./live": {
+      "types": "./.tsbuild/interface/live.index.d.ts",
+      "default": "./src/interface/live.index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": "19.2.3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "fake-indexeddb": "6.2.2",
+    "react": "19.2.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.2"
+  }
+}

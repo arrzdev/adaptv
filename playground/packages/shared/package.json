@@ -1,0 +1,21 @@
+{
+  "name": "@repo/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#shared/*": "./*"
+  },
+  "exports": {
+    "./http": "./http.ts",
+    "./logging": "./logging.ts",
+    "./try-catch": "./try-catch.ts"
+  },
+  "peerDependencies": {
+    "hono": "4.11.8",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

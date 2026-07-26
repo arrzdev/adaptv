@@ -180,6 +180,7 @@ src/            framework: shell · components · capabilities · config · hook
   interface/    the public export barrels (map to package.json "exports")
 bin/adaptv.mjs   the CLI (self-contained Node ESM; owns the native toolchain + templates)
   lib/          CLI internals: dev-server · devices · cache · build · doctor · privacy-manifest
+playground/     a real app (chopchop) vendored for dogfooding — see docs/DEVELOPMENT.md
 docs/           VISION · ARCHITECTURE · DECISIONS · LIFECYCLE · COORDINATION · NATIVE-SHELL · RENDERING · BEHAVIORS ·
                 TESTING · RESEARCH · STYLING · FACADE · ANIMATION · PRIOR-ART · COOKBOOK · VS-IONIC · capacitor-internals
 ```
@@ -195,12 +196,22 @@ docs/           VISION · ARCHITECTURE · DECISIONS · LIFECYCLE · COORDINATION
 
 ## Develop against a real app
 
-No playground — dogfood against a real app (e.g. `chopchop`) via a local dependency:
+`playground/` is a real app vendored into this repo — chopchop's `adaptv-testing` branch (React app
++ Cloudflare Workers API + D1), linked to its own checkout via `"@arrzdev/adaptv": "link:../../.."`.
+Every worktree gets its own copy with the branch, so a framework change and the consumer change it
+forces land in one commit. Drive it from the root of any checkout **or worktree**:
 
-```jsonc
-// in the app's package.json
-"@arrzdev/adaptv": "link:../adaptv"
+```bash
+pnpm dev:web        pnpm preview:web        pnpm build:ios
+pnpm dev:ios        pnpm preview:ios        pnpm build:android
+pnpm dev:android    pnpm preview:android    pnpm build:all
+pnpm dev:all        pnpm preview:all
+
+pnpm adaptv doctor                     # ad-hoc passthrough to the CLI in the app
 ```
+
+Full loop — fresh worktrees, ports, what the playground is (and is not):
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ## Verify
 
