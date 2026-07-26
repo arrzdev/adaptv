@@ -4,7 +4,10 @@ import {
   ADAPTV_DIR,
   adaptvDirGitignoreEntry,
   adaptvDirTsconfigPaths,
+  isPrunableLegacyTmpDir,
+  LEGACY_TMP_DIR,
   resolveGeneratedPaths,
+  resolveGeneratedTmpDir,
 } from "#adaptv/vite/adaptv-dir"
 
 const APP = "/app"
@@ -68,5 +71,67 @@ describe("the consumer wires nothing by hand", () => {
 
   it("uses a dot-prefixed dir so editors and search collapse it by default", () => {
     expect(ADAPTV_DIR.startsWith(".")).toBe(true)
+  })
+})
+
+describe("generator scratch space — no second dot-dir at the app root", () => {
+  //TanStack's route generator writes-then-renames through a temp dir that
+  //defaults to `<cwd>/.tanstack/tmp`. Left alone it plants a dot-directory from a
+  //package the consumer never installed, and leaves it behind empty after every
+  //run — the exact artifact-beside-app-code problem `.adaptv/` exists to solve.
+  it("keeps the temp dir inside .adaptv/", () => {
+    expect(resolveGeneratedTmpDir(APP)).toBe(
+      path.join(APP, ADAPTV_DIR, "tmp", "router"),
+    )
+  })
+
+  it("namespaces scratch under tmp/, away from the files that get imported", () => {
+    //`routeTree.gen.ts` is an OUTPUT and sits at the top level; scratch must not
+    //be mistakable for one, or `.adaptv/` stops being organised
+    const tmp = resolveGeneratedTmpDir(APP)
+    const outputs = Object.values(resolveGeneratedPaths(APP))
+    expect(tmp).toContain(`${path.sep}tmp${path.sep}`)
+    for (const output of outputs)
+      expect(output.startsWith(tmp)).toBe(false)
+  })
+
+  it("is absolute — the generator resolves tmpDir against cwd, not the app root", () => {
+    //a relative value would scatter scratch dirs wherever Vite happens to be
+    //invoked from, which is worse than the default it replaces
+    expect(path.isAbsolute(resolveGeneratedTmpDir(APP))).toBe(true)
+  })
+})
+
+describe("isPrunableLegacyTmpDir — only ever deletes an empty husk", () => {
+  it("prunes an empty .tanstack/", () => {
+    expect(isPrunableLegacyTmpDir([], null)).toBe(true)
+  })
+
+  it("prunes .tanstack/ holding nothing but an empty tmp/", () => {
+    //the exact shape the old default leaves behind: every temp file is renamed
+    //into place, so the directory is always empty by the time anyone looks
+    expect(isPrunableLegacyTmpDir(["tmp"], [])).toBe(true)
+  })
+
+  it("keeps it when tmp/ still has files in it", () => {
+    //a run in flight, or a crash that left real state — not ours to delete
+    expect(isPrunableLegacyTmpDir(["tmp"], ["a1b2-deadbeef"])).toBe(false)
+  })
+
+  it("keeps it when TanStack (or anyone) put something else there", () => {
+    //the directory belongs to the consumer's repo; a future upstream version
+    //keeping real state in it must not lose that state to adaptv housekeeping
+    expect(isPrunableLegacyTmpDir(["tmp", "cache.json"], [])).toBe(false)
+    expect(isPrunableLegacyTmpDir(["start"], null)).toBe(false)
+  })
+
+  it("keeps it when tmp/ is not a readable directory", () => {
+    //`null` means "could not read it" — unknown contents are not empty contents
+    expect(isPrunableLegacyTmpDir(["tmp"], null)).toBe(false)
+  })
+
+  it("targets TanStack's dir, not adaptv's own", () => {
+    expect(LEGACY_TMP_DIR).toBe(".tanstack")
+    expect(LEGACY_TMP_DIR).not.toBe(ADAPTV_DIR)
   })
 })
