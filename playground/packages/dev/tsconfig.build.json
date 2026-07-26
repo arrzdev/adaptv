@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "#dev/*": ["./*"]
+    },
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./.tsbuild",
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", ".tsbuild"]
+}

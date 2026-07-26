@@ -1,0 +1,48 @@
+@keyframes splash-wordmark-fill {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  12% {
+    clip-path: inset(0 50% 0 0);
+  }
+
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes splash-wordmark-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.025);
+  }
+}
+
+.animate-splash-wordmark-fill {
+  animation: splash-wordmark-fill var(--splash-fill-ms, 500ms) linear forwards;
+  clip-path: inset(0 100% 0 0);
+}
+
+.animate-splash-wordmark-pulse {
+  animation: splash-wordmark-pulse var(--splash-pulse-ms, 1750ms) ease-in-out
+    var(--splash-pulse-delay-ms, 600ms) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-splash-wordmark-fill {
+    animation: none;
+    clip-path: inset(0 0 0 0);
+  }
+
+  .animate-splash-wordmark-pulse {
+    animation: none;
+    transform: none;
+  }
+}
+
+/* Drawer overlay-fade + caret patches moved to @arrzdev/adaptv styles/drawer.css */

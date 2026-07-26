@@ -1,0 +1,212 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/dist-ssr",
+      "!!**/build",
+      "!!**/.tsbuild",
+      "!!**/.next",
+      "!!**/out",
+      "!!**/.turbo",
+      "!!**/.vite",
+      "!!**/.git",
+      "!!**/.vscode",
+      "!!**/.idea",
+      "!!**/coverage",
+      "!!**/.nyc_output",
+      "!!**/*.tsbuildinfo",
+      "!!**/database/migrations",
+      "!!**/routeTree.gen.ts",
+      "!!**/__root.gen.tsx",
+      "!!**/router.gen.tsx",
+      "!!**/public/sw.js",
+      "!!**/*.css",
+      "!!**/env/.env",
+      "!!**/env/.env.*",
+      "!!**/.env",
+      "!!**/.env.local",
+      "!!**/.env.*",
+      "!!**/.env.*.local",
+      "!!**/.wrangler",
+      "!!**/.tanstack",
+      "!!**/.nitro",
+      "!!**/.output",
+      "!!**/.vinxi",
+      "!!**/.cache",
+      "!!**/.parcel-cache",
+      "!!**/.npm",
+      "!!**/.pnp",
+      "!!**/.pnp.js",
+      "!!**/*.log",
+      "!!**/npm-debug.log*",
+      "!!**/yarn-debug.log*",
+      "!!**/yarn-error.log*",
+      "!!**/pnpm-debug.log*",
+      "!!**/lerna-debug.log*",
+      "!!**/turbo.log",
+      "!!**/package-lock.json",
+      "!!**/yarn.lock",
+      "!!**/pnpm-lock.yaml",
+      "!!**/*.tmp",
+      "!!**/*.temp",
+      "!!**/*.swp",
+      "!!**/*.swo",
+      "!!**/*~",
+      "!!**/.DS_Store",
+      "!!**/._*",
+      "!!**/Thumbs.db",
+      "!!**/ehthumbs.db",
+      "!!**/Desktop.ini",
+      "!!**/*.lcov",
+      "!!**/*.tgz",
+      "!!**/.cursor",
+      "!!.claude",
+      "!!**/.adaptv"
+    ],
+    "ignoreUnknown": true
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        },
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["./*", "../*"],
+                "message": "Use the member self-alias (@/* in apps, #<slug>/* in packages), not ./ or ../."
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 75
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "asNeeded"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["*.css"],
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["**/*.html"],
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["apps/**/*.{ts,tsx}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["./*", "../*"],
+                    "message": "Use the member self-alias (@/* in apps, #<slug>/* in packages), not ./ or ../."
+                  },
+                  {
+                    "group": ["#/*"],
+                    "message": "#/* is package-internal. Apps use @repo/<slug>/... exports only."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/**/*.{ts,tsx}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["./*", "../*"],
+                    "message": "Use the package self-alias (#<slug>/*), not ./ or ../."
+                  },
+                  {
+                    "group": ["#/*"],
+                    "message": "#/* is invalid Node ESM. Use #<slug>/* (e.g. #nativ/*)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/**/vite.config.ts",
+        "apps/**/entrypoint/**",
+        "apps/**/app.config.ts",
+        "apps/**/app.config.tsx",
+        "apps/**/sw.config.ts",
+        "apps/**/sw.config.tsx",
+        "packages/**/src/config/**",
+        "packages/**/src/vite/**",
+        "packages/**/src/client/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/**/src/index.ts",
+        "packages/**/src/interface/*.index.ts",
+        "packages/**/src/**/index.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
+}

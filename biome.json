@@ -12,7 +12,8 @@
       "!!**/*.css",
       "!!**/*.log",
       "!!**/.DS_Store",
-      "!!**/.project-zero"
+      "!!**/.project-zero",
+      "!!**/playground"
     ],
     "ignoreUnknown": true
   },
