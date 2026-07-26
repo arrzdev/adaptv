@@ -86,6 +86,7 @@
     "@tanstack/virtual-file-routes": "1.161.7",
     "@vitejs/plugin-react": "5.2.0",
     "esbuild": "0.28.0",
+    "sharp": "0.35.3",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",
     "workbox-expiration": "7.4.1",
