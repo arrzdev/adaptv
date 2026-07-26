@@ -19,6 +19,7 @@ import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { exec } from "./exec.mjs"
+import { brandLauncherIcon } from "./icons.mjs"
 import {
   classListChanged,
   mergeClassList,
@@ -126,12 +127,19 @@ function run(cmd, args, { cwd, env, report } = {}) {
  * config-derived plans (pure)
  * ============================================================================= */
 
-/** Icon source dir + launcher-icon backing (icon only; the splash is colour-driven). */
+/**
+ * Where the launcher icon comes from, and what it sits on (icon only; the splash is
+ * colour-driven). The source is the app's ONE icon dir — the same `icons` the web manifest
+ * is built from — so a PWA icon set brands the native launcher with no second file to keep
+ * in sync. Mirrors `DEFAULT_ICONS_DIR` in src/vite/manifest.ts.
+ */
 export function resolveIconPlan(config) {
   const theme = config.themeColor ?? {}
   const dark = theme.dark ?? theme.light ?? "#000000"
   return {
-    dir: "./assets", //convention: assets/logo.png (transparent mark)
+    dir: config.icons ?? "./public/favicons",
+    //White, NOT the light theme colour: these icons sit on someone else's home screen, not
+    //inside the app, and the PWA set the source comes from is drawn against white too.
     iconBackground: "#ffffff",
     iconBackgroundDark: dark,
   }
@@ -419,9 +427,11 @@ export function patchIosTheme(appRoot, mask) {
  * ============================================================================= */
 
 /**
- * Brand the launcher icons + splash. Splash patches are synchronous file writes; the
- * launcher icon is generated via @capacitor/assets. Returns any non-fatal warnings
- * (missing source art / generator) so the caller can surface them after the run.
+ * Brand the launcher icon + splash for each platform. The splash patches are synchronous
+ * file writes (it's a flat colour, not art); the launcher icon is rendered from the app's
+ * icon set by `brandLauncherIcon`, which picks the member of that set drawn for the platform
+ * being built. Returns non-fatal warnings — about the SOURCE ART only, never about adaptv's
+ * own toolchain — so the caller can surface them after the run.
  */
 export async function generateAssets(
   appRoot,
@@ -436,42 +446,25 @@ export async function generateAssets(
     patchAndroidSplash(appRoot, mask, config.appId)
   if (platforms.includes("ios")) patchIosTheme(appRoot, mask)
 
-  const dir = path.resolve(appRoot, icon.dir)
-  const logo = path.join(dir, "logo.png")
-  if (!existsSync(logo)) {
-    //A NOTE, not a warning (R5): the dev never asked for generated icons, and the app
-    //keeps the icons it already has. Nothing is broken and there is nothing to do, so
-    //it must not carry a `!` on every single build for the rest of the project's life.
-    warnings.push({
-      note: `no ${icon.dir}/logo.png — using the launcher icons already in the project.`,
-    })
-    return { warnings }
-  }
-  const bin = localBin(appRoot, "capacitor-assets")
-  if (!bin) {
-    //Stays a `!`: there IS a logo.png, so the dev asked for generated icons and is not
-    //getting them. Only they can fix that, which is what a warning is for.
-    warnings.push(
-      `${icon.dir}/logo.png is present but @capacitor/assets is not installed — keeping the existing launcher icons (add: pnpm add -D @capacitor/assets).`,
+  for (const platform of platforms) {
+    //A `!` (R5): a launcher icon adaptv couldn't brand, or branded from art too small or
+    //too opaque for the slot, is the dev's to fix and nobody else's — the app otherwise
+    //ships Capacitor's stock mark or a soft one. Every message NAMES THE FIX (R7) and is
+    //short by construction, because `log.warn` must not truncate a line whose whole value
+    //is the instruction in it (R15/R10).
+    const { warning } = await brandLauncherIcon(
+      nativeDir(appRoot, platform),
+      platform,
+      {
+        appRoot,
+        iconsDir: icon.dir,
+        background: icon.iconBackground,
+        backgroundDark: icon.iconBackgroundDark,
+        report,
+      },
     )
-    return { warnings }
+    if (warning) warnings.push(warning)
   }
-  report?.("branding launcher icon from ./assets/logo.png")
-  const args = [
-    "generate",
-    "--assetPath",
-    icon.dir,
-    "--iconBackgroundColor",
-    icon.iconBackground,
-    "--iconBackgroundColorDark",
-    icon.iconBackgroundDark,
-    "--splashBackgroundColor",
-    mask.light,
-    "--splashBackgroundColorDark",
-    mask.dark,
-    ...platforms.flatMap((p) => [`--${p}`]),
-  ]
-  await run(bin, args, { cwd: appRoot, report })
   return { warnings }
 }
 
