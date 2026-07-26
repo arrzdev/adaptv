@@ -1,0 +1,48 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/entrypoint": ["./entrypoint/worker.ts"],
+      "@/env/*": ["./env/*"],
+      "@/ports": ["./ports.ts"],
+      "@/*": ["./src/*"]
+    },
+    "lib": ["ES2022"],
+    "types": [
+      "@cloudflare/workers-types",
+      "@cloudflare/vitest-pool-workers/types",
+      "@types/node"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./.tsbuild",
+    "rootDir": "."
+  },
+  "include": [
+    "entrypoint/**/*",
+    "env/**/*",
+    "ports.ts",
+    "scripts/**/*",
+    "src/**/*"
+  ],
+  "exclude": ["node_modules", ".tsbuild"],
+  "references": [
+    {
+      "path": "../../packages/shared/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/env-validation/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/dev/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/synq/tsconfig.build.json"
+    }
+  ]
+}
