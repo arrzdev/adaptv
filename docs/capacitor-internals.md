@@ -207,10 +207,46 @@ authored. A legacy app-root `ios/`/`android/` is moved into `.adaptv/` on the ne
 
 ## App icons + splash — branded, never the Capacitor default
 
-`adaptv run`/`adaptv assets` feeds `@capacitor/assets` from `apps/frontend/assets/` — **only a transparent
-`logo.png`** (the launcher-icon source). The **launcher icon** is the mascot on `#ffffff` (matching the PWA
-icons). There are **no splash PNGs** — the splash is colour-driven (see Splash policy), so `assets/` holds
-just the logo.
+The launcher icon comes from the app's **one icon set** — `icons` in `adaptv.config.ts`, default
+`./public/favicons`, the same directory the web manifest is built from. A standard PWA/favicon-generator
+output already contains platform-specific art, so adaptv's job is to **pick the right member of that set for
+the platform being built**, not to ask for a second source file (→ DECISIONS L8). There are **no splash
+PNGs** — the splash is colour-driven (see Splash policy) — so the icon set is the only art adaptv reads.
+
+`bin/lib/icons.mjs` does the picking and the rendering. It classifies each file by *family* from its name
+(`maskable` · `android` · `apple` · `ms` · `favicon` · `generic`) and measures its real pixel size from the
+file header — names lie, and the resolution warning is only worth printing if it's measured. Family
+preference is per platform and inverts on `maskable`: iOS never masks an icon, so safe-zoned art would ship
+a logo floating in dead space, while that same art is exactly what Android's adaptive foreground wants.
+Resolution beats family when the gap is wide (a 180px `apple-touch-icon` loses to a 512px `android-chrome`
+for iOS — upscaling 5.7× is the worse defect), so family only breaks ties among sources that already clear
+the platform's bar. A lone `icon.png` is a valid set of one.
+
+adaptv **writes the native icon files itself** rather than shelling out to `@capacitor/assets`: that package
+is a ~260-package tree pinned to an old `@capacitor/cli`, whose `sharp` needs a native build step, and the
+surface it would generate for us is small and fully known —
+
+| target | written |
+| --- | --- |
+| iOS | `App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png` — the single 1024px universal slot the scaffolded `Contents.json` declares. **Flattened, alpha channel removed**: App Store Connect rejects an icon that merely *has* one, and it rejects it after the archive. |
+| Android | `mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher.png` (opaque square), `ic_launcher_round.png` (same art, circular mask), `ic_launcher_foreground.png` (transparent, inset to the 72/108dp safe zone unless the source is already `maskable`), plus `values{,-night}/ic_launcher_background.xml`. The `mipmap-anydpi-v26/*.xml` that wire foreground to background are Capacitor's and already correct — adaptv replaces only the art they point at. |
+
+The **launcher-icon background is `#ffffff`**, not the app's light theme colour: these icons sit on someone
+else's home screen, not inside the app, and the PWA set they're derived from is drawn against white too.
+`values-night` gets the dark theme colour so a dark home screen resolves the dark brand background.
+
+Warnings are about the **source art only, never adaptv's toolchain**, and none of them fire for a set that
+is actually fine — a `!` every project sees is noise, not information (CLI-UX R4/R5). There are three:
+nothing usable in the configured dir; a source below the platform's largest slot (1024px iOS, 432px
+Android) which adaptv upscales anyway; and an opaque source on Android, where the adaptive foreground has
+to be transparent for the launcher to composite and mask it. None is fatal — a bad icon ships Capacitor's
+stock mark or a soft one, and neither is a reason to fail someone's build.
+
+That last one is **decoded, not read from the header**, and the difference is the whole warning: a favicon
+generator's `android-chrome-512.png` is RGBA with every pixel opaque. Trusting the declared channel branded
+the adaptive foreground as a white box floating in the safe zone *and* stayed silent about it — the exact
+case the warning exists for. `scanIcons` reads headers (cheap, for ranking); `resolveTransparency` decodes
+the ONE file that won the pick.
 
 The **launch splash is a SOLID mask colour — no mascot**. Deliberate: every app has an unavoidable OS launch
 screen, and if it shows the mascot you get a **double splash** — the OS mascot, then the app's own React
