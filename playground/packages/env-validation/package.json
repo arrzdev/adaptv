@@ -1,0 +1,28 @@
+{
+  "name": "@repo/env-validation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#env-validation/*": "./*"
+  },
+  "exports": {
+    "./cli-runner": "./src/cli-runner.ts",
+    "./core": "./src/core.ts",
+    "./registry-factory": "./src/registry-factory.ts",
+    "./parser": "./src/parser.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "tsx": "4.19.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.2",
+    "zod": "4.3.6"
+  }
+}
