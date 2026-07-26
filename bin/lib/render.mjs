@@ -122,8 +122,14 @@ export const log = {
 /**
  * Print collected notices once each, then empty the list.
  *
- * An entry is either a plain string — a real `!` the dev may need to act on — or
- * `{ note }`, something adaptv already handled and is only mentioning (R5).
+ * EVERY notice carries the `!` (R5). There is no second, glyphless severity: a line with no
+ * glyph reads as stray output rather than something the CLI meant to say, and the dev is
+ * left deciding whether an unmarked sentence is a problem. The question a notice must pass
+ * is not "how bad is this" but "does the dev need to know" — if the answer is no, it is not
+ * printed at all (R4).
+ *
+ * Entries are strings; `{ note }` is still accepted so callers can be migrated, and renders
+ * identically.
  *
  * Deduped, because the same app-level fact (an icon source, a config key) is
  * discovered once per platform: printing it per platform reads as several separate
@@ -135,8 +141,7 @@ export function flushNotices(notices) {
     const text = typeof n === "string" ? n : n.note
     if (seen.has(text)) continue
     seen.add(text)
-    if (typeof n === "string") log.warn(text)
-    else log.info(text)
+    log.warn(text)
   }
   notices.length = 0
 }
@@ -160,10 +165,14 @@ export function section(title) {
  * `doctor` used to draw its own rows with `✔` (a different check mark) and `○`, so the one
  * command a dev runs when something is wrong was also the one that looked like a different
  * program. `optional` marks a thing whose absence is fine: dim, not red.
+ *
+ * The note is this row's metadata and opens with the same `·` every other row uses (R31) —
+ * `✓ node  · v26.0.0`, not `✓ node  v26.0.0`. It was the last shape still setting its
+ * right-hand side one column left of the rest of the CLI.
  */
 export function check(ok, label, note = "", { optional = false } = {}) {
   const glyph = ok ? c.green("✓") : optional ? c.dim("○") : c.red("✖")
-  out(`  ${glyph} ${label}${note ? c.dim(`  ${note}`) : ""}\n`)
+  out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
 }
 
 /**
@@ -183,10 +192,20 @@ export function skip(label, note = "cached") {
 /**
  * A failure that has no live line of its own to settle (a transient step, or a crash
  * before any step started): the SAME one-line shape a settled ✖ uses, so every failure in
- * the CLI reads identically — `✖ <label>  <reason>` plus dim detail underneath.
+ * the CLI reads identically — `✖ <label>  · <reason>` plus dim detail underneath.
+ *
+ * The leading `·` is the same one `settled()`/`skip()` open with when nothing precedes the
+ * metadata (`✓ web  · 3.9s`, `✓ ios  · cached`). Without it this row started one column to
+ * the left of every other row's right-hand side, and a run that settled a surface and then
+ * failed it read ragged:
+ *     ✓ web  · 3.9s
+ *     ✖ web  listen EADDRINUSE: address already in use 127.0.0.1:41720
+ * A timed ✖ (`✖ ios  gradle said X · 12.0s`) keeps its reason in the content column — the
+ * `·` there already separates that content from the elapsed time, and a second one would
+ * put two dots on one row.
  */
 export function fail(label, reason, detail = []) {
-  out(`${compose(c.red("✖"), label, reason)}\n`)
+  out(`${compose(c.red("✖"), label, `· ${reason}`)}\n`)
   detailBlock(detail)
   noteFailurePrinted()
 }
@@ -326,7 +345,10 @@ export function liveWatcher({ keys = true } = {}) {
       // A pending native change outranks the idle hint — it's the one thing the dev has to
       // act on, and it stays put until they do.
       s = notice
-        ? `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("·")}  ${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
+        ? //`  · ` — two spaces before the dot, ONE after, the same as every settled row
+          //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that
+          //comes from a row hand-spacing its own separator (R31).
+          `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
         : idleLine
     }
     // Clip to the terminal width so this stays ONE physical row — a wrapped status line
@@ -755,6 +777,11 @@ export async function runLine(
     const bad = failRight(reason)
     out(`\r\x1b[2K${compose(c.red("✖"), label, bad.right, bad.keep)}\n`)
     detailBlock(why)
+    // This row IS the report (R2) — the same claim the non-TTY branch above makes, and it
+    // has to be made on BOTH paths. Only the non-TTY one did, so on a real terminal a dev
+    // server that failed to bind printed `✖ web  port 7171 …` and then, from the command's
+    // outer catch, `✖ dev  port 7171 …` with the same two fix lines under it.
+    markReported(err)
     throw err
   }
 }
