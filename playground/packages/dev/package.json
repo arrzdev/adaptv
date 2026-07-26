@@ -1,0 +1,36 @@
+{
+  "name": "@repo/dev",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#dev/*": "./*"
+  },
+  "exports": {
+    "./clear-ports": "./src/clear-ports.ts",
+    "./lan-ip": "./src/lan-ip.ts",
+    "./log-sink": "./src/log-sink.ts",
+    "./log-sink-port": "./src/log-sink-port.ts",
+    "./ports": "./src/ports.ts",
+    "./run-dev": "./src/run-dev.ts",
+    "./redirect-stripe-webhook": "./src/redirect-stripe-webhook.ts",
+    "./setup-cronjobs-locally": "./src/setup-cronjobs-locally.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@repo/env-validation": "workspace:*",
+    "@repo/shared": "workspace:*"
+  },
+  "dependencies": {
+    "@repo/env-validation": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "cron-parser": "5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "typescript": "5.9.3",
+    "vitest": "4.1.2"
+  }
+}

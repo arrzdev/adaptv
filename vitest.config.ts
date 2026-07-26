@@ -19,6 +19,11 @@ export default defineConfig({
     //adaptv end-to-end. It has its own suites (and its own vitest/playwright
     //configs), which must never be collected into the framework's gate — they
     //would fail here for reasons that say nothing about adaptv.
-    exclude: ["**/node_modules/**", "**/dist/**", ".project-zero/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      ".project-zero/**",
+      "playground/**",
+    ],
   },
 })
