@@ -23,7 +23,9 @@
 //
 // Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
-// the local `cap` / `capacitor-assets` binaries directly, so it works from a bare shell.
+// `cap` through adaptv's own shim, so it works from a bare shell. Launcher icons are
+// rendered in-process from the app's icon set (bin/lib/icons.mjs) — no asset generator
+// for the consumer to install.
 import { spawn, spawnSync } from "node:child_process"
 import {
   copyFileSync,
@@ -48,6 +50,7 @@ import {
 } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import { fingerprint, nativeFingerprint } from "./lib/fingerprint.mjs"
+import { scanIcons } from "./lib/icons.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -84,6 +87,7 @@ import {
   patchNativeIdentity,
   platformEnv,
   relaunchAndroidApp,
+  resolveIconPlan,
 } from "./lib/native.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
@@ -110,7 +114,7 @@ import {
   wasReported,
 } from "./lib/render.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
-import { errorTail, gradleCause } from "./lib/tool-log.mjs"
+import { errorTail, gradleCause, portInUse } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
 //the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
@@ -232,11 +236,14 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
  */
 function explainFailure(label) {
   return (err) => {
-    const known = explainLaunchFailure(
-      label,
-      `${err?.message ?? ""}\n${err?.tail ?? ""}`,
-    )
+    const text = `${err?.message ?? ""}\n${err?.tail ?? ""}`
+    const known = explainLaunchFailure(label, text)
     if (known) return { reason: known.msg, detail: known.fix }
+    // A taken port is not a build error and its tail explains nothing: the useful lines are
+    // a Node stack, and the one line that matters (`EADDRINUSE … :41720`) names a port the
+    // dev never chose. Same sentence wherever it surfaces — a build, or the server itself.
+    const busy = portInUse(text)
+    if (busy) return { reason: busy.msg, detail: busy.fix }
 
     const lines = String(err?.tail ?? "")
       .split("\n")
@@ -567,12 +574,24 @@ async function runLive(appRoot, platforms, opts) {
       await setCapacitorConfigEnv(config)
       // cap sync copies the web bundle even though the WebView loads from the dev
       // server, so make sure one exists (content is irrelevant here).
+      // The bundle is a SUB-ACTION of getting the app onto the device, not a step of its
+      // own: it renders live under the SAME `web` label the dev server settles under, and
+      // is erased rather than settled (R1 — one settled line per surface). It used to
+      // settle as `✓ web bundle (first run)`, so a first `dev ios` printed two different
+      // names for the one web surface.
       if (!existsSync(path.join(appRoot, CAP_WEB_DIR, "index.html"))) {
-        await runLine(
-          "web bundle (first run)",
-          (r) => buildWeb(appRoot, { report: r }),
-          { verbose },
-        )
+        try {
+          await runLine("web", (r) => buildWeb(appRoot, { report: r }), {
+            verbose,
+            transient: true,
+          })
+        } catch (err) {
+          // A transient row is erased, so the caller owns the ✖ (and `fail` marks it
+          // reported, keeping the outer catch from printing a second one).
+          const { reason, detail } = explainFailure("web")(err)
+          fail("web", reason, detail)
+          throw err
+        }
       }
       // prepare native projects (must exist before device listing + sync).
       const prepareOne = async (platform, report) => {
@@ -583,9 +602,10 @@ async function runLive(appRoot, platforms, opts) {
         const res = await generateAssets(appRoot, config, [platform], {
           report,
         })
-        //NOT platform-prefixed: an icon/splash source is an app-level fact, identical for
-        //every platform. Prefixing it made `all` print the same sentence once per
-        //platform, as if two different things were wrong.
+        //Deduped by `flushNotices`, not here: a missing icon DIRECTORY is one app-level
+        //fact and must not print once per platform (it did, and read as two separate
+        //problems). A source that is too SMALL is genuinely per-platform — iOS needs
+        //1024px where Android is happy at 432 — so that one names its platform.
         warnings.push(...res.warnings)
         prepared.add(platform)
       }
@@ -698,7 +718,10 @@ async function runLive(appRoot, platforms, opts) {
         //no detail: the addresses are rendered as their own aligned block under this row.
         return ""
       },
-      { verbose },
+      // The dev server gets the same failure vocabulary as every other line: a taken port
+      // reads as `port 41710 is already in use` with the fix underneath, instead of one
+      // three-sentence message clipped to the terminal width (R15).
+      { verbose, explain: explainFailure("web") },
     )
     addresses({
       local: devServer.localUrl,
@@ -750,13 +773,9 @@ async function runLive(appRoot, platforms, opts) {
     const url = external
       ? `http://${lanHost}:${port}`
       : `http://localhost:${port}`
-    // The dev-server line shows localhost (the binding); a physical device actually loads
-    // over the LAN, so surface that address once — it's the only place it appears now.
+    // The `addresses()` block under the web row already lists local + network; this says
+    // WHICH of them the device will load, and only when that's the non-obvious one (external).
     if (external) log.info(`device loads from ${c.bold(url)}`)
-    // Vite reports a Network address only when it actually bound one (external mode). Show
-    // it when it exists and stay silent otherwise — printing an address that nothing serves
-    // is the same lie as offering a key that does nothing.
-    if (devServer?.networkUrl) detail(`network  ${devServer.networkUrl}`)
     // Record the bound port + url in the lock, so a second `dev` (or a `preview`/`build`)
     // can name exactly what's holding the port in its refusal message.
     updateDevLock(appRoot, { port, url })
@@ -1050,7 +1069,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // kind is "preview" (static build → install → launch) or "build" (produce artifacts).
   const verb = kind
   const single = platforms.length === 1
-  header(`${verb} ${single ? platforms[0] : "all"}`)
+  // `embedded` = this is one part of a larger command (`preview all`, which serves the web
+  // surface around it), so the banner and the closing gap belong to that command, not here.
+  const embedded = !!opts.embedded
+  if (!embedded) header(`${verb} ${single ? platforms[0] : "all"}`)
 
   // A live `dev` run owns capacitor.config.json (its server.url etc.); regenerating it
   // here would break that run. Refuse until it's stopped.
@@ -1092,7 +1114,21 @@ async function pipeline(kind, appRoot, platforms, opts) {
     if (failed) {
       footer(`${hint} ${c.dim(`· ${since(t0)}`)}`)
       process.exitCode = 1
-    } else spacer()
+    } else if (!embedded) spacer()
+    return { ran: true, ok: !failed }
+  }
+
+  // The command gave up before the lanes ran — the shared web bundle didn't build, or no
+  // platform could be prepared. There is exactly ONE thing that went wrong and its ✖ is
+  // already on screen, so there is no verdict left to state: a closing
+  // `nothing was rebuilt or launched · 3s` under a `✖ web …` is the same fact a second
+  // time (R18/R30). Just the blank line, and `false` so the caller stops instead of
+  // handing the terminal to a watcher for work that never started.
+  const abort = () => {
+    flushWarnings()
+    process.exitCode = 1
+    spacer()
+    return { ran: false, ok: false }
   }
 
   // build fingerprint cache — skip the web build + sync when nothing that affects the
@@ -1109,15 +1145,20 @@ async function pipeline(kind, appRoot, platforms, opts) {
   //    warnings from prepare stay the first thing under the header, not a cache line on top.
   if (opts.force || !distReady || buildCache.web !== fp) {
     try {
-      await runLine("web build", (r) => buildWeb(appRoot, { report: r }), {
+      // Transient, under the plain `web` label: this bundle is what the native targets
+      // install, a sub-action of theirs rather than a step the dev asked for — and in
+      // `preview all` the served web surface settles its own `web` line afterwards, so a
+      // settled one here would print the same name twice for two different things.
+      await runLine("web", (r) => buildWeb(appRoot, { report: r }), {
         verbose,
-        explain: explainFailure("web build"),
+        transient: true,
       })
-    } catch {
-      // the ✖ web build line already states why; the footer just says nothing shipped.
-      return finish(
-        c.red("✖ web build failed — nothing was rebuilt or launched"),
-      )
+    } catch (err) {
+      // The erased row owns no ✖, so this ONE line carries the whole failure — and it is
+      // also the whole command, because nothing downstream can run without this bundle.
+      const { reason, detail } = explainFailure("web")(err)
+      fail("web", reason, detail)
+      return abort()
     }
     // re-fingerprint after the build (it stamps a few files) and remember it.
     fp = fingerprint(appRoot)
@@ -1125,6 +1166,12 @@ async function pipeline(kind, appRoot, platforms, opts) {
     buildCache.sync = {} // a new bundle invalidates every platform's sync
     writeBuildState(appRoot, buildCache)
   }
+
+  // The last vite BUILD of the command is done (or was cached away), so it is now safe for
+  // the caller to start serving: `preview all` hangs its web server here rather than before
+  // the pipeline, because two vite processes on one app collide on any port that app's
+  // config pins — see R32 and `buildWebPreview`. Nothing below this point runs vite.
+  await opts.onBundleReady?.()
 
   // 2. prepare native projects — must precede device listing (`cap run --list`
   //    refuses until the platform exists) and sync.
@@ -1144,9 +1191,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     const res = await generateAssets(appRoot, config, [platform], {
       report,
     })
-    //NOT platform-prefixed: an icon/splash source is an app-level fact, identical for
-    //every platform. Prefixing it made `all` print the same sentence once per
-    //platform, as if two different things were wrong.
+    //Deduped by `flushNotices`, not here: a missing icon DIRECTORY is one app-level
+    //fact and must not print once per platform (it did, and read as two separate
+    //problems). A source that is too SMALL is genuinely per-platform — iOS needs
+    //1024px where Android is happy at 432 — so that one names its platform.
     warnings.push(...res.warnings)
     // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run
     // killed without teardown can leave an ATS exception in it. Strip ours before it
@@ -1154,11 +1202,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     if (platform === "ios") {
       const ats = healDevAtsLeftover(appRoot)
       if (ats.healed) {
-        // A note, NOT a warning: this is adaptv's own leftover and adaptv just removed it.
-        // Nothing is wrong and there is nothing for the dev to do, so it doesn't get a `!`.
-        warnings.push({
-          note: "ios: cleaned up a dev ATS exception left by an interrupted `adaptv dev`.",
-        })
+        // SILENT (R4/R8): adaptv added this exception, adaptv just removed it, and the
+        // plist is back where it should be. There is nothing for the dev to know or do, so
+        // it is not printed — the alternative was a glyphless line, and a notice with no
+        // `!` is not a lower severity, it is a line that shouldn't have been printed.
       } else if (ats.warn) {
         warnings.push(
           "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
@@ -1198,9 +1245,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()
 
+  // Every platform already settled its own `✖ ios  native project — …`, so a footer here
+  // would be a second glyph for failures the dev has just read.
   const ready = platforms.filter((p) => prepared.has(p))
-  if (ready.length === 0)
-    return finish(c.red("✖ could not prepare any platform"))
+  if (ready.length === 0) return abort()
 
   // 3. resolve device targets (run only) — sequential prompts, up front, so the
   //    parallel launch phase never has two pickers competing for the terminal.
@@ -1357,7 +1405,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // all-green phrase. Failure stays red.
   // Which platform failed and why is already on that platform's own line, so the footer
   // states only the command's outcome — `✖ build failed`, not a second inventory of it.
-  finish(
+  return finish(
     ok
       ? `${c.green("✓")} ${c.bold(kind === "preview" ? "launched" : "artifacts ready")}`
       : c.red(`✖ ${verb} failed`),
@@ -1521,10 +1569,18 @@ async function doctor(appRoot) {
     "",
     { optional: true },
   )
+  //Best-effort config read: `doctor` reports on the toolchain and must still be useful when
+  //the app's config is the thing that's broken, so a failed load just falls back to the
+  //default icon dir rather than taking the report down with it.
+  let iconsDir = "./public/favicons"
+  try {
+    iconsDir = resolveIconPlan(await loadConfig(appRoot)).dir
+  } catch {}
+  const icons = scanIcons(path.resolve(appRoot, iconsDir))
   check(
-    existsSync(path.join(appRoot, "assets/logo.png")),
-    "assets/logo.png (launcher-icon source)",
-    "",
+    icons.length > 0,
+    `${iconsDir} (launcher-icon source)`,
+    icons.length > 0 ? `${icons.length} icons` : "",
     { optional: true },
   )
   await runProjectChecks(appRoot)
@@ -1602,51 +1658,92 @@ function targetsFor(arg) {
  * same adaptv plugin pipeline — SSR/SPA choice, manifest, service worker — that a deploy does.
  * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (LIFECYCLE §0, L14).
  */
-/**
- * `preview web` — the real web build, served the way a user gets it, held until Ctrl-C.
- *
- * ONE line for the target (R1): the build and the server both render on it and vanish, and it
- * settles into the address block. It used to print `✓ web build` + `✓ server <url>` and then
- * hand-roll its own `ctrl-c stop` — a dim, unspaced copy of the row `dev` gets from
- * `liveWatcher()`, which is exactly the drift that comes from a command drawing its own
- * output instead of asking the renderer for it.
- *
- * `header: false` when `preview all` runs this after the native targets — one banner per
- * command, not one per surface.
- */
-async function previewWeb(appRoot, opts) {
-  if (opts.header !== false) header("preview web")
-  const verbose = !!opts.verbose
-  const viteBin = localBin(appRoot, "vite")
-  const spawnVite = (args, extra) =>
-    viteBin
-      ? [viteBin, args, extra]
-      : ["npx", ["--yes", "vite", ...args], extra]
+/** `[command, args]` for a vite invocation, preferring the app's own binary. */
+function viteCommand(appRoot, args) {
+  const bin = localBin(appRoot, "vite")
+  return bin ? [bin, args] : ["npx", ["--yes", "vite", ...args]]
+}
 
+/**
+ * Build the web-lineage bundle that `preview` serves. Returns how long it took, for the
+ * server's line to bill (R1: the `web` line covers the whole story, build included).
+ *
+ * TRANSIENT under the `web` label (R28): this is the bundle the served surface needs, not a
+ * surface the dev can open, so it renders live and is erased — the ✓ belongs to the server.
+ *
+ * Split from `serveWebPreview` so that EVERY vite build in a command finishes before anything
+ * starts serving (R32). `preview all` used to serve first and then build the native bundle,
+ * which put two vite processes on the same app at once — and a vite config is free to pin
+ * ports (a `cloudflare({ inspectorPort })`, an HMR port), which the second process then can't
+ * bind. It doesn't even take a long-running server in the config to collide: TanStack's
+ * prerender step starts its own `vite preview` inside the build to crawl the routes.
+ */
+async function buildWebPreview(appRoot, opts) {
+  const verbose = !!opts.verbose
+  const startedAt = Date.now()
+  try {
+    await runLine(
+      "web",
+      async (report) => {
+        report("building app")
+        const [cmd, args] = viteCommand(appRoot, ["build"])
+        await exec(cmd, args, {
+          cwd: appRoot,
+          env: process.env,
+          onLine: (l) => report(l),
+        })
+      },
+      { verbose, transient: true },
+    )
+  } catch (err) {
+    // The erased row owns no ✖, so this ONE line carries the whole failure — same shape as
+    // the shared-bundle failure in `pipeline`, and the whole command, since there is nothing
+    // left to serve.
+    const { reason, detail } = explainFailure("web")(err)
+    fail("web", reason, detail)
+    process.exit(1)
+  }
+  return Date.now() - startedAt
+}
+
+/**
+ * Serve the built bundle, settling ONE `web` line plus its address block. `offsetMs` bills the
+ * build above to this line, so `✓ web · 4.0s` is still the whole surface's time.
+ *
+ * Split from the holding half below so `preview all` can put the web surface FIRST and still
+ * keep the terminal afterwards: start here, run the native targets, then hold. Returns the
+ * live server so the caller can hold or stop it.
+ *
+ * ONE line for the target (R1): the server renders on it and it settles into the address
+ * block. It used to print `✓ web build` + `✓ server <url>` and then hand-roll its own
+ * `ctrl-c stop` — a dim, unspaced copy of the row `dev` gets from `liveWatcher()`, which is
+ * exactly the drift that comes from a command drawing its own output instead of asking the
+ * renderer for it.
+ */
+async function serveWebPreview(appRoot, opts) {
+  const verbose = !!opts.verbose
   let child = null
   const found = { local: "", network: "" }
   try {
     await runLine(
       "web",
       async (report) => {
-        report("building app")
-        const [bcmd, bargs] = spawnVite(["build"])
-        await exec(bcmd, bargs, {
-          cwd: appRoot,
-          env: process.env,
-          onLine: (l) => report(l),
-        })
         // `vite preview` is long-running: wait for it to announce an address, then let this
         // line settle and hand the terminal to the watcher.
         report("starting server")
-        const [cmd, args] = spawnVite([
+        const [cmd, args] = viteCommand(appRoot, [
           "preview",
           ...(opts.viteArgs ?? []),
         ])
+        // detached → its own process group, so `stop()` can take down vite AND its children.
+        // `dev` has always done this (`startDevServer`); preview didn't, and a plain
+        // `child.kill()` left the workers vite spawns (cloudflare's workerd, one per run)
+        // orphaned on ppid 1, still holding the ports the next run needs.
         child = spawn(cmd, args, {
           cwd: appRoot,
           env: process.env,
           stdio: ["ignore", "pipe", "pipe"],
+          detached: true,
         })
         const seen = []
         await new Promise((resolve, reject) => {
@@ -1669,15 +1766,16 @@ async function previewWeb(appRoot, opts) {
           // output — a taken port by far the most often, which Node states as a raw
           // `EADDRINUSE … 127.0.0.1:41720`: true, and unreadable.
           child.on("close", (code) => {
-            const busy = seen.join("\n").match(/EADDRINUSE[^\n]*?:(\d+)/)
+            const raw = seen.join("\n")
             reject(
               Object.assign(
                 new Error(
-                  busy
-                    ? `port ${busy[1]} is already in use — stop what's holding it, or pick another: \`adaptv preview web -- --port <n>\``
-                    : `the preview server stopped${code ? ` (exit ${code})` : ""}`,
+                  `the preview server stopped${code ? ` (exit ${code})` : ""}`,
                 ),
-                { tail: busy ? [] : errorTail(seen, 6) },
+                // The wording of a busy port is `explainFailure`'s job, not this call
+                // site's: a build that dies on the same port has to say the same thing,
+                // and two copies of one sentence drift (R26).
+                { tail: portInUse(raw) ? raw : errorTail(seen, 6) },
               ),
             )
           })
@@ -1685,7 +1783,11 @@ async function previewWeb(appRoot, opts) {
         //the addresses are their own block under this row
         return ""
       },
-      { verbose },
+      {
+        verbose,
+        offsetMs: opts.offsetMs ?? 0,
+        explain: explainFailure("web"),
+      },
     )
   } catch {
     //`runLine` already rendered the ✖ with the reason — just stop.
@@ -1693,28 +1795,46 @@ async function previewWeb(appRoot, opts) {
   }
 
   addresses(found)
+
+  // The server outlives this function (in `preview all` the native targets build while it
+  // stays up), so the signal handlers are installed HERE — a Ctrl-C during the iOS build
+  // must not leave a `vite preview` orphaned on the port.
+  const state = { child, watcher: null }
+  const stop = () => {
+    state.watcher?.stop()
+    // The whole GROUP (`-pid`), not just vite: the workers it spawns survive a SIGINT sent
+    // to the parent alone, and a worker that outlives the run keeps holding the ports the
+    // next one needs. Fall back to the direct child if the group is already gone.
+    try {
+      process.kill(-state.child.pid, "SIGINT")
+    } catch {
+      try {
+        state.child?.kill("SIGINT")
+      } catch {}
+    }
+  }
+  // Exit with whatever the command decided, not a blanket 0: in `preview all` a native
+  // target that failed has already set `exitCode`, and Ctrl-C on the still-running web
+  // server must not report the whole command as a success.
+  const quit = () => {
+    stop()
+    process.exit(process.exitCode ?? 0)
+  }
+  process.on("SIGINT", quit)
+  process.on("SIGTERM", quit)
+  state.stop = stop
+  return state
+}
+
+/** Hand the terminal to the watcher and hold the preview server until Ctrl-C. */
+async function holdWebPreview(state) {
   spacer()
   //The SAME watcher row `dev` uses — bold key, its own line — rather than a second copy of
   //the idea. `keys: false` because there is nothing to reload or rebuild from here (R17).
-  const watcher = liveWatcher({ keys: false })
-
-  const stop = () => {
-    watcher.stop()
-    try {
-      child?.kill("SIGINT")
-    } catch {}
-  }
-  process.on("SIGINT", () => {
-    stop()
-    process.exit(0)
-  })
-  process.on("SIGTERM", () => {
-    stop()
-    process.exit(0)
-  })
+  state.watcher = liveWatcher({ keys: false })
   await new Promise((resolve) => {
-    child?.on("close", (code) => {
-      stop()
+    state.child?.on("close", (code) => {
+      state.stop()
       if (code && code !== 0) {
         fail("web", `preview server exited with code ${code}`)
         process.exit(1)
@@ -1722,6 +1842,17 @@ async function previewWeb(appRoot, opts) {
       resolve()
     })
   })
+}
+
+/**
+ * `adaptv preview web` — the app's real web build, served locally, held until Ctrl-C.
+ */
+async function previewWeb(appRoot, opts) {
+  header("preview web")
+  const offsetMs = await buildWebPreview(appRoot, opts)
+  return holdWebPreview(
+    await serveWebPreview(appRoot, { ...opts, offsetMs }),
+  )
 }
 
 async function main() {
@@ -1776,10 +1907,9 @@ async function main() {
           "--target can't be used with `preview all` (it's per-platform). Use --latest, or preview each platform.",
         )
       }
-      // `all` means every surface a user could get the app on, WEB INCLUDED — the native
-      // targets install and exit, then the web build is served and held until Ctrl-C. It
-      // used to mean "every NATIVE target", so `preview all` skipped the one surface you
-      // can look at without a device, and the command exited with nothing still running.
+      // `all` means every surface a user could get the app on, WEB INCLUDED — it used to
+      // mean "every NATIVE target", so `preview all` skipped the one surface you can look
+      // at without a device, and the command exited with nothing still running.
       const opts = {
         target: flags.target,
         latest: !!flags.latest,
@@ -1787,11 +1917,47 @@ async function main() {
         force: !!flags.force,
       }
       if (rest[0] === "all") {
-        await pipeline("preview", appRoot, platforms, opts)
-        return await previewWeb(appRoot, {
+        // WEB FIRST, then the devices. `web` is the app's own JavaScript: if the bundle is
+        // broken, it breaks here, in seconds, instead of after two native builds have run.
+        // It also keeps the three surfaces as one uninterrupted block under one banner —
+        // running it last put `web` after a blank line, reading like a separate command.
+        // The server keeps running while the native targets build; the terminal is handed
+        // over only once every surface has settled its line.
+        header("preview all")
+        // BUILD, then serve (R32). Both bundles are vite builds of the same app — the web
+        // lineage here, the capacitor one inside `pipeline` — and they must not run while a
+        // `vite preview` for that app is up: whatever the config pins (a cloudflare
+        // `inspectorPort`) is already taken, and the build dies on a port the dev never
+        // asked for. Serving is deferred to `onBundleReady`, the moment the last build is
+        // done, which still leaves `✓ web` and its addresses above the device lanes (R29).
+        const buildMs = await buildWebPreview(appRoot, {
           verbose: !!flags.verbose,
-          header: false, //one banner per command, not one per surface
         })
+        let web = null
+        const native = await pipeline("preview", appRoot, platforms, {
+          ...opts,
+          embedded: true, //one banner and one closing gap per command, not per surface
+          onBundleReady: async () => {
+            web = await serveWebPreview(appRoot, {
+              verbose: !!flags.verbose,
+              viteArgs: flags.viteArgs,
+              offsetMs: buildMs,
+            })
+          },
+        })
+        // The pipeline gave up before it launched anything (a broken bundle, no platform
+        // preparable). Holding the terminal then is a promise the run can't keep: it
+        // printed `✖ web …`, launched nothing, and still sat there offering `ctrl-c stop`
+        // as if something were live. Stop the server this command started and leave (R30).
+        // A run that DID reach the devices keeps the terminal even if a platform failed —
+        // the web surface (and whatever else launched) is up and worth using.
+        // `web` is null when it gave up BEFORE the bundle was ready (the capacitor build
+        // failed), which is now the earliest thing that can go wrong.
+        if (!native.ran) {
+          web?.stop()
+          process.exit(1)
+        }
+        return await holdWebPreview(web)
       }
       return pipeline("preview", appRoot, platforms, opts)
     }

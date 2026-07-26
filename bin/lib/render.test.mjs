@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { flushNotices, nextPhase, prettyLine } from "./render.mjs"
+import {
+  check,
+  fail,
+  flushNotices,
+  nextPhase,
+  prettyLine,
+  skip,
+} from "./render.mjs"
 
 //Built rather than written as a literal: a raw ESC inside a regex trips
 //lint/suspicious/noControlCharactersInRegex.
@@ -23,27 +30,28 @@ function captureOut(fn) {
 afterEach(() => vi.restoreAllMocks())
 
 describe("flushNotices — severity and repetition", () => {
-  it("gives a `!` only to notices the dev must act on", () => {
-    //R5: a string is a real warning; `{ note }` is something adaptv already handled,
-    //so it informs without implying anything is wrong.
+  it("gives every notice the `!` — there is no glyphless severity", () => {
+    //R5: a line the CLI meant to say carries the mark. A notice with no glyph read as
+    //stray output and left the dev deciding whether an unmarked sentence was a problem;
+    //anything that doesn't earn a `!` isn't printed at all (R4).
     const out = captureOut(() =>
       flushNotices([
-        "logo.png is present but @capacitor/assets is not installed",
+        "ios launcher icon upscaled from 512px — add a 1024px icon",
         {
-          note: "no ./assets/logo.png — using the launcher icons already there",
+          note: "no icons in ./public/favicons — add one to brand the launcher icon",
         },
       ]),
     )
     expect(out[0]).toContain("!")
-    expect(out[1]).not.toContain("!")
-    expect(out[1]).toContain("no ./assets/logo.png")
+    expect(out[1]).toContain("!")
+    expect(out[1]).toContain("no icons in ./public/favicons")
   })
 
   it("prints an app-level fact once, not once per platform", () => {
     //Regression: asset config is discovered per platform, so `build all` printed the
     //same sentence twice — reading as two separate problems when it is one.
     const same = {
-      note: "no ./assets/logo.png — using the launcher icons already there",
+      note: "no icons in ./public/favicons — add one to brand the launcher icon",
     }
     const out = captureOut(() => flushNotices([{ ...same }, { ...same }]))
     expect(out).toHaveLength(1)
@@ -68,6 +76,41 @@ describe("flushNotices — severity and repetition", () => {
     captureOut(() => flushNotices(notices))
     expect(notices).toHaveLength(0)
     expect(captureOut(() => flushNotices(notices))).toHaveLength(0)
+  })
+})
+
+describe("fail — the timeless ✖ opens with the same `·` every other row does", () => {
+  it("puts a `·` between the label and the reason", () => {
+    //R25/R31: `·` introduces a row's right-hand side when nothing precedes it — the same
+    //dot `✓ web  · 3.9s` and `✓ ios  · cached` open with. Without it the ✖ started one
+    //column left of every neighbour, and settling a surface then failing it read ragged.
+    const out = captureOut(() =>
+      fail(
+        "web",
+        "listen EADDRINUSE: address already in use 127.0.0.1:41720",
+      ),
+    )
+    expect(out[0]).toMatch(
+      /✖ web {2}· listen EADDRINUSE: address already in use 127\.0\.0\.1:41720$/,
+    )
+  })
+
+  it("lines its reason up with a settled row's metadata", () => {
+    //The point of the dot is alignment: both right-hand sides must start at the same column.
+    const [ok] = captureOut(() => skip("web", "cached"))
+    const [bad] = captureOut(() => fail("web", "the bundle did not build"))
+    expect(bad.indexOf("·")).toBe(ok.indexOf("·"))
+  })
+
+  it("gives a doctor row the same dot — one CLI, not two", () => {
+    //`doctor` is the command a dev runs when something is already wrong; it must not be
+    //the one that looks like a different program (the reason it shares this glyph set).
+    const [row] = captureOut(() => check(true, "node", "v26.0.0"))
+    expect(row).toBe("  ✓ node  · v26.0.0")
+    //…and a row with nothing to report still says only its label.
+    expect(captureOut(() => check(true, "@capacitor/app"))[0]).toBe(
+      "  ✓ @capacitor/app",
+    )
   })
 })
 

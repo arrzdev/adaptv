@@ -7,6 +7,7 @@ import {
   gradleCause,
   isRawToolNoise,
   phaseLabel,
+  portInUse,
 } from "./tool-log.mjs"
 
 describe("phaseLabel — xcodebuild", () => {
@@ -253,5 +254,28 @@ describe("gradleCause — the deepest link in gradle's chain", () => {
         "** BUILD FAILED **",
       ]),
     ).toBe(null)
+  })
+})
+
+describe("portInUse — one sentence for a port, whoever says it", () => {
+  it("reads Node's raw EADDRINUSE, taking the port and not an IP octet", () => {
+    //What a vite BUILD dies with when a plugin's pinned port is taken — the whole reason
+    //`preview all` ever printed `✖ web  listen EADDRINUSE … 127.0.0.1:41720` (R32).
+    const found = portInUse(
+      "Error: listen EADDRINUSE: address already in use 127.0.0.1:41720",
+    )
+    expect(found?.msg).toBe("port 41720 is already in use")
+    expect(found?.fix.join(" ")).toContain("lsof -nP -iTCP:41720")
+  })
+
+  it("reads vite's own sentence, which never says EADDRINUSE", () => {
+    //`dev` runs vite with `--strictPort`, and that path reports in prose instead.
+    expect(portInUse("Error: Port 7171 is already in use")?.msg).toBe(
+      "port 7171 is already in use",
+    )
+  })
+
+  it("is null for anything else, so a real build error keeps its own reason", () => {
+    expect(portInUse("AppDelegate.swift:6:35: error: bad")).toBe(null)
   })
 })
