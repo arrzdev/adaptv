@@ -236,6 +236,37 @@ export function gradleCause(lines) {
 }
 
 /**
+ * A taken port, in the dev's terms. Node states it as `listen EADDRINUSE: address already in
+ * use 127.0.0.1:41720` — true, and unreadable — and it is by far the most common way both a
+ * `vite preview` and a `vite build` die.
+ *
+ * The `--port` flag is deliberately NOT the fix here: the port that collides is usually not
+ * vite's own. A vite config can pin ports for the things it starts (a cloudflare
+ * `inspectorPort`, an HMR socket), and any second vite process for that app — a running
+ * `dev`, or a build whose prerender step brings up its own server — hits them. So the fix
+ * that always applies is to find the process holding it, which is also the one thing the raw
+ * message doesn't help with.
+ *
+ * Returns `{ msg, fix }` like `explainLaunchFailure`, or null when the text isn't about a port.
+ */
+export function portInUse(text) {
+  // Two wordings for one fact: Node's raw `EADDRINUSE … 127.0.0.1:41720` (greedy to the LAST
+  // colon, so the port is captured and not an IP octet), and vite's own sentence under
+  // `--strictPort`, which never says EADDRINUSE at all.
+  const busy =
+    String(text).match(/EADDRINUSE[^\n]*?:(\d{2,5})\b/i) ??
+    String(text).match(/\bPort (\d{2,5}) is already in use/i)
+  if (!busy) return null
+  return {
+    msg: `port ${busy[1]} is already in use`,
+    fix: [
+      "Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.",
+      `\`lsof -nP -iTCP:${busy[1]} -sTCP:LISTEN\` names it — stop that, then run again.`,
+    ],
+  }
+}
+
+/**
  * The lines of a captured stream worth showing after a failure, newest last, capped at
  * `limit`. Falls back to the raw tail when nothing matched — an empty failure report is
  * worse than an irrelevant one.

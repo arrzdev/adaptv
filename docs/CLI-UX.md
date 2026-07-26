@@ -41,6 +41,17 @@ build, install, launch. Not a `prepare ios` line and then an `ios` line. Sub-act
 
 **R2 — One glyph per outcome.** A failure gets exactly one `✖`. Never settle a lane with `✖ ios`
 and then print `✖ ios failed — …` underneath.
+> Also violated by a row that renders its own ✖ without SAYING so. `wasReported(err)` is how a
+> command's outer catch knows to stay quiet, and `runLine` only marked it on the non-TTY path —
+> so in a real terminal one failure printed twice, under two labels, with the same fix under
+> each:
+> ```
+> ✖ web  port 7171 is already in use · 3.1s
+>     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+> ✖ dev  port 7171 is already in use
+>     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+> ```
+> Whichever branch draws the ✖ owns the report, on every path it can take.
 
 **R3 — Never interleave platforms.** In an `all` run, a platform's failure detail must sit with
 its own line, never after another platform's. Collect and group; don't emit as you go.
@@ -53,9 +64,9 @@ its own line, never after another platform's. Collect and group; don't emit as y
 
 **R20 — One platform is not a different rendering.** `build ios`, `build android` and
 `build all` are the same command with a different argument, so they must produce the same
-shape: shared work (the web bundle, the dev server) as its own line, then ONE line per
-platform. A single platform is a one-lane run, never a separate code path that exposes
-internals as top-level steps.
+shape: shared work rendered the same way in each (the dev server settles a line; the native
+web bundle renders transiently — R28), then ONE line per platform. A single platform is a
+one-lane run, never a separate code path that exposes internals as top-level steps.
 > Violated by all three at once:
 > ```
 > adaptv  build ios          adaptv  build android      adaptv  build all
@@ -78,9 +89,14 @@ prefixed with a platform that has nothing to do with it.
 > which is about iOS or Android. `flushNotices()` in `render.mjs` dedupes, and every command
 > shares it rather than keeping its own copy of the loop.
 >
-> That warning also broke R5: adaptv kept the existing launcher icons and carried on, so
-> there is nothing to do — it is a dim note. The `@capacitor/assets` one stays a `!`, because
-> there a `logo.png` IS present and is being silently ignored, which only the dev can fix.
+> Only the platform prefix and the repetition were wrong there — both messages keep their `!`
+> (R5): one says the launcher icon is Capacitor's stock art, the other says a `logo.png` IS
+> present and is being silently ignored. Neither is something adaptv can fix.
+>
+> The test is whether the FACT is app-level, not whether the code that found it runs per
+> platform. A missing icon directory is one fact and gets stated once; "the source is too small"
+> is genuinely per-platform (1024px iOS vs 432px Android) and *earns* its prefix — see R7b. The
+> rule is against a platform label that carries no information, not against platform labels.
 
 **R4 — A step that did nothing prints nothing.** A sub-10ms no-op must not print `✓ … 5ms`.
 Only surface a step when it genuinely took time or the dev needs to know it happened.
@@ -89,11 +105,20 @@ Only surface a step when it genuinely took time or the dev needs to know it happ
 
 ## 2. Severity
 
-**R5 — `!` (warning) means the dev may need to act.** If adaptv already handled it and there is
-nothing to do, it is a dim note with no glyph (`log.info`), not a warning.
-> Violated by: `! ios: removed a leftover dev ATS exception …` — adaptv added it, adaptv removed
-> it, nothing to do. Contrast with ATS that adaptv did *not* add: that one stays `!`, because only
-> the dev can decide about it before App Review.
+**R5 — Every notice carries the `!`. There is no glyphless severity.** The question a notice has
+to pass is not *how bad is this* but **does the dev need to know** — and if the answer is no, it
+is not printed at all (R4). Anything adaptv does say gets the mark.
+> Violated by: `no ./assets/logo.png — using the launcher icons already in the project.` printed
+> bare, with no glyph, in the middle of a `preview all`. There is no such thing as "information
+> you should know, without an icon": an unmarked sentence reads as stray output, and leaves the
+> dev working out for themselves whether it was a problem. It is also not true that adaptv
+> "handled it" — the app ships Capacitor's stock icon, which only the dev can fix.
+>
+> This *reverses* an earlier version of R5 (a glyphless `log.info` note for things adaptv had
+> already handled). What survives from it is the other half: the leftover-dev-ATS message, which
+> adaptv both added and removed, is now printed **not at all** rather than printed quietly.
+> Contrast with ATS that adaptv did *not* add: that one stays a `!`, because only the dev can
+> decide about it before App Review.
 
 **R6 — Don't announce what the next thing already says.** No preamble for an interactive prompt.
 > Violated by: `! android: no cached device yet — pick one (it'll be remembered).` immediately
@@ -102,6 +127,27 @@ nothing to do, it is a dim note with no glyph (`log.info`), not a warning.
 **R7 — Errors are terse and name the fix.** `missing \`appId\` in adaptv.config.ts` — not
 `run failed — adaptv.config.ts needs an \`appId\` for native builds.` A user error is not a crash:
 render it as a plain one-liner and exit, never wrapped in step-failure scaffolding.
+
+**R7b — A warning about the dev's ASSETS names what's wrong with the asset, never what adaptv
+would have needed.** The launcher icon is the whole worked example, and it says exactly three
+things — all of them about the art in `icons`, none of them fireable by a set that is fine:
+> ```
+> ! no icons in ./public/favicons — add one to brand the launcher icon
+> ! ios launcher icon upscaled from 512px — add a 1024px icon
+> ! android launcher icon is opaque — add one with a transparent background
+> ```
+> Violated by `./assets/logo.png needs @capacitor/assets — pnpm add -D @capacitor/assets`: a
+> `!` telling the dev to install adaptv's own image toolchain, for a Capacitor package they are
+> not supposed to know exists (R8, DECISIONS L20). adaptv owns that now; if it can't render an
+> icon that is adaptv's problem, and the line says only what the dev sees — `could not brand the
+> launcher icon on this platform`.
+>
+> The three that remain each pass the "does the dev need to know" test (R5) *and* stay silent on
+> a good set: a lone 1024px transparent `icon.png` trips none of them, because it is genuinely
+> the best source adaptv can be handed. A warning every project sees teaches devs to ignore the
+> `!`. Note also that these are NOT uniformly app-level: the missing-directory line is one fact
+> and `flushNotices` dedupes it across an `all` run, while the size bar really does differ per
+> platform (1024px iOS, 432px Android), so that one names its platform and stands alone.
 
 ---
 
@@ -171,6 +217,33 @@ does not get a new phrase invented for it, and it never passes through raw. The 
 `✓ ios  .adaptv/builds/ChopChop.ipa · 5.0s`, `· cached`. It is never used to bolt an identifier onto
 a phase — that was R22's bug wearing a separator.
 
+**R31 — Every row's right-hand side starts at the same column, so a row with nothing before its
+metadata OPENS with the `·`.** `✓ web  · 3.9s`, `✓ ios  · cached` — and a `✖` that carries no
+elapsed time does the same: `✖ web  · <reason>`. A row that DOES have content before the metadata
+keeps the dot where it belongs (`✓ ios  ChopChop.ipa · 5.0s`, `✖ android  gradle said X · 12.0s`);
+a second one would put two dots on one line.
+> Violated by `fail()`, whose reason started one column to the left of every neighbour — so a
+> surface that settled and then failed read ragged:
+> ```
+>   ✓ web  · 3.9s
+>   ✖ web  listen EADDRINUSE: address already in use 127.0.0.1:41720
+> ```
+> `settled()` and `skip()` had this right; `fail()` was the one shape that didn't, which is the
+> usual tell that one idea has two implementations (R26).
+>
+> The sweep for the rest of it found two more, both the same shape:
+> - `check()` — every `doctor` row (`✓ node  v26.0.0`, `✓ JDK  /…/jbr/Contents/Home`). `doctor`
+>   is the command a dev opens when something is *already* wrong, so it is the worst one to have
+>   looking like a different program — the same reason it was made to share this glyph set.
+> - the watcher's pending-rebuild row, which padded BOTH sides of its dot
+>   (`! main.swift changed  ·  press b to rebuild`) where every settled row pads two before and
+>   one after. A row that hand-spaces its own separator will drift from the ones that don't.
+>
+> Audited and correct as they are: the live phase row (`⠋ ios  compiling` — the phase sits in the
+> content column the artifact/reason later settles into), `addresses()` and `detail()` (indented
+> sub-blocks under a row, not rows), and the non-TTY pending marker (`  · web`), whose dot is in
+> the GLYPH column standing in for the ✓/✖ that follows, not a separator.
+
 **R12 — `--verbose` is the raw escape hatch.** It streams unfiltered tool output. Every rule in
 §3 applies to the calm path only; never "fix" noise by making `--verbose` quieter.
 
@@ -229,6 +302,29 @@ went wrong.
 > Removed: `✓ launched · 4s`, `✓ artifacts ready · 7s`, and the `✓ watching` prefix on the
 > watcher row (it is just the keys now; the spinner already says "working").
 
+**R30 — A command that gives up early prints ONE `✖` and LEAVES.** The verdict footer R18 keeps
+is for a run that reached its lanes and has more than one outcome to total up. When the command
+aborts before that — the shared web bundle didn't build, no platform could be prepared — there is
+exactly one thing that went wrong, its `✖` is already on screen, and a closing line can only say
+it again. And having given up, the command must **exit**: a run that launched nothing may not hold
+the terminal.
+> Violated by `preview all` when the bundle build failed:
+> ```
+>   ✓ web  · 3.6s
+>       local  http://localhost:41710
+>   ✖ web  listen EADDRINUSE: address already in use 127.0.0.1:41720
+>
+>   nothing was rebuilt or launched · 3s
+>
+>   ctrl-c stop
+> ```
+> Two faults from one shape. The footer restated the `✖` above it, and `pipeline()` reported
+> the abort by *returning*, so `preview all` went on to hand the terminal to the watcher —
+> offering `ctrl-c stop` for work that never started, one line under a sentence saying nothing
+> had started. The abort now returns `{ ran: false }`, the caller stops the server it started
+> and exits 1, and the output ends at the `✖`. A run that DID reach the devices still holds:
+> the web surface is up and worth using even when a platform failed.
+
 **R19 — Addresses come from the server, never from inference.** Print the network URL only when
 Vite reports one, dim under the settled line. adaptv binds the LAN only when a physical device
 needs it, so a computed `http://<lan-ip>:<port>` would often point at nothing — the same lie as
@@ -269,6 +365,77 @@ exception, for `--verbose` passthrough (R12).
 > the same name the platform lanes use, because that is what is being served. The elapsed
 > time always reads `· 2.0s` so a row whose detail moved into the block still matches its
 > neighbours.
+>
+> Also violated by the line that block REPLACED, left behind in `dev`:
+> ```
+> ✓ web  · 5.5s
+>     local    http://localhost:41710
+>     network  http://192.168.1.25:41710
+>     network  http://192.168.1.25:41710
+> ```
+> `addresses()` already printed the network row; a leftover `detail("network  …")` further
+> down the command printed it again. When a block primitive takes over a fact, DELETE the
+> old print — an address that appears twice reads as two servers.
+
+**R28 — The web surface is called `web`, everywhere, and settles exactly once.** Not
+`web build`, not `web bundle (first run)` — one surface, one name, in every command that
+touches it. A bundle built so that something *else* can ship (the `cap sync` copy in `dev`,
+the native lineage in `build`/`preview`) is a SUB-ACTION: it renders live under the same
+`web` label and is erased, never settled (R1). Only a web surface the dev can actually open
+settles a `✓ web` line.
+> Violated by: `preview web` printing `✓ web` while `preview all` printed `✓ web build` for
+> the same idea — and by `dev ios` on a first run printing `✓ web bundle (first run)` above a
+> later `✓ web` for the dev server. Three names, and in `preview all` two settled `web` rows
+> for two different things. Making the shared bundle transient is what lets the name be the
+> same in all three: there is never more than one settled `web` line to collide with.
+
+**R29 — In an `all` run, `web` goes FIRST.** The web bundle is the app's own JavaScript, so a
+broken bundle fails there in seconds instead of after two native builds; and the surfaces stay
+one uninterrupted block under one banner.
+> Violated by:
+> ```
+> adaptv · preview all
+>   no ./assets/logo.png — using the launcher icons already in the project.
+>   ✓ ios      iPad (10th generation) (simulator) · 12.9s
+>   ✓ android  Pixel 10 (emulator) · 6.4s
+>
+>   ✓ web  · 4.1s
+>       local  http://localhost:41710
+> ```
+> `web` last, and behind a blank line — the closing gap of the native run — so it read like a
+> second command that had somehow started on its own. The web server now comes up first and
+> stays up while the devices build; the terminal is handed to the watcher only once every
+> surface has settled. A command composed of two halves passes `embedded: true` to the inner
+> one so the banner and the closing gap belong to the command, not to a half of it.
+
+**R32 — Nothing starts SERVING until every build has finished.** R29 puts `web` first, and the
+obvious reading of it — start the server, then build the rest — is wrong. A command may run more
+than one vite build (`preview all` builds the web lineage and the capacitor one), and a build
+cannot run while a server for the same app is up: a vite config is free to PIN ports for what it
+starts (a `cloudflare({ inspectorPort })`, an HMR socket), and the second process cannot bind
+them. It doesn't even take a long-running server in the config — TanStack's prerender step starts
+its own `vite preview` inside the build to crawl the routes. So: build, build, *then* serve.
+> Violated by:
+> ```
+> adaptv · preview all
+>
+>   ✓ web  · 4.0s
+>     local  http://localhost:41710
+>   ✖ web  · listen EADDRINUSE: address already in use 127.0.0.1:41720
+> ```
+> Reported as "the web server appears running in 41710 correctly but this error appears wtf" —
+> which is exactly what it says. Two settled `web` rows for two different things (R28): the ✓ is
+> the server, which was fine and stayed up; the ✖ is the native bundle's build, killed by a port
+> **the dev never chose and adaptv never mentions** — it belongs to a plugin in their own
+> `vite.config.ts`, and the run above is the only thing that ever puts two vite processes on one
+> app. Ordering is the fix; `pipeline`'s `onBundleReady` hook is where the server now starts, and
+> `✓ web` still lands above the device lanes because the build row is transient either way.
+>
+> The wording is the other half. `listen EADDRINUSE: address already in use 127.0.0.1:41720` is
+> Node's sentence, not adaptv's: it names an address, a port and no action (R13). One explainer
+> (`portInUse` in `tool-log.mjs`) now says `port 41720 is already in use` for the dev server, the
+> preview server and a build alike, with what to do underneath — the dev-server copy used to
+> offer `-- --port <n>`, advice that cannot work when the busy port is a plugin's pinned one.
 
 ## 5. Before you ship a CLI change
 

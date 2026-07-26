@@ -153,18 +153,13 @@ export function startDevServer(
       )
       const errs =
         firstErr === -1 ? [] : buffer.slice(firstErr, firstErr + 20)
-      // A busy port is the common case (a second `adaptv dev`, the app's own
-      // `pnpm dev`, or a stale process). Name it plainly instead of a raw stack.
-      // greedy up to the LAST colon so we grab the port (9220), not an IP octet (127).
-      const inUse = buffer
-        .join("\n")
-        .match(/EADDRINUSE[^\n]*:(\d{2,5})\b/i)
+      // A busy port is the common case (a second `adaptv dev`, the app's own `pnpm dev`,
+      // a stale worker). It is NOT worded here: `explainFailure` says it, once, for the
+      // dev server and the preview server and a build that dies the same way — three
+      // copies of one sentence is how the ✖ for one cause ends up reading three ways
+      // (R26). The EADDRINUSE line is in the tail below, which is what it reads.
       const err = new Error(
-        inUse
-          ? `port ${inUse[1]} is already in use — another dev server is running ` +
-              "(another `adaptv dev`, the app's `pnpm dev`, or a stale process). " +
-              "Stop it, then retry. Only one adaptv dev server can run at a time."
-          : `vite dev exited (code ${code}) before it was ready`,
+        `vite dev exited (code ${code}) before it was ready`,
       )
       //an error block is kept from its START (the headline plus what follows);
       //the generic fallback still shows the tail, where a crash usually lands.
