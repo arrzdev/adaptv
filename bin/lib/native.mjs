@@ -199,6 +199,54 @@ function androidLaunchStyles(platform) {
 `
 }
 
+/*
+ * The theme the activity runs on AFTER the launch splash hands off
+ * (`postSplashScreenTheme`). Capacitor's stock version inherits AppCompat's grey
+ * `windowBackground` — `#fafafa` light, `#303030` dark — and that colour is what shows
+ * through wherever the WebView is not covering the screen. It is also literally what
+ * `SystemBars.setStyle()` paints the decor view with (`getThemeColor(windowBackground)`).
+ *
+ * So the grey is not one bug, it is the *background* of every edge-to-edge failure: the
+ * split second before first paint, an old WebView on Capacitor's inset-PADDING fallback
+ * (< WebView 140, where drawing under the bars is not attempted at all), a device the
+ * probe never fired on. Pointing it at the same theme-aware colour as the splash mask
+ * means the worst case is a band that MATCHES the app instead of a grey one — on every
+ * Android version, without depending on anything the JS layer did or didn't manage to do.
+ *
+ * The bar colours only do work below API 35 (from 35 the system owns the bars and ignores
+ * them, NATIVE-SHELL §0.0), and that is exactly where they are needed: pre-15 Android
+ * paints `colorPrimaryDark` behind the status bar otherwise. The contrast opt-outs are
+ * API 29+, so they live in `values-v29` rather than making the base theme reference an
+ * attribute half the minSdk range has never heard of.
+ */
+const ANDROID_APP_THEME_ITEMS = `        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/adaptvSplashBackground</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>`
+
+//API 29+ only: without these Android paints its own translucent scrim over a transparent
+//bar, which is the same grey band by another route.
+const ANDROID_APP_THEME_ITEMS_V29 = `${ANDROID_APP_THEME_ITEMS}
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>`
+
+function androidAppTheme(items) {
+  return `    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+${items}
+    </style>`
+}
+
+function androidAppThemeStyles(items) {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+${androidAppTheme(items)}
+</resources>
+`
+}
+
 function androidMainActivityPlain(appId) {
   return `package ${appId};
 
@@ -266,7 +314,10 @@ public class MainActivity extends BridgeActivity {
 `
 }
 
-/** Patch the Android launch theme (flat mask colour + transparent icon). */
+/**
+ * Patch the Android themes: the launch theme (flat mask colour + transparent icon) and
+ * the post-splash app theme (app-coloured window, transparent system bars).
+ */
 export function patchAndroidSplash(appRoot, mask, appId) {
   const res = path.join(nativeDir(appRoot, "android"), "app/src/main/res")
   if (!existsSync(res)) return
@@ -279,6 +330,10 @@ export function patchAndroidSplash(appRoot, mask, appId) {
   put("values/colors.xml", androidColorsXml(mask.light))
   put("values-night/colors.xml", androidColorsXml(mask.dark))
   put("values-v31/styles.xml", androidLaunchStyles(true))
+  put(
+    "values-v29/styles.xml",
+    androidAppThemeStyles(ANDROID_APP_THEME_ITEMS_V29),
+  )
   const stylesPath = path.join(res, "values/styles.xml")
   if (existsSync(stylesPath)) {
     const base = `    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
@@ -287,10 +342,17 @@ export function patchAndroidSplash(appRoot, mask, appId) {
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>`
-    const styles = readFileSync(stylesPath, "utf8").replace(
-      /[ \t]*<style name="AppTheme\.NoActionBarLaunch"[\s\S]*?<\/style>/,
-      base,
-    )
+    //`AppTheme.NoActionBar"` (with the closing quote) can't match `…NoActionBarLaunch`,
+    //so the two rewrites are independent whichever order they run in.
+    const styles = readFileSync(stylesPath, "utf8")
+      .replace(
+        /[ \t]*<style name="AppTheme\.NoActionBarLaunch"[\s\S]*?<\/style>/,
+        base,
+      )
+      .replace(
+        /[ \t]*<style name="AppTheme\.NoActionBar"[\s\S]*?<\/style>/,
+        androidAppTheme(ANDROID_APP_THEME_ITEMS),
+      )
     writeFileSync(stylesPath, styles)
   }
   const javaDir = path.join(
