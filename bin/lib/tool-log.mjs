@@ -82,6 +82,32 @@ const NOT_A_PHASE = [
   /^[^\w\s]{1,3}$/, // a lone caret/bang from a compiler diagnostic's context lines
 ]
 
+/**
+ * A node crash dump — what a tool leaves behind when it, or a server it starts, dies on an
+ * uncaught exception. A `vite build` does exactly this when a port its config pins is taken
+ * (R32): the prerender step brings up its own server, the listen throws, and node prints a
+ * stack sandwich ending in its own version.
+ *
+ * That last line is the leak. `Node.js v26.0.0` is short, path-free, prose-shaped text, so it
+ * passed every other filter and BECAME the phase — the whole dump narrowed to the one line
+ * that says least:
+ *
+ *     ⠴ web  node.js v26.0.0
+ *
+ * The rest of the dump only ever failed those filters by accident — a bracket in one stack
+ * frame, a colon in the message, a length that happened to run long — so name the SHAPE
+ * rather than trusting punctuation to keep holding. None of it is a phase (R24, R33): the
+ * row keeps its last real phase and the step fails a beat later with the reason `fail()`
+ * renders (`port 41740 is already in use`).
+ */
+const CRASH_DUMP = [
+  /^Node\.js v\d/, // the version footer, printed last after any uncaught throw
+  /^node:[\w./-]+:\d+$/, // `node:events:487` — where it threw, printed first
+  /^\s*at\s+\S.*(?:\(|\bnode:|:\d+:\d+)/, // a V8 stack frame
+  /^\s*throw\s/, // `throw er; // Unhandled 'error' event`
+  /^Emitted '[^']*' event on\b/, // the banner between the two stacks
+]
+
 // The live line is a SENTENCE about what's happening. Anything carrying source-code or
 // data-structure punctuation is a compiler diagnostic's context lines, a serialised build
 // setting, or a shelled-out command — none of which describe a phase, and all of which
@@ -161,6 +187,9 @@ export function phaseLabel(raw) {
   // xcodebuild's own banners ("** BUILD SUCCEEDED **") restate what the ✓/✖ already says.
   if (/^\*{2}.*\*{2}$/.test(line)) return ""
   if (NOT_A_PHASE.some((re) => re.test(line))) return ""
+  // A dying process is not a phase — and its tail line looks more like one than the rest of
+  // the dump does, which is exactly why it was the piece that got through.
+  if (CRASH_DUMP.some((re) => re.test(line))) return ""
   return null
 }
 
