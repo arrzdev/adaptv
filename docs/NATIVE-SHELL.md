@@ -69,6 +69,40 @@ relies on native `env()`), configurable via `insetsHandling: "css" | "disable"`.
 they disagree with `env(safe-area-inset-*)` by up to 1px; and **`--safe-area-inset-bottom` is forced to
 `0` whenever the IME is visible** — the variable is not a stable geometric fact.
 
+### ⚠︎ 0.1 The `viewport-fit=cover` probe is one-shot, and a framework loses that race (2026-07-27)
+
+`SystemBars` decides **once per process** whether the page opted into drawing under the bars: from a
+`DOMContentLoaded` listener it calls `onDOMReady()`, which reads the **last** `meta[name=viewport]` and
+looks for the literal string `viewport-fit=cover`. The answer (`hasViewportCover`) gates
+`shouldPassthroughInsets`, and **nothing re-checks it** — not a rotation, not `onPageCommitVisible`, not
+a new inset dispatch.
+
+A static `index.html` never loses that race. A framework that manages `<head>` on the client does: the
+router replaces the viewport tag during boot, and a probe landing in the gap reads "no cover".
+
+**The fallback it then picks is the bug users see.** With no cover, SystemBars pads the WebView's parent
+by the system-bar insets *natively* and injects `--safe-area-inset-*` as **`0`** (deliberately — the
+WebView is no longer drawing under anything). The app is not edge-to-edge, and the strip it stopped
+covering shows the window background: Capacitor's stock `AppTheme.NoActionBar` inherits AppCompat's
+`#fafafa`/`#303030`, so it reads as **a solid grey status-bar band**.
+
+Measured, Pixel emulator API 37 / WebView 149, `adaptv preview android`: `innerHeight` 845 of 923,
+`--safe-area-inset-top: 0px`, and rotating the device did **not** recover it (proving the flag, not the
+inset pass, was stale). Calling `window.CapacitorSystemBarsAndroidInterface.onDOMReady()` by hand
+flipped it to 923 / `54px` immediately.
+
+**Two fixes, at two layers, because the failure has two halves:**
+
+1. `capabilities/status-bar.ts` re-runs `onDOMReady()` — Capacitor's own entry point, so idempotent —
+   and then *watches the result*, re-probing on any frame where the injected variable is missing, for
+   the first 2s of boot. Watching beats a fixed delay because there are two independent races: the
+   probe can run before the head settles, **and** a pass that landed can have its properties wiped
+   afterwards by the router's `<html>` reconcile (the same one `applyPlatformStamp` already undoes).
+2. `bin/lib/native.mjs` points the app theme's `windowBackground` at the theme-aware splash-mask
+   colour, and makes the pre-API-35 bars transparent with the API-29+ contrast scrims off. The grey is
+   then unreachable *by construction* on every Android version — including WebView < 140, where
+   Capacitor never attempts passthrough at all and the padded fallback is permanent.
+
 ### 🔒 Revised decision: layer on `SystemBars`, do not replace it
 
 The original plan — "phase 1 owns edge-to-edge + inset/IME reporting" — would mean **a second
