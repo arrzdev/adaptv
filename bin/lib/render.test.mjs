@@ -198,6 +198,34 @@ describe("prettyLine — the vocabulary is closed (R24)", () => {
     expect(prettyLine("2576 modules transformed.")).toBe("")
   })
 
+  it("drops every line of a crash dump (R33)", () => {
+    //`adaptv build android` with the port ports.ts pins already taken. Only the last line
+    //ever reached the row (`⠴ web  node.js v26.0.0`); assert the WHOLE dump renders nothing,
+    //so no future reshuffle of these filters lets a different line of it through.
+    const dump = `node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:41740
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on WebSocketServer instance at:
+    at Server.emit (node:events:521:24)
+    at Server.emit (node:domain:473:12)
+    at emitErrorNT (node:net:2044:8) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 41740
+}
+
+Node.js v26.0.0`
+    for (const line of dump.split("\n")) expect(prettyLine(line)).toBe("")
+  })
+
   it("keeps a line that already reads like a phase", () => {
     expect(prettyLine("rendering chunks...")).toBe("rendering chunks")
     expect(prettyLine("computing gzip size...")).toBe(
