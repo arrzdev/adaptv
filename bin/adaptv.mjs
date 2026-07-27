@@ -91,6 +91,7 @@ import {
 } from "./lib/native.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
+import { inspect as inspectApp } from "./lib/preflight.mjs"
 import {
   addresses,
   c,
@@ -158,6 +159,50 @@ async function loadConfig(appRoot) {
   if (!config?.appId) {
     throw new Error("missing `appId` in adaptv.config.ts")
   }
+  return config
+}
+
+/**
+ * What every command does before it does anything: read the config, check what adaptv can
+ * check without doing work, and say it — under the banner, above the first step (R33).
+ *
+ * Returns the loaded config, so no command pays for a second esbuild bundle of it.
+ *
+ * The ordering is the whole point. A launcher-icon `!` is about source art the run does not
+ * touch, so printing it between the web bundle and the device lanes told the dev, halfway
+ * through a build, something that was true before it started; and a config value adaptv
+ * cannot use must stop the command, not survive into a native build that fails on it minutes
+ * later. Anything that can only be known by doing the work (a compile error, a device that
+ * won't boot) still belongs to the step that finds it.
+ *
+ * `optional` is the web-only commands: `dev web` / `preview web` run an app that has no
+ * adaptv.config.ts at all, so a missing one is not an error there — but a config that IS
+ * there is still checked before the server comes up, because the same values reach the
+ * manifest and the shell.
+ */
+async function preflight(appRoot, platforms, { optional = false } = {}) {
+  if (optional && !existsSync(path.join(appRoot, "adaptv.config.ts")))
+    return null
+  let config
+  try {
+    config = await loadConfig(appRoot)
+  } catch (err) {
+    // A config problem is a plain user error — clean one-liner, not a "run failed" report (R7).
+    log.error(err.message)
+    spacer()
+    process.exit(1)
+  }
+  const { errors, warnings } = await inspectApp(appRoot, config, platforms)
+  if (errors.length > 0) {
+    //Every one of them, not just the first: they are all already known, and fixing a config
+    //one line per run is a worse experience than reading the list. Each names its key in
+    //backticks and stays on one row (R10) — the file is not repeated per line because every
+    //key here is one the dev wrote in adaptv.config.ts.
+    for (const e of errors) log.error(e)
+    spacer()
+    process.exit(1)
+  }
+  flushNotices(warnings)
   return config
 }
 
@@ -547,21 +592,12 @@ async function runLive(appRoot, platforms, opts) {
     process.exit(1)
   }
 
-  // A config problem (missing file / no appId) is a plain user error — show it as a clean
-  // one-liner and stop, exactly like the dev-lock check above, not a "run failed" step
-  // report. `dev web` needs no config.
-  let config = null
-  if (!webOnly) {
-    try {
-      config = await loadConfig(appRoot)
-    } catch (err) {
-      log.error(err.message)
-      process.exit(1)
-    }
-  }
+  // Config + assets, checked and reported before the dev server or any native project is
+  // touched (R33). `dev web` runs without an adaptv.config.ts, so there it checks one only
+  // if the app has one.
+  const config = await preflight(appRoot, platforms, { optional: webOnly })
 
   try {
-    const warnings = []
     const prepared = new Set()
     // Per-platform scaffolding time, billed to that platform's launch line further down
     // (it runs before the line exists — see the prepare loop). Declared out here because
@@ -599,14 +635,10 @@ async function runLive(appRoot, platforms, opts) {
           report,
           plugins: config?.plugins,
         })
-        const res = await generateAssets(appRoot, config, [platform], {
-          report,
-        })
-        //Deduped by `flushNotices`, not here: a missing icon DIRECTORY is one app-level
-        //fact and must not print once per platform (it did, and read as two separate
-        //problems). A source that is too SMALL is genuinely per-platform — iOS needs
-        //1024px where Android is happy at 432 — so that one names its platform.
-        warnings.push(...res.warnings)
+        //Silent about the icon set: `preflight` already read the same art and said whatever
+        //there was to say, above the run. Repeating it here would be the same fact twice
+        //(R18), the second time under a step that only wrote files from it.
+        await generateAssets(appRoot, config, [platform], { report })
         prepared.add(platform)
       }
       // Scaffolding the native project has to happen HERE, before the device picker: the
@@ -638,7 +670,6 @@ async function runLive(appRoot, platforms, opts) {
         }
         prepareMs[platform] = Date.now() - t0
       }
-      flushNotices(warnings)
     }
 
     const ready = platforms.filter((p) => prepared.has(p))
@@ -1079,14 +1110,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   assertNoActiveDevLock(appRoot, kind)
 
   const t0 = Date.now()
-  // A config problem is a plain user error — clean one-liner, not a "run failed" report.
-  let config
-  try {
-    config = await loadConfig(appRoot)
-  } catch (err) {
-    log.error(err.message)
-    process.exit(1)
-  }
+  // Config + assets, before the first byte of work (R33). `preview all` preflighted for the
+  // whole command — including the web surface it builds ahead of this — and hands the config
+  // down rather than having it read, checked and reported a second time.
+  const config = opts.config ?? (await preflight(appRoot, platforms))
   // Fresh capacitor.config.json FIRST — a release build must never inherit dev fields
   // (`server.url` etc.) left by a `dev` run that was killed before it could revert.
   await setCapacitorConfigEnv(config)
@@ -1188,14 +1215,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     patchNativeIdentity(appRoot, config, platform, {
       dev: kind === "preview",
     })
-    const res = await generateAssets(appRoot, config, [platform], {
-      report,
-    })
-    //Deduped by `flushNotices`, not here: a missing icon DIRECTORY is one app-level
-    //fact and must not print once per platform (it did, and read as two separate
-    //problems). A source that is too SMALL is genuinely per-platform — iOS needs
-    //1024px where Android is happy at 432 — so that one names its platform.
-    warnings.push(...res.warnings)
+    //Silent about the icon set: `preflight` already read the same art and said whatever
+    //there was to say, above the run (R33). What stays here is the ATS leftover, which can
+    //only be known by opening the native project this step just prepared.
+    await generateAssets(appRoot, config, [platform], { report })
     // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run
     // killed without teardown can leave an ATS exception in it. Strip ours before it
     // gets packaged; only warn about one we didn't add.
@@ -1849,6 +1872,9 @@ async function holdWebPreview(state) {
  */
 async function previewWeb(appRoot, opts) {
   header("preview web")
+  // Before the build, not after it fails inside vite (R33). No platforms — the launcher-icon
+  // warnings are about art only a native build uses, and there is nothing native here.
+  await preflight(appRoot, [], { optional: true })
   const offsetMs = await buildWebPreview(appRoot, opts)
   return holdWebPreview(
     await serveWebPreview(appRoot, { ...opts, offsetMs }),
@@ -1924,6 +1950,11 @@ async function main() {
         // The server keeps running while the native targets build; the terminal is handed
         // over only once every surface has settled its line.
         header("preview all")
+        // Before the first vite build, not inside `pipeline` after it: the web bundle is
+        // work, and nothing this command already knows may be reported from underneath work
+        // it went on to do anyway (R33). The config travels down so the native half doesn't
+        // read and check it a second time.
+        const config = await preflight(appRoot, platforms)
         // BUILD, then serve (R32). Both bundles are vite builds of the same app — the web
         // lineage here, the capacitor one inside `pipeline` — and they must not run while a
         // `vite preview` for that app is up: whatever the config pins (a cloudflare
@@ -1936,6 +1967,7 @@ async function main() {
         let web = null
         const native = await pipeline("preview", appRoot, platforms, {
           ...opts,
+          config,
           embedded: true, //one banner and one closing gap per command, not per surface
           onBundleReady: async () => {
             web = await serveWebPreview(appRoot, {
