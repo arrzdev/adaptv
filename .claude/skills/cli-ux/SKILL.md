@@ -46,7 +46,8 @@ implementations and they drifted.
 never `compiling · CapacitorSplashScreen` or `gradle · parseDebugLocalResources`. No target,
 task, or pod names; no camelCase identifiers. The vocabulary is CLOSED (`preparing build`,
 `compiling`, `linking`, `processing resources`, `packaging`, … — full list in `docs/CLI-UX.md`
-R24); map a new tool verb into it rather than inventing a phrase or passing one through. The row
+R24); map a new tool verb into it rather than inventing a phrase or passing one through. A tool
+that CRASHES says nothing at all — a dump's stack and version footer are not phases (R33). The row
 also SAMPLES the stream instead of following it (`nextPhase()`), so a phase holds for a beat
 before another replaces it — subjects plus unthrottled updates once made one 13s build rewrite
 its row 140 times. `·` separates a thing from its metadata (`adaptv · build ios`, `… · 5.0s`),

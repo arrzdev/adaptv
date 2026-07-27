@@ -127,6 +127,42 @@ describe("phaseLabel — gradle & CocoaPods", () => {
   })
 })
 
+describe("phaseLabel — a crashing tool (R33)", () => {
+  it("never lets node's version footer become the phase", () => {
+    //THE line. `adaptv build android` with the port ports.ts pins (supervisorPort) taken:
+    //vite's prerender step starts its own server, the listen throws, and the tail of the
+    //crash dump reached the live row as `⠴ web  node.js v26.0.0` — short, path-free prose,
+    //so it passed every filter the rest of the dump tripped only by accident.
+    expect(phaseLabel("Node.js v26.0.0")).toBe("")
+  })
+
+  it("recognises the rest of the dump by shape, not by punctuation", () => {
+    //Verbatim from that run. Each of these was already shown as nothing — but by a bracket,
+    //a colon or a length, none of which is a promise. Name them, so the next node release
+    //reformatting a frame can't put one back on the row.
+    const cases = [
+      "node:events:487",
+      "      throw er; // Unhandled 'error' event",
+      "    at Server.setupListenHandle [as _listen2] (node:net:2008:16)",
+      "    at listenInCluster (node:net:2065:12)",
+      "    at node:net:2274:7",
+      "    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)",
+      "Emitted 'error' event on WebSocketServer instance at:",
+    ]
+    for (const line of cases) expect(phaseLabel(line)).toBe("")
+  })
+
+  it("still reports the reason the dump was about", () => {
+    //Silencing the dump on the live line must not cost the failure its diagnosis (R13) —
+    //the row holds its last real phase, then `fail()` says what a dev can act on.
+    expect(
+      portInUse(
+        "Error: listen EADDRINUSE: address already in use 127.0.0.1:41740",
+      )?.msg,
+    ).toBe("port 41740 is already in use")
+  })
+})
+
 describe("phaseLabel — unknown lines", () => {
   it("returns null so the caller's generic prettifier still gets a turn", () => {
     expect(phaseLabel("copying web assets")).toBeNull()

@@ -213,6 +213,27 @@ does not get a new phrase invented for it, and it never passes through raw. The 
 > activity appears, add ONE phrase here and to the tables in `tool-log.mjs` — the list staying
 > short is the point, and it is what keeps iOS and Android speaking the same language.
 
+**R33 — A crash dump is never a phase.** When a tool dies rather than fails — an uncaught
+exception, a stack trace, a signal — none of what it prints on the way out is a status. The row
+holds its last real phase until the step settles and states the reason.
+> Violated by `adaptv build android` when the port `ports.ts` pins was taken, so vite's
+> prerender step could not bind it (R32). The tail of node's dump became the live phase:
+> ```
+>   ⠴ web  node.js v26.0.0
+> ```
+> A phase leak is normally an identifier (R22) or a listing (R24). This one is the opposite:
+> `Node.js v26.0.0` is short, path-free, prose-shaped text, so it passed every filter written to
+> catch tool chatter — and it says less than any line in the dump it came from. The rest of that
+> dump *was* already silent, but by a bracket in one stack frame, a colon in another and a length
+> that ran long — accidents, not rules, so which line reached the row was luck. `CRASH_DUMP` in
+> `tool-log.mjs` names the shape instead: the footer, the frames, the `throw`, the re-emit banner.
+>
+> The failure loses nothing by going quiet here. A beat later the row settles into the sentence a
+> dev can act on (R13), which is where a dying process belongs:
+> ```
+>   ✖ web  · port 41740 is already in use
+> ```
+
 **R25 — `·` separates a thing from its metadata.** `adaptv · build ios`,
 `✓ ios  .adaptv/builds/ChopChop.ipa · 5.0s`, `· cached`. It is never used to bolt an identifier onto
 a phase — that was R22's bug wearing a separator.
@@ -443,6 +464,8 @@ Tests do not cover any of this. Run it and read it:
 
 - [ ] `adaptv dev ios` — **first run** (`rm -rf .adaptv/ios`) and a warm run
 - [ ] `adaptv preview ios` and `adaptv build all` — including a genuine **failure** (force one)
+- [ ] a tool that **crashes** rather than fails (occupy the port `ports.ts` pins, then
+      `adaptv build android`) — the row must hold its last phase, never show the dump (R33)
 - [ ] an `all` run, to check platforms don't interleave
 - [ ] the **device picker** path (`rm -f .adaptv/state.json`, no `--target`)
 - [ ] `--verbose` still streams raw output
