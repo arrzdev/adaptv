@@ -3,9 +3,11 @@ import {
   check,
   fail,
   flushNotices,
+  header,
   nextPhase,
   prettyLine,
   skip,
+  spacer,
 } from "./render.mjs"
 
 //Built rather than written as a literal: a raw ESC inside a regex trips
@@ -26,6 +28,9 @@ function captureOut(fn) {
   }
   return lines
 }
+
+/** The notices themselves, without the blank line that closes the block. */
+const said = (lines) => lines.filter(Boolean)
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -54,7 +59,7 @@ describe("flushNotices — severity and repetition", () => {
       note: "no icons in ./public/favicons — add one to brand the launcher icon",
     }
     const out = captureOut(() => flushNotices([{ ...same }, { ...same }]))
-    expect(out).toHaveLength(1)
+    expect(said(out)).toHaveLength(1)
   })
 
   it("dedupes warnings and notes independently of each other", () => {
@@ -66,7 +71,7 @@ describe("flushNotices — severity and repetition", () => {
         { note: "other" },
       ]),
     )
-    expect(out).toHaveLength(2)
+    expect(said(out)).toHaveLength(2)
   })
 
   it("empties the list so a later flush cannot reprint it", () => {
@@ -76,6 +81,27 @@ describe("flushNotices — severity and repetition", () => {
     captureOut(() => flushNotices(notices))
     expect(notices).toHaveLength(0)
     expect(captureOut(() => flushNotices(notices))).toHaveLength(0)
+  })
+
+  it("closes the notices with a blank line, and says nothing when there are none", () => {
+    //R33: the `!`s are a BLOCK between the banner and the first step, not loose lines
+    //leaning against the run. A flush with nothing to say prints nothing at all —
+    //including the gap, which would otherwise push every step down a row on a good app.
+    expect(captureOut(() => flushNotices(["one"])).at(-1)).toBe("")
+    expect(captureOut(() => flushNotices([]))).toHaveLength(0)
+  })
+})
+
+describe("spacer — breathing room is asked for, not counted", () => {
+  it("does not open a second gap where there is already one", () => {
+    //Every block closes with a blank line and the next opens after one, so at each seam
+    //two of them ask for the same gap. Counting both put `preview all` two rows below
+    //its banner on an app with nothing to warn about.
+    captureOut(() => header("preview all"))
+    expect(captureOut(() => spacer())).toHaveLength(0)
+    //…and after real output it still separates.
+    captureOut(() => skip("web", "cached"))
+    expect(captureOut(() => spacer())).toHaveLength(1)
   })
 })
 

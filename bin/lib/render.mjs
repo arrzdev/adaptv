@@ -31,7 +31,15 @@ export const c = {
 const isCI = !!process.env.CI
 const isTTY = !!process.stdout.isTTY && !isCI
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-const out = (s) => process.stdout.write(s)
+// The last two bytes written, so `spacer()` can tell a blank line that is missing from one
+// that is already there. Blank lines are how the output separates blocks (banner, notices,
+// steps), and every block wants one on each side of itself — without a memory, the seam
+// between two of them is two blank lines and the run looks like two runs.
+let tail = ""
+const out = (s) => {
+  tail = `${tail}${s}`.slice(-2)
+  process.stdout.write(s)
+}
 const width = () => process.stdout.columns || 80
 
 // Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
@@ -134,6 +142,12 @@ export const log = {
  * Deduped, because the same app-level fact (an icon source, a config key) is
  * discovered once per platform: printing it per platform reads as several separate
  * problems when it is one. Shared by every command so they cannot drift apart.
+ *
+ * Notices are a BLOCK, not loose lines: they close with a blank line so the `!`s read as one
+ * thing adaptv had to say and the steps below start clean (R33). The gap belongs here rather
+ * than at the call sites because every command flushes and every one of them wants it — and
+ * `spacer()` collapses it into a neighbouring blank line, so a flush next to a banner or a
+ * finished command never opens a second gap.
  */
 export function flushNotices(notices) {
   const seen = new Set()
@@ -144,6 +158,7 @@ export function flushNotices(notices) {
     log.warn(text)
   }
   notices.length = 0
+  if (seen.size > 0) spacer()
 }
 
 /**
@@ -213,7 +228,11 @@ export function fail(label, reason, detail = []) {
 /** The blank line that used to come from the closing footer — kept so a finished command
  * still ends with breathing room instead of the shell prompt hugging the last step. */
 export function spacer() {
-  out("\n")
+  //Idempotent: asking for breathing room where there already is some is not a request for
+  //twice as much. Several blocks each end with one (the banner, a notice block, a finished
+  //command) and they meet — `preview all` with nothing to warn about put the gap after the
+  //banner AND before the first step, and the run started two lines lower than every other.
+  if (tail !== "\n\n") out("\n")
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail

@@ -29,6 +29,12 @@ Full text + the violating output that produced each rule: `docs/CLI-UX.md`.
 that line, then vanish); one glyph per outcome (never `✖ ios` *and* `✖ ios failed — …`); never
 interleave platforms in an `all` run; a step that did nothing prints nothing.
 
+**Order** (R33) — everything adaptv can know from the dev's own files is said BEFORE the run and
+stops it if it must: banner, blank line, what adaptv knew (`!` notices), blank line, the steps.
+Config values it cannot use are `✖`s that exit before anything is built or served — all of them
+at once. That check lives in `bin/lib/preflight.mjs`; the step that later uses the same fact
+stays silent. Anything only doing the work can reveal still belongs to the step that finds it.
+
 **Severity** — `!` means the dev may need to act; if adaptv already handled it, it's a dim note
 with no glyph. Don't announce what the next thing already says (no preamble before a picker).
 Errors are terse and name the fix (`missing \`appId\` in adaptv.config.ts`), not wrapped in
@@ -67,7 +73,9 @@ truncate an error whose remaining lines carry the instructions.
 
 Run these and READ the output — `dev ios` (first run *and* warm), `preview ios`, `build all`
 including a forced failure, an `all` run (interleaving), the device picker
-(`rm -f .adaptv/state.json`, no `--target`), and `--verbose`. **Watch a native build for 10s**:
+(`rm -f .adaptv/state.json`, no `--target`), `--verbose`, and a deliberately broken
+`adaptv.config.ts` (a colour that isn't hex — it must refuse before building anything).
+**Watch a native build for 10s**:
 if the phase text moves more than ~once a second, or you can read an identifier in it, the live
 line is wrong. Then `pnpm typecheck && pnpm biome:check && pnpm test`.
 

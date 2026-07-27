@@ -101,6 +101,45 @@ prefixed with a platform that has nothing to do with it.
 **R4 — A step that did nothing prints nothing.** A sub-10ms no-op must not print `✓ … 5ms`.
 Only surface a step when it genuinely took time or the dev needs to know it happened.
 
+**R33 — Everything adaptv already knows is said before the run starts, and stops it if it
+must.** A command reads the config and the dev's assets FIRST, says what it found, and only
+then builds, serves or installs anything. The output is three blocks with a blank line between
+them: the banner, what adaptv knew, the run.
+```
+  adaptv · preview all
+
+  ! ios launcher icon upscaled from 512px — add a 1024px icon
+  ! android launcher icon is opaque — add one with a transparent background
+
+  ✓ web  · 4.6s
+    local  http://localhost:41730
+  ✓ ios  iPhone 16 Pro (simulator) · 19.1s
+```
+> Violated by exactly that run with the two `!`s **under** `✓ web`, in the middle of the
+> lanes: the icons are source art the build does not change, so both sentences were true
+> before the command started, and the dev read them halfway through work already done with
+> them. They landed there because they were *returned by the branding step* — the code
+> printed them where it happened to learn them, and `dev` looked correct only by accident of
+> preparing the platforms before the dev server came up. The fix is a **preflight**
+> (`bin/lib/preflight.mjs`): what can be known from the icon directory alone is computed
+> there, printed under the banner, and the branding step goes silent (R18).
+>
+> The same rule decides a bad config. An illegal value must not survive into a build:
+> ```
+>   adaptv · build android
+>
+>   ✖ `themeColor.light` must be a hex colour like #1b1b1b — got "eeeeec"
+>   ✖ `splashMaskMode` must be preferences, system, light or dark — got "auto"
+> ```
+> Nothing is built, nothing is served, and every problem is listed at once — a config fixed
+> one line per run is worse than a list. These used to be SILENT: an unparseable colour fell
+> back to white and an unknown mode to `preferences`, so the app shipped with a setting the
+> dev wrote and adaptv ignored. Guessing is the bug; saying so is the fix.
+>
+> What preflight may NOT do is guess at work: a compile error, a device that won't boot, an
+> ATS exception in a plist that has to exist first — those belong to the step that finds
+> them. The test is whether the answer was already sitting in a file the dev wrote.
+
 ---
 
 ## 2. Severity
@@ -353,6 +392,11 @@ exception, for `--verbose` passthrough (R12).
 > `console.log` outside the engine, and no second glyph vocabulary (`✔ ✗ ⚠`) anywhere. A
 > document cannot catch this; a test can. If you need a new kind of line, ADD A PRIMITIVE to
 > the engine — never draw it in the command.
+>
+> Blank lines are the engine's too. Each block closes with one (`header`, `flushNotices`, a
+> finished command) and the next opens after one, so at every seam two of them ask for the
+> same gap — `spacer()` is therefore idempotent, and a run with nothing to warn about starts
+> where a run with two `!`s does. Commands never count blank lines to compensate.
 
 **R27 — A served app's addresses are a block, not a suffix.** Aligned, labelled, one per row:
 > ```
@@ -445,6 +489,8 @@ Tests do not cover any of this. Run it and read it:
 - [ ] `adaptv preview ios` and `adaptv build all` — including a genuine **failure** (force one)
 - [ ] an `all` run, to check platforms don't interleave
 - [ ] the **device picker** path (`rm -f .adaptv/state.json`, no `--target`)
+- [ ] a deliberately broken `adaptv.config.ts` (a colour that isn't hex) — every command must
+      refuse under the banner, before it builds or serves anything (R33)
 - [ ] `--verbose` still streams raw output
 - [ ] no line wraps at a normal terminal width
 - [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,

@@ -492,8 +492,12 @@ export function patchIosTheme(appRoot, mask) {
  * Brand the launcher icon + splash for each platform. The splash patches are synchronous
  * file writes (it's a flat colour, not art); the launcher icon is rendered from the app's
  * icon set by `brandLauncherIcon`, which picks the member of that set drawn for the platform
- * being built. Returns non-fatal warnings — about the SOURCE ART only, never about adaptv's
- * own toolchain — so the caller can surface them after the run.
+ * being built.
+ *
+ * Says nothing. What is wrong with the source art is known from the icon directory alone, so
+ * the CLI reads it at preflight and prints it above the run (`bin/lib/preflight.mjs`, R33);
+ * returning the same sentences from here as well only gave a caller the chance to print them
+ * a second time, halfway through work that had already used them.
  */
 export async function generateAssets(
   appRoot,
@@ -501,7 +505,6 @@ export async function generateAssets(
   platforms,
   { report } = {},
 ) {
-  const warnings = []
   const icon = resolveIconPlan(config)
   const mask = resolveSplashMask(config)
   if (platforms.includes("android"))
@@ -509,25 +512,14 @@ export async function generateAssets(
   if (platforms.includes("ios")) patchIosTheme(appRoot, mask)
 
   for (const platform of platforms) {
-    //A `!` (R5): a launcher icon adaptv couldn't brand, or branded from art too small or
-    //too opaque for the slot, is the dev's to fix and nobody else's — the app otherwise
-    //ships Capacitor's stock mark or a soft one. Every message NAMES THE FIX (R7) and is
-    //short by construction, because `log.warn` must not truncate a line whose whole value
-    //is the instruction in it (R15/R10).
-    const { warning } = await brandLauncherIcon(
-      nativeDir(appRoot, platform),
-      platform,
-      {
-        appRoot,
-        iconsDir: icon.dir,
-        background: icon.iconBackground,
-        backgroundDark: icon.iconBackgroundDark,
-        report,
-      },
-    )
-    if (warning) warnings.push(warning)
+    await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
+      appRoot,
+      iconsDir: icon.dir,
+      background: icon.iconBackground,
+      backgroundDark: icon.iconBackgroundDark,
+      report,
+    })
   }
-  return { warnings }
 }
 
 /** Build the static SPA for the Capacitor target and stamp its `index.html`. */

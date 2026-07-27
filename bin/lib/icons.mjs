@@ -437,20 +437,20 @@ async function resolveTransparency(sharp, pick) {
 }
 
 /**
- * Brand the launcher icon for one platform from the app's icon set.
+ * The source adaptv will brand this platform's launcher icon from, and the ONE thing the dev
+ * may need to act on about it — `{ sharp, pick, warning }`, with a null `pick` when there is
+ * nothing to brand from.
  *
- * Returns `{ warning }` — a single `!` line, or null when the set was good. Nothing here is
- * fatal by design: a missing or unusable icon means the app ships Capacitor's stock art,
- * which is worth telling the dev about but is never a reason to fail their build.
+ * Reads the icon DIRECTORY and nothing else, so the answer is available before the native
+ * project exists: `preflight` states the warning under the banner, before the run touches
+ * anything, and `brandLauncherIcon` acts on the same answer later (R33). Both go through
+ * here so the sentence the dev reads and the file adaptv writes can never disagree.
  */
-export async function brandLauncherIcon(
-  nativeRoot,
-  platform,
-  { appRoot, iconsDir, background, backgroundDark, report },
-) {
+export async function resolveLauncherSource(appRoot, iconsDir, platform) {
   const candidates = scanIcons(path.resolve(appRoot, iconsDir))
   if (candidates.length === 0)
     return {
+      pick: null,
       warning: `no icons in ${iconsDir} — add one to brand the launcher icon`,
     }
 
@@ -460,6 +460,7 @@ export async function brandLauncherIcon(
   //that the icon didn't get branded.
   if (!sharp)
     return {
+      pick: null,
       warning: `could not brand the launcher icon on this platform`,
     }
 
@@ -467,6 +468,27 @@ export async function brandLauncherIcon(
     sharp,
     pickIcon(candidates, platform),
   )
+  return { sharp, pick, warning: iconIssue(pick, platform) }
+}
+
+/**
+ * Brand the launcher icon for one platform from the app's icon set.
+ *
+ * Returns `{ warning }` — a single `!` line, or null when the set was good. Nothing here is
+ * fatal by design: a missing or unusable icon means the app ships Capacitor's stock art,
+ * which is worth telling the dev about but is never a reason to fail their build. The caller
+ * has normally already PRINTED that warning at preflight; it is returned rather than dropped
+ * so this stays the whole answer for anyone branding without one.
+ */
+export async function brandLauncherIcon(
+  nativeRoot,
+  platform,
+  { appRoot, iconsDir, background, backgroundDark, report, source },
+) {
+  const { sharp, pick, warning } =
+    source ?? (await resolveLauncherSource(appRoot, iconsDir, platform))
+  if (!pick) return { warning }
+
   report?.("processing resources")
   if (platform === "ios")
     await writeIosIcon(sharp, nativeRoot, pick, parseHex(background))
@@ -476,5 +498,5 @@ export async function brandLauncherIcon(
       dark: backgroundDark,
     })
 
-  return { warning: iconIssue(pick, platform) }
+  return { warning }
 }
