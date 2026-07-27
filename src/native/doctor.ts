@@ -103,6 +103,13 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
 //exact string, but adaptv GENERATES the viewport meta in its app shell, so it
 //cannot be wrong. A doctor rule for a value the framework owns would only ever
 //fire on a bug in adaptv itself — and it would report it as the user's problem.
+//
+//The tag being right is not the same as Capacitor SEEING it right, though:
+//SystemBars reads it once, from a DOMContentLoaded listener, and losing that race
+//costs the app edge-to-edge for the whole process (grey status-bar band, insets
+//reported as 0). That failure is invisible to a file-reading doctor — it is a
+//runtime ordering fact — so it is fixed at the source instead, by re-probing from
+//`capabilities/status-bar.ts` until a pass lands.
 
 /** The privacy manifest — §5.0.1. Fails at submission, not at build. */
 function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
