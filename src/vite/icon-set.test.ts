@@ -1,0 +1,424 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { describe, expect, it } from "vitest"
+import type { IconFile, IconSet } from "#adaptv/vite/icon-set"
+import {
+  headIconLinks,
+  iconFamily,
+  installabilityIssue,
+  manifestIcons,
+  readImageHeader,
+  resolveIconSet,
+  scanIcons,
+} from "#adaptv/vite/icon-set"
+
+/** A minimal but REAL png header — signature + IHDR, which is all the scanner reads. */
+function pngHeader(width: number, height: number, alpha = true) {
+  const buf = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
+    buf,
+    0,
+  )
+  buf.writeUInt32BE(13, 8)
+  buf.write("IHDR", 12)
+  buf.writeUInt32BE(width, 16)
+  buf.writeUInt32BE(height, 20)
+  buf[24] = 8 //bit depth
+  buf[25] = alpha ? 6 : 2 //colour type: 6 = RGBA, 2 = RGB
+  return buf
+}
+
+const icon = (name: string, width: number, height = width): IconFile => ({
+  file: `/icons/${name}`,
+  name,
+  family: iconFamily(name),
+  width,
+  height,
+  alpha: true,
+})
+
+/** An `IconSet` around a hand-built list, for the pure derivation tests. */
+const setOf = (
+  icons: IconFile[],
+  over: Partial<IconSet> = {},
+): IconSet => ({
+  source: "app",
+  dirRel: "./public/favicons",
+  dirAbs: "/app/public/favicons",
+  urlBase: "/favicons",
+  icons,
+  ...over,
+})
+
+/** Write PNG headers into a fresh temp directory and return its path. */
+function iconDir(files: Record<string, [number, number?]>) {
+  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-icon-set-"))
+  for (const [name, [w, h]] of Object.entries(files))
+    writeFileSync(path.join(dir, name), pngHeader(w, h ?? w))
+  return dir
+}
+
+describe("iconFamily — which platform a file was drawn for", () => {
+  it("reads the family out of the standard generator names", () => {
+    expect(iconFamily("android-chrome-512x512.png")).toBe("android")
+    expect(iconFamily("apple-touch-icon.png")).toBe("apple")
+    expect(iconFamily("mstile-150x150.png")).toBe("ms")
+    expect(iconFamily("favicon-32x32.png")).toBe("favicon")
+  })
+
+  it("calls a maskable icon maskable even though its name starts with android", () => {
+    expect(iconFamily("android-maskable-512x512.png")).toBe("maskable")
+    expect(iconFamily("icon-maskable.png")).toBe("maskable")
+  })
+
+  it("treats an unrecognised name as a generic mark, not as unusable", () => {
+    expect(iconFamily("icon.png")).toBe("generic")
+    expect(iconFamily("logo.png")).toBe("generic")
+    expect(iconFamily("my-brand-mark.png")).toBe("generic")
+  })
+})
+
+describe("readImageHeader — measured pixels, not parsed filenames", () => {
+  it("reads a PNG's real size and alpha channel", () => {
+    expect(readImageHeader(pngHeader(512, 512))).toEqual({
+      width: 512,
+      height: 512,
+      alpha: true,
+    })
+    expect(readImageHeader(pngHeader(180, 180, false))).toEqual({
+      width: 180,
+      height: 180,
+      alpha: false,
+    })
+  })
+
+  it("returns null for bytes that aren't an image it knows", () => {
+    expect(readImageHeader(Buffer.alloc(64))).toBeNull()
+    expect(readImageHeader(Buffer.from("not an image at all"))).toBeNull()
+  })
+})
+
+describe("scanIcons", () => {
+  it("measures each icon and skips files that aren't usable art", () => {
+    const dir = iconDir({
+      "android-chrome-512x512.png": [512],
+      "icon.png": [1024],
+    })
+    writeFileSync(path.join(dir, "browserconfig.xml"), "<xml/>")
+    writeFileSync(path.join(dir, "broken.png"), "not a png")
+
+    const found = scanIcons(dir)
+    expect(found.map((f) => f.name)).toEqual([
+      "android-chrome-512x512.png",
+      "icon.png",
+    ])
+    expect(found.map((f) => f.width)).toEqual([512, 1024])
+  })
+
+  it("treats a missing directory as an empty set, never as a crash", () => {
+    expect(scanIcons("/nope/not/here")).toEqual([])
+  })
+})
+
+describe("resolveIconSet — which set a build is going to use", () => {
+  it("uses the app's own art when the directory has any", () => {
+    const dir = iconDir({ "icon.png": [1024] })
+    const appRoot = path.dirname(dir)
+    mkdirSync(path.join(appRoot, "public"), { recursive: true })
+
+    const set = resolveIconSet(dir, { icons: "." })
+    expect(set.source).toBe("app")
+    expect(set.icons).toHaveLength(1)
+  })
+
+  it("falls back to the default set when the directory has NO usable art, not when the config key is missing", () => {
+    const empty = iconDir({})
+    const fallback = [icon("icon.png", 1024)]
+
+    // configured, but empty — the same position as an app that configured nothing
+    const configured = resolveIconSet(empty, { icons: "." }, fallback)
+    expect(configured.source).toBe("default")
+    expect(configured.icons).toEqual(fallback)
+    expect(configured.urlBase).toBe("/adaptv-icons")
+
+    // not configured at all, and the default directory doesn't exist
+    const unset = resolveIconSet(empty, {}, fallback)
+    expect(unset.source).toBe("default")
+    expect(unset.dirRel).toBe("./public/favicons")
+  })
+
+  it("reports an icon directory outside public/ instead of emitting ../ hrefs", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-app-"))
+    mkdirSync(path.join(root, "public"))
+    mkdirSync(path.join(root, "assets"))
+    writeFileSync(
+      path.join(root, "assets/icon.png"),
+      pngHeader(1024, 1024),
+    )
+
+    const set = resolveIconSet(root, { icons: "./assets" })
+    expect(set.source).toBe("app")
+    expect(set.error).toContain("inside public/")
+    expect(set.urlBase).toBe("")
+    // the art is still there — it brands the native icons perfectly well
+    expect(set.icons).toHaveLength(1)
+  })
+
+  it("builds the url base from the directory's position under public/", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-app-"))
+    mkdirSync(path.join(root, "public/brand/icons"), { recursive: true })
+    writeFileSync(
+      path.join(root, "public/brand/icons/icon.png"),
+      pngHeader(1024, 1024),
+    )
+
+    expect(
+      resolveIconSet(root, { icons: "./public/brand/icons" }).urlBase,
+    ).toBe("/brand/icons")
+  })
+})
+
+describe("manifestIcons — the set a browser is handed", () => {
+  it("uses measured sizes, never the ones in the filename", () => {
+    // a designer resized this by hand and kept the name
+    const icons = manifestIcons(
+      setOf([icon("android-chrome-192x192.png", 180)]),
+    )
+    expect(icons[0].sizes).toBe("180x180")
+  })
+
+  it("takes art the old `android-` prefix filter threw away", () => {
+    const icons = manifestIcons(
+      setOf([icon("logo-192.png", 192), icon("my-mark-512.png", 512)]),
+    )
+    expect(icons.map((i) => i.src)).toEqual([
+      "/favicons/logo-192.png",
+      "/favicons/my-mark-512.png",
+    ])
+  })
+
+  it("keeps the 1024px native masters OUT — no browser asks for them", () => {
+    //`icon-maskable.png` is Android's adaptive FOREGROUND and transparent by design.
+    //Published as `purpose: "maskable"` it promises full-bleed art on a solid background
+    //and delivers a mark floating in a transparent circle on Chrome's splash.
+    const icons = manifestIcons(
+      setOf([
+        icon("icon.png", 1024),
+        icon("icon-maskable.png", 1024),
+        icon("android-chrome-512.png", 512),
+        icon("android-maskable-512.png", 512),
+      ]),
+    )
+    expect(icons.map((i) => i.sizes)).toEqual(["512x512", "512x512"])
+  })
+
+  it("still lists an oversized master when it is the only art there is", () => {
+    //An empty `icons` array means no install prompt at all — worse than one big entry.
+    const icons = manifestIcons(
+      setOf([icon("icon.png", 1024), icon("icon-maskable.png", 2048)]),
+    )
+    expect(icons).toEqual([
+      { src: "/favicons/icon.png", sizes: "1024x1024", type: "image/png" },
+      {
+        src: "/favicons/icon-maskable.png",
+        sizes: "2048x2048",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ])
+  })
+
+  it("marks maskable art and sorts it after the `any` icon of the same size", () => {
+    const icons = manifestIcons(
+      setOf([
+        icon("android-maskable-512x512.png", 512),
+        icon("android-chrome-512x512.png", 512),
+      ]),
+    )
+    expect(icons).toEqual([
+      {
+        src: "/favicons/android-chrome-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+      {
+        src: "/favicons/android-maskable-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
+    ])
+  })
+
+  it("keeps ONE entry when two files claim the same size and purpose", () => {
+    const icons = manifestIcons(
+      setOf([
+        icon("android-chrome-192.png", 192),
+        icon("android-icon-192x192.png", 192),
+        icon("favicon-192x192.png", 192),
+      ]),
+    )
+    expect(icons).toHaveLength(1)
+    //the android family outranks a favicon-named file of the same size
+    expect(icons[0].src).toBe("/favicons/android-chrome-192.png")
+  })
+
+  it("drops apple and ms art, which is head-linked rather than manifest-listed", () => {
+    const icons = manifestIcons(
+      setOf([
+        icon("apple-touch-icon-180.png", 180),
+        icon("mstile-150x150.png", 150),
+        icon("icon.png", 512),
+      ]),
+    )
+    expect(icons.map((i) => i.src)).toEqual(["/favicons/icon.png"])
+  })
+
+  it("drops sub-48px favicons and non-square art", () => {
+    const icons = manifestIcons(
+      setOf([
+        icon("favicon-16x16.png", 16),
+        icon("favicon-32x32.png", 32),
+        icon("banner.png", 512, 256),
+        icon("favicon-512x512.png", 512),
+      ]),
+    )
+    expect(icons.map((i) => i.sizes)).toEqual(["512x512"])
+  })
+
+  it("emits nothing when the icons aren't served at any url", () => {
+    expect(
+      manifestIcons(setOf([icon("icon.png", 1024)], { urlBase: "" })),
+    ).toEqual([])
+  })
+
+  it("types each entry from its extension", () => {
+    const icons = manifestIcons(setOf([icon("icon.webp", 512)]))
+    expect(icons[0].type).toBe("image/webp")
+  })
+})
+
+describe("installabilityIssue — silent on any normal set", () => {
+  it("says nothing about a lone big icon, which IS installable", () => {
+    //"192 and 512" is a Lighthouse recommendation, not Chrome's requirement. An app whose
+    //whole set is one `icon.png` would otherwise see a `!` on every single run.
+    expect(
+      installabilityIssue(manifestIcons(setOf([icon("icon.png", 1024)]))),
+    ).toBeNull()
+    expect(
+      installabilityIssue(manifestIcons(setOf([icon("icon.png", 192)]))),
+    ).toBeNull()
+  })
+
+  it("names the largest size when nothing reaches Chrome's install bar", () => {
+    const icons = manifestIcons(setOf([icon("favicon-96x96.png", 96)]))
+    expect(installabilityIssue(icons)).toBe(
+      "web manifest's largest icon is 96px — a PWA needs 192px",
+    )
+  })
+
+  it("points at the generator when there is nothing at all", () => {
+    expect(installabilityIssue([])).toContain("adaptv gen icons")
+  })
+
+  it("stays inside a narrow terminal", () => {
+    for (const icons of [[], manifestIcons(setOf([icon("i.png", 96)]))]) {
+      const message = installabilityIssue(icons)
+      if (message) expect(message.length).toBeLessThanOrEqual(72)
+    }
+  })
+})
+
+describe("headIconLinks — links to files that exist", () => {
+  it("emits nothing for a set that isn't served", () => {
+    expect(
+      headIconLinks(setOf([icon("icon.png", 512)], { urlBase: "" })),
+    ).toEqual([])
+  })
+
+  it("links every tab-sized raster ascending, so the browser's last-wins pick is the biggest", () => {
+    const dir = iconDir({
+      "favicon-16x16.png": [16],
+      "favicon-32x32.png": [32],
+      "android-chrome-192.png": [192],
+    })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.sizes)).toEqual([
+      "16x16",
+      "32x32",
+      "192x192",
+    ])
+  })
+
+  it("does NOT link the 1024px master as a tab icon when smaller art exists", () => {
+    const dir = iconDir({ "icon.png": [1024], "favicon-32x32.png": [32] })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).toEqual([
+      "/favicons/favicon-32x32.png",
+    ])
+  })
+
+  it("links the master anyway when it is the only art there is", () => {
+    const dir = iconDir({ "icon.png": [1024] })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).toEqual(["/favicons/icon.png"])
+  })
+
+  it("puts favicon.ico first and an svg last, so both outranked and outranking are right", () => {
+    const dir = iconDir({ "favicon-32x32.png": [32] })
+    writeFileSync(path.join(dir, "favicon.ico"), Buffer.alloc(8))
+    writeFileSync(path.join(dir, "icon.svg"), "<svg/>")
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).toEqual([
+      "/favicons/favicon.ico",
+      "/favicons/favicon-32x32.png",
+      "/favicons/icon.svg",
+    ])
+  })
+
+  it("emits apple-touch-icon only for the sizes present, largest last", () => {
+    const dir = iconDir({
+      "apple-touch-icon.png": [180],
+      "apple-icon-120x120.png": [120],
+      "apple-touch-icon-180.png": [180],
+    })
+    const links = headIconLinks(
+      setOf(scanIcons(dir), { dirAbs: dir }),
+    ).filter((l) => l.rel === "apple-touch-icon")
+    expect(links.map((l) => l.href)).toEqual([
+      "/favicons/apple-touch-icon.png",
+      "/favicons/apple-icon-120x120.png",
+      "/favicons/apple-touch-icon-180.png",
+    ])
+  })
+
+  it("never links a maskable icon from the head — it is manifest-only art", () => {
+    const dir = iconDir({
+      "icon-maskable.png": [512],
+      "favicon-32x32.png": [32],
+    })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).not.toContain(
+      "/favicons/icon-maskable.png",
+    )
+  })
+})
+
+describe("headIconLinks — one link per size", () => {
+  it("does not link two files for the same size", () => {
+    //A full generator set ships `android-icon-96x96.png` AND `favicon-96x96.png`. A browser
+    //downloads one of them, so the second is markup that can only ever be ignored.
+    const dir = iconDir({
+      "android-icon-96x96.png": [96],
+      "favicon-96x96.png": [96],
+      "favicon-32x32.png": [32],
+    })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).toEqual([
+      "/favicons/favicon-32x32.png",
+      //android outranks favicon at the same size — the same tie-break the manifest uses
+      "/favicons/android-icon-96x96.png",
+    ])
+  })
+})

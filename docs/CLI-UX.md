@@ -140,6 +140,73 @@ them: the banner, what adaptv knew, the run.
 > ATS exception in a plist that has to exist first — those belong to the step that finds
 > them. The test is whether the answer was already sitting in a file the dev wrote.
 
+**R34 — A command that destroys the dev's work ASKS, and a command that cannot ask REFUSES.**
+`gen icons` overwrites every file in the icon directory. When there is something to lose it
+prompts; when there is nothing there it asks nothing (R4); and when there is no TTY at all it
+**names the flag** instead of guessing:
+```
+  adaptv · gen icons
+
+    replace 27 icons in ./public/favicons (your `icons` dir)?   ↑↓ move · ↵ select
+  › replace them
+    cancel
+```
+```
+  adaptv · gen icons
+
+  ✖ ./public/favicons (your `icons` dir) is not empty — pass --yes to replace it
+```
+> The prompt's own header carries the fact, so there is no `!` line above it repeating it (R6),
+> and it is `confirm()` in `render.mjs` — built on `select` so the two share one look and one
+> self-erase, not a second picker drawn in the command (R26).
+>
+> **It also says where the path came from.** `./public/favicons has 27 icons — replace them?`
+> names a directory without saying why adaptv picked it, and the answer — `icons` in
+> `adaptv.config.ts` — is in a file the dev may not have open. A prompt that is about to destroy
+> files has to be answerable from the prompt. `--output` needs no such suffix: they just typed it.
+>
+> The same reasoning made a missing destination an `✖` rather than a default. `resolveIconSet`
+> falls back to `./public/favicons` when `icons` is unset, which is right for READING — an app
+> with art there works with no config at all. Writing inverts it: thirteen files landing in a
+> directory nobody named is a surprise found afterwards, so the destination must have been
+> chosen.
+> ```
+>   ✖ nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>
+> ```
+>
+> The non-TTY branch is the rule's real content. `select` returns **option 0** when it can't
+> prompt, which is right for a device picker (any simulator will do) and catastrophic here — it
+> would answer *yes* on the dev's behalf, silently, in the one situation where nobody is
+> watching. `confirm` returns `null` there instead, and the caller turns it into the `✖` above.
+>
+> **The gate is about the dev's FILES, never their taste.** `gen icons` first shipped refusing
+> to generate from a source under 1024px, on the theory that a generator run is deliberate and
+> should be held to a standard. That is a different rule wearing this one's clothes, and it was
+> wrong: a 512px logo is a real answer for someone prototyping, and blocking them teaches only
+> that the tool is in the way. What the source costs them is a `!` under the banner, before the
+> prompt, while cancelling is still free — and the run proceeds:
+> ```
+>   adaptv · gen icons
+>
+>   ! source is 400px — every icon is upscaled from it (1024px is ideal)
+>   ! source has no flat background — the mask will crop its edges
+>
+>   ✓ icons  12 files → ./public/favicons · 72ms
+>       preview  .adaptv/icons-preview.html
+> ```
+> Only bytes adaptv genuinely cannot decode stay an `✖`, because then there is no set to make.
+>
+> The preview sheet is written on **every** run rather than behind a `--preview` flag, and that
+> is the other half of warning instead of refusing: `the mask will crop its edges` is a
+> sentence, and the sheet is the only place the dev can SEE it happen. Behind a flag it was a
+> review step only someone who already knew to look would find.
+>
+> Both warnings narrowed once the generator got better, and that is the rule working rather than
+> bending: a `!` has to describe what adaptv will ACTUALLY do. "no transparency" fired for every
+> opaque source until `measureArtwork` learned to lift a mark off a flat background — after which
+> it was warning about the case it had just fixed. What is left fires only when the background
+> genuinely cannot be isolated, which is the only case the dev still has to act on.
+
 ---
 
 ## 2. Severity
@@ -167,13 +234,107 @@ is not printed at all (R4). Anything adaptv does say gets the mark.
 `run failed — adaptv.config.ts needs an \`appId\` for native builds.` A user error is not a crash:
 render it as a plain one-liner and exit, never wrapped in step-failure scaffolding.
 
+**R35 — An error about the INVOCATION names the argument the dev actually typed, and shows the
+shape.** A wrong command line is the one failure where the dev is looking straight at their own
+input and cannot see what is wrong with it. Say which token is the problem, what was expected
+instead, and put the usage line dim underneath.
+> Violated by `gen icons`, reported by the owner:
+> ```
+> $ adaptv gen icons --target ./public/favicons/android-chrome-512.png
+>
+>   adaptv · gen icons
+>
+>   ✖ missing image — adaptv gen icons <image>
+> ```
+> The command plainly contains an image, so "missing image" reads as a bug in adaptv. What
+> happened is that `parseFlags` turns any `--foo` into `flags.foo = true` and *swallows the
+> value after it*, so an unvalidated flag is not merely ignored — it eats the positional
+> argument. Validating the flags says both things at once, and names what was expected, because
+> a typo is only obvious next to the right spelling:
+> ```
+>   ✖ unknown flag "--target" for gen icons
+>       adaptv gen icons --input <image>  [--out <dir>] [--yes]
+>         tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]
+> ```
+> **The same message for every unknown flag, `--target` included.** The first fix gave it a
+> special case — `` `--target` is a device id — `gen icons` takes the image positionally `` —
+> on the theory that it is the predictable wrong guess and deserved a precise answer. The owner
+> rejected it, correctly: *"porque é que a explicação do erro está a dar leak do `--target` que
+> é uma coisa específica de outro comando?"* A dev generating icons has no reason to learn what
+> `--target` means on `dev`, and adaptv narrating its own flag vocabulary is the plumbing R8
+> keeps out of the output. What they need is that this command doesn't take it, and what it does
+> — which the usage block under the `✖` already says.
+>
+> The usage line is for errors about the SHAPE of the command, not every bad value. A path that
+> doesn't exist gets `✖ no such image: ./nope.png` and nothing else: they typed an image in the
+> right place, so the shape is not the fix and printing it answers a question nobody asked (R6).
+
+**R36 — A wrapper around the CLI adds NOTHING to its output.** `pnpm dev:ios` and
+`pnpm adaptv …` go through `scripts/playground.mjs`, which is a passthrough — so the run must
+look exactly like the run, and a failure must end where the `✖` ends.
+> Violated by one mistyped flag, reported by the owner as *"se nada foi gerado porque aparece
+> ali tanta porcaria?"*:
+> ```
+>   ✖ unknown flag "--target" — expected --padding, --background or --yes
+>       adaptv gen icons <image>  [--padding <pct>] [--background <hex>] [--yes]
+> undefined
+> /Users/arrz/…/playground/apps/frontend:
+>  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: adaptv gen icons …
+>  ELIFECYCLE  Command failed with exit code 1.
+> ```
+> Five lines nobody wrote, under a CLI whose whole contract is that a user error is ONE terse
+> line (R7) — including the app's absolute path (R9) and the command re-quoted argument by
+> argument. Two causes, both ours:
+> - `playground/package.json` used `pnpm --filter @repo/frontend exec`, which takes pnpm's
+>   **recursive** exec path and reports a failure as a multi-package summary — the stray
+>   `undefined`, the package header, and `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL`. There is exactly
+>   one package here, so `--dir apps/frontend` is the same thing without the summary.
+> - `playground.mjs` spawned `pnpm run <script>`; `pnpm run --silent` drops the script echo and
+>   the `ELIFECYCLE` line. It suppresses pnpm's lifecycle reporter, **not** the process it
+>   starts, so every byte the CLI writes still comes through.
+>
+> The outermost layer is the invocation itself (`pnpm adaptv …` echoing its own script and
+> exiting `[ELIFECYCLE]`) and belongs to pnpm, not to adaptv — `pnpm --silent adaptv …` is the
+> quiet form. Everything inside that is adaptv's to keep clean.
+
+**R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
+— that is the point of it — but erasing the prompt must not also erase the fact that it was
+answered. Every exit has a last line.
+> Violated by cancelling `gen icons`, reported by the owner as *"quando a pessoa cancela algo
+> deve aparecer… isto está muito vazio"*:
+> ```
+>   adaptv · gen icons
+>
+>   ! source is 512px — every icon is upscaled from it (1024px is ideal)
+>
+>
+> ~/…/adaptv ❯
+> ```
+> The banner, a warning about a source that was then never used, and a bare shell prompt. The
+> dev cannot tell whether the command ran, crashed, or is still thinking — and the one thing
+> they wanted to know is whether their icons are still there:
+> ```
+>   ! cancelled — ./public/favicons is unchanged
+> ```
+> `!`, not a glyph of its own. A deliberate "no" is not a failure — a `✖` reads as adaptv
+> scolding the dev for an answer it asked for — and not a success, so `✓` would claim work that
+> did not happen. It is something they need to know, which is exactly what the `!` is for (R5),
+> and it names the DIRECTORY because the thing they just protected is the thing worth confirming
+> is intact.
+>
+> Both ways out say it. The deliberate `cancel` option is the command's, and **Ctrl-C is the
+> engine's** — `select` erases and exits `130` from inside `render.mjs`, so the caller never gets
+> a chance to speak. It prints there instead, which fixes the same silence behind the device
+> picker, where aborting had always dropped straight to the shell.
+
 **R7b — A warning about the dev's ASSETS names what's wrong with the asset, never what adaptv
 would have needed.** The launcher icon is the whole worked example, and it says exactly three
 things — all of them about the art in `icons`, none of them fireable by a set that is fine:
 > ```
-> ! no icons in ./public/favicons — add one to brand the launcher icon
+> ! no icons in ./public/favicons — shipping adaptv's default mark
 > ! ios launcher icon upscaled from 512px — add a 1024px icon
 > ! android launcher icon is opaque — add one with a transparent background
+> ! web manifest's largest icon is 96px — a PWA needs 192px
 > ```
 > Violated by `./assets/logo.png needs @capacitor/assets — pnpm add -D @capacitor/assets`: a
 > `!` telling the dev to install adaptv's own image toolchain, for a Capacitor package they are
@@ -181,7 +342,16 @@ things — all of them about the art in `icons`, none of them fireable by a set 
 > icon that is adaptv's problem, and the line says only what the dev sees — `could not brand the
 > launcher icon on this platform`.
 >
-> The three that remain each pass the "does the dev need to know" test (R5) *and* stay silent on
+> The first line is the one that changed shape twice. It used to say *"add one to brand the
+> launcher icon"* while the app silently shipped **Capacitor's** stock art — a `!` that named a
+> fix without admitting what the current state was. adaptv has its own mark now, so the line
+> says which logo is on the home screen; it keeps the `!` because an app wearing someone else's
+> logo is not something adaptv "handled" (R5). It is also the one warning here that is
+> **app-level** (R21): it was briefly returned per platform from `resolveLauncherSource`, which
+> meant a `dev web` run — no platforms, and the same wrong logo in the tab, the manifest and
+> the install prompt — said nothing at all. It lives in `iconWarnings` now, stated once.
+>
+> The rest each pass the "does the dev need to know" test (R5) *and* stay silent on
 > a good set: a lone 1024px transparent `icon.png` trips none of them, because it is genuinely
 > the best source adaptv can be handed. A warning every project sees teaches devs to ignore the
 > `!`. Note also that these are NOT uniformly app-level: the missing-directory line is one fact
@@ -520,6 +690,20 @@ Tests do not cover any of this. Run it and read it:
       or you can read an identifier in it, R22/R23 are broken
 - [ ] `adaptv preview web` and `adaptv preview all` — the web server must come up and STAY up
 - [ ] `adaptv doctor` — same banner and glyphs as every other command
+- [ ] `adaptv gen icons --input <image>` into an **empty** dir, then again into the **populated** one —
+      the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
+      without `--yes` exits `1` on the terse `✖` (R34)
+- [ ] `gen icons` from a **small, opaque** source — two `!`s under the banner, and the set is
+      generated anyway; then from a big transparent one — **no** `!` at all (R34)
+- [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `gen icons` with no
+      argument at all — each names the token that is wrong and shows the usage line (R35)
+- [ ] `gen icons --input <image>` in an app whose config has **no `icons` key** — it refuses and
+      names both ways to fix it, rather than writing into `./public/favicons` (R34)
+- [ ] **cancel** the overwrite prompt, and separately **Ctrl-C** it — each ends on a line saying
+      nothing was written, never on a bare shell prompt (R37). Same for the device picker.
+- [ ] an app with **no icons at all** (`mv public/favicons /tmp`) — the `!` fires ONCE under the
+      banner on `dev web` as well as on a native run (R21), and the app wears adaptv's mark
+      rather than Capacitor's
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:

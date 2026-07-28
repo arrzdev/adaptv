@@ -17,7 +17,7 @@
     "build:android": "pnpm --filter @repo/frontend run build:android",
     "build:all": "pnpm --filter @repo/frontend run build:all",
     "dev:clean": "rm -rf node_modules && pnpm install && turbo run dev:web --ui=tui",
-    "adaptv": "pnpm --filter @repo/frontend exec adaptv",
+    "adaptv": "pnpm --dir apps/frontend exec adaptv",
     "start": "turbo run start --ui=tui",
     "logs": "tsx packages/dev/src/log-sink.ts",
     "build": "turbo run build",

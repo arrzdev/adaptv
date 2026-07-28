@@ -13,8 +13,11 @@
 //
 // Everything here reads config values and the icon directory. Nothing writes, nothing
 // scaffolds, nothing shells out — that is what makes it safe to run before the first step.
-import { resolveLauncherSource } from "./icons.mjs"
-import { resolveIconPlan } from "./native.mjs"
+import {
+  iconSetModule,
+  loadIconSet,
+  resolveLauncherSource,
+} from "./icons.mjs"
 
 /** `#rgb` / `#rrggbb`. The same shape `parseHex` accepts and the native colour resources need. */
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
@@ -72,18 +75,35 @@ export function configErrors(config) {
 }
 
 /**
- * What is wrong with the art adaptv will brand the launcher icons from, for the platforms
- * this run is about. Deduped by `flushNotices`, not here: a missing icon directory is one
- * app-level fact (R21) while a source too small for iOS but fine for Android is genuinely
- * per-platform (R7b).
+ * What is wrong with the app's icons — the art the launcher icons are branded from, and the
+ * set the web manifest is built out of. Deduped by `flushNotices`, not here: a missing icon
+ * directory is one app-level fact (R21) while a source too small for iOS but fine for Android
+ * is genuinely per-platform (R7b).
+ *
+ * The manifest half runs for EVERY command, native platforms or not: `dev web` and
+ * `preview web` serve a manifest too, and an app that can't be installed should hear about it
+ * from adaptv rather than from a Lighthouse report weeks later.
  */
-export async function iconWarnings(appRoot, config, platforms) {
-  const { dir } = resolveIconPlan(config)
+export async function iconWarnings(set, platforms) {
+  // The app has no art of its own, so it is wearing adaptv's mark — on the home screen, in
+  // the install prompt, in the browser tab. ONE app-level sentence (R21), stated on every
+  // command including a `dev web` run with no platforms in it, and it still carries the `!`:
+  // an app shipping someone else's logo is not something adaptv "handled" (R5).
+  //
+  // Nothing else is worth saying about a default set. Every per-platform warning below is
+  // about a deficiency in the dev's own art, and adaptv's is correct by construction — piling
+  // "upscaled from…" on top would be adaptv reporting its own files as a problem.
+  if (set.source === "default")
+    return [`no icons in ${set.dirRel} — shipping adaptv's default mark`]
+
+  const { manifestIcons, installabilityIssue } = await iconSetModule()
   const warnings = []
   for (const platform of platforms) {
-    const { warning } = await resolveLauncherSource(appRoot, dir, platform)
+    const { warning } = await resolveLauncherSource(set, platform)
     if (warning) warnings.push(warning)
   }
+  const issue = installabilityIssue(manifestIcons(set))
+  if (issue) warnings.push(issue)
   return warnings
 }
 
@@ -96,8 +116,12 @@ export async function inspect(appRoot, config, platforms) {
   // A bad config is the answer. Reading the icon set on top would add `!` lines about art
   // for a run that is not going to happen — noise under the one line that matters (R6).
   if (errors.length > 0) return { errors, warnings: [] }
-  return {
-    errors,
-    warnings: await iconWarnings(appRoot, config, platforms),
-  }
+
+  const set = await loadIconSet(appRoot, config)
+  // An icon directory outside `public/` is a config value adaptv cannot use: nothing in it is
+  // served, so every manifest `src` and every head `href` would 404. It is an `✖` for the same
+  // reason a colour that isn't hex is — the alternative is a silently iconless web app.
+  if (set.error) return { errors: [set.error], warnings: [] }
+
+  return { errors, warnings: await iconWarnings(set, platforms), set }
 }

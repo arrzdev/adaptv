@@ -189,22 +189,38 @@ export type AdaptvAppConfig = {
    */
   backgroundColor?: string
   /**
-   * The app's icon set — **one directory, every target**. Default:
-   * `"./public/favicons"`. Drop a standard PWA/favicon-generator output in it and adaptv
-   * takes it from there; there is no second file to maintain for native.
+   * The app's icon set — **one directory, every target**. Default `"./public/favicons"`, and
+   * it must live inside `public/` so the files are actually served.
    *
-   * - **Web manifest** — the `android-*` files, sized from their filenames
-   *   (`android-icon-36x36.png`, `android-chrome-192.png`); `android-maskable-*` become
-   *   `purpose: "maskable"`.
-   * - **Native launcher icons** — adaptv picks the member of the set drawn for the platform
-   *   it is building (apple art for iOS, maskable art for Android's adaptive icon) and
-   *   renders the native icons from it, falling back to the next-best source when a family
-   *   is missing. A lone `icon.png` is a perfectly good set of one.
+   * Generate it with **`adaptv gen icons --input <image>`** (one png/svg, 1024px+) or drop a
+   * standard favicon-generator output in. Either way adaptv reads the directory itself — it **measures
+   * every file** rather than trusting the size in its name — and derives all three surfaces:
    *
-   * It warns only about things you can act on: an icon dir it found nothing usable in, a
-   * source too small for the platform's largest slot (1024px iOS, 432px Android — it still
-   * upscales and builds), or an opaque source where Android's adaptive foreground needs
-   * transparency.
+   * - **Web manifest** — every square icon ≥48px, deduped per size, `android-maskable-*` and
+   *   any `*maskable*` file marked `purpose: "maskable"`. `apple-*` and `ms-*` art is
+   *   excluded (that is head-linked), and so are 1024px masters, which no browser asks for.
+   * - **Head links** — `<link rel=icon>` per size plus the Apple touch icons, for the files
+   *   that **exist**. Nothing is linked speculatively.
+   * - **Native launcher icons** — the right member per slot: full-bleed art for iOS and for
+   *   Android's legacy square, safe-zoned `maskable` art for Android's adaptive foreground.
+   *   A lone `icon.png` is a perfectly good set of one.
+   *
+   * **No usable art anywhere** — no directory, an empty one, nothing readable — and the app
+   * ships **adaptv's own mark** rather than Capacitor's stock icon, on every surface. You are
+   * told once per run; `adaptv gen icons --input <image>` is the fix.
+   *
+   * Beyond that it warns only about what you can act on: a source too small for the platform's
+   * largest slot (1024px iOS, 432px Android — it still upscales and builds), an opaque source
+   * where Android's adaptive foreground needs transparency, or a set too small to install as
+   * a PWA.
+   *
+   * ⚠︎ Author the source **full-bleed on a flat (or transparent) background**. Every platform
+   * applies its own mask — iOS rounds, Android cuts a circle or a squircle — so art that draws
+   * its own rounded-square background gets rounded twice. Keeping the background flat is what
+   * lets `gen icons` find where the logo ends: it reads the border, lifts the mark off it and
+   * zooms out until no mask can crop it. A gradient or a photo behind the mark can't be
+   * separated, so the logo is left where you drew it and the mask takes whatever reaches
+   * the edge.
    */
   icons?: string
   /** Manifest orientation lock; also drives the runtime rotate guard. */

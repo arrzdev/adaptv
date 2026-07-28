@@ -1,39 +1,18 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
+// The scan itself lives in `src/vite/icon-set.ts` — the manifest and the head need the same
+// answer, so there is one implementation of it and these tests exercise the native half only.
+import { iconFamily, resolveIconSet } from "#adaptv/vite/icon-set"
 import {
   brandLauncherIcon,
-  iconFamily,
   iconIssue,
   MIN_SOURCE_PX,
   parseHex,
   pickIcon,
-  readImageHeader,
-  scanIcons,
+  resolveLauncherSource,
 } from "./icons.mjs"
-
-/** A minimal but REAL png header — signature + IHDR, which is all the ranker reads. */
-function pngHeader(width, height, { alpha = true } = {}) {
-  const buf = Buffer.alloc(33)
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
-    buf,
-    0,
-  )
-  buf.writeUInt32BE(13, 8)
-  buf.write("IHDR", 12)
-  buf.writeUInt32BE(width, 16)
-  buf.writeUInt32BE(height, 20)
-  buf[24] = 8 //bit depth
-  buf[25] = alpha ? 6 : 2 //colour type: 6 = RGBA, 2 = RGB
-  return buf
-}
 
 /**
  * A candidate as it reaches `iconIssue` — i.e. AFTER the pick has been decoded, so
@@ -58,28 +37,6 @@ const PWA_SET = [
   icon("favicon-32x32.png", 32),
   icon("mstile-150x150.png", 150),
 ]
-
-describe("iconFamily — which platform a file was drawn for", () => {
-  it("reads the family out of the standard generator names", () => {
-    expect(iconFamily("android-chrome-512x512.png")).toBe("android")
-    expect(iconFamily("apple-touch-icon.png")).toBe("apple")
-    expect(iconFamily("mstile-150x150.png")).toBe("ms")
-    expect(iconFamily("favicon-32x32.png")).toBe("favicon")
-  })
-
-  it("calls a maskable icon maskable even though its name starts with android", () => {
-    //It has to outrank plain `android-*` on Android and rank BELOW it on iOS, so the
-    //prefix must not win: this art is safe-zoned, which is a different thing entirely.
-    expect(iconFamily("android-maskable-512x512.png")).toBe("maskable")
-  })
-
-  it("treats an unrecognised name as a generic mark, not as unusable", () => {
-    //The single-file case the whole feature has to keep working: one square logo.
-    expect(iconFamily("logo.png")).toBe("generic")
-    expect(iconFamily("icon.png")).toBe("generic")
-    expect(iconFamily("my-brand-mark.webp")).toBe("generic")
-  })
-})
 
 describe("pickIcon — the right art for the build being produced", () => {
   it("prefers apple art on iOS and maskable art on Android", () => {
@@ -217,84 +174,6 @@ describe("iconIssue — the one thing the dev may need to act on", () => {
   })
 })
 
-describe("readImageHeader — measured pixels, not parsed filenames", () => {
-  it("reads a PNG's real size and alpha channel", () => {
-    expect(readImageHeader(pngHeader(512, 512))).toEqual({
-      width: 512,
-      height: 512,
-      alpha: true,
-    })
-    expect(
-      readImageHeader(pngHeader(64, 64, { alpha: false })).alpha,
-    ).toBe(false)
-  })
-
-  //Encoded by sharp rather than hand-assembled: the parser's whole job is to agree with
-  //real encoder output (JPEG's segment chain and WebP's three header chunks are exactly
-  //where a hand-written fixture would quietly diverge from the files a dev actually has).
-  it.each([
-    ["jpeg", { alpha: false }],
-    ["webp", { alpha: true }],
-    ["png", { alpha: true }],
-  ])("agrees with a real %s encoder", async (format, expected) => {
-    const { default: sharp } = await import("sharp")
-    const buf = await sharp({
-      create: {
-        width: 400,
-        height: 300,
-        channels: 4,
-        background: { r: 10, g: 20, b: 30, alpha: 0.5 },
-      },
-    })
-      .toFormat(format)
-      .toBuffer()
-    expect(readImageHeader(buf)).toEqual({
-      width: 400,
-      height: 300,
-      alpha: expected.alpha,
-    })
-  })
-
-  it("returns null for bytes that aren't an image it knows", () => {
-    expect(readImageHeader(Buffer.alloc(64))).toBeNull()
-    expect(
-      readImageHeader(Buffer.from("<svg xmlns='x'></svg>")),
-    ).toBeNull()
-  })
-})
-
-describe("scanIcons", () => {
-  it("measures each icon and skips files that aren't usable art", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-icons-"))
-    writeFileSync(
-      path.join(dir, "android-chrome-512x512.png"),
-      pngHeader(512, 512),
-    )
-    //A name that LIES about its size — the ranker must go by the bytes.
-    writeFileSync(
-      path.join(dir, "apple-touch-icon-1024.png"),
-      pngHeader(180, 180),
-    )
-    //SVG is excluded on purpose: `safari-pinned-tab.svg` is a flat silhouette and
-    //nothing in the name separates it from a real logo.
-    writeFileSync(path.join(dir, "safari-pinned-tab.svg"), "<svg/>")
-    writeFileSync(path.join(dir, "site.webmanifest"), "{}")
-
-    const found = scanIcons(dir)
-    expect(found.map((f) => f.name)).toEqual([
-      "android-chrome-512x512.png",
-      "apple-touch-icon-1024.png",
-    ])
-    expect(found.find((f) => f.name.startsWith("apple")).width).toBe(180)
-  })
-
-  it("treats a missing directory as an empty set, never as a crash", () => {
-    //The dev configured an `icons` path that isn't there yet — that is a warning, and
-    //a warning is not a reason to fail their build.
-    expect(scanIcons("/definitely/not/a/real/icons/dir")).toEqual([])
-  })
-})
-
 describe("parseHex", () => {
   it("accepts both shorthand and full hex, with or without the hash", () => {
     expect(parseHex("#fff")).toEqual({ r: 255, g: 255, b: 255, alpha: 1 })
@@ -319,10 +198,15 @@ describe("parseHex", () => {
 })
 
 describe("MIN_SOURCE_PX", () => {
-  it("matches the largest slot each platform actually fills", () => {
-    //iOS has exactly one 1024px App Store slot; Android's biggest is the xxxhdpi
-    //adaptive foreground at 432px. These bars are what the warning means.
-    expect(MIN_SOURCE_PX).toEqual({ ios: 1024, android: 432 })
+  it("matches the largest size each slot actually fills", () => {
+    //iOS has exactly one 1024px App Store slot; Android's biggest adaptive foreground is
+    //xxxhdpi at 432px and its biggest legacy mipmap is 192px. These bars are what the
+    //warning means — and only `ios`/`android` are ever warned about (one fix, one sentence).
+    expect(MIN_SOURCE_PX).toEqual({
+      ios: 1024,
+      android: 432,
+      androidLegacy: 192,
+    })
   })
 })
 
@@ -361,10 +245,11 @@ async function fixture(sources) {
   for (const p of ["ios", "android"])
     mkdirSync(nativeRoot(p), { recursive: true })
 
+  // The set is resolved with NO default icons on purpose: these tests are about what adaptv
+  // does with the APP's art, and a framework fallback would quietly stand in for a missing set.
   const brand = (platform) =>
     brandLauncherIcon(nativeRoot(platform), platform, {
-      appRoot,
-      iconsDir: "./public/favicons",
+      set: resolveIconSet(appRoot, { icons: "./public/favicons" }, []),
       background: "#ffffff",
       backgroundDark: "#101014",
     })
@@ -507,23 +392,90 @@ describe("brandLauncherIcon — Android", () => {
 })
 
 describe("brandLauncherIcon — when there is nothing to work with", () => {
-  it("warns and writes nothing when the icons dir is missing", async () => {
+  it("writes nothing, and says nothing, when there is no art at all", async () => {
+    //Silent on purpose: "this app has no icons" is ONE app-level fact and `iconWarnings`
+    //states it once for the whole run (R21) — including a `dev web` run that never gets
+    //here. Repeating it per platform is what R21 exists to stop.
     const { nativeRoot, brand } = await fixture([])
-    const { warning } = await brand("ios")
-    expect(warning).toBe(
-      "no icons in ./public/favicons — add one to brand the launcher icon",
-    )
+    expect((await brand("ios")).warning).toBeNull()
     expect(existsSync(path.join(nativeRoot("ios"), IOS_ICON))).toBe(false)
   })
+})
 
-  it("names the icons dir the app configured, not adaptv's default", async () => {
-    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-icons-cfg-"))
-    const { warning } = await brandLauncherIcon(appRoot, "android", {
-      appRoot,
-      iconsDir: "./src/brand",
-      background: "#ffffff",
-      backgroundDark: "#000000",
+describe("resolveLauncherSource — the sentence the dev reads", () => {
+  it("brands from adaptv's mark and says nothing about the art itself", async () => {
+    //A default set is by construction a perfect source, so `iconIssue` has nothing to say
+    //about it. That the app is wearing someone else's logo is app-level and belongs to
+    //`iconWarnings`, once — see `preflight.test.mjs`.
+    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-icons-def-"))
+    const { default: sharp } = await import("sharp")
+    const marks = path.join(appRoot, "adaptv-marks")
+    mkdirSync(marks, { recursive: true })
+    await sharp({
+      create: {
+        width: 1024,
+        height: 1024,
+        channels: 4,
+        background: { r: 30, g: 30, b: 40, alpha: 0.8 },
+      },
     })
-    expect(warning).toContain("./src/brand")
+      .png()
+      .toFile(path.join(marks, "icon.png"))
+
+    const set = resolveIconSet(appRoot, { icons: "./public/favicons" }, [
+      {
+        file: path.join(marks, "icon.png"),
+        name: "icon.png",
+        family: iconFamily("icon.png"),
+        width: 1024,
+        height: 1024,
+        alpha: true,
+      },
+    ])
+    expect(set.source).toBe("default")
+
+    const { pick, warning } = await resolveLauncherSource(set, "android")
+    expect(pick.name).toBe("icon.png")
+    expect(warning).toBeNull()
+  })
+})
+
+describe("Android's two slots want opposite art", () => {
+  it("ranks full-bleed art FIRST for the legacy square and maskable art LAST", () => {
+    //Nothing masks the legacy mipmap, so it wants what iOS wants. Feeding it the safe-zoned
+    //maskable source insets art that is already inset (0.85 × 72/108) and the launcher shows
+    //a mark at 57% of its icon, adrift in the brand colour.
+    const set = [
+      icon("icon-maskable.png", 1024),
+      icon("icon.png", 1024, { transparent: false }),
+    ]
+    expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
+    expect(pickIcon(set, "androidLegacy").name).toBe("icon.png")
+  })
+
+  it("falls back to the maskable source when it is the only art there is", () => {
+    const set = [icon("icon-maskable.png", 1024)]
+    expect(pickIcon(set, "androidLegacy").name).toBe("icon-maskable.png")
+  })
+
+  it("draws the legacy square from the full-bleed source, edge to edge", async () => {
+    //The regression this pair exists for: with ONE pick, the round mipmap cut its circle out
+    //of transparent padding and the icon read as a small tile. Measured by trimming — a
+    //full-bleed square trims to nothing, a floating mark trims to its own size.
+    const { nativeRoot, brand, sharp } = await fixture([
+      ["icon-maskable.png", 1024, false],
+      ["icon.png", 1024, true],
+    ])
+    await brand("android")
+    const { info } = await sharp(
+      path.join(
+        nativeRoot("android"),
+        RES,
+        "mipmap-xxxhdpi/ic_launcher.png",
+      ),
+    )
+      .trim()
+      .toBuffer({ resolveWithObject: true })
+    expect(info.width).toBe(192)
   })
 })

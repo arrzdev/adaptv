@@ -40,8 +40,8 @@ import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
-import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
+import { measureArtwork } from "./lib/artwork.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import {
   cachedDevice,
@@ -50,7 +50,16 @@ import {
 } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import { fingerprint, nativeFingerprint } from "./lib/fingerprint.mjs"
-import { scanIcons } from "./lib/icons.mjs"
+import {
+  existingIcons,
+  generateIcons,
+  sourceError,
+  sourceWarnings,
+} from "./lib/icon-gen.mjs"
+import { artTarget, SAFE_ZONE } from "./lib/icon-geometry.mjs"
+import { writeIconPreview } from "./lib/icon-preview.mjs"
+import { parseTuning } from "./lib/icon-tuning.mjs"
+import { loadIconSet, parseHex } from "./lib/icons.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -58,6 +67,7 @@ import {
   patchIosLocalNetwork,
   patchServerUrl,
 } from "./lib/live-reload.mjs"
+import { ADAPTV_ROOT, loadAdaptvModule } from "./lib/load-ts.mjs"
 import {
   acquireDevLock,
   assertNoActiveDevLock,
@@ -96,6 +106,7 @@ import {
   addresses,
   c,
   check,
+  confirm,
   detail,
   fail,
   flushNotices,
@@ -118,9 +129,6 @@ import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, gradleCause, portInUse } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
-//the framework package root — bin/ is directly under it. Lets the CLI load adaptv's
-//own pure modules (doctor, privacy-manifest) rather than duplicate them.
-const ADAPTV_ROOT = fileURLToPath(new URL("..", import.meta.url))
 
 /* =============================================================================
  * config loading (esbuild-bundled `adaptv.config.ts`)
@@ -179,8 +187,16 @@ async function loadConfig(appRoot) {
  * adaptv.config.ts at all, so a missing one is not an error there — but a config that IS
  * there is still checked before the server comes up, because the same values reach the
  * manifest and the shell.
+ *
+ * `icons: false` is for `gen icons`, and ONLY for it: the config errors still stop the run, but
+ * a `!` about the icon set is stale the moment the command finishes, because the command's
+ * whole job is to replace it. Every other command wants both halves.
  */
-async function preflight(appRoot, platforms, { optional = false } = {}) {
+async function preflight(
+  appRoot,
+  platforms,
+  { optional = false, icons = true } = {},
+) {
   if (optional && !existsSync(path.join(appRoot, "adaptv.config.ts")))
     return null
   let config
@@ -202,30 +218,8 @@ async function preflight(appRoot, platforms, { optional = false } = {}) {
     spacer()
     process.exit(1)
   }
-  flushNotices(warnings)
+  if (icons) flushNotices(warnings)
   return config
-}
-
-/**
- * Load a adaptv source module (TS) and return its exports. Same esbuild trick as
- * loadConfig, so the CLI can call the framework's own pure functions (doctor,
- * privacy-manifest) instead of duplicating them here.
- */
-async function loadAdaptvModule(relFromSrc) {
-  const abs = path.join(ADAPTV_ROOT, "src", relFromSrc)
-  const result = await esbuild({
-    entryPoints: [abs],
-    bundle: true,
-    write: false,
-    format: "esm",
-    platform: "node",
-    target: "es2022",
-    alias: { "#adaptv": path.join(ADAPTV_ROOT, "src") },
-  })
-  const source = result.outputFiles?.[0]?.text
-  if (!source) throw new Error(`failed to bundle ${relFromSrc}`)
-  const url = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
-  return import(url)
 }
 
 /**
@@ -1593,17 +1587,19 @@ async function doctor(appRoot) {
     { optional: true },
   )
   //Best-effort config read: `doctor` reports on the toolchain and must still be useful when
-  //the app's config is the thing that's broken, so a failed load just falls back to the
-  //default icon dir rather than taking the report down with it.
-  let iconsDir = "./public/favicons"
+  //the app's config is the thing that's broken, so a failed load just falls back to an empty
+  //config (and therefore the default icon dir) rather than taking the report down with it.
+  let iconConfig = {}
   try {
-    iconsDir = resolveIconPlan(await loadConfig(appRoot)).dir
+    iconConfig = await loadConfig(appRoot)
   } catch {}
-  const icons = scanIcons(path.resolve(appRoot, iconsDir))
+  const set = await loadIconSet(appRoot, iconConfig)
   check(
-    icons.length > 0,
-    `${iconsDir} (launcher-icon source)`,
-    icons.length > 0 ? `${icons.length} icons` : "",
+    set.source === "app",
+    `${set.dirRel} (icon source)`,
+    set.source === "app"
+      ? `${set.icons.length} icons`
+      : "adaptv's default mark",
     { optional: true },
   )
   await runProjectChecks(appRoot)
@@ -1622,6 +1618,7 @@ ${c.bold("Usage")}
   adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
   adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
+  adaptv gen icons --input <image>      [--output <dir>] [--yes]  (tuning: --margin, --padding, --background)
   adaptv doctor
 
 ${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
@@ -1631,6 +1628,17 @@ ${c.dim("preview = static build installed & launched on a device/simulator (no l
 ${c.dim("build = static artifacts: an UNSIGNED .ipa and a debug .apk, both built by adaptv.")}
 ${c.dim("Signing is the one thing adaptv can't do for you — for TestFlight/App Store, open")}
 ${c.dim(".adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.")}
+${c.dim("gen icons = your whole icon set — web manifest, favicons, native launcher icons —")}
+${c.dim("from ONE image (png or svg, 1024px+), written to the `icons` dir in adaptv.config.ts")}
+${c.dim("(or --output). That dir must be CHOSEN — adaptv never guesses one to write into. It")}
+${c.dim("REPLACES what is there, so it asks first, naming where the path came from; --yes skips")}
+${c.dim("the prompt. Every run writes .adaptv/icons-preview.html — every icon under the mask its")}
+${c.dim("platform applies. No icons at all? adaptv ships its own mark rather than Capacitor's.")}
+${c.dim("adaptv reads the image to find where the background ends, then sizes the mark so no")}
+${c.dim("mask can crop it. You should never need the tuning flags — they exist to take that")}
+${c.dim("judgement back: --margin <pct> is the room left inside the mask (default 10; 0 fills")}
+${c.dim("it exactly), --padding <pct> insets every icon on top of that, --background <hex>")}
+${c.dim("overrides the colour flattened behind slots that can't carry transparency.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
 ${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
 ${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
@@ -1651,6 +1659,10 @@ function parseFlags(argv) {
     }
     if (a === "--target") flags.target = argv[++i]
     else if (a === "--output" || a === "-o") flags.output = argv[++i]
+    else if (a === "--padding") flags.padding = argv[++i]
+    else if (a === "--margin") flags.margin = argv[++i]
+    else if (a === "--background") flags.background = argv[++i]
+    else if (a === "--input") flags.input = argv[++i]
     else if (a === "--host") {
       // `--host` forces external (LAN) mode; an optional IP pins the interface
       // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
@@ -1872,13 +1884,269 @@ async function holdWebPreview(state) {
  */
 async function previewWeb(appRoot, opts) {
   header("preview web")
-  // Before the build, not after it fails inside vite (R33). No platforms — the launcher-icon
-  // warnings are about art only a native build uses, and there is nothing native here.
+  // Before the build, not after it fails inside vite (R33). No platforms: the launcher-icon
+  // warnings are about art only a native build uses, and there is nothing native here — but
+  // preflight still checks the icon set, because this command serves a manifest too.
   await preflight(appRoot, [], { optional: true })
   const offsetMs = await buildWebPreview(appRoot, opts)
   return holdWebPreview(
     await serveWebPreview(appRoot, { ...opts, offsetMs }),
   )
+}
+
+/* =============================================================================
+ * gen icons
+ * ============================================================================= */
+
+/** Flags `gen icons` understands. `viteArgs` is always present from `parseFlags`. */
+const GEN_ICON_FLAGS = new Set([
+  "input",
+  "output",
+  "margin",
+  "padding",
+  "background",
+  "yes",
+  "verbose",
+  "viteArgs",
+])
+
+/**
+ * The command's shape, shown under any error about how it was invoked.
+ *
+ * Two lines because the flags fall into two groups and pretending otherwise makes a simple
+ * command look complicated: `--input` is the command, everything else is tuning a dev never has
+ * to think about. The tuning line is indented under it for that reason.
+ */
+const GEN_ICONS_USAGE = [
+  "adaptv gen icons --input <image>  [--output <dir>] [--yes]",
+  "  tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]",
+]
+
+/**
+ * An error about the ARGUMENTS, which carries the usage line as its dim detail.
+ *
+ * A wrong invocation is the one failure where the dev is looking straight at what they typed
+ * and cannot see what is wrong with it, so the shape they should have typed goes under the
+ * `✖` — the same dim-detail-under-a-failure pattern a build error uses (R13/R14). The `✖` line
+ * itself still names ONE thing and stays terse (R7); the usage line is not a replacement for
+ * saying what went wrong.
+ */
+function usageError(message) {
+  const err = new Error(message)
+  err.tail = GEN_ICONS_USAGE
+  return err
+}
+
+/**
+ * `adaptv gen icons --input <image>` — the app's whole icon set, from one image.
+ *
+ * The command adaptv was missing: it could always PICK the best member of an icon set, but
+ * getting one meant finding a favicon generator on the web and hoping its filenames matched
+ * what adaptv reads. Now the set is adaptv's own, so the manifest, the head and the native
+ * launcher icons are all reading files adaptv wrote.
+ *
+ * The image is NAMED (`--input`) rather than positional. It started positional, on the argument
+ * that `--target` — the flag a dev reaches for out of habit from `dev`/`preview`/`build` — is a
+ * device id and must not gain a second meaning. That was the right worry and the wrong fix: the
+ * dev still reached for a flag, and got `missing image` while looking at a command that plainly
+ * contained one. A name they cannot collide with is the answer to both.
+ */
+async function genIcons(appRoot, positional, flags) {
+  header("gen icons")
+
+  // Every flag this command doesn't define, reported the SAME way — `--target` included.
+  //
+  // `--target` had its own sentence for a while ("`--target` is a device id — `gen icons` takes
+  // the image positionally"), on the theory that it is the predictable wrong guess and deserved
+  // a precise answer. It was the wrong instinct: a dev generating icons has no reason to learn
+  // what `--target` means on some other command, and adaptv explaining its own flag vocabulary
+  // is exactly the plumbing R8 keeps out of the output. What they need is that this command
+  // doesn't take it, and what it does take — which is what every unknown flag already says.
+  //
+  // `parseFlags` turns any `--foo` into `flags.foo = true` and swallows the value after
+  // `--target`, so an unvalidated flag is not merely ignored: it is ignored AND it eats the
+  // positional argument, which is how `--target <image>` used to fail with `missing image`
+  // while the dev looked at a command that plainly contained one.
+  const unknown = Object.keys(flags).filter((f) => !GEN_ICON_FLAGS.has(f))
+  if (unknown.length > 0)
+    throw usageError(`unknown flag "--${unknown[0]}" for gen icons`)
+
+  const imageArg = typeof flags.input === "string" ? flags.input : null
+  if (!imageArg)
+    //A bare path is the other half of the `--input` move: someone who types the image without
+    //the flag is one word away, and should be told which word.
+    throw usageError(
+      positional
+        ? `the image goes after --input — adaptv gen icons --input ${positional}`
+        : "missing --input — the png or svg to generate the set from",
+    )
+  //NOT a `usageError`: they named an image and it isn't there. The shape of the command is not
+  //the fix, and printing it would be adaptv answering a question nobody asked (R6).
+  const sourceAbs = path.resolve(appRoot, imageArg)
+  if (!existsSync(sourceAbs)) throw new Error(`no such image: ${imageArg}`)
+
+  //Through `preflight` like every other command (R33): a config adaptv would refuse for a
+  //build must not be quietly accepted here, or the dev overwrites their icon directory and
+  //only then finds out the run they wanted was never going to happen. `icons: false` because
+  //a `!` about the set this command is REPLACING is stale before it is read.
+  const config = await preflight(appRoot, [], { icons: false })
+  const { resolveIconSet, manifestIcons } =
+    await loadAdaptvModule("vite/icon-set.ts")
+  //Resolved with NO adaptv fallback: this command is about the dev's own directory, and
+  //`gen icons` writing into it is exactly what makes the fallback stop applying.
+  const configured = resolveIconSet(appRoot, config, [])
+
+  // WHERE the set goes, and never by guessing. `resolveIconSet` falls back to
+  // `./public/favicons` when `icons` is unset, which is right for READING — an app with art
+  // there works without configuring anything. Writing is the opposite: thirteen files landing
+  // in a directory the dev never named is a surprise they find afterwards, so the destination
+  // has to have been chosen, either in the config or on the command line.
+  const outArg = typeof flags.output === "string" ? flags.output : null
+  const configuredDir =
+    typeof config.icons === "string" ? config.icons : null
+  if (!outArg && !configuredDir)
+    throw usageError(
+      "nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>",
+    )
+
+  //`--output` also serves as the escape hatch for a set that is NOT this app's: comparing two
+  //sources, or producing adaptv's own shipped mark without inventing a scratch app for it.
+  const set = outArg
+    ? {
+        ...configured,
+        dirRel: outArg,
+        dirAbs: path.resolve(appRoot, outArg),
+      }
+    : configured
+  //Only the CONFIGURED directory has to be servable — an explicit `--output` is the dev saying
+  //they know where these are going.
+  if (!outArg && set.error) throw new Error(set.error)
+
+  //Where the path came from, for the one message that is about to destroy files with it. An
+  //`--output` the dev just typed needs no explaining; a path that arrived from a config file
+  //they may not have open does.
+  const whence = outArg ? "" : " (your `icons` dir)"
+
+  const sharp = (await import("sharp")).default
+  const ext = path.extname(sourceAbs)
+  //Bytes adaptv cannot decode are the ONLY refusal — there is no set to generate (R7).
+  const error = sourceError(ext)
+  if (error) {
+    log.error(error)
+    spacer()
+    process.exit(1)
+  }
+
+  // Everything else about the source is a `!`, stated under the banner BEFORE anything is
+  // written or asked (R33) — so it reaches the dev while cancelling is still free, and reads
+  // the same way the icon notices on `dev`/`build` do. It is deliberately not a refusal: a
+  // 512px source is a real answer for someone prototyping, and adaptv saying what will be
+  // worse is help, where adaptv saying no is just the tool in the way.
+  //ONE reading of the pixels, shared by the warnings and the layout. `measureArtwork` finds
+  //where the background stops and how far the art reaches from its own centre; the `!`s below
+  //and every masked slot are both derived from it, so they cannot disagree about whether a
+  //mask is going to crop this logo.
+  const [meta, artwork] = await Promise.all([
+    sharp(sourceAbs)
+      .metadata()
+      .catch(() => ({})),
+    //A file with the right extension that sharp still cannot decode — a truncated png, an svg
+    //whose root element sits past sharp's format-sniffing window. `sourceError` only checks the
+    //extension, so without this the run ends on `Input file contains unsupported image format`,
+    //which is the library's sentence about its own internals, not adaptv's about their file.
+    measureArtwork(sharp, sourceAbs).catch(() => {
+      throw new Error(`could not read ${imageArg} — is it a valid image?`)
+    }),
+  ])
+  // The numeric flags are read HERE, with everything else adaptv knows before it acts (R33) —
+  // a bad `--margin` must stop the run before the icon directory is emptied, and an unusual but
+  // legal one must be said while cancelling is still free.
+  const tuning = parseTuning(flags)
+  if (tuning.errors.length > 0) {
+    for (const e of tuning.errors) log.error(e)
+    spacer()
+    process.exit(1)
+  }
+  flushNotices([
+    ...sourceWarnings({ ...meta, isolable: artwork.mark !== null }, ext),
+    ...tuning.warnings,
+  ])
+
+  // The overwrite gate. `gen icons` REPLACES the directory's art, so a dev pointing it at a
+  // hand-tuned set has to say so — but only when there is something to lose (R4: an empty or
+  // absent directory asks nothing).
+  //Counted with `existingIcons`, not `set.icons`: the set is only art adaptv can RANK, while
+  //what is about to be deleted includes the `.ico` and the `.svg` too. A prompt that says 11
+  //and removes 13 is the kind of thing a dev finds out afterwards.
+  const doomed = existingIcons(set.dirAbs)
+  if (doomed.length > 0 && !flags.yes) {
+    const ok = await confirm(
+      `replace ${doomed.length} icons in ${set.dirRel}${whence}?`,
+      { yes: "replace them" },
+    )
+    //`null` is "nobody could be asked" (CI, a pipe). Answering yes on the dev's behalf there
+    //would overwrite files with no one watching, so the flag that decides it is named instead.
+    if (ok === null)
+      throw new Error(
+        `${set.dirRel}${whence} is not empty — pass --yes to replace it`,
+      )
+    if (!ok) {
+      //A deliberate "no" is not a failure (`✖` would read as adaptv scolding them for it) and
+      //not a success (`✓` would claim work that did not happen). It is something the dev needs
+      //to know, which is what the `!` is for — and it names the DIRECTORY, because the thing
+      //they just protected is the one thing worth confirming is still there.
+      log.warn(`cancelled — ${set.dirRel} is unchanged`)
+      spacer()
+      return
+    }
+  }
+
+  const background = parseHex(
+    flags.background ?? resolveIconPlan(config).iconBackground,
+  )
+
+  let written = []
+  await runLine("icons", async () => {
+    written = await generateIcons({
+      source: sourceAbs,
+      dirAbs: set.dirAbs,
+      background,
+      padding: tuning.values.padding,
+      margin: tuning.values.margin,
+      artwork,
+      sharp,
+    })
+    return `${written.length} files → ${set.dirRel}`
+  })
+
+  {
+    // ALWAYS, not behind a flag. The sheet is the only place the dev can actually SEE what the
+    // warnings above are about — a mark cropped by Android's circle, a favicon that turns to
+    // mush at 16px — and it costs one file in a directory adaptv already owns and gitignores.
+    // Behind `--preview` it was a feature only someone who already knew to look would find,
+    // which is exactly backwards for a review step.
+    const dest = path.join(appRoot, ADAPTV_DIR, "icons-preview.html")
+    mkdirSync(path.dirname(dest), { recursive: true })
+    writeIconPreview({
+      dest,
+      dirAbs: set.dirAbs,
+      names: written,
+      manifest: manifestIcons(resolveIconSet(appRoot, config, [])),
+      meta: {
+        dirRel: set.dirRel,
+        sourceRel: path.relative(appRoot, sourceAbs),
+        padding: tuning.values.padding,
+        margin: tuning.values.margin,
+        artTarget: artTarget(tuning.values.margin),
+        safeZone: SAFE_ZONE,
+        //the adaptive tiles composite over this exactly as a launcher does
+        background: `rgb(${background.r} ${background.g} ${background.b})`,
+      },
+    })
+    detail(`preview  ${path.relative(appRoot, dest)}`)
+  }
+
+  spacer()
 }
 
 async function main() {
@@ -1889,6 +2157,18 @@ async function main() {
   switch (command) {
     case "doctor":
       return await doctor(appRoot)
+
+    case "gen": {
+      // A namespace on purpose: `gen` is where anything adaptv can PRODUCE from the app's
+      // config belongs, and `icons` is simply the first of them.
+      if (rest[0] !== "icons")
+        throw usageError(
+          rest[0]
+            ? `unknown gen target "${rest[0]}" — expected icons`
+            : "missing gen target — expected icons",
+        )
+      return await genIcons(appRoot, rest[1], flags)
+    }
 
     case "dev": {
       // `dev` is the live-reload command: one Vite dev server, web + native
@@ -2035,7 +2315,9 @@ main().catch((err) => {
   // rather than appending Node's raw message under the calm one.
   if (!wasReported(err)) {
     log.error(err?.message ?? String(err))
-    if (err?.tail) detail(err.tail)
+    //`tail` is one line or several — a usage block is several, and joining them would put a
+    //comma where a line break belongs.
+    for (const line of [].concat(err?.tail ?? [])) detail(line)
   }
   process.exit(1)
 })

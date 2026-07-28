@@ -107,7 +107,13 @@ try {
   // no link yet (a package that doesn't declare it, or a partial install) — the run will say so
 }
 
-const child = spawn("pnpm", ["run", ...args], {
+// `--silent` because this is a PASSTHROUGH and pnpm's own chatter is not part of the command
+// the dev ran. Without it, one failed `pnpm adaptv gen icons …` ended in four lines nobody
+// wrote — the script echo, the resolved command with every argument re-quoted, the app's
+// absolute path, and `ELIFECYCLE Command failed with exit code 1` — under a CLI whose entire
+// contract is that a user error is ONE terse line (R7). The child's own stdout is untouched:
+// `--silent` suppresses pnpm's lifecycle reporter, not the process it starts.
+const child = spawn("pnpm", ["run", "--silent", ...args], {
   cwd: PLAYGROUND,
   stdio: "inherit",
 })
