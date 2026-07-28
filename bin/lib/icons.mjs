@@ -174,6 +174,10 @@ const ANDROID_DENSITIES = [
   ["xxxhdpi", 192, 432],
 ]
 
+/** A measured `{r,g,b}` back to the `#rrggbb` an Android colour resource needs. */
+const hexOf = ({ r, g, b }) =>
+  `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`
+
 /** `#rgb` / `#rrggbb` → a sharp background. Anything unparseable falls back to white. */
 export function parseHex(hex) {
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex ?? "").trim())
@@ -273,6 +277,20 @@ async function writeAndroidIcons(
 ) {
   const res = path.join(nativeRoot, "app/src/main/res")
   const background = parseHex(light)
+
+  // `ic_launcher_background` is the layer the transparent foreground is composited over, and it
+  // should be the colour the MARK WAS DRAWN ON whenever adaptv can see one. Otherwise a logo
+  // exported flat on white becomes a white mark on the config's brand colour, or — the case
+  // that first showed this up — a white mark on a white resource, i.e. nothing at all.
+  //
+  // The same colour on both appearances, deliberately: it is what the art was composed
+  // against, and adaptv has no dark-mode variant of the mark to justify swapping it.
+  // Read from the LEGACY pick, not the foreground one. The foreground is a layer and carries no
+  // background by construction — that is the whole point of it — so the colour has to come from
+  // a member of the set that is a standalone image. For a generated set that is `icon.png`; for
+  // a raw favicon set it is whatever full square `androidLegacy` chose.
+  const source = legacy.artBackground ?? pick.artBackground
+  const adaptive = source ? hexOf(source) : null
   // Art of the `maskable` family is DRAWN to the adaptive spec, so it is already safe-zoned and
   // must not be inset a second time; anything else is measured into the ring like every other
   // circle-masked slot. The legacy square is never masked, so it takes the box fit.
@@ -318,10 +336,10 @@ async function writeAndroidIcons(
       .toFile(path.join(dir, "ic_launcher_round.png"))
   }
 
-  writeColorRes(path.join(res, "values"), light)
+  writeColorRes(path.join(res, "values"), adaptive ?? light)
   // `values-night` is resolved by the launcher the same way any other config-qualified
   // resource is, so a dark-mode home screen gets the dark brand colour behind the mark.
-  writeColorRes(path.join(res, "values-night"), dark)
+  writeColorRes(path.join(res, "values-night"), adaptive ?? dark)
 }
 
 function writeColorRes(dir, hex) {
@@ -367,16 +385,18 @@ async function resolveTransparency(sharp, pick) {
   //mask crops it rather than adaptv shrinking a picture it does not understand.
   let fit = 1
   let fitCircle = 1
+  let artBackground = null
   try {
     const { measureArtwork } = await import("./artwork.mjs")
     const art = await measureArtwork(sharp, pick.file)
     if (art.mark) {
       fit = fitScale(art, { shape: "box" })
       fitCircle = fitScale(art, { shape: "circle" })
+      artBackground = art.background
     }
   } catch {}
 
-  return { ...pick, transparent, fit, fitCircle }
+  return { ...pick, transparent, fit, fitCircle, artBackground }
 }
 
 /**

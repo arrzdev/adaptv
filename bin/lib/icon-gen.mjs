@@ -12,11 +12,17 @@
 //   manifest the `android-*` pairs, `any` and `maskable`, at the two sizes that matter.
 //   head     the favicons, the `.ico`, and one Apple touch icon.
 //
-// The two maskable lineages are deliberately different files. The WEB maskable spec wants
-// full-bleed art on a solid background; Android's adaptive FOREGROUND must be transparent so
-// the launcher can composite it over `ic_launcher_background` and mask the pair. One file
-// cannot be both — sharing it is what would make `iconIssue` report the launcher icon as
-// opaque, correctly.
+// The two maskable lineages are deliberately different files, and that is a platform
+// requirement rather than a preference. The WEB maskable spec wants full-bleed art on a solid
+// background. Android's adaptive icon is TWO LAYERS — a transparent foreground the launcher
+// composites over `ic_launcher_background` and then masks together — so its foreground must
+// carry alpha, or the background layer is invisible and none of what the format exists for
+// can happen. One file cannot be both.
+//
+// Which is the real answer to "do some platforms require transparency?": yes, and they
+// disagree. iOS is the opposite — App Store Connect rejects an icon that merely HAS an alpha
+// channel. adaptv produces each output in the form its platform demands, from whatever source
+// it is given; the requirement is on the FILES, never on the image the dev hands over.
 import {
   mkdirSync,
   readdirSync,
@@ -42,8 +48,15 @@ const ICO_SIZES = [16, 32, 48]
  * `treatment` is the whole design in two letters — `<shape><alpha>`:
  *   - shape `circle` the slot is masked to a disc, so the mark is fitted by RADIUS inside the
  *            safe ring; `box` nothing crops it, so it is fitted by BOUNDING BOX inside the tile.
- *   - alpha `keep` transparency is preserved; `flat` the result is composited onto the
- *            background and stripped of its alpha channel, for slots that must not carry one.
+ *   - alpha `flat`  always composited onto the background and stripped of its alpha channel,
+ *            for slots that must not carry one (App Store Connect rejects an iOS icon that
+ *            merely HAS an alpha channel).
+ *     alpha `layer` never composited — it is one LAYER of a two-layer icon, and painting the
+ *            other layer onto it defeats the format. Exactly one slot: `icon-maskable.png`,
+ *            Android's adaptive FOREGROUND.
+ *     alpha `keep`  transparency is preserved when the source had none of its own to lose;
+ *            a source that DID sit on a background keeps it, because these are standalone
+ *            images and the icon is the background plus the mark.
  *
  * EVERY slot is fitted, which is the fix for an iOS icon sitting flush against its own edges:
  * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
@@ -53,7 +66,7 @@ const ICO_SIZES = [16, 32, 48]
 export const ICON_SET = [
   //the native masters — biggest of their family, which is how `pickIcon` finds them
   ["icon.png", 1024, "box", "keep"],
-  ["icon-maskable.png", 1024, "circle", "keep"],
+  ["icon-maskable.png", 1024, "circle", "layer"],
   //the web manifest
   ["android-chrome-192.png", 192, "box", "keep"],
   ["android-chrome-512.png", 512, "box", "keep"],
@@ -89,7 +102,11 @@ function slotPlan(
   background,
   margin,
 ) {
-  const flatten = alpha === "flat"
+  // `layer` is the one slot that must stay clear whatever the source looked like — see
+  // `ICON_SET`. Everything else reproduces the icon as a STANDALONE image, so a mark that was
+  // lifted off a background gets it back: the icon is the background plus the mark.
+  const flatten =
+    alpha === "flat" || (alpha !== "layer" && artwork.background !== null)
   if (!artwork.mark) return { art: source, scale: 1, background, flatten }
 
   return {
@@ -98,12 +115,7 @@ function slotPlan(
     //Keep the colour the art was found on, so a logo exported as a flat-coloured tile stays
     //that colour instead of jumping to the config's brand background.
     background: artwork.background ?? background,
-    // A `keep` slot normally stays transparent — Android's adaptive foreground is composited
-    // over `ic_launcher_background` by the launcher. But once the mark has been lifted off a
-    // detected background, that colour is the icon's brand and lives nowhere else: leaving the
-    // foreground transparent hands the launcher a white chevron to draw on a white resource,
-    // and the icon vanishes. A source that HAD a background keeps it.
-    flatten: flatten || artwork.background !== null,
+    flatten,
   }
 }
 
@@ -152,7 +164,7 @@ async function render(
  * the directory, never the list (R4: the dev asked for an icon set, not an inventory).
  *
  * `padding` is EXTRA room, on top of whatever a slot already needs — never instead of it. The
- * masked slots are sized from the measured art (`safeScale`) so they clear the mask with room
+ * masked slots are sized from the measured art (`fitScale`) so they clear the mask with room
  * to spare; `--padding 10` makes those 10% tighter again, and insets the unmasked slots, which
  * have no fit of their own, by 10%. Defaulting to 0 is the point: nobody should have to pass a
  * number to stop their logo being cropped.
