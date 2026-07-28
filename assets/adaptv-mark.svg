@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!--
+  adaptv's default launcher mark — the icon an app wears when it has none of its own.
+
+  PLACEHOLDER. This is the shape, not the brand: it exists so the whole default-icon path
+  (native branding, the served manifest, the head links) is built and tested end to end. When
+  the real artwork arrives, replace this file and regenerate the set next to it — the recipe
+  is in assets/default-icons/README.md.
+
+  ⚠︎ The <svg> element comes FIRST and this note lives inside it. sharp sniffs the head of a
+  file to identify the format, and a comment long enough to push the root element past that
+  window makes an otherwise-valid SVG fail with "Input file contains unsupported image format".
+
+  FULL BLEED and a FLAT background, and both are the rule for any icon source rather than
+  quirks of this one:
+
+  · Full bleed, because every platform applies its OWN mask — iOS rounds the corners, Android
+    cuts a circle or a squircle depending on the launcher. Art that draws its own rounded-square
+    background gets rounded twice, and reads as a small tile floating inside the mask.
+
+  · Flat, because that is what lets adaptv SEE the mark. measureArtwork reads the border ring:
+    transparent or one colour means the logo can be isolated, re-centred and zoomed out until it
+    clears the mask. A gradient — which this file used to have — is unclassifiable, so the mark
+    is left where the designer put it and the mask crops whatever reaches the edge. The
+    reference art should demonstrate the path that works.
+-->
+  <rect width="1024" height="1024" fill="#5563d6"/>
+  <!-- a chevron: the "adaptv" A, and legible down to 16px, which a letterform is not -->
+  <path d="M512 268 L744 756 H624 L512 512 L400 756 H280 Z" fill="#fff"/>
+</svg>

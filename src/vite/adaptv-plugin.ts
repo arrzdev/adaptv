@@ -19,6 +19,7 @@ import {
   loadAppConfig,
 } from "#adaptv/vite/app-config-loader.ts"
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
+import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import {
   adaptvManifestPlugin,
   buildManifest,
@@ -187,6 +188,7 @@ export async function adaptv(
     adaptvBanServerApisPlugin(),
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
+    adaptvDefaultIconsPlugin(context),
     adaptvPwaRegisterPlugin(),
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),

@@ -84,3 +84,24 @@ describe("adaptv generates no router entry at all", () => {
     expect("renderRouterGen" in stamp).toBe(false)
   })
 })
+
+describe("renderRootRouteModule — the head's icon links are baked in", () => {
+  it("emits the resolved links so `pwaHead` never has to invent any", () => {
+    //`pwaHead` used to spread a hardcoded twenty-entry list under a hardcoded `/favicons`
+    //base — files that need not exist, in a directory the app need not use. Deciding them
+    //means reading the icon directory, and the shell has no filesystem, so the answer is
+    //resolved at build time and travels through this module.
+    const source = renderRootRouteModule(config(), undefined, [
+      { rel: "icon", href: "/brand/favicon-32x32.png", sizes: "32x32" },
+      { rel: "apple-touch-icon", href: "/brand/apple-touch-icon-180.png" },
+    ])
+    expect(source).toContain('"href": "/brand/favicon-32x32.png"')
+    expect(source).toContain('"rel": "apple-touch-icon"')
+  })
+
+  it("emits no `links` field at all when there are no icons to link", () => {
+    //An empty array would be a promise of a set that isn't there; the field is simply absent
+    //and `pwaHead` falls back to its own (now icon-free) defaults.
+    expect(renderRootRouteModule(config())).not.toContain("links:")
+  })
+})
