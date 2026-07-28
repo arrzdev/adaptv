@@ -48,6 +48,7 @@ const MIME: Record<string, string> = {
 export type IconFamily =
   | "dark"
   | "tinted"
+  | "monochrome"
   | "maskable"
   | "android"
   | "apple"
@@ -81,6 +82,9 @@ export function iconFamily(filename: string): IconFamily {
   // catalog. Only `gen icons` writes these two names.
   if (/^icon-dark\./.test(name)) return "dark"
   if (/^icon-tinted\./.test(name)) return "tinted"
+  // Android's themed-icon layer. Same rule as above and the same reason: matched whole, so a
+  // `logo-monochrome.png` a dev happens to keep in the directory stays rankable art.
+  if (/^icon-monochrome\./.test(name)) return "monochrome"
   if (name.includes("maskable")) return "maskable"
   if (name.startsWith("android")) return "android"
   if (name.startsWith("apple")) return "apple"
@@ -251,11 +255,16 @@ export function defaultIconsDir(): string | null {
  * Separate from {@link defaultIconFiles} because the two answer different questions: what art
  * can adaptv RANK, versus what files must exist at a URL. Serving only the first is what left
  * `/adaptv-icons/favicon.ico` a 404 under a `<link>` pointing straight at it.
+ *
+ * `NATIVE_ONLY` is dropped, and it is deliberately not `NOT_IN_MANIFEST`: that set also holds
+ * `apple`, which the HEAD links by name — filtering on it would 404 the touch icon.
  */
 export function defaultIconAssets(): string[] {
   const dir = defaultIconsDir()
   if (!dir) return []
-  const rasters = defaultIconFiles().map((i) => i.name)
+  const rasters = defaultIconFiles()
+    .filter((i) => !NATIVE_ONLY.has(i.family))
+    .map((i) => i.name)
   let extra: string[] = []
   try {
     extra = readdirSync(dir).filter((n) =>
@@ -380,16 +389,27 @@ const MIN_MANIFEST_PX = 48
 // publishing an internal file under a contract it doesn't meet.
 const MAX_MANIFEST_PX = 512
 
+/**
+ * The families that exist for a LAUNCHER and have no web surface at all. Nothing links them,
+ * and the native brander reads them off disk rather than over HTTP — so for the default set
+ * they are also the files that must not be emitted into an app's build output.
+ */
+const NATIVE_ONLY: ReadonlySet<IconFamily> = new Set([
+  "dark",
+  "tinted",
+  "monochrome",
+])
+
 // `apple` and `ms` art is linked from the HEAD, by rel, and means nothing to a manifest
 // consumer. Everything else — including a plain `favicon-512x512.png`, which is a perfectly
 // good 512px icon whatever its name says — is eligible.
 const NOT_IN_MANIFEST: ReadonlySet<IconFamily> = new Set([
   "apple",
   "ms",
-  //iOS 18 appearance variants: one is a bare mark on nothing, the other greyscale on black.
-  //Either would be a baffling home-screen icon on any other platform.
-  "dark",
-  "tinted",
+  //The launcher-only families (`NATIVE_ONLY`): the iOS 18 appearances — one a bare mark on
+  //nothing, the other a greyscale ramp — and Android's themed layer, a white silhouette whose
+  //ink a launcher supplies. On a web surface that last one is an invisible icon.
+  ...NATIVE_ONLY,
 ])
 
 // Which family to keep when two files claim the same (size, purpose) slot. Nothing downstream
@@ -548,7 +568,8 @@ export function headIconLinks(
       i.family !== "ms" &&
       i.family !== "maskable" &&
       i.family !== "dark" &&
-      i.family !== "tinted",
+      i.family !== "tinted" &&
+      i.family !== "monochrome",
   )
   // Everything a tab icon could want, ascending. An app whose ONLY art is the 1024px master
   // still gets a link — better one oversized favicon than none.

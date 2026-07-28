@@ -428,6 +428,74 @@ describe("iOS 18 appearance variants", () => {
   })
 })
 
+describe("Android's themed-icon layer", () => {
+  it("writes a monochrome layer that is white and never flattened", async () => {
+    //It is ONE LAYER of a two-layer icon, like `icon-maskable.png`: the launcher tints it with
+    //SRC_IN and draws it on its own background, so painting a background onto it here would
+    //make the tile a solid rectangle of ink.
+    const { dir, sharp } = await generated()
+    const mono = sharp(path.join(dir, "icon-monochrome.png"))
+    expect((await mono.metadata()).hasAlpha).toBe(true)
+    expect((await mono.stats()).isOpaque).toBe(false)
+    //White WHERE THERE IS INK — the transparent surround keeps sharp's rgba(0,0,0,0), so this
+    //has to be read off the inked pixels rather than off the whole frame's channel stats.
+    const { data, info } = await sharp(
+      path.join(dir, "icon-monochrome.png"),
+    )
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    let inked = 0
+    for (let i = 0; i < info.width * info.height; i++) {
+      if (data[i * 4 + 3] < 250) continue
+      inked++
+      expect([data[i * 4], data[i * 4 + 1], data[i * 4 + 2]]).toEqual([
+        255, 255, 255,
+      ])
+    }
+    expect(inked).toBeGreaterThan(0)
+  })
+
+  it("keeps the layer out of every web surface it would be invisible on", async () => {
+    //White on white. It has exactly one consumer — `mipmap-anydpi-v26/ic_launcher.xml`.
+    const { dir } = await generated()
+    const set = scanIcons(dir)
+    expect(set.some((i) => i.family === "monochrome")).toBe(true)
+    expect(pickIcon(set, "ios").name).toBe("icon.png")
+    expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
+    expect(pickIcon(set, "androidLegacy").name).toBe("icon.png")
+  })
+
+  it("uses a hand-authored --monochrome whole, without re-deriving its alpha", async () => {
+    //Re-ramping it would put back the decision the flag exists to take away.
+    const { default: sharp } = await import("sharp")
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-mono-"))
+    const source = path.join(dir, "src.png")
+    writeFileSync(source, await markPng(sharp))
+    const authored = path.join(dir, "mine.png")
+    await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><circle cx="512" cy="512" r="512" fill="#101010"/></svg>`,
+      ),
+    )
+      .png()
+      .toFile(authored)
+
+    const out = path.join(dir, "icons")
+    await generateIcons({
+      source,
+      dirAbs: out,
+      background: WHITE,
+      appearances: { "icon-monochrome.png": authored },
+      sharp,
+    })
+    //Derived, a near-black disc would come out at the ramp's floor. Authored, it is opaque.
+    const { channels } = await sharp(
+      path.join(out, "icon-monochrome.png"),
+    ).stats()
+    expect(channels[3].max).toBe(255)
+  })
+})
+
 describe("the dark-mark warning covers BOTH iOS appearances", () => {
   const dark = (over = {}) =>
     sourceWarnings(

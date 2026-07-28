@@ -1618,7 +1618,7 @@ ${c.bold("Usage")}
   adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
   adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
-  adaptv gen icons --input <image>      [--output <dir>] [--dark <img>] [--tinted <img>] [--yes]
+  adaptv gen icons --input <image>      [--output <dir>] [--dark <img>] [--tinted <img>] [--monochrome <img>] [--yes]
   adaptv doctor
 
 ${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
@@ -1642,6 +1642,11 @@ ${c.dim("app that ships no variants keeps its light icon in all three. adaptv wr
 ${c.dim("dark = your mark on the system's dark backdrop, tinted = greyscale for iOS to colour.")}
 ${c.dim("A DARK mark can't be derived (black art on a black backdrop is nothing) — adaptv says")}
 ${c.dim("so, and --dark <img> takes a hand-inverted one. --tinted <img> likewise.")}
+${c.dim("")}
+${c.dim("Android 13+ recolours every home-screen icon to match the wallpaper, and an app with")}
+${c.dim("no <monochrome> layer opts out and sits there in full colour. adaptv writes that layer")}
+${c.dim("too: your mark in one ink, keeping its internal contrast where it has any and falling")}
+${c.dim("back to a flat silhouette where it doesn't. --monochrome <img> replaces it outright.")}
 ${c.dim("")}
 ${c.dim("You should never need the tuning flags — they exist to take adaptv's judgement back:")}
 ${c.dim("--margin <pct> is the room left inside EVERY slot's limit (default 10; 0 fills it")}
@@ -1673,6 +1678,7 @@ function parseFlags(argv) {
     else if (a === "--input") flags.input = argv[++i]
     else if (a === "--dark") flags.dark = argv[++i]
     else if (a === "--tinted") flags.tinted = argv[++i]
+    else if (a === "--monochrome") flags.monochrome = argv[++i]
     else if (a === "--host") {
       // `--host` forces external (LAN) mode; an optional IP pins the interface
       // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
@@ -1914,6 +1920,7 @@ const GEN_ICON_FLAGS = new Set([
   "output",
   "dark",
   "tinted",
+  "monochrome",
   "margin",
   "padding",
   "background",
@@ -1931,8 +1938,9 @@ const GEN_ICON_FLAGS = new Set([
  */
 const GEN_ICONS_USAGE = [
   "adaptv gen icons --input <image>  [--output <dir>] [--yes]",
-  "  iOS 18:  [--dark <image>] [--tinted <image>]",
-  "  tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]",
+  "  iOS 18:   [--dark <image>] [--tinted <image>]",
+  "  Android:  [--monochrome <image>]",
+  "  tuning:   [--margin <pct>] [--padding <pct>] [--background <hex>]",
 ]
 
 /**
@@ -2081,6 +2089,7 @@ async function genIcons(appRoot, positional, flags) {
   for (const [flag, slot] of [
     ["dark", "icon-dark.png"],
     ["tinted", "icon-tinted.png"],
+    ["monochrome", "icon-monochrome.png"],
   ]) {
     if (typeof flags[flag] !== "string") continue
     const abs = path.resolve(appRoot, flags[flag])

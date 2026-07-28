@@ -31,7 +31,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
-import { measureArtwork } from "./artwork.mjs"
+import { measureArtwork, monochromeMark } from "./artwork.mjs"
 import { encodeIco } from "./ico.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 
@@ -61,6 +61,9 @@ const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
  *            images and the icon is the background plus the mark.
  *     alpha `tint`  desaturated to greyscale and flattened onto BLACK — iOS's tinted
  *            appearance, where the system maps luminance onto the colour the user picked.
+ *     alpha `mono`  white, with the mark's luminance encoded into the ALPHA channel — Android's
+ *            themed-icon layer, which the launcher tints with `SRC_IN`. Like `layer` it is
+ *            never composited onto anything. → {@link monochromeMark}
  *
  * EVERY slot is fitted, which is the fix for an iOS icon sitting flush against its own edges:
  * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
@@ -71,6 +74,7 @@ export const ICON_SET = [
   //the native masters — biggest of their family, which is how `pickIcon` finds them
   ["icon.png", 1024, "box", "keep"],
   ["icon-maskable.png", 1024, "circle", "layer"],
+  ["icon-monochrome.png", 1024, "circle", "mono"],
   //the web manifest
   ["android-chrome-192.png", 192, "box", "keep"],
   ["android-chrome-512.png", 512, "box", "keep"],
@@ -109,14 +113,17 @@ function slotPlan(
   background,
   margin,
 ) {
-  // `layer` is the one slot that must stay clear whatever the source looked like — see
-  // `ICON_SET`. Everything else reproduces the icon as a STANDALONE image, so a mark that was
-  // lifted off a background gets it back: the icon is the background plus the mark.
+  // `layer` and `mono` are the slots that must stay clear whatever the source looked like —
+  // both are ONE LAYER of a two-layer Android icon, and painting the other layer onto them
+  // defeats the format. Everything else reproduces the icon as a STANDALONE image, so a mark
+  // that was lifted off a background gets it back: the icon is the background plus the mark.
+  const layered = alpha === "layer" || alpha === "mono"
   const flatten =
     alpha === "flat" ||
     alpha === "tint" ||
-    (alpha !== "layer" && artwork.background !== null)
+    (!layered && artwork.background !== null)
   const greyscale = alpha === "tint"
+  const mono = alpha === "mono"
   //iOS composites the tinted variant itself, from luminance, over its own backdrop — so the
   //art has to sit on BLACK rather than on the app's brand colour.
   const onBlack = greyscale ? BLACK : null
@@ -127,12 +134,14 @@ function slotPlan(
       background: onBlack ?? background,
       flatten,
       greyscale,
+      mono,
     }
 
   return {
     art: artwork.mark,
     scale: fitScale(artwork, { shape, margin }),
     greyscale,
+    mono,
     //Keep the colour the art was found on, so a logo exported as a flat-coloured tile stays
     //that colour instead of jumping to the config's brand background.
     background: onBlack ?? artwork.background ?? background,
@@ -154,7 +163,7 @@ function slotPlan(
 async function render(
   sharp,
   source,
-  { canvas, scale, background, flatten, greyscale },
+  { canvas, scale, background, flatten, greyscale, mono },
 ) {
   const inner = Math.max(1, Math.round(canvas * scale))
   let art = sharp(source, { density: 384 }).resize(inner, inner, {
@@ -166,7 +175,10 @@ async function render(
   // the composited art in full colour — a "tinted" icon that iOS would map a colour onto a
   // picture that already had its own. The backdrop it lands on is black, which is grey already.
   if (greyscale) art = art.greyscale()
-  const mark = await art.png().toBuffer()
+  let mark = await art.png().toBuffer()
+  // After the resize, so the ramp is computed over the pixels that actually ship — and on the
+  // MARK rather than the canvas, so the transparent surround never enters its range.
+  if (mono) mark = await monochromeMark(sharp, mark)
 
   let out = sharp({
     create: {
@@ -234,6 +246,10 @@ export async function generateIcons({
           background: alpha === "tint" ? BLACK : bg,
           flatten: alpha === "tint",
           greyscale: alpha === "tint",
+          //An authored `--monochrome` is NOT re-ramped. The whole reason to reach for the flag
+          //is that the derived alpha was wrong for this mark; deriving it again from the file
+          //the dev drew to replace it would put the same decision back.
+          mono: false,
         }
       : slotPlan(slot, art, source, bg, margin)
     const png = await render(sharp, plan.art, {
@@ -242,6 +258,7 @@ export async function generateIcons({
       background: plan.background,
       flatten: plan.flatten,
       greyscale: plan.greyscale,
+      mono: plan.mono,
     })
     writeFileSync(path.join(dirAbs, name), png)
     written.push(name)

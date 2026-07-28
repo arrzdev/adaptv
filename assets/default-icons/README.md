@@ -23,7 +23,7 @@ they have to exist in the published package. They are produced by adaptv's own g
 [`../adaptv-mark.svg`](../adaptv-mark.svg), which is the only file to edit:
 
 ```bash
-adaptv gen icons ../adaptv-mark.svg --yes
+adaptv gen icons --input ../adaptv-mark.svg --yes
 ```
 
 Run it from a scratch app whose `icons` points at a temp directory, then copy the output here —

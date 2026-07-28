@@ -282,3 +282,151 @@ function luminanceOf(px, isArt, box) {
     }
   return n === 0 ? 0.5 : sum / n
 }
+
+/* =============================================================================
+ * the themed-icon layer
+ * ============================================================================= */
+
+/**
+ * The faintest a mark's darkest pixel is allowed to get. Android tints the monochrome layer
+ * with `SRC_IN`, so the drawable's ALPHA is the whole picture and a 0-alpha pixel is a hole.
+ * Mapping luminance straight onto alpha would therefore delete every dark part of a logo.
+ */
+const MONO_FLOOR = 0.3
+
+/**
+ * Below this much spread between the mark's lightest and darkest pixel there is no internal
+ * structure to preserve, so the ramp is skipped and the mark becomes a flat silhouette.
+ */
+const MONO_FLAT_RANGE = 0.12
+
+/**
+ * Alpha at which a pixel is solid enough for its COLOUR to be trusted.
+ *
+ * Anti-aliased edges are a blend of the mark and whatever was behind it, and `cutBackground`
+ * makes them semi-transparent without making them any less contaminated: the fringe of a black
+ * mark on white is a row of near-white pixels. Including them in a min/max is what broke the
+ * first version — a solid black `R` measured a full 0–1 spread off its own fringe, took the
+ * ramp instead of the flat path, and came out at 30% alpha with a bright halo.
+ */
+const MONO_SOLID_ALPHA = 200
+
+/** Fraction of the solid pixels trimmed off each end before the range is taken. */
+const MONO_TRIM = 0.02
+
+/**
+ * A mark rendered as Android's `<monochrome>` layer: white, with the art's LUMINANCE encoded
+ * into the alpha channel.
+ *
+ * Android tints this drawable with the wallpaper colour and draws it on a themed background,
+ * using `SRC_IN` — it takes the drawable's alpha and throws its colour away. So alpha is the
+ * only channel that can carry anything, and what gets encoded into it decides whether a logo
+ * survives theming or turns into a blob.
+ *
+ * Two obvious rules are both wrong on their own:
+ *   - **the alpha channel as-is** (a flat silhouette) is what most hand-drawn themed icons are,
+ *     and it can never be invisible — but it flattens a two-tone mark into one shape, which is
+ *     the same structure loss the iOS tinted appearance has.
+ *   - **luminance straight onto alpha** keeps the structure and deletes dark marks: a black
+ *     wordmark maps to alpha 0 everywhere and themes to nothing at all.
+ *
+ * So the ramp is normalised to the MARK'S OWN range and floored. A mark with real internal
+ * contrast keeps it, stretched across `MONO_FLOOR`–1; a mark with none — a solid black
+ * wordmark, where lightest and darkest are the same pixel — falls through `MONO_FLAT_RANGE`
+ * and comes out as the flat silhouette that case wanted anyway. The two rules stop being a
+ * choice, because which one is right is a property of the art and adaptv can measure it.
+ *
+ * NB: light art becomes the OPAQUE part, which is what themed icons do — Instagram's is its
+ * white camera outline, not its gradient. On a light home screen the launcher then paints that
+ * outline in a dark tint, so the mark's lightest region reads darkest. That inversion is the
+ * format, not a bug: there is one ink and the background is the wallpaper's.
+ *
+ * @param {import("sharp")} sharp
+ * @param {Buffer|string} input  The mark, already isolated and square.
+ * @returns {Promise<Buffer>} PNG bytes.
+ */
+export async function monochromeMark(sharp, input) {
+  const { data, info } = await sharp(input)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  const count = info.width * info.height
+  const ch = info.channels
+  const lum = new Float32Array(count)
+  // Binned rather than collected, so the trim is one pass over 256 counters instead of a sort
+  // over a million floats.
+  const hist = new Uint32Array(256)
+  let solid = 0
+  for (let i = 0; i < count; i++) {
+    const o = i * ch
+    const l =
+      (0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2]) /
+      255
+    lum[i] = l
+    // The RANGE comes only from pixels solid enough to trust — see `MONO_SOLID_ALPHA`. The
+    // ramp is still applied to every pixel; it is the span it is normalised against that has
+    // to be measured off the art itself rather than off its fringe.
+    if (data[o + 3] < MONO_SOLID_ALPHA) continue
+    hist[Math.round(l * 255)]++
+    solid++
+  }
+
+  const { min, max } =
+    solid > 0 ? trimmedRange(hist, solid) : { min: 0, max: 0 }
+  const range = max - min
+  const flat = !(range > MONO_FLAT_RANGE)
+  const out = Buffer.alloc(count * 4)
+  for (let i = 0; i < count; i++) {
+    const alpha = data[i * ch + 3]
+    //Clamped, because the trim deliberately leaves pixels outside [min, max] — the fringe, and
+    //the 2% at each end — and they must land ON the ends rather than past them.
+    const ramp = flat
+      ? 1
+      : MONO_FLOOR +
+        (1 - MONO_FLOOR) * Math.min(1, Math.max(0, (lum[i] - min) / range))
+    out[i * 4] = 255
+    out[i * 4 + 1] = 255
+    out[i * 4 + 2] = 255
+    //Multiplied, not replaced: the art's own edges are already anti-aliased and that softness
+    //is what keeps the silhouette from looking cut out with scissors.
+    out[i * 4 + 3] = Math.round(alpha * ramp)
+  }
+
+  return sharp(out, {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  })
+    .png()
+    .toBuffer()
+}
+
+/**
+ * The luminance span of a 256-bin histogram with `MONO_TRIM` of the population cut off each
+ * end — the mark's real range, with its outliers not counted.
+ *
+ * A percentile rather than a min/max because one stray pixel should not set the scale the whole
+ * icon is mapped through: a single white specular dot in a dark logo would otherwise stretch
+ * the ramp across a span nothing else in the image occupies, and wash the mark out.
+ */
+function trimmedRange(hist, total) {
+  const cut = Math.floor(total * MONO_TRIM)
+  let seen = 0
+  let min = 0
+  for (let b = 0; b < 256; b++) {
+    seen += hist[b]
+    if (seen > cut) {
+      min = b / 255
+      break
+    }
+  }
+  seen = 0
+  let max = 1
+  for (let b = 255; b >= 0; b--) {
+    seen += hist[b]
+    if (seen > cut) {
+      max = b / 255
+      break
+    }
+  }
+  return { min, max: Math.max(min, max) }
+}

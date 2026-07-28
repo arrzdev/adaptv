@@ -145,6 +145,52 @@ describe("the sheet is organised by STATE, and names the file behind each", () =
     }
   })
 
+  it("renders the themed states by MASKING the ink, the way the launcher tints", async () => {
+    //Showing `icon-monochrome.png` itself would show a white square on a white page. The tile
+    //has to reproduce Android's SRC_IN tint — a block of the launcher's ink, cut to the file's
+    //alpha — or it proves nothing about how the icon will actually look.
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-themed-"))
+    const sharp = (await import("sharp")).default
+    const names = ["icon-monochrome.png"]
+    writeFileSync(
+      path.join(dir, names[0]),
+      await sharp({
+        create: {
+          width: 64,
+          height: 64,
+          channels: 4,
+          background: { r: 255, g: 255, b: 255, alpha: 1 },
+        },
+      })
+        .png()
+        .toBuffer(),
+    )
+    const dest = path.join(dir, "p.html")
+    writeIconPreview({
+      dest,
+      dirAbs: dir,
+      names,
+      manifest: [],
+      meta: {
+        dirRel: ".",
+        sourceRel: "s.png",
+        padding: 0,
+        margin: 10,
+        artTarget: artTarget(10),
+        safeZone: SAFE_ZONE,
+        background: "rgb(255 255 255)",
+      },
+    })
+    const html = readFileSync(dest, "utf8")
+    expect(html).toContain("Android themed icons")
+    //both themes, because the launcher supplies the background as well as the ink
+    expect(html).toContain("themed \u00b7 light<span>")
+    expect(html).toContain("themed \u00b7 dark<span>")
+    //the tint itself: the file is the MASK, not the image
+    expect(html).toContain("mask-image:var(--m)")
+    expect(html).toContain("--m:url(data:image/png;base64,")
+  })
+
   it("drops a state whose file this run did not write", async () => {
     //An app whose set predates the appearance variants must not get two broken tiles.
     expect(await sheet()).not.toContain("icon-dark.png")

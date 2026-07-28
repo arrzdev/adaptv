@@ -4,6 +4,8 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 import type { IconFile, IconSet } from "#adaptv/vite/icon-set"
 import {
+  defaultIconAssets,
+  defaultIconFiles,
   headIconLinks,
   iconFamily,
   installabilityIssue,
@@ -70,6 +72,15 @@ describe("iconFamily — which platform a file was drawn for", () => {
   it("calls a maskable icon maskable even though its name starts with android", () => {
     expect(iconFamily("android-maskable-512x512.png")).toBe("maskable")
     expect(iconFamily("icon-maskable.png")).toBe("maskable")
+  })
+
+  it("names the appearance variants whole, so a favicon set's dark tab icon isn't one", () => {
+    expect(iconFamily("icon-dark.png")).toBe("dark")
+    expect(iconFamily("icon-tinted.png")).toBe("tinted")
+    expect(iconFamily("icon-monochrome.png")).toBe("monochrome")
+    //A tab icon for dark browser chrome, and someone's own art — neither is an app-icon slot.
+    expect(iconFamily("favicon-dark.svg")).toBe("favicon")
+    expect(iconFamily("logo-monochrome.png")).toBe("generic")
   })
 
   it("treats an unrecognised name as a generic mark, not as unusable", () => {
@@ -179,6 +190,41 @@ describe("resolveIconSet — which set a build is going to use", () => {
   })
 })
 
+describe("defaultIconAssets — what actually has to reach a URL", () => {
+  it("serves everything the head and manifest reference, including the non-rankable members", () => {
+    //`favicon.ico` and `icon.svg` are linked BY NAME and skipped by `scanIcons`, which is what
+    //once left `/adaptv-icons/favicon.ico` a 404 under a link pointing straight at it.
+    const names = defaultIconAssets().map((f) => path.basename(f))
+    expect(names).toContain("favicon.ico")
+    expect(names).toContain("icon.svg")
+    expect(names).toContain("apple-touch-icon-180.png")
+    expect(names).toContain("icon.png")
+  })
+
+  it("leaves the launcher-only variants out of the build output", () => {
+    //Nothing on a web surface links them and the native brander reads them off disk, so
+    //emitting them is dead weight in every app that wears adaptv's mark.
+    const names = defaultIconAssets().map((f) => path.basename(f))
+    expect(names).not.toContain("icon-dark.png")
+    expect(names).not.toContain("icon-tinted.png")
+    expect(names).not.toContain("icon-monochrome.png")
+  })
+
+  it("serves exactly what headIconLinks asks for, with nothing missing", () => {
+    //The pairing that matters: a link with no asset behind it is a 404 that looks like a
+    //working fallback, and this is the check that keeps the two lists honest with each other.
+    const set = resolveIconSet("/nonexistent-app", {}, defaultIconFiles())
+    expect(set.source).toBe("default")
+    const served = new Set(
+      defaultIconAssets().map((f) => path.basename(f)),
+    )
+    for (const link of headIconLinks(set))
+      expect(served).toContain(path.basename(link.href))
+    for (const icon of manifestIcons(set))
+      expect(served).toContain(path.basename(icon.src))
+  })
+})
+
 describe("manifestIcons — the set a browser is handed", () => {
   it("uses measured sizes, never the ones in the filename", () => {
     // a designer resized this by hand and kept the name
@@ -211,6 +257,23 @@ describe("manifestIcons — the set a browser is handed", () => {
       ]),
     )
     expect(icons.map((i) => i.sizes)).toEqual(["512x512", "512x512"])
+  })
+
+  it("keeps the platform appearance variants out of the manifest entirely", () => {
+    //None of the three is an icon in the web sense: `icon-dark.png` is a bare mark on
+    //nothing, `icon-tinted.png` a greyscale ramp, `icon-monochrome.png` a white silhouette
+    //whose ink a launcher supplies. On a browser surface the last one is white on white.
+    const icons = manifestIcons(
+      setOf([
+        icon("android-chrome-512.png", 512),
+        icon("icon-dark.png", 512),
+        icon("icon-tinted.png", 512),
+        icon("icon-monochrome.png", 512),
+      ]),
+    )
+    expect(icons.map((i) => i.src)).toEqual([
+      "/favicons/android-chrome-512.png",
+    ])
   })
 
   it("still lists an oversized master when it is the only art there is", () => {
@@ -353,6 +416,19 @@ describe("headIconLinks — links to files that exist", () => {
 
   it("does NOT link the 1024px master as a tab icon when smaller art exists", () => {
     const dir = iconDir({ "icon.png": [1024], "favicon-32x32.png": [32] })
+    const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
+    expect(links.map((l) => l.href)).toEqual([
+      "/favicons/favicon-32x32.png",
+    ])
+  })
+
+  it("never links an appearance variant as a tab icon", () => {
+    const dir = iconDir({
+      "favicon-32x32.png": [32],
+      "icon-dark.png": [64],
+      "icon-tinted.png": [64],
+      "icon-monochrome.png": [64],
+    })
     const links = headIconLinks(setOf(scanIcons(dir), { dirAbs: dir }))
     expect(links.map((l) => l.href)).toEqual([
       "/favicons/favicon-32x32.png",

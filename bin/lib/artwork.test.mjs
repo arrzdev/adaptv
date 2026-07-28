@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { measureArtwork } from "./artwork.mjs"
+import { measureArtwork, monochromeMark } from "./artwork.mjs"
 import { artTarget, fitScale, SAFE_ZONE } from "./icon-geometry.mjs"
 
 const sharpP = import("sharp").then((m) => m.default)
@@ -270,5 +270,95 @@ describe("measureArtwork — luminance decides the dark appearance", () => {
         <circle cx="256" cy="256" r="150" fill="#ffffff"/></svg>`),
     )
     expect(art.luminance).toBeGreaterThan(0.9)
+  })
+})
+
+describe("monochromeMark — Android's themed layer", () => {
+  /** `{ coverage, mean, opaqueShare }` over the alpha channel's non-empty pixels. */
+  async function alphaStats(buf) {
+    const sharp = await sharpP
+    const { data, info } = await sharp(buf)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    let n = 0
+    let sum = 0
+    let opaque = 0
+    for (let i = 0; i < info.width * info.height; i++) {
+      const a = data[i * 4 + 3]
+      if (a <= 8) continue
+      n++
+      sum += a
+      if (a > 250) opaque++
+    }
+    return {
+      coverage: n / (info.width * info.height),
+      mean: sum / n,
+      opaqueShare: opaque / n,
+    }
+  }
+
+  it("keeps a two-tone mark's internal contrast, as a range of alpha", async () => {
+    //The whole reason not to ship a flat silhouette: these two halves are the mark's structure
+    //and a launcher tinting one solid shape would lose them.
+    const art = await measureArtwork(
+      await sharpP,
+      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+        <rect width="512" height="512" fill="#ffffff"/>
+        <rect x="120" y="120" width="272" height="136" fill="#f0f0f0"/>
+        <rect x="120" y="256" width="272" height="136" fill="#202020"/></svg>`),
+    )
+    const stats = await alphaStats(
+      await monochromeMark(await sharpP, art.mark),
+    )
+    expect(stats.opaqueShare).toBeGreaterThan(0.3)
+    expect(stats.opaqueShare).toBeLessThan(0.7)
+  })
+
+  it("falls back to a flat silhouette for a mark with no internal contrast", async () => {
+    //A solid black wordmark. Mapping luminance straight onto alpha would delete it outright,
+    //and this is the case `--tinted` exists for on iOS precisely because iOS cannot do this.
+    const art = await measureArtwork(
+      await sharpP,
+      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+        <rect width="512" height="512" fill="#ffffff"/>
+        <rect x="140" y="140" width="232" height="232" fill="#000000"/></svg>`),
+    )
+    const stats = await alphaStats(
+      await monochromeMark(await sharpP, art.mark),
+    )
+    expect(stats.opaqueShare).toBeGreaterThan(0.98)
+    expect(stats.mean).toBeGreaterThan(250)
+  })
+
+  it("measures the range off SOLID pixels, so an anti-aliased fringe can't set the scale", async () => {
+    //The bug this locks: a black disc's fringe is a ring of near-white pixels left behind by
+    //`cutBackground`. Counting them made a flat mark measure a full 0-1 spread, take the ramp,
+    //and come out at 30% alpha with a bright halo.
+    const art = await measureArtwork(
+      await sharpP,
+      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+        <rect width="512" height="512" fill="#ffffff"/>
+        <circle cx="256" cy="256" r="180" fill="#000000"/></svg>`),
+    )
+    const stats = await alphaStats(
+      await monochromeMark(await sharpP, art.mark),
+    )
+    expect(stats.opaqueShare).toBeGreaterThan(0.95)
+  })
+
+  it("never returns an empty layer, whatever the mark's luminance", async () => {
+    for (const fill of ["#000000", "#ffffff", "#5563d6"]) {
+      const art = await measureArtwork(
+        await sharpP,
+        await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+          <circle cx="256" cy="256" r="180" fill="${fill}"/></svg>`),
+      )
+      const stats = await alphaStats(
+        await monochromeMark(await sharpP, art.mark),
+      )
+      expect(stats.coverage).toBeGreaterThan(0.3)
+      expect(stats.mean).toBeGreaterThan(120)
+    }
   })
 })

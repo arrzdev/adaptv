@@ -323,6 +323,62 @@ describe("brandLauncherIcon — Android", () => {
     expect((await at("ic_launcher.png")).hasAlpha).toBe(false)
   })
 
+  it("declares a monochrome layer, and writes one at every density", async () => {
+    //Capacitor's template ships two layers and no <monochrome>, which on Android 13+ means the
+    //app opts out of themed icons and sits in full colour on a themed home screen. Same shape
+    //of defect as an iOS icon with no dark variant, and invisible until someone looks.
+    const { nativeRoot, brand, sharp } = await fixture([
+      ["icon.png", 1024, false],
+    ])
+    await brand("android")
+    const res = path.join(nativeRoot("android"), RES)
+    for (const name of ["ic_launcher.xml", "ic_launcher_round.xml"]) {
+      const xml = readFileSync(
+        path.join(res, "mipmap-anydpi-v26", name),
+        "utf8",
+      )
+      expect(xml).toContain(
+        '<monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>',
+      )
+      expect(xml).toContain(
+        '<foreground android:drawable="@mipmap/ic_launcher_foreground"/>',
+      )
+    }
+    for (const [density, px] of [
+      ["mdpi", 108],
+      ["xxxhdpi", 432],
+    ]) {
+      const meta = await sharp(
+        path.join(res, `mipmap-${density}`, "ic_launcher_monochrome.png"),
+      ).metadata()
+      expect(meta.width).toBe(px)
+      //It is a LAYER: the launcher supplies the ink and the background, so it must carry alpha.
+      expect(meta.hasAlpha).toBe(true)
+    }
+  })
+
+  it("derives the monochrome layer for a set that has no authored one", async () => {
+    //A hand-dropped favicon set never ran `gen icons`, so it has no `icon-monochrome.png` —
+    //and it is exactly the app that would otherwise ship no themed icon at all.
+    const { nativeRoot, brand, sharp } = await fixture([
+      ["android-chrome-512x512.png", 512, false],
+    ])
+    await brand("android")
+    const alphaMax = async (f) =>
+      (
+        await sharp(
+          path.join(nativeRoot("android"), RES, "mipmap-xxxhdpi", f),
+        ).stats()
+      ).channels[3].max
+    //This fixture is one flat colour, so there is no internal contrast to ramp and the layer
+    //should come out inked exactly as far as the foreground is — which is also the check that
+    //something was derived at all, rather than an empty layer being written.
+    expect(await alphaMax("ic_launcher_monochrome.png")).toBe(
+      await alphaMax("ic_launcher_foreground.png"),
+    )
+    expect(await alphaMax("ic_launcher_monochrome.png")).toBeGreaterThan(0)
+  })
+
   it("writes the adaptive background colour for both appearances", async () => {
     const { nativeRoot, brand } = await fixture([
       ["icon.png", 1024, false],

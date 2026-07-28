@@ -32,6 +32,16 @@ const IOS_DARK = "#1c1c1e"
 /** A stand-in for the user's chosen home-screen tint, for the tinted mock. */
 const TINT = "#7aa7ff"
 
+/**
+ * Two plausible Material You palettes, for the themed-icon mock. Android derives these from the
+ * wallpaper, so like `TINT` they stand in for a colour the dev does not choose — but unlike iOS
+ * the launcher supplies BOTH the ink and what sits behind it, which is why each entry is a pair.
+ */
+const ANDROID_THEMED = [
+  { label: "themed · light", bg: "#dbe2f5", ink: "#37436b" },
+  { label: "themed · dark", bg: "#2b2f3a", ink: "#c2cbe8" },
+]
+
 const MIME = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
@@ -82,6 +92,21 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
              <img src="${src(name)}" alt="">
            </div>
            <figcaption>tinted<span>${name}</span><em>the user picks the colour</em></figcaption>
+         </figure>`
+      : ""
+
+  /**
+   * The themed mock. Android tints the monochrome layer with `SRC_IN` — it keeps the alpha and
+   * throws the colour away — so the tile is a block of the launcher's ink MASKED by the file,
+   * which is the same operation. Showing the file itself would show a white-on-white square.
+   */
+  const themed = ({ label, bg, ink }) =>
+    has("icon-monochrome.png")
+      ? `<figure class="tile safe">
+           <div class="art themed squircle" style="background:${bg};--m:url(${src("icon-monochrome.png")})">
+             <i style="background:${ink}"></i>
+           </div>
+           <figcaption>${label}<span>icon-monochrome.png</span><em>the wallpaper picks both colours</em></figcaption>
          </figure>`
       : ""
 
@@ -145,6 +170,14 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
      one-line stand-in, and it is honest about the direction: dark stays dark. */
   .art.tint { border:0; }
   .art.tint img { mix-blend-mode:multiply; }
+  /* Android's themed layer: a block of the launcher's ink, masked by the file's alpha. That IS
+     the SRC_IN tint the launcher does, rather than a stand-in for it. */
+  .art.themed { background-image:none; border:0; }
+  .art.themed i { display:block; width:100%; height:100%;
+    -webkit-mask-image:var(--m); mask-image:var(--m);
+    -webkit-mask-size:contain; mask-size:contain;
+    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    -webkit-mask-position:center; mask-position:center; }
   /* Two rings, and the gap between them is the whole point.
      · outer, dashed — the 72/108 safe zone: the launcher may cut anything past it
      · inner, dotted — where this run actually put the art (a --margin short of the limit)
@@ -201,6 +234,18 @@ adaptv measured where your logo ends and scaled it to sit inside both rings.</p>
   ${adaptive("rounded square", "rounded")}
   ${screen("icon-maskable.png", "foreground alone", { cls: "safe" })}
   ${screen("icon.png", "legacy square", { cls: "rounded" })}
+</div>
+
+<h2>Android themed icons (13+)</h2>
+<p class="note">When the home screen is themed, the launcher drops your colours entirely: it takes
+the <code>monochrome</code> layer's transparency, fills it with an ink derived from the wallpaper,
+and draws it on a matching background. An app that ships no such layer opts out and sits there in
+full colour — the Android counterpart of an iOS icon with no dark variant. adaptv derives the layer
+from your mark's luminance, keeping its internal contrast where there is any and falling back to a
+flat silhouette where there isn't.</p>
+<div class="row">
+  ${ANDROID_THEMED.map(themed).join("\n  ")}
+  ${screen("icon-monochrome.png", "the layer alone", { cls: "safe", backdrop: IOS_DARK, note: "white — the launcher supplies the ink" })}
 </div>
 
 <h2>Installed web app</h2>

@@ -20,6 +20,7 @@
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { monochromeMark } from "./artwork.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
 
@@ -315,10 +316,15 @@ async function writeIosIcon(sharp, nativeRoot, pick, background, set) {
 }
 
 /**
- * Android: the legacy square + round mipmaps, the adaptive-icon foreground, and the colour
- * the adaptive background resolves to. The `mipmap-anydpi-v26/*.xml` that wire foreground to
- * background are part of Capacitor's template and already correct — adaptv only replaces the
- * art they point at, and the `values/ic_launcher_background.xml` colour they resolve.
+ * Android: the legacy square + round mipmaps, the adaptive-icon foreground and monochrome
+ * layers, the `mipmap-anydpi-v26/*.xml` that wire them together, and the colour the adaptive
+ * background resolves to.
+ *
+ * The XMLs used to be left alone as "part of Capacitor's template and already correct". They
+ * are correct for the two layers they declare and silently incomplete about the third:
+ * Capacitor's template has no `<monochrome>`, so on Android 13+ the app simply opted out of
+ * themed icons and sat in full colour on a home screen where everything else had taken the
+ * wallpaper's palette. Same symptom as an iOS icon with no dark variant, same fix.
  *
  * TWO sources, because the two slots want opposite art: `pick` is the adaptive foreground
  * (safe-zoned, transparent, masked by the launcher) and `legacy` is the pre-adaptive square,
@@ -331,7 +337,7 @@ async function writeAndroidIcons(
   nativeRoot,
   pick,
   legacy,
-  { light, dark },
+  { light, dark, set },
 ) {
   const res = path.join(nativeRoot, "app/src/main/res")
   const background = parseHex(light)
@@ -355,6 +361,14 @@ async function writeAndroidIcons(
   const foregroundScale = pick.family === "maskable" ? 1 : pick.fitCircle
   const legacyScale = legacy.family === "maskable" ? 1 : legacy.fit
 
+  // The themed layer, matched by FAMILY and never by rank — like the iOS appearance slots, it
+  // is not "a better icon" but a different one. `gen icons` writes `icon-monochrome.png` (and
+  // `--monochrome` replaces it); a hand-dropped favicon set has nothing of the sort, so the
+  // layer is DERIVED from the foreground instead. Deriving is the important half: an app that
+  // never ran `gen icons` is exactly the one that would otherwise ship no themed icon at all.
+  const authoredMono = set?.icons?.find((i) => i.family === "monochrome")
+  const monoScale = authoredMono ? 1 : foregroundScale
+
   for (const [density, legacyPx, foregroundPx] of ANDROID_DENSITIES) {
     const dir = path.join(res, `mipmap-${density}`)
     mkdirSync(dir, { recursive: true })
@@ -368,6 +382,22 @@ async function writeAndroidIcons(
         background: TRANSPARENT,
       })
     ).toFile(path.join(dir, "ic_launcher_foreground.png"))
+
+    // Themed icon. An AUTHORED layer goes in whole — the dev drew the alpha they want and the
+    // launcher's `SRC_IN` tint will use it verbatim. A derived one is ramped from the
+    // foreground's luminance AFTER composition, so the transparent surround stays out of the
+    // range the ramp is normalised against.
+    const mono = await (
+      await compose(sharp, authoredMono?.file ?? pick.file, {
+        canvas: foregroundPx,
+        size: Math.round(foregroundPx * monoScale),
+        background: TRANSPARENT,
+      })
+    ).toBuffer()
+    writeFileSync(
+      path.join(dir, "ic_launcher_monochrome.png"),
+      authoredMono ? mono : await monochromeMark(sharp, mono),
+    )
 
     const square = await (
       await compose(sharp, legacy.file, {
@@ -394,10 +424,32 @@ async function writeAndroidIcons(
       .toFile(path.join(dir, "ic_launcher_round.png"))
   }
 
+  writeAdaptiveRes(path.join(res, "mipmap-anydpi-v26"))
   writeColorRes(path.join(res, "values"), adaptive ?? light)
   // `values-night` is resolved by the launcher the same way any other config-qualified
   // resource is, so a dark-mode home screen gets the dark brand colour behind the mark.
   writeColorRes(path.join(res, "values-night"), adaptive ?? dark)
+}
+
+/**
+ * The two `mipmap-anydpi-v26` descriptors, THREE layers each.
+ *
+ * `ic_launcher_round.xml` gets the identical document rather than something round: an
+ * adaptive icon is already shape-agnostic — the launcher owns the mask — and the round entry
+ * exists only so a launcher that asks for `@mipmap/ic_launcher_round` by name on API 26+
+ * doesn't fall through to the pre-adaptive bitmap.
+ */
+function writeAdaptiveRes(dir) {
+  mkdirSync(dir, { recursive: true })
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
+</adaptive-icon>
+`
+  for (const name of ["ic_launcher.xml", "ic_launcher_round.xml"])
+    writeFileSync(path.join(dir, name), xml)
 }
 
 function writeColorRes(dir, hex) {
@@ -531,6 +583,7 @@ export async function brandLauncherIcon(
     await writeAndroidIcons(sharp, nativeRoot, pick, legacy, {
       light: background,
       dark: backgroundDark,
+      set,
     })
   }
 

@@ -98,11 +98,23 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 #                      the user picks ONE colour and iOS recolours every icon with it,
 #                      mapping that colour onto the luminance — bright greys take the
 #                      colour, dark ones stay dark
-# iOS derives both itself when an app ships neither, by desaturating the light icon —
-# which collapses a logo and its background to the same grey. adaptv derives better ones
-# (mark isolated, on true black, so the ramp uses the full range). Supply your own when
-# even that loses it: a DARK mark needs INVERTING for both, and a mark whose internal
-# colours share a luminance loses its structure. adaptv measures and says which.
+# Apple recommends shipping all three: the system only generates them for designs simple
+# enough to have clear foreground/background contrast, and with no tinted variant supplied
+# it applies the tint over the ORIGINAL icon — background and all. adaptv always writes
+# them, from the isolated mark on true black, so the ramp uses the full range. Supply your
+# own when even that loses it: a DARK mark needs INVERTING for both (black art on a black
+# backdrop is nothing), and a mark whose internal colours share a luminance loses its
+# structure. adaptv measures the mark and says which of the two you need.
+# gen icons — Android themed icons (derived from --input unless you override)
+#   --monochrome <image>
+#                      the themed-icon layer. On Android 13+ the home screen recolours every
+#                      icon to match the wallpaper: the launcher takes this layer's ALPHA,
+#                      fills it with an ink it chose, and draws it on a background it chose.
+#                      An app with no <monochrome> layer opts out and sits there in full
+#                      colour. adaptv derives one from your mark's luminance — internal
+#                      contrast kept where the mark has any, a flat silhouette where it
+#                      hasn't — so a black wordmark themes correctly instead of vanishing.
+#                      Supply your own to draw the simplified one-ink version yourself
 # gen icons — tuning (you shouldn't need these)
 #   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
 #                      safe ring on Android, the tile itself on iOS and the favicons.
