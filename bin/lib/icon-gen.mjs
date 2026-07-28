@@ -369,7 +369,7 @@ export function sourceError(ext) {
  * A good source — a big square transparent mark — trips none of them.
  */
 export function sourceWarnings(
-  { width, height, isolable, luminance, hasDark },
+  { width, height, isolable, luminance, hasDark, hasTinted },
   ext,
 ) {
   const warnings = []
@@ -408,19 +408,25 @@ export function sourceWarnings(
       `source has no flat background — the mask will crop its edges`,
     )
 
-  // iOS 18's DARK app icon is the mark alone on a near-black backdrop the system draws. adaptv
-  // can derive that — strip the background, keep the mark — and for a light or colourful logo
-  // the result is right. For a DARK mark it is invisible, and no amount of measuring fixes it:
-  // the apps that get this right (a black wordmark that turns white on a dark home screen) ship
-  // a hand-INVERTED second image, which is a design decision, not a transform.
+  // BOTH iOS 18 appearances need light art, and the first version of this warning only said
+  // one of them. The dark icon is the mark on a near-black backdrop the system draws; the
+  // tinted one is a luminance ramp, so dark pixels stay dark there too — a black wordmark
+  // measured 0.005 mean luminance through the tint and was a black rectangle. adaptv can
+  // derive both from a light or colourful logo, and neither from a dark one: turning black art
+  // white is an INVERSION, a design decision rather than a transform.
+  const missing = [!hasDark && "dark", !hasTinted && "tinted"].filter(
+    Boolean,
+  )
   if (
-    !hasDark &&
+    missing.length > 0 &&
     isolable !== false &&
     Number.isFinite(luminance) &&
     luminance < DARK_ICON_FLOOR
   )
     warnings.push(
-      `mark is dark — iOS's dark icon needs a light one, see --dark`,
+      `mark is dark — iOS ${missing.join(" + ")} ${
+        missing.length > 1 ? "need" : "needs"
+      } light art (${missing.map((m) => `--${m}`).join(", ")})`,
     )
 
   return warnings

@@ -93,11 +93,16 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 #   --yes              skip the "replace them?" prompt (required with no TTY)
 # gen icons — iOS 18 appearances (derived from --input unless you override)
 #   --dark <image>     the dark-mode icon: your mark with NO background, since iOS draws
-#                      its own near-black one. adaptv derives this by stripping the
-#                      background — pass your own when the mark is dark and needs
-#                      INVERTING (a black wordmark that should turn white)
-#   --tinted <image>   the tinted icon: greyscale on black, which iOS maps the user's
-#                      chosen colour onto. Derived unless you supply one
+#                      its own near-black one
+#   --tinted <image>   the tinted icon: greyscale on black. In "Tinted" home-screen mode
+#                      the user picks ONE colour and iOS recolours every icon with it,
+#                      mapping that colour onto the luminance — bright greys take the
+#                      colour, dark ones stay dark
+# iOS derives both itself when an app ships neither, by desaturating the light icon —
+# which collapses a logo and its background to the same grey. adaptv derives better ones
+# (mark isolated, on true black, so the ramp uses the full range). Supply your own when
+# even that loses it: a DARK mark needs INVERTING for both, and a mark whose internal
+# colours share a luminance loses its structure. adaptv measures and says which.
 # gen icons — tuning (you shouldn't need these)
 #   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
 #                      safe ring on Android, the tile itself on iOS and the favicons.

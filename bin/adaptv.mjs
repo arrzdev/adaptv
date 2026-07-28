@@ -2102,6 +2102,7 @@ async function genIcons(appRoot, positional, flags) {
         isolable: artwork.mark !== null,
         luminance: artwork.luminance,
         hasDark: appearances["icon-dark.png"] !== undefined,
+        hasTinted: appearances["icon-tinted.png"] !== undefined,
       },
       ext,
     ),

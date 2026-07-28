@@ -427,3 +427,52 @@ describe("iOS 18 appearance variants", () => {
     expect(pickIcon(set, "androidLegacy").name).toBe("icon.png")
   })
 })
+
+describe("the dark-mark warning covers BOTH iOS appearances", () => {
+  const dark = (over = {}) =>
+    sourceWarnings(
+      {
+        width: 1024,
+        height: 1024,
+        isolable: true,
+        luminance: 0.05,
+        ...over,
+      },
+      ".png",
+    )
+
+  it("names both when neither is supplied", () => {
+    //It first said only `--dark`, which was half the problem: the tinted variant is a
+    //luminance ramp, so dark pixels stay dark there too. A black wordmark measured 0.005
+    //through the tint — a black rectangle.
+    expect(dark()).toEqual([
+      "mark is dark — iOS dark + tinted need light art (--dark, --tinted)",
+    ])
+  })
+
+  it("names only what is still missing", () => {
+    expect(dark({ hasDark: true })).toEqual([
+      "mark is dark — iOS tinted needs light art (--tinted)",
+    ])
+    expect(dark({ hasTinted: true })).toEqual([
+      "mark is dark — iOS dark needs light art (--dark)",
+    ])
+  })
+
+  it("goes quiet once both are hand-authored", () => {
+    expect(dark({ hasDark: true, hasTinted: true })).toEqual([])
+  })
+
+  it("says nothing about a light mark", () => {
+    expect(dark({ luminance: 0.7 })).toEqual([])
+  })
+
+  it("stays inside a narrow terminal in every form", () => {
+    for (const w of [
+      ...dark(),
+      ...dark({ hasDark: true }),
+      ...dark({ hasTinted: true }),
+    ])
+      expect(w.length).toBeLessThanOrEqual(72)
+  })
+})
