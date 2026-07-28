@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -51,6 +52,27 @@ describe("the render engine owns every byte the CLI prints", () => {
       .map(([n, l]) => `${rel}:${n}  ${l.trim()}`)
     //`rawOut()` in render.mjs is the sanctioned escape hatch for --verbose passthrough (R12).
     expect(offenders).toEqual([])
+  })
+
+  it("parses — every module, with the real parser", () => {
+    //The suite only loads a module something imports, and `icon-preview.mjs` is imported by one
+    //command and no test. It is also ONE enormous template literal, so ordinary prose can break
+    //it: a backtick in a CSS comment closes the literal and turns the rest of the sheet into
+    //JavaScript. That shipped a `SyntaxError` past a fully green run, and only the dev running
+    //the command ever saw it. `node --check` is the cheap floor under that — the same parser
+    //that will refuse the file at runtime, rather than a regex guessing at one.
+    const broken = cliModules()
+      .map((rel) => [
+        rel,
+        spawnSync(process.execPath, ["--check", join(BIN, rel)], {
+          encoding: "utf8",
+        }),
+      ])
+      .filter(([, r]) => r.status !== 0)
+      .map(
+        ([rel, r]) => `${rel}: ${(r.stderr ?? "").split("\n")[2] ?? ""}`,
+      )
+    expect(broken).toEqual([])
   })
 
   it("keeps the glyph set in one place", () => {

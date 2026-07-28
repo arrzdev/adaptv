@@ -19,7 +19,7 @@ import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { exec } from "./exec.mjs"
-import { brandLauncherIcon } from "./icons.mjs"
+import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import {
   classListChanged,
   mergeClassList,
@@ -511,10 +511,12 @@ export async function generateAssets(
     patchAndroidSplash(appRoot, mask, config.appId)
   if (platforms.includes("ios")) patchIosTheme(appRoot, mask)
 
+  //One scan for the whole run, even an `all` one: the same set brands both platforms, and
+  //`preflight` has normally already resolved and reported on it before any of this ran.
+  const set = await loadIconSet(appRoot, config)
   for (const platform of platforms) {
     await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
-      appRoot,
-      iconsDir: icon.dir,
+      set,
       background: icon.iconBackground,
       backgroundDark: icon.iconBackgroundDark,
       report,

@@ -1,11 +1,16 @@
 // Launcher icons — ONE source set, the right art per platform.
 //
 // The app declares a single icon directory (`icons` in adaptv.config.ts, default
-// `./public/favicons`) and adaptv reads it for BOTH the web manifest (src/vite/manifest.ts)
-// and the native launcher icons. There is deliberately no second `assets/logo.png`
-// convention: a PWA icon set already ships platform-specific art, so the framework's job is
-// to PICK the right member of that set for the build being produced — not to ask the dev to
-// maintain another file that says the same thing. → DECISIONS.md L8 (one config source).
+// `./public/favicons`) and adaptv reads it for BOTH the web manifest and the native launcher
+// icons. There is deliberately no second `assets/logo.png` convention: a PWA icon set already
+// ships platform-specific art, so the framework's job is to PICK the right member of that set
+// for the build being produced — not to ask the dev to maintain another file that says the same
+// thing. → DECISIONS.md L8 (one config source).
+//
+// **Reading** the directory is not here — it is `src/vite/icon-set.ts`, because the manifest and
+// the head need exactly the same answer and used to compute their own (see that file's header).
+// What stays here is everything that is native-only: ranking the set for a PLATFORM, the one
+// sentence the dev may need to act on, and writing the iOS/Android art with sharp.
 //
 // adaptv writes the native icon files itself rather than shelling out to `@capacitor/assets`.
 // That package is a 260-package tree pinned to an old `@capacitor/cli` whose `sharp` needs a
@@ -13,61 +18,77 @@
 // 1024px PNG for iOS, fifteen mipmaps plus a colour resource for Android. adaptv already
 // hand-writes the native splash + theme resources next door (`patchAndroidSplash`,
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs"
+import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { monochromeMark } from "./artwork.mjs"
+import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
+import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
 
 /* =============================================================================
- * the icon set (pure — no fs, no sharp)
+ * the resolved set
  * ============================================================================= */
 
-// RASTER ONLY, on purpose. A PWA icon set's vector member is usually
-// `safari-pinned-tab.svg` — a flat monochrome silhouette that would make a solid black
-// launcher icon — and nothing in the filename reliably separates that from a real logo.svg.
-// Raster also keeps the resolution warning honest: a pixel count is a fact, "it's a vector"
-// is a promise. A dev with only an SVG gets the "no icons" warning, which names the fix.
-const ICON_EXTS = new Set([".png", ".webp", ".jpg", ".jpeg"])
+/** adaptv's own icon set, shipped in the package. → `DEFAULT_ICONS_URL_BASE` */
+export const DEFAULT_ICONS_DIR = path.join(
+  ADAPTV_ROOT,
+  "assets/default-icons",
+)
+
+/** `src/vite/icon-set.ts`, bundled once per process. */
+export const iconSetModule = () => loadAdaptvModule("vite/icon-set.ts")
 
 /**
- * Which platform an icon file was drawn FOR, from its name. These are the families a
- * standard PWA/favicon generator emits; anything unrecognised is `generic` — a plain
- * `icon.png` / `logo.png` / `my-mark.png`, which is the single best source there is.
+ * The icon set this app will be branded from — the dev's own art, or adaptv's mark when they
+ * have none. The SAME function the manifest and the head resolve through, so a run can never
+ * brand the launcher from one set and list another in `manifest.json`.
  */
-export function iconFamily(filename) {
-  const name = filename.toLowerCase()
-  if (name.includes("maskable")) return "maskable"
-  if (name.startsWith("android")) return "android"
-  if (name.startsWith("apple")) return "apple"
-  if (/^(?:ms|mstile|msapplication|browserconfig)/.test(name)) return "ms"
-  if (name.includes("favicon")) return "favicon"
-  return "generic"
+export async function loadIconSet(appRoot, config) {
+  const { resolveIconSet, scanIcons } = await iconSetModule()
+  return resolveIconSet(appRoot, config, scanIcons(DEFAULT_ICONS_DIR))
 }
 
 /**
- * Family preference per build target, best first.
+ * Family preference per SLOT, best first.
  *
  * iOS never masks an icon, so `maskable` art (a small mark floating in a 66dp safe zone)
- * ranks BELOW a full-bleed square — it would ship a tiny logo. Android inverts that: a
- * maskable source is already safe-zoned, which is exactly what an adaptive foreground wants.
+ * ranks BELOW a full-bleed square — it would ship a tiny logo. Android's adaptive foreground
+ * inverts that: a maskable source is already safe-zoned, which is exactly what it wants.
  * `favicon` is last everywhere — it's the 16–48px member of the set.
+ *
+ * `androidLegacy` is the pre-adaptive square/round mipmap, and it is a THIRD ranking rather
+ * than a reuse of `android` because those two slots want opposite art. Nothing masks the
+ * legacy square, so it wants the same full-bleed mark iOS does; feeding it the safe-zoned
+ * maskable source insets art that is already inset — 0.85 × 72/108 — and the launcher shows a
+ * mark at 57% of its icon, adrift in the brand colour. With one ranking for both, adaptv's own
+ * generated set hit that every time, because it always ships a maskable master.
  */
 const FAMILY_ORDER = {
   ios: ["apple", "generic", "android", "maskable", "ms", "favicon"],
   android: ["maskable", "android", "generic", "apple", "ms", "favicon"],
+  androidLegacy: [
+    "generic",
+    "android",
+    "apple",
+    "maskable",
+    "ms",
+    "favicon",
+  ],
 }
 
 /**
- * The smallest source that still renders crisply for a platform's largest icon slot:
- * iOS has exactly one 1024px slot (the App Store icon), Android's biggest is the
- * xxxhdpi adaptive foreground at 432px. Below this the source gets upscaled and the dev
- * is told so — above it, adaptv is only ever downscaling and there is nothing to say.
+ * The smallest source that still renders crisply for a slot's largest size: iOS has exactly one
+ * 1024px slot (the App Store icon), Android's biggest adaptive foreground is xxxhdpi at 432px,
+ * and its biggest legacy mipmap is 192px. Below this the source gets upscaled and the dev is
+ * told so — above it, adaptv is only ever downscaling and there is nothing to say.
+ *
+ * Only `ios` and `android` are WARNED about (`iconIssue`): the legacy square is derived from
+ * the same directory and a separate `!` about it would be a second sentence for one fix.
  */
-export const MIN_SOURCE_PX = { ios: 1024, android: 432 }
+export const MIN_SOURCE_PX = {
+  ios: 1024,
+  android: 432,
+  androidLegacy: 192,
+}
 
 /**
  * Pick the best source for one platform out of a scanned icon set.
@@ -126,121 +147,18 @@ export function iconIssue(pick, platform) {
   const min = MIN_SOURCE_PX[platform]
   if (pick.width < min)
     return `${platform} launcher icon upscaled from ${pick.width}px — add a ${min}px icon`
-  if (platform === "android" && !pick.transparent)
-    return `android launcher icon is opaque — add one with a transparent background`
-  return null
-}
-
-/* =============================================================================
- * reading the icon directory
- * ============================================================================= */
-
-/**
- * Every usable icon in `dirAbs`, with its REAL pixel size read from the file header rather
- * than parsed out of the filename. Names lie (`android-chrome-192.png` resized by hand,
- * `logo.png` with no size in it at all) and the resolution warning is only worth printing if
- * it is measured. Unreadable or non-image files are skipped, never fatal.
- */
-export function scanIcons(dirAbs) {
-  if (!existsSync(dirAbs)) return []
-  let names
-  try {
-    names = readdirSync(dirAbs)
-  } catch {
-    return []
-  }
-  const found = []
-  for (const name of names.sort()) {
-    if (!ICON_EXTS.has(path.extname(name).toLowerCase())) continue
-    const file = path.join(dirAbs, name)
-    let header
-    try {
-      // 4 KB covers a PNG's IHDR/tRNS, a WebP's VP8X/VP8L header, and a JPEG's SOF marker
-      // past the usual EXIF block — without pulling whole megabyte icons into memory.
-      const fd = readFileSync(file)
-      header = readImageHeader(fd.subarray(0, 4096))
-    } catch {
-      continue
-    }
-    if (!header) continue
-    found.push({ file, name, family: iconFamily(name), ...header })
-  }
-  return found
-}
-
-/**
- * `{ width, height, alpha }` from an image header, or null when the bytes aren't a PNG,
- * JPEG or WebP. Header-only: ranking a directory of icons must not cost a decode each.
- */
-export function readImageHeader(buf) {
-  if (buf.length < 24) return null
-
-  // PNG — IHDR is always the first chunk: width/height at 16/20, colour type at 25.
-  // Bit 2 of the colour type is the alpha channel (4 = grey+A, 6 = RGBA); a palette image
-  // (3) carries its transparency in a separate tRNS chunk instead.
-  if (buf.readUInt32BE(0) === 0x89504e47) {
-    const colorType = buf[25]
-    return {
-      width: buf.readUInt32BE(16),
-      height: buf.readUInt32BE(20),
-      alpha: (colorType & 4) !== 0 || buf.includes("tRNS", 0, "latin1"),
-    }
-  }
-
-  // WebP — RIFF container, then one of three header chunks.
+  // The opacity warning is about art that will be INSET into the safe zone: an opaque block
+  // scaled to 72/108 shows its own background as a square floating inside the mask. Art of the
+  // `maskable` family is not inset — `writeAndroidIcons` gives it `foregroundScale = 1` because
+  // it is already drawn to the spec — so an opaque one is full-bleed, the launcher masks it, and
+  // there is nothing to report. Warning anyway is what `gen icons` output started tripping the
+  // moment it learned to keep a detected background on the foreground it writes.
   if (
-    buf.readUInt32BE(0) === 0x52494646 &&
-    buf.readUInt32BE(8) === 0x57454250
-  ) {
-    const chunk = buf.toString("latin1", 12, 16)
-    if (chunk === "VP8X")
-      return {
-        width: (buf.readUIntLE(24, 3) & 0xffffff) + 1,
-        height: (buf.readUIntLE(27, 3) & 0xffffff) + 1,
-        alpha: (buf[20] & 0x10) !== 0,
-      }
-    if (chunk === "VP8L") {
-      const bits = buf.readUInt32LE(21)
-      return {
-        width: (bits & 0x3fff) + 1,
-        height: ((bits >> 14) & 0x3fff) + 1,
-        alpha: (buf[24] & 0x10) !== 0,
-      }
-    }
-    if (chunk === "VP8 ")
-      return {
-        width: buf.readUInt16LE(26) & 0x3fff,
-        height: buf.readUInt16LE(28) & 0x3fff,
-        alpha: false,
-      }
-    return null
-  }
-
-  // JPEG — walk the segment chain to a start-of-frame marker, which is the only place the
-  // dimensions live. JPEG has no alpha channel at all.
-  if (buf.readUInt16BE(0) === 0xffd8) {
-    let i = 2
-    while (i + 9 < buf.length) {
-      if (buf[i] !== 0xff) {
-        i++
-        continue
-      }
-      const marker = buf[i + 1]
-      // SOF0–SOF15, minus the four markers in that range that aren't frame headers.
-      if (
-        marker >= 0xc0 &&
-        marker <= 0xcf &&
-        ![0xc4, 0xc8, 0xcc, 0xd8].includes(marker)
-      )
-        return {
-          height: buf.readUInt16BE(i + 5),
-          width: buf.readUInt16BE(i + 7),
-          alpha: false,
-        }
-      i += 2 + buf.readUInt16BE(i + 2)
-    }
-  }
-
+    platform === "android" &&
+    !pick.transparent &&
+    pick.family !== "maskable"
+  )
+    return `android launcher icon is opaque — add one with a transparent background`
   return null
 }
 
@@ -257,11 +175,9 @@ const ANDROID_DENSITIES = [
   ["xxxhdpi", 192, 432],
 ]
 
-// An adaptive icon's foreground is 108dp but only its centre 72dp is guaranteed to survive
-// the launcher's mask, so a full-bleed mark loses its edges. Art that is ALREADY safe-zoned
-// (a `maskable` source, drawn to that spec) must not be inset a second time or the logo ends
-// up a speck; everything else gets scaled into the safe zone.
-const SAFE_ZONE = 72 / 108
+/** A measured `{r,g,b}` back to the `#rrggbb` an Android colour resource needs. */
+const hexOf = ({ r, g, b }) =>
+  `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`
 
 /** `#rgb` / `#rrggbb` → a sharp background. Anything unparseable falls back to white. */
 export function parseHex(hex) {
@@ -281,8 +197,6 @@ export function parseHex(hex) {
     alpha: 1,
   }
 }
-
-const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }
 
 /**
  * Load sharp lazily. It is a native module, so a `dev web` run should never pay to load it,
@@ -310,52 +224,150 @@ async function compose(sharp, src, { canvas, size, background }) {
     .png()
 }
 
+/** The iOS 18 appearance slots, as the asset catalog names and declares them. */
+const IOS_APPEARANCES = [
+  { file: "AppIcon-512@2x.png", family: null, value: null },
+  { file: "AppIcon-Dark-512@2x.png", family: "dark", value: "dark" },
+  {
+    file: "AppIcon-Tinted-512@2x.png",
+    family: "tinted",
+    value: "tinted",
+  },
+]
+
 /**
- * iOS: a single 1024px `AppIcon-512@2x.png` in the asset catalog Capacitor already
- * scaffolds — the `Contents.json` next to it declares exactly this one universal slot, so
- * there is nothing else to write. FLATTENED onto the brand colour on purpose: App Store
- * Connect rejects an icon with an alpha channel, and a transparent mark shipped as-is
- * renders black on the device.
+ * iOS: the app icon and its two iOS 18 APPEARANCES, plus the `Contents.json` that declares them.
+ *
+ * The catalog used to hold one universal slot, which is what Xcode scaffolds and what adaptv
+ * left alone. That is the state every app is in until someone does this work, and it is why so
+ * many App Store apps still show their light icon unchanged on a dark home screen: with no
+ * variant supplied, iOS has nothing to switch to. Apps that DO change — the ones this was
+ * reported against — ship authored variants, and this is that.
+ *
+ *   light    flattened onto the brand colour and stripped of its alpha channel. App Store
+ *            Connect rejects an icon that merely HAS the channel, days after the archive.
+ *   dark     the mark with NO background: the system draws its own near-black backdrop under
+ *            it. The opposite requirement to the light slot, from the same vendor.
+ *   tinted   greyscale on black. iOS reads the luminance and maps the user's chosen colour
+ *            onto it, so this one is a ramp rather than a picture.
+ *
+ * Each is written only if the resolved set actually has that art (`gen icons` produces
+ * `icon-dark.png` / `icon-tinted.png`; a hand-dropped favicon set will not have them), and the
+ * `Contents.json` declares exactly the files that got written — a catalog naming a file that
+ * is not there fails the build.
  */
-async function writeIosIcon(sharp, nativeRoot, pick, background) {
-  const dest = path.join(
+async function writeIosIcon(sharp, nativeRoot, pick, background, set) {
+  const dir = path.join(
     nativeRoot,
-    "App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+    "App/App/Assets.xcassets/AppIcon.appiconset",
   )
-  mkdirSync(path.dirname(dest), { recursive: true })
-  // Full bleed when the source is its own square (an opaque `android-chrome`/`apple-icon`
-  // already carries its background); inset a transparent mark so it isn't corner-to-corner.
-  const size = Math.round(1024 * (pick.transparent ? 0.82 : 1))
-  await (
-    await compose(sharp, pick.file, { canvas: 1024, size, background })
+  mkdirSync(dir, { recursive: true })
+
+  const images = []
+  for (const slot of IOS_APPEARANCES) {
+    // The light slot is the ranked pick — whatever the app's best art is. The appearance slots
+    // are matched by FAMILY, never by rank: they are not "a better icon", they are a different
+    // one, and `pickIcon` must never return them for a normal build.
+    const art = slot.family
+      ? set?.icons?.find((i) => i.family === slot.family)
+      : pick
+    if (!art) continue
+
+    // MEASURED, not guessed. The light slot was `pick.transparent ? 0.82 : 1` — full bleed for
+    // anything opaque, on the theory that an opaque source carries its own background and
+    // insetting would frame one background inside another. True of a finished tile, and false
+    // of the far more common case: a logo exported flat on white. Those went edge to edge,
+    // reported as *"o icon para iOS fica completamente sem margem colado às margens"*.
+    //
+    // The appearance variants are already composed for their slot — `gen icons` fitted them, or
+    // the dev authored them — so they go in whole.
+    const size = Math.round(1024 * (slot.family ? 1 : pick.fit))
+    let out = await compose(sharp, art.file, {
+      canvas: 1024,
+      size,
+      background: slot.family === "dark" ? TRANSPARENT : background,
+    })
+    //Only the light slot must lose its alpha. The dark one MUST keep it (the system composites
+    //it), and the tinted one is already opaque on black.
+    if (!slot.family) out = out.flatten({ background }).removeAlpha()
+    await out.toFile(path.join(dir, slot.file))
+
+    images.push({
+      ...(slot.value
+        ? {
+            appearances: [{ appearance: "luminosity", value: slot.value }],
+          }
+        : {}),
+      filename: slot.file,
+      idiom: "universal",
+      platform: "ios",
+      size: "1024x1024",
+    })
+  }
+
+  writeFileSync(
+    path.join(dir, "Contents.json"),
+    `${JSON.stringify(
+      { images, info: { author: "adaptv", version: 1 } },
+      null,
+      2,
+    )}\n`,
   )
-    //`flatten` composites the transparency away but LEAVES the (now redundant) channel, and
-    //App Store Connect rejects an icon that merely HAS one. `removeAlpha` is what actually
-    //drops it — without this the upload is refused after the archive, not before it.
-    .flatten({ background })
-    .removeAlpha()
-    .toFile(dest)
 }
 
 /**
- * Android: the legacy square + round mipmaps, the adaptive-icon foreground, and the colour
- * the adaptive background resolves to. The `mipmap-anydpi-v26/*.xml` that wire foreground to
- * background are part of Capacitor's template and already correct — adaptv only replaces the
- * art they point at, and the `values/ic_launcher_background.xml` colour they resolve.
+ * Android: the legacy square + round mipmaps, the adaptive-icon foreground and monochrome
+ * layers, the `mipmap-anydpi-v26/*.xml` that wire them together, and the colour the adaptive
+ * background resolves to.
+ *
+ * The XMLs used to be left alone as "part of Capacitor's template and already correct". They
+ * are correct for the two layers they declare and silently incomplete about the third:
+ * Capacitor's template has no `<monochrome>`, so on Android 13+ the app simply opted out of
+ * themed icons and sat in full colour on a home screen where everything else had taken the
+ * wallpaper's palette. Same symptom as an iOS icon with no dark variant, same fix.
+ *
+ * TWO sources, because the two slots want opposite art: `pick` is the adaptive foreground
+ * (safe-zoned, transparent, masked by the launcher) and `legacy` is the pre-adaptive square,
+ * which nothing masks and which therefore wants the same full-bleed mark iOS gets. They are
+ * often the same file — a set with only `icon.png` has one answer for both — and when they
+ * differ it is exactly the case that used to ship a 57%-scale logo adrift in the brand colour.
  */
 async function writeAndroidIcons(
   sharp,
   nativeRoot,
   pick,
-  { light, dark },
+  legacy,
+  { light, dark, set },
 ) {
   const res = path.join(nativeRoot, "app/src/main/res")
   const background = parseHex(light)
-  // A pre-safe-zoned source is already inset; a plain mark still has to be scaled into the
-  // 72dp window. An opaque source stays full-bleed on the legacy square, where nothing masks
-  // it — insetting there would frame the icon's own background inside a second one.
-  const foregroundScale = pick.family === "maskable" ? 1 : SAFE_ZONE
-  const legacyScale = pick.transparent ? 0.85 : 1
+
+  // `ic_launcher_background` is the layer the transparent foreground is composited over, and it
+  // should be the colour the MARK WAS DRAWN ON whenever adaptv can see one. Otherwise a logo
+  // exported flat on white becomes a white mark on the config's brand colour, or — the case
+  // that first showed this up — a white mark on a white resource, i.e. nothing at all.
+  //
+  // The same colour on both appearances, deliberately: it is what the art was composed
+  // against, and adaptv has no dark-mode variant of the mark to justify swapping it.
+  // Read from the LEGACY pick, not the foreground one. The foreground is a layer and carries no
+  // background by construction — that is the whole point of it — so the colour has to come from
+  // a member of the set that is a standalone image. For a generated set that is `icon.png`; for
+  // a raw favicon set it is whatever full square `androidLegacy` chose.
+  const source = legacy.artBackground ?? pick.artBackground
+  const adaptive = source ? hexOf(source) : null
+  // Art of the `maskable` family is DRAWN to the adaptive spec, so it is already safe-zoned and
+  // must not be inset a second time; anything else is measured into the ring like every other
+  // circle-masked slot. The legacy square is never masked, so it takes the box fit.
+  const foregroundScale = pick.family === "maskable" ? 1 : pick.fitCircle
+  const legacyScale = legacy.family === "maskable" ? 1 : legacy.fit
+
+  // The themed layer, matched by FAMILY and never by rank — like the iOS appearance slots, it
+  // is not "a better icon" but a different one. `gen icons` writes `icon-monochrome.png` (and
+  // `--monochrome` replaces it); a hand-dropped favicon set has nothing of the sort, so the
+  // layer is DERIVED from the foreground instead. Deriving is the important half: an app that
+  // never ran `gen icons` is exactly the one that would otherwise ship no themed icon at all.
+  const authoredMono = set?.icons?.find((i) => i.family === "monochrome")
+  const monoScale = authoredMono ? 1 : foregroundScale
 
   for (const [density, legacyPx, foregroundPx] of ANDROID_DENSITIES) {
     const dir = path.join(res, `mipmap-${density}`)
@@ -371,8 +383,24 @@ async function writeAndroidIcons(
       })
     ).toFile(path.join(dir, "ic_launcher_foreground.png"))
 
+    // Themed icon. An AUTHORED layer goes in whole — the dev drew the alpha they want and the
+    // launcher's `SRC_IN` tint will use it verbatim. A derived one is ramped from the
+    // foreground's luminance AFTER composition, so the transparent surround stays out of the
+    // range the ramp is normalised against.
+    const mono = await (
+      await compose(sharp, authoredMono?.file ?? pick.file, {
+        canvas: foregroundPx,
+        size: Math.round(foregroundPx * monoScale),
+        background: TRANSPARENT,
+      })
+    ).toBuffer()
+    writeFileSync(
+      path.join(dir, "ic_launcher_monochrome.png"),
+      authoredMono ? mono : await monochromeMark(sharp, mono),
+    )
+
     const square = await (
-      await compose(sharp, pick.file, {
+      await compose(sharp, legacy.file, {
         canvas: legacyPx,
         size: Math.round(legacyPx * legacyScale),
         background,
@@ -396,10 +424,32 @@ async function writeAndroidIcons(
       .toFile(path.join(dir, "ic_launcher_round.png"))
   }
 
-  writeColorRes(path.join(res, "values"), light)
+  writeAdaptiveRes(path.join(res, "mipmap-anydpi-v26"))
+  writeColorRes(path.join(res, "values"), adaptive ?? light)
   // `values-night` is resolved by the launcher the same way any other config-qualified
   // resource is, so a dark-mode home screen gets the dark brand colour behind the mark.
-  writeColorRes(path.join(res, "values-night"), dark)
+  writeColorRes(path.join(res, "values-night"), adaptive ?? dark)
+}
+
+/**
+ * The two `mipmap-anydpi-v26` descriptors, THREE layers each.
+ *
+ * `ic_launcher_round.xml` gets the identical document rather than something round: an
+ * adaptive icon is already shape-agnostic — the launcher owns the mask — and the round entry
+ * exists only so a launcher that asks for `@mipmap/ic_launcher_round` by name on API 26+
+ * doesn't fall through to the pre-adaptive bitmap.
+ */
+function writeAdaptiveRes(dir) {
+  mkdirSync(dir, { recursive: true })
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome"/>
+</adaptive-icon>
+`
+  for (const name of ["ic_launcher.xml", "ic_launcher_round.xml"])
+    writeFileSync(path.join(dir, name), xml)
 }
 
 function writeColorRes(dir, hex) {
@@ -428,12 +478,36 @@ function writeColorRes(dir, hex) {
  * smaller failure than no icon at all.
  */
 async function resolveTransparency(sharp, pick) {
+  let transparent = pick.alpha
   try {
     const { isOpaque } = await sharp(pick.file).stats()
-    return { ...pick, transparent: !isOpaque }
-  } catch {
-    return { ...pick, transparent: pick.alpha }
-  }
+    transparent = !isOpaque
+  } catch {}
+
+  // Where the art actually sits inside this file, and therefore how much of each native slot it
+  // may fill. The native brander used to guess with two constants — `0.82` for a transparent
+  // iOS pick, `0.85` for a transparent legacy square, full bleed otherwise — and the guess was
+  // wrong in the most common direction: a logo exported flat on white is opaque, so it went edge
+  // to edge on iOS. `measureArtwork` already knows better; `gen icons` was simply the only
+  // caller using it. Falls back to the old constants only if the measurement fails.
+  //Full bleed is the fallback for BOTH failure modes, and it is the same answer `slotPlan`
+  //gives: a source with no isolable mark (a photo, a gradient) is a finished picture, so the
+  //mask crops it rather than adaptv shrinking a picture it does not understand.
+  let fit = 1
+  let fitCircle = 1
+  let artBackground = null
+  try {
+    const { measureArtwork } = await import("./artwork.mjs")
+    const art = await measureArtwork(sharp, pick.file)
+    if (art.mark) {
+      //`whole: true` — these scale the FILE ON DISK, not a crop. See `fitScale`.
+      fit = fitScale(art, { shape: "box", whole: true })
+      fitCircle = fitScale(art, { shape: "circle", whole: true })
+      artBackground = art.background
+    }
+  } catch {}
+
+  return { ...pick, transparent, fit, fitCircle, artBackground }
 }
 
 /**
@@ -441,18 +515,19 @@ async function resolveTransparency(sharp, pick) {
  * may need to act on about it — `{ sharp, pick, warning }`, with a null `pick` when there is
  * nothing to brand from.
  *
- * Reads the icon DIRECTORY and nothing else, so the answer is available before the native
- * project exists: `preflight` states the warning under the banner, before the run touches
- * anything, and `brandLauncherIcon` acts on the same answer later (R33). Both go through
- * here so the sentence the dev reads and the file adaptv writes can never disagree.
+ * Takes an already-resolved {@link loadIconSet} rather than a directory, so the answer is
+ * available before the native project exists: `preflight` states the warning under the banner,
+ * before the run touches anything, and `brandLauncherIcon` acts on the same answer later (R33).
+ * Both go through here so the sentence the dev reads and the file adaptv writes can never
+ * disagree.
+ *
+ * The warning is only ever about THE ART FOR THIS PLATFORM — a source too small for iOS's
+ * 1024px slot, an opaque one where Android's foreground needs transparency. That the app has no
+ * art of its own at all is an app-level fact and belongs to `iconWarnings`, once (R21): it is
+ * equally true of a `dev web` run with no platforms in it, which never calls this at all.
  */
-export async function resolveLauncherSource(appRoot, iconsDir, platform) {
-  const candidates = scanIcons(path.resolve(appRoot, iconsDir))
-  if (candidates.length === 0)
-    return {
-      pick: null,
-      warning: `no icons in ${iconsDir} — add one to brand the launcher icon`,
-    }
+export async function resolveLauncherSource(set, platform) {
+  if (set.icons.length === 0) return { pick: null, warning: null }
 
   const sharp = await loadSharp()
   //Named as the dev's problem, not the module's: `sharp` is adaptv's own dependency, so
@@ -466,9 +541,14 @@ export async function resolveLauncherSource(appRoot, iconsDir, platform) {
 
   const pick = await resolveTransparency(
     sharp,
-    pickIcon(candidates, platform),
+    pickIcon(set.icons, platform),
   )
-  return { sharp, pick, warning: iconIssue(pick, platform) }
+  //adaptv's own mark is by construction a good source, so there is nothing to say about it.
+  return {
+    sharp,
+    pick,
+    warning: set.source === "default" ? null : iconIssue(pick, platform),
+  }
 }
 
 /**
@@ -483,20 +563,29 @@ export async function resolveLauncherSource(appRoot, iconsDir, platform) {
 export async function brandLauncherIcon(
   nativeRoot,
   platform,
-  { appRoot, iconsDir, background, backgroundDark, report, source },
+  { set, background, backgroundDark, report, source },
 ) {
   const { sharp, pick, warning } =
-    source ?? (await resolveLauncherSource(appRoot, iconsDir, platform))
+    source ?? (await resolveLauncherSource(set, platform))
   if (!pick) return { warning }
 
   report?.("processing resources")
   if (platform === "ios")
-    await writeIosIcon(sharp, nativeRoot, pick, parseHex(background))
-  else
-    await writeAndroidIcons(sharp, nativeRoot, pick, {
+    await writeIosIcon(sharp, nativeRoot, pick, parseHex(background), set)
+  else {
+    //The legacy square wants full-bleed art, which is usually a DIFFERENT member of the set
+    //from the safe-zoned adaptive foreground. Decoded the same way as the foreground pick,
+    //because `legacyScale` turns on whether the art actually uses transparency.
+    const legacy = await resolveTransparency(
+      sharp,
+      pickIcon(set.icons, "androidLegacy"),
+    )
+    await writeAndroidIcons(sharp, nativeRoot, pick, legacy, {
       light: background,
       dark: backgroundDark,
+      set,
     })
+  }
 
   return { warning }
 }

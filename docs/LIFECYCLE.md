@@ -519,8 +519,9 @@ baseline, not hand-assembly:
 - `adaptv.config.ts` (with a `web` block, optional `native.appId`, optional `ota`).
 - `vite.config.ts` with a single `adaptv()` call.
 - A `routing/` dir + one example `View`-rooted route (§`ARCHITECTURE.md §1`).
-- `src/sw.ts`, `src/styles/main.css`, a `public/favicons/` icon-set placeholder (`icons` — one set
-  for the manifest AND the native launcher icons).
+- `src/sw.ts`, `src/styles/main.css`. **No icon placeholder**: a scaffolded app with no `icons`
+  directory already wears adaptv's own mark on every surface, and `adaptv gen icons <image>`
+  replaces it in one command — a committed placeholder set would be twelve files to delete.
 - Scripts wired to `adaptv dev` / `vite build` / `adaptv run`.
 - Optionally scaffolds `android/`/`ios/` on first `adaptv sync` rather than at create time (keeps the repo
   lean; native projects are regenerable from config).

@@ -84,7 +84,50 @@ adaptv doctor                          # check the native toolchain (JDK, SDK, X
 adaptv dev     web|ios|android|all     # live reload: one Vite dev server, native WebViews attached
 adaptv preview ios|android|all         # build SPA → sync → install → launch (static, no reload)
 adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
+adaptv gen icons --input <image>       # the whole icon set — web + native — from one image
 
+# gen icons
+#   --input <image>    png or svg, 1024px+ — the only thing you normally pass
+#   --output <dir>     where to write. Defaults to `icons` in adaptv.config.ts; with
+#                      neither set, adaptv refuses rather than guessing a directory
+#   --yes              skip the "replace them?" prompt (required with no TTY)
+# gen icons — iOS 18 appearances (derived from --input unless you override)
+#   --dark <image>     the dark-mode icon: your mark with NO background, since iOS draws
+#                      its own near-black one
+#   --tinted <image>   the tinted icon: greyscale on black. In "Tinted" home-screen mode
+#                      the user picks ONE colour and iOS recolours every icon with it,
+#                      mapping that colour onto the luminance — bright greys take the
+#                      colour, dark ones stay dark
+# Apple recommends shipping all three: the system only generates them for designs simple
+# enough to have clear foreground/background contrast, and with no tinted variant supplied
+# it applies the tint over the ORIGINAL icon — background and all. adaptv always writes
+# them, from the isolated mark on true black, so the ramp uses the full range. Supply your
+# own when even that loses it: a DARK mark needs INVERTING for both (black art on a black
+# backdrop is nothing), and a mark whose internal colours share a luminance loses its
+# structure. adaptv measures the mark and says which of the two you need.
+# gen icons — Android themed icons (derived from --input unless you override)
+#   --monochrome <image>
+#                      the themed-icon layer. On Android 13+ the home screen recolours every
+#                      icon to match the wallpaper: the launcher takes this layer's ALPHA,
+#                      fills it with an ink it chose, and draws it on a background it chose.
+#                      An app with no <monochrome> layer opts out and sits there in full
+#                      colour. adaptv derives one from your mark's luminance — internal
+#                      contrast kept where the mark has any, a flat silhouette where it
+#                      hasn't — so a black wordmark themes correctly instead of vanishing.
+#                      Supply your own to draw the simplified one-ink version yourself
+# gen icons — tuning (you shouldn't need these)
+#   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
+#                      safe ring on Android, the tile itself on iOS and the favicons.
+#                      adaptv warns below the default and above 30
+#   --padding <pct>    extra inset on EVERY icon, on top of the fit above (0–40, default 0)
+#   --background <hex> flatten colour for the slots that can't carry transparency
+# Every run writes .adaptv/icons-preview.html — every icon under the mask its platform
+# actually applies, both safe-zone rings, and the manifest adaptv will emit. adaptv reads the
+# source's pixels to find where the background stops, then sizes the mark for each slot: by
+# RADIUS where a mask cuts a circle, by BOUNDING BOX where nothing crops it. Art you already
+# framed with room around it keeps that room — adaptv only ever adds. It WARNS about a source
+# that will make worse icons (too small, not square, no isolable background) and generates
+# anyway — it never refuses.
 # dev / preview flags
 #   --target <id>   launch on a specific device/simulator id (skips the picker)
 #   --latest        reuse the last device you picked for this platform
@@ -157,6 +200,11 @@ a Capacitor config. The native projects live inside the hidden, git-ignored **`.
 - **OTA** — self-hosted, pointer-flip bundle swaps via `adaptv/ota` (pure, testable policy + updater).
 - **Live reload** — `adaptv dev` runs one Vite dev server with the native WebViews attached and
   hot-reloading on save, including over the LAN to a physical device (`--host`).
+- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv gen icons
+  <image>` produces the set from a single png/svg; adaptv then **measures** what's there and
+  derives the web manifest, the head links, and the native launcher icons from it — full-bleed
+  art for iOS and Android's legacy square, safe-zoned maskable art for Android's adaptive
+  foreground. An app with no icons ships **adaptv's own mark**, never Capacitor's stock one.
 
 > **The seed is green:** `pnpm typecheck` (0), `pnpm test` (515/515), `pnpm biome:check` (0). CI runs all
 > three on every PR.

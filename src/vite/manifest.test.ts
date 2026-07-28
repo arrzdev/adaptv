@@ -1,7 +1,10 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { describe, expect, it } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import { resolveThemeColors } from "#adaptv/config/app-config"
-import { buildManifest, parseIconSize } from "#adaptv/vite/manifest"
+import { buildManifest } from "#adaptv/vite/manifest"
 
 const BASE: AdaptvAppConfig = {
   name: "ChopChop",
@@ -19,20 +22,97 @@ const BASE: AdaptvAppConfig = {
   },
 }
 
-describe("parseIconSize", () => {
-  it("parses explicit WxH", () => {
-    expect(parseIconSize("android-icon-36x36.png")).toBe("36x36")
-    expect(parseIconSize("android-icon-144x144.png")).toBe("144x144")
+/** An app root with `public/favicons/<name>` written as real PNG headers. */
+function appWithIcons(files: Record<string, number>) {
+  const root = mkdtempSync(path.join(tmpdir(), "adaptv-manifest-"))
+  const dir = path.join(root, "public/favicons")
+  mkdirSync(dir, { recursive: true })
+  for (const [name, px] of Object.entries(files)) {
+    const buf = Buffer.alloc(33)
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
+      buf,
+      0,
+    )
+    buf.writeUInt32BE(13, 8)
+    buf.write("IHDR", 12)
+    buf.writeUInt32BE(px, 16)
+    buf.writeUInt32BE(px, 20)
+    buf[24] = 8
+    buf[25] = 6
+    writeFileSync(path.join(dir, name), buf)
+  }
+  return root
+}
+
+describe("buildManifest — icons come from the files, not the filenames", () => {
+  it("reads the app's real icon directory rather than an `android-` prefix", () => {
+    //The old `collectIcons` accepted only names starting `android-` and took the size out of
+    //the name. A `logo-512.png` contributed nothing, and a hand-resized file lied about itself.
+    const root = appWithIcons({
+      "logo-512.png": 512,
+      "android-chrome-192.png": 180,
+    })
+    const manifest = buildManifest(
+      { ...BASE, icons: "./public/favicons" },
+      root,
+    )
+    expect(manifest.icons).toEqual([
+      {
+        src: "/favicons/android-chrome-192.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+      {
+        src: "/favicons/logo-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ])
   })
 
-  it("treats a single trailing number as square", () => {
-    expect(parseIconSize("android-chrome-192.png")).toBe("192x192")
-    expect(parseIconSize("android-chrome-512.png")).toBe("512x512")
+  it("re-reads on every call, so a dev adding art doesn't have to restart", () => {
+    const root = appWithIcons({ "icon-192.png": 192 })
+    const config = { ...BASE, icons: "./public/favicons" }
+    expect(buildManifest(config, root).icons).toHaveLength(1)
+
+    const buf = Buffer.alloc(33)
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
+      buf,
+      0,
+    )
+    buf.writeUInt32BE(13, 8)
+    buf.write("IHDR", 12)
+    buf.writeUInt32BE(512, 16)
+    buf.writeUInt32BE(512, 20)
+    buf[24] = 8
+    buf[25] = 6
+    writeFileSync(path.join(root, "public/favicons/icon-512.png"), buf)
+    expect(buildManifest(config, root).icons).toHaveLength(2)
   })
 
-  it("returns null when no size is present", () => {
-    expect(parseIconSize("favicon.ico")).toBeNull()
-    expect(parseIconSize("pinned-tab.svg")).toBeNull()
+  it("falls back to adaptv's own set when the app has no art at all", () => {
+    const root = appWithIcons({})
+    const manifest = buildManifest(
+      { ...BASE, icons: "./public/favicons" },
+      root,
+      [
+        {
+          file: "/adaptv/assets/default-icons/android-chrome-512.png",
+          name: "android-chrome-512.png",
+          family: "android",
+          width: 512,
+          height: 512,
+          alpha: true,
+        },
+      ],
+    )
+    expect(manifest.icons).toEqual([
+      {
+        src: "/adaptv-icons/android-chrome-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ])
   })
 })
 

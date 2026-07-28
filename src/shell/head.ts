@@ -31,176 +31,14 @@ export const defaultMetaTags = [
   },
 ] as const
 
-const FAVICON_BASE = "/favicons"
-
-/** Full favicon / touch-icon / PWA icon link set for TanStack Start apps. */
-export const defaultFaviconLinks = [
-  {
-    rel: "shortcut icon",
-    href: `${FAVICON_BASE}/favicon.ico`,
-    type: "image/x-icon",
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "16x16",
-    href: `${FAVICON_BASE}/favicon-16x16.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "32x32",
-    href: `${FAVICON_BASE}/favicon-32x32.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "96x96",
-    href: `${FAVICON_BASE}/favicon-96x96.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "512x512",
-    href: `${FAVICON_BASE}/favicon-512x512.png`,
-  },
-  {
-    rel: "icon",
-    href: `${FAVICON_BASE}/favicon-light.svg`,
-    type: "image/svg+xml",
-    media: "(prefers-color-scheme: light)",
-  },
-  {
-    rel: "icon",
-    href: `${FAVICON_BASE}/favicon-dark.svg`,
-    type: "image/svg+xml",
-    media: "(prefers-color-scheme: dark)",
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "180x180",
-    href: `${FAVICON_BASE}/apple-touch-icon-180.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "152x152",
-    href: `${FAVICON_BASE}/apple-icon-152x152.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "144x144",
-    href: `${FAVICON_BASE}/apple-icon-144x144.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "120x120",
-    href: `${FAVICON_BASE}/apple-icon-120x120.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "114x114",
-    href: `${FAVICON_BASE}/apple-icon-114x114.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "76x76",
-    href: `${FAVICON_BASE}/apple-icon-76x76.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "72x72",
-    href: `${FAVICON_BASE}/apple-icon-72x72.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "60x60",
-    href: `${FAVICON_BASE}/apple-icon-60x60.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    sizes: "57x57",
-    href: `${FAVICON_BASE}/apple-icon-57x57.png`,
-  },
-  {
-    rel: "apple-touch-icon",
-    href: `${FAVICON_BASE}/apple-touch-icon.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "192x192",
-    href: `${FAVICON_BASE}/android-chrome-192.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "512x512",
-    href: `${FAVICON_BASE}/android-chrome-512.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "144x144",
-    href: `${FAVICON_BASE}/android-icon-144x144.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "96x96",
-    href: `${FAVICON_BASE}/android-icon-96x96.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "72x72",
-    href: `${FAVICON_BASE}/android-icon-72x72.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "48x48",
-    href: `${FAVICON_BASE}/android-icon-48x48.png`,
-  },
-  {
-    rel: "icon",
-    type: "image/png",
-    sizes: "36x36",
-    href: `${FAVICON_BASE}/android-icon-36x36.png`,
-  },
-  {
-    rel: "mask-icon",
-    href: `${FAVICON_BASE}/pinned-tab.svg`,
-    color: "#5bbad5",
-  },
-] as const
-
+// Windows tile metadata. ONLY the colour: the tile IMAGE metas this used to emit
+// (`msapplication-TileImage`, the square/wide logos, `msapplication-config`) all pointed at
+// hardcoded `/favicons/ms-icon-*.png` and `browserconfig.xml` paths that adaptv has never
+// generated and most apps have never had — six meta tags of 404 in every document. An app that
+// genuinely wants them can pass them through `meta`.
 function getMsApplicationMeta(themeColorLight: string) {
   return [
     { name: "msapplication-TileColor", content: themeColorLight },
-    {
-      name: "msapplication-TileImage",
-      content: `${FAVICON_BASE}/ms-icon-144x144.png`,
-    },
-    {
-      name: "msapplication-square70x70logo",
-      content: `${FAVICON_BASE}/ms-icon-70x70.png`,
-    },
-    {
-      name: "msapplication-square150x150logo",
-      content: `${FAVICON_BASE}/ms-icon-150x150.png`,
-    },
-    {
-      name: "msapplication-wide310x150logo",
-      content: `${FAVICON_BASE}/ms-icon-310x310.png`,
-    },
-    {
-      name: "msapplication-square310x310logo",
-      content: `${FAVICON_BASE}/ms-icon-310x310.png`,
-    },
-    {
-      name: "msapplication-config",
-      content: `${FAVICON_BASE}/browserconfig.xml`,
-    },
   ] as const
 }
 
@@ -314,7 +152,12 @@ export function pwaHead(config: PwaHeadConfig) {
 
   const links: Array<Record<string, string>> = [
     { rel: "manifest", href: manifestPath },
-    ...defaultFaviconLinks.map((link) => ({ ...link })),
+    //NB: no built-in favicon links. They used to be a hardcoded twenty-entry list under a
+    //hardcoded `/favicons` base — it ignored the `icons` config key entirely, so any app whose
+    //icons lived elsewhere shipped a head full of 404s, and even one using the default
+    //directory 404'd on every file its favicon generator happened not to emit. The real set is
+    //resolved at BUILD time (`headIconLinks` in `src/vite/icon-set.ts`) from the files that
+    //exist, and arrives here through `links`. → `DECISIONS.md` L8.
     ...extraLinks,
   ]
 

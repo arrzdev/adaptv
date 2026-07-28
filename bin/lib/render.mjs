@@ -560,11 +560,41 @@ export async function select(message, options) {
         // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
         // The caller registers a process 'exit' hook that tears down anything already
         // started (e.g. the dev server running behind this picker), so exiting here is safe.
-        done(() => process.exit(130))
+        done(() => {
+          // SAY so. The picker erases itself on the way out (that is the point of it), so
+          // aborting used to leave the banner, whatever notices preceded it, and then a bare
+          // shell prompt — reported as *"quando a pessoa cancela algo deve aparecer… isto está
+          // muito vazio"*. Erasing the prompt is right; erasing the fact that it was answered
+          // is not, and the dev is left unsure whether the command did anything.
+          log.warn("cancelled")
+          spacer()
+          process.exit(130)
+        })
       }
     }
     stdin.on("data", onData)
   })
+}
+
+/**
+ * A yes/no the dev has to answer before adaptv does something it can't undo — `true`, `false`,
+ * or **`null` when nothing could be asked** (no TTY: CI, a pipe, an editor task runner).
+ *
+ * Built on `select` rather than beside it, so the two share one look and one erase (R26). The
+ * `null` is the part that isn't `select`'s behaviour and is the point: `select` takes the first
+ * option when it can't prompt, which is right for a device picker (any simulator will do) and
+ * catastrophic for "may I overwrite these files?" — it would answer yes on the dev's behalf,
+ * silently, in the one situation where nobody is watching. The caller turns `null` into a terse
+ * error naming the flag that decides it non-interactively (R7).
+ *
+ * `message` carries the fact, so there is no `!` line above it saying the same thing (R6).
+ */
+export async function confirm(message, { yes, no } = {}) {
+  if (!isTTY || !process.stdin.isTTY) return null
+  return await select(message, [
+    { value: true, label: yes ?? "yes" },
+    { value: false, label: no ?? "cancel" },
+  ])
 }
 
 /* -------------------------------------------------------------------------- */
