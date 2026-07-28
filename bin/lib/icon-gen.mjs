@@ -27,7 +27,7 @@ import {
 import path from "node:path"
 import { measureArtwork } from "./artwork.mjs"
 import { encodeIco } from "./ico.mjs"
-import { artTarget, safeScale, TRANSPARENT } from "./icon-geometry.mjs"
+import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 
 /* =============================================================================
  * geometry
@@ -39,71 +39,71 @@ const ICO_SIZES = [16, 32, 48]
 /**
  * Every file `gen icons` writes, as `[name, px, treatment]`.
  *
- * `treatment` is the whole design in one column:
- *   - `bleed`  the mark fills its square, transparency preserved.
- *   - `safe`   the mark is inset into the 72/108 safe zone, transparency preserved.
- *   - `flat`   like `bleed`, then flattened onto the brand colour and stripped of its alpha
- *              channel — for slots the OS will never mask and must not receive transparency.
- *   - `masked` like `safe`, then flattened. The web maskable icon: art edge-to-edge on a
- *              solid background, with the logo inside the safe zone.
+ * `treatment` is the whole design in two letters — `<shape><alpha>`:
+ *   - shape `circle` the slot is masked to a disc, so the mark is fitted by RADIUS inside the
+ *            safe ring; `box` nothing crops it, so it is fitted by BOUNDING BOX inside the tile.
+ *   - alpha `keep` transparency is preserved; `flat` the result is composited onto the
+ *            background and stripped of its alpha channel, for slots that must not carry one.
+ *
+ * EVERY slot is fitted, which is the fix for an iOS icon sitting flush against its own edges:
+ * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
+ * tile. The margin is one number and it now applies everywhere — only the LIMIT it is measured
+ * against changes (`LIMIT` in `icon-geometry.mjs`).
  */
 export const ICON_SET = [
   //the native masters — biggest of their family, which is how `pickIcon` finds them
-  ["icon.png", 1024, "bleed"],
-  ["icon-maskable.png", 1024, "safe"],
+  ["icon.png", 1024, "box", "keep"],
+  ["icon-maskable.png", 1024, "circle", "keep"],
   //the web manifest
-  ["android-chrome-192.png", 192, "bleed"],
-  ["android-chrome-512.png", 512, "bleed"],
-  ["android-maskable-192.png", 192, "masked"],
-  ["android-maskable-512.png", 512, "masked"],
+  ["android-chrome-192.png", 192, "box", "keep"],
+  ["android-chrome-512.png", 512, "box", "keep"],
+  ["android-maskable-192.png", 192, "circle", "flat"],
+  ["android-maskable-512.png", 512, "circle", "flat"],
   //the head
-  ["apple-touch-icon-180.png", 180, "flat"],
-  ["favicon-16x16.png", 16, "bleed"],
-  ["favicon-32x32.png", 32, "bleed"],
-  ["favicon-96x96.png", 96, "bleed"],
-  ["favicon-512x512.png", 512, "bleed"],
+  ["apple-touch-icon-180.png", 180, "box", "flat"],
+  ["favicon-16x16.png", 16, "box", "keep"],
+  ["favicon-32x32.png", 32, "box", "keep"],
+  ["favicon-96x96.png", 96, "box", "keep"],
+  ["favicon-512x512.png", 512, "box", "keep"],
 ]
 
-/** Whether a slot is masked by the OS and therefore has to respect the safe ring. */
-const isMasked = (treatment) =>
-  treatment === "safe" || treatment === "masked"
-
 /**
- * What a slot is drawn FROM and at what scale — `{ art, scale, background }`.
+ * What a slot is drawn FROM, at what scale, on what background — `{ art, scale, background,
+ * flatten }`.
  *
- * The two kinds of slot want opposite things and used to be handled by one number:
- *
- *  - **Unmasked** (`bleed`, `flat`: iOS, the favicons, the manifest's `any` icons) take the
- *    source WHOLE, untouched. Nothing crops them, so the dev's own composition — margins,
- *    off-centre placement, a full-bleed background — is theirs to keep.
- *  - **Masked** (`safe`, `masked`: Android's adaptive foreground, the web maskable pair) take
- *    the measured MARK, scaled so its furthest pixel lands on the safe ring, on the background
- *    it was found sitting on. This is the fix for a mask cutting a logo's ears off: the art is
- *    isolated, re-centred and zoomed out until it fits the circle, instead of being inset by a
- *    fixed 0.667 that only ever suited a perfectly round logo.
+ * Every slot now goes through the same measurement. It used to be only the masked ones: the
+ * unmasked slots took the source WHOLE at scale 1, on the theory that nothing crops them so the
+ * dev's own composition is theirs to keep. That was right about cropping and wrong about the
+ * result — a mark drawn to fill its frame produced an iOS icon flush against its own edges,
+ * reported as *"fica completamente sem margem colado às margens"*. Nothing was cutting it; it
+ * simply looked wrong, and adaptv had measured exactly what it needed to know to fix it.
  *
  * `artwork.mark` is null when the source has no isolable background (a photo, a gradient). Then
- * there is nothing to re-lay-out and every slot takes the source whole — the old behaviour, and
+ * there is nothing to lift out and every slot takes the source whole — the old behaviour, and
  * the case `sourceWarnings` warns will be cropped.
  */
-function slotPlan(treatment, artwork, source, background, target) {
-  //`flat`/`masked` must never carry alpha; `bleed`/`safe` normally keep it.
-  const opaqueSlot = treatment === "flat" || treatment === "masked"
-  if (!isMasked(treatment) || !artwork.mark)
-    return { art: source, scale: 1, background, flatten: opaqueSlot }
+function slotPlan(
+  [, , shape, alpha],
+  artwork,
+  source,
+  background,
+  margin,
+) {
+  const flatten = alpha === "flat"
+  if (!artwork.mark) return { art: source, scale: 1, background, flatten }
 
   return {
     art: artwork.mark,
-    scale: safeScale(artwork.radius, target),
+    scale: fitScale(artwork, { shape, margin }),
     //Keep the colour the art was found on, so a logo exported as a flat-coloured tile stays
     //that colour instead of jumping to the config's brand background.
     background: artwork.background ?? background,
-    // `safe` is Android's adaptive FOREGROUND, normally transparent so the launcher can
-    // composite it over `ic_launcher_background`. But once the mark has been lifted off a
-    // detected background, that colour is the icon's brand and lives nowhere else — leaving
-    // the foreground transparent hands the launcher a white chevron to draw on a white
-    // resource, and the icon vanishes. A source that HAD a background keeps it.
-    flatten: opaqueSlot || artwork.background !== null,
+    // A `keep` slot normally stays transparent — Android's adaptive foreground is composited
+    // over `ic_launcher_background` by the launcher. But once the mark has been lifted off a
+    // detected background, that colour is the icon's brand and lives nowhere else: leaving the
+    // foreground transparent hands the launcher a white chevron to draw on a white resource,
+    // and the icon vanishes. A source that HAD a background keeps it.
+    flatten: flatten || artwork.background !== null,
   }
 }
 
@@ -174,11 +174,11 @@ export async function generateIcons({
   //Measured by the caller so the WARNINGS and the LAYOUT come from one reading of the pixels —
   //a `!` that says the mask will crop, next to a set where it doesn't, is worse than silence.
   const art = artwork ?? (await measureArtwork(sharp, source))
-  const target = artTarget(margin)
 
   const written = []
-  for (const [name, px, treatment] of ICON_SET) {
-    const plan = slotPlan(treatment, art, source, bg, target)
+  for (const slot of ICON_SET) {
+    const [name, px] = slot
+    const plan = slotPlan(slot, art, source, bg, margin)
     const png = await render(sharp, plan.art, {
       canvas: px,
       scale: plan.scale * inset,
@@ -328,11 +328,20 @@ export function sourceWarnings({ width, height, isolable }, ext) {
     )
 
   // The one that is genuinely hard to discover on your own — and the ONLY case adaptv can no
-  // longer rescue. When the border is transparent, or a single flat colour, the mark is
-  // isolated and zoomed out until it clears the mask (`measureArtwork`). When it is a photo, a
-  // gradient or a screenshot, there is no "the logo" to move and the mask cuts whatever is at
-  // the edges. This used to fire for ANY opaque source, which was wrong the moment adaptv
-  // learned to detect a flat background: it warned about the case it had just fixed.
+  // longer rescue.
+  //
+  // ⚠︎ A transparent background is NOT required, and asking for one would be adaptv demanding
+  // something it does not need. What it needs is to know where the logo ENDS, and a flat colour
+  // says that just as clearly as alpha does: the mark is lifted off it, re-centred, fitted, and
+  // the colour is repainted around it. A logo exported flat on white — the normal output of
+  // every favicon generator — goes down exactly the same path as a transparent PNG and comes
+  // out identical. Requiring alpha would reject the most common working input there is.
+  //
+  // A photo, a gradient or a screenshot is the real failure: there is no "the logo" to move, so
+  // the mask cuts whatever is at the edges. That is what this warns about, and it is the only
+  // background shape the dev has to act on. It used to fire for ANY opaque source, which was
+  // wrong the moment adaptv learned to detect a flat background: it warned about the case it
+  // had just fixed.
   if (isolable === false)
     warnings.push(
       `source has no flat background — the mask will crop its edges`,

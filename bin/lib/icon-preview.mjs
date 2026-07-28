@@ -132,7 +132,8 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
 
 <h2>iOS home screen</h2>
 <p class="note">Flattened onto the brand colour and stripped of its alpha channel — App Store
-Connect rejects an icon that merely has one. iOS never masks, so this art is full-bleed.</p>
+Connect rejects an icon that merely has one. Nothing crops these, so the mark is fitted to the
+TILE rather than to a ring — the same margin, measured against a bigger limit.</p>
 <div class="row">
   ${tile("icon.png", "app icon", "ios mask")}
   ${tile("apple-touch-icon-180.png", "touch icon", "ios mask")}

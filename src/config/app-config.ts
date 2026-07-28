@@ -216,11 +216,13 @@ export type AdaptvAppConfig = {
    *
    * ⚠︎ Author the source **full-bleed on a flat (or transparent) background**. Every platform
    * applies its own mask — iOS rounds, Android cuts a circle or a squircle — so art that draws
-   * its own rounded-square background gets rounded twice. Keeping the background flat is what
-   * lets `gen icons` find where the logo ends: it reads the border, lifts the mark off it and
-   * zooms out until no mask can crop it. A gradient or a photo behind the mark can't be
-   * separated, so the logo is left where you drew it and the mask takes whatever reaches
-   * the edge.
+   * its own rounded-square background gets rounded twice.
+   *
+   * Transparency is **not** required: what `gen icons` needs is to know where the logo *ends*,
+   * and a flat colour says that as clearly as alpha does — the mark is lifted off it, re-centred
+   * and fitted, and the colour is repainted around it. A gradient or a photo behind the mark
+   * can't be separated, so the logo is left where you drew it and the mask takes whatever
+   * reaches the edge.
    */
   icons?: string
   /** Manifest orientation lock; also drives the runtime rotate guard. */

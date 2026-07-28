@@ -207,7 +207,7 @@ describe("generateIcons — the set adaptv's own consumers read back", () => {
     expect(await opaque("android-chrome-512.png")).toBe(false)
   })
 
-  it("insets maskable art into the safe zone and leaves full-bleed art alone", async () => {
+  it("fits every slot — the ring for masked art, the tile for the rest", async () => {
     //432 × 72/108 = 288. Measured on the ART, by trimming the transparent surround —
     //the canvas is the same size either way.
     const { dir, sharp } = await generated()
@@ -217,7 +217,9 @@ describe("generateIcons — the set adaptv's own consumers read back", () => {
         .toBuffer({ resolveWithObject: true })
       return info.width
     }
-    expect(await spread("icon.png")).toBe(1024)
+    //EVERY slot is fitted now, not just the masked ones — an unmasked icon used to take the
+    //source whole, which put a mark drawn to fill its frame flush against the tile's edge.
+    expect(await spread("icon.png")).toBeWithin(1024 * 0.9, 4)
     //Within a few px: the mark goes through a crop and two resizes, and the property under
     //test is "fitted to the safe ring", not a byte-exact width.
     expect(await spread("icon-maskable.png")).toBeWithin(

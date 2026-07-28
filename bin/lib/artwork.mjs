@@ -38,9 +38,13 @@ const MASTER_PX = 1024
  *                                and is therefore a finished picture to be used whole.
  * @property {{r:number,g:number,b:number,alpha:number}|null} background
  *                                The colour the art sat on, when it sat on a uniform one.
- * @property {number} radius      How far the art reaches from its own centre, in units of half
+ * @property {number} reach       How far the art reaches from its own centre, in units of half
  *                                the cropped square: `1` touches the inscribed circle, `√2`
- *                                fills the corners. This is the number the safe-zone fit needs.
+ *                                fills the corners. This is what a CIRCLE fit is computed from.
+ * @property {number} fill        How much of the original frame the art's bounding square
+ *                                occupied, 0–1. This is what a BOX fit is computed from, and it
+ *                                is also the ceiling on every fit: art the dev already framed
+ *                                loosely keeps its own margins rather than being blown up.
  */
 
 /**
@@ -70,13 +74,13 @@ export async function measureArtwork(sharp, source) {
   const background = detectBackground(px, w, h)
   //`undefined` is "the border is neither transparent nor uniform" — no artwork to isolate.
   if (background === undefined)
-    return { mark: null, background: null, radius: Math.SQRT2 }
+    return { mark: null, background: null, reach: Math.SQRT2, fill: 1 }
 
   const isArt = artTest(background)
   const box = bounds(px, w, h, isArt)
   //A source that is ENTIRELY background: nothing to protect, and cropping it would produce a
   //zero-width extract. Treat it as a picture and let the slots use it whole.
-  if (!box) return { mark: null, background, radius: Math.SQRT2 }
+  if (!box) return { mark: null, background, reach: Math.SQRT2, fill: 1 }
 
   const side = Math.max(box.right - box.left + 1, box.bottom - box.top + 1)
   const mark = await sharp(cutBackground(data, info, isArt), { raw: info })
@@ -95,7 +99,11 @@ export async function measureArtwork(sharp, source) {
   return {
     mark,
     background,
-    radius: reach(px, isArt, box),
+    reach: reachOf(px, isArt, box),
+    //How much of the frame the art occupied BEFORE cropping — the ceiling on every fit, so a
+    //logo the dev drew with room around it keeps that room instead of being enlarged to the
+    //slot's target.
+    fill: side / Math.max(w, h),
   }
 }
 
@@ -220,7 +228,7 @@ function bounds(px, w, h, isArt) {
  * corners, is what keeps a round logo from being needlessly shrunk: a circle reads `1.0` and
  * keeps the full 0.667 inset, while a square reads `√2` and is correctly given much less.
  */
-function reach(px, isArt, box) {
+function reachOf(px, isArt, box) {
   const cx = (box.left + box.right) / 2
   const cy = (box.top + box.bottom) / 2
   const half =

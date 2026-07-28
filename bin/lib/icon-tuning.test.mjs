@@ -51,7 +51,7 @@ describe("parseTuning — defaults are opinions a power user can take back", () 
 
     it("has its own sentence for zero, which is the one that can actually crop", () => {
       expect(parse({ margin: "0" }).warnings).toEqual([
-        "--margin 0 fills the mask exactly — any tighter mask will crop",
+        "--margin 0 leaves no room — art sits flush to every edge",
       ])
     })
 

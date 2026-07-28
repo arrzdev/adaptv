@@ -20,6 +20,7 @@
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { fitScale } from "./icon-geometry.mjs"
 import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
 
 /* =============================================================================
@@ -173,12 +174,6 @@ const ANDROID_DENSITIES = [
   ["xxxhdpi", 192, 432],
 ]
 
-// An adaptive icon's foreground is 108dp but only its centre 72dp is guaranteed to survive
-// the launcher's mask, so a full-bleed mark loses its edges. Art that is ALREADY safe-zoned
-// (a `maskable` source, drawn to that spec) must not be inset a second time or the logo ends
-// up a speck; everything else gets scaled into the safe zone.
-const SAFE_ZONE = 72 / 108
-
 /** `#rgb` / `#rrggbb` → a sharp background. Anything unparseable falls back to white. */
 export function parseHex(hex) {
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex ?? "").trim())
@@ -239,9 +234,13 @@ async function writeIosIcon(sharp, nativeRoot, pick, background) {
     "App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
   )
   mkdirSync(path.dirname(dest), { recursive: true })
-  // Full bleed when the source is its own square (an opaque `android-chrome`/`apple-icon`
-  // already carries its background); inset a transparent mark so it isn't corner-to-corner.
-  const size = Math.round(1024 * (pick.transparent ? 0.82 : 1))
+  // MEASURED, not guessed. This was `pick.transparent ? 0.82 : 1` — full bleed for anything
+  // opaque, on the theory that an opaque source carries its own background and insetting would
+  // frame one background inside another. True of a finished tile, and false of the far more
+  // common case: a logo exported flat on white. Those went edge to edge, reported as *"o icon
+  // para iOS fica completamente sem margem colado às margens"*. `fitScale` reads where the art
+  // actually is and leaves the same margin every other slot gets.
+  const size = Math.round(1024 * pick.fit)
   await (
     await compose(sharp, pick.file, { canvas: 1024, size, background })
   )
@@ -274,14 +273,11 @@ async function writeAndroidIcons(
 ) {
   const res = path.join(nativeRoot, "app/src/main/res")
   const background = parseHex(light)
-  // A pre-safe-zoned source is already inset; a plain mark still has to be scaled into the
-  // 72dp window.
-  const foregroundScale = pick.family === "maskable" ? 1 : SAFE_ZONE
-  // An opaque source stays full-bleed on the legacy square — insetting there would frame the
-  // icon's own background inside a second one. A transparent mark gets a small breathing gap.
-  // Safe-zoned art, if it is genuinely all there is, must NOT be inset again on top of that.
-  const legacyScale =
-    legacy.family === "maskable" ? 1 : legacy.transparent ? 0.85 : 1
+  // Art of the `maskable` family is DRAWN to the adaptive spec, so it is already safe-zoned and
+  // must not be inset a second time; anything else is measured into the ring like every other
+  // circle-masked slot. The legacy square is never masked, so it takes the box fit.
+  const foregroundScale = pick.family === "maskable" ? 1 : pick.fitCircle
+  const legacyScale = legacy.family === "maskable" ? 1 : legacy.fit
 
   for (const [density, legacyPx, foregroundPx] of ANDROID_DENSITIES) {
     const dir = path.join(res, `mipmap-${density}`)
@@ -354,12 +350,33 @@ function writeColorRes(dir, hex) {
  * smaller failure than no icon at all.
  */
 async function resolveTransparency(sharp, pick) {
+  let transparent = pick.alpha
   try {
     const { isOpaque } = await sharp(pick.file).stats()
-    return { ...pick, transparent: !isOpaque }
-  } catch {
-    return { ...pick, transparent: pick.alpha }
-  }
+    transparent = !isOpaque
+  } catch {}
+
+  // Where the art actually sits inside this file, and therefore how much of each native slot it
+  // may fill. The native brander used to guess with two constants — `0.82` for a transparent
+  // iOS pick, `0.85` for a transparent legacy square, full bleed otherwise — and the guess was
+  // wrong in the most common direction: a logo exported flat on white is opaque, so it went edge
+  // to edge on iOS. `measureArtwork` already knows better; `gen icons` was simply the only
+  // caller using it. Falls back to the old constants only if the measurement fails.
+  //Full bleed is the fallback for BOTH failure modes, and it is the same answer `slotPlan`
+  //gives: a source with no isolable mark (a photo, a gradient) is a finished picture, so the
+  //mask crops it rather than adaptv shrinking a picture it does not understand.
+  let fit = 1
+  let fitCircle = 1
+  try {
+    const { measureArtwork } = await import("./artwork.mjs")
+    const art = await measureArtwork(sharp, pick.file)
+    if (art.mark) {
+      fit = fitScale(art, { shape: "box" })
+      fitCircle = fitScale(art, { shape: "circle" })
+    }
+  } catch {}
+
+  return { ...pick, transparent, fit, fitCircle }
 }
 
 /**

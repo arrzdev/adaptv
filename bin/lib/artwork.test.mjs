@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { measureArtwork } from "./artwork.mjs"
-import { artTarget, SAFE_ZONE, safeScale } from "./icon-geometry.mjs"
+import { artTarget, fitScale, SAFE_ZONE } from "./icon-geometry.mjs"
 
 const sharpP = import("sharp").then((m) => m.default)
 
@@ -46,30 +46,54 @@ async function reachOf(buf) {
   return max / (w / 2)
 }
 
-describe("safeScale — the fit falls out of the measurement", () => {
-  it("lands every shape at the same distance, inside the ring", () => {
+describe("fitScale — the placement falls out of the measurement", () => {
+  const art = (reach, fill = 1) => ({ reach, fill })
+
+  it("lands every shape the same distance from the centre in a CIRCLE slot", () => {
     //The whole bug in two numbers. Android's safe zone is a CIRCLE, so art inset to a 0.667
     //SQUARE puts its corners at 0.667 × √2 = 0.94 — outside the circle every time. Measuring
-    //instead means a round mark and a square one both end up reaching ART_TARGET.
+    //instead means a round mark and a square one both end up reaching the same target.
     for (const reach of [1, 1.17, Math.SQRT2])
-      expect(reach * safeScale(reach)).toBeCloseTo(artTarget(), 5)
+      expect(
+        reach * fitScale(art(reach), { shape: "circle" }),
+      ).toBeCloseTo(artTarget(), 5)
   })
 
-  it("stops SHORT of the ring, so the icon isn't flush against the mask", () => {
-    //The ring is the cropping limit, not a target: art sized exactly to it survives every mask
-    //and still reads as an icon that outgrew its tile.
+  it("insets a BOX slot by the margin, whatever shape the art is", () => {
+    //Nothing crops these, so the constraint is the tile, not a radius — and a mark drawn to
+    //fill its frame used to come out flush against the edge of an iOS icon.
+    for (const reach of [1, Math.SQRT2])
+      expect(fitScale(art(reach), { shape: "box" })).toBeCloseTo(0.9, 5)
+  })
+
+  it("stops SHORT of every limit, so nothing sits flush", () => {
     expect(artTarget()).toBeLessThan(SAFE_ZONE)
-    expect(safeScale(Math.SQRT2)).toBeLessThan(0.5)
+    expect(fitScale(art(1), { shape: "box" })).toBeLessThan(1)
   })
 
-  it("never blows small art up to fill the zone", () => {
-    //`gen icons` reproduces a logo; it does not redesign one.
-    expect(safeScale(0.2)).toBe(1)
+  it("never blows up art the dev already framed with room around it", () => {
+    //`gen icons` reproduces a logo; it does not redesign one. `fill` is the ceiling.
+    expect(fitScale(art(1, 0.4), { shape: "box" })).toBeCloseTo(0.4, 5)
+    expect(fitScale(art(1, 0.4), { shape: "circle" })).toBeCloseTo(0.4, 5)
   })
 
-  it("falls back to the fixed inset rather than dividing by nothing", () => {
-    expect(safeScale(0)).toBe(artTarget())
-    expect(safeScale(Number.NaN)).toBe(artTarget())
+  it("honours the margin on both shapes", () => {
+    expect(fitScale(art(1), { shape: "box", margin: 0 })).toBeCloseTo(1, 5)
+    expect(fitScale(art(1), { shape: "circle", margin: 0 })).toBeCloseTo(
+      SAFE_ZONE,
+      5,
+    )
+    expect(fitScale(art(1), { shape: "box", margin: 30 })).toBeCloseTo(
+      0.7,
+      5,
+    )
+  })
+
+  it("falls back rather than dividing by nothing", () => {
+    expect(fitScale({}, { shape: "circle" })).toBeCloseTo(artTarget(), 5)
+    expect(
+      fitScale({ reach: Number.NaN, fill: Number.NaN }, { shape: "box" }),
+    ).toBeCloseTo(0.9, 5)
   })
 })
 
@@ -79,7 +103,7 @@ describe("measureArtwork — where the background stops", () => {
     expect(art.background).toBeNull()
     expect(art.mark).not.toBeNull()
     //a disc fills the inscribed circle of its box exactly
-    expect(art.radius).toBeCloseTo(1, 1)
+    expect(art.reach).toBeCloseTo(1, 1)
   })
 
   it("reads a FLAT COLOUR surround as background too", async () => {
@@ -90,7 +114,7 @@ describe("measureArtwork — where the background stops", () => {
       await png(inset("#ffffff")),
     )
     expect(art.background).toMatchObject({ r: 255, g: 255, b: 255 })
-    expect(art.radius).toBeCloseTo(1, 1)
+    expect(art.reach).toBeCloseTo(1, 1)
   })
 
   it("cuts the flat background OUT of the mark, not just around it", async () => {
@@ -105,7 +129,7 @@ describe("measureArtwork — where the background stops", () => {
 
   it("measures a square mark as reaching its corners", async () => {
     const art = await measureArtwork(await sharpP, await png(square()))
-    expect(art.radius).toBeCloseTo(Math.SQRT2, 1)
+    expect(art.reach).toBeCloseTo(Math.SQRT2, 1)
   })
 
   it("re-centres art that sat off-centre in its own file", async () => {
@@ -114,7 +138,7 @@ describe("measureArtwork — where the background stops", () => {
     const off = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
       <circle cx="150" cy="150" r="100" fill="#e0483c"/></svg>`
     const art = await measureArtwork(await sharpP, await png(off))
-    expect(art.radius).toBeCloseTo(1, 1)
+    expect(art.reach).toBeCloseTo(1, 1)
   })
 
   it("gives up on a background it cannot isolate, rather than inventing a mark", async () => {
@@ -127,7 +151,7 @@ describe("measureArtwork — where the background stops", () => {
       <rect width="512" height="512" fill="url(#g)"/></svg>`
     const art = await measureArtwork(await sharpP, await png(gradient))
     expect(art.mark).toBeNull()
-    expect(art.radius).toBeCloseTo(Math.SQRT2, 5)
+    expect(art.reach).toBeCloseTo(Math.SQRT2, 5)
   })
 
   it("treats an all-background image as having nothing to protect", async () => {
@@ -153,7 +177,7 @@ describe("the fitted mark actually clears the ring", () => {
          <circle cx="416" cy="96" r="48" fill="#e0483c"/></svg>`,
     )
     const art = await measureArtwork(sharp, spiky)
-    const scale = safeScale(art.radius)
+    const scale = fitScale(art, { shape: "circle" })
 
     const canvas = 512
     const inner = Math.round(canvas * scale)

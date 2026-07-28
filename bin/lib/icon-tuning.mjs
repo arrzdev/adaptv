@@ -28,7 +28,7 @@ export const TUNING = {
     max: 50,
     band: [DEFAULT_MARGIN, 30],
     fallback: DEFAULT_MARGIN,
-    what: "room left inside the mask",
+    what: "room left inside every slot's limit",
   },
   padding: {
     min: 0,
@@ -80,7 +80,7 @@ export function parseTuning(flags) {
 function tighter(name, n, low) {
   if (name === "margin")
     return n === 0
-      ? `--margin 0 fills the mask exactly — any tighter mask will crop`
+      ? `--margin 0 leaves no room — art sits flush to every edge`
       : `--margin ${n} leaves less room than the ${low}% default`
   return `--${name} ${n} is below the ${low}% default`
 }
@@ -89,6 +89,6 @@ function tighter(name, n, low) {
 function looser(name, n, spec) {
   const [, high] = spec.band
   if (name === "margin")
-    return `--margin ${n} shrinks the mark well inside the mask (${high}% is a lot)`
+    return `--margin ${n} shrinks the mark a long way in (${high}% is a lot)`
   return `--padding ${n} is a lot on top of the fit adaptv already computes`
 }

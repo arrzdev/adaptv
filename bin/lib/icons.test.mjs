@@ -342,14 +342,24 @@ describe("brandLauncherIcon — Android", () => {
     expect(colour("values-night")).toContain("#101014")
   })
 
-  it("insets a plain mark into the safe zone but leaves maskable art alone", async () => {
-    //Only the centre 72 of an adaptive foreground's 108dp survives the launcher mask, so a
-    //plain mark has to be scaled into it — but `maskable` art is DRAWN to that spec, and
-    //insetting it a second time leaves the logo a speck. Measure the art, not the canvas.
-    const spread = async (name) => {
-      const { nativeRoot, brand, sharp } = await fixture([
-        [name, 1024, false],
-      ])
+  it("fits a MARK into the ring, leaves maskable art and solid tiles alone", async () => {
+    //Three cases, one rule. Only the centre 72 of an adaptive foreground's 108dp survives the
+    //mask, so a mark is measured into it; `maskable` art is DRAWN to that spec and insetting
+    //it twice leaves the logo a speck; and a source with no isolable mark at all is a finished
+    //picture, so the mask crops it rather than adaptv shrinking something it can't read.
+    const spread = async (name, art = "solid") => {
+      const { appRoot, nativeRoot, brand, sharp } = await fixture([])
+      const icons = path.join(appRoot, "public/favicons")
+      mkdirSync(icons, { recursive: true })
+      await sharp(
+        Buffer.from(
+          art === "mark"
+            ? `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><circle cx="512" cy="512" r="512" fill="#dc323c"/></svg>`
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="#dc323c"/></svg>`,
+        ),
+      )
+        .png()
+        .toFile(path.join(icons, name))
       await brand("android")
       const { info } = await sharp(
         path.join(
@@ -362,9 +372,19 @@ describe("brandLauncherIcon — Android", () => {
         .toBuffer({ resolveWithObject: true })
       return info.width
     }
-    //432 × 72/108 = 288
-    expect(await spread("android-chrome-1024x1024.png")).toBe(288)
-    expect(await spread("android-maskable-1024x1024.png")).toBe(432)
+    //432 × 0.6 (the ring, less the default margin) = 259
+    expect(
+      await spread("android-chrome-1024x1024.png", "mark"),
+    ).toBeGreaterThan(250)
+    expect(
+      await spread("android-chrome-1024x1024.png", "mark"),
+    ).toBeLessThan(268)
+    //already drawn to the spec — not inset a second time
+    expect(await spread("android-maskable-1024x1024.png", "mark")).toBe(
+      432,
+    )
+    //a solid tile has no mark to protect; the mask crops it
+    expect(await spread("android-chrome-1024x1024.png", "solid")).toBe(432)
   })
 
   it("warns about a source that declares alpha but is a solid square", async () => {
