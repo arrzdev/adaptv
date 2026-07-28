@@ -46,6 +46,8 @@ const MIME: Record<string, string> = {
 
 /** Which platform an icon file was drawn FOR. → {@link iconFamily} */
 export type IconFamily =
+  | "dark"
+  | "tinted"
   | "maskable"
   | "android"
   | "apple"
@@ -73,6 +75,12 @@ export type IconFile = {
  */
 export function iconFamily(filename: string): IconFamily {
   const name = filename.toLowerCase()
+  // iOS 18 appearance variants, matched on the WHOLE basename rather than a `-dark` substring:
+  // a favicon set's `favicon-dark.svg` is a different idea entirely (a tab icon for a dark
+  // browser chrome), and letting it read as an app-icon appearance would put it in the asset
+  // catalog. Only `gen icons` writes these two names.
+  if (/^icon-dark\./.test(name)) return "dark"
+  if (/^icon-tinted\./.test(name)) return "tinted"
   if (name.includes("maskable")) return "maskable"
   if (name.startsWith("android")) return "android"
   if (name.startsWith("apple")) return "apple"
@@ -375,7 +383,14 @@ const MAX_MANIFEST_PX = 512
 // `apple` and `ms` art is linked from the HEAD, by rel, and means nothing to a manifest
 // consumer. Everything else — including a plain `favicon-512x512.png`, which is a perfectly
 // good 512px icon whatever its name says — is eligible.
-const NOT_IN_MANIFEST: ReadonlySet<IconFamily> = new Set(["apple", "ms"])
+const NOT_IN_MANIFEST: ReadonlySet<IconFamily> = new Set([
+  "apple",
+  "ms",
+  //iOS 18 appearance variants: one is a bare mark on nothing, the other greyscale on black.
+  //Either would be a baffling home-screen icon on any other platform.
+  "dark",
+  "tinted",
+])
 
 // Which family to keep when two files claim the same (size, purpose) slot. Nothing downstream
 // can tell them apart, so the tie is broken once, here, and deterministically.
@@ -531,7 +546,9 @@ export function headIconLinks(
       i.width === i.height &&
       i.family !== "apple" &&
       i.family !== "ms" &&
-      i.family !== "maskable",
+      i.family !== "maskable" &&
+      i.family !== "dark" &&
+      i.family !== "tinted",
   )
   // Everything a tab icon could want, ascending. An app whose ONLY art is the 1024px master
   // still gets a link — better one oversized favicon than none.

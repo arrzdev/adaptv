@@ -45,6 +45,10 @@ const MASTER_PX = 1024
  *                                occupied, 0–1. This is what a BOX fit is computed from, and it
  *                                is also the ceiling on every fit: art the dev already framed
  *                                loosely keeps its own margins rather than being blown up.
+ * @property {number} luminance   Mean relative luminance of the ART pixels alone, 0–1. Decides
+ *                                whether iOS's DARK app icon can be derived from this mark: the
+ *                                system draws it on a near-black backdrop, so a dark mark
+ *                                disappears and only hand-authored art can fix it.
  */
 
 /**
@@ -74,13 +78,26 @@ export async function measureArtwork(sharp, source) {
   const background = detectBackground(px, w, h)
   //`undefined` is "the border is neither transparent nor uniform" — no artwork to isolate.
   if (background === undefined)
-    return { mark: null, background: null, reach: Math.SQRT2, fill: 1 }
+    return {
+      mark: null,
+      background: null,
+      reach: Math.SQRT2,
+      fill: 1,
+      luminance: 0.5,
+    }
 
   const isArt = artTest(background)
   const box = bounds(px, w, h, isArt)
   //A source that is ENTIRELY background: nothing to protect, and cropping it would produce a
   //zero-width extract. Treat it as a picture and let the slots use it whole.
-  if (!box) return { mark: null, background, reach: Math.SQRT2, fill: 1 }
+  if (!box)
+    return {
+      mark: null,
+      background,
+      reach: Math.SQRT2,
+      fill: 1,
+      luminance: 0.5,
+    }
 
   const side = Math.max(box.right - box.left + 1, box.bottom - box.top + 1)
   const mark = await sharp(cutBackground(data, info, isArt), { raw: info })
@@ -100,6 +117,7 @@ export async function measureArtwork(sharp, source) {
     mark,
     background,
     reach: reachOf(px, isArt, box),
+    luminance: luminanceOf(px, isArt, box),
     //How much of the frame the art occupied BEFORE cropping — the ceiling on every fit, so a
     //logo the dev drew with room around it keeps that room instead of being enlarged to the
     //slot's target.
@@ -241,4 +259,26 @@ function reachOf(px, isArt, box) {
       if (d > max) max = d
     }
   return max / half
+}
+
+/**
+ * Mean relative luminance of the ART pixels, 0–1 — background excluded, which is the whole
+ * point. An icon that is 90% white background around a black mark is a BRIGHT image and a DARK
+ * mark, and iOS's dark app icon is the mark alone on a near-black backdrop. Averaging the whole
+ * frame would call that logo light and let adaptv derive an invisible icon from it.
+ *
+ * Rec. 709 coefficients on sRGB values without linearising: the question is "is this mark light
+ * or dark enough to read on black", and a perceptual ordering is all that needs to survive.
+ */
+function luminanceOf(px, isArt, box) {
+  let sum = 0
+  let n = 0
+  for (let y = box.top; y <= box.bottom; y++)
+    for (let x = box.left; x <= box.right; x++) {
+      const p = px(x, y)
+      if (!isArt(p)) continue
+      sum += (0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) / 255
+      n++
+    }
+  return n === 0 ? 0.5 : sum / n
 }

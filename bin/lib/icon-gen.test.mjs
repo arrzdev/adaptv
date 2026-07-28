@@ -366,3 +366,64 @@ describe("an opaque source is a finished tile, not a mark", () => {
     expect(info.width).toBeWithin(1024 * artTarget(), 4)
   })
 })
+
+describe("iOS 18 appearance variants", () => {
+  it("writes a dark variant that keeps its alpha and a tinted one that is greyscale on black", async () => {
+    //The two iOS 18 slots, and they want opposite things from the light icon: the dark one is
+    //composited over the system's own near-black backdrop, so it must carry alpha; the tinted
+    //one is a luminance ramp the system maps a colour onto, so it must not.
+    const { dir, sharp } = await generated()
+    const dark = await sharp(path.join(dir, "icon-dark.png"))
+    expect((await dark.metadata()).hasAlpha).toBe(true)
+    expect((await dark.stats()).isOpaque).toBe(false)
+
+    const tinted = sharp(path.join(dir, "icon-tinted.png"))
+    expect((await tinted.metadata()).hasAlpha).toBe(false)
+    //greyscale: every pixel's channels agree
+    const { channels } = await tinted.stats()
+    expect(channels[0].mean).toBeCloseTo(channels[1].mean, 0)
+    expect(channels[1].mean).toBeCloseTo(channels[2].mean, 0)
+  })
+
+  it("uses a hand-authored variant WHOLE, without re-fitting it", async () => {
+    //The dev drew it for this exact tile — re-framing it is the thing they opted out of. It is
+    //also what keeps a hand-inverted dark icon the same size as the light one.
+    const { default: sharp } = await import("sharp")
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-appearance-"))
+    const source = path.join(dir, "src.png")
+    writeFileSync(source, await markPng(sharp))
+    const authored = path.join(dir, "mine.png")
+    await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect x="0" y="0" width="1024" height="1024" fill="#4488ff"/></svg>`,
+      ),
+    )
+      .png()
+      .toFile(authored)
+
+    const out = path.join(dir, "icons")
+    await generateIcons({
+      source,
+      dirAbs: out,
+      background: WHITE,
+      appearances: { "icon-dark.png": authored },
+      sharp,
+    })
+    //the authored art fills its frame, so it fills the slot — no 0.9 fit applied
+    const { info } = await sharp(path.join(out, "icon-dark.png"))
+      .trim()
+      .toBuffer({ resolveWithObject: true })
+    expect(info.width).toBe(1024)
+  })
+
+  it("never lets an appearance variant win a normal platform pick", async () => {
+    //`icon-dark.png` is a bare mark on nothing and `icon-tinted.png` is greyscale — either as
+    //THE app icon would be a baffling home screen.
+    const { dir } = await generated()
+    const set = scanIcons(dir)
+    expect(set.some((i) => i.family === "dark")).toBe(true)
+    expect(pickIcon(set, "ios").name).toBe("icon.png")
+    expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
+    expect(pickIcon(set, "androidLegacy").name).toBe("icon.png")
+  })
+})

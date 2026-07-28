@@ -693,6 +693,8 @@ Tests do not cover any of this. Run it and read it:
 - [ ] `adaptv gen icons --input <image>` into an **empty** dir, then again into the **populated** one —
       the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
       without `--yes` exits `1` on the terse `✖` (R34)
+- [ ] `gen icons` from a **dark mark on a light background** — one `!` naming `--dark`, and the
+      set is generated anyway; then pass `--dark <image>` and it goes quiet (R34)
 - [ ] `gen icons` from a **small, opaque** source — two `!`s under the banner, and the set is
       generated anyway; then from a big transparent one — **no** `!` at all (R34)
 - [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `gen icons` with no

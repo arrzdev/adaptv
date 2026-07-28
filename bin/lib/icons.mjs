@@ -20,7 +20,7 @@
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { fitScale } from "./icon-geometry.mjs"
+import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
 
 /* =============================================================================
@@ -197,8 +197,6 @@ export function parseHex(hex) {
   }
 }
 
-const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }
-
 /**
  * Load sharp lazily. It is a native module, so a `dev web` run should never pay to load it,
  * and on the (rare) platform with no prebuilt binary the failure must surface as one icon
@@ -225,35 +223,95 @@ async function compose(sharp, src, { canvas, size, background }) {
     .png()
 }
 
+/** The iOS 18 appearance slots, as the asset catalog names and declares them. */
+const IOS_APPEARANCES = [
+  { file: "AppIcon-512@2x.png", family: null, value: null },
+  { file: "AppIcon-Dark-512@2x.png", family: "dark", value: "dark" },
+  {
+    file: "AppIcon-Tinted-512@2x.png",
+    family: "tinted",
+    value: "tinted",
+  },
+]
+
 /**
- * iOS: a single 1024px `AppIcon-512@2x.png` in the asset catalog Capacitor already
- * scaffolds — the `Contents.json` next to it declares exactly this one universal slot, so
- * there is nothing else to write. FLATTENED onto the brand colour on purpose: App Store
- * Connect rejects an icon with an alpha channel, and a transparent mark shipped as-is
- * renders black on the device.
+ * iOS: the app icon and its two iOS 18 APPEARANCES, plus the `Contents.json` that declares them.
+ *
+ * The catalog used to hold one universal slot, which is what Xcode scaffolds and what adaptv
+ * left alone. That is the state every app is in until someone does this work, and it is why so
+ * many App Store apps still show their light icon unchanged on a dark home screen: with no
+ * variant supplied, iOS has nothing to switch to. Apps that DO change — the ones this was
+ * reported against — ship authored variants, and this is that.
+ *
+ *   light    flattened onto the brand colour and stripped of its alpha channel. App Store
+ *            Connect rejects an icon that merely HAS the channel, days after the archive.
+ *   dark     the mark with NO background: the system draws its own near-black backdrop under
+ *            it. The opposite requirement to the light slot, from the same vendor.
+ *   tinted   greyscale on black. iOS reads the luminance and maps the user's chosen colour
+ *            onto it, so this one is a ramp rather than a picture.
+ *
+ * Each is written only if the resolved set actually has that art (`gen icons` produces
+ * `icon-dark.png` / `icon-tinted.png`; a hand-dropped favicon set will not have them), and the
+ * `Contents.json` declares exactly the files that got written — a catalog naming a file that
+ * is not there fails the build.
  */
-async function writeIosIcon(sharp, nativeRoot, pick, background) {
-  const dest = path.join(
+async function writeIosIcon(sharp, nativeRoot, pick, background, set) {
+  const dir = path.join(
     nativeRoot,
-    "App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png",
+    "App/App/Assets.xcassets/AppIcon.appiconset",
   )
-  mkdirSync(path.dirname(dest), { recursive: true })
-  // MEASURED, not guessed. This was `pick.transparent ? 0.82 : 1` — full bleed for anything
-  // opaque, on the theory that an opaque source carries its own background and insetting would
-  // frame one background inside another. True of a finished tile, and false of the far more
-  // common case: a logo exported flat on white. Those went edge to edge, reported as *"o icon
-  // para iOS fica completamente sem margem colado às margens"*. `fitScale` reads where the art
-  // actually is and leaves the same margin every other slot gets.
-  const size = Math.round(1024 * pick.fit)
-  await (
-    await compose(sharp, pick.file, { canvas: 1024, size, background })
+  mkdirSync(dir, { recursive: true })
+
+  const images = []
+  for (const slot of IOS_APPEARANCES) {
+    // The light slot is the ranked pick — whatever the app's best art is. The appearance slots
+    // are matched by FAMILY, never by rank: they are not "a better icon", they are a different
+    // one, and `pickIcon` must never return them for a normal build.
+    const art = slot.family
+      ? set?.icons?.find((i) => i.family === slot.family)
+      : pick
+    if (!art) continue
+
+    // MEASURED, not guessed. The light slot was `pick.transparent ? 0.82 : 1` — full bleed for
+    // anything opaque, on the theory that an opaque source carries its own background and
+    // insetting would frame one background inside another. True of a finished tile, and false
+    // of the far more common case: a logo exported flat on white. Those went edge to edge,
+    // reported as *"o icon para iOS fica completamente sem margem colado às margens"*.
+    //
+    // The appearance variants are already composed for their slot — `gen icons` fitted them, or
+    // the dev authored them — so they go in whole.
+    const size = Math.round(1024 * (slot.family ? 1 : pick.fit))
+    let out = await compose(sharp, art.file, {
+      canvas: 1024,
+      size,
+      background: slot.family === "dark" ? TRANSPARENT : background,
+    })
+    //Only the light slot must lose its alpha. The dark one MUST keep it (the system composites
+    //it), and the tinted one is already opaque on black.
+    if (!slot.family) out = out.flatten({ background }).removeAlpha()
+    await out.toFile(path.join(dir, slot.file))
+
+    images.push({
+      ...(slot.value
+        ? {
+            appearances: [{ appearance: "luminosity", value: slot.value }],
+          }
+        : {}),
+      filename: slot.file,
+      idiom: "universal",
+      platform: "ios",
+      size: "1024x1024",
+    })
+  }
+
+  writeFileSync(
+    path.join(dir, "Contents.json"),
+    `${JSON.stringify(
+      { images, info: { author: "adaptv", version: 1 } },
+      null,
+      2,
+    )}\n`,
   )
-    //`flatten` composites the transparency away but LEAVES the (now redundant) channel, and
-    //App Store Connect rejects an icon that merely HAS one. `removeAlpha` is what actually
-    //drops it — without this the upload is refused after the archive, not before it.
-    .flatten({ background })
-    .removeAlpha()
-    .toFile(dest)
 }
 
 /**
@@ -390,8 +448,9 @@ async function resolveTransparency(sharp, pick) {
     const { measureArtwork } = await import("./artwork.mjs")
     const art = await measureArtwork(sharp, pick.file)
     if (art.mark) {
-      fit = fitScale(art, { shape: "box" })
-      fitCircle = fitScale(art, { shape: "circle" })
+      //`whole: true` — these scale the FILE ON DISK, not a crop. See `fitScale`.
+      fit = fitScale(art, { shape: "box", whole: true })
+      fitCircle = fitScale(art, { shape: "circle", whole: true })
       artBackground = art.background
     }
   } catch {}
@@ -460,7 +519,7 @@ export async function brandLauncherIcon(
 
   report?.("processing resources")
   if (platform === "ios")
-    await writeIosIcon(sharp, nativeRoot, pick, parseHex(background))
+    await writeIosIcon(sharp, nativeRoot, pick, parseHex(background), set)
   else {
     //The legacy square wants full-bleed art, which is usually a DIFFERENT member of the set
     //from the safe-zoned adaptive foreground. Decoded the same way as the foreground pick,

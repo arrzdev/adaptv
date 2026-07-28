@@ -53,6 +53,13 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
   // the transparent foreground over `ic_launcher_background` and masks the pair, so a preview
   // that just displays `icon-maskable.png` shows a floating mark and proves nothing about the
   // mask. Same two layers, same order, clipped by the shape under test.
+  // The appearance variants are shown on the backdrop iOS actually puts behind them — a dark
+  // icon judged on this page's own background would look fine and be invisible on a phone.
+  const appearance = (name, label, backdrop) =>
+    has(name)
+      ? `<figure class="tile ios"><div class="art" style="background:${backdrop};background-image:none"><img src="${src(name)}" alt=""></div><figcaption>${label}<span>${name}</span></figcaption></figure>`
+      : ""
+
   const adaptive = (label, cls) =>
     has("icon-maskable.png")
       ? `<figure class="tile safe"><div class="art adaptive ${cls}" style="background:${escapeHtml(meta.background)}"><img src="${src("icon-maskable.png")}" alt=""></div><figcaption>${label}<span>foreground + background</span></figcaption></figure>`
@@ -137,6 +144,17 @@ TILE rather than to a ring — the same margin, measured against a bigger limit.
 <div class="row">
   ${tile("icon.png", "app icon", "ios mask")}
   ${tile("apple-touch-icon-180.png", "touch icon", "ios mask")}
+</div>
+
+<h2>iOS 18 appearances</h2>
+<p class="note">iOS shows a different icon in dark mode and when the home screen is tinted. An app
+that ships no variants keeps its light icon in all three — which is why so many still do. The dark
+one carries NO background (the system draws its own); the tinted one is a greyscale ramp iOS maps
+the user's colour onto.</p>
+<div class="row">
+  ${tile("icon.png", "light", "ios mask")}
+  ${appearance("icon-dark.png", "dark", "#1c1c1e")}
+  ${appearance("icon-tinted.png", "tinted", "#1c1c1e")}
 </div>
 
 <h2>Android adaptive icon</h2>

@@ -59,7 +59,7 @@ export const LIMIT = {
  */
 export function fitScale(
   artwork,
-  { shape = "box", margin = DEFAULT_MARGIN },
+  { shape = "box", margin = DEFAULT_MARGIN, whole = false },
 ) {
   const limit = LIMIT[shape] ?? LIMIT.box
   const pct = Number.isFinite(margin) ? margin : DEFAULT_MARGIN
@@ -67,8 +67,21 @@ export function fitScale(
 
   const reach = Number.isFinite(artwork?.reach) ? artwork.reach : 1
   const fill = Number.isFinite(artwork?.fill) ? artwork.fill : 1
-  const wanted = shape === "circle" ? target / (reach || 1) : target
-  return Math.max(0.01, Math.min(fill, wanted))
+  const spread = shape === "circle" ? reach || 1 : 1
+
+  // TWO callers, two questions, and conflating them applied the fit twice.
+  //
+  //   `whole: false` — the scale for the CROPPED MARK, which fills its own square by
+  //   definition. `gen icons` composes from `artwork.mark`, so the answer is just the target,
+  //   floored by `fill` so art the dev framed loosely is never enlarged.
+  //
+  //   `whole: true`  — the scale for the ENTIRE SOURCE FILE, where the art already occupies
+  //   `fill` of the frame. The native brander composes from the file on disk, so it has to
+  //   divide the target by what is already there. Reusing the crop's answer meant a generated
+  //   `icon.png` (mark already at 0.9) was fitted to 0.9 AGAIN and landed at 0.81 — and for a
+  //   loosely-framed logo, at 0.20 next to a 0.45 dark variant that had been left alone.
+  if (whole) return Math.max(0.01, Math.min(1, target / (fill * spread)))
+  return Math.max(0.01, Math.min(fill, target / spread))
 }
 
 /**

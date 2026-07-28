@@ -204,6 +204,9 @@ export type AdaptvAppConfig = {
    * - **Native launcher icons** — the right member per slot: full-bleed art for iOS and for
    *   Android's legacy square, safe-zoned `maskable` art for Android's adaptive foreground.
    *   A lone `icon.png` is a perfectly good set of one.
+   * - **iOS 18 appearances** — `icon-dark.png` and `icon-tinted.png` become the Dark and
+   *   Tinted slots of the app icon, so the home screen switches with the system instead of
+   *   keeping the light icon in all three. `gen icons` writes them; nothing else has to.
    *
    * **No usable art anywhere** — no directory, an empty one, nothing readable — and the app
    * ships **adaptv's own mark** rather than Capacitor's stock icon, on every surface. You are

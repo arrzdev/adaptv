@@ -209,3 +209,66 @@ describe("the fitted mark actually clears the ring", () => {
     expect(await reachOf(placed)).toBeLessThan(SAFE_ZONE - 0.05)
   })
 })
+
+describe("fitScale — whole file vs cropped mark", () => {
+  const art = (fill, reach = 1) => ({ reach, fill })
+
+  it("does not apply the fit twice to a file that is already fitted", () => {
+    //`gen icons` writes `icon.png` with the mark at 0.9. The native brander then measured that
+    //file and, using the crop's answer, fitted it to 0.9 AGAIN — 0.81. For a loosely framed
+    //logo it was worse: 0.20 next to a 0.45 hand-authored dark variant left alone.
+    const already = art(0.9)
+    expect(
+      0.9 * fitScale(already, { shape: "box", whole: true }),
+    ).toBeCloseTo(0.9, 3)
+  })
+
+  it("scales a raw file DOWN to the target when its art overflows", () => {
+    //A favicon set's square, art nearly edge to edge.
+    const raw = art(0.98)
+    expect(
+      0.98 * fitScale(raw, { shape: "box", whole: true }),
+    ).toBeCloseTo(0.9, 3)
+  })
+
+  it("leaves a loosely framed file alone rather than enlarging it", () => {
+    expect(fitScale(art(0.4), { shape: "box", whole: true })).toBe(1)
+  })
+
+  it("lands a circle-masked file on the ring, wherever its art started", () => {
+    for (const [fill, reach] of [
+      [0.9, 1],
+      [0.5, 1.3],
+      [1, Math.SQRT2],
+    ])
+      expect(
+        fill *
+          reach *
+          fitScale(art(fill, reach), { shape: "circle", whole: true }),
+      ).toBeLessThanOrEqual(artTarget() + 0.001)
+  })
+})
+
+describe("measureArtwork — luminance decides the dark appearance", () => {
+  it("reads the MARK, not the frame — a black logo on white is a dark mark", async () => {
+    //Averaging the whole image would call this bright and let adaptv derive an iOS dark icon
+    //that is invisible on the system's near-black backdrop.
+    const art = await measureArtwork(
+      await sharpP,
+      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+        <rect width="512" height="512" fill="#ffffff"/>
+        <circle cx="256" cy="256" r="150" fill="#0a0a0a"/></svg>`),
+    )
+    expect(art.luminance).toBeLessThan(0.1)
+  })
+
+  it("reads a light mark as light, whatever it sits on", async () => {
+    const art = await measureArtwork(
+      await sharpP,
+      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+        <rect width="512" height="512" fill="#123456"/>
+        <circle cx="256" cy="256" r="150" fill="#ffffff"/></svg>`),
+    )
+    expect(art.luminance).toBeGreaterThan(0.9)
+  })
+})

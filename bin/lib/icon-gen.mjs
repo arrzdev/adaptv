@@ -42,6 +42,8 @@ import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 /** Sizes packed into `favicon.ico`. 48 is what Windows uses for a desktop shortcut. */
 const ICO_SIZES = [16, 32, 48]
 
+const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
+
 /**
  * Every file `gen icons` writes, as `[name, px, treatment]`.
  *
@@ -57,6 +59,8 @@ const ICO_SIZES = [16, 32, 48]
  *     alpha `keep`  transparency is preserved when the source had none of its own to lose;
  *            a source that DID sit on a background keeps it, because these are standalone
  *            images and the icon is the background plus the mark.
+ *     alpha `tint`  desaturated to greyscale and flattened onto BLACK — iOS's tinted
+ *            appearance, where the system maps luminance onto the colour the user picked.
  *
  * EVERY slot is fitted, which is the fix for an iOS icon sitting flush against its own edges:
  * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
@@ -72,6 +76,9 @@ export const ICON_SET = [
   ["android-chrome-512.png", 512, "box", "keep"],
   ["android-maskable-192.png", 192, "circle", "flat"],
   ["android-maskable-512.png", 512, "circle", "flat"],
+  //iOS 18 app-icon appearances — see `writeIosIcon`, which puts these in the asset catalog
+  ["icon-dark.png", 1024, "box", "layer"],
+  ["icon-tinted.png", 1024, "box", "tint"],
   //the head
   ["apple-touch-icon-180.png", 180, "box", "flat"],
   ["favicon-16x16.png", 16, "box", "keep"],
@@ -106,15 +113,29 @@ function slotPlan(
   // `ICON_SET`. Everything else reproduces the icon as a STANDALONE image, so a mark that was
   // lifted off a background gets it back: the icon is the background plus the mark.
   const flatten =
-    alpha === "flat" || (alpha !== "layer" && artwork.background !== null)
-  if (!artwork.mark) return { art: source, scale: 1, background, flatten }
+    alpha === "flat" ||
+    alpha === "tint" ||
+    (alpha !== "layer" && artwork.background !== null)
+  const greyscale = alpha === "tint"
+  //iOS composites the tinted variant itself, from luminance, over its own backdrop — so the
+  //art has to sit on BLACK rather than on the app's brand colour.
+  const onBlack = greyscale ? BLACK : null
+  if (!artwork.mark)
+    return {
+      art: source,
+      scale: 1,
+      background: onBlack ?? background,
+      flatten,
+      greyscale,
+    }
 
   return {
     art: artwork.mark,
     scale: fitScale(artwork, { shape, margin }),
+    greyscale,
     //Keep the colour the art was found on, so a logo exported as a flat-coloured tile stays
     //that colour instead of jumping to the config's brand background.
-    background: artwork.background ?? background,
+    background: onBlack ?? artwork.background ?? background,
     flatten,
   }
 }
@@ -133,13 +154,19 @@ function slotPlan(
 async function render(
   sharp,
   source,
-  { canvas, scale, background, flatten },
+  { canvas, scale, background, flatten, greyscale },
 ) {
   const inner = Math.max(1, Math.round(canvas * scale))
-  const mark = await sharp(source, { density: 384 })
-    .resize(inner, inner, { fit: "contain", background: TRANSPARENT })
-    .png()
-    .toBuffer()
+  let art = sharp(source, { density: 384 }).resize(inner, inner, {
+    fit: "contain",
+    background: TRANSPARENT,
+  })
+  // Desaturate the MARK, not the finished tile. sharp applies `greyscale()` to the image it is
+  // called on and then composites overlays on top, so greyscaling the canvas afterwards left
+  // the composited art in full colour — a "tinted" icon that iOS would map a colour onto a
+  // picture that already had its own. The backdrop it lands on is black, which is grey already.
+  if (greyscale) art = art.greyscale()
+  const mark = await art.png().toBuffer()
 
   let out = sharp({
     create: {
@@ -163,6 +190,11 @@ async function render(
  * Returns the names written, in the order they were produced — the caller reports a count and
  * the directory, never the list (R4: the dev asked for an icon set, not an inventory).
  *
+ * `appearances` maps a slot name to a hand-authored file — `{ "icon-dark.png": "…" }`, from
+ * `--dark` / `--tinted`. Those slots are then copied at full size rather than derived, because
+ * the cases that need them are the ones adaptv cannot compute: a dark mark needs INVERTING for
+ * iOS's dark appearance, and no amount of measuring turns black art into white art.
+ *
  * `padding` is EXTRA room, on top of whatever a slot already needs — never instead of it. The
  * masked slots are sized from the measured art (`fitScale`) so they clear the mask with room
  * to spare; `--padding 10` makes those 10% tighter again, and insets the unmasked slots, which
@@ -176,6 +208,7 @@ export async function generateIcons({
   padding = 0,
   margin,
   artwork,
+  appearances = {},
   sharp,
 }) {
   const bg = { ...background, alpha: 1 }
@@ -189,13 +222,26 @@ export async function generateIcons({
 
   const written = []
   for (const slot of ICON_SET) {
-    const [name, px] = slot
-    const plan = slotPlan(slot, art, source, bg, margin)
+    const [name, px, , alpha] = slot
+    // A hand-authored appearance variant is used WHOLE, at scale 1, with no measuring and no
+    // re-fitting. The dev drew it for this exact 1024 tile — second-guessing their framing is
+    // the one thing they were opting out of by passing the flag.
+    const authored = appearances[name]
+    const plan = authored
+      ? {
+          art: authored,
+          scale: 1,
+          background: alpha === "tint" ? BLACK : bg,
+          flatten: alpha === "tint",
+          greyscale: alpha === "tint",
+        }
+      : slotPlan(slot, art, source, bg, margin)
     const png = await render(sharp, plan.art, {
       canvas: px,
       scale: plan.scale * inset,
       background: plan.background,
       flatten: plan.flatten,
+      greyscale: plan.greyscale,
     })
     writeFileSync(path.join(dirAbs, name), png)
     written.push(name)
@@ -322,7 +368,10 @@ export function sourceError(ext) {
  * Each line names what is wrong with THEIR file and what it costs, never what adaptv wanted.
  * A good source — a big square transparent mark — trips none of them.
  */
-export function sourceWarnings({ width, height, isolable }, ext) {
+export function sourceWarnings(
+  { width, height, isolable, luminance, hasDark },
+  ext,
+) {
   const warnings = []
   //A vector has no meaningful pixel size — sharp rasterises it at whatever density each slot
   //asks for — so the SIZE checks below say nothing true about one.
@@ -359,8 +408,32 @@ export function sourceWarnings({ width, height, isolable }, ext) {
       `source has no flat background — the mask will crop its edges`,
     )
 
+  // iOS 18's DARK app icon is the mark alone on a near-black backdrop the system draws. adaptv
+  // can derive that — strip the background, keep the mark — and for a light or colourful logo
+  // the result is right. For a DARK mark it is invisible, and no amount of measuring fixes it:
+  // the apps that get this right (a black wordmark that turns white on a dark home screen) ship
+  // a hand-INVERTED second image, which is a design decision, not a transform.
+  if (
+    !hasDark &&
+    isolable !== false &&
+    Number.isFinite(luminance) &&
+    luminance < DARK_ICON_FLOOR
+  )
+    warnings.push(
+      `mark is dark — iOS's dark icon needs a light one, see --dark`,
+    )
+
   return warnings
 }
+
+/**
+ * Below this mean luminance a mark cannot carry iOS's dark appearance on its own.
+ *
+ * Deliberately low. The question is not "is this the prettiest dark icon" — it is "would the
+ * dev see nothing at all", and a warning that fires on every mid-tone logo is one devs learn to
+ * ignore (R5). A mid grey still reads against near-black; a near-black mark does not.
+ */
+const DARK_ICON_FLOOR = 0.28
 
 /** The size every slot can be produced from without upscaling — iOS's App Store icon. */
 const MIN_SOURCE_PX = 1024

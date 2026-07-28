@@ -1618,7 +1618,7 @@ ${c.bold("Usage")}
   adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
   adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
   adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
-  adaptv gen icons --input <image>      [--output <dir>] [--yes]  (tuning: --margin, --padding, --background)
+  adaptv gen icons --input <image>      [--output <dir>] [--dark <img>] [--tinted <img>] [--yes]
   adaptv doctor
 
 ${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
@@ -1634,10 +1634,18 @@ ${c.dim("(or --output). That dir must be CHOSEN — adaptv never guesses one to 
 ${c.dim("REPLACES what is there, so it asks first, naming where the path came from; --yes skips")}
 ${c.dim("the prompt. Every run writes .adaptv/icons-preview.html — every icon under the mask its")}
 ${c.dim("platform applies. No icons at all? adaptv ships its own mark rather than Capacitor's.")}
-${c.dim("adaptv reads the image to find where the background ends, then sizes the mark so no")}
-${c.dim("mask can crop it. You should never need the tuning flags — they exist to take that")}
-${c.dim("judgement back: --margin <pct> is the room left inside the mask (default 10; 0 fills")}
-${c.dim("it exactly), --padding <pct> insets every icon on top of that, --background <hex>")}
+${c.dim("adaptv reads the image to find where the background ends, then sizes the mark for each")}
+${c.dim("slot so no mask can crop it and nothing sits flush against an edge.")}
+${c.dim("")}
+${c.dim("iOS 18 shows a different icon in dark mode and when the home screen is tinted, and an")}
+${c.dim("app that ships no variants keeps its light icon in all three. adaptv writes all three:")}
+${c.dim("dark = your mark on the system's dark backdrop, tinted = greyscale for iOS to colour.")}
+${c.dim("A DARK mark can't be derived (black art on a black backdrop is nothing) — adaptv says")}
+${c.dim("so, and --dark <img> takes a hand-inverted one. --tinted <img> likewise.")}
+${c.dim("")}
+${c.dim("You should never need the tuning flags — they exist to take adaptv's judgement back:")}
+${c.dim("--margin <pct> is the room left inside EVERY slot's limit (default 10; 0 fills it")}
+${c.dim("exactly), --padding <pct> insets every icon on top of that, --background <hex>")}
 ${c.dim("overrides the colour flattened behind slots that can't carry transparency.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
 ${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
@@ -1663,6 +1671,8 @@ function parseFlags(argv) {
     else if (a === "--margin") flags.margin = argv[++i]
     else if (a === "--background") flags.background = argv[++i]
     else if (a === "--input") flags.input = argv[++i]
+    else if (a === "--dark") flags.dark = argv[++i]
+    else if (a === "--tinted") flags.tinted = argv[++i]
     else if (a === "--host") {
       // `--host` forces external (LAN) mode; an optional IP pins the interface
       // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
@@ -1902,6 +1912,8 @@ async function previewWeb(appRoot, opts) {
 const GEN_ICON_FLAGS = new Set([
   "input",
   "output",
+  "dark",
+  "tinted",
   "margin",
   "padding",
   "background",
@@ -1919,6 +1931,7 @@ const GEN_ICON_FLAGS = new Set([
  */
 const GEN_ICONS_USAGE = [
   "adaptv gen icons --input <image>  [--output <dir>] [--yes]",
+  "  iOS 18:  [--dark <image>] [--tinted <image>]",
   "  tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]",
 ]
 
@@ -2061,6 +2074,21 @@ async function genIcons(appRoot, positional, flags) {
   // The numeric flags are read HERE, with everything else adaptv knows before it acts (R33) —
   // a bad `--margin` must stop the run before the icon directory is emptied, and an unusual but
   // legal one must be said while cancelling is still free.
+  // Hand-authored iOS 18 appearance variants. Resolved BEFORE the warnings, because "your mark
+  // is too dark for the derived dark icon" is not something to say to someone who has already
+  // supplied one.
+  const appearances = {}
+  for (const [flag, slot] of [
+    ["dark", "icon-dark.png"],
+    ["tinted", "icon-tinted.png"],
+  ]) {
+    if (typeof flags[flag] !== "string") continue
+    const abs = path.resolve(appRoot, flags[flag])
+    if (!existsSync(abs))
+      throw new Error(`no such image: ${flags[flag]} (--${flag})`)
+    appearances[slot] = abs
+  }
+
   const tuning = parseTuning(flags)
   if (tuning.errors.length > 0) {
     for (const e of tuning.errors) log.error(e)
@@ -2068,7 +2096,15 @@ async function genIcons(appRoot, positional, flags) {
     process.exit(1)
   }
   flushNotices([
-    ...sourceWarnings({ ...meta, isolable: artwork.mark !== null }, ext),
+    ...sourceWarnings(
+      {
+        ...meta,
+        isolable: artwork.mark !== null,
+        luminance: artwork.luminance,
+        hasDark: appearances["icon-dark.png"] !== undefined,
+      },
+      ext,
+    ),
     ...tuning.warnings,
   ])
 
@@ -2114,6 +2150,7 @@ async function genIcons(appRoot, positional, flags) {
       padding: tuning.values.padding,
       margin: tuning.values.margin,
       artwork,
+      appearances,
       sharp,
     })
     return `${written.length} files → ${set.dirRel}`
