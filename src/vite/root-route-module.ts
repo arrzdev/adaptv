@@ -6,6 +6,11 @@ import {
 } from "#adaptv/config/app-config.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
+import {
+  defaultIconFiles,
+  headIconLinks,
+  resolveIconSet,
+} from "#adaptv/vite/icon-set.ts"
 import { serializeValue } from "#adaptv/vite/serialize.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
 
@@ -54,9 +59,16 @@ export function adaptvRootRoutePlugin(
         return renderRouterConfigModule(requireAppConfig(context))
       }
       if (id !== RESOLVED_ROOT_ROUTE_ID) return null
+      const config = requireAppConfig(context)
+      // Resolved on LOAD, so a dev who drops icons in and restarts gets them — but note this
+      // module is cached for the session, so mid-session additions reach the manifest (its
+      // middleware re-reads per request) before they reach the head.
       return renderRootRouteModule(
-        requireAppConfig(context),
+        config,
         routerSpecifier,
+        headIconLinks(
+          resolveIconSet(context.appRoot, config, defaultIconFiles()),
+        ),
       )
     },
   }
@@ -95,6 +107,7 @@ const BANNER =
 export function renderRootRouteModule(
   config: AdaptvAppConfig,
   routerSpecifier: string = DEFAULT_ROUTER_SPECIFIER,
+  iconLinks: Array<Record<string, string>> = [],
 ): string {
   const imports: string[] = [
     `import { createRootRoute } from ${JSON.stringify(routerSpecifier)}`,
@@ -134,6 +147,11 @@ export function renderRootRouteModule(
     fields.push(`twitter: ${serializeValue(config.twitter)}`)
   if (config.sw !== false)
     fields.push(`serviceWorker: { register: "prompt" }`)
+  //The favicon / touch-icon links, resolved from the files that actually exist. Baked in
+  //HERE rather than invented by `pwaHead` at runtime, because deciding them means reading the
+  //icon directory and the shell has no filesystem. → `src/vite/icon-set.ts`
+  if (iconLinks.length > 0)
+    fields.push(`links: ${serializeValue(iconLinks)}`)
   fields.push(`stylesEntryPoint: appStyles`)
 
   const splash = importThunk(
