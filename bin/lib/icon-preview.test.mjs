@@ -93,3 +93,60 @@ describe("writeIconPreview", () => {
     expect(await sheet()).not.toContain("icon.svg")
   })
 })
+
+describe("the sheet is organised by STATE, and names the file behind each", () => {
+  it("captions the state and names the file under it", async () => {
+    //Both, always: a filename does not say where it is used, and a state does not say what to
+    //re-draw when it looks wrong.
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-states-"))
+    const sharp = (await import("sharp")).default
+    const names = ["icon.png", "icon-dark.png", "icon-tinted.png"]
+    for (const n of names)
+      writeFileSync(
+        path.join(dir, n),
+        await sharp({
+          create: {
+            width: 64,
+            height: 64,
+            channels: 4,
+            background: { r: 1, g: 2, b: 3, alpha: 1 },
+          },
+        })
+          .png()
+          .toBuffer(),
+      )
+    const dest = path.join(dir, "p.html")
+    writeIconPreview({
+      dest,
+      dirAbs: dir,
+      names,
+      manifest: [],
+      meta: {
+        dirRel: ".",
+        sourceRel: "s.png",
+        padding: 0,
+        margin: 10,
+        artTarget: artTarget(10),
+        safeZone: SAFE_ZONE,
+        background: "rgb(255 255 255)",
+      },
+    })
+    const html = readFileSync(dest, "utf8")
+    //composited on the backdrop iOS supplies — a dark icon judged on this page's own
+    //background looks fine and is invisible on a phone
+    expect(html).toContain("#1c1c1e")
+    for (const [state, file] of [
+      ["light", "icon.png"],
+      ["dark", "icon-dark.png"],
+      ["tinted", "icon-tinted.png"],
+    ]) {
+      expect(html).toContain(`${state}<span>`)
+      expect(html).toContain(file)
+    }
+  })
+
+  it("drops a state whose file this run did not write", async () => {
+    //An app whose set predates the appearance variants must not get two broken tiles.
+    expect(await sheet()).not.toContain("icon-dark.png")
+  })
+})

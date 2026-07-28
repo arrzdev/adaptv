@@ -1,23 +1,36 @@
-// The `--preview` contact sheet: every generated icon, under the masks that will actually be
-// applied to it.
+// The contact sheet: every STATE an app's icon is actually rendered in.
 //
-// A terminal cannot show the one thing the dev needs to check. `gen icons` makes decisions
-// they can only judge by eye — is the mark still legible inside the Android safe zone, does the
-// logo survive being cut to a circle, is the 16px favicon a smudge — and the alternative to
-// showing them is a build, an install, and a look at a home screen. So the whole set is written
-// to ONE self-contained HTML file: no server, no upload, no assets to resolve. Every image is
+// A terminal cannot show the one thing the dev needs to check. `gen icons` makes decisions they
+// can only judge by eye — is the mark still legible inside Android's safe zone, does the logo
+// survive being cut to a circle, does the dark variant disappear on the backdrop iOS puts behind
+// it, is the 16px favicon a smudge — and the alternative to showing them is a build, an install,
+// and a look at a home screen.
+//
+// So the sheet is organised by STATE, not by file. A row of filenames tells a dev what adaptv
+// wrote; a row of home screens tells them what their users will see. Each tile is composited the
+// way the platform composites it — the mask it applies, the backdrop it supplies, the tint it
+// maps — because a dark icon judged on this page's own background looks fine and is invisible on
+// a phone.
+//
+// ONE self-contained HTML file: no server, no upload, no assets to resolve. Every image is
 // inlined as a data URI, which is why it can live in `.adaptv/` (gitignored, disposable) and
 // still be opened straight from disk weeks later.
 //
 // Written on EVERY run, not behind a flag. It is the only place a dev can see what the warnings
-// describe — a mark cropped by Android's circle, a favicon that turns to mush at 16px, the gap
-// `--margin` actually bought them — and it costs one file in a directory adaptv already owns and
-// gitignores. Behind a flag it was a review step only someone who already knew to look would find.
+// describe, and it costs one file in a directory adaptv already owns and gitignores. Behind a
+// flag it was a review step only someone who already knew to look would find.
 import { readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
-/** The tile size every mock is drawn at — the rings are computed from it. */
+/** The tile size every mock is drawn at — the safe-zone rings are computed from it. */
 const TILE_PX = 132
+
+/** The backdrops the two platforms actually put behind an icon. */
+const IOS_LIGHT = "#ececed"
+const IOS_DARK = "#1c1c1e"
+
+/** A stand-in for the user's chosen home-screen tint, for the tinted mock. */
+const TINT = "#7aa7ff"
 
 const MIME = {
   ".png": "image/png",
@@ -43,26 +56,46 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
   //isn't there.
   const ring = Math.round(TILE_PX * meta.safeZone)
   const put = Math.round(TILE_PX * meta.artTarget)
-
-  const tile = (name, label, cls = "") =>
+  /**
+   * One tile: the STATE it shows, and the FILE that produces it.
+   *
+   * Both, always. Organising the sheet by state is what makes it answer "how will this look",
+   * but every state is rendered from one generated file — so the caption names the state and
+   * the line under it names the file. Either alone leaves a question open: a filename does not
+   * say where it is used, and a state does not say what to re-draw when it looks wrong.
+   */
+  const screen = (name, state, { cls = "", backdrop, note } = {}) =>
     has(name)
-      ? `<figure class="tile ${cls}"><div class="art"><img src="${src(name)}" alt=""></div><figcaption>${label}<span>${name}</span></figcaption></figure>`
+      ? `<figure class="tile ${cls}">
+           <div class="art"${backdrop ? ` style="background:${backdrop};background-image:none"` : ""}>
+             <img src="${src(name)}" alt="">
+           </div>
+           <figcaption>${state}<span>${name}</span>${note ? `<em>${note}</em>` : ""}</figcaption>
+         </figure>`
       : ""
 
-  // The Android tile is the one that has to be BUILT rather than shown: a launcher composites
-  // the transparent foreground over `ic_launcher_background` and masks the pair, so a preview
-  // that just displays `icon-maskable.png` shows a floating mark and proves nothing about the
-  // mask. Same two layers, same order, clipped by the shape under test.
-  // The appearance variants are shown on the backdrop iOS actually puts behind them — a dark
-  // icon judged on this page's own background would look fine and be invisible on a phone.
-  const appearance = (name, label, backdrop) =>
+  /** The tinted mock: the greyscale ramp multiplied by a tint, the way iOS maps it. */
+  const tinted = (name) =>
     has(name)
-      ? `<figure class="tile ios"><div class="art" style="background:${backdrop};background-image:none"><img src="${src(name)}" alt=""></div><figcaption>${label}<span>${name}</span></figcaption></figure>`
+      ? `<figure class="tile ios">
+           <div class="art tint" style="background:${TINT}">
+             <img src="${src(name)}" alt="">
+           </div>
+           <figcaption>tinted<span>${name}</span><em>the user picks the colour</em></figcaption>
+         </figure>`
       : ""
 
-  const adaptive = (label, cls) =>
+  // The Android tile has to be BUILT rather than shown: a launcher composites the transparent
+  // foreground over `ic_launcher_background` and masks the pair, so a preview that just displays
+  // `icon-maskable.png` shows a floating mark and proves nothing about the mask.
+  const adaptive = (state, cls) =>
     has("icon-maskable.png")
-      ? `<figure class="tile safe"><div class="art adaptive ${cls}" style="background:${escapeHtml(meta.background)}"><img src="${src("icon-maskable.png")}" alt=""></div><figcaption>${label}<span>foreground + background</span></figcaption></figure>`
+      ? `<figure class="tile safe">
+           <div class="art adaptive ${cls}" style="background:${escapeHtml(meta.background)}">
+             <img src="${src("icon-maskable.png")}" alt="">
+           </div>
+           <figcaption>${state}<span>icon-maskable.png + ${escapeHtml(meta.background)}</span></figcaption>
+         </figure>`
       : ""
 
   writeFileSync(
@@ -80,15 +113,15 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
   body { margin:0; padding:40px 32px 80px; background:var(--bg); color:var(--fg);
          font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",sans-serif; }
   h1 { font-size:19px; margin:0 0 4px; font-weight:600; }
-  .sub { color:var(--dim); font-size:13px; margin:0 0 40px; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 8px; }
   h2 { font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
        color:var(--dim); margin:44px 0 6px; }
-  .note { color:var(--dim); font-size:13px; margin:0 0 18px; max-width:62ch; }
+  .note { color:var(--dim); font-size:13px; margin:0 0 18px; max-width:64ch; }
   .row { display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; }
   .tile { margin:0; width:132px; }
   .tile .art { width:132px; height:132px; display:grid; place-items:center; overflow:hidden;
     border:1px solid var(--line); border-radius:14px; background:var(--card);
-    /* a checkerboard, so a transparent icon is visibly transparent rather than white-on-white */
+    /* a checkerboard, so a transparent asset is visibly transparent rather than white-on-white */
     background-image:
       linear-gradient(45deg,var(--line) 25%,transparent 25%,transparent 75%,var(--line) 75%),
       linear-gradient(45deg,var(--line) 25%,transparent 25%,transparent 75%,var(--line) 75%);
@@ -97,6 +130,7 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
   figcaption { font-size:12px; color:var(--fg); margin-top:8px; }
   figcaption span { display:block; color:var(--dim); font-size:11px;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-all; }
+  figcaption em { display:block; color:var(--dim); font-size:11px; font-style:normal; opacity:.75; }
   /* The masks each platform actually applies. Each matches the .art element itself AND an
      ancestor carrying the class, because a composited tile puts the shape on the layer stack
      while a plain one puts it on the figure. */
@@ -104,14 +138,16 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
   .circle .art, .art.circle  { border-radius:50%; }
   .squircle .art, .art.squircle { border-radius:34px; }
   .rounded .art, .art.rounded { border-radius:18px; }
-  .mask .art { background-image:none; border-color:transparent; }
   /* the composited adaptive pair: brand colour behind, transparent foreground on top */
   .art.adaptive { background-image:none; border:0; position:relative; }
   .art.adaptive img { width:100%; height:100%; }
+  /* iOS tints by mapping the greyscale ramp onto the chosen colour — multiply is the closest
+     one-line stand-in, and it is honest about the direction: dark stays dark. */
+  .art.tint { border:0; }
+  .art.tint img { mix-blend-mode:multiply; }
   /* Two rings, and the gap between them is the whole point.
      · outer, dashed — the 72/108 safe zone: the launcher may cut anything past it
-     · inner, dotted — where this run actually put the art (a --margin short of the limit),
-       so the icon sits inside its tile instead of flush against the mask
+     · inner, dotted — where this run actually put the art (a --margin short of the limit)
      NB: no backticks anywhere below this line — the whole document is a template literal, and
      one inside a CSS comment closes it and turns the rest of the sheet into broken JS. */
   .safe .art { position:relative; }
@@ -119,12 +155,12 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
     margin:auto; border-radius:50%; pointer-events:none; }
   .safe .art::after  { width:${ring}px; height:${ring}px; border:1px dashed #e0483c; opacity:.8; }
   .safe .art::before { width:${put}px; height:${put}px; border:1px dotted #4caf82; opacity:.7; }
-  .rings { display:flex; gap:18px; margin:14px 0 0; font-size:12px; color:var(--dim); }
+  .rings { display:flex; flex-wrap:wrap; gap:18px; margin:14px 0 18px; font-size:12px; color:var(--dim); }
   .rings span { display:flex; align-items:center; gap:6px; }
   .rings i { width:14px; height:0; display:inline-block; }
   .rings .lim { border-top:1px dashed #e0483c; }
   .rings .put { border-top:1px dotted #4caf82; }
-  .actual { display:flex; gap:20px; align-items:flex-end; padding:16px 20px;
+  .actual { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end; padding:16px 20px;
     border:1px solid var(--line); border-radius:12px; background:var(--card); }
   .actual figure { margin:0; text-align:center; }
   .actual img { display:block; image-rendering:auto; margin:0 auto 6px; }
@@ -135,29 +171,23 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
 </style>
 
 <h1>adaptv icons</h1>
-<p class="sub">${escapeHtml(meta.dirRel)} · generated from ${escapeHtml(meta.sourceRel)}${meta.padding ? ` · padding ${meta.padding}%` : ""}</p>
+<p class="sub">${escapeHtml(meta.dirRel)} · from ${escapeHtml(meta.sourceRel)} · --margin ${meta.margin}${meta.padding ? ` · --padding ${meta.padding}` : ""}</p>
+<p class="note">Every tile below is composited the way the platform composites it — its mask, its
+backdrop, its tint. Nothing here is the file on its own.</p>
 
 <h2>iOS home screen</h2>
-<p class="note">Flattened onto the brand colour and stripped of its alpha channel — App Store
-Connect rejects an icon that merely has one. Nothing crops these, so the mark is fitted to the
-TILE rather than to a ring — the same margin, measured against a bigger limit.</p>
+<p class="note">iOS 18 renders three different icons, and an app that ships no variants keeps its
+light one in all three — which is why so many still don't change. The DARK tile is the variant
+with no background of its own, on the near-black backdrop the system supplies. The TINTED one is
+a greyscale ramp iOS maps the user's chosen colour onto; the blue here stands in for whatever
+they pick.</p>
 <div class="row">
-  ${tile("icon.png", "app icon", "ios mask")}
-  ${tile("apple-touch-icon-180.png", "touch icon", "ios mask")}
+  ${screen("icon.png", "light", { cls: "ios", backdrop: IOS_LIGHT })}
+  ${screen("icon-dark.png", "dark", { cls: "ios", backdrop: IOS_DARK, note: "system backdrop" })}
+  ${tinted("icon-tinted.png")}
 </div>
 
-<h2>iOS 18 appearances</h2>
-<p class="note">iOS shows a different icon in dark mode and when the home screen is tinted. An app
-that ships no variants keeps its light icon in all three — which is why so many still do. The dark
-one carries NO background (the system draws its own); the tinted one is a greyscale ramp iOS maps
-the user's colour onto.</p>
-<div class="row">
-  ${tile("icon.png", "light", "ios mask")}
-  ${appearance("icon-dark.png", "dark", "#1c1c1e")}
-  ${appearance("icon-tinted.png", "tinted", "#1c1c1e")}
-</div>
-
-<h2>Android adaptive icon</h2>
+<h2>Android home screen</h2>
 <p class="note">The launcher composites the transparent foreground over the brand colour, then
 masks the pair to whatever shape the device uses — so the same art has to survive all three.
 adaptv measured where your logo ends and scaled it to sit inside both rings.</p>
@@ -169,24 +199,26 @@ adaptv measured where your logo ends and scaled it to sit inside both rings.</p>
   ${adaptive("circle", "circle")}
   ${adaptive("squircle", "squircle")}
   ${adaptive("rounded square", "rounded")}
-  ${tile("icon-maskable.png", "foreground alone", "safe")}
+  ${screen("icon-maskable.png", "foreground alone", { cls: "safe" })}
+  ${screen("icon.png", "legacy square", { cls: "rounded" })}
 </div>
 
-<h2>Web manifest</h2>
+<h2>Installed web app</h2>
 <p class="note">What a browser is handed on install. The maskable pair is drawn edge-to-edge on
-the brand colour with the mark inside the safe zone; the <code>any</code> pair keeps its
-transparency.</p>
+the brand colour with the mark inside the safe zone, so a launcher can cut it to any shape; the
+<code>any</code> pair keeps its transparency.</p>
 <div class="row">
-  ${tile("android-chrome-192.png", "any · 192")}
-  ${tile("android-chrome-512.png", "any · 512")}
-  ${tile("android-maskable-192.png", "maskable · 192", "circle")}
-  ${tile("android-maskable-512.png", "maskable · 512", "circle")}
+  ${screen("android-chrome-192.png", "any · 192")}
+  ${screen("android-chrome-512.png", "any · 512")}
+  ${screen("android-maskable-192.png", "maskable · 192", { cls: "circle" })}
+  ${screen("android-maskable-512.png", "maskable · 512", { cls: "circle" })}
+  ${screen("apple-touch-icon-180.png", "apple touch icon", { cls: "ios" })}
 </div>
 <pre>${escapeHtml(JSON.stringify({ icons: manifest }, null, 2))}</pre>
 
-<h2>Favicons, at the size they are drawn</h2>
-<p class="note">Not scaled up — this is what a browser tab actually shows. If the mark is a
-smudge here, it needs a simpler silhouette at small sizes, not more pixels.</p>
+<h2>Browser tab, at the size it is drawn</h2>
+<p class="note">Not scaled up — this is what a tab actually shows. If the mark is a smudge here it
+needs a simpler silhouette at small sizes, not more pixels.</p>
 <div class="actual">
   ${actual("favicon-16x16.png", 16, has, src)}
   ${actual("favicon-32x32.png", 32, has, src)}
