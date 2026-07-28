@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { resolveIconSet } from "#adaptv/vite/icon-set"
 import { configErrors, iconWarnings, inspect } from "./preflight.mjs"
 
 /** A config that passes — every check below starts from this and breaks one thing. */
@@ -24,6 +25,23 @@ function appWithIcon(name, bytes) {
   if (name) writeFileSync(path.join(icons, name), bytes)
   return dir
 }
+
+/**
+ * The app's icon set, resolved with NO adaptv default art. These tests are about what the
+ * dev's own directory produces; a framework fallback standing in for a missing set would make
+ * the "nothing there" cases silently pass.
+ */
+const setFor = (root) => resolveIconSet(root, {}, [])
+
+/** One entry of adaptv's own set, for the default-mark cases. */
+const icon = (name, width) => ({
+  file: `/adaptv/assets/default-icons/${name}`,
+  name,
+  family: "generic",
+  width,
+  height: width,
+  alpha: true,
+})
 
 /** A minimal PNG header: `width`×`width`, colour type 6 (RGBA) or 2 (RGB). */
 function png(width, { alpha = true } = {}) {
@@ -97,7 +115,7 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
     //The whole reason this is separable from branding: nothing here has been scaffolded,
     //so the `!` can be printed under the banner instead of between two build steps (R33).
     return expect(
-      iconWarnings(appWithIcon("icon.png", png(512)), ok, [
+      iconWarnings(setFor(appWithIcon("icon.png", png(512))), [
         "ios",
         "android",
       ]),
@@ -108,16 +126,48 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
 
   it("says nothing about a set that is good", async () => {
     const root = appWithIcon("icon.png", png(1024))
-    expect(await iconWarnings(root, ok, ["ios"])).toEqual([])
+    expect(await iconWarnings(setFor(root), ["ios"])).toEqual([])
   })
 
-  it("states a missing directory once per platform, for `flushNotices` to dedupe", async () => {
-    //R21 — one app-level fact. The dedupe lives in the renderer so every command shares it.
+  it("states having no art ONCE, however many platforms are in the run", async () => {
+    //R21 — one app-level fact, and it does not gain a platform prefix or a second copy just
+    //because the code that found it runs per platform.
     const root = appWithIcon(null)
-    expect(await iconWarnings(root, ok, ["ios", "android"])).toEqual([
-      "no icons in ./public/favicons — add one to brand the launcher icon",
-      "no icons in ./public/favicons — add one to brand the launcher icon",
+    const set = resolveIconSet(root, {}, [icon("icon.png", 1024)])
+    for (const platforms of [[], ["ios"], ["ios", "android"]])
+      expect(await iconWarnings(set, platforms)).toEqual([
+        "no icons in ./public/favicons — shipping adaptv's default mark",
+      ])
+  })
+
+  it("warns about the default mark on a `web` run, which has no platforms at all", async () => {
+    //The whole reason this moved out of the per-platform launcher path: `dev web` never asks
+    //about a launcher icon, and the app is still wearing someone else\'s logo in its tab, its
+    //manifest and its install prompt.
+    const set = resolveIconSet(appWithIcon(null), {}, [
+      icon("icon.png", 1024),
     ])
+    expect(await iconWarnings(set, [])).toEqual([
+      "no icons in ./public/favicons — shipping adaptv's default mark",
+    ])
+  })
+
+  it("checks the WEB manifest too, on a run with no native platforms at all", async () => {
+    //`dev web` / `preview web` serve a manifest, so an app that cannot be installed should
+    //hear it from adaptv rather than from a Lighthouse report weeks later.
+    const root = appWithIcon("favicon-96x96.png", png(96))
+    expect(await iconWarnings(setFor(root), [])).toEqual([
+      "web manifest's largest icon is 96px — a PWA needs 192px",
+    ])
+  })
+
+  it("says nothing ELSE about a default set — every other warning is about the dev's art", async () => {
+    //adaptv's own mark is correct by construction. Reporting it as "upscaled from…" or
+    //"not installable" would be adaptv filing bugs against its own files.
+    const set = resolveIconSet(appWithIcon(null), {}, [
+      icon("tiny.png", 64),
+    ])
+    expect(await iconWarnings(set, ["ios", "android"])).toHaveLength(1)
   })
 })
 

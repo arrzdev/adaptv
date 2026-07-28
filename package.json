@@ -142,6 +142,7 @@
     "src",
     "patches",
     "bin",
+    "assets",
     "biome-shared.json",
     "THIRD_PARTY_LICENSES"
   ]
