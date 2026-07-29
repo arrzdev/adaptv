@@ -1131,7 +1131,7 @@ async function runLive(appRoot, platforms, opts) {
       // from adaptv.config.ts ALONE, so it carries no `server` block — re-stamping and
       // syncing straight afterwards installed an app with no dev-server URL at all, a
       // live-reload shell pointing nowhere and rendering the placeholder bundle. The install
-      // identity is re-applied by `preparePlatforms` below; the server block is re-applied
+      // identity is re-applied by the lane's own prepare below; the server block is re-applied
       // here, reusing the revert already registered at startup.
       await setCapacitorConfigEnv(config)
       patchServerUrl(appRoot, url)
