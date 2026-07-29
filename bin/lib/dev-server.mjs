@@ -30,9 +30,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * attached. Best-effort: returns `true` if it confirmed stability, `false` on timeout
  * (the caller still proceeds — worst case is the pre-fix behavior).
  */
+/**
+ * Did Vite say it was re-optimizing? The trailing settle exists ONLY for the reload that
+ * follows an optimize, so this is the question that decides whether it is needed.
+ *
+ * Version-agnostic on purpose: Vite has reworded these over releases, so match the stems it
+ * has always used rather than a whole sentence.
+ */
+export const SAW_OPTIMIZE =
+  /(re-?optimiz|new dependencies optimized|optimized dependencies changed|dependencies updated)/i
+
 export async function warmDevServer(
   url,
-  { timeoutMs = 30000, onLine } = {},
+  { timeoutMs = 30000, onLine, sawOptimize = () => true } = {},
 ) {
   const start = Date.now()
   let good = 0
@@ -48,9 +58,15 @@ export async function warmDevServer(
     if (ok) {
       good += 1
       if (good >= 2) {
-        // let Vite's post-optimize `full-reload` broadcast fire while nothing is
-        // connected, so it can't knock out a WebView's socket after launch.
-        await sleep(1000)
+        // Let Vite's post-optimize `full-reload` broadcast fire while nothing is connected,
+        // so it can't knock out a WebView's socket after launch.
+        //
+        // ONLY when there was an optimize. That broadcast is the entire reason for the wait,
+        // and on a warm `node_modules/.vite` — the overwhelmingly common case — Vite never
+        // re-optimizes and there is no broadcast to miss. A flat second on every native `dev`
+        // was paying the cold-start price on every warm start. A short settle still covers the
+        // scheduling gap between the last good read and the launch.
+        await sleep(sawOptimize() ? 1000 : 150)
         onLine?.("dev server stable")
         return true
       }

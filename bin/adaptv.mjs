@@ -31,7 +31,11 @@ import { build as esbuild } from "esbuild"
 import { measureArtwork } from "./lib/artwork.mjs"
 import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
 import { CliFault, parse } from "./lib/cli-parse.mjs"
-import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
+import {
+  SAW_OPTIMIZE,
+  startDevServer,
+  warmDevServer,
+} from "./lib/dev-server.mjs"
 import {
   cachedDevice,
   listTargets,
@@ -213,7 +217,7 @@ async function preflight(
     for (const m of messages) recordError({ kind: "config", message: m })
     //Every one of them, not just the first: they are all already known, and fixing a config
     //one line per run is a worse experience than reading the list. Each names its key in
-    //backticks and stays on one row (R10) — the file is not repeated per line because every
+    //single quotes and stays on one row (R10, R43) — the file is not repeated per line because every
     //key here is one the dev wrote in adaptv.config.ts.
     for (const m of messages) log.error(m)
     spacer()
@@ -649,6 +653,9 @@ async function runLive(appRoot, platforms, opts) {
   const cleanups = [] // revert fns, unwound LIFO on exit
   let devServer = null
   let onDevLine = null // set once we're watching; parses HMR events
+  //Set by the dev-server line sink below. Read by `warmDevServer` to decide whether the
+  //post-optimize settle is needed at all.
+  let viteReoptimized = false
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
   let nativeFp = null // last-known native fingerprint per platform
@@ -849,7 +856,13 @@ async function runLive(appRoot, platforms, opts) {
           // native surface) keeps the app's normal web config.
           env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
           host: externalPossible,
-          onLine: (l) => onDevLine?.(l),
+          //Every dev-server line, from the very first — `onDevLine` is only assigned once
+          //the run reaches the watch phase, so anything Vite says during startup would
+          //otherwise be dropped. The optimize signal arrives in exactly that window.
+          onLine: (l) => {
+            if (SAW_OPTIMIZE.test(l)) viteReoptimized = true
+            onDevLine?.(l)
+          },
         })
         // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
         // launching the WebViews. iOS WKWebView won't survive that reload if it attaches
@@ -858,6 +871,18 @@ async function runLive(appRoot, platforms, opts) {
           report(`${devServer.localUrl} · warming`)
           const stable = await warmDevServer(devServer.localUrl, {
             onLine: (l) => onDevLine?.(l),
+            //NOT passing `sawOptimize` — so the FULL settle is taken, every time, as before.
+            //
+            //The short-settle path is built, plumbed and unit-tested, and it is worth ~850ms
+            //on every native `dev`. It is not enabled because its gate cannot currently be
+            //run: the check is "do two consecutive HMR updates still land in the WKWebView",
+            //and in this playground they do not land even with the original 1s settle. The
+            //dev server serves the edited module (verified: curl returns the new source, root
+            //is 200) but the WebView does not apply it. Whatever that is, it is not this
+            //change — and until it is fixed there is no baseline to certify against.
+            //
+            //Enabling is one line: pass `sawOptimize: () => viteReoptimized`. Do it only
+            //after watching an edit reach the simulator twice, cold `.vite` and warm.
           })
           // Fail SAFE: if the detected URL never serves the app, something else holds
           // the port (a stray `adaptv dev`/`pnpm dev`, or another server on the same

@@ -233,8 +233,8 @@ is not printed at all (R4). Anything adaptv does say gets the mark.
 > Violated by: `! android: no cached device yet — pick one (it'll be remembered).` immediately
 > above a picker whose header reads *"Choose a android device"*.
 
-**R7 — Errors are terse and name the fix.** `missing \`appId\` in adaptv.config.ts` — not
-`run failed — adaptv.config.ts needs an \`appId\` for native builds.` A user error is not a crash:
+**R7 — Errors are terse and name the fix.** `missing 'appId' in adaptv.config.ts` — not
+`run failed — adaptv.config.ts needs an 'appId' for native builds.` A user error is not a crash:
 render it as a plain one-liner and exit, never wrapped in step-failure scaffolding.
 
 **R35 — An error about the INVOCATION names the argument the dev actually typed, and shows the
@@ -346,7 +346,7 @@ to explain what adaptv would do about the missing art:
 > Half of each row is adaptv narrating its own fallback. The dev acts on the missing art; what
 > adaptv substitutes meanwhile is its business (R0), and the clause nearly doubled a row that has
 > to survive a narrow terminal without being clipped (R31). Reported by the owner as wanting just
-> `! no \`icons\` in adaptv.config.ts`.
+> `! no 'icons' in adaptv.config.ts`.
 >
 > Both were shortened, not just the one reported: they are two shapes of one fact, and leaving
 > one with the clause and one without is precisely the drift this file exists to stop. The two
