@@ -47,9 +47,9 @@ and then print `✖ ios failed — …` underneath.
 > each:
 > ```
 > ✖ web  port 7171 is already in use · 3.1s
->     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+>     Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.
 > ✖ dev  port 7171 is already in use
->     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+>     Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.
 > ```
 > Whichever branch draws the ✖ owns the report, on every path it can take.
 
@@ -128,8 +128,8 @@ them: the banner, what adaptv knew, the run.
 > ```
 >   adaptv · build android
 >
->   ✖ `themeColor.light` must be a hex colour like #1b1b1b — got "eeeeec"
->   ✖ `splashMaskMode` must be preferences, system, light or dark — got "auto"
+>   ✖ 'themeColor.light' must be a hex colour like #1b1b1b — got "eeeeec"
+>   ✖ 'splashMaskMode' must be preferences, system, light or dark — got "auto"
 > ```
 > Nothing is built, nothing is served, and every problem is listed at once — a config fixed
 > one line per run is worse than a list. These used to be SILENT: an unparseable colour fell
@@ -147,14 +147,14 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 ```
   adaptv · gen icons
 
-    replace 27 icons in ./public/favicons (your `icons` dir)?   ↑↓ move · ↵ select
+    replace 27 icons in ./public/favicons (your 'icons' dir)?   ↑↓ move · ↵ select
   › replace them
     cancel
 ```
 ```
   adaptv · gen icons
 
-  ✖ ./public/favicons (your `icons` dir) is not empty — pass --yes to replace it
+  ✖ ./public/favicons (your 'icons' dir) is not empty — pass --yes to replace it
 ```
 > The prompt's own header carries the fact, so there is no `!` line above it repeating it (R6),
 > and it is `confirm()` in `render.mjs` — built on `select` so the two share one look and one
@@ -169,7 +169,7 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 > directory nobody named is a surprise found afterwards, so the destination must have been
 > chosen. The READ path later had to agree — see R38.
 > ```
->   ✖ nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>
+>   ✖ nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>
 > ```
 >
 > The non-TTY branch is the rule's real content. `select` returns **option 0** when it can't
@@ -310,18 +310,33 @@ there — and the notice for an app with none named that directory back:
 > sentences — an empty directory is filled, an absent key is set:
 > ```
 > ! no icons in ./public/favicons
-> ! no `icons` in adaptv.config.ts
+> ! no 'icons' in adaptv.config.ts
 > ```
 > The general rule is R7 (name the fix), and the general lesson is the fallback rather than the
 > wording: a default that silently resolves to a real directory makes the config key look
 > ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
 > to guess where to READ, and the two finally describe the same framework.
 
+**R43 — Quote a config key, flag or command with `'`, never a backtick.** A backtick is markdown
+punctuation: it renders as code in this file and as a literal backtick in a terminal, which is
+where these sentences actually live.
+> ```
+> ✖ `themeColor.light` must be a hex colour like #1b1b1b — got "midnightblue"     ← was
+> ✖ 'themeColor.light' must be a hex colour like #1b1b1b — got "midnightblue"     ← is
+> ```
+> Owner's call, and it applies to every printed string, not only the config errors: key names,
+> `--flags`, and commands the dev is told to run (`'adaptv dev ios'`, `'pnpm install'`,
+> `'lsof -nP -iTCP:41730 -sTCP:LISTEN'`). Source comments and this document keep backticks —
+> they are read as markdown, so the convention is right there and wrong on a terminal.
+>
+> The apostrophe in a possessive sits next to it happily enough:
+> `'icons' must be a path to the app's icon directory`.
+
 **R42 — A notice states the fact, not adaptv's reaction to it.** Both default-mark notices used
 to explain what adaptv would do about the missing art:
 > ```
 > ! no icons in ./public/favicons — shipping adaptv's default mark
-> ! no `icons` in adaptv.config.ts — shipping adaptv's default mark
+> ! no 'icons' in adaptv.config.ts — shipping adaptv's default mark
 > ```
 > Half of each row is adaptv narrating its own fallback. The dev acts on the missing art; what
 > adaptv substitutes meanwhile is its business (R0), and the clause nearly doubled a row that has
@@ -341,7 +356,7 @@ a config value adaptv cannot use stops the command before it builds anything. Th
 same answer at minute forty as at second zero. The `b` key briefly had a softer one — it kept the
 last good config, refused the rebuild, and said so on the watch row:
 > ```
->   ! not rebuilt · `themeColor.light` must be a hex colour like #1b1b1b — got "midnightblue"
+>   ! not rebuilt · 'themeColor.light' must be a hex colour like #1b1b1b — got "midnightblue"
 > ```
 > The reasoning was that killing a live session over a half-typed file is expensive — a dev
 > server and every attached device, gone. But what it actually bought was a session that kept

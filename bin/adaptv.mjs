@@ -169,7 +169,7 @@ async function loadConfig(appRoot) {
   const mod = await import(url)
   const config = mod.default
   if (!config?.appId) {
-    throw new Error("missing `appId` in adaptv.config.ts")
+    throw new Error("missing 'appId' in adaptv.config.ts")
   }
   return config
 }
@@ -853,7 +853,7 @@ async function runLive(appRoot, platforms, opts) {
             throw new Error(
               `dev server at ${devServer.localUrl} isn't responding — another process ` +
                 "is likely using that port. Stop it, or run on a free port: " +
-                "`adaptv dev … -- --port <n>`.",
+                "'adaptv dev … -- --port <n>'.",
             )
           }
         }
@@ -898,7 +898,7 @@ async function runLive(appRoot, platforms, opts) {
     ) {
       throw new Error(
         "the Android emulator can't reach an external dev server (its NAT can't route to your LAN IP). " +
-          "Use a physical Android device, or run android without `--host` (and not alongside a physical iOS device).",
+          "Use a physical Android device, or run android without '--host' (and not alongside a physical iOS device).",
       )
     }
     let lanHost = null
@@ -907,7 +907,7 @@ async function runLive(appRoot, platforms, opts) {
       if (!lanHost) {
         throw new Error(
           "couldn't detect a LAN IP for external mode — pass one explicitly: " +
-            "`adaptv dev … --host <ip>` (find it with `ipconfig getifaddr en0`).",
+            "'adaptv dev … --host <ip>' (find it with 'ipconfig getifaddr en0').",
         )
       }
     }
@@ -1615,7 +1615,7 @@ function checkAppPlugins(_appRoot) {
   }
   if (missing.length) {
     log.warn(
-      `${missing.length} plugin(s) missing from adaptv's install — reinstall with \`pnpm install\``,
+      `${missing.length} plugin(s) missing from adaptv's install — reinstall with 'pnpm install'`,
     )
   }
 }
@@ -1730,7 +1730,7 @@ async function doctor(appRoot) {
     //reporting on instead. Interpolating `dirRel` regardless printed a bare " (icon source)".
     set.configured
       ? `${set.dirRel} (icon source)`
-      : "`icons` (icon source)",
+      : "'icons' (icon source)",
     set.source === "app"
       ? `${set.icons.length} icons`
       : "adaptv's default mark",
@@ -1756,14 +1756,14 @@ ${c.bold("Usage")}
   adaptv doctor
 
 ${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
-${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
-${c.dim("`adaptv dev all -- --port 4000`.")}
+${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after '--' go to vite, e.g.")}
+${c.dim("'adaptv dev all -- --port 4000'.")}
 ${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
 ${c.dim("build = static artifacts: an UNSIGNED .ipa and a debug .apk, both built by adaptv.")}
 ${c.dim("Signing is the one thing adaptv can't do for you — for TestFlight/App Store, open")}
 ${c.dim(".adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.")}
 ${c.dim("gen icons = your whole icon set — web manifest, favicons, native launcher icons —")}
-${c.dim("from ONE image (png or svg, 1024px+), written to the `icons` dir in adaptv.config.ts")}
+${c.dim("from ONE image (png or svg, 1024px+), written to the 'icons' dir in adaptv.config.ts")}
 ${c.dim("(or --output). That dir must be CHOSEN — adaptv never guesses one to write into. It")}
 ${c.dim("REPLACES what is there, so it asks first, naming where the path came from; --yes skips")}
 ${c.dim("the prompt. Every run writes .adaptv/icons-preview.html — every icon under the mask its")}
@@ -2161,7 +2161,7 @@ async function genIcons(appRoot, positional, flags) {
     typeof config.icons === "string" ? config.icons : null
   if (!outArg && !configuredDir)
     throw usageError(
-      "nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>",
+      "nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>",
     )
 
   //`--output` also serves as the escape hatch for a set that is NOT this app's: comparing two
@@ -2180,7 +2180,7 @@ async function genIcons(appRoot, positional, flags) {
   //Where the path came from, for the one message that is about to destroy files with it. An
   //`--output` the dev just typed needs no explaining; a path that arrived from a config file
   //they may not have open does.
-  const whence = outArg ? "" : " (your `icons` dir)"
+  const whence = outArg ? "" : " (your 'icons' dir)"
 
   const sharp = (await import("sharp")).default
   const ext = path.extname(sourceAbs)
@@ -2362,7 +2362,7 @@ async function main() {
       }
       if (platforms.length > 1 && flags.target) {
         throw new Error(
-          "--target can't be used with `dev all` (it's per-platform). Use --latest, or dev each platform.",
+          "--target can't be used with 'dev all' (it's per-platform). Use --latest, or dev each platform.",
         )
       }
       return runLive(appRoot, platforms, {
@@ -2391,7 +2391,7 @@ async function main() {
       }
       if (platforms.length > 1 && flags.target) {
         throw new Error(
-          "--target can't be used with `preview all` (it's per-platform). Use --latest, or preview each platform.",
+          "--target can't be used with 'preview all' (it's per-platform). Use --latest, or preview each platform.",
         )
       }
       // `all` means every surface a user could get the app on, WEB INCLUDED — it used to
@@ -2473,7 +2473,7 @@ async function main() {
       // Retired in favour of dev/preview — don't silently redefine it.
       const hint = rest[0] && rest[0] !== "web" ? rest[0] : "ios"
       throw new Error(
-        `\`run\` was split into \`dev\` and \`preview\` — did you mean \`adaptv dev ${hint}\`? (live reload = dev; static build → install = preview)`,
+        `'run' was split into 'dev' and 'preview' — did you mean 'adaptv dev ${hint}'? (live reload = dev; static build → install = preview)`,
       )
     }
 

@@ -83,7 +83,7 @@ export async function resolveTarget(
     // later `--latest` fails against a device that was never real.
     if (!known) {
       throw new Error(
-        `unknown ${platform} device "${target}". Run \`adaptv dev ${platform}\` to pick from the current list.`,
+        `unknown ${platform} device "${target}". Run 'adaptv dev ${platform}' to pick from the current list.`,
       )
     }
     const device = { id: target, name: known.name ?? target }

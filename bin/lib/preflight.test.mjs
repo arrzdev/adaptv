@@ -80,11 +80,11 @@ describe("configErrors — a value adaptv cannot use stops the run", () => {
       themeColor: { light: "midnightblue", dark: "#101010" },
     })
     expect(color).toBe(
-      '`themeColor.light` must be a hex colour like #1b1b1b — got "midnightblue"',
+      `'themeColor.light' must be a hex colour like #1b1b1b — got "midnightblue"`,
     )
     const [mode] = configErrors({ ...ok, splashMaskMode: "auto" })
     expect(mode).toBe(
-      '`splashMaskMode` must be preferences, system, light or dark — got "auto"',
+      `'splashMaskMode' must be preferences, system, light or dark — got "auto"`,
     )
   })
 
@@ -165,7 +165,7 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
       icon("icon.png", 1024),
     ])
     expect(await iconWarnings(set, ["ios"])).toEqual([
-      "no `icons` in adaptv.config.ts",
+      "no 'icons' in adaptv.config.ts",
     ])
   })
 

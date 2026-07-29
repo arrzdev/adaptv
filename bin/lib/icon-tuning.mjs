@@ -59,7 +59,7 @@ export function parseTuning(flags) {
     const n = Number(raw)
     if (!Number.isFinite(n) || n < spec.min || n > spec.max) {
       errors.push(
-        `\`--${name}\` must be a percentage between ${spec.min} and ${spec.max} — got ${JSON.stringify(String(raw))}`,
+        `'--${name}' must be a percentage between ${spec.min} and ${spec.max} — got ${JSON.stringify(String(raw))}`,
       )
       values[name] = spec.fallback
       continue

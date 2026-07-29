@@ -934,7 +934,7 @@ export function explainLaunchFailure(platform, text = "") {
       msg: `device "${invalid[1]}" isn't available right now`,
       fix: [
         "It's disconnected, locked, or a stale saved pick.",
-        `Reconnect + unlock it, or run \`adaptv dev ${platform}\` to pick from the current list.`,
+        `Reconnect + unlock it, or run 'adaptv dev ${platform}' to pick from the current list.`,
       ],
     }
 

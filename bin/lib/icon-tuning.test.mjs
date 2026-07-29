@@ -21,7 +21,7 @@ describe("parseTuning — defaults are opinions a power user can take back", () 
   it("refuses only what cannot be used, and names the range", () => {
     const { errors } = parse({ margin: "90" })
     expect(errors).toEqual([
-      '`--margin` must be a percentage between 0 and 50 — got "90"',
+      `'--margin' must be a percentage between 0 and 50 — got "90"`,
     ])
   })
 
