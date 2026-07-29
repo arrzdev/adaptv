@@ -1,25 +1,12 @@
 #!/usr/bin/env node
 // The adaptv CLI — owns the whole native (Capacitor) lifecycle so a consumer never
-// touches Capacitor, the toolchain env, or the asset generator by hand:
+// touches Capacitor, the toolchain env, or the asset generator by hand.
 //
-//   adaptv doctor                     check the local toolchain (JDK, Android SDK, Xcode, pod)
-//   adaptv dev  web|ios|android|all   live reload: one Vite dev server, web + native
-//                                    WebViews all attached, hot-reloading on save
-//   adaptv preview web|ios|android|all  the real build: web served locally, native installed
-//                                    and launched on a device (no live reload)
-//   adaptv build ios|android|all      static artifacts: build SPA → sync → package (.ipa/.apk)
-//
-//   dev/preview flags:
-//               --target <id>   launch on a specific device/simulator id
-//               --latest        reuse the last device picked for this platform
-//               --host [ip]     (dev only) serve on the LAN IP for a PHYSICAL device — auto
-//                               when the target is a real device; pass an ip to pin it
-//               --force         reinstall even when nothing native changed (dev/preview skip
-//                               the rebuild and just relaunch the installed app otherwise)
-//               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
-//   build flags: --output <path> where to write the artifact (default: .adaptv/builds/)
-//               --force         rebuild even if unchanged (web build + sync are cached)
-//   all:         --verbose      show the full underlying tool logs (raw passthrough)
+// The command surface — every command, every flag, every description — is `bin/lib/cli-spec.mjs`.
+// `adaptv --help` renders it and `bin/lib/cli-parse.mjs` parses from it; nothing here restates
+// it. This comment used to carry its own copy and had already drifted away from the code below
+// it: it described four commands and omitted `gen icons` entirely, along with all seven of its
+// flags. A test in `cli-parse.test.mjs` now fails the build if a flag reappears here.
 //
 // Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
@@ -42,6 +29,8 @@ import path from "node:path"
 import process from "node:process"
 import { build as esbuild } from "esbuild"
 import { measureArtwork } from "./lib/artwork.mjs"
+import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
+import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import {
   cachedDevice,
@@ -116,7 +105,6 @@ import {
   flushNotices,
   footer,
   header,
-  helpText,
   liveWatcher,
   log,
   onKeys,
@@ -1745,93 +1733,28 @@ async function doctor(appRoot) {
  * dispatch
  * ============================================================================= */
 
-function usage() {
-  helpText(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
-
-${c.bold("Usage")}
-  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
-  adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
-  adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
-  adaptv gen icons --input <image>      [--output <dir>] [--dark <img>] [--tinted <img>] [--monochrome <img>] [--yes]
-  adaptv doctor
-
-${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
-${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after '--' go to vite, e.g.")}
-${c.dim("'adaptv dev all -- --port 4000'.")}
-${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
-${c.dim("build = static artifacts: an UNSIGNED .ipa and a debug .apk, both built by adaptv.")}
-${c.dim("Signing is the one thing adaptv can't do for you — for TestFlight/App Store, open")}
-${c.dim(".adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.")}
-${c.dim("gen icons = your whole icon set — web manifest, favicons, native launcher icons —")}
-${c.dim("from ONE image (png or svg, 1024px+), written to the 'icons' dir in adaptv.config.ts")}
-${c.dim("(or --output). That dir must be CHOSEN — adaptv never guesses one to write into. It")}
-${c.dim("REPLACES what is there, so it asks first, naming where the path came from; --yes skips")}
-${c.dim("the prompt. Every run writes .adaptv/icons-preview.html — every icon under the mask its")}
-${c.dim("platform applies. No icons at all? adaptv ships its own mark rather than Capacitor's.")}
-${c.dim("adaptv reads the image to find where the background ends, then sizes the mark for each")}
-${c.dim("slot so no mask can crop it and nothing sits flush against an edge.")}
-${c.dim("")}
-${c.dim("iOS 18 shows a different icon in dark mode and when the home screen is tinted, and an")}
-${c.dim("app that ships no variants keeps its light icon in all three. adaptv writes all three:")}
-${c.dim("dark = your mark on the system's dark backdrop, tinted = greyscale for iOS to colour.")}
-${c.dim("A DARK mark can't be derived (black art on a black backdrop is nothing) — adaptv says")}
-${c.dim("so, and --dark <img> takes a hand-inverted one. --tinted <img> likewise.")}
-${c.dim("")}
-${c.dim("Android 13+ recolours every home-screen icon to match the wallpaper, and an app with")}
-${c.dim("no <monochrome> layer opts out and sits there in full colour. adaptv writes that layer")}
-${c.dim("too: your mark in one ink, keeping its internal contrast where it has any and falling")}
-${c.dim("back to a flat silhouette where it doesn't. --monochrome <img> replaces it outright.")}
-${c.dim("")}
-${c.dim("You should never need the tuning flags — they exist to take adaptv's judgement back:")}
-${c.dim("--margin <pct> is the room left inside EVERY slot's limit (default 10; 0 fills it")}
-${c.dim("exactly), --padding <pct> insets every icon on top of that, --background <hex>")}
-${c.dim("overrides the colour flattened behind slots that can't carry transparency.")}
-${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
-${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
-${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
-${c.dim("automatically). --host <ip> only overrides that IP if detection guesses wrong (VPN /")}
-${c.dim("multiple adapters). Native projects live in .adaptv/. Toolchain env auto-resolved.")}`)
+/**
+ * A validated surface → the native platforms it means.
+ *
+ * No `null` branch and no error: by the time this is called the parser has already checked the
+ * token against that command's own `choices`, so an unknown one cannot reach here. It used to
+ * be three copies of the same check, one per command, each with its own sentence.
+ */
+function surfaceToPlatforms(surface) {
+  if (surface === "all") return ["ios", "android"]
+  if (surface === "web") return []
+  return [surface]
 }
 
-function parseFlags(argv) {
-  const flags = {}
-  const rest = []
-  let passthrough = []
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]
-    // a lone `--` ends adaptv's flags; the rest is forwarded to vite (dev server).
-    if (a === "--") {
-      passthrough = argv.slice(i + 1)
-      break
-    }
-    if (a === "--target") flags.target = argv[++i]
-    else if (a === "--output" || a === "-o") flags.output = argv[++i]
-    else if (a === "--padding") flags.padding = argv[++i]
-    else if (a === "--margin") flags.margin = argv[++i]
-    else if (a === "--background") flags.background = argv[++i]
-    else if (a === "--input") flags.input = argv[++i]
-    else if (a === "--dark") flags.dark = argv[++i]
-    else if (a === "--tinted") flags.tinted = argv[++i]
-    else if (a === "--monochrome") flags.monochrome = argv[++i]
-    else if (a === "--host") {
-      // `--host` forces external (LAN) mode; an optional IP pins the interface
-      // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
-      const next = argv[i + 1]
-      if (next && /^\d{1,3}(\.\d{1,3}){3}$/.test(next))
-        flags.host = argv[++i]
-      else flags.host = true
-    } else if (a.startsWith("--")) flags[a.slice(2)] = true
-    else rest.push(a)
+/** adaptv's own version, for `--version`. */
+function pkgVersion() {
+  try {
+    return JSON.parse(
+      readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+    ).version
+  } catch {
+    return "unknown"
   }
-  flags.viteArgs = passthrough
-  return { flags, rest }
-}
-
-/** Expand a `run`/`build` platform arg (`ios` | `android` | `all`) to a list. */
-function targetsFor(arg) {
-  if (arg === "all") return ["ios", "android"]
-  if (arg === "ios" || arg === "android") return [arg]
-  return null
 }
 
 /**
@@ -2048,50 +1971,6 @@ async function previewWeb(appRoot, opts) {
  * gen icons
  * ============================================================================= */
 
-/** Flags `gen icons` understands. `viteArgs` is always present from `parseFlags`. */
-const GEN_ICON_FLAGS = new Set([
-  "input",
-  "output",
-  "dark",
-  "tinted",
-  "monochrome",
-  "margin",
-  "padding",
-  "background",
-  "yes",
-  "verbose",
-  "viteArgs",
-])
-
-/**
- * The command's shape, shown under any error about how it was invoked.
- *
- * Two lines because the flags fall into two groups and pretending otherwise makes a simple
- * command look complicated: `--input` is the command, everything else is tuning a dev never has
- * to think about. The tuning line is indented under it for that reason.
- */
-const GEN_ICONS_USAGE = [
-  "adaptv gen icons --input <image>  [--output <dir>] [--yes]",
-  "  iOS 18:   [--dark <image>] [--tinted <image>]",
-  "  Android:  [--monochrome <image>]",
-  "  tuning:   [--margin <pct>] [--padding <pct>] [--background <hex>]",
-]
-
-/**
- * An error about the ARGUMENTS, which carries the usage line as its dim detail.
- *
- * A wrong invocation is the one failure where the dev is looking straight at what they typed
- * and cannot see what is wrong with it, so the shape they should have typed goes under the
- * `✖` — the same dim-detail-under-a-failure pattern a build error uses (R13/R14). The `✖` line
- * itself still names ONE thing and stays terse (R7); the usage line is not a replacement for
- * saying what went wrong.
- */
-function usageError(message) {
-  const err = new Error(message)
-  err.tail = GEN_ICONS_USAGE
-  return err
-}
-
 /**
  * `adaptv gen icons --input <image>` — the app's whole icon set, from one image.
  *
@@ -2106,37 +1985,16 @@ function usageError(message) {
  * dev still reached for a flag, and got `missing image` while looking at a command that plainly
  * contained one. A name they cannot collide with is the answer to both.
  */
-async function genIcons(appRoot, positional, flags) {
+async function genIcons(appRoot, _positional, flags) {
   header("gen icons")
 
-  // Every flag this command doesn't define, reported the SAME way — `--target` included.
-  //
-  // `--target` had its own sentence for a while ("`--target` is a device id — `gen icons` takes
-  // the image positionally"), on the theory that it is the predictable wrong guess and deserved
-  // a precise answer. It was the wrong instinct: a dev generating icons has no reason to learn
-  // what `--target` means on some other command, and adaptv explaining its own flag vocabulary
-  // is exactly the plumbing R8 keeps out of the output. What they need is that this command
-  // doesn't take it, and what it does take — which is what every unknown flag already says.
-  //
-  // `parseFlags` turns any `--foo` into `flags.foo = true` and swallows the value after
-  // `--target`, so an unvalidated flag is not merely ignored: it is ignored AND it eats the
-  // positional argument, which is how `--target <image>` used to fail with `missing image`
-  // while the dev looked at a command that plainly contained one.
-  const unknown = Object.keys(flags).filter((f) => !GEN_ICON_FLAGS.has(f))
-  if (unknown.length > 0)
-    throw usageError(`unknown flag "--${unknown[0]}" for gen icons`)
-
-  const imageArg = typeof flags.input === "string" ? flags.input : null
-  if (!imageArg)
-    //A bare path is the other half of the `--input` move: someone who types the image without
-    //the flag is one word away, and should be told which word.
-    throw usageError(
-      positional
-        ? `the image goes after --input — adaptv gen icons --input ${positional}`
-        : "missing --input — the png or svg to generate the set from",
-    )
-  //NOT a `usageError`: they named an image and it isn't there. The shape of the command is not
-  //the fix, and printing it would be adaptv answering a question nobody asked (R6).
+  //Nothing is validated here any more. Unknown flags, a missing `--input`, an out-of-range
+  //`--margin` and a `--background` that isn't a colour are all rejected by the parser, from
+  //the spec, BEFORE this function is entered — which is why the banner above is now safe to
+  //print: it can no longer appear over a command that was never going to run (R33).
+  const imageArg = flags.input
+  //They named an image and it isn't there. The SHAPE of the command was not the problem, so
+  //no usage block — that would be adaptv answering a question nobody asked (R6).
   const sourceAbs = path.resolve(appRoot, imageArg)
   if (!existsSync(sourceAbs)) throw new Error(`no such image: ${imageArg}`)
 
@@ -2159,8 +2017,11 @@ async function genIcons(appRoot, positional, flags) {
   const outArg = typeof flags.output === "string" ? flags.output : null
   const configuredDir =
     typeof config.icons === "string" ? config.icons : null
+  //A plain error, not an invocation fault: this one can only be known once the CONFIG has been
+  //read, so the parser could not have caught it and the shape of the command was not wrong.
+  //The message names both fixes, which is all R7 asks.
   if (!outArg && !configuredDir)
-    throw usageError(
+    throw new Error(
       "nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>",
     )
 
@@ -2335,40 +2196,27 @@ async function genIcons(appRoot, positional, flags) {
 }
 
 async function main() {
-  const [command, ...raw] = process.argv.slice(2)
-  const { flags, rest } = parseFlags(raw)
+  // Parsing, help and every invocation error come from ONE description of the command
+  // surface (`cli-spec.mjs`). Nothing below re-validates a flag or a surface: by the time a
+  // case body runs, the flags are known-good and the surface is one of its own choices.
+  const parsed = parse(process.argv.slice(2))
+  const { path: cmdPath, flags, rest } = parsed
   const appRoot = CWD
 
-  switch (command) {
+  if (parsed.version) return renderVersion(pkgVersion())
+  if (parsed.help) return renderHelp(cmdPath)
+
+  switch (cmdPath.join(" ")) {
     case "doctor":
       return await doctor(appRoot)
 
-    case "gen": {
-      // A namespace on purpose: `gen` is where anything adaptv can PRODUCE from the app's
-      // config belongs, and `icons` is simply the first of them.
-      if (rest[0] !== "icons")
-        throw usageError(
-          rest[0]
-            ? `unknown gen target "${rest[0]}" — expected icons`
-            : "missing gen target — expected icons",
-        )
-      return await genIcons(appRoot, rest[1], flags)
-    }
+    case "gen icons":
+      return await genIcons(appRoot, null, flags)
 
     case "dev": {
       // `dev` is the live-reload command: one Vite dev server, web + native
       // WebViews all pointed at it. `web` = the dev server alone (no native).
-      const platforms = rest[0] === "web" ? [] : targetsFor(rest[0])
-      if (platforms === null) {
-        throw new Error(
-          `unknown dev target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
-        )
-      }
-      if (platforms.length > 1 && flags.target) {
-        throw new Error(
-          "--target can't be used with 'dev all' (it's per-platform). Use --latest, or dev each platform.",
-        )
-      }
+      const platforms = surfaceToPlatforms(rest[0])
       return runLive(appRoot, platforms, {
         target: flags.target,
         latest: !!flags.latest,
@@ -2387,17 +2235,7 @@ async function main() {
           verbose: !!flags.verbose,
           viteArgs: flags.viteArgs,
         })
-      const platforms = targetsFor(rest[0])
-      if (!platforms) {
-        throw new Error(
-          `unknown preview target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
-        )
-      }
-      if (platforms.length > 1 && flags.target) {
-        throw new Error(
-          "--target can't be used with 'preview all' (it's per-platform). Use --latest, or preview each platform.",
-        )
-      }
+      const platforms = surfaceToPlatforms(rest[0])
       // `all` means every surface a user could get the app on, WEB INCLUDED — it used to
       // mean "every NATIVE target", so `preview all` skipped the one surface you can look
       // at without a device, and the command exited with nothing still running.
@@ -2459,43 +2297,30 @@ async function main() {
       return pipeline("preview", appRoot, platforms, opts)
     }
 
-    case "build": {
-      const platforms = targetsFor(rest[0])
-      if (!platforms) {
-        throw new Error(
-          `unknown build target "${rest[0] ?? ""}" — expected ios, android, or all.`,
-        )
-      }
-      return pipeline("build", appRoot, platforms, {
+    case "build":
+      return pipeline("build", appRoot, surfaceToPlatforms(rest[0]), {
         output: flags.output,
         verbose: !!flags.verbose,
         force: !!flags.force,
       })
-    }
 
-    case "run": {
-      // Retired in favour of dev/preview — don't silently redefine it.
-      const hint = rest[0] && rest[0] !== "web" ? rest[0] : "ios"
-      throw new Error(
-        `'run' was split into 'dev' and 'preview' — did you mean 'adaptv dev ${hint}'? (live reload = dev; static build → install = preview)`,
-      )
-    }
-
-    case undefined:
-    case "help":
-    case "--help":
-    case "-h":
-      return usage()
-
-    default:
-      log.error(`unknown command: ${command}`)
-      spacer()
-      usage()
-      process.exit(1)
+    //No `default`: an unrecognised command never reaches here. `parse` throws a `CliFault`
+    //carrying the token and a suggestion, and the catch below renders it — so there is no
+    //second, weaker copy of "unknown command" to drift away from the first.
   }
 }
 
 main().catch((err) => {
+  // An INVOCATION fault is not a run failure: nothing started, so there is nothing to tear
+  // down and nothing to report but the sentence and the fix. It exits 2 (BSD `EX_USAGE`), so
+  // CI can tell "the command was typed wrong" from "the build broke" — which is exactly the
+  // distinction a single exit code was hiding.
+  if (err instanceof CliFault) {
+    spacer()
+    renderFault(err)
+    spacer()
+    process.exit(2)
+  }
   // Same rule at the top level: if a step already rendered this failure, exit quietly
   // rather than appending Node's raw message under the calm one.
   if (!wasReported(err)) {

@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.1.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "repository": {
     "type": "git",
@@ -98,6 +98,7 @@
     "@tanstack/react-virtual": "3.14.6",
     "@tanstack/virtual-file-routes": "1.161.7",
     "@vitejs/plugin-react": "5.2.0",
+    "commander": "15.0.0",
     "esbuild": "0.28.0",
     "sharp": "0.35.3",
     "workbox-build": "7.4.1",

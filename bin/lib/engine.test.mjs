@@ -75,6 +75,20 @@ describe("the render engine owns every byte the CLI prints", () => {
     expect(broken).toEqual([])
   })
 
+  it("keeps commander behind one door", () => {
+    //Commander is a SECOND engine: left to itself it prints its own help, its own errors and
+    //its own exit codes, in its own visual language. `cli-parse.mjs` exists to take all three
+    //away from it (configureOutput, exitOverride, configureHelp) and hand back structured
+    //faults instead. That containment is only true while exactly one module imports it — a
+    //second importer is a second set of defaults nobody silenced.
+    const importers = cliModules().filter((rel) =>
+      /from\s+["']commander["']/.test(
+        readFileSync(join(BIN, rel), "utf8"),
+      ),
+    )
+    expect(importers).toEqual(["lib/cli-parse.mjs"])
+  })
+
   it("keeps the glyph set in one place", () => {
     //A second ✔/✗/⚠ vocabulary is how `doctor` ended up looking like a different program.
     const strays = []

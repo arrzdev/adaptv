@@ -270,6 +270,123 @@ function detailBlock(detail) {
   for (const d of detail ?? []) out(`    ${c.dim(d)}\n`)
 }
 
+/* -----------------------------------------------------------------------------
+ * static pages — help, and the failure of an invocation
+ *
+ * R10 keeps a LIVE row to one physical line, because a row redrawn with `\r\x1b[2K` must
+ * occupy exactly one. A help page and an invocation error are printed once and never
+ * redrawn, so the same rule would only cost them their tail — and R15 says never truncate an
+ * error whose remaining words carry the instructions. So these WRAP (R44). `clipAnsi` stays
+ * for rows; `wrap` and `table` serve pages.
+ * -------------------------------------------------------------------------- */
+
+/** Visible width, ignoring colour escapes (built without a literal control char in source). */
+const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+const visibleLength = (s) => s.replace(ANSI_RE, "").length
+
+/**
+ * Word-wrap to `max` visible columns. `hang` indents every line after the first, so a wrapped
+ * synopsis or description stays visually attached to the thing it belongs to.
+ */
+export function wrap(text, { max = 80, hang = 0 } = {}) {
+  const words = String(text).split(/\s+/).filter(Boolean)
+  if (words.length === 0) return [""]
+  const pad = " ".repeat(hang)
+  const lines = []
+  let line = ""
+  for (const w of words) {
+    const width = lines.length === 0 ? max : max - hang
+    if (line && visibleLength(line) + 1 + visibleLength(w) > width) {
+      lines.push(line)
+      line = w
+    } else line = line ? `${line} ${w}` : w
+  }
+  lines.push(line)
+  return lines.map((l, i) => (i === 0 ? l : pad + l))
+}
+
+/**
+ * The aligned two-column layout every list in the CLI wants: a flag and what it is for, a
+ * surface and what it runs, a command and what it does.
+ *
+ * Below `minRight` columns of room it stacks instead — the right cell on its own indented
+ * line — because a description wrapped into a four-character gutter is not a table, it is a
+ * column of syllables. `addresses()` is the same shape and goes through here.
+ */
+export function table(rows, { indent = 4, gap = 2, minRight = 28 } = {}) {
+  const cols = Math.max(20, width())
+  const left = Math.max(...rows.map((r) => visibleLength(r.left)))
+  const start = indent + left + gap
+  const stacked = cols - start < minRight
+  const pad = " ".repeat(indent)
+  for (const r of rows) {
+    if (!r.right) {
+      out(`${pad}${r.left}\n`)
+      continue
+    }
+    if (stacked) {
+      out(`${pad}${r.left}\n`)
+      for (const l of wrap(r.right, { max: cols - indent - 2 }))
+        out(`${pad}  ${c.dim(l)}\n`)
+      continue
+    }
+    const spaces = " ".repeat(left - visibleLength(r.left) + gap)
+    const [first, ...more] = wrap(r.right, { max: cols - start })
+    out(`${pad}${r.left}${spaces}${c.dim(first)}\n`)
+    for (const l of more) out(`${" ".repeat(start)}${c.dim(l)}\n`)
+  }
+}
+
+/** A titled block of two-column rows — the body of a help page. */
+export function section2(title, rows) {
+  if (!rows?.length) return
+  spacer()
+  out(`  ${c.bold(title)}\n`)
+  table(rows)
+}
+
+/**
+ * A titled block of pre-composed lines — a synopsis, a list of examples. Each WRAPS with a
+ * hanging indent rather than clipping, so a long synopsis on a narrow terminal folds under
+ * itself instead of losing the flags at the end of it (R44).
+ */
+export function lineBlock(title, lines) {
+  if (!lines?.length) return
+  spacer()
+  if (title) out(`  ${c.bold(title)}\n`)
+  const max = Math.max(20, width()) - 4
+  for (const l of lines)
+    for (const w of wrap(l, { max, hang: 2 })) out(`    ${w}\n`)
+}
+
+/** Free prose inside a help page: dim, wrapped, indented like the body. */
+export function paragraph(text) {
+  //`spacer()` rather than a raw newline: it is idempotent, so a paragraph directly under the
+  //banner (which already ends in a blank line) does not open a second gap.
+  spacer()
+  for (const l of wrap(text, { max: Math.max(20, width()) - 4 }))
+    out(`  ${c.dim(l)}\n`)
+}
+
+/**
+ * An invocation that cannot run: the dev typed something wrong, so nothing has started and
+ * there is nothing to tear down. ONE `✖` naming what was wrong, then the fix — never the whole
+ * help page, which answers a question they did not ask (R6/R36).
+ *
+ * The `✖` line WRAPS rather than clipping, with a hanging indent that lines its continuation
+ * up under the first word rather than under the glyph.
+ */
+export function usageFail(reason, fix = []) {
+  const cols = Math.max(20, width())
+  const [first, ...more] = wrap(reason, { max: cols - 4 })
+  out(`  ${c.red("✖")} ${first}\n`)
+  for (const l of more) out(`    ${l}\n`)
+  for (const f of fix)
+    for (const l of wrap(f, { max: cols - 6, hang: 2 }))
+      out(`    ${c.dim(l)}\n`)
+  noteFailurePrinted()
+}
+
 /**
  * Normalise whatever a step threw into the two things a failed line renders: a `reason`
  * shown INLINE on the ✖ line, and `detail` lines under it. `explain` is the CLI's
