@@ -1130,21 +1130,19 @@ async function runLive(appRoot, platforms, opts) {
     }
 
     /**
-     * The watch block, from whichever renderer is in play.
+     * The watch block. Ink renders it (`bin/ui/watch.mjs`), describing the block as layout
+     * rather than growing and shrinking it with cursor arithmetic — the thing that once walked
+     * it up the screen and erased the settled rows above it.
      *
-     * `ADAPTV_INK=1` swaps in the Ink implementation (`bin/ui/watch.mjs`), which describes the
-     * block as layout instead of growing and shrinking it with cursor arithmetic — the thing
-     * that once walked it up the screen and erased the settled rows above it. Both return the
-     * same `{ hmr, notice, clearNotice, stop }`, so nothing below can tell them apart.
+     * `ADAPTV_INK=0` falls back to the string version, kept for one release as an escape
+     * hatch. Both return the same `{ hmr, notice, clearNotice, stop }`, so nothing below can
+     * tell them apart. The flag defaulted the other way while the port was unproven; it is
+     * proven now — `build`, `dev`, the `b` rebuild and the `r` reload have all run through it
+     * on a device.
      *
-     * Behind a flag while the port is unverified against a real `dev` session. Ink also owns
-     * the keypresses when it is in play: two raw-mode listeners on one stdin would each get
-     * half the bytes.
+     * Ink also owns the keypresses when it is in play: two raw-mode listeners on one stdin
+     * would each get half the bytes.
      */
-    //Ink renders the watch block. `ADAPTV_INK=0` falls back to the string version, kept for
-    //one release as an escape hatch — the flag defaulted the other way while the port was
-    //unproven, and it is proven now: build, dev, the `b` rebuild and the `r` reload have all
-    //run through it on a device.
     const useInk = process.env.ADAPTV_INK !== "0" && !webOnly
     //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
     //a 64ms bare-node floor, and a static import would charge that to `adaptv --help` and to
