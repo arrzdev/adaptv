@@ -794,12 +794,18 @@ async function runLive(appRoot, platforms, opts) {
       for (const p of ready) {
         const env = envFor(p)
         const physicalInPlay = opts.target
-          ? isPhysicalTarget(p, opts.target, env)
+          ? await isPhysicalTarget(p, opts.target, env)
           : opts.latest
-            ? isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
-            : (await listTargets(appRoot, p, env)).some((t) =>
-                isPhysicalTarget(p, t.id, env),
-              )
+            ? await isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
+            : //`.some` with an async predicate is always true — every promise is truthy. The
+              //answers have to be resolved before the question can be asked.
+              (
+                await Promise.all(
+                  (
+                    await listTargets(appRoot, p, env)
+                  ).map((t) => isPhysicalTarget(p, t.id, env)),
+                )
+              ).some(Boolean)
         if (physicalInPlay) {
           externalPossible = true
           break
@@ -873,16 +879,25 @@ async function runLive(appRoot, platforms, opts) {
     // physical or --host forced it, else localhost (sim shares loopback; emulator uses
     // `adb reverse`). Vite is already bound for the LAN if it was possible, so only the URL
     // is decided here.
+    //Same trap as above: resolve first, then ask.
     const anyPhysical =
       !webOnly &&
-      ready.some((p) => isPhysicalTarget(p, targets[p].id, envFor(p)))
+      (
+        await Promise.all(
+          ready.map((p) => isPhysicalTarget(p, targets[p].id, envFor(p))),
+        )
+      ).some(Boolean)
     const external = !!forcedHost || anyPhysical
     // The Android emulator can't reach a LAN IP (its NAT can't route back to the host's own
     // LAN address), so it's fundamentally incompatible with external mode.
     if (
       external &&
       ready.includes("android") &&
-      !isPhysicalTarget("android", targets.android.id, envFor("android"))
+      !(await isPhysicalTarget(
+        "android",
+        targets.android.id,
+        envFor("android"),
+      ))
     ) {
       throw new Error(
         "the Android emulator can't reach an external dev server (its NAT can't route to your LAN IP). " +
@@ -957,7 +972,7 @@ async function runLive(appRoot, platforms, opts) {
           !force &&
           prev?.url === url &&
           prev?.fp === nativeFingerprint(appRoot, platform) &&
-          isAppInstalled(appRoot, platform, target.id, env)
+          (await isAppInstalled(appRoot, platform, target.id, env))
 
         if (cached) {
           // Android emulator first needs the localhost route back to the host — no `cap
@@ -965,11 +980,13 @@ async function runLive(appRoot, platforms, opts) {
           // directly, so there's no `adb reverse` to (re-)assert.
           if (platform === "android" && !external) {
             report("linking server")
-            cleanups.push(androidReverse(port, env))
+            cleanups.push(await androidReverse(port, env))
           }
           report("launching device")
-          if (launchInstalledApp(appRoot, platform, target.id, env)) {
-            foregroundDevice(platform, target.id, env)
+          if (
+            await launchInstalledApp(appRoot, platform, target.id, env)
+          ) {
+            await foregroundDevice(platform, target.id, env)
             launched.add(platform)
             return `${target.name} · cached`
           }
@@ -988,7 +1005,12 @@ async function runLive(appRoot, platforms, opts) {
         })
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
-        const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+        const wasRunning = await isAppRunning(
+          appRoot,
+          platform,
+          target.id,
+          env,
+        )
         report("launching device")
         await capRun(appRoot, platform, target.id, env, { report })
         if (platform === "android" && !external) {
@@ -998,16 +1020,16 @@ async function runLive(appRoot, platforms, opts) {
           // app so its WebView loads with a working route. External mode reaches the LAN IP
           // directly (no reverse), so none of this applies.
           report("linking server")
-          cleanups.push(androidReverse(port, env))
-          relaunchAndroidApp(appRoot, env, target.id)
+          cleanups.push(await androidReverse(port, env))
+          await relaunchAndroidApp(appRoot, env, target.id)
         } else if (platform === "ios" && wasRunning) {
           // The old process kept running through the build; load the fresh install now
           // (one relaunch, at the end — not a kill-then-wait-15s at the start).
-          launchInstalledApp(appRoot, platform, target.id, env, {
+          await launchInstalledApp(appRoot, platform, target.id, env, {
             restart: true,
           })
         }
-        foregroundDevice(platform, target.id, env)
+        await foregroundDevice(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
         runCache.run[key] = {
@@ -1170,10 +1192,10 @@ async function runLive(appRoot, platforms, opts) {
     // server. Instant next to a native rebuild (no sync/gradle/xcode), and the fix for a
     // wedged JS bundle — a fresh document from the dev server, no reinstall. Distinct from
     // `R`, which reinstalls the binary for a genuine native change.
-    const reloadOne = (platform, report) => {
+    const reloadOne = async (platform, report) => {
       const target = targets[platform]
       report("reloading device")
-      const ok = launchInstalledApp(
+      const ok = await launchInstalledApp(
         appRoot,
         platform,
         target.id,
@@ -1184,7 +1206,7 @@ async function runLive(appRoot, platforms, opts) {
         throw new Error(
           "couldn't relaunch the app — is it still installed? press b to rebuild.",
         )
-      foregroundDevice(platform, target.id, envFor(platform))
+      await foregroundDevice(platform, target.id, envFor(platform))
       return `${target.name} · reloaded`
     }
     const reload = async () => {
@@ -1491,15 +1513,15 @@ async function pipeline(kind, appRoot, platforms, opts) {
       !opts.force &&
       !staleAtStart[platform] &&
       buildCache.run[key]?.id === runIdOf(platform) &&
-      isAppInstalled(appRoot, platform, target.id, env)
+      (await isAppInstalled(appRoot, platform, target.id, env))
     if (cached) {
       // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
       // (e.g. a prior `dev` session's offline screen) must not linger on screen.
       report("relaunching device")
-      launchInstalledApp(appRoot, platform, target.id, env, {
+      await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
       })
-      foregroundDevice(platform, target.id, env)
+      await foregroundDevice(platform, target.id, env)
       done[platform] = `launched on ${target.name}`
       return `${target.name} · cached`
     }
@@ -1507,14 +1529,19 @@ async function pipeline(kind, appRoot, platforms, opts) {
     // `cap run` installs + activates, but only FOREGROUNDS an already-running app — its old
     // WebView (e.g. the dev offline screen) would stay. Restart it after the build so the
     // freshly-installed bundle is what's shown.
-    const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+    const wasRunning = await isAppRunning(
+      appRoot,
+      platform,
+      target.id,
+      env,
+    )
     await capRun(appRoot, platform, target.id, env, { report })
     if (wasRunning) {
-      launchInstalledApp(appRoot, platform, target.id, env, {
+      await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
       })
     }
-    foregroundDevice(platform, target.id, env)
+    await foregroundDevice(platform, target.id, env)
     buildCache.run[key] = { id: runIdOf(platform) }
     done[platform] = `launched on ${target.name}`
     return target.name

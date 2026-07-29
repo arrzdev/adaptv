@@ -3,7 +3,7 @@
 // Extracted from bin/adaptv.mjs so the entry file stays a thin dispatcher. Every
 // long-running command streams through the captured `exec` (see exec.mjs) so its
 // output can be rendered as calm steps instead of a raw log dump.
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import {
   copyFileSync,
   existsSync,
@@ -843,9 +843,44 @@ export async function capRun(
  * across the Linux/Windows hosts where Android dev also runs. The app is still fronted
  * *inside* the emulator by the launch; raising the emulator window stays the dev's own.
  */
-export function foregroundDevice(platform, target, env) {
-  if (isPhysicalTarget(platform, target, env)) return
-  if (platform === "ios") spawnSync("open", ["-a", "Simulator"])
+
+/**
+ * Run a short command and resolve `{ status, stdout }`. The async twin of `spawnSync`, for the
+ * device probes and launches.
+ *
+ * Why this exists: the live rows are repainted by a timer, and `spawnSync` blocks Node's event
+ * loop for its whole duration — so during a launch the timer cannot fire, the spinner freezes,
+ * and on `dev all` the two platform lanes cannot overlap at all (iOS runs to completion, THEN
+ * Android). Reported as a reload that sits on one stale frame while the app is already open on
+ * the device. Nothing here needs to be synchronous; it only ever was by habit.
+ *
+ * Deliberately not `exec()` from `exec.mjs`: that one streams every line to a phase reporter and
+ * keeps a failure tail, which is right for xcodebuild and gradle and pure overhead for
+ * `simctl launch`. This wants the exit code and, sometimes, a line of stdout.
+ */
+function probe(command, args, { env, encoding = "utf8" } = {}) {
+  return new Promise((resolve) => {
+    let out = ""
+    const child = spawn(command, args, {
+      env,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    child.stdout?.setEncoding(encoding)
+    child.stdout?.on("data", (d) => {
+      out += d
+    })
+    //Never rejects: every caller here asks a yes/no question about a device, and "the tool
+    //isn't there" is a `no`, not an exception to handle at each site.
+    child.on("error", () => resolve({ status: 1, stdout: "" }))
+    child.on("close", (status) =>
+      resolve({ status: status ?? 1, stdout: out }),
+    )
+  })
+}
+
+export async function foregroundDevice(platform, target, env) {
+  if (await isPhysicalTarget(platform, target, env)) return
+  if (platform === "ios") await probe("open", ["-a", "Simulator"])
 }
 
 /**
@@ -854,8 +889,8 @@ export function foregroundDevice(platform, target, env) {
  * command is ambiguous and fails — which silently breaks `adb reverse` (→ the emulator
  * can't reach the host, → black screen).
  */
-export function androidDevices(env) {
-  const r = spawnSync("adb", ["devices"], { env, encoding: "utf8" })
+export async function androidDevices(env) {
+  const r = await probe("adb", ["devices"], { env })
   if (r.status !== 0 || !r.stdout) return []
   return r.stdout
     .split("\n")
@@ -880,10 +915,13 @@ const IOS_SIM_UUID =
  * not-yet-booted emulator — neither is a real device. A physical device is a serial that
  * shows up in `adb devices` and isn't `emulator-`-prefixed.
  */
-export function isPhysicalTarget(platform, id, env) {
+export async function isPhysicalTarget(platform, id, env) {
   if (!id) return false
+  //iOS answers from the id alone — no device call, so this stays instant for the common case.
   if (platform === "ios") return !IOS_SIM_UUID.test(id)
-  return androidDevices(env).includes(id) && !id.startsWith("emulator-")
+  return (
+    (await androidDevices(env)).includes(id) && !id.startsWith("emulator-")
+  )
 }
 
 // Virtual bridges / VPN / link-local interfaces that aren't a real LAN address.
@@ -1017,17 +1055,14 @@ export function explainLaunchFailure(platform, text = "") {
  * emulator that has never seen the app makes the answer `false` forever, and the run
  * cache can never hit. Returns null when ambiguous so callers fall back to the safe path.
  */
-export function androidSerialForTarget(target, env) {
-  const serials = androidDevices(env)
+export async function androidSerialForTarget(target, env) {
+  const serials = await androidDevices(env)
   if (serials.length === 0) return null
   if (serials.length === 1) return serials[0]
   if (!target) return null
   if (serials.includes(target)) return target // already a serial
   for (const s of serials) {
-    const r = spawnSync("adb", ["-s", s, "emu", "avd", "name"], {
-      env,
-      encoding: "utf8",
-    })
+    const r = await probe("adb", ["-s", s, "emu", "avd", "name"], { env })
     const name = (r.stdout ?? "").split("\n")[0]?.trim()
     if (name && name === target) return s
   }
@@ -1043,26 +1078,27 @@ export function androidSerialForTarget(target, env) {
  * so the caller falls back to a full build; a wasted rebuild is free, a skipped one that
  * should have happened is a debugging nightmare.
  */
-export function isAppInstalled(appRoot, platform, target, env) {
+export async function isAppInstalled(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   if (platform === "ios") {
     if (!target) return false
-    const r = spawnSync(
-      "xcrun",
-      ["simctl", "get_app_container", target, appId],
-      { encoding: "utf8" },
-    )
+    const r = await probe("xcrun", [
+      "simctl",
+      "get_app_container",
+      target,
+      appId,
+    ])
     return r.status === 0
   }
   if (platform === "android") {
     // Ask ONLY the device this run targets — see `androidSerialForTarget`.
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
-    const r = spawnSync(
+    const r = await probe(
       "adb",
       ["-s", serial, "shell", "pm", "list", "packages", appId],
-      { env, encoding: "utf8" },
+      { env },
     )
     return r.status === 0 && (r.stdout ?? "").includes(`package:${appId}`)
   }
@@ -1070,24 +1106,25 @@ export function isAppInstalled(appRoot, platform, target, env) {
 }
 
 /** Is the app currently RUNNING on the target device (not merely installed)? */
-export function isAppRunning(appRoot, platform, target, env) {
+export async function isAppRunning(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   if (platform === "ios") {
     if (!target) return false
-    const r = spawnSync(
-      "xcrun",
-      ["simctl", "spawn", target, "launchctl", "list"],
-      { encoding: "utf8" },
-    )
+    const r = await probe("xcrun", [
+      "simctl",
+      "spawn",
+      target,
+      "launchctl",
+      "list",
+    ])
     return r.status === 0 && (r.stdout ?? "").includes(appId)
   }
   if (platform === "android") {
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
-    const r = spawnSync("adb", ["-s", serial, "shell", "pidof", appId], {
+    const r = await probe("adb", ["-s", serial, "shell", "pidof", appId], {
       env,
-      encoding: "utf8",
     })
     return r.status === 0 && (r.stdout ?? "").trim().length > 0
   }
@@ -1110,7 +1147,7 @@ export function isAppRunning(appRoot, platform, target, env) {
  * server. The offline screen + reconnect watchdog now cover that case, and `r` remains
  * the explicit escape hatch for a genuinely wedged app.)
  */
-export function launchInstalledApp(
+export async function launchInstalledApp(
   appRoot,
   platform,
   target,
@@ -1131,27 +1168,25 @@ export function launchInstalledApp(
     if (!target) return false
     // `simctl launch` on a running app activates it in place; only a requested restart
     // needs a terminate first.
-    if (restart) spawnSync("xcrun", ["simctl", "terminate", target, appId])
-    const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
-      encoding: "utf8",
-    })
+    if (restart)
+      await probe("xcrun", ["simctl", "terminate", target, appId])
+    const r = await probe("xcrun", ["simctl", "launch", target, appId])
     return r.status === 0
   }
   if (platform === "android") {
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
     // Same rule, and the same reduction: the LAUNCHER intent alone re-fronts an existing
     // task without restarting it, and `am force-stop` on a stopped app is a no-op.
-    if (restart) {
-      spawnSync(
+    if (restart)
+      await probe(
         "adb",
         ["-s", serial, "shell", "am", "force-stop", appId],
         {
           env,
         },
       )
-    }
-    const r = spawnSync(
+    const r = await probe(
       "adb",
       [
         "-s",
@@ -1255,19 +1290,19 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
  * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
  */
-export function relaunchAndroidApp(appRoot, env, target) {
+export async function relaunchAndroidApp(appRoot, env, target) {
   const appId = readAppId(appRoot)
   if (!appId) return
   // Only the device this run targets — never every connected emulator. A second, idle
   // emulator must not be force-stopped and relaunched. Fall back to all devices only when
   // the target can't be resolved (ambiguous), matching the prior best-effort behaviour.
-  const serial = androidSerialForTarget(target, env)
-  const serials = serial ? [serial] : androidDevices(env)
+  const serial = await androidSerialForTarget(target, env)
+  const serials = serial ? [serial] : await androidDevices(env)
   for (const s of serials) {
-    spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
+    await probe("adb", ["-s", s, "shell", "am", "force-stop", appId], {
       env,
     })
-    spawnSync(
+    await probe(
       "adb",
       [
         "-s",
