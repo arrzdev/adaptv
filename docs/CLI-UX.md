@@ -295,6 +295,27 @@ look exactly like the run, and a failure must end where the `✖` ends.
 > exiting `[ELIFECYCLE]`) and belongs to pnpm, not to adaptv — `pnpm --silent adaptv …` is the
 > quiet form. Everything inside that is adaptv's to keep clean.
 
+**R39 — An explicit flag outranks a measurement, or it is not a flag.** `gen icons` measures the
+colour behind the mark and repaints it on the slots that cannot carry transparency. `--background
+<hex>` was documented as overriding that colour and did not: `slotPlan` read
+`artwork.background ?? background`, so the measurement won and the flag was a silent no-op in the
+ONLY case anyone reaches for it — a source that HAS a background whose colour they want changed.
+Passing it changed nothing and said nothing.
+> ```
+> $ adaptv gen icons --input logo.png --background "#ff0000"
+>   ✓ icons  15 files → ./public/favicons · 127ms      # still #1e7a4f
+> ```
+> A measurement is adaptv being smart on the dev's behalf; a flag is the dev answering the
+> question themselves. The answer wins. The same run now says which colour it read, so the
+> measurement is visible before it is disagreed with — and the notice goes silent once
+> `--background` is passed, because it is answering a question the dev already answered.
+> ```
+>   ! background #1e7a4f lifted off the mark — --background overrides
+> ```
+> Generally: every tuning flag must be checked against the path it claims to control, with a
+> value that would be indistinguishable from the default if it were ignored. `--background
+> #ffffff` on a white-backed logo proves nothing.
+
 **R38 — A notice never names a path the dev did not write.** `icons` used to fall back to
 `./public/favicons` for reading, so an app that configured nothing still got the art sitting
 there — and the notice for an app with none named that directory back:
