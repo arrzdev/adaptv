@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest"
 import { readImageHeader, scanIcons } from "#adaptv/vite/icon-set"
 import { decodeIco, encodeIco } from "./ico.mjs"
 import {
+  effectiveBackground,
   existingIcons,
   generateIcons,
   ICON_SET,
@@ -425,6 +426,133 @@ describe("iOS 18 appearance variants", () => {
     expect(pickIcon(set, "ios").name).toBe("icon.png")
     expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
     expect(pickIcon(set, "androidLegacy").name).toBe("icon.png")
+  })
+})
+
+describe("the background adaptv lifted off the mark", () => {
+  const warn = (over = {}) =>
+    sourceWarnings(
+      {
+        width: 1024,
+        height: 1024,
+        isolable: true,
+        luminance: 0.6,
+        hasDark: false,
+        hasTinted: false,
+        ...over,
+      },
+      ".png",
+    ).filter((w) => w.startsWith("background "))
+
+  it("names the colour it measured, because everything visible comes from it", async () => {
+    //It becomes the iOS tile, Android's ic_launcher_background and the favicon backdrop. Read
+    //off the border ring, so a drop shadow or a near-white canvas can put it a shade out —
+    //invisible in the source, obvious on a home screen.
+    expect(warn({ background: { r: 30, g: 122, b: 79 } })).toEqual([
+      "background #1e7a4f lifted off the mark — --background overrides",
+    ])
+  })
+
+  it("says nothing for a transparent source — no colour was chosen", async () => {
+    expect(warn({ background: null })).toEqual([])
+  })
+
+  it("says nothing once the dev has named the colour themselves", async () => {
+    //The whole notice answers a question they already answered.
+    expect(
+      warn({
+        background: { r: 30, g: 122, b: 79 },
+        backgroundChosen: true,
+      }),
+    ).toEqual([])
+  })
+
+  it("resolves ONE colour for the files, the notice and the preview sheet", async () => {
+    //Three consumers used to work it out separately and the sheet got it wrong: it drew the
+    //adaptive tiles on the flag's value while the files were flattened onto the measured one,
+    //so a green-backed logo previewed on white and shipped on green.
+    const measured = { background: { r: 30, g: 122, b: 79 } }
+    const flag = { r: 255, g: 0, b: 0 }
+    expect(effectiveBackground(measured, flag)).toEqual({
+      r: 30,
+      g: 122,
+      b: 79,
+    })
+    expect(effectiveBackground(measured, flag, true)).toEqual(flag)
+    //a transparent source measured no colour, so there is nothing to prefer
+    expect(effectiveBackground({ background: null }, flag)).toEqual(flag)
+  })
+
+  it("lets --background outrank the measurement it warned about", async () => {
+    //It used to lose to it, which made the flag a no-op in the only case anyone reaches for
+    //it: a source that HAS a background whose colour they want changed.
+    const { default: sharp } = await import("sharp")
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-bg-"))
+    const source = path.join(dir, "src.png")
+    await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#1e7a4f"/><circle cx="256" cy="256" r="150" fill="#ffffff"/></svg>`,
+      ),
+    )
+      .png()
+      .toFile(source)
+
+    const corner = async (out) => {
+      const { data } = await sharp(path.join(out, "icon.png"))
+        .extract({ left: 2, top: 2, width: 1, height: 1 })
+        .raw()
+        .toBuffer({ resolveWithObject: true })
+      return [data[0], data[1], data[2]]
+    }
+
+    const measured = path.join(dir, "measured")
+    await generateIcons({
+      source,
+      dirAbs: measured,
+      background: WHITE,
+      sharp,
+    })
+    expect(await corner(measured)).toEqual([30, 122, 79])
+
+    const chosen = path.join(dir, "chosen")
+    await generateIcons({
+      source,
+      dirAbs: chosen,
+      background: { r: 255, g: 0, b: 0 },
+      backgroundChosen: true,
+      sharp,
+    })
+    expect(await corner(chosen)).toEqual([255, 0, 0])
+  })
+
+  it("keeps the iOS dark variant transparent whichever colour won", async () => {
+    //Apple's requirement, and it is about the LAYER, not about the source: the system draws
+    //its own near-black backdrop under it. A background colour, measured or named, must never
+    //reach this slot.
+    const { default: sharp } = await import("sharp")
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-bgdark-"))
+    const source = path.join(dir, "src.png")
+    await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#1e7a4f"/><circle cx="256" cy="256" r="150" fill="#ffffff"/></svg>`,
+      ),
+    )
+      .png()
+      .toFile(source)
+
+    for (const over of [{}, { backgroundChosen: true }]) {
+      const out = path.join(dir, `d${Object.keys(over).length}`)
+      await generateIcons({
+        source,
+        dirAbs: out,
+        background: { r: 255, g: 0, b: 0 },
+        sharp,
+        ...over,
+      })
+      const dark = sharp(path.join(out, "icon-dark.png"))
+      expect((await dark.metadata()).hasAlpha).toBe(true)
+      expect((await dark.stats()).isOpaque).toBe(false)
+    }
   })
 })
 

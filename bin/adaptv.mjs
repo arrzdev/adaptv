@@ -51,6 +51,7 @@ import {
 import { exec } from "./lib/exec.mjs"
 import { fingerprint, nativeFingerprint } from "./lib/fingerprint.mjs"
 import {
+  effectiveBackground,
   existingIcons,
   generateIcons,
   sourceError,
@@ -1710,8 +1711,9 @@ ${c.dim("back to a flat silhouette where it doesn't. --monochrome <img> replaces
 ${c.dim("")}
 ${c.dim("You should never need the tuning flags — they exist to take adaptv's judgement back:")}
 ${c.dim("--margin <pct> is the room left inside EVERY slot's limit (default 10; 0 fills it")}
-${c.dim("exactly), --padding <pct> insets every icon on top of that, --background <hex>")}
-${c.dim("overrides the colour flattened behind slots that can't carry transparency.")}
+${c.dim("exactly), --padding <pct> insets every icon on top of that. adaptv MEASURES the")}
+${c.dim("colour behind your mark and says which one it read; --background <hex> overrules")}
+${c.dim("that. The iOS dark icon and Android's foreground stay transparent regardless.")}
 ${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
 ${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
 ${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
@@ -2158,6 +2160,19 @@ async function genIcons(appRoot, positional, flags) {
     appearances[slot] = abs
   }
 
+  //Resolved HERE, above the notices that read it — R33 puts everything adaptv already knows
+  //before the run, so the values those notices are derived from have to exist by then.
+  //`backgroundChosen` is whether the dev NAMED the colour, not what it resolved to:
+  //`--background` outranks a measured background (see `slotPlan`), and once through `parseHex`
+  //the default is indistinguishable from someone typing `--background #ffffff`.
+  const backgroundChosen = typeof flags.background === "string"
+  const background = parseHex(
+    flags.background ?? resolveIconPlan(config).iconBackground,
+  )
+  //What the mark will actually sit on. Shared with `slotPlan` rather than restated, so the
+  //preview sheet cannot disagree with the files it is previewing.
+  const tile = effectiveBackground(artwork, background, backgroundChosen)
+
   const tuning = parseTuning(flags)
   if (tuning.errors.length > 0) {
     for (const e of tuning.errors) log.error(e)
@@ -2170,6 +2185,8 @@ async function genIcons(appRoot, positional, flags) {
         ...meta,
         isolable: artwork.mark !== null,
         luminance: artwork.luminance,
+        background: artwork.background,
+        backgroundChosen,
         hasDark: appearances["icon-dark.png"] !== undefined,
         hasTinted: appearances["icon-tinted.png"] !== undefined,
       },
@@ -2207,16 +2224,13 @@ async function genIcons(appRoot, positional, flags) {
     }
   }
 
-  const background = parseHex(
-    flags.background ?? resolveIconPlan(config).iconBackground,
-  )
-
   let written = []
   await runLine("icons", async () => {
     written = await generateIcons({
       source: sourceAbs,
       dirAbs: set.dirAbs,
       background,
+      backgroundChosen,
       padding: tuning.values.padding,
       margin: tuning.values.margin,
       artwork,
@@ -2246,8 +2260,13 @@ async function genIcons(appRoot, positional, flags) {
         margin: tuning.values.margin,
         artTarget: artTarget(tuning.values.margin),
         safeZone: SAFE_ZONE,
-        //the adaptive tiles composite over this exactly as a launcher does
-        background: `rgb(${background.r} ${background.g} ${background.b})`,
+        //The colour that will actually SHIP, not the flag's value. `slotPlan` prefers the
+        //measured background over the default, so a green-backed logo lands on green in every
+        //solid slot and in `ic_launcher_background` — while the sheet drew its adaptive tiles
+        //on white and captioned them `+ rgb(255 255 255)`. A preview whose whole job is
+        //showing what the platforms will do must not disagree with them about the one colour
+        //this run just printed a `!` about.
+        background: `rgb(${tile.r} ${tile.g} ${tile.b})`,
       },
     })
     detail(`preview  ${path.relative(appRoot, dest)}`)
