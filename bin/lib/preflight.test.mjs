@@ -31,7 +31,8 @@ function appWithIcon(name, bytes) {
  * dev's own directory produces; a framework fallback standing in for a missing set would make
  * the "nothing there" cases silently pass.
  */
-const setFor = (root) => resolveIconSet(root, {}, [])
+const setFor = (root) =>
+  resolveIconSet(root, { icons: "./public/favicons" }, [])
 
 /** One entry of adaptv's own set, for the default-mark cases. */
 const icon = (name, width) => ({
@@ -133,7 +134,9 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
     //R21 — one app-level fact, and it does not gain a platform prefix or a second copy just
     //because the code that found it runs per platform.
     const root = appWithIcon(null)
-    const set = resolveIconSet(root, {}, [icon("icon.png", 1024)])
+    const set = resolveIconSet(root, { icons: "./public/favicons" }, [
+      icon("icon.png", 1024),
+    ])
     for (const platforms of [[], ["ios"], ["ios", "android"]])
       expect(await iconWarnings(set, platforms)).toEqual([
         "no icons in ./public/favicons — shipping adaptv's default mark",
@@ -144,11 +147,25 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
     //The whole reason this moved out of the per-platform launcher path: `dev web` never asks
     //about a launcher icon, and the app is still wearing someone else\'s logo in its tab, its
     //manifest and its install prompt.
-    const set = resolveIconSet(appWithIcon(null), {}, [
-      icon("icon.png", 1024),
-    ])
+    const set = resolveIconSet(
+      appWithIcon(null),
+      { icons: "./public/favicons" },
+      [icon("icon.png", 1024)],
+    )
     expect(await iconWarnings(set, [])).toEqual([
       "no icons in ./public/favicons — shipping adaptv's default mark",
+    ])
+  })
+
+  it("names the KEY, not a directory, when the config never chose one", async () => {
+    //Two ways to reach the default mark and they have different fixes: an empty directory is
+    //filled, an absent key is set. Naming `./public/favicons` at someone who never wrote it
+    //sent them looking for a directory adaptv had invented (R7 — name the fix).
+    const set = resolveIconSet(appWithIcon("icon.png", png(1024)), {}, [
+      icon("icon.png", 1024),
+    ])
+    expect(await iconWarnings(set, ["ios"])).toEqual([
+      "no `icons` in adaptv.config.ts — shipping adaptv's default mark",
     ])
   })
 
@@ -164,9 +181,11 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
   it("says nothing ELSE about a default set — every other warning is about the dev's art", async () => {
     //adaptv's own mark is correct by construction. Reporting it as "upscaled from…" or
     //"not installable" would be adaptv filing bugs against its own files.
-    const set = resolveIconSet(appWithIcon(null), {}, [
-      icon("tiny.png", 64),
-    ])
+    const set = resolveIconSet(
+      appWithIcon(null),
+      { icons: "./public/favicons" },
+      [icon("tiny.png", 64)],
+    )
     expect(await iconWarnings(set, ["ios", "android"])).toHaveLength(1)
   })
 })

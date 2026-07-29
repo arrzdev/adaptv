@@ -189,8 +189,14 @@ export type AdaptvAppConfig = {
    */
   backgroundColor?: string
   /**
-   * The app's icon set — **one directory, every target**. Default `"./public/favicons"`, and
-   * it must live inside `public/` so the files are actually served.
+   * The app's icon set — **one directory, every target**. It must live inside `public/` so the
+   * files are actually served.
+   *
+   * There is **no default directory**. Name one and adaptv reads it; name none and the app
+   * wears adaptv's own mark, on the home screen and in the manifest alike — never Capacitor's
+   * stock icon. `./public/favicons` is the conventional place to put it, not a path adaptv
+   * looks in on its own: a fallback that resolved to a real directory made this key look
+   * ignored, because removing it changed nothing.
    *
    * Generate it with **`adaptv gen icons --input <image>`** (one png/svg, 1024px+) or drop a
    * standard favicon-generator output in. Either way adaptv reads the directory itself — it **measures
