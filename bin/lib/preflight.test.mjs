@@ -139,7 +139,7 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
     ])
     for (const platforms of [[], ["ios"], ["ios", "android"]])
       expect(await iconWarnings(set, platforms)).toEqual([
-        "no icons in ./public/favicons — shipping adaptv's default mark",
+        "no icons in ./public/favicons",
       ])
   })
 
@@ -153,7 +153,7 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
       [icon("icon.png", 1024)],
     )
     expect(await iconWarnings(set, [])).toEqual([
-      "no icons in ./public/favicons — shipping adaptv's default mark",
+      "no icons in ./public/favicons",
     ])
   })
 
@@ -165,7 +165,7 @@ describe("iconWarnings — the art, read before the run touches anything", () =>
       icon("icon.png", 1024),
     ])
     expect(await iconWarnings(set, ["ios"])).toEqual([
-      "no `icons` in adaptv.config.ts — shipping adaptv's default mark",
+      "no `icons` in adaptv.config.ts",
     ])
   })
 

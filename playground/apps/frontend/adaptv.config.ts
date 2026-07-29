@@ -8,7 +8,7 @@ export default defineApp({
   description: "A focused task list for desktop, mobile, and PWA.",
   lang: "en",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
-  // icons: "./public/favicons",
+  icons: "./public/favicons",
   orientation: "portrait",
   styles: "./src/styles/main.css",
   sw: "./src/sw.ts",

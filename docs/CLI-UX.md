@@ -299,7 +299,7 @@ look exactly like the run, and a failure must end where the `✖` ends.
 `./public/favicons` for reading, so an app that configured nothing still got the art sitting
 there — and the notice for an app with none named that directory back:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no icons in ./public/favicons
 > ```
 > The dev had never written that path. Worse, the fallback made the rule adaptv claimed to have
 > — *no icons dir configured ships adaptv's mark* — one it did not actually have: commenting the
@@ -309,13 +309,32 @@ there — and the notice for an app with none named that directory back:
 > Two situations reach the default mark and they have different fixes, so they get different
 > sentences — an empty directory is filled, an absent key is set:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
-> ! no `icons` in adaptv.config.ts — shipping adaptv's default mark
+> ! no icons in ./public/favicons
+> ! no `icons` in adaptv.config.ts
 > ```
 > The general rule is R7 (name the fix), and the general lesson is the fallback rather than the
 > wording: a default that silently resolves to a real directory makes the config key look
 > ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
 > to guess where to READ, and the two finally describe the same framework.
+
+**R42 — A notice states the fact, not adaptv's reaction to it.** Both default-mark notices used
+to explain what adaptv would do about the missing art:
+> ```
+> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no `icons` in adaptv.config.ts — shipping adaptv's default mark
+> ```
+> Half of each row is adaptv narrating its own fallback. The dev acts on the missing art; what
+> adaptv substitutes meanwhile is its business (R0), and the clause nearly doubled a row that has
+> to survive a narrow terminal without being clipped (R31). Reported by the owner as wanting just
+> `! no \`icons\` in adaptv.config.ts`.
+>
+> Both were shortened, not just the one reported: they are two shapes of one fact, and leaving
+> one with the clause and one without is precisely the drift this file exists to stop. The two
+> sentences still differ where it matters — the fix (R38).
+>
+> The consequence accepted here is that neither row says the app still gets a real icon. That is
+> the right trade only because the mark is visible the moment the app launches; a notice whose
+> consequence is INVISIBLE still has to state it.
 
 **R39 — There is ONE answer to "is this config usable", and a run that loses it ends.** R33 says
 a config value adaptv cannot use stops the command before it builds anything. That has to be the
@@ -411,7 +430,7 @@ answered. Every exit has a last line.
 would have needed.** The launcher icon is the whole worked example, and it says exactly three
 things — all of them about the art in `icons`, none of them fireable by a set that is fine:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no icons in ./public/favicons
 > ! ios launcher icon upscaled from 512px — add a 1024px icon
 > ! android launcher icon is opaque — add one with a transparent background
 > ! web manifest's largest icon is 96px — a PWA needs 192px
