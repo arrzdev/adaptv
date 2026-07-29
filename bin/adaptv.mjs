@@ -2315,10 +2315,10 @@ main().catch((err) => {
   // down and nothing to report but the sentence and the fix. It exits 2 (BSD `EX_USAGE`), so
   // CI can tell "the command was typed wrong" from "the build broke" — which is exactly the
   // distinction a single exit code was hiding.
+  //`usageFail` owns its own blank lines, on stderr, so the block stays intact when stdout is
+  //redirected somewhere else.
   if (err instanceof CliFault) {
-    spacer()
     renderFault(err)
-    spacer()
     process.exit(2)
   }
   // Same rule at the top level: if a step already rendered this failure, exit quietly

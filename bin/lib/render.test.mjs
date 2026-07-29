@@ -14,17 +14,26 @@ import {
 //lint/suspicious/noControlCharactersInRegex.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 
-/** Capture what the CLI actually wrote, minus colour. */
+/**
+ * Capture what the CLI actually wrote, minus colour — from BOTH streams.
+ *
+ * Failures go to stderr and everything else to stdout, so a helper watching only stdout would
+ * see a `✖` block as silence. These tests are about what the dev READS, and the dev reads both.
+ */
 function captureOut(fn) {
   const lines = []
-  const spy = vi.spyOn(process.stdout, "write").mockImplementation((s) => {
+  const take = (s) => {
     lines.push(String(s).replace(ANSI, "").trimEnd())
     return true
-  })
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
   try {
     fn()
   } finally {
-    spy.mockRestore()
+    for (const s of spies) s.mockRestore()
   }
   return lines
 }

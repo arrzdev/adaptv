@@ -41,15 +41,47 @@ const isTTY = !!process.stdout.isTTY && !isCI
 //the design system (docs/CLI-VISUAL.md), and a second copy in the renderer is a second design
 //system waiting to drift.
 const FRAMES = THEME_FRAMES
-// The last two bytes written, so `spacer()` can tell a blank line that is missing from one
-// that is already there. Blank lines are how the output separates blocks (banner, notices,
-// steps), and every block wants one on each side of itself — without a memory, the seam
-// between two of them is two blank lines and the run looks like two runs.
-let tail = ""
-const out = (s) => {
-  tail = `${tail}${s}`.slice(-2)
-  process.stdout.write(s)
+/**
+ * The two streams, each with its own memory of the last two bytes it wrote.
+ *
+ * The memory is what makes `spacer()` idempotent: blank lines separate blocks (banner,
+ * notices, steps) and every block asks for one on each side of itself, so without it the seam
+ * between two blocks is two blank lines and one run looks like two.
+ *
+ * PER-STREAM, because a failure goes to stderr and everything else to stdout. With one shared
+ * memory, a stdout write would satisfy a stderr `spacer()` and the `✖` block would lose its
+ * breathing room the moment stdout was redirected to a file — which is exactly when the dev is
+ * relying on stderr to still read properly.
+ */
+const streams = {
+  out: { w: process.stdout, tail: "" },
+  err: { w: process.stderr, tail: "" },
 }
+/**
+ * Where a failure goes.
+ *
+ * Errors used to be written to stdout like everything else, so `adaptv build ios > out.json`
+ * captured the failure INTO the file it was supposed to be producing. Failures — `log.error`,
+ * `fail`, `usageFail`, and the dim detail hanging under them — go to stderr; the banner, the
+ * steps, the notices and the addresses stay on stdout, because they are what the dev asked
+ * for. A notice is not a failure: it stays on stdout with the rest of the story.
+ */
+let sink = "out"
+const toStderr = (fn) => {
+  sink = "err"
+  try {
+    fn()
+  } finally {
+    sink = "out"
+  }
+}
+const out = (s) => {
+  const st = streams[sink]
+  st.tail = `${st.tail}${s}`.slice(-2)
+  st.w.write(s)
+}
+/** `spacer()` asks the stream it is CURRENTLY writing to whether it already has a blank line. */
+const currentTail = () => streams[sink].tail
 const width = () => process.stdout.columns || DEFAULT_COLUMNS
 
 // Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
@@ -134,7 +166,7 @@ export const log = {
   info: (m) => out(`  ${c.dim(m)}\n`),
   warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`),
   success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`),
-  error: (m) => out(`  ${c.red(GLYPH.fail)} ${m}\n`),
+  error: (m) => toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`)),
 }
 
 /**
@@ -234,8 +266,10 @@ export function skip(label, note = "cached") {
  * put two dots on one row.
  */
 export function fail(label, reason, detail = []) {
-  out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
-  detailBlock(detail)
+  toStderr(() => {
+    out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
+    detailBlock(detail)
+  })
   noteFailurePrinted()
 }
 
@@ -246,7 +280,7 @@ export function spacer() {
   //twice as much. Several blocks each end with one (the banner, a notice block, a finished
   //command) and they meet — `preview all` with nothing to warn about put the gap after the
   //banner AND before the first step, and the run started two lines lower than every other.
-  if (tail !== "\n\n") out("\n")
+  if (currentTail() !== "\n\n") out("\n")
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail
@@ -392,12 +426,18 @@ export function paragraph(text) {
  */
 export function usageFail(reason, fix = []) {
   const cols = Math.max(20, width())
-  const [first, ...more] = wrap(reason, { max: cols - 4 })
-  out(`  ${c.red(GLYPH.fail)} ${first}\n`)
-  for (const l of more) out(`    ${l}\n`)
-  for (const f of fix)
-    for (const l of wrap(f, { max: cols - 6, hang: 2 }))
-      out(`    ${c.dim(l)}\n`)
+  //The whole block on stderr — the glyph line, its wrapped tail, and the fix — with the blank
+  //lines around it, so a redirected stdout still leaves a readable error on the terminal.
+  toStderr(() => {
+    spacer()
+    const [first, ...more] = wrap(reason, { max: cols - 4 })
+    out(`  ${c.red(GLYPH.fail)} ${first}\n`)
+    for (const l of more) out(`    ${l}\n`)
+    for (const f of fix)
+      for (const l of wrap(f, { max: cols - 6, hang: 2 }))
+        out(`    ${c.dim(l)}\n`)
+    spacer()
+  })
   noteFailurePrinted()
 }
 
