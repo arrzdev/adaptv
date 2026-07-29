@@ -825,6 +825,13 @@ async function runLive(appRoot, platforms, opts) {
       }
     }
 
+    //Start listing devices NOW, unawaited. The next ~1.9s is spent warming the dev server
+    //with the process otherwise idle, and a listing costs 176-279ms per platform. See the
+    //bounding rule in `resolveTarget`: this may only ever be used to SUCCEED.
+    const deviceLists = Object.fromEntries(
+      ready.map((p) => [p, listTargets(appRoot, p, envFor(p))]),
+    )
+
     // Start the Vite dev server FIRST — an app/config problem shows up here, before the dev
     // has to pick a device. Bind for the LAN when external is even possible; a
     // simulator/emulator-only run stays on localhost.
@@ -883,6 +890,7 @@ async function runLive(appRoot, platforms, opts) {
       targets[p] = await resolveTarget(appRoot, p, envFor(p), {
         target: opts.target,
         latest: opts.latest,
+        prefetch: deviceLists[p],
       })
     }
 
