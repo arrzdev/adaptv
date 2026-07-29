@@ -93,8 +93,17 @@ export async function iconWarnings(set, platforms) {
   // Nothing else is worth saying about a default set. Every per-platform warning below is
   // about a deficiency in the dev's own art, and adaptv's is correct by construction — piling
   // "upscaled from…" on top would be adaptv reporting its own files as a problem.
+  //
+  // Two ways to get here and they need different sentences, because they have different
+  // fixes: a directory that is empty is filled, a key that is absent is set. The message
+  // used to name `./public/favicons` in both cases — a path the unconfigured dev never
+  // wrote, and one adaptv no longer reads unless they do (R7: name the fix).
   if (set.source === "default")
-    return [`no icons in ${set.dirRel} — shipping adaptv's default mark`]
+    return [
+      set.configured
+        ? `no icons in ${set.dirRel} — shipping adaptv's default mark`
+        : "no `icons` in adaptv.config.ts — shipping adaptv's default mark",
+    ]
 
   const { manifestIcons, installabilityIssue } = await iconSetModule()
   const warnings = []

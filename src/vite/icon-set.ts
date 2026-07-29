@@ -207,7 +207,11 @@ export function scanIcons(dirAbs: string): IconFile[] {
  * resolving the set
  * ============================================================================= */
 
-export const DEFAULT_ICONS_DIR = "./public/favicons"
+// There is deliberately no `DEFAULT_ICONS_DIR` here any more. It was `"./public/favicons"`,
+// and `resolveIconSet` fell back to it whenever `icons` was unset — which meant an app could
+// not opt OUT of its own icon directory, because removing the key resolved to the same place.
+// The conventional location still belongs in the `icons` docs; it does not belong in the code
+// that decides which set a build uses. → {@link resolveIconSet}
 
 /** URL prefix the framework's own icon set is served/emitted under. */
 export const DEFAULT_ICONS_URL_BASE = "/adaptv-icons"
@@ -298,7 +302,14 @@ export function defaultIconFiles(): IconFile[] {
  */
 export type IconSet = {
   source: "app" | "default"
-  /** App-relative directory, as the dev wrote it — for messages only. */
+  /**
+   * Whether the app NAMED an icon directory. Two different situations reach `source:
+   * "default"` — a config that points somewhere empty, and a config that points nowhere at
+   * all — and they need different sentences: one says which directory to fill, the other says
+   * which key to set. Without this they shared a message that named a path the dev never wrote.
+   */
+  configured: boolean
+  /** App-relative directory, as the dev wrote it — `""` when unconfigured. Messages only. */
   dirRel: string
   dirAbs: string
   /** URL prefix the icons are reachable at, no trailing slash. */
@@ -322,13 +333,23 @@ export function resolveIconSet(
   config: IconSetConfig,
   defaultIcons: IconFile[] = [],
 ): IconSet {
-  const dirRel = config.icons ?? DEFAULT_ICONS_DIR
-  const dirAbs = path.resolve(appRoot, dirRel)
-  const icons = scanIcons(dirAbs)
+  // The config KEY drives this, and there is deliberately no fallback directory. It used to
+  // default to `./public/favicons` for reading, on the theory that an app with art there
+  // should work without configuring anything. The cost of that convenience was that removing
+  // `icons` from the config changed nothing at all — the set resolved to the same directory,
+  // the same manifest, the same launcher icons — so "no icons dir configured ships adaptv's
+  // mark" was a rule the framework did not actually have. Reported as icons that would not
+  // update. `gen icons` already refused to GUESS a directory to write into; this is the read
+  // path finally agreeing with the write path.
+  const configured = typeof config.icons === "string"
+  const dirRel = configured ? (config.icons as string) : ""
+  const dirAbs = configured ? path.resolve(appRoot, dirRel) : ""
+  const icons = configured ? scanIcons(dirAbs) : []
 
   if (icons.length === 0)
     return {
       source: "default",
+      configured,
       //`dirRel` stays the APP's directory — it is what every message names, and "put your
       //icons here" is the only actionable thing about a default set. `dirAbs` follows the
       //FILES, because callers probe it for the members that aren't rankable rasters
@@ -350,6 +371,8 @@ export function resolveIconSet(
     rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
   return {
     source: "app",
+    //Unreachable unless the dev named a directory — an unconfigured app has no icons to scan.
+    configured: true,
     dirRel,
     dirAbs,
     urlBase: served ? `/${rel.replaceAll(path.sep, "/")}` : "",

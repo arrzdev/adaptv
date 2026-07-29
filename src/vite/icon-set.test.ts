@@ -46,6 +46,7 @@ const setOf = (
   over: Partial<IconSet> = {},
 ): IconSet => ({
   source: "app",
+  configured: true,
   dirRel: "./public/favicons",
   dirAbs: "/app/public/favicons",
   urlBase: "/favicons",
@@ -143,20 +144,51 @@ describe("resolveIconSet — which set a build is going to use", () => {
     expect(set.icons).toHaveLength(1)
   })
 
-  it("falls back to the default set when the directory has NO usable art, not when the config key is missing", () => {
+  it("uses the default set for a directory with no usable art", () => {
     const empty = iconDir({})
     const fallback = [icon("icon.png", 1024)]
+    const set = resolveIconSet(empty, { icons: "." }, fallback)
+    expect(set.source).toBe("default")
+    expect(set.configured).toBe(true)
+    expect(set.icons).toEqual(fallback)
+    expect(set.urlBase).toBe("/adaptv-icons")
+  })
 
-    // configured, but empty — the same position as an app that configured nothing
-    const configured = resolveIconSet(empty, { icons: "." }, fallback)
-    expect(configured.source).toBe("default")
-    expect(configured.icons).toEqual(fallback)
-    expect(configured.urlBase).toBe("/adaptv-icons")
+  it("uses the default set when the config names NO directory, whatever is on disk", () => {
+    //The reported bug, and the rule the framework claimed to have but didn't: commenting
+    //`icons` out changed nothing, because the read path fell back to `./public/favicons` —
+    //the very directory the app's art was already in. So the icons "would not update".
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-unset-"))
+    const favicons = path.join(root, "public/favicons")
+    mkdirSync(favicons, { recursive: true })
+    writeFileSync(path.join(favicons, "icon.png"), pngHeader(1024, 1024))
 
-    // not configured at all, and the default directory doesn't exist
-    const unset = resolveIconSet(empty, {}, fallback)
-    expect(unset.source).toBe("default")
-    expect(unset.dirRel).toBe("./public/favicons")
+    const fallback = [icon("adaptv.png", 1024)]
+    const set = resolveIconSet(root, {}, fallback)
+    expect(set.source).toBe("default")
+    expect(set.configured).toBe(false)
+    expect(set.icons).toEqual(fallback)
+    expect(set.urlBase).toBe("/adaptv-icons")
+    //No directory was named, so there is none to name back — the message says which KEY to
+    //set instead, and a path the dev never wrote must not appear in it.
+    expect(set.dirRel).toBe("")
+  })
+
+  it("uses the app's art the moment the key names the directory it is in", () => {
+    //The other half of the same rule: configuring it is all it takes, and nothing else
+    //about the app has to change.
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-set-"))
+    const favicons = path.join(root, "public/favicons")
+    mkdirSync(favicons, { recursive: true })
+    writeFileSync(path.join(favicons, "icon.png"), pngHeader(1024, 1024))
+
+    const set = resolveIconSet(root, { icons: "./public/favicons" }, [
+      icon("adaptv.png", 1024),
+    ])
+    expect(set.source).toBe("app")
+    expect(set.configured).toBe(true)
+    expect(set.urlBase).toBe("/favicons")
+    expect(set.icons.map((i) => i.name)).toEqual(["icon.png"])
   })
 
   it("reports an icon directory outside public/ instead of emitting ../ hrefs", () => {

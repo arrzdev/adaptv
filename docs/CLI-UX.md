@@ -165,11 +165,9 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 > `adaptv.config.ts` — is in a file the dev may not have open. A prompt that is about to destroy
 > files has to be answerable from the prompt. `--output` needs no such suffix: they just typed it.
 >
-> The same reasoning made a missing destination an `✖` rather than a default. `resolveIconSet`
-> falls back to `./public/favicons` when `icons` is unset, which is right for READING — an app
-> with art there works with no config at all. Writing inverts it: thirteen files landing in a
+> The same reasoning made a missing destination an `✖` rather than a default: files landing in a
 > directory nobody named is a surprise found afterwards, so the destination must have been
-> chosen.
+> chosen. The READ path later had to agree — see R38.
 > ```
 >   ✖ nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>
 > ```
@@ -296,6 +294,28 @@ look exactly like the run, and a failure must end where the `✖` ends.
 > The outermost layer is the invocation itself (`pnpm adaptv …` echoing its own script and
 > exiting `[ELIFECYCLE]`) and belongs to pnpm, not to adaptv — `pnpm --silent adaptv …` is the
 > quiet form. Everything inside that is adaptv's to keep clean.
+
+**R38 — A notice never names a path the dev did not write.** `icons` used to fall back to
+`./public/favicons` for reading, so an app that configured nothing still got the art sitting
+there — and the notice for an app with none named that directory back:
+> ```
+> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ```
+> The dev had never written that path. Worse, the fallback made the rule adaptv claimed to have
+> — *no icons dir configured ships adaptv's mark* — one it did not actually have: commenting the
+> key out resolved to the same directory, the same manifest, the same launcher icons. Reported as
+> icons that would not update on `dev`, in the app AND on the web.
+>
+> Two situations reach the default mark and they have different fixes, so they get different
+> sentences — an empty directory is filled, an absent key is set:
+> ```
+> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no `icons` in adaptv.config.ts — shipping adaptv's default mark
+> ```
+> The general rule is R7 (name the fix), and the general lesson is the fallback rather than the
+> wording: a default that silently resolves to a real directory makes the config key look
+> ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
+> to guess where to READ, and the two finally describe the same framework.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
