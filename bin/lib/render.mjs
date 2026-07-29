@@ -68,6 +68,49 @@ const streams = {
  * steps, the notices and the addresses stay on stdout, because they are what the dev asked
  * for. A notice is not a failure: it stays on stdout with the rest of the story.
  */
+/**
+ * Output MODE — the engine's, not a branch in every command.
+ *
+ * `--quiet` keeps outcomes and failures and drops the narration; `--json` replaces the whole
+ * page with one document. Both are enforced in `out()`, which every primitive already funnels
+ * through, so a command cannot accidentally print around them and the machine representation
+ * is decided in the same file as the human one.
+ */
+const LEVELS = { chrome: 0, notice: 1, step: 2, result: 3, error: 4 }
+let jsonMode = false
+let quietMode = false
+/** Structured record of the run, built regardless of mode and serialised only by `emitJson`. */
+const journal = { notices: [], steps: [], result: {}, error: null }
+
+export function setOutputMode({ json = false, quiet = false } = {}) {
+  jsonMode = json
+  quietMode = quiet
+}
+/** Should a LIVE region run at all? Not merely "should its bytes print" — the spinner's
+ *  timers, the cursor hiding and the rewind arithmetic must not run either. */
+export const live = () => isTTY && !jsonMode && !quietMode
+export const record = (part, value) => {
+  if (Array.isArray(journal[part])) journal[part].push(value)
+  else journal[part] = { ...journal[part], ...value }
+}
+export function recordError(error) {
+  journal.error = error
+}
+/** The one document, on stdout, bypassing the mode gate that silenced everything else. */
+export function emitJson(meta) {
+  if (!jsonMode) return
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: !journal.error,
+      ...meta,
+      notices: journal.notices,
+      steps: journal.steps,
+      result: journal.result,
+      ...(journal.error ? { error: journal.error } : {}),
+    })}\n`,
+  )
+}
+
 let sink = "out"
 const toStderr = (fn) => {
   sink = "err"
@@ -77,7 +120,12 @@ const toStderr = (fn) => {
     sink = "out"
   }
 }
-const out = (s) => {
+const out = (s, level = "step") => {
+  //`--json` replaces the PAGE, not the diagnostics: stderr always speaks. A run that fails
+  //under `--json` with silence on both streams is the worst of both worlds — no document to
+  //parse and nothing to read either.
+  if (jsonMode && sink !== "err") return
+  if (quietMode && LEVELS[level] < LEVELS.result) return
   const st = streams[sink]
   st.tail = `${st.tail}${s}`.slice(-2)
   st.w.write(s)
@@ -161,14 +209,18 @@ export function since(start) {
 export function header(title) {
   //`adaptv · build ios` — the separator reads as one phrase where two spaces read as a
   //gap the eye has to bridge.
-  out(`\n  ${c.bold(c.magenta("adaptv"))} ${c.dim(`· ${title}`)}\n\n`)
+  out(
+    `\n  ${c.bold(c.magenta("adaptv"))} ${c.dim(`· ${title}`)}\n\n`,
+    "chrome",
+  )
 }
 
 export const log = {
-  info: (m) => out(`  ${c.dim(m)}\n`),
-  warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`),
-  success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`),
-  error: (m) => toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`)),
+  info: (m) => out(`  ${c.dim(m)}\n`, "chrome"),
+  warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`, "notice"),
+  success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`, "result"),
+  error: (m) =>
+    toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`, "error")),
 }
 
 /**
@@ -199,6 +251,7 @@ export function flushNotices(notices) {
     const text = typeof n === "string" ? n : n.note
     if (seen.has(text)) continue
     seen.add(text)
+    record("notices", text)
     log.warn(text)
   }
   notices.length = 0
@@ -235,6 +288,10 @@ export function check(ok, label, note = "", { optional = false } = {}) {
     : optional
       ? c.dim(GLYPH.absent)
       : c.red(GLYPH.fail)
+  //Recorded as well as printed. It used to only print, so `doctor`'s whole matrix — the one
+  //thing a script would ever want from it — existed nowhere but the terminal, and `--json`
+  //would have had nothing to serialise.
+  record("steps", { label, ok, note: note || undefined, optional })
   out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
 }
 
@@ -249,7 +306,7 @@ export function helpText(text) {
 
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
-  out(`  ${c.green(GLYPH.ok)} ${label}  ${c.dim(`· ${note}`)}\n`)
+  out(`  ${c.green(GLYPH.ok)} ${label}  ${c.dim(`· ${note}`)}\n`, "result")
 }
 
 /**
@@ -268,6 +325,8 @@ export function skip(label, note = "cached") {
  * put two dots on one row.
  */
 export function fail(label, reason, detail = []) {
+  record("steps", { label, ok: false, reason })
+  recordError({ kind: "step-failed", label, message: reason })
   toStderr(() => {
     out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
     detailBlock(detail)
@@ -515,7 +574,7 @@ export function liveWatcher({ keys = true } = {}) {
   // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
   // and the row still animates on HMR — the spinner is what says "working", not a word.
   const idleLine = hint.trimEnd() || `  ${c.dim("ctrl-c stop")}`
-  if (!isTTY) {
+  if (!live()) {
     out(`${idleLine}\n`)
     return {
       hmr: () => {},
@@ -602,7 +661,7 @@ export function liveWatcher({ keys = true } = {}) {
  * all they need. Returns false off a TTY, where the caller should just append.
  */
 export function rewindLines(n) {
-  if (!isTTY || n <= 0) return false
+  if (!live() || n <= 0) return false
   out(`\x1b[${n}A\x1b[0J`)
   return true
 }
@@ -669,6 +728,13 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
 export async function select(message, options) {
   if (!options?.length) return undefined
   const stdin = process.stdin
+  //A prompt has no machine answer. Silently taking the default would pick a device, or
+  //overwrite an icon set, on behalf of a script that never agreed to either — so refuse and
+  //name the flag that makes the question unnecessary.
+  if (jsonMode)
+    throw new Error(
+      "'--json' can't answer a prompt — pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
+    )
   if (!isTTY || !stdin.isTTY || typeof stdin.setRawMode !== "function")
     return options[0].value
 
@@ -778,6 +844,10 @@ export async function select(message, options) {
  * `message` carries the fact, so there is no `!` line above it saying the same thing (R6).
  */
 export async function confirm(message, { yes, no } = {}) {
+  if (jsonMode)
+    throw new Error(
+      "'--json' can't answer a prompt — pass '--yes' to say so up front",
+    )
   if (!isTTY || !process.stdin.isTTY) return null
   return await select(message, [
     { value: true, label: yes ?? "yes" },
@@ -983,16 +1053,17 @@ export async function runLine(
   const failRight = (reason) => settled(reason, elapsed(start, offsetMs))
   const flat = ({ right, keep }) => `${right}${keep}`
 
-  if (verbose || !isTTY) {
+  if (verbose || !live()) {
     // A transient step prints NOTHING here: there's no cursor to erase a line with off a
     // TTY, and a start/settle pair is exactly the extra step this mode exists to avoid.
     // `--verbose` still streams the raw tool output through `report` — that's its contract.
-    if (!transient) out(`  ${c.dim("·")} ${label}\n`)
+    if (!transient) out(`  ${c.dim("·")} ${label}\n`, "step")
     try {
       const r = await fn(report)
       if (!transient)
         out(
           `  ${c.green(GLYPH.ok)} ${label}  ${c.dim(flat(doneRight(r)))}\n`,
+          "result",
         )
       return r
     } catch (err) {
@@ -1163,15 +1234,19 @@ export async function runLanes(lanes, { verbose = false } = {}) {
   let repaint = null
 
   // verbose / non-TTY: no in-place animation, just start + settle lines.
-  if (verbose || !isTTY) {
-    for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`)
+  if (verbose || !live()) {
+    for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`, "step")
     await Promise.all(lanes.map(runOne))
     for (const i of settledOrder()) {
       const s = state[i]
       const glyph =
         s.status === "ok" ? c.green(GLYPH.ok) : c.red(GLYPH.fail)
       const r = settledRight(s)
-      out(`  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`)
+      //A settled row is the OUTCOME, which is exactly what `--quiet` keeps.
+      out(
+        `  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`,
+        "result",
+      )
       if (s.status === "fail") detailBlock(s.why)
     }
     return results
@@ -1206,7 +1281,10 @@ export async function runLanes(lanes, { verbose = false } = {}) {
               keep: liveElapsed(s.start, s.offsetMs),
             }
           : settledRight(s)
-      out(`\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`)
+      out(
+        `\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`,
+        s.status === "run" ? "step" : "result",
+      )
     }
     drawn = state.length
     frame++

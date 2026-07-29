@@ -101,6 +101,7 @@ import {
   check,
   confirm,
   detail,
+  emitJson,
   fail,
   flushNotices,
   footer,
@@ -109,10 +110,13 @@ import {
   log,
   onKeys,
   rawOut,
+  record,
+  recordError,
   rewindLines,
   runLanes,
   runLine,
   section,
+  setOutputMode,
   since,
   spacer,
   wasReported,
@@ -203,12 +207,17 @@ async function preflight(
   // and this is simply absent.
   const stop = (messages) => {
     beforeExit?.()
+    //Under `--json` the caller never gets to `emitJson`, because this exits. Record the
+    //failure and emit here, so a script sees a document that says what went wrong rather
+    //than an empty stdout and a non-zero code.
+    for (const m of messages) recordError({ kind: "config", message: m })
     //Every one of them, not just the first: they are all already known, and fixing a config
     //one line per run is a worse experience than reading the list. Each names its key in
     //backticks and stays on one row (R10) — the file is not repeated per line because every
     //key here is one the dev wrote in adaptv.config.ts.
     for (const m of messages) log.error(m)
     spacer()
+    emitJson({ command: "preflight", version: pkgVersion() })
     process.exit(1)
   }
   if (optional && !existsSync(path.join(appRoot, "adaptv.config.ts")))
@@ -1606,6 +1615,8 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
   writeBuildState(appRoot, buildCache)
 
+  //The artifacts (or the devices launched) are what a script came for.
+  record("result", { [kind]: { ...done } })
   const ok = platforms.every((p) => p in done)
   // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an
   // all-green phrase. Failure stays red.
@@ -2276,10 +2287,15 @@ async function main() {
 
   if (parsed.version) return renderVersion(pkgVersion())
   if (parsed.help) return renderHelp(cmdPath)
+  //Before any command runs, so no banner escapes ahead of the mode being known.
+  setOutputMode({ json: !!flags.json, quiet: !!flags.quiet })
 
   switch (cmdPath.join(" ")) {
-    case "doctor":
-      return await doctor(appRoot)
+    case "doctor": {
+      const out = await doctor(appRoot)
+      emitJson({ command: "doctor", version: pkgVersion() })
+      return out
+    }
 
     case "gen icons":
       return await genIcons(appRoot, null, flags)
@@ -2368,12 +2384,20 @@ async function main() {
       return pipeline("preview", appRoot, platforms, opts)
     }
 
-    case "build":
-      return pipeline("build", appRoot, surfaceToPlatforms(rest[0]), {
-        output: flags.output,
-        verbose: !!flags.verbose,
-        force: !!flags.force,
-      })
+    case "build": {
+      const out = await pipeline(
+        "build",
+        appRoot,
+        surfaceToPlatforms(rest[0]),
+        {
+          output: flags.output,
+          verbose: !!flags.verbose,
+          force: !!flags.force,
+        },
+      )
+      emitJson({ command: `build ${rest[0]}`, version: pkgVersion() })
+      return out
+    }
 
     //No `default`: an unrecognised command never reaches here. `parse` throws a `CliFault`
     //carrying the token and a suggestion, and the catch below renders it — so there is no

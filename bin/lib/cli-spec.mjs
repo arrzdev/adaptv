@@ -36,6 +36,23 @@
  *             before preflight, and before anything destructive (R33).
  */
 
+const JSON_OUT = {
+  long: "json",
+  short: null,
+  value: null,
+  group: "advanced",
+  describe:
+    "one machine-readable document on stdout and nothing else — for scripts and CI",
+}
+
+const QUIET = {
+  long: "quiet",
+  short: null,
+  value: null,
+  group: "advanced",
+  describe: "outcomes and failures only, none of the narration",
+}
+
 const VERBOSE = {
   long: "verbose",
   short: null,
@@ -132,7 +149,7 @@ export const SPEC = {
       summary:
         "check the local toolchain — JDK, Android SDK, Xcode, CocoaPods",
       args: [],
-      flags: [VERBOSE],
+      flags: [JSON_OUT, QUIET, VERBOSE],
     },
     {
       path: ["dev"],
@@ -225,9 +242,15 @@ export const SPEC = {
             "where to write the artifact (default: .adaptv/builds/)",
         },
         FORCE,
+        JSON_OUT,
+        QUIET,
         VERBOSE,
       ],
-      examples: ["adaptv build ios", "adaptv build all -o ./dist"],
+      examples: [
+        "adaptv build ios",
+        "adaptv build all -o ./dist",
+        "adaptv build ios --json",
+      ],
     },
     {
       path: ["gen", "icons"],

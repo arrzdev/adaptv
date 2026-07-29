@@ -433,6 +433,32 @@ reads as an activity, not as a command or a thing:
 > A deliberate phase is now recognised by name (`OWN_PHASES` in `bin/ui/theme.mjs`) and passes
 > through untouched; the participle rule keeps that list honest.
 
+**R46 — A machine mode is a mode of the ENGINE, not a branch in every command.** `--json` and
+`--quiet` are enforced in `out()`, which every primitive already funnels through, so no command
+carries an `if`:
+> ```
+> $ adaptv build ios --quiet
+>   ✓ ios  .adaptv/builds/ChopChop.ipa · 1.6s
+>
+> $ adaptv build ios --json
+> {"ok":true,"command":"build ios","version":"0.1.0","notices":[],"steps":[],
+>  "result":{"build":{"ios":".adaptv/builds/ChopChop.ipa"}}}
+> ```
+> Three rules the first attempt got wrong, each found by running it:
+>
+> - **`--json` replaces the PAGE, not the diagnostics.** Silencing every stream left a failing
+>   run with no document to parse AND nothing to read. stderr always speaks; a failure also
+>   emits the document, with `ok:false` and a structured `error`.
+> - **A settled row is an OUTCOME, not narration**, so `--quiet` keeps it. Levelling it as a
+>   step made `--quiet` print nothing at all, which is not quiet, it is broken.
+> - **A prompt has no machine answer.** Taking the default would pick a device, or overwrite an
+>   icon set, for a script that never agreed to either — so both refuse and name the flag that
+>   makes the question unnecessary.
+>
+> It also forced something overdue: `check()` printed `doctor`'s matrix and returned nothing, so
+> the one thing a script would ever want from that command existed nowhere but the terminal. A
+> command has to RETURN its results before a second renderer can exist.
+
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
 answered. Every exit has a last line.
