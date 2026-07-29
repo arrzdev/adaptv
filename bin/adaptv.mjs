@@ -1083,9 +1083,37 @@ async function runLive(appRoot, platforms, opts) {
       }
     }
 
+    /**
+     * The watch block, from whichever renderer is in play.
+     *
+     * `ADAPTV_INK=1` swaps in the Ink implementation (`bin/ui/watch.mjs`), which describes the
+     * block as layout instead of growing and shrinking it with cursor arithmetic — the thing
+     * that once walked it up the screen and erased the settled rows above it. Both return the
+     * same `{ hmr, notice, clearNotice, stop }`, so nothing below can tell them apart.
+     *
+     * Behind a flag while the port is unverified against a real `dev` session. Ink also owns
+     * the keypresses when it is in play: two raw-mode listeners on one stdin would each get
+     * half the bytes.
+     */
+    const useInk = process.env.ADAPTV_INK === "1" && !webOnly
+    //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
+    //a 64ms bare-node floor, and a static import would charge that to `adaptv --help` and to
+    //every invocation error — the paths where the <100ms responsiveness rule actually bites.
+    //Only a run that puts a live block on screen pays for one.
+    const openWatcher = async () => {
+      if (!useInk) return liveWatcher({ keys: !webOnly })
+      const { inkWatcher } = await import("./ui/watch.mjs")
+      return inkWatcher({
+        keys: !webOnly,
+        onReload: () => void reload(),
+        onRebuild: () => void rebuild(),
+        onQuit: () => onSigint(),
+      })
+    }
+
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     spacer()
-    watcher = liveWatcher({ keys: !webOnly })
+    watcher = await openWatcher()
 
     // `b` reinstalls on demand — always, not only after a change is detected. A device
     // in a state you don't trust is reason enough, and having to kill the run to get a
@@ -1134,7 +1162,7 @@ async function runLive(appRoot, platforms, opts) {
       await launchAll({ force: true, prepare: true })
       armStaleness()
       spacer()
-      watcher = liveWatcher({ keys: !webOnly }) // fresh line, which also clears any pending notice
+      watcher = await openWatcher() // fresh block, which also clears any pending notice
       rebuilding = false
     }
 
@@ -1184,12 +1212,15 @@ async function runLive(appRoot, platforms, opts) {
         )
       }
       spacer()
-      watcher = liveWatcher({ keys: !webOnly })
+      watcher = await openWatcher()
       reloading = false
     }
-    cleanups.push(
-      onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
-    )
+    //Ink owns stdin when it is rendering: `useInput` puts the terminal in raw mode itself, and
+    //a second listener on the same stdin would take half the bytes.
+    if (!useInk)
+      cleanups.push(
+        onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
+      )
 
     // Two kinds of edit can't hot-reload, and both leave the installed app quietly wrong.
     //

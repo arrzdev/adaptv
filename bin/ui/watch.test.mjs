@@ -1,0 +1,109 @@
+import { EventEmitter } from "node:events"
+import { afterEach, describe, expect, it } from "vitest"
+import { inkWatcher } from "./watch.mjs"
+
+// The watch block is where a cursor-arithmetic bug actually shipped: the string renderer grows
+// it to two rows for a notice and shrinks it back, by hand, and getting that off by one walked
+// the block up the screen and erased the settled lines above it.
+//
+// Ink writes WHOLE FRAMES, so the last frame it wrote is the screen. That makes these
+// assertions about what the dev sees, not about escape sequences — which is exactly the kind of
+// check the old renderer could not have.
+
+/** A stdout Ink will happily render into, keeping every frame. */
+class FakeStdout extends EventEmitter {
+  constructor(columns = 100) {
+    super()
+    this.columns = columns
+    this.rows = 30
+    this.frames = []
+  }
+  write(s) {
+    this.frames.push(s)
+    return true
+  }
+}
+
+const ANSI = new RegExp(
+  `${String.fromCharCode(27)}\\[[0-9;?]*[a-zA-Z]`,
+  "g",
+)
+
+let restore = null
+afterEach(() => {
+  restore?.()
+  restore = null
+})
+
+/** Mount the block, drive it, and return the final screen as trimmed lines. */
+async function screen(drive, columns = 100) {
+  const fake = new FakeStdout(columns)
+  const real = Object.getOwnPropertyDescriptor(process, "stdout")
+  Object.defineProperty(process, "stdout", {
+    value: fake,
+    configurable: true,
+  })
+  restore = () => Object.defineProperty(process, "stdout", real)
+  //`keys: false` — no raw-mode stdin to set up, and the keys row is asserted separately.
+  const w = inkWatcher({ keys: false })
+  drive(w)
+  await new Promise((r) => setTimeout(r, 120))
+  const last = fake.frames.at(-1) ?? ""
+  w.stop()
+  restore()
+  restore = null
+  return last
+    .replace(ANSI, "")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim() !== "")
+}
+
+describe("the watch block — a notice is ADDED, never swapped in", () => {
+  it("is just the keys when there is nothing to say", async () => {
+    const rows = await screen(() => {})
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toContain("ctrl-c")
+  })
+
+  it("puts a notice on its own row and KEEPS the keys underneath (R41)", async () => {
+    const rows = await screen((w) => w.notice("config change"))
+    //The regression this exists for: the notice used to REPLACE the keys row, so the moment
+    //adaptv had something to say the dev lost the very key it was telling them to press.
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toContain("! config change")
+    expect(rows[0]).toContain("press b to rebuild")
+    expect(rows[1]).toContain("ctrl-c")
+  })
+
+  it("holds the notice while an HMR flash animates below it", async () => {
+    const rows = await screen((w) => {
+      w.notice("config + native change · ios, android")
+      w.hmr("app.tsx, main.css")
+    })
+    expect(rows[0]).toContain("config + native change")
+    //The bottom row is the spinner now, not the keys — and the notice above is untouched.
+    expect(rows.at(-1)).toContain("watching")
+    expect(rows.at(-1)).toContain("app.tsx, main.css")
+  })
+
+  it("shrinks back to one row when the notice clears, leaving nothing behind", async () => {
+    const rows = await screen((w) => {
+      w.notice("config change")
+      w.clearNotice()
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toContain("ctrl-c")
+    expect(rows.join("\n")).not.toContain("config change")
+  })
+
+  it("indents to the body grid rather than prefixing spaces per line", async () => {
+    const rows = await screen((w) => w.notice("config change"))
+    for (const r of rows) expect(r.startsWith("  ")).toBe(true)
+  })
+
+  it("stays inside a narrow terminal", async () => {
+    const rows = await screen((w) => w.notice("config change"), 40)
+    for (const r of rows) expect(r.length).toBeLessThanOrEqual(40)
+  })
+})
