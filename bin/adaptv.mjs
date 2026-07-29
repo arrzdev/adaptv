@@ -385,7 +385,7 @@ async function preparePlatform(
   config,
   platform,
   env,
-  { dev, healAts = true, report, warnings },
+  { dev, healAts = true, force = false, report, warnings },
 ) {
   await capAddIfMissing(appRoot, platform, env, {
     report,
@@ -399,7 +399,8 @@ async function preparePlatform(
   //Silent about the icon set: `preflight` already read the same art and said whatever there
   //was to say, above the run (R33). Repeating it here would be the same fact twice (R18),
   //the second time under a step that only wrote files from it.
-  await generateAssets(appRoot, config, [platform], { report })
+  //`force` reaches here so `--force` re-derives the assets, not just the binary.
+  await generateAssets(appRoot, config, [platform], { report, force })
   // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run killed
   // without teardown strands an ATS exception in it. `dev` heals it too, and MUST: its own
   // `patchIosAts` no-ops when ATS is already declared, so it adopted the leftover, registered
@@ -438,7 +439,7 @@ async function preparePlatforms(
   appRoot,
   config,
   platforms,
-  { dev, healAts = true, envFor, verbose, warnings },
+  { dev, healAts = true, force = false, envFor, verbose, warnings },
 ) {
   const prepared = new Set()
   const prepareMs = {}
@@ -449,6 +450,7 @@ async function preparePlatforms(
       preparePlatform(appRoot, config, platform, envFor(platform), {
         dev,
         healAts,
+        force,
         report,
         warnings,
       })
@@ -761,6 +763,7 @@ async function runLive(appRoot, platforms, opts) {
       // which refuses until the project exists.
       const prep = await preparePlatforms(appRoot, config, platforms, {
         dev: true,
+        force: opts.force,
         envFor,
         verbose,
         warnings,
@@ -1069,6 +1072,10 @@ async function runLive(appRoot, platforms, opts) {
                 await preparePlatform(appRoot, config, p, envFor(p), {
                   dev: true,
                   healAts: false,
+                  //`b` means "rebuild it properly" — re-derive the assets, don't consult
+                  //the guard. A device in a state you don't trust is the whole reason for
+                  //pressing it.
+                  force: true,
                   report: r,
                   //Dropped, not flushed: these were printed above the run, and a row
                   //appearing here would also desync the rewind geometry the caller used.
@@ -1429,7 +1436,13 @@ async function pipeline(kind, appRoot, platforms, opts) {
     appRoot,
     config,
     platforms,
-    { dev: kind === "preview", envFor, verbose, warnings },
+    {
+      dev: kind === "preview",
+      force: opts.force,
+      envFor,
+      verbose,
+      warnings,
+    },
   )
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()

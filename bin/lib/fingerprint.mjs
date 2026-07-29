@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
-import { ADAPTV_DIR } from "./native.mjs"
+import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 
 // Directories that never affect the built bundle (deps, outputs, VCS, caches, the
 // native projects themselves). Skipped wholesale while walking.

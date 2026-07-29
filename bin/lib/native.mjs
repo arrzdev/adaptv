@@ -4,6 +4,7 @@
 // long-running command streams through the captured `exec` (see exec.mjs) so its
 // output can be rendered as calm steps instead of a raw log dump.
 import { spawn, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import {
   copyFileSync,
   existsSync,
@@ -12,19 +13,23 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
 import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { exec } from "./exec.mjs"
+import { appConfigFingerprint } from "./fingerprint.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import {
   classListChanged,
   mergeClassList,
   podsNeedInstall,
 } from "./native-state.mjs"
+import { readSection, writeSection } from "./state.mjs"
 
 // The framework package root (bin/lib/native.mjs → up two). adaptv OWNS Capacitor:
 // the `cap` CLI, both native platforms, and every plugin are adaptv's OWN deps, so
@@ -36,8 +41,9 @@ export const ADAPTV_ROOT = path.join(
   "..",
 )
 
-/** The hidden generated dir (mirrors src/vite/adaptv-dir.ts — kept in sync by hand). */
-export const ADAPTV_DIR = ".adaptv"
+//Re-exported so every existing importer keeps working; the constant itself lives in its own
+//module to break the native ↔ fingerprint cycle.
+export { ADAPTV_DIR } from "./adaptv-dir.mjs"
 /** Where `adaptv build` puts its artifacts: `.adaptv/builds/<app>.ipa|.apk`. */
 export const BUILDS_DIR = "builds"
 /** Absolute path to a platform's native project, now under `.adaptv/`. */
@@ -501,22 +507,120 @@ export function patchIosTheme(appRoot, mask) {
  * returning the same sentences from here as well only gave a caller the chance to print them
  * a second time, halfway through work that had already used them.
  */
+/**
+ * Bump when the GENERATOR's output changes — a new slot, a different scale, a fixed mask.
+ *
+ * Non-negotiable, and the one part of the guard below that a human has to maintain: without
+ * it, editing `writeAndroidIcons` and re-running would keep the old mipmaps, because the
+ * inputs (the art, the config) did not move. It lives next to the writers for that reason.
+ */
+const ASSETS_GEN_VERSION = 1
+
+/** Everything `generateAssets` writes into, per platform. Hashed to answer "is it already there?" */
+const ASSET_OUTPUTS = {
+  ios: [
+    "App/App/Assets.xcassets/AppIcon.appiconset",
+    "App/App/Assets.xcassets/AdaptvSplash.colorset",
+    "App/App/Base.lproj/LaunchScreen.storyboard",
+    "App/App/AppDelegate.swift",
+  ],
+  android: [
+    "app/src/main/res/mipmap-mdpi",
+    "app/src/main/res/mipmap-hdpi",
+    "app/src/main/res/mipmap-xhdpi",
+    "app/src/main/res/mipmap-xxhdpi",
+    "app/src/main/res/mipmap-xxxhdpi",
+    "app/src/main/res/mipmap-anydpi-v26",
+    "app/src/main/res/values/ic_launcher_background.xml",
+    "app/src/main/res/values-night/ic_launcher_background.xml",
+  ],
+}
+
+/** A content hash of those paths as they are ON DISK right now. Missing hashes as absent. */
+function assetOutputsHash(appRoot, platform) {
+  const h = createHash("sha1")
+  const root = nativeDir(appRoot, platform)
+  const walk = (rel) => {
+    const abs = path.join(root, rel)
+    let st
+    try {
+      st = statSync(abs)
+    } catch {
+      h.update(`${rel}:absent\n`)
+      return
+    }
+    if (st.isDirectory()) {
+      for (const name of readdirSync(abs).sort())
+        walk(path.join(rel, name))
+      return
+    }
+    h.update(`${rel}:`)
+    try {
+      h.update(readFileSync(abs))
+    } catch {
+      h.update("unreadable")
+    }
+    h.update("\n")
+  }
+  for (const rel of ASSET_OUTPUTS[platform] ?? []) walk(rel)
+  return h.digest("hex")
+}
+
+/**
+ * Write the launcher icons, the splash colours and the launch storyboard into the native
+ * projects — unless they are already exactly the files that would be written.
+ *
+ * This runs on EVERY command, and it is ~18-23 sharp encodes (measured ~240ms for both
+ * platforms) re-deriving byte-identical files from art that has not changed. The guard has two
+ * halves and needs BOTH to skip:
+ *
+ *   inputs   `appConfigFingerprint` — the config file plus the icon directory it points at —
+ *            with the icon plan, the splash mask, the appId and `ASSETS_GEN_VERSION` folded in.
+ *   outputs  a content hash of the files this function writes, as they are on disk.
+ *
+ * The outputs half is the whole safety argument, and it is why this is not the usual "trust a
+ * cache" trade. It asks the honest question — *are the files I would write already the files
+ * that are there?* — so every way of going wrong answers no and the work happens: a deleted
+ * mipmap, a hand-edited icon, a half-written file from a Ctrl-C, a native project rescaffolded
+ * by `cap add`, a `state.json` from another machine or none at all. It fails toward doing the
+ * work, which is the only direction a build cache may fail in.
+ *
+ * `--force` bypasses it, like every other cache here.
+ */
 export async function generateAssets(
   appRoot,
   config,
   platforms,
-  { report } = {},
+  { report, force = false } = {},
 ) {
   const icon = resolveIconPlan(config)
   const mask = resolveSplashMask(config)
-  if (platforms.includes("android"))
+
+  const inputs = createHash("sha1")
+    .update(appConfigFingerprint(appRoot, config))
+    .update(JSON.stringify(icon))
+    .update(JSON.stringify(mask))
+    .update(String(config?.appId))
+    .update(`v${ASSETS_GEN_VERSION}`)
+    .digest("hex")
+  const remembered = readSection(appRoot, "assets")
+
+  const stale = platforms.filter(
+    (p) =>
+      force ||
+      remembered[p]?.inputs !== inputs ||
+      remembered[p]?.outputs !== assetOutputsHash(appRoot, p),
+  )
+  if (stale.length === 0) return
+
+  if (stale.includes("android"))
     patchAndroidSplash(appRoot, mask, config.appId)
-  if (platforms.includes("ios")) patchIosTheme(appRoot, mask)
+  if (stale.includes("ios")) patchIosTheme(appRoot, mask)
 
   //One scan for the whole run, even an `all` one: the same set brands both platforms, and
   //`preflight` has normally already resolved and reported on it before any of this ran.
   const set = await loadIconSet(appRoot, config)
-  for (const platform of platforms) {
+  for (const platform of stale) {
     await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
       set,
       background: icon.iconBackground,
@@ -524,6 +628,12 @@ export async function generateAssets(
       report,
     })
   }
+
+  //Recorded AFTER writing, so the stored outputs hash describes what is now on disk.
+  const next = { ...remembered }
+  for (const p of stale)
+    next[p] = { inputs, outputs: assetOutputsHash(appRoot, p) }
+  writeSection(appRoot, "assets", next)
 }
 
 /** Build the static SPA for the Capacitor target and stamp its `index.html`. */
