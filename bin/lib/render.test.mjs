@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { OWN_PHASES } from "../ui/theme.mjs"
 import {
   check,
   fail,
@@ -196,8 +197,7 @@ describe("prettyLine — the vocabulary is closed (R24)", () => {
   //lone verb", which is right for gradle, silently ate `sync`, `package` and `packaging`.
   //The row then sat on `preparing` for the whole of `cap sync`.
   it.each([
-    "sync",
-    "package",
+    "syncing",
     "packaging",
     "launching device",
     "reloading device",
@@ -209,7 +209,19 @@ describe("prettyLine — the vocabulary is closed (R24)", () => {
   })
 
   it("keeps the metadata on a phase that carries some", () => {
-    expect(prettyLine("sync · cached")).toBe("sync · cached")
+    expect(prettyLine("syncing · cached")).toBe("syncing · cached")
+  })
+
+  it("has no bare-noun phase left anywhere in the vocabulary (R45)", () => {
+    //Every phase must finish "right now adaptv is …". `sync` and `package` did not, and they
+    //sat on the same row as `compiling`.
+    for (const p of OWN_PHASES) {
+      const head = p.split(" ")[0]
+      expect(
+        head.endsWith("ing"),
+        `'${p}' is not a present participle`,
+      ).toBe(true)
+    }
   })
 
   it("still drops a lone verb a TOOL printed", () => {

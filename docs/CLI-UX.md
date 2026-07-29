@@ -416,6 +416,23 @@ telling the dev to press:
 > where this goes wrong — a redraw that rewinds to the top when it is already parked there walks
 > the block one row up the screen per frame, and the erase then eats the settled lines above it.
 
+**R45 — A phase is a present participle.** The row says what is happening RIGHT NOW, so it
+reads as an activity, not as a command or a thing:
+> ```
+>   ⠴ ios  sync            ← was
+>   ⠴ ios  syncing         ← is
+> ```
+> `report("sync")` and `report("package")` were bare nouns sitting on the same row as
+> `compiling` and `processing resources`, and they read as an instruction being issued rather
+> than work being done. `package` was a duplicate of `packaging` on top of that — R24's list
+> already had the right word. The test is whether it finishes *"right now adaptv is …"*.
+>
+> This had a second cost, which is how it was found. `prettyLine` filters what BUILD TOOLS
+> print, and one of its rules drops a lone verb — correct for gradle, and it silently ate
+> adaptv's own single-word phases. The row then sat on `preparing` for the whole of `cap sync`.
+> A deliberate phase is now recognised by name (`OWN_PHASES` in `bin/ui/theme.mjs`) and passes
+> through untouched; the participle rule keeps that list honest.
+
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
 answered. Every exit has a last line.

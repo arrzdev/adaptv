@@ -998,7 +998,7 @@ async function runLive(appRoot, platforms, opts) {
         // patch for `b` reinstalling the launcher icons of the run it started in — and that
         // is precisely the seam this pipeline removes: assets written in two places is how
         // they came to be written in neither on the one path that mattered.
-        report("sync")
+        report("syncing")
         await capSync(appRoot, platform, env, {
           report,
           plugins: config?.plugins,
@@ -1549,19 +1549,19 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   const tailOne = async (platform, report) => {
     if (syncNeeded(platform)) {
-      report("sync")
+      report("syncing")
       await capSync(appRoot, platform, envFor(platform), {
         report,
         plugins: config?.plugins,
       })
       buildCache.sync[platform] = syncTag
     } else {
-      report("sync · cached")
+      report("syncing · cached")
     }
     if (kind === "preview") {
       return previewLaunch(platform, ctx.targets[platform], report)
     }
-    report("package")
+    report("packaging")
     done[platform] = await packageArtifact(
       appRoot,
       config,

@@ -111,6 +111,11 @@ not printed at all.
 - **A phase says what is happening, never what it is happening TO.** `compiling`, never
   `compiling · CapacitorSplashScreen`. The vocabulary is closed (`CLI-UX.md` R24) — map a new
   tool verb into it rather than inventing a phrase.
+- **A phase is a present participle, always.** `syncing`, `creating package`, `launching
+  device` — never `sync`, `package`, `launch`. A bare noun reads as a command being issued, or
+  as a thing rather than an activity, and it sits wrong beside `compiling` and `processing
+  resources` on the very same row. The test: it has to finish the sentence *"right now adaptv
+  is …"*.
 - **Never print an absolute path.** App-root-relative only.
 - **Never name adaptv's own plumbing.** Its base Capacitor plugins, its shim, its temp dirs.
   Name only what the dev caused.

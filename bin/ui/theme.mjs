@@ -76,15 +76,19 @@ export const ROLE = {
 /* -----------------------------------------------------------------------------
  * the phase vocabulary adaptv speaks about ITSELF
  *
- * A live row shows one of two things: a phase adaptv chose (`sync`, `packaging`) or a line of
- * xcodebuild/gradle output mapped into one. The second kind is filtered hard — a lone verb, a
- * hex digest or a path is noise, and showing it flickers the row to a stop on nothing.
+ * A live row shows one of two things: a phase adaptv chose (`syncing`, `packaging`) or a line
+ * of xcodebuild/gradle output mapped into one. The second kind is filtered hard — a lone verb,
+ * a hex digest or a path is noise, and showing it flickers the row to a stop on nothing.
  *
- * Those two went through the same filter, and it swallowed adaptv's own words: `sync`,
- * `package` and `packaging` are single verbs, so "drop a lone verb" dropped them. The row then
- * sat on `preparing` for the entire `cap sync` — a step that can run for seconds — because the
- * phase announcing it never survived. This list is how a deliberate phase is told apart from a
- * line a build tool happened to print.
+ * Those two went through the same filter, and it swallowed adaptv's own words: they are single
+ * verbs, so "drop a lone verb" dropped them. The row then sat on `preparing` for the entire
+ * `cap sync` — a step that can run for seconds — because the phase announcing it never
+ * survived. This list is how a deliberate phase is told apart from a line a build tool printed.
+ *
+ * EVERY entry is a present participle: what is happening RIGHT NOW, to someone watching. Two of
+ * these used to be bare nouns — `sync` and `package` — which read as a command being issued
+ * rather than work being done, and sat oddly beside `compiling` and `launching device` on the
+ * very same row. `package` was a duplicate of `packaging` on top of that.
  * -------------------------------------------------------------------------- */
 
 export const OWN_PHASES = new Set([
@@ -92,7 +96,6 @@ export const OWN_PHASES = new Set([
   "launching device",
   "linking plugins",
   "linking server",
-  "package",
   "packaging",
   "preparing",
   "preparing build",
@@ -100,7 +103,7 @@ export const OWN_PHASES = new Set([
   "relaunching device",
   "reloading device",
   "starting server",
-  "sync",
+  "syncing",
 ])
 
 /* -----------------------------------------------------------------------------
