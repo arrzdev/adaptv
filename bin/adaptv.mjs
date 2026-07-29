@@ -1596,7 +1596,11 @@ async function doctor(appRoot) {
   const set = await loadIconSet(appRoot, iconConfig)
   check(
     set.source === "app",
-    `${set.dirRel} (icon source)`,
+    //An app that named no directory has no path to show, so the row names the KEY it is
+    //reporting on instead. Interpolating `dirRel` regardless printed a bare " (icon source)".
+    set.configured
+      ? `${set.dirRel} (icon source)`
+      : "`icons` (icon source)",
     set.source === "app"
       ? `${set.icons.length} icons`
       : "adaptv's default mark",
@@ -2017,11 +2021,11 @@ async function genIcons(appRoot, positional, flags) {
   //`gen icons` writing into it is exactly what makes the fallback stop applying.
   const configured = resolveIconSet(appRoot, config, [])
 
-  // WHERE the set goes, and never by guessing. `resolveIconSet` falls back to
-  // `./public/favicons` when `icons` is unset, which is right for READING — an app with art
-  // there works without configuring anything. Writing is the opposite: thirteen files landing
-  // in a directory the dev never named is a surprise they find afterwards, so the destination
-  // has to have been chosen, either in the config or on the command line.
+  // WHERE the set goes, and never by guessing: files landing in a directory the dev never
+  // named is a surprise they find afterwards, so the destination has to have been chosen,
+  // either in the config or on the command line. `resolveIconSet` now holds the same line on
+  // the READ side — an app that names no directory wears adaptv's mark rather than picking up
+  // whatever happens to be in `./public/favicons`.
   const outArg = typeof flags.output === "string" ? flags.output : null
   const configuredDir =
     typeof config.icons === "string" ? config.icons : null
