@@ -191,6 +191,33 @@ describe("nextPhase — the live line samples the stream, it does not follow it"
 })
 
 describe("prettyLine — the vocabulary is closed (R24)", () => {
+  //A live row shows either a phase adaptv CHOSE or a build-tool line mapped into one. Both
+  //went through the same filter, and the filter is tuned for the second kind — so "drop a
+  //lone verb", which is right for gradle, silently ate `sync`, `package` and `packaging`.
+  //The row then sat on `preparing` for the whole of `cap sync`.
+  it.each([
+    "sync",
+    "package",
+    "packaging",
+    "launching device",
+    "reloading device",
+    "linking server",
+    "building app",
+    "starting server",
+  ])("lets adaptv's own phase '%s' through untouched", (phase) => {
+    expect(prettyLine(phase)).toBe(phase)
+  })
+
+  it("keeps the metadata on a phase that carries some", () => {
+    expect(prettyLine("sync · cached")).toBe("sync · cached")
+  })
+
+  it("still drops a lone verb a TOOL printed", () => {
+    //The rule this exception is carved out of, and it has to keep working.
+    expect(prettyLine("running")).toBe("")
+    expect(prettyLine("building")).toBe("")
+  })
+
   it("drops a bundle listing", () => {
     //Reached the live line during every web build: a filename, a hash and two sizes.
     expect(

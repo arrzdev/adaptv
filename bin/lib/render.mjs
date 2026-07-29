@@ -11,7 +11,9 @@
 //   - --verbose→ the raw underlying tool output is streamed through instead
 import {
   DEFAULT_COLUMNS,
+  ELAPSED_AFTER_MS,
   GLYPH,
+  OWN_PHASES,
   PHASE_DWELL_MS as THEME_DWELL_MS,
   FRAMES as THEME_FRAMES,
   IDLE_MS as THEME_IDLE_MS,
@@ -820,6 +822,14 @@ const PROPER = [
 const HUMAN_PHRASE = /^[a-z][a-z0-9 .·'-]{0,38}$/
 
 export function prettyLine(line) {
+  //A phase adaptv chose for itself passes through untouched. Everything below this line is a
+  //filter for what BUILD TOOLS print, and running adaptv's own vocabulary through it is what
+  //silently swallowed `sync`, `package` and `packaging` — single verbs, dropped by the
+  //lone-verb rule meant for gradle. `sync · cached` is the same phase with metadata attached,
+  //so it is matched on the part before the separator.
+  const own = line.split(" · ")[0]
+  if (OWN_PHASES.has(own)) return line
+
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
     const pct = Math.min(100, Number(m[1]))
@@ -876,6 +886,23 @@ function compose(glyph, label, right, keep = "") {
   const detail = `${clipped}${keep}`
   return `  ${glyph} ${label}${detail ? `  ${c.dim(detail)}` : ""}`
 }
+
+/**
+ * How long a LIVE row has been running, once that has become a question worth answering.
+ *
+ * Under the threshold it is absent, so a step that takes two seconds does not gain a jittering
+ * number. Past it the row grows ` · 1m04s`, which is the only evidence the dev has that a
+ * four-minute iOS build is alive at all: the phase is sampled and can legitimately hold the
+ * same word for a minute, and `IDLE_MS` can freeze it on a present-tense label for longer.
+ *
+ * It rides in `compose`'s `keep` slot, so it is the part that never gets clipped — same
+ * reasoning as a settled row's time (R25). It is metadata, not a phase: R24 governs the phase
+ * vocabulary, and the `·` already separates a row from what is measured about it.
+ */
+const liveElapsed = (start, offset = 0) =>
+  Date.now() - start + offset >= ELAPSED_AFTER_MS
+    ? ` · ${elapsed(start, offset)}`
+    : ""
 
 /** A settled line's right-hand side, split so `compose` never clips the time away. */
 // The elapsed time always arrives as `· 2.0s` — the `·` separates a row from its metadata
@@ -999,7 +1026,12 @@ export async function runLine(
         ? idle
         : detail
     out(
-      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, phase)}`,
+      `\r\x1b[2K${compose(
+        c.cyan(FRAMES[frame++ % FRAMES.length]),
+        label,
+        phase,
+        liveElapsed(start, offsetMs),
+      )}`,
     )
   }
   repaint = draw
@@ -1171,7 +1203,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
                 : s.idle && now - s.lastAt > IDLE_MS
                   ? s.idle
                   : s.detail,
-              keep: "",
+              keep: liveElapsed(s.start, s.offsetMs),
             }
           : settledRight(s)
       out(`\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`)
