@@ -1119,15 +1119,19 @@ export function launchInstalledApp(
 ) {
   const appId = readAppId(appRoot)
   if (!appId) return false
-  const running = isAppRunning(appRoot, platform, target, env)
+  // NOT asked: whether the app is running. It used to be, to compute `restart || !running`
+  // — but terminating a stopped app is a no-op, so the two branches converge and the whole
+  // expression reduces to `restart`. The invariant above (a running app is re-fronted, never
+  // killed) is unchanged and is now enforced by the shape of the code rather than by a
+  // question that cost ~200ms on iOS, asked on top of the one the caller had already asked.
+  //
   // `restart` forces a fresh start of an already-running app, so its WebView reloads
   // from the dev server — the cheap `r` reload (no native rebuild).
   if (platform === "ios") {
     if (!target) return false
-    // `simctl launch` on a running app activates it in place; only a stopped app (or a
-    // requested restart) needs a terminate first. Terminating a stopped app is a no-op.
-    if (restart || !running)
-      spawnSync("xcrun", ["simctl", "terminate", target, appId])
+    // `simctl launch` on a running app activates it in place; only a requested restart
+    // needs a terminate first.
+    if (restart) spawnSync("xcrun", ["simctl", "terminate", target, appId])
     const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
       encoding: "utf8",
     })
@@ -1136,9 +1140,9 @@ export function launchInstalledApp(
   if (platform === "android") {
     const serial = androidSerialForTarget(target, env)
     if (!serial) return false
-    // Same rule: the LAUNCHER intent alone re-fronts an existing task without
-    // restarting it. force-stop when there's nothing live to preserve, or on `restart`.
-    if (restart || !running) {
+    // Same rule, and the same reduction: the LAUNCHER intent alone re-fronts an existing
+    // task without restarting it, and `am force-stop` on a stopped app is a no-op.
+    if (restart) {
       spawnSync(
         "adb",
         ["-s", serial, "shell", "am", "force-stop", appId],
