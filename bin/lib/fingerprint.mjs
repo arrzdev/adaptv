@@ -76,6 +76,54 @@ export function fingerprint(appRoot) {
 }
 
 /**
+ * A fingerprint of what the app DECLARES — `adaptv.config.ts` and the icon art it points at.
+ *
+ * Neither is visible to `nativeFingerprint`, and that is not an oversight there but a gap
+ * here. It folds in `ADAPTV_CAPACITOR_CONFIG`, but that env var is only re-stamped when
+ * something calls `setCapacitorConfigEnv`, so editing the config FILE moves nothing it
+ * hashes; and the icon art is read at `generateAssets` time, from a directory that lives
+ * outside the native tree. Both are inputs a `dev` session baked into the app already
+ * installed on the device, so editing either makes that install stale with nothing on screen
+ * to say so — which is why commenting `icons` out mid-session produced no notice at all.
+ *
+ * Deliberately SHALLOW: the config file itself, not the modules it imports. A splash-screen
+ * component reached through `import()` is app JS and hot-reloads on its own; following the
+ * import graph would cost an esbuild bundle on every poll to catch changes that mostly are
+ * not native ones.
+ *
+ * mtime + size for the art, like `fingerprint()` and for the same reason: nothing re-stamps
+ * the dev's SOURCE icons, so an mtime only moves when they genuinely edit one. (The native
+ * tree needs content hashing precisely because `generateAssets` rewrites it every run.)
+ */
+export function appConfigFingerprint(appRoot, config) {
+  const h = createHash("sha1")
+  try {
+    h.update(readFileSync(path.join(appRoot, "adaptv.config.ts")))
+  } catch {
+    h.update("config:absent")
+  }
+  // `icons` is the ONLY thing that points at the launcher art and there is no fallback
+  // directory (see `resolveIconSet`), so an unset key genuinely has nothing to watch — and
+  // unsetting it is itself a change, caught by the config file's own hash above.
+  if (typeof config?.icons === "string") {
+    const dir = path.resolve(appRoot, config.icons)
+    let entries = []
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+      entries.sort((a, b) => (a.name < b.name ? -1 : 1))
+    } catch {}
+    for (const e of entries) {
+      if (!e.isFile() || SKIP_FILES.has(e.name)) continue
+      try {
+        const s = statSync(path.join(dir, e.name))
+        h.update(`${e.name}:${s.size}:${Math.round(s.mtimeMs)}\n`)
+      } catch {}
+    }
+  }
+  return h.digest("hex")
+}
+
+/**
  * Directories under a native project that don't describe the app BINARY — build output,
  * tool caches, and `public/` (the synced web bundle). `public/` matters most: during
  * live-reload the WebView loads from the dev server and never reads it, yet `cap sync`

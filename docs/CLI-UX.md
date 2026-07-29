@@ -317,6 +317,44 @@ there — and the notice for an app with none named that directory back:
 > ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
 > to guess where to READ, and the two finally describe the same framework.
 
+**R39 — There is ONE answer to "is this config usable", and a run that loses it ends.** R33 says
+a config value adaptv cannot use stops the command before it builds anything. That has to be the
+same answer at minute forty as at second zero. The `b` key briefly had a softer one — it kept the
+last good config, refused the rebuild, and said so on the watch row:
+> ```
+>   ! not rebuilt · `themeColor.light` must be a hex colour like #1b1b1b — got "midnightblue"
+> ```
+> The reasoning was that killing a live session over a half-typed file is expensive — a dev
+> server and every attached device, gone. But what it actually bought was a session that kept
+> serving an app built from a config the file on disk no longer contained, with one `!` on a row
+> the dev may not be looking at, and only the FIRST problem named where startup lists them all.
+> Two answers to one question is how the two halves of a command drift apart.
+>
+> So `b` now prints every error and exits non-zero, exactly as startup does. What makes that
+> affordable is that it is not a kill: the teardown runs first — dev server stopped, `adb
+> reverse` cleared, the iOS ATS exception reverted, the lock released — so it ends as cleanly as
+> ctrl-c. The unwinding happens BEFORE the errors print, because the watch row redraws every
+> 80ms and would otherwise overwrite them.
+>
+> `r` is untouched: it reloads the running app's JS and never reads the config, so it has no
+> opinion to be wrong about.
+
+**R40 — One row means one line, so competing notices MERGE rather than take turns.** The watch
+row has a single notice slot, and `dev` now has two things that can fill it: a native change and
+an edit to `adaptv.config.ts` or the icon art it points at. Letting the newer one win drops the
+config half exactly when both are true — the sync a config edit implies is itself what rewrites
+the native tree — so the causes are combined into the one line instead:
+> ```
+>   ! config change  · press b to rebuild
+>   ! native change · ios  · press b to rebuild
+>   ! config + native change · ios  · press b to rebuild
+> ```
+> The action is identical in all three; naming the cause is what tells the dev whether adaptv
+> saw the edit they just made. Which is the point — editing the config used to produce no notice
+> at all, because the only fingerprint being polled folds in `ADAPTV_CAPACITOR_CONFIG`, an env
+> var nothing re-stamps until something rebuilds. Reported as commenting `icons` out and watching
+> nothing happen.
+
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
 answered. Every exit has a last line.
@@ -726,6 +764,16 @@ Tests do not cover any of this. Run it and read it:
 - [ ] an app with **no icons at all** (`mv public/favicons /tmp`) — the `!` fires ONCE under the
       banner on `dev web` as well as on a native run (R21), and the app wears adaptv's mark
       rather than Capacitor's
+- [ ] edit `adaptv.config.ts` **during** a `dev` run — `! config change · press b to rebuild`
+      appears on the watch row within ~3s (R40); touch a file in the `icons` dir for the same
+      notice, and change something native as well to see the two merge into one line
+- [ ] press **`b`** — the app is rebuilt from the CURRENT config, launcher icons included, and
+      it still live-reloads afterwards (the dev server URL survives the config re-stamp)
+- [ ] make the config invalid, then press **`b`** — every error prints, the process exits
+      non-zero, and teardown ran: `.adaptv/ios/App/App/Info.plist` has no
+      `NSAppTransportSecurity` left in it (R39)
+- [ ] SIGKILL a `dev ios` run, then start another one — the stranded ATS exception is healed at
+      prepare rather than adopted, and reverted again on a clean exit
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:
