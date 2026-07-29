@@ -9,6 +9,13 @@
 //   - TTY      → animated spinner lines, redrawn in place
 //   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
+import {
+  DEFAULT_COLUMNS,
+  GLYPH,
+  PHASE_DWELL_MS as THEME_DWELL_MS,
+  FRAMES as THEME_FRAMES,
+  IDLE_MS as THEME_IDLE_MS,
+} from "../ui/theme.mjs"
 import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
 
 /* -------------------------------------------------------------------------- */
@@ -30,7 +37,10 @@ export const c = {
 
 const isCI = !!process.env.CI
 const isTTY = !!process.stdout.isTTY && !isCI
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+//From the theme, not restated here: the spinner, the glyphs, the widths and the timings are
+//the design system (docs/CLI-VISUAL.md), and a second copy in the renderer is a second design
+//system waiting to drift.
+const FRAMES = THEME_FRAMES
 // The last two bytes written, so `spacer()` can tell a blank line that is missing from one
 // that is already there. Blank lines are how the output separates blocks (banner, notices,
 // steps), and every block wants one on each side of itself — without a memory, the seam
@@ -40,7 +50,7 @@ const out = (s) => {
   tail = `${tail}${s}`.slice(-2)
   process.stdout.write(s)
 }
-const width = () => process.stdout.columns || 80
+const width = () => process.stdout.columns || DEFAULT_COLUMNS
 
 // Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
 // closing with a reset if it was cut. A single-row status line redrawn with `\r\x1b[2K`
@@ -77,7 +87,7 @@ const elapsed = (start, offset = 0) => {
 
 /** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
  *  native build streams nothing, so past this the last finished phase is stale. */
-const IDLE_MS = 1200
+const IDLE_MS = THEME_IDLE_MS
 // A phase must hold the line this long before another may replace it.
 //
 // The native toolchains change phase several times a second — an iOS build rewrote the live
@@ -86,7 +96,7 @@ const IDLE_MS = 1200
 // watch. So the line SAMPLES the stream rather than following it: whatever phase is current
 // when the window opens gets the row and keeps it. Nothing is hidden — a phase that lasts
 // less than a blink was never information, and `--verbose` still streams every line.
-const PHASE_DWELL_MS = 700
+const PHASE_DWELL_MS = THEME_DWELL_MS
 
 /**
  * The row's next phase: adopt `pending` only once the current one has had its dwell.
@@ -122,9 +132,9 @@ export function header(title) {
 
 export const log = {
   info: (m) => out(`  ${c.dim(m)}\n`),
-  warn: (m) => out(`  ${c.yellow("!")} ${c.dim(m)}\n`),
-  success: (m) => out(`  ${c.green("✓")} ${m}\n`),
-  error: (m) => out(`  ${c.red("✖")} ${m}\n`),
+  warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`),
+  success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`),
+  error: (m) => out(`  ${c.red(GLYPH.fail)} ${m}\n`),
 }
 
 /**
@@ -186,7 +196,11 @@ export function section(title) {
  * right-hand side one column left of the rest of the CLI.
  */
 export function check(ok, label, note = "", { optional = false } = {}) {
-  const glyph = ok ? c.green("✓") : optional ? c.dim("○") : c.red("✖")
+  const glyph = ok
+    ? c.green(GLYPH.ok)
+    : optional
+      ? c.dim(GLYPH.absent)
+      : c.red(GLYPH.fail)
   out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
 }
 
@@ -201,7 +215,7 @@ export function helpText(text) {
 
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
-  out(`  ${c.green("✓")} ${label}  ${c.dim(`· ${note}`)}\n`)
+  out(`  ${c.green(GLYPH.ok)} ${label}  ${c.dim(`· ${note}`)}\n`)
 }
 
 /**
@@ -220,7 +234,7 @@ export function skip(label, note = "cached") {
  * put two dots on one row.
  */
 export function fail(label, reason, detail = []) {
-  out(`${compose(c.red("✖"), label, `· ${reason}`)}\n`)
+  out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
   detailBlock(detail)
   noteFailurePrinted()
 }
@@ -379,7 +393,7 @@ export function paragraph(text) {
 export function usageFail(reason, fix = []) {
   const cols = Math.max(20, width())
   const [first, ...more] = wrap(reason, { max: cols - 4 })
-  out(`  ${c.red("✖")} ${first}\n`)
+  out(`  ${c.red(GLYPH.fail)} ${first}\n`)
   for (const l of more) out(`    ${l}\n`)
   for (const f of fix)
     for (const l of wrap(f, { max: cols - 6, hang: 2 }))
@@ -488,7 +502,7 @@ export function liveWatcher({ keys = true } = {}) {
     //from a row hand-spacing its own separator (R31).
     const rows = notice
       ? [
-          `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild and see the changes")}`,
+          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild and see the changes")}`,
           "",
           activity,
         ]
@@ -895,13 +909,15 @@ export async function runLine(
     try {
       const r = await fn(report)
       if (!transient)
-        out(`  ${c.green("✓")} ${label}  ${c.dim(flat(doneRight(r)))}\n`)
+        out(
+          `  ${c.green(GLYPH.ok)} ${label}  ${c.dim(flat(doneRight(r)))}\n`,
+        )
       return r
     } catch (err) {
       if (!transient) {
         const { reason, detail: why } = explained(explain, err)
         out(
-          `  ${c.red("✖")} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
+          `  ${c.red(GLYPH.fail)} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
         )
         detailBlock(why)
         // This failure now OWNS a ✖ on screen. An outer catch that reports again would
@@ -943,7 +959,7 @@ export async function runLine(
     out(
       transient
         ? "\r\x1b[2K"
-        : `\r\x1b[2K${compose(c.green("✓"), label, done.right, done.keep)}\n`,
+        : `\r\x1b[2K${compose(c.green(GLYPH.ok), label, done.right, done.keep)}\n`,
     )
     return r
   } catch (err) {
@@ -956,7 +972,9 @@ export async function runLine(
     }
     const { reason, detail: why } = explained(explain, err)
     const bad = failRight(reason)
-    out(`\r\x1b[2K${compose(c.red("✖"), label, bad.right, bad.keep)}\n`)
+    out(
+      `\r\x1b[2K${compose(c.red(GLYPH.fail), label, bad.right, bad.keep)}\n`,
+    )
     detailBlock(why)
     // This row IS the report (R2) — the same claim the non-TTY branch above makes, and it
     // has to be made on BOTH paths. Only the non-TTY one did, so on a real terminal a dev
@@ -1055,7 +1073,8 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     await Promise.all(lanes.map(runOne))
     for (const i of settledOrder()) {
       const s = state[i]
-      const glyph = s.status === "ok" ? c.green("✓") : c.red("✖")
+      const glyph =
+        s.status === "ok" ? c.green(GLYPH.ok) : c.red(GLYPH.fail)
       const r = settledRight(s)
       out(`  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`)
       if (s.status === "fail") detailBlock(s.why)
@@ -1073,9 +1092,9 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       const s = state[i]
       const glyph =
         s.status === "ok"
-          ? c.green("✓")
+          ? c.green(GLYPH.ok)
           : s.status === "fail"
-            ? c.red("✖")
+            ? c.red(GLYPH.fail)
             : c.cyan(FRAMES[frame % FRAMES.length])
       //Same dwell as runLine — a lane samples its stream rather than following it.
       if (s.status === "run") Object.assign(s, nextPhase(s, now))

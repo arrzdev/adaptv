@@ -25,9 +25,17 @@ const ENGINE = "lib/render.mjs"
 /** Every .mjs the CLI ships, excluding tests and the engine itself. */
 function cliModules() {
   const files = []
-  for (const entry of ["", "lib"]) {
+  //`ui/` too: the Ink components are held to the same glyph and stdout rules as everything
+  //else — a second visual language is exactly as possible there as anywhere.
+  for (const entry of ["", "lib", "ui"]) {
     const dir = join(BIN, entry)
-    for (const f of readdirSync(dir)) {
+    let names = []
+    try {
+      names = readdirSync(dir)
+    } catch {
+      continue
+    }
+    for (const f of names) {
       if (!f.endsWith(".mjs") || f.includes(".test.")) continue
       const rel = entry ? `${entry}/${f}` : f
       if (rel !== ENGINE) files.push(rel)
