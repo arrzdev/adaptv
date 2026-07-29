@@ -223,6 +223,31 @@ async function preflight(
 }
 
 /**
+ * Re-read adaptv.config.ts mid-run — the NON-EXITING sibling of `preflight`, for the `b` key.
+ *
+ * `preflight` prints and calls `process.exit` because at startup a config adaptv cannot use
+ * means there is no run to have. Halfway through a `dev` session the opposite is true: there
+ * IS a run, the dev is watching it, and killing it over a half-typed config file would throw
+ * away the dev server and every device already attached. So this returns the problem instead,
+ * and the caller keeps the last good config and says the rebuild didn't happen.
+ *
+ * Returns `{ config }` or `{ problem }` — never both.
+ */
+async function reloadConfig(appRoot, platforms) {
+  let config
+  try {
+    config = await loadConfig(appRoot)
+  } catch (err) {
+    return { problem: err.message }
+  }
+  //Errors only. The warnings were printed above the run and are about the app's art, not
+  //about whether this rebuild can happen — repeating them on every `b` would be R18.
+  const { errors } = await inspectApp(appRoot, config, platforms)
+  if (errors.length > 0) return { problem: errors[0] }
+  return { config }
+}
+
+/**
  * Publish the Capacitor config to the `ADAPTV_CAPACITOR_CONFIG` env var, generated fresh
  * from `adaptv.config.ts`, before any native command runs. adaptv's patched `@capacitor/cli`
  * reads config from this env (not a file), so there is NO `capacitor.config.json` anywhere in
@@ -589,7 +614,9 @@ async function runLive(appRoot, platforms, opts) {
   // Config + assets, checked and reported before the dev server or any native project is
   // touched (R33). `dev web` runs without an adaptv.config.ts, so there it checks one only
   // if the app has one.
-  const config = await preflight(appRoot, platforms, { optional: webOnly })
+  //`let`, because the `b` key re-reads it — see `reloadConfig`. A dev editing
+  //adaptv.config.ts mid-run and rebuilding must not get the config the run started with.
+  let config = await preflight(appRoot, platforms, { optional: webOnly })
 
   try {
     const prepared = new Set()
@@ -880,6 +907,17 @@ async function runLive(appRoot, platforms, opts) {
           // couldn't launch it after all — fall through and rebuild.
         }
 
+        // A forced rebuild re-derives the native ASSETS, not just the binary. They are
+        // written once at startup by `prepareOne` and nothing rewrote them afterwards, so an
+        // edit to the icon art — or to `icons` in the config — was invisible to `b`: it
+        // synced, built and installed the very same launcher icon it already had. Reported as
+        // icons that changed only when the whole command was restarted.
+        //
+        // Only when forced. An unforced launch got here because the fingerprint moved, and
+        // `prepareOne` has already run for this platform in that path.
+        if (force)
+          await generateAssets(appRoot, config, [platform], { report })
+
         report("sync")
         await capSync(appRoot, platform, env, {
           report,
@@ -972,6 +1010,24 @@ async function runLive(appRoot, platforms, opts) {
     const rebuild = async () => {
       if (rebuilding || reloading || webOnly || !launchAll) return
       rebuilding = true
+      // `b` is a FULL rebuild, and that has to include the CONFIG. It used to reuse the
+      // object loaded before the run, so editing adaptv.config.ts and pressing `b` rebuilt
+      // the app from the config the dev had already changed — the icons half of which is the
+      // bug this was reported as. Re-stamping the env matters as much as adopting it: the
+      // native fingerprint folds `ADAPTV_CAPACITOR_CONFIG` in, and `cap` reads it.
+      const reloaded = await reloadConfig(appRoot, ready)
+      if (reloaded.problem) {
+        //Refused, not rebuilt-with-the-old-one: a binary that doesn't match the file on disk
+        //is worse than no rebuild, and the notice already ends in "press b to rebuild".
+        watcher.notice(`not rebuilt · ${reloaded.problem}`)
+        rebuilding = false
+        return
+      }
+      config = reloaded.config
+      await setCapacitorConfigEnv(config)
+      //Idempotent, and re-applied because the identity is derived from the config too.
+      for (const p of ready)
+        patchNativeIdentity(appRoot, config, p, { dev: true })
       watcher.stop() // clears the watch row; cursor stays on it
       // Walk back over the blank separator + one row per platform so the SETTLED
       // platform lines animate again in place, rather than a second copy appearing
@@ -1596,7 +1652,11 @@ async function doctor(appRoot) {
   const set = await loadIconSet(appRoot, iconConfig)
   check(
     set.source === "app",
-    `${set.dirRel} (icon source)`,
+    //An app that named no directory has no path to show, so the row names the KEY it is
+    //reporting on instead. Interpolating `dirRel` regardless printed a bare " (icon source)".
+    set.configured
+      ? `${set.dirRel} (icon source)`
+      : "`icons` (icon source)",
     set.source === "app"
       ? `${set.icons.length} icons`
       : "adaptv's default mark",
@@ -2017,11 +2077,11 @@ async function genIcons(appRoot, positional, flags) {
   //`gen icons` writing into it is exactly what makes the fallback stop applying.
   const configured = resolveIconSet(appRoot, config, [])
 
-  // WHERE the set goes, and never by guessing. `resolveIconSet` falls back to
-  // `./public/favicons` when `icons` is unset, which is right for READING — an app with art
-  // there works without configuring anything. Writing is the opposite: thirteen files landing
-  // in a directory the dev never named is a surprise they find afterwards, so the destination
-  // has to have been chosen, either in the config or on the command line.
+  // WHERE the set goes, and never by guessing: files landing in a directory the dev never
+  // named is a surprise they find afterwards, so the destination has to have been chosen,
+  // either in the config or on the command line. `resolveIconSet` now holds the same line on
+  // the READ side — an app that names no directory wears adaptv's mark rather than picking up
+  // whatever happens to be in `./public/favicons`.
   const outArg = typeof flags.output === "string" ? flags.output : null
   const configuredDir =
     typeof config.icons === "string" ? config.icons : null

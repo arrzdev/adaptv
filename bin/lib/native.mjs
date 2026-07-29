@@ -128,16 +128,18 @@ function run(cmd, args, { cwd, env, report } = {}) {
  * ============================================================================= */
 
 /**
- * Where the launcher icon comes from, and what it sits on (icon only; the splash is
- * colour-driven). The source is the app's ONE icon dir — the same `icons` the web manifest
- * is built from — so a PWA icon set brands the native launcher with no second file to keep
- * in sync. Mirrors `DEFAULT_ICONS_DIR` in src/vite/manifest.ts.
+ * What the launcher icon SITS ON (icon only; the splash is colour-driven).
+ *
+ * WHERE it comes from is not here and must not be: `resolveIconSet` in
+ * `src/vite/icon-set.ts` is the one place that answers that, for the manifest, the head and
+ * the launcher alike. This used to also return `dir: config.icons ?? "./public/favicons"`,
+ * a second copy of a fallback rule that nothing read — dead code, and the kind that only
+ * looks harmless until someone changes one copy.
  */
 export function resolveIconPlan(config) {
   const theme = config.themeColor ?? {}
   const dark = theme.dark ?? theme.light ?? "#000000"
   return {
-    dir: config.icons ?? "./public/favicons",
     //White, NOT the light theme colour: these icons sit on someone else's home screen, not
     //inside the app, and the PWA set the source comes from is drawn against white too.
     iconBackground: "#ffffff",
