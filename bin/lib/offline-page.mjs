@@ -133,8 +133,8 @@ function renderOfflineHtml(devUrl) {
       <span>adaptv</span>
     </div>
     <div>
-      <h1>Dev server isn't running</h1>
-      <p>This is a development build, start the dev server</p>
+      <h1>Couldn't reach dev server</h1>
+      <p>This is a development build</p>
     </div>
     <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
     <div class="status"><span class="spin"></span><span>Reconnecting automatically…</span></div>
