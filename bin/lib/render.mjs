@@ -927,12 +927,27 @@ export async function runLine(
     pending = pretty
     lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
+    //Paint the FIRST phase the moment it is announced, rather than waiting for the next
+    //timer tick. The tick may never come: the launch and reload paths are `spawnSync` all
+    //the way down (`simctl launch`, `open -a Simulator`, `adb`), and synchronous work blocks
+    //the event loop, so `setInterval` cannot fire. The row would sit frozen on the frame
+    //drawn BEFORE the work began — which is the `!detail` fallback, `preparing` — while the
+    //app was already open on the device. Reported as a reload that stalls on "preparing".
+    //
+    //Only the first: `nextPhase` already says an empty row shows its phase at once and the
+    //dwell governs REPLACING one, so this is that rule finally getting a chance to apply.
+    //Later phases stay on the sampled loop, which is what stops a chatty tool strobing.
+    if (!detail) repaint?.()
   }
   // Promote the newest phase only when the current one has had its turn. Called from the
   // draw loop, so the row adopts whatever is current at the window boundary.
   const tick = (now) => {
     ;({ detail, shownAt } = nextPhase({ detail, pending, shownAt }, now))
   }
+  //Set to `draw` once the live row exists. Stays null off a TTY and under `--verbose`, where
+  //there is no row being redrawn in place and nothing to repaint. (Named `repaint`, not
+  //`paint`: that one is the module's colour helper.)
+  let repaint = null
 
   // a step's return value, when it's a string, is its final detail (e.g. an artifact
   // path) — shown before the elapsed time on the ✓ line.
@@ -987,6 +1002,7 @@ export async function runLine(
       `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, phase)}`,
     )
   }
+  repaint = draw
   draw()
   const timer = setInterval(draw, 80)
   try {
@@ -1062,6 +1078,10 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       state[i].pending = pretty
       state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
+      //Paint the lane's FIRST phase at once — see the same note in `runLine`. The launch and
+      //reload paths are `spawnSync` throughout, so the draw timer cannot fire while they run
+      //and the rows would sit frozen on `preparing` until every lane had finished.
+      if (!state[i].detail) repaint?.()
     }
     return Promise.resolve()
       .then(() => lane.run(report))
@@ -1106,6 +1126,9 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           (state[a].status === "fail" ? 1 : 0) -
           (state[b].status === "fail" ? 1 : 0),
       )
+
+  //Set to the frame renderer once the block exists; null off a TTY, where nothing repaints.
+  let repaint = null
 
   // verbose / non-TTY: no in-place animation, just start + settle lines.
   if (verbose || !isTTY) {
@@ -1157,6 +1180,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     frame++
   }
 
+  repaint = draw
   draw()
   const timer = setInterval(draw, 80)
   await Promise.all(lanes.map(runOne))
