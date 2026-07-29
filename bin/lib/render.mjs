@@ -356,23 +356,35 @@ export function liveWatcher({ keys = true } = {}) {
   let clearAt = 0
   let notice = null
   const draw = () => {
-    let s
-    if (changed && Date.now() < clearAt) {
-      s = `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
-    } else {
-      changed = null
-      // A pending native change outranks the idle hint — it's the one thing the dev has to
-      // act on, and it stays put until they do.
-      s = notice
-        ? //`  · ` — two spaces before the dot, ONE after, the same as every settled row
-          //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that
-          //comes from a row hand-spacing its own separator (R31).
-          `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
-        : idleLine
-    }
-    // Clip to the terminal width so this stays ONE physical row — a wrapped status line
-    // redrawn in place stacks a copy every frame (the cascade).
-    out(`\r\x1b[2K${clipAnsi(s, Math.max(10, width()))}`)
+    // The activity row: a spinner while HMR applies, otherwise the keys. The keys are ALWAYS
+    // the last row now — a notice used to REPLACE them, so the moment adaptv had something to
+    // say the dev lost sight of `r`/`b`/`ctrl-c` entirely, which is the one row that is never
+    // not relevant. Reported by the owner as the actions being swapped out.
+    const busy = changed && Date.now() < clearAt
+    const activity = busy
+      ? `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
+      : idleLine
+    if (!busy) changed = null
+    // A pending change gets its OWN row above, and stays until the dev acts on it.
+    //`  · ` — two spaces before the dot, ONE after, the same as every settled row
+    //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that comes
+    //from a row hand-spacing its own separator (R31).
+    const rows = notice
+      ? [
+          `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild and see the changes")}`,
+          "",
+          activity,
+        ]
+      : [activity]
+    // Every draw ENDS with the cursor parked back at the top of the block, so a draw begins
+    // by simply wiping from where it stands — no rewind first. (Rewinding as well walked the
+    // block one row up the screen per frame, and `stop()` then erased the settled platform
+    // lines above it.) Clipping keeps each row ONE physical line: a wrapped status row redrawn
+    // in place stacks a copy every frame, and a block does it several rows at a time.
+    out("\r\x1b[0J")
+    out(rows.map((r) => clipAnsi(r, Math.max(10, width()))).join("\n"))
+    if (rows.length > 1) out(`\x1b[${rows.length - 1}A`)
+    out("\r")
   }
   draw()
   const anim = setInterval(draw, 80)
@@ -389,7 +401,10 @@ export function liveWatcher({ keys = true } = {}) {
     },
     stop: () => {
       clearInterval(anim)
-      out("\r\x1b[2K")
+      // The cursor is parked at the top of the block, so this erases the whole thing however
+      // many rows it grew to — and leaves the cursor exactly where the block began, which is
+      // what `rewindLines` counts back from.
+      out("\r\x1b[0J")
     },
   }
 }

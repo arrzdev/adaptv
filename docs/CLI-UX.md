@@ -339,21 +339,43 @@ last good config, refused the rebuild, and said so on the watch row:
 > `r` is untouched: it reloads the running app's JS and never reads the config, so it has no
 > opinion to be wrong about.
 
-**R40 — One row means one line, so competing notices MERGE rather than take turns.** The watch
-row has a single notice slot, and `dev` now has two things that can fill it: a native change and
-an edit to `adaptv.config.ts` or the icon art it points at. Letting the newer one win drops the
-config half exactly when both are true — the sync a config edit implies is itself what rewrites
-the native tree — so the causes are combined into the one line instead:
+**R40 — Competing notices MERGE rather than take turns.** `dev` has two things that can go
+stale: the native project, and `adaptv.config.ts` plus the icon art it points at. Letting the
+newer one win drops the config half exactly when both are true — the sync a config edit implies
+is itself what rewrites the native tree — so the causes combine into one sentence:
 > ```
->   ! config change  · press b to rebuild
->   ! native change · ios  · press b to rebuild
->   ! config + native change · ios  · press b to rebuild
+>   ! config change  · press b to rebuild and see the changes
+>   ! native change · ios  · press b to rebuild and see the changes
+>   ! config + native change · ios, android  · press b to rebuild and see the changes
 > ```
 > The action is identical in all three; naming the cause is what tells the dev whether adaptv
 > saw the edit they just made. Which is the point — editing the config used to produce no notice
 > at all, because the only fingerprint being polled folds in `ADAPTV_CAPACITOR_CONFIG`, an env
 > var nothing re-stamps until something rebuilds. Reported as commenting `icons` out and watching
 > nothing happen.
+
+**R41 — A notice is added to the live block, never swapped in for something still true.** The
+watch row used to be one row with one slot, so a pending notice REPLACED the keys — the moment
+adaptv had something to say, `r`/`b`/`ctrl-c` disappeared, including the very key the notice was
+telling the dev to press:
+> ```
+>   ! config change   · press b to rebui
+> ```
+> Reported by the owner as *"trocaste as actions"* — you swapped out the actions. The keys row is
+> the one row that is never not relevant, so the block now grows instead: the notice takes its
+> own row above, and the keys stay put underneath.
+> ```
+>   ✓ ios  iPhone 16 Pro (simulator) · 20.0s
+>
+>   ! config change  · press b to rebuild and see the changes
+>
+>   r reload js   b rebuild app   ctrl-c stop
+> ```
+> An HMR burst animates the bottom row while the notice holds above it, rather than the two
+> taking turns. The general rule is that a live block is a BLOCK: it is redrawn as a whole, every
+> row still clipped to one physical line (R31), and it is erased as a whole. Cursor arithmetic is
+> where this goes wrong — a redraw that rewinds to the top when it is already parked there walks
+> the block one row up the screen per frame, and the erase then eats the settled lines above it.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
@@ -764,9 +786,12 @@ Tests do not cover any of this. Run it and read it:
 - [ ] an app with **no icons at all** (`mv public/favicons /tmp`) — the `!` fires ONCE under the
       banner on `dev web` as well as on a native run (R21), and the app wears adaptv's mark
       rather than Capacitor's
-- [ ] edit `adaptv.config.ts` **during** a `dev` run — `! config change · press b to rebuild`
-      appears on the watch row within ~3s (R40); touch a file in the `icons` dir for the same
-      notice, and change something native as well to see the two merge into one line
+- [ ] edit `adaptv.config.ts` **during** a `dev` run — the notice appears within ~3s on its own
+      row, with the `r`/`b`/`ctrl-c` row still underneath it (R41); touch a file in the `icons`
+      dir for the same notice, and change something native too to see the two merge (R40).
+      Save a source file while it is showing: the bottom row animates, the notice holds
+- [ ] Ctrl-C while a notice is showing — the whole block is erased, and the settled platform
+      lines above it are still there (the block is redrawn and erased as a whole, R41)
 - [ ] press **`b`** — the app is rebuilt from the CURRENT config, launcher icons included, and
       it still live-reloads afterwards (the dev server URL survives the config re-stamp)
 - [ ] make the config invalid, then press **`b`** — every error prints, the process exits
