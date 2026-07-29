@@ -18,7 +18,7 @@
 // 1024px PNG for iOS, fifteen mipmaps plus a colour resource for Android. adaptv already
 // hand-writes the native splash + theme resources next door (`patchAndroidSplash`,
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { monochromeMark } from "./artwork.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
@@ -37,14 +37,60 @@ export const DEFAULT_ICONS_DIR = path.join(
 /** `src/vite/icon-set.ts`, bundled once per process. */
 export const iconSetModule = () => loadAdaptvModule("vite/icon-set.ts")
 
+/* -----------------------------------------------------------------------------
+ * per-run memos
+ *
+ * All three below answer questions about FILES ON DISK, and a single CLI run asks each of
+ * them several times: `loadIconSet` once in `preflight` and again per platform inside
+ * `generateAssets`; the decodes once per platform for the warning and again for the writer.
+ * Every repeat re-reads and re-decodes art that cannot have changed in between.
+ *
+ * Scoped to the process, and keyed so they cannot outlive an edit:
+ *   - the set is keyed by the two inputs `resolveIconSet` actually reads;
+ *   - the decodes are keyed by the file's size and mtime, NOT its path — so a file rewritten
+ *     mid-run misses, which is the case that matters (`gen icons` writes into the very
+ *     directory it then re-reads). `clearIconCaches()` makes that explicit rather than
+ *     relying on the timestamp, and both together are deliberate belt and braces.
+ * -------------------------------------------------------------------------- */
+const setCache = new Map()
+const opacityCache = new Map()
+const fitCache = new Map()
+
+/** Key a decode by what the bytes look like, not where they live. */
+function fileKey(file) {
+  try {
+    const s = statSync(file)
+    return `${file}\0${s.size}\0${Math.round(s.mtimeMs)}`
+  } catch {
+    return `${file}\0absent`
+  }
+}
+
+/**
+ * Forget everything remembered about the icon files. Called by any command that WRITES art,
+ * so the run reads back what it just produced rather than what was there before.
+ */
+export function clearIconCaches() {
+  setCache.clear()
+  opacityCache.clear()
+  fitCache.clear()
+}
+
 /**
  * The icon set this app will be branded from — the dev's own art, or adaptv's mark when they
  * have none. The SAME function the manifest and the head resolve through, so a run can never
  * brand the launcher from one set and list another in `manifest.json`.
  */
 export async function loadIconSet(appRoot, config) {
+  //`icons` is the only config value `resolveIconSet` reads; `appRoot` is what it resolves
+  //against. Nothing else can change the answer within one process.
+  const key = `${appRoot}\0${config?.icons ?? ""}`
+  const hit = setCache.get(key)
+  if (hit) return hit
   const { resolveIconSet, scanIcons } = await iconSetModule()
-  return resolveIconSet(appRoot, config, scanIcons(DEFAULT_ICONS_DIR))
+  const set = resolveIconSet(appRoot, config, scanIcons(DEFAULT_ICONS_DIR))
+  setCache.set(key, set)
+  return set
 }
 
 /**
@@ -478,11 +524,15 @@ function writeColorRes(dir, hex) {
  * smaller failure than no icon at all.
  */
 async function resolveOpacity(sharp, pick) {
+  const key = fileKey(pick.file)
+  const hit = opacityCache.get(key)
+  if (hit !== undefined) return { ...pick, transparent: hit }
   let transparent = pick.alpha
   try {
     const { isOpaque } = await sharp(pick.file).stats()
     transparent = !isOpaque
   } catch {}
+  opacityCache.set(key, transparent)
   return { ...pick, transparent }
 }
 
@@ -507,6 +557,9 @@ async function resolveOpacity(sharp, pick) {
  * adaptv shrinking a picture it does not understand.
  */
 async function measureFit(sharp, pick) {
+  const key = fileKey(pick.file)
+  const hit = fitCache.get(key)
+  if (hit) return { ...pick, ...hit }
   let fit = 1
   let fitCircle = 1
   let artBackground = null
@@ -520,6 +573,7 @@ async function measureFit(sharp, pick) {
       artBackground = art.background
     }
   } catch {}
+  fitCache.set(key, { fit, fitCircle, artBackground })
   return { ...pick, fit, fitCircle, artBackground }
 }
 

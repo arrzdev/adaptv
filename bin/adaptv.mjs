@@ -63,7 +63,7 @@ import {
 import { artTarget, SAFE_ZONE } from "./lib/icon-geometry.mjs"
 import { writeIconPreview } from "./lib/icon-preview.mjs"
 import { parseTuning } from "./lib/icon-tuning.mjs"
-import { loadIconSet, parseHex } from "./lib/icons.mjs"
+import { clearIconCaches, loadIconSet, parseHex } from "./lib/icons.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -2299,6 +2299,10 @@ async function genIcons(appRoot, positional, flags) {
     })
     return `${written.length} files → ${set.dirRel}`
   })
+  //The icon directory just changed underneath every memo that describes it. This command is
+  //the only one in the CLI that WRITES art, and it goes on to re-resolve the set for the
+  //preview sheet below — so forget what was remembered before those files existed.
+  clearIconCaches()
 
   {
     // ALWAYS, not behind a flag. The sheet is the only place the dev can actually SEE what the
