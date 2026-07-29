@@ -6,6 +6,11 @@
 > every test passes.
 >
 > The tests can't catch these. **You must run the command and look at the output.**
+>
+> **Building something NEW rather than changing something old?** Start with
+> [`CLI-VISUAL.md`](CLI-VISUAL.md) — the design system: the grid, the colour and glyph roles,
+> the component inventory, and the checklist for adding a command. This file is the record of
+> what has already gone wrong; that one is how to not need it.
 
 ---
 

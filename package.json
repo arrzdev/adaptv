@@ -100,6 +100,7 @@
     "@vitejs/plugin-react": "5.2.0",
     "commander": "15.0.0",
     "esbuild": "0.28.0",
+    "ink": "6.4.0",
     "sharp": "0.35.3",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",
