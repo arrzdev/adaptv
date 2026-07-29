@@ -1,7 +1,7 @@
 // Launcher icons — ONE source set, the right art per platform.
 //
-// The app declares a single icon directory (`icons` in adaptv.config.ts, default
-// `./public/favicons`) and adaptv reads it for BOTH the web manifest and the native launcher
+// The app declares a single icon directory (`icons` in adaptv.config.ts — named, never
+// defaulted) and adaptv reads it for BOTH the web manifest and the native launcher
 // icons. There is deliberately no second `assets/logo.png` convention: a PWA icon set already
 // ships platform-specific art, so the framework's job is to PICK the right member of that set
 // for the build being produced — not to ask the dev to maintain another file that says the same
@@ -20,7 +20,7 @@
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { monochromeMark } from "./artwork.mjs"
+import { hexOf, monochromeMark } from "./artwork.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
 
@@ -174,10 +174,6 @@ const ANDROID_DENSITIES = [
   ["xxhdpi", 144, 324],
   ["xxxhdpi", 192, 432],
 ]
-
-/** A measured `{r,g,b}` back to the `#rrggbb` an Android colour resource needs. */
-const hexOf = ({ r, g, b }) =>
-  `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`
 
 /** `#rgb` / `#rrggbb` → a sharp background. Anything unparseable falls back to white. */
 export function parseHex(hex) {
@@ -337,7 +333,7 @@ async function writeAndroidIcons(
   nativeRoot,
   pick,
   legacy,
-  { light, dark, set },
+  { light, set },
 ) {
   const res = path.join(nativeRoot, "app/src/main/res")
   const background = parseHex(light)
@@ -425,10 +421,19 @@ async function writeAndroidIcons(
   }
 
   writeAdaptiveRes(path.join(res, "mipmap-anydpi-v26"))
-  writeColorRes(path.join(res, "values"), adaptive ?? light)
-  // `values-night` is resolved by the launcher the same way any other config-qualified
-  // resource is, so a dark-mode home screen gets the dark brand colour behind the mark.
-  writeColorRes(path.join(res, "values-night"), adaptive ?? dark)
+
+  // ONE colour, both appearances. A launcher icon is not part of the app's UI — it sits on
+  // someone else's home screen next to thirty others, none of which restyle themselves when
+  // the system flips to dark. Instagram's tile is the same colour at midnight as at noon.
+  //
+  // `values-night` used to resolve to the app's DARK THEME colour, and it produced the bug
+  // this fixes: a transparent mark has no background of its own to keep, so the tile fell back
+  // to the theme, and on a dark home screen a `#0a0a0c` tile under a dark-outlined logo reads
+  // as no tile at all. Reported as *"em android o icon fica sem fundo"*. Written rather than
+  // deleted so a `values-night` left by an older run is overwritten instead of outliving it.
+  const tile = adaptive ?? light
+  for (const dir of ["values", "values-night"])
+    writeColorRes(path.join(res, dir), tile)
 }
 
 /**
@@ -563,7 +568,7 @@ export async function resolveLauncherSource(set, platform) {
 export async function brandLauncherIcon(
   nativeRoot,
   platform,
-  { set, background, backgroundDark, report, source },
+  { set, background, report, source },
 ) {
   const { sharp, pick, warning } =
     source ?? (await resolveLauncherSource(set, platform))
@@ -582,7 +587,6 @@ export async function brandLauncherIcon(
     )
     await writeAndroidIcons(sharp, nativeRoot, pick, legacy, {
       light: background,
-      dark: backgroundDark,
       set,
     })
   }
