@@ -69,6 +69,13 @@ export function installOfflinePage(appRoot, { url }) {
  *
  * Never blind-bounce (navigate and let a failed load bounce back here): it strobes the
  * Android WebView black on every attempt.
+ *
+ * ## The mark
+ *
+ * `assets/adaptv-mark.svg` with the background rect dropped and the viewBox tightened to the
+ * artwork, drawn in `currentColor` so it takes the wordmark's white on this near-black page.
+ * Inlined rather than linked: `cap sync` copies this ONE file into each platform's `public/`,
+ * so anything it references by URL would 404 on the device.
  */
 function renderOfflineHtml(devUrl) {
   const url = JSON.stringify(devUrl)
@@ -94,23 +101,12 @@ function renderOfflineHtml(devUrl) {
     user-select: none; -webkit-user-select: none;
     overflow: hidden;
   }
-  .wrap { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
-  .mark {
-    font-weight: 650; font-size: 15px; letter-spacing: -0.02em; color: #fff;
-    display: inline-flex; align-items: center; gap: 8px;
-  }
-  .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #4ade80; box-shadow: 0 0 0 0 rgba(74,222,128,0.55);
-    animation: pulse 1.8s ease-out infinite;
-  }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(74,222,128,0.5); }
-    70% { box-shadow: 0 0 0 9px rgba(74,222,128,0); }
-    100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
-  }
+  .wrap { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  .brand { display: flex; flex-direction: column; align-items: center; gap: 12px; color: #fff; }
+  .brand svg { width: 62px; height: 62px; display: block; }
+  .brand span { font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; color: #6f6f78; }
   h1 { font-size: 19px; font-weight: 620; letter-spacing: -0.01em; color: #fff; }
-  p { color: #9b9ba4; font-size: 14px; }
+  p { color: #9b9ba4; font-size: 14px; margin-top: 7px; }
   .cmd {
     width: 100%;
     background: #141418; border: 1px solid #26262e; border-radius: 11px;
@@ -132,13 +128,16 @@ function renderOfflineHtml(devUrl) {
 </head>
 <body>
   <div class="wrap">
-    <div class="mark"><span class="dot"></span>adaptv</div>
+    <div class="brand">
+      <svg viewBox="192 192 640 640" fill="none" aria-hidden="true"><circle cx="512" cy="512" r="164" fill="currentColor"/><g stroke="currentColor" stroke-width="100" stroke-linecap="round" stroke-linejoin="round"><path d="M256 400V296H360"/><path d="M768 624V728H664"/></g></svg>
+      <span>adaptv</span>
+    </div>
     <div>
-      <h1>Development build</h1>
-      <p>The dev server isn't running.</p>
+      <h1>Dev server isn't running</h1>
+      <p>This is a development build, start the dev server</p>
     </div>
     <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
-    <div class="status"><span class="spin"></span><span>Waiting for the dev server…</span></div>
+    <div class="status"><span class="spin"></span><span>Reconnecting automatically…</span></div>
   </div>
 <script>
   (function () {
