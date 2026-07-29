@@ -162,10 +162,15 @@ function renderOfflineHtml(devUrl) {
       return "web";
     }
 
+    // Anything that isn't a native WebView falls back to \`web\`, not to nothing. The blank
+    // this used to print reasoned that the page only ever loads on a device, so a platform
+    // it couldn't detect wasn't worth naming — but that left \`adaptv dev\` with no target,
+    // and \`targetsFor\` rejects that ("unknown dev target"). Every branch here has to name
+    // a target the CLI takes, and \`web\` is one.
     function paintPlatform() {
       var p = platformOf();
       var el = document.getElementById("platform");
-      if (el) el.textContent = p === "android" ? "android" : p === "ios" ? "ios" : "";
+      if (el) el.textContent = p === "android" ? "android" : p === "ios" ? "ios" : "web";
     }
 
     // Hide the OS splash so this screen is visible (config sets launchAutoHide:false, so
