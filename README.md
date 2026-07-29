@@ -120,7 +120,12 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 #                      safe ring on Android, the tile itself on iOS and the favicons.
 #                      adaptv warns below the default and above 30
 #   --padding <pct>    extra inset on EVERY icon, on top of the fit above (0–40, default 0)
-#   --background <hex> flatten colour for the slots that can't carry transparency
+#   --background <hex> the colour behind the mark, for the slots that can't carry
+#                      transparency (iOS, favicons, Android's adaptive tile). adaptv
+#                      normally MEASURES this off your source's border and says which
+#                      colour it read; pass this to overrule that reading. The iOS dark
+#                      variant and Android's adaptive foreground stay transparent either
+#                      way — those are layers the OS composites itself
 # Every run writes .adaptv/icons-preview.html — every icon under the mask its platform
 # actually applies, both safe-zone rings, and the manifest adaptv will emit. adaptv reads the
 # source's pixels to find where the background stops, then sizes the mark for each slot: by

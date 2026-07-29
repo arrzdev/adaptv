@@ -379,7 +379,7 @@ describe("brandLauncherIcon — Android", () => {
     expect(await alphaMax("ic_launcher_monochrome.png")).toBeGreaterThan(0)
   })
 
-  it("writes the adaptive background colour for both appearances", async () => {
+  it("gives both appearances the SAME tile colour, so it can't follow the device theme", async () => {
     const { nativeRoot, brand } = await fixture([
       ["icon.png", 1024, false],
     ])
@@ -394,8 +394,31 @@ describe("brandLauncherIcon — Android", () => {
         ),
         "utf8",
       )
+    //A launcher icon is not part of the app's UI — it sits on a home screen next to thirty
+    //others, none of which restyle themselves when the system flips to dark. `values-night`
+    //used to resolve to the app's dark THEME colour, which under a dark-outlined mark on a
+    //dark home screen read as no tile at all ("em android o icon fica sem fundo").
     expect(colour("values")).toContain("#ffffff")
-    expect(colour("values-night")).toContain("#101014")
+    expect(colour("values-night")).toContain("#ffffff")
+  })
+
+  it("keeps writing values-night, so an older run's dark tile cannot outlive it", async () => {
+    //Deleting the divergence is not enough: the file is already on disk in every project
+    //branded before this, and a resource adaptv stops writing is a resource that keeps
+    //applying.
+    const { nativeRoot, brand } = await fixture([
+      ["icon.png", 1024, false],
+    ])
+    await brand("android")
+    expect(
+      existsSync(
+        path.join(
+          nativeRoot("android"),
+          RES,
+          "values-night/ic_launcher_background.xml",
+        ),
+      ),
+    ).toBe(true)
   })
 
   it("fits a MARK into the ring, leaves maskable art and solid tiles alone", async () => {

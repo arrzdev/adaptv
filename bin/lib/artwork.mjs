@@ -17,6 +17,16 @@
 // treated exactly like transparency.
 import { TRANSPARENT } from "./icon-geometry.mjs"
 
+/**
+ * A measured `{r,g,b}` as `#rrggbb` — what an Android colour resource needs, and what the CLI
+ * shows the dev when it reports the background it lifted off their mark.
+ *
+ * Here rather than next to either caller because both of them are printing a colour THIS module
+ * measured, and two copies of a formatter is how the same value ends up written two ways.
+ */
+export const hexOf = ({ r, g, b }) =>
+  `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`
+
 /** Alpha at or below this is background, not art. Catches anti-aliased edges' faint tails. */
 const ALPHA_FLOOR = 8
 
