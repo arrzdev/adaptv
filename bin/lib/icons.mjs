@@ -139,7 +139,7 @@ export function pickIcon(candidates, platform) {
  * must NOT be transparent, and `writeIosIcon` flattens onto the brand colour regardless.
  *
  * `transparent` is whether the source USES transparency, not whether it declares a channel —
- * see `resolveTransparency`. A `png` that carries a fully-opaque alpha channel is the normal
+ * see `resolveOpacity`. A `png` that carries a fully-opaque alpha channel is the normal
  * output of a favicon generator, and reading the header alone let exactly that source
  * through: it branded an adaptive foreground as a white box and said nothing.
  */
@@ -477,22 +477,36 @@ function writeColorRes(dir, hex) {
  * Falls back to the header's answer if sharp can't stat the file: a wrong inset is a much
  * smaller failure than no icon at all.
  */
-async function resolveTransparency(sharp, pick) {
+async function resolveOpacity(sharp, pick) {
   let transparent = pick.alpha
   try {
     const { isOpaque } = await sharp(pick.file).stats()
     transparent = !isOpaque
   } catch {}
+  return { ...pick, transparent }
+}
 
-  // Where the art actually sits inside this file, and therefore how much of each native slot it
-  // may fill. The native brander used to guess with two constants — `0.82` for a transparent
-  // iOS pick, `0.85` for a transparent legacy square, full bleed otherwise — and the guess was
-  // wrong in the most common direction: a logo exported flat on white is opaque, so it went edge
-  // to edge on iOS. `measureArtwork` already knows better; `gen icons` was simply the only
-  // caller using it. Falls back to the old constants only if the measurement fails.
-  //Full bleed is the fallback for BOTH failure modes, and it is the same answer `slotPlan`
-  //gives: a source with no isolable mark (a photo, a gradient) is a finished picture, so the
-  //mask crops it rather than adaptv shrinking a picture it does not understand.
+/**
+ * Where the art actually sits inside the file, and therefore how much of each native slot it
+ * may fill.
+ *
+ * Split from {@link resolveOpacity} because only the WRITERS need it. The native brander used
+ * to guess with two constants — `0.82` for a transparent iOS pick, `0.85` for a transparent
+ * legacy square, full bleed otherwise — and the guess was wrong in the most common direction:
+ * a logo exported flat on white is opaque, so it went edge to edge on iOS. `measureArtwork`
+ * already knows better; `gen icons` was simply the only caller using it.
+ *
+ * It is also the expensive half — it rasterises to 1024², pulls a 4MB raw RGBA buffer and scans
+ * it pixel by pixel (~45ms per file). `preflight` runs on every single command and needs none
+ * of it: the one thing it asks is `iconIssue`, which reads `width`, `transparent` and `family`.
+ * Paying 45ms per platform for three fields that are then discarded is what made the pre-run
+ * window twice as long as it needed to be.
+ *
+ * Falls back to full bleed on failure, which is the same answer `slotPlan` gives: a source with
+ * no isolable mark (a photo, a gradient) is a finished picture, so the mask crops it rather than
+ * adaptv shrinking a picture it does not understand.
+ */
+async function measureFit(sharp, pick) {
   let fit = 1
   let fitCircle = 1
   let artBackground = null
@@ -506,8 +520,7 @@ async function resolveTransparency(sharp, pick) {
       artBackground = art.background
     }
   } catch {}
-
-  return { ...pick, transparent, fit, fitCircle, artBackground }
+  return { ...pick, fit, fitCircle, artBackground }
 }
 
 /**
@@ -525,8 +538,19 @@ async function resolveTransparency(sharp, pick) {
  * 1024px slot, an opaque one where Android's foreground needs transparency. That the app has no
  * art of its own at all is an app-level fact and belongs to `iconWarnings`, once (R21): it is
  * equally true of a `dev web` run with no platforms in it, which never calls this at all.
+ *
+ * `measure: false` returns a pick carrying everything the WARNING needs and nothing the writers
+ * do — no `fit`/`fitCircle`/`artBackground`, and so no 45ms artwork scan. `preflight` passes it
+ * because it destructures `warning` alone. The PICK itself is chosen here either way, so the
+ * sentence the dev reads and the file adaptv writes still cannot disagree about which source
+ * was used — which is the property this function exists for, and it is unaffected by how much
+ * of that source gets measured.
  */
-export async function resolveLauncherSource(set, platform) {
+export async function resolveLauncherSource(
+  set,
+  platform,
+  { measure = true } = {},
+) {
   if (set.icons.length === 0) return { pick: null, warning: null }
 
   const sharp = await loadSharp()
@@ -539,10 +563,8 @@ export async function resolveLauncherSource(set, platform) {
       warning: `could not brand the launcher icon on this platform`,
     }
 
-  const pick = await resolveTransparency(
-    sharp,
-    pickIcon(set.icons, platform),
-  )
+  const opaque = await resolveOpacity(sharp, pickIcon(set.icons, platform))
+  const pick = measure ? await measureFit(sharp, opaque) : opaque
   //adaptv's own mark is by construction a good source, so there is nothing to say about it.
   return {
     sharp,
@@ -576,9 +598,9 @@ export async function brandLauncherIcon(
     //The legacy square wants full-bleed art, which is usually a DIFFERENT member of the set
     //from the safe-zoned adaptive foreground. Decoded the same way as the foreground pick,
     //because `legacyScale` turns on whether the art actually uses transparency.
-    const legacy = await resolveTransparency(
+    const legacy = await measureFit(
       sharp,
-      pickIcon(set.icons, "androidLegacy"),
+      await resolveOpacity(sharp, pickIcon(set.icons, "androidLegacy")),
     )
     await writeAndroidIcons(sharp, nativeRoot, pick, legacy, {
       light: background,

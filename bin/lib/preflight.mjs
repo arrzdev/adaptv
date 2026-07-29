@@ -113,7 +113,12 @@ export async function iconWarnings(set, platforms) {
   const { manifestIcons, installabilityIssue } = await iconSetModule()
   const warnings = []
   for (const platform of platforms) {
-    const { warning } = await resolveLauncherSource(set, platform)
+    //`measure: false` — the warning is `iconIssue`, which reads width, transparency and
+    //family. The artwork scan behind the other three fields costs ~45ms per platform and
+    //nothing here reads them; the writers ask for it themselves later.
+    const { warning } = await resolveLauncherSource(set, platform, {
+      measure: false,
+    })
     if (warning) warnings.push(warning)
   }
   const issue = installabilityIssue(manifestIcons(set))
