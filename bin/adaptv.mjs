@@ -1141,7 +1141,11 @@ async function runLive(appRoot, platforms, opts) {
      * the keypresses when it is in play: two raw-mode listeners on one stdin would each get
      * half the bytes.
      */
-    const useInk = process.env.ADAPTV_INK === "1" && !webOnly
+    //Ink renders the watch block. `ADAPTV_INK=0` falls back to the string version, kept for
+    //one release as an escape hatch — the flag defaulted the other way while the port was
+    //unproven, and it is proven now: build, dev, the `b` rebuild and the `r` reload have all
+    //run through it on a device.
+    const useInk = process.env.ADAPTV_INK !== "0" && !webOnly
     //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
     //a 64ms bare-node floor, and a static import would charge that to `adaptv --help` and to
     //every invocation error — the paths where the <100ms responsiveness rule actually bites.

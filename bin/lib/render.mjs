@@ -726,108 +726,28 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
  * non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
  */
 export async function select(message, options) {
-  if (!options?.length) return undefined
-  const stdin = process.stdin
-  //A prompt has no machine answer. Silently taking the default would pick a device, or
-  //overwrite an icon set, on behalf of a script that never agreed to either — so refuse and
-  //name the flag that makes the question unnecessary.
+  //A prompt has no machine answer — see the note on `--json` in `setOutputMode`.
   if (jsonMode)
     throw new Error(
       "'--json' can't answer a prompt — pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
     )
-  if (!isTTY || !stdin.isTTY || typeof stdin.setRawMode !== "function")
-    return options[0].value
+  //Off a TTY there is nobody to press anything, so the first option stands as the default —
+  //the same answer the hand-rolled picker gave, and what makes a piped run deterministic.
+  if (!isTTY || !process.stdin.isTTY) return options[0]?.value
 
-  const WINDOW = 8
-  const windowed = options.length > WINDOW
-  const visible = Math.min(WINDOW, options.length)
-  // Fixed line count per frame: header + visible rows (+ a "N of M" footer when scrolling).
-  const rows = 1 + visible + (windowed ? 1 : 0)
-
-  let idx = 0
-  let top = 0
-
-  // Clip a plain string to `max` VISIBLE chars. EVERY emitted row must fit the terminal
-  // width — a line that wraps takes two physical rows, which breaks the fixed-row cursor
-  // rewind below and cascades the whole menu on each keypress on a narrow terminal.
-  const clip = (s, max) => {
-    const a = [...s]
-    return a.length > max
-      ? `${a.slice(0, Math.max(0, max - 1)).join("")}…`
-      : s
+  //THE PICKER IS INK'S NOW. It used to count its own rows, move the cursor back over them
+  //and erase — `\r\x1b[NA\x1b[0J` — on every keypress, which is the same arithmetic that
+  //walked the watch block up the screen. Arrow keys are `useInput`; the list is a column.
+  const { inkSelect } = await import("../ui/live.mjs")
+  const chosen = await inkSelect(message, options)
+  if (chosen === null) {
+    //R37: a cancelled prompt still leaves a line. A prompt that erases itself and says
+    //nothing is indistinguishable from one that was never asked.
+    log.warn("cancelled")
+    spacer()
+    process.exit(130)
   }
-  const paint = () => {
-    if (idx < top) top = idx
-    else if (idx >= top + visible) top = idx - visible + 1
-    const w = Math.max(24, width())
-    const nav = "   ↑↓ move · ↵ select"
-    out(
-      message.length + nav.length <= w - 2
-        ? `  ${c.bold(message)}${c.dim(nav)}\n`
-        : `  ${c.bold(clip(message, w - 2))}\n`,
-    )
-    const end = top + visible
-    for (let i = top; i < end; i++) {
-      const o = options[i]
-      const on = i === idx
-      const cursor = on ? c.cyan("›") : " "
-      const text = clip(`${o.label}${o.hint ? `  ${o.hint}` : ""}`, w - 4)
-      out(`  ${cursor} ${on ? text : c.dim(text)}\n`)
-    }
-    if (windowed)
-      out(
-        `  ${c.dim(clip(`  ${top + 1}–${end} of ${options.length}`, w - 2))}\n`,
-      )
-  }
-  // `\r` first so the cursor is at column 0 before moving up: a terminal that doesn't
-  // reset the column on `\n` would otherwise leave the cursor mid-line, and `\x1b[0J`
-  // would only clear from there — leaving the start of the header behind.
-  const erase = () => out(`\r\x1b[${rows}A\x1b[0J`)
-
-  paint()
-  return await new Promise((resolve) => {
-    stdin.setRawMode(true)
-    stdin.resume()
-    stdin.setEncoding("utf8")
-    const done = (fn) => {
-      stdin.off("data", onData)
-      try {
-        stdin.setRawMode(false)
-      } catch {}
-      stdin.pause()
-      erase()
-      fn()
-    }
-    const onData = (key) => {
-      if (key === "\x1b[A" || key === "\x1bOA" || key === "k") {
-        idx = (idx - 1 + options.length) % options.length
-        erase()
-        paint()
-      } else if (key === "\x1b[B" || key === "\x1bOB" || key === "j") {
-        idx = (idx + 1) % options.length
-        erase()
-        paint()
-      } else if (key === "\r" || key === "\n") {
-        done(() => resolve(options[idx].value))
-      } else if (key === "\x03" || key === "q") {
-        // NOT bare Esc: an arrow key can arrive as Esc then `[A` in two chunks, and
-        // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
-        // The caller registers a process 'exit' hook that tears down anything already
-        // started (e.g. the dev server running behind this picker), so exiting here is safe.
-        done(() => {
-          // SAY so. The picker erases itself on the way out (that is the point of it), so
-          // aborting used to leave the banner, whatever notices preceded it, and then a bare
-          // shell prompt — reported as *"quando a pessoa cancela algo deve aparecer… isto está
-          // muito vazio"*. Erasing the prompt is right; erasing the fact that it was answered
-          // is not, and the dev is left unsure whether the command did anything.
-          log.warn("cancelled")
-          spacer()
-          process.exit(130)
-        })
-      }
-    }
-    stdin.on("data", onData)
-  })
+  return chosen
 }
 
 /**
@@ -935,6 +855,17 @@ export function prettyLine(line) {
   // Drop lines with no real action — a lone verb ("building", "running"), even with a `· time`.
   if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
   if (!HUMAN_PHRASE.test(s)) return ""
+  //Two last gates, both R24, both found by watching a long build leak fragments of its own
+  //tool output onto the row.
+  //
+  //A phase NAMES A FILE. `creating capacitor.config.json` and `packaging .ipa` both got here
+  //as prose that survived every earlier filter — no path to give them away, no `error:`
+  //prefix — and both say what is being acted ON, which is the one thing a phase may not.
+  if (/\.[a-z0-9]{2,5}\b/.test(s)) return ""
+  //A phase is not an ACTIVITY. `as any` reached the row as a two-word fragment of a compiler
+  //line; it is grammatical, short and completely meaningless as a status. Anything adaptv did
+  //not choose itself has to start with a present participle to be a phase at all (R45).
+  if (!OWN_PHASES.has(s) && !/^[a-z]+ing\b/.test(s)) return ""
   return s
 }
 
@@ -1083,58 +1014,60 @@ export async function runLine(
     }
   }
 
-  let frame = 0
-  const draw = () => {
-    // Live line = just the current phase (no per-step timer — the total lands on the ✓
-    // line). Nothing yet → "preparing". Once there's been output and the stream goes quiet
-    // for a beat — the long opaque native build, which cap emits nothing during — fall back
-    // to the caller's present-tense `idle` label instead of freezing on the last phase.
+  //THE LIVE ROW IS INK'S NOW. What used to be here was a `setInterval` recomputing the whole
+  //row and rewriting it with `\r\x1b[2K` — the frame counter, the width arithmetic, the rule
+  //that the elapsed time is the last thing to be clipped, all by hand. Ink owns the frame and
+  //the layout; this loop only decides WHAT the row should say.
+  const { liveRows } = await import("../ui/live.mjs")
+  const block = liveRows([label], { started: start })
+  repaint = () => {}
+  const tickPhase = () => {
     const now = Date.now()
     tick(now)
-    const phase = !detail
-      ? "preparing"
-      : idle && now - lastAt > IDLE_MS
-        ? idle
-        : detail
-    out(
-      `\r\x1b[2K${compose(
-        c.cyan(FRAMES[frame++ % FRAMES.length]),
-        label,
-        phase,
-        liveElapsed(start, offsetMs),
-      )}`,
+    block.phase(
+      label,
+      !detail
+        ? "preparing"
+        : idle && now - lastAt > IDLE_MS
+          ? idle
+          : detail,
     )
+    block.elapsed(label, liveElapsed(start, offsetMs))
   }
-  repaint = draw
-  draw()
-  const timer = setInterval(draw, 80)
+  tickPhase()
+  const timer = setInterval(tickPhase, 80)
+  //`repaint` still exists for `report()`: a phase announced while the event loop is blocked
+  //has to reach the store before the block goes, even though Ink cannot draw until the loop
+  //frees up. Setting the state is what survives.
+  repaint = tickPhase
   try {
     const r = await fn(report)
     clearInterval(timer)
-    // transient → erase the row (no ✓). `\r\x1b[2K` leaves the cursor at column 0 of a
-    // now-blank row, so whatever prints next simply takes it over: the live line is
-    // replaced by the next real step rather than pushing it down a row.
+    block.stop()
+    //Settled rows are written AFTER Ink unmounts, as ordinary text that scrolls. They are
+    //printed once and never redrawn, so there is nothing for a layout engine to do.
     const done = doneRight(r)
-    out(
-      transient
-        ? "\r\x1b[2K"
-        : `\r\x1b[2K${compose(c.green(GLYPH.ok), label, done.right, done.keep)}\n`,
-    )
+    if (!transient)
+      out(
+        `${compose(c.green(GLYPH.ok), label, done.right, done.keep)}\n`,
+        "result",
+      )
     return r
   } catch (err) {
     clearInterval(timer)
+    block.stop()
     // A failed transient step is still reported — by the caller, via `fail()`, which owns
     // the label. Marking the row too would just double the ✖.
-    if (transient) {
-      out("\r\x1b[2K")
-      throw err
-    }
+    if (transient) throw err
     const { reason, detail: why } = explained(explain, err)
     const bad = failRight(reason)
-    out(
-      `\r\x1b[2K${compose(c.red(GLYPH.fail), label, bad.right, bad.keep)}\n`,
-    )
-    detailBlock(why)
+    toStderr(() => {
+      out(
+        `${compose(c.red(GLYPH.fail), label, bad.right, bad.keep)}\n`,
+        "error",
+      )
+      detailBlock(why)
+    })
     // This row IS the report (R2) — the same claim the non-TTY branch above makes, and it
     // has to be made on BOTH paths. Only the non-TTY one did, so on a real terminal a dev
     // server that failed to bind printed `✖ web  port 7171 …` and then, from the command's
@@ -1252,53 +1185,56 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     return results
   }
 
-  let frame = 0
-  let drawn = 0
-  let order = state.map((_, i) => i)
-  const draw = () => {
+  //THE LANES ARE INK'S NOW. This was the block that walked the cursor: `\x1b[NA` back over
+  //however many rows were drawn last time, `\x1b[2K` per row on the way down, and a `drawn`
+  //counter to remember the height. R3 (never interleave platforms) used to be a property of
+  //that loop being careful; it is now structural, because each lane is its own row in a
+  //column and there is no shared cursor to get wrong.
+  const { liveRows } = await import("../ui/live.mjs")
+  const block = liveRows(state.map((s) => s.label))
+  const tickAll = () => {
     const now = Date.now()
-    if (drawn > 0) out(`\x1b[${drawn}A`)
-    for (const i of order) {
-      const s = state[i]
-      const glyph =
-        s.status === "ok"
-          ? c.green(GLYPH.ok)
-          : s.status === "fail"
-            ? c.red(GLYPH.fail)
-            : c.cyan(FRAMES[frame % FRAMES.length])
+    for (const s of state) {
+      if (s.status !== "run") continue
       //Same dwell as runLine — a lane samples its stream rather than following it.
-      if (s.status === "run") Object.assign(s, nextPhase(s, now))
-      // live: just the current phase (nothing yet → "preparing"; idle fallback for the
-      // silent build); the total lands on the settled line.
-      const right =
-        s.status === "run"
-          ? {
-              right: !s.detail
-                ? "preparing"
-                : s.idle && now - s.lastAt > IDLE_MS
-                  ? s.idle
-                  : s.detail,
-              keep: liveElapsed(s.start, s.offsetMs),
-            }
-          : settledRight(s)
-      out(
-        `\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`,
-        s.status === "run" ? "step" : "result",
+      Object.assign(s, nextPhase(s, now))
+      block.phase(
+        s.label,
+        !s.detail
+          ? "preparing"
+          : s.idle && now - s.lastAt > IDLE_MS
+            ? s.idle
+            : s.detail,
       )
+      block.elapsed(s.label, liveElapsed(s.start, s.offsetMs))
     }
-    drawn = state.length
-    frame++
   }
-
-  repaint = draw
-  draw()
-  const timer = setInterval(draw, 80)
+  repaint = tickAll
+  tickAll()
+  const timer = setInterval(tickAll, 80)
   await Promise.all(lanes.map(runOne))
   clearInterval(timer)
-  order = settledOrder() // failures sink to the bottom rows, so their detail can follow
-  draw() // final frame with all statuses settled
-  for (const i of order) {
-    if (state[i].status === "fail") detailBlock(state[i].why)
+  block.stop()
+
+  //Settled rows are ordinary text, written after the block is gone. Failures sink to the
+  //bottom so their dim detail can follow them without landing under another platform (R3).
+  for (const i of settledOrder()) {
+    const s = state[i]
+    const r = settledRight(s)
+    if (s.status === "fail") {
+      toStderr(() => {
+        out(
+          `${compose(c.red(GLYPH.fail), s.label, r.right, r.keep)}\n`,
+          "error",
+        )
+        detailBlock(s.why)
+      })
+    } else {
+      out(
+        `${compose(c.green(GLYPH.ok), s.label, r.right, r.keep)}\n`,
+        "result",
+      )
+    }
   }
   return results
 }
