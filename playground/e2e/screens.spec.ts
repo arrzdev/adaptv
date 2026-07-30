@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 // Screen-level guards for the shell's full-screen overlays. Unlike smoke.spec,
@@ -44,4 +45,102 @@ test("the splash attribute the guards query is the one the shell ships", async (
       .join(""),
   )
   expect(criticalCss).toContain("data-adaptv-splash")
+})
+
+/*
+ * Wait for the app to be INTERACTIVE, not merely present.
+ *
+ * The shell is server-rendered, so the markup and the links exist before React has
+ * attached anything — click in that window and nothing happens, the URL never changes,
+ * and the assertion fails as though the 404 were broken. It only shows up under
+ * parallel workers, which is the worst way to find out.
+ *
+ * The splash unmounting is the app's own ready signal, so it is the honest thing to
+ * wait on rather than a sleep.
+ */
+async function appReady(page: Page) {
+  await page.locator("[data-adaptv-screen]").waitFor()
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+}
+
+test.describe("full-screen chrome", () => {
+  test("a bad route renders the app's own 404, not the router's error page", async ({
+    page,
+  }) => {
+    await page.goto("/lab/screens")
+    await appReady(page)
+    await page.getByRole("link", { name: /client navigation/i }).click()
+
+    //the app's screen, identified by content it and only it renders
+    await expect(page.getByText("404", { exact: false }).first()).toBeVisible()
+    const back = page.getByRole("link", { name: /back home/i })
+    await expect(back, "the 404 must offer a way out").toBeVisible()
+
+    //a raw router error or a blank page is the failure — assert neither
+    const body = (await page.locator("body").innerText()).toLowerCase()
+    expect(body).not.toContain("unexpected error")
+    expect(body.trim().length, "a blank page is the other failure").toBeGreaterThan(20)
+  })
+
+  test("the server-rendered 404 matches the client-navigated one", async ({
+    page,
+  }) => {
+    //different code path: this one never runs the client router's not-found handling
+    await page.goto("/lab/definitely-not-a-route")
+    await expect(page.getByText("404", { exact: false }).first()).toBeVisible()
+    await expect(page.getByRole("link", { name: /back home/i })).toBeVisible()
+  })
+
+  test("Back home from the 404 lands on a working app", async ({ page }) => {
+    await page.goto("/lab/definitely-not-a-route")
+    //`appReady` works here now: #26 made the splash unmount on the not-found route
+    //too. Before that it never did, and waiting on it hung on the bug.
+    await appReady(page)
+    await page.getByRole("link", { name: /back home/i }).click()
+
+    await expect(page.locator("[data-adaptv-screen] > *")).toBeVisible()
+    //…and the shell is genuinely alive, not a rendered husk
+    await expect(page.locator("[data-app-shell]")).toBeVisible()
+    expect(new URL(page.url()).pathname).not.toContain("definitely-not-a-route")
+  })
+
+  test("the splash overlay leaves nothing behind after boot", async ({
+    page,
+  }) => {
+    /*
+     * The overlay self-unmounts by returning null, so by the time any route exists it
+     * should be gone. If it is not, it is a `fixed inset-0` element over the whole app
+     * silently swallowing every tap — which presents as "the app stopped responding",
+     * never as "the splash is still there".
+     */
+    await page.goto("/lab/screens")
+    await page.locator("[data-adaptv-screen]").waitFor()
+
+    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+
+    //the page's own live readout must agree — if it does not, one of the two is lying
+    await expect(page.getByText("gone, as expected")).toBeVisible()
+  })
+
+  test("the orientation readout reports a real orientation", async ({
+    page,
+  }) => {
+    /*
+     * Deliberately NOT "it tracks the window". `useOrientation` wraps
+     * `screen.orientation`, which on a desktop browser reports the MONITOR — so it
+     * reads landscape however narrow the window is, and resizing never moves it. That
+     * is the API behaving correctly for a device-first framework, and the page now
+     * says so. What is still worth pinning is that the value is real rather than the
+     * SSR placeholder: a readout stuck on the server's `portrait-primary` guess would
+     * mean the hook never hydrated, and no manual pass on a desktop would catch it.
+     */
+    await page.goto("/lab/screens")
+    await page.locator("[data-adaptv-screen]").waitFor()
+
+    const orientation = await page.evaluate(
+      () => (screen.orientation as ScreenOrientation | undefined)?.type,
+    )
+    expect(orientation).toBeTruthy()
+    await expect(page.getByText(orientation as string, { exact: true })).toBeVisible()
+  })
 })
