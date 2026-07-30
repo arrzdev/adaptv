@@ -1,4 +1,4 @@
-import { ScrollView, View } from "@arrzdev/adaptv/components"
+import { ScrollView } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 
@@ -10,46 +10,46 @@ export type PageProps = {
 const PAGE_CONTENT_CLASS =
   "mx-auto flex w-full max-w-2xl flex-col gap-y-5 px-6 web:py-4 app:py-safe-offset-2"
 
+/*
+ * A page's root IS the ScrollView. Nothing wraps it.
+ *
+ * These used to open with `<View fill className="w-full">`, which measured as the
+ * exact same box as the shell's own screen frame — same `flex flex-col`, same
+ * `flex-1`, same `min-h-0`, same 720px. It existed only because a flex child does not
+ * grow on its own, so the page had to say `fill` to be full-height and someone added
+ * a wrapper that said it too. The shell now stretches a page's only root element
+ * (`adaptv/styles/screen.css`), so both the wrapper and the `fill` are gone — which
+ * is also what makes a top-level `View` (a page that must never scroll) and a
+ * top-level `ScrollView` freely interchangeable.
+ */
+
 /**
- * Scrollable page column with default horizontal padding and max width. Sits on
- * a {@link View} route surface (fills the shell) with a {@link ScrollView} for
- * the content. Pass `className` to override padding (`px-*`) and background
- * (`bg-*`).
+ * Scrollable page column with default horizontal padding and max width. Pass
+ * `className` to override padding (`px-*`) and background (`bg-*`).
  */
 export function Page({ children, className }: PageProps) {
   return (
-    <View fill className="w-full">
-      <ScrollView
-        className={cn(
-          "relative bg-background",
-          PAGE_CONTENT_CLASS,
-          className,
-        )}
-      >
-        {children}
-      </ScrollView>
-    </View>
+    <ScrollView
+      className={cn("relative bg-background", PAGE_CONTENT_CLASS, className)}
+    >
+      {children}
+    </ScrollView>
   )
 }
 
 /**
- * Like {@link Page}, with soft fades at the top and bottom screen edges.
- * Edge overlays use the same `bg-*` utilities from `className` when provided.
+ * Like {@link Page}, with the content dissolving at the top and bottom screen edges
+ * instead of ending on a hard line. Each edge fades only while there is content that
+ * way, so the first line is crisp while you are parked at the top.
  *
- * The scroll lives on the edge-fades surface itself; children are a plain
- * normal-flow column that just renders. Nesting a second `flex-col` scroller
- * inside lets tall content overflow instead of scrolling, so keep it flat.
+ * The scroll lives on this surface itself; children are a plain normal-flow column.
+ * Nesting a second `flex-col` scroller inside lets tall content overflow instead of
+ * scrolling, so keep it flat.
  */
 export function PageWithSmoothEdges({ children, className }: PageProps) {
   return (
-    <View fill className="w-full">
-      <ScrollView
-        edgeFades
-        className={cn("bg-background", className)}
-        edgeClassName={cn("bg-background", className)}
-      >
-        <div className={PAGE_CONTENT_CLASS}>{children}</div>
-      </ScrollView>
-    </View>
+    <ScrollView fade className={cn("bg-background", className)}>
+      <div className={PAGE_CONTENT_CLASS}>{children}</div>
+    </ScrollView>
   )
 }
