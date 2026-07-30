@@ -1047,11 +1047,10 @@ async function runLive(appRoot, platforms, opts) {
           env,
         )
         // `cap run` BUILDS, then installs, then launches — the build is all but one second
-        // of it. Announcing `launching device` here said the last step first: the row read
-        // `launching device` for twenty seconds of compiling, and `building app` (the lane's
-        // idle label, shown whenever the tool's stream goes quiet) surfaced twice around it —
-        // once in the pause before xcodebuild speaks, once in the silent install at the end.
-        // Same words, two different meanings, in the wrong order. Say what starts.
+        // of it. Announcing `launching device` here said the last step first, so the row read
+        // `launching device` through twenty seconds of compiling. A row narrates whatever it
+        // is told (it has no fallback of its own any more), so announcing the right thing at
+        // the right moment is entirely this function's job. Say what STARTS.
         report("building app")
         await capRun(appRoot, platform, target.id, env, { report })
         // The build is done; from here it really is the device's turn. Every branch below
@@ -1124,7 +1123,6 @@ async function runLive(appRoot, platforms, opts) {
                 })
               return launchOne(p, r, { force })
             },
-            idle: "building app",
             offsetMs: offsets[p] ?? 0,
             explain: explainFailure(p),
           })),
@@ -1644,7 +1642,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
       // Each lane carries its own outcome (explain → the inline reason + hint), so a
       // failure needs nothing printed after the lanes settle.
       run: (r) => tailOne(p, r),
-      idle: "building app",
       offsetMs: prepareMs[p] ?? 0,
       explain: explainFailure(p),
     })),

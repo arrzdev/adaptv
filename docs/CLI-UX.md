@@ -858,20 +858,30 @@ was got wrong twice, in two components, and the two failures looked nothing alik
 > One `eraseRegion(app)` in `bin/ui/live.mjs`, used by every region, so there is one place to be
 > right. Any cursor arithmetic elsewhere on the page depends on it.
 
-**R48 — A live row's idle fallback is its current STAGE, not a fixed label.** A row that has
-heard nothing from its tool for `IDLE_MS` must not freeze on the last thing the tool shouted —
-`processing resources` is a lie once linking starts. It falls back to the last phase adaptv
-announced about ITSELF (`OWN_PHASES`), which moves as the run moves. A constant cannot be right
-for a whole run: `dev` seeded `idle: "building app"` and showed it twice for one build —
+**R48 — A live row only moves FORWARD. A phase is shown once.** The row shows the last phase
+reported and silence changes nothing; it never returns to a phase it has left, because going
+back says the work is being redone. There was an idle fallback — after `IDLE_MS` of quiet the
+row dropped to a per-lane `idle` label rather than freeze on a stale tool line — and on every
+native build it read as a restart:
 > ```
 >   ⠴ ios  building app        ← the pause before xcodebuild speaks
 >   ⠴ ios  compiling
+>   ⠴ ios  building app        ← quiet again
 >   ⠴ ios  processing resources
->   ⠴ ios  building app        ← the silent install. The app was NOT being built.
+>   ⠴ ios  building app
 > ```
-> The other half is announcing the right thing to begin with: `cap run` builds, installs, then
-> launches, and `report("launching device")` before it named the last step first, so the row
-> claimed to be launching through twenty seconds of compiling. Say what starts.
+> A first fix made that label track the current stage instead of a constant. It cured the case
+> where it was an outright lie (`building app` during the silent install) and did nothing about
+> the repetition, which was the complaint — so the fallback is gone entirely. A frozen `linking`
+> is not misleading: the spinner is what says the row is alive, and the last thing the tool said
+> is the most specific true statement available.
+> ```
+>   syncing → installing dependencies → building app → compiling → launching device
+> ```
+> Honesty is now the CALLER's job, which is the other half of this. `cap run` builds, installs,
+> then launches, and `report("launching device")` before it named the last step first — so the
+> row claimed to be launching through twenty seconds of compiling. **Announce what STARTS**, and
+> announce again when the work actually changes.
 
 ## 5. Before you ship a CLI change
 

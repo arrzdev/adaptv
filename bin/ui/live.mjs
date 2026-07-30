@@ -21,7 +21,7 @@
 // `createElement`.
 import { Box, render, Text, useApp, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
-import { FRAME_MS, FRAMES, IDLE_MS, ROLE } from "./theme.mjs"
+import { FRAME_MS, FRAMES, ROLE } from "./theme.mjs"
 
 /** The braille spinner, on the theme's clock. */
 function useSpinner() {
@@ -215,6 +215,3 @@ export async function inkSelect(message, options) {
   const { chosen, cancelled } = bus.get()
   return cancelled ? null : chosen
 }
-
-/** Shared with the string renderer so both agree on when a row starts showing its age. */
-export { IDLE_MS }

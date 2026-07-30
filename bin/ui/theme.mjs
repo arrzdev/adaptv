@@ -120,8 +120,9 @@ export const OWN_PHASES = new Set([
  */
 export const PHASE_DWELL_MS = 700
 
-/** Silence after which a live row falls back to its present-tense idle label. */
-export const IDLE_MS = 1200
+//NO idle-fallback constant here, and none wanted. A row used to drop back to a per-lane label
+//after this long without output; it read as the build restarting — `building app → compiling →
+//building app`. A row now holds its last phase, and silence changes nothing.
 
 /** How long an HMR flash stays on the watch row before it settles back to the keys. */
 export const HMR_FLASH_MS = 900

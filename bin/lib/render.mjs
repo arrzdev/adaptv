@@ -15,7 +15,6 @@ import {
   OWN_PHASES,
   PHASE_DWELL_MS as THEME_DWELL_MS,
   FRAMES as THEME_FRAMES,
-  IDLE_MS as THEME_IDLE_MS,
 } from "../ui/theme.mjs"
 import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
 
@@ -166,9 +165,6 @@ const elapsed = (start, offset = 0) => {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
-/** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
- *  native build streams nothing, so past this the last finished phase is stale. */
-const IDLE_MS = THEME_IDLE_MS
 // A phase must hold the line this long before another may replace it.
 //
 // The native toolchains change phase several times a second — an iOS build rewrote the live
@@ -902,27 +898,28 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const stripLen = (s) => s.replace(ANSI, "").length
 
 /* -----------------------------------------------------------------------------
- * anchoring — what a row says when the tool stops talking
+ * a row only ever moves FORWARD
  *
- * A native build is loud in bursts and silent in between: xcodebuild names a dozen phases in
- * two seconds, then links for thirty saying nothing. Freezing on the last thing it happened to
- * shout is wrong (the row claims `processing resources` long after that finished), so a lane
- * falls back to an ANCHOR once its stream has been quiet for `IDLE_MS`.
+ * A row shows the last phase that was reported, and silence changes nothing. There is no idle
+ * fallback, and that is the whole rule: a phase is shown once, and the row never returns to one
+ * it has left.
  *
- * The anchor used to be a constant per lane — `idle: "building app"` — and a constant cannot be
- * right for a whole run. `dev` showed it twice for one build: once in the pause before
- * xcodebuild speaks, once in the silent install at the end, with the actual build phases in
- * between. The second was a plain lie; the app was being installed, not built.
+ * There used to be a fallback. A native build is loud in bursts and silent in between, so after
+ * `IDLE_MS` of quiet the row dropped back to a per-lane `idle` label to avoid freezing on a
+ * stale tool line. It read as the build restarting:
  *
- * So the anchor MOVES. `idle` seeds it, and every phase adaptv announces about ITSELF — the
- * `OWN_PHASES` set — becomes the new anchor. Tool lines refine the row; adaptv's own phases say
- * which STAGE the row is in, and that is exactly what a quiet row should fall back to:
+ *     building app → compiling → building app → processing resources → building app
  *
- *     syncing → installing dependencies → (quiet) syncing
- *     building app → compiling → processing resources → (quiet) building app
- *     launching device → (quiet) launching device
+ * Making the fallback label track the current stage instead of a constant fixed the case where
+ * it was an outright lie (`building app` during the install) and did nothing about this, which
+ * is the actual complaint: going back to a phase you have already shown says work is being
+ * redone. A frozen `linking` is not misleading — the spinner is what says the row is alive, and
+ * the last thing the tool said is the most specific true statement available.
  *
- * One vocabulary, always in the present, and the fallback can no longer contradict the stage.
+ *     syncing → installing dependencies → building app → compiling → launching device
+ *
+ * Staying honest is then the CALLER's job: announce a phase when the work actually changes, and
+ * the row narrates it. See the note on `cap run` in `launchOne`.
  * -------------------------------------------------------------------------- */
 
 /**
@@ -942,28 +939,16 @@ const stripLen = (s) => s.replace(ANSI, "").length
 export async function runLine(
   label,
   fn,
-  {
-    verbose = false,
-    idle = "",
-    transient = false,
-    offsetMs = 0,
-    explain,
-  } = {},
+  { verbose = false, transient = false, offsetMs = 0, explain } = {},
 ) {
   const start = Date.now()
   let detail = "" // what the row currently SHOWS (updated at most once per dwell)
   let pending = "" // the newest phase the stream has reported
   let shownAt = 0
-  let lastAt = start // when the live detail last changed — drives the idle fallback
-  //What the row falls back to when the tool's stream goes quiet. It MOVES: `idle` only seeds
-  //it, and every phase adaptv announces itself takes over from there. See `anchoring`.
-  let anchor = idle
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
-    if (OWN_PHASES.has(pretty)) anchor = pretty
     pending = pretty
-    lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
     //Paint the FIRST phase the moment it is announced, rather than waiting for the next
     //timer tick. The tick may never come: the launch and reload paths are `spawnSync` all
@@ -1034,14 +1019,7 @@ export async function runLine(
   const tickPhase = () => {
     const now = Date.now()
     tick(now)
-    block.phase(
-      label,
-      !detail
-        ? "preparing"
-        : anchor && now - lastAt > IDLE_MS
-          ? anchor
-          : detail,
-    )
+    block.phase(label, detail || "preparing")
   }
   tickPhase()
   const timer = setInterval(tickPhase, 80)
@@ -1105,8 +1083,6 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     start: Date.now(),
     pending: "", // newest phase reported (promoted to `detail` once per dwell)
     shownAt: 0,
-    lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
-    idle: l.idle ?? "", // the SEED anchor; every own-phase reported replaces it (see `anchoring`)
     offsetMs: l.offsetMs ?? 0, // work done for this lane before it had a line (scaffolding)
     time: "",
     reason: "", // inline failure cause, shown on this lane's own ✖ line
@@ -1120,9 +1096,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     const report = (line) => {
       const pretty = prettyLine(line)
       if (!pretty) return
-      if (OWN_PHASES.has(pretty)) state[i].idle = pretty
       state[i].pending = pretty
-      state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
       //Paint the lane's FIRST phase at once — see the same note in `runLine`. The launch and
       //reload paths are `spawnSync` throughout, so the draw timer cannot fire while they run
@@ -1208,14 +1182,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       if (s.status !== "run") continue
       //Same dwell as runLine — a lane samples its stream rather than following it.
       Object.assign(s, nextPhase(s, now))
-      block.phase(
-        s.label,
-        !s.detail
-          ? "preparing"
-          : s.idle && now - s.lastAt > IDLE_MS
-            ? s.idle
-            : s.detail,
-      )
+      block.phase(s.label, s.detail || "preparing")
     }
   }
   repaint = tickAll
