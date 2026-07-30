@@ -24,6 +24,7 @@ import {
   useDrawerEngineContext,
 } from "#adaptv/components/drawer/drawer-engine"
 import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -111,22 +112,33 @@ export type DrawerNestedRootProps = DrawerRootProps
  * through `className` from the app wrapper and win via twMerge.
  * ============================================================================= */
 
+//LOCKED: a dim layer that does not span the viewport is not a dim layer.
+const DRAWER_OVERLAY_LOCKED_CLASS = "inset-0"
 //will-change keeps the full-screen dim promoted while mounted, so it doesn't demote and
 //repaint at every fade end (that repaint stacked with the panel's settle re-raster)
-const DRAWER_OVERLAY_BASE_CLASS =
-  "inset-0 bg-black/40 will-change-[opacity]"
+const DRAWER_OVERLAY_BASE_CLASS = "bg-black/40 will-change-[opacity]"
+//LOCKED: the sheet is translated along Y by the engine and spans the viewport
+//width; `inset-x-0` is the geometry the drag maths and the max-height cap assume.
+//`flex flex-col` is what makes the handle / scroller / footer stack a stack — the
+//scroller's `min-h-0` only means anything inside a flex column.
+const DRAWER_PANEL_LOCKED_CLASS = "inset-x-0 flex flex-col"
 const DRAWER_PANEL_BASE_CLASS =
-  "inset-x-0 flex flex-col rounded-t-xl bg-white shadow-lg outline-none"
+  "rounded-t-xl bg-white shadow-lg outline-none"
 const DRAWER_HANDLE_REGION_CLASS =
   "flex shrink-0 flex-col items-center pt-3 pb-2"
 const DRAWER_GRABBER_BASE_CLASS =
   "mx-auto h-1 w-12 shrink-0 rounded-full bg-gray-600"
-//contain scopes content invalidations (e.g. the keyboard scroll spacer) to the scroller,
-//keeping them off the panel's animated layer; the scroller already clips, so paint
-//containment changes nothing visually
-const DRAWER_SCROLLER_CLASS =
-  "flex min-h-0 flex-col overflow-y-auto overscroll-y-none contain-[layout_paint_style]"
-const DRAWER_FOOTER_BASE_CLASS = "flex shrink-0 flex-col"
+//LOCKED: `overflow-y-auto` + `min-h-0` ARE the drawer's scroll model — the panel is
+//height-capped and this is the only element allowed to scroll inside it, which the
+//drag engine relies on when it decides whether a downward gesture is a scroll or a
+//dismiss. `overscroll-y-none` is what stops a fling at the end chaining to the page
+//behind the sheet. `contain` scopes content invalidations (e.g. the keyboard scroll
+//spacer) to the scroller, keeping them off the panel's animated layer; the scroller
+//already clips, so paint containment changes nothing visually.
+const DRAWER_SCROLLER_LOCKED_CLASS =
+  "min-h-0 overflow-y-auto overscroll-y-none"
+const DRAWER_SCROLLER_BASE_CLASS =
+  "flex flex-col contain-[layout_paint_style]"
 
 //scroll-edge affordance: fade the scroller edge that hides more content. A CSS
 //mask (not gradient overlays) so Tier-1 stays color-agnostic — the fade reveals
@@ -233,6 +245,7 @@ function useDrawerActions() {
 
 function DrawerOverlay({
   className,
+  style,
   onTap,
   onClick,
   onPointerDown,
@@ -261,21 +274,33 @@ function DrawerOverlay({
       data-state={engine.backdropState}
       data-animate="false"
       data-dragging="false"
-      style={{
-        ["--pwa-drawer-overlay-duration" as string]: `${engine.overlayDuration}s`,
-        animationDuration: `${engine.overlayDuration}s`,
-      }}
-      className={cn(
-        engine.backdropPosition,
-        engine.backdropZ,
-        DRAWER_OVERLAY_BASE_CLASS,
-        //The overlay only renders while the drawer is mounted (open, opening, or closing), so
-        //it always intercepts taps — even while invisible mid-close. Keying pointer-events off
-        //`open` let a tap during the close animation fall through to the trigger and reopen
-        //(the open/close flash). A backdrop tap while closing is harmless: onBackdropClick ->
-        //requestClose no-ops when already closing.
+      //LOCKED (classes): the engine owns where the backdrop sits and what it sits
+      //above. `fixed inset-0` is what makes it cover the app at all, and the
+      //z-index is what puts it under the panel and over everything else — a
+      //consumer's `z-0` would leave the dim layer behind the content it dims.
+      //LOCKED (inline): the fade duration is read back off this element by the
+      //engine's close timing, so the two must not disagree. Colour and the layer
+      //hint are base — restyling the dim is the normal thing to want.
+      //
+      //The overlay only renders while the drawer is mounted (open, opening, or closing), so
+      //it always intercepts taps — even while invisible mid-close. Keying pointer-events off
+      //`open` let a tap during the close animation fall through to the trigger and reopen
+      //(the open/close flash). A backdrop tap while closing is harmless: onBackdropClick ->
+      //requestClose no-ops when already closing.
+      {...mergeStyles({
+        base: DRAWER_OVERLAY_BASE_CLASS,
         className,
-      )}
+        locked: [
+          engine.backdropPosition,
+          engine.backdropZ,
+          DRAWER_OVERLAY_LOCKED_CLASS,
+        ],
+        style,
+        lockedStyle: {
+          ["--pwa-drawer-overlay-duration" as string]: `${engine.overlayDuration}s`,
+          animationDuration: `${engine.overlayDuration}s`,
+        },
+      })}
       onPointerDown={(event) => {
         onPointerDown?.(event)
         pointerStartedOnBackdrop.current = true
@@ -297,6 +322,7 @@ DrawerOverlay.displayName = "Drawer.Overlay"
 function DrawerContent({
   children,
   className,
+  style,
   shell = true,
   scrollClassName,
   ...props
@@ -361,16 +387,27 @@ function DrawerContent({
       aria-hidden={!engine.open}
       data-pwa-drawer=""
       data-open={engine.open}
-      style={engine.panelStyle}
-      className={cn(
-        engine.panelPosition,
-        engine.panelZ,
-        DRAWER_PANEL_BASE_CLASS,
+      //LOCKED (inline): `engine.panelStyle` carries the sheet's live transform,
+      //height cap and keyboard lift — values the drag engine rewrites per frame.
+      //A consumer inline `transform` there would not lose to a precedence rule, it
+      //would lose to a RACE (`styles.ts` limit 2), so keeping it above the consumer
+      //tier at least makes the outcome the one adaptv declared. Look stays base.
+      {...mergeStyles({
+        base: DRAWER_PANEL_BASE_CLASS,
         className,
-      )}
+        locked: [
+          engine.panelPosition,
+          engine.panelZ,
+          DRAWER_PANEL_LOCKED_CLASS,
+        ],
+        style,
+        lockedStyle: engine.panelStyle,
+      })}
     >
       <div ref={engine.contentRef} className={engine.contentLayoutClass}>
         <div
+          //internal region, no consumer className channel — `cn` is the right tool
+          //here precisely because there are no tiers to arbitrate
           className={cn(
             DRAWER_HANDLE_REGION_CLASS,
             !engine.isDragDisabled &&
@@ -388,12 +425,20 @@ function DrawerContent({
         <div
           ref={engine.scrollerRef}
           onScroll={syncEdgeFade}
-          className={cn(DRAWER_SCROLLER_CLASS, scrollClassName)}
-          style={{
-            transition: engine.contentPaddingTransition,
-            maskImage: edgeFadeMask,
-            WebkitMaskImage: edgeFadeMask,
-          }}
+          //LOCKED (inline): the mask IS the scroll-edge affordance and it is
+          //recomputed from live scroll position; the transition is the engine's
+          //keyboard-lift timing. `scrollClassName` is a paint channel and takes no
+          //`style` of its own, so the tier here only ever holds adaptv's values.
+          {...mergeStyles({
+            base: DRAWER_SCROLLER_BASE_CLASS,
+            className: scrollClassName,
+            locked: DRAWER_SCROLLER_LOCKED_CLASS,
+            lockedStyle: {
+              transition: engine.contentPaddingTransition,
+              maskImage: edgeFadeMask,
+              WebkitMaskImage: edgeFadeMask,
+            },
+          })}
         >
           {body}
           {engine.keyboardScrollSpace > 0 && (
@@ -433,7 +478,13 @@ function DrawerTrigger({
     <button
       type={type}
       data-drawer-trigger
-      className={className}
+      //a trigger is a plain <button> adaptv attaches `show()` to — no neutral look
+      //and nothing structural, so both tiers are undefined by decision (§2)
+      className={mergeStyles({
+        base: undefined,
+        className,
+        locked: undefined,
+      })}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -447,7 +498,17 @@ DrawerTrigger.displayName = "Drawer.Trigger"
 
 function DrawerShell({ className, children, ...props }: DrawerShellProps) {
   return (
-    <div className={cn(DRAWER_SHELL_LAYOUT_CLASS, className)} {...props}>
+    //LOCKED: the shell is the flex column the scroller's `min-h-0` cap is measured
+    //inside — flatten it and a tall body pushes the panel past its max height
+    //instead of scrolling. Everything else about it is the consumer's.
+    <div
+      className={mergeStyles({
+        base: undefined,
+        className,
+        locked: DRAWER_SHELL_LAYOUT_CLASS,
+      })}
+      {...props}
+    >
       {children}
     </div>
   )
@@ -466,7 +527,13 @@ function DrawerDragHandle({
   return (
     <span
       aria-hidden
-      className={cn(DRAWER_GRABBER_BASE_CLASS, className)}
+      //a grabber is pure decoration — the drag lives on the region around it, so
+      //there is nothing here a className could break
+      className={mergeStyles({
+        base: DRAWER_GRABBER_BASE_CLASS,
+        className,
+        locked: undefined,
+      })}
       {...props}
     />
   )
@@ -486,7 +553,17 @@ function DrawerFooter({
   ...props
 }: DrawerFooterProps) {
   return (
-    <div className={cn(DRAWER_FOOTER_BASE_CLASS, className)} {...props}>
+    //`shrink-0` is the footer's whole job — it is the sibling BELOW the scroller
+    //that must stay visible when the panel hits its height cap. Locked for that,
+    //base for the column direction.
+    <div
+      className={mergeStyles({
+        base: "flex flex-col",
+        className,
+        locked: "shrink-0",
+      })}
+      {...props}
+    >
       {children}
     </div>
   )
@@ -504,7 +581,13 @@ function DrawerClose({
   return (
     <button
       type={type}
-      className={className}
+      //a plain <button> adaptv attaches `hide()` to — no neutral look, nothing
+      //structural. Both tiers named so the omission stays a decision (§2).
+      className={mergeStyles({
+        base: undefined,
+        className,
+        locked: undefined,
+      })}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -517,7 +600,17 @@ function DrawerClose({
 DrawerClose.displayName = "Drawer.Close"
 
 function DrawerTitle({ className, ...props }: DrawerTitleProps) {
-  return <h2 className={className} {...props} />
+  //heading text: nothing neutral to offer, nothing structural to protect
+  return (
+    <h2
+      className={mergeStyles({
+        base: undefined,
+        className,
+        locked: undefined,
+      })}
+      {...props}
+    />
+  )
 }
 DrawerTitle.displayName = "Drawer.Title"
 
@@ -525,7 +618,17 @@ function DrawerDescription({
   className,
   ...props
 }: DrawerDescriptionProps) {
-  return <p className={className} {...props} />
+  //body text: nothing neutral to offer, nothing structural to protect
+  return (
+    <p
+      className={mergeStyles({
+        base: undefined,
+        className,
+        locked: undefined,
+      })}
+      {...props}
+    />
+  )
 }
 DrawerDescription.displayName = "Drawer.Description"
 

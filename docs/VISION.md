@@ -74,6 +74,64 @@ beat on developer joy and correctness, not to copy.
    feedback are *on by default* and *right per platform*; every one is overridable.
 9. **Lean on the ecosystem.** Wrap TanStack Virtual, `motion`, TanStack Router, Dexie — don't
    re-implement solved problems. adaptv is the *cross-platform correctness layer*, not a NIH museum.
+10. **Layout shift is a named enemy.** Content that moves after it is painted is the single loudest
+    tell that an app is a web page. adaptv spends whatever is within its reach — abstractions,
+    platform quirks, build-time work — to remove it, bounded only by what would ruin the developer
+    experience. → §2.1.
+
+---
+
+## 2.1 🔒 Layout shift — the named enemy
+
+Decided **2026-07-29**. Principle 10 gets its own section because it is the one principle that
+routinely *loses* to a plausible-sounding shortcut, and the shortcut has to be recognisable.
+
+**Why this and not "performance" generally.** Jank is a frame-rate problem and users forgive it;
+a button that moves out from under a thumb mid-tap is a correctness problem and they don't. It is
+also the failure mode that native apps structurally do not have — a native list reserves its cell
+height before it draws — so every instance of it is adaptv failing at the thing adaptv exists for.
+
+### The test a mitigation must pass
+
+> **A mitigation that removes the shift in one case and fails silently in the others is worse than
+> none, because it manufactures false confidence.**
+
+The worked example, and the reason this section exists. Every primitive briefly shipped
+`border border-transparent` in its `base` layer, so that
+`className={selected ? "border-orange-500" : ""}` would swap a colour rather than add a width.
+It was reverted the same day:
+
+- It cancels the shift for a border of **exactly 1px**. A consumer writing `border-2` shifts anyway,
+  and nothing tells them.
+- It permanently and **invisibly** costs 2px of content box on every instance, because
+  `box-sizing: border-box` is Tailwind's preflight default — so a control specified at 40px silently
+  stops matching its design.
+- It trades a conditional problem for a constant one.
+
+The correct primitive for toggled emphasis is **`outline`**: it never participates in layout at any
+width, and it follows `border-radius` in every engine adaptv targets. Same answer as the focus ring
+(`STYLING.md` §D), which is not a coincidence — `outline` exists precisely for decoration that must
+not move anything.
+
+### What this licenses
+
+Because the enemy is named, these are **doctrine, not taste** — they are forced and abstracted, and
+`ui: {}` does not get a knob for them (the alternative is not a different look, it is a broken one):
+
+| Mechanism | What it prevents |
+|---|---|
+| `Image` reserving its box from `width`/`height` before the bytes arrive | the canonical CLS source |
+| Build-time low-resolution placeholders for statically-imported images | a placeholder that is itself a shift when it swaps |
+| `AvoidKeyboard` publishing `--adaptv-keyboard-height` rather than resizing | the keyboard reflowing the page under the caret |
+| Safe-area insets resolved pre-paint (`var()`-before-`env()`, `crbug/40699457`) | chrome jumping once the real insets arrive |
+| `--adaptv-keyboard-height` and the inset vars being **always defined** (`0px` at rest) | a `calc()` that collapses because a variable was absent |
+| `List` virtualisation measuring rows rather than assuming them | rows resizing as they scroll into view |
+
+### What it does not license
+
+Principle 3 still holds: **guardrails teach, they never mutate.** adaptv does not rewrite the
+consumer's markup to insert size attributes, and it does not silently wrap their elements. The lever
+is the primitive and the build step, never their tree.
 
 ---
 
@@ -222,7 +280,7 @@ two answers, and a route nested one level deeper silently gets a different one. 
 inferred from position in the DOM. → `ARCHITECTURE.md §1`
 
 ### `Button` — real press physics
-Wraps the gesture engine (exists: `useGestureEngine`, `pressed:` variant). Press feedback that survives finger re-entry, optional haptic, disabled states, keyboard-activatable.
+Wraps the gesture engine (exists: `useGestureEngine`, and the patched `active:` variant). Press feedback that survives finger re-entry, optional haptic, disabled states, keyboard-activatable.
 
 ```tsx
 <Button onPress={createTask} haptic="light" className="bg-primary text-white">
@@ -230,7 +288,7 @@ Wraps the gesture engine (exists: `useGestureEngine`, `pressed:` variant). Press
 </Button>
 
 <Button variant="ghost" onPress={undo} disabled={!canUndo} />
-// press → data-pressed (JS-driven, not :active) → pressed:scale-95; haptic fires on pointerup (native/web).
+// press → data-pressed (JS-driven, not :active) → active:scale-95; haptic fires on pointerup (native/web).
 ```
 
 ### `List` — optimized cross-platform lists

@@ -119,7 +119,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 
 ### 9. Network status
 - **How:** `src/capabilities/network.ts` — `@capacitor/network` (accurate) on native, `navigator.onLine`
-  + online/offline events on web. `useNetworkStatus` reads it via `useSyncExternalStore`.
+  + online/offline events on web. `useIsOffline` reads it via `useSyncExternalStore`.
 - **Test:** airplane-mode toggles the value; native reflects real reachability, web the coarse signal.
 
 ### 10. Memory history when installed

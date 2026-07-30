@@ -119,8 +119,9 @@ kEffectHasNonReplaceCompositeMode = 1 << 4,
 ```
 
 **Using any composite mode other than `replace` silently disables compositor acceleration.** You get
-free blending and lose the GPU. On low-end Android — the exact device class adaptv's `gpuBoost`
-sentinel exists for — that is the wrong trade.
+free blending and lose the GPU. On low-end Android that is the wrong trade — and note there is no
+runtime safety net: the `gpuBoost` sentinel that once claimed that role was deleted as counter-
+productive (`PERFORMANCE-BOOST.md`), so a composite mode other than `replace` is simply a cost.
 
 `iterationComposite` is worse: **Chrome has never shipped it** ([crbug 41133485](https://crbug.com/41133485)),
 Baseline limited, zero developer signal. Treat as nonexistent.
