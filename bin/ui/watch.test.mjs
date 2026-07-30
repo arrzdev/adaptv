@@ -35,6 +35,30 @@ afterEach(() => {
   restore = null
 })
 
+/*
+ * Wait for Ink to STOP writing, rather than sleeping a guessed number of milliseconds.
+ *
+ * Ink renders asynchronously, so a fixed wait is a bet on how loaded the machine is. At
+ * 120ms these passed on a laptop and failed on CI, where the last frame had not been
+ * written yet — so `clearNotice()` looked like it had not cleared, which reads as a
+ * cursor-arithmetic bug in the very code these tests exist to pin. Settling on "no new
+ * frame for two ticks" asserts the same thing without the bet.
+ */
+async function settled(fake, deadlineMs = 3000) {
+  const stop = Date.now() + deadlineMs
+  let seen = -1
+  let quiet = 0
+  while (Date.now() < stop) {
+    await new Promise((r) => setTimeout(r, 20))
+    if (fake.frames.length === seen) {
+      if (++quiet >= 2 && seen > 0) return
+    } else {
+      seen = fake.frames.length
+      quiet = 0
+    }
+  }
+}
+
 /** Mount the block, drive it, and return the final screen as trimmed lines. */
 async function screen(drive, columns = 100) {
   const fake = new FakeStdout(columns)
@@ -47,7 +71,7 @@ async function screen(drive, columns = 100) {
   //`keys: false` — no raw-mode stdin to set up, and the keys row is asserted separately.
   const w = inkWatcher({ keys: false })
   drive(w)
-  await new Promise((r) => setTimeout(r, 120))
+  await settled(fake)
   const last = fake.frames.at(-1) ?? ""
   w.stop()
   restore()
@@ -128,7 +152,7 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     restore = () => Object.defineProperty(process, "stdout", real)
     const w = inkWatcher({ keys: false })
     w.notice("config change")
-    await new Promise((r) => setTimeout(r, 120))
+    await settled(fake)
     const before = fake.frames.length
     w.stop()
     restore()
