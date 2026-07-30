@@ -1006,9 +1006,7 @@ function injectAndroidPluginProjects(
   ]) {
     const dir = resolvePkgDir(name)
     if (!dir) {
-      report?.(
-        `! plugin ${name} not found, skipped (did you install it?)`,
-      )
+      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
       continue
     }
     // `capacitor.android.src` is where the plugin keeps its Gradle module; a package
