@@ -15,6 +15,7 @@
 // `src/`), so there is no build step to compile it. `h` is `createElement`.
 import { Box, render, Text, useApp, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
+import { eraseRegion } from "./live.mjs"
 import { FRAME_MS, FRAMES, GLYPH, HMR_FLASH_MS, ROLE } from "./theme.mjs"
 
 /** The braille spinner, on the theme's own clock. */
@@ -179,12 +180,11 @@ export function inkWatcher({
     hmr: (files) => push({ changed: files }),
     notice: (text) => push({ notice: text }),
     clearNotice: () => push({ notice: null }),
-    stop: () => {
-      app.unmount()
-      //`unmount` leaves the last frame on screen; clear it so the block is erased as a whole,
-      //exactly as the string renderer's `stop()` does.
-      app.clear?.()
-    },
+    //Erase-then-unmount, and the order is the whole bug — see `eraseRegion`. This block is
+    //ALSO what `rewindLines` counts back from: `r`/`b` walk the cursor up over the blank
+    //separator and one row per platform so the settled platform lines animate again in place.
+    //Leaving this block on screen made every one of those rewinds land short.
+    stop: () => eraseRegion(app),
     /** Await this before exiting the process, so Ink can restore the terminal. */
     done: () => app.waitUntilExit(),
   }

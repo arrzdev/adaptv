@@ -119,6 +119,16 @@ not printed at all.
   as a thing rather than an activity, and it sits wrong beside `compiling` and `processing
   resources` on the very same row. The test: it has to finish the sentence *"right now adaptv
   is …"*.
+- **Announce what STARTS, not what it ends in.** `cap run` builds for twenty seconds, installs,
+  then launches — so the phase before it is `building app`, and `launching device` waits until
+  the build has actually finished. Naming the last step first made the row read `launching
+  device` through the whole compile.
+- **A quiet row falls back to its STAGE, not to a constant.** Native tools are loud in bursts
+  and silent in between, so a row that has heard nothing for `IDLE_MS` shows an anchor instead
+  of freezing on the last thing the tool shouted. The anchor is the most recent phase adaptv
+  announced about itself (`OWN_PHASES`), so it moves with the run: `syncing` → `installing
+  dependencies` → *(quiet)* `syncing`. A fixed anchor cannot be right for a whole run — one
+  showed `building app` twice for a single build, the second time during the install.
 - **Never print an absolute path.** App-root-relative only.
 - **Never name adaptv's own plumbing.** Its base Capacitor plugins, its shim, its temp dirs.
   Name only what the dev caused.

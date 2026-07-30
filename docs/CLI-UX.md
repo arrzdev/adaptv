@@ -834,6 +834,45 @@ its own `vite preview` inside the build to crawl the routes. So: build, build, *
 > preview server and a build alike, with what to do underneath — the dev-server copy used to
 > offer `-- --port <n>`, advice that cannot work when the busy port is a plugin's pinned one.
 
+**R47 — Take a live region down with ERASE, then unmount. Never the other way round.** Ink keeps
+its last frame on screen when it unmounts, by design — right for a UI that IS the output, wrong
+for every region adaptv mounts, all of which are transient. After unmounting there is nothing
+left to clear, so the region survives and whatever prints next lands underneath it. The order
+was got wrong twice, in two components, and the two failures looked nothing alike:
+> ```
+>   ⠴ web  preparing
+>   ✓ web  · 6.4s
+>   ⠙ ios  launching device
+>   ✓ ios  iPhone 16 Pro (simulator) · cached · 419ms
+> ```
+> In `liveRows` the spinner rows stayed and every step appeared twice. In the watch block
+> nothing looked wrong at all — the surviving block silently pushed the screen down by its own
+> height, and `rewindLines` (which counts back a FIXED number of rows so `r`/`b` redraw the
+> platform lines in place) landed that many rows short and rebuilt underneath its own history:
+> ```
+>   ✓ ios  iPhone 16 Pro (simulator) · cached · 366ms
+>   ✓ ios  iPhone 16 Pro (simulator) · reloaded · 369ms
+>   ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+>   ✓ android  Pixel 10 (emulator) · 6.1s
+> ```
+> One `eraseRegion(app)` in `bin/ui/live.mjs`, used by every region, so there is one place to be
+> right. Any cursor arithmetic elsewhere on the page depends on it.
+
+**R48 — A live row's idle fallback is its current STAGE, not a fixed label.** A row that has
+heard nothing from its tool for `IDLE_MS` must not freeze on the last thing the tool shouted —
+`processing resources` is a lie once linking starts. It falls back to the last phase adaptv
+announced about ITSELF (`OWN_PHASES`), which moves as the run moves. A constant cannot be right
+for a whole run: `dev` seeded `idle: "building app"` and showed it twice for one build —
+> ```
+>   ⠴ ios  building app        ← the pause before xcodebuild speaks
+>   ⠴ ios  compiling
+>   ⠴ ios  processing resources
+>   ⠴ ios  building app        ← the silent install. The app was NOT being built.
+> ```
+> The other half is announcing the right thing to begin with: `cap run` builds, installs, then
+> launches, and `report("launching device")` before it named the last step first, so the row
+> claimed to be launching through twenty seconds of compiling. Say what starts.
+
 ## 5. Before you ship a CLI change
 
 Tests do not cover any of this. Run it and read it:

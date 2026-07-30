@@ -106,4 +106,40 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     const rows = await screen((w) => w.notice("config change"), 40)
     for (const r of rows) expect(r.length).toBeLessThanOrEqual(40)
   })
+
+  it("ERASES itself on stop, so `rewindLines` counts from the right row", async () => {
+    //The bug: `stop()` unmounted and THEN cleared, and after unmounting there is nothing
+    //left to clear — Ink keeps its last frame on screen by design. The block survived, which
+    //pushed everything below it down by its own height, and `r`/`b` walk the cursor back a
+    //FIXED number of rows (the blank separator + one per platform) to redraw the platform
+    //lines in place. Landing short, they rebuilt underneath their own history:
+    //
+    //    ✓ ios  iPhone 16 Pro (simulator) · cached · 366ms
+    //    ✓ ios  iPhone 16 Pro (simulator) · reloaded · 369ms
+    //    ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+    //
+    //Two rows, so a one-row clear would also pass — the notice makes the height matter.
+    const fake = new FakeStdout(100)
+    const real = Object.getOwnPropertyDescriptor(process, "stdout")
+    Object.defineProperty(process, "stdout", {
+      value: fake,
+      configurable: true,
+    })
+    restore = () => Object.defineProperty(process, "stdout", real)
+    const w = inkWatcher({ keys: false })
+    w.notice("config change")
+    await new Promise((r) => setTimeout(r, 120))
+    const before = fake.frames.length
+    w.stop()
+    restore()
+    restore = null
+    //Everything written from `stop()` onwards. Nothing may re-state the block.
+    const after = fake.frames.slice(before).join("")
+    expect(after).not.toContain("config change")
+    expect(after).not.toContain("ctrl-c")
+    //And it must actually erase: two rows up, not one.
+    const esc = String.fromCharCode(27)
+    expect(after).toContain(`${esc}[2K`)
+    expect(after).toContain(`${esc}[1A`)
+  })
 })

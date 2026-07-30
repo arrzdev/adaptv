@@ -1046,8 +1046,17 @@ async function runLive(appRoot, platforms, opts) {
           target.id,
           env,
         )
-        report("launching device")
+        // `cap run` BUILDS, then installs, then launches — the build is all but one second
+        // of it. Announcing `launching device` here said the last step first: the row read
+        // `launching device` for twenty seconds of compiling, and `building app` (the lane's
+        // idle label, shown whenever the tool's stream goes quiet) surfaced twice around it —
+        // once in the pause before xcodebuild speaks, once in the silent install at the end.
+        // Same words, two different meanings, in the wrong order. Say what starts.
+        report("building app")
         await capRun(appRoot, platform, target.id, env, { report })
+        // The build is done; from here it really is the device's turn. Every branch below
+        // installs, relaunches or fronts the app, so the phase covers all of them.
+        report("launching device")
         if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
@@ -1572,7 +1581,9 @@ async function pipeline(kind, appRoot, platforms, opts) {
       done[platform] = `launched on ${target.name}`
       return `${target.name} · cached`
     }
-    report("launching device")
+    // Say what starts, not what it ends in — `cap run` is a build first and a launch last.
+    // See the same note on `dev`'s launch path.
+    report("building app")
     // `cap run` installs + activates, but only FOREGROUNDS an already-running app — its old
     // WebView (e.g. the dev offline screen) would stay. Restart it after the build so the
     // freshly-installed bundle is what's shown.
@@ -1583,6 +1594,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
       env,
     )
     await capRun(appRoot, platform, target.id, env, { report })
+    report("launching device")
     if (wasRunning) {
       await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,

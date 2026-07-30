@@ -40,6 +40,31 @@ function useBus(bus) {
   return state
 }
 
+/**
+ * Take a transient Ink region off the screen: ERASE it, then unmount — in that order.
+ *
+ * Ink deliberately leaves its last frame on screen when it unmounts. That is right for a UI
+ * that IS the output and wrong for every region here, all of which are transient: the caller
+ * prints the settled text afterwards, into the space the region gave back. Unmounting first
+ * leaves nothing to clear, so the region stays and whatever comes next lands underneath it.
+ *
+ * Shared rather than written per component because it was got wrong twice, independently, and
+ * the two failures looked nothing like each other. In `liveRows` the spinner rows survived and
+ * every step appeared twice. In the watch block the surviving rows silently shifted the screen
+ * down, so `rewindLines` — which counts back a fixed number of rows to redraw the platform
+ * lines in place — landed that many rows too low and rebuilt underneath its own history:
+ *
+ *     ✓ ios  iPhone 16 Pro (simulator) · cached · 366ms
+ *     ✓ ios  iPhone 16 Pro (simulator) · reloaded · 369ms
+ *     ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+ *
+ * One function, so there is one place to be right.
+ */
+export function eraseRegion(app) {
+  app.clear?.()
+  app.unmount?.()
+}
+
 /** A minimal store the command side pushes into and the components read. */
 export function makeBus(initial) {
   let state = initial
@@ -122,15 +147,7 @@ export function liveRows(labels) {
             : r,
         ),
       })),
-    stop: () => {
-      //CLEAR, then unmount — in that order, and it matters. Ink deliberately leaves its last
-      //frame on screen when it unmounts, which is right for a UI that IS the output and wrong
-      //for a transient block: the spinner rows stayed and the settled rows printed underneath
-      //them, so every step appeared twice. Reported as success creating new lines instead of
-      //replacing the ones that were thinking.
-      app.clear()
-      app.unmount()
-    },
+    stop: () => eraseRegion(app),
   }
 }
 
@@ -192,7 +209,9 @@ export async function inkSelect(message, options) {
     exitOnCtrlC: false,
   })
   await app.waitUntilExit()
-  app.clear?.()
+  //`waitUntilExit` already unmounted, so this is only the erase — but it goes through the
+  //shared helper anyway, so there is no second opinion about what taking a region down means.
+  eraseRegion(app)
   const { chosen, cancelled } = bus.get()
   return cancelled ? null : chosen
 }

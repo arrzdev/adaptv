@@ -901,6 +901,30 @@ const settled = (left, time) =>
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const stripLen = (s) => s.replace(ANSI, "").length
 
+/* -----------------------------------------------------------------------------
+ * anchoring — what a row says when the tool stops talking
+ *
+ * A native build is loud in bursts and silent in between: xcodebuild names a dozen phases in
+ * two seconds, then links for thirty saying nothing. Freezing on the last thing it happened to
+ * shout is wrong (the row claims `processing resources` long after that finished), so a lane
+ * falls back to an ANCHOR once its stream has been quiet for `IDLE_MS`.
+ *
+ * The anchor used to be a constant per lane — `idle: "building app"` — and a constant cannot be
+ * right for a whole run. `dev` showed it twice for one build: once in the pause before
+ * xcodebuild speaks, once in the silent install at the end, with the actual build phases in
+ * between. The second was a plain lie; the app was being installed, not built.
+ *
+ * So the anchor MOVES. `idle` seeds it, and every phase adaptv announces about ITSELF — the
+ * `OWN_PHASES` set — becomes the new anchor. Tool lines refine the row; adaptv's own phases say
+ * which STAGE the row is in, and that is exactly what a quiet row should fall back to:
+ *
+ *     syncing → installing dependencies → (quiet) syncing
+ *     building app → compiling → processing resources → (quiet) building app
+ *     launching device → (quiet) launching device
+ *
+ * One vocabulary, always in the present, and the fallback can no longer contradict the stage.
+ * -------------------------------------------------------------------------- */
+
 /**
  * Run one step as a single spinner line. `fn(report)` does the work; `report(line)`
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
@@ -931,9 +955,13 @@ export async function runLine(
   let pending = "" // the newest phase the stream has reported
   let shownAt = 0
   let lastAt = start // when the live detail last changed — drives the idle fallback
+  //What the row falls back to when the tool's stream goes quiet. It MOVES: `idle` only seeds
+  //it, and every phase adaptv announces itself takes over from there. See `anchoring`.
+  let anchor = idle
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
+    if (OWN_PHASES.has(pretty)) anchor = pretty
     pending = pretty
     lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
@@ -1010,8 +1038,8 @@ export async function runLine(
       label,
       !detail
         ? "preparing"
-        : idle && now - lastAt > IDLE_MS
-          ? idle
+        : anchor && now - lastAt > IDLE_MS
+          ? anchor
           : detail,
     )
   }
@@ -1078,7 +1106,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     pending: "", // newest phase reported (promoted to `detail` once per dwell)
     shownAt: 0,
     lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
-    idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
+    idle: l.idle ?? "", // the SEED anchor; every own-phase reported replaces it (see `anchoring`)
     offsetMs: l.offsetMs ?? 0, // work done for this lane before it had a line (scaffolding)
     time: "",
     reason: "", // inline failure cause, shown on this lane's own ✖ line
@@ -1092,6 +1120,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     const report = (line) => {
       const pretty = prettyLine(line)
       if (!pretty) return
+      if (OWN_PHASES.has(pretty)) state[i].idle = pretty
       state[i].pending = pretty
       state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
