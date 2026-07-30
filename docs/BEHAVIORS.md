@@ -45,6 +45,10 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   - Policy: React splash renders only when **installed**; a browser tab gets no splash unless
     `splashScreenInBrowser`. Gated by the critical-CSS splash gate keyed on the platform stamp.
   - The React splash **self-unmounts** (returns `null` when ready) — `RoutingShell` just mounts it.
+  - **…except on a not-found, where `RoutingShell` retires it.** A not-found boundary (root, since
+    `notFoundMode: "root"`) short-circuits the outlet, so no layout route mounts and the app's ready
+    signal — which lives in one — can never fire. adaptv mounts the splash, so adaptv takes it down; the
+    decision is latched, so navigating back out of a 404 doesn't replay it. → `DECISIONS.md` B28.
   - Native mask is **colour-driven**, not an image: Android launch theme + `colors.xml` /
     `colors-night.xml`; iOS `AdaptvSplash` colour asset + a solid launch storyboard. Mascot lives *only*
     in the React splash → appears once.
@@ -59,6 +63,9 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   colour → app (mascot once). Toggle the app to dark on a light device → the mask is dark next launch,
   and vice-versa. Browser tab (1–3): page loads instantly, no splash. (iOS storyboard's *first* pre-app
   frame follows the device for adaptive masks — a single-frame OS limit; a fixed mask has no such frame.)
+  Cold-start installed straight into a URL that does not exist: the 404 is up and **tappable**, with no
+  `[data-adaptv-splash]` left in the DOM (query the count, not visibility — on web a leftover splash is
+  `display: none` and still covering).
 
 ### 4. Keyboard avoidance + hybrid drawer (the autofocus race)
 - **Problem:** opening a drawer with an `autoFocus` field — the async `Keyboard.addListener` lost the

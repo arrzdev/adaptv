@@ -112,7 +112,9 @@ no hydration mismatch, no flash.
 `splashScreenInBrowser` (in `adaptv.config.ts`, default `false`) is the only knob. The gate:
 `html[data-adaptv-platform="web"] [data-adaptv-splash]{display:none!important}` (omitted entirely when
 `splashScreenInBrowser`). The React splash **self-dismisses by returning `null`** when ready (no `hide`
-prop) — `RoutingShell` just mounts it.
+prop) — `RoutingShell` just mounts it. **One exception:** on a not-found the app's ready signal can never
+fire (the boundary skips the layout route it lives in), so `RoutingShell` stops mounting the splash itself
+— latched, so navigating back out of a 404 doesn't replay it. → `DECISIONS.md` B28.
 
 **The OS launch splash is a flat MASK colour** (`launchAutoHide: false` holds it until the app hands off;
 `RoutingShell` calls `hideNativeSplash()` after first paint) that fades into the React splash — the mascot
