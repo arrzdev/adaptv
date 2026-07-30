@@ -130,12 +130,6 @@ describe("commands and surfaces", () => {
     expect(run(["preview", "all", "--target", "x"]).fault).toBe("conflict")
   })
 
-  it("still points 'run' at what replaced it", () => {
-    const r = run(["run", "android"])
-    expect(r.fault).toBe("retired-command")
-    expect(r.suggestion).toBe("adaptv dev android")
-  })
-
   it("rejects a stray extra argument", () => {
     expect(run(["dev", "ios", "extra"]).fault).toBe("excess-args")
   })
@@ -144,12 +138,12 @@ describe("commands and surfaces", () => {
     expect(run(["icons"]).fault).toBe("missing-flag")
   })
 
-  it("sends the old 'gen icons' to 'icons' instead of calling it unknown", () => {
-    //It was renamed because the namespace bought nothing and cost a command that could not be
-    //run: `adaptv gen` answered "unknown command 'gen', did you mean 'gen'?".
+  it("treats a renamed command as simply unknown", () => {
+    //`gen icons` became `icons`, and there is no migration message: nothing has ever been
+    //published, so no install anywhere carries the old spelling.
     const r = run(["gen", "icons", "--input", "x.png"])
-    expect(r.fault).toBe("retired-command")
-    expect(r.suggestion).toBe("adaptv icons --input x.png")
+    expect(r.fault).toBe("unknown-command")
+    expect(r.token).toBe("gen")
   })
 })
 

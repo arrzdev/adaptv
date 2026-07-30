@@ -152,9 +152,6 @@ export function renderFault(fault) {
         [`'${SPEC.name} --help' lists every command`],
       )
 
-    case "retired-command":
-      return usageFail(`${fault.reason}. Try '${fault.suggestion}'`)
-
     case "unknown-flag":
       return usageFail(
         `unknown flag '${fault.token}'${where}${didYouMean(fault.suggestions)}`,

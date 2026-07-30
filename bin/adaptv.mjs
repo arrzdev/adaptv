@@ -184,7 +184,7 @@ async function loadConfig(appRoot) {
  * there is still checked before the server comes up, because the same values reach the
  * manifest and the shell.
  *
- * `icons: false` skips the `!` half. `gen icons` passes it because a notice about the icon set
+ * `icons: false` skips the `!` half. `icons` passes it because a notice about the icon set
  * is stale the moment that command finishes — replacing the set is its whole job. A mid-run
  * `b` passes it because those notices were already printed above the run and are about source
  * art, not about whether this rebuild can happen; reprinting them on every `b` would be R18.
@@ -2088,7 +2088,7 @@ async function previewWeb(appRoot, opts) {
 }
 
 /* =============================================================================
- * gen icons
+ * icons
  * ============================================================================= */
 
 /**
@@ -2126,7 +2126,7 @@ async function genIcons(appRoot, _positional, flags) {
   const { resolveIconSet, manifestIcons } =
     await loadAdaptvModule("vite/icon-set.ts")
   //Resolved with NO adaptv fallback: this command is about the dev's own directory, and
-  //`gen icons` writing into it is exactly what makes the fallback stop applying.
+  //`icons` writing into it is exactly what makes the fallback stop applying.
   const configured = resolveIconSet(appRoot, config, [])
 
   // WHERE the set goes, and never by guessing: files landing in a directory the dev never
@@ -2233,7 +2233,7 @@ async function genIcons(appRoot, _positional, flags) {
     ...tuning.warnings,
   ])
 
-  // The overwrite gate. `gen icons` REPLACES the directory's art, so a dev pointing it at a
+  // The overwrite gate. `icons` REPLACES the directory's art, so a dev pointing it at a
   // hand-tuned set has to say so — but only when there is something to lose (R4: an empty or
   // absent directory asks nothing).
   //Counted with `existingIcons`, not `set.icons`: the set is only art adaptv can RANK, while

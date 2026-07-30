@@ -159,13 +159,10 @@ export function parse(argv) {
   const { cmd, rest } = matchCommand(head)
   if (!cmd) {
     const token = head[0]
-    const retired = SPEC.retired.find((r) => r.path[0] === token)
-    if (retired)
-      throw new CliFault("retired-command", {
-        token,
-        reason: retired.reason,
-        suggestion: retired.suggest(head.slice(1)),
-      })
+    //No migration path for a renamed command, deliberately. adaptv has never been published
+    //(`private: true`, no tag, nothing on npm), so there is no install anywhere carrying the
+    //old spelling — a `retired` table would be back-compat ceremony for a consumer that does
+    //not exist. Add one with the first release, not before.
     throw new CliFault("unknown-command", {
       token,
       suggestions: suggest(token, commandNames()),

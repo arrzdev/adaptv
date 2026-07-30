@@ -86,12 +86,12 @@ adaptv preview ios|android|all         # build SPA → sync → install → laun
 adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
 adaptv icons --input <image>       # the whole icon set — web + native — from one image
 
-# gen icons
+# icons
 #   --input <image>    png or svg, 1024px+ — the only thing you normally pass
 #   --output <dir>     where to write. Defaults to `icons` in adaptv.config.ts; with
 #                      neither set, adaptv refuses rather than guessing a directory
 #   --yes              skip the "replace them?" prompt (required with no TTY)
-# gen icons — iOS 18 appearances (derived from --input unless you override)
+# icons — iOS 18 appearances (derived from --input unless you override)
 #   --dark <image>     the dark-mode icon: your mark with NO background, since iOS draws
 #                      its own near-black one
 #   --tinted <image>   the tinted icon: greyscale on black. In "Tinted" home-screen mode
@@ -105,7 +105,7 @@ adaptv icons --input <image>       # the whole icon set — web + native — fro
 # own when even that loses it: a DARK mark needs INVERTING for both (black art on a black
 # backdrop is nothing), and a mark whose internal colours share a luminance loses its
 # structure. adaptv measures the mark and says which of the two you need.
-# gen icons — Android themed icons (derived from --input unless you override)
+# icons — Android themed icons (derived from --input unless you override)
 #   --monochrome <image>
 #                      the themed-icon layer. On Android 13+ the home screen recolours every
 #                      icon to match the wallpaper: the launcher takes this layer's ALPHA,
@@ -115,7 +115,7 @@ adaptv icons --input <image>       # the whole icon set — web + native — fro
 #                      contrast kept where the mark has any, a flat silhouette where it
 #                      hasn't — so a black wordmark themes correctly instead of vanishing.
 #                      Supply your own to draw the simplified one-ink version yourself
-# gen icons — tuning (you shouldn't need these)
+# icons — tuning (you shouldn't need these)
 #   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
 #                      safe ring on Android, the tile itself on iOS and the favicons.
 #                      adaptv warns below the default and above 30

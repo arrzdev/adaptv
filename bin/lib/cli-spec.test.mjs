@@ -75,10 +75,6 @@ describe("suggest — offer a correction only when it is probably right", () => 
     expect(suggest("frobnicate", commandNames())).toEqual([])
   })
 
-  it("never offers a retired command as a correction", () => {
-    expect(suggest("run", commandNames())).toEqual([])
-  })
-
   it("returns at most two, best first", () => {
     const out = suggest("--forcx", [
       "--force",

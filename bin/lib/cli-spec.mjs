@@ -328,24 +328,6 @@ export const SPEC = {
    * Commands that used to exist. Kept as data so the message is one entry rather than an arm
    * of the dispatch switch, and so `suggest()` never proposes them as a correction.
    */
-  retired: [
-    {
-      path: ["gen"],
-      //WHY it moved belongs here, not in the error: there was only ever one thing to generate,
-      //so the namespace bought nothing and cost a command that could not be run — `adaptv gen`
-      //answered "unknown command 'gen', did you mean 'gen'?". The dev needs the new name.
-      reason: "'gen icons' was renamed",
-      suggest: (rest) =>
-        `adaptv icons${rest.slice(1).length ? ` ${rest.slice(1).join(" ")}` : ""}`,
-    },
-    {
-      path: ["run"],
-      reason:
-        "'run' was split into 'dev' and 'preview'. Live reload is dev; a static build you install is preview",
-      suggest: (rest) =>
-        `adaptv dev ${rest[0] && rest[0] !== "web" ? rest[0] : "ios"}`,
-    },
-  ],
 }
 
 /* =============================================================================

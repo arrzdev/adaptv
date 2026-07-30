@@ -906,10 +906,16 @@ phase — because the roles carried `{ ink: "cyan" }` and the components spread 
 > Two faults in one line. `commandNames()` returns `path[0]`, so the two-word `gen icons`
 > contributed the candidate `gen` and `suggest()` matched it at distance 0. And `gen` was a
 > namespace the dev could type but not run, which is a command that exists only to fail.
-> `gen icons` is now **`adaptv icons`** — there was only ever one thing to generate, so the
-> namespace bought nothing — with a `retired` entry so the old form migrates:
-> `'gen icons' was renamed. Try 'adaptv icons --input ./mark.png'`. `suggest()` also drops an
-> exact match outright, so the next two-word command cannot bring it back.
+> `gen icons` is now **`adaptv icons`**: there was only ever one thing to generate, so the
+> namespace bought nothing. `suggest()` also drops an exact match outright, so the next
+> two-word command cannot bring the suggestion bug back.
+>
+> It first shipped with a `retired` table that answered `'gen icons' was renamed. Try 'adaptv
+> icons'`. That came straight back out. **adaptv has never been published** — `private: true`,
+> no tag, nothing on npm — so no install anywhere carries the old spelling, and the migration
+> path was ceremony for a consumer who does not exist. Write one with the first release. Until
+> then a renamed command is simply unknown, and the rule generalises: back-compat machinery
+> before there is anything to be compatible with is dead code that reads as caution.
 
 **R51 — `where` is a TRAILING clause. It cannot open a sentence.** `renderFault` builds
 `where = " for 'dev'"` for the tail of a did-you-mean, and two branches used it as the subject:
