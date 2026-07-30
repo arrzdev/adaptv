@@ -66,13 +66,13 @@ export function makeBus(initial) {
  * -------------------------------------------------------------------------- */
 
 /**
- * `⠴ ios  compiling · 1m04s`
+ * `⠴ ios  compiling`
  *
- * `flexShrink` on the phase and `flexShrink: 0` on the elapsed time is what used to be the
- * `keep` argument of `compose()` — the hand-written rule that the time is the last thing to be
- * clipped. Here it is just layout: the terminal narrows, the phase gives way, the time does not.
+ * NO running clock. A live row says what is happening; how long it took is the SETTLED row's
+ * business (`✓ ios  iPhone 16 Pro · 20.0s`). A number ticking in place is motion that carries
+ * no new information — the spinner already says "alive" — and it made a calm page restless.
  */
-function Row({ label, phase, elapsed }) {
+function Row({ label, phase }) {
   const frame = useSpinner()
   return h(
     Box,
@@ -84,9 +84,6 @@ function Row({ label, phase, elapsed }) {
       { flexShrink: 1, overflow: "hidden" },
       h(Text, { ...ROLE.quiet, wrap: "truncate-end" }, phase),
     ),
-    elapsed
-      ? h(Box, { flexShrink: 0 }, h(Text, { ...ROLE.quiet }, elapsed))
-      : null,
   )
 }
 
@@ -97,12 +94,7 @@ function Rows({ bus }) {
     Box,
     { flexDirection: "column", marginLeft: 2 },
     ...rows.map((r) =>
-      h(Row, {
-        key: r.label,
-        label: r.label,
-        phase: r.phase,
-        elapsed: r.elapsed,
-      }),
+      h(Row, { key: r.label, label: r.label, phase: r.phase }),
     ),
   )
 }
@@ -115,14 +107,9 @@ function Rows({ bus }) {
  * rows itself, afterwards, with ordinary writes — Ink is only ever mounted while something is
  * moving.
  */
-export function liveRows(labels, { started = Date.now() } = {}) {
+export function liveRows(labels) {
   const bus = makeBus({
-    rows: labels.map((label) => ({
-      label,
-      phase: "preparing",
-      elapsed: "",
-      start: started,
-    })),
+    rows: labels.map((label) => ({ label, phase: "preparing" })),
   })
   const app = render(h(Rows, { bus }), { patchConsole: false })
   return {
@@ -135,18 +122,14 @@ export function liveRows(labels, { started = Date.now() } = {}) {
             : r,
         ),
       })),
-    /** Set one row's elapsed suffix (the caller decides when it is worth showing). */
-    elapsed: (label, text) =>
-      bus.set((s) => ({
-        rows: s.rows.map((r) =>
-          r.label === label && r.elapsed !== text
-            ? { ...r, elapsed: text }
-            : r,
-        ),
-      })),
     stop: () => {
+      //CLEAR, then unmount — in that order, and it matters. Ink deliberately leaves its last
+      //frame on screen when it unmounts, which is right for a UI that IS the output and wrong
+      //for a transient block: the spinner rows stayed and the settled rows printed underneath
+      //them, so every step appeared twice. Reported as success creating new lines instead of
+      //replacing the ones that were thinking.
+      app.clear()
       app.unmount()
-      app.clear?.()
     },
   }
 }

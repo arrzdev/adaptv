@@ -111,6 +111,9 @@ not printed at all.
 - **A phase says what is happening, never what it is happening TO.** `compiling`, never
   `compiling · CapacitorSplashScreen`. The vocabulary is closed (`CLI-UX.md` R24) — map a new
   tool verb into it rather than inventing a phrase.
+- **A live row never counts.** The spinner already says "alive"; a number ticking in place is
+  motion carrying no new information, and it makes a calm page restless. How long it took is
+  the SETTLED row's business — `✓ ios  iPhone 16 Pro · 20.0s`, once, when it is a fact.
 - **A phase is a present participle, always.** `syncing`, `creating package`, `launching
   device` — never `sync`, `package`, `launch`. A bare noun reads as a command being issued, or
   as a thing rather than an activity, and it sits wrong beside `compiling` and `processing
@@ -131,7 +134,7 @@ in the command.
 |---|---|---|---|
 | **banner** `header()` | `adaptv · dev ios` | once, at the top of a command | twice; or above a command that then refuses to run |
 | **notice** `flushNotices()` | `! no 'icons' in adaptv.config.ts` | something the dev may want to act on, known BEFORE the run | a fact adaptv already handled |
-| **live row** `runLine()` | `⠴ web  compiling` | one unit of work with a name | naming a target, task or pod |
+| **live row** `runLine()` | `⠴ web  compiling` | one unit of work with a name | naming a target, task or pod; showing a running clock |
 | **lanes** `runLanes()` | one row per platform, concurrent | `all` runs — and single ones too | a different shape for one platform vs two |
 | **settled row** | `✓ ios  iPhone 16 Pro · 20.0s` | the outcome of a live row | a second line restating it |
 | **failure** `fail()` | `✖ ios  · <reason>` + dim detail | a step that failed | a second `✖` for the same failure |

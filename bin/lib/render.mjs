@@ -11,7 +11,6 @@
 //   - --verbose→ the raw underlying tool output is streamed through instead
 import {
   DEFAULT_COLUMNS,
-  ELAPSED_AFTER_MS,
   GLYPH,
   OWN_PHASES,
   PHASE_DWELL_MS as THEME_DWELL_MS,
@@ -888,23 +887,6 @@ function compose(glyph, label, right, keep = "") {
   return `  ${glyph} ${label}${detail ? `  ${c.dim(detail)}` : ""}`
 }
 
-/**
- * How long a LIVE row has been running, once that has become a question worth answering.
- *
- * Under the threshold it is absent, so a step that takes two seconds does not gain a jittering
- * number. Past it the row grows ` · 1m04s`, which is the only evidence the dev has that a
- * four-minute iOS build is alive at all: the phase is sampled and can legitimately hold the
- * same word for a minute, and `IDLE_MS` can freeze it on a present-tense label for longer.
- *
- * It rides in `compose`'s `keep` slot, so it is the part that never gets clipped — same
- * reasoning as a settled row's time (R25). It is metadata, not a phase: R24 governs the phase
- * vocabulary, and the `·` already separates a row from what is measured about it.
- */
-const liveElapsed = (start, offset = 0) =>
-  Date.now() - start + offset >= ELAPSED_AFTER_MS
-    ? ` · ${elapsed(start, offset)}`
-    : ""
-
 /** A settled line's right-hand side, split so `compose` never clips the time away. */
 // The elapsed time always arrives as `· 2.0s` — the `·` separates a row from its metadata
 // (R25), and that reading shouldn't depend on whether the row happens to carry a detail.
@@ -1019,7 +1001,7 @@ export async function runLine(
   //that the elapsed time is the last thing to be clipped, all by hand. Ink owns the frame and
   //the layout; this loop only decides WHAT the row should say.
   const { liveRows } = await import("../ui/live.mjs")
-  const block = liveRows([label], { started: start })
+  const block = liveRows([label])
   repaint = () => {}
   const tickPhase = () => {
     const now = Date.now()
@@ -1032,7 +1014,6 @@ export async function runLine(
           ? idle
           : detail,
     )
-    block.elapsed(label, liveElapsed(start, offsetMs))
   }
   tickPhase()
   const timer = setInterval(tickPhase, 80)
@@ -1206,7 +1187,6 @@ export async function runLanes(lanes, { verbose = false } = {}) {
             ? s.idle
             : s.detail,
       )
-      block.elapsed(s.label, liveElapsed(s.start, s.offsetMs))
     }
   }
   repaint = tickAll

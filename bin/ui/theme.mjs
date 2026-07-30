@@ -126,8 +126,9 @@ export const IDLE_MS = 1200
 /** How long an HMR flash stays on the watch row before it settles back to the keys. */
 export const HMR_FLASH_MS = 900
 
-/** A row runs longer than this before it starts showing how long it has been running. */
-export const ELAPSED_AFTER_MS = 10_000
+//NO live elapsed constant here on purpose. A running clock on a live row was tried and
+//removed: the spinner already says the row is alive, and a number ticking in place is motion
+//with no information in it. The duration is stated once, on the settled row.
 
 /* -----------------------------------------------------------------------------
  * layout rules with a number in them
