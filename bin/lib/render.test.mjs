@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { OWN_PHASES } from "../ui/theme.mjs"
 import {
   check,
   fail,
@@ -14,17 +15,26 @@ import {
 //lint/suspicious/noControlCharactersInRegex.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 
-/** Capture what the CLI actually wrote, minus colour. */
+/**
+ * Capture what the CLI actually wrote, minus colour — from BOTH streams.
+ *
+ * Failures go to stderr and everything else to stdout, so a helper watching only stdout would
+ * see a `✖` block as silence. These tests are about what the dev READS, and the dev reads both.
+ */
 function captureOut(fn) {
   const lines = []
-  const spy = vi.spyOn(process.stdout, "write").mockImplementation((s) => {
+  const take = (s) => {
     lines.push(String(s).replace(ANSI, "").trimEnd())
     return true
-  })
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
   try {
     fn()
   } finally {
-    spy.mockRestore()
+    for (const s of spies) s.mockRestore()
   }
   return lines
 }
@@ -182,6 +192,44 @@ describe("nextPhase — the live line samples the stream, it does not follow it"
 })
 
 describe("prettyLine — the vocabulary is closed (R24)", () => {
+  //A live row shows either a phase adaptv CHOSE or a build-tool line mapped into one. Both
+  //went through the same filter, and the filter is tuned for the second kind — so "drop a
+  //lone verb", which is right for gradle, silently ate `sync`, `package` and `packaging`.
+  //The row then sat on `preparing` for the whole of `cap sync`.
+  it.each([
+    "syncing",
+    "packaging",
+    "launching device",
+    "reloading device",
+    "linking server",
+    "building app",
+    "starting server",
+  ])("lets adaptv's own phase '%s' through untouched", (phase) => {
+    expect(prettyLine(phase)).toBe(phase)
+  })
+
+  it("keeps the metadata on a phase that carries some", () => {
+    expect(prettyLine("syncing · cached")).toBe("syncing · cached")
+  })
+
+  it("has no bare-noun phase left anywhere in the vocabulary (R45)", () => {
+    //Every phase must finish "right now adaptv is …". `sync` and `package` did not, and they
+    //sat on the same row as `compiling`.
+    for (const p of OWN_PHASES) {
+      const head = p.split(" ")[0]
+      expect(
+        head.endsWith("ing"),
+        `'${p}' is not a present participle`,
+      ).toBe(true)
+    }
+  })
+
+  it("still drops a lone verb a TOOL printed", () => {
+    //The rule this exception is carved out of, and it has to keep working.
+    expect(prettyLine("running")).toBe("")
+    expect(prettyLine("building")).toBe("")
+  })
+
   it("drops a bundle listing", () => {
     //Reached the live line during every web build: a filename, a hash and two sizes.
     expect(

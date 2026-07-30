@@ -37,7 +37,8 @@ stays silent. Anything only doing the work can reveal still belongs to the step 
 
 **Severity** — `!` means the dev may need to act; if adaptv already handled it, it's a dim note
 with no glyph. Don't announce what the next thing already says (no preamble before a picker).
-Errors are terse and name the fix (`missing \`appId\` in adaptv.config.ts`), not wrapped in
+Errors are terse and name the fix (`missing 'appId' in adaptv.config.ts` — keys, flags and
+commands are quoted with `'`, never a backtick, R43), not wrapped in
 step-failure scaffolding.
 
 **The engine** — `bin/lib/render.mjs` owns EVERY byte the CLI prints. Commands state intent
