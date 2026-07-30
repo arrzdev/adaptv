@@ -133,6 +133,21 @@ not printed at all.
   silence changes nothing. Never re-show a phase the row has left — `building app → compiling →
   building app` reads as the build restarting. A row that has gone quiet on `linking` is not
   misleading; the spinner is what says it is alive.
+- **A command's one-liner is an ACTION.** `run the app with live reload`, not `live reload —
+  one dev server, every surface attached`. The command list is scanned, not read, and it should
+  scan as a list of things you can do.
+- **Vary the construction.** Every command summary was `<noun phrase> — <expansion>`, five for
+  five. No single line was bad; the rhythm was, and uniformity is what makes copy read as
+  generated rather than written. An em-dash is fine where it earns its place — `--force: do the
+  work even when nothing changed — reinstall, rebuild, re-sync` introduces a list — but not as
+  the house connector.
+- **Explain a flag in the DEV's words, not ours.** `calm steps` is what our renderer calls its
+  own output; `slots` is an internal icon target; `one-ink` is print jargon; `your mark` is a
+  designer's word for an icon. Each was in a shipped flag description and meant nothing outside
+  this repo. `cli-spec.test.mjs` fails the build on all four.
+- **No marketing filler**, ever: `seamless`, `robust`, `powerful`, `simply`, `easily`,
+  `leverage`, `streamline`, `blazing`. There has never been any; the test is what keeps it so.
+  A CLI string is written for clarity and the next action, never to persuade.
 - **Never print an absolute path.** App-root-relative only.
 - **Never name adaptv's own plumbing.** Its base Capacitor plugins, its shim, its temp dirs.
   Name only what the dev caused.

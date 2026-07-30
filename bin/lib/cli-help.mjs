@@ -58,8 +58,10 @@ function overview() {
     { left: "-h, --help", right: "show help for a command" },
     { left: "-v, --version", right: "print the version and exit" },
   ])
+  //"explains that command's flags and what each is for" said one thing twice, and wrapped
+  //mid-phrase at 80 columns ("what each is / for.").
   paragraph(
-    `'${SPEC.name} <command> --help' explains that command's flags and what each is for.`,
+    `'${SPEC.name} <command> --help' explains every flag it takes.`,
   )
   spacer()
 }

@@ -203,11 +203,9 @@ export function since(start) {
 /** The command banner: `  adaptv  dev android`. */
 export function header(title) {
   //`adaptv · build ios` — the separator reads as one phrase where two spaces read as a
-  //gap the eye has to bridge.
-  out(
-    `\n  ${c.bold(c.magenta("adaptv"))} ${c.dim(`· ${title}`)}\n\n`,
-    "chrome",
-  )
+  //gap the eye has to bridge. No title on the root help page, which printed `adaptv · adaptv`.
+  const rest = title && title !== "adaptv" ? ` ${c.dim(`· ${title}`)}` : ""
+  out(`\n  ${c.bold(c.magenta("adaptv"))}${rest}\n\n`, "chrome")
 }
 
 export const log = {

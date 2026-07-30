@@ -58,7 +58,7 @@ const VERBOSE = {
   short: null,
   value: null,
   group: "advanced",
-  describe: "stream the raw underlying tool logs instead of calm steps",
+  describe: "stream the raw build output instead of the summarised steps",
 }
 
 const FORCE = {
@@ -75,7 +75,7 @@ const TARGET = {
   short: null,
   value: "<id>",
   group: "common",
-  describe: "launch on one specific device or simulator, by id",
+  describe: "launch on a specific device or simulator, by id",
 }
 
 const LATEST = {
@@ -98,7 +98,7 @@ const HOST = {
   value: null,
   group: "advanced",
   describe:
-    "serve on this machine's LAN address so a physical device can reach it — automatic when the target is a real device",
+    "serve on this machine's LAN address so a physical device can reach it. Automatic when the target is one",
 }
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
@@ -137,19 +137,17 @@ const SURFACES = ["web", "ios", "android", "all"]
 
 export const SPEC = {
   name: "adaptv",
-  tagline: "native lifecycle for an adaptv app",
+  tagline: "run, preview and ship your app on web, iOS and Android",
   commands: [
     {
       path: ["doctor"],
-      summary:
-        "check the local toolchain — JDK, Android SDK, Xcode, CocoaPods",
+      summary: "check your machine has what a native build needs",
       args: [],
       flags: [JSON_OUT, QUIET, VERBOSE],
     },
     {
       path: ["dev"],
-      summary:
-        "live reload — one dev server, every surface attached, hot-reloading on save",
+      summary: "run the app with live reload, on every surface at once",
       prose: [
         "Runs until Ctrl-C, then reverts everything it changed. Press r to reload the app's JavaScript, b to rebuild and reinstall the native app.",
       ],
@@ -182,8 +180,7 @@ export const SPEC = {
     },
     {
       path: ["preview"],
-      summary:
-        "the real build, run the way a user gets it — no live reload",
+      summary: "run the real build the way a user gets it, no live reload",
       args: [
         {
           name: "surface",
@@ -210,7 +207,8 @@ export const SPEC = {
     },
     {
       path: ["build"],
-      summary: "static artifacts — an unsigned .ipa and a debug .apk",
+      summary:
+        "write the artifacts you ship: an unsigned .ipa and a debug .apk",
       prose: [
         "Signing is the one thing adaptv can't do for you. For TestFlight or the App Store, open .adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.",
       ],
@@ -249,8 +247,7 @@ export const SPEC = {
     },
     {
       path: ["gen", "icons"],
-      summary:
-        "your whole icon set — manifest, favicons, native launcher icons — from one image",
+      summary: "generate every icon your app needs from a single image",
       prose: [
         "Written to the 'icons' directory named in adaptv.config.ts, or --output. That directory must be chosen: adaptv never guesses one to write into, and it REPLACES what is there, so it asks first unless you pass --yes.",
         "Every run also writes .adaptv/icons-preview.html — every icon under the mask its platform actually applies.",
@@ -282,24 +279,27 @@ export const SPEC = {
           group: "common",
           describe: "replace what is already there without asking",
         },
-        image("dark", "your mark inverted, for the iOS 18 dark-mode icon"),
+        image(
+          "dark",
+          "an inverted version, for the iOS 18 dark-mode icon",
+        ),
         image(
           "tinted",
-          "greyscale art for iOS to colour on a tinted home screen",
+          "a greyscale version, which iOS colours on a tinted home screen",
         ),
         image(
           "monochrome",
-          "a one-ink version for Android's themed icons",
+          "a single-colour version, for Android's themed icons",
         ),
         pct(
           "margin",
           50,
-          "room left inside every slot's limit (default 10; 0 fills it exactly)",
+          "space left around your art in every icon (default 10; 0 fills it edge to edge)",
         ),
         pct(
           "padding",
           40,
-          "extra inset applied to every icon, on top of --margin",
+          "extra space around your art, on top of --margin",
         ),
         {
           long: "background",
@@ -307,7 +307,7 @@ export const SPEC = {
           value: "<hex>",
           group: "advanced",
           describe:
-            "the colour flattened behind slots that cannot carry transparency",
+            "the colour behind your art where an icon cannot be transparent",
           parse: (raw) => {
             if (raw === true || !HEX.test(String(raw).trim()))
               throw new Error(

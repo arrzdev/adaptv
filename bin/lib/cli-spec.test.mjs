@@ -136,3 +136,47 @@ describe("orList", () => {
     expect(orList([])).toBe("")
   })
 })
+
+describe("the copy reads like a person wrote it", () => {
+  const summaries = SPEC.commands.map((c) => c.summary)
+  const describes = SPEC.commands.flatMap((c) =>
+    flagsFor(c).map((f) => f.describe),
+  )
+
+  it("keeps the em-dash out of the command list", () => {
+    //Not a ban on em-dashes — `--force` and `--json` earn theirs introducing a list. This is
+    //about the COMMAND LIST, which was five lines all built the same way:
+    //    doctor   check the local toolchain — JDK, Android SDK, Xcode, CocoaPods
+    //    dev      live reload — one dev server, every surface attached, hot-reloading on save
+    //    preview  the real build, run the way a user gets it — no live reload
+    //    build    static artifacts — an unsigned .ipa and a debug .apk
+    //    gen icons your whole icon set — manifest, favicons, … — from one image
+    //`<noun phrase> — <expansion>`, five times. No single line was bad; the rhythm was the
+    //tell, and a page you scan is where uniformity shows most.
+    for (const s of summaries) expect(s).not.toContain("—")
+  })
+
+  it("says what running the command DOES, so the list reads as actions", () => {
+    //Four of the five opened with a noun. A command is a verb; its one line should be too.
+    const VERB =
+      /^(check|run|write|generate|open|show|print|launch|build)\b/
+    for (const s of summaries) expect(s).toMatch(VERB)
+  })
+
+  it("uses no marketing filler", () => {
+    //Never had any, and this is what keeps it that way.
+    const SLOP =
+      /\b(seamless(ly)?|robust|powerful|effortless(ly)?|simply|easily|leverage|utilize|streamline|innovative|comprehensive|blazing|delightful|unlock|empower|elevate)\b/i
+    for (const s of [...summaries, ...describes, SPEC.tagline])
+      expect({ s }).toSatisfy(({ s: t }) => !SLOP.test(t))
+  })
+
+  it("explains a flag in the dev's words, not adaptv's", () => {
+    //Each of these was in a flag description and meant nothing outside this codebase:
+    //"calm steps" (what our own renderer prints), "slots" (an internal icon target),
+    //"one-ink" (print jargon), "your mark" (designer jargon).
+    const OURS = /\bcalm steps\b|\bslots?\b|\bone-ink\b|\byour mark\b/i
+    for (const d of describes)
+      expect({ d }).toSatisfy(({ d: t }) => !OURS.test(t))
+  })
+})
