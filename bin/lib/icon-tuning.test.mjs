@@ -21,7 +21,7 @@ describe("parseTuning — defaults are opinions a power user can take back", () 
   it("refuses only what cannot be used, and names the range", () => {
     const { errors } = parse({ margin: "90" })
     expect(errors).toEqual([
-      '`--margin` must be a percentage between 0 and 50 — got "90"',
+      `'--margin' must be a percentage between 0 and 50, got "90"`,
     ])
   })
 
@@ -51,7 +51,7 @@ describe("parseTuning — defaults are opinions a power user can take back", () 
 
     it("has its own sentence for zero, which is the one that can actually crop", () => {
       expect(parse({ margin: "0" }).warnings).toEqual([
-        "--margin 0 leaves no room — art sits flush to every edge",
+        "--margin 0 leaves no room, so art sits flush to every edge",
       ])
     })
 
