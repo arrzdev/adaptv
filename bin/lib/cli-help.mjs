@@ -82,8 +82,8 @@ function commandPage(cmd) {
     )
 
   //Two groups, because a flag nobody should need next to one everybody does makes both harder
-  //to find. `--host` is the worked example: correct by default, and only ever reached for when
-  //detection guessed wrong.
+  //to find. `--host` is the worked example: adaptv turns LAN mode on by itself the moment the
+  //target is a physical device, so the flag exists only to force it.
   const flags = flagsFor(cmd)
   const common = flags.filter((f) => f.group === "common")
   const advanced = flags.filter((f) => f.group !== "common")
@@ -216,11 +216,29 @@ export function renderFault(fault) {
         ],
       )
 
-    case "excess-args":
+    case "excess-args": {
+      //`where` is a TRAILING clause (" for 'dev'"), so it cannot also open the sentence —
+      //`where.trim()` here produced "for 'dev' does not take '192.168.1.5'". Name the command.
+      const cmd = fault.path?.length ? fault.path.join(" ") : SPEC.name
+      //`--host` stopped taking a value, and `--host <ip>` is exactly what muscle memory and
+      //any existing script will type. It arrives here as a stray operand, so a generic "does
+      //not take" would be true and useless — say what changed.
+      const strayIp = fault.received.find((a) =>
+        /^\d{1,3}(\.\d{1,3}){3}$/.test(a),
+      )
+      if (strayIp)
+        return usageFail(
+          `'${cmd}' does not take ${orList(fault.received)}`,
+          [
+            "'--host' takes no address — adaptv uses this machine's LAN address",
+            `drop the ip: '${SPEC.name} ${cmd} --host'`,
+          ],
+        )
       return usageFail(
-        `${where.trim() || SPEC.name} does not take ${orList(fault.received)}`,
+        `'${cmd}' does not take ${orList(fault.received)}`,
         synopsis(fault.path),
       )
+    }
 
     default:
       return usageFail(fault.message ?? String(fault))

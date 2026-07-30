@@ -194,7 +194,6 @@ export function parse(argv) {
       //wrapped in "option '--x <y>' argument 'z' is invalid. …", so the dev would read
       //commander's sentence with ours stapled to the end. This passes straight through.
       opt.argParser((raw) => f.parse(raw))
-    //`--host [ip]` with no value arrives as `true`; the spec's parser decides what that means.
     if (f.required) opt.makeOptionMandatory(true)
     program.addOption(opt)
   }

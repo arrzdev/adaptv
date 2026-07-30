@@ -131,7 +131,7 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 # dev / preview flags
 #   --target <id>   launch on a specific device/simulator id (skips the picker)
 #   --latest        reuse the last device you picked for this platform
-#   --host [ip]     (dev) serve on the LAN IP for a PHYSICAL device — auto when the target is
+#   --host          (dev) serve on this machine's LAN address for a PHYSICAL device — auto when the target is
 #                   a real device; pass an ip to pin it
 #   --force         reinstall even when nothing native changed (otherwise dev/preview skip the
 #                   rebuild and just relaunch the installed app)

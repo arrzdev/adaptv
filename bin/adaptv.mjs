@@ -800,7 +800,7 @@ async function runLive(appRoot, platforms, opts) {
     // --host, a physical --target, a cached physical (--latest), or a physical device sitting
     // in the picker's list. Over-binding when a simulator is ultimately picked is harmless
     // (localhost still works); a false negative would break a physical launch.
-    const forcedHost = opts.host // true | "<ip>" | undefined
+    const forcedHost = opts.host // true | undefined — '--host' takes no value
     let externalPossible = !!forcedHost
     if (!webOnly && !externalPossible) {
       for (const p of ready) {
@@ -941,13 +941,17 @@ async function runLive(appRoot, platforms, opts) {
     }
     let lanHost = null
     if (external) {
-      lanHost = typeof forcedHost === "string" ? forcedHost : lanIp()
-      if (!lanHost) {
+      //Always detected. `--host` used to accept an ip to pin the interface, which asked the
+      //dev to go and look up their own address for a machine adaptv is already running on.
+      //There is no override to fall back to now, so a failure here has to say what to CHECK
+      //rather than what to pass.
+      lanHost = lanIp()
+      if (!lanHost)
         throw new Error(
-          "couldn't detect a LAN IP for external mode — pass one explicitly: " +
-            "'adaptv dev … --host <ip>' (find it with 'ipconfig getifaddr en0').",
+          "no LAN address on this machine — a physical device has no route to the dev server. " +
+            "Connect to Wi-Fi or Ethernet (a VPN tunnel alone is not enough), or run on a " +
+            "simulator instead.",
         )
-      }
     }
     const port = devServer.port
     const url = external
@@ -2344,7 +2348,7 @@ async function main() {
         verbose: !!flags.verbose,
         force: !!flags.force,
         viteArgs: flags.viteArgs,
-        host: flags.host, // true | "<ip>" | undefined — external (LAN) mode
+        host: flags.host, // true | undefined — external (LAN) mode
       })
     }
 

@@ -86,24 +86,19 @@ const LATEST = {
   describe: "reuse the last device you picked for this platform",
 }
 
-//IPv4 only, and validated HERE rather than by consuming-the-next-token-if-it-looks-like-an-ip.
-//An optional-value flag otherwise eats whatever follows it, so `adaptv dev --host ios` would
-//swallow the surface and then complain that no surface was given.
+//TAKES NO VALUE. It used to accept an optional `[ip]` to pin the interface when detection
+//guessed wrong, and that was the wrong shape for the question: nobody wants to look up their
+//own LAN address to hand it back to the tool that is already standing on the machine. `lanIp()`
+//reads it from the interfaces, skipping loopback, link-local, VPN tunnels and container
+//bridges, and the run prints the URL the device will load — so a wrong guess is visible rather
+//than something you pre-empt by typing an address you had to go and find.
 const HOST = {
   long: "host",
   short: null,
-  value: "[ip]",
+  value: null,
   group: "advanced",
   describe:
-    "serve on your LAN ip so a physical device can reach it — automatic when the target is a real device; pass an ip to pin the interface when detection guesses wrong (VPN, several adapters)",
-  parse: (raw) => {
-    if (raw === true) return true
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(raw))
-      throw new Error(
-        `'--host' takes an ip address — got ${JSON.stringify(raw)}`,
-      )
-    return raw
-  },
+    "serve on this machine's LAN address so a physical device can reach it — automatic when the target is a real device",
 }
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i

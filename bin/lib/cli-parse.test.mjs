@@ -34,12 +34,25 @@ describe("what used to be accepted in silence", () => {
     expect(run(["dev", "--target=abc", "ios"]).flags.target).toBe("abc")
   })
 
-  it("refuses a --host that is not an ip, instead of eating the surface after it", () => {
-    //The regression this guards: an optional-value flag consumes the next token, so
-    //`--host ios` would take the surface and then complain there wasn't one.
+  it("takes no value, so '--host ios' means the ios surface in LAN mode", () => {
+    //`--host` used to accept an optional `[ip]`, and an optional-value flag consumes the next
+    //token — so this ate the surface and then complained there wasn't one. The flag stopped
+    //taking a value because nobody wants to look up their own LAN address for a tool already
+    //running on the machine; the shape reads naturally now as a side effect.
     const r = run(["dev", "--host", "ios"])
-    expect(r.fault).toBe("invalid-value")
-    expect(r.message).toContain("--host")
+    expect(r.fault).toBeUndefined()
+    expect(r.flags.host).toBe(true)
+    expect(r.path).toEqual(["dev"])
+    expect(r.rest).toEqual(["ios"])
+  })
+
+  it("rejects an ip after --host, and says the flag no longer takes one", () => {
+    //Muscle memory, and any script written against the old shape. The ip arrives as a stray
+    //operand, so a generic "does not take" would be true and useless.
+    //The fault carries the operand; the SENTENCE it turns into is `cli-help.test.mjs`'s.
+    const r = run(["dev", "ios", "--host", "192.168.1.5"])
+    expect(r.fault).toBe("excess-args")
+    expect(r.received).toEqual(["192.168.1.5"])
   })
 
   it("refuses a --background that is not a colour, which used to silently become white", () => {

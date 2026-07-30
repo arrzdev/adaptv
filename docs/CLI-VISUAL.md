@@ -195,8 +195,8 @@ four-character gutter is not a table, it is a column of syllables.
    come from that entry; there is nowhere else to register it.
 2. **Give every flag a real sentence.** `--force: force` teaches nothing. A test fails the
    build on a description shorter than 12 characters or equal to the flag's own name.
-3. **Decide `common` vs `advanced`.** Advanced means *correct by default, only reached for when
-   the default guessed wrong* — `--host` is the worked example.
+3. **Decide `common` vs `advanced`.** Advanced means *adaptv already does this by itself; the
+   flag only forces it* — `--host` is the worked example.
 4. **Validate values in the spec's `parse`**, not in the command. It runs before the banner,
    before the config is read, and before anything destructive happens.
 5. **Print through the primitives in §4.** If you reach for `process.stdout.write`, stop —
