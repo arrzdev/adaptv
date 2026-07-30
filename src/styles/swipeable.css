@@ -11,80 +11,85 @@
  * off-screen when closed — so nothing sits behind the content and the content
  * may be transparent. The block is translated, never scaled (scaling a hairline
  * shimmered on iOS WebKit).
+ *
+ * Layered in `adaptv.components` (STYLING.md §6) so a consumer can override any of it
+ * with an ordinary unlayered rule, at any specificity and with no `!important`.
  */
 
-[data-swipeable-root] {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
+@layer adaptv.components {
+  [data-swipeable-root] {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
 
-/*
- * Sliding surface — the caller's content. It bleeds 1px past each side (the root
- * clip hides the overflow) so it always overlaps the action/fill edge and no
- * sub-pixel hairline can show at the content/action seam. Content may be
- * transparent: the panels and the rubber-band fill park off-screen when closed,
- * so nothing is rendered behind it (a transparent card shows the root's bg, or
- * the page when the root has none).
- */
-[data-swipeable-content] {
-  position: relative;
-  z-index: 2;
-  width: calc(100% + 2px);
-  margin-inline: -1px;
-  min-height: 100%;
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-}
+  /*
+   * Sliding surface — the caller's content. It bleeds 1px past each side (the root
+   * clip hides the overflow) so it always overlaps the action/fill edge and no
+   * sub-pixel hairline can show at the content/action seam. Content may be
+   * transparent: the panels and the rubber-band fill park off-screen when closed,
+   * so nothing is rendered behind it (a transparent card shows the root's bg, or
+   * the page when the root has none).
+   */
+  [data-swipeable-content] {
+    position: relative;
+    z-index: 2;
+    width: calc(100% + 2px);
+    margin-inline: -1px;
+    min-height: 100%;
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 
-/* action panels — pinned to an edge, sized to their natural content width */
-[data-swipeable-actions] {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  align-items: stretch;
-  width: max-content;
-}
+  /* action panels — pinned to an edge, sized to their natural content width */
+  [data-swipeable-actions] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: stretch;
+    width: max-content;
+  }
 
-[data-swipeable-actions] > * {
-  min-height: 100%;
-}
+  [data-swipeable-actions] > * {
+    min-height: 100%;
+  }
 
-[data-swipeable-actions="left"] {
-  left: 0;
-  justify-content: flex-start;
-}
+  [data-swipeable-actions="left"] {
+    left: 0;
+    justify-content: flex-start;
+  }
 
-[data-swipeable-actions="right"] {
-  right: 0;
-  justify-content: flex-end;
-}
+  [data-swipeable-actions="right"] {
+    right: 0;
+    justify-content: flex-end;
+  }
 
-/*
- * Rubber-band fill — a block, as wide as its action panel, parked just past the
- * panel's OUTER edge (so it sits off-screen when the row is closed, never behind
- * the content). The engine translates it to track the content's trailing edge
- * (see swipeable.tsx applyOffset), so it rides in the gap between the content and
- * the parked panel during overshoot. Overshoot is clamped to half the panel
- * width, so the panel-width block always covers the gap. Coloured from the
- * content-adjacent action so it reads as the same surface. Translating a solid
- * block (not scaling a hairline) keeps it flicker-free.
- */
-[data-swipeable-fill] {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-  pointer-events: none;
-}
+  /*
+   * Rubber-band fill — a block, as wide as its action panel, parked just past the
+   * panel's OUTER edge (so it sits off-screen when the row is closed, never behind
+   * the content). The engine translates it to track the content's trailing edge
+   * (see swipeable.tsx applyOffset), so it rides in the gap between the content and
+   * the parked panel during overshoot. Overshoot is clamped to half the panel
+   * width, so the panel-width block always covers the gap. Coloured from the
+   * content-adjacent action so it reads as the same surface. Translating a solid
+   * block (not scaling a hairline) keeps it flicker-free.
+   */
+  [data-swipeable-fill] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+    pointer-events: none;
+  }
 
-[data-swipeable-fill="left"] {
-  right: 100%;
-}
+  [data-swipeable-fill="left"] {
+    right: 100%;
+  }
 
-[data-swipeable-fill="right"] {
-  left: 100%;
+  [data-swipeable-fill="right"] {
+    left: 100%;
+  }
 }

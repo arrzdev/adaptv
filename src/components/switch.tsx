@@ -17,9 +17,13 @@ import {
   useRef,
   useState,
 } from "react"
+import {
+  PRESS_TARGET_DISABLED_LOCKED_CLASS,
+  PRESS_TARGET_LOCKED_CLASS,
+} from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
-import { cn } from "#adaptv/utils/cn"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -103,12 +107,26 @@ export interface SwitchThumbProps {
  * CLASSES
  * ============================================================================= */
 
-const SWITCH_TRACK_LAYOUT_CLASS =
-  "relative inline-flex shrink-0 items-center"
+//LOCKED: `relative` is the positioning context the thumb's `absolute` + computed
+//`left` are measured against — drop it and the thumb flies to the nearest
+//positioned ancestor, usually the page.
+const SWITCH_TRACK_LOCKED_LAYOUT_CLASS = "relative"
+const SWITCH_TRACK_BASE_LAYOUT_CLASS = "inline-flex shrink-0 items-center"
+//⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
+//cancels the shift at exactly 1px and permanently shrinks the content box; use
+//`outline` for toggled emphasis instead.
 const SWITCH_TRACK_SURFACE_CLASS = "bg-gray-50"
-const SWITCH_TRACK_INTERACTION_CLASS = "clickable"
+//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
+const SWITCH_TRACK_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
+const SWITCH_TRACK_CURSOR_CLASS = "cursor-pointer"
+const SWITCH_TRACK_NON_INTERACTION_CLASS =
+  PRESS_TARGET_DISABLED_LOCKED_CLASS
+const SWITCH_TRACK_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 const SWITCH_INPUT_CHROMELESS_CLASS = "peer sr-only"
-const SWITCH_THUMB_LAYOUT_CLASS =
+//LOCKED: the thumb is decorative and sits over the track's hit area — taking
+//pointer events would swallow the tap the label's gesture engine needs. The
+//absolute placement + vertical centring are what the computed `left` assumes.
+const SWITCH_THUMB_LOCKED_LAYOUT_CLASS =
   "pointer-events-none absolute top-1/2 -translate-y-1/2 shrink-0"
 const SWITCH_THUMB_SURFACE_CLASS = "bg-gray-950"
 
@@ -231,16 +249,19 @@ function resolveSwitchThumbChild(children: ReactNode): ReactNode {
 function SwitchThumb({ className }: SwitchThumbProps) {
   const { isChecked, size } = useSwitch()
 
+  //`switchThumbStyle` is `lockedStyle`: its `left` is the ON/OFF POSITION, computed
+  //from the track width and the thumb size that the root's `size` prop derived. It
+  //is state, not look — a consumer pinning `left` inline would freeze the thumb on
+  //one side while the control kept toggling. Colour and shape stay `className`.
+  const thumb = mergeStyles({
+    base: SWITCH_THUMB_SURFACE_CLASS,
+    className,
+    locked: SWITCH_THUMB_LOCKED_LAYOUT_CLASS,
+    lockedStyle: switchThumbStyle(isChecked, size),
+  })
+
   return (
-    <span
-      aria-hidden
-      style={switchThumbStyle(isChecked, size)}
-      className={cn(
-        SWITCH_THUMB_LAYOUT_CLASS,
-        SWITCH_THUMB_SURFACE_CLASS,
-        className,
-      )}
-    />
+    <span aria-hidden style={thumb.style} className={thumb.className} />
   )
 }
 
@@ -344,14 +365,32 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
   return (
     <SwitchContext.Provider value={switchContext}>
       <label
+        data-adaptv="switch"
         htmlFor={resolvedInputId}
-        style={{ ...switchTrackStyle(size), ...style }}
-        className={cn(
-          SWITCH_TRACK_LAYOUT_CLASS,
-          SWITCH_TRACK_SURFACE_CLASS,
-          !isDisabled && SWITCH_TRACK_INTERACTION_CLASS,
+        //`switchTrackStyle` moves from "consumer wins" to LOCKED: the thumb's
+        //`left` is computed from this exact track width, so an inline `width` from
+        //the consumer resizes the track and leaves the thumb parked at the old
+        //offset. `size={n}` is the supported way to change it, and it moves both.
+        //`clickable` / `non-clickable` are locked for the press-core reason
+        //(WebKit 240917 + a disabled control must stay untappable).
+        {...mergeStyles({
+          base: [
+            SWITCH_TRACK_BASE_LAYOUT_CLASS,
+            SWITCH_TRACK_SURFACE_CLASS,
+            isDisabled
+              ? SWITCH_TRACK_DISABLED_CURSOR_CLASS
+              : SWITCH_TRACK_CURSOR_CLASS,
+          ],
           className,
-        )}
+          locked: [
+            SWITCH_TRACK_LOCKED_LAYOUT_CLASS,
+            isDisabled
+              ? SWITCH_TRACK_NON_INTERACTION_CLASS
+              : SWITCH_TRACK_INTERACTION_CLASS,
+          ],
+          style,
+          lockedStyle: switchTrackStyle(size),
+        })}
         {...gestureEngineHandlers}
         onPointerDown={(e: PointerEvent<HTMLLabelElement>) => {
           onPointerDownProp?.(

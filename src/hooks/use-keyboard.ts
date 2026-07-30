@@ -99,6 +99,50 @@ export function dismissVirtualKeyboard() {
   }
 }
 
+//---- Root publication ----------------
+
+/*
+ * The keyboard is a singleton, so its geometry belongs on `<html>` where any rule in
+ * the app can see it — global chrome (a tab bar that lifts, a docked toolbar) must be
+ * able to react without living inside an `<AvoidKeyboard>` subtree.
+ *
+ * `--adaptv-keyboard-height` (STYLING.md §4) is a measured scalar: continuous, and it
+ * has to compose inside `calc()`, which an attribute cannot. The resting `0px` is
+ * declared in styles/keyboard.css so the variable is ALWAYS defined and no call site
+ * needs a `, 0px` fallback; the inline value written here overrides it.
+ *
+ * `data-keyboard-open` is boolean-PRESENCE (§3.1) — present or absent, never
+ * `="false"` — so Tailwind v4's bare `data-keyboard-open:pb-4` works and
+ * `not-data-keyboard-open:` composes for the inverse.
+ *
+ * Refcounted, because more than one component may observe the keyboard at once and a
+ * DISABLED observer reports `{ isOpen: false, height: 0 }` — letting it publish would
+ * let it stamp "closed" over a live keyboard. Only enabled observers register, and the
+ * root is only reset once the last of them goes away.
+ */
+const KEYBOARD_HEIGHT_VAR = "--adaptv-keyboard-height"
+const KEYBOARD_OPEN_ATTR = "data-keyboard-open"
+
+let keyboardPublisherCount = 0
+
+function publishKeyboardState({ isOpen, height }: KeyboardState) {
+  if (typeof document === "undefined") return
+  const root = document.documentElement
+  root.style.setProperty(KEYBOARD_HEIGHT_VAR, `${height}px`)
+  if (isOpen) root.setAttribute(KEYBOARD_OPEN_ATTR, "")
+  else root.removeAttribute(KEYBOARD_OPEN_ATTR)
+}
+
+function clearPublishedKeyboardState() {
+  if (typeof document === "undefined") return
+  const root = document.documentElement
+  //remove rather than set to "0px": the stylesheet's resting declaration is the
+  //source of truth for "closed", and leaving an inline copy behind would shadow a
+  //consumer who overrides it
+  root.style.removeProperty(KEYBOARD_HEIGHT_VAR)
+  root.removeAttribute(KEYBOARD_OPEN_ATTR)
+}
+
 //---- Hook ----------------
 
 export type KeyboardState = {
@@ -139,6 +183,10 @@ const KEYBOARD_HEIGHT_CONFIRM_MS = 120
  * Canonical on-screen keyboard observer. Reports a live height + open flag,
  * sourced from the VirtualKeyboard API when available and falling back to
  * `visualViewport` geometry. Only reports open while a text input is focused.
+ *
+ * Also publishes the state on `<html>` for CSS: `--adaptv-keyboard-height` (always
+ * defined, `0px` closed) and the boolean-presence `data-keyboard-open` attribute —
+ * so app-level chrome can respond with no React state of its own.
  */
 export function useKeyboard({
   isEnabled = true,
@@ -400,6 +448,22 @@ export function useKeyboard({
       resetKeyboardState()
     }
   }, [debounceDelay, isEnabled, visualViewportThreshold])
+
+  //register as a publisher for as long as this observer is enabled; the last one out
+  //hands the root back to the stylesheet's resting values
+  useEffect(() => {
+    if (!isEnabled) return
+    keyboardPublisherCount++
+    return () => {
+      keyboardPublisherCount--
+      if (keyboardPublisherCount === 0) clearPublishedKeyboardState()
+    }
+  }, [isEnabled])
+
+  useEffect(() => {
+    if (!isEnabled) return
+    publishKeyboardState(state)
+  }, [isEnabled, state])
 
   return state
 }

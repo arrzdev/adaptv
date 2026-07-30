@@ -9,7 +9,7 @@ export const ICON_BUTTON_CLASSNAME = cn(
   "hover:bg-border-strong",
   "focus:outline-none",
   //micro tier — small icon target gets a firmer squeeze than a full-size button
-  "origin-center transition-transform duration-200 ease-out pressed:duration-0 pressed:scale-95",
+  "origin-center transition-transform duration-200 ease-out active:duration-0 active:scale-95",
   "disabled:opacity-50",
 )
 

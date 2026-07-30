@@ -71,6 +71,23 @@ export interface UseGestureEngineOptions {
 }
 
 export interface GestureHandlers {
+  /**
+   * Boolean-presence marker (§3.1) saying "this node's press state is engine-owned".
+   * Read by the patched `active:` variant (styles/patches.css), which sends a marked
+   * element to `[data-pressed]` and everything else to native `:active` — so a
+   * consumer's own `<button className="active:scale-95">` keeps working while an
+   * engine target gets the reentrant, JS-clearable state instead.
+   *
+   * It rides in the handler bag rather than being written from a mount effect, and
+   * that is the correctness argument, not a shortcut: the engine holds no ref of its
+   * own (it reads `e.currentTarget` — see `PressableSlotProps`, where adding one
+   * would break every `render` target narrower than `HTMLElement`, and Button, which
+   * already composes two owners onto its host ref). Riding the bag also makes the
+   * marker *exactly* co-extensive with the engine — spread the handlers and you have
+   * it, forget to and there is no engine to mismatch — and it lands with the first
+   * paint, so there is no frame in which `:active` and the engine both apply.
+   */
+  "data-press-engine": string
   onPointerDown: (e: React.PointerEvent) => void
   onPointerMove: (e: React.PointerEvent) => void
   onPointerUp: (e: React.PointerEvent) => void
@@ -94,6 +111,29 @@ export type OmitGestureEngineHandlers<T> = Omit<T, keyof GestureHandlers>
 //single source of truth for press feedback. it is reentrant (toggles as the
 //finger leaves and re-enters the region) and pointer-only — keyboard activation
 //never lights it, so Enter/Space don't trigger a press-scale animation.
+//the patched `active:` variant reads this attribute; `data-press-engine` (in the
+//returned handler bag) is what tells the variant to read it HERE and not `:active`.
+/*
+ * Ported from Ionic Framework (MIT, © 2015-present Drifty Co.)
+ * core/src/utils/tap-click/index.ts — `ADD_ACTIVATED_DEFERS` / `CLEAR_STATE_DEFERS`.
+ *
+ * Why: a press visual applied on `pointerdown` flashes on every touch that turns
+ * out to be a SCROLL. Ionic's note is exact — "tap click effects such as the ripple
+ * effect should not happen when scrolling… `pointercancel` is dispatched on a
+ * gesture when scrolling starts, so this lets us avoid having to listen for
+ * ion-content's scroll events". Waiting 100ms before showing anything means the
+ * cancel almost always arrives first, and the user who laid a finger down and
+ * swiped never sees the button light up.
+ */
+const SHOW_PRESSED_AFTER_MS = 100
+
+/*
+ * …and the mirror of it. A tap shorter than the show-delay would otherwise render
+ * NO feedback at all, so a press that ends early still shows, for at least this
+ * long. Ionic's `CLEAR_STATE_DEFERS`.
+ */
+const MIN_PRESSED_MS = 150
+
 const PRESSED_ATTR = "data-pressed"
 
 function setPressedFlag(el: HTMLElement | null, pressed: boolean) {
@@ -152,6 +192,11 @@ export function useGestureEngine({
   const anchorY = useRef(0)
   const isKeyboard = useRef(false)
   const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  //the deferred SHOW, and the wall-clock the visual actually appeared at — the
+  //minimum-duration guarantee needs to know how long it has already been up
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shownAt = useRef(0)
   //budgets resolved per-press from the pointer type
   const outset = useRef(POINTER_PRESS_OUTSET_PX)
   const maxDistance = useRef(LONG_PRESS_MAX_DISTANCE_PX)
@@ -185,6 +230,76 @@ export function useGestureEngine({
     touchGuard.current = null
   }, [])
 
+  /*
+   * The press visual is SCHEDULED, never immediate.
+   *
+   * `showPressed` arms a {@link SHOW_PRESSED_AFTER_MS} timer instead of setting the
+   * attribute, so a touch that the browser turns into a scroll — which arrives as
+   * `pointercancel` — is cancelled before anything is drawn. That is the whole
+   * reason a finger laid down and swiped must not light the control up.
+   *
+   * `hidePressed` is the mirror: once the visual IS up it stays for at least
+   * {@link MIN_PRESSED_MS}, so a fast tap is still visible. `force` skips that for
+   * the cases where the press is genuinely over and the visual must go now (unmount,
+   * long-press taking over, a cancel that arrived after the visual was already up).
+   */
+  const clearPressTimers = useCallback(() => {
+    if (showTimer.current !== null) {
+      clearTimeout(showTimer.current)
+      showTimer.current = null
+    }
+    if (hideTimer.current !== null) {
+      clearTimeout(hideTimer.current)
+      hideTimer.current = null
+    }
+  }, [])
+
+  const showPressed = useCallback((el: HTMLElement) => {
+    if (showTimer.current !== null) clearTimeout(showTimer.current)
+    //a pending hide belongs to the press this one replaces; letting it fire would
+    //blank the NEW visual mid-press (two fast taps, or a drag back in under 150ms)
+    if (hideTimer.current !== null) {
+      clearTimeout(hideTimer.current)
+      hideTimer.current = null
+    }
+    showTimer.current = setTimeout(() => {
+      showTimer.current = null
+      shownAt.current = Date.now()
+      setPressedFlag(el, true)
+    }, SHOW_PRESSED_AFTER_MS)
+  }, [])
+
+  const hidePressed = useCallback((force = false) => {
+    const el = pressTargetEl.current
+    //still pending: it was never drawn, so drop it and leave nothing behind
+    if (showTimer.current !== null) {
+      clearTimeout(showTimer.current)
+      showTimer.current = null
+      setPressedFlag(el, false)
+      return
+    }
+    if (force || shownAt.current === 0) {
+      setPressedFlag(el, false)
+      shownAt.current = 0
+      return
+    }
+    const remaining = MIN_PRESSED_MS - (Date.now() - shownAt.current)
+    if (remaining <= 0) {
+      setPressedFlag(el, false)
+      shownAt.current = 0
+      return
+    }
+    //hold the element itself, not the ref: the press may be torn down before this
+    //fires and the ref is nulled on cleanup
+    const target = el
+    if (hideTimer.current !== null) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => {
+      hideTimer.current = null
+      shownAt.current = 0
+      setPressedFlag(target, false)
+    }, remaining)
+  }, [])
+
   const cleanup = useCallback(() => {
     active.current = false
     inside.current = false
@@ -192,14 +307,18 @@ export function useGestureEngine({
     longPressFailed.current = false
     isKeyboard.current = false
     targetRect.current = null
-    setPressedFlag(pressTargetEl.current, false)
+    hidePressed()
     detachTouchGuard()
     pressTargetEl.current = null
+    if (showTimer.current !== null) {
+      clearTimeout(showTimer.current)
+      showTimer.current = null
+    }
     if (lpTimer.current !== null) {
       clearTimeout(lpTimer.current)
       lpTimer.current = null
     }
-  }, [detachTouchGuard])
+  }, [detachTouchGuard, hidePressed])
 
   const clearLongPressTimer = useCallback(() => {
     if (lpTimer.current !== null) {
@@ -215,13 +334,20 @@ export function useGestureEngine({
         if (!active.current || longPressFailed.current) return
         longPressFired.current = true
         //the hold is no longer a tap — drop the press visual so the consumer can
-        //apply its own long-press feedback (lift, menu, drag handle, …)
-        setPressedFlag(pressTargetEl.current, false)
+        //apply its own long-press feedback (lift, menu, drag handle, …). Forced:
+        //the minimum-duration guarantee is about perceiving a TAP, and this is not one.
+        hidePressed(true)
         notifyState("longpress")
         onLongPressDown?.(e)
       }, longPressThreshold)
     },
-    [notifyState, onLongPressDown, longPressThreshold, wantsLongPress],
+    [
+      notifyState,
+      onLongPressDown,
+      longPressThreshold,
+      wantsLongPress,
+      hidePressed,
+    ],
   )
 
   const onPointerDown = useCallback(
@@ -247,8 +373,9 @@ export function useGestureEngine({
       maxDistance.current = longPressMaxDistance
       targetRect.current = el.getBoundingClientRect()
       pressTargetEl.current = el
-      //pointer press lights the visual immediately (keyboard never does)
-      setPressedFlag(el, true)
+      //SCHEDULE the visual; do not stamp it. A touch that becomes a scroll is
+      //cancelled inside the delay and must never have lit up. (Keyboard never does.)
+      showPressed(el)
 
       //arm the scroll guard up-front; it only bites once the long-press fires
       if (wantsLongPress && claimPointerOnLongPress) {
@@ -274,6 +401,7 @@ export function useGestureEngine({
       longPressMaxDistance,
       claimPointerOnLongPress,
       wantsLongPress,
+      showPressed,
     ],
   )
 
@@ -299,7 +427,12 @@ export function useGestureEngine({
         //reentrant: the visual and tap-armed state follow region membership
         if (within !== inside.current) {
           inside.current = within
-          setPressedFlag(pressTargetEl.current, within)
+          if (within) {
+            const el = pressTargetEl.current
+            if (el) showPressed(el)
+          } else {
+            hidePressed(true)
+          }
           notifyState(within ? "pressing" : "outside")
         }
       }
@@ -328,6 +461,8 @@ export function useGestureEngine({
       onLongPressMove,
       clearLongPressTimer,
       wantsLongPress,
+      showPressed,
+      hidePressed,
     ],
   )
 
@@ -452,10 +587,17 @@ export function useGestureEngine({
   useEffect(() => {
     return () => {
       cleanup()
+      //`cleanup` may have left a hide PENDING to honour the minimum press duration.
+      //There is nothing left to look at after unmount, so drop it rather than fire a
+      //timer against a detached node.
+      clearPressTimers()
     }
-  }, [cleanup])
+  }, [cleanup, clearPressTimers])
 
   return {
+    //`""`, not `true`: React stringifies a boolean data-* value to "true", and this
+    //is a presence attribute (§3.1) — the same shape as data-pressed above.
+    "data-press-engine": "",
     onPointerDown,
     onPointerMove,
     onPointerUp,

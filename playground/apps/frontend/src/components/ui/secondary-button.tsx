@@ -9,7 +9,7 @@ export const secondaryButtonClassName = cn(
   "rounded-md ring-1 ring-inset ring-border bg-surface px-4 py-2 text-sm font-medium text-foreground",
   "hover:bg-secondary",
   "focus:outline-none",
-  "origin-center transition-transform duration-200 ease-out pressed:duration-0 pressed:scale-[0.98]",
+  "origin-center transition-transform duration-200 ease-out active:duration-0 active:scale-[0.98]",
   "disabled:opacity-50",
   "aria-busy:bg-secondary aria-busy:text-muted aria-busy:saturate-50 aria-busy:opacity-70 aria-busy:ring-border-subtle aria-busy:hover:bg-secondary",
 )

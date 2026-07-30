@@ -1,6 +1,6 @@
 import { Button } from "#adaptv/components/button"
 import { View } from "#adaptv/components/view"
-import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /**
  * Props for the offline UI. **Every one is optional**, and that is the design:
@@ -71,13 +71,18 @@ export function Offline({
 
   return (
     <View
+      data-adaptv="offline"
       safe="all"
       role="alert"
       aria-live="polite"
-      className={cn(
-        "flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 px-6 text-center",
+      //`locked: undefined` by decision: the one structural thing on this screen is
+      //the safe-area padding, and that is already the `safe="all"` PROP above —
+      //View locks it, so there is nothing left here for a className to break.
+      className={mergeStyles({
+        base: "flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 px-6 text-center",
         className,
-      )}
+        locked: undefined,
+      })}
     >
       <h1 className="text-gray-950">{title}</h1>
       <p className="text-gray-600">{description}</p>

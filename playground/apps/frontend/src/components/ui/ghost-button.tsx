@@ -8,7 +8,7 @@ const GHOST_BUTTON_CLASSNAME = cn(
   "rounded-full border-0 bg-transparent px-4 py-2 text-sm font-medium text-muted",
   "hover:bg-secondary hover:text-foreground",
   "focus:outline-none",
-  "origin-center transition-transform duration-200 ease-out pressed:duration-0 pressed:scale-[0.98]",
+  "origin-center transition-transform duration-200 ease-out active:duration-0 active:scale-[0.98]",
   "disabled:opacity-50",
 )
 

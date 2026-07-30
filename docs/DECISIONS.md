@@ -30,9 +30,9 @@ Verified by reading the tree, not by trusting the docs.
 
 | Area | Files | Reality vs README |
 |---|---|---|
-| `components/` | 19 primitives + tests | **Ahead of the README.** `Input`, `TextArea`, `Checkbox`, `Switch`, `WheelColumn`, `EdgeSwipeGestures`, `OrientationGuard`, `PwaSplashOverlay`, `NotFound` all exist and are exported — the README lists several as "not done." |
+| `components/` | 20 exported primitives + tests | **Ahead of the README.** `Input`, `TextArea`, `Checkbox`, `Switch`, `WheelColumn`, `EdgeSwipeGestures`, `OrientationGuard`, `PwaSplashOverlay`, `NotFound` all exist and are exported — the README lists several as "not done." |
 | `capabilities/` | 9 (haptics, keyboard, network, status-bar, geolocation, splash, browser, native-theme) | matches |
-| `hooks/` | 22 | ahead — includes `useCaretRepaint`, `useFreezeViewport`, `useGlobalFpsSentinel`, `useSuppressTextMagnifier`, `useScrollDirectionLock`, `useGestureEngine` |
+| `hooks/` | 32 modules, **22 exported** (`interface/hooks.index.ts`) | ahead — the capability hooks (`useShare`, `useClipboard`, `useDevice`, `useOrientation`, `useKeepAwake`, `useInsets`, `useAppState`, `useBackHandler`, `useHapticTick`) landed after this audit, `useNetworkStatus` became `useIsOffline`, and `useGlobalFpsSentinel` was **deleted** with the gpu-boost mechanism (`PERFORMANCE-BOOST.md §9.1`). The 10-module gap between the two counts is deliberate: `useCaretRepaint` and `useSuppressTextMagnifier` are mounted by the shell and are private *as exports* while running on every app (`COMPONENT-SURFACE.md §8.2`). |
 | `sw/` | 13 modules | **far ahead of the docs** — a full hand-rolled Workbox SW (precache, strategies, expiration, navigation, warm-routes, cache-name, lifecycle) |
 | `vite/` | 15 | plugin, config loader, capacitor-config, manifest, stamping, sw-build, build-tag, virtuals |
 | `shell/` | 10 | root route, critical CSS, head, launch-viewport, standalone history, foreign-SW unregister |
@@ -69,16 +69,53 @@ it is migrated and live**:
 | iOS caret-repaint ghost caret | `patches.caretRepaint` | `hooks/use-caret-repaint.ts` + `[data-caret-muted]` rule in `patches.css` |
 | iOS double-tap text magnifier (WebKit bug 231161) | `patches.textMagnifier` | `hooks/use-suppress-text-magnifier.ts` |
 | Viewport freeze (scroll pin + virtualKeyboard overlay, refcounted) | `patches.viewportFreeze` | `hooks/use-freeze-viewport.ts` |
-| GPU layer promotion on FPS drop | `patches.gpuBoost` | `hooks/use-global-fps-sentinel.ts` + `html[data-gpu-boost] .hardware-boosted` |
 
-Plus the **unflagged, always-on** `patches.css` sheet: global no-select (with `input`/`textarea`
-opt-back-in), scrollbar suppression, hover-stickiness fix on touch (`@custom-variant hover` that
-excludes `:focus`), autofill yellow-background kill, `-webkit-touch-callout` / tap-highlight
-suppression on anchors, native focus-ring reset, `type=search` decoration removal.
+A fourth row, **GPU layer promotion on FPS drop** (`patches.gpuBoost` +
+`hooks/use-global-fps-sentinel.ts` + `html[data-gpu-boost] .hardware-boosted`), was **deleted, not
+disabled** — the config field, the sentinel and the utility are all gone. `PERFORMANCE-BOOST.md §9.1`
+records what landed and why; `styles/utils.test.ts` now asserts the *absence* of every trace, so the
+mechanism cannot come back by accident. One nuance worth keeping: the port of Ionic's static
+`body { transform: translateZ(0) }` (still ranked 1 in `PRIOR-ART.md §1`) was **considered and
+deliberately skipped**, not forgotten. A transform on `body` makes it the containing block for
+`position: fixed` descendants, and `Drawer` portals its backdrop and panel into `document.body` as
+exactly that — but `body` is `h-dvh`, which tracks the **dynamic** viewport while fixed positioning
+resolves against the **layout** viewport. They differ by the URL-bar delta, which is precisely where
+the drawer's geometry lives.
 
-> ❓ **OPEN:** the always-on rules in `patches.css` are **not** behind `patches.*` flags and several
-> are aggressive (`* { user-select: none !important }`, `* { scrollbar-width: none !important }`).
-> Decide whether these become flags too, or are declared doctrine. See §3.1.
+Then the `ui` block — three rules that are the CONSUMER'S call rather than doctrine, each resolved
+pre-paint in `utils/platform.ts` (`UI_STAMPS`) into a boolean-presence attribute on `<html>`, so the
+stylesheet stays one static artifact with no build matrix and no flash:
+
+| Rule | Config flag (`"app" \| "all" \| "off"`, default `"app"`) | Stamp |
+|---|---|---|
+| Global `user-select: none` (with `input`/`textarea`/`[contenteditable]` always exempt, and a `selectable` utility to opt back in per element) | `ui.noSelect` | `html[data-adaptv-no-select]` |
+| `scrollbar-width: none` + `::-webkit-scrollbar { display: none }` | `ui.hideScrollbars` | `html[data-adaptv-hide-scrollbars]` |
+| `a[href] { -webkit-touch-callout: none }` — iOS's long-press link-preview sheet | `ui.touchCallout` | `html[data-adaptv-no-touch-callout]` |
+
+And the genuinely **unflagged doctrine** in `patches.css`, which fixes things that are *broken* rather
+than merely different, so nobody wants the alternative: the hover-stickiness fix on touch
+(`@custom-variant hover`, which also excludes `:focus`), the `active:` repoint onto `data-pressed`,
+the autofill yellow-background kill, `-webkit-tap-highlight-color: transparent` on anchors (the other
+half of the callout rule, and deliberately *not* configurable — the grey flash duplicates the press
+feedback adaptv already draws), the caret-mute hook, and `type=search` decoration removal.
+
+> ✅ **RESOLVED — the question this section used to leave open is answered, and in both directions.**
+> It asked whether the always-on rules become flags or are declared doctrine; the split above is the
+> answer. Two corrections to what it assumed along the way:
+>
+> - The `!important`s it quoted (`* { user-select: none !important }`,
+>   `* { scrollbar-width: none !important }`) are **gone**. Cascade layers made them unnecessary, and
+>   `STYLING.md §6.0.1` now *bans* `!important` inside adaptv's layer — an important declaration in a
+>   layer declared before `utilities` inverts layer order and becomes the single strongest author
+>   declaration on the page. Exactly one survives, the autofill `box-shadow`, and it fights a UA
+>   stylesheet, which is the only exemption.
+> - The **native focus-ring reset is no longer blanket.** It was `:focus` flat, justified by "package
+>   components replace it with focus-visible rings" — which only ever covered adaptv's own primitives,
+>   leaving a consumer's plain `<button>` with no visible focus indicator on any target, keyboard
+>   included. That is **WCAG 2.4.7 Level AA**, so it is broken rather than a preference and gets no
+>   knob. It is now `:focus:not(:focus-visible)` — "focused, but the UA decided this focus does not
+>   deserve an indicator", i.e. a click or a tap — plus a shipped replacement,
+>   `:where(:focus-visible) { outline: 2px solid var(--adaptv-ring, currentColor) }`.
 
 ### 1.4 The splash question — answered: fully migrated, and more complete than documented
 
@@ -142,21 +179,29 @@ Every piece of the custom-splash-over-masked-native-splash design is in the repo
 These are the dangerous ones: two authoritative sources disagree, so "the decision" depends on which
 doc you read.
 
-### 3.1 🔀 The styling contract is built but never decided
+### 3.1 ✅ The styling contract is built, decided, and enforced
 
 - `VISION.md §9` lists **"Styling system"** as an *open question* ("Leaning: keep Tailwind").
 - But `src/utils/styles.ts` already implements a **three-layer precedence contract**:
   `mergeStyles({ base, className, locked })` → `base < className < locked`, riding on
   tailwind-merge's last-wins resolution.
-- **And only 2 of 19 components use it** (`view.tsx`, `external-link.tsx`). The other 17 use bare
-  `cn()`, so the "consumer can't break structural classes" guarantee is **not actually enforced**.
-- No doc in `docs/` mentions `mergeStyles` at all.
+- ✅ **All primitives now use it** (bug **B8**, closed 2026-07-29). A primitive with nothing
+  structural passes `locked: undefined` *explicitly*, so the omission reads as a decision, and
+  `src/components/style-precedence.test.tsx` asserts both halves on every one — a class that must
+  win and a class that must lose. The migration immediately caught a shipped bug: `WheelColumn`
+  carried `"scrollable-y overscroll-contain"`, and since `overscroll` is a registered conflicting
+  group, tailwind-merge dropped `scrollable-y` **entirely** — the wheel had no `overflow-y: auto`.
+- ✅ `mergeStyles` also merges the **inline-style** channel (`baseStyle < style < lockedStyle`),
+  because inline `style` is its own cascade origin and beats every layer — so the `data-*` escape
+  hatch does not protect against it. → `STYLING.md §2.1`.
+- ✅ Documented: `STYLING.md` is the contract, and `VISION.md §9`'s open question is closed by it.
 - There is **no theming token layer** — no `--adaptv-*` custom properties, no colour system, no
   per-component style hooks. Consumers restyle by throwing Tailwind classes at primitives and hoping
   tailwind-merge resolves correctly.
 
-> **Resolution owed: `docs/STYLING.md`** — the full styling & theming contract. This is the single
-> biggest undecided surface in the framework. See §5.
+> ✅ **Resolved by `docs/STYLING.md`** — the full styling & theming contract, decided 2026-07-20 and
+> extended since (Tailwind as a hard requirement §0.1, the inline-style tier §2.1, the closed
+> six-variant list §5, the auto-injected `@layer` statement §6.0.2).
 
 ### 3.2 🔀 TanStack opacity — two contradictory decisions, and the older one has the evidence
 
@@ -493,8 +538,8 @@ Filed here so they don't get lost in the design discussion.
 | B4 | No `vite:preloadError` handler anywhere in `src/` — nothing catches the stale-chunk failure B3 causes. | — | **high** |
 | B5 | `sw.warm-routes.ts` fetches HTML documents with `credentials: "same-origin"` into a shared cache, and strategies force `ignoreVary: true` — authenticated SSR HTML can be served to the wrong state. | `src/sw/sw.warm-routes.ts` | **privacy** |
 | B6 | Dead reference to vite-plugin-pwa's `dev-sw.js?dev-sw` filename — adaptv doesn't use vite-plugin-pwa. | `src/shell/unregister-foreign-service-workers.ts` | cosmetic |
-| B7 | `Screen` shipped despite being documented as removed. | `src/components/screen.tsx` + barrel | consistency |
-| B8 | `mergeStyles` used by 2 of 19 components — the structural-class guarantee is unenforced. | `src/components/*` | **contract** |
+| B7 | ✅ **CLOSED** — `src/components/screen.tsx` is gone and appears in neither barrel; `VISION.md §5` documents the removal and the reason (the frame is owned above the route). | — | consistency |
+| B8 | ✅ **CLOSED** — every primitive routes through `mergeStyles` with an explicit `locked`, asserted per-primitive in `style-precedence.test.tsx`. → §3.1 | `src/components/*` | **contract** |
 
 ---
 
@@ -1186,3 +1231,78 @@ TESTING.md     six-target discipline
 RESEARCH.md    upstream issues to watch
 capacitor-internals.md version pins + native gotchas
 ```
+
+---
+
+## 🚨 Android ships with 12 of adaptv's 13 native plugins missing (found 2026-07-30)
+
+**Measured on two emulators, same debug APK.** Android 14 (SDK 34) and Android 17 (SDK 37):
+
+| | Android 14 | Android 17 |
+|---|---|---|
+| WebView covers the screen | **no — 76 CSS px short** | yes |
+| `--adaptv-inset-top` | **0px** | 54px |
+| `--safe-area-inset-top` (Capacitor SystemBars) | **unset** | 54px |
+| `env(safe-area-inset-top)` | 0px | 55px |
+
+Edge-to-edge is **off** on Android ≤ 14, which contradicts `ARCHITECTURE.md §1.4` ("not a toggle").
+Android 15+ enforces edge-to-edge for `targetSdk ≥ 35` (the generated project targets 36), which is the
+only reason this was never seen.
+
+**Root cause — and it is much wider than the status bar.** Asking the bridge directly:
+
+```
+StatusBar.setStyle    → REJECTED: "StatusBar" plugin is not implemented on android
+Haptics.impact        → REJECTED: "Haptics" plugin is not implemented on android
+Preferences.get       → REJECTED: "Preferences" plugin is not implemented on android
+App.getInfo           → REJECTED: "App" plugin is not implemented on android
+Network.getStatus     → REJECTED: undefined
+Device.getInfo        → ok
+```
+
+`capacitor.settings.gradle` includes exactly one plugin project, `capacitor-device` — the only
+`@capacitor/*` package the **consumer app** declares. adaptv's own 12 are invisible to Capacitor's
+Android resolver under pnpm. The generated paths give it away: `capacitor-device` resolves through the
+app's `node_modules` (four levels up), `capacitor-android` through the workspace root (five). iOS is
+unaffected — its Podfile lists all 15 pods, resolved out of the pnpm store, so the two platforms do not
+share a discovery path.
+
+**Why nothing caught it.** Every wrapper swallows the rejection — `enableEdgeToEdge` even carries
+`.catch(() => {})` with the comment *"older plugin / unsupported — safe to ignore"*. So on Android the
+app silently degrades to its web behaviour: no haptics, no native KV, no hardware back button, no
+status-bar styling, and on ≤ 14 no edge-to-edge. There was no device coverage at all until this pass, and
+the one emulator anybody would reach for (a recent Android) hides the most visible symptom.
+
+**Not fixed here.** The fix is in project generation, not in the JS: adaptv has to make its own plugins
+visible to the Android resolver rather than relying on the consumer to re-declare them. Two candidates
+worth measuring — hoisting adaptv's `@capacitor/*` into the app's tree at generate time, or writing the
+`include`/`implementation` entries into `capacitor.settings.gradle` / `capacitor.build.gradle` directly.
+Whatever lands, the guard is a device smoke test: `Device.getInfo` is not evidence that the bridge works,
+because `Device` is the one plugin that was never broken.
+
+---
+
+## 🚨 A cold start into a 404 leaves the splash covering the app, on native (found 2026-07-30)
+
+`PwaSplashOverlay` self-unmounts when the app signals ready. On an unknown route it never does — the
+element stays in the DOM for the life of the session. Measured in the Android WebView on
+`/lab/definitely-not-a-route`:
+
+```
+display: block   opacity: 1   pointer-events: auto   z-index: 100
+elementFromPoint(centre of screen) → inside [data-adaptv-splash]
+```
+
+The app is stuck on the launch screen with the 404 unreachable behind it. On a normal route the same
+build reports zero splash elements, so it is the not-found path specifically.
+
+**Invisible on the web**, which is why it survived: the critical-CSS splash policy is scoped to
+`html[data-adaptv-platform="web"]`, so in a browser tab the leftover is `display: none` and covers
+nothing. Every check anybody would run in a browser passes.
+
+`playground/e2e/screens.spec.ts` carries it as a `test.fail()` — it stays visible in every run and flips
+to a pass the moment the unmount is fixed. `/lab/screens` already described this exact failure in prose
+("an overlay left mounted covers the app with an invisible full-screen element and swallows every tap");
+nothing was checking it, and its own readout was reporting a false alarm in the other direction (it
+sampled once on mount, while the splash was legitimately still up, so it said STILL PRESENT on every
+cold load — fixed in this pass).

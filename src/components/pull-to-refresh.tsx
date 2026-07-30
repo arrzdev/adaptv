@@ -18,6 +18,7 @@ import {
 import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 import tryCatch from "#adaptv/utils/try-catch"
 
 /* =============================================================================
@@ -76,7 +77,13 @@ export interface PullToRefreshProps {
  * CLASSES
  * ============================================================================= */
 
-const PULL_TO_REFRESH_ROOT_LAYOUT_CLASS = "relative shrink-0 grow-0"
+//LOCKED: `relative` is the containing block the indicator track is absolutely
+//positioned against — without it the spinner escapes to the nearest positioned
+//ancestor and animates somewhere else entirely. `shrink-0 grow-0` is BASE: it is a
+//flex-line default, and a consumer putting this in a `flex-1` column is a legitimate
+//layout choice that does not break the gesture.
+const PULL_TO_REFRESH_ROOT_LOCKED_CLASS = "relative"
+const PULL_TO_REFRESH_ROOT_BASE_CLASS = "shrink-0 grow-0"
 const PULL_TO_REFRESH_STATUS_LAYOUT_CLASS = "sr-only"
 const PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS =
   "pointer-events-none absolute inset-x-0 z-0 flex justify-center motion-reduce:transition-none"
@@ -745,7 +752,11 @@ export const PullToRefresh = forwardRef<
       <PullToRefreshContext.Provider value={contextValue}>
         <div
           ref={setScrollRef}
-          className={cn(PULL_TO_REFRESH_ROOT_LAYOUT_CLASS, className)}
+          className={mergeStyles({
+            base: PULL_TO_REFRESH_ROOT_BASE_CLASS,
+            className,
+            locked: PULL_TO_REFRESH_ROOT_LOCKED_CLASS,
+          })}
         >
           {children}
         </div>
@@ -756,8 +767,13 @@ export const PullToRefresh = forwardRef<
   return (
     <PullToRefreshContext.Provider value={contextValue}>
       <div
+        data-adaptv="pull-to-refresh"
         ref={setScrollRef}
-        className={cn(PULL_TO_REFRESH_ROOT_LAYOUT_CLASS, className)}
+        className={mergeStyles({
+          base: PULL_TO_REFRESH_ROOT_BASE_CLASS,
+          className,
+          locked: PULL_TO_REFRESH_ROOT_LOCKED_CLASS,
+        })}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

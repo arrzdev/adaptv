@@ -4,7 +4,18 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 import { PORTS } from "./ports"
 
-const { appPort, supervisorPort } = PORTS
+/*
+ * `ports.ts` is the committed pair, and every worktree carries the SAME one — so a
+ * second checkout cannot boot a dev server while the first is up. Both ports have to
+ * move together: overriding only the app port still dies on `EADDRINUSE` from the
+ * Cloudflare inspector, which is a confusing way to be told about a port you did not
+ * name. The env pair exists for that case (headless e2e in a sibling worktree); a
+ * normal `dev` run passes neither and keeps the committed ports.
+ */
+const appPort = Number(process.env.VITE_APP_PORT ?? PORTS.appPort)
+const supervisorPort = Number(
+  process.env.VITE_SUPERVISOR_PORT ?? PORTS.supervisorPort,
+)
 
 export default defineConfig({
   envDir: "env",

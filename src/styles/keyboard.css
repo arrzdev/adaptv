@@ -1,0 +1,28 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+ * keyboard — the on-screen keyboard height contract (STYLING.md §4)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `--adaptv-keyboard-height` is published on `<html>` by `useKeyboard` (which
+ * sources it from the OS on native and from `visualViewport` geometry on the
+ * web — a value CSS cannot compute for itself, so §4's "runtime values only"
+ * rule applies).
+ *
+ * The declaration below is the RESTING value, and it is the reason the variable
+ * is worth having: it is ALWAYS defined. A consumer writes
+ *
+ *     calc(1rem + var(--adaptv-keyboard-height))
+ *
+ * and never has to remember a `, 0px` fallback, never gets an invalid-at-
+ * computed-value-time `calc()` before the first `useKeyboard` mounts, and gets
+ * `0px` — not "undefined" — while the keyboard is down. `useKeyboard` writes the
+ * live value as an inline style on `<html>`, which beats this declaration, and
+ * removes it on the last unmount so the resting value comes back.
+ *
+ * The matching state flag is the boolean-presence attribute `data-keyboard-open`
+ * on `<html>` (§3.1), so `data-keyboard-open:pb-4` works bare in Tailwind v4.
+ */
+@layer adaptv.reset {
+  :root {
+    --adaptv-keyboard-height: 0px;
+  }
+}

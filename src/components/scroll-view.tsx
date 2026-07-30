@@ -1,7 +1,7 @@
 import type { ComponentPropsWithRef, CSSProperties, Ref } from "react"
 import { useCallback, useRef } from "react"
-import { useScrollDirectionLock } from "#adaptv/hooks/use-scroll-direction-lock"
-import { cn } from "#adaptv/utils/cn"
+import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
+import { useScrollEdgeFade } from "#adaptv/hooks/use-scroll-edge-fade"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
@@ -17,28 +17,69 @@ import { mergeStyles } from "#adaptv/utils/styles"
 export interface ScrollViewProps extends ComponentPropsWithRef<"div"> {
   /** Scroll horizontally instead of vertically (RN `horizontal`). Default `false`. */
   horizontal?: boolean
+  /**
+   * Grow to fill the parent flex line — `flex-1`. Default `false`, matching
+   * {@link View}.
+   *
+   * **Not needed at a page's root.** The shell stretches a route's only root element
+   * (`styles/screen.css`), so `<ScrollView>` alone fills the screen and scrolls. Reach
+   * for `fill` when the scroller is one of SEVERAL children of a flex parent and it is
+   * the one that should absorb the leftover space.
+   *
+   * ⚠︎ A scroller only scrolls if something constrains its height, and there are
+   * exactly two ways to get that: fill a sized flex parent, or be given an explicit
+   * height. Picking one for the consumer silently defeats the other — this used to
+   * be an unconditional `flex-1`, and `<ScrollView className="h-40">` then rendered
+   * at its content height and did not scroll at all. `flex-grow` and `height` are
+   * different properties, so tailwind-merge cannot see the conflict and the
+   * three-layer contract never fires; the `className` simply loses in the cascade.
+   * Making it a prop is the same fix `View` already had (`VISION.md` L6 — behaviour
+   * is props, presentation is className).
+   */
+  fill?: boolean
   /** Allow scrolling; `false` clips instead (RN `scrollEnabled`). Default `true`. */
   scrollEnabled?: boolean
-  /**
-   * Lock dragging to the dominant axis so a diagonal gesture doesn't bleed into
-   * the cross axis — the native-feel heavy lifting (RN `directionalLockEnabled`,
-   * iOS-only effect; no-op elsewhere). See {@link useScrollDirectionLock}.
-   * Default `false` (matches RN) — opt in per surface, or flip app-wide once
-   * tuned on a real device.
-   */
-  directionalLockEnabled?: boolean
-  /** Show the vertical scrollbar (RN `showsVerticalScrollIndicator`). Default `true`. */
+  /** Show the vertical scrollbar (RN `showsVerticalScrollIndicator`). Default `false` — a
+   * scrollbar is desktop-browser chrome, and the whole point of this layer is that the
+   * same code feels native on every target. Opt in per scroller when the indicator is
+   * genuinely informative (a long settings pane on desktop). Beats `ui.hideScrollbars`. */
   showsVerticalScrollIndicator?: boolean
-  /** Show the horizontal scrollbar (RN `showsHorizontalScrollIndicator`). Default `true`. */
+  /** Show the horizontal scrollbar (RN `showsHorizontalScrollIndicator`). Default `false`. */
   showsHorizontalScrollIndicator?: boolean
   /**
-   * Soft fade masks at the top and bottom edges so content dissolves under the
-   * safe areas (package extra, not RN). Vertical only; ignored when `horizontal`.
-   * Default `false`.
+   * Dissolve the content at the scroller's edges, so it reads as continuing past
+   * the frame instead of being chopped off. Default `false`.
+   *
+   * `true` fades both ends; `"start"` and `"end"` fade one. The names are LOGICAL to
+   * the scroll axis — on a vertical scroller `start` is the top, on a horizontal one
+   * it is the inline start (the left in LTR, the right in RTL) — so the same prop
+   * reads correctly in both orientations and both writing directions. That is the
+   * split SwiftUI's `scrollEdgeEffectStyle(_:for:)` and shadcn's `scroll-fade-s/-e`
+   * both landed on; Android and React Native only ever offered all-or-nothing.
+   *
+   * **Each end fades only while there is content that way.** Parked at the top, the
+   * top fade is off and the first row is fully crisp; it ramps to full strength over
+   * the first 24px of scroll. Without that a tall fade permanently greys out the
+   * content you are looking at, which is why the depth had to stay small before.
+   *
+   * Depth is {@link ScrollViewProps.fadeSize}.
+   *
+   * There is no colour, deliberately — this masks the content rather than painting a
+   * band over it, so whatever is behind the scroller shows through and there is no
+   * colour to keep in sync with the theme. See `styles/scroll-fade.css`.
    */
-  edgeFades?: boolean
-  /** Brand background utilities for the fade bands (e.g. `bg-background`). */
-  edgeClassName?: string
+  fade?: boolean | "start" | "end"
+  /**
+   * How deep the fade reaches. Any CSS length or percentage — `"3rem"`, `"10%"`,
+   * `"48px"`. Default `2rem`.
+   *
+   * This is the whole depth API. There is no companion class and no variable to
+   * learn: a consumer should not have to know that the mask reads `--fade-length`
+   * any more than they have to know it is a mask at all. If a depth that changes
+   * with a breakpoint ever turns out to be a real need, it belongs here as a typed
+   * value — not as a class name to guess.
+   */
+  fadeSize?: string
 }
 
 /* =============================================================================
@@ -46,46 +87,10 @@ export interface ScrollViewProps extends ComponentPropsWithRef<"div"> {
  * ============================================================================= */
 
 const SCROLL_VIEW_BASE_CLASS = "flex min-h-0 min-w-0"
-const SCROLL_VIEW_COLUMN_CLASS = "flex-1 flex-col"
-
-const EDGE_FADE_WRAPPER_CLASS =
-  "relative flex min-h-0 min-w-0 w-full flex-1 flex-col"
-const EDGE_FADE_BAND_CLASS = "pointer-events-none absolute inset-x-0 z-20"
-
-// One soft fade band sized to the top safe-area inset, so it fades content exactly
-// under the status-bar region and stops at the content's top padding
-// (`p-safe-offset-2` = inset + 0.5rem) — never over the page header.
-//
-// The old `max(2rem, …)` floor assumed a large inset (iOS notch). On Android an
-// installed PWA's status bar is a separate strip, so the top inset is 0 and the
-// floor forced a 32px band that sat ON TOP of the title + action buttons (they
-// render ~8px from the top). Tracking the inset (+0.5rem to match the content
-// padding) keeps iOS unchanged and shrinks the band to a soft ~8px edge on Android,
-// clear of the header. `--safe-*` are the contract vars (styles/safe-area.css).
-const TOP_FADE_HEIGHT = "web:h-4 app:h-[calc(var(--safe-top)+0.5rem)]"
-const BOTTOM_FADE_HEIGHT =
-  "web:h-[calc(var(--safe-bottom)+1.125rem)] app:h-[calc(var(--safe-bottom)+0.625rem)]"
-
-const smoothMask: CSSProperties = {
-  maskSize: "100% 100%",
-  WebkitMaskSize: "100% 100%",
-}
-
-const topEdgeMask: CSSProperties = {
-  ...smoothMask,
-  maskImage:
-    "linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.82) 35%, rgba(0,0,0,0.48) 65%, transparent 100%)",
-  WebkitMaskImage:
-    "linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.82) 35%, rgba(0,0,0,0.48) 65%, transparent 100%)",
-}
-
-const bottomEdgeMask: CSSProperties = {
-  ...smoothMask,
-  maskImage:
-    "linear-gradient(to top, #000 0%, #000 10%, rgba(0,0,0,0.9) 32%, rgba(0,0,0,0.58) 60%, rgba(0,0,0,0.22) 84%, transparent 100%)",
-  WebkitMaskImage:
-    "linear-gradient(to top, #000 0%, #000 10%, rgba(0,0,0,0.9) 32%, rgba(0,0,0,0.58) 60%, rgba(0,0,0,0.22) 84%, transparent 100%)",
-}
+//Direction is unconditional; GROWTH is the `fill` prop. Keeping `flex-1` here
+//meant a consumer height could never win — see the `fill` docblock.
+const SCROLL_VIEW_COLUMN_CLASS = "flex-col"
+const SCROLL_VIEW_FILL_CLASS = "flex-1"
 
 /* =============================================================================
  * ROOT
@@ -95,8 +100,8 @@ const bottomEdgeMask: CSSProperties = {
  * Managed scroll surface for the native-feel viewport contract (the document
  * never scrolls; panes do) — reach for this instead of a `<div className=
  * "scrollable-y">`. Sets the directional `scrollable-*` utility for you, opts
- * into the iOS directional lock, hides scrollbars on request, and (vertically)
- * masks the safe-area edges — all on a plain, fully styleable `<div>`.
+ * hides scrollbars on request, and dissolves the edges on request — all on a
+ * plain, fully styleable `<div>`.
  *
  * Neutral Tier-1: no brand padding, max-width, or background — wrap it (`Page`,
  * a chip row, …) to add those.
@@ -105,18 +110,20 @@ const bottomEdgeMask: CSSProperties = {
  * ```tsx
  * <ScrollView className="px-6">{rows}</ScrollView>
  * <ScrollView horizontal className="gap-x-2">{chips}</ScrollView>
- * <ScrollView edgeFades edgeClassName="bg-background">{content}</ScrollView>
+ * <ScrollView fade fadeSize="3rem">{content}</ScrollView>
+ * <ScrollView horizontal fade="end">{chips}</ScrollView>
  * ```
  */
 export function ScrollView({
   horizontal = false,
+  fill = false,
   scrollEnabled = true,
-  directionalLockEnabled = false,
-  showsVerticalScrollIndicator = true,
-  showsHorizontalScrollIndicator = true,
-  edgeFades = false,
-  edgeClassName,
+  showsVerticalScrollIndicator = false,
+  showsHorizontalScrollIndicator = false,
+  fade = false,
+  fadeSize,
   className,
+  style,
   children,
   ref,
   ...props
@@ -124,9 +131,12 @@ export function ScrollView({
   const scrollRef = useRef<HTMLDivElement>(null)
   const axis = horizontal ? "x" : "y"
 
-  useScrollDirectionLock(scrollRef, {
-    axis,
-    enabled: directionalLockEnabled && scrollEnabled,
+  const fadeStart = fade === true || fade === "start"
+  const fadeEnd = fade === true || fade === "end"
+  useScrollEdgeFade(scrollRef, fadeStart || fadeEnd, {
+    start: fadeStart,
+    end: fadeEnd,
+    horizontal,
   })
 
   // forward the consumer ref while keeping our own handle on the scroll node
@@ -138,15 +148,47 @@ export function ScrollView({
     [ref],
   )
 
-  const hideScrollbar = horizontal
-    ? !showsHorizontalScrollIndicator
-    : !showsVerticalScrollIndicator
+  /*
+   * The prop owns the indicator in BOTH directions, which is why there are two
+   * utilities rather than one. `ui.hideScrollbars` hides scrollbars app-wide from
+   * `adaptv.reset`; a component that could only ever ADD `scrollbar-hidden` had no
+   * way to say "show mine" once that reset had spoken, so the prop worked in a
+   * browser tab and did nothing at all in an installed PWA. `scrollbar-visible`
+   * compiles into Tailwind's `utilities` layer, which outranks `adaptv.reset`.
+   */
+  const showIndicator = horizontal
+    ? showsHorizontalScrollIndicator
+    : showsVerticalScrollIndicator
+  const scrollbarClass = showIndicator
+    ? "scrollbar-visible"
+    : "scrollbar-hidden"
 
+  /*
+   * Raw Tailwind, not a `scrollable-*` utility of our own.
+   *
+   * The three `touch-*` classes each set one `--tw-*` var and share one `touch-action`
+   * declaration, so together they emit exactly the `pan-x pan-y pinch-zoom` longhand
+   * the old utility hard-coded. The win is not brevity — it is that tailwind-merge
+   * already OWNS these groups. A consumer's `overflow-hidden` conflicts with
+   * `overflow-y-auto` natively, so the `locked` tier resolves it without the
+   * hand-written `conflictingClassGroups` table the custom utility needed, and without
+   * anyone having to remember to keep that table in step with the CSS.
+   */
   const scrollClass = !scrollEnabled
     ? "overflow-hidden"
     : horizontal
-      ? "scrollable-x"
-      : "scrollable-y"
+      ? [
+          "overflow-x-auto",
+          "overflow-y-hidden",
+          "overscroll-x-contain",
+          TOUCH_PASSTHROUGH_CLASS,
+        ]
+      : [
+          "overflow-y-auto",
+          "overflow-x-hidden",
+          "overscroll-y-contain",
+          TOUCH_PASSTHROUGH_CLASS,
+        ]
 
   //`scrollClass` is LOCKED, not base: the scroll axis is owned by the `horizontal`
   //and `scrollEnabled` PROPS (L6 — behaviour is props, presentation is className),
@@ -156,61 +198,33 @@ export function ScrollView({
     base: [
       SCROLL_VIEW_BASE_CLASS,
       !horizontal && SCROLL_VIEW_COLUMN_CLASS,
-      hideScrollbar && "scrollbar-hidden",
+      fill && SCROLL_VIEW_FILL_CLASS,
     ],
     className,
-    locked: scrollClass,
+    locked: [scrollClass, scrollbarClass],
   })
-
-  if (edgeFades && !horizontal) {
-    return (
-      <div className={EDGE_FADE_WRAPPER_CLASS}>
-        <div
-          ref={mergeRef}
-          data-scroll-view={axis}
-          className={mergeStyles({
-            base: [
-              "relative z-0",
-              SCROLL_VIEW_BASE_CLASS,
-              SCROLL_VIEW_COLUMN_CLASS,
-              hideScrollbar && "scrollbar-hidden",
-            ],
-            className,
-            locked: scrollClass,
-          })}
-          {...props}
-        >
-          {children}
-        </div>
-        <div
-          aria-hidden
-          className={cn(
-            EDGE_FADE_BAND_CLASS,
-            "top-0",
-            TOP_FADE_HEIGHT,
-            edgeClassName,
-          )}
-          style={topEdgeMask}
-        />
-        <div
-          aria-hidden
-          className={cn(
-            EDGE_FADE_BAND_CLASS,
-            "bottom-0",
-            BOTTOM_FADE_HEIGHT,
-            edgeClassName,
-          )}
-          style={bottomEdgeMask}
-        />
-      </div>
-    )
-  }
 
   return (
     <div
       ref={mergeRef}
       data-scroll-view={axis}
+      //the component the CONSUMER wrote; a composing primitive (List) overrides it
+      //by passing its own, which is why this sits ahead of the `{...props}` spread
+      data-adaptv="scroll-view"
+      //presence + which ends, so the mask rule has a hook and a test has something
+      //to read; the STRENGTHS are custom properties written by the hook (STYLING.md
+      //§3 — enumerable state is an attribute, measured scalars are variables)
+      data-fade={
+        fade === true ? "both" : fade === false ? undefined : fade
+      }
       className={scrollNodeClass}
+      //the consumer's own `style` still wins over the depth, because a caller who
+      //writes the variable by hand has been more specific than one who passed a prop
+      style={
+        fadeSize === undefined
+          ? style
+          : ({ "--fade-length": fadeSize, ...style } as CSSProperties)
+      }
       {...props}
     >
       {children}

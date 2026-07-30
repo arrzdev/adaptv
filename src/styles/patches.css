@@ -1,111 +1,291 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * ua / platform overrides — autofill, hover stickiness, scrollbars, touch quirks
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Everything here is inside `@layer adaptv.*` (STYLING.md §6), so a consumer's
+ * ordinary unlayered rule overrides any of it at any specificity — `!important`
+ * is not needed and is BANNED (§6.0.1: `!important` inverts layer order, so an
+ * important declaration in a layer declared before `utilities` becomes the
+ * single strongest author declaration on the page). The only survivors below
+ * fight a *UA* stylesheet, which layers cannot reach; each is justified inline.
+ */
 
-/* fixes hover: on touch / no-hover devices where :hover sticks after tap */
-/* fixes hover: winning over focus: / focus-visible: on a focused control (e.g. ring flips gray on mouse-over) */
+/*
+ * Tailwind v4 already compiles `hover:` inside `@media (hover: hover)` — the
+ * sticky-hover-after-tap fix is THEIRS, not ours (verified in tailwindcss@4.2.4
+ * `dist/chunk-3IR7ZFJX.mjs`). Overriding the variant DISCARDS that default, so
+ * re-supplying the media query here is required, not redundant.
+ *
+ * What adaptv adds is the `:not(...)` half: `hover:` must not beat `focus:` /
+ * `focus-visible:` on a focused control (otherwise the ring flips grey the
+ * moment the mouse passes over it).
+ *
+ * `:focus-visible` is by spec a SUBSET of `:focus`, so it needs no clause of its
+ * own. Grouping the rest in `:is()` matters for specificity: `:not()` takes the
+ * specificity of its most specific argument, so `:hover:not(:is(a, b))` is
+ * (0,2,0) where the old chained `:not(a):not(b):not(c)` was (0,4,0) — two extra
+ * class-level points every consumer override had to out-specify. See
+ * styles/utils.test.ts, which asserts the compiled selector.
+ */
 @custom-variant hover {
   @media (hover: hover) {
-    &:hover:not(:focus):not(:focus-visible):not(:focus-within) {
+    &:hover:not(:is(:focus, :focus-within)) {
       @slot;
     }
   }
 }
 
-/* gesture-engine-driven press feedback uses the reentrant `pressed:` variant
- * (data-pressed, see utils.css). plain elements keep Tailwind's native `active:`. */
-
-/* fixes accidental text selection across the ui in both app + web */
-/* opt back in with the `selectable` utility (it beats `*` on specificity) */
-* {
-  -webkit-user-select: none !important;
-  user-select: none !important;
+/*
+ * `active:` — press feedback, corrected, with nothing for the consumer to learn.
+ *
+ * This used to be a separate `pressed:` variant over `[data-pressed]`. That was a
+ * variant NAME the consumer had to know existed, on top of `active:` still being
+ * there and silently doing the wrong thing on any gesture-engine element. Folding
+ * it into `active:` makes it the same kind of thing as the `hover:` fix above: a
+ * correction that reaches idiomatic code the consumer already writes.
+ *
+ * ⚠︎ The naive rewrite — `active:` → `&[data-pressed]` — is a SILENT REGRESSION and
+ * must never be shipped. `data-pressed` only exists where the gesture engine is
+ * attached, so a consumer's own `<button className="active:scale-95">` would simply
+ * stop doing anything. Hence two branches, keyed on a mount-time marker
+ * (`data-press-engine`) that useGestureEngine puts on the node it is wired to:
+ *
+ *   engine element → `[data-pressed]` only. Native `:active` is EXCLUDED, and that
+ *     exclusion is the point: it cannot be cleared from JS and will not re-light
+ *     when a finger drags out of the target and slides back in, which is exactly
+ *     the reentrant behaviour the engine exists to provide.
+ *   plain element  → `:active`, byte-for-byte the old behaviour. No regression.
+ *   marker missing → the `:not()` matches, so it falls through to `:active`. A
+ *     wiring mistake degrades to stock Tailwind rather than to nothing.
+ *
+ * Overriding a built-in variant discards Tailwind's own definition; `active:` has no
+ * media-query half to re-supply (unlike `hover:`), so these two branches are the
+ * whole of it. Specificity is asserted in styles/utils.test.ts alongside `hover:`.
+ */
+@custom-variant active {
+  &[data-pressed] {
+    @slot;
+  }
+  &:active:not([data-press-engine]) {
+    @slot;
+  }
 }
 
-/* text-editing surfaces always keep native selection so fields stay usable */
-input,
-textarea,
-[contenteditable="true"] {
-  -webkit-user-select: text !important;
-  user-select: text !important;
+@layer adaptv.reset {
+  /* ═══════════════════════════════════════════════════════════════════════════
+   * The two app-feel resets that are the CONSUMER'S call, not doctrine
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Everything else in this file fixes something BROKEN — sticky hover after a tap,
+   * a `pointercancel` WebKit never dispatches, a ghost caret, WebKit's autofill
+   * yellow. Nobody wants the alternative, so none of it has a knob.
+   *
+   * Selection and scrollbars are different: they are just *different*. A
+   * content-heavy web app and a mobile-first installed app genuinely want opposite
+   * answers, and applying the app answer in a browser tab is hostile — the user
+   * cannot select an error message, cannot Ctrl+A, loses the scroll-position
+   * indicator on a long page.
+   *
+   * So both are keyed on a boolean-presence attribute stamped on <html> BY THE
+   * PRE-PAINT INIT SCRIPT (utils/platform.ts, `UI_STAMPS`), which resolves
+   * `adaptv.config.ts` `ui.*` × the runtime platform exactly once:
+   *
+   *   "app" (default) + standalone/native → stamped     "all" → always stamped
+   *   "app" (default) + browser tab       → absent      "off" → never stamped
+   *
+   * Resolving it there rather than here is the whole point: the stylesheet stays
+   * ONE static artifact for every config, there is no build matrix, and because the
+   * stamp lands before first paint there is no flash and no hydration mismatch. */
+
+  /* fixes accidental text selection across the ui, where a selection is a mis-tap
+   * rather than a feature (`ui.noSelect`, default installed-app-only).
+   * `html[…]` is in the list so the root element matches too — the old bare `*` did.
+   * opt back in per element with the `selectable` utility: utilities is a LATER
+   * layer than adaptv, so it wins on layer order alone (this used to need
+   * `!important`) and the extra attribute specificity here changes nothing. */
+  html[data-adaptv-no-select],
+  html[data-adaptv-no-select] * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* text-editing surfaces always keep native selection so fields stay usable,
+   * whatever `ui.noSelect` is set to. `:is()` rather than three bare selectors so
+   * this out-specifies the stamped `*` above (0,2,1 vs 0,1,1) instead of leaning on
+   * source order — `input` alone would now LOSE to it. */
+  html[data-adaptv-no-select] :is(input, textarea, [contenteditable="true"]) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Media is never selectable, on ANY target, regardless of `ui.noSelect`.
+   *
+   * This is doctrine, not taste — the owner's test is "is the alternative broken, or
+   * just different?", and a selected `<img>` is broken twice over. It paints the blue
+   * selection wash over the picture, which nobody has ever wanted; and a
+   * selection-drag that starts on an image is the browser's cue to begin a native
+   * image drag, which steals the pointer from the gesture engine. Swipe a `Swipeable`
+   * row that contains a thumbnail and the row stops tracking the finger.
+   *
+   * Deliberately NOT behind the knob: `ui.noSelect` answers "is TEXT selectable in
+   * this app", which is a real product question with different right answers for a
+   * reading app and an installed tool. Whether a photo highlights blue is not that
+   * question — and a content-heavy web app that turns text selection back on still
+   * does not want its images highlighting.
+   *
+   * `-webkit-user-drag` is deliberately absent here and lives on `Image` instead
+   * (`draggable={false}`): dragging a photo out to the desktop is a legitimate thing
+   * for a gallery to want, so it stays overridable per element rather than global. */
+  img,
+  svg,
+  video,
+  canvas {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* fixes scrollbars clashing with full-bleed app chrome (firefox + legacy width).
+   * `ui.hideScrollbars`, default installed-app-only. */
+  html[data-adaptv-hide-scrollbars],
+  html[data-adaptv-hide-scrollbars] * {
+    scrollbar-width: none;
+  }
+
+  /* fixes webkit scrollbar chrome still showing when width is none */
+  html[data-adaptv-hide-scrollbars]::-webkit-scrollbar,
+  html[data-adaptv-hide-scrollbars]::-webkit-scrollbar-track,
+  html[data-adaptv-hide-scrollbars]::-webkit-scrollbar-thumb,
+  html[data-adaptv-hide-scrollbars] *::-webkit-scrollbar,
+  html[data-adaptv-hide-scrollbars] *::-webkit-scrollbar-track,
+  html[data-adaptv-hide-scrollbars] *::-webkit-scrollbar-thumb {
+    display: none;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+   * Focus — kill the MOUSE/TOUCH ring, keep the KEYBOARD one
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * This reset used to be `:focus` flat, justified by "package components replace
+   * with focus-visible rings". That only ever covered adaptv's OWN primitives — a
+   * consumer's plain `<button>` was left with no visible focus indicator on any
+   * target, keyboard included. That is WCAG 2.4.7 Level AA, so it is broken, not a
+   * preference, and it does not get a config knob.
+   *
+   * `:focus-visible` is by spec a SUBSET of `:focus`, so `:focus:not(:focus-visible)`
+   * is exactly "focused, but the UA decided this focus does not deserve an
+   * indicator" — a click or a tap. That is the app-feel half, and it is all that
+   * needed removing. */
+  input:focus:not(:focus-visible),
+  textarea:focus:not(:focus-visible),
+  select:focus:not(:focus-visible),
+  button:focus:not(:focus-visible),
+  a:focus:not(:focus-visible),
+  [tabindex]:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* The replacement indicator. NO platform branching, and none should be added:
+   * UAs deliberately do not match `:focus-visible` for touch-initiated focus, so a
+   * tap on mobile gets no ring (the app feel we wanted) while Tab keeps one —
+   * including an external keyboard on an installed iPad PWA, which is a case a
+   * `data-adaptv-platform` stamp could never detect.
+   *
+   * `outline`, not `border`/`ring`: it never participates in layout (no reflow when
+   * it appears) and it follows `border-radius` in every browser adaptv targets.
+   *
+   * `:where()` per STYLING.md §6.0.1 — zero specificity, so an adaptv component rule
+   * in a later sub-layer (the drawer overlay opts out) and a consumer's same-layer
+   * override both win without a fight. §7 means adaptv ships no colour token, so the
+   * fallback chain (§4's idiom) ends at `currentColor`.
+   *
+   * ⚠︎ Known limitation, and the reason `--adaptv-ring` exists: `currentColor` on a
+   * FILLED control is the label colour, so a white-on-brand button gets a white ring
+   * that washes out against a light page. An app with a brand palette should set
+   * `--adaptv-ring` once on `:root`. */
+  :where(:focus-visible) {
+    outline: 2px solid var(--adaptv-ring, currentColor);
+    outline-offset: 2px;
+  }
+
+  /* fixes inconsistent single-line field metrics across browsers */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"] {
+    line-height: 1.5;
+    box-sizing: border-box;
+  }
+
+  /* hides webkit/ms native clear on type=search when apps render their own clear control */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration,
+  input[type="search"]::-webkit-search-results-button,
+  input[type="search"]::-ms-clear {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
 }
 
-/* fixes scrollbars clashing with full-bleed app chrome (firefox + legacy width) */
-* {
-  scrollbar-width: none !important;
-}
+@layer adaptv.patches {
+  /* fixes ios autofill yellow background and text/caret color ignoring the field's color.
+   *
+   * ⚠︎ THE ONE SURVIVING `!important` IN ADAPTV'S CSS is the box-shadow, and it is a UA
+   * fight, which is the only exemption §6.0.1 allows. WebKit's UA stylesheet paints the
+   * autofill background with its own `!important`, so no author declaration of
+   * `background-color` — important or not, layered or not — can replace it. The only
+   * working technique is to COVER it with a full-bleed inset shadow, and that cover has
+   * to survive a consumer's `shadow-*` utility landing on the same field (`-webkit-box-
+   * shadow` is an alias of `box-shadow`, and `utilities` is a later layer than this one).
+   * Without the `!important` an `<Input className="shadow-sm">` uncovers the yellow.
+   *
+   * The other two declarations are deliberately NOT important. Neither appears in any UA
+   * stylesheet — `-webkit-text-fill-color` and `caret-color` are plain author properties
+   * — so an important there would only have been a fight with the consumer, and it is
+   * exactly the fight the layer already wins for them. The playground's main.css retints
+   * autofilled text this way; with the old `!important` here it silently lost, because
+   * important declarations INVERT layer order and unlayered important is the weakest. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  textarea:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px transparent inset !important;
+    -webkit-text-fill-color: currentColor;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: currentColor;
+  }
 
-/* fixes webkit scrollbar chrome still showing when width is none */
-*::-webkit-scrollbar,
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-thumb {
-  display: none !important;
-}
+  /* the grey tap flash on anchors is DOCTRINE and stays universal: it is a second,
+   * uglier press feedback drawn on top of the one adaptv already draws, and nobody
+   * has a reason to want both. */
+  a[href] {
+    -webkit-tap-highlight-color: transparent;
+  }
 
-/* fixes default focus ring on native controls; package components replace with focus-visible rings */
-input:focus,
-textarea:focus,
-select:focus,
-button:focus,
-a:focus,
-[tabindex]:focus {
-  outline: none;
-  box-shadow: none;
-}
+  /* the iOS long-press link preview (callout) is NOT doctrine — it is the same shape
+   * as `ui.noSelect`. In an installed app the sheet is a browser artefact leaking
+   * through, and it fights any long-press gesture the app owns; in an iOS Safari tab
+   * it is a real affordance (long-press → copy link / open in new tab) that removing
+   * costs the user something. So it is stamped: `ui.touchCallout`, default
+   * installed-app-only, resolved pre-paint in utils/platform.ts (`UI_STAMPS`). */
+  html[data-adaptv-no-touch-callout] a[href] {
+    -webkit-touch-callout: none;
+  }
 
-/* fixes inconsistent single-line field metrics across browsers */
-input[type="text"],
-input[type="password"],
-input[type="email"] {
-  line-height: 1.5;
-  box-sizing: border-box;
-}
+  /* iOS caret-repaint patch (app-wide) — the system caret overlay doesn't track CSS transforms,
+     so a moving field leaves a detached ghost caret. The caret controller mutes the focused field
+     while it moves, then force-repaints it on settle. See hooks/use-caret-repaint.ts.
 
-/* hides webkit/ms native clear on type=search when apps render their own clear control */
-input[type="search"]::-webkit-search-cancel-button,
-input[type="search"]::-webkit-search-decoration,
-input[type="search"]::-webkit-search-results-button,
-input[type="search"]::-ms-clear {
-  -webkit-appearance: none;
-  appearance: none;
-  display: none;
-}
-
-/* fixes ios autofill yellow background and text/caret color ignoring the field's color */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-input:-webkit-autofill:active,
-textarea:-webkit-autofill,
-textarea:-webkit-autofill:hover,
-textarea:-webkit-autofill:focus,
-textarea:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 30px transparent inset !important;
-  -webkit-text-fill-color: currentColor !important;
-  transition: background-color 5000s ease-in-out 0s;
-  caret-color: currentColor !important;
-}
-
-/* suppress iOS long-press link preview (callout) + grey tap flash on anchors */
-a[href] {
-  -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent !important;
-}
-
-/* iOS caret-repaint patch (app-wide) — the system caret overlay doesn't track CSS transforms,
-   so a moving field leaves a detached ghost caret. The caret controller mutes the focused field
-   while it moves, then force-repaints it on settle. See hooks/use-caret-repaint.ts. */
-[data-caret-muted="true"] {
-  caret-color: transparent !important;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * gpu boost — emergency layer promotion when fps sentinel trips
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-html[data-gpu-boost="true"] .hardware-boosted {
-  transform: translate3d(0, 0, 0) !important;
-  will-change: transform !important;
-  backface-visibility: hidden;
-  perspective: 1000px;
+     This rule is the declarative styling hook only. The mute itself must be UNTOUCHABLE (a field
+     with any `caret-*` utility would otherwise out-layer it), and §6.0.1 forbids `!important`
+     in adaptv's layer — so the controller ALSO sets `caret-color: transparent !important` as an
+     INLINE style, which is the one thing above every layer. Layered CSS is the wrong tool for
+     "must win"; §2's escape-hatch rule says so. */
+  [data-caret-muted="true"] {
+    caret-color: transparent;
+  }
 }

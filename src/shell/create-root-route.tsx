@@ -6,7 +6,10 @@ import {
 import type { ComponentType } from "react"
 import { UiNotFound } from "#adaptv/components/not-found"
 import type { OfflineProps } from "#adaptv/components/offline"
-import type { AdaptvPatches } from "#adaptv/config/app-config"
+import type {
+  AdaptvPatches,
+  AdaptvUiConfig,
+} from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
   PwaServiceWorkerRuntimeConfig,
@@ -80,6 +83,12 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
   serviceWorker?: PwaServiceWorkerRuntimeConfig
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
+  /**
+   * The app-feel resets that are the app's call — text selection, scrollbars. Each
+   * defaults to `"app"`. Resolved against the runtime platform in the pre-paint init
+   * script and stamped on `<html>`. See {@link AdaptvUiConfig}.
+   */
+  ui?: AdaptvUiConfig
 }
 
 function buildRootRouteHead({
@@ -136,6 +145,7 @@ export function createRootRoute(config: CreateRootRouteConfig) {
     headScripts = [],
     serviceWorker,
     patches,
+    ui,
     ...headConfig
   } = config
 
@@ -155,9 +165,10 @@ export function createRootRoute(config: CreateRootRouteConfig) {
         splashScreenInBrowser,
       ),
       headInitScript:
-        //platform stamp first — the app:/web: variants and attribute-scoped
-        //critical CSS below resolve from the very first frame.
-        getPlatformInitScript() +
+        //platform stamp first — the app:/web: variants, the ui app-feel stamps
+        //and the attribute-scoped critical CSS below all resolve from the very
+        //first frame.
+        getPlatformInitScript(ui) +
         getUiThemeInitScript({
           themeColorLight,
           themeColorDark,
@@ -199,6 +210,7 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           offlineComponent={offlineComponent}
           shellClassName={shellClassName}
           patches={patches}
+          ui={ui}
         >
           {outlet}
         </RoutingShell>

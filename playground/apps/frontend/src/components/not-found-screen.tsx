@@ -26,7 +26,7 @@ export function NotFoundScreen() {
 
       <Link
         to="/"
-        className="inline-flex w-full max-w-xs origin-center items-center justify-center rounded-xl bg-gradient-to-b from-primary/32 via-primary/14 to-surface px-8 py-4 text-center text-base font-semibold uppercase leading-none tracking-[0.14em] text-primary no-underline ring-1 ring-inset ring-primary/28 shadow-[inset_0_1px_0_0_oklch(1_0_0/0.5)] transition-[transform,background-color] duration-200 ease-out hover:from-primary/38 hover:via-primary/18 hover:ring-primary/38 pressed:scale-[0.98] pressed:duration-0"
+        className="inline-flex w-full max-w-xs origin-center items-center justify-center rounded-xl bg-gradient-to-b from-primary/32 via-primary/14 to-surface px-8 py-4 text-center text-base font-semibold uppercase leading-none tracking-[0.14em] text-primary no-underline ring-1 ring-inset ring-primary/28 shadow-[inset_0_1px_0_0_oklch(1_0_0/0.5)] transition-[transform,background-color] duration-200 ease-out hover:from-primary/38 hover:via-primary/18 hover:ring-primary/38 active:scale-[0.98] active:duration-0"
       >
         Back home
       </Link>

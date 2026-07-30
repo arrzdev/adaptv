@@ -101,19 +101,25 @@ describe("Button — structural classes the consumer cannot break (B8)", () => {
       <Button className="touch-none">Go</Button>,
     )
     const root = container.querySelector("button")
-    expect(root?.className).toContain("clickable")
+    expect(root?.className).toContain("touch-pan-x")
     expect(root?.className).not.toContain("touch-none")
   })
 
-  it("keeps a disabled button non-interactive whatever the className says", () => {
-    const { container } = render(
-      <Button disabled className="clickable">
-        Go
-      </Button>,
-    )
-    expect(container.querySelector("button")?.className).toContain(
-      "non-clickable",
-    )
+  it("keeps a disabled button inert without making it a scroll dead zone", () => {
+    /*
+     * A disabled control used to carry `touch-none`, which does not govern tappability
+     * at all — the engine refuses every gesture when `disabled`, and the native
+     * `disabled` attribute blocks activation — but DOES stop the browser reading the
+     * gesture as a scroll. Thumb down on a greyed-out button, swipe, page frozen.
+     * Measured in `playground/e2e/disabled-scroll.spec.ts`.
+     */
+    const el = render(
+      <Button disabled>Go</Button>,
+    ).container.querySelector("button") as HTMLElement
+    expect(el.className).not.toContain("touch-none")
+    expect(el.className).toContain("touch-pan-x")
+    //inert is carried by the attribute and the engine, which is where it belongs
+    expect(el.hasAttribute("disabled")).toBe(true)
   })
 
   it("still lets the consumer restyle the look — locking stays narrow", () => {

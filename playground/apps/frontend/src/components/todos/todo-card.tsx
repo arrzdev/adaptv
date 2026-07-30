@@ -200,7 +200,7 @@ export function TodoCard({
               onArchive()
             }}
             aria-label={`Archive ${todo.title}`}
-            className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success pressed:scale-100"
+            className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
             <Archive size={20} strokeWidth={1.75} aria-hidden />
           </IconButton>
@@ -212,7 +212,7 @@ export function TodoCard({
               onUnarchive()
             }}
             aria-label={`Unarchive ${todo.title}`}
-            className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success pressed:scale-100"
+            className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
             <ArchiveRestore size={20} strokeWidth={1.75} aria-hidden />
           </IconButton>
@@ -223,7 +223,7 @@ export function TodoCard({
             onDelete()
           }}
           aria-label={`Delete ${todo.title}`}
-          className="h-full min-w-20 rounded-none bg-error text-primary-foreground hover:bg-error pressed:scale-100"
+          className="h-full min-w-20 rounded-none bg-error text-primary-foreground hover:bg-error active:scale-100"
         >
           <Trash2 size={20} strokeWidth={1.75} aria-hidden />
         </IconButton>

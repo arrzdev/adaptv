@@ -123,28 +123,38 @@ and a dumb-correct `View`.
 flex-col parent's default `align-stretch`). Static full-screen surfaces (404, empty states, rotate
 prompt) use a plain `<View>` at the route root — it fills automatically (§1.3).
 
-### 1.3 The frame stretches its route child — the delta to close
+### 1.3 The frame stretches its route child — ✅ **CLOSED** (2026-07-30)
 
-**Contract:** a bare `<View>` at the top of a route fills the screen **without** the consumer remembering
-`fill`. The shell's screen slot is a full-viewport flex column that stretches its direct child.
+**Contract:** a bare `<View>` or `<ScrollView>` at the top of a route fills the screen **without** the
+consumer remembering `fill`. The shell's screen slot is a full-viewport flex column that stretches its
+route child.
 
-**Today:** `AppShell` renders the frame — an outer `div[data-app-shell]` (`h-dvh flex flex-col
-overflow-hidden`) and an inner screen-frame `div` (`flex-1 flex-col min-h-0 overflow-hidden`) — and the
-route's `<Outlet/>` renders inside it (`shell-layout.tsx`). But the frame does **not** stretch its direct
-child, so a route whose root `<View>` omits `fill` collapses to content height.
-
-**Delta:** the screen-frame element stretches its direct child via a CSS child rule, e.g.
+**Shipped:** `shell-layout.tsx` stamps `data-adaptv-screen` on the screen-frame element and
+`styles/screen.css` carries the rule. `fill` is now an *inner-tree* convenience rather than a root
+requirement, and `ScrollViewProps.fill` / `ViewProps.fill` say so.
 
 ```css
-[data-adaptv-screen] > * { flex: 1 1 0%; min-height: 0; }
+@layer adaptv.components {
+  [data-adaptv-screen] > :only-child { flex: 1 1 0%; min-height: 0; }
+}
 ```
 
-so the root `View` (or any root element) fills for free, and `fill` becomes an *inner-tree* convenience
-rather than a root requirement. This is the last mechanical piece of "the shell owns the frame."
+**`:only-child`, not `> *`** — the delta as originally specced. Measured while implementing: a route
+that renders several siblings would have every one of them stretch and fight under `> *`, and a
+single-cell grid on the frame (the other candidate) stacks them on top of each other. `:only-child`
+cannot silently rearrange an existing page, which is the property worth having; `screen-frame.spec.ts`
+pins both halves.
 
-> **Open sub-question:** apply the stretch to the *direct child only* (clean, predictable) vs. exposing a
-> shell prop for routes that deliberately want a non-filling root (rare). Leaning direct-child-only;
-> a non-filling root can wrap in `<View className="flex-none">`.
+**The open sub-question is answered: no shell prop.** A root that deliberately must not fill writes
+`className="flex-none"`. That works with no new API and no `!important`, because the stretch lives in
+`adaptv.components` and a Tailwind utility compiles into `utilities`, which outranks it — the layer
+order (§6 of `STYLING.md`) doing exactly the job it exists for. Also pinned in `screen-frame.spec.ts`,
+with the caveat that Tailwind's JIT only emits a class it finds in the consumer's own source.
+
+**What this removed:** apps were papering over the missing default with their own wrapper. The
+playground's `Page` opened with `<View fill className="w-full">` around its `ScrollView`, and that div
+measured as the *same box* as the frame it sat inside — same `flex flex-col`, same `flex-1`, same
+`min-h-0`, same height. Both the wrapper and both `fill`s are gone.
 
 ### 1.4 Edge-to-edge is always on (opinionated)
 
@@ -181,7 +191,7 @@ One `storage` namespace, **three tiers**, each hiding its per-target backend beh
 
 All backends store **strings**; adaptv JSON-encodes/decodes, so values must be JSON-serializable. All
 tiers are **SSR-safe** (reads return `undefined`/fallback on the server; hooks use a server snapshot,
-mirroring `useNetworkStatus`). adaptv-managed keys carry a stable prefix so `clear()` and cross-tab sync
+mirroring `useIsOffline`). adaptv-managed keys carry a stable prefix so `clear()` and cross-tab sync
 never touch the consumer's own `localStorage`.
 
 ### 2.1 `storage.kv` — fast KV, **sync**, memory-backed

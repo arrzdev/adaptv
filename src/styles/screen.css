@@ -1,0 +1,46 @@
+/*
+ * The screen frame stretches a page's root element — so a page does not have to.
+ *
+ * ## The boilerplate this removes
+ *
+ * The shell already gives every route a full-screen frame: `h-dvh` on the shell,
+ * `flex-1 min-h-0 overflow-hidden` on the frame inside it (`shell/shell-layout.tsx`).
+ * What it did NOT do was make the page's own root grow into it, because a flex child
+ * does not grow unless something says so. So every page opened with
+ * `<View fill>` / `<ScrollView fill>`, and forgetting `fill` produced a scroller
+ * rendered at its content height that silently would not scroll — the single most
+ * reported layout confusion in this framework.
+ *
+ * Worse, apps papered over it by adding their own wrapper. The playground's `Page`
+ * carried `<View fill className="w-full">` around its `ScrollView`, and that div was
+ * structurally IDENTICAL to the frame it sat inside — same `flex flex-col`, same
+ * `flex-1`, same `min-h-0`, measured at the same 720px. Pure redundancy, invented to
+ * work around a missing default.
+ *
+ * ## Why `:only-child` and not `> *`
+ *
+ * React Native's model is that the screen container is full-size and the screen's
+ * root fills it. Making EVERY child grow would break the case where a route renders
+ * several siblings (a fragment with a header and a body): they would all stretch and
+ * fight. A single-cell grid on the frame has the mirror problem — siblings stack on
+ * top of each other, which is a much worse surprise than the current behaviour.
+ *
+ * `:only-child` is exactly the case worth defaulting: one root element, obviously
+ * meant to be the screen. Render two and nothing changes from today, so this can
+ * never silently rearrange an existing page.
+ *
+ * `min-height: 0` travels with it: growing is useless to a `ScrollView` without it —
+ * a flex item's automatic minimum size is its content, so the scroller would size to
+ * its content and scroll nothing. (`ScrollView` sets its own; a plain `<div>` page
+ * root would not.)
+ *
+ * `flex: 1 1 0%` rather than `flex-grow: 1`: with the default `flex-basis: auto` a
+ * tall page still starts from its content height and only grows, which changes
+ * nothing for overflowing content.
+ */
+@layer adaptv.components {
+  [data-adaptv-screen] > :only-child {
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+}

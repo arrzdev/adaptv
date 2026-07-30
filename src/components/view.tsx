@@ -25,7 +25,13 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
   row?: boolean
   /** Center children on both axes. */
   center?: boolean
-  /** Grow to fill the parent flex line — `flex-1` + `min-h-0` (so nested scroll works). */
+  /**
+   * Grow to fill the parent flex line — `flex-1` + `min-h-0` (so nested scroll works).
+   *
+   * **Not needed at a page's root**: the shell stretches a route's only root element
+   * (`styles/screen.css`), so a bare `<View>` is already a full-screen, non-scrolling
+   * page. Use it when this box is one of several children and should take the slack.
+   */
   fill?: boolean
   /** Pad the given safe-area edge(s). Wins over `className` (structural). */
   safe?: SafeEdges
@@ -62,6 +68,7 @@ export function View({
 }: ViewProps) {
   return (
     <div
+      data-adaptv="view"
       className={mergeStyles({
         base: [
           "flex",

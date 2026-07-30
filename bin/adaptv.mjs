@@ -2346,6 +2346,13 @@ async function main() {
   //Before any command runs, so no banner escapes ahead of the mode being known.
   setOutputMode({ json: !!flags.json, quiet: !!flags.quiet })
 
+  // `--verbose` means "show me what the tools are actually doing", so it has to reach
+  // the tools, not just the renderer. Set once here rather than threaded per call
+  // site: every vite invocation (dev, build, preview) spawns with `...process.env`,
+  // so one assignment covers all of them and none can be forgotten. Read by adaptv's
+  // own vite plugins — currently the image pipeline's per-build cost summary.
+  if (flags.verbose) process.env.ADAPTV_VERBOSE = "1"
+
   switch (cmdPath.join(" ")) {
     case "doctor": {
       const out = await doctor(appRoot)

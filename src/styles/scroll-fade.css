@@ -1,0 +1,92 @@
+/*
+ * Edge fades for scroll containers — the "there is more content that way" hint.
+ *
+ * ## Why a mask and not a coloured band
+ *
+ * adaptv used to paint two absolutely-positioned bands over the scroller and ask the
+ * consumer for a background utility (`edgeClassName="bg-background"`). That only ever
+ * looks right when the band's colour matches whatever is behind the scroller, so it
+ * broke over an image, over a themed surface, and in dark mode if the consumer forgot
+ * to re-declare it. It also needed a wrapper element, which changed the layout.
+ *
+ * A mask dissolves the CONTENT to transparent instead of painting over it, so whatever
+ * is actually behind shows through — no colour to supply and none to keep in sync.
+ * Every platform that ships this feature made the same choice: Android's
+ * `requiresFadingEdge`, Flutter's `FadingEdgeScrollView`, shadcn's `scroll-fade`, and
+ * React Native's `fadingEdgeLength` are all masks, and not one of them exposes a
+ * colour. If a design genuinely needs a coloured gradient — fading into an opaque
+ * toolbar, say — that is an overlay, a different thing, and a plain `<div>` composes it.
+ *
+ * ## Why the strength is a variable and not a media/`:has()` condition
+ *
+ * The fade must vanish at the end it is parked against, or a tall fade permanently
+ * greys out the first line of content — the whole reason this was reworked. CSS can
+ * express that on its own with scroll-driven animations (`animation-timeline:
+ * scroll()`), which is how shadcn does it, but that is Safari 26+ and adaptv's floor
+ * is iOS 18 (`DECISIONS.md`). A CSS-only version would therefore work on Android and
+ * silently do nothing on the majority of iOS installs — a mitigation that fixes one
+ * target and fails quietly on another is worse than none (`VISION.md §2.1`). So one
+ * implementation, driven from JS on every target: `use-scroll-edge-fade.ts` writes
+ * `--fade-start` / `--fade-end` as 0→1 strengths, exactly Android's
+ * `getTopFadingEdgeStrength()` contract.
+ */
+
+/*
+ * `--fade-length` is the depth; `--fade-start` / `--fade-end` are the strengths.
+ * Declared here so the mask never reads an undefined variable — an absent custom
+ * property poisons the whole `calc()` and the mask silently drops the element to
+ * fully transparent, i.e. an invisible scroller.
+ */
+@layer adaptv.components {
+  [data-fade] {
+    --fade-length: 2rem;
+    --fade-start: 0;
+    --fade-end: 0;
+
+    /*
+     * At strength 0 the two stops collapse onto the same position, which is a hard
+     * transition — fully opaque right up to the edge. That is what makes "parked"
+     * cost nothing: no branch, no second rule, the same gradient just stops fading.
+     */
+    --fade-mask: linear-gradient(
+      var(--fade-direction, to bottom),
+      transparent,
+      #000 calc(var(--fade-length) * var(--fade-start)),
+      #000 calc(100% - var(--fade-length) * var(--fade-end)),
+      transparent
+    );
+
+    /* Chromium only dropped the prefix in 120, and Android WebView trails the OS —
+     * so the prefixed pair is not legacy noise here, it is the Android baseline. */
+    -webkit-mask-image: var(--fade-mask);
+    mask-image: var(--fade-mask);
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+
+  /* Horizontal scrollers fade along the inline axis, and `start`/`end` are LOGICAL —
+   * the same two props read correctly in an RTL layout, which is the whole reason the
+   * prop is not called `top`/`bottom`. */
+  [data-fade][data-scroll-view="x"] {
+    --fade-direction: to right;
+  }
+  [dir="rtl"] [data-fade][data-scroll-view="x"] {
+    --fade-direction: to left;
+  }
+}
+
+/*
+ * `--fade-length` is INTERNAL. Depth is the `fadeSize` prop.
+ *
+ * There was briefly an `edge-fade-*` utility as well, and shipping both was the
+ * mistake: the prop writes an inline custom property, which is its own cascade origin,
+ * so it beat the class every time and `fadeSize` next to `md:edge-fade-12` looked
+ * broken at the breakpoint. The fix is not a caveat in the docs — it is one channel.
+ *
+ * Nor is the variable itself a fallback API. A consumer should not have to know the
+ * mask reads `--fade-length` any more than they have to know it is a mask; the point
+ * of a typed component interface is that nothing has to be guessed. If a responsive
+ * depth ever becomes a real requirement it goes on `fadeSize` as a typed value.
+ */

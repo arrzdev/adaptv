@@ -1,3 +1,7 @@
+//The PUBLIC component surface, kept in lockstep with `src/components/index.ts` by
+//`src/components/barrels.test.ts`. The drift that hid `Text` from consumers passed
+//typecheck, lint, the unit suite and `build:check` — a missing re-export is invisible
+//to every gate that does not compare the two lists.
 export * from "../components/avoid-keyboard"
 export * from "../components/button"
 export * from "../components/checkbox"
@@ -8,12 +12,16 @@ export * from "../components/image"
 export * from "../components/input"
 export * from "../components/link"
 export * from "../components/list"
+export * from "../components/not-found"
 export * from "../components/offline"
+export * from "../components/orientation-guard"
+export * from "../components/pressable"
 export * from "../components/pull-to-refresh"
 export * from "../components/pwa-splash-overlay"
 export * from "../components/scroll-view"
 export * from "../components/swipeable"
 export * from "../components/switch"
+export * from "../components/text"
 export * from "../components/text-area"
 export * from "../components/view"
 export * from "../components/wheel-column"

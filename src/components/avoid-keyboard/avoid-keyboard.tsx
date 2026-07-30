@@ -2,7 +2,7 @@ import type { CSSProperties, HTMLAttributes, Ref } from "react"
 import { forwardRef, useCallback, useRef } from "react"
 import type { AvoidKeyboardBehavior } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
-import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -49,10 +49,13 @@ export interface AvoidKeyboardProps
  *
  * **Styling hooks** — `className` lands on the root `<div>`:
  *
- * | Attribute | When | Example |
- * |-----------|------|---------|
- * | `data-keyboard-open` | `"true"` while the keyboard is up | `data-[keyboard-open=true]:…` |
- * | `data-keyboard-height` | live keyboard height in px (`0` closed) | — |
+ * | Hook | When | Example |
+ * |------|------|---------|
+ * | `data-keyboard-open` | present (valueless) while the keyboard is up | `data-keyboard-open:pb-4` |
+ * | `--adaptv-keyboard-height` | live keyboard height (`0px` closed) | `h-[calc(100%-var(--adaptv-keyboard-height))]` |
+ *
+ * Both are also stamped on `<html>` by {@link useKeyboard}, so global chrome outside
+ * this subtree can react too; the copies here are element-scoped for the common case.
  *
  * @example
  * ```tsx
@@ -97,13 +100,39 @@ export const AvoidKeyboard = forwardRef<
         : { paddingBottom: space }
       : undefined
 
+  //The keyboard height is a MEASURED SCALAR, so it is a custom property and not a data
+  //attribute (§3.2): the value space is continuous, and the whole point of publishing it
+  //is that a consumer can compose it inside `calc()` — which an attribute cannot do.
+  //
+  //Both inline declarations are `lockedStyle`, and the reservation is the reason: the
+  //`behavior` PROP picked `paddingBottom` vs `marginBottom`, and the value is the live
+  //obstruction measured this frame. A consumer's inline `paddingBottom` landing on top
+  //of it does not restyle the component, it un-reserves the space and puts the focused
+  //field back under the keyboard — the one failure this component exists to prevent.
+  //Padding as a CLASS is untouched and still the right way to pad this element.
+  const keyboardLockedStyle = {
+    ...spacingStyle,
+    "--adaptv-keyboard-height": `${keyboardHeight}px`,
+  } as CSSProperties
+
+  const merged = mergeStyles({
+    //no neutral look and nothing structural in the class tier — the avoidance is
+    //entirely inline + an attribute, so `base`/`locked` are undefined by decision
+    base: undefined,
+    className,
+    locked: undefined,
+    style,
+    lockedStyle: keyboardLockedStyle,
+  })
+
   return (
     <div
       ref={setRefs}
-      className={cn(className)}
-      style={spacingStyle ? { ...style, ...spacingStyle } : style}
-      data-keyboard-open={isKeyboardOpen}
-      data-keyboard-height={keyboardHeight}
+      className={merged.className}
+      style={merged.style}
+      //boolean-PRESENCE, never `="false"` (§3.1) — that is what makes v4's bare
+      //`data-keyboard-open:pb-4` work instead of `data-[keyboard-open=true]:pb-4`
+      data-keyboard-open={isKeyboardOpen ? "" : undefined}
       {...props}
     >
       {children}

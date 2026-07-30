@@ -73,6 +73,23 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
   })
 })
 
+describe("renderRootRouteModule — the ui app-feel block", () => {
+  it("forwards `ui` to the root config so the init script can resolve it", () => {
+    const source = renderRootRouteModule(
+      config({ ui: { noSelect: "all", hideScrollbars: "off" } }),
+    )
+    expect(source).toContain(
+      'ui: { "noSelect": "all", "hideScrollbars": "off" }',
+    )
+  })
+
+  it("omits the block entirely when the app says nothing", () => {
+    //absent, not `undefined` — the shell's own `"app"` defaults are the source of
+    //truth for the default, and there must be exactly one of them
+    expect(renderRootRouteModule(config())).not.toContain("ui:")
+  })
+})
+
 describe("adaptv generates no router entry at all", () => {
   //`.adaptv/router.gen.tsx` used to hold `getRouter`, and the justification was
   //"Start needs a module PATH exporting it". True — but the path does not have to

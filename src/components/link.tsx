@@ -3,8 +3,12 @@ import type { MouseEvent, ReactNode } from "react"
 import { forwardRef, useEffect } from "react"
 import { isExternalUrl } from "#adaptv/capabilities/browser"
 import { ExternalLink } from "#adaptv/components/external-link"
+import {
+  PRESS_TARGET_DISABLED_LOCKED_CLASS,
+  PRESS_TARGET_LOCKED_CLASS,
+} from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
-import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -36,8 +40,11 @@ export interface LinkProps {
  * ============================================================================= */
 
 const LINK_ROOT_SURFACE_CLASS = "text-gray-950 no-underline"
-const LINK_ROOT_INTERACTION_CLASS = "clickable"
-const LINK_ROOT_NON_INTERACTION_CLASS = "non-clickable"
+//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
+const LINK_ROOT_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
+const LINK_ROOT_CURSOR_CLASS = "cursor-pointer"
+const LINK_ROOT_NON_INTERACTION_CLASS = PRESS_TARGET_DISABLED_LOCKED_CLASS
+const LINK_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 const LINK_ROOT_LAYOUT_CLASS = "text-left"
 
 /* =============================================================================
@@ -95,8 +102,9 @@ function noop() {}
  * swallowed by the engine so it never navigates.
  *
  * The iOS long-press link preview is suppressed in CSS (`-webkit-touch-callout:
- * none` on `a[href]`), not here. Use `<button>` + `router.navigate()` for
- * imperative handlers, not `Link`.
+ * none` on `a[href]`), not here — and only where `ui.touchCallout` resolves to on,
+ * which by default is the installed app but not a browser tab. Use `<button>` +
+ * `router.navigate()` for imperative handlers, not `Link`.
  */
 export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   {
@@ -157,6 +165,9 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   if (isExternalUrl(to)) {
     return (
       <ExternalLink
+        //"link", not "external-link": the consumer wrote `<Link>`, and which of the
+        //two anchors it resolves to is an implementation detail of this component
+        data-adaptv="link"
         ref={ref}
         href={to}
         className={className}
@@ -169,6 +180,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
 
   return (
     <RouterLink
+      data-adaptv="link"
       ref={ref}
       to={to}
       params={params}
@@ -178,14 +190,24 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       onClick={handleClick}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}
-      className={cn(
-        LINK_ROOT_LAYOUT_CLASS,
-        LINK_ROOT_SURFACE_CLASS,
-        disabled
+      //LOCKED: the interaction utility, for the press-core reason — `clickable`
+      //carries the `touch-action` longhand that keeps `pointercancel` alive on iOS
+      //(WebKit 240917), which is how this link's engine learns a scroll took over
+      //and cancels the tap; and a `disabled` link must stay untappable whatever
+      //`className` says. Alignment and colour are a neutral default.
+      className={mergeStyles({
+        base: [
+          LINK_ROOT_LAYOUT_CLASS,
+          LINK_ROOT_SURFACE_CLASS,
+          disabled
+            ? LINK_ROOT_DISABLED_CURSOR_CLASS
+            : LINK_ROOT_CURSOR_CLASS,
+        ],
+        className,
+        locked: disabled
           ? LINK_ROOT_NON_INTERACTION_CLASS
           : LINK_ROOT_INTERACTION_CLASS,
-        className,
-      )}
+      })}
     >
       {children}
     </RouterLink>
