@@ -147,7 +147,7 @@ export const SPEC = {
     },
     {
       path: ["dev"],
-      summary: "run the app with live reload, on every surface at once",
+      summary: "run the app with live reload on the surface you name",
       prose: [
         "Runs until Ctrl-C, then reverts everything it changed. Press r to reload the app's JavaScript, b to rebuild and reinstall the native app.",
       ],
@@ -207,8 +207,7 @@ export const SPEC = {
     },
     {
       path: ["build"],
-      summary:
-        "write the artifacts you ship: an unsigned .ipa and a debug .apk",
+      summary: "package the app: an unsigned .ipa or a debug .apk",
       prose: [
         "Signing is the one thing adaptv can't do for you. For TestFlight or the App Store, open .adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.",
       ],

@@ -165,7 +165,7 @@ describe("the copy reads like a person wrote it", () => {
   it("says what running the command DOES, so the list reads as actions", () => {
     //Four of the five opened with a noun. A command is a verb; its one line should be too.
     const VERB =
-      /^(check|run|write|generate|open|show|print|launch|build)\b/
+      /^(check|run|package|generate|write|open|show|print|launch|build)\b/
     for (const s of summaries) expect(s).toMatch(VERB)
   })
 
