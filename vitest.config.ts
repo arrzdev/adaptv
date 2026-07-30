@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url"
 import { defineConfig } from "vitest/config"
+import { adaptvPwaRegisterPlugin } from "./src/vite/virtuals"
 
 //mirror the package's "#adaptv/*" subpath import (package.json "imports") so tests can
 //use the same self-alias the source does instead of brittle relative paths
@@ -8,6 +9,11 @@ const srcDir = fileURLToPath(new URL("./src", import.meta.url))
 //happy-dom gives the hook a document to mount into (Testing Library's
 //renderHook); the engine itself only touches the synthetic events it's handed
 export default defineConfig({
+  //the shell imports `virtual:adaptv/pwa-register`, which adaptv's own Vite plugin
+  //provides in a real app build — so any test that mounts the shell needs it too.
+  //Reusing the plugin (rather than stubbing the id) keeps the test graph resolving
+  //the same module source consumers get.
+  plugins: [adaptvPwaRegisterPlugin()],
   resolve: {
     alias: { "#adaptv": srcDir },
   },
