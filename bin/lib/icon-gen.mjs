@@ -31,7 +31,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
-import { measureArtwork, monochromeMark } from "./artwork.mjs"
+import { hexOf, measureArtwork, monochromeMark } from "./artwork.mjs"
 import { encodeIco } from "./ico.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 
@@ -92,6 +92,23 @@ export const ICON_SET = [
 ]
 
 /**
+ * The colour the mark will actually sit on — `{r,g,b}`.
+ *
+ * One function because THREE things have to agree about it: the slots `generateIcons` flattens,
+ * the `!` that tells the dev which colour was read, and the preview sheet's adaptive tiles.
+ * They didn't. The sheet drew its tiles on the flag's value while the files were flattened onto
+ * the measured one, so a green-backed logo previewed on white and shipped on green — the
+ * preview disagreeing with the platforms about the one colour the run had just warned about.
+ *
+ * `chosen` is whether the dev NAMED the colour, and it is the whole precedence: a measurement
+ * is adaptv guessing on their behalf, a flag is them answering, and the answer wins (R39).
+ */
+export function effectiveBackground(artwork, background, chosen = false) {
+  if (chosen) return background
+  return artwork?.background ?? background
+}
+
+/**
  * What a slot is drawn FROM, at what scale, on what background — `{ art, scale, background,
  * flatten }`.
  *
@@ -112,6 +129,7 @@ function slotPlan(
   source,
   background,
   margin,
+  chosen = false,
 ) {
   // `layer` and `mono` are the slots that must stay clear whatever the source looked like —
   // both are ONE LAYER of a two-layer Android icon, and painting the other layer onto them
@@ -127,11 +145,16 @@ function slotPlan(
   //iOS composites the tinted variant itself, from luminance, over its own backdrop — so the
   //art has to sit on BLACK rather than on the app's brand colour.
   const onBlack = greyscale ? BLACK : null
+  //Through `effectiveBackground` like the branch below, not the raw value. A source that is
+  //ENTIRELY background reaches here with a colour measured and no mark to lift off it, and
+  //using the flag's default instead would letterbox that source onto white while the preview
+  //sheet — which asks the same function — drew the measured colour.
   if (!artwork.mark)
     return {
       art: source,
       scale: 1,
-      background: onBlack ?? background,
+      background:
+        onBlack ?? effectiveBackground(artwork, background, chosen),
       flatten,
       greyscale,
       mono,
@@ -143,8 +166,13 @@ function slotPlan(
     greyscale,
     mono,
     //Keep the colour the art was found on, so a logo exported as a flat-coloured tile stays
-    //that colour instead of jumping to the config's brand background.
-    background: onBlack ?? artwork.background ?? background,
+    //that colour instead of jumping to the config's brand background — UNLESS the dev named
+    //one. `--background` used to lose to the measurement, which made it a no-op in the only
+    //case anyone reaches for it: a source that HAS a background whose colour they want
+    //changed. A measurement is adaptv's guess and the flag is the dev's answer, so the flag
+    //wins; with no flag there is nothing to prefer and the measurement stands.
+    background:
+      onBlack ?? effectiveBackground(artwork, background, chosen),
     flatten,
   }
 }
@@ -217,6 +245,7 @@ export async function generateIcons({
   source,
   dirAbs,
   background,
+  backgroundChosen = false,
   padding = 0,
   margin,
   artwork,
@@ -251,7 +280,7 @@ export async function generateIcons({
           //the dev drew to replace it would put the same decision back.
           mono: false,
         }
-      : slotPlan(slot, art, source, bg, margin)
+      : slotPlan(slot, art, source, bg, margin, backgroundChosen)
     const png = await render(sharp, plan.art, {
       canvas: px,
       scale: plan.scale * inset,
@@ -386,7 +415,16 @@ export function sourceError(ext) {
  * A good source — a big square transparent mark — trips none of them.
  */
 export function sourceWarnings(
-  { width, height, isolable, luminance, hasDark, hasTinted },
+  {
+    width,
+    height,
+    isolable,
+    luminance,
+    hasDark,
+    hasTinted,
+    background,
+    backgroundChosen,
+  },
   ext,
 ) {
   const warnings = []
@@ -423,6 +461,24 @@ export function sourceWarnings(
   if (isolable === false)
     warnings.push(
       `source has no flat background, so the mask will crop its edges`,
+    )
+
+  // NOT a complaint about the source — a statement of the one measurement everything visible
+  // downstream is derived from. This colour becomes the iOS tile, Android's
+  // `ic_launcher_background` and the favicon backdrop, while the mark is lifted off it for the
+  // slots that must stay clear (iOS dark, Android's adaptive foreground).
+  //
+  // It carries the `!` because it is ACTIONABLE (R5): adaptv read the colour off the border
+  // ring, and a logo with a border, a drop shadow or a near-white-but-not-white canvas can be
+  // read one shade off — which is invisible in the source and obvious on a home screen. The
+  // fix is named, and naming it is what made `--background` have to outrank the measurement.
+  // Deliberately silent for a transparent source: there is no colour that was chosen, and a
+  // line every project sees is noise (R4). Silent too when the dev PASSED `--background` —
+  // adaptv used their colour, not the measured one, so the whole notice is answering a
+  // question they already answered.
+  if (background && !backgroundChosen)
+    warnings.push(
+      `background ${hexOf(background)} lifted off the mark; --background overrides`,
     )
 
   // BOTH iOS 18 appearances need light art, and the first version of this warning only said

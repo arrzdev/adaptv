@@ -306,7 +306,7 @@ export const SPEC = {
           value: "<hex>",
           group: "advanced",
           describe:
-            "the colour behind your art where an icon cannot be transparent",
+            "overrules the colour adaptv read from your image, for the icons that cannot be transparent",
           parse: (raw) => {
             if (raw === true || !HEX.test(String(raw).trim()))
               throw new Error(

@@ -44,6 +44,7 @@ import {
   nativeFingerprint,
 } from "./lib/fingerprint.mjs"
 import {
+  effectiveBackground,
   existingIcons,
   generateIcons,
   sourceError,
@@ -2213,6 +2214,19 @@ async function genIcons(appRoot, _positional, flags) {
     appearances[slot] = abs
   }
 
+  //Resolved HERE, above the notices that read it — R33 puts everything adaptv already knows
+  //before the run, so the values those notices are derived from have to exist by then.
+  //`backgroundChosen` is whether the dev NAMED the colour, not what it resolved to:
+  //`--background` outranks a measured background (see `slotPlan`), and once through `parseHex`
+  //the default is indistinguishable from someone typing `--background #ffffff`.
+  const backgroundChosen = typeof flags.background === "string"
+  const background = parseHex(
+    flags.background ?? resolveIconPlan(config).iconBackground,
+  )
+  //What the mark will actually sit on. Shared with `slotPlan` rather than restated, so the
+  //preview sheet cannot disagree with the files it is previewing.
+  const tile = effectiveBackground(artwork, background, backgroundChosen)
+
   const tuning = parseTuning(flags)
   if (tuning.errors.length > 0) {
     for (const e of tuning.errors) log.error(e)
@@ -2225,6 +2239,8 @@ async function genIcons(appRoot, _positional, flags) {
         ...meta,
         isolable: artwork.mark !== null,
         luminance: artwork.luminance,
+        background: artwork.background,
+        backgroundChosen,
         hasDark: appearances["icon-dark.png"] !== undefined,
         hasTinted: appearances["icon-tinted.png"] !== undefined,
       },
@@ -2262,16 +2278,13 @@ async function genIcons(appRoot, _positional, flags) {
     }
   }
 
-  const background = parseHex(
-    flags.background ?? resolveIconPlan(config).iconBackground,
-  )
-
   let written = []
   await runLine("icons", async () => {
     written = await generateIcons({
       source: sourceAbs,
       dirAbs: set.dirAbs,
       background,
+      backgroundChosen,
       padding: tuning.values.padding,
       margin: tuning.values.margin,
       artwork,
@@ -2305,8 +2318,13 @@ async function genIcons(appRoot, _positional, flags) {
         margin: tuning.values.margin,
         artTarget: artTarget(tuning.values.margin),
         safeZone: SAFE_ZONE,
-        //the adaptive tiles composite over this exactly as a launcher does
-        background: `rgb(${background.r} ${background.g} ${background.b})`,
+        //The colour that will actually SHIP, not the flag's value. `slotPlan` prefers the
+        //measured background over the default, so a green-backed logo lands on green in every
+        //solid slot and in `ic_launcher_background` — while the sheet drew its adaptive tiles
+        //on white and captioned them `+ rgb(255 255 255)`. A preview whose whole job is
+        //showing what the platforms will do must not disagree with them about the one colour
+        //this run just printed a `!` about.
+        background: `rgb(${tile.r} ${tile.g} ${tile.b})`,
       },
     })
     detail(`preview  ${path.relative(appRoot, dest)}`)
