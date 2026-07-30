@@ -289,8 +289,8 @@ export function portInUse(text) {
   return {
     msg: `port ${busy[1]} is already in use`,
     fix: [
-      "Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.",
-      `\`lsof -nP -iTCP:${busy[1]} -sTCP:LISTEN\` names it — stop that, then run again.`,
+      "Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.",
+      `'lsof -nP -iTCP:${busy[1]} -sTCP:LISTEN' names it. Stop that, then run again.`,
     ],
   }
 }

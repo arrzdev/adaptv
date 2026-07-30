@@ -245,7 +245,7 @@ from your mark's luminance, keeping its internal contrast where there is any and
 flat silhouette where there isn't.</p>
 <div class="row">
   ${ANDROID_THEMED.map(themed).join("\n  ")}
-  ${screen("icon-monochrome.png", "the layer alone", { cls: "safe", backdrop: IOS_DARK, note: "white — the launcher supplies the ink" })}
+  ${screen("icon-monochrome.png", "the layer alone", { cls: "safe", backdrop: IOS_DARK, note: "white; the launcher supplies the ink" })}
 </div>
 
 <h2>Installed web app</h2>

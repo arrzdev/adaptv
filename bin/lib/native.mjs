@@ -3,7 +3,8 @@
 // Extracted from bin/adaptv.mjs so the entry file stays a thin dispatcher. Every
 // long-running command streams through the captured `exec` (see exec.mjs) so its
 // output can be rendered as calm steps instead of a raw log dump.
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import {
   copyFileSync,
   existsSync,
@@ -12,13 +13,16 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
 import { homedir, networkInterfaces } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { exec } from "./exec.mjs"
+import { appConfigFingerprint } from "./fingerprint.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import {
   classListChanged,
@@ -29,6 +33,7 @@ import {
   mergeSettingsGradle,
   podsNeedInstall,
 } from "./native-state.mjs"
+import { readSection, writeSection } from "./state.mjs"
 
 // The framework package root (bin/lib/native.mjs → up two). adaptv OWNS Capacitor:
 // the `cap` CLI, both native platforms, and every plugin are adaptv's OWN deps, so
@@ -40,8 +45,9 @@ export const ADAPTV_ROOT = path.join(
   "..",
 )
 
-/** The hidden generated dir (mirrors src/vite/adaptv-dir.ts — kept in sync by hand). */
-export const ADAPTV_DIR = ".adaptv"
+//Re-exported so every existing importer keeps working; the constant itself lives in its own
+//module to break the native ↔ fingerprint cycle.
+export { ADAPTV_DIR } from "./adaptv-dir.mjs"
 /** Where `adaptv build` puts its artifacts: `.adaptv/builds/<app>.ipa|.apk`. */
 export const BUILDS_DIR = "builds"
 /** Absolute path to a platform's native project, now under `.adaptv/`. */
@@ -512,22 +518,120 @@ export function patchIosTheme(appRoot, mask) {
  * returning the same sentences from here as well only gave a caller the chance to print them
  * a second time, halfway through work that had already used them.
  */
+/**
+ * Bump when the GENERATOR's output changes — a new slot, a different scale, a fixed mask.
+ *
+ * Non-negotiable, and the one part of the guard below that a human has to maintain: without
+ * it, editing `writeAndroidIcons` and re-running would keep the old mipmaps, because the
+ * inputs (the art, the config) did not move. It lives next to the writers for that reason.
+ */
+const ASSETS_GEN_VERSION = 1
+
+/** Everything `generateAssets` writes into, per platform. Hashed to answer "is it already there?" */
+const ASSET_OUTPUTS = {
+  ios: [
+    "App/App/Assets.xcassets/AppIcon.appiconset",
+    "App/App/Assets.xcassets/AdaptvSplash.colorset",
+    "App/App/Base.lproj/LaunchScreen.storyboard",
+    "App/App/AppDelegate.swift",
+  ],
+  android: [
+    "app/src/main/res/mipmap-mdpi",
+    "app/src/main/res/mipmap-hdpi",
+    "app/src/main/res/mipmap-xhdpi",
+    "app/src/main/res/mipmap-xxhdpi",
+    "app/src/main/res/mipmap-xxxhdpi",
+    "app/src/main/res/mipmap-anydpi-v26",
+    "app/src/main/res/values/ic_launcher_background.xml",
+    "app/src/main/res/values-night/ic_launcher_background.xml",
+  ],
+}
+
+/** A content hash of those paths as they are ON DISK right now. Missing hashes as absent. */
+function assetOutputsHash(appRoot, platform) {
+  const h = createHash("sha1")
+  const root = nativeDir(appRoot, platform)
+  const walk = (rel) => {
+    const abs = path.join(root, rel)
+    let st
+    try {
+      st = statSync(abs)
+    } catch {
+      h.update(`${rel}:absent\n`)
+      return
+    }
+    if (st.isDirectory()) {
+      for (const name of readdirSync(abs).sort())
+        walk(path.join(rel, name))
+      return
+    }
+    h.update(`${rel}:`)
+    try {
+      h.update(readFileSync(abs))
+    } catch {
+      h.update("unreadable")
+    }
+    h.update("\n")
+  }
+  for (const rel of ASSET_OUTPUTS[platform] ?? []) walk(rel)
+  return h.digest("hex")
+}
+
+/**
+ * Write the launcher icons, the splash colours and the launch storyboard into the native
+ * projects — unless they are already exactly the files that would be written.
+ *
+ * This runs on EVERY command, and it is ~18-23 sharp encodes (measured ~240ms for both
+ * platforms) re-deriving byte-identical files from art that has not changed. The guard has two
+ * halves and needs BOTH to skip:
+ *
+ *   inputs   `appConfigFingerprint` — the config file plus the icon directory it points at —
+ *            with the icon plan, the splash mask, the appId and `ASSETS_GEN_VERSION` folded in.
+ *   outputs  a content hash of the files this function writes, as they are on disk.
+ *
+ * The outputs half is the whole safety argument, and it is why this is not the usual "trust a
+ * cache" trade. It asks the honest question — *are the files I would write already the files
+ * that are there?* — so every way of going wrong answers no and the work happens: a deleted
+ * mipmap, a hand-edited icon, a half-written file from a Ctrl-C, a native project rescaffolded
+ * by `cap add`, a `state.json` from another machine or none at all. It fails toward doing the
+ * work, which is the only direction a build cache may fail in.
+ *
+ * `--force` bypasses it, like every other cache here.
+ */
 export async function generateAssets(
   appRoot,
   config,
   platforms,
-  { report } = {},
+  { report, force = false } = {},
 ) {
   const icon = resolveIconPlan(config)
   const mask = resolveSplashMask(config)
-  if (platforms.includes("android"))
+
+  const inputs = createHash("sha1")
+    .update(appConfigFingerprint(appRoot, config))
+    .update(JSON.stringify(icon))
+    .update(JSON.stringify(mask))
+    .update(String(config?.appId))
+    .update(`v${ASSETS_GEN_VERSION}`)
+    .digest("hex")
+  const remembered = readSection(appRoot, "assets")
+
+  const stale = platforms.filter(
+    (p) =>
+      force ||
+      remembered[p]?.inputs !== inputs ||
+      remembered[p]?.outputs !== assetOutputsHash(appRoot, p),
+  )
+  if (stale.length === 0) return
+
+  if (stale.includes("android"))
     patchAndroidSplash(appRoot, mask, config.appId)
-  if (platforms.includes("ios")) patchIosTheme(appRoot, mask)
+  if (stale.includes("ios")) patchIosTheme(appRoot, mask)
 
   //One scan for the whole run, even an `all` one: the same set brands both platforms, and
   //`preflight` has normally already resolved and reported on it before any of this ran.
   const set = await loadIconSet(appRoot, config)
-  for (const platform of platforms) {
+  for (const platform of stale) {
     await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
       set,
       background: icon.iconBackground,
@@ -535,6 +639,12 @@ export async function generateAssets(
       report,
     })
   }
+
+  //Recorded AFTER writing, so the stored outputs hash describes what is now on disk.
+  const next = { ...remembered }
+  for (const p of stale)
+    next[p] = { inputs, outputs: assetOutputsHash(appRoot, p) }
+  writeSection(appRoot, "assets", next)
 }
 
 /** Build the static SPA for the Capacitor target and stamp its `index.html`. */
@@ -616,7 +726,7 @@ export async function capAddIfMissing(
   }
   if (!platformInstalled) {
     throw new Error(
-      `@capacitor/${platform} is missing from adaptv's install — reinstall adaptv ` +
+      `@capacitor/${platform} is missing from adaptv's install. Reinstall adaptv ` +
         `(this is a framework packaging issue, not something to add to your app).`,
     )
   }
@@ -758,9 +868,7 @@ async function injectIosPluginPods(
   for (const name of [...adaptvCapacitorNativePkgs("ios"), ...plugins]) {
     const dir = resolvePkgDir(name)
     if (!dir) {
-      report?.(
-        `! plugin ${name} not found — skipped (did you install it?)`,
-      )
+      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
       continue
     }
     const rel = path.relative(podfileDir, dir)
@@ -898,9 +1006,7 @@ function injectAndroidPluginProjects(
   ]) {
     const dir = resolvePkgDir(name)
     if (!dir) {
-      report?.(
-        `! plugin ${name} not found — skipped (did you install it?)`,
-      )
+      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
       continue
     }
     // `capacitor.android.src` is where the plugin keeps its Gradle module; a package
@@ -1012,9 +1118,44 @@ export async function capRun(
  * across the Linux/Windows hosts where Android dev also runs. The app is still fronted
  * *inside* the emulator by the launch; raising the emulator window stays the dev's own.
  */
-export function foregroundDevice(platform, target, env) {
-  if (isPhysicalTarget(platform, target, env)) return
-  if (platform === "ios") spawnSync("open", ["-a", "Simulator"])
+
+/**
+ * Run a short command and resolve `{ status, stdout }`. The async twin of `spawnSync`, for the
+ * device probes and launches.
+ *
+ * Why this exists: the live rows are repainted by a timer, and `spawnSync` blocks Node's event
+ * loop for its whole duration — so during a launch the timer cannot fire, the spinner freezes,
+ * and on `dev all` the two platform lanes cannot overlap at all (iOS runs to completion, THEN
+ * Android). Reported as a reload that sits on one stale frame while the app is already open on
+ * the device. Nothing here needs to be synchronous; it only ever was by habit.
+ *
+ * Deliberately not `exec()` from `exec.mjs`: that one streams every line to a phase reporter and
+ * keeps a failure tail, which is right for xcodebuild and gradle and pure overhead for
+ * `simctl launch`. This wants the exit code and, sometimes, a line of stdout.
+ */
+function probe(command, args, { env, encoding = "utf8" } = {}) {
+  return new Promise((resolve) => {
+    let out = ""
+    const child = spawn(command, args, {
+      env,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+    child.stdout?.setEncoding(encoding)
+    child.stdout?.on("data", (d) => {
+      out += d
+    })
+    //Never rejects: every caller here asks a yes/no question about a device, and "the tool
+    //isn't there" is a `no`, not an exception to handle at each site.
+    child.on("error", () => resolve({ status: 1, stdout: "" }))
+    child.on("close", (status) =>
+      resolve({ status: status ?? 1, stdout: out }),
+    )
+  })
+}
+
+export async function foregroundDevice(platform, target, env) {
+  if (await isPhysicalTarget(platform, target, env)) return
+  if (platform === "ios") await probe("open", ["-a", "Simulator"])
 }
 
 /**
@@ -1023,8 +1164,8 @@ export function foregroundDevice(platform, target, env) {
  * command is ambiguous and fails — which silently breaks `adb reverse` (→ the emulator
  * can't reach the host, → black screen).
  */
-export function androidDevices(env) {
-  const r = spawnSync("adb", ["devices"], { env, encoding: "utf8" })
+export async function androidDevices(env) {
+  const r = await probe("adb", ["devices"], { env })
   if (r.status !== 0 || !r.stdout) return []
   return r.stdout
     .split("\n")
@@ -1049,10 +1190,13 @@ const IOS_SIM_UUID =
  * not-yet-booted emulator — neither is a real device. A physical device is a serial that
  * shows up in `adb devices` and isn't `emulator-`-prefixed.
  */
-export function isPhysicalTarget(platform, id, env) {
+export async function isPhysicalTarget(platform, id, env) {
   if (!id) return false
+  //iOS answers from the id alone — no device call, so this stays instant for the common case.
   if (platform === "ios") return !IOS_SIM_UUID.test(id)
-  return androidDevices(env).includes(id) && !id.startsWith("emulator-")
+  return (
+    (await androidDevices(env)).includes(id) && !id.startsWith("emulator-")
+  )
 }
 
 // Virtual bridges / VPN / link-local interfaces that aren't a real LAN address.
@@ -1103,7 +1247,7 @@ export function explainLaunchFailure(platform, text = "") {
       msg: `device "${invalid[1]}" isn't available right now`,
       fix: [
         "It's disconnected, locked, or a stale saved pick.",
-        `Reconnect + unlock it, or run \`adaptv dev ${platform}\` to pick from the current list.`,
+        `Reconnect + unlock it, or run 'adaptv dev ${platform}' to pick from the current list.`,
       ],
     }
 
@@ -1117,7 +1261,7 @@ export function explainLaunchFailure(platform, text = "") {
         msg: "iOS code signing isn't set up for a device build",
         fix: [
           "open .adaptv/ios/App/App.xcworkspace → App target → Signing & Capabilities → pick your Team",
-          "(add your Apple ID in Xcode → Settings → Accounts — a free one works)",
+          "(add your Apple ID in Xcode → Settings → Accounts; a free one works)",
         ],
       }
     if (/Developer Mode|enable-developer-mode|DVTDeviceOperation/i.test(t))
@@ -1186,17 +1330,14 @@ export function explainLaunchFailure(platform, text = "") {
  * emulator that has never seen the app makes the answer `false` forever, and the run
  * cache can never hit. Returns null when ambiguous so callers fall back to the safe path.
  */
-export function androidSerialForTarget(target, env) {
-  const serials = androidDevices(env)
+export async function androidSerialForTarget(target, env) {
+  const serials = await androidDevices(env)
   if (serials.length === 0) return null
   if (serials.length === 1) return serials[0]
   if (!target) return null
   if (serials.includes(target)) return target // already a serial
   for (const s of serials) {
-    const r = spawnSync("adb", ["-s", s, "emu", "avd", "name"], {
-      env,
-      encoding: "utf8",
-    })
+    const r = await probe("adb", ["-s", s, "emu", "avd", "name"], { env })
     const name = (r.stdout ?? "").split("\n")[0]?.trim()
     if (name && name === target) return s
   }
@@ -1212,26 +1353,27 @@ export function androidSerialForTarget(target, env) {
  * so the caller falls back to a full build; a wasted rebuild is free, a skipped one that
  * should have happened is a debugging nightmare.
  */
-export function isAppInstalled(appRoot, platform, target, env) {
+export async function isAppInstalled(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   if (platform === "ios") {
     if (!target) return false
-    const r = spawnSync(
-      "xcrun",
-      ["simctl", "get_app_container", target, appId],
-      { encoding: "utf8" },
-    )
+    const r = await probe("xcrun", [
+      "simctl",
+      "get_app_container",
+      target,
+      appId,
+    ])
     return r.status === 0
   }
   if (platform === "android") {
     // Ask ONLY the device this run targets — see `androidSerialForTarget`.
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
-    const r = spawnSync(
+    const r = await probe(
       "adb",
       ["-s", serial, "shell", "pm", "list", "packages", appId],
-      { env, encoding: "utf8" },
+      { env },
     )
     return r.status === 0 && (r.stdout ?? "").includes(`package:${appId}`)
   }
@@ -1239,24 +1381,25 @@ export function isAppInstalled(appRoot, platform, target, env) {
 }
 
 /** Is the app currently RUNNING on the target device (not merely installed)? */
-export function isAppRunning(appRoot, platform, target, env) {
+export async function isAppRunning(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
   if (!appId) return false
   if (platform === "ios") {
     if (!target) return false
-    const r = spawnSync(
-      "xcrun",
-      ["simctl", "spawn", target, "launchctl", "list"],
-      { encoding: "utf8" },
-    )
+    const r = await probe("xcrun", [
+      "simctl",
+      "spawn",
+      target,
+      "launchctl",
+      "list",
+    ])
     return r.status === 0 && (r.stdout ?? "").includes(appId)
   }
   if (platform === "android") {
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
-    const r = spawnSync("adb", ["-s", serial, "shell", "pidof", appId], {
+    const r = await probe("adb", ["-s", serial, "shell", "pidof", appId], {
       env,
-      encoding: "utf8",
     })
     return r.status === 0 && (r.stdout ?? "").trim().length > 0
   }
@@ -1279,7 +1422,7 @@ export function isAppRunning(appRoot, platform, target, env) {
  * server. The offline screen + reconnect watchdog now cover that case, and `r` remains
  * the explicit escape hatch for a genuinely wedged app.)
  */
-export function launchInstalledApp(
+export async function launchInstalledApp(
   appRoot,
   platform,
   target,
@@ -1288,35 +1431,37 @@ export function launchInstalledApp(
 ) {
   const appId = readAppId(appRoot)
   if (!appId) return false
-  const running = isAppRunning(appRoot, platform, target, env)
+  // NOT asked: whether the app is running. It used to be, to compute `restart || !running`
+  // — but terminating a stopped app is a no-op, so the two branches converge and the whole
+  // expression reduces to `restart`. The invariant above (a running app is re-fronted, never
+  // killed) is unchanged and is now enforced by the shape of the code rather than by a
+  // question that cost ~200ms on iOS, asked on top of the one the caller had already asked.
+  //
   // `restart` forces a fresh start of an already-running app, so its WebView reloads
   // from the dev server — the cheap `r` reload (no native rebuild).
   if (platform === "ios") {
     if (!target) return false
-    // `simctl launch` on a running app activates it in place; only a stopped app (or a
-    // requested restart) needs a terminate first. Terminating a stopped app is a no-op.
-    if (restart || !running)
-      spawnSync("xcrun", ["simctl", "terminate", target, appId])
-    const r = spawnSync("xcrun", ["simctl", "launch", target, appId], {
-      encoding: "utf8",
-    })
+    // `simctl launch` on a running app activates it in place; only a requested restart
+    // needs a terminate first.
+    if (restart)
+      await probe("xcrun", ["simctl", "terminate", target, appId])
+    const r = await probe("xcrun", ["simctl", "launch", target, appId])
     return r.status === 0
   }
   if (platform === "android") {
-    const serial = androidSerialForTarget(target, env)
+    const serial = await androidSerialForTarget(target, env)
     if (!serial) return false
-    // Same rule: the LAUNCHER intent alone re-fronts an existing task without
-    // restarting it. force-stop when there's nothing live to preserve, or on `restart`.
-    if (restart || !running) {
-      spawnSync(
+    // Same rule, and the same reduction: the LAUNCHER intent alone re-fronts an existing
+    // task without restarting it, and `am force-stop` on a stopped app is a no-op.
+    if (restart)
+      await probe(
         "adb",
         ["-s", serial, "shell", "am", "force-stop", appId],
         {
           env,
         },
       )
-    }
-    const r = spawnSync(
+    const r = await probe(
       "adb",
       [
         "-s",
@@ -1420,19 +1565,19 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
  * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
  */
-export function relaunchAndroidApp(appRoot, env, target) {
+export async function relaunchAndroidApp(appRoot, env, target) {
   const appId = readAppId(appRoot)
   if (!appId) return
   // Only the device this run targets — never every connected emulator. A second, idle
   // emulator must not be force-stopped and relaunched. Fall back to all devices only when
   // the target can't be resolved (ambiguous), matching the prior best-effort behaviour.
-  const serial = androidSerialForTarget(target, env)
-  const serials = serial ? [serial] : androidDevices(env)
+  const serial = await androidSerialForTarget(target, env)
+  const serials = serial ? [serial] : await androidDevices(env)
   for (const s of serials) {
-    spawnSync("adb", ["-s", s, "shell", "am", "force-stop", appId], {
+    await probe("adb", ["-s", s, "shell", "am", "force-stop", appId], {
       env,
     })
-    spawnSync(
+    await probe(
       "adb",
       [
         "-s",

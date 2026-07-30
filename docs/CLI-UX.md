@@ -6,6 +6,11 @@
 > every test passes.
 >
 > The tests can't catch these. **You must run the command and look at the output.**
+>
+> **Building something NEW rather than changing something old?** Start with
+> [`CLI-VISUAL.md`](CLI-VISUAL.md) — the design system: the grid, the colour and glyph roles,
+> the component inventory, and the checklist for adding a command. This file is the record of
+> what has already gone wrong; that one is how to not need it.
 
 ---
 
@@ -47,9 +52,9 @@ and then print `✖ ios failed — …` underneath.
 > each:
 > ```
 > ✖ web  port 7171 is already in use · 3.1s
->     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+>     Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.
 > ✖ dev  port 7171 is already in use
->     Usually a running `adaptv dev`, a stray `pnpm dev`, or a worker left behind by one.
+>     Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.
 > ```
 > Whichever branch draws the ✖ owns the report, on every path it can take.
 
@@ -128,8 +133,8 @@ them: the banner, what adaptv knew, the run.
 > ```
 >   adaptv · build android
 >
->   ✖ `themeColor.light` must be a hex colour like #1b1b1b — got "eeeeec"
->   ✖ `splashMaskMode` must be preferences, system, light or dark — got "auto"
+>   ✖ 'themeColor.light' must be a hex colour like #1b1b1b — got "eeeeec"
+>   ✖ 'splashMaskMode' must be preferences, system, light or dark — got "auto"
 > ```
 > Nothing is built, nothing is served, and every problem is listed at once — a config fixed
 > one line per run is worse than a list. These used to be SILENT: an unparseable colour fell
@@ -141,20 +146,20 @@ them: the banner, what adaptv knew, the run.
 > them. The test is whether the answer was already sitting in a file the dev wrote.
 
 **R34 — A command that destroys the dev's work ASKS, and a command that cannot ask REFUSES.**
-`gen icons` overwrites every file in the icon directory. When there is something to lose it
+`icons` overwrites every file in the icon directory. When there is something to lose it
 prompts; when there is nothing there it asks nothing (R4); and when there is no TTY at all it
 **names the flag** instead of guessing:
 ```
   adaptv · gen icons
 
-    replace 27 icons in ./public/favicons (your `icons` dir)?   ↑↓ move · ↵ select
+    replace 27 icons in ./public/favicons (your 'icons' dir)?   ↑↓ move · ↵ select
   › replace them
     cancel
 ```
 ```
   adaptv · gen icons
 
-  ✖ ./public/favicons (your `icons` dir) is not empty — pass --yes to replace it
+  ✖ ./public/favicons (your 'icons' dir) is not empty — pass --yes to replace it
 ```
 > The prompt's own header carries the fact, so there is no `!` line above it repeating it (R6),
 > and it is `confirm()` in `render.mjs` — built on `select` so the two share one look and one
@@ -169,7 +174,7 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 > directory nobody named is a surprise found afterwards, so the destination must have been
 > chosen. The READ path later had to agree — see R38.
 > ```
->   ✖ nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>
+>   ✖ nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>
 > ```
 >
 > The non-TTY branch is the rule's real content. `select` returns **option 0** when it can't
@@ -177,7 +182,7 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 > would answer *yes* on the dev's behalf, silently, in the one situation where nobody is
 > watching. `confirm` returns `null` there instead, and the caller turns it into the `✖` above.
 >
-> **The gate is about the dev's FILES, never their taste.** `gen icons` first shipped refusing
+> **The gate is about the dev's FILES, never their taste.** `icons` first shipped refusing
 > to generate from a source under 1024px, on the theory that a generator run is deliberate and
 > should be held to a standard. That is a different rule wearing this one's clothes, and it was
 > wrong: a 512px logo is a real answer for someone prototyping, and blocking them teaches only
@@ -228,21 +233,21 @@ is not printed at all (R4). Anything adaptv does say gets the mark.
 > Violated by: `! android: no cached device yet — pick one (it'll be remembered).` immediately
 > above a picker whose header reads *"Choose a android device"*.
 
-**R7 — Errors are terse and name the fix.** `missing \`appId\` in adaptv.config.ts` — not
-`run failed — adaptv.config.ts needs an \`appId\` for native builds.` A user error is not a crash:
+**R7 — Errors are terse and name the fix.** `missing 'appId' in adaptv.config.ts` — not
+`run failed — adaptv.config.ts needs an 'appId' for native builds.` A user error is not a crash:
 render it as a plain one-liner and exit, never wrapped in step-failure scaffolding.
 
 **R35 — An error about the INVOCATION names the argument the dev actually typed, and shows the
 shape.** A wrong command line is the one failure where the dev is looking straight at their own
 input and cannot see what is wrong with it. Say which token is the problem, what was expected
 instead, and put the usage line dim underneath.
-> Violated by `gen icons`, reported by the owner:
+> Violated by `icons`, reported by the owner:
 > ```
-> $ adaptv gen icons --target ./public/favicons/android-chrome-512.png
+> $ adaptv icons --target ./public/favicons/android-chrome-512.png
 >
 >   adaptv · gen icons
 >
->   ✖ missing image — adaptv gen icons <image>
+>   ✖ missing image — adaptv icons <image>
 > ```
 > The command plainly contains an image, so "missing image" reads as a bug in adaptv. What
 > happened is that `parseFlags` turns any `--foo` into `flags.foo = true` and *swallows the
@@ -251,11 +256,11 @@ instead, and put the usage line dim underneath.
 > a typo is only obvious next to the right spelling:
 > ```
 >   ✖ unknown flag "--target" for gen icons
->       adaptv gen icons --input <image>  [--out <dir>] [--yes]
+>       adaptv icons --input <image>  [--out <dir>] [--yes]
 >         tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]
 > ```
 > **The same message for every unknown flag, `--target` included.** The first fix gave it a
-> special case — `` `--target` is a device id — `gen icons` takes the image positionally `` —
+> special case — `` `--target` is a device id — `icons` takes the image positionally `` —
 > on the theory that it is the predictable wrong guess and deserved a precise answer. The owner
 > rejected it, correctly: *"porque é que a explicação do erro está a dar leak do `--target` que
 > é uma coisa específica de outro comando?"* A dev generating icons has no reason to learn what
@@ -274,10 +279,10 @@ look exactly like the run, and a failure must end where the `✖` ends.
 > ali tanta porcaria?"*:
 > ```
 >   ✖ unknown flag "--target" — expected --padding, --background or --yes
->       adaptv gen icons <image>  [--padding <pct>] [--background <hex>] [--yes]
+>       adaptv icons <image>  [--padding <pct>] [--background <hex>] [--yes]
 > undefined
 > /Users/arrz/…/playground/apps/frontend:
->  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: adaptv gen icons …
+>  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: adaptv icons …
 >  ELIFECYCLE  Command failed with exit code 1.
 > ```
 > Five lines nobody wrote, under a CLI whose whole contract is that a user error is ONE terse
@@ -320,7 +325,7 @@ Passing it changed nothing and said nothing.
 `./public/favicons` for reading, so an app that configured nothing still got the art sitting
 there — and the notice for an app with none named that directory back:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no icons in ./public/favicons
 > ```
 > The dev had never written that path. Worse, the fallback made the rule adaptv claimed to have
 > — *no icons dir configured ships adaptv's mark* — one it did not actually have: commenting the
@@ -330,18 +335,155 @@ there — and the notice for an app with none named that directory back:
 > Two situations reach the default mark and they have different fixes, so they get different
 > sentences — an empty directory is filled, an absent key is set:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
-> ! no `icons` in adaptv.config.ts — shipping adaptv's default mark
+> ! no icons in ./public/favicons
+> ! no 'icons' in adaptv.config.ts
 > ```
 > The general rule is R7 (name the fix), and the general lesson is the fallback rather than the
 > wording: a default that silently resolves to a real directory makes the config key look
-> ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
+> ignored. `icons` already refused to guess where to WRITE (R34); the read path now refuses
 > to guess where to READ, and the two finally describe the same framework.
+
+**R43 — Quote a config key, flag or command with `'`, never a backtick.** A backtick is markdown
+punctuation: it renders as code in this file and as a literal backtick in a terminal, which is
+where these sentences actually live.
+> ```
+> ✖ `themeColor.light` must be a hex colour like #1b1b1b — got "midnightblue"     ← was
+> ✖ 'themeColor.light' must be a hex colour like #1b1b1b — got "midnightblue"     ← is
+> ```
+> Owner's call, and it applies to every printed string, not only the config errors: key names,
+> `--flags`, and commands the dev is told to run (`'adaptv dev ios'`, `'pnpm install'`,
+> `'lsof -nP -iTCP:41730 -sTCP:LISTEN'`). Source comments and this document keep backticks —
+> they are read as markdown, so the convention is right there and wrong on a terminal.
+>
+> The apostrophe in a possessive sits next to it happily enough:
+> `'icons' must be a path to the app's icon directory`.
+
+**R42 — A notice states the fact, not adaptv's reaction to it.** Both default-mark notices used
+to explain what adaptv would do about the missing art:
+> ```
+> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no 'icons' in adaptv.config.ts — shipping adaptv's default mark
+> ```
+> Half of each row is adaptv narrating its own fallback. The dev acts on the missing art; what
+> adaptv substitutes meanwhile is its business (R0), and the clause nearly doubled a row that has
+> to survive a narrow terminal without being clipped (R31). Reported by the owner as wanting just
+> `! no 'icons' in adaptv.config.ts`.
+>
+> Both were shortened, not just the one reported: they are two shapes of one fact, and leaving
+> one with the clause and one without is precisely the drift this file exists to stop. The two
+> sentences still differ where it matters — the fix (R38).
+>
+> The consequence accepted here is that neither row says the app still gets a real icon. That is
+> the right trade only because the mark is visible the moment the app launches; a notice whose
+> consequence is INVISIBLE still has to state it.
+
+**R39 — There is ONE answer to "is this config usable", and a run that loses it ends.** R33 says
+a config value adaptv cannot use stops the command before it builds anything. That has to be the
+same answer at minute forty as at second zero. The `b` key briefly had a softer one — it kept the
+last good config, refused the rebuild, and said so on the watch row:
+> ```
+>   ! not rebuilt · 'themeColor.light' must be a hex colour like #1b1b1b — got "midnightblue"
+> ```
+> The reasoning was that killing a live session over a half-typed file is expensive — a dev
+> server and every attached device, gone. But what it actually bought was a session that kept
+> serving an app built from a config the file on disk no longer contained, with one `!` on a row
+> the dev may not be looking at, and only the FIRST problem named where startup lists them all.
+> Two answers to one question is how the two halves of a command drift apart.
+>
+> So `b` now prints every error and exits non-zero, exactly as startup does. What makes that
+> affordable is that it is not a kill: the teardown runs first — dev server stopped, `adb
+> reverse` cleared, the iOS ATS exception reverted, the lock released — so it ends as cleanly as
+> ctrl-c. The unwinding happens BEFORE the errors print, because the watch row redraws every
+> 80ms and would otherwise overwrite them.
+>
+> `r` is untouched: it reloads the running app's JS and never reads the config, so it has no
+> opinion to be wrong about.
+
+**R40 — Competing notices MERGE rather than take turns.** `dev` has two things that can go
+stale: the native project, and `adaptv.config.ts` plus the icon art it points at. Letting the
+newer one win drops the config half exactly when both are true — the sync a config edit implies
+is itself what rewrites the native tree — so the causes combine into one sentence:
+> ```
+>   ! config change  · press b to rebuild and see the changes
+>   ! native change · ios  · press b to rebuild and see the changes
+>   ! config + native change · ios, android  · press b to rebuild and see the changes
+> ```
+> The action is identical in all three; naming the cause is what tells the dev whether adaptv
+> saw the edit they just made. Which is the point — editing the config used to produce no notice
+> at all, because the only fingerprint being polled folds in `ADAPTV_CAPACITOR_CONFIG`, an env
+> var nothing re-stamps until something rebuilds. Reported as commenting `icons` out and watching
+> nothing happen.
+
+**R41 — A notice is added to the live block, never swapped in for something still true.** The
+watch row used to be one row with one slot, so a pending notice REPLACED the keys — the moment
+adaptv had something to say, `r`/`b`/`ctrl-c` disappeared, including the very key the notice was
+telling the dev to press:
+> ```
+>   ! config change   · press b to rebui
+> ```
+> Reported by the owner as *"trocaste as actions"* — you swapped out the actions. The keys row is
+> the one row that is never not relevant, so the block now grows instead: the notice takes its
+> own row above, and the keys stay put underneath.
+> ```
+>   ✓ ios  iPhone 16 Pro (simulator) · 20.0s
+>
+>   ! config change  · press b to rebuild and see the changes
+>
+>   r reload js   b rebuild app   ctrl-c stop
+> ```
+> An HMR burst animates the bottom row while the notice holds above it, rather than the two
+> taking turns. The general rule is that a live block is a BLOCK: it is redrawn as a whole, every
+> row still clipped to one physical line (R31), and it is erased as a whole. Cursor arithmetic is
+> where this goes wrong — a redraw that rewinds to the top when it is already parked there walks
+> the block one row up the screen per frame, and the erase then eats the settled lines above it.
+
+**R45 — A phase is a present participle.** The row says what is happening RIGHT NOW, so it
+reads as an activity, not as a command or a thing:
+> ```
+>   ⠴ ios  sync            ← was
+>   ⠴ ios  syncing         ← is
+> ```
+> `report("sync")` and `report("package")` were bare nouns sitting on the same row as
+> `compiling` and `processing resources`, and they read as an instruction being issued rather
+> than work being done. `package` was a duplicate of `packaging` on top of that — R24's list
+> already had the right word. The test is whether it finishes *"right now adaptv is …"*.
+>
+> This had a second cost, which is how it was found. `prettyLine` filters what BUILD TOOLS
+> print, and one of its rules drops a lone verb — correct for gradle, and it silently ate
+> adaptv's own single-word phases. The row then sat on `preparing` for the whole of `cap sync`.
+> A deliberate phase is now recognised by name (`OWN_PHASES` in `bin/ui/theme.mjs`) and passes
+> through untouched; the participle rule keeps that list honest.
+
+**R46 — A machine mode is a mode of the ENGINE, not a branch in every command.** `--json` and
+`--quiet` are enforced in `out()`, which every primitive already funnels through, so no command
+carries an `if`:
+> ```
+> $ adaptv build ios --quiet
+>   ✓ ios  .adaptv/builds/ChopChop.ipa · 1.6s
+>
+> $ adaptv build ios --json
+> {"ok":true,"command":"build ios","version":"0.1.0","notices":[],"steps":[],
+>  "result":{"build":{"ios":".adaptv/builds/ChopChop.ipa"}}}
+> ```
+> Three rules the first attempt got wrong, each found by running it:
+>
+> - **`--json` replaces the PAGE, not the diagnostics.** Silencing every stream left a failing
+>   run with no document to parse AND nothing to read. stderr always speaks; a failure also
+>   emits the document, with `ok:false` and a structured `error`.
+> - **A settled row is an OUTCOME, not narration**, so `--quiet` keeps it. Levelling it as a
+>   step made `--quiet` print nothing at all, which is not quiet, it is broken.
+> - **A prompt has no machine answer.** Taking the default would pick a device, or overwrite an
+>   icon set, for a script that never agreed to either — so both refuse and name the flag that
+>   makes the question unnecessary.
+>
+> It also forced something overdue: `check()` printed `doctor`'s matrix and returned nothing, so
+> the one thing a script would ever want from that command existed nowhere but the terminal. A
+> command has to RETURN its results before a second renderer can exist.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
 answered. Every exit has a last line.
-> Violated by cancelling `gen icons`, reported by the owner as *"quando a pessoa cancela algo
+> Violated by cancelling `icons`, reported by the owner as *"quando a pessoa cancela algo
 > deve aparecer… isto está muito vazio"*:
 > ```
 >   adaptv · gen icons
@@ -372,7 +514,7 @@ answered. Every exit has a last line.
 would have needed.** The launcher icon is the whole worked example, and it says exactly three
 things — all of them about the art in `icons`, none of them fireable by a set that is fine:
 > ```
-> ! no icons in ./public/favicons — shipping adaptv's default mark
+> ! no icons in ./public/favicons
 > ! ios launcher icon upscaled from 512px — add a 1024px icon
 > ! android launcher icon is opaque — add one with a transparent background
 > ! web manifest's largest icon is 96px — a PWA needs 192px
@@ -713,6 +855,98 @@ its own `vite preview` inside the build to crawl the routes. So: build, build, *
 > preview server and a build alike, with what to do underneath — the dev-server copy used to
 > offer `-- --port <n>`, advice that cannot work when the busy port is a plugin's pinned one.
 
+**R47 — Take a live region down with ERASE, then unmount. Never the other way round.** Ink keeps
+its last frame on screen when it unmounts, by design — right for a UI that IS the output, wrong
+for every region adaptv mounts, all of which are transient. After unmounting there is nothing
+left to clear, so the region survives and whatever prints next lands underneath it. The order
+was got wrong twice, in two components, and the two failures looked nothing alike:
+> ```
+>   ⠴ web  preparing
+>   ✓ web  · 6.4s
+>   ⠙ ios  launching device
+>   ✓ ios  iPhone 16 Pro (simulator) · cached · 419ms
+> ```
+> In `liveRows` the spinner rows stayed and every step appeared twice. In the watch block
+> nothing looked wrong at all — the surviving block silently pushed the screen down by its own
+> height, and `rewindLines` (which counts back a FIXED number of rows so `r`/`b` redraw the
+> platform lines in place) landed that many rows short and rebuilt underneath its own history:
+> ```
+>   ✓ ios  iPhone 16 Pro (simulator) · cached · 366ms
+>   ✓ ios  iPhone 16 Pro (simulator) · reloaded · 369ms
+>   ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+>   ✓ android  Pixel 10 (emulator) · 6.1s
+> ```
+> One `eraseRegion(app)` in `bin/ui/live.mjs`, used by every region, so there is one place to be
+> right. Any cursor arithmetic elsewhere on the page depends on it.
+
+**R48 — A live row only moves FORWARD. A phase is shown once.** The row shows the last phase
+reported and silence changes nothing; it never returns to a phase it has left, because going
+back says the work is being redone. There was an idle fallback — after `IDLE_MS` of quiet the
+row dropped to a per-lane `idle` label rather than freeze on a stale tool line — and on every
+native build it read as a restart:
+> ```
+>   ⠴ ios  building app        ← the pause before xcodebuild speaks
+>   ⠴ ios  compiling
+>   ⠴ ios  building app        ← quiet again
+>   ⠴ ios  processing resources
+>   ⠴ ios  building app
+> ```
+> A first fix made that label track the current stage instead of a constant. It cured the case
+> where it was an outright lie (`building app` during the silent install) and did nothing about
+> the repetition, which was the complaint — so the fallback is gone entirely. A frozen `linking`
+> is not misleading: the spinner is what says the row is alive, and the last thing the tool said
+> is the most specific true statement available.
+> ```
+>   syncing → installing dependencies → building app → compiling → launching device
+> ```
+> Honesty is now the CALLER's job, which is the other half of this. `cap run` builds, installs,
+> then launches, and `report("launching device")` before it named the last step first — so the
+> row claimed to be launching through twenty seconds of compiling. **Announce what STARTS**, and
+> announce again when the work actually changes.
+
+**R49 — A prop Ink does not know is dropped in SILENCE. Check the bytes on a pty.** The whole
+live layer rendered flat white for the entire Ink port — no cyan spinner, no yellow `!`, no dim
+phase — because the roles carried `{ ink: "cyan" }` and the components spread that into
+`<Text>`, which takes `color`. `dim` was wrong the same way; Ink's prop is `dimColor`:
+> ```
+> before   ⠋ ios  compiling                      ← no escapes at all
+> after    \x1b[36m⠋\x1b[39m ios  \x1b[2mcompiling\x1b[22m
+> ```
+> It looked deliberate rather than broken, because `bold` IS a real prop and came through, so
+> the rows were merely flat. **The unit tests cannot catch this**: chalk fixes its colour level
+> from the real stdout when it is imported, and a fake stdout is not a terminal — so under
+> vitest Ink strips every colour whatever the props say, and an assertion there measures the
+> harness. `scripts/check-colour.mjs` runs the components under a pty and greps the bytes; run
+> it after touching `theme.mjs` or any component's props.
+
+**R50 — Never suggest the word that was just typed, and never make a namespace a command.**
+`adaptv gen` answered:
+> ```
+>   ✖ unknown command 'gen' — did you mean 'gen'?
+> ```
+> Two faults in one line. `commandNames()` returns `path[0]`, so the two-word `gen icons`
+> contributed the candidate `gen` and `suggest()` matched it at distance 0. And `gen` was a
+> namespace the dev could type but not run, which is a command that exists only to fail.
+> `gen icons` is now **`adaptv icons`**: there was only ever one thing to generate, so the
+> namespace bought nothing. `suggest()` also drops an exact match outright, so the next
+> two-word command cannot bring the suggestion bug back.
+>
+> It first shipped with a `retired` table that answered `'gen icons' was renamed. Try 'adaptv
+> icons'`. That came straight back out. **adaptv has never been published** — `private: true`,
+> no tag, nothing on npm — so no install anywhere carries the old spelling, and the migration
+> path was ceremony for a consumer who does not exist. Write one with the first release. Until
+> then a renamed command is simply unknown, and the rule generalises: back-compat machinery
+> before there is anything to be compatible with is dead code that reads as caution.
+
+**R51 — `where` is a TRAILING clause. It cannot open a sentence.** `renderFault` builds
+`where = " for 'dev'"` for the tail of a did-you-mean, and two branches used it as the subject:
+> ```
+>   ✖ for 'dev' does not take '192.168.1.5'
+>   ✖ for 'icons' needs '--input': the png or svg to generate the whole set from
+> ```
+> Both now name the command directly. Fixed once in `excess-args` and missed in `missing-flag`,
+> which is the usual shape of this: the same helper misused in every branch that borrowed it.
+
 ## 5. Before you ship a CLI change
 
 Tests do not cover any of this. Run it and read it:
@@ -731,14 +965,14 @@ Tests do not cover any of this. Run it and read it:
       or you can read an identifier in it, R22/R23 are broken
 - [ ] `adaptv preview web` and `adaptv preview all` — the web server must come up and STAY up
 - [ ] `adaptv doctor` — same banner and glyphs as every other command
-- [ ] `adaptv gen icons --input <image>` into an **empty** dir, then again into the **populated** one —
+- [ ] `adaptv icons --input <image>` into an **empty** dir, then again into the **populated** one —
       the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
       without `--yes` exits `1` on the terse `✖` (R34)
-- [ ] `gen icons` from a **dark mark on a light background** — one `!` naming `--dark`, and the
+- [ ] `icons` from a **dark mark on a light background** — one `!` naming `--dark`, and the
       set is generated anyway; then pass `--dark <image>` and it goes quiet (R34)
-- [ ] `gen icons` from a **small, opaque** source — two `!`s under the banner, and the set is
+- [ ] `icons` from a **small, opaque** source — two `!`s under the banner, and the set is
       generated anyway; then from a big transparent one — **no** `!` at all (R34)
-- [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `gen icons` with no
+- [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `icons` with no
       argument at all — each names the token that is wrong and shows the usage line (R35)
 - [ ] `gen icons --input <image>` in an app whose config has **no `icons` key** — it refuses and
       names both ways to fix it, rather than writing into `./public/favicons` (R34)
@@ -747,10 +981,27 @@ Tests do not cover any of this. Run it and read it:
 - [ ] an app with **no icons at all** (`mv public/favicons /tmp`) — the `!` fires ONCE under the
       banner on `dev web` as well as on a native run (R21), and the app wears adaptv's mark
       rather than Capacitor's
+- [ ] edit `adaptv.config.ts` **during** a `dev` run — the notice appears within ~3s on its own
+      row, with the `r`/`b`/`ctrl-c` row still underneath it (R41); touch a file in the `icons`
+      dir for the same notice, and change something native too to see the two merge (R40).
+      Save a source file while it is showing: the bottom row animates, the notice holds
+- [ ] Ctrl-C while a notice is showing — the whole block is erased, and the settled platform
+      lines above it are still there (the block is redrawn and erased as a whole, R41)
+- [ ] press **`b`** — the app is rebuilt from the CURRENT config, launcher icons included, and
+      it still live-reloads afterwards (the dev server URL survives the config re-stamp)
+- [ ] make the config invalid, then press **`b`** — every error prints, the process exits
+      non-zero, and teardown ran: `.adaptv/ios/App/App/Info.plist` has no
+      `NSAppTransportSecurity` left in it (R39)
+- [ ] SIGKILL a `dev ios` run, then start another one — the stranded ATS exception is healed at
+      prepare rather than adopted, and reverted again on a clean exit
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:
 `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv <cmd>`
+
+`pnpm gate` runs biome, typecheck, the suite and the colour probe as ONE command that exits
+non-zero. Run it bare. Piping it (`pnpm gate | grep Tests`) reports **grep's** exit code, not
+the gate's — that is how a commit went in on this branch while a test was red.
 
 Stop `dev` runs with **SIGINT** (`pkill -INT -f "adaptv.mjs dev"`), never SIGKILL — SIGKILL skips
 teardown and strands the dev ATS exception in `Info.plist`.

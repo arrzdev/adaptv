@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.1.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "repository": {
     "type": "git",
@@ -23,26 +23,27 @@
     "**/*.css"
   ],
   "scripts": {
-    "playground:setup": "node scripts/playground-setup.mjs",
-    "dev:web": "node scripts/playground.mjs dev:web",
-    "dev:ios": "node scripts/playground.mjs dev:ios",
-    "dev:android": "node scripts/playground.mjs dev:android",
-    "dev:all": "node scripts/playground.mjs dev:all",
-    "preview:web": "node scripts/playground.mjs preview:web",
-    "preview:ios": "node scripts/playground.mjs preview:ios",
-    "preview:android": "node scripts/playground.mjs preview:android",
-    "preview:all": "node scripts/playground.mjs preview:all",
-    "build:ios": "node scripts/playground.mjs build:ios",
-    "build:android": "node scripts/playground.mjs build:android",
-    "build:all": "node scripts/playground.mjs build:all",
     "adaptv": "node scripts/playground.mjs adaptv",
-    "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
-    "build": "tsdown",
-    "build:check": "tsdown && node scripts/verify-dist.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
     "biome:check": "biome check .",
-    "biome:fix": "biome check --write ."
+    "biome:fix": "biome check --write .",
+    "build": "tsdown",
+    "build:all": "node scripts/playground.mjs build:all",
+    "build:android": "node scripts/playground.mjs build:android",
+    "build:check": "tsdown && node scripts/verify-dist.mjs",
+    "build:ios": "node scripts/playground.mjs build:ios",
+    "dev:all": "node scripts/playground.mjs dev:all",
+    "dev:android": "node scripts/playground.mjs dev:android",
+    "dev:ios": "node scripts/playground.mjs dev:ios",
+    "dev:web": "node scripts/playground.mjs dev:web",
+    "gate": "pnpm biome:check && pnpm typecheck && pnpm test && node scripts/check-colour.mjs",
+    "playground:setup": "node scripts/playground-setup.mjs",
+    "preview:all": "node scripts/playground.mjs preview:all",
+    "preview:android": "node scripts/playground.mjs preview:android",
+    "preview:ios": "node scripts/playground.mjs preview:ios",
+    "preview:web": "node scripts/playground.mjs preview:web",
+    "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
   },
   "imports": {
     "#adaptv/*": [
@@ -99,7 +100,9 @@
     "@tanstack/react-virtual": "3.14.6",
     "@tanstack/virtual-file-routes": "1.161.7",
     "@vitejs/plugin-react": "5.2.0",
+    "commander": "15.0.0",
     "esbuild": "0.28.0",
+    "ink": "6.4.0",
     "sharp": "0.35.3",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",

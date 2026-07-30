@@ -84,14 +84,14 @@ adaptv doctor                          # check the native toolchain (JDK, SDK, X
 adaptv dev     web|ios|android|all     # live reload: one Vite dev server, native WebViews attached
 adaptv preview ios|android|all         # build SPA → sync → install → launch (static, no reload)
 adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
-adaptv gen icons --input <image>       # the whole icon set — web + native — from one image
+adaptv icons --input <image>       # the whole icon set — web + native — from one image
 
-# gen icons
+# icons
 #   --input <image>    png or svg, 1024px+ — the only thing you normally pass
 #   --output <dir>     where to write. Defaults to `icons` in adaptv.config.ts; with
 #                      neither set, adaptv refuses rather than guessing a directory
 #   --yes              skip the "replace them?" prompt (required with no TTY)
-# gen icons — iOS 18 appearances (derived from --input unless you override)
+# icons — iOS 18 appearances (derived from --input unless you override)
 #   --dark <image>     the dark-mode icon: your mark with NO background, since iOS draws
 #                      its own near-black one
 #   --tinted <image>   the tinted icon: greyscale on black. In "Tinted" home-screen mode
@@ -105,7 +105,7 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 # own when even that loses it: a DARK mark needs INVERTING for both (black art on a black
 # backdrop is nothing), and a mark whose internal colours share a luminance loses its
 # structure. adaptv measures the mark and says which of the two you need.
-# gen icons — Android themed icons (derived from --input unless you override)
+# icons — Android themed icons (derived from --input unless you override)
 #   --monochrome <image>
 #                      the themed-icon layer. On Android 13+ the home screen recolours every
 #                      icon to match the wallpaper: the launcher takes this layer's ALPHA,
@@ -115,7 +115,7 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 #                      contrast kept where the mark has any, a flat silhouette where it
 #                      hasn't — so a black wordmark themes correctly instead of vanishing.
 #                      Supply your own to draw the simplified one-ink version yourself
-# gen icons — tuning (you shouldn't need these)
+# icons — tuning (you shouldn't need these)
 #   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
 #                      safe ring on Android, the tile itself on iOS and the favicons.
 #                      adaptv warns below the default and above 30
@@ -136,7 +136,7 @@ adaptv gen icons --input <image>       # the whole icon set — web + native —
 # dev / preview flags
 #   --target <id>   launch on a specific device/simulator id (skips the picker)
 #   --latest        reuse the last device you picked for this platform
-#   --host [ip]     (dev) serve on the LAN IP for a PHYSICAL device — auto when the target is
+#   --host          (dev) serve on this machine's LAN address for a PHYSICAL device — auto when the target is
 #                   a real device; pass an ip to pin it
 #   --force         reinstall even when nothing native changed (otherwise dev/preview skip the
 #                   rebuild and just relaunch the installed app)
@@ -205,7 +205,7 @@ a Capacitor config. The native projects live inside the hidden, git-ignored **`.
 - **OTA** — self-hosted, pointer-flip bundle swaps via `adaptv/ota` (pure, testable policy + updater).
 - **Live reload** — `adaptv dev` runs one Vite dev server with the native WebViews attached and
   hot-reloading on save, including over the LAN to a physical device (`--host`).
-- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv gen icons
+- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv icons
   <image>` produces the set from a single png/svg; adaptv then **measures** what's there and
   derives the web manifest, the head links, and the native launcher icons from it — full-bleed
   art for iOS and Android's legacy square, safe-zoned maskable art for Android's adaptive

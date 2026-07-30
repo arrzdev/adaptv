@@ -71,7 +71,7 @@ too — the equivalent of Ionic's `ionic capacitor run ios -l --external`, but a
 
 **How it works now:** adaptv branches on **device class**, not a flag. When the resolved
 target is a physical device it switches the whole run to the LAN-IP path automatically;
-`--host [ip]` forces it (and pins the interface for VPN/multi-NIC machines). Under the hood:
+`--host` forces it; the address is always detected from this machine's interfaces. Under the hood:
 Vite is started with `--host` (binds `0.0.0.0`), `server.url` becomes `http://<LAN_IP>:<port>`,
 and on iOS `NSLocalNetworkUsageDescription` is patched into `Info.plist` (reverted on
 teardown, like the ATS exception) so iOS prompts for Local Network access instead of silently

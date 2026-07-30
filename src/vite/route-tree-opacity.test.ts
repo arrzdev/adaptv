@@ -197,10 +197,24 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
     //the one place event DELIVERY is exercised.
     plugin.configResolved()
     const tmp = path.join(dir, "incoming.tmp")
-    writeFileSync(tmp, GENERATED)
-    renameSync(tmp, tree)
-    await expect.poll(opaque, { timeout: 5000 }).toBe(true)
-  })
+    //RE-TRIGGER each poll rather than renaming once and waiting. `fs.watch` registers with
+    //the OS asynchronously, so a single rename issued straight after `configResolved()` can
+    //land before the watcher exists — and a missed event is missed forever, which no timeout
+    //fixes. It read as flakiness (green alone, red under the full suite, where registration
+    //is slower) and it stayed red at a 30s budget, which is what gave it away.
+    //Check BEFORE re-triggering, so the poll never clobbers the repair it is looking for.
+    await expect
+      .poll(
+        () => {
+          if (opaque()) return true
+          writeFileSync(tmp, GENERATED)
+          renameSync(tmp, tree)
+          return false
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true)
+  }, 25_000)
 
   it("stops watching when Vite closes its watcher", () => {
     plugin.configResolved()

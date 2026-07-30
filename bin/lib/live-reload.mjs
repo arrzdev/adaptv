@@ -172,8 +172,12 @@ function setAndroidReverse(serials, port, env) {
  * so it's cheap), and the Android watchdog reconnects HMR once the route is back.
  * Returns a revert fn that stops the interval and removes the mapping.
  */
-export function androidReverse(port, env, { intervalMs = 4000 } = {}) {
-  const serials = androidDevices(env)
+export async function androidReverse(
+  port,
+  env,
+  { intervalMs = 4000 } = {},
+) {
+  const serials = await androidDevices(env)
   setAndroidReverse(serials, port, env)
   const ensure = () => {
     for (const s of serials) {

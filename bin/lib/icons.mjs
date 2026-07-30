@@ -18,7 +18,7 @@
 // 1024px PNG for iOS, fifteen mipmaps plus a colour resource for Android. adaptv already
 // hand-writes the native splash + theme resources next door (`patchAndroidSplash`,
 // `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { hexOf, monochromeMark } from "./artwork.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
@@ -37,14 +37,60 @@ export const DEFAULT_ICONS_DIR = path.join(
 /** `src/vite/icon-set.ts`, bundled once per process. */
 export const iconSetModule = () => loadAdaptvModule("vite/icon-set.ts")
 
+/* -----------------------------------------------------------------------------
+ * per-run memos
+ *
+ * All three below answer questions about FILES ON DISK, and a single CLI run asks each of
+ * them several times: `loadIconSet` once in `preflight` and again per platform inside
+ * `generateAssets`; the decodes once per platform for the warning and again for the writer.
+ * Every repeat re-reads and re-decodes art that cannot have changed in between.
+ *
+ * Scoped to the process, and keyed so they cannot outlive an edit:
+ *   - the set is keyed by the two inputs `resolveIconSet` actually reads;
+ *   - the decodes are keyed by the file's size and mtime, NOT its path — so a file rewritten
+ *     mid-run misses, which is the case that matters (`gen icons` writes into the very
+ *     directory it then re-reads). `clearIconCaches()` makes that explicit rather than
+ *     relying on the timestamp, and both together are deliberate belt and braces.
+ * -------------------------------------------------------------------------- */
+const setCache = new Map()
+const opacityCache = new Map()
+const fitCache = new Map()
+
+/** Key a decode by what the bytes look like, not where they live. */
+function fileKey(file) {
+  try {
+    const s = statSync(file)
+    return `${file}\0${s.size}\0${Math.round(s.mtimeMs)}`
+  } catch {
+    return `${file}\0absent`
+  }
+}
+
+/**
+ * Forget everything remembered about the icon files. Called by any command that WRITES art,
+ * so the run reads back what it just produced rather than what was there before.
+ */
+export function clearIconCaches() {
+  setCache.clear()
+  opacityCache.clear()
+  fitCache.clear()
+}
+
 /**
  * The icon set this app will be branded from — the dev's own art, or adaptv's mark when they
  * have none. The SAME function the manifest and the head resolve through, so a run can never
  * brand the launcher from one set and list another in `manifest.json`.
  */
 export async function loadIconSet(appRoot, config) {
+  //`icons` is the only config value `resolveIconSet` reads; `appRoot` is what it resolves
+  //against. Nothing else can change the answer within one process.
+  const key = `${appRoot}\0${config?.icons ?? ""}`
+  const hit = setCache.get(key)
+  if (hit) return hit
   const { resolveIconSet, scanIcons } = await iconSetModule()
-  return resolveIconSet(appRoot, config, scanIcons(DEFAULT_ICONS_DIR))
+  const set = resolveIconSet(appRoot, config, scanIcons(DEFAULT_ICONS_DIR))
+  setCache.set(key, set)
+  return set
 }
 
 /**
@@ -139,14 +185,14 @@ export function pickIcon(candidates, platform) {
  * must NOT be transparent, and `writeIosIcon` flattens onto the brand colour regardless.
  *
  * `transparent` is whether the source USES transparency, not whether it declares a channel —
- * see `resolveTransparency`. A `png` that carries a fully-opaque alpha channel is the normal
+ * see `resolveOpacity`. A `png` that carries a fully-opaque alpha channel is the normal
  * output of a favicon generator, and reading the header alone let exactly that source
  * through: it branded an adaptive foreground as a white box and said nothing.
  */
 export function iconIssue(pick, platform) {
   const min = MIN_SOURCE_PX[platform]
   if (pick.width < min)
-    return `${platform} launcher icon upscaled from ${pick.width}px — add a ${min}px icon`
+    return `${platform} launcher icon upscaled from ${pick.width}px. Add a ${min}px icon`
   // The opacity warning is about art that will be INSET into the safe zone: an opaque block
   // scaled to 72/108 shows its own background as a square floating inside the mask. Art of the
   // `maskable` family is not inset — `writeAndroidIcons` gives it `foregroundScale = 1` because
@@ -158,7 +204,7 @@ export function iconIssue(pick, platform) {
     !pick.transparent &&
     pick.family !== "maskable"
   )
-    return `android launcher icon is opaque — add one with a transparent background`
+    return `android launcher icon is opaque. Add one with a transparent background`
   return null
 }
 
@@ -482,22 +528,43 @@ function writeColorRes(dir, hex) {
  * Falls back to the header's answer if sharp can't stat the file: a wrong inset is a much
  * smaller failure than no icon at all.
  */
-async function resolveTransparency(sharp, pick) {
+async function resolveOpacity(sharp, pick) {
+  const key = fileKey(pick.file)
+  const hit = opacityCache.get(key)
+  if (hit !== undefined) return { ...pick, transparent: hit }
   let transparent = pick.alpha
   try {
     const { isOpaque } = await sharp(pick.file).stats()
     transparent = !isOpaque
   } catch {}
+  opacityCache.set(key, transparent)
+  return { ...pick, transparent }
+}
 
-  // Where the art actually sits inside this file, and therefore how much of each native slot it
-  // may fill. The native brander used to guess with two constants — `0.82` for a transparent
-  // iOS pick, `0.85` for a transparent legacy square, full bleed otherwise — and the guess was
-  // wrong in the most common direction: a logo exported flat on white is opaque, so it went edge
-  // to edge on iOS. `measureArtwork` already knows better; `gen icons` was simply the only
-  // caller using it. Falls back to the old constants only if the measurement fails.
-  //Full bleed is the fallback for BOTH failure modes, and it is the same answer `slotPlan`
-  //gives: a source with no isolable mark (a photo, a gradient) is a finished picture, so the
-  //mask crops it rather than adaptv shrinking a picture it does not understand.
+/**
+ * Where the art actually sits inside the file, and therefore how much of each native slot it
+ * may fill.
+ *
+ * Split from {@link resolveOpacity} because only the WRITERS need it. The native brander used
+ * to guess with two constants — `0.82` for a transparent iOS pick, `0.85` for a transparent
+ * legacy square, full bleed otherwise — and the guess was wrong in the most common direction:
+ * a logo exported flat on white is opaque, so it went edge to edge on iOS. `measureArtwork`
+ * already knows better; `gen icons` was simply the only caller using it.
+ *
+ * It is also the expensive half — it rasterises to 1024², pulls a 4MB raw RGBA buffer and scans
+ * it pixel by pixel (~45ms per file). `preflight` runs on every single command and needs none
+ * of it: the one thing it asks is `iconIssue`, which reads `width`, `transparent` and `family`.
+ * Paying 45ms per platform for three fields that are then discarded is what made the pre-run
+ * window twice as long as it needed to be.
+ *
+ * Falls back to full bleed on failure, which is the same answer `slotPlan` gives: a source with
+ * no isolable mark (a photo, a gradient) is a finished picture, so the mask crops it rather than
+ * adaptv shrinking a picture it does not understand.
+ */
+async function measureFit(sharp, pick) {
+  const key = fileKey(pick.file)
+  const hit = fitCache.get(key)
+  if (hit) return { ...pick, ...hit }
   let fit = 1
   let fitCircle = 1
   let artBackground = null
@@ -511,8 +578,8 @@ async function resolveTransparency(sharp, pick) {
       artBackground = art.background
     }
   } catch {}
-
-  return { ...pick, transparent, fit, fitCircle, artBackground }
+  fitCache.set(key, { fit, fitCircle, artBackground })
+  return { ...pick, fit, fitCircle, artBackground }
 }
 
 /**
@@ -530,8 +597,19 @@ async function resolveTransparency(sharp, pick) {
  * 1024px slot, an opaque one where Android's foreground needs transparency. That the app has no
  * art of its own at all is an app-level fact and belongs to `iconWarnings`, once (R21): it is
  * equally true of a `dev web` run with no platforms in it, which never calls this at all.
+ *
+ * `measure: false` returns a pick carrying everything the WARNING needs and nothing the writers
+ * do — no `fit`/`fitCircle`/`artBackground`, and so no 45ms artwork scan. `preflight` passes it
+ * because it destructures `warning` alone. The PICK itself is chosen here either way, so the
+ * sentence the dev reads and the file adaptv writes still cannot disagree about which source
+ * was used — which is the property this function exists for, and it is unaffected by how much
+ * of that source gets measured.
  */
-export async function resolveLauncherSource(set, platform) {
+export async function resolveLauncherSource(
+  set,
+  platform,
+  { measure = true } = {},
+) {
   if (set.icons.length === 0) return { pick: null, warning: null }
 
   const sharp = await loadSharp()
@@ -544,10 +622,8 @@ export async function resolveLauncherSource(set, platform) {
       warning: `could not brand the launcher icon on this platform`,
     }
 
-  const pick = await resolveTransparency(
-    sharp,
-    pickIcon(set.icons, platform),
-  )
+  const opaque = await resolveOpacity(sharp, pickIcon(set.icons, platform))
+  const pick = measure ? await measureFit(sharp, opaque) : opaque
   //adaptv's own mark is by construction a good source, so there is nothing to say about it.
   return {
     sharp,
@@ -581,9 +657,9 @@ export async function brandLauncherIcon(
     //The legacy square wants full-bleed art, which is usually a DIFFERENT member of the set
     //from the safe-zoned adaptive foreground. Decoded the same way as the foreground pick,
     //because `legacyScale` turns on whether the art actually uses transparency.
-    const legacy = await resolveTransparency(
+    const legacy = await measureFit(
       sharp,
-      pickIcon(set.icons, "androidLegacy"),
+      await resolveOpacity(sharp, pickIcon(set.icons, "androidLegacy")),
     )
     await writeAndroidIcons(sharp, nativeRoot, pick, legacy, {
       light: background,

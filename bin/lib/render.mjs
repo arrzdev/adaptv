@@ -9,6 +9,13 @@
 //   - TTY      → animated spinner lines, redrawn in place
 //   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
+import {
+  DEFAULT_COLUMNS,
+  GLYPH,
+  OWN_PHASES,
+  PHASE_DWELL_MS as THEME_DWELL_MS,
+  FRAMES as THEME_FRAMES,
+} from "../ui/theme.mjs"
 import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
 
 /* -------------------------------------------------------------------------- */
@@ -30,17 +37,100 @@ export const c = {
 
 const isCI = !!process.env.CI
 const isTTY = !!process.stdout.isTTY && !isCI
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-// The last two bytes written, so `spacer()` can tell a blank line that is missing from one
-// that is already there. Blank lines are how the output separates blocks (banner, notices,
-// steps), and every block wants one on each side of itself — without a memory, the seam
-// between two of them is two blank lines and the run looks like two runs.
-let tail = ""
-const out = (s) => {
-  tail = `${tail}${s}`.slice(-2)
-  process.stdout.write(s)
+//From the theme, not restated here: the spinner, the glyphs, the widths and the timings are
+//the design system (docs/CLI-VISUAL.md), and a second copy in the renderer is a second design
+//system waiting to drift.
+const FRAMES = THEME_FRAMES
+/**
+ * The two streams, each with its own memory of the last two bytes it wrote.
+ *
+ * The memory is what makes `spacer()` idempotent: blank lines separate blocks (banner,
+ * notices, steps) and every block asks for one on each side of itself, so without it the seam
+ * between two blocks is two blank lines and one run looks like two.
+ *
+ * PER-STREAM, because a failure goes to stderr and everything else to stdout. With one shared
+ * memory, a stdout write would satisfy a stderr `spacer()` and the `✖` block would lose its
+ * breathing room the moment stdout was redirected to a file — which is exactly when the dev is
+ * relying on stderr to still read properly.
+ */
+const streams = {
+  out: { w: process.stdout, tail: "" },
+  err: { w: process.stderr, tail: "" },
 }
-const width = () => process.stdout.columns || 80
+/**
+ * Where a failure goes.
+ *
+ * Errors used to be written to stdout like everything else, so `adaptv build ios > out.json`
+ * captured the failure INTO the file it was supposed to be producing. Failures — `log.error`,
+ * `fail`, `usageFail`, and the dim detail hanging under them — go to stderr; the banner, the
+ * steps, the notices and the addresses stay on stdout, because they are what the dev asked
+ * for. A notice is not a failure: it stays on stdout with the rest of the story.
+ */
+/**
+ * Output MODE — the engine's, not a branch in every command.
+ *
+ * `--quiet` keeps outcomes and failures and drops the narration; `--json` replaces the whole
+ * page with one document. Both are enforced in `out()`, which every primitive already funnels
+ * through, so a command cannot accidentally print around them and the machine representation
+ * is decided in the same file as the human one.
+ */
+const LEVELS = { chrome: 0, notice: 1, step: 2, result: 3, error: 4 }
+let jsonMode = false
+let quietMode = false
+/** Structured record of the run, built regardless of mode and serialised only by `emitJson`. */
+const journal = { notices: [], steps: [], result: {}, error: null }
+
+export function setOutputMode({ json = false, quiet = false } = {}) {
+  jsonMode = json
+  quietMode = quiet
+}
+/** Should a LIVE region run at all? Not merely "should its bytes print" — the spinner's
+ *  timers, the cursor hiding and the rewind arithmetic must not run either. */
+export const live = () => isTTY && !jsonMode && !quietMode
+export const record = (part, value) => {
+  if (Array.isArray(journal[part])) journal[part].push(value)
+  else journal[part] = { ...journal[part], ...value }
+}
+export function recordError(error) {
+  journal.error = error
+}
+/** The one document, on stdout, bypassing the mode gate that silenced everything else. */
+export function emitJson(meta) {
+  if (!jsonMode) return
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: !journal.error,
+      ...meta,
+      notices: journal.notices,
+      steps: journal.steps,
+      result: journal.result,
+      ...(journal.error ? { error: journal.error } : {}),
+    })}\n`,
+  )
+}
+
+let sink = "out"
+const toStderr = (fn) => {
+  sink = "err"
+  try {
+    fn()
+  } finally {
+    sink = "out"
+  }
+}
+const out = (s, level = "step") => {
+  //`--json` replaces the PAGE, not the diagnostics: stderr always speaks. A run that fails
+  //under `--json` with silence on both streams is the worst of both worlds — no document to
+  //parse and nothing to read either.
+  if (jsonMode && sink !== "err") return
+  if (quietMode && LEVELS[level] < LEVELS.result) return
+  const st = streams[sink]
+  st.tail = `${st.tail}${s}`.slice(-2)
+  st.w.write(s)
+}
+/** `spacer()` asks the stream it is CURRENTLY writing to whether it already has a blank line. */
+const currentTail = () => streams[sink].tail
+const width = () => process.stdout.columns || DEFAULT_COLUMNS
 
 // Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
 // closing with a reset if it was cut. A single-row status line redrawn with `\r\x1b[2K`
@@ -75,9 +165,6 @@ const elapsed = (start, offset = 0) => {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
-/** Silence (ms) after which a live line falls back to its present-tense `idle` label — the
- *  native build streams nothing, so past this the last finished phase is stale. */
-const IDLE_MS = 1200
 // A phase must hold the line this long before another may replace it.
 //
 // The native toolchains change phase several times a second — an iOS build rewrote the live
@@ -86,7 +173,7 @@ const IDLE_MS = 1200
 // watch. So the line SAMPLES the stream rather than following it: whatever phase is current
 // when the window opens gets the row and keeps it. Nothing is hidden — a phase that lasts
 // less than a blink was never information, and `--verbose` still streams every line.
-const PHASE_DWELL_MS = 700
+const PHASE_DWELL_MS = THEME_DWELL_MS
 
 /**
  * The row's next phase: adopt `pending` only once the current one has had its dwell.
@@ -116,15 +203,17 @@ export function since(start) {
 /** The command banner: `  adaptv  dev android`. */
 export function header(title) {
   //`adaptv · build ios` — the separator reads as one phrase where two spaces read as a
-  //gap the eye has to bridge.
-  out(`\n  ${c.bold(c.magenta("adaptv"))} ${c.dim(`· ${title}`)}\n\n`)
+  //gap the eye has to bridge. No title on the root help page, which printed `adaptv · adaptv`.
+  const rest = title && title !== "adaptv" ? ` ${c.dim(`· ${title}`)}` : ""
+  out(`\n  ${c.bold(c.magenta("adaptv"))}${rest}\n\n`, "chrome")
 }
 
 export const log = {
-  info: (m) => out(`  ${c.dim(m)}\n`),
-  warn: (m) => out(`  ${c.yellow("!")} ${c.dim(m)}\n`),
-  success: (m) => out(`  ${c.green("✓")} ${m}\n`),
-  error: (m) => out(`  ${c.red("✖")} ${m}\n`),
+  info: (m) => out(`  ${c.dim(m)}\n`, "chrome"),
+  warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`, "notice"),
+  success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`, "result"),
+  error: (m) =>
+    toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`, "error")),
 }
 
 /**
@@ -155,6 +244,7 @@ export function flushNotices(notices) {
     const text = typeof n === "string" ? n : n.note
     if (seen.has(text)) continue
     seen.add(text)
+    record("notices", text)
     log.warn(text)
   }
   notices.length = 0
@@ -186,7 +276,15 @@ export function section(title) {
  * right-hand side one column left of the rest of the CLI.
  */
 export function check(ok, label, note = "", { optional = false } = {}) {
-  const glyph = ok ? c.green("✓") : optional ? c.dim("○") : c.red("✖")
+  const glyph = ok
+    ? c.green(GLYPH.ok)
+    : optional
+      ? c.dim(GLYPH.absent)
+      : c.red(GLYPH.fail)
+  //Recorded as well as printed. It used to only print, so `doctor`'s whole matrix — the one
+  //thing a script would ever want from it — existed nowhere but the terminal, and `--json`
+  //would have had nothing to serialise.
+  record("steps", { label, ok, note: note || undefined, optional })
   out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
 }
 
@@ -201,7 +299,7 @@ export function helpText(text) {
 
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
-  out(`  ${c.green("✓")} ${label}  ${c.dim(`· ${note}`)}\n`)
+  out(`  ${c.green(GLYPH.ok)} ${label}  ${c.dim(`· ${note}`)}\n`, "result")
 }
 
 /**
@@ -220,8 +318,12 @@ export function skip(label, note = "cached") {
  * put two dots on one row.
  */
 export function fail(label, reason, detail = []) {
-  out(`${compose(c.red("✖"), label, `· ${reason}`)}\n`)
-  detailBlock(detail)
+  record("steps", { label, ok: false, reason })
+  recordError({ kind: "step-failed", label, message: reason })
+  toStderr(() => {
+    out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
+    detailBlock(detail)
+  })
   noteFailurePrinted()
 }
 
@@ -232,7 +334,7 @@ export function spacer() {
   //twice as much. Several blocks each end with one (the banner, a notice block, a finished
   //command) and they meet — `preview all` with nothing to warn about put the gap after the
   //banner AND before the first step, and the run started two lines lower than every other.
-  if (tail !== "\n\n") out("\n")
+  if (currentTail() !== "\n\n") out("\n")
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail
@@ -268,6 +370,129 @@ export function addresses({ local, network } = {}) {
 /** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
 function detailBlock(detail) {
   for (const d of detail ?? []) out(`    ${c.dim(d)}\n`)
+}
+
+/* -----------------------------------------------------------------------------
+ * static pages — help, and the failure of an invocation
+ *
+ * R10 keeps a LIVE row to one physical line, because a row redrawn with `\r\x1b[2K` must
+ * occupy exactly one. A help page and an invocation error are printed once and never
+ * redrawn, so the same rule would only cost them their tail — and R15 says never truncate an
+ * error whose remaining words carry the instructions. So these WRAP (R44). `clipAnsi` stays
+ * for rows; `wrap` and `table` serve pages.
+ * -------------------------------------------------------------------------- */
+
+/** Visible width, ignoring colour escapes (built without a literal control char in source). */
+const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+const visibleLength = (s) => s.replace(ANSI_RE, "").length
+
+/**
+ * Word-wrap to `max` visible columns. `hang` indents every line after the first, so a wrapped
+ * synopsis or description stays visually attached to the thing it belongs to.
+ */
+export function wrap(text, { max = 80, hang = 0 } = {}) {
+  const words = String(text).split(/\s+/).filter(Boolean)
+  if (words.length === 0) return [""]
+  const pad = " ".repeat(hang)
+  const lines = []
+  let line = ""
+  for (const w of words) {
+    const width = lines.length === 0 ? max : max - hang
+    if (line && visibleLength(line) + 1 + visibleLength(w) > width) {
+      lines.push(line)
+      line = w
+    } else line = line ? `${line} ${w}` : w
+  }
+  lines.push(line)
+  return lines.map((l, i) => (i === 0 ? l : pad + l))
+}
+
+/**
+ * The aligned two-column layout every list in the CLI wants: a flag and what it is for, a
+ * surface and what it runs, a command and what it does.
+ *
+ * Below `minRight` columns of room it stacks instead — the right cell on its own indented
+ * line — because a description wrapped into a four-character gutter is not a table, it is a
+ * column of syllables. `addresses()` is the same shape and goes through here.
+ */
+export function table(rows, { indent = 4, gap = 2, minRight = 28 } = {}) {
+  const cols = Math.max(20, width())
+  const left = Math.max(...rows.map((r) => visibleLength(r.left)))
+  const start = indent + left + gap
+  const stacked = cols - start < minRight
+  const pad = " ".repeat(indent)
+  for (const r of rows) {
+    if (!r.right) {
+      out(`${pad}${r.left}\n`)
+      continue
+    }
+    if (stacked) {
+      out(`${pad}${r.left}\n`)
+      for (const l of wrap(r.right, { max: cols - indent - 2 }))
+        out(`${pad}  ${c.dim(l)}\n`)
+      continue
+    }
+    const spaces = " ".repeat(left - visibleLength(r.left) + gap)
+    const [first, ...more] = wrap(r.right, { max: cols - start })
+    out(`${pad}${r.left}${spaces}${c.dim(first)}\n`)
+    for (const l of more) out(`${" ".repeat(start)}${c.dim(l)}\n`)
+  }
+}
+
+/** A titled block of two-column rows — the body of a help page. */
+export function section2(title, rows) {
+  if (!rows?.length) return
+  spacer()
+  out(`  ${c.bold(title)}\n`)
+  table(rows)
+}
+
+/**
+ * A titled block of pre-composed lines — a synopsis, a list of examples. Each WRAPS with a
+ * hanging indent rather than clipping, so a long synopsis on a narrow terminal folds under
+ * itself instead of losing the flags at the end of it (R44).
+ */
+export function lineBlock(title, lines) {
+  if (!lines?.length) return
+  spacer()
+  if (title) out(`  ${c.bold(title)}\n`)
+  const max = Math.max(20, width()) - 4
+  for (const l of lines)
+    for (const w of wrap(l, { max, hang: 2 })) out(`    ${w}\n`)
+}
+
+/** Free prose inside a help page: dim, wrapped, indented like the body. */
+export function paragraph(text) {
+  //`spacer()` rather than a raw newline: it is idempotent, so a paragraph directly under the
+  //banner (which already ends in a blank line) does not open a second gap.
+  spacer()
+  for (const l of wrap(text, { max: Math.max(20, width()) - 4 }))
+    out(`  ${c.dim(l)}\n`)
+}
+
+/**
+ * An invocation that cannot run: the dev typed something wrong, so nothing has started and
+ * there is nothing to tear down. ONE `✖` naming what was wrong, then the fix — never the whole
+ * help page, which answers a question they did not ask (R6/R36).
+ *
+ * The `✖` line WRAPS rather than clipping, with a hanging indent that lines its continuation
+ * up under the first word rather than under the glyph.
+ */
+export function usageFail(reason, fix = []) {
+  const cols = Math.max(20, width())
+  //The whole block on stderr — the glyph line, its wrapped tail, and the fix — with the blank
+  //lines around it, so a redirected stdout still leaves a readable error on the terminal.
+  toStderr(() => {
+    spacer()
+    const [first, ...more] = wrap(reason, { max: cols - 4 })
+    out(`  ${c.red(GLYPH.fail)} ${first}\n`)
+    for (const l of more) out(`    ${l}\n`)
+    for (const f of fix)
+      for (const l of wrap(f, { max: cols - 6, hang: 2 }))
+        out(`    ${c.dim(l)}\n`)
+    spacer()
+  })
+  noteFailurePrinted()
 }
 
 /**
@@ -329,7 +554,11 @@ export function liveWatcher({ keys = true } = {}) {
   //     browser reloads itself; there is no binary to rebuild.
   //   - raw mode may be unavailable (stdin isn't a TTY), in which case NO key arrives.
   // ctrl-c always works, so it is always worth saying.
-  const stop = `${c.bold("ctrl-c")}${c.dim(" stop")}`
+  //A pressable key gets ROLE.key (cyan bold), never plain bold — see the note in `theme.mjs`.
+  //Both renderers draw this row, so they have to agree on it or the block changes colour the
+  //moment `ADAPTV_INK=0` is set.
+  const key = (s) => c.cyan(c.bold(s))
+  const stop = `${key("ctrl-c")}${c.dim(" stop")}`
   //no leading separator: this row IS the hints now, not a suffix on `✓ watching`
   const dot = "  "
   const hint = !keys
@@ -337,12 +566,12 @@ export function liveWatcher({ keys = true } = {}) {
     : keysAvailable()
       ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
         // keys, where the bold's reset bleeds and the key ends up gray.
-        `${dot}${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${stop}`
-      : `${dot}${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
+        `${dot}${key("r")}${c.dim(" reload js")}   ${key("b")}${c.dim(" rebuild app")}   ${stop}`
+      : `${dot}${c.dim("keys unavailable (stdin is not a TTY). Run adaptv directly for r/b")}`
   // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
   // and the row still animates on HMR — the spinner is what says "working", not a word.
   const idleLine = hint.trimEnd() || `  ${c.dim("ctrl-c stop")}`
-  if (!isTTY) {
+  if (!live()) {
     out(`${idleLine}\n`)
     return {
       hmr: () => {},
@@ -356,23 +585,35 @@ export function liveWatcher({ keys = true } = {}) {
   let clearAt = 0
   let notice = null
   const draw = () => {
-    let s
-    if (changed && Date.now() < clearAt) {
-      s = `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
-    } else {
-      changed = null
-      // A pending native change outranks the idle hint — it's the one thing the dev has to
-      // act on, and it stays put until they do.
-      s = notice
-        ? //`  · ` — two spaces before the dot, ONE after, the same as every settled row
-          //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that
-          //comes from a row hand-spacing its own separator (R31).
-          `  ${c.yellow("!")} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild")}`
-        : idleLine
-    }
-    // Clip to the terminal width so this stays ONE physical row — a wrapped status line
-    // redrawn in place stacks a copy every frame (the cascade).
-    out(`\r\x1b[2K${clipAnsi(s, Math.max(10, width()))}`)
+    // The activity row: a spinner while HMR applies, otherwise the keys. The keys are ALWAYS
+    // the last row now — a notice used to REPLACE them, so the moment adaptv had something to
+    // say the dev lost sight of `r`/`b`/`ctrl-c` entirely, which is the one row that is never
+    // not relevant. Reported by the owner as the actions being swapped out.
+    const busy = changed && Date.now() < clearAt
+    const activity = busy
+      ? `  ${c.cyan(FRAMES[frame++ % FRAMES.length])} ${c.bold("watching")}  ${c.dim(`↻ ${changed}`)}`
+      : idleLine
+    if (!busy) changed = null
+    // A pending change gets its OWN row above, and stays until the dev acts on it.
+    //`  · ` — two spaces before the dot, ONE after, the same as every settled row
+    //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that comes
+    //from a row hand-spacing its own separator (R31).
+    const rows = notice
+      ? [
+          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${key("b")}${c.dim(" to rebuild and see the changes")}`,
+          "",
+          activity,
+        ]
+      : [activity]
+    // Every draw ENDS with the cursor parked back at the top of the block, so a draw begins
+    // by simply wiping from where it stands — no rewind first. (Rewinding as well walked the
+    // block one row up the screen per frame, and `stop()` then erased the settled platform
+    // lines above it.) Clipping keeps each row ONE physical line: a wrapped status row redrawn
+    // in place stacks a copy every frame, and a block does it several rows at a time.
+    out("\r\x1b[0J")
+    out(rows.map((r) => clipAnsi(r, Math.max(10, width()))).join("\n"))
+    if (rows.length > 1) out(`\x1b[${rows.length - 1}A`)
+    out("\r")
   }
   draw()
   const anim = setInterval(draw, 80)
@@ -389,7 +630,10 @@ export function liveWatcher({ keys = true } = {}) {
     },
     stop: () => {
       clearInterval(anim)
-      out("\r\x1b[2K")
+      // The cursor is parked at the top of the block, so this erases the whole thing however
+      // many rows it grew to — and leaves the cursor exactly where the block began, which is
+      // what `rewindLines` counts back from.
+      out("\r\x1b[0J")
     },
   }
 }
@@ -414,7 +658,7 @@ export function liveWatcher({ keys = true } = {}) {
  * all they need. Returns false off a TTY, where the caller should just append.
  */
 export function rewindLines(n) {
-  if (!isTTY || n <= 0) return false
+  if (!live() || n <= 0) return false
   out(`\x1b[${n}A\x1b[0J`)
   return true
 }
@@ -479,101 +723,28 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
  * non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
  */
 export async function select(message, options) {
-  if (!options?.length) return undefined
-  const stdin = process.stdin
-  if (!isTTY || !stdin.isTTY || typeof stdin.setRawMode !== "function")
-    return options[0].value
-
-  const WINDOW = 8
-  const windowed = options.length > WINDOW
-  const visible = Math.min(WINDOW, options.length)
-  // Fixed line count per frame: header + visible rows (+ a "N of M" footer when scrolling).
-  const rows = 1 + visible + (windowed ? 1 : 0)
-
-  let idx = 0
-  let top = 0
-
-  // Clip a plain string to `max` VISIBLE chars. EVERY emitted row must fit the terminal
-  // width — a line that wraps takes two physical rows, which breaks the fixed-row cursor
-  // rewind below and cascades the whole menu on each keypress on a narrow terminal.
-  const clip = (s, max) => {
-    const a = [...s]
-    return a.length > max
-      ? `${a.slice(0, Math.max(0, max - 1)).join("")}…`
-      : s
-  }
-  const paint = () => {
-    if (idx < top) top = idx
-    else if (idx >= top + visible) top = idx - visible + 1
-    const w = Math.max(24, width())
-    const nav = "   ↑↓ move · ↵ select"
-    out(
-      message.length + nav.length <= w - 2
-        ? `  ${c.bold(message)}${c.dim(nav)}\n`
-        : `  ${c.bold(clip(message, w - 2))}\n`,
+  //A prompt has no machine answer — see the note on `--json` in `setOutputMode`.
+  if (jsonMode)
+    throw new Error(
+      "'--json' can't answer a prompt. Pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
     )
-    const end = top + visible
-    for (let i = top; i < end; i++) {
-      const o = options[i]
-      const on = i === idx
-      const cursor = on ? c.cyan("›") : " "
-      const text = clip(`${o.label}${o.hint ? `  ${o.hint}` : ""}`, w - 4)
-      out(`  ${cursor} ${on ? text : c.dim(text)}\n`)
-    }
-    if (windowed)
-      out(
-        `  ${c.dim(clip(`  ${top + 1}–${end} of ${options.length}`, w - 2))}\n`,
-      )
-  }
-  // `\r` first so the cursor is at column 0 before moving up: a terminal that doesn't
-  // reset the column on `\n` would otherwise leave the cursor mid-line, and `\x1b[0J`
-  // would only clear from there — leaving the start of the header behind.
-  const erase = () => out(`\r\x1b[${rows}A\x1b[0J`)
+  //Off a TTY there is nobody to press anything, so the first option stands as the default —
+  //the same answer the hand-rolled picker gave, and what makes a piped run deterministic.
+  if (!isTTY || !process.stdin.isTTY) return options[0]?.value
 
-  paint()
-  return await new Promise((resolve) => {
-    stdin.setRawMode(true)
-    stdin.resume()
-    stdin.setEncoding("utf8")
-    const done = (fn) => {
-      stdin.off("data", onData)
-      try {
-        stdin.setRawMode(false)
-      } catch {}
-      stdin.pause()
-      erase()
-      fn()
-    }
-    const onData = (key) => {
-      if (key === "\x1b[A" || key === "\x1bOA" || key === "k") {
-        idx = (idx - 1 + options.length) % options.length
-        erase()
-        paint()
-      } else if (key === "\x1b[B" || key === "\x1bOB" || key === "j") {
-        idx = (idx + 1) % options.length
-        erase()
-        paint()
-      } else if (key === "\r" || key === "\n") {
-        done(() => resolve(options[idx].value))
-      } else if (key === "\x03" || key === "q") {
-        // NOT bare Esc: an arrow key can arrive as Esc then `[A` in two chunks, and
-        // treating a lone Esc as cancel would misfire on that split. Ctrl-C / q cancel.
-        // The caller registers a process 'exit' hook that tears down anything already
-        // started (e.g. the dev server running behind this picker), so exiting here is safe.
-        done(() => {
-          // SAY so. The picker erases itself on the way out (that is the point of it), so
-          // aborting used to leave the banner, whatever notices preceded it, and then a bare
-          // shell prompt — reported as *"quando a pessoa cancela algo deve aparecer… isto está
-          // muito vazio"*. Erasing the prompt is right; erasing the fact that it was answered
-          // is not, and the dev is left unsure whether the command did anything.
-          log.warn("cancelled")
-          spacer()
-          process.exit(130)
-        })
-      }
-    }
-    stdin.on("data", onData)
-  })
+  //THE PICKER IS INK'S NOW. It used to count its own rows, move the cursor back over them
+  //and erase — `\r\x1b[NA\x1b[0J` — on every keypress, which is the same arithmetic that
+  //walked the watch block up the screen. Arrow keys are `useInput`; the list is a column.
+  const { inkSelect } = await import("../ui/live.mjs")
+  const chosen = await inkSelect(message, options)
+  if (chosen === null) {
+    //R37: a cancelled prompt still leaves a line. A prompt that erases itself and says
+    //nothing is indistinguishable from one that was never asked.
+    log.warn("cancelled")
+    spacer()
+    process.exit(130)
+  }
+  return chosen
 }
 
 /**
@@ -590,6 +761,10 @@ export async function select(message, options) {
  * `message` carries the fact, so there is no `!` line above it saying the same thing (R6).
  */
 export async function confirm(message, { yes, no } = {}) {
+  if (jsonMode)
+    throw new Error(
+      "'--json' can't answer a prompt. Pass '--yes' to say so up front",
+    )
   if (!isTTY || !process.stdin.isTTY) return null
   return await select(message, [
     { value: true, label: yes ?? "yes" },
@@ -634,6 +809,14 @@ const PROPER = [
 const HUMAN_PHRASE = /^[a-z][a-z0-9 .·'-]{0,38}$/
 
 export function prettyLine(line) {
+  //A phase adaptv chose for itself passes through untouched. Everything below this line is a
+  //filter for what BUILD TOOLS print, and running adaptv's own vocabulary through it is what
+  //silently swallowed `sync`, `package` and `packaging` — single verbs, dropped by the
+  //lone-verb rule meant for gradle. `sync · cached` is the same phase with metadata attached,
+  //so it is matched on the part before the separator.
+  const own = line.split(" · ")[0]
+  if (OWN_PHASES.has(own)) return line
+
   const m = line.match(/(\d{1,3})%\s+([A-Z]+)/)
   if (m) {
     const pct = Math.min(100, Number(m[1]))
@@ -669,6 +852,17 @@ export function prettyLine(line) {
   // Drop lines with no real action — a lone verb ("building", "running"), even with a `· time`.
   if (/^[a-z]+(\s+·.*)?$/i.test(s)) return ""
   if (!HUMAN_PHRASE.test(s)) return ""
+  //Two last gates, both R24, both found by watching a long build leak fragments of its own
+  //tool output onto the row.
+  //
+  //A phase NAMES A FILE. `creating capacitor.config.json` and `packaging .ipa` both got here
+  //as prose that survived every earlier filter — no path to give them away, no `error:`
+  //prefix — and both say what is being acted ON, which is the one thing a phase may not.
+  if (/\.[a-z0-9]{2,5}\b/.test(s)) return ""
+  //A phase is not an ACTIVITY. `as any` reached the row as a two-word fragment of a compiler
+  //line; it is grammatical, short and completely meaningless as a status. Anything adaptv did
+  //not choose itself has to start with a present participle to be a phase at all (R45).
+  if (!OWN_PHASES.has(s) && !/^[a-z]+ing\b/.test(s)) return ""
   return s
 }
 
@@ -705,6 +899,31 @@ const settled = (left, time) =>
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const stripLen = (s) => s.replace(ANSI, "").length
 
+/* -----------------------------------------------------------------------------
+ * a row only ever moves FORWARD
+ *
+ * A row shows the last phase that was reported, and silence changes nothing. There is no idle
+ * fallback, and that is the whole rule: a phase is shown once, and the row never returns to one
+ * it has left.
+ *
+ * There used to be a fallback. A native build is loud in bursts and silent in between, so after
+ * `IDLE_MS` of quiet the row dropped back to a per-lane `idle` label to avoid freezing on a
+ * stale tool line. It read as the build restarting:
+ *
+ *     building app → compiling → building app → processing resources → building app
+ *
+ * Making the fallback label track the current stage instead of a constant fixed the case where
+ * it was an outright lie (`building app` during the install) and did nothing about this, which
+ * is the actual complaint: going back to a phase you have already shown says work is being
+ * redone. A frozen `linking` is not misleading — the spinner is what says the row is alive, and
+ * the last thing the tool said is the most specific true statement available.
+ *
+ *     syncing → installing dependencies → building app → compiling → launching device
+ *
+ * Staying honest is then the CALLER's job: announce a phase when the work actually changes, and
+ * the row narrates it. See the note on `cap run` in `launchOne`.
+ * -------------------------------------------------------------------------- */
+
 /**
  * Run one step as a single spinner line. `fn(report)` does the work; `report(line)`
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
@@ -722,31 +941,38 @@ const stripLen = (s) => s.replace(ANSI, "").length
 export async function runLine(
   label,
   fn,
-  {
-    verbose = false,
-    idle = "",
-    transient = false,
-    offsetMs = 0,
-    explain,
-  } = {},
+  { verbose = false, transient = false, offsetMs = 0, explain } = {},
 ) {
   const start = Date.now()
   let detail = "" // what the row currently SHOWS (updated at most once per dwell)
   let pending = "" // the newest phase the stream has reported
   let shownAt = 0
-  let lastAt = start // when the live detail last changed — drives the idle fallback
   const report = (line) => {
     const pretty = prettyLine(line)
     if (!pretty) return
     pending = pretty
-    lastAt = Date.now()
     if (verbose) out(`    ${c.dim(line)}\n`)
+    //Paint the FIRST phase the moment it is announced, rather than waiting for the next
+    //timer tick. The tick may never come: the launch and reload paths are `spawnSync` all
+    //the way down (`simctl launch`, `open -a Simulator`, `adb`), and synchronous work blocks
+    //the event loop, so `setInterval` cannot fire. The row would sit frozen on the frame
+    //drawn BEFORE the work began — which is the `!detail` fallback, `preparing` — while the
+    //app was already open on the device. Reported as a reload that stalls on "preparing".
+    //
+    //Only the first: `nextPhase` already says an empty row shows its phase at once and the
+    //dwell governs REPLACING one, so this is that rule finally getting a chance to apply.
+    //Later phases stay on the sampled loop, which is what stops a chatty tool strobing.
+    if (!detail) repaint?.()
   }
   // Promote the newest phase only when the current one has had its turn. Called from the
   // draw loop, so the row adopts whatever is current at the window boundary.
   const tick = (now) => {
     ;({ detail, shownAt } = nextPhase({ detail, pending, shownAt }, now))
   }
+  //Set to `draw` once the live row exists. Stays null off a TTY and under `--verbose`, where
+  //there is no row being redrawn in place and nothing to repaint. (Named `repaint`, not
+  //`paint`: that one is the module's colour helper.)
+  let repaint = null
 
   // a step's return value, when it's a string, is its final detail (e.g. an artifact
   // path) — shown before the elapsed time on the ✓ line.
@@ -755,21 +981,24 @@ export async function runLine(
   const failRight = (reason) => settled(reason, elapsed(start, offsetMs))
   const flat = ({ right, keep }) => `${right}${keep}`
 
-  if (verbose || !isTTY) {
+  if (verbose || !live()) {
     // A transient step prints NOTHING here: there's no cursor to erase a line with off a
     // TTY, and a start/settle pair is exactly the extra step this mode exists to avoid.
     // `--verbose` still streams the raw tool output through `report` — that's its contract.
-    if (!transient) out(`  ${c.dim("·")} ${label}\n`)
+    if (!transient) out(`  ${c.dim("·")} ${label}\n`, "step")
     try {
       const r = await fn(report)
       if (!transient)
-        out(`  ${c.green("✓")} ${label}  ${c.dim(flat(doneRight(r)))}\n`)
+        out(
+          `  ${c.green(GLYPH.ok)} ${label}  ${c.dim(flat(doneRight(r)))}\n`,
+          "result",
+        )
       return r
     } catch (err) {
       if (!transient) {
         const { reason, detail: why } = explained(explain, err)
         out(
-          `  ${c.red("✖")} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
+          `  ${c.red(GLYPH.fail)} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
         )
         detailBlock(why)
         // This failure now OWNS a ✖ on screen. An outer catch that reports again would
@@ -782,50 +1011,52 @@ export async function runLine(
     }
   }
 
-  let frame = 0
-  const draw = () => {
-    // Live line = just the current phase (no per-step timer — the total lands on the ✓
-    // line). Nothing yet → "preparing". Once there's been output and the stream goes quiet
-    // for a beat — the long opaque native build, which cap emits nothing during — fall back
-    // to the caller's present-tense `idle` label instead of freezing on the last phase.
+  //THE LIVE ROW IS INK'S NOW. What used to be here was a `setInterval` recomputing the whole
+  //row and rewriting it with `\r\x1b[2K` — the frame counter, the width arithmetic, the rule
+  //that the elapsed time is the last thing to be clipped, all by hand. Ink owns the frame and
+  //the layout; this loop only decides WHAT the row should say.
+  const { liveRows } = await import("../ui/live.mjs")
+  const block = liveRows([label])
+  repaint = () => {}
+  const tickPhase = () => {
     const now = Date.now()
     tick(now)
-    const phase = !detail
-      ? "preparing"
-      : idle && now - lastAt > IDLE_MS
-        ? idle
-        : detail
-    out(
-      `\r\x1b[2K${compose(c.cyan(FRAMES[frame++ % FRAMES.length]), label, phase)}`,
-    )
+    block.phase(label, detail || "preparing")
   }
-  draw()
-  const timer = setInterval(draw, 80)
+  tickPhase()
+  const timer = setInterval(tickPhase, 80)
+  //`repaint` still exists for `report()`: a phase announced while the event loop is blocked
+  //has to reach the store before the block goes, even though Ink cannot draw until the loop
+  //frees up. Setting the state is what survives.
+  repaint = tickPhase
   try {
     const r = await fn(report)
     clearInterval(timer)
-    // transient → erase the row (no ✓). `\r\x1b[2K` leaves the cursor at column 0 of a
-    // now-blank row, so whatever prints next simply takes it over: the live line is
-    // replaced by the next real step rather than pushing it down a row.
+    block.stop()
+    //Settled rows are written AFTER Ink unmounts, as ordinary text that scrolls. They are
+    //printed once and never redrawn, so there is nothing for a layout engine to do.
     const done = doneRight(r)
-    out(
-      transient
-        ? "\r\x1b[2K"
-        : `\r\x1b[2K${compose(c.green("✓"), label, done.right, done.keep)}\n`,
-    )
+    if (!transient)
+      out(
+        `${compose(c.green(GLYPH.ok), label, done.right, done.keep)}\n`,
+        "result",
+      )
     return r
   } catch (err) {
     clearInterval(timer)
+    block.stop()
     // A failed transient step is still reported — by the caller, via `fail()`, which owns
     // the label. Marking the row too would just double the ✖.
-    if (transient) {
-      out("\r\x1b[2K")
-      throw err
-    }
+    if (transient) throw err
     const { reason, detail: why } = explained(explain, err)
     const bad = failRight(reason)
-    out(`\r\x1b[2K${compose(c.red("✖"), label, bad.right, bad.keep)}\n`)
-    detailBlock(why)
+    toStderr(() => {
+      out(
+        `${compose(c.red(GLYPH.fail), label, bad.right, bad.keep)}\n`,
+        "error",
+      )
+      detailBlock(why)
+    })
     // This row IS the report (R2) — the same claim the non-TTY branch above makes, and it
     // has to be made on BOTH paths. Only the non-TTY one did, so on a real terminal a dev
     // server that failed to bind printed `✖ web  port 7171 …` and then, from the command's
@@ -854,8 +1085,6 @@ export async function runLanes(lanes, { verbose = false } = {}) {
     start: Date.now(),
     pending: "", // newest phase reported (promoted to `detail` once per dwell)
     shownAt: 0,
-    lastAt: Date.now(), // when this lane's detail last changed (idle fallback)
-    idle: l.idle ?? "", // present-tense label shown once the lane's stream goes quiet
     offsetMs: l.offsetMs ?? 0, // work done for this lane before it had a line (scaffolding)
     time: "",
     reason: "", // inline failure cause, shown on this lane's own ✖ line
@@ -870,8 +1099,11 @@ export async function runLanes(lanes, { verbose = false } = {}) {
       const pretty = prettyLine(line)
       if (!pretty) return
       state[i].pending = pretty
-      state[i].lastAt = Date.now()
       if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
+      //Paint the lane's FIRST phase at once — see the same note in `runLine`. The launch and
+      //reload paths are `spawnSync` throughout, so the draw timer cannot fire while they run
+      //and the rows would sit frozen on `preparing` until every lane had finished.
+      if (!state[i].detail) repaint?.()
     }
     return Promise.resolve()
       .then(() => lane.run(report))
@@ -917,63 +1149,70 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           (state[b].status === "fail" ? 1 : 0),
       )
 
+  //Set to the frame renderer once the block exists; null off a TTY, where nothing repaints.
+  let repaint = null
+
   // verbose / non-TTY: no in-place animation, just start + settle lines.
-  if (verbose || !isTTY) {
-    for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`)
+  if (verbose || !live()) {
+    for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`, "step")
     await Promise.all(lanes.map(runOne))
     for (const i of settledOrder()) {
       const s = state[i]
-      const glyph = s.status === "ok" ? c.green("✓") : c.red("✖")
+      const glyph =
+        s.status === "ok" ? c.green(GLYPH.ok) : c.red(GLYPH.fail)
       const r = settledRight(s)
-      out(`  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`)
+      //A settled row is the OUTCOME, which is exactly what `--quiet` keeps.
+      out(
+        `  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`,
+        "result",
+      )
       if (s.status === "fail") detailBlock(s.why)
     }
     return results
   }
 
-  let frame = 0
-  let drawn = 0
-  let order = state.map((_, i) => i)
-  const draw = () => {
+  //THE LANES ARE INK'S NOW. This was the block that walked the cursor: `\x1b[NA` back over
+  //however many rows were drawn last time, `\x1b[2K` per row on the way down, and a `drawn`
+  //counter to remember the height. R3 (never interleave platforms) used to be a property of
+  //that loop being careful; it is now structural, because each lane is its own row in a
+  //column and there is no shared cursor to get wrong.
+  const { liveRows } = await import("../ui/live.mjs")
+  const block = liveRows(state.map((s) => s.label))
+  const tickAll = () => {
     const now = Date.now()
-    if (drawn > 0) out(`\x1b[${drawn}A`)
-    for (const i of order) {
-      const s = state[i]
-      const glyph =
-        s.status === "ok"
-          ? c.green("✓")
-          : s.status === "fail"
-            ? c.red("✖")
-            : c.cyan(FRAMES[frame % FRAMES.length])
+    for (const s of state) {
+      if (s.status !== "run") continue
       //Same dwell as runLine — a lane samples its stream rather than following it.
-      if (s.status === "run") Object.assign(s, nextPhase(s, now))
-      // live: just the current phase (nothing yet → "preparing"; idle fallback for the
-      // silent build); the total lands on the settled line.
-      const right =
-        s.status === "run"
-          ? {
-              right: !s.detail
-                ? "preparing"
-                : s.idle && now - s.lastAt > IDLE_MS
-                  ? s.idle
-                  : s.detail,
-              keep: "",
-            }
-          : settledRight(s)
-      out(`\x1b[2K${compose(glyph, s.label, right.right, right.keep)}\n`)
+      Object.assign(s, nextPhase(s, now))
+      block.phase(s.label, s.detail || "preparing")
     }
-    drawn = state.length
-    frame++
   }
-
-  draw()
-  const timer = setInterval(draw, 80)
+  repaint = tickAll
+  tickAll()
+  const timer = setInterval(tickAll, 80)
   await Promise.all(lanes.map(runOne))
   clearInterval(timer)
-  order = settledOrder() // failures sink to the bottom rows, so their detail can follow
-  draw() // final frame with all statuses settled
-  for (const i of order) {
-    if (state[i].status === "fail") detailBlock(state[i].why)
+  block.stop()
+
+  //Settled rows are ordinary text, written after the block is gone. Failures sink to the
+  //bottom so their dim detail can follow them without landing under another platform (R3).
+  for (const i of settledOrder()) {
+    const s = state[i]
+    const r = settledRight(s)
+    if (s.status === "fail") {
+      toStderr(() => {
+        out(
+          `${compose(c.red(GLYPH.fail), s.label, r.right, r.keep)}\n`,
+          "error",
+        )
+        detailBlock(s.why)
+      })
+    } else {
+      out(
+        `${compose(c.green(GLYPH.ok), s.label, r.right, r.keep)}\n`,
+        "result",
+      )
+    }
   }
   return results
 }

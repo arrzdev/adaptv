@@ -25,9 +25,17 @@ const ENGINE = "lib/render.mjs"
 /** Every .mjs the CLI ships, excluding tests and the engine itself. */
 function cliModules() {
   const files = []
-  for (const entry of ["", "lib"]) {
+  //`ui/` too: the Ink components are held to the same glyph and stdout rules as everything
+  //else — a second visual language is exactly as possible there as anywhere.
+  for (const entry of ["", "lib", "ui"]) {
     const dir = join(BIN, entry)
-    for (const f of readdirSync(dir)) {
+    let names = []
+    try {
+      names = readdirSync(dir)
+    } catch {
+      continue
+    }
+    for (const f of names) {
       if (!f.endsWith(".mjs") || f.includes(".test.")) continue
       const rel = entry ? `${entry}/${f}` : f
       if (rel !== ENGINE) files.push(rel)
@@ -73,6 +81,20 @@ describe("the render engine owns every byte the CLI prints", () => {
         ([rel, r]) => `${rel}: ${(r.stderr ?? "").split("\n")[2] ?? ""}`,
       )
     expect(broken).toEqual([])
+  })
+
+  it("keeps commander behind one door", () => {
+    //Commander is a SECOND engine: left to itself it prints its own help, its own errors and
+    //its own exit codes, in its own visual language. `cli-parse.mjs` exists to take all three
+    //away from it (configureOutput, exitOverride, configureHelp) and hand back structured
+    //faults instead. That containment is only true while exactly one module imports it — a
+    //second importer is a second set of defaults nobody silenced.
+    const importers = cliModules().filter((rel) =>
+      /from\s+["']commander["']/.test(
+        readFileSync(join(BIN, rel), "utf8"),
+      ),
+    )
+    expect(importers).toEqual(["lib/cli-parse.mjs"])
   })
 
   it("keeps the glyph set in one place", () => {

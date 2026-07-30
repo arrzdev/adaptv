@@ -396,7 +396,7 @@ const SOURCE_EXTS = new Set([
  */
 export function sourceError(ext) {
   if (!SOURCE_EXTS.has(ext.toLowerCase()))
-    return `${ext} isn't an image adaptv can read — use a png or svg`
+    return `${ext} isn't an image adaptv can read. Use a png or svg`
   return null
 }
 
@@ -434,13 +434,13 @@ export function sourceWarnings(
 
   if (!vector && width && height && width !== height)
     warnings.push(
-      `source is ${width}\u00d7${height} — icons are square, so it will be letterboxed`,
+      `source is ${width}\u00d7${height}, and icons are square, so it will be letterboxed`,
     )
 
   const size = Math.min(width ?? 0, height ?? 0)
   if (!vector && size > 0 && size < MIN_SOURCE_PX)
     warnings.push(
-      `source is ${size}px — every icon is upscaled from it (${MIN_SOURCE_PX}px is ideal)`,
+      `source is ${size}px, so every icon is upscaled from it (${MIN_SOURCE_PX}px is ideal)`,
     )
 
   // The one that is genuinely hard to discover on your own — and the ONLY case adaptv can no
@@ -460,7 +460,7 @@ export function sourceWarnings(
   // had just fixed.
   if (isolable === false)
     warnings.push(
-      `source has no flat background — the mask will crop its edges`,
+      `source has no flat background, so the mask will crop its edges`,
     )
 
   // NOT a complaint about the source — a statement of the one measurement everything visible
@@ -478,7 +478,7 @@ export function sourceWarnings(
   // question they already answered.
   if (background && !backgroundChosen)
     warnings.push(
-      `background ${hexOf(background)} lifted off the mark — --background overrides`,
+      `background ${hexOf(background)} lifted off the mark; --background overrides`,
     )
 
   // BOTH iOS 18 appearances need light art, and the first version of this warning only said
