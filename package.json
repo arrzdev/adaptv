@@ -36,6 +36,7 @@
     "build:android": "node scripts/playground.mjs build:android",
     "build:all": "node scripts/playground.mjs build:all",
     "adaptv": "node scripts/playground.mjs adaptv",
+    "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
     "build": "tsdown",
     "build:check": "tsdown && node scripts/verify-dist.mjs",
     "typecheck": "tsc --noEmit",

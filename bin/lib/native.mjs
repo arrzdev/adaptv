@@ -22,7 +22,11 @@ import { exec } from "./exec.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import {
   classListChanged,
+  gradleProjectName,
+  mergeCapacitorBuildGradle,
   mergeClassList,
+  mergePluginsJson,
+  mergeSettingsGradle,
   podsNeedInstall,
 } from "./native-state.mjs"
 
@@ -121,6 +125,13 @@ export function capCmd(_appRoot) {
 /** Run a captured command; each raw line goes to `report`. Throws on failure. */
 function run(cmd, args, { cwd, env, report } = {}) {
   return exec(cmd, args, { cwd, env, onLine: (l) => report?.(l) })
+}
+
+/** Write only when the content actually differs — these files feed the native build's own
+ * up-to-date checks, and rewriting an identical Gradle file invalidates it for nothing. */
+function writeIfChanged(file, next) {
+  if (existsSync(file) && readFileSync(file, "utf8") === next) return
+  writeFileSync(file, next)
 }
 
 /* =============================================================================
@@ -562,15 +573,17 @@ export async function capAddIfMissing(
 ) {
   const dir = nativeDir(appRoot, platform)
   if (existsSync(dir)) {
-    // Project already scaffolded — but still verify adaptv's plugin pods are declared AND
-    // that the CocoaPods sandbox is in sync. This has to happen on EVERY prepare, not only
-    // when the project is created: `cap sync` is skipped by the build cache on an unchanged
-    // run, so a project left half-installed (Ctrl-C during CocoaPods → `Pods/` with no
-    // lockfiles) would otherwise never be repaired and every build would fail with
-    // "The sandbox is not in sync with the Podfile.lock". Cheap when healthy: two stats and
-    // a string compare, then an early return.
+    // Project already scaffolded — but still verify adaptv's plugins are declared in it (and,
+    // on iOS, that the CocoaPods sandbox is in sync). This has to happen on EVERY prepare, not
+    // only when the project is created: `cap sync` is skipped by the build cache on an
+    // unchanged run, so a project left half-installed (Ctrl-C during CocoaPods → `Pods/` with
+    // no lockfiles) would otherwise never be repaired and every build would fail with "The
+    // sandbox is not in sync with the Podfile.lock" — and an Android project generated before
+    // adaptv injected its plugins would keep building without them. Cheap when healthy: a few
+    // stats and a string compare, then an early return.
     if (platform === "ios")
       await injectIosPluginPods(appRoot, env, { report, plugins })
+    else injectAndroidPluginProjects(appRoot, { report, plugins })
     return
   }
 
@@ -621,18 +634,25 @@ export async function capAddIfMissing(
     env: withLiveCapConfig(env),
     report,
   })
-  //`cap add` writes a core-only Podfile (Capacitor can't discover adaptv's plugins);
-  //inject them now so a first run that skips the (cached) sync still gets them.
+  //`cap add` writes a core-only project (Capacitor can't discover adaptv's plugins) — a
+  //Podfile on iOS, the Gradle/registry trio on Android. Inject now so a first run that
+  //skips the (cached) sync still gets them.
   if (platform === "ios")
     await injectIosPluginPods(appRoot, env, { report, plugins })
+  else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
 /** `cap sync <platform>` (copies web assets + updates native deps). */
-/** The Capacitor packages adaptv ships that carry NATIVE code — `@capacitor/ios`
- * (the core pods) plus every plugin. Derived from adaptv's own manifest so it can
- * never drift from what's installed. Excludes the JS-only core, the CLI, and the
- * other platform. */
-function adaptvCapacitorNativePkgs() {
+/** The Capacitor packages adaptv ships that carry NATIVE code for `platform` — every
+ * plugin, plus (on iOS) `@capacitor/ios` for the core pods. Derived from adaptv's own
+ * manifest so it can never drift from what's installed. Excludes the JS-only core, the
+ * CLI, and the other platform's runtime.
+ *
+ * Android's core runtime is excluded too, but for a different reason than iOS's is
+ * included: cap writes `include ':capacitor-android'` into `capacitor.settings.gradle`
+ * itself (it resolves `@capacitor/android` from the app root, and finds it), so adding it
+ * again would declare the same Gradle module twice. */
+function adaptvCapacitorNativePkgs(platform) {
   const pkg = JSON.parse(
     readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
   )
@@ -641,9 +661,26 @@ function adaptvCapacitorNativePkgs() {
     "@capacitor/core",
     "@capacitor/android",
   ])
+  if (platform === "android") skip.add("@capacitor/ios")
   return Object.keys(pkg.dependencies ?? {}).filter(
     (n) => n.startsWith("@capacitor/") && !skip.has(n),
   )
+}
+
+/** Resolve a package directory for the native injectors. adaptv's OWN plugins resolve from
+ * the framework; consumer-registered extras (adaptv.config.ts `plugins`) resolve from the
+ * app, where the consumer `pnpm add`ed them. Tries both roots so either location works. */
+function pkgDirResolver(appRoot) {
+  const reqAdaptv = createRequire(path.join(ADAPTV_ROOT, "package.json"))
+  const reqApp = createRequire(path.join(appRoot, "package.json"))
+  return (name) => {
+    for (const req of [reqApp, reqAdaptv]) {
+      try {
+        return path.dirname(req.resolve(`${name}/package.json`))
+      } catch {}
+    }
+    return null
+  }
 }
 
 /** Scan a plugin package's iOS sources for its registered class name(s) — mirrors
@@ -713,24 +750,12 @@ async function injectIosPluginPods(
 ) {
   const podfile = path.join(nativeDir(appRoot, "ios"), "App", "Podfile")
   if (!existsSync(podfile)) return
-  // adaptv's OWN plugins resolve from the framework; consumer-registered extras
-  // (adaptv.config.ts `plugins`) resolve from the app, where the consumer `pnpm add`ed
-  // them. Try both roots per package so either location works.
-  const reqAdaptv = createRequire(path.join(ADAPTV_ROOT, "package.json"))
-  const reqApp = createRequire(path.join(appRoot, "package.json"))
-  const resolvePkgDir = (name) => {
-    for (const req of [reqApp, reqAdaptv]) {
-      try {
-        return path.dirname(req.resolve(`${name}/package.json`))
-      } catch {}
-    }
-    return null
-  }
+  const resolvePkgDir = pkgDirResolver(appRoot)
   const podfileDir = path.dirname(podfile)
   const pods = []
   const seen = new Set()
   const classNames = []
-  for (const name of [...adaptvCapacitorNativePkgs(), ...plugins]) {
+  for (const name of [...adaptvCapacitorNativePkgs("ios"), ...plugins]) {
     const dir = resolvePkgDir(name)
     if (!dir) {
       report?.(
@@ -787,6 +812,149 @@ async function injectIosPluginPods(
   await run("pod", ["install"], { cwd: podfileDir, env, report })
 }
 
+/** Scan an Android plugin's sources for the class the bridge must register — mirrors
+ * @capacitor/cli's `findAndroidPluginClassesInPlugin`: the first `@CapacitorPlugin` /
+ * `@NativePlugin` class in a `.java`/`.kt` file, qualified by that file's `package`. */
+function scanAndroidPluginClasses(srcMainDir) {
+  const out = []
+  const stack = [srcMainDir]
+  while (stack.length) {
+    const dir = stack.pop()
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const e of entries) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        stack.push(p)
+        continue
+      }
+      if (!e.name.endsWith(".java") && !e.name.endsWith(".kt")) continue
+      const src = readFileSync(p, "utf8")
+      const cls = src.match(
+        /^@(?:CapacitorPlugin|NativePlugin)[\s\S]+?class ([\w]+)/m,
+      )
+      if (!cls) continue
+      const pkg = src.slice(0, cls.index).match(/^package ([\w.]+);?$/m)
+      if (!pkg) continue
+      const classpath = `${pkg[1]}.${cls[1]}`
+      if (!out.includes(classpath)) out.push(classpath)
+    }
+  }
+  return out
+}
+
+/**
+ * The Android half of the same problem `injectIosPluginPods` solves — and it was failing
+ * silently in the worse direction. Capacitor discovers plugins from the CONSUMER's
+ * `package.json` dependencies, and adaptv's plugins are adaptv's dependencies, so cap wrote
+ * a project containing only whatever `@capacitor/*` the app happened to declare itself. iOS
+ * never showed it because adaptv had already been injecting the Podfile; Android had no
+ * equivalent, so 12 of 13 plugins were absent from the build and every native capability
+ * quietly fell back to its web behaviour (no haptics, no native KV, no hardware back
+ * button, no status-bar styling).
+ *
+ * Three files, because Android splits the job three ways — see the note in
+ * `native-state.mjs`. All three are regenerated by every `cap sync`, so this runs after each
+ * one and is self-healing rather than a one-time patch.
+ *
+ * NOT solved by `includePlugins` in the Capacitor config (which adaptv owns, and which would
+ * be a one-line fix): cap resolves each named package from the APP root, and under pnpm
+ * adaptv's plugins aren't reachable from there — it `fatal`s instead of syncing. It only
+ * appears to work in this repo, where the playground sits inside adaptv's own tree and
+ * Node's parent-directory walk finds them by accident of layout.
+ */
+function injectAndroidPluginProjects(
+  appRoot,
+  { report, plugins = [] } = {},
+) {
+  const androidDir = nativeDir(appRoot, "android")
+  const settings = path.join(androidDir, "capacitor.settings.gradle")
+  const buildGradle = path.join(
+    androidDir,
+    "app",
+    "capacitor.build.gradle",
+  )
+  if (!existsSync(settings) || !existsSync(buildGradle)) return
+  const resolvePkgDir = pkgDirResolver(appRoot)
+  const assets = path.join(
+    androidDir,
+    "app",
+    "src",
+    "main",
+    "assets",
+    "capacitor.plugins.json",
+  )
+
+  const entries = []
+  const projects = []
+  const classes = []
+  for (const name of [
+    ...adaptvCapacitorNativePkgs("android"),
+    ...plugins,
+  ]) {
+    const dir = resolvePkgDir(name)
+    if (!dir) {
+      report?.(
+        `! plugin ${name} not found — skipped (did you install it?)`,
+      )
+      continue
+    }
+    // `capacitor.android.src` is where the plugin keeps its Gradle module; a package
+    // without it has no Android half (an iOS-only plugin) and is not ours to declare.
+    const meta = JSON.parse(
+      readFileSync(path.join(dir, "package.json"), "utf8"),
+    )
+    const src = meta.capacitor?.android?.src
+    if (!src) continue
+    const project = gradleProjectName(name)
+    if (projects.includes(project)) continue //dedupe (a base plugin also listed in config)
+    projects.push(project)
+    entries.push({
+      project,
+      //Gradle reads this file on Windows too, and `new File()` there takes the unix form.
+      dir: path
+        .relative(androidDir, path.join(dir, src))
+        .split(path.sep)
+        .join("/"),
+    })
+    for (const cp of scanAndroidPluginClasses(
+      path.join(dir, src, "src", "main"),
+    ))
+      classes.push({ pkg: name, classpath: cp })
+  }
+  if (projects.length === 0) return
+
+  writeIfChanged(
+    settings,
+    mergeSettingsGradle(readFileSync(settings, "utf8"), entries),
+  )
+  writeIfChanged(
+    buildGradle,
+    mergeCapacitorBuildGradle(readFileSync(buildGradle, "utf8"), projects),
+  )
+  //cap writes the registry itself, but only for the plugins it found — merge rather than
+  //replace so a consumer-declared plugin keeps its entry. An unreadable one is rebuilt from
+  //adaptv's set rather than crashing the run: a half-written registry is exactly the state a
+  //Ctrl-C leaves behind, and it's this pass's job to repair the project, not to die on it.
+  let existing = []
+  try {
+    if (existsSync(assets))
+      existing = JSON.parse(readFileSync(assets, "utf8"))
+  } catch {}
+  mkdirSync(path.dirname(assets), { recursive: true })
+  writeIfChanged(
+    assets,
+    `${JSON.stringify(mergePluginsJson(existing, classes), null, "\t")}\n`,
+  )
+  //Same rule as iOS: adaptv's base set is plumbing the dev never asked for and must not be
+  //told about (R8/L20). Only a plugin the CONSUMER registered is worth a word.
+  if (plugins.length > 0) report?.("linking plugins")
+}
+
 export async function capSync(
   appRoot,
   platform,
@@ -802,6 +970,7 @@ export async function capSync(
   //Capacitor's discovery can't see adaptv-owned plugins; adaptv adds them itself.
   if (platform === "ios")
     await injectIosPluginPods(appRoot, env, { report, plugins })
+  else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
 /** `cap run <platform> --target <id>` (build + install + launch). */

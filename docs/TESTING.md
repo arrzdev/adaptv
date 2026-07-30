@@ -45,6 +45,20 @@ pnpm --filter @repo/frontend cap:android      # → Pixel emulator (emulator-555
 pnpm --filter @repo/frontend cap:ios          # → iPhone simulator
 ```
 
+**Is the bridge actually there?** With the app installed and running:
+
+```
+pnpm smoke:android            # add --target <serial> when more than one device is up
+```
+
+It asserts that every `@capacitor/*` plugin adaptv depends on is registered natively on the
+device. Run it after any change to native project generation, and whenever a capability
+"works on iOS but not Android" — that is exactly the shape of a plugin that never made it into
+the build. **Do not substitute a hand check that `Device.getInfo()` works**: `Device` was the one
+plugin the consumer app declared itself, so it kept working through the entire outage where the
+other twelve were missing. `Capacitor.Plugins.Haptics` existing proves nothing either — that is
+the JS shim; only the call rejects.
+
 Inspect the running native app:
 - **Android:** `adb -s emulator-5554 exec-out screencap -p > shot.png`; focused app via `adb shell dumpsys window | grep mCurrentFocus`.
 - **iOS:** `xcrun simctl io <UDID> screenshot shot.png`; `xcrun simctl launch <UDID> com.chopchop.app`.
