@@ -32,9 +32,7 @@ Run it from a scratch app whose `icons` points at a temp directory, then copy th
 
 The mark is **full bleed on a flat colour**, and both halves are deliberate. Full bleed because
 every platform applies its own mask and art with its own rounded background gets rounded twice.
-Flat because that is what lets `measureArtwork` see the chevron: it reads the border ring, finds
+Flat because that is what lets `measureArtwork` see the mark: it reads the border ring, finds
 one colour, lifts the mark off it and scales it until it clears the mask. A gradient — which this
 file used to have — is unclassifiable, so the mark would be left where it was drawn and cropped.
 The reference art should demonstrate the path that works, and it generates with no warnings.
-
-⚠︎ The current mark is a **placeholder**: the right shape and the right pipeline, not the brand.
