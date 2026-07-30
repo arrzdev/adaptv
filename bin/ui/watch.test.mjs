@@ -1,6 +1,5 @@
 import { EventEmitter } from "node:events"
-import { afterEach, describe, expect, it } from "vitest"
-import { inkWatcher } from "./watch.mjs"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 // The watch block is where a cursor-arithmetic bug actually shipped: the string renderer grows
 // it to two rows for a notice and shrinks it back, by hand, and getting that off by one walked
@@ -59,6 +58,28 @@ async function settled(fake, deadlineMs = 3000) {
   }
 }
 
+/*
+ * Ink must be imported with `CI` ABSENT, and imported fresh.
+ *
+ * In CI mode Ink skips the animation entirely and writes one frame at unmount, so
+ * `fake.frames` stays empty and every assertion about "what the dev sees" reads "".
+ * That is why these passed on a laptop and failed the first time CI ever ran on this
+ * branch — nine tests across this file and live.test.mjs, none about anything that
+ * had changed. `CI=true pnpm test bin/ui/` reproduces it.
+ *
+ * DELETE the key, do not blank it: Ink asks whether it EXISTS, so `CI=""` still counts.
+ * And `vi.resetModules()` before the import, because the check runs once at module load
+ * — the same shape `render-phase-order.test.mjs` already uses for `render.mjs`.
+ */
+function withInteractiveInk() {
+  const ci = process.env.CI
+  delete process.env.CI
+  return () => {
+    if (ci === undefined) delete process.env.CI
+    else process.env.CI = ci
+  }
+}
+
 /** Mount the block, drive it, and return the final screen as trimmed lines. */
 async function screen(drive, columns = 100) {
   const fake = new FakeStdout(columns)
@@ -67,7 +88,13 @@ async function screen(drive, columns = 100) {
     value: fake,
     configurable: true,
   })
-  restore = () => Object.defineProperty(process, "stdout", real)
+  const restoreCi = withInteractiveInk()
+  restore = () => {
+    restoreCi()
+    Object.defineProperty(process, "stdout", real)
+  }
+  vi.resetModules()
+  const { inkWatcher } = await import("./watch.mjs")
   //`keys: false` — no raw-mode stdin to set up, and the keys row is asserted separately.
   const w = inkWatcher({ keys: false })
   drive(w)
@@ -149,7 +176,13 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
       value: fake,
       configurable: true,
     })
-    restore = () => Object.defineProperty(process, "stdout", real)
+    const restoreCi = withInteractiveInk()
+    restore = () => {
+      restoreCi()
+      Object.defineProperty(process, "stdout", real)
+    }
+    vi.resetModules()
+    const { inkWatcher } = await import("./watch.mjs")
     const w = inkWatcher({ keys: false })
     w.notice("config change")
     await settled(fake)

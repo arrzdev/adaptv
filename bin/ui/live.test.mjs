@@ -1,6 +1,5 @@
 import { EventEmitter } from "node:events"
-import { afterEach, describe, expect, it } from "vitest"
-import { liveRows } from "./live.mjs"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 // Ink writes whole frames, so the last frame it wrote IS the screen. That makes these
 // assertions about what the dev actually sees.
@@ -24,7 +23,31 @@ const ANSI = new RegExp(
 )
 const strip = (s) => s.replace(ANSI, "")
 
+/*
+ * Ink must be imported with `CI` ABSENT, and imported fresh.
+ *
+ * In CI mode Ink skips the animation entirely and writes one frame at unmount, so
+ * `fake.frames` stays empty and every assertion about "what the dev sees" reads "".
+ * That is why these passed on a laptop and failed the first time CI ever ran on this
+ * branch — nine tests across this file and live.test.mjs, none about anything that
+ * had changed. `CI=true pnpm test bin/ui/` reproduces it.
+ *
+ * DELETE the key, do not blank it: Ink asks whether it EXISTS, so `CI=""` still counts.
+ * And `vi.resetModules()` before the import, because the check runs once at module load
+ * — the same shape `render-phase-order.test.mjs` already uses for `render.mjs`.
+ */
+function withInteractiveInk() {
+  const ci = process.env.CI
+  delete process.env.CI
+  return () => {
+    if (ci === undefined) delete process.env.CI
+    else process.env.CI = ci
+  }
+}
+
 let restore = null
+/** Bound by `withFakeStdout`, which imports it fresh with `CI` absent. */
+let liveRows = null
 afterEach(() => {
   restore?.()
   restore = null
@@ -37,7 +60,15 @@ async function withFakeStdout(fn) {
     value: fake,
     configurable: true,
   })
-  restore = () => Object.defineProperty(process, "stdout", real)
+  const restoreCi = withInteractiveInk()
+  restore = () => {
+    restoreCi()
+    Object.defineProperty(process, "stdout", real)
+  }
+  vi.resetModules()
+  //module-scoped, because the test bodies call it inside `fn` and the fresh import
+  //has to happen in here — after `CI` is gone and the fake stdout is in place
+  ;({ liveRows } = await import("./live.mjs"))
   const out = await fn(fake)
   restore()
   restore = null
