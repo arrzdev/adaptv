@@ -59,7 +59,7 @@ export function parseTuning(flags) {
     const n = Number(raw)
     if (!Number.isFinite(n) || n < spec.min || n > spec.max) {
       errors.push(
-        `\`--${name}\` must be a percentage between ${spec.min} and ${spec.max} — got ${JSON.stringify(String(raw))}`,
+        `'--${name}' must be a percentage between ${spec.min} and ${spec.max}, got ${JSON.stringify(String(raw))}`,
       )
       values[name] = spec.fallback
       continue
@@ -80,7 +80,7 @@ export function parseTuning(flags) {
 function tighter(name, n, low) {
   if (name === "margin")
     return n === 0
-      ? `--margin 0 leaves no room — art sits flush to every edge`
+      ? `--margin 0 leaves no room, so art sits flush to every edge`
       : `--margin ${n} leaves less room than the ${low}% default`
   return `--${name} ${n} is below the ${low}% default`
 }

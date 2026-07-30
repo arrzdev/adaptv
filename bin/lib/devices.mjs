@@ -46,8 +46,14 @@ export async function listTargets(appRoot, platform, env) {
 }
 
 /** Present the branded picker for a fresh list; caches + returns `{ id, name }`. */
-async function pickAndCache(appRoot, platform, env) {
-  const targets = await listTargets(appRoot, platform, env)
+async function pickAndCache(appRoot, platform, env, listed) {
+  let targets = listed
+    ? await listed()
+    : await listTargets(appRoot, platform, env)
+  //An EMPTY prefetched list is the one answer that must never be trusted — a simulator that
+  //booted during the warm would otherwise be reported as "no devices found".
+  if (targets.length === 0)
+    targets = await listTargets(appRoot, platform, env)
   if (targets.length === 0) {
     throw new Error(
       `no ${platform} devices or simulators found. Boot a simulator/emulator (or connect a device) and try again.`,
@@ -73,17 +79,34 @@ export async function resolveTarget(
   appRoot,
   platform,
   env,
-  { target, latest },
+  { target, latest, prefetch },
 ) {
+  /**
+   * The device list, from a listing started earlier if one was.
+   *
+   * `dev` sits idle for ~1.9s warming the dev server, and listing devices costs 176-279ms per
+   * platform — a whole node process, the Capacitor CLI and `simctl`/`adb`. Starting it during
+   * that wait is free wall-clock.
+   *
+   * THE BOUNDING RULE: a prefetched answer may only ever be used to SUCCEED. Every negative
+   * below re-lists first, because the prefetch was taken up to two seconds ago and a device
+   * booted in the meantime must not turn a run that would have worked into one that fails.
+   * The only residual effect is a device that appeared mid-warm being absent from a
+   * NON-empty picker list — visible, and fixed by running again.
+   */
+  const listed = async () =>
+    (prefetch ? await prefetch.catch(() => null) : null) ??
+    (await listTargets(appRoot, platform, env))
+  const fresh = () => listTargets(appRoot, platform, env)
   if (target) {
-    const known = (await listTargets(appRoot, platform, env)).find(
-      (t) => t.id === target,
-    )
+    let known = (await listed()).find((t) => t.id === target)
+    //Not found in a possibly-stale list is exactly the case that must re-ask.
+    if (!known) known = (await fresh()).find((t) => t.id === target)
     // Validate BEFORE caching — otherwise a typo'd `--target` gets remembered and every
     // later `--latest` fails against a device that was never real.
     if (!known) {
       throw new Error(
-        `unknown ${platform} device "${target}". Run \`adaptv dev ${platform}\` to pick from the current list.`,
+        `unknown ${platform} device "${target}". Run 'adaptv dev ${platform}' to pick from the current list.`,
       )
     }
     const device = { id: target, name: known.name ?? target }
@@ -100,7 +123,9 @@ export async function resolveTarget(
       // told the dev to re-run a DIFFERENT command to recover. `--latest` means "don't ask me
       // again", not "fail if my last choice is gone" — so when it isn't there, quietly fall
       // through to the picker, which is what the dev would have had to do by hand anyway.
-      const available = await listTargets(appRoot, platform, env)
+      let available = await listed()
+      if (!available.some((t) => t.id === cached.id))
+        available = await fresh()
       if (available.some((t) => t.id === cached.id))
         // the "latest" tag is surfaced on the launch line, not as its own log line.
         return { ...cached, source: "latest" }
@@ -109,5 +134,5 @@ export async function resolveTarget(
     // obvious ("Choose a <platform> device"), so announcing it first is noise.
   }
 
-  return pickAndCache(appRoot, platform, env)
+  return pickAndCache(appRoot, platform, env, listed)
 }

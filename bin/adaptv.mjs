@@ -1,25 +1,12 @@
 #!/usr/bin/env node
 // The adaptv CLI — owns the whole native (Capacitor) lifecycle so a consumer never
-// touches Capacitor, the toolchain env, or the asset generator by hand:
+// touches Capacitor, the toolchain env, or the asset generator by hand.
 //
-//   adaptv doctor                     check the local toolchain (JDK, Android SDK, Xcode, pod)
-//   adaptv dev  web|ios|android|all   live reload: one Vite dev server, web + native
-//                                    WebViews all attached, hot-reloading on save
-//   adaptv preview web|ios|android|all  the real build: web served locally, native installed
-//                                    and launched on a device (no live reload)
-//   adaptv build ios|android|all      static artifacts: build SPA → sync → package (.ipa/.apk)
-//
-//   dev/preview flags:
-//               --target <id>   launch on a specific device/simulator id
-//               --latest        reuse the last device picked for this platform
-//               --host [ip]     (dev only) serve on the LAN IP for a PHYSICAL device — auto
-//                               when the target is a real device; pass an ip to pin it
-//               --force         reinstall even when nothing native changed (dev/preview skip
-//                               the rebuild and just relaunch the installed app otherwise)
-//               -- <vite args>  (dev only) forwarded to the vite dev server (e.g. `-- --port 4000`)
-//   build flags: --output <path> where to write the artifact (default: .adaptv/builds/)
-//               --force         rebuild even if unchanged (web build + sync are cached)
-//   all:         --verbose      show the full underlying tool logs (raw passthrough)
+// The command surface — every command, every flag, every description — is `bin/lib/cli-spec.mjs`.
+// `adaptv --help` renders it and `bin/lib/cli-parse.mjs` parses from it; nothing here restates
+// it. This comment used to carry its own copy and had already drifted away from the code below
+// it: it described four commands and omitted `gen icons` entirely, along with all seven of its
+// flags. A test in `cli-parse.test.mjs` now fails the build if a flag reappears here.
 //
 // Native projects live inside the hidden, git-ignored `.adaptv/` dir (relocated from the
 // app root). The CLI resolves ANDROID_HOME / JAVA_HOME / pod / LANG itself and invokes
@@ -42,6 +29,8 @@ import path from "node:path"
 import process from "node:process"
 import { build as esbuild } from "esbuild"
 import { measureArtwork } from "./lib/artwork.mjs"
+import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
+import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import {
   cachedDevice,
@@ -49,7 +38,11 @@ import {
   resolveTarget,
 } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
-import { fingerprint, nativeFingerprint } from "./lib/fingerprint.mjs"
+import {
+  appConfigFingerprint,
+  fingerprint,
+  nativeFingerprint,
+} from "./lib/fingerprint.mjs"
 import {
   effectiveBackground,
   existingIcons,
@@ -60,7 +53,7 @@ import {
 import { artTarget, SAFE_ZONE } from "./lib/icon-geometry.mjs"
 import { writeIconPreview } from "./lib/icon-preview.mjs"
 import { parseTuning } from "./lib/icon-tuning.mjs"
-import { loadIconSet, parseHex } from "./lib/icons.mjs"
+import { clearIconCaches, loadIconSet, parseHex } from "./lib/icons.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -109,19 +102,22 @@ import {
   check,
   confirm,
   detail,
+  emitJson,
   fail,
   flushNotices,
   footer,
   header,
-  helpText,
   liveWatcher,
   log,
   onKeys,
   rawOut,
+  record,
+  recordError,
   rewindLines,
   runLanes,
   runLine,
   section,
+  setOutputMode,
   since,
   spacer,
   wasReported,
@@ -139,7 +135,7 @@ async function loadConfig(appRoot) {
   const configPath = path.join(appRoot, "adaptv.config.ts")
   if (!existsSync(configPath)) {
     throw new Error(
-      `no adaptv.config.ts in ${appRoot} — run from an app root.`,
+      `no adaptv.config.ts in ${appRoot}. Run from an app root.`,
     )
   }
   const result = await esbuild({
@@ -166,7 +162,7 @@ async function loadConfig(appRoot) {
   const mod = await import(url)
   const config = mod.default
   if (!config?.appId) {
-    throw new Error("missing `appId` in adaptv.config.ts")
+    throw new Error("missing 'appId' in adaptv.config.ts")
   }
   return config
 }
@@ -189,15 +185,42 @@ async function loadConfig(appRoot) {
  * there is still checked before the server comes up, because the same values reach the
  * manifest and the shell.
  *
- * `icons: false` is for `gen icons`, and ONLY for it: the config errors still stop the run, but
- * a `!` about the icon set is stale the moment the command finishes, because the command's
- * whole job is to replace it. Every other command wants both halves.
+ * `icons: false` skips the `!` half. `icons` passes it because a notice about the icon set
+ * is stale the moment that command finishes — replacing the set is its whole job. A mid-run
+ * `b` passes it because those notices were already printed above the run and are about source
+ * art, not about whether this rebuild can happen; reprinting them on every `b` would be R18.
+ *
+ * `beforeExit` runs after the errors are printed and before the process goes — it is how a
+ * live `dev` session unwinds (dev server, adb reverse, the iOS ATS exception, the lock)
+ * instead of being killed where it stands. There is exactly ONE answer to "is this config
+ * usable", and it is the same at startup and at minute forty: print every problem and stop.
+ * A session whose config no longer parses is serving something that does not match the file
+ * on disk, which is a worse place to be than back at the shell.
  */
 async function preflight(
   appRoot,
   platforms,
-  { optional = false, icons = true } = {},
+  { optional = false, icons = true, beforeExit } = {},
 ) {
+  // Unwind BEFORE printing, not after. A live `dev` session's watch row redraws every 80ms,
+  // so an error written while it is still animating is overwritten before it can be read —
+  // and `beforeExit` (teardown) stops that row first. At startup there is nothing to unwind
+  // and this is simply absent.
+  const stop = (messages) => {
+    beforeExit?.()
+    //Under `--json` the caller never gets to `emitJson`, because this exits. Record the
+    //failure and emit here, so a script sees a document that says what went wrong rather
+    //than an empty stdout and a non-zero code.
+    for (const m of messages) recordError({ kind: "config", message: m })
+    //Every one of them, not just the first: they are all already known, and fixing a config
+    //one line per run is a worse experience than reading the list. Each names its key in
+    //single quotes and stays on one row (R10, R43) — the file is not repeated per line because every
+    //key here is one the dev wrote in adaptv.config.ts.
+    for (const m of messages) log.error(m)
+    spacer()
+    emitJson({ command: "preflight", version: pkgVersion() })
+    process.exit(1)
+  }
   if (optional && !existsSync(path.join(appRoot, "adaptv.config.ts")))
     return null
   let config
@@ -205,47 +228,12 @@ async function preflight(
     config = await loadConfig(appRoot)
   } catch (err) {
     // A config problem is a plain user error — clean one-liner, not a "run failed" report (R7).
-    log.error(err.message)
-    spacer()
-    process.exit(1)
+    stop([err.message])
   }
   const { errors, warnings } = await inspectApp(appRoot, config, platforms)
-  if (errors.length > 0) {
-    //Every one of them, not just the first: they are all already known, and fixing a config
-    //one line per run is a worse experience than reading the list. Each names its key in
-    //backticks and stays on one row (R10) — the file is not repeated per line because every
-    //key here is one the dev wrote in adaptv.config.ts.
-    for (const e of errors) log.error(e)
-    spacer()
-    process.exit(1)
-  }
+  if (errors.length > 0) stop(errors)
   if (icons) flushNotices(warnings)
   return config
-}
-
-/**
- * Re-read adaptv.config.ts mid-run — the NON-EXITING sibling of `preflight`, for the `b` key.
- *
- * `preflight` prints and calls `process.exit` because at startup a config adaptv cannot use
- * means there is no run to have. Halfway through a `dev` session the opposite is true: there
- * IS a run, the dev is watching it, and killing it over a half-typed config file would throw
- * away the dev server and every device already attached. So this returns the problem instead,
- * and the caller keeps the last good config and says the rebuild didn't happen.
- *
- * Returns `{ config }` or `{ problem }` — never both.
- */
-async function reloadConfig(appRoot, platforms) {
-  let config
-  try {
-    config = await loadConfig(appRoot)
-  } catch (err) {
-    return { problem: err.message }
-  }
-  //Errors only. The warnings were printed above the run and are about the app's art, not
-  //about whether this rebuild can happen — repeating them on every `b` would be R18.
-  const { errors } = await inspectApp(appRoot, config, platforms)
-  if (errors.length > 0) return { problem: errors[0] }
-  return { config }
 }
 
 /**
@@ -378,6 +366,122 @@ function toolErrorParts(raw) {
 /** Same idea for a detail line: keep the filename, drop the directories. */
 const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
 
+/* =============================================================================
+ * prepare — the ONE definition of "ready to sync"
+ * ============================================================================= */
+
+/**
+ * Everything that must be true of a platform's native project before anything syncs, builds
+ * or installs it: the project exists, it carries the right install identity, its generated
+ * assets match the config, and its plist has no dev leftovers in it.
+ *
+ * There is one of these because there used to be two, and they had already drifted. `dev`
+ * kept a copy that patched the install identity in a SEPARATE loop after the device picker
+ * and never healed a leftover ATS exception; `preview`/`build` kept another that did both
+ * here. Neither difference was ever decided by anyone — and a step that lives in one half of
+ * a duplicated flow is exactly how `b` came to reinstall the launcher icons of the run it
+ * started in: it calls the launch half, and the assets were written by the other one.
+ *
+ * `dev: true` is the `.dev` install identity, shared by `dev` and `preview` so both coexist
+ * with a release build in their own icon + storage sandbox. `build` uses the release id.
+ *
+ * `healAts: false` is for a rebuild INSIDE a live `dev` session, and only for that. The heal
+ * strips a dev ATS exception a previous run left behind — but mid-session that exception is
+ * this run's own, still in force, with its revert already registered on teardown. Healing it
+ * there would cut the running app off from the cleartext dev server it is loading from.
+ */
+async function preparePlatform(
+  appRoot,
+  config,
+  platform,
+  env,
+  { dev, healAts = true, force = false, report, warnings },
+) {
+  await capAddIfMissing(appRoot, platform, env, {
+    report,
+    plugins: config?.plugins,
+  })
+  // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
+  // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
+  // identity afterwards — as `dev` used to — meant teardown wrote back a plist from before
+  // the `(dev)` display name existed, so every session ended by reverting its own rename.
+  patchNativeIdentity(appRoot, config, platform, { dev })
+  //Silent about the icon set: `preflight` already read the same art and said whatever there
+  //was to say, above the run (R33). Repeating it here would be the same fact twice (R18),
+  //the second time under a step that only wrote files from it.
+  //`force` reaches here so `--force` re-derives the assets, not just the binary.
+  await generateAssets(appRoot, config, [platform], { report, force })
+  // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run killed
+  // without teardown strands an ATS exception in it. `dev` heals it too, and MUST: its own
+  // `patchIosAts` no-ops when ATS is already declared, so it adopted the leftover, registered
+  // no revert, and the exception outlived the session — silently, because a stale
+  // `NSAllowsArbitraryLoads` happens to be exactly what live-reload wanted anyway. Shipping
+  // one is a real hole and something App Review asks about.
+  if (platform === "ios" && healAts) {
+    const ats = healDevAtsLeftover(appRoot)
+    if (ats.healed) {
+      // SILENT (R4/R8): adaptv added this exception, adaptv just removed it, and the plist is
+      // back where it should be. There is nothing for the dev to know or do, so it is not
+      // printed — the alternative was a glyphless line, and a notice with no `!` is not a
+      // lower severity, it is a line that shouldn't have been printed.
+    } else if (ats.warn) {
+      warnings.push(
+        "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it, so it is left alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
+      )
+    }
+  }
+}
+
+/**
+ * Prepare every platform, in order, billing what each took to that platform's own line.
+ *
+ * Scaffolding is the first thing a platform does, NOT a step of its own — so on a first run
+ * (`cap add` + CocoaPods is slow and worth watching) it renders on a TRANSIENT line under the
+ * platform's OWN label, erased rather than settled, and the seconds it took are folded into
+ * that platform's real line below (`prepareMs` → `offsetMs`). The dev sees one `ios` line that
+ * begins at "preparing" and settles once. On later runs it's a sub-10ms no-op with no line at
+ * all. Sequential on purpose: first-run prepares are rare, so it costs nothing, and it keeps
+ * the warnings in order instead of interleaved under live lanes.
+ *
+ * Returns the platforms that made it, and what each one cost.
+ */
+async function preparePlatforms(
+  appRoot,
+  config,
+  platforms,
+  { dev, healAts = true, force = false, envFor, verbose, warnings },
+) {
+  const prepared = new Set()
+  const prepareMs = {}
+  for (const platform of platforms) {
+    const fresh = !existsSync(nativeDir(appRoot, platform))
+    const startedAt = Date.now()
+    const one = (report) =>
+      preparePlatform(appRoot, config, platform, envFor(platform), {
+        dev,
+        healAts,
+        force,
+        report,
+        warnings,
+      })
+    try {
+      if (fresh) {
+        await runLine(platform, one, { verbose, transient: true })
+      } else {
+        await one(() => {})
+      }
+      prepared.add(platform)
+    } catch (err) {
+      // The transient line was erased and this platform never reaches the lanes below, so
+      // its ONE line is printed here — same shape as a settled ✖.
+      const { reason, detail } = explainFailure(platform)(err)
+      fail(platform, `native project: ${reason}`, detail)
+    }
+    prepareMs[platform] = Date.now() - startedAt
+  }
+  return { ready: platforms.filter((p) => prepared.has(p)), prepareMs }
+}
+
 /**
  * Assemble the platform artifact (.apk / .ipa) and place it at `output` or `.adaptv/builds/`.
  * Returns the artifact path relative to the app root — that string becomes the step's
@@ -442,7 +546,7 @@ async function packageIpa(appRoot, name, env, output, report) {
   const workspace = path.join(iosDir, "App/App.xcworkspace")
   if (!existsSync(workspace))
     throw new Error(
-      "no .adaptv/ios/App/App.xcworkspace — the iOS project isn't prepared.",
+      "no .adaptv/ios/App/App.xcworkspace, so the iOS project isn't prepared.",
     )
   const derived = path.join(iosDir, "DerivedData/build")
 
@@ -549,6 +653,7 @@ async function runLive(appRoot, platforms, opts) {
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
   let nativeFp = null // last-known native fingerprint per platform
+  let configFp = null // last-known adaptv.config.ts + icon-art fingerprint
   let tearing = false
 
   let tornDown = false
@@ -620,11 +725,22 @@ async function runLive(appRoot, platforms, opts) {
   let config = await preflight(appRoot, platforms, { optional: webOnly })
 
   try {
-    const prepared = new Set()
-    // Per-platform scaffolding time, billed to that platform's launch line further down
-    // (it runs before the line exists — see the prepare loop). Declared out here because
-    // the launch phase lives in a separate `if (!webOnly)` block.
-    const prepareMs = {}
+    // Prepare-time notices — the iOS ATS block adaptv did NOT add. `preflight` already
+    // flushed everything the config could tell us; this is the half that can only be known
+    // by opening the native project, and it still belongs above the run (R33).
+    const warnings = []
+    // The platforms whose native project is ready to sync, and what each cost to prepare —
+    // billed to that platform's launch line further down (it runs before the line exists).
+    // Declared out here because the launch phase lives in a separate `if (!webOnly)` block.
+    let ready = []
+    let prepareMs = {}
+    // Re-arm BOTH staleness fingerprints together, always. They answer one question — does
+    // what is installed still match what the dev wrote — so arming one without the other is
+    // how a notice comes to either never fire or never clear.
+    const armStaleness = () => {
+      nativeFp = snapshotNativeFp(appRoot, ready)
+      configFp = appConfigFingerprint(appRoot, config)
+    }
 
     if (!webOnly) {
       // Fresh capacitor.config.json before anything reads or patches it, so a run
@@ -651,50 +767,24 @@ async function runLive(appRoot, platforms, opts) {
           throw err
         }
       }
-      // prepare native projects (must exist before device listing + sync).
-      const prepareOne = async (platform, report) => {
-        await capAddIfMissing(appRoot, platform, envFor(platform), {
-          report,
-          plugins: config?.plugins,
-        })
-        //Silent about the icon set: `preflight` already read the same art and said whatever
-        //there was to say, above the run. Repeating it here would be the same fact twice
-        //(R18), the second time under a step that only wrote files from it.
-        await generateAssets(appRoot, config, [platform], { report })
-        prepared.add(platform)
-      }
-      // Scaffolding the native project has to happen HERE, before the device picker: the
-      // device list comes from `cap run <platform> --list`, which needs the project to
-      // exist. But it is NOT a step of its own — it's the first thing that platform does.
-      // So on a first run (`cap add` + CocoaPods is slow and worth watching) it renders on
-      // a TRANSIENT line under the platform's OWN label, which is erased rather than
-      // settled; the seconds it took are then folded into that platform's real line below
-      // (`prepareMs` → `offsetMs`). The dev sees one `ios` line that begins at "preparing"
-      // and settles once — no separate "native project" step to learn. On later runs it's
-      // a sub-10ms no-op, done with no line at all.
-      for (const platform of platforms) {
-        const fresh = !existsSync(nativeDir(appRoot, platform))
-        const t0 = Date.now()
-        try {
-          if (fresh) {
-            await runLine(platform, (r) => prepareOne(platform, r), {
-              verbose,
-              transient: true,
-            })
-          } else {
-            await prepareOne(platform, () => {})
-          }
-        } catch (err) {
-          // The transient line was erased and this platform never reaches the launch
-          // lanes, so its ONE line is printed here — same shape as a settled ✖.
-          const { reason, detail } = explainFailure(platform)(err)
-          fail(platform, `native project — ${reason}`, detail)
-        }
-        prepareMs[platform] = Date.now() - t0
-      }
+      // Prepare the native projects — the SAME call `preview`/`build` make, so `dev` can
+      // never drift into its own idea of what a prepared platform is. It has to happen HERE,
+      // before the device picker: the device list comes from `cap run <platform> --list`,
+      // which refuses until the project exists.
+      const prep = await preparePlatforms(appRoot, config, platforms, {
+        dev: true,
+        force: opts.force,
+        envFor,
+        verbose,
+        warnings,
+      })
+      ready = prep.ready
+      prepareMs = prep.prepareMs
+      //Above the dev server and the device lines, like every other thing adaptv knew before
+      //it started (R33).
+      flushNotices(warnings)
     }
 
-    const ready = platforms.filter((p) => prepared.has(p))
     if (!webOnly && ready.length === 0) {
       teardown()
       process.off("SIGINT", onSigint)
@@ -711,24 +801,37 @@ async function runLive(appRoot, platforms, opts) {
     // --host, a physical --target, a cached physical (--latest), or a physical device sitting
     // in the picker's list. Over-binding when a simulator is ultimately picked is harmless
     // (localhost still works); a false negative would break a physical launch.
-    const forcedHost = opts.host // true | "<ip>" | undefined
+    const forcedHost = opts.host // true | undefined — '--host' takes no value
     let externalPossible = !!forcedHost
     if (!webOnly && !externalPossible) {
       for (const p of ready) {
         const env = envFor(p)
         const physicalInPlay = opts.target
-          ? isPhysicalTarget(p, opts.target, env)
+          ? await isPhysicalTarget(p, opts.target, env)
           : opts.latest
-            ? isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
-            : (await listTargets(appRoot, p, env)).some((t) =>
-                isPhysicalTarget(p, t.id, env),
-              )
+            ? await isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
+            : //`.some` with an async predicate is always true — every promise is truthy. The
+              //answers have to be resolved before the question can be asked.
+              (
+                await Promise.all(
+                  (
+                    await listTargets(appRoot, p, env)
+                  ).map((t) => isPhysicalTarget(p, t.id, env)),
+                )
+              ).some(Boolean)
         if (physicalInPlay) {
           externalPossible = true
           break
         }
       }
     }
+
+    //Start listing devices NOW, unawaited. The next ~1.9s is spent warming the dev server
+    //with the process otherwise idle, and a listing costs 176-279ms per platform. See the
+    //bounding rule in `resolveTarget`: this may only ever be used to SUCCEED.
+    const deviceLists = Object.fromEntries(
+      ready.map((p) => [p, listTargets(appRoot, p, envFor(p))]),
+    )
 
     // Start the Vite dev server FIRST — an app/config problem shows up here, before the dev
     // has to pick a device. Bind for the LAN when external is even possible; a
@@ -756,15 +859,30 @@ async function runLive(appRoot, platforms, opts) {
           report(`${devServer.localUrl} · warming`)
           const stable = await warmDevServer(devServer.localUrl, {
             onLine: (l) => onDevLine?.(l),
+            //NOT passing `sawOptimize` — so the FULL settle is taken, every time, as before.
+            //
+            //The short-settle path is built, plumbed and unit-tested, and it is worth ~850ms
+            //on every native `dev`. It is not enabled because its gate cannot currently be
+            //run: the check is "do two consecutive HMR updates still land in the WKWebView",
+            //and in this playground they do not land even with the original 1s settle. The
+            //dev server serves the edited module (verified: curl returns the new source, root
+            //is 200) but the WebView does not apply it. Whatever that is, it is not this
+            //change — and until it is fixed there is no baseline to certify against.
+            //
+            //To enable, once HMR is fixed: sniff the dev-server lines for `SAW_OPTIMIZE`
+            //(they must be sniffed in `startDevServer`'s own `onLine`, because `onDevLine` is
+            //not assigned until the watch phase and the optimize signal arrives before that),
+            //then pass `sawOptimize`. Do it only after watching an edit reach the simulator
+            //twice, cold `.vite` and warm.
           })
           // Fail SAFE: if the detected URL never serves the app, something else holds
           // the port (a stray `adaptv dev`/`pnpm dev`, or another server on the same
           // port). Don't point the native apps at a stranger — abort with a clear fix.
           if (!stable) {
             throw new Error(
-              `dev server at ${devServer.localUrl} isn't responding — another process ` +
+              `dev server at ${devServer.localUrl} isn't responding. Another process ` +
                 "is likely using that port. Stop it, or run on a free port: " +
-                "`adaptv dev … -- --port <n>`.",
+                "'adaptv dev … -- --port <n>'.",
             )
           }
         }
@@ -788,6 +906,7 @@ async function runLive(appRoot, platforms, opts) {
       targets[p] = await resolveTarget(appRoot, p, envFor(p), {
         target: opts.target,
         latest: opts.latest,
+        prefetch: deviceLists[p],
       })
     }
 
@@ -796,31 +915,44 @@ async function runLive(appRoot, platforms, opts) {
     // physical or --host forced it, else localhost (sim shares loopback; emulator uses
     // `adb reverse`). Vite is already bound for the LAN if it was possible, so only the URL
     // is decided here.
+    //Same trap as above: resolve first, then ask.
     const anyPhysical =
       !webOnly &&
-      ready.some((p) => isPhysicalTarget(p, targets[p].id, envFor(p)))
+      (
+        await Promise.all(
+          ready.map((p) => isPhysicalTarget(p, targets[p].id, envFor(p))),
+        )
+      ).some(Boolean)
     const external = !!forcedHost || anyPhysical
     // The Android emulator can't reach a LAN IP (its NAT can't route back to the host's own
     // LAN address), so it's fundamentally incompatible with external mode.
     if (
       external &&
       ready.includes("android") &&
-      !isPhysicalTarget("android", targets.android.id, envFor("android"))
+      !(await isPhysicalTarget(
+        "android",
+        targets.android.id,
+        envFor("android"),
+      ))
     ) {
       throw new Error(
         "the Android emulator can't reach an external dev server (its NAT can't route to your LAN IP). " +
-          "Use a physical Android device, or run android without `--host` (and not alongside a physical iOS device).",
+          "Use a physical Android device, or run android without '--host' (and not alongside a physical iOS device).",
       )
     }
     let lanHost = null
     if (external) {
-      lanHost = typeof forcedHost === "string" ? forcedHost : lanIp()
-      if (!lanHost) {
+      //Always detected. `--host` used to accept an ip to pin the interface, which asked the
+      //dev to go and look up their own address for a machine adaptv is already running on.
+      //There is no override to fall back to now, so a failure here has to say what to CHECK
+      //rather than what to pass.
+      lanHost = lanIp()
+      if (!lanHost)
         throw new Error(
-          "couldn't detect a LAN IP for external mode — pass one explicitly: " +
-            "`adaptv dev … --host <ip>` (find it with `ipconfig getifaddr en0`).",
+          "no LAN address on this machine, so a physical device has no route to the dev server. " +
+            "Connect to Wi-Fi or Ethernet (a VPN tunnel alone is not enough), or run on a " +
+            "simulator instead.",
         )
-      }
     }
     const port = devServer.port
     const url = external
@@ -851,15 +983,6 @@ async function runLive(appRoot, platforms, opts) {
           if (revertLN) cleanups.push(revertLN)
         }
       }
-      // dev shares the `.dev` install identity with `preview` (separate icon + storage
-      // sandbox, coexists with a release build). Patch it AFTER the dev server's own
-      // capacitor.config.json stamp (which writes the base id), and before sync/build reads
-      // the native project. Idempotent, so a first-run `cap add` created with the base id is
-      // corrected here too.
-      for (const p of ready) {
-        patchNativeIdentity(appRoot, config, p, { dev: true })
-      }
-
       // sync (copies the patched config) + launch each platform against the server.
       //
       // …unless nothing NATIVE changed. In live-reload the installed app is only a shell
@@ -889,7 +1012,7 @@ async function runLive(appRoot, platforms, opts) {
           !force &&
           prev?.url === url &&
           prev?.fp === nativeFingerprint(appRoot, platform) &&
-          isAppInstalled(appRoot, platform, target.id, env)
+          (await isAppInstalled(appRoot, platform, target.id, env))
 
         if (cached) {
           // Android emulator first needs the localhost route back to the host — no `cap
@@ -897,38 +1020,47 @@ async function runLive(appRoot, platforms, opts) {
           // directly, so there's no `adb reverse` to (re-)assert.
           if (platform === "android" && !external) {
             report("linking server")
-            cleanups.push(androidReverse(port, env))
+            cleanups.push(await androidReverse(port, env))
           }
           report("launching device")
-          if (launchInstalledApp(appRoot, platform, target.id, env)) {
-            foregroundDevice(platform, target.id, env)
+          if (
+            await launchInstalledApp(appRoot, platform, target.id, env)
+          ) {
+            await foregroundDevice(platform, target.id, env)
             launched.add(platform)
             return `${target.name} · cached`
           }
           // couldn't launch it after all — fall through and rebuild.
         }
 
-        // A forced rebuild re-derives the native ASSETS, not just the binary. They are
-        // written once at startup by `prepareOne` and nothing rewrote them afterwards, so an
-        // edit to the icon art — or to `icons` in the config — was invisible to `b`: it
-        // synced, built and installed the very same launcher icon it already had. Reported as
-        // icons that changed only when the whole command was restarted.
-        //
-        // Only when forced. An unforced launch got here because the fingerprint moved, and
-        // `prepareOne` has already run for this platform in that path.
-        if (force)
-          await generateAssets(appRoot, config, [platform], { report })
-
-        report("sync")
+        // No `generateAssets` here: every path that reaches this function has just been
+        // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
+        // patch for `b` reinstalling the launcher icons of the run it started in — and that
+        // is precisely the seam this pipeline removes: assets written in two places is how
+        // they came to be written in neither on the one path that mattered.
+        report("syncing")
         await capSync(appRoot, platform, env, {
           report,
           plugins: config?.plugins,
         })
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
-        const wasRunning = isAppRunning(appRoot, platform, target.id, env)
-        report("launching device")
+        const wasRunning = await isAppRunning(
+          appRoot,
+          platform,
+          target.id,
+          env,
+        )
+        // `cap run` BUILDS, then installs, then launches — the build is all but one second
+        // of it. Announcing `launching device` here said the last step first, so the row read
+        // `launching device` through twenty seconds of compiling. A row narrates whatever it
+        // is told (it has no fallback of its own any more), so announcing the right thing at
+        // the right moment is entirely this function's job. Say what STARTS.
+        report("building app")
         await capRun(appRoot, platform, target.id, env, { report })
+        // The build is done; from here it really is the device's turn. Every branch below
+        // installs, relaunches or fronts the app, so the phase covers all of them.
+        report("launching device")
         if (platform === "android" && !external) {
           // `cap run` resets the emulator's `adb reverse` while installing/launching,
           // so the app it just launched has no route to the dev server (black WebView,
@@ -936,16 +1068,16 @@ async function runLive(appRoot, platforms, opts) {
           // app so its WebView loads with a working route. External mode reaches the LAN IP
           // directly (no reverse), so none of this applies.
           report("linking server")
-          cleanups.push(androidReverse(port, env))
-          relaunchAndroidApp(appRoot, env, target.id)
+          cleanups.push(await androidReverse(port, env))
+          await relaunchAndroidApp(appRoot, env, target.id)
         } else if (platform === "ios" && wasRunning) {
           // The old process kept running through the build; load the fresh install now
           // (one relaunch, at the end — not a kill-then-wait-15s at the start).
-          launchInstalledApp(appRoot, platform, target.id, env, {
+          await launchInstalledApp(appRoot, platform, target.id, env, {
             restart: true,
           })
         }
-        foregroundDevice(platform, target.id, env)
+        await foregroundDevice(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
         runCache.run[key] = {
@@ -959,8 +1091,20 @@ async function runLive(appRoot, platforms, opts) {
       // Hoisted so the `r` key can replay exactly the same launch lines mid-run. `offsets`
       // carries the scaffolding time each platform already spent above (the transient
       // "preparing" line), so the settled line reports the platform's WHOLE first-run cost.
-      // A replay (`b`) passes none — that work isn't repeated, so it mustn't be re-billed.
-      launchAll = async ({ force, offsets = {} } = {}) => {
+      // A replay (`b`) passes none — it re-prepares inside the lane instead, and that time
+      // is billed by the lane itself.
+      //
+      // `prepare` is the `b` rebuild: it re-runs the SAME preparation a fresh run does —
+      // scaffold, install identity, generated assets — as the first phase of the platform's
+      // own line. Doing it here rather than before the lanes is what keeps the terminal from
+      // sitting blank for a second while sharp re-renders the launcher icons; doing it AT ALL
+      // is what stops a rebuild from being a subset of a startup. `healAts: false` because the
+      // ATS exception in the plist right now is this session's own and still in force.
+      launchAll = async ({
+        force,
+        offsets = {},
+        prepare = false,
+      } = {}) => {
         // One lane per platform for ANY count — same as `build`/`preview`. Rendering one
         // platform through a different call than two is how the two shapes drift apart.
         // Each lane carries its own outcome (explain → the inline reason + hint), so a
@@ -968,8 +1112,22 @@ async function runLive(appRoot, platforms, opts) {
         await runLanes(
           ready.map((p) => ({
             label: p,
-            run: (r) => launchOne(p, r, { force }),
-            idle: "building app",
+            run: async (r) => {
+              if (prepare)
+                await preparePlatform(appRoot, config, p, envFor(p), {
+                  dev: true,
+                  healAts: false,
+                  //`b` means "rebuild it properly" — re-derive the assets, don't consult
+                  //the guard. A device in a state you don't trust is the whole reason for
+                  //pressing it.
+                  force: true,
+                  report: r,
+                  //Dropped, not flushed: these were printed above the run, and a row
+                  //appearing here would also desync the rewind geometry the caller used.
+                  warnings: [],
+                })
+              return launchOne(p, r, { force })
+            },
             offsetMs: offsets[p] ?? 0,
             explain: explainFailure(p),
           })),
@@ -977,7 +1135,7 @@ async function runLive(appRoot, platforms, opts) {
         )
       }
       await launchAll({ force: opts.force, offsets: prepareMs })
-      nativeFp = snapshotNativeFp(appRoot, ready)
+      armStaleness()
 
       // Nothing made it onto a device? Then there's nothing to hot-reload — don't pretend
       // to "watch". The dev server did come up, but `dev <platform>` is about the device,
@@ -998,9 +1156,39 @@ async function runLive(appRoot, platforms, opts) {
       }
     }
 
+    /**
+     * The watch block. Ink renders it (`bin/ui/watch.mjs`), describing the block as layout
+     * rather than growing and shrinking it with cursor arithmetic — the thing that once walked
+     * it up the screen and erased the settled rows above it.
+     *
+     * `ADAPTV_INK=0` falls back to the string version, kept for one release as an escape
+     * hatch. Both return the same `{ hmr, notice, clearNotice, stop }`, so nothing below can
+     * tell them apart. The flag defaulted the other way while the port was unproven; it is
+     * proven now — `build`, `dev`, the `b` rebuild and the `r` reload have all run through it
+     * on a device.
+     *
+     * Ink also owns the keypresses when it is in play: two raw-mode listeners on one stdin
+     * would each get half the bytes.
+     */
+    const useInk = process.env.ADAPTV_INK !== "0" && !webOnly
+    //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
+    //a 64ms bare-node floor, and a static import would charge that to `adaptv --help` and to
+    //every invocation error — the paths where the <100ms responsiveness rule actually bites.
+    //Only a run that puts a live block on screen pays for one.
+    const openWatcher = async () => {
+      if (!useInk) return liveWatcher({ keys: !webOnly })
+      const { inkWatcher } = await import("./ui/watch.mjs")
+      return inkWatcher({
+        keys: !webOnly,
+        onReload: () => void reload(),
+        onRebuild: () => void rebuild(),
+        onQuit: () => onSigint(),
+      })
+    }
+
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
     spacer()
-    watcher = liveWatcher({ keys: !webOnly })
+    watcher = await openWatcher()
 
     // `b` reinstalls on demand — always, not only after a change is detected. A device
     // in a state you don't trust is reason enough, and having to kill the run to get a
@@ -1011,33 +1199,45 @@ async function runLive(appRoot, platforms, opts) {
     const rebuild = async () => {
       if (rebuilding || reloading || webOnly || !launchAll) return
       rebuilding = true
-      // `b` is a FULL rebuild, and that has to include the CONFIG. It used to reuse the
+      // `b` is a FULL rebuild, and that has to include the CONFIG — it used to reuse the
       // object loaded before the run, so editing adaptv.config.ts and pressing `b` rebuilt
-      // the app from the config the dev had already changed — the icons half of which is the
-      // bug this was reported as. Re-stamping the env matters as much as adopting it: the
-      // native fingerprint folds `ADAPTV_CAPACITOR_CONFIG` in, and `cap` reads it.
-      const reloaded = await reloadConfig(appRoot, ready)
-      if (reloaded.problem) {
-        //Refused, not rebuilt-with-the-old-one: a binary that doesn't match the file on disk
-        //is worse than no rebuild, and the notice already ends in "press b to rebuild".
-        watcher.notice(`not rebuilt · ${reloaded.problem}`)
-        rebuilding = false
-        return
-      }
-      config = reloaded.config
+      // the app from the config the dev had already replaced.
+      //
+      // A config adaptv cannot use ENDS the session (R39). The old `b` kept the last good
+      // config and refused the rebuild, which left a dev server and two attached devices
+      // serving something that no longer matched the file on disk — two answers to "is this
+      // config usable", one at startup and a softer one at minute forty. `beforeExit` is what
+      // makes that affordable: the dev server, the adb reverse, the iOS ATS exception and the
+      // lock all unwind first, so exiting here is as clean as ctrl-c.
+      config = await preflight(appRoot, ready, {
+        icons: false,
+        beforeExit: () => {
+          teardown()
+          process.off("SIGINT", onSigint)
+          process.off("SIGTERM", onSigint)
+          process.off("SIGHUP", onSigint)
+        },
+      })
+      // Re-stamp the env from the config just read. `setCapacitorConfigEnv` regenerates it
+      // from adaptv.config.ts ALONE, so it carries no `server` block — re-stamping and
+      // syncing straight afterwards installed an app with no dev-server URL at all, a
+      // live-reload shell pointing nowhere and rendering the placeholder bundle. The install
+      // identity is re-applied by the lane's own prepare below; the server block is re-applied
+      // here, reusing the revert already registered at startup.
       await setCapacitorConfigEnv(config)
-      //Idempotent, and re-applied because the identity is derived from the config too.
-      for (const p of ready)
-        patchNativeIdentity(appRoot, config, p, { dev: true })
+      patchServerUrl(appRoot, url)
       watcher.stop() // clears the watch row; cursor stays on it
       // Walk back over the blank separator + one row per platform so the SETTLED
       // platform lines animate again in place, rather than a second copy appearing
       // below them. Off a TTY there's no cursor to move, so just append.
       if (!rewindLines(1 + ready.length)) spacer()
-      await launchAll({ force: true })
-      nativeFp = snapshotNativeFp(appRoot, ready)
+      // `prepare: true` — the rebuild re-runs the SAME preparation a fresh run does, on each
+      // platform's own line. That is the whole point of the pipeline: a rebuild cannot be a
+      // subset of a startup, because both go through one definition of "ready to sync".
+      await launchAll({ force: true, prepare: true })
+      armStaleness()
       spacer()
-      watcher = liveWatcher({ keys: !webOnly }) // fresh line, which also clears any pending notice
+      watcher = await openWatcher() // fresh block, which also clears any pending notice
       rebuilding = false
     }
 
@@ -1045,10 +1245,10 @@ async function runLive(appRoot, platforms, opts) {
     // server. Instant next to a native rebuild (no sync/gradle/xcode), and the fix for a
     // wedged JS bundle — a fresh document from the dev server, no reinstall. Distinct from
     // `R`, which reinstalls the binary for a genuine native change.
-    const reloadOne = (platform, report) => {
+    const reloadOne = async (platform, report) => {
       const target = targets[platform]
       report("reloading device")
-      const ok = launchInstalledApp(
+      const ok = await launchInstalledApp(
         appRoot,
         platform,
         target.id,
@@ -1057,9 +1257,9 @@ async function runLive(appRoot, platforms, opts) {
       )
       if (!ok)
         throw new Error(
-          "couldn't relaunch the app — is it still installed? press b to rebuild.",
+          "couldn't relaunch the app. Is it still installed? press b to rebuild.",
         )
-      foregroundDevice(platform, target.id, envFor(platform))
+      await foregroundDevice(platform, target.id, envFor(platform))
       return `${target.name} · reloaded`
     }
     const reload = async () => {
@@ -1087,27 +1287,51 @@ async function runLive(appRoot, platforms, opts) {
         )
       }
       spacer()
-      watcher = liveWatcher({ keys: !webOnly })
+      watcher = await openWatcher()
       reloading = false
     }
-    cleanups.push(
-      onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
-    )
+    //Ink owns stdin when it is rendering: `useInput` puts the terminal in raw mode itself, and
+    //a second listener on the same stdin would take half the bytes.
+    if (!useInk)
+      cleanups.push(
+        onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
+      )
 
-    // Native changes can't hot-reload: a new plugin, an edited Info.plist or
-    // AndroidManifest, or hand-written Swift/Kotlin all live in the BINARY, so the
-    // running app simply won't have them. Left undetected the symptom is a bridge call
-    // that fails with no explanation. Poll the same fingerprint the run cache uses (it
-    // already covers config, deps and native sources) and surface it — but never rebuild
-    // behind the dev's back: a reinstall costs ~15s and drops app state, so it's their call.
+    // Two kinds of edit can't hot-reload, and both leave the installed app quietly wrong.
+    //
+    // NATIVE ones — a new plugin, an edited Info.plist or AndroidManifest, hand-written
+    // Swift/Kotlin — live in the BINARY, so the running app simply won't have them, and the
+    // symptom is a bridge call that fails with no explanation.
+    //
+    // DECLARED ones — `adaptv.config.ts` and the icon art it points at — are invisible to the
+    // native fingerprint (see `appConfigFingerprint`), so until now they produced no notice at
+    // all: the reported case was commenting `icons` out and watching nothing happen.
+    //
+    // Never rebuild behind the dev's back either way: a reinstall costs ~15s and drops app
+    // state, so it stays their call. The notice IS the feature.
     if (!webOnly && ready.length > 0) {
       const poll = setInterval(() => {
         if (rebuilding || reloading) return
-        const now = snapshotNativeFp(appRoot, ready)
-        const changed = ready.filter((p) => now[p] !== nativeFp?.[p])
-        if (changed.length === 0) return
-        nativeFp = now // re-arm, so one edit notices once
-        watcher.notice(`native change · ${changed.join(", ")}`)
+        const nowNative = snapshotNativeFp(appRoot, ready)
+        const changed = ready.filter((p) => nowNative[p] !== nativeFp?.[p])
+        const nowConfig = appConfigFingerprint(appRoot, config)
+        const configChanged = nowConfig !== configFp
+        if (changed.length === 0 && !configChanged) return
+        // re-arm both, so one edit notices once
+        nativeFp = nowNative
+        configFp = nowConfig
+        // ONE row, one line (R31) — so the two causes MERGE rather than one winning the slot.
+        // Newer-wins would drop `config change` the moment the sync it implies rewrites the
+        // native tree, which is exactly the case where both are true at once. The action is
+        // identical either way; naming the cause is what tells the dev whether adaptv saw the
+        // edit they just made.
+        watcher.notice(
+          configChanged && changed.length > 0
+            ? `config + native change · ${changed.join(", ")}`
+            : configChanged
+              ? "config change"
+              : `native change · ${changed.join(", ")}`,
+        )
       }, 3000)
       poll.unref?.()
       cleanups.push(() => clearInterval(poll))
@@ -1252,76 +1476,25 @@ async function pipeline(kind, appRoot, platforms, opts) {
   await opts.onBundleReady?.()
 
   // 2. prepare native projects — must precede device listing (`cap run --list`
-  //    refuses until the platform exists) and sync.
-  const prepared = new Set()
-  const prepareOne = async (platform, report) => {
-    await capAddIfMissing(appRoot, platform, envFor(platform), {
-      report,
-      plugins: config?.plugins,
-    })
-    // `preview` shares the `.dev` install identity with `dev` (own icon + storage sandbox,
-    // coexists with a release build); `build` uses the release id. Patch after the web
-    // build's capacitor.config.json stamp, before sync. Idempotent → also flips a project
-    // back to the release id when this is a `build`.
-    patchNativeIdentity(appRoot, config, platform, {
+  //    refuses until the platform exists) and sync. Same call `dev` makes, so a step can
+  //    never again be added to one command's idea of "prepared" and not the other's.
+  const { ready, prepareMs } = await preparePlatforms(
+    appRoot,
+    config,
+    platforms,
+    {
       dev: kind === "preview",
-    })
-    //Silent about the icon set: `preflight` already read the same art and said whatever
-    //there was to say, above the run (R33). What stays here is the ATS leftover, which can
-    //only be known by opening the native project this step just prepared.
-    await generateAssets(appRoot, config, [platform], { report })
-    // The iOS Info.plist is patched in place by `dev` and never regenerated, so a run
-    // killed without teardown can leave an ATS exception in it. Strip ours before it
-    // gets packaged; only warn about one we didn't add.
-    if (platform === "ios") {
-      const ats = healDevAtsLeftover(appRoot)
-      if (ats.healed) {
-        // SILENT (R4/R8): adaptv added this exception, adaptv just removed it, and the
-        // plist is back where it should be. There is nothing for the dev to know or do, so
-        // it is not printed — the alternative was a glyphless line, and a notice with no
-        // `!` is not a lower severity, it is a line that shouldn't have been printed.
-      } else if (ats.warn) {
-        warnings.push(
-          "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
-        )
-      }
-    }
-    prepared.add(platform)
-  }
-  // Scaffolding is the first thing a platform does, NOT a step of its own — so on a first
-  // run (`cap add` + CocoaPods is slow and worth watching) it renders on a TRANSIENT line
-  // under the platform's OWN label, erased rather than settled, and the time it took is
-  // folded into that platform's real line below (`prepareMs` → `offsetMs`). On later runs
-  // it's a sub-10ms no-op with no line at all. Sequential (like `dev`): first-run prepares
-  // are rare, so it costs nothing, and it keeps asset/config warnings in order instead of
-  // interleaved under live lanes.
-  const prepareMs = {}
-  for (const platform of platforms) {
-    const fresh = !existsSync(nativeDir(appRoot, platform))
-    const startedAt = Date.now()
-    try {
-      if (fresh) {
-        await runLine(platform, (r) => prepareOne(platform, r), {
-          verbose,
-          transient: true,
-        })
-      } else {
-        await prepareOne(platform, () => {})
-      }
-    } catch (err) {
-      // The transient line was erased and this platform never reaches the sync/package
-      // lanes, so its ONE line is printed here — same shape as a settled ✖.
-      const { reason, detail } = explainFailure(platform)(err)
-      fail(platform, `native project — ${reason}`, detail)
-    }
-    prepareMs[platform] = Date.now() - startedAt
-  }
+      force: opts.force,
+      envFor,
+      verbose,
+      warnings,
+    },
+  )
   // surface asset/config warnings right after prepare (where they arise), not at the end.
   flushWarnings()
 
   // Every platform already settled its own `✖ ios  native project — …`, so a footer here
   // would be a second glyph for failures the dev has just read.
-  const ready = platforms.filter((p) => prepared.has(p))
   if (ready.length === 0) return abort()
 
   // 3. resolve device targets (run only) — sequential prompts, up front, so the
@@ -1399,30 +1572,38 @@ async function pipeline(kind, appRoot, platforms, opts) {
       !opts.force &&
       !staleAtStart[platform] &&
       buildCache.run[key]?.id === runIdOf(platform) &&
-      isAppInstalled(appRoot, platform, target.id, env)
+      (await isAppInstalled(appRoot, platform, target.id, env))
     if (cached) {
       // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
       // (e.g. a prior `dev` session's offline screen) must not linger on screen.
       report("relaunching device")
-      launchInstalledApp(appRoot, platform, target.id, env, {
+      await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
       })
-      foregroundDevice(platform, target.id, env)
+      await foregroundDevice(platform, target.id, env)
       done[platform] = `launched on ${target.name}`
       return `${target.name} · cached`
     }
-    report("launching device")
+    // Say what starts, not what it ends in — `cap run` is a build first and a launch last.
+    // See the same note on `dev`'s launch path.
+    report("building app")
     // `cap run` installs + activates, but only FOREGROUNDS an already-running app — its old
     // WebView (e.g. the dev offline screen) would stay. Restart it after the build so the
     // freshly-installed bundle is what's shown.
-    const wasRunning = isAppRunning(appRoot, platform, target.id, env)
+    const wasRunning = await isAppRunning(
+      appRoot,
+      platform,
+      target.id,
+      env,
+    )
     await capRun(appRoot, platform, target.id, env, { report })
+    report("launching device")
     if (wasRunning) {
-      launchInstalledApp(appRoot, platform, target.id, env, {
+      await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
       })
     }
-    foregroundDevice(platform, target.id, env)
+    await foregroundDevice(platform, target.id, env)
     buildCache.run[key] = { id: runIdOf(platform) }
     done[platform] = `launched on ${target.name}`
     return target.name
@@ -1430,19 +1611,19 @@ async function pipeline(kind, appRoot, platforms, opts) {
 
   const tailOne = async (platform, report) => {
     if (syncNeeded(platform)) {
-      report("sync")
+      report("syncing")
       await capSync(appRoot, platform, envFor(platform), {
         report,
         plugins: config?.plugins,
       })
       buildCache.sync[platform] = syncTag
     } else {
-      report("sync · cached")
+      report("syncing · cached")
     }
     if (kind === "preview") {
       return previewLaunch(platform, ctx.targets[platform], report)
     }
-    report("package")
+    report("packaging")
     done[platform] = await packageArtifact(
       appRoot,
       config,
@@ -1466,7 +1647,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
       // Each lane carries its own outcome (explain → the inline reason + hint), so a
       // failure needs nothing printed after the lanes settle.
       run: (r) => tailOne(p, r),
-      idle: "building app",
       offsetMs: prepareMs[p] ?? 0,
       explain: explainFailure(p),
     })),
@@ -1474,6 +1654,8 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
   writeBuildState(appRoot, buildCache)
 
+  //The artifacts (or the devices launched) are what a script came for.
+  record("result", { [kind]: { ...done } })
   const ok = platforms.every((p) => p in done)
   // On success the label reads like `dev`'s "watching": a green ✓ + bold white word, not an
   // all-green phrase. Failure stays red.
@@ -1542,7 +1724,7 @@ function checkAppPlugins(_appRoot) {
   }
   if (missing.length) {
     log.warn(
-      `${missing.length} plugin(s) missing from adaptv's install — reinstall with \`pnpm install\``,
+      `${missing.length} plugin(s) missing from adaptv's install. Reinstall with 'pnpm install'`,
     )
   }
 }
@@ -1627,7 +1809,7 @@ async function doctor(appRoot) {
       { optional: true },
     )
 
-  section("Plugins (shipped by adaptv — the consumer installs none)")
+  section("Plugins (shipped by adaptv; the consumer installs none)")
   checkAppPlugins(appRoot)
 
   section("Project")
@@ -1657,7 +1839,7 @@ async function doctor(appRoot) {
     //reporting on instead. Interpolating `dirRel` regardless printed a bare " (icon source)".
     set.configured
       ? `${set.dirRel} (icon source)`
-      : "`icons` (icon source)",
+      : "'icons' (icon source)",
     set.source === "app"
       ? `${set.icons.length} icons`
       : "adaptv's default mark",
@@ -1672,94 +1854,28 @@ async function doctor(appRoot) {
  * dispatch
  * ============================================================================= */
 
-function usage() {
-  helpText(`${c.bold("adaptv")} — native (Capacitor) lifecycle for a adaptv app
-
-${c.bold("Usage")}
-  adaptv dev     <web|ios|android|all>  [--target <id>] [--latest] [--host [ip]] [--force] [--verbose] [-- <vite args>]
-  adaptv preview <web|ios|android|all>  [--target <id>] [--latest] [--force] [--verbose]
-  adaptv build   <ios|android|all>      [--output <path>] [--verbose] [--force]
-  adaptv gen icons --input <image>      [--output <dir>] [--dark <img>] [--tinted <img>] [--monochrome <img>] [--yes]
-  adaptv doctor
-
-${c.dim("dev = live reload: one Vite dev server, web + native WebViews all attached,")}
-${c.dim("hot-reloading on every save (Ctrl-C to stop). Args after `--` go to vite, e.g.")}
-${c.dim("`adaptv dev all -- --port 4000`.")}
-${c.dim("preview = static build installed & launched on a device/simulator (no live reload).")}
-${c.dim("build = static artifacts: an UNSIGNED .ipa and a debug .apk, both built by adaptv.")}
-${c.dim("Signing is the one thing adaptv can't do for you — for TestFlight/App Store, open")}
-${c.dim(".adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.")}
-${c.dim("gen icons = your whole icon set — web manifest, favicons, native launcher icons —")}
-${c.dim("from ONE image (png or svg, 1024px+), written to the `icons` dir in adaptv.config.ts")}
-${c.dim("(or --output). That dir must be CHOSEN — adaptv never guesses one to write into. It")}
-${c.dim("REPLACES what is there, so it asks first, naming where the path came from; --yes skips")}
-${c.dim("the prompt. Every run writes .adaptv/icons-preview.html — every icon under the mask its")}
-${c.dim("platform applies. No icons at all? adaptv ships its own mark rather than Capacitor's.")}
-${c.dim("adaptv reads the image to find where the background ends, then sizes the mark for each")}
-${c.dim("slot so no mask can crop it and nothing sits flush against an edge.")}
-${c.dim("")}
-${c.dim("iOS 18 shows a different icon in dark mode and when the home screen is tinted, and an")}
-${c.dim("app that ships no variants keeps its light icon in all three. adaptv writes all three:")}
-${c.dim("dark = your mark on the system's dark backdrop, tinted = greyscale for iOS to colour.")}
-${c.dim("A DARK mark can't be derived (black art on a black backdrop is nothing) — adaptv says")}
-${c.dim("so, and --dark <img> takes a hand-inverted one. --tinted <img> likewise.")}
-${c.dim("")}
-${c.dim("Android 13+ recolours every home-screen icon to match the wallpaper, and an app with")}
-${c.dim("no <monochrome> layer opts out and sits there in full colour. adaptv writes that layer")}
-${c.dim("too: your mark in one ink, keeping its internal contrast where it has any and falling")}
-${c.dim("back to a flat silhouette where it doesn't. --monochrome <img> replaces it outright.")}
-${c.dim("")}
-${c.dim("You should never need the tuning flags — they exist to take adaptv's judgement back:")}
-${c.dim("--margin <pct> is the room left inside EVERY slot's limit (default 10; 0 fills it")}
-${c.dim("exactly), --padding <pct> insets every icon on top of that. adaptv MEASURES the")}
-${c.dim("colour behind your mark and says which one it read; --background <hex> overrules")}
-${c.dim("that. The iOS dark icon and Android's foreground stay transparent regardless.")}
-${c.dim("--latest reuses the last device you picked. dev/preview skip the rebuild and just")}
-${c.dim("relaunch when nothing native changed; --force reinstalls anyway.")}
-${c.dim("Physical devices just work — plug one in and pick it (adaptv serves on your LAN IP")}
-${c.dim("automatically). --host <ip> only overrides that IP if detection guesses wrong (VPN /")}
-${c.dim("multiple adapters). Native projects live in .adaptv/. Toolchain env auto-resolved.")}`)
+/**
+ * A validated surface → the native platforms it means.
+ *
+ * No `null` branch and no error: by the time this is called the parser has already checked the
+ * token against that command's own `choices`, so an unknown one cannot reach here. It used to
+ * be three copies of the same check, one per command, each with its own sentence.
+ */
+function surfaceToPlatforms(surface) {
+  if (surface === "all") return ["ios", "android"]
+  if (surface === "web") return []
+  return [surface]
 }
 
-function parseFlags(argv) {
-  const flags = {}
-  const rest = []
-  let passthrough = []
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]
-    // a lone `--` ends adaptv's flags; the rest is forwarded to vite (dev server).
-    if (a === "--") {
-      passthrough = argv.slice(i + 1)
-      break
-    }
-    if (a === "--target") flags.target = argv[++i]
-    else if (a === "--output" || a === "-o") flags.output = argv[++i]
-    else if (a === "--padding") flags.padding = argv[++i]
-    else if (a === "--margin") flags.margin = argv[++i]
-    else if (a === "--background") flags.background = argv[++i]
-    else if (a === "--input") flags.input = argv[++i]
-    else if (a === "--dark") flags.dark = argv[++i]
-    else if (a === "--tinted") flags.tinted = argv[++i]
-    else if (a === "--monochrome") flags.monochrome = argv[++i]
-    else if (a === "--host") {
-      // `--host` forces external (LAN) mode; an optional IP pins the interface
-      // (`--host 192.168.1.50`) for the multi-NIC / VPN case where detection guesses wrong.
-      const next = argv[i + 1]
-      if (next && /^\d{1,3}(\.\d{1,3}){3}$/.test(next))
-        flags.host = argv[++i]
-      else flags.host = true
-    } else if (a.startsWith("--")) flags[a.slice(2)] = true
-    else rest.push(a)
+/** adaptv's own version, for `--version`. */
+function pkgVersion() {
+  try {
+    return JSON.parse(
+      readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+    ).version
+  } catch {
+    return "unknown"
   }
-  flags.viteArgs = passthrough
-  return { flags, rest }
-}
-
-/** Expand a `run`/`build` platform arg (`ios` | `android` | `all`) to a list. */
-function targetsFor(arg) {
-  if (arg === "all") return ["ios", "android"]
-  if (arg === "ios" || arg === "android") return [arg]
-  return null
 }
 
 /**
@@ -1973,55 +2089,11 @@ async function previewWeb(appRoot, opts) {
 }
 
 /* =============================================================================
- * gen icons
+ * icons
  * ============================================================================= */
 
-/** Flags `gen icons` understands. `viteArgs` is always present from `parseFlags`. */
-const GEN_ICON_FLAGS = new Set([
-  "input",
-  "output",
-  "dark",
-  "tinted",
-  "monochrome",
-  "margin",
-  "padding",
-  "background",
-  "yes",
-  "verbose",
-  "viteArgs",
-])
-
 /**
- * The command's shape, shown under any error about how it was invoked.
- *
- * Two lines because the flags fall into two groups and pretending otherwise makes a simple
- * command look complicated: `--input` is the command, everything else is tuning a dev never has
- * to think about. The tuning line is indented under it for that reason.
- */
-const GEN_ICONS_USAGE = [
-  "adaptv gen icons --input <image>  [--output <dir>] [--yes]",
-  "  iOS 18:   [--dark <image>] [--tinted <image>]",
-  "  Android:  [--monochrome <image>]",
-  "  tuning:   [--margin <pct>] [--padding <pct>] [--background <hex>]",
-]
-
-/**
- * An error about the ARGUMENTS, which carries the usage line as its dim detail.
- *
- * A wrong invocation is the one failure where the dev is looking straight at what they typed
- * and cannot see what is wrong with it, so the shape they should have typed goes under the
- * `✖` — the same dim-detail-under-a-failure pattern a build error uses (R13/R14). The `✖` line
- * itself still names ONE thing and stays terse (R7); the usage line is not a replacement for
- * saying what went wrong.
- */
-function usageError(message) {
-  const err = new Error(message)
-  err.tail = GEN_ICONS_USAGE
-  return err
-}
-
-/**
- * `adaptv gen icons --input <image>` — the app's whole icon set, from one image.
+ * `adaptv icons --input <image>`: the app's whole icon set, from one image.
  *
  * The command adaptv was missing: it could always PICK the best member of an icon set, but
  * getting one meant finding a favicon generator on the web and hoping its filenames matched
@@ -2034,37 +2106,16 @@ function usageError(message) {
  * dev still reached for a flag, and got `missing image` while looking at a command that plainly
  * contained one. A name they cannot collide with is the answer to both.
  */
-async function genIcons(appRoot, positional, flags) {
-  header("gen icons")
+async function genIcons(appRoot, _positional, flags) {
+  header("icons")
 
-  // Every flag this command doesn't define, reported the SAME way — `--target` included.
-  //
-  // `--target` had its own sentence for a while ("`--target` is a device id — `gen icons` takes
-  // the image positionally"), on the theory that it is the predictable wrong guess and deserved
-  // a precise answer. It was the wrong instinct: a dev generating icons has no reason to learn
-  // what `--target` means on some other command, and adaptv explaining its own flag vocabulary
-  // is exactly the plumbing R8 keeps out of the output. What they need is that this command
-  // doesn't take it, and what it does take — which is what every unknown flag already says.
-  //
-  // `parseFlags` turns any `--foo` into `flags.foo = true` and swallows the value after
-  // `--target`, so an unvalidated flag is not merely ignored: it is ignored AND it eats the
-  // positional argument, which is how `--target <image>` used to fail with `missing image`
-  // while the dev looked at a command that plainly contained one.
-  const unknown = Object.keys(flags).filter((f) => !GEN_ICON_FLAGS.has(f))
-  if (unknown.length > 0)
-    throw usageError(`unknown flag "--${unknown[0]}" for gen icons`)
-
-  const imageArg = typeof flags.input === "string" ? flags.input : null
-  if (!imageArg)
-    //A bare path is the other half of the `--input` move: someone who types the image without
-    //the flag is one word away, and should be told which word.
-    throw usageError(
-      positional
-        ? `the image goes after --input — adaptv gen icons --input ${positional}`
-        : "missing --input — the png or svg to generate the set from",
-    )
-  //NOT a `usageError`: they named an image and it isn't there. The shape of the command is not
-  //the fix, and printing it would be adaptv answering a question nobody asked (R6).
+  //Nothing is validated here any more. Unknown flags, a missing `--input`, an out-of-range
+  //`--margin` and a `--background` that isn't a colour are all rejected by the parser, from
+  //the spec, BEFORE this function is entered — which is why the banner above is now safe to
+  //print: it can no longer appear over a command that was never going to run (R33).
+  const imageArg = flags.input
+  //They named an image and it isn't there. The SHAPE of the command was not the problem, so
+  //no usage block — that would be adaptv answering a question nobody asked (R6).
   const sourceAbs = path.resolve(appRoot, imageArg)
   if (!existsSync(sourceAbs)) throw new Error(`no such image: ${imageArg}`)
 
@@ -2076,7 +2127,7 @@ async function genIcons(appRoot, positional, flags) {
   const { resolveIconSet, manifestIcons } =
     await loadAdaptvModule("vite/icon-set.ts")
   //Resolved with NO adaptv fallback: this command is about the dev's own directory, and
-  //`gen icons` writing into it is exactly what makes the fallback stop applying.
+  //`icons` writing into it is exactly what makes the fallback stop applying.
   const configured = resolveIconSet(appRoot, config, [])
 
   // WHERE the set goes, and never by guessing: files landing in a directory the dev never
@@ -2087,9 +2138,12 @@ async function genIcons(appRoot, positional, flags) {
   const outArg = typeof flags.output === "string" ? flags.output : null
   const configuredDir =
     typeof config.icons === "string" ? config.icons : null
+  //A plain error, not an invocation fault: this one can only be known once the CONFIG has been
+  //read, so the parser could not have caught it and the shape of the command was not wrong.
+  //The message names both fixes, which is all R7 asks.
   if (!outArg && !configuredDir)
-    throw usageError(
-      "nowhere to write — set `icons` in adaptv.config.ts, or pass --output <dir>",
+    throw new Error(
+      "nowhere to write. Set 'icons' in adaptv.config.ts, or pass --output <dir>",
     )
 
   //`--output` also serves as the escape hatch for a set that is NOT this app's: comparing two
@@ -2108,7 +2162,7 @@ async function genIcons(appRoot, positional, flags) {
   //Where the path came from, for the one message that is about to destroy files with it. An
   //`--output` the dev just typed needs no explaining; a path that arrived from a config file
   //they may not have open does.
-  const whence = outArg ? "" : " (your `icons` dir)"
+  const whence = outArg ? "" : " (your 'icons' dir)"
 
   const sharp = (await import("sharp")).default
   const ext = path.extname(sourceAbs)
@@ -2138,7 +2192,7 @@ async function genIcons(appRoot, positional, flags) {
     //extension, so without this the run ends on `Input file contains unsupported image format`,
     //which is the library's sentence about its own internals, not adaptv's about their file.
     measureArtwork(sharp, sourceAbs).catch(() => {
-      throw new Error(`could not read ${imageArg} — is it a valid image?`)
+      throw new Error(`could not read ${imageArg}. Is it a valid image?`)
     }),
   ])
   // The numeric flags are read HERE, with everything else adaptv knows before it acts (R33) —
@@ -2195,7 +2249,7 @@ async function genIcons(appRoot, positional, flags) {
     ...tuning.warnings,
   ])
 
-  // The overwrite gate. `gen icons` REPLACES the directory's art, so a dev pointing it at a
+  // The overwrite gate. `icons` REPLACES the directory's art, so a dev pointing it at a
   // hand-tuned set has to say so — but only when there is something to lose (R4: an empty or
   // absent directory asks nothing).
   //Counted with `existingIcons`, not `set.icons`: the set is only art adaptv can RANK, while
@@ -2211,14 +2265,14 @@ async function genIcons(appRoot, positional, flags) {
     //would overwrite files with no one watching, so the flag that decides it is named instead.
     if (ok === null)
       throw new Error(
-        `${set.dirRel}${whence} is not empty — pass --yes to replace it`,
+        `${set.dirRel}${whence} is not empty. Pass --yes to replace it`,
       )
     if (!ok) {
       //A deliberate "no" is not a failure (`✖` would read as adaptv scolding them for it) and
       //not a success (`✓` would claim work that did not happen). It is something the dev needs
       //to know, which is what the `!` is for — and it names the DIRECTORY, because the thing
       //they just protected is the one thing worth confirming is still there.
-      log.warn(`cancelled — ${set.dirRel} is unchanged`)
+      log.warn(`cancelled; ${set.dirRel} is unchanged`)
       spacer()
       return
     }
@@ -2239,6 +2293,10 @@ async function genIcons(appRoot, positional, flags) {
     })
     return `${written.length} files → ${set.dirRel}`
   })
+  //The icon directory just changed underneath every memo that describes it. This command is
+  //the only one in the CLI that WRITES art, and it goes on to re-resolve the set for the
+  //preview sheet below — so forget what was remembered before those files existed.
+  clearIconCaches()
 
   {
     // ALWAYS, not behind a flag. The sheet is the only place the dev can actually SEE what the
@@ -2276,47 +2334,39 @@ async function genIcons(appRoot, positional, flags) {
 }
 
 async function main() {
-  const [command, ...raw] = process.argv.slice(2)
-  const { flags, rest } = parseFlags(raw)
+  // Parsing, help and every invocation error come from ONE description of the command
+  // surface (`cli-spec.mjs`). Nothing below re-validates a flag or a surface: by the time a
+  // case body runs, the flags are known-good and the surface is one of its own choices.
+  const parsed = parse(process.argv.slice(2))
+  const { path: cmdPath, flags, rest } = parsed
   const appRoot = CWD
 
-  switch (command) {
-    case "doctor":
-      return await doctor(appRoot)
+  if (parsed.version) return renderVersion(pkgVersion())
+  if (parsed.help) return renderHelp(cmdPath)
+  //Before any command runs, so no banner escapes ahead of the mode being known.
+  setOutputMode({ json: !!flags.json, quiet: !!flags.quiet })
 
-    case "gen": {
-      // A namespace on purpose: `gen` is where anything adaptv can PRODUCE from the app's
-      // config belongs, and `icons` is simply the first of them.
-      if (rest[0] !== "icons")
-        throw usageError(
-          rest[0]
-            ? `unknown gen target "${rest[0]}" — expected icons`
-            : "missing gen target — expected icons",
-        )
-      return await genIcons(appRoot, rest[1], flags)
+  switch (cmdPath.join(" ")) {
+    case "doctor": {
+      const out = await doctor(appRoot)
+      emitJson({ command: "doctor", version: pkgVersion() })
+      return out
     }
+
+    case "icons":
+      return await genIcons(appRoot, null, flags)
 
     case "dev": {
       // `dev` is the live-reload command: one Vite dev server, web + native
       // WebViews all pointed at it. `web` = the dev server alone (no native).
-      const platforms = rest[0] === "web" ? [] : targetsFor(rest[0])
-      if (platforms === null) {
-        throw new Error(
-          `unknown dev target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
-        )
-      }
-      if (platforms.length > 1 && flags.target) {
-        throw new Error(
-          "--target can't be used with `dev all` (it's per-platform). Use --latest, or dev each platform.",
-        )
-      }
+      const platforms = surfaceToPlatforms(rest[0])
       return runLive(appRoot, platforms, {
         target: flags.target,
         latest: !!flags.latest,
         verbose: !!flags.verbose,
         force: !!flags.force,
         viteArgs: flags.viteArgs,
-        host: flags.host, // true | "<ip>" | undefined — external (LAN) mode
+        host: flags.host, // true | undefined — external (LAN) mode
       })
     }
 
@@ -2328,17 +2378,7 @@ async function main() {
           verbose: !!flags.verbose,
           viteArgs: flags.viteArgs,
         })
-      const platforms = targetsFor(rest[0])
-      if (!platforms) {
-        throw new Error(
-          `unknown preview target "${rest[0] ?? ""}" — expected web, ios, android, or all.`,
-        )
-      }
-      if (platforms.length > 1 && flags.target) {
-        throw new Error(
-          "--target can't be used with `preview all` (it's per-platform). Use --latest, or preview each platform.",
-        )
-      }
+      const platforms = surfaceToPlatforms(rest[0])
       // `all` means every surface a user could get the app on, WEB INCLUDED — it used to
       // mean "every NATIVE target", so `preview all` skipped the one surface you can look
       // at without a device, and the command exited with nothing still running.
@@ -2401,42 +2441,37 @@ async function main() {
     }
 
     case "build": {
-      const platforms = targetsFor(rest[0])
-      if (!platforms) {
-        throw new Error(
-          `unknown build target "${rest[0] ?? ""}" — expected ios, android, or all.`,
-        )
-      }
-      return pipeline("build", appRoot, platforms, {
-        output: flags.output,
-        verbose: !!flags.verbose,
-        force: !!flags.force,
-      })
-    }
-
-    case "run": {
-      // Retired in favour of dev/preview — don't silently redefine it.
-      const hint = rest[0] && rest[0] !== "web" ? rest[0] : "ios"
-      throw new Error(
-        `\`run\` was split into \`dev\` and \`preview\` — did you mean \`adaptv dev ${hint}\`? (live reload = dev; static build → install = preview)`,
+      const out = await pipeline(
+        "build",
+        appRoot,
+        surfaceToPlatforms(rest[0]),
+        {
+          output: flags.output,
+          verbose: !!flags.verbose,
+          force: !!flags.force,
+        },
       )
+      emitJson({ command: `build ${rest[0]}`, version: pkgVersion() })
+      return out
     }
 
-    case undefined:
-    case "help":
-    case "--help":
-    case "-h":
-      return usage()
-
-    default:
-      log.error(`unknown command: ${command}`)
-      spacer()
-      usage()
-      process.exit(1)
+    //No `default`: an unrecognised command never reaches here. `parse` throws a `CliFault`
+    //carrying the token and a suggestion, and the catch below renders it — so there is no
+    //second, weaker copy of "unknown command" to drift away from the first.
   }
 }
 
 main().catch((err) => {
+  // An INVOCATION fault is not a run failure: nothing started, so there is nothing to tear
+  // down and nothing to report but the sentence and the fix. It exits 2 (BSD `EX_USAGE`), so
+  // CI can tell "the command was typed wrong" from "the build broke" — which is exactly the
+  // distinction a single exit code was hiding.
+  //`usageFail` owns its own blank lines, on stderr, so the block stays intact when stdout is
+  //redirected somewhere else.
+  if (err instanceof CliFault) {
+    renderFault(err)
+    process.exit(2)
+  }
   // Same rule at the top level: if a step already rendered this failure, exit quietly
   // rather than appending Node's raw message under the calm one.
   if (!wasReported(err)) {

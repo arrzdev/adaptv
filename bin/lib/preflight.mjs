@@ -51,25 +51,25 @@ export function configErrors(config) {
   const errors = []
   if (!APP_ID.test(String(config.appId ?? "")))
     errors.push(
-      `\`appId\` must be reverse-DNS like com.example.app — got ${JSON.stringify(config.appId)}`,
+      `'appId' must be reverse-DNS like com.example.app, got ${JSON.stringify(config.appId)}`,
     )
   if (!config.themeColor?.light && !config.themeColor?.dark)
-    errors.push("`themeColor` needs at least one of `light` / `dark`")
+    errors.push("'themeColor' needs at least one of 'light' / 'dark'")
   for (const [key, value] of colorKeys(config)) {
     if (value === undefined) continue
     if (typeof value !== "string" || !HEX.test(value.trim()))
       errors.push(
-        `\`${key}\` must be a hex colour like #1b1b1b — got ${JSON.stringify(value)}`,
+        `'${key}' must be a hex colour like #1b1b1b, got ${JSON.stringify(value)}`,
       )
   }
   const mode = config.splashMaskMode
   if (mode !== undefined && !SPLASH_MASK_MODES.includes(mode))
     errors.push(
-      `\`splashMaskMode\` must be preferences, system, light or dark — got ${JSON.stringify(mode)}`,
+      `'splashMaskMode' must be preferences, system, light or dark, got ${JSON.stringify(mode)}`,
     )
   if (config.icons !== undefined && typeof config.icons !== "string")
     errors.push(
-      `\`icons\` must be a path to the app's icon directory — got ${JSON.stringify(config.icons)}`,
+      `'icons' must be a path to the app's icon directory, got ${JSON.stringify(config.icons)}`,
     )
   return errors
 }
@@ -98,17 +98,27 @@ export async function iconWarnings(set, platforms) {
   // fixes: a directory that is empty is filled, a key that is absent is set. The message
   // used to name `./public/favicons` in both cases — a path the unconfigured dev never
   // wrote, and one adaptv no longer reads unless they do (R7: name the fix).
+  //
+  // Just the fact. Both used to carry `— shipping adaptv's default mark`, which is adaptv
+  // narrating its own fallback: the dev acts on the missing art, not on what adaptv does
+  // meanwhile, and the clause doubled the length of a row that has to survive a narrow
+  // terminal (R42).
   if (set.source === "default")
     return [
       set.configured
-        ? `no icons in ${set.dirRel} — shipping adaptv's default mark`
-        : "no `icons` in adaptv.config.ts — shipping adaptv's default mark",
+        ? `no icons in ${set.dirRel}`
+        : "no 'icons' in adaptv.config.ts",
     ]
 
   const { manifestIcons, installabilityIssue } = await iconSetModule()
   const warnings = []
   for (const platform of platforms) {
-    const { warning } = await resolveLauncherSource(set, platform)
+    //`measure: false` — the warning is `iconIssue`, which reads width, transparency and
+    //family. The artwork scan behind the other three fields costs ~45ms per platform and
+    //nothing here reads them; the writers ask for it themselves later.
+    const { warning } = await resolveLauncherSource(set, platform, {
+      measure: false,
+    })
     if (warning) warnings.push(warning)
   }
   const issue = installabilityIssue(manifestIcons(set))
