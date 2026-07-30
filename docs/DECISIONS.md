@@ -922,6 +922,45 @@ Moot under `ANIMATION.md §4.1` (adaptv doesn't use the top layer), but worth kn
 Both need wrapping regardless of scope decisions — this is exactly doctrine §2's "everything exported
 abstracts the hybrid heavy-lifting."
 
+### B28 — A cold start into a 404 leaves the splash covering the app, on native ✅ **FIXED**
+
+**Measured** in an Android WebView on `/lab/definitely-not-a-route`: `[data-adaptv-splash]` still in the
+DOM at `display: block`, `opacity: 1`, `pointer-events: auto`, `z-index: 100`, and
+`document.elementFromPoint(centre)` inside it. Zero splash elements on a normal route in the same build,
+so it is the not-found path specifically. **Native/installed only** — on the web the critical-CSS splash
+policy is scoped to `html[data-adaptv-platform="web"]` and renders the leftover `display: none`, so it is
+invisible there and the bug hid.
+
+**Cause — two correct designs meeting badly.**
+
+1. The React splash is **app-owned and self-unmounting**: it returns `null` when the app signals ready,
+   and that signal is the app's own boot work. In the playground that is `AppDbProvider`, which lives in
+   the `providers` **layout route** (`routing/layouts/providers.layout.tsx`).
+2. adaptv sets **`notFoundMode: "root"`** (`create-adaptv-router.ts`), so root is the not-found boundary.
+   A not-found boundary short-circuits the `<Outlet/>` at that match — the router renders the boundary's
+   `notFoundComponent` there and **never descends**.
+
+So on a not-found nothing below root mounts. No layout route runs, the bootstrap gate is never set, the
+splash never returns `null`, and its own coverage box — which is doing exactly what it was designed to do
+— covers the 404 forever. Worth being precise about the matcher, because "use `notFoundMode: fuzzy`" is
+the tempting non-fix: for a path that matches nothing, `getMatchedRoutes` returns **root alone**
+(`match?.branch || [rootRoute]`), so a pathless layout is not even in the match chain and fuzzy resolves
+to root anyway. A loader that throws `notFound()` mid-boot lands on the same root boundary.
+
+**Fix (`src/shell/shell-layout.tsx`).** adaptv mounts the splash, so adaptv retires it: `RoutingShell`
+reads the router's not-found boundary state and stops mounting the app's splash when one is up — there is
+no boot left to cover if the app tree is never going to mount. Two details that are load-bearing:
+
+- **Derived during render, not in an effect.** `globalNotFound` is dehydrated, so the SSR pass and
+  hydration agree, and a native cold start never paints the splash even for one frame.
+- **Latched — retiring is one-way.** Re-mounting on the navigation *out* of a 404 would hand a fresh
+  splash a ready gate that is already set, replaying a full-screen splash over a booted app for its
+  dismiss delay.
+
+Guards: `src/shell/shell-layout.test.ts*` (real router + the playground's providers-layout shape; the
+404 cases fail without the fix) and `playground/e2e/screens.spec.ts` (which also *clicks* the 404's home
+link, so an intercepting overlay fails the test rather than merely showing up in a query).
+
 ---
 
 ## 6.3 🔒 `web.render` defaults to `"ssr"` — and the asymmetry of being wrong settles it

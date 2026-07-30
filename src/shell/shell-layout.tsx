@@ -1,6 +1,10 @@
-import { HeadContent, Scripts } from "@tanstack/react-router"
+import {
+  HeadContent,
+  Scripts,
+  useRouterState,
+} from "@tanstack/react-router"
 import type { ComponentType, ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { initNativeKeyboard } from "#adaptv/capabilities/keyboard"
 import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
 import { hideNativeSplash } from "#adaptv/capabilities/splash"
@@ -131,6 +135,30 @@ type RoutingShellProps = {
   children: ReactNode
 }
 
+/**
+ * `true` when the router is rendering a not-found through a match boundary
+ * instead of the app's own route tree.
+ *
+ * A not-found boundary short-circuits the `<Outlet/>` at that match: the router
+ * renders the boundary's `notFoundComponent` there and **never descends**, so no
+ * route below it mounts. adaptv sets `notFoundMode: "root"`, which makes root
+ * that boundary for every not-found — a URL that matches nothing (the matcher
+ * returns root alone, so no layout route is even in the match chain) *and* a
+ * `notFound()` thrown from a loader mid-boot. Either way the app's layout routes
+ * do not run, which is the whole reason this flag has to exist here.
+ */
+function useNotFoundBoundary() {
+  return useRouterState({
+    //`globalNotFound` marks the boundary that renders the not-found; `notFound`
+    //status is the nested (`notFoundMode: "fuzzy"`) form of the same thing. Both
+    //cut the tree off below that point.
+    select: (state) =>
+      state.matches.some(
+        (match) => match.globalNotFound || match.status === "notFound",
+      ),
+  })
+}
+
 export function RoutingShell({
   themeColorLight,
   themeColorDark,
@@ -201,6 +229,23 @@ export function RoutingShell({
   //browser tab (see the critical-css splash policy) unless the app opts in.
   const SplashScreenComponent = splashScreenComponent
 
+  //…except on a not-found, where self-unmount CANNOT happen: the ready signal is
+  //the app's own boot work, which lives in a layout route (see the playground's
+  //providers layout) that the boundary skips. The signal never fires, the splash
+  //never returns null, and a cold start into a 404 is left under a full-viewport
+  //overlay for good — installed/native only, since on web the critical-CSS policy
+  //renders the leftover `display: none`. → DECISIONS.md B28
+  //
+  //adaptv mounts the splash, so adaptv retires it — there is no boot left to cover
+  //when the app tree is never going to mount. During render, not in an effect, so
+  //the SSR pass and hydration agree (`globalNotFound` is dehydrated) and a native
+  //cold start never paints the splash even for a frame. Latched, because retiring
+  //is one-way: re-mounting on the navigation *out* of a 404 would hand a fresh
+  //splash an already-set ready gate and replay it over a booted app.
+  const notFound = useNotFoundBoundary()
+  const splashRetired = useRef(false)
+  if (notFound) splashRetired.current = true
+
   //Adaptv's own offline call site: a route chunk 404'd and the one-shot reload
   //guard is already spent, so reloading cannot help and there is no route left to
   //render its own offline UI. Without this the user gets a blank screen.
@@ -222,7 +267,9 @@ export function RoutingShell({
 
   return (
     <>
-      {SplashScreenComponent && <SplashScreenComponent />}
+      {SplashScreenComponent && !splashRetired.current && (
+        <SplashScreenComponent />
+      )}
       <AppShell className={shellClassName}>{children}</AppShell>
       <OrientationGuard
         manifestPath={manifestPath}
