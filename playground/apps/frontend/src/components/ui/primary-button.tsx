@@ -9,7 +9,7 @@ const PRIMARY_BUTTON_CLASSNAME = cn(
   "rounded-md border-0 bg-primary px-4 py-2 text-sm font-medium leading-none text-primary-foreground",
   "hover:bg-accent",
   "focus:outline-none",
-  "origin-center transition-transform duration-200 ease-out pressed:duration-0 pressed:scale-[0.98]",
+  "origin-center transition-transform duration-200 ease-out active:duration-0 active:scale-[0.98]",
   "disabled:opacity-50",
   "aria-busy:bg-secondary aria-busy:text-muted aria-busy:saturate-50 aria-busy:opacity-70 aria-busy:hover:bg-secondary",
 )

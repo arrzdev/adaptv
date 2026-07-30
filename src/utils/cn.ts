@@ -2,62 +2,98 @@ import type { ClassValue } from "clsx"
 import { clsx } from "clsx"
 import { extendTailwindMerge } from "tailwind-merge"
 
+/*
+ * Matches every suffix adaptv's safe-area utilities accept (styles/safe-area.css):
+ * the bare inset, the inset plus N spacing units, and the inset floored at N.
+ * `[7]` is Tailwind's arbitrary-integer form, which the `--value(integer, [integer])`
+ * in the `@utility` rules also accepts — keep the two in step.
+ */
+const isSafeAreaSuffix = (value: string) =>
+  value === "safe" || /^safe-(offset|or)-(\d+|\[\d+\])$/.test(value)
+
+/*
+ * Fold the safe-area families into the STANDARD spacing/inset groups rather than
+ * giving them groups of their own. That is the whole trick: tailwind-merge's
+ * built-in conflict table already says `p` beats `px`/`pt`/…, `inset` beats
+ * `top`/`bottom`/…, and so on — joining those groups inherits every one of those
+ * relations for free, and `pb-safe` conflict-resolves against `pb-0` (a
+ * `View safe="bottom"` must win over a stray consumer padding class) without a
+ * single hand-written conflict entry.
+ */
 const customTwMerge = extendTailwindMerge<
-  "pwa-touch-behavior" | "pwa-scroll-behavior"
+  "pwa-select-behavior" | "pwa-scrollbar"
 >({
   extend: {
     classGroups: {
-      "pwa-touch-behavior": ["clickable", "non-clickable"],
-      "pwa-scroll-behavior": [
-        "scrollable-x",
-        "scrollable-y",
-        "scrollable",
-      ],
-      //register the tailwindcss-safe-area padding utilities into the standard
-      //padding groups so `pb-safe` conflict-resolves against `pb-0` etc. (a
-      //`View safe="bottom"` must win over a stray consumer padding class).
-      p: [{ p: ["safe"] }],
-      px: [{ px: ["safe"] }],
-      py: [{ py: ["safe"] }],
-      pt: [{ pt: ["safe"] }],
-      pr: [{ pr: ["safe"] }],
-      pb: [{ pb: ["safe"] }],
-      pl: [{ pl: ["safe"] }],
+      //`selectable` is the opt-in against the app-wide `user-select: none` reset that
+      //`ui.noSelect` stamps. Without this group tailwind-merge does not know it fights
+      //`select-*`, so `cn("select-none", "selectable")` emitted BOTH and compiled
+      //source order decided which won — the same silent failure documented for
+      //`scrollable-y` below. `Text selectable` must beat a stray consumer `select-none`.
+      "pwa-select-behavior": ["selectable"],
+      //one scroller shows OR hides its indicator; emitting both leaves the
+      //winner to compiled source order, which is how `scrollable-y` broke once
+      "pwa-scrollbar": ["scrollbar-hidden", "scrollbar-visible"],
+      p: [{ p: [isSafeAreaSuffix] }],
+      px: [{ px: [isSafeAreaSuffix] }],
+      py: [{ py: [isSafeAreaSuffix] }],
+      ps: [{ ps: [isSafeAreaSuffix] }],
+      pe: [{ pe: [isSafeAreaSuffix] }],
+      pt: [{ pt: [isSafeAreaSuffix] }],
+      pr: [{ pr: [isSafeAreaSuffix] }],
+      pb: [{ pb: [isSafeAreaSuffix] }],
+      pl: [{ pl: [isSafeAreaSuffix] }],
+      m: [{ m: [isSafeAreaSuffix] }],
+      mx: [{ mx: [isSafeAreaSuffix] }],
+      my: [{ my: [isSafeAreaSuffix] }],
+      ms: [{ ms: [isSafeAreaSuffix] }],
+      me: [{ me: [isSafeAreaSuffix] }],
+      mt: [{ mt: [isSafeAreaSuffix] }],
+      mr: [{ mr: [isSafeAreaSuffix] }],
+      mb: [{ mb: [isSafeAreaSuffix] }],
+      ml: [{ ml: [isSafeAreaSuffix] }],
+      inset: [{ inset: [isSafeAreaSuffix] }],
+      "inset-x": [{ "inset-x": [isSafeAreaSuffix] }],
+      "inset-y": [{ "inset-y": [isSafeAreaSuffix] }],
+      start: [{ start: [isSafeAreaSuffix] }],
+      end: [{ end: [isSafeAreaSuffix] }],
+      top: [{ top: [isSafeAreaSuffix] }],
+      right: [{ right: [isSafeAreaSuffix] }],
+      bottom: [{ bottom: [isSafeAreaSuffix] }],
+      left: [{ left: [isSafeAreaSuffix] }],
     },
     /*
-     * A custom utility must declare conflicts with everything it EXPANDS to, or
-     * the `locked` layer silently stops being a guarantee.
+     * Only two custom groups are left, and both earn it: they set properties Tailwind
+     * has no utility for at all (`scrollbar-width` + `::-webkit-scrollbar`, and the
+     * opt-in against the app-wide `user-select` reset).
      *
-     * `scrollable-y` is one class but sets four properties (`overflow-y`,
-     * `overflow-x`, `touch-action`, `overscroll-behavior-y`). tailwind-merge only
-     * drops a class it knows conflicts — and a custom group it has never heard of
-     * conflicts with nothing. So `cn("scrollable-y", "overflow-hidden")` kept
-     * BOTH, and which one actually applied was decided by the order the rules
-     * happened to land in the compiled stylesheet rather than by the caller.
+     * The `clickable` / `non-clickable` / `scrollable-*` families used to live here too,
+     * each with a hand-written `conflictingClassGroups` entry naming every property it
+     * expanded to — because a group tailwind-merge has never heard of conflicts with
+     * nothing, so `cn("scrollable-y", "overflow-hidden")` kept BOTH and compiled source
+     * order picked the winner. That table was a standing liability: it had to be kept in
+     * step with the CSS by hand, and the one entry nobody wrote was `cursor`, so a
+     * consumer's `cursor-wait` next to `non-clickable` also emitted both and only
+     * *happened* to win.
      *
-     * That is exactly the failure `mergeStyles`' precedence exists to prevent:
-     * a consumer's `overflow-hidden` could defeat a `ScrollView`'s scroll axis,
-     * which is owned by a PROP (L6). Same for `clickable`, whose whole purpose is
-     * the `touch-action` longhand that works around WebKit 240917.
+     * Those families are now spelled in raw Tailwind at the call sites, so tailwind-merge
+     * resolves them through the groups it already owns — `overflow`, `touch`, `cursor`,
+     * `overscroll` — and there is nothing left to keep in step.
      */
     conflictingClassGroups: {
-      "pwa-scroll-behavior": [
-        "overflow",
-        "overflow-x",
-        "overflow-y",
-        "touch",
-        "overscroll",
-        "overscroll-x",
-        "overscroll-y",
-      ],
-      "pwa-touch-behavior": ["touch"],
-      overflow: ["pwa-scroll-behavior"],
-      "overflow-x": ["pwa-scroll-behavior"],
-      "overflow-y": ["pwa-scroll-behavior"],
-      touch: ["pwa-scroll-behavior", "pwa-touch-behavior"],
-      overscroll: ["pwa-scroll-behavior"],
-      "overscroll-x": ["pwa-scroll-behavior"],
-      "overscroll-y": ["pwa-scroll-behavior"],
+      "pwa-select-behavior": ["select"],
+      select: ["pwa-select-behavior"],
+      /*
+       * A locked axis must beat a consumer's `overflow-hidden` BY RESOLUTION, not by
+       * luck. Tailwind emits the shorthand before the longhands, so today the pair
+       * `overflow-hidden overflow-y-auto` already resolves the way `ScrollView` needs —
+       * but that is emission order deciding a guarantee, which is exactly the failure
+       * mode the custom-utility table was full of. Declaring the relationship makes
+       * tailwind-merge DROP the shorthand instead, so the winner is the caller's
+       * position in `mergeStyles` and nothing else.
+       */
+      "overflow-x": ["overflow"],
+      "overflow-y": ["overflow"],
     },
   },
 })

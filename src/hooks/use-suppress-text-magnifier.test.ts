@@ -72,7 +72,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-01-01T00:00:00Z"))
   plain = appendEl({ tag: "div" })
   editable = appendEl({ tag: "input" })
-  clickable = appendEl({ tag: "button", attrs: { class: "clickable" } })
+  clickable = appendEl({ tag: "button", attrs: { class: "touch-pan-x" } })
   renderHook(() => useSuppressTextMagnifier())
 })
 

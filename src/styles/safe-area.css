@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * safe-area — THE safe-area inset contract. This file is the ONE place
- * `env(safe-area-inset-*)` may appear; everything else consumes these vars.
+ * safe-area — THE safe-area inset contract, and the utilities built on it.
+ * This file is the ONE place `env(safe-area-inset-*)` may appear; everything
+ * else — adaptv components, consumer classes, useInsets — consumes these vars.
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * 🔒 LOCKED CONTRACT — DECISIONS.md §6.0 (B18). Consume the Capacitor-injected
@@ -18,28 +19,368 @@
  * to native `env()`. This ordering is exactly what Capacitor's own SystemBars
  * docs recommend.
  *
- * This file loads AFTER `tailwindcss-safe-area` (consumers import
- * `@arrzdev/nativ/styles.css` after the plugin — see the app's main.css), so the
- * `--twsa-*` re-route below wins the cascade.
+ * ── Why the names are PREFIXED, against §3.2's "unprefixed" rule ────────────
+ * §3.2 argued for unprefixed custom properties, but it reasoned about
+ * COMPONENT-LOCAL scalars (`--available-height` on one popover). These four are
+ * global, live on `:root`, and are named for a concept every app has an opinion
+ * about — an unprefixed `--safe-bottom` would collide with the consumer's own
+ * the first time they define one. So: `--adaptv-inset-{top,right,bottom,left}`.
+ *
+ * ── Why adaptv owns the utilities instead of `tailwindcss-safe-area` ────────
+ * The plugin was dropped (it was a peer dependency until this file took over).
+ * adaptv never used its utilities as shipped: it overwrote the plugin's PRIVATE
+ * `--twsa-safe-area-inset-*` variables to re-route every utility through the
+ * contract above. Depending on another package's private API — and pinning it
+ * exact (1.3.0) so the names could not move — is not a foundation. The utility
+ * NAMES below are the plugin's, so nothing downstream has to change.
  */
 
-:root {
-  /* The contract expression, written exactly once. Every safe-area consumer —
-   * nativ components and the tailwindcss-safe-area utilities alike — resolves
-   * through these four. */
-  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
-  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
-  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+/* Custom properties, not utilities, so they live in a cascade layer — the
+ * FIRST one, so a consumer's own `:root` declaration wins with no !important.
+ * (`@utility` cannot be nested in `@layer`; the utilities below compile into
+ * Tailwind's own `utilities` layer, which is where they belong.) */
+@layer adaptv.reset {
+  :root {
+    /* The contract expression, written exactly once. Every safe-area consumer —
+     * the utilities below, adaptv components, and useInsets — resolves through
+     * these four. Always DEFINED: `0px` where there is no inset, never absent. */
+    --adaptv-inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --adaptv-inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --adaptv-inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --adaptv-inset-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  }
+}
 
-  /* Re-route tailwindcss-safe-area onto the contract. The plugin declares its
-   * private `--twsa-safe-area-inset-*` vars as bare `env()`, and every utility it
-   * emits (`p-safe`, `pt-safe`, `*-safe-offset-*`, `m-safe`, …) reads them — so
-   * `View` / `ScrollView` / `AvoidKeyboard` / `OrientationGuard` inherit the fix
-   * from this single override, with zero component churn. Pinned at 1.3.0, so the
-   * private var names are stable; styles/safe-area.test.ts guards this reroute. */
-  --twsa-safe-area-inset-top: var(--safe-top);
-  --twsa-safe-area-inset-right: var(--safe-right);
-  --twsa-safe-area-inset-bottom: var(--safe-bottom);
-  --twsa-safe-area-inset-left: var(--safe-left);
+/* ═══════════════════════════════════════════════════════════════════════════
+ * UTILITIES
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Three variants per family, all resolving through the four contract vars:
+ *
+ *   pb-safe             the inset
+ *   pb-safe-offset-4    the inset PLUS 4 spacing units      (inset + gap)
+ *   pb-safe-or-4        the inset, but never less than 4    (a floor)
+ *
+ * `-safe-or-*` needs `max()`, not a `var()` fallback: the contract vars are
+ * always defined (`0px` with no inset), so a fallback would never fire.
+ *
+ * `--spacing(--value(integer, [integer]))` is Tailwind v4's functional-utility
+ * syntax — `--value()` resolves the `*` suffix (bare integer or `[7]`), and
+ * `--spacing()` multiplies it by the theme's `--spacing`. The nesting compiles
+ * to `calc(var(--spacing) * 4)`; styles/safe-area.test.ts asserts the compiled
+ * output rather than the source text, because the syntax is easy to get subtly
+ * wrong and Tailwind fails soft (an unparseable utility just never emits).
+ *
+ * Every family below is registered in utils/cn.ts (STYLING.md §5.5) — an
+ * unregistered utility silently drops out of the mergeStyles precedence
+ * contract, so `View safe="bottom"` would stop beating a stray `pb-0`.
+ *
+ * DELIBERATELY NOT REPRODUCED from the plugin's 329-utility surface, because
+ * nothing in adaptv or the playground uses them and each carries a real cost:
+ *   - `safe` / `safe-x` / `safe-t` / `safe-none` (per-element re-derivation of
+ *     the inset vars from bare `env()`) — that is precisely the Android bug the
+ *     contract exists to avoid; re-scoping these vars must not be one class away.
+ *   - the negative families (`-pt-safe`, `-m-safe-offset-*`, …).
+ *   - `scroll-p*`/`scroll-m*`-safe and the `h-screen-safe` height family.
+ * Add them here if a real use appears — do not re-add the plugin.
+ */
+
+/* ---- padding ---- */
+@utility p-safe {
+  padding-top: var(--adaptv-inset-top, 0px);
+  padding-right: var(--adaptv-inset-right, 0px);
+  padding-bottom: var(--adaptv-inset-bottom, 0px);
+  padding-left: var(--adaptv-inset-left, 0px);
+}
+@utility px-safe {
+  padding-right: var(--adaptv-inset-right, 0px);
+  padding-left: var(--adaptv-inset-left, 0px);
+}
+@utility py-safe {
+  padding-top: var(--adaptv-inset-top, 0px);
+  padding-bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility ps-safe {
+  padding-inline-start: var(--adaptv-inset-left, 0px);
+}
+@utility pe-safe {
+  padding-inline-end: var(--adaptv-inset-right, 0px);
+}
+@utility pt-safe {
+  padding-top: var(--adaptv-inset-top, 0px);
+}
+@utility pr-safe {
+  padding-right: var(--adaptv-inset-right, 0px);
+}
+@utility pb-safe {
+  padding-bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: var(--adaptv-inset-left, 0px);
+}
+
+@utility p-safe-offset-* {
+  padding-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  padding-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  padding-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+  padding-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility px-safe-offset-* {
+  padding-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  padding-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility py-safe-offset-* {
+  padding-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  padding-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility ps-safe-offset-* {
+  padding-inline-start: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility pe-safe-offset-* {
+  padding-inline-end: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility pt-safe-offset-* {
+  padding-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+}
+@utility pr-safe-offset-* {
+  padding-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility pb-safe-offset-* {
+  padding-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility pl-safe-offset-* {
+  padding-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+
+@utility p-safe-or-* {
+  padding-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  padding-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  padding-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+  padding-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility px-safe-or-* {
+  padding-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  padding-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility py-safe-or-* {
+  padding-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  padding-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility ps-safe-or-* {
+  padding-inline-start: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility pe-safe-or-* {
+  padding-inline-end: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility pt-safe-or-* {
+  padding-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+}
+@utility pr-safe-or-* {
+  padding-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility pb-safe-or-* {
+  padding-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility pl-safe-or-* {
+  padding-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+
+/* ---- margin ---- */
+@utility m-safe {
+  margin-top: var(--adaptv-inset-top, 0px);
+  margin-right: var(--adaptv-inset-right, 0px);
+  margin-bottom: var(--adaptv-inset-bottom, 0px);
+  margin-left: var(--adaptv-inset-left, 0px);
+}
+@utility mx-safe {
+  margin-right: var(--adaptv-inset-right, 0px);
+  margin-left: var(--adaptv-inset-left, 0px);
+}
+@utility my-safe {
+  margin-top: var(--adaptv-inset-top, 0px);
+  margin-bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility ms-safe {
+  margin-inline-start: var(--adaptv-inset-left, 0px);
+}
+@utility me-safe {
+  margin-inline-end: var(--adaptv-inset-right, 0px);
+}
+@utility mt-safe {
+  margin-top: var(--adaptv-inset-top, 0px);
+}
+@utility mr-safe {
+  margin-right: var(--adaptv-inset-right, 0px);
+}
+@utility mb-safe {
+  margin-bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility ml-safe {
+  margin-left: var(--adaptv-inset-left, 0px);
+}
+
+@utility m-safe-offset-* {
+  margin-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  margin-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  margin-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+  margin-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility mx-safe-offset-* {
+  margin-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  margin-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility my-safe-offset-* {
+  margin-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  margin-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility ms-safe-offset-* {
+  margin-inline-start: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility me-safe-offset-* {
+  margin-inline-end: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility mt-safe-offset-* {
+  margin-top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+}
+@utility mr-safe-offset-* {
+  margin-right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility mb-safe-offset-* {
+  margin-bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility ml-safe-offset-* {
+  margin-left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+
+@utility m-safe-or-* {
+  margin-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  margin-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  margin-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+  margin-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility mx-safe-or-* {
+  margin-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  margin-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility my-safe-or-* {
+  margin-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  margin-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility ms-safe-or-* {
+  margin-inline-start: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility me-safe-or-* {
+  margin-inline-end: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility mt-safe-or-* {
+  margin-top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+}
+@utility mr-safe-or-* {
+  margin-right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility mb-safe-or-* {
+  margin-bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility ml-safe-or-* {
+  margin-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+
+/* ---- inset (positioning) ---- */
+@utility inset-safe {
+  top: var(--adaptv-inset-top, 0px);
+  right: var(--adaptv-inset-right, 0px);
+  bottom: var(--adaptv-inset-bottom, 0px);
+  left: var(--adaptv-inset-left, 0px);
+}
+@utility inset-x-safe {
+  right: var(--adaptv-inset-right, 0px);
+  left: var(--adaptv-inset-left, 0px);
+}
+@utility inset-y-safe {
+  top: var(--adaptv-inset-top, 0px);
+  bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility start-safe {
+  inset-inline-start: var(--adaptv-inset-left, 0px);
+}
+@utility end-safe {
+  inset-inline-end: var(--adaptv-inset-right, 0px);
+}
+@utility top-safe {
+  top: var(--adaptv-inset-top, 0px);
+}
+@utility right-safe {
+  right: var(--adaptv-inset-right, 0px);
+}
+@utility bottom-safe {
+  bottom: var(--adaptv-inset-bottom, 0px);
+}
+@utility left-safe {
+  left: var(--adaptv-inset-left, 0px);
+}
+
+@utility inset-safe-offset-* {
+  top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+  left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility inset-x-safe-offset-* {
+  right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+  left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility inset-y-safe-offset-* {
+  top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+  bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility start-safe-offset-* {
+  inset-inline-start: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+@utility end-safe-offset-* {
+  inset-inline-end: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility top-safe-offset-* {
+  top: --spacing(--value(integer, [integer]) + var(--adaptv-inset-top, 0px));
+}
+@utility right-safe-offset-* {
+  right: --spacing(--value(integer, [integer]) + var(--adaptv-inset-right, 0px));
+}
+@utility bottom-safe-offset-* {
+  bottom: --spacing(--value(integer, [integer]) + var(--adaptv-inset-bottom, 0px));
+}
+@utility left-safe-offset-* {
+  left: --spacing(--value(integer, [integer]) + var(--adaptv-inset-left, 0px));
+}
+
+@utility inset-safe-or-* {
+  top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+  left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility inset-x-safe-or-* {
+  right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+  left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility inset-y-safe-or-* {
+  top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+  bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility start-safe-or-* {
+  inset-inline-start: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
+}
+@utility end-safe-or-* {
+  inset-inline-end: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility top-safe-or-* {
+  top: max(var(--adaptv-inset-top, 0px), --spacing(--value(integer, [integer])));
+}
+@utility right-safe-or-* {
+  right: max(var(--adaptv-inset-right, 0px), --spacing(--value(integer, [integer])));
+}
+@utility bottom-safe-or-* {
+  bottom: max(var(--adaptv-inset-bottom, 0px), --spacing(--value(integer, [integer])));
+}
+@utility left-safe-or-* {
+  left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
 }

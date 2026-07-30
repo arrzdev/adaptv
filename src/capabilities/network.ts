@@ -5,7 +5,12 @@
 //
 //Exposed as a plain subscribe/get pair (not just a hook) so it can also feed a data
 //layer — e.g. TanStack Query's `onlineManager` — so query pause/resume is accurate
-//on every target. `useNetworkStatus` is a thin `useSyncExternalStore` over this.
+//on every target. `useIsOffline` is a thin `useSyncExternalStore` over this.
+//
+//The accessor stays phrased positively (`getOnline`) while the hook is phrased
+//negatively (`useIsOffline`) on purpose: this layer reports the raw signal, and the
+//hook names the only direction that signal is trustworthy in (`false` means offline;
+//`true` only means an interface exists, not that anything is reachable).
 import type { PluginListenerHandle } from "@capacitor/core"
 import { Network } from "@capacitor/network"
 import { isNativePlatform } from "#adaptv/utils/platform"

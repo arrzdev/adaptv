@@ -2,8 +2,10 @@ export {
   type AdaptvAppConfig,
   type AdaptvPatches,
   type AdaptvRouterConfig,
+  type AdaptvUiConfig,
   defineApp,
   type ScreenThunk,
+  type UiPatchScope,
 } from "../config/app-config.ts"
 export {
   defineSwConfig,

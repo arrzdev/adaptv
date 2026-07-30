@@ -1,6 +1,7 @@
 import type { RefObject } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
+import { useInsets } from "#adaptv/hooks/use-insets"
 import {
   useKeyboard,
   willOpenVirtualKeyboard,
@@ -141,22 +142,6 @@ export function computeScrollIntoViewTop({
  * DOM HELPERS
  * ============================================================================= */
 
-/** Measure the safe-area bottom inset in px (0 when unsupported or no inset). Reads
- * the `--safe-bottom` contract var (styles/safe-area.css), so it picks up Capacitor's
- * injected value on Android WebView < 140 rather than the bare — and there, wrong —
- * native inset. An undefined var makes the probe height invalid → 0, which matches the
- * "0 when unsupported" contract. */
-function readSafeAreaInsetBottom(): number {
-  if (typeof document === "undefined") return 0
-  const probe = document.createElement("div")
-  probe.style.cssText =
-    "position:fixed;left:0;bottom:0;width:0;visibility:hidden;pointer-events:none;height:var(--safe-bottom)"
-  document.documentElement.appendChild(probe)
-  const inset = probe.getBoundingClientRect().height
-  probe.remove()
-  return inset
-}
-
 function isScrollable(node: Element): boolean {
   if (!(node instanceof HTMLElement)) return false
 
@@ -247,7 +232,6 @@ export function useKeyboardAvoidance({
   const keyboard = useKeyboard({ isEnabled })
   const reducedMotion = useReducedMotion()
   const [space, setSpace] = useState(0)
-  const [safeInsetBottom, setSafeInsetBottom] = useState(0)
   //the element's resting padding/margin (its design gap from className/style), so the
   //obstruction reservation stacks on top of it instead of replacing it
   const baseSpaceRef = useRef(0)
@@ -268,19 +252,10 @@ export function useKeyboardAvoidance({
       ) || 0
   }, [behavior, containerRef])
 
-  //track the home-indicator inset (stable per orientation, not per keyboard)
-  useEffect(() => {
-    function measure() {
-      setSafeInsetBottom(readSafeAreaInsetBottom())
-    }
-    measure()
-    window.addEventListener("resize", measure)
-    window.addEventListener("orientationchange", measure)
-    return () => {
-      window.removeEventListener("resize", measure)
-      window.removeEventListener("orientationchange", measure)
-    }
-  }, [])
+  //the home-indicator inset (stable per orientation, not per keyboard). `useInsets` owns
+  //the measurement now — one probe technique, one set of contract vars, and it also watches
+  //the Capacitor SystemBars injection that the local `resize`/`orientationchange` pair missed.
+  const { bottom: safeInsetBottom } = useInsets()
 
   //reserve room for the bottom obstruction — the keyboard when open, or the home-indicator
   //safe area when this element reaches the screen bottom — whichever is larger, plus the gap

@@ -1,6 +1,25 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * utils — custom variants + scroll / tap / selection helpers
- * ═══════════════════════════════════════════════════════════════════════════ */
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `@utility` and `@custom-variant` cannot be nested in `@layer` (Tailwind
+ * rejects it), and they don't need to be: everything here compiles into
+ * Tailwind's own `utilities` layer, which the consumer's
+ * `@layer theme, base, adaptv, components, utilities;` statement places AFTER
+ * `adaptv` — so these utilities beat the resets in patches.css on layer order
+ * alone, and unlayered consumer CSS still beats them. That is what let the
+ * cascade-only `!important`s go (STYLING.md §6.0.1).
+ *
+ * `app:` / `web:` below are the COMPLETE set of variants adaptv INVENTS,
+ * deliberately. They earn their keep because the CSS path costs zero re-renders;
+ * they are not a pattern to grow. Per-OS styling stays a hand-written
+ * `[data-adaptv-os="ios"] &` selector, and `not-data-keyboard-open:` already
+ * composes in v4 — neither needs a variant of its own.
+ *
+ * Press feedback is deliberately NOT here: it is a correction to the built-in
+ * `active:` (patches.css), not a new name. A variant the consumer has to learn is
+ * a worse fix than one that reaches the code they already write.
+ */
 
 /*
  * "installed app" vs "browser tab" styling.
@@ -27,19 +46,13 @@
   }
 }
 
-/*
- * Press feedback hook. useGestureEngine sets `data-pressed` on the element while
- * the pointer is down inside the press region, and clears it the moment the
- * finger drags out — reentrant, and restored when it slides back in. This is the
- * source of truth for press visuals (native :active can't be cleared from JS and
- * won't re-light on touch re-entry), so prefer `pressed:` over `active:` on any
- * gesture-engine-driven element. Pointer-only: keyboard activation never sets it.
- */
-@custom-variant pressed (&[data-pressed]);
-
+/* opt back into text selection over the `ui.noSelect` reset in patches.css (which
+ * is stamped on <html> and therefore only live where the app asked for it). No
+ * `!important`: `utilities` is a later cascade layer than `adaptv.reset`, so this
+ * wins on layer order at zero specificity, whatever the reset's selector costs. */
 @utility selectable {
-  -webkit-user-select: text !important;
-  user-select: text !important;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /*
@@ -56,21 +69,9 @@
  * handle — strands its gesture state machine on iOS under the shorthand. Do not
  * "simplify" this back; src/styles/utils.test.ts guards it.
  */
-@utility clickable {
-  touch-action: pan-x pan-y pinch-zoom;
-  cursor: pointer;
-}
 
-@utility hardware-boosted {
-  will-change: auto;
-}
-
-@utility non-clickable {
-  touch-action: none;
-  cursor: not-allowed;
-  -webkit-user-select: none !important;
-  user-select: none !important;
-}
+/* the selection lock beats the `input, textarea` opt-out in patches.css on layer
+ * order (`utilities` after `adaptv.reset`) — no `!important` needed */
 
 /*
  * Single-axis scrollers must pin the cross axis. Setting overflow on one axis
@@ -78,32 +79,60 @@
  * single-axis scroller silently becomes scrollable both ways — a child that
  * overflows the cross axis then rubber-bands/overscrolls the container off-axis.
  * `hidden` clips identically to the implicit `auto` but kills the stray scroll.
+ *
+ * Deliberately NO layer-promotion hint here — no `will-change`, no `translate3d`.
+ * Both target engines already composite every scroller: WebKit accelerates all
+ * `overflow: scroll` since Safari 13 / iOS 13 (which is why
+ * `-webkit-overflow-scrolling: touch` became a no-op), and Chromium's scroll
+ * unification hands every scroller to the compositor in `cc/input`. So a hint here
+ * buys a layer the scroller already has, and pays for it: any of `will-change:
+ * transform` / `transform` / `perspective` / `backface-visibility` makes the
+ * scroller a containing block for its `position: fixed` and `absolute` descendants
+ * (css-transforms-1 §3, css-will-change §2) — a fixed child inside a scroller stops
+ * being fixed. Ionic goes further and documents that `translate3d` on a scroll
+ * container DEFEATS WebKit's layer-backing-sharing optimisation and degrades
+ * scrolling (WebKit bug 216701); they use `z-index: 0` instead. → PERFORMANCE-BOOST.md
  */
-@utility scrollable-x {
-  overflow-x: auto;
-  overflow-y: hidden;
-  touch-action: pan-x;
-  /* keep the local rubber-band, but never chain the overscroll to the page —
-   * lets iOS bounce natively without the JS boundary lock bleeding to the shell */
-  overscroll-behavior-x: contain;
-  @apply hardware-boosted;
-}
+/*
+ * ⚠︎ `touch-action` here allows BOTH pan axes, and that is the whole point.
+ *
+ * These used to be single-axis (`pan-x` on `scrollable-x`, `pan-y` on
+ * `scrollable-y`), which reads as obviously correct and is a serious bug:
+ * `touch-action` restricts the WHOLE gesture that starts on the element, not just
+ * that element's own scrolling. A horizontal strip with `pan-x` therefore made a
+ * vertical swipe starting on it scroll NOTHING — not the strip, not the page behind
+ * it. Measured with CDP touch injection (`e2e/scroll-axis.spec.ts`): page moved 0px
+ * with `pan-x`, 195px with both axes.
+ *
+ * Allowing both does NOT cost cross-axis bleed, because the browser already
+ * performs directional lock itself. Same measurement, diagonal drag dominated by
+ * horizontal: the strip moved 200px and the page moved 0. That is why adaptv has no
+ * JS directional lock — it had one, it was iOS-only, and it was solving a problem
+ * the platform had already solved while this CSS created a worse one.
+ *
+ * The longhand rather than `manipulation` is WebKit 240917, as in `clickable`.
+ */
 
-@utility scrollable-y {
-  overflow-y: auto;
-  overflow-x: hidden;
-  touch-action: pan-y;
-  overscroll-behavior-y: contain;
-  @apply hardware-boosted;
-}
 
-@utility scrollable {
-  overflow: auto;
-  touch-action: auto;
-  overscroll-behavior: contain;
-}
 
 /* hide the scrollbar without disabling scroll (RN shows*ScrollIndicator={false}) */
+/*
+ * The per-scroller ESCAPE from the app-wide `ui.hideScrollbars` reset.
+ *
+ * The reset lives in `adaptv.reset`; both of these are `@utility`, so they compile
+ * into Tailwind's `utilities` layer, which is ordered AFTER `adaptv`. That ordering
+ * is the entire mechanism: without `scrollbar-visible` a `ScrollView` could hide its
+ * indicator but never show one, because the global rule had already won and the
+ * component had nothing louder to say. The symptom was a prop that worked in a
+ * browser tab and silently did nothing in an installed PWA.
+ */
+@utility scrollbar-visible {
+  scrollbar-width: auto;
+  &::-webkit-scrollbar {
+    display: initial;
+  }
+}
+
 @utility scrollbar-hidden {
   scrollbar-width: none;
   &::-webkit-scrollbar {

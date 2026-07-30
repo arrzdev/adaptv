@@ -1,5 +1,9 @@
 import type { ComponentPropsWithRef, MouseEvent } from "react"
 import { openExternal } from "#adaptv/capabilities/browser"
+import {
+  PRESS_TARGET_CURSOR_CLASS,
+  PRESS_TARGET_LOCKED_CLASS,
+} from "#adaptv/components/press-core"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 const EXTERNAL_LINK_BASE_CLASS = "text-left no-underline"
@@ -48,15 +52,16 @@ export function ExternalLink({
 
   return (
     <a
+      data-adaptv="external-link"
       {...props}
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       onClick={handleClick}
       className={mergeStyles({
-        base: EXTERNAL_LINK_BASE_CLASS,
+        base: [EXTERNAL_LINK_BASE_CLASS, PRESS_TARGET_CURSOR_CLASS],
         className,
-        locked: "clickable",
+        locked: PRESS_TARGET_LOCKED_CLASS,
       })}
     >
       {children}

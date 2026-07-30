@@ -1,21 +1,45 @@
 /*
- * PWA styles — @import "@arrzdev/adaptv/styles.css" from app main.css after tailwind + safe-area.
+ * adaptv styles — `@import "@arrzdev/adaptv/styles.css"` from the app's main.css,
+ * AFTER `@import "tailwindcss"`.
+ *
+ * ⚠︎ The app's entry stylesheet MUST open with this line, BEFORE every `@import`
+ * (STYLING.md §6.0):
+ *
+ *     @layer theme, base, adaptv, components, utilities;
+ *
+ * The `adaptv()` vite plugin now WRITES that line into the app's Tailwind entry
+ * stylesheet for you (`adaptv:css-layer-order`, idempotent — a hand-written one is
+ * left alone), and warns if it cannot find one. The rest of this note stands because
+ * the CSS reason is unchanged, and because a build without that plugin still needs it.
+ *
+ * CSS fixes layer order by FIRST MENTION, and a name first mentioned in a later
+ * statement is APPENDED, not inserted. Without that line `adaptv` registers here —
+ * after `utilities` — and every rule below starts beating the app's Tailwind
+ * utilities, which looks exactly like a adaptv bug. The statement is the only
+ * rule (besides `@charset`) the spec allows before `@import`, which is why it
+ * has to live in the app and cannot be shipped from inside this file.
  */
+@layer adaptv.reset, adaptv.patches, adaptv.components, adaptv.utilities;
+
 @source "../**/*.{ts,tsx}";
 
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant light (&:where(.light, .light *));
 
-/* 1. The safe-area inset contract (reroutes tailwindcss-safe-area var-first). Must
- *    load after the plugin — which it does: the app imports this bundle after it. */
+/* 1. Runtime-value contracts (STYLING.md §4) — the safe-area insets and the
+ *    keyboard height, plus the safe-area utility families built on them. */
 @import "./safe-area.css";
+@import "./keyboard.css";
 
 /* 2. Reset rules and platform patches */
 @import "./patches.css";
 
-/* 3. Component-owned styles (drawer keyframes + caret patch) */
+/* 3. Component-owned styles (drawer keyframes, swipeable layout, Text's Dynamic Type) */
+@import "./screen.css";
+@import "./scroll-fade.css";
 @import "./drawer.css";
 @import "./swipeable.css";
+@import "./text.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";

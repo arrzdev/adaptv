@@ -1,6 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
-@import "tailwindcss-safe-area";
 @import "@arrzdev/adaptv/styles.css";
 @import "./animations.css";
 
@@ -20,6 +19,30 @@ textarea:-webkit-autofill:active {
   caret-color: var(--foreground) !important;
   -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
   transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ── Testing → Cascade layers ─────────────────────────────────────────────────
+   These two rules are UNLAYERED on purpose: they are the demonstration itself,
+   and moving them into a @layer would delete the thing being demonstrated.
+
+   `@arrzdev/adaptv/styles.css` sets `input[type="text"] { line-height: 1.5 }`
+   inside `@layer adaptv.reset`, at specificity (0,1,1). The rule below is LESS
+   specific (0,1,0) and carries no `!important`, and it must still win, because
+   an unlayered author rule outranks every layered one whatever the specificity.
+   That is the promise §6.0.1 makes when it BANS `!important` from adaptv's CSS:
+   the consumer never has to fight, so adaptv never has to escalate.
+
+   If either of these stops winning, adaptv's rules have escaped their layer and
+   every override in every consuming app has quietly become a specificity war.
+   Used only by the Testing → Cascade layers page. */
+.lab-unlayered-line-height {
+  line-height: 3;
+}
+
+/* Same shape against `@layer adaptv.patches`, which kills the grey tap flash on
+   `a[href]` (0,1,1). This class is (0,1,0) and puts a loud one back. */
+.lab-unlayered-tap-highlight {
+  -webkit-tap-highlight-color: rgb(240 125 61 / 0.5);
 }
 
 :root {

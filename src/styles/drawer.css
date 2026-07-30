@@ -2,6 +2,11 @@
  * Drawer engine styles. The panel/backdrop opacity is JS-driven (see drawer-motion.ts);
  * these rules cover the keyframe fallback for the overlay fade. The iOS caret-repaint patch
  * is now app-wide — see hooks/use-caret-repaint.ts + styles/patches.css.
+ *
+ * Layered in `adaptv.components` (STYLING.md §6) so a consumer restyles the overlay with an
+ * ordinary unlayered rule. `@keyframes` stays outside the layer: keyframe names are resolved
+ * from a single flat namespace where the LAST definition wins regardless of layer, so putting
+ * it in a layer would buy nothing and only obscure that.
  */
 
 /* Mirrored from vaul style.css — overlay fade on open/close */
@@ -25,41 +30,53 @@
   }
 }
 
-[data-pwa-drawer-overlay] {
-  animation-duration: var(--pwa-drawer-overlay-duration, 0.5s);
-  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-  /* The backdrop is a <button>; suppress iOS's tap highlight and the focus ring so a tap
-     fades it out cleanly instead of flashing a highlight over the dim layer. */
-  -webkit-tap-highlight-color: transparent;
-}
-
-[data-pwa-drawer-overlay]:focus,
-[data-pwa-drawer-overlay]:focus-visible {
-  outline: none;
-}
-
-[data-pwa-drawer-overlay][data-state="open"] {
-  animation-name: pwa-drawer-overlay-fade-in;
-  animation-fill-mode: both;
-}
-
-[data-pwa-drawer-overlay][data-state="closed"] {
-  animation-name: pwa-drawer-overlay-fade-out;
-  animation-fill-mode: forwards;
-}
-
-[data-pwa-drawer-overlay][data-animate="false"],
-[data-pwa-drawer-overlay][data-dragging="true"] {
-  animation: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
+@layer adaptv.components {
   [data-pwa-drawer-overlay] {
-    animation: none !important;
+    animation-duration: var(--pwa-drawer-overlay-duration, 0.5s);
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    /* The backdrop is a <button>; suppress iOS's tap highlight and the focus ring so a tap
+     fades it out cleanly instead of flashing a highlight over the dim layer. */
+    -webkit-tap-highlight-color: transparent;
   }
-}
 
-[data-pwa-drawer] :is(input, textarea, [contenteditable]) {
-  -webkit-text-size-adjust: none !important;
-  text-size-adjust: none !important;
+  [data-pwa-drawer-overlay]:focus,
+  [data-pwa-drawer-overlay]:focus-visible {
+    outline: none;
+  }
+
+  [data-pwa-drawer-overlay][data-state="open"] {
+    animation-name: pwa-drawer-overlay-fade-in;
+    animation-fill-mode: both;
+  }
+
+  [data-pwa-drawer-overlay][data-state="closed"] {
+    animation-name: pwa-drawer-overlay-fade-out;
+    animation-fill-mode: forwards;
+  }
+
+  /* The `!important`s here were cascade-only (§6.0.1). These rules already beat the
+   * two above: equal specificity (0,2,0), declared later in the same layer, and the
+   * `animation` shorthand resets `animation-name`/`-fill-mode` outright. */
+  [data-pwa-drawer-overlay][data-animate="false"],
+  [data-pwa-drawer-overlay][data-dragging="true"] {
+    animation: none;
+  }
+
+  /* `[data-state]` is carried purely for specificity: the bare
+   * `[data-pwa-drawer-overlay]` this used to select is (0,1,0) and would now LOSE to the
+   * `[data-state="open"]` rule above, which the dropped `!important` had been hiding.
+   * Matching it at (0,2,0) and declaring it later wins on source order instead. */
+  @media (prefers-reduced-motion: reduce) {
+    [data-pwa-drawer-overlay][data-state] {
+      animation: none;
+    }
+  }
+
+  /* iOS inflates text in a transformed subtree unless the adjustment is pinned. Tailwind's
+   * preflight sets `-webkit-text-size-adjust: 100%` on <html>, but that lives in `@layer base`
+   * — an earlier layer — so this wins with no `!important`. */
+  [data-pwa-drawer] :is(input, textarea, [contenteditable]) {
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+  }
 }

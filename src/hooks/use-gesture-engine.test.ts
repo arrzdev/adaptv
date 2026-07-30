@@ -3,6 +3,10 @@ import type { KeyboardEvent, MouseEvent, PointerEvent } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 
+//mirrors the engine's own constants (Ionic's ADD_ACTIVATED_DEFERS / CLEAR_STATE_DEFERS)
+const SHOW_PRESSED_AFTER_MS = 100
+const MIN_PRESSED_MS = 150
+
 /* =============================================================================
  * SYNTHETIC EVENTS — the engine only reads these fields off the events it's
  * handed, so a plain object cast to the React type is enough to drive it.
@@ -189,6 +193,10 @@ describe("useGestureEngine", () => {
 
   describe("press region (reentrant)", () => {
     it("re-enters and still taps after the finger drags out and back in", () => {
+      //iOS UIControl behaviour: the press survives the finger leaving, so long as it
+      //comes back before release. The visual follows the same deferred rule on the way
+      //back in — it is re-armed, not stamped.
+      vi.useFakeTimers()
       const onPressUp = vi.fn()
       const onStateChange = vi.fn()
       const { result } = renderHook(() =>
@@ -201,19 +209,27 @@ describe("useGestureEngine", () => {
           pointerDown({ clientX: 50, clientY: 50 }, target),
         ),
       )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS)
+      })
       expect(target.hasAttribute("data-pressed")).toBe(true)
 
-      //drag well outside the frame — press disarms, visual drops
+      //drag well outside the frame — press disarms, visual drops at once (a press
+      //the finger has left is over; the minimum-duration floor is for taps)
       act(() => result.current.onPointerMove(pointerAt(200, 200)))
       expect(onStateChange).toHaveBeenCalledWith("outside")
       expect(target.hasAttribute("data-pressed")).toBe(false)
 
-      //slide back in — press re-arms, visual returns
+      //slide back in — press re-arms, visual returns after the same defer
       act(() => result.current.onPointerMove(pointerAt(50, 50)))
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS)
+      })
       expect(target.hasAttribute("data-pressed")).toBe(true)
 
       act(() => result.current.onPointerUp(pointerAt(50, 50)))
       expect(onPressUp).toHaveBeenCalledTimes(1)
+      vi.useRealTimers()
     })
 
     it("does not tap when released outside the region", () => {
@@ -402,8 +418,21 @@ describe("useGestureEngine", () => {
     })
   })
 
+  /*
+   * The press visual is DEFERRED, and that is the feature.
+   *
+   * Reported: "if I just layed the finger down and swiped, not even the pressed style
+   * should be activated". A touch that the browser decides is a scroll arrives as
+   * `pointercancel` a few frames after `pointerdown` — so any engine that paints on
+   * `pointerdown` flashes every single scroll that happens to start on a control.
+   * Ionic solved this in `tap-click` with a 100ms defer before showing and a 150ms
+   * floor once shown (PRIOR-ART.md §6); adaptv adopts the same pair.
+   *
+   * These tests use fake timers because the whole contract IS the timing.
+   */
   describe("press visual flag (data-pressed)", () => {
-    it("sets data-pressed while held inside and clears it on drag out", () => {
+    it("does not paint on pointerdown — it waits out the scroll-vs-tap window", () => {
+      vi.useFakeTimers()
       const { result } = renderHook(() =>
         useGestureEngine({ onPressUp: vi.fn() }),
       )
@@ -414,10 +443,78 @@ describe("useGestureEngine", () => {
           pointerDown({ clientX: 50, clientY: 50 }, target),
         ),
       )
+      expect(
+        target.hasAttribute("data-pressed"),
+        "painting here is what makes every scroll flash",
+      ).toBe(false)
+
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS)
+      })
       expect(target.hasAttribute("data-pressed")).toBe(true)
 
       act(() => result.current.onPointerMove(pointerAt(200, 200)))
       expect(target.hasAttribute("data-pressed")).toBe(false)
+      vi.useRealTimers()
+    })
+
+    it("a finger laid down and swiped never lights the control at all", () => {
+      //the reported bug, end to end: down, the browser takes the gesture for a
+      //scroll and cancels the pointer, and no frame in between was ever painted
+      vi.useFakeTimers()
+      const { result } = renderHook(() =>
+        useGestureEngine({ onPressUp: vi.fn() }),
+      )
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS - 20)
+      })
+      act(() => result.current.onPointerCancel(pointerAt(50, 90)))
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+
+      expect(
+        target.hasAttribute("data-pressed"),
+        "the scroll must leave no trace on the control",
+      ).toBe(false)
+      vi.useRealTimers()
+    })
+
+    it("holds the visual for a minimum once shown, so a fast tap is still seen", () => {
+      //the other half of the pair: a tap released 10ms after the visual appeared
+      //would otherwise be a sub-frame flicker the user never perceives
+      vi.useFakeTimers()
+      const { result } = renderHook(() =>
+        useGestureEngine({ onPressUp: vi.fn() }),
+      )
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS + 10)
+      })
+      act(() => result.current.onPointerUp(pointerAt(50, 50)))
+      expect(
+        target.hasAttribute("data-pressed"),
+        "released early — the visual must still be up",
+      ).toBe(true)
+
+      act(() => {
+        vi.advanceTimersByTime(MIN_PRESSED_MS)
+      })
+      expect(target.hasAttribute("data-pressed")).toBe(false)
+      vi.useRealTimers()
     })
 
     it("leaves no data-pressed flag after a clean tap", () => {
@@ -452,6 +549,24 @@ describe("useGestureEngine", () => {
         } as unknown as KeyboardEvent),
       )
       expect(target.hasAttribute("data-pressed")).toBe(false)
+    })
+  })
+
+  describe("data-press-engine — the marker the `active:` variant branches on", () => {
+    //without it the patched variant cannot tell an engine target from a plain
+    //element, and would have to pick one of them to break
+    it("ships in the handler bag, so it lands with the first paint", () => {
+      const { result } = renderHook(() => useGestureEngine({}))
+      expect(result.current["data-press-engine"]).toBe("")
+    })
+
+    it("is present even when the engine is disabled", () => {
+      //a disabled target still must not light on native :active — the engine owns
+      //the press state whether or not it is currently accepting gestures
+      const { result } = renderHook(() =>
+        useGestureEngine({ disabled: true }),
+      )
+      expect(result.current["data-press-engine"]).toBe("")
     })
   })
 })
