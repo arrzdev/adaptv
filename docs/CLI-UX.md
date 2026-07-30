@@ -883,6 +883,21 @@ native build it read as a restart:
 > row claimed to be launching through twenty seconds of compiling. **Announce what STARTS**, and
 > announce again when the work actually changes.
 
+**R49 — A prop Ink does not know is dropped in SILENCE. Check the bytes on a pty.** The whole
+live layer rendered flat white for the entire Ink port — no cyan spinner, no yellow `!`, no dim
+phase — because the roles carried `{ ink: "cyan" }` and the components spread that into
+`<Text>`, which takes `color`. `dim` was wrong the same way; Ink's prop is `dimColor`:
+> ```
+> before   ⠋ ios  compiling                      ← no escapes at all
+> after    \x1b[36m⠋\x1b[39m ios  \x1b[2mcompiling\x1b[22m
+> ```
+> It looked deliberate rather than broken, because `bold` IS a real prop and came through, so
+> the rows were merely flat. **The unit tests cannot catch this**: chalk fixes its colour level
+> from the real stdout when it is imported, and a fake stdout is not a terminal — so under
+> vitest Ink strips every colour whatever the props say, and an assertion there measures the
+> harness. `scripts/check-colour.mjs` runs the components under a pty and greps the bytes; run
+> it after touching `theme.mjs` or any component's props.
+
 ## 5. Before you ship a CLI change
 
 Tests do not cover any of this. Run it and read it:
@@ -934,6 +949,8 @@ Tests do not cover any of this. Run it and read it:
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:
 `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv <cmd>`
+
+And `node scripts/check-colour.mjs` — the live layer's colour is invisible to the test suite (R49).
 
 Stop `dev` runs with **SIGINT** (`pkill -INT -f "adaptv.mjs dev"`), never SIGKILL — SIGKILL skips
 teardown and strands the dev ATS exception in `Info.plist`.

@@ -102,12 +102,12 @@ function Row({ label, phase }) {
   return h(
     Box,
     null,
-    h(Text, { ...ROLE.busy }, frame),
+    h(Text, { ...ROLE.busy.text }, frame),
     h(Text, null, ` ${label}  `),
     h(
       Box,
       { flexShrink: 1, overflow: "hidden" },
-      h(Text, { ...ROLE.quiet, wrap: "truncate-end" }, phase),
+      h(Text, { ...ROLE.quiet.text, wrap: "truncate-end" }, phase),
     ),
   )
 }
@@ -186,12 +186,16 @@ function Picker({ bus, message, options }) {
         Text,
         { key: String(o.value ?? i) },
         i === index
-          ? h(Text, { ...ROLE.busy }, "  › ")
+          ? h(Text, { ...ROLE.key.text }, "  › ")
           : h(Text, null, "    "),
-        h(Text, i === index ? { bold: true } : { ...ROLE.quiet }, o.label),
+        h(
+          Text,
+          i === index ? { bold: true } : { ...ROLE.quiet.text },
+          o.label,
+        ),
       ),
     ),
-    h(Text, { ...ROLE.quiet }, "  ↑↓ move · ↵ select · esc cancel"),
+    h(Text, { ...ROLE.quiet.text }, "  ↑↓ move · ↵ select · esc cancel"),
   )
 }
 

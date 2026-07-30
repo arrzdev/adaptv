@@ -9,6 +9,11 @@
 >
 > The executable half of this document is `bin/ui/theme.mjs`. Where the two disagree, the code
 > is wrong.
+>
+> A role's `text` is spread straight into an Ink `<Text>`, which knows `color`, `dimColor` and
+> `bold` and **silently drops anything else** — that mistake once left the entire live layer
+> colourless without a single test failing. Verify with `node scripts/check-colour.mjs`, never
+> by reading the props (`CLI-UX.md` R49).
 
 ---
 
@@ -75,7 +80,8 @@ loss of meaning — which is the test for whether you have used it as decoration
 | something to act on | **yellow** | `!` |
 | work in progress | **cyan** | the spinner |
 | everything secondary | **dim** | timings, detail, hints, descriptions, paths |
-| emphasis | **bold** | a section heading, a key the dev should press, a device name |
+| a key you can PRESS | **cyan bold** | `r`, `b`, `ctrl-c`, `↑↓`, `↵` — an offer, not a statement |
+| emphasis | **bold** | a section heading, a device name |
 
 Dim carries 35 of the ~70 colour calls in the renderer, and that ratio is the point: **the page
 is mostly quiet, and the few bright things are the ones that matter.**

@@ -56,21 +56,46 @@ export const FRAME_MS = 80
  * defined once and each renderer reads its own dialect.
  * -------------------------------------------------------------------------- */
 
+// `text` is SPREAD STRAIGHT INTO an Ink `<Text>`, and that is the whole reason it exists.
+// The roles used to carry `{ ink: "cyan" }` and the components spread that, which handed Ink a
+// prop called `ink` — not one it has. Every live region rendered with NO COLOUR AT ALL for the
+// whole port: no cyan spinner, no yellow `!`, no dim phase. It failed silently and looked
+// deliberate, because `bold` and `dim` ARE real `<Text>` props and came through by accident,
+// so the rows were merely flat rather than obviously broken.
+//
+// The prop is `dimColor`, NOT `dim` — Ink's name, and the reason `quiet` was flat too. Both
+// mistakes are the same mistake: a prop Ink does not know is silently dropped, so the only
+// honest check is the BYTES on a real terminal. `docs/CLI-UX.md` R49 has the pty one-liner.
+//
+// `quiet` maps to `dim` alone, NOT `color: "gray"` plus dim. The settled rows are written by the
+// string renderer as ANSI 2 (dim), and a live row that is gray AND dim visibly changes shade the
+// moment it settles into a ✓. The two halves have to agree — that is what `ansi` is here for.
 export const ROLE = {
   /** The word `adaptv`, once per command. */
-  brand: { ink: "magenta", bold: true, ansi: 35 },
+  brand: { ansi: 35, text: { color: "magenta", bold: true } },
   /** `✓` */
-  ok: { ink: "green", ansi: 32 },
+  ok: { ansi: 32, text: { color: "green" } },
   /** `✖` */
-  fail: { ink: "red", ansi: 31 },
+  fail: { ansi: 31, text: { color: "red" } },
   /** `!` */
-  notice: { ink: "yellow", ansi: 33 },
+  notice: { ansi: 33, text: { color: "yellow" } },
   /** The spinner — work in progress. */
-  busy: { ink: "cyan", ansi: 36 },
+  busy: { ansi: 36, text: { color: "cyan" } },
   /** Timings, detail, hints, descriptions, paths. MOST of the page. */
-  quiet: { ink: "gray", dim: true, ansi: 2 },
-  /** A heading, a key to press, a device name. */
-  strong: { ink: undefined, bold: true, ansi: 1 },
+  quiet: { ansi: 2, text: { dimColor: true } },
+  /** A heading, a device name — emphasis that is not a thing you can press. */
+  strong: { ansi: 1, text: { bold: true } },
+  /**
+   * A KEY THE DEV CAN PRESS: `r`, `b`, `ctrl-c`, `↑↓`, `↵`.
+   *
+   * Its own role rather than `strong`, because it is the one thing on the page that is not a
+   * statement — it is an offer. Bold alone left the keys reading as ordinary emphasis in a row
+   * that is otherwise all dim label. Cyan is deliberate and not a clash: it is already "adaptv
+   * is working", and a key is "adaptv can work for you" — the same actor, a different tense.
+   * The spinner and the keys never share a row (the watch block renders one or the other), so
+   * the two never appear at once. If that ever changes, split this off its own colour.
+   */
+  key: { ansi: 36, text: { color: "cyan", bold: true } },
 }
 
 /* -----------------------------------------------------------------------------

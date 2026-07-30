@@ -38,24 +38,24 @@ function Keys({ keys, available }) {
     return h(
       Box,
       null,
-      h(Text, { bold: true }, "ctrl-c"),
-      h(Text, { ...ROLE.quiet }, " stop"),
+      h(Text, { ...ROLE.key.text }, "ctrl-c"),
+      h(Text, { ...ROLE.quiet.text }, " stop"),
     )
   if (!available)
     return h(
       Text,
-      { ...ROLE.quiet },
+      { ...ROLE.quiet.text },
       "keys unavailable (stdin is not a TTY) — run adaptv directly for r/b",
     )
   return h(
     Box,
     null,
-    h(Text, { bold: true }, "r"),
-    h(Text, { ...ROLE.quiet }, " reload js   "),
-    h(Text, { bold: true }, "b"),
-    h(Text, { ...ROLE.quiet }, " rebuild app   "),
-    h(Text, { bold: true }, "ctrl-c"),
-    h(Text, { ...ROLE.quiet }, " stop"),
+    h(Text, { ...ROLE.key.text }, "r"),
+    h(Text, { ...ROLE.quiet.text }, " reload js   "),
+    h(Text, { ...ROLE.key.text }, "b"),
+    h(Text, { ...ROLE.quiet.text }, " rebuild app   "),
+    h(Text, { ...ROLE.key.text }, "ctrl-c"),
+    h(Text, { ...ROLE.quiet.text }, " stop"),
   )
 }
 
@@ -64,12 +64,12 @@ function Notice({ text }) {
   return h(
     Box,
     null,
-    h(Text, { ...ROLE.notice }, GLYPH.notice),
+    h(Text, { ...ROLE.notice.text }, GLYPH.notice),
     h(Text, null, " "),
     h(Text, { bold: true }, text),
-    h(Text, { ...ROLE.quiet }, "  · press "),
-    h(Text, { bold: true }, "b"),
-    h(Text, { ...ROLE.quiet }, " to rebuild and see the changes"),
+    h(Text, { ...ROLE.quiet.text }, "  · press "),
+    h(Text, { ...ROLE.key.text }, "b"),
+    h(Text, { ...ROLE.quiet.text }, " to rebuild and see the changes"),
   )
 }
 
@@ -80,10 +80,10 @@ function Activity({ changed, keys, available }) {
   return h(
     Box,
     null,
-    h(Text, { ...ROLE.busy }, frame),
+    h(Text, { ...ROLE.busy.text }, frame),
     h(Text, null, " "),
-    h(Text, { bold: true }, "watching"),
-    h(Text, { ...ROLE.quiet }, `  ↻ ${changed}`),
+    h(Text, { ...ROLE.strong.text }, "watching"),
+    h(Text, { ...ROLE.quiet.text }, `  ↻ ${changed}`),
   )
 }
 

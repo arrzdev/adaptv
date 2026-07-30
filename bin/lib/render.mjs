@@ -556,7 +556,11 @@ export function liveWatcher({ keys = true } = {}) {
   //     browser reloads itself; there is no binary to rebuild.
   //   - raw mode may be unavailable (stdin isn't a TTY), in which case NO key arrives.
   // ctrl-c always works, so it is always worth saying.
-  const stop = `${c.bold("ctrl-c")}${c.dim(" stop")}`
+  //A pressable key gets ROLE.key (cyan bold), never plain bold — see the note in `theme.mjs`.
+  //Both renderers draw this row, so they have to agree on it or the block changes colour the
+  //moment `ADAPTV_INK=0` is set.
+  const key = (s) => c.cyan(c.bold(s))
+  const stop = `${key("ctrl-c")}${c.dim(" stop")}`
   //no leading separator: this row IS the hints now, not a suffix on `✓ watching`
   const dot = "  "
   const hint = !keys
@@ -564,7 +568,7 @@ export function liveWatcher({ keys = true } = {}) {
     : keysAvailable()
       ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
         // keys, where the bold's reset bleeds and the key ends up gray.
-        `${dot}${c.bold("r")}${c.dim(" reload js")}   ${c.bold("b")}${c.dim(" rebuild app")}   ${stop}`
+        `${dot}${key("r")}${c.dim(" reload js")}   ${key("b")}${c.dim(" rebuild app")}   ${stop}`
       : `${dot}${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
   // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
   // and the row still animates on HMR — the spinner is what says "working", not a word.
@@ -598,7 +602,7 @@ export function liveWatcher({ keys = true } = {}) {
     //from a row hand-spacing its own separator (R31).
     const rows = notice
       ? [
-          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${c.bold("b")}${c.dim(" to rebuild and see the changes")}`,
+          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${key("b")}${c.dim(" to rebuild and see the changes")}`,
           "",
           activity,
         ]
