@@ -102,12 +102,22 @@ describe("distance", () => {
 })
 
 describe("the shape of the surface", () => {
-  it("matches the two-word command before the one-word one", () => {
-    expect(
-      matchCommand(["gen", "icons", "--input", "x"]).cmd.path,
-    ).toEqual(["gen", "icons"])
+  it("prefers the longest match, and separates the command from its rest", () => {
+    //`matchCommand` still tries two words before one. Nothing uses that today — `gen icons`
+    //became `icons` — but a namespace is the sort of thing that comes back, and the rule is
+    //what stops `gen` matching before `gen icons` when it does.
+    expect(matchCommand(["icons", "--input", "x"]).cmd.path).toEqual([
+      "icons",
+    ])
     expect(matchCommand(["dev", "ios"]).rest).toEqual(["ios"])
     expect(matchCommand(["nope"]).cmd).toBeNull()
+  })
+
+  it("never suggests the word that was just typed", () => {
+    //`commandNames()` returns `path[0]`, so while `gen icons` existed it contributed the
+    //candidate `gen`, and `adaptv gen` answered: unknown command 'gen', did you mean 'gen'?
+    for (const name of commandNames())
+      expect(suggest(name, commandNames())).not.toContain(name)
   })
 
   it("writes a synopsis for every command", () => {
@@ -165,8 +175,10 @@ describe("the copy reads like a person wrote it", () => {
 
   it("uses no marketing filler", () => {
     //Never had any, and this is what keeps it that way.
+    //No `unlock` or `elevate`: both have literal uses here ("Unlock it and keep it unlocked
+    //while installing"), and a rule that flags correct copy is a rule that gets switched off.
     const SLOP =
-      /\b(seamless(ly)?|robust|powerful|effortless(ly)?|simply|easily|leverage|utilize|streamline|innovative|comprehensive|blazing|delightful|unlock|empower|elevate)\b/i
+      /\b(seamless(ly)?|robust|powerful|effortless(ly)?|simply|easily|leverage|utilize|streamline|innovative|comprehensive|blazing|delightful|empower)\b/i
     for (const s of [...summaries, ...describes, SPEC.tagline])
       expect({ s }).toSatisfy(({ s: t }) => !SLOP.test(t))
   })

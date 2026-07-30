@@ -713,7 +713,7 @@ export async function capAddIfMissing(
   }
   if (!platformInstalled) {
     throw new Error(
-      `@capacitor/${platform} is missing from adaptv's install — reinstall adaptv ` +
+      `@capacitor/${platform} is missing from adaptv's install. Reinstall adaptv ` +
         `(this is a framework packaging issue, not something to add to your app).`,
     )
   }
@@ -843,9 +843,7 @@ async function injectIosPluginPods(
   for (const name of [...adaptvCapacitorNativePkgs(), ...plugins]) {
     const dir = resolvePkgDir(name)
     if (!dir) {
-      report?.(
-        `! plugin ${name} not found — skipped (did you install it?)`,
-      )
+      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
       continue
     }
     const rel = path.relative(podfileDir, dir)
@@ -1096,7 +1094,7 @@ export function explainLaunchFailure(platform, text = "") {
         msg: "iOS code signing isn't set up for a device build",
         fix: [
           "open .adaptv/ios/App/App.xcworkspace → App target → Signing & Capabilities → pick your Team",
-          "(add your Apple ID in Xcode → Settings → Accounts — a free one works)",
+          "(add your Apple ID in Xcode → Settings → Accounts; a free one works)",
         ],
       }
     if (/Developer Mode|enable-developer-mode|DVTDeviceOperation/i.test(t))

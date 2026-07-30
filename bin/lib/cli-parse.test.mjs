@@ -56,26 +56,19 @@ describe("what used to be accepted in silence", () => {
   })
 
   it("refuses a --background that is not a colour, which used to silently become white", () => {
-    const r = run([
-      "gen",
-      "icons",
-      "--input",
-      "x.png",
-      "--background",
-      "zzz",
-    ])
+    const r = run(["icons", "--input", "x.png", "--background", "zzz"])
     expect(r.fault).toBe("invalid-value")
     expect(r.message).toContain("hex colour")
   })
 
   it("refuses a --margin with no value, which used to fall back to the default", () => {
-    expect(
-      run(["gen", "icons", "--input", "x.png", "--margin"]).fault,
-    ).toBe("flag-needs-value")
+    expect(run(["icons", "--input", "x.png", "--margin"]).fault).toBe(
+      "flag-needs-value",
+    )
   })
 
   it("refuses an out-of-range --margin", () => {
-    const r = run(["gen", "icons", "--input", "x.png", "--margin", "90"])
+    const r = run(["icons", "--input", "x.png", "--margin", "90"])
     expect(r.fault).toBe("invalid-value")
     expect(r.message).toContain("between 0 and 50")
   })
@@ -92,9 +85,9 @@ describe("help and version, which used to be errors", () => {
       help: true,
       path: ["dev"],
     })
-    expect(run(["gen", "icons", "--help"])).toMatchObject({
+    expect(run(["icons", "--help"])).toMatchObject({
       help: true,
-      path: ["gen", "icons"],
+      path: ["icons"],
     })
     expect(run(["-h"]).help).toBe(true)
     expect(run([]).help).toBe(true)
@@ -147,8 +140,16 @@ describe("commands and surfaces", () => {
     expect(run(["dev", "ios", "extra"]).fault).toBe("excess-args")
   })
 
-  it("requires --input for gen icons", () => {
-    expect(run(["gen", "icons"]).fault).toBe("missing-flag")
+  it("requires --input for icons", () => {
+    expect(run(["icons"]).fault).toBe("missing-flag")
+  })
+
+  it("sends the old 'gen icons' to 'icons' instead of calling it unknown", () => {
+    //It was renamed because the namespace bought nothing and cost a command that could not be
+    //run: `adaptv gen` answered "unknown command 'gen', did you mean 'gen'?".
+    const r = run(["gen", "icons", "--input", "x.png"])
+    expect(r.fault).toBe("retired-command")
+    expect(r.suggestion).toBe("adaptv icons --input x.png")
   })
 })
 

@@ -128,8 +128,7 @@ export function renderHelp(path) {
 }
 
 /** `— did you mean 'x'?`, or nothing at all when nothing is close enough. */
-const didYouMean = (s) =>
-  s?.length ? ` — did you mean ${orList(s)}?` : ""
+const didYouMean = (s) => (s?.length ? `, did you mean ${orList(s)}?` : "")
 
 /** The one-line synopsis shown under an error, as the dim fix line. */
 const synopsis = (path) => {
@@ -154,9 +153,7 @@ export function renderFault(fault) {
       )
 
     case "retired-command":
-      return usageFail(
-        `${fault.reason} — did you mean '${fault.suggestion}'?`,
-      )
+      return usageFail(`${fault.reason}. Try '${fault.suggestion}'`)
 
     case "unknown-flag":
       return usageFail(
@@ -169,7 +166,7 @@ export function renderFault(fault) {
         (x) => `--${x.long}` === fault.long,
       )
       return usageFail(
-        `'${fault.long}' needs a value — ${f?.describe ?? "see --help"}`,
+        `'${fault.long}' needs a value: ${f?.describe ?? "see --help"}`,
       )
     }
 
@@ -178,7 +175,7 @@ export function renderFault(fault) {
         (x) => `--${x.long}` === fault.long,
       )
       return usageFail(
-        `${where.trim() || "this command"} needs '${fault.long}' — ${f?.describe ?? ""}`,
+        `${fault.path?.length ? `'${fault.path.join(" ")}'` : "this command"} needs '${fault.long}': ${f?.describe ?? ""}`,
         synopsis(fault.path),
       )
     }
@@ -189,7 +186,7 @@ export function renderFault(fault) {
 
     case "missing-surface":
       return usageFail(
-        `'${fault.path.join(" ")}' needs a surface — one of ${fault.choices.join(", ")}`,
+        `'${fault.path.join(" ")}' needs a surface: ${orList(fault.choices)}`,
         synopsis(fault.path),
       )
 
@@ -198,7 +195,7 @@ export function renderFault(fault) {
       //names the command that has it rather than listing the ones that don't.
       return usageFail(
         fault.rejection
-          ? `'${fault.path.join(" ")}' has no '${fault.token}' surface — ${fault.rejection}`
+          ? `'${fault.path.join(" ")}' has no '${fault.token}' surface. ${fault.rejection}`
           : `unknown surface '${fault.token}'${where}${didYouMean(fault.suggestions)}`,
         fault.rejection ? [] : synopsis(fault.path),
       )
@@ -232,7 +229,7 @@ export function renderFault(fault) {
         return usageFail(
           `'${cmd}' does not take ${orList(fault.received)}`,
           [
-            "'--host' takes no address — adaptv uses this machine's LAN address",
+            "'--host' takes no address; adaptv uses this machine's LAN address",
             `drop the ip: '${SPEC.name} ${cmd} --host'`,
           ],
         )

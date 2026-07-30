@@ -112,7 +112,7 @@ describe("iconIssue — the one thing the dev may need to act on", () => {
       "ios",
     )
     expect(warning).toBe(
-      "ios launcher icon upscaled from 512px — add a 1024px icon",
+      "ios launcher icon upscaled from 512px. Add a 1024px icon",
     )
   })
 
@@ -124,7 +124,7 @@ describe("iconIssue — the one thing the dev may need to act on", () => {
     ).toBeNull()
     expect(
       iconIssue(icon("android-chrome-192x192.png", 192), "android"),
-    ).toBe("android launcher icon upscaled from 192px — add a 432px icon")
+    ).toBe("android launcher icon upscaled from 192px. Add a 432px icon")
   })
 
   it("warns about an opaque source on Android, where the foreground must be transparent", () => {
@@ -462,7 +462,7 @@ describe("brandLauncherIcon — Android", () => {
       .toFile(path.join(icons, "android-chrome-512x512.png"))
 
     expect((await brand("android")).warning).toBe(
-      "android launcher icon is opaque — add one with a transparent background",
+      "android launcher icon is opaque. Add one with a transparent background",
     )
   })
 })

@@ -134,7 +134,7 @@ async function loadConfig(appRoot) {
   const configPath = path.join(appRoot, "adaptv.config.ts")
   if (!existsSync(configPath)) {
     throw new Error(
-      `no adaptv.config.ts in ${appRoot} — run from an app root.`,
+      `no adaptv.config.ts in ${appRoot}. Run from an app root.`,
     )
   }
   const result = await esbuild({
@@ -425,7 +425,7 @@ async function preparePlatform(
       // lower severity, it is a line that shouldn't have been printed.
     } else if (ats.warn) {
       warnings.push(
-        "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it — leaving it alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
+        "ios: Info.plist declares NSAppTransportSecurity and adaptv did not add it, so it is left alone. If that's an NSAllowsArbitraryLoads left over from an older dev run, remove it before submitting to App Review.",
       )
     }
   }
@@ -474,7 +474,7 @@ async function preparePlatforms(
       // The transient line was erased and this platform never reaches the lanes below, so
       // its ONE line is printed here — same shape as a settled ✖.
       const { reason, detail } = explainFailure(platform)(err)
-      fail(platform, `native project — ${reason}`, detail)
+      fail(platform, `native project: ${reason}`, detail)
     }
     prepareMs[platform] = Date.now() - startedAt
   }
@@ -545,7 +545,7 @@ async function packageIpa(appRoot, name, env, output, report) {
   const workspace = path.join(iosDir, "App/App.xcworkspace")
   if (!existsSync(workspace))
     throw new Error(
-      "no .adaptv/ios/App/App.xcworkspace — the iOS project isn't prepared.",
+      "no .adaptv/ios/App/App.xcworkspace, so the iOS project isn't prepared.",
     )
   const derived = path.join(iosDir, "DerivedData/build")
 
@@ -879,7 +879,7 @@ async function runLive(appRoot, platforms, opts) {
           // port). Don't point the native apps at a stranger — abort with a clear fix.
           if (!stable) {
             throw new Error(
-              `dev server at ${devServer.localUrl} isn't responding — another process ` +
+              `dev server at ${devServer.localUrl} isn't responding. Another process ` +
                 "is likely using that port. Stop it, or run on a free port: " +
                 "'adaptv dev … -- --port <n>'.",
             )
@@ -948,7 +948,7 @@ async function runLive(appRoot, platforms, opts) {
       lanHost = lanIp()
       if (!lanHost)
         throw new Error(
-          "no LAN address on this machine — a physical device has no route to the dev server. " +
+          "no LAN address on this machine, so a physical device has no route to the dev server. " +
             "Connect to Wi-Fi or Ethernet (a VPN tunnel alone is not enough), or run on a " +
             "simulator instead.",
         )
@@ -1256,7 +1256,7 @@ async function runLive(appRoot, platforms, opts) {
       )
       if (!ok)
         throw new Error(
-          "couldn't relaunch the app — is it still installed? press b to rebuild.",
+          "couldn't relaunch the app. Is it still installed? press b to rebuild.",
         )
       await foregroundDevice(platform, target.id, envFor(platform))
       return `${target.name} · reloaded`
@@ -1723,7 +1723,7 @@ function checkAppPlugins(_appRoot) {
   }
   if (missing.length) {
     log.warn(
-      `${missing.length} plugin(s) missing from adaptv's install — reinstall with 'pnpm install'`,
+      `${missing.length} plugin(s) missing from adaptv's install. Reinstall with 'pnpm install'`,
     )
   }
 }
@@ -1808,7 +1808,7 @@ async function doctor(appRoot) {
       { optional: true },
     )
 
-  section("Plugins (shipped by adaptv — the consumer installs none)")
+  section("Plugins (shipped by adaptv; the consumer installs none)")
   checkAppPlugins(appRoot)
 
   section("Project")
@@ -2092,7 +2092,7 @@ async function previewWeb(appRoot, opts) {
  * ============================================================================= */
 
 /**
- * `adaptv gen icons --input <image>` — the app's whole icon set, from one image.
+ * `adaptv icons --input <image>`: the app's whole icon set, from one image.
  *
  * The command adaptv was missing: it could always PICK the best member of an icon set, but
  * getting one meant finding a favicon generator on the web and hoping its filenames matched
@@ -2106,7 +2106,7 @@ async function previewWeb(appRoot, opts) {
  * contained one. A name they cannot collide with is the answer to both.
  */
 async function genIcons(appRoot, _positional, flags) {
-  header("gen icons")
+  header("icons")
 
   //Nothing is validated here any more. Unknown flags, a missing `--input`, an out-of-range
   //`--margin` and a `--background` that isn't a colour are all rejected by the parser, from
@@ -2142,7 +2142,7 @@ async function genIcons(appRoot, _positional, flags) {
   //The message names both fixes, which is all R7 asks.
   if (!outArg && !configuredDir)
     throw new Error(
-      "nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>",
+      "nowhere to write. Set 'icons' in adaptv.config.ts, or pass --output <dir>",
     )
 
   //`--output` also serves as the escape hatch for a set that is NOT this app's: comparing two
@@ -2191,7 +2191,7 @@ async function genIcons(appRoot, _positional, flags) {
     //extension, so without this the run ends on `Input file contains unsupported image format`,
     //which is the library's sentence about its own internals, not adaptv's about their file.
     measureArtwork(sharp, sourceAbs).catch(() => {
-      throw new Error(`could not read ${imageArg} — is it a valid image?`)
+      throw new Error(`could not read ${imageArg}. Is it a valid image?`)
     }),
   ])
   // The numeric flags are read HERE, with everything else adaptv knows before it acts (R33) —
@@ -2249,14 +2249,14 @@ async function genIcons(appRoot, _positional, flags) {
     //would overwrite files with no one watching, so the flag that decides it is named instead.
     if (ok === null)
       throw new Error(
-        `${set.dirRel}${whence} is not empty — pass --yes to replace it`,
+        `${set.dirRel}${whence} is not empty. Pass --yes to replace it`,
       )
     if (!ok) {
       //A deliberate "no" is not a failure (`✖` would read as adaptv scolding them for it) and
       //not a success (`✓` would claim work that did not happen). It is something the dev needs
       //to know, which is what the `!` is for — and it names the DIRECTORY, because the thing
       //they just protected is the one thing worth confirming is still there.
-      log.warn(`cancelled — ${set.dirRel} is unchanged`)
+      log.warn(`cancelled; ${set.dirRel} is unchanged`)
       spacer()
       return
     }
@@ -2335,7 +2335,7 @@ async function main() {
       return out
     }
 
-    case "gen icons":
+    case "icons":
       return await genIcons(appRoot, null, flags)
 
     case "dev": {

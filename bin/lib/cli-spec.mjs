@@ -42,7 +42,7 @@ const JSON_OUT = {
   value: null,
   group: "advanced",
   describe:
-    "one machine-readable document on stdout and nothing else — for scripts and CI",
+    "one machine-readable document on stdout and nothing else, for scripts and CI",
 }
 
 const QUIET = {
@@ -67,7 +67,7 @@ const FORCE = {
   value: null,
   group: "common",
   describe:
-    "do the work even when nothing changed — reinstall, rebuild, re-sync",
+    "do the work even when nothing changed: reinstall, rebuild, re-sync",
 }
 
 const TARGET = {
@@ -114,7 +114,7 @@ const pct = (long, max, describe) => ({
     const n = Number(raw)
     if (raw === true || !Number.isFinite(n) || n < 0 || n > max)
       throw new Error(
-        `'--${long}' must be a percentage between 0 and ${max} — got ${JSON.stringify(raw === true ? "" : raw)}`,
+        `'--${long}' must be a percentage between 0 and ${max}, got ${JSON.stringify(raw === true ? "" : raw)}`,
       )
     return String(n)
   },
@@ -169,7 +169,7 @@ export const SPEC = {
           flag: "target",
           whenArg: ["all"],
           reason:
-            "'--target' is per-platform and 'dev all' spans both — use '--latest', or run each platform",
+            "'--target' is per-platform and 'dev all' spans both. Use '--latest', or run each platform",
         },
       ],
       examples: [
@@ -200,7 +200,7 @@ export const SPEC = {
           flag: "target",
           whenArg: ["all"],
           reason:
-            "'--target' is per-platform and 'preview all' spans both — use '--latest', or run each platform",
+            "'--target' is per-platform and 'preview all' spans both. Use '--latest', or run each platform",
         },
       ],
       examples: ["adaptv preview ios", "adaptv preview all"],
@@ -246,11 +246,11 @@ export const SPEC = {
       ],
     },
     {
-      path: ["gen", "icons"],
+      path: ["icons"],
       summary: "generate every icon your app needs from a single image",
       prose: [
         "Written to the 'icons' directory named in adaptv.config.ts, or --output. That directory must be chosen: adaptv never guesses one to write into, and it REPLACES what is there, so it asks first unless you pass --yes.",
-        "Every run also writes .adaptv/icons-preview.html — every icon under the mask its platform actually applies.",
+        "Every run also writes .adaptv/icons-preview.html, showing every icon under the mask its platform actually applies.",
         "iOS 18 shows a different icon in dark mode and when the home screen is tinted; Android 13+ recolours icons to match the wallpaper. adaptv writes all of those variants. A dark mark cannot be derived from a dark one, so --dark takes a hand-inverted image; --tinted and --monochrome likewise.",
       ],
       args: [],
@@ -311,7 +311,7 @@ export const SPEC = {
           parse: (raw) => {
             if (raw === true || !HEX.test(String(raw).trim()))
               throw new Error(
-                `'--background' must be a hex colour like '#0b0b0f' — got ${JSON.stringify(raw === true ? "" : raw)}`,
+                `'--background' must be a hex colour like '#0b0b0f', got ${JSON.stringify(raw === true ? "" : raw)}`,
               )
             return String(raw).trim()
           },
@@ -319,8 +319,8 @@ export const SPEC = {
         VERBOSE,
       ],
       examples: [
-        "adaptv gen icons --input ./mark.png",
-        "adaptv gen icons --input ./mark.svg --dark ./mark-dark.png --yes",
+        "adaptv icons --input ./mark.png",
+        "adaptv icons --input ./mark.svg --dark ./mark-dark.png --yes",
       ],
     },
   ],
@@ -330,9 +330,18 @@ export const SPEC = {
    */
   retired: [
     {
+      path: ["gen"],
+      //WHY it moved belongs here, not in the error: there was only ever one thing to generate,
+      //so the namespace bought nothing and cost a command that could not be run — `adaptv gen`
+      //answered "unknown command 'gen', did you mean 'gen'?". The dev needs the new name.
+      reason: "'gen icons' was renamed",
+      suggest: (rest) =>
+        `adaptv icons${rest.slice(1).length ? ` ${rest.slice(1).join(" ")}` : ""}`,
+    },
+    {
       path: ["run"],
       reason:
-        "'run' was split into 'dev' and 'preview' — live reload is dev; a static build you install is preview",
+        "'run' was split into 'dev' and 'preview'. Live reload is dev; a static build you install is preview",
       suggest: (rest) =>
         `adaptv dev ${rest[0] && rest[0] !== "web" ? rest[0] : "ios"}`,
     },
@@ -438,6 +447,11 @@ export function suggest(input, candidates) {
   return candidates
     .map((c) => {
       const bare = String(c).replace(/^-+/, "").toLowerCase()
+      //NEVER suggest what was just typed. `commandNames()` returns `path[0]`, so `gen icons`
+      //contributed the candidate `gen`, and `adaptv gen` answered
+      //`unknown command 'gen', did you mean 'gen'?`. The command was renamed to `icons` so that
+      //exact case is gone, but any two-word command would bring it straight back.
+      if (bare === word) return { c, d: Number.POSITIVE_INFINITY }
       //A prefix counts as close regardless of how much is missing: someone who typed `--mono`
       //meant `--monochrome`, and edit distance alone scores that 6 and says nothing.
       const d = bare.startsWith(word) ? 0 : distance(word, bare)

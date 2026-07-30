@@ -117,7 +117,7 @@ describe("reading the source — warn, never refuse", () => {
     //the dev's — a 512px source is a real answer for someone prototyping.
     const [w] = warn({ width: 512, height: 512, opaque: false })
     expect(w).toBe(
-      "source is 512px — every icon is upscaled from it (1024px is ideal)",
+      "source is 512px, so every icon is upscaled from it (1024px is ideal)",
     )
   })
 
@@ -132,7 +132,7 @@ describe("reading the source — warn, never refuse", () => {
     //A gradient, a photo, a screenshot: there is no "the logo" to move, so the mask cuts
     //whatever is at the edges and only the dev can fix it.
     expect(warn({ width: 1024, height: 1024, isolable: false })).toEqual([
-      "source has no flat background — the mask will crop its edges",
+      "source has no flat background, so the mask will crop its edges",
     ])
   })
 
@@ -152,7 +152,7 @@ describe("reading the source — warn, never refuse", () => {
     expect(
       sourceWarnings({ width: 16, height: 16, isolable: false }, ".svg"),
     ).toEqual([
-      "source has no flat background — the mask will crop its edges",
+      "source has no flat background, so the mask will crop its edges",
     ])
   })
 
@@ -164,7 +164,7 @@ describe("reading the source — warn, never refuse", () => {
   it("refuses ONLY bytes it cannot decode", () => {
     expect(sourceError(".png")).toBeNull()
     expect(sourceError(".svg")).toBeNull()
-    expect(sourceError(".pdf")).toContain("use a png or svg")
+    expect(sourceError(".pdf")).toContain("Use a png or svg")
   })
 })
 

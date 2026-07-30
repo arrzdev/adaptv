@@ -51,7 +51,7 @@ export function configErrors(config) {
   const errors = []
   if (!APP_ID.test(String(config.appId ?? "")))
     errors.push(
-      `'appId' must be reverse-DNS like com.example.app — got ${JSON.stringify(config.appId)}`,
+      `'appId' must be reverse-DNS like com.example.app, got ${JSON.stringify(config.appId)}`,
     )
   if (!config.themeColor?.light && !config.themeColor?.dark)
     errors.push("'themeColor' needs at least one of 'light' / 'dark'")
@@ -59,17 +59,17 @@ export function configErrors(config) {
     if (value === undefined) continue
     if (typeof value !== "string" || !HEX.test(value.trim()))
       errors.push(
-        `'${key}' must be a hex colour like #1b1b1b — got ${JSON.stringify(value)}`,
+        `'${key}' must be a hex colour like #1b1b1b, got ${JSON.stringify(value)}`,
       )
   }
   const mode = config.splashMaskMode
   if (mode !== undefined && !SPLASH_MASK_MODES.includes(mode))
     errors.push(
-      `'splashMaskMode' must be preferences, system, light or dark — got ${JSON.stringify(mode)}`,
+      `'splashMaskMode' must be preferences, system, light or dark, got ${JSON.stringify(mode)}`,
     )
   if (config.icons !== undefined && typeof config.icons !== "string")
     errors.push(
-      `'icons' must be a path to the app's icon directory — got ${JSON.stringify(config.icons)}`,
+      `'icons' must be a path to the app's icon directory, got ${JSON.stringify(config.icons)}`,
     )
   return errors
 }

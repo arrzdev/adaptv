@@ -146,7 +146,7 @@ them: the banner, what adaptv knew, the run.
 > them. The test is whether the answer was already sitting in a file the dev wrote.
 
 **R34 — A command that destroys the dev's work ASKS, and a command that cannot ask REFUSES.**
-`gen icons` overwrites every file in the icon directory. When there is something to lose it
+`icons` overwrites every file in the icon directory. When there is something to lose it
 prompts; when there is nothing there it asks nothing (R4); and when there is no TTY at all it
 **names the flag** instead of guessing:
 ```
@@ -182,7 +182,7 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 > would answer *yes* on the dev's behalf, silently, in the one situation where nobody is
 > watching. `confirm` returns `null` there instead, and the caller turns it into the `✖` above.
 >
-> **The gate is about the dev's FILES, never their taste.** `gen icons` first shipped refusing
+> **The gate is about the dev's FILES, never their taste.** `icons` first shipped refusing
 > to generate from a source under 1024px, on the theory that a generator run is deliberate and
 > should be held to a standard. That is a different rule wearing this one's clothes, and it was
 > wrong: a 512px logo is a real answer for someone prototyping, and blocking them teaches only
@@ -241,13 +241,13 @@ render it as a plain one-liner and exit, never wrapped in step-failure scaffoldi
 shape.** A wrong command line is the one failure where the dev is looking straight at their own
 input and cannot see what is wrong with it. Say which token is the problem, what was expected
 instead, and put the usage line dim underneath.
-> Violated by `gen icons`, reported by the owner:
+> Violated by `icons`, reported by the owner:
 > ```
-> $ adaptv gen icons --target ./public/favicons/android-chrome-512.png
+> $ adaptv icons --target ./public/favicons/android-chrome-512.png
 >
 >   adaptv · gen icons
 >
->   ✖ missing image — adaptv gen icons <image>
+>   ✖ missing image — adaptv icons <image>
 > ```
 > The command plainly contains an image, so "missing image" reads as a bug in adaptv. What
 > happened is that `parseFlags` turns any `--foo` into `flags.foo = true` and *swallows the
@@ -256,11 +256,11 @@ instead, and put the usage line dim underneath.
 > a typo is only obvious next to the right spelling:
 > ```
 >   ✖ unknown flag "--target" for gen icons
->       adaptv gen icons --input <image>  [--out <dir>] [--yes]
+>       adaptv icons --input <image>  [--out <dir>] [--yes]
 >         tuning:  [--margin <pct>] [--padding <pct>] [--background <hex>]
 > ```
 > **The same message for every unknown flag, `--target` included.** The first fix gave it a
-> special case — `` `--target` is a device id — `gen icons` takes the image positionally `` —
+> special case — `` `--target` is a device id — `icons` takes the image positionally `` —
 > on the theory that it is the predictable wrong guess and deserved a precise answer. The owner
 > rejected it, correctly: *"porque é que a explicação do erro está a dar leak do `--target` que
 > é uma coisa específica de outro comando?"* A dev generating icons has no reason to learn what
@@ -279,10 +279,10 @@ look exactly like the run, and a failure must end where the `✖` ends.
 > ali tanta porcaria?"*:
 > ```
 >   ✖ unknown flag "--target" — expected --padding, --background or --yes
->       adaptv gen icons <image>  [--padding <pct>] [--background <hex>] [--yes]
+>       adaptv icons <image>  [--padding <pct>] [--background <hex>] [--yes]
 > undefined
 > /Users/arrz/…/playground/apps/frontend:
->  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: adaptv gen icons …
+>  ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: adaptv icons …
 >  ELIFECYCLE  Command failed with exit code 1.
 > ```
 > Five lines nobody wrote, under a CLI whose whole contract is that a user error is ONE terse
@@ -319,7 +319,7 @@ there — and the notice for an app with none named that directory back:
 > ```
 > The general rule is R7 (name the fix), and the general lesson is the fallback rather than the
 > wording: a default that silently resolves to a real directory makes the config key look
-> ignored. `gen icons` already refused to guess where to WRITE (R34); the read path now refuses
+> ignored. `icons` already refused to guess where to WRITE (R34); the read path now refuses
 > to guess where to READ, and the two finally describe the same framework.
 
 **R43 — Quote a config key, flag or command with `'`, never a backtick.** A backtick is markdown
@@ -462,7 +462,7 @@ carries an `if`:
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
 answered. Every exit has a last line.
-> Violated by cancelling `gen icons`, reported by the owner as *"quando a pessoa cancela algo
+> Violated by cancelling `icons`, reported by the owner as *"quando a pessoa cancela algo
 > deve aparecer… isto está muito vazio"*:
 > ```
 >   adaptv · gen icons
@@ -898,6 +898,28 @@ phase — because the roles carried `{ ink: "cyan" }` and the components spread 
 > harness. `scripts/check-colour.mjs` runs the components under a pty and greps the bytes; run
 > it after touching `theme.mjs` or any component's props.
 
+**R50 — Never suggest the word that was just typed, and never make a namespace a command.**
+`adaptv gen` answered:
+> ```
+>   ✖ unknown command 'gen' — did you mean 'gen'?
+> ```
+> Two faults in one line. `commandNames()` returns `path[0]`, so the two-word `gen icons`
+> contributed the candidate `gen` and `suggest()` matched it at distance 0. And `gen` was a
+> namespace the dev could type but not run, which is a command that exists only to fail.
+> `gen icons` is now **`adaptv icons`** — there was only ever one thing to generate, so the
+> namespace bought nothing — with a `retired` entry so the old form migrates:
+> `'gen icons' was renamed. Try 'adaptv icons --input ./mark.png'`. `suggest()` also drops an
+> exact match outright, so the next two-word command cannot bring it back.
+
+**R51 — `where` is a TRAILING clause. It cannot open a sentence.** `renderFault` builds
+`where = " for 'dev'"` for the tail of a did-you-mean, and two branches used it as the subject:
+> ```
+>   ✖ for 'dev' does not take '192.168.1.5'
+>   ✖ for 'icons' needs '--input': the png or svg to generate the whole set from
+> ```
+> Both now name the command directly. Fixed once in `excess-args` and missed in `missing-flag`,
+> which is the usual shape of this: the same helper misused in every branch that borrowed it.
+
 ## 5. Before you ship a CLI change
 
 Tests do not cover any of this. Run it and read it:
@@ -916,14 +938,14 @@ Tests do not cover any of this. Run it and read it:
       or you can read an identifier in it, R22/R23 are broken
 - [ ] `adaptv preview web` and `adaptv preview all` — the web server must come up and STAY up
 - [ ] `adaptv doctor` — same banner and glyphs as every other command
-- [ ] `adaptv gen icons --input <image>` into an **empty** dir, then again into the **populated** one —
+- [ ] `adaptv icons --input <image>` into an **empty** dir, then again into the **populated** one —
       the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
       without `--yes` exits `1` on the terse `✖` (R34)
-- [ ] `gen icons` from a **dark mark on a light background** — one `!` naming `--dark`, and the
+- [ ] `icons` from a **dark mark on a light background** — one `!` naming `--dark`, and the
       set is generated anyway; then pass `--dark <image>` and it goes quiet (R34)
-- [ ] `gen icons` from a **small, opaque** source — two `!`s under the banner, and the set is
+- [ ] `icons` from a **small, opaque** source — two `!`s under the banner, and the set is
       generated anyway; then from a big transparent one — **no** `!` at all (R34)
-- [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `gen icons` with no
+- [ ] `gen icons --target <image>`, `gen icons --pading 10 <image>`, and `icons` with no
       argument at all — each names the token that is wrong and shows the usage line (R35)
 - [ ] `gen icons --input <image>` in an app whose config has **no `icons` key** — it refuses and
       names both ways to fix it, rather than writing into `./public/favicons` (R34)

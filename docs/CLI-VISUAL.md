@@ -136,11 +136,16 @@ not printed at all.
 - **A command's one-liner is an ACTION.** `run the app with live reload`, not `live reload —
   one dev server, every surface attached`. The command list is scanned, not read, and it should
   scan as a list of things you can do.
-- **Vary the construction.** Every command summary was `<noun phrase> — <expansion>`, five for
-  five. No single line was bad; the rhythm was, and uniformity is what makes copy read as
-  generated rather than written. An em-dash is fine where it earns its place — `--force: do the
-  work even when nothing changed — reinstall, rebuild, re-sync` introduces a list — but not as
-  the house connector.
+- **NO em-dash. Not anywhere, not one.** It was the house connector — 50 user-facing strings
+  had one — and it is the single most recognisable tell of generated prose. Every use has a
+  better replacement, and picking it sharpens the sentence: a colon names what follows
+  (`'dev' needs a surface: web, ios, android or all`), a comma joins a clause
+  (`must be a hex colour, got "zzz"`), a full stop separates a fact from an instruction
+  (`no adaptv.config.ts here. Run from an app root.`), a semicolon links two halves of one
+  thought. If none of them fits, the sentence was doing two jobs. `copy.test.mjs` walks every
+  string literal in `bin/` and fails the build on one.
+- **Vary the construction.** Beyond the punctuation: every command summary was
+  `<noun phrase> — <expansion>`, five for five. No single line was bad; the rhythm was.
 - **Explain a flag in the DEV's words, not ours.** `calm steps` is what our renderer calls its
   own output; `slots` is an internal icon target; `one-ink` is print jargon; `your mark` is a
   designer's word for an icon. Each was in a shipped flag description and meant nothing outside

@@ -117,7 +117,7 @@ describe("a failure names the offender and the fix", () => {
 describe("a help page fits the terminal it is printed in", () => {
   //R10/R31. The OLD `usage()` was one template literal with 27 lines over 80 columns, the
   //longest 119 — the single biggest violator of the rule the rest of the CLI is held to.
-  const PAGES = [[], ["dev"], ["build"], ["gen", "icons"], ["doctor"]]
+  const PAGES = [[], ["dev"], ["build"], ["icons"], ["doctor"]]
   for (const columns of [100, 80, 48, 40]) {
     it(`wraps to ${columns} columns`, () => {
       for (const path of PAGES) {

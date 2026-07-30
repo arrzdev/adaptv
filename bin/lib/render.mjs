@@ -567,7 +567,7 @@ export function liveWatcher({ keys = true } = {}) {
       ? // keys bright (their own bold span), labels dim — NOT one big dim() wrapping bold
         // keys, where the bold's reset bleeds and the key ends up gray.
         `${dot}${key("r")}${c.dim(" reload js")}   ${key("b")}${c.dim(" rebuild app")}   ${stop}`
-      : `${dot}${c.dim("keys unavailable (stdin is not a TTY) — run adaptv directly for r/b")}`
+      : `${dot}${c.dim("keys unavailable (stdin is not a TTY). Run adaptv directly for r/b")}`
   // Just the keys. `✓ watching` restated an outcome the settled step lines already gave,
   // and the row still animates on HMR — the spinner is what says "working", not a word.
   const idleLine = hint.trimEnd() || `  ${c.dim("ctrl-c stop")}`
@@ -726,7 +726,7 @@ export async function select(message, options) {
   //A prompt has no machine answer — see the note on `--json` in `setOutputMode`.
   if (jsonMode)
     throw new Error(
-      "'--json' can't answer a prompt — pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
+      "'--json' can't answer a prompt. Pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
     )
   //Off a TTY there is nobody to press anything, so the first option stands as the default —
   //the same answer the hand-rolled picker gave, and what makes a piped run deterministic.
@@ -763,7 +763,7 @@ export async function select(message, options) {
 export async function confirm(message, { yes, no } = {}) {
   if (jsonMode)
     throw new Error(
-      "'--json' can't answer a prompt — pass '--yes' to say so up front",
+      "'--json' can't answer a prompt. Pass '--yes' to say so up front",
     )
   if (!isTTY || !process.stdin.isTTY) return null
   return await select(message, [

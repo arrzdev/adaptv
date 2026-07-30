@@ -84,7 +84,7 @@ adaptv doctor                          # check the native toolchain (JDK, SDK, X
 adaptv dev     web|ios|android|all     # live reload: one Vite dev server, native WebViews attached
 adaptv preview ios|android|all         # build SPA → sync → install → launch (static, no reload)
 adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
-adaptv gen icons --input <image>       # the whole icon set — web + native — from one image
+adaptv icons --input <image>       # the whole icon set — web + native — from one image
 
 # gen icons
 #   --input <image>    png or svg, 1024px+ — the only thing you normally pass
@@ -200,7 +200,7 @@ a Capacitor config. The native projects live inside the hidden, git-ignored **`.
 - **OTA** — self-hosted, pointer-flip bundle swaps via `adaptv/ota` (pure, testable policy + updater).
 - **Live reload** — `adaptv dev` runs one Vite dev server with the native WebViews attached and
   hot-reloading on save, including over the LAN to a physical device (`--host`).
-- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv gen icons
+- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv icons
   <image>` produces the set from a single png/svg; adaptv then **measures** what's there and
   derives the web manifest, the head links, and the native launcher icons from it — full-bleed
   art for iOS and Android's legacy square, safe-zoned maskable art for Android's adaptive

@@ -45,7 +45,7 @@ function Keys({ keys, available }) {
     return h(
       Text,
       { ...ROLE.quiet.text },
-      "keys unavailable (stdin is not a TTY) — run adaptv directly for r/b",
+      "keys unavailable (stdin is not a TTY). Run adaptv directly for r/b",
     )
   return h(
     Box,

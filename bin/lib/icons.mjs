@@ -192,7 +192,7 @@ export function pickIcon(candidates, platform) {
 export function iconIssue(pick, platform) {
   const min = MIN_SOURCE_PX[platform]
   if (pick.width < min)
-    return `${platform} launcher icon upscaled from ${pick.width}px — add a ${min}px icon`
+    return `${platform} launcher icon upscaled from ${pick.width}px. Add a ${min}px icon`
   // The opacity warning is about art that will be INSET into the safe zone: an opaque block
   // scaled to 72/108 shows its own background as a square floating inside the mask. Art of the
   // `maskable` family is not inset — `writeAndroidIcons` gives it `foregroundScale = 1` because
@@ -204,7 +204,7 @@ export function iconIssue(pick, platform) {
     !pick.transparent &&
     pick.family !== "maskable"
   )
-    return `android launcher icon is opaque — add one with a transparent background`
+    return `android launcher icon is opaque. Add one with a transparent background`
   return null
 }
 

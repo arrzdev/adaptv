@@ -75,7 +75,7 @@ export async function warmDevServer(
     }
     await sleep(900)
   }
-  onLine?.("dev server warm timed out — launching anyway")
+  onLine?.("dev server warm timed out, launching anyway")
   return false
 }
 
