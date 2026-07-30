@@ -20,6 +20,13 @@
     "baseUrl": ".",
     "paths": {
       "#adaptv-route-tree": ["./.adaptv/routeTree.gen.ts"],
+      // ⚠︎ TEMPORARY, and a bug report in the form of a path mapping.
+      // `Text` (src/components/text.tsx) is NOT re-exported from
+      // `src/interface/components.index.ts`, and adaptv's package `exports`
+      // map has no wildcard — so `@arrzdev/adaptv/components` cannot reach it
+      // and no consumer can import it at all. The Testing → Text page needs to
+      // render the real component, so it reaches past the export map through
+      // this alias. DELETE this mapping the moment the barrel exports Text.
       "@/env/*": ["./env/*"],
       "@/ports": ["./ports.ts"],
       "@/*": ["./src/*"],

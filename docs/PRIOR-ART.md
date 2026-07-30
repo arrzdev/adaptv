@@ -260,9 +260,26 @@ export const calculateSpringStep = (t: number) =>
   `WeakMap` so re-pressing the same element cancels them.
 - Listeners are **capture-phase**, plus a document listener for `ionGestureCaptured` (§3).
 
-This is the same problem `src/hooks/use-gesture-engine.ts` + the `pressed:` variant already solve —
+This is the same problem `src/hooks/use-gesture-engine.ts` + the patched `active:` variant already solve —
 **diff the timings.** adaptv's reentrant `data-pressed` (clears on drag-out, restores on re-entry) is
 arguably better than Ionic's; the 100/150 pair and the `pointercancel` strategy are the parts to adopt.
+
+**Adopted.** `SHOW_PRESSED_AFTER_MS = 100` / `MIN_PRESSED_MS = 150` in `use-gesture-engine.ts`, same
+names and same reasons. The visual is now *scheduled* on `pointerdown` rather than stamped, so a finger
+laid down and swiped is cancelled inside the delay and never draws; once drawn it is held for the floor,
+so a fast tap is still perceived. Verified in `playground/e2e/press-visual.spec.ts` with real touch —
+a unit test cannot show it, because synthetic events do not drive native scrolling and therefore never
+produce the `pointercancel` the whole design turns on.
+
+**What re-entry actually buys you, which is less than iOS.** The engine tracks drag-out/drag-back and
+still commits on release. By mouse and stylus that is exactly iOS's behaviour. By *touch on a scrolling
+surface it is unreachable*: the browser claims the gesture at its own touch slop (~10px), far inside
+`Button`'s 48px press outset, and fires `pointercancel` — after which the press is over and no JS can
+reclaim it. `touch-action: none` would reclaim it, and is the wrong trade: it also makes it impossible
+to scroll a page by starting the drag on a button, which is a far more common gesture than sliding off
+a control and back. So the guarantee adaptv actually ships on touch is the protective half — **a gesture
+the platform turned into a scroll never activates and never leaves a press visual behind** — and that is
+what the e2e pins.
 
 `ripple-effect`: `PADDING = 10`, `INITIAL_ORIGIN_SCALE = 0.5`, peak opacity **0.16**, scale 225ms /
 fade-in 75ms / fade-out 150ms, `cubic-bezier(.4, 0, .2, 1)`. Port the math and CSS, skip the component.

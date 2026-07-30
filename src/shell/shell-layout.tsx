@@ -11,7 +11,10 @@ import { hideNativeSplash } from "#adaptv/capabilities/splash"
 import type { OfflineProps } from "#adaptv/components/offline"
 import { Offline } from "#adaptv/components/offline"
 import { OrientationGuard } from "#adaptv/components/orientation-guard"
-import type { AdaptvPatches } from "#adaptv/config/app-config"
+import type {
+  AdaptvPatches,
+  AdaptvUiConfig,
+} from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
   PwaServiceWorkerRuntimeConfig,
@@ -20,7 +23,6 @@ import type {
 import { useAndroidBackButton } from "#adaptv/hooks/use-android-back-button"
 import { useCaretRepaint } from "#adaptv/hooks/use-caret-repaint"
 import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
-import { useGlobalFpsSentinel } from "#adaptv/hooks/use-global-fps-sentinel"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useRegisterPwaServiceWorker } from "#adaptv/hooks/use-register-pwa-service-worker"
 import { useStatusBar } from "#adaptv/hooks/use-status-bar"
@@ -38,7 +40,7 @@ const APP_SHELL_CLASS =
   "box-border flex min-h-0 min-w-0 w-full flex-col overflow-hidden h-dvh app:h-screen"
 
 const APP_SCREEN_FRAME_CLASS =
-  "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden hardware-boosted"
+  "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
 
 export type AppShellProps = {
   children: ReactNode
@@ -53,7 +55,13 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <div data-app-shell className={cn(APP_SHELL_CLASS, className)}>
-      <div className={cn(APP_SCREEN_FRAME_CLASS, frameClassName)}>
+      {/* `data-adaptv-screen` is what `styles/screen.css` hooks: a page's root element
+          is stretched to the frame when it is the only one, so a page never has to
+          remember `fill` just to be full-height. */}
+      <div
+        data-adaptv-screen
+        className={cn(APP_SCREEN_FRAME_CLASS, frameClassName)}
+      >
         {children}
       </div>
     </div>
@@ -132,6 +140,8 @@ type RoutingShellProps = {
   shellClassName?: string
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
+  /** App-feel resets that are the app's call; each defaults to `"app"`. See {@link AdaptvUiConfig}. */
+  ui?: AdaptvUiConfig
   children: ReactNode
 }
 
@@ -169,21 +179,23 @@ export function RoutingShell({
   offlineComponent,
   shellClassName,
   patches,
+  ui,
   children,
 }: RoutingShellProps) {
   //resolve each native-feel fix — all default on, opt out per fix via config.
   const caretRepaint = patches?.caretRepaint ?? true
   const textMagnifier = patches?.textMagnifier ?? true
   const viewportFreeze = patches?.viewportFreeze ?? true
-  const gpuBoost = patches?.gpuBoost ?? true
 
   //Restore the `<html>` platform/OS stamp that React strips when it reconciles the
   //document on the SPA/native client path. Without it every `app:` variant is inert —
   //most visibly safe-area padding, so content slides under the status bar. Layout
   //effect (pre-paint) and behind the splash, so there is no visible reflow.
+  //The ui app-feel stamps ride along for the same reason: React would otherwise drop
+  //`data-adaptv-no-select` too, and text selection would silently come back.
   useIsomorphicLayoutEffect(() => {
-    applyPlatformStamp()
-  }, [])
+    applyPlatformStamp(ui)
+  }, [ui])
 
   const [resolvedAppearance] = useTheme()
   useSyncTheme({ themeColorLight, themeColorDark })
@@ -193,8 +205,6 @@ export function RoutingShell({
   //takes no colour — see capabilities/status-bar.ts.
   useStatusBar(resolvedAppearance)
   useAndroidBackButton()
-  //watch the frame rate and GPU-promote animating layers when frames drop
-  useGlobalFpsSentinel({ enabled: gpuBoost })
   //app-wide iOS caret-repaint patch — mutes a focused field's caret while it moves and
   //force-repaints it on settle, so a translated input never leaves a detached ghost caret
   useCaretRepaint({ enabled: caretRepaint })

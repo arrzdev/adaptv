@@ -50,11 +50,91 @@ export type AdaptvPatches = {
    * inputs outside an overlay (wrap them in `<AvoidKeyboard>`). Default `true`.
    */
   viewportFreeze?: boolean
+}
+
+/**
+ * How far one of the *questionable* app-feel resets reaches.
+ *
+ * - `"app"` — installed PWA + native only (the default for every option).
+ * - `"all"` — every target, browser tab included.
+ * - `"off"` — adaptv does not touch the property at all.
+ *
+ * Only the resets whose alternative is **different, not broken**, are configurable.
+ * The hover-stickiness fix, the `touch-action` longhand (WebKit 240917), the caret
+ * mute, the autofill cover and the safe-area `env()` ordering (crbug/40699457) have
+ * no knob and never will — nobody has a legitimate reason to want the broken
+ * behaviour, so a flag there would only be a way to break the app.
+ */
+export type UiPatchScope = "app" | "all" | "off"
+
+/**
+ * The `ui` block — the app-feel resets whose right answer depends on what the app
+ * *is*, not on correctness. All default to `"app"`, so an installed app keeps the
+ * native feel while a browser tab keeps browser behaviour.
+ *
+ * Resolved **once**, in the pre-paint init script, against the runtime platform;
+ * the result is a boolean-presence attribute on `<html>`. So `styles.css` stays a
+ * single static artifact — there is no per-config CSS and no build matrix.
+ */
+export type AdaptvUiConfig = {
   /**
-   * Watch the frame rate and promote animating layers to their own GPU layer
-   * when frames drop, then release on recovery. Default `true`.
+   * The global `user-select: none` reset. Default `"app"`.
+   *
+   * `"all"` is hostile in a real browser tab: the user cannot select an error
+   * message, cannot `Ctrl+A`, cannot copy a code snippet. Text-editing surfaces
+   * (`input`, `textarea`, `[contenteditable="true"]`) always keep native selection
+   * whatever this is set to, and any element can opt back in with the `selectable`
+   * utility.
    */
-  gpuBoost?: boolean
+  noSelect?: UiPatchScope
+  /**
+   * The global `scrollbar-width: none` + `::-webkit-scrollbar { display: none }`
+   * reset. Default `"all"`.
+   *
+   * The earlier default was `"app"`, on the reasoning that a desktop user loses the
+   * scroll-position indicator. That reasoning assumed the consumer had no recourse —
+   * they do: `ScrollView`'s `showsVerticalScrollIndicator` emits `scrollbar-visible`,
+   * which outranks this reset, so a scroller that genuinely wants an indicator asks
+   * for one. With a working per-scroller escape, defaulting to off everywhere is what
+   * makes the same code feel the same on all six targets.
+   */
+  hideScrollbars?: UiPatchScope
+  /**
+   * The `a[href] { -webkit-touch-callout: none }` reset — iOS's long-press link
+   * preview sheet. Default `"app"`.
+   *
+   * Same shape as {@link noSelect}: in an installed app the sheet is a browser
+   * artefact leaking through (and it fights any long-press gesture the app owns),
+   * but in an iOS Safari tab it is a real affordance the user expects — long-press
+   * a link to copy it or open it in a new tab. `"all"` takes that away.
+   *
+   * ⚠︎ Only the callout is configurable. The `-webkit-tap-highlight-color:
+   * transparent` half of the same rule stays universal: the grey flash is a
+   * duplicate of the press feedback adaptv already draws, and nobody wants both.
+   */
+  touchCallout?: UiPatchScope
+}
+
+/**
+ * The build-time image pipeline, behind `?adaptv-image`.
+ *
+ * ⚠︎ There is deliberately **no switch for the dimensions.** `width`/`height` are
+ * the whole anti-layout-shift mechanism (`VISION.md §2.1`), so a build that cannot
+ * resolve them errors rather than degrading — that is doctrine, not preference, and
+ * a knob for it would be a knob for shipping layout shift.
+ */
+export type AdaptvImagesConfig = {
+  /**
+   * Generate the blurred low-resolution placeholder. Default `true`.
+   *
+   * Turning it off still resolves `width`/`height`, so the box is still reserved and
+   * nothing shifts — you lose the blur, not the guarantee. Worth it for an app whose
+   * images are mostly flat colour or line art, where a 16px blur reads as a grey
+   * smear rather than a preview, and for shaving the per-image build cost.
+   *
+   * A caller can still pass a `placeholder` data URL per `<Image>` with this off.
+   */
+  placeholder?: boolean
 }
 
 /**
@@ -268,6 +348,17 @@ export type AdaptvAppConfig = {
   defaultThemePreference?: UiThemePreference
   /** Toggle adaptv's native-feel WebKit fixes. All default `true`; opt out per fix. */
   patches?: AdaptvPatches
+  /**
+   * The app-feel resets that are genuinely the app's call — text selection,
+   * scrollbar visibility, and the iOS link callout. All default to `"app"`
+   * (installed PWA + native only). See {@link AdaptvUiConfig}.
+   */
+  ui?: AdaptvUiConfig
+  /**
+   * The build-time image pipeline behind `import hero from "./hero.jpg?adaptv-image"`.
+   * See {@link AdaptvImagesConfig}.
+   */
+  images?: AdaptvImagesConfig
 
   /**
    * Extra Capacitor-compatible native plugins, by package name — **additive** to the

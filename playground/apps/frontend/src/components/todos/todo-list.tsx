@@ -277,7 +277,7 @@ function TodoFlatList({
 
   if (reducedMotion) {
     return (
-      <div className="relative flex w-full flex-col gap-y-4 hardware-boosted">
+      <div className="relative flex w-full flex-col gap-y-4">
         {rows.map((row, index) => (
           <div key={row.key} className={rowClass(rows, index)}>
             {row.type === "header" && (
@@ -291,7 +291,7 @@ function TodoFlatList({
   }
 
   return (
-    <div className="relative flex w-full flex-col gap-y-4 hardware-boosted">
+    <div className="relative flex w-full flex-col gap-y-4">
       {/* section headers snap straight to their slot (plain divs — no layout).
           only task rows translate: layout="position" FLIPs a checked task to the
           completed block while the rest close the gap. no opacity/scale, so a

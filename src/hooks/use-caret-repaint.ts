@@ -106,9 +106,16 @@ export function useCaretRepaint({
     //pay the selection-perturbation re-sync (which we don't want poking the caret on every focus).
     let movedWhileMuted = false
 
+    //The attribute is the public styling hook (§3); the INLINE `!important` is what
+    //actually enforces the mute. adaptv's own `[data-caret-muted]` rule lives in
+    //`@layer adaptv.patches` and would lose to any `caret-*` utility the field carries
+    //(`utilities` is a later layer), and §6.0.1 bans the `!important` inside the layer
+    //that used to cover for that. An inline important declaration sits above every
+    //layer, which is exactly the "must win" semantics this needs.
     function mute() {
       if (!field || muted) return
       field.setAttribute("data-caret-muted", "true")
+      field.style.setProperty("caret-color", "transparent", "important")
       muted = true
     }
 
@@ -145,6 +152,7 @@ export function useCaretRepaint({
     function restore() {
       if (!field || !muted) return
       field.removeAttribute("data-caret-muted")
+      field.style.removeProperty("caret-color")
       muted = false
       repaintCaret(field)
       //Re-seed the movement baseline to the POST-perturbation position. repaintCaret's

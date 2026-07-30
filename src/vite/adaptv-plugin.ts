@@ -14,11 +14,13 @@ import {
   resolveGeneratedPaths,
   resolveGeneratedTmpDir,
 } from "#adaptv/vite/adaptv-dir.ts"
+import { adaptvImagePlugin } from "#adaptv/vite/adaptv-image.ts"
 import {
   APP_CONFIG_BASENAME,
   loadAppConfig,
 } from "#adaptv/vite/app-config-loader.ts"
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
+import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import {
   adaptvManifestPlugin,
@@ -186,10 +188,22 @@ export async function adaptv(
     //before tanstackStart() can resolve it. This is the one layer a consumer
     //cannot disable, misconfigure, or forget to install. → FACADE.md §2.2
     adaptvBanServerApisPlugin(),
+    //Also `enforce: "pre"`, and for the same kind of reason: it has to reach the
+    //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
+    //→ src/vite/css-layer-order.ts
+    adaptvCssLayerOrderPlugin(),
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
     adaptvDefaultIconsPlugin(context),
     adaptvPwaRegisterPlugin(),
+    //Also `enforce: "pre"`, and NOT as a precaution: Vite's own asset plugin
+    //claims any unknown query on a known image extension, so at normal
+    //enforcement `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL
+    //string and this plugin's `load` is never called — a build that succeeds with
+    //every dimension silently gone. → src/vite/adaptv-image.ts, IMAGE-COMPONENT §4.2a
+    adaptvImagePlugin({
+      placeholder: context.loaded.config.images?.placeholder,
+    }),
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
     adaptvFsAllowPlugin(),

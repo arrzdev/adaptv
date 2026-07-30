@@ -101,9 +101,11 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
           theme.dark,
           config.splashScreenInBrowser ?? false,
         ),
-        //platform stamp first, then theme — both must resolve before first paint
+        //platform stamp first, then theme — both must resolve before first paint.
+        //the ui app-feel stamps are part of the platform script, so the emitted
+        //shell resolves them identically to the runtime document.
         headInitScript:
-          getPlatformInitScript() +
+          getPlatformInitScript(config.ui) +
           getUiThemeInitScript({
             themeColorLight: theme.light,
             themeColorDark: theme.dark,
