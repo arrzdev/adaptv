@@ -1,6 +1,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type { CSSProperties, ReactNode } from "react"
 import { useEffect, useRef } from "react"
+import type { ScrollViewProps } from "#adaptv/components/scroll-view"
 import { ScrollView } from "#adaptv/components/scroll-view"
 
 /* =============================================================================
@@ -22,12 +23,21 @@ export interface ListProps<T> {
   emptyState?: ReactNode
   /** Fired once the last row enters the window — wire infinite scroll here. */
   onEndReached?: () => void
-  /** Masked safe-area edge fades (top + bottom). */
-  edgeFades?: boolean
-  /** Brand background for the fade bands (e.g. `bg-background`). */
-  edgeClassName?: string
+  /** Dissolve the list's edges — see {@link ScrollViewProps.fade}. */
+  fade?: ScrollViewProps["fade"]
+  /** How deep the fade reaches — see {@link ScrollViewProps.fadeSize}. */
+  fadeSize?: ScrollViewProps["fadeSize"]
   /** Classes for the scroll surface. */
   className?: string
+  /**
+   * Grow to fill the parent flex line, forwarded to the underlying
+   * {@link ScrollView}. Default `false`.
+   *
+   * A virtualised list needs a constrained height even more than a plain scroller:
+   * with none, every row is measured as visible and virtualisation does nothing.
+   * Either pass this inside a sized flex parent, or give `className` a height.
+   */
+  fill?: boolean
 }
 
 const ROW_STYLE_BASE: CSSProperties = {
@@ -56,7 +66,7 @@ const ROW_STYLE_BASE: CSSProperties = {
  *   renderItem={(t) => <TodoRow todo={t} />}
  *   onEndReached={loadMore}
  *   emptyState={<Empty />}
- *   edgeFades
+ *   fade
  * />
  * ```
  */
@@ -68,9 +78,10 @@ export function List<T>({
   overscan = 6,
   emptyState,
   onEndReached,
-  edgeFades,
-  edgeClassName,
+  fade,
+  fadeSize,
   className,
+  fill = false,
 }: ListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -97,9 +108,13 @@ export function List<T>({
 
   return (
     <ScrollView
+      //`list`, not the `scroll-view` it is built on: composition is an
+      //implementation detail and must not leak into a styling hook
+      data-adaptv="list"
       ref={scrollRef}
-      edgeFades={edgeFades}
-      edgeClassName={edgeClassName}
+      fill={fill}
+      fade={fade}
+      fadeSize={fadeSize}
       className={className}
     >
       <div

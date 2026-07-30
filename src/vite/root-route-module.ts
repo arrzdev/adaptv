@@ -140,6 +140,11 @@ export function renderRootRouteModule(
   if (config.patches) {
     fields.push(`patches: ${serializeValue(config.patches)}`)
   }
+  //omitted when absent, so the shell applies adaptv's own `"app"` defaults rather
+  //than being handed an explicit `undefined` to re-derive them from
+  if (config.ui) {
+    fields.push(`ui: ${serializeValue(config.ui)}`)
+  }
   if (config.openGraph) {
     fields.push(`openGraph: ${serializeValue(config.openGraph)}`)
   }

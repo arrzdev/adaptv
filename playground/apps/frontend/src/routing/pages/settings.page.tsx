@@ -4,8 +4,15 @@ import {
   useMediaQuery,
   useTheme,
 } from "@arrzdev/adaptv/hooks"
-import { useRouter } from "@tanstack/react-router"
-import { Moon, Sparkles, Trash2, Vibrate } from "lucide-react"
+import { Link, useRouter } from "@tanstack/react-router"
+import {
+  ChevronRight,
+  FlaskConical,
+  Moon,
+  Sparkles,
+  Trash2,
+  Vibrate,
+} from "lucide-react"
 import { useState } from "react"
 import { CreateDeckDrawer } from "@/components/decks/create-deck-drawer"
 import { EditDeckDrawer } from "@/components/decks/edit-deck-drawer"
@@ -113,6 +120,39 @@ function SettingsPage() {
             checked={settings.haptics}
             onCheckedChange={handleHapticsChange}
           />
+        </ul>
+      </section>
+
+      <section className="flex flex-col gap-y-2">
+        <h2 className="ps-1 text-sm font-medium text-subtle">Framework</h2>
+        <ul className="flex flex-col overflow-hidden rounded-md bg-surface">
+          <li>
+            {/* the manual-testing surface — one page per component, framework
+                behaviour and capability, each stating the expected result on
+                every target so a hand pass produces a verdict rather than
+                "seemed fine". ONE entry point on purpose: a second row for the
+                same route is how two names for one thing start. */}
+            <Link
+              to="/lab"
+              className="clickable flex w-full items-center gap-x-3 px-4 py-4 text-start"
+            >
+              <FlaskConical
+                size={20}
+                strokeWidth={1.75}
+                aria-hidden
+                className="shrink-0 text-subtle"
+              />
+              <span className="flex-1 text-base font-medium text-foreground">
+                Testing
+              </span>
+              <ChevronRight
+                size={18}
+                strokeWidth={1.75}
+                aria-hidden
+                className="shrink-0 text-subtle"
+              />
+            </Link>
+          </li>
         </ul>
       </section>
 

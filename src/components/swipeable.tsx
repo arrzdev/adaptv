@@ -19,7 +19,7 @@ import {
 } from "#adaptv/hooks/use-gesture-capture"
 import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { cn } from "#adaptv/utils/cn"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /**
  * True when `target` sits inside a swipeable row root (`[data-swipeable-root]`).
@@ -1059,10 +1059,23 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
     return (
       <SwipeableContext.Provider value={contextValue}>
         <div
+          data-adaptv="swipeable"
           ref={rootRef}
           data-swipeable-root
-          className={cn(className)}
-          style={style}
+          //Both tiers undefined by decision (§2). Swipeable is the component that
+          //already follows the escape-hatch rule end to end: every structural
+          //declaration — the clip, the isolation, the panel pinning, the fill
+          //parking — is keyed on `data-swipeable-*` in styles/swipeable.css, so
+          //there is no class for a consumer to fight and nothing to lock. The
+          //engine writes its transforms to the CONTENT node, not this one, so the
+          //consumer's inline `style` here has no per-frame writer to race either.
+          {...mergeStyles({
+            base: undefined,
+            className,
+            locked: undefined,
+            style,
+            lockedStyle: undefined,
+          })}
         >
           {hasLeft && (
             <div ref={leftRef} data-swipeable-actions="left">

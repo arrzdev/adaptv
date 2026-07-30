@@ -83,7 +83,7 @@ unless it's a native build). Public hook APIs never change across platforms.
 | Hook (`@repo/adaptv/hooks`) | web / iOS-web | native |
 |---|---|---|
 | `useVibrate` | `navigator.vibrate` / iOS-18 switch polyfill | `@capacitor/haptics` |
-| `useNetworkStatus` | `navigator.onLine` + events | `@capacitor/network` |
+| `useIsOffline` | `navigator.onLine` + events | `@capacitor/network` |
 | `useStatusBar` | no-op (browser owns the bar) | `@capacitor/status-bar` — **edge-to-edge**, theme-synced |
 | `useGeolocation` | `navigator.geolocation` + Permissions | `@capacitor/geolocation` (OS prompt) |
 | `useAndroidBackButton` | n/a | `@capacitor/app` back → router |

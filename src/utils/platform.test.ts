@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import type { AdaptvUiConfig } from "#adaptv/config/app-config"
 import {
+  applyPlatformStamp,
   getOS,
   getPlatformInitScript,
   isInstalledApp,
   isIOS,
   isNativePlatform,
   isStandaloneDisplay,
+  normalizeUiScope,
   resolvePlatformTag,
+  resolveUiStamp,
+  UI_STAMPS,
 } from "#adaptv/utils/platform"
 
 // ---- global stubs ----------------------------------------------------------
@@ -62,6 +67,11 @@ afterEach(() => {
   vi.restoreAllMocks()
   delete document.documentElement.dataset.adaptvPlatform
   delete document.documentElement.dataset.adaptvOs
+  //drive the cleanup off the table itself — a new stamp must not be able to leak
+  //into the next test just because someone forgot to add a line here
+  for (const [, attr] of UI_STAMPS) {
+    document.documentElement.removeAttribute(attr)
+  }
 })
 
 // ---- isNativePlatform ------------------------------------------------------
@@ -219,8 +229,8 @@ describe("resolvePlatformTag", () => {
 // we assert the CONTRACT: eval'ing it stamps <html data-adaptv-platform/-os> to the
 // same values resolvePlatformTag/getOS would produce.
 describe("getPlatformInitScript", () => {
-  function run(): void {
-    new Function(getPlatformInitScript())()
+  function run(ui?: AdaptvUiConfig): void {
+    new Function(getPlatformInitScript(ui))()
   }
 
   it("is a self-invoking guarded script", () => {
@@ -254,5 +264,157 @@ describe("getPlatformInitScript", () => {
 
   it("never throws even if globals are missing (guarded)", () => {
     expect(() => run()).not.toThrow()
+  })
+})
+
+// ---- ui app-feel stamps ----------------------------------------------------
+// `config × platform` is resolved ONCE, here, and expressed as a boolean-presence
+// attribute — that is what keeps styles.css a single static artifact instead of a
+// per-config build matrix. So the resolution table is the contract worth pinning.
+
+describe("normalizeUiScope", () => {
+  it("passes the three literals through", () => {
+    expect(normalizeUiScope("app")).toBe("app")
+    expect(normalizeUiScope("all")).toBe("all")
+    expect(normalizeUiScope("off")).toBe("off")
+  })
+
+  it("falls back to the documented default for anything else", () => {
+    //this is the defensive half: the value reaches a pre-paint script, and a typo
+    //in adaptv.config.ts must not be able to leave the page unstamped
+    for (const bad of [undefined, null, "", "APP", 1, {}, []]) {
+      expect(normalizeUiScope(bad)).toBe("app")
+    }
+  })
+})
+
+describe("resolveUiStamp", () => {
+  it("is the config × platform table", () => {
+    const table: Array<[Parameters<typeof resolveUiStamp>[0], boolean[]]> =
+      [
+        //                      web    standalone  native
+        ["app", [false, true, true]],
+        ["all", [true, true, true]],
+        ["off", [false, false, false]],
+      ]
+    for (const [scope, expected] of table) {
+      expect([
+        resolveUiStamp(scope, "web"),
+        resolveUiStamp(scope, "standalone"),
+        resolveUiStamp(scope, "native"),
+      ]).toEqual(expected)
+    }
+  })
+})
+
+describe("getPlatformInitScript — ui stamps", () => {
+  function run(ui?: AdaptvUiConfig): void {
+    new Function(getPlatformInitScript(ui))()
+  }
+
+  function stamped(attr: string): boolean {
+    return document.documentElement.hasAttribute(attr)
+  }
+
+  /*
+   * The defaults are NOT uniform, and the split is the design. An option whose
+   * reset a component can escape from can afford to be strict; one with no escape
+   * cannot. `hideScrollbars` has an escape (`ScrollView showsVerticalScrollIndicator`
+   * emits `scrollbar-visible`, which outranks the reset from a later cascade layer),
+   * so it defaults to `"all"` and the same code looks the same on every target.
+   * `noSelect` and `touchCallout` have none — a `user-select: none` in a real tab
+   * means the user cannot select an error message or Ctrl+A the page, and a
+   * suppressed callout means they cannot long-press a link to copy it — so those
+   * stay `"app"`.
+   */
+  it("leaves the escapable-free resets alone in a browser tab by default", () => {
+    stubStandaloneMedia(false)
+    run()
+    expect(stamped("data-adaptv-no-select")).toBe(false)
+    expect(stamped("data-adaptv-no-touch-callout")).toBe(false)
+    expect(
+      stamped("data-adaptv-hide-scrollbars"),
+      "scrollbars are hidden everywhere — the per-scroller prop is the way back",
+    ).toBe(true)
+  })
+
+  it("stamps all of them by default in an installed app", () => {
+    stubStandaloneMedia(true)
+    run()
+    for (const [, attr] of UI_STAMPS) expect(stamped(attr)).toBe(true)
+  })
+
+  it("honours 'all' in a browser tab and 'off' in an installed app", () => {
+    stubStandaloneMedia(false)
+    run({ noSelect: "all", hideScrollbars: "off", touchCallout: "all" })
+    expect(stamped("data-adaptv-no-select")).toBe(true)
+    expect(stamped("data-adaptv-hide-scrollbars")).toBe(false)
+    expect(stamped("data-adaptv-no-touch-callout")).toBe(true)
+
+    stubCapacitor({ isNativePlatform: () => true })
+    run({ noSelect: "off", hideScrollbars: "all", touchCallout: "off" })
+    expect(stamped("data-adaptv-no-select")).toBe(false)
+    expect(stamped("data-adaptv-hide-scrollbars")).toBe(true)
+    expect(stamped("data-adaptv-no-touch-callout")).toBe(false)
+  })
+
+  it("survives a malformed config without losing the platform stamp", () => {
+    //the script runs pre-paint on every boot on every target. a bad `ui` value must
+    //degrade to the default, never throw — a throw would skip the platform stamp
+    //too, which silently disables every `app:` variant and safe-area padding.
+    stubStandaloneMedia(true)
+    const malformed = {
+      noSelect: 42,
+      hideScrollbars: null,
+      touchCallout: { scope: "app" },
+    } as unknown as AdaptvUiConfig
+    expect(() => run(malformed)).not.toThrow()
+    expect(document.documentElement.dataset.adaptvPlatform).toBe(
+      "standalone",
+    )
+    for (const [, attr] of UI_STAMPS) expect(stamped(attr)).toBe(true)
+  })
+})
+
+describe("applyPlatformStamp — ui stamps", () => {
+  it("re-applies the stamps React drops when it reconciles <html>", () => {
+    stubStandaloneMedia(true)
+    applyPlatformStamp()
+    expect(document.documentElement.dataset.adaptvPlatform).toBe(
+      "standalone",
+    )
+    expect(
+      document.documentElement.hasAttribute("data-adaptv-no-select"),
+    ).toBe(true)
+  })
+
+  it("REMOVES a stamp the config turned off, rather than leaving it stale", () => {
+    stubStandaloneMedia(true)
+    document.documentElement.setAttribute("data-adaptv-no-select", "")
+    applyPlatformStamp({ noSelect: "off" })
+    expect(
+      document.documentElement.hasAttribute("data-adaptv-no-select"),
+    ).toBe(false)
+  })
+
+  it("agrees with the init script it re-runs", () => {
+    //two implementations of one table (a string for pre-paint, TS for the effect)
+    //is exactly the pair that drifts, so pin them to each other
+    stubStandaloneMedia(false)
+    const ui: AdaptvUiConfig = {
+      noSelect: "all",
+      hideScrollbars: "app",
+      touchCallout: "all",
+    }
+    const readAll = () =>
+      UI_STAMPS.map(([, attr]) =>
+        document.documentElement.hasAttribute(attr),
+      )
+    new Function(getPlatformInitScript(ui))()
+    const fromScript = readAll()
+    applyPlatformStamp(ui)
+    expect(readAll()).toEqual(fromScript)
+    //and it actually decided something, rather than agreeing on all-false
+    expect(fromScript).toEqual([true, false, true])
   })
 })

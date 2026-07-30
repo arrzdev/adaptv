@@ -44,6 +44,7 @@ export function OrientationGuard({
 function DefaultOrientationGuard({ orientation }: OrientationGuardProps) {
   return (
     <div
+      data-adaptv="orientation-guard"
       role="alert"
       className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-y-6 bg-background px-safe-offset-6 py-safe-offset-8 text-center text-foreground"
     >

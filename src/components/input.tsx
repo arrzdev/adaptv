@@ -15,8 +15,9 @@ import {
   useMemo,
   useRef,
 } from "react"
-import { cn } from "#adaptv/utils/cn"
+import { PRESS_TARGET_DISABLED_LOCKED_CLASS } from "#adaptv/components/press-core"
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
+import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * TYPES
@@ -80,7 +81,7 @@ export type InputProps = Omit<
 interface InputFieldProps extends Omit<InputProps, "children"> {
   grouped?: boolean
   inputId: string
-  /** Routed from {@link partitionInputClassName} when grouped. */
+  /** The `placeholder:` / `caret:` half of {@link partitionInputClassName}. */
   innerClassName?: string
 }
 
@@ -95,18 +96,33 @@ interface InputGroupProps {
  * CLASSES
  * ============================================================================= */
 
-const INPUT_SLOT_LAYOUT_CLASS =
-  "inline-flex shrink-0 items-center self-center"
-const INPUT_LEADING_LAYOUT_CLASS = "order-1"
-const INPUT_TRAILING_LAYOUT_CLASS = "order-3"
+//LOCKED on the slots: `order-*` IS the compound contract. Children render in
+//document order and the field is injected with `order-2`, so leading → field →
+//trailing only holds while these stick; `shrink-0` keeps an icon from collapsing
+//when the label runs out of room. Alignment is a default.
+const INPUT_SLOT_LOCKED_LAYOUT_CLASS = "inline-flex shrink-0"
+const INPUT_SLOT_BASE_LAYOUT_CLASS = "items-center self-center"
+const INPUT_LEADING_LOCKED_ORDER_CLASS = "order-1"
+const INPUT_TRAILING_LOCKED_ORDER_CLASS = "order-3"
 const INPUT_GROUP_LAYOUT_CLASS = "flex items-center w-fit min-w-0"
 const INPUT_GROUP_INTERACTION_CLASS = "cursor-text"
-const INPUT_GROUP_NON_INTERACTION_CLASS = "non-clickable"
+const INPUT_GROUP_NON_INTERACTION_CLASS =
+  PRESS_TARGET_DISABLED_LOCKED_CLASS
+const INPUT_GROUP_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
+//⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
+//cancels the shift at exactly 1px and permanently shrinks the content box; use
+//`outline` for toggled emphasis instead.
 const INPUT_GROUP_SURFACE_CLASS = "bg-gray-50 text-gray-950"
 const INPUT_FIELD_RESIZE_CLASS = "resize-none"
 const INPUT_FIELD_INTERACTION_CLASS = "cursor-text"
-const INPUT_FIELD_NON_INTERACTION_CLASS = "non-clickable"
+const INPUT_FIELD_NON_INTERACTION_CLASS =
+  PRESS_TARGET_DISABLED_LOCKED_CLASS
+const INPUT_FIELD_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 const INPUT_FIELD_SURFACE_CLASS = "bg-gray-50 text-gray-950"
+//LOCKED when grouped: this is what makes the field a chromeless participant in the
+//label's flex row rather than a second visible box inside the first. `order-2` is
+//the slot contract above; `flex-1 min-w-0` is what lets it give way to the slots;
+//the chrome-strippers are why the group's own surface is the only visible one.
 const INPUT_FIELD_GROUPED_CHROMELESS_CLASS =
   "order-2 min-w-0 flex-1 border-none bg-transparent p-0 shadow-none text-inherit"
 
@@ -241,11 +257,14 @@ function InputLeading({ children, className }: InputLeadingProps) {
 
   return (
     <div
-      className={cn(
-        INPUT_SLOT_LAYOUT_CLASS,
-        INPUT_LEADING_LAYOUT_CLASS,
+      className={mergeStyles({
+        base: INPUT_SLOT_BASE_LAYOUT_CLASS,
         className,
-      )}
+        locked: [
+          INPUT_SLOT_LOCKED_LAYOUT_CLASS,
+          INPUT_LEADING_LOCKED_ORDER_CLASS,
+        ],
+      })}
       onMouseDownCapture={handleMouseDownCapture}
     >
       {children}
@@ -286,11 +305,14 @@ function InputTrailing({ children, className }: InputTrailingProps) {
 
   return (
     <div
-      className={cn(
-        INPUT_SLOT_LAYOUT_CLASS,
-        INPUT_TRAILING_LAYOUT_CLASS,
+      className={mergeStyles({
+        base: INPUT_SLOT_BASE_LAYOUT_CLASS,
         className,
-      )}
+        locked: [
+          INPUT_SLOT_LOCKED_LAYOUT_CLASS,
+          INPUT_TRAILING_LOCKED_ORDER_CLASS,
+        ],
+      })}
       onMouseDownCapture={handleMouseDownCapture}
     >
       {children}
@@ -322,15 +344,21 @@ function InputGroup({
 
   return (
     <label
+      data-adaptv="input"
       htmlFor={inputId}
-      className={cn(
-        INPUT_GROUP_LAYOUT_CLASS,
-        disabled
-          ? INPUT_GROUP_NON_INTERACTION_CLASS
-          : INPUT_GROUP_INTERACTION_CLASS,
-        INPUT_GROUP_SURFACE_CLASS,
+      //LOCKED: `non-clickable` when disabled — a disabled field that still accepts
+      //a tap (and still shows a text caret) is a bug, not a style. `cursor-text`
+      //when enabled is only a cursor, so it stays base and a consumer can change it.
+      className={mergeStyles({
+        base: [
+          INPUT_GROUP_LAYOUT_CLASS,
+          INPUT_GROUP_SURFACE_CLASS,
+          !disabled && INPUT_GROUP_INTERACTION_CLASS,
+          disabled && INPUT_GROUP_DISABLED_CURSOR_CLASS,
+        ],
         className,
-      )}
+        locked: disabled && INPUT_GROUP_NON_INTERACTION_CLASS,
+      })}
       onMouseDown={handleMouseDown}
     >
       {children}
@@ -381,16 +409,26 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
         id={inputId}
         type={type}
         size={grouped ? size : (size ?? 20)}
-        className={cn(
-          INPUT_FIELD_RESIZE_CLASS,
-          !grouped && INPUT_FIELD_SURFACE_CLASS,
-          !grouped &&
-            (disabled
-              ? INPUT_FIELD_NON_INTERACTION_CLASS
-              : INPUT_FIELD_INTERACTION_CLASS),
-          grouped && INPUT_FIELD_GROUPED_CHROMELESS_CLASS,
-          grouped ? innerClassName : cn(className, innerClassName),
-        )}
+        //Grouped, the chromeless class is LOCKED: it is what makes this field a
+        //participant in the label's flex row (`order-2 flex-1 min-w-0`) instead of
+        //a second visible box inside the first, and the consumer already has the
+        //group shell for exactly the chrome it strips. Ungrouped there is no shell,
+        //so the same surface is a plain BASE the consumer restyles freely.
+        className={mergeStyles({
+          base: [
+            INPUT_FIELD_RESIZE_CLASS,
+            !grouped && INPUT_FIELD_SURFACE_CLASS,
+            !grouped && !disabled && INPUT_FIELD_INTERACTION_CLASS,
+            !grouped && disabled && INPUT_FIELD_DISABLED_CURSOR_CLASS,
+          ],
+          className: grouped
+            ? innerClassName
+            : [className, innerClassName],
+          locked: [
+            grouped && INPUT_FIELD_GROUPED_CHROMELESS_CLASS,
+            disabled && INPUT_FIELD_NON_INTERACTION_CLASS,
+          ],
+        })}
         onKeyDown={handleKeyDown}
         onBlur={onBlur}
         {...props}
@@ -436,10 +474,13 @@ function dispatchFieldValueEvents(field: HTMLInputElement) {
  * - `ref.current.focus()` — focuses the underlying input.
  * - `ref.current.clear()` — clears the native `<input>` and dispatches `input`/`change`.
  *
- * **Baseline styles**: neutral gray surface; bare fields use native inline-block
- * width (~20 characters via default `size={20}`). Pass `w-full` or another width
- * utility when the field should fill its parent. Borders and focus rings belong
- * in Tier 2 `className`.
+ * **Baseline styles**: neutral gray surface with a **transparent 1px border**, so
+ * a `focus-within:border-primary` or an invalid-state border costs no layout —
+ * under `box-sizing: border-box` a border that appears later eats the content box
+ * and the text jumps. It is `base`, so `border-0` still wins. Bare fields use
+ * native inline-block width (~20 characters via default `size={20}`). Pass
+ * `w-full` or another width utility when the field should fill its parent. Border
+ * colours and focus rings belong in Tier 2 `className`.
  *
  * @example
  * ```tsx
@@ -505,13 +546,17 @@ const InputRoot = forwardRef<InputHandle, InputProps>(function Input(
   const chromeLessField = (
     <InputField
       ref={fieldRef}
+      //only when it IS the root: grouped, the wrapping label above carries it, and
+      //stamping both would make `[data-adaptv="input"]` match two nested elements
+      data-adaptv={isGrouped ? undefined : "input"}
       grouped={isGrouped}
       inputId={inputId}
       name={name}
-      className={
-        isGrouped ? undefined : cn(shellClassName, innerClassName)
-      }
-      innerClassName={isGrouped ? innerClassName : undefined}
+      //both halves of the partition are the CONSUMER tier, so they are handed over
+      //separately and merged there rather than pre-joined here — that keeps one
+      //mergeStyles call as the single place precedence is decided (§2)
+      className={isGrouped ? undefined : shellClassName}
+      innerClassName={innerClassName}
       value={value}
       defaultValue={defaultValue}
       onChange={onChange}
