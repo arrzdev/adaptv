@@ -950,7 +950,9 @@ Tests do not cover any of this. Run it and read it:
 Capture output through a pty so live-line rendering behaves as in a real terminal:
 `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv <cmd>`
 
-And `node scripts/check-colour.mjs` — the live layer's colour is invisible to the test suite (R49).
+`pnpm gate` runs biome, typecheck, the suite and the colour probe as ONE command that exits
+non-zero. Run it bare. Piping it (`pnpm gate | grep Tests`) reports **grep's** exit code, not
+the gate's — that is how a commit went in on this branch while a test was red.
 
 Stop `dev` runs with **SIGINT** (`pkill -INT -f "adaptv.mjs dev"`), never SIGKILL — SIGKILL skips
 teardown and strands the dev ATS exception in `Info.plist`.
