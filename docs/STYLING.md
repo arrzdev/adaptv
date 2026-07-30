@@ -2,8 +2,8 @@
 
 > **How a consumer customises the look of adaptv primitives.** The framework's most-touched surface,
 > and until now the only major one with no decision written down: `VISION.md §9` listed "Styling
-> system" as open, while `src/utils/styles.ts` had already shipped a precedence contract that only
-> 2 of 19 components actually used.
+> system" as open, while `src/utils/styles.ts` had already shipped a precedence contract that, at the
+> time, only 2 of the then-19 components actually used (bug **B8**, closed 2026-07-29 — see §2).
 >
 > Decided **2026-07-20**, informed by a source-level study of Ionic's `--ion-*` system, Ark UI/Zag's
 > `data-scope`/`data-part` model, and Tailwind v4's `@theme`.
@@ -19,6 +19,89 @@ globally from plain CSS without importing a single class name. Custom properties
 *exclusively* for values that must cross the JS→CSS boundary at runtime (insets, keyboard height).
 Cascade layers guarantee consumer styles win without `!important`. **Design tokens are the
 consumer's Tailwind `@theme` — adaptv ships no palette.**
+
+---
+
+## 0.1 🔒 Tailwind is a hard requirement, and that is now an explicit decision
+
+Decided **2026-07-28**. The doc previously *implied* this (§7 makes the consumer's `@theme` the token
+system) without ever stating it, so it was an assumption rather than a decision. It is now the
+latter, and the alternative was considered and rejected.
+
+**adaptv does not work without Tailwind v4 in the consumer's build.** Not "looks unstyled" — *does not
+work*. Three separate couplings, worth knowing individually because they fail differently:
+
+1. **Primitives emit Tailwind utilities for structure**, not just decoration (`inline-flex`,
+   `shrink-0`, `overflow-*`, the `clickable` `touch-action` longhand). Uncompiled, those class names
+   generate no CSS and the primitive is structurally broken.
+2. **`patches.css` and `utils.css` use Tailwind at-rules** (`@custom-variant`, `@utility`, `@source`).
+   A non-Tailwind bundler passes them through as unknown at-rules and the browser **ignores them
+   silently** — the plain-CSS patches (autofill, scrollbar, iOS callout) survive, the `hover:` fix and
+   every `@utility` vanish with no error. Silent partial failure is the worst mode; say so in the
+   quickstart.
+3. **`index.css` declares `@source "../**/*.{ts,tsx}"`** — adaptv instructing the consumer's Tailwind
+   to scan adaptv's own source. This also couples the styling layer to **shipping as source**: the
+   `exports` map points at `./src/interface/*.ts` today, and the deferred `dist` cutover must move
+   this path with it or every internal utility silently stops being generated.
+
+### The positive reason: build-time rewriting is a capability, not ergonomics
+
+The decisive argument is **not** cost-avoidance — it's that a `@custom-variant` lets adaptv ship a
+cross-platform correctness fix that applies **automatically to idiomatic consumer code the consumer
+already writes**, with nothing to remember. `hover:` is the worked example:
+
+```css
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover:not(:is(:focus, :focus-within)) { @slot; }
+  }
+}
+```
+
+A consumer writes `hover:bg-muted` as they always would, and it compiles to a rule that cannot stick
+after a tap on touch and cannot beat a focus ring. **There is no CSS mechanism for this** — `:hover`
+cannot be redefined, so in raw CSS the guard has to be hand-written at every call site, which means
+it will be missed. Build-time rewriting is the only delivery vehicle, and it generalises: any
+cross-platform quirk expressible as a variant override or an `@utility` becomes free for every
+consumer. That is a category of leverage worth paying a peer dependency for.
+
+**Two honest limits on it**, both of which belong in the quickstart:
+
+- **The fix covers `hover:` utilities, not `:hover` anywhere.** A consumer who writes
+  `.card:hover { … }` in their own stylesheet — still possible under this decision — gets stock
+  behaviour. Coverage tracks how much of their hover styling stays in utilities.
+- **Only the `:not(:is(:focus, :focus-within))` half is adaptv's.** Tailwind v4 already compiles
+  `hover:` inside `@media (hover: hover)` by default (verified in `tailwindcss@4.2.4`
+  `dist/chunk-3IR7ZFJX.mjs`). Overriding the variant *discards* that, so adaptv must re-supply the
+  media query — it is required, not redundant — but the sticky-hover fix is Tailwind's, not ours, and
+  `patches.css`'s first comment line currently implies otherwise.
+
+**The rejected alternative** was moving structural classes into real CSS in `@layer adaptv.components`
+keyed on the `data-adaptv` / `data-part` attributes §3 already mandates. That would have made
+correctness Tailwind-independent (a SCSS-only consumer imports `styles.css`, gets working components,
+overrides with unlayered CSS and no `!important`) and demoted Tailwind to ergonomics. Rejected for now
+on cost — a per-component rewrite, plus shipping a whole stylesheet instead of tree-shaken utilities —
+and because it would forfeit the leverage above for the primitives it touched.
+
+> **Revisit as an *additive* path, not a replacement**, if a non-Tailwind consumer ever becomes a
+> target: core in the layer, utilities still emitted for Tailwind consumers. Nothing in §2–§7 changes
+> under that model; the variant-delivered fixes simply stop reaching the non-Tailwind tier, which is
+> an accepted downgrade rather than a regression.
+
+### What follows, and is therefore non-negotiable
+
+- **`tailwindcss`, `tailwind-merge`, `clsx` are `peerDependencies`** — they
+  already are, which is the correct shape now that this is a requirement rather than an internal
+  choice. ⚠︎ They are pinned **exact** (`4.2.4`); for a required peer that means a consumer on
+  `4.2.5` gets an install failure. Widen to a caret range unless an exact pin is load-bearing.
+- **The requirement is stated in the quickstart.** The `@layer` statement §6.0 describes is **no
+  longer the consumer's job** — the Vite plugin injects it (§6.0.2). What the quickstart must state
+  instead is that `adaptv()` comes **before** `tailwindcss()` in `vite.config.ts`.
+- **§5.5's `extendTailwindMerge` rule is permanent and load-bearing.** Every new `@utility` must be
+  registered in `cn.ts` with its conflicting groups, or `locked` silently stops being a guarantee for
+  that property — see the `scrollable-y` case documented in `cn.ts`.
+- **Structural classes go in `locked`** (§2), which is now the whole of bug **B8**'s remedy — there is
+  no CSS-layer alternative path to weigh against it.
 
 ---
 
@@ -76,15 +159,45 @@ mergeStyles({ base, className, locked })   //  base  <  className  <  locked
 | `locked` | adaptv | Structural / cross-platform-correctness classes. **Wins over both.** |
 
 Precedence rides on tailwind-merge's last-wins conflict resolution, including adaptv's custom class
-groups registered via `extendTailwindMerge` (`scrollable-*`, `clickable`/`non-clickable`, and the
-`tailwindcss-safe-area` `p*-safe` utilities folded into the standard padding groups — so
-`View safe="bottom"` beats a stray consumer `pb-0`).
+groups registered via `extendTailwindMerge` (`scrollable-*`, `clickable`/`non-clickable`, and adaptv's
+own `*-safe` / `*-safe-offset-*` / `*-safe-or-*` families folded into the standard padding, margin and
+inset groups — so `View safe="bottom"` beats a stray consumer `pb-0`).
 
-> **⚠︎ Delta to close (bug B8): 17 of 19 primitives use bare `cn()` and therefore have no `locked`
-> layer at all.** The "consumer can't break structural classes" guarantee is currently unenforced
-> everywhere except `View` and `ExternalLink`. Every primitive must migrate to `mergeStyles`, and a
-> primitive with nothing structural should pass `locked: undefined` **explicitly** so the omission is
-> a decision rather than an oversight.
+> ✅ **Bug B8 is closed.** Every primitive now routes through `mergeStyles`, and one with nothing
+> structural passes `locked: undefined` **explicitly**, so the omission reads as a decision.
+> `src/components/style-precedence.test.tsx` asserts both halves on every primitive — a class that
+> must win *and* a class that must lose — because the failure is silent in both directions: forgetting
+> `locked` looks fine until a consumer's `touch-none` strands a gesture on iOS, and over-locking looks
+> fine until someone cannot restyle it and files a bug adaptv cannot fix from their side.
+>
+> The migration paid for itself immediately: it exposed that `WheelColumn` shipped
+> `"scrollable-y overscroll-contain"`, and since `overscroll` is a registered conflicting group of
+> `pwa-scroll-behavior`, tailwind-merge dropped `scrollable-y` **entirely** — the wheel had no
+> `overflow-y: auto` at all. That is §5.5's rule failing inside adaptv's own code.
+
+### 2.1 The inline-style tier
+
+`mergeStyles` merges **both** channels, because inline `style` is its own cascade origin and beats
+every author stylesheet at any layer or specificity — so a `data-*`-keyed CSS rule (the escape hatch
+below) does *not* protect against it:
+
+```ts
+mergeStyles({ base, className, locked, baseStyle, style, lockedStyle })
+// class → cn(base, className, locked)
+// style → { ...baseStyle, ...style, ...lockedStyle }
+```
+
+Object spread gives exact last-wins semantics **per property**, so unlike the class path there is no
+conflict-group registry to keep in step — strictly more reliable than `cn`, for the reason the
+`WheelColumn` bug above demonstrates. The return type is conditional: `string` when only class layers
+are named, `{ className, style }` the moment any style layer is *named* (even as `undefined`).
+
+**Two honest limits.** It is not a security boundary — a consumer holding a `ref` can always assign
+`el.style.*`, exactly as they can always write an unlayered `!important` against the class tiers; the
+contract makes the *accidental* case impossible, not the deliberate one. And for properties the
+gesture engine writes per frame directly to the node, a consumer's inline value loses to a **race**,
+not to this contract; the clean channel there is §3.2 (engine writes a custom property, a layer rule
+consumes it).
 
 **The escape-hatch rule (learned from Ionic #24283):** when behaviour must be untouchable, do **not**
 express it as a class the consumer can fight — express it as a **prop → `data-*` → CSS rule**, so
@@ -96,7 +209,7 @@ there is no class to lose to. `locked` covers *soft*-structural look only.
 
 adaptv already exposes state this way ad hoc: `data-pressed` (the reentrant press engine, since
 native `:active` can't be cleared from JS and won't re-light on touch re-entry),
-`data-keyboard-open` / `data-keyboard-height`, `data-caret-muted`, `data-gpu-boost`,
+`data-keyboard-open`, `data-caret-muted`, `data-press-engine`,
 `data-adaptv-splash`, `data-app-shell`. **Formalise it**, adopting Ark UI/Zag's two-axis idea:
 
 ```html
@@ -160,7 +273,7 @@ because its components are *copied into your repo*, so edited classNames give a 
 to target. Two systems arriving at the same primitive from opposite directions is about as strong a
 signal as design research produces.
 
-### 3.2 🔒 Measured scalars are CSS variables — and unprefixed
+### 3.2 🔒 Measured scalars are CSS variables — unprefixed when local, prefixed when global
 
 The split every library converged on: **enumerable state → data attribute; measured scalar → CSS
 variable.** Four reasons a class can't do the job — the value space is continuous (`473.5px`), it's
@@ -168,9 +281,20 @@ computed post-layout *in the same frame* (a class means a React round-trip betwe
 a visible flash), custom properties **inherit** so the measuring element and the consuming element can
 differ, and they compose inside `calc()`.
 
-**Unprefixed names.** Base UI and Zag independently landed on `--available-height`, `--anchor-width`,
-`--transform-origin`; only Radix prefixes, and its own internals show why it regretted it — five real
-vars in `popper.tsx`, then a per-component alias layer on top. adaptv follows Base UI/Zag.
+**Unprefixed for component-local scalars.** Base UI and Zag independently landed on
+`--available-height`, `--anchor-width`, `--transform-origin`; only Radix prefixes, and its own
+internals show why it regretted it — five real vars in `popper.tsx`, then a per-component alias layer
+on top. adaptv follows Base UI/Zag for anything scoped to one component's subtree.
+
+**🔒 Prefixed for the global contract variables** — amended **2026-07-29**. Base UI and Zag reasoned
+about *component-local* scalars, where the declaring and consuming elements are one subtree apart and
+a collision is nearly impossible. A variable published on `:root` and read app-wide is a different
+risk: `--safe-bottom` and `--keyboard-height` are generic enough that a consumer plausibly owns names
+like them already, and a silent collision there breaks layout globally rather than in one component.
+
+So `--adaptv-inset-{top,right,bottom,left}`, `--adaptv-keyboard-height` and
+`--adaptv-ring` carry the prefix; a `Drawer`'s own measured content height does not. **The test is
+scope, not importance.**
 
 **The unknown-height animation trick, worth porting verbatim** (Radix `collapsible.tsx`): suppress
 animation → force layout → measure → restore animation → publish as a var.
@@ -221,38 +345,160 @@ CSS cannot compute for itself:
 
 | Property | Set by | Why it must be a variable |
 |---|---|---|
-| `--safe-area-inset-{top,right,bottom,left}` | native inset reporting | Android WebView `env()` is unreliable; the plugin layer must inject real values (§6) |
-| `--keyboard-height` | `useKeyboard` accessor | the real OS keyboard height, not a `visualViewport` guess |
+| `--adaptv-inset-{top,right,bottom,left}` | `safe-area.css`, resolving the contract | the value space is continuous, and it must compose inside `calc()` |
+| `--safe-area-inset-*` | Capacitor `SystemBars` on Android | the **input** to the contract above, injected with no event — `env()` reads 0/wrong in Android WebView (`crbug/40699457`) |
+| `--adaptv-keyboard-height` | `useKeyboard` | the real OS keyboard height, not a `visualViewport` guess |
 | `--pwa-launch-height` | `getLaunchViewportInitScript()` | freezes resolved `100vh` against the iOS standalone cold-start ICB expansion |
 | `--viewport-cover-bleed` | critical CSS | launch-overscan bleed |
 
-Use Ionic's fallback-chain idiom so a consumer override cascades without recomputation:
+Use Ionic's fallback-chain idiom so a consumer override cascades without recomputation. The
+`var()`-before-`env()` ordering is the inverse of what most people write, and it is a **🔒 locked
+contract** (`DECISIONS.md §6.0`, B18) — Capacitor's injected variable must win, with `env()` only as
+the fallback:
 
 ```css
-padding-top: var(--adaptv-inset-top, env(safe-area-inset-top, 0px));
+--adaptv-inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 ```
+
+**Every one of these is always defined**, at rest as `0px`. An absent variable forces each call site
+to remember `var(--x, 0px)`, and the one that forgets breaks the whole `calc()`.
+
+### 4.1 The third category — properties adaptv *reads* but never *defines*
+
+`--adaptv-ring` (the `:focus-visible` outline colour, §D) is neither of the two things this doc
+recognises. It is not JS→CSS transport — no JS writes it. It is not the rejected theming API of §1 —
+adaptv ships no value for it, and the rule below still holds.
+
+It is a **declared extension point**: adaptv consumes it with a literal fallback
+(`var(--adaptv-ring, currentColor)`), so it works with the consumer defining nothing, and defining it
+is the one-line fix for the case where the fallback is wrong (`currentColor` on a filled button gives
+a light ring that washes out against a light page).
+
+🔒 The constraint that keeps this from becoming §1's rejected model: **an extension point must have a
+working literal fallback, and there must be very few of them.** The moment adaptv *needs* a consumer
+to define one, it has shipped a token surface by the back door. Two is the ceiling worth having.
 
 > **Do not** add `--adaptv-color-*`, `--adaptv-radius-*`, `--adaptv-spacing-*`, or per-component
 > properties like `--drawer-padding-start`. That is §1's rejected model.
 
 ---
 
-## 5. 🔒 Layer 4 — platform variants, already correct
+## 5. 🔒 Layer 4 — variants: the complete, closed list
 
-adaptv stamps `data-adaptv-platform` (`web` | `native` | `standalone`) and `data-adaptv-os` on `<html>`
-**pre-paint**, and derives Tailwind custom variants from it:
+Variants are the one part of the surface that is **not discoverable** — a hook shows up in
+autocomplete, a variant appears nowhere. That is only acceptable with a single canonical list, and
+this is it. **Six, and the set is closed.**
 
-- **`app:`** → installed PWA (`display-mode: standalone`) **or** a native Capacitor build. The
-  attribute branch is load-bearing: **a native WebView reports `display-mode: browser`**, so a media
-  query alone misses it.
-- **`web:`** → a real browser tab only. Attribute-scoped for the same reason.
-- **`pressed:`** → `[data-pressed]`, the gesture-engine press state.
+They split into two categories, and the split is the rule for whether a seventh ever gets added:
 
-This is strictly better than Ionic's `.ios`/`.md` mode classes: it's pre-paint (no FOUC, no hydration
-mismatch), and it separates *platform* from *installation context*, which Ionic conflates.
+### Corrections — the consumer never learns these
 
-**Delta:** add `ios:` / `android:` variants off `data-adaptv-os` — currently only the platform axis has
-variants, so per-OS styling still requires a hand-written `[data-adaptv-os="ios"] &` selector.
+They rewrite the meaning of code the consumer already writes. There is nothing to import and no name
+to remember; existing `hover:bg-muted` simply becomes correct. **No hook can do this**, because there
+is nothing to call — build-time rewriting is the only delivery vehicle, and it is the concrete reason
+Tailwind is a hard requirement (§0.1).
+
+| | What it fixes |
+|---|---|
+| **`hover:`** | `&:hover:not(:is(:focus, :focus-within))` inside `@media (hover: hover)`. The media query is Tailwind v4's own default, which overriding the variant *discards* — so adaptv must re-supply it. Ours is the `:not(…)` half: hover must not beat a focus ring. |
+| **`active:`** | Two branches — `&[data-pressed]` for engine-driven elements, `&:active:not([data-press-engine])` for everything else. The gesture engine stamps `data-press-engine` so a consumer's plain `<button className="active:scale-95">` keeps native `:active` and does not silently stop working. Native `:active` cannot be cleared from JS and will not re-light on touch re-entry, which is why engine elements must not use it. |
+
+### State — the consumer must know these exist
+
+| | Meaning |
+|---|---|
+| **`app:`** | installed PWA (`display-mode: standalone`) **or** a native Capacitor build. The attribute branch is load-bearing: a native WebView reports `display-mode: browser`, so a media query alone misses it. |
+| **`web:`** | a real browser tab only. Attribute-scoped for the same reason. |
+| **`dark:` / `light:`** | the pre-paint theme stamp. |
+
+### What is deliberately absent
+
+- **`pressed:`** — removed. It was pure sugar over Tailwind v4's built-in `data-pressed:`, and having
+  `pressed:` *and* `data-pressed:` *and* a hook is three ways to do one thing. Folded into `active:`.
+- **`ios:` / `android:`** — not added. The value is static for the session, so a hook returns a
+  constant with no subscription and **zero re-renders after mount**; the performance argument that
+  justifies `app:`/`web:` does not apply, and `[data-adaptv-os="ios"] &` covers the CSS case.
+- **Negations** (`keyboard-closed:`, …) — never. Tailwind v4's `not-*` composes with any variant, so
+  shipping the inverse of every boolean doubles the surface for zero capability.
+
+### The rule for adding a seventh
+
+> **Does it fix code the consumer already wrote, or expose state they could read?**
+> Fixes are invisible and belong here. State is importable and belongs in a hook, a prop, or the
+> documented `data-*` attribute — which is also visible in devtools, and therefore more discoverable
+> than either.
+
+The primitives are the real answer for most of this: if `View safe="bottom"`, `<Pressable>` and
+`<Image>` cover the common cases, the consumer never reaches for a variant at all. Progressive
+disclosure, not two parallel APIs.
+
+This whole layer is strictly better than Ionic's `.ios`/`.md` mode classes: it is pre-paint (no FOUC,
+no hydration mismatch), and it separates *platform* from *installation context*, which Ionic conflates.
+
+---
+
+## 5.4 🔒 A knob is a prop. A class may only extend a vocabulary the consumer already has
+
+Added **2026-07-30**, after `ScrollView`'s fade depth shipped as a class and was pulled back.
+
+§2 says presentation is `className`. That is about letting a consumer *repaint* things — it is not a
+licence to push **component parameters** out of the typed interface. The two get confused easily, and
+the rule that separates them:
+
+> A class is acceptable when it extends a vocabulary the consumer already has. It is wrong when the
+> name is one only adaptv knows.
+
+- `pb-safe-offset-2` ✅ — it is `pb-*`, extended to the safe area. Nothing to discover; nobody argues
+  `pb-2` should be a prop.
+- `edge-fade-10` ❌ — a name adaptv invented, for a knob on one component. It is now `fadeSize`.
+
+**Two failure modes it prevents, both of which actually happened.**
+
+*Guessing.* The point of a typed component interface is that nothing has to be looked up. A consumer
+should not have to learn that the fade is a mask, let alone that the mask reads `--fade-length`.
+Offering the variable as a documented "escape hatch" is the same defect wearing a nicer name.
+
+*Two channels for one knob.* `fadeSize` and `edge-fade-*` briefly shipped together, and the prop won
+every time — an inline custom property is its own cascade origin — so `fadeSize` beside
+`md:edge-fade-12` sat at the prop's value and the breakpoint read as broken. A caveat in the docs is
+not a fix for that; one channel is.
+
+Note the prop **cannot** dodge the conflict by emitting the class instead: Tailwind's JIT only compiles
+names it finds in a source scan, and one built at runtime from a prop is never in one — it emits no
+rule and silently does nothing.
+
+**Known, deliberate exception:** `selectable` is an adaptv-invented name and only `Text` exposes it as
+a prop; elsewhere it is the class. Reviewed 2026-07-30 and left alone — adding it to `View`,
+`ScrollView` and friends is more public surface than the inconsistency costs. Revisit if it bites.
+
+---
+
+### 5.4.1 🔒 Do not invent a utility Tailwind can already spell
+
+Amended **2026-07-30**. adaptv shipped `clickable`, `non-clickable`, `scrollable`,
+`scrollable-x` and `scrollable-y`. All five are gone; the call sites write raw Tailwind.
+
+**A custom utility is not free — it costs a conflict table.** tailwind-merge resolves by
+GROUP, and a group it has never heard of conflicts with nothing. So every invented
+utility had to declare, by hand, every property it expanded to; `cn.ts` carried a
+`conflictingClassGroups` block naming `overflow`, `overflow-x`, `overflow-y`, `touch`,
+`overscroll`… kept in step with the CSS by memory. The entry nobody wrote was `cursor`,
+so `cn("non-clickable", "cursor-wait")` emitted **both** and Tailwind's print order
+picked the winner — the consumer's, by luck, and silently the other way round the day
+that order changes.
+
+**And it hides a bundle.** `clickable` was `touch-action` *and* `cursor: pointer` in one
+class, applied as `locked`. Locking the touch longhand is correct (WebKit 240917); locking
+the cursor was an accident of packaging, and it made `cursor-wait` on a pending button
+unreachable. Raw utilities cannot bundle, so the tiers had to separate — the touch
+longhand `locked`, the cursor `base`, and a consumer's `cursor-*` now wins through
+tailwind-merge's own group.
+
+**The bar for a new utility**, and the three that still clear it: the property has no
+Tailwind equivalent at all. `scrollbar-hidden` / `scrollbar-visible` (`scrollbar-width` +
+`::-webkit-scrollbar`) and `selectable` (the opt-in against the app-wide reset) stay.
+Anything expressible as `overflow-y-auto touch-pan-x …` is written that way, at the call
+site, where tailwind-merge already knows how to resolve it.
 
 ---
 
@@ -316,7 +562,33 @@ The fix is spec-sanctioned: `@layer` statements are among the only rules allowed
 @import "@arrzdev/adaptv/styles.css";
 ```
 
-**Ship that as a copy-paste line in the quickstart**, and have `create-adaptv` scaffold it. This is also the pattern MUI documents for its own Tailwind integration (`@layer theme, base, mui, components, utilities;`).
+This is also the pattern MUI documents for its own Tailwind integration
+(`@layer theme, base, mui, components, utilities;`).
+
+#### ✅ 6.0.2 The consumer no longer writes that line — the plugin injects it
+
+Shipping the line as a quickstart copy-paste was the original plan, and it was the wrong shape:
+adaptv already generates `capacitor.config.json`, the route tree, the entries, the web manifest and
+the service worker, so one line of CSS is the same category of build detail the framework should
+absorb. Making it the consumer's job means it is forgotten, and forgetting it looks like an adaptv bug.
+
+**`adaptv:css-layer-order`** (`src/vite/css-layer-order.ts`, `enforce: "pre"`) transforms any CSS
+module that imports a Tailwind entry and prepends the statement if it is not already there.
+Idempotent — a consumer who wrote it by hand is unaffected.
+
+Two things about it are load-bearing:
+
+- **The plugin must be listed before `tailwindcss()` in `vite.config.ts`.** Tailwind's own CSS
+  transforms are *also* `enforce: "pre"`, so relative order is array order, not enforce order. This
+  replaced one requirement with another — but the new one **fails loudly**: when no stylesheet
+  declares a Tailwind entry, the plugin warns through the same channel as every other adaptv Vite
+  plugin, naming the fix. Silent breakage would have been strictly worse than the explicit line.
+- **The equivalence was proven from output, not reasoned.** Deleting the hand-written line from the
+  playground and rebuilding produced a **byte-identical stylesheet, same content hash**; swapping the
+  plugin order reproduced §6.0's inverted layer order exactly, with the warning firing once.
+
+The line still belongs in the docs for contexts the plugin does not run in — Storybook, test
+harnesses, anything consuming `styles.css` outside adaptv's build.
 
 ### 6.0.1 🔒 adaptv must never use `!important` inside its own layer
 
@@ -379,7 +651,6 @@ it. Shipping a second, parallel token layer would mean every consumer maintains 
 ```css
 /* the app's main.css — the ONLY place tokens are defined */
 @import "tailwindcss";
-@import "tailwindcss-safe-area";
 @import "@arrzdev/adaptv/styles.css";
 
 @theme {
@@ -433,17 +704,24 @@ Six mechanisms, each with one obvious job, and **no per-component API surface to
 
 ## 9. Acceptance (testably done)
 
-- [ ] All 19 primitives use `mergeStyles`; `locked` is explicit (bug **B8**).
-- [ ] A consumer `className` overrides `base` on every primitive; `locked` beats `className` where declared.
-- [ ] `View safe="bottom" className="pb-0"` keeps its safe padding.
+- [x] All primitives use `mergeStyles`; `locked` is explicit (bug **B8**).
+- [x] A consumer `className` overrides `base` on every primitive; `locked` beats `className` where declared.
+- [x] The same holds for the inline-style channel (`baseStyle < style < lockedStyle`, §2.1).
+- [x] `View safe="bottom" className="pb-0"` keeps its safe padding.
 - [ ] Every stateful primitive emits `data-adaptv` + `data-part` + its state attributes; a global
       `[data-adaptv="…"]` rule restyles it with no imports.
-- [ ] `patches.css` / `utils.css` / component CSS are wrapped in `@layer`; the cascade-only
-      `!important`s are gone; an unlayered consumer rule overrides each of them.
-- [ ] `ios:` / `android:` variants exist alongside `app:` / `web:` / `pressed:`.
+- [x] `patches.css` / `utils.css` / component CSS are wrapped in `@layer`; the cascade-only
+      `!important`s are gone; an unlayered consumer rule overrides each of them. One survivor, the
+      autofill `-webkit-box-shadow`, fights a UA sheet and is justified in place.
+- [x] The variant list is closed at six and documented in one place (§5).
+- [x] The consumer writes **no** `@layer` line — the `adaptv:css-layer-order` Vite plugin injects it
+      (§6.0), and warns when it can find no stylesheet to inject into.
+- [x] adaptv owns its safe-area utilities; `tailwindcss-safe-area` is not a dependency.
 - [ ] adaptv defines **zero** colour/spacing/radius tokens; primitives reference semantic Tailwind
       classes that resolve against the consumer's `@theme`.
-- [ ] No `::part()`, no shadow DOM, no `--adaptv-color-*` anywhere in the codebase.
+- [x] No `::part()`, no shadow DOM, no `--adaptv-color-*` anywhere in the codebase.
+- [x] No primitive ships a default border width — guarded by inverted tests, with the reasoning in
+      `VISION.md §2.1` and a `⚠︎ Do NOT re-add` note in each primitive.
 
 ---
 

@@ -13,14 +13,13 @@ import {
 } from "react"
 import type { ImpactWeight } from "#adaptv/capabilities/haptics"
 import { haptics } from "#adaptv/capabilities/haptics"
+import { usePressCore } from "#adaptv/components/press-core"
 import type {
   GestureEvent,
   OmitGestureEngineHandlers,
 } from "#adaptv/hooks/use-gesture-engine"
-import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { useHapticTick } from "#adaptv/hooks/use-haptic-tick"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 // Buttons are small touch targets, so widen the reentrant press region well past
@@ -113,8 +112,15 @@ export function resolveButtonHaptic(
  * CLASSES
  * ============================================================================= */
 
-const BUTTON_SLOT_LAYOUT_CLASS =
-  "inline-flex shrink-0 items-center justify-center [&>svg]:block"
+//LOCKED on the slots: the content row tweens to a MEASURED width, so a slot that
+//shrinks (`shrink`) or stops being an inline flex row changes what `scrollWidth`
+//reports and the animation lands on the wrong size. Everything cosmetic about a
+//slot — alignment, the svg display fix — stays in `base`.
+const BUTTON_SLOT_LOCKED_LAYOUT_CLASS = "inline-flex shrink-0 items-center"
+const BUTTON_SLOT_BASE_LAYOUT_CLASS = "justify-center [&>svg]:block"
+//LOCKED: these two ARE the width mode. `shrink-0` is what makes an intrinsic-width
+//button size to its label; `min-w-0` is what lets the label truncate inside a fixed
+//one. Swapping either by hand desyncs the label from the root's measured width.
 const BUTTON_TEXT_INTRINSIC_LAYOUT_CLASS =
   "inline-flex shrink-0 items-center"
 const BUTTON_TEXT_FIXED_LAYOUT_CLASS = "inline-flex min-w-0 items-center"
@@ -126,9 +132,15 @@ const BUTTON_CONTENT_INNER_ROW_CLASS =
   "inline-flex w-max max-w-full items-center"
 const BUTTON_ROOT_LAYOUT_CLASS =
   "inline-flex w-fit min-w-0 max-w-full items-center justify-center select-none"
+//⚠︎ Do NOT re-add `border border-transparent` here to pre-allocate a toggled border.
+//It was tried and reverted: it only cancels the shift for a border of exactly 1px
+//(a consumer writing `border-2` shifts again), while permanently and invisibly
+//costing 2px of content box on EVERY button — a fixed-height control silently stops
+//matching its design spec. A mitigation that works in one case and fails silently in
+//the rest manufactures false confidence, which is worse than none (VISION.md, layout
+//shift). For toggled emphasis the correct primitive is `outline`, which never
+//participates in layout at any width and follows `border-radius`.
 const BUTTON_ROOT_SURFACE_CLASS = "bg-gray-50 text-gray-950"
-const BUTTON_ROOT_INTERACTION_CLASS = "clickable"
-const BUTTON_ROOT_NON_INTERACTION_CLASS = "non-clickable"
 
 /* =============================================================================
  * CONTEXT
@@ -249,7 +261,14 @@ function ButtonLeading({ children, className }: ButtonLeadingProps) {
   if (!buttonSlotHasContent(children)) return null
 
   return (
-    <span aria-hidden className={cn(BUTTON_SLOT_LAYOUT_CLASS, className)}>
+    <span
+      aria-hidden
+      className={mergeStyles({
+        base: BUTTON_SLOT_BASE_LAYOUT_CLASS,
+        className,
+        locked: BUTTON_SLOT_LOCKED_LAYOUT_CLASS,
+      })}
+    >
       {children}
     </span>
   )
@@ -279,7 +298,14 @@ function ButtonTrailing({ children, className }: ButtonTrailingProps) {
   if (!buttonSlotHasContent(children)) return null
 
   return (
-    <span aria-hidden className={cn(BUTTON_SLOT_LAYOUT_CLASS, className)}>
+    <span
+      aria-hidden
+      className={mergeStyles({
+        base: BUTTON_SLOT_BASE_LAYOUT_CLASS,
+        className,
+        locked: BUTTON_SLOT_LOCKED_LAYOUT_CLASS,
+      })}
+    >
       {children}
     </span>
   )
@@ -306,12 +332,15 @@ function ButtonText({ children, className }: ButtonTextProps) {
 
   return (
     <span
-      className={cn(
-        hasFixedWidth
+      className={mergeStyles({
+        //nothing neutral to override here — the label's only intrinsic styling IS
+        //the width mode, and that is the root's `w-*` decision, not the label's
+        base: undefined,
+        className,
+        locked: hasFixedWidth
           ? BUTTON_TEXT_FIXED_LAYOUT_CLASS
           : BUTTON_TEXT_INTRINSIC_LAYOUT_CLASS,
-        className,
-      )}
+      })}
     >
       {children}
     </span>
@@ -427,8 +456,11 @@ ButtonContentRow.displayName = "ButtonContentRow"
  * - `ref.current.focus()` — focuses the underlying button element.
  * - `ref.current.disabled` — reflects the live disabled state (readonly).
  *
- * **Baseline styles**: neutral gray, `w-fit`, `inline-flex`. Provide variants
- * via `className` — no internal variant logic. With intrinsic width, the content
+ * **Baseline styles**: neutral gray, `w-fit`, `inline-flex`, and a **transparent
+ * 1px border** so `className={selected ? "border-orange-500" : ""}` costs no
+ * layout — under `box-sizing: border-box` a border that appears later eats the
+ * content box and shifts the label. It is `base`, so `border-0` still wins.
+ * Provide variants via `className` — no internal variant logic. With intrinsic width, the content
  * row tweens width when slots mount or unmount; with a fixed width on the root
  * (`w-full`, `w-64`, …), size does not animate.
  *
@@ -436,10 +468,11 @@ ButtonContentRow.displayName = "ButtonContentRow"
  *
  * | Attribute | When | Example |
  * |-----------|------|---------|
- * | `data-pressed` | pointer is down within the press region; reentrant (drops when the finger drags off, returns when it slides back in) and pointer-only — keyboard activation never sets it | `pressed:scale-95` |
+ * | `data-pressed` | pointer is down within the press region; reentrant (drops when the finger drags off, returns when it slides back in) and pointer-only — keyboard activation never sets it | `active:scale-95` |
  *
- * Press feedback rides `data-pressed`, not native `:active` — use the `pressed:`
- * variant for scale feedback (`origin-center`, instant in, ~200ms ease-out release).
+ * Press feedback rides `data-pressed`, not native `:active` — but you still write
+ * plain `active:`, because adaptv repoints that variant at the attribute on any
+ * gesture-engine element (`origin-center`, instant in, ~200ms ease-out release).
  *
  * @example
  * ```tsx
@@ -497,7 +530,14 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
     [attachHaptic],
   )
 
-  const gestureEngineHandlers = useGestureEngine({
+  //the same press implementation Pressable ships — engine + the locked interaction
+  //class. Button adds what a press target alone does not have: semantics, haptics,
+  //slots. → src/components/press-core.ts
+  const {
+    handlers: gestureEngineHandlers,
+    locked: pressLocked,
+    base: pressBase,
+  } = usePressCore({
     disabled: isDisabled,
     pressOutset: BUTTON_PRESS_OUTSET_PX,
     //haptic on contact (native engine / web pulse); the tap fires on release
@@ -505,7 +545,7 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
       const weight = resolveButtonHaptic(haptic)
       if (weight) haptics.impact(weight)
     }, [haptic]),
-    onPressUp: useCallback(
+    onPress: useCallback(
       (e: GestureEvent) => {
         onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>)
       },
@@ -522,18 +562,22 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
         aria-disabled={disabled || undefined}
         {...props}
         {...gestureEngineHandlers}
-        //The interaction utility is LOCKED, the look is not. `clickable` carries
-        //the `touch-action` longhand that keeps `pointercancel` alive on iOS
-        //(WebKit 240917) — a consumer `touch-none` silently stranding the gesture
-        //state machine is exactly the class of bug adaptv exists to absorb. And a
-        //DISABLED button must not be tappable no matter what className says.
+        data-adaptv="button"
+        //The interaction utility is LOCKED, the look is not — `pressLocked` is the
+        //press core's structural class (`clickable`, or `non-clickable` when
+        //disabled), and why it cannot be overridden is documented there.
         //Layout and surface stay overridable: restyling a button is the point.
         className={mergeStyles({
-          base: [BUTTON_ROOT_LAYOUT_CLASS, BUTTON_ROOT_SURFACE_CLASS],
+          base: [
+            BUTTON_ROOT_LAYOUT_CLASS,
+            BUTTON_ROOT_SURFACE_CLASS,
+            //the cursor rides the BASE tier so `className="cursor-wait"` on a
+            //pending button actually lands — it used to be inside the locked
+            //`clickable` bundle and was silently unreachable
+            pressBase,
+          ],
           className,
-          locked: disabled
-            ? BUTTON_ROOT_NON_INTERACTION_CLASS
-            : BUTTON_ROOT_INTERACTION_CLASS,
+          locked: pressLocked,
         })}
       >
         <ButtonContentRow
