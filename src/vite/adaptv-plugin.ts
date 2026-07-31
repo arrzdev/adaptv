@@ -26,6 +26,7 @@ import {
   adaptvManifestPlugin,
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
+import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvOpacityCheckPlugin } from "#adaptv/vite/route-tree-opacity.ts"
 import {
@@ -192,6 +193,10 @@ export async function adaptv(
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts
     adaptvCssLayerOrderPlugin(),
+    //The mirror image of the line above: `enforce: "post"`, because it rewrites what
+    //@tailwindcss/vite PRODUCED. Without it every `ring-*` in the app silently renders
+    //nothing on Android WebView 113–118. → src/vite/ring-shadow-fallback.ts
+    adaptvRingShadowPlugin(),
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
     adaptvDefaultIconsPlugin(context),

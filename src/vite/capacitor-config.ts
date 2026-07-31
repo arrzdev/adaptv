@@ -13,14 +13,15 @@ export type CapacitorConfigJson = {
   appName: string
   webDir: string
   //Native projects live under `.adaptv/`; paths are app-root-relative (cap's CWD).
-  android: { path: string }
+  android: { path: string; minWebViewVersion: number }
   ios: { path: string }
   //Open-ended on purpose: adaptv's own blocks are spelled out in `buildCapacitorConfig`
   //(SplashScreen / StatusBar / SystemBars), but a consumer can add settings for any plugin
   //they registered via `adaptv.config.ts` `pluginConfig`, which no fixed shape can enumerate.
   plugins: Record<string, unknown>
-  //Set only by the CLI at run time (via the env config), never by the generator: the
-  //live-reload dev server (`dev`) points the native WebView at the Vite server.
+  //The generator sets `errorPath` (it is a static fact of every native build — see
+  //ERROR_PAGE). The rest is the CLI's, at run time via the env config: `dev`'s live-reload
+  //replaces this whole block to point the native WebView at the Vite server.
   server?: {
     url?: string
     cleartext?: boolean
@@ -38,6 +39,45 @@ export type CapacitorConfigJson = {
 //app-root-relative, as upstream expects. The native projects live under `.adaptv/`.
 const CAPACITOR_WEB_DIR = "dist/client"
 
+/**
+ * The Android WebView adaptv refuses to run below.
+ *
+ * **This is a floor, not a fix.** The bug that prompted it — Chromium 113–118 silently
+ * dropping every Tailwind v4 `ring-*` utility — is *patched*, unconditionally, by
+ * `vite/ring-shadow-fallback.ts`. Gating those devices out would now mean refusing to boot
+ * on hardware adaptv renders correctly, so the floor sits below them.
+ *
+ * 111 is **Tailwind v4's own stated minimum** (Chrome 111 / Safari 16.4 / Firefox 128).
+ * Below it the app's stylesheet is outside what its CSS toolchain claims to compile for, so
+ * adaptv cannot honestly promise anything — which is exactly what a floor is for. It costs
+ * nothing real: every device Capacitor 8 supports (`minSdk` 24 = Android 7) reaches at least
+ * Chromium 119 (DECISIONS.md B21), well above it.
+ *
+ * What it replaces is Capacitor's default of **60** — Chromium 60 shipped in 2017, so the
+ * built-in gate can never fire on any device that runs Capacitor 8 (B21). The alternative to
+ * a floor is not "more devices work", it is a white screen with no explanation.
+ *
+ * Mirrored as `MIN_ANDROID_WEBVIEW` in `bin/lib/offline-page.mjs`, which renders the screen
+ * this gate shows. `offline-page.test.mjs` fails if the two drift.
+ */
+export const MIN_ANDROID_WEBVIEW = 111
+
+/**
+ * `server.errorPath` — the page Capacitor loads when the main frame can't load, AND
+ * (Android) when {@link MIN_ANDROID_WEBVIEW} is not met: `Bridge.loadWebView()` routes
+ * both through this one path. Set on EVERY native build, not just `dev`.
+ *
+ * Without it the version gate is a no-op — Capacitor's `else` branch only logs
+ * `MINIMUM_ANDROID_WEBVIEW_ERROR` and falls through to load the app anyway. The page
+ * itself tells the two causes apart from its own user-agent, so `dev`'s "couldn't reach
+ * the dev server" screen keeps its meaning.
+ *
+ * Duplicated from `bin/lib/error-page.mjs`'s `ERROR_PAGE` rather than imported: this
+ * module is framework source and must not pull the CLI into the bundle. Same trade the
+ * `CAPACITOR_WEB_DIR` / `CAP_WEB_DIR` pair already makes, and pinned by the same test.
+ */
+const ERROR_PAGE = "adaptv-offline.html"
+
 export function buildCapacitorConfig(
   config: AdaptvAppConfig,
 ): CapacitorConfigJson {
@@ -50,8 +90,14 @@ export function buildCapacitorConfig(
     appId: config.appId,
     appName: config.appName ?? config.name,
     webDir: CAPACITOR_WEB_DIR,
-    android: { path: `${ADAPTV_DIR}/android` },
+    android: {
+      path: `${ADAPTV_DIR}/android`,
+      minWebViewVersion: MIN_ANDROID_WEBVIEW,
+    },
     ios: { path: `${ADAPTV_DIR}/ios` },
+    //`dev` REPLACES this block wholesale (live-reload's url/cleartext/androidScheme, with
+    //its own errorPath), so this is the production half — see ERROR_PAGE.
+    server: { errorPath: ERROR_PAGE },
     plugins: {
       //consumer-registered per-plugin native settings (adaptv.config.ts `pluginConfig`),
       //overridable by the adaptv defaults below.

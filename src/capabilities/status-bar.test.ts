@@ -21,10 +21,15 @@ vi.mock("@capacitor/status-bar", () => ({
   },
 }))
 
-function forceNative(native: boolean): void {
+function forceNative(
+  native: boolean,
+  os: "ios" | "android" = "ios",
+): void {
   vi.stubGlobal(
     "Capacitor",
-    native ? { isNativePlatform: () => true } : undefined,
+    native
+      ? { isNativePlatform: () => true, getPlatform: () => os }
+      : undefined,
   )
 }
 
@@ -60,8 +65,8 @@ describe("applyStatusBar", () => {
 })
 
 describe("enableEdgeToEdge", () => {
-  it("overlays the webview on native, no-ops on web", () => {
-    forceNative(true)
+  it("overlays the webview on iOS, no-ops on web", () => {
+    forceNative(true, "ios")
     enableEdgeToEdge()
     expect(StatusBar.setOverlaysWebView).toHaveBeenCalledWith({
       overlay: true,
@@ -69,6 +74,15 @@ describe("enableEdgeToEdge", () => {
 
     vi.clearAllMocks()
     forceNative(false)
+    enableEdgeToEdge()
+    expect(StatusBar.setOverlaysWebView).not.toHaveBeenCalled()
+  })
+
+  //Android's window is put edge-to-edge natively, in the generated MainActivity
+  //(bin/lib/native.mjs). Calling the plugin here would re-run the deprecated
+  //setSystemUiVisibility path Play flags — and it only ever covered the status bar.
+  it("leaves the deprecated overlay call alone on Android", () => {
+    forceNative(true, "android")
     enableEdgeToEdge()
     expect(StatusBar.setOverlaysWebView).not.toHaveBeenCalled()
   })
@@ -84,7 +98,7 @@ describe("enableEdgeToEdge", () => {
       frames.push(cb)
       return frames.length
     })
-    forceNative(true)
+    forceNative(true, "android")
 
     enableEdgeToEdge()
     expect(onDOMReady).toHaveBeenCalledTimes(1)
@@ -117,7 +131,7 @@ describe("enableEdgeToEdge", () => {
       return frames.length
     })
     vi.useFakeTimers()
-    forceNative(true)
+    forceNative(true, "android")
 
     enableEdgeToEdge()
     vi.advanceTimersByTime(3000)

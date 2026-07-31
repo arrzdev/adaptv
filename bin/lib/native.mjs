@@ -266,12 +266,136 @@ ${androidAppTheme(items)}
 `
 }
 
+/*
+ * The edge-to-edge half of the generated activity — the ONLY thing that ever puts an
+ * Android app under the system bars, and the only thing that reports the insets back
+ * when Capacitor won't.
+ *
+ * Android 15 (API 35) enforces edge-to-edge. Below that NOTHING in the stack asks for it:
+ * Capacitor 8's `SystemBars` only *reports* insets (it never touches the window), and
+ * `@capacitor/status-bar`'s `setOverlaysWebView` is the deprecated `setSystemUiVisibility`
+ * path Play Console now warns about — which covered the status bar and never the gesture
+ * bar, so it produced a half-overlay even when it worked. Measured on a Pixel 7 emulator
+ * (API 34): `innerHeight` 891 of 915 — under the status bar, above the nav bar.
+ *
+ * One AndroidX call replaces it, on API 21+, for both bars, from `onCreate` — so there is
+ * no plugin to be registered and no JS round-trip to lose a race to.
+ */
+const ANDROID_EDGE_TO_EDGE_JAVA = `
+    // The WebView major version Capacitor's SystemBars requires before it will pass real
+    // insets through to CSS (crbug/40699457). Below it the plugin injects zeros — see
+    // adaptvOwnInsetsOnOldWebView().
+    private static final int ADAPTV_WEBVIEW_WITH_SAFE_AREA_FIX = 140;
+
+    private void adaptvEdgeToEdge() {
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        adaptvOwnInsetsOnOldWebView();
+    }
+
+    /**
+     * Report the real insets to the page on the WebViews where SystemBars refuses to.
+     *
+     * SystemBars passes insets through to \`--safe-area-inset-*\` only when the WebView is
+     * >= 140; below that it injects \`0px\` for all four ON PURPOSE, because it assumes the
+     * page is NOT drawing under the bars. Now that it is, those zeros are the bug: content
+     * sits under the status bar with nothing to pad it (the app header on top of the clock).
+     *
+     * So on an old WebView adaptv takes the listener over. This REPLACES SystemBars' rather
+     * than joining it — a View holds exactly one \`OnApplyWindowInsetsListener\`, and ours is
+     * installed after the bridge loaded the plugin, so exactly one remains in the hierarchy.
+     * The two-listeners-on-one-hierarchy collision behind capacitor-keyboard#61/#68 cannot
+     * happen. On WebView >= 140 this does nothing and SystemBars keeps its whole pipeline,
+     * Chromium workarounds and all — adaptv rents it, per NATIVE-SHELL §0.0.
+     */
+    private void adaptvOwnInsetsOnOldWebView() {
+        if (adaptvWebViewMajorVersion() >= ADAPTV_WEBVIEW_WITH_SAFE_AREA_FIX) return;
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        View parent = (View) getBridge().getWebView().getParent();
+        if (parent == null) return;
+        final int barTypes = WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout();
+        ViewCompat.setOnApplyWindowInsetsListener(parent, (v, insets) -> {
+            Insets bars = insets.getInsets(barTypes);
+            boolean keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
+            // While the IME is up the page must NOT pad for the gesture bar: the view is
+            // resized for the keyboard instead, so the bottom inset would be counted twice.
+            int bottom = keyboardVisible ? 0 : bars.bottom;
+            v.setPadding(0, 0, 0, keyboardVisible ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0);
+            adaptvInjectInsets(bars.left, bars.top, bars.right, bottom);
+            // Deliberately NOT WindowInsetsCompat.CONSUMED — returning that breaks the
+            // WebView's own safe-area recalculation (crbug/461332423).
+            return new WindowInsetsCompat.Builder(insets)
+                .setInsets(barTypes, Insets.of(bars.left, bars.top, bars.right, bottom))
+                .build();
+        });
+        getBridge().getWebView().requestApplyInsets();
+    }
+
+    // Same four properties, same integer-truncated dp, same element as SystemBars writes
+    // (styles/safe-area.css consumes them var-first) — so nothing downstream can tell which
+    // of the two produced a given pass.
+    private void adaptvInjectInsets(int left, int top, int right, int bottom) {
+        float density = getResources().getDisplayMetrics().density;
+        String script = String.format(
+            Locale.US,
+            "try{var s=document.documentElement.style;" +
+                "s.setProperty('--safe-area-inset-top','%dpx');" +
+                "s.setProperty('--safe-area-inset-right','%dpx');" +
+                "s.setProperty('--safe-area-inset-bottom','%dpx');" +
+                "s.setProperty('--safe-area-inset-left','%dpx');}catch(e){}",
+            (int) (top / density),
+            (int) (right / density),
+            (int) (bottom / density),
+            (int) (left / density)
+        );
+        getBridge().getWebView().evaluateJavascript(script, null);
+    }
+
+    // 0 when the version can't be read (API < 26, or no WebView package) — which routes to
+    // adaptv owning the insets. That is the safe default: a wrong "modern" answer means the
+    // page gets zeros and no padding, a wrong "old" answer just means adaptv reports them.
+    private int adaptvWebViewMajorVersion() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return 0;
+        PackageInfo info = WebView.getCurrentWebViewPackage();
+        if (info == null || info.versionName == null) return 0;
+        try {
+            return Integer.parseInt(info.versionName.split("\\\\.")[0]);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+`
+
+//Imports the edge-to-edge block needs, in two groups so each variant can interleave its
+//own and still come out in the order a human would have written them (android, androidx,
+//com, java). `java.util.Locale` sorts last in both, so it's written inline there.
+const ANDROID_SHELL_IMPORTS_PLATFORM = `import android.content.pm.PackageInfo;
+import android.os.Build;
+import android.os.Bundle;
+import android.view.View;
+import android.webkit.WebView;`
+const ANDROID_SHELL_IMPORTS_ANDROIDX = `import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;`
+
 function androidMainActivityPlain(appId) {
   return `package ${appId};
 
+${ANDROID_SHELL_IMPORTS_PLATFORM}
+${ANDROID_SHELL_IMPORTS_ANDROIDX}
 import com.getcapacitor.BridgeActivity;
+import java.util.Locale;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // after super: the bridge (and its WebView) is created in BridgeActivity.onCreate,
+        // and installing the inset listener after the plugin loaded is what makes ours win.
+        adaptvEdgeToEdge();
+    }
+${ANDROID_EDGE_TO_EDGE_JAVA}}
 `
 }
 
@@ -281,10 +405,11 @@ function androidMainActivityThemed(appId) {
 import android.app.UiModeManager;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.os.Build;
-import android.os.Bundle;
+${ANDROID_SHELL_IMPORTS_PLATFORM}
 import androidx.appcompat.app.AppCompatDelegate;
+${ANDROID_SHELL_IMPORTS_ANDROIDX}
 import com.getcapacitor.BridgeActivity;
+import java.util.Locale;
 
 public class MainActivity extends BridgeActivity {
 
@@ -294,6 +419,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         applyAdaptvTheme(true);
         super.onCreate(savedInstanceState);
+        // after super: the bridge (and its WebView) is created in BridgeActivity.onCreate,
+        // and installing the inset listener after the plugin loaded is what makes ours win.
+        adaptvEdgeToEdge();
         // uiMode is in the activity's configChanges, so applying live does NOT reload
         // the WebView; kept as a field so the listener isn't garbage-collected.
         SharedPreferences prefs = getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
@@ -329,7 +457,7 @@ public class MainActivity extends BridgeActivity {
             }
         }
     }
-}
+${ANDROID_EDGE_TO_EDGE_JAVA}}
 `
 }
 

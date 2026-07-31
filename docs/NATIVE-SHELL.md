@@ -103,6 +103,40 @@ flipped it to 923 / `54px` immediately.
    then unreachable *by construction* on every Android version — including WebView < 140, where
    Capacitor never attempts passthrough at all and the padded fallback is permanent.
 
+### ⚠︎ 0.2 Nothing in the stack ever asked for edge-to-edge below Android 15 (2026-07-31)
+
+§0.0 and §0.1 are both about the *inset report*. They assume the window is already drawing under the
+bars. **Below API 35 it never was.**
+
+- `SystemBars` only **reports**. Read its source again: it installs a listener, injects CSS, and styles
+  bar icons. It never touches the window. Nothing in `BridgeActivity` does either.
+- `@capacitor/status-bar`'s `setOverlaysWebView(true)` was the only thing left holding it up, and it is
+  the deprecated `setSystemUiVisibility` path — `LAYOUT_STABLE | LAYOUT_FULLSCREEN`, no
+  `LAYOUT_HIDE_NAVIGATION`. **It covers the status bar and never the gesture bar.**
+- And it only ran at all if the plugin reached the native project. Before
+  [#27](https://github.com/arrzdev/adaptv/pull/27) adaptv's own plugins didn't, so on a pre-#27 build
+  the JS call rejected `UNIMPLEMENTED`, `.catch(() => {})` swallowed it, and the app was simply not
+  edge-to-edge — the grey band in §0.1, reached by a second, unrelated route.
+
+Measured on the `Pixel_7` AVD (API 34, WebView 113, `adaptv preview android`):
+
+| build | `innerHeight` / `screen.height` | `--safe-area-inset-top` | what you see |
+|---|---|---|---|
+| pre-#27 (no StatusBar plugin) | 839 / 915 | *unset* | padded, `windowBackground` band top **and** bottom |
+| #27 (plugin registered) | 891 / 915 | `0px` | under the status bar, **nothing pads it** — header on the clock |
+
+**The fix is native, in the generated `MainActivity` (`bin/lib/native.mjs`), not in JS:**
+
+1. `WindowCompat.setDecorFitsSystemWindows(getWindow(), false)` in `onCreate`. Both bars, API 21+, no
+   plugin to be registered, and it lands before the first inset dispatch — so there is no boot race to
+   lose and no `UNIMPLEMENTED` to swallow. On API 35+ the OS already enforces the same thing.
+2. `enableEdgeToEdge()` stops calling `setOverlaysWebView` on Android (iOS keeps it — there it is still
+   the real mechanism). Calling it now would re-run the Play-flagged deprecated path over a window that
+   is already correctly edge-to-edge.
+3. **On WebView < 140 adaptv reports the insets itself.** `shouldPassthroughInsets` requires
+   `getWebViewMajorVersion() >= 140`; below that `SystemBars` injects `0px` for all four *on purpose*,
+   because it assumes the page is not drawing under anything. Once the page is, those zeros are the bug.
+
 ### 🔒 Revised decision: layer on `SystemBars`, do not replace it
 
 The original plan — "phase 1 owns edge-to-edge + inset/IME reporting" — would mean **a second

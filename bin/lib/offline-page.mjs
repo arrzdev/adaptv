@@ -20,11 +20,23 @@ import { CAP_WEB_DIR } from "./native.mjs"
 export const OFFLINE_PAGE = "adaptv-offline.html"
 
 /**
- * Write the offline screen into `<appRoot>/<webDir>/adaptv-offline.html`, with the dev
- * server `url` baked in so the page can navigate back to it. Returns a revert fn that
- * deletes the file (the next `cap sync` then drops it from `public/`).
+ * The Android WebView floor. Mirrors `MIN_ANDROID_WEBVIEW` in `src/vite/capacitor-config.ts`,
+ * which is where the measurement and the reasoning live; `capacitor-config.test.ts` fails if
+ * the two drift. Needed HERE because this page renders the screen that gate shows, and the
+ * page has to name the number.
  */
-export function installOfflinePage(appRoot, { url }) {
+export const MIN_ANDROID_WEBVIEW = 111
+
+/**
+ * Write the error screen into `<appRoot>/<webDir>/adaptv-offline.html`.
+ *
+ * `url` is the dev server, baked in so the page can navigate back to it — pass `null` for
+ * `preview`/`build`, where there is nothing to reconnect to and the page exists only for
+ * the WebView-too-old case. Returns a revert fn that deletes the file; `dev` registers it
+ * as a cleanup (the next `cap sync` drops it from `public/`), production does NOT — there
+ * the page has to ship inside the app.
+ */
+export function installOfflinePage(appRoot, { url = null } = {}) {
   const dest = path.join(appRoot, CAP_WEB_DIR, OFFLINE_PAGE)
   writeFileSync(dest, renderOfflineHtml(url))
   return () => {
@@ -76,6 +88,18 @@ export function installOfflinePage(appRoot, { url }) {
  * artwork, drawn in `currentColor` so it takes the wordmark's white on this near-black page.
  * Inlined rather than linked: `cap sync` copies this ONE file into each platform's `public/`,
  * so anything it references by URL would 404 on the device.
+ */
+/*
+ * ## Why ONE page serves two unrelated failures
+ *
+ * Capacitor gives exactly one `server.errorPath`, and `Bridge.loadWebView()` routes BOTH a
+ * failed main-frame load AND `minWebViewVersion` not being met through it. So this page has
+ * to tell them apart itself, or an ancient WebView would be told "couldn't reach dev server"
+ * — a lie, and one the dev would chase for an hour.
+ *
+ * It can, with no bridge: the WebView's own user-agent carries the Chromium major, and that
+ * is the whole test. The version branch runs FIRST and is terminal — no reconnect loop, no
+ * dev-server probing, because neither has anything to do with the failure.
  */
 function renderOfflineHtml(devUrl) {
   const url = JSON.stringify(devUrl)
@@ -133,15 +157,55 @@ function renderOfflineHtml(devUrl) {
       <span>adaptv</span>
     </div>
     <div>
-      <h1>Couldn't reach dev server</h1>
-      <p>This is a development build</p>
+      <h1 id="title">Couldn't reach dev server</h1>
+      <p id="detail">This is a development build</p>
     </div>
-    <div class="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
-    <div class="status"><span class="spin"></span><span>Reconnecting automatically…</span></div>
+    <div class="cmd" id="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
+    <div class="status" id="status"><span class="spin"></span><span>Reconnecting automatically…</span></div>
   </div>
 <script>
   (function () {
     var DEV_URL = ${url};
+    var MIN_WEBVIEW = ${MIN_ANDROID_WEBVIEW};
+
+    // ---- the WebView floor, checked first and terminal -----------------------------
+    // Capacitor sends BOTH "main frame failed to load" and "WebView older than
+    // android.minWebViewVersion" to this one page. Only the user-agent can separate them,
+    // and it needs no bridge — which matters, because Android injects none here.
+    function chromiumMajor() {
+      var m = /Chrome\\/(\\d+)/.exec(navigator.userAgent || "");
+      return m ? parseInt(m[1], 10) : 0;
+    }
+
+    function showOutdatedWebView(major) {
+      document.title = "adaptv · update WebView";
+      document.getElementById("title").textContent = "Update Android System WebView";
+      document.getElementById("detail").textContent =
+        "This app needs WebView " + MIN_WEBVIEW + " or newer to render correctly. " +
+        "This device has " + (major || "an unknown version") + ".";
+      var cmd = document.getElementById("cmd");
+      cmd.innerHTML = "";
+      cmd.appendChild(document.createTextNode("Update \\u201CAndroid System WebView\\u201D in the Play Store, then reopen."));
+      // no spinner: nothing here resolves itself, and a spinner would promise that it does
+      document.getElementById("status").remove();
+    }
+
+    var major = chromiumMajor();
+    // \`major > 0\` guards iOS, where there is no Chrome token at all and the floor
+    // does not apply — WebKit is versioned with the OS.
+    if (major > 0 && major < MIN_WEBVIEW) { showOutdatedWebView(major); return; }
+
+    // ---- past here: a genuine load failure ------------------------------------------
+    // Production has no dev server to go back to, so there is nothing to probe. Say what
+    // happened and stop, rather than spinning forever on a reconnect that cannot happen.
+    if (!DEV_URL) {
+      document.getElementById("title").textContent = "Couldn't load the app";
+      document.getElementById("detail").textContent = "Reopen the app to try again.";
+      document.getElementById("cmd").remove();
+      document.getElementById("status").remove();
+      return;
+    }
+
     var navigating = false;
     var splashHidden = false;
     // Consecutive answers that were reachable but NOT 2xx/3xx (e.g. a 500 Vite throws

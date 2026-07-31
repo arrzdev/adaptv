@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
-import { buildCapacitorConfig } from "#adaptv/vite/capacitor-config"
+import {
+  buildCapacitorConfig,
+  MIN_ANDROID_WEBVIEW,
+} from "#adaptv/vite/capacitor-config"
 
 const BASE: AdaptvAppConfig = {
   name: "ChopChop",
@@ -54,6 +57,27 @@ describe("buildCapacitorConfig", () => {
     const statusBar = buildCapacitorConfig(BASE).plugins
       .StatusBar as Record<string, unknown>
     expect(statusBar.overlaysWebView).toBe(true)
+  })
+
+  // Replaces Capacitor's default of 60, which is unreachable and so can never fire (B21).
+  // Deliberately BELOW the 113–118 ring bug: that is patched in the CSS
+  // (vite/ring-shadow-fallback.ts), so gating those devices out would refuse hardware
+  // adaptv renders correctly. 111 is Tailwind v4's own stated minimum.
+  it("floors the Android WebView at Tailwind v4's minimum, not at the ring bug", () => {
+    const android = buildCapacitorConfig(BASE).android
+    expect(android.minWebViewVersion).toBe(111)
+    expect(MIN_ANDROID_WEBVIEW).toBe(111)
+  })
+
+  // The gate has no UI of its own: Capacitor loads `server.errorPath` for a too-old
+  // WebView exactly as it does for a failed load. With no errorPath it only logs and boots
+  // the app anyway, so production shipping this page is what makes the floor real.
+  it("ships an errorPath in production, so the floor is not a silent no-op", () => {
+    //the literal, not the CLI's constant: this IS the contract between them, and
+    //`offline-page.test.mjs` asserts the other side of it.
+    expect(buildCapacitorConfig(BASE).server?.errorPath).toBe(
+      "adaptv-offline.html",
+    )
   })
 
   it("configures SystemBars insetsHandling:css so Android injects --safe-area-inset-*", () => {

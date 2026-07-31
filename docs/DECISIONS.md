@@ -823,7 +823,9 @@ raises `minSdk` to 26, which lifts the floor to **138** — the single biggest w
   so the built-in gate can never fire on any device that runs Capacitor 8. **adaptv should set it
   explicitly and ship an `errorPath` page** — the only supported way to fail gracefully instead of
   white-screening. Caveat from the docs: *"On Android the html file won't have access to Capacitor
-  plugins."*
+  plugins."* ✅ **DONE 2026-07-31** — `minWebViewVersion: 111` (Tailwind v4's own minimum), and the page
+  ships in production too. Deliberately BELOW the 113–118 ring bug, which is patched in CSS rather than
+  gated around — see the ring entry at the end.
 - Detect at runtime via `Device.getInfo().webViewVersion` (native, reliable), not UA parsing.
 
 ### B22 — `WKAppBoundDomains` silently kills the entire native bridge
@@ -1306,3 +1308,164 @@ to a pass the moment the unmount is fixed. `/lab/screens` already described this
 nothing was checking it, and its own readout was reporting a false alarm in the other direction (it
 sampled once on mount, while the splash was legitimately still up, so it said STILL PRESENT on every
 cold load — fixed in this pass).
+
+---
+
+## 🚨 Nothing ever asked for edge-to-edge below Android 15 ✅ **FIXED** (found 2026-07-31)
+
+The other half of the plugin-discovery entry above. That one ended *"and on ≤ 14 no edge-to-edge"*, and
+read as a consequence of the missing plugins. It is not — it survives the fix. **Neither `SystemBars`
+nor `BridgeActivity` ever touches the window.** `SystemBars` only *reports* insets; the one thing that
+asked for the window was `@capacitor/status-bar`'s `setOverlaysWebView`, which is the deprecated
+`setSystemUiVisibility` path Play Console flags, and which sets `LAYOUT_STABLE | LAYOUT_FULLSCREEN` with
+no `LAYOUT_HIDE_NAVIGATION` — **the status bar, never the gesture bar.**
+
+Measured on the `Pixel_7` AVD (API 34, WebView 113), one build per row:
+
+| build | `innerHeight` / `screen.height` | `--safe-area-inset-top` | on screen |
+|---|---|---|---|
+| before the plugin fix | 839 / 915 | *unset* | `windowBackground` band, top **and** bottom |
+| after the plugin fix | 891 / 915 | `0px` | under the status bar, nothing padding it |
+| after this fix | **915 / 915** | **51px** | edge-to-edge, both bars, header clear of the clock |
+
+**The fix is in project generation, not JS** — and that is principle 7 being obeyed, not bent. Its own
+table puts insets at *"plugin reports raw numbers"* on the dumb-platform side and `View safe="…"` on the
+React side; asking for the window and measuring it is the raw-numbers half, and there is no JS API that
+does it. The generated `MainActivity` (`bin/lib/native.mjs`) calls
+`WindowCompat.setDecorFitsSystemWindows(getWindow(), false)` in `onCreate`: both bars, API 21+, no
+plugin to be registered, and it lands before the first inset dispatch rather than a frame or two into
+boot. `enableEdgeToEdge()` stops calling `setOverlaysWebView` on Android; iOS keeps it.
+
+**And adaptv now reports the insets itself on WebView < 140.** `SystemBars.shouldPassthroughInsets`
+requires WebView ≥ 140, and below that it injects `0px` for all four **on purpose** — it assumes the page
+is not drawing under anything. Once the page is, those zeros are the bug. So below 140 the generated
+activity replaces SystemBars' listener (a View holds exactly one, and ours is installed after the bridge
+loaded the plugin, so exactly one remains — this is not the two-listener collision behind
+capacitor-keyboard#61/#68). At or above 140 it does not touch it and SystemBars keeps its whole
+pipeline.
+
+**B21 is why that branch is permanent, not transitional.** Android 7 caps at Chromium 119 and Android
+8–9 at 138: those devices can *never* reach 140, so "SystemBars reports insets" is not a floor adaptv
+can wait out. Verified on both ends — `Pixel_7` API 34 / WebView 113 (adaptv's listener) and `Pixel_10`
+API 37 / WebView 149 (SystemBars' own, `innerHeight` 923 of 924, insets 54/24, unchanged).
+
+The **status-bar colour** in the original report was the plugin fix, not this one: with
+`@capacitor/preferences` missing, `adaptv-theme` never reached SharedPreferences, so `MainActivity` fell
+back to the system night mode and a dark app got the light `windowBackground` band. It is moot now —
+with the window edge-to-edge there is no band to be the wrong colour, and `windowBackground` is back to
+being only the pre-first-paint mask it was designed as.
+
+---
+
+## 🚨 Tailwind v4's whole `ring-*` family is dead below Chromium 119 ✅ **FIXED** (found 2026-07-31)
+
+Reported as "the borders aren't rendering" on the `Pixel_7` AVD — the checkbox outline and the task
+field's hairline. They are not borders. They are `ring-1 ring-inset ring-border`, and **every `ring-*`
+and `inset-ring-*` utility silently computes to `box-shadow: none`** on that WebView.
+
+The CSS parses identically on both devices — same rule text, same `@property` registrations. It fails at
+*substitution* time. Bisected on-device:
+
+```
+@property --pn { syntax: "*"; inherits: false; }   /* registered, NO initial-value */
+
+var(--pn,)              →  113: whole declaration invalid   ·  149: ok
+var(--pn, currentcolor) →  both ok
+--pn: ; then var(--pn,) →  still invalid on 113
+```
+
+That empty fallback over a registered-but-uninitialised property is Tailwind v4's ring, verbatim:
+
+```css
+--tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+```
+
+One invalid `var()` invalidates the whole `box-shadow`, which is why nothing paints rather than a partial
+ring. On the tasks screen: 10 elements carrying a ring class, **0** painting. `shadow-*`, `opacity-*`,
+`duration-*`, real `border-*` and `oklch()` are all fine on 113 — measured, not assumed.
+
+**Pinned to the milestone.** Bisected across every Chrome-for-Testing build 113→119 (`--headless
+--dump-dom`, mac-arm64), with 113 cross-checked against the real Android WebView 113 so the desktop
+builds stand in for device ones:
+
+| Chromium | 113 | 114 | 115 | 116 | 117 | 118 | **119** | 124 | 149 |
+|---|---|---|---|---|---|---|---|---|---|
+| `var(--x,)` | ✖ | ✖ | ✖ | ✖ | ✖ | ✖ | **✓** | ✓ | ✓ |
+
+**119 is the first working build — and B21's table says Android 7 is frozen at exactly 119.**
+
+### 🔒 The fix is a CSS rewrite, NOT a version gate
+
+The first cut of this entry gated at `minWebViewVersion: 119`. That was wrong, and the reason is worth
+keeping: **a floor is what you ship when you cannot fix something.** Here it can be fixed, so gating
+would have refused to boot on hardware adaptv renders correctly — for a bug adaptv is able to patch.
+
+`vite/ring-shadow-fallback.ts` rewrites Tailwind's compiled output, unconditionally:
+
+```css
+/* was: --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + …) var(--tw-ring-color, currentcolor) */
+.ring-1     { --adaptv-tw-ring: 0 0 0 calc(1px + …) var(--tw-ring-color, currentcolor);
+              --tw-ring-shadow: var(--adaptv-tw-ring) }
+.ring-inset { --tw-ring-shadow: inset var(--adaptv-tw-ring, 0 0 #0000) }
+```
+
+The carrier is **unregistered**, so the empty fallback disappears entirely. It stays a `box-shadow`, so
+`ring` + `shadow` + `outline` remain three independent properties — which matters, because the
+playground's own `text-input` carries `ring-1 … focus-within:outline-none` on one element, and a
+`ring`→`outline` rewrite would have erased its ring precisely on focus. Unconditional is safe because
+the rewrite is **byte-identical on browsers that were never broken** (measured on WebView 149, both
+constructs side by side), so there is nothing to detect and no `@supports` that could see it anyway.
+
+Measured on the `Pixel_7` AVD after the rewrite: **10 of 10 ringed elements painting**, up from 0.
+
+Three traps found while building it, all now guarded by tests and comments in the file:
+
+1. **`--adaptv-ring` / `--adaptv-ring-offset` were already taken** — they are adaptv's *public*
+   focus-ring tokens (`patches.css`). Using them as carriers would have redefined the focus-ring colour
+   as a box-shadow body on every ringed element, killing `:focus-visible` on **every** browser. Hence
+   `--adaptv-tw-*`.
+2. **`enforce` must be absent.** `pre` runs before `@tailwindcss/vite:generate:*` (also `pre`) and sees
+   no utilities; `post` is too late — a clean build with `post` still emitted 4 `var(--tw-ring-inset,)`
+   and zero carriers. Adding an `enforce` breaks the rewrite *silently*: CSS builds, tests pass, only an
+   old WebView shows it.
+3. **An invalid declaration does not fall back to the registered `initial-value` on these builds.** The
+   first working version left `--tw-ring-offset-shadow: inset var(--adaptv-tw-ring-offset)` with the
+   carrier unset; `--tw-ring-shadow` computed correctly, `--tw-ring-offset-shadow` computed to `""`, and
+   the guaranteed-invalid value poisoned the whole `box-shadow` — ring right, page wrong. Every carrier
+   reference now carries an explicit `, 0 0 #0000`.
+
+**The floor stays, at 111** — Tailwind v4's own stated minimum, and still a large improvement on
+Capacitor's unreachable default of 60. It closes B21's open recommendation ("set `minWebViewVersion`
+explicitly and ship an `errorPath` page") without gating out anything adaptv can render.
+
+**Why the page had to move to production, and why it branches.** Capacitor gives ONE `server.errorPath`
+and routes both failures through it — `Bridge.loadWebView()`:
+
+```java
+if (!this.isMinimumWebViewInstalled()) {
+    String errorUrl = this.getErrorUrl();
+    if (errorUrl != null) { webView.loadUrl(errorUrl); return; }
+    else { Logger.error(MINIMUM_ANDROID_WEBVIEW_ERROR); }   // ← falls through and boots anyway
+}
+```
+
+So a floor with no `errorPath` is a **silent no-op**, which is what production would have been (only
+`patchServerUrl` set one). And a floor with the *dev* `errorPath` would tell someone on WebView 113
+"couldn't reach dev server" — a lie they would chase for an hour. The page therefore reads its own
+Chromium major out of `navigator.userAgent` — no bridge needed, which matters because Android injects
+none there — and branches before it looks at the dev server at all. Verified in Chrome 113 and 119
+across both builds:
+
+| build | Chromium | screen |
+|---|---|---|
+| dev | 113 | Update Android System WebView (needs 119, has 113) |
+| dev | 119 | Couldn't reach dev server + reconnect spinner |
+| prod | 113 | Update Android System WebView |
+| prod | 119 | Couldn't load the app |
+
+`major > 0` gates the whole check, so it can never fire on iOS, where there is no Chrome token and
+WebKit ships with the OS.
+
+**adaptv itself uses zero `ring-*` utilities** — every hit is in the consumer app's UI kit. This is not
+an adaptv component bug; it is the framework refusing to ship onto a WebView where a mainstream Tailwind
+family is silently dead.

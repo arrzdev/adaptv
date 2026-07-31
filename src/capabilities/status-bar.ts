@@ -13,7 +13,7 @@
 //  Style.Light = dark content  (for a LIGHT background)
 import { SystemBars, SystemBarsStyle } from "@capacitor/core"
 import { StatusBar } from "@capacitor/status-bar"
-import { isNativePlatform } from "#adaptv/utils/platform"
+import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 export type StatusBarAppearance = "light" | "dark"
 
@@ -126,22 +126,34 @@ function watchAndroidInsets(): void {
  * Enable edge-to-edge on native: content draws under the system bars, and the shell's
  * safe-area utilities pad it back. No-op on web.
  *
- * Two mechanisms, one per platform generation:
+ * One mechanism per platform, and Android's is no longer here:
  *
- *  - `setOverlaysWebView(true)` — iOS (all versions) and Android ≤ 14, where the window
- *    still has to be told to lay out behind the bars. On Android 15+ it resolves and does
- *    nothing (NATIVE-SHELL §0.0 point 4); harmless, and the only thing keeping the pre-15
- *    devices edge-to-edge until @adaptv/shell (roadmap #4) replaces the plugin.
+ *  - **iOS** — `setOverlaysWebView(true)`, still the real mechanism, still first-party.
+ *  - **Android** — the generated `MainActivity` calls
+ *    `WindowCompat.setDecorFitsSystemWindows(window, false)` in `onCreate`
+ *    (bin/lib/native.mjs). It covers BOTH bars on every API level, needs no plugin to be
+ *    registered, and lands before the first inset dispatch instead of a frame or two into
+ *    the app's boot.
+ *
+ *    `setOverlaysWebView` is deliberately NOT called there. It is the deprecated
+ *    `setSystemUiVisibility` path Play Console warns about (NATIVE-SHELL §0.0 point 4); on
+ *    Android 15+ it resolves and does nothing, and below 15 it only ever laid the window
+ *    out under the *status* bar — a half-overlay, measured at `innerHeight` 891 of 915 on
+ *    a Pixel 7 (API 34). Calling it now would re-run the deprecated path over a window
+ *    that is already correctly edge-to-edge.
+ *
  *  - {@link reprobeAndroidInsets} + {@link watchAndroidInsets} — Android of every version,
- *    where SystemBars owns edge-to-edge and its one-shot viewport probe can lose a race
- *    with the app's own boot. Probe now, then watch the result until it holds.
+ *    where SystemBars' one-shot viewport probe can lose a race with the app's own boot.
+ *    Probe now, then watch the result until it holds.
  */
 export function enableEdgeToEdge(): void {
   if (!isNativePlatform()) return
-  try {
-    void StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
-  } catch {
-    //older plugin / unsupported — safe to ignore
+  if (getOS() !== "android") {
+    try {
+      void StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
+    } catch {
+      //older plugin / unsupported — safe to ignore
+    }
   }
   reprobeAndroidInsets()
   watchAndroidInsets()
