@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test"
  * Overscroll containment: an inner scroller at its end must not drag the page.
  *
  * Reported as "overscroll is not being contained". The CSS was already right —
- * `overscroll-behavior-y: contain` on the `scrollable-y` utility — and that is exactly
+ * `overscroll-behavior-y: contain`, locked on by `ScrollView` — and that is exactly
  * why this file exists: confirming the declaration is applied proves nothing about the
  * behaviour, and shipping on that is the false confidence `VISION.md §2.1` names. Scroll
  * chaining is a compositor decision; only a real touch drag can settle it.
