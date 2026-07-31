@@ -32,11 +32,7 @@ import { measureArtwork } from "./lib/artwork.mjs"
 import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
 import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
-import {
-  cachedDevice,
-  listTargets,
-  resolveTarget,
-} from "./lib/devices.mjs"
+import { listTargets, resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import {
   appConfigFingerprint,
@@ -767,75 +763,30 @@ async function runLive(appRoot, platforms, opts) {
           throw err
         }
       }
-      // Prepare the native projects — the SAME call `preview`/`build` make, so `dev` can
-      // never drift into its own idea of what a prepared platform is. It has to happen HERE,
-      // before the device picker: the device list comes from `cap run <platform> --list`,
-      // which refuses until the project exists.
-      const prep = await preparePlatforms(appRoot, config, platforms, {
-        dev: true,
-        force: opts.force,
-        envFor,
-        verbose,
-        warnings,
-      })
-      ready = prep.ready
-      prepareMs = prep.prepareMs
-      //Above the dev server and the device lines, like every other thing adaptv knew before
-      //it started (R33).
-      flushNotices(warnings)
     }
 
-    if (!webOnly && ready.length === 0) {
-      teardown()
-      process.off("SIGINT", onSigint)
-      process.off("SIGTERM", onSigint)
-      process.off("SIGHUP", onSigint)
-      footer(c.red("✖ could not prepare any platform"))
-      process.exitCode = 1
-      return
-    }
-
-    // Decide whether the dev server must be reachable over the LAN (bind 0.0.0.0) BEFORE
-    // asking which device — so a broken app surfaces on the `dev server` line without first
-    // forcing a device pick. The LAN is needed when the run COULD land on a physical device:
-    // --host, a physical --target, a cached physical (--latest), or a physical device sitting
-    // in the picker's list. Over-binding when a simulator is ultimately picked is harmless
-    // (localhost still works); a false negative would break a physical launch.
+    /**
+     * Whether the dev server has to be reachable over the LAN (bind `0.0.0.0`).
+     *
+     * ANY native run binds for the LAN, and that is the price of serving before the native
+     * projects exist. It used to be decided by asking whether a physical device was in play —
+     * `--host`, a physical `--target`, a cached physical (`--latest`), or a physical device
+     * sitting in the picker's list — and every one of those answers comes from
+     * `cap run <platform> --list`, which refuses until the project exists. So the question
+     * could only be asked after scaffolding, which is what pinned the whole first-run
+     * `cap add` + CocoaPods wait (minutes, on a lone `ios` row) IN FRONT of the dev server.
+     *
+     * Over-binding was always documented as harmless — a simulator reaches the app on
+     * localhost either way — and it is what makes the order the dev actually wants possible:
+     * Vite comes up first and proves the app compiles, and the native work happens after,
+     * against a server already known to be good. What it costs is real and worth stating: a
+     * simulator-only `dev` now listens on the LAN too, and the address block says so.
+     */
     const forcedHost = opts.host // true | undefined — '--host' takes no value
-    let externalPossible = !!forcedHost
-    if (!webOnly && !externalPossible) {
-      for (const p of ready) {
-        const env = envFor(p)
-        const physicalInPlay = opts.target
-          ? await isPhysicalTarget(p, opts.target, env)
-          : opts.latest
-            ? await isPhysicalTarget(p, cachedDevice(appRoot, p)?.id, env)
-            : //`.some` with an async predicate is always true — every promise is truthy. The
-              //answers have to be resolved before the question can be asked.
-              (
-                await Promise.all(
-                  (
-                    await listTargets(appRoot, p, env)
-                  ).map((t) => isPhysicalTarget(p, t.id, env)),
-                )
-              ).some(Boolean)
-        if (physicalInPlay) {
-          externalPossible = true
-          break
-        }
-      }
-    }
+    const externalPossible = !!forcedHost || !webOnly
 
-    //Start listing devices NOW, unawaited. The next ~1.9s is spent warming the dev server
-    //with the process otherwise idle, and a listing costs 176-279ms per platform. See the
-    //bounding rule in `resolveTarget`: this may only ever be used to SUCCEED.
-    const deviceLists = Object.fromEntries(
-      ready.map((p) => [p, listTargets(appRoot, p, envFor(p))]),
-    )
-
-    // Start the Vite dev server FIRST — an app/config problem shows up here, before the dev
-    // has to pick a device. Bind for the LAN when external is even possible; a
-    // simulator/emulator-only run stays on localhost.
+    // Start the Vite dev server FIRST — an app/config problem shows up here, before any
+    // native project is scaffolded and before the dev has to pick a device.
     await runLine(
       //`web` — the same name the platform lanes use, because that is what is being served.
       //The URL moves off this row into the address block below (R27), so the row no longer
@@ -898,6 +849,47 @@ async function runLive(appRoot, platforms, opts) {
       local: devServer.localUrl,
       network: devServer.networkUrl,
     })
+
+    // Prepare the native projects — the SAME call `preview`/`build` make, so `dev` can never
+    // drift into its own idea of what a prepared platform is. It has to happen before the
+    // device picker: the device list comes from `cap run <platform> --list`, which refuses
+    // until the project exists. It happens AFTER the dev server because a first run scaffolds
+    // for minutes (`cap add` + CocoaPods), and doing that first meant a `dev all` sat on a
+    // lone `ios` row with nothing yet proved about the app itself.
+    let deviceLists = {}
+    if (!webOnly) {
+      const prep = await preparePlatforms(appRoot, config, platforms, {
+        dev: true,
+        force: opts.force,
+        envFor,
+        verbose,
+        warnings,
+      })
+      ready = prep.ready
+      prepareMs = prep.prepareMs
+      //R33 draws the line at what was already sitting in a file the dev wrote: preflight said
+      //all of that under the banner. This is the other half — an ATS block in a plist that has
+      //to EXIST first — and it belongs to the step that finds it, which is this one.
+      flushNotices(warnings)
+
+      if (ready.length === 0) {
+        teardown()
+        process.off("SIGINT", onSigint)
+        process.off("SIGTERM", onSigint)
+        process.off("SIGHUP", onSigint)
+        footer(c.red("✖ could not prepare any platform"))
+        process.exitCode = 1
+        return
+      }
+
+      //Start listing devices NOW, unawaited: a listing costs 176-279ms per platform and the
+      //picker is the next thing to want one. It used to overlap the dev server's ~1.9s warm,
+      //which the reorder above spends before the projects exist. See the bounding rule in
+      //`resolveTarget`: this may only ever be used to SUCCEED.
+      deviceLists = Object.fromEntries(
+        ready.map((p) => [p, listTargets(appRoot, p, envFor(p))]),
+      )
+    }
 
     // Now resolve the device — AFTER the server is confirmed up, so the picker never appears
     // for a run that was going to fail at the dev server anyway.
