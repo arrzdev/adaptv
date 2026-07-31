@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { createServer } from "node:http"
+import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { SAW_OPTIMIZE, warmDevServer } from "./dev-server.mjs"
+import {
+  SAW_OPTIMIZE,
+  startDevServer,
+  warmDevServer,
+} from "./dev-server.mjs"
 
 // `@vitest-environment node` at the top is load-bearing: the suite defaults to happy-dom, and
 // under it a real HTTP server plus `fetch` never complete — `warmDevServer` simply hangs until
@@ -103,5 +108,70 @@ describe("warmDevServer — the settle is paid when it buys something", () => {
       await warmDevServer("http://127.0.0.1:1", { timeoutMs: 1200 }),
     ).toBe(false)
     expect(Date.now() - t).toBeLessThan(6000)
+  })
+})
+
+/* -------------------------------------------------------------------------- */
+/* startDevServer — reading the URLs out of Vite's banner                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A fake `node_modules/.bin/vite` that prints the ready banner in a controlled number of
+ * writes, so a SPLIT between `Local:` and `Network:` can be reproduced on demand.
+ *
+ * That split is the whole point. The two lines are one write from Vite and were read as
+ * one, so the parser took `Network:` only if it happened to be in the same 'data' event.
+ * When the pipe split them, `networkUrl` stayed null on a server that WAS bound to the
+ * LAN — the address block quietly lost its `network` row, and a phone on the same Wi-Fi
+ * had no URL to type.
+ */
+async function fakeVite(gapMs) {
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } =
+    await import("node:fs")
+  const { tmpdir } = await import("node:os")
+  const root = mkdtempSync(path.join(tmpdir(), "adaptv-devserver-"))
+  const bin = path.join(root, "node_modules", ".bin")
+  mkdirSync(bin, { recursive: true })
+  const script = path.join(bin, "vite")
+  writeFileSync(
+    script,
+    `#!/usr/bin/env node
+process.stdout.write("\\n  VITE v8.0.11  ready in 300 ms\\n\\n")
+process.stdout.write("  \\u279c  Local:   http://localhost:41730/\\n")
+setTimeout(() => {
+  process.stdout.write("  \\u279c  Network: http://192.168.1.25:41730/\\n")
+}, ${gapMs})
+setInterval(() => {}, 1000)
+`,
+  )
+  chmodSync(script, 0o755)
+  return root
+}
+
+describe("startDevServer — the Network line arriving in its own chunk", () => {
+  it("still reports networkUrl when the banner is split across writes", async () => {
+    const root = await fakeVite(60)
+    const s = await startDevServer(root, { host: true })
+    try {
+      expect(s.localUrl).toBe("http://localhost:41730")
+      expect(s.networkUrl).toBe("http://192.168.1.25:41730")
+    } finally {
+      s.stop()
+    }
+  })
+
+  it("does not wait for a Network line it never asked for", async () => {
+    //`host: false` means localhost-only, so there is no second line coming and the grace
+    //would be a flat delay on every `dev web`.
+    const root = await fakeVite(5000)
+    const started = Date.now()
+    const s = await startDevServer(root, { host: false })
+    try {
+      expect(s.localUrl).toBe("http://localhost:41730")
+      expect(s.networkUrl).toBe(null)
+      expect(Date.now() - started).toBeLessThan(1000)
+    } finally {
+      s.stop()
+    }
   })
 })
