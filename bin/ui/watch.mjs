@@ -15,7 +15,7 @@
 // `src/`), so there is no build step to compile it. `h` is `createElement`.
 import { Box, render, Text, useApp, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
-import { eraseRegion } from "./live.mjs"
+import { eraseRegion, REGION } from "./live.mjs"
 import { FRAME_MS, FRAMES, GLYPH, HMR_FLASH_MS, ROLE } from "./theme.mjs"
 
 /** The braille spinner, on the theme's own clock. */
@@ -171,10 +171,10 @@ export function inkWatcher({
     Boolean(process.stdin.isTTY) &&
     typeof process.stdin.setRawMode === "function"
 
-  const app = render(h(Watch, { bus, keys, available }), {
-    //Ink clears and repaints its own region; anything already on screen scrolls above it.
-    patchConsole: false,
-  })
+  //Ink clears and repaints its own region; anything already on screen scrolls above it.
+  //`REGION` rather than options of its own — the erase is only sound if every region was
+  //mounted the same way (see `REGION` in `live.mjs`).
+  const app = render(h(Watch, { bus, keys, available }), REGION)
 
   return {
     hmr: (files) => push({ changed: files }),

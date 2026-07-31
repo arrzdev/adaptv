@@ -878,6 +878,46 @@ was got wrong twice, in two components, and the two failures looked nothing alik
 > ```
 > One `eraseRegion(app)` in `bin/ui/live.mjs`, used by every region, so there is one place to be
 > right. Any cursor arithmetic elsewhere on the page depends on it.
+>
+> **A component must not unmount ITSELF.** The third time this broke, the call order at the erase
+> was already correct — the picker had simply answered a keypress with Ink's `useApp().exit()`,
+> which unmounts, so the region was gone (and its height forgotten) before `eraseRegion` ran and
+> erased nothing. Every answered question stayed on screen, stacked above the run it had started:
+> ```
+>   Choose a ios device
+>       iPad (10th generation) (simulator)
+>     › iPhone 16 Pro (simulator)
+>     ↑↓ move · ↵ select · esc cancel
+>   Choose a android device
+>     › Pixel 10 (emulator)
+>     ↑↓ move · ↵ select · esc cancel
+>   ⠏ ios  linking plugins
+>   ⠏ android  building app
+> ```
+> A keypress RESOLVES A PROMISE and nothing else — no `exit()`, and no state push either, since a
+> re-render after the take-down redraws the list. The region is still mounted when `eraseRegion`
+> reaches it, which is the only state from which it can be erased.
+>
+> **And nothing may be left PENDING when the erase runs**, which is the same failure arriving
+> from the other side. Ink's frame-rate cap (`maxFps`, 30 by default) defers a render into a
+> trailing timer, and `unmount()` re-renders — so a region whose last two updates landed inside
+> one frame had its pending frame painted back over the screen the erase had just cleared, and
+> then forgotten, where nothing can ever erase it again:
+> ```
+>   ⠹ ios  linking                                  ← repainted by unmount, AFTER the erase
+>   ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+> ```
+> Two `phase()` calls a few ms apart before the step returns reproduce it — an ordinary sequence
+> when a tool's last line arrives just before its command exits — and it leaked on 20 runs out of
+> 20 through a pty. Every region mounts with the shared `REGION` options (`maxFps: 0`), so no
+> render is ever outstanding. The cap was never doing the pacing anyway: phases are SAMPLED
+> rather than followed (R24), the bus drops an update that changes nothing, and the spinner has
+> its own clock. It paced nothing that wasn't paced already, and made the erase racy.
+>
+> Note what this costs to test: an erase is a frame with no text in it, so "the last frame is the
+> screen" says *empty* whether the region went away or is still there, and the first version of
+> this test passed against the bug. `bin/ui/live.test.mjs` replays the frames — erases included —
+> and asserts on what is LEFT.
 
 **R48 — A live row only moves FORWARD. A phase is shown once.** The row shows the last phase
 reported and silence changes nothing; it never returns to a phase it has left, because going
@@ -946,6 +986,59 @@ phase — because the roles carried `{ ink: "cyan" }` and the components spread 
 > ```
 > Both now name the command directly. Fixed once in `excess-args` and missed in `missing-flag`,
 > which is the usual shape of this: the same helper misused in every branch that borrowed it.
+
+**R52 — The step that can PROVE the app runs first.** A run is ordered by what each step tells
+the dev, not by what the next step happens to need. `dev all` scaffolded the native projects
+before it started Vite, so a first run showed this, and only this, for **81 seconds**:
+```
+  adaptv · dev all
+
+  ⠴ ios  installing pods
+```
+> One platform, no web surface, nothing yet known about whether the app even compiles — and
+> then `android` alone after it, because the scaffolding loop is sequential. Measured on a real
+> first run: started 01:14:00, `.adaptv/ios` finished 01:15:21, `.adaptv/android` at 01:15:24,
+> dev server after that.
+>
+> It was in that order for a reason, which is the part worth remembering: the dev server has to
+> decide whether to bind `0.0.0.0` before it starts, that was decided by asking whether a
+> physical device was in play, and every way of asking runs `cap run <platform> --list`, which
+> refuses until the native project exists. A cheap question at the front of the run had quietly
+> made the most expensive step a prerequisite of the cheapest one. The fix is to stop asking:
+> any native run binds for the LAN, which was already documented as harmless (a simulator
+> reaches the app on localhost either way), and Vite now comes up first. Captured through a pty
+> on a real first run (`rm -rf .adaptv/ios .adaptv/android`):
+> ```
+>     0.7s  adaptv · dev all
+>     1.0s  ⠋ web  preparing
+>     7.9s  ✓ web  · 7.1s
+>             local    http://localhost:41730
+>             network  http://192.168.1.25:41730
+>     7.9s  ⠋ ios  preparing            ← the native work starts against a server already proved
+>    12.4s  ⠋ android  preparing
+>    15.6s  ⠋ ios  syncing / ⠋ android  syncing      ← lanes, concurrent
+>    57.5s  ✓ ios  iPhone 16 Pro (simulator) · 46.4s
+> ```
+> The cost is stated rather than hidden: a simulator-only `dev` listens on the LAN too, and the
+> address block says so. When a dependency like that forces a bad order, question the
+> dependency — reordering around it just moves the wait somewhere else.
+>
+> Scaffolding is still SEQUENTIAL across platforms (`ios` at 7.9s, `android` at 12.4s), which is
+> the remaining half of this. Only the lanes below it are concurrent.
+
+**R53 — A URL that arrives in a second chunk is still the URL.** Vite prints `Local:` and
+`Network:` as one write, and `startDevServer` matched both against the single `data` event that
+carried `Local:`. When the pipe split them the promise had already resolved, `networkUrl` stayed
+null on a server that WAS bound to `0.0.0.0`, and the address block silently lost a row:
+```
+  ✓ web  · 6.9s
+    local  http://localhost:41730          ← and nothing for the phone on the same Wi-Fi
+```
+> Intermittent, which is the tell — the same command printed the `network` row on one run and
+> not the next. It matches the accumulated output now, and when adaptv asked to bind every
+> interface it gives the second line one 250ms beat before settling for what it has. R52 is what
+> made this urgent: `--host` used to be the rare physical-device case and is now every native
+> run, so a row that goes missing one run in five goes missing in front of everyone.
 
 ## 5. Before you ship a CLI change
 

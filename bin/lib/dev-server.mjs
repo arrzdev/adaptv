@@ -85,6 +85,11 @@ export async function warmDevServer(
  * caller can stream HMR logs). Resolves `{ localUrl, networkUrl, host, port, stop() }`;
  * rejects if Vite exits before becoming ready.
  */
+/** How long a `Local:` line waits for the `Network:` line under it. See `handle`. */
+const NETWORK_GRACE_MS = 250
+/** Re-entry into `handle` with nothing to add — it re-reads what has been seen so far. */
+const EMPTY = Buffer.alloc(0)
+
 export function startDevServer(
   appRoot,
   { args = [], env = {}, onLine, host = false } = {},
@@ -123,6 +128,7 @@ export function startDevServer(
     }
 
     let ready = false
+    let grace = null // the one beat given to a `Network:` line that hasn't landed yet
     const buffer = []
     const handle = (buf) => {
       const text = strip(buf.toString())
@@ -134,10 +140,26 @@ export function startDevServer(
         onLine?.(l)
       }
       if (ready) return
-      // Vite prints e.g. "➜  Local:   http://localhost:5173/"
-      const local = text.match(/Local:\s+(https?:\/\/\S+)/)
+      // Vite prints e.g. "➜  Local:   http://localhost:5173/", then `Network:` under it.
+      // Matched against everything seen SO FAR rather than this chunk: the two lines are
+      // one write from Vite and were read as one, until the pipe split them and the URL
+      // block arrived across two 'data' events.
+      const seen = buffer.join("\n")
+      const local = seen.match(/Local:\s+(https?:\/\/\S+)/)
       if (!local) return
-      const network = text.match(/Network:\s+(https?:\/\/\S+)/)
+      const network = seen.match(/Network:\s+(https?:\/\/\S+)/)
+      // `Network:` comes AFTER `Local:`, so a split leaves it unseen at the moment the
+      // promise would resolve — and `networkUrl` is then null forever, on a server that IS
+      // bound to the LAN. The address block silently loses its `network` row and a phone on
+      // the same Wi-Fi has no URL to type. So when we asked to bind every interface, give
+      // the second line one beat before settling for what we have. Costs nothing in the
+      // normal case (both lines are already here) and cannot hang: the timer resolves.
+      if (host && !network && !grace) {
+        grace = setTimeout(() => handle(EMPTY), NETWORK_GRACE_MS)
+        grace.unref?.()
+        return
+      }
+      clearTimeout(grace)
       const url = new URL(local[1])
       ready = true
       resolve({

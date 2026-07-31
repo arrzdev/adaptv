@@ -19,7 +19,7 @@
 //
 // NO JSX: `bin/` ships as raw source (DECISIONS O12), so there is no build step. `h` is
 // `createElement`.
-import { Box, render, Text, useApp, useInput } from "ink"
+import { Box, render, Text, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
 import { FRAME_MS, FRAMES, ROLE } from "./theme.mjs"
 
@@ -59,11 +59,41 @@ function useBus(bus) {
  *     ✓ ios  iPhone 16 Pro (simulator) · 21.4s
  *
  * One function, so there is one place to be right.
+ *
+ * THE ORDER IS THE WHOLE CONTRACT, and it is not recoverable afterwards: Ink's `unmount()`
+ * ends with `log.done()`, which forgets how many rows the last frame occupied WITHOUT erasing
+ * them. A `clear()` after that erases zero lines — a silent no-op on a region that is still on
+ * screen. So nothing here may unmount by any other route first; in particular a component must
+ * not call `useApp().exit()` (see `inkSelect`).
  */
 export function eraseRegion(app) {
   app.clear?.()
   app.unmount?.()
 }
+
+/**
+ * The Ink options EVERY region mounts with. One object, for the same reason there is one
+ * `eraseRegion`: the erase is only sound if every region was mounted the same way.
+ *
+ * `maxFps: 0` turns Ink's frame-rate cap OFF, and that is a correctness fix rather than a
+ * performance one. The cap defers a render into a trailing timer, so a component whose last two
+ * updates land inside one frame still has a paint PENDING when the region is taken down — and
+ * `unmount()` re-renders. That pending frame is therefore painted straight back over the screen
+ * `eraseRegion` had just cleared, and then forgotten, so it can never be erased again:
+ *
+ *     …⠹ ios  linking…   erase   ⠹ ios  linking   ← repainted by unmount, after the erase
+ *     ✓ ios  iPhone 16 Pro (simulator) · 21.4s
+ *
+ * Reproducing it takes only two `phase()` calls a few ms apart before `stop()` — an ordinary
+ * sequence when a tool's last line arrives just before its step returns. It leaked 20 times out
+ * of 20; with the cap off, 0 of 20.
+ *
+ * Nothing here needs the cap. Pacing is the CALLER's, and always was: phases are sampled rather
+ * than followed (`nextPhase()`), the bus drops an update that changes nothing, and the spinner
+ * runs on the theme's own clock. The cap paced nothing that wasn't paced already — it only made
+ * the erase racy.
+ */
+export const REGION = { patchConsole: false, maxFps: 0 }
 
 /** A minimal store the command side pushes into and the components read. */
 export function makeBus(initial) {
@@ -136,7 +166,7 @@ export function liveRows(labels) {
   const bus = makeBus({
     rows: labels.map((label) => ({ label, phase: "preparing" })),
   })
-  const app = render(h(Rows, { bus }), { patchConsole: false })
+  const app = render(h(Rows, { bus }), REGION)
   return {
     /** Set one row's phase. Idempotent — the same text does not re-render. */
     phase: (label, text) =>
@@ -155,8 +185,7 @@ export function liveRows(labels) {
  * the picker
  * -------------------------------------------------------------------------- */
 
-function Picker({ bus, message, options }) {
-  const { exit } = useApp()
+function Picker({ bus, message, options, onDone }) {
   const { index } = useBus(bus)
   useInput((input, key) => {
     if (key.upArrow || input === "k")
@@ -165,17 +194,11 @@ function Picker({ bus, message, options }) {
       }))
     else if (key.downArrow || input === "j")
       bus.set((s) => ({ index: (s.index + 1) % options.length }))
-    else if (key.return) {
-      bus.set({ chosen: options[bus.get().index].value })
-      exit()
-    } else if (
-      key.escape ||
-      input === "q" ||
-      (key.ctrl && input === "c")
-    ) {
-      bus.set({ cancelled: true })
-      exit()
-    }
+    //An answer only REPORTS itself. It must not touch the bus (a re-render after the region
+    //is taken down would redraw the list) and must not `exit()` — see `eraseRegion`.
+    else if (key.return) onDone({ chosen: options[bus.get().index].value })
+    else if (key.escape || input === "q" || (key.ctrl && input === "c"))
+      onDone({ cancelled: true })
   })
   return h(
     Box,
@@ -205,17 +228,35 @@ function Picker({ bus, message, options }) {
  * Erases itself on the way out — the choice is reported by whatever the caller prints next, so
  * a list left on screen is a question that has already been answered (R37 covers the cancel
  * case, which must still leave a line).
+ *
+ * THE ANSWER IS A PROMISE, NOT `waitUntilExit`. That is the whole reason this reads the way it
+ * does. Waiting on Ink's exit meant the component had already called `exit()` — Ink unmounts,
+ * leaves its last frame on screen and forgets it (`eraseRegion`), so the erase that followed
+ * erased nothing and every answered picker stayed:
+ *
+ *     Choose a ios device
+ *         iPhone 16 Pro (simulator)
+ *       ↑↓ move · ↵ select · esc cancel
+ *     Choose a android device
+ *       ↑↓ move · ↵ select · esc cancel
+ *     ⠏ ios  linking plugins
+ *
+ * Two answered questions and a lane, all on screen at once. So the keypress resolves a plain
+ * promise instead, and the region is still MOUNTED when `eraseRegion` takes it down.
  */
 export async function inkSelect(message, options) {
-  const bus = makeBus({ index: 0, chosen: undefined, cancelled: false })
-  const app = render(h(Picker, { bus, message, options }), {
-    patchConsole: false,
-    exitOnCtrlC: false,
+  const bus = makeBus({ index: 0 })
+  let settle
+  const answered = new Promise((resolve) => {
+    settle = resolve
   })
-  await app.waitUntilExit()
-  //`waitUntilExit` already unmounted, so this is only the erase — but it goes through the
-  //shared helper anyway, so there is no second opinion about what taking a region down means.
+  const app = render(
+    h(Picker, { bus, message, options, onDone: (r) => settle(r) }),
+    //`exitOnCtrlC: false` because Ctrl-C is one of the picker's own answers (cancel), and Ink's
+    //handler would unmount before it — the very take-down this function exists to avoid.
+    { ...REGION, exitOnCtrlC: false },
+  )
+  const { chosen, cancelled } = await answered
   eraseRegion(app)
-  const { chosen, cancelled } = bus.get()
   return cancelled ? null : chosen
 }
