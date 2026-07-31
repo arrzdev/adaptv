@@ -1469,6 +1469,14 @@ async function pipeline(kind, appRoot, platforms, opts) {
     writeBuildState(appRoot, buildCache)
   }
 
+  // The error screen, into the web dir so `cap sync` copies it into each platform's
+  // public/. `dev` installs its own (with the dev URL baked in) and deletes it on teardown;
+  // this one carries no URL and is NOT reverted, because it has to ship inside the app:
+  // Android's `minWebViewVersion` gate loads `server.errorPath` and, with nothing there,
+  // Capacitor just logs and boots the app anyway — a silent no-op gate. Unconditional
+  // rather than inside the cache branch above, so a cached bundle still gets it.
+  installOfflinePage(appRoot, { url: null })
+
   // The last vite BUILD of the command is done (or was cached away), so it is now safe for
   // the caller to start serving: `preview all` hangs its web server here rather than before
   // the pipeline, because two vite processes on one app collide on any port that app's
