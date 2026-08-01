@@ -1,4 +1,4 @@
-import { cn } from "@arrzdev/adaptv/utils"
+import { ScrollView } from "@arrzdev/adaptv/components"
 import { AlertCircle, Check, Copy } from "lucide-react"
 import type { ErrorInfo } from "react"
 import { Component, useState } from "react"
@@ -74,14 +74,18 @@ const DefaultErrorComponent = ({
 
         {showTrace && traceText && (
           <div className="relative w-full shrink-0">
-            <pre
+            {/* the max-height caps the block; ScrollView is what makes the
+                overflow reachable rather than clipped, and it contains the
+                overscroll so a fling at the end of a long stack does not drag
+                the screen behind it */}
+            <ScrollView
               data-trace-logs
-              className={cn(
-                "scrollable-y max-h-[min(36dvh,18rem)] rounded-lg border border-border bg-surface p-3 pr-10 font-mono text-[11px] leading-relaxed whitespace-pre-wrap wrap-break-word text-muted sm:max-h-[min(40dvh,20rem)] sm:p-4 sm:pr-11 sm:text-xs",
-              )}
+              className="max-h-[min(36dvh,18rem)] rounded-lg border border-border bg-surface p-3 pr-10 sm:max-h-[min(40dvh,20rem)] sm:p-4 sm:pr-11"
             >
-              {traceText}
-            </pre>
+              <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap wrap-break-word text-muted sm:text-xs">
+                {traceText}
+              </pre>
+            </ScrollView>
             <IconButton
               onClick={handleCopy}
               className="absolute top-2 right-2 size-7 text-muted sm:size-8"

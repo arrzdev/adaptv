@@ -190,13 +190,11 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
     node !== document.body &&
     node !== document.documentElement
   ) {
-    if (
-      node.classList.contains("scrollable-y") ||
-      node.classList.contains("scrollable-x") ||
-      node.classList.contains("scrollable")
-    ) {
-      return node
-    }
+    //computed style only. This used to short-circuit on `scrollable-y` /
+    //`scrollable-x` / `scrollable` class names first; those utilities are gone, so
+    //the checks matched nothing and only hid the fact that the real test was always
+    //the one below — which finds a `ScrollView`, a drawer scroller and a
+    //hand-rolled `overflow-y-auto` alike, without knowing any class names.
     const style = getComputedStyle(node)
     const flow = `${style.overflow}${style.overflowY}${style.overflowX}`
     if (/(auto|scroll|overlay)/.test(flow)) return node
