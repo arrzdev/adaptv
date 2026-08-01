@@ -1,3 +1,4 @@
+import { ScrollView } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import {
@@ -23,7 +24,8 @@ export function EmojiSelector({
   return (
     <div className="flex flex-col gap-y-2">
       <span className="ps-1 text-sm font-medium text-subtle">Emoji</span>
-      <div className="scrollable-x -mx-6 flex gap-x-2 px-6 py-1">
+      {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
+      <ScrollView horizontal className="-mx-6 gap-x-2 px-6 py-1">
         {options.map((emoji) => {
           const isSelected = selectedEmoji === emoji
           const emojiHandlers = hapticPointerHandlers(
@@ -46,7 +48,7 @@ export function EmojiSelector({
             </GhostButton>
           )
         })}
-      </div>
+      </ScrollView>
     </div>
   )
 }

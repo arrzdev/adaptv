@@ -1,3 +1,4 @@
+import { ScrollView } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { PRIORITY_LEVELS } from "@/data/collections/todos/priority"
@@ -33,7 +34,8 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
       <span className="ps-1 text-sm font-medium text-subtle">
         Priority
       </span>
-      <div className="scrollable-x -mx-6 flex gap-x-2 px-6">
+      {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
+      <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {PRIORITY_OPTIONS.map((option) => {
           const isSelected = value === option.value
           const handlers = hapticPointerHandlers(
@@ -66,7 +68,7 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
             </GhostButton>
           )
         })}
-      </div>
+      </ScrollView>
     </div>
   )
 }
