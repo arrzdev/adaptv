@@ -917,6 +917,7 @@ export function DrawerEngine({
     avoidKeyboard,
     keyboard.isOpen,
     keyboard.height,
+    keyboardFlip,
     open,
     beginPanelAnimation,
     endPanelAnimation,
