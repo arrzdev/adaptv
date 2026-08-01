@@ -98,10 +98,11 @@ const SCROLL_VIEW_FILL_CLASS = "flex-1"
 
 /**
  * Managed scroll surface for the native-feel viewport contract (the document
- * never scrolls; panes do) — reach for this instead of a `<div className=
- * "scrollable-y">`. Sets the directional `scrollable-*` utility for you, opts
- * hides scrollbars on request, and dissolves the edges on request — all on a
- * plain, fully styleable `<div>`.
+ * never scrolls; panes do) — reach for this instead of hand-rolling a scrolling
+ * `<div>`. It owns the scroll axis (and pins the cross one), contains the
+ * overscroll, keeps touch panning alive on both axes, hides scrollbars on
+ * request, and dissolves the edges on request — all on a plain, fully styleable
+ * `<div>`. The `scrollClass` comment below is why each of those is not optional.
  *
  * Neutral Tier-1: no brand padding, max-width, or background — wrap it (`Page`,
  * a chip row, …) to add those.
@@ -164,15 +165,51 @@ export function ScrollView({
     : "scrollbar-hidden"
 
   /*
-   * Raw Tailwind, not a `scrollable-*` utility of our own.
+   * Raw Tailwind, not a scroll utility of our own — and every class here is
+   * load-bearing. This used to be a pair of `@utility` rules in `styles/utils.css`;
+   * the reasoning moved here with them.
    *
-   * The three `touch-*` classes each set one `--tw-*` var and share one `touch-action`
-   * declaration, so together they emit exactly the `pan-x pan-y pinch-zoom` longhand
-   * the old utility hard-coded. The win is not brevity — it is that tailwind-merge
-   * already OWNS these groups. A consumer's `overflow-hidden` conflicts with
-   * `overflow-y-auto` natively, so the `locked` tier resolves it without the
-   * hand-written `conflictingClassGroups` table the custom utility needed, and without
-   * anyone having to remember to keep that table in step with the CSS.
+   * WHY RAW TAILWIND. The three `touch-*` classes each set one `--tw-*` var and share
+   * one `touch-action` declaration, so together they emit exactly the
+   * `pan-x pan-y pinch-zoom` longhand the old utility hard-coded. The win is not
+   * brevity — it is that tailwind-merge already OWNS these groups. A consumer's
+   * `overflow-hidden` conflicts with `overflow-y-auto` natively, so the `locked` tier
+   * resolves it without the hand-written `conflictingClassGroups` table the custom
+   * utility needed, and without anyone having to remember to keep that table in step
+   * with the CSS.
+   *
+   * WHY THE CROSS AXIS IS PINNED `hidden`. Setting overflow on one axis forces the
+   * other from `visible` to `auto` (CSS overflow spec), so a single-axis scroller that
+   * only names its own axis silently becomes scrollable both ways — a child that
+   * overflows the cross axis then rubber-bands the container off-axis. `hidden` clips
+   * identically to the implicit `auto` but kills the stray scroll.
+   *
+   * WHY `touch-action` ALLOWS BOTH PAN AXES. This looks wrong and is not. It was once
+   * single-axis (`pan-x` horizontal, `pan-y` vertical), which reads as obviously
+   * correct and is a serious bug: `touch-action` restricts the WHOLE gesture that
+   * starts on the element, not just that element's own scrolling. A horizontal strip
+   * with `pan-x` therefore made a vertical swipe starting on it scroll NOTHING — not
+   * the strip, not the page behind it. Measured with CDP touch injection
+   * (`playground/e2e/scroll-axis.spec.ts`): page moved 0px with `pan-x`, 195px with
+   * both axes. Allowing both costs no cross-axis bleed, because the browser performs
+   * directional lock itself — same measurement, diagonal drag dominated by horizontal:
+   * the strip moved 200px and the page moved 0. That is why adaptv has no JS
+   * directional lock; it had one, it was iOS-only, and it solved a problem the platform
+   * had already solved while this CSS created a worse one. The longhand rather than
+   * `manipulation` is WebKit 240917 — see TOUCH_PASSTHROUGH_CLASS in `press-core.ts`.
+   *
+   * WHY THERE IS NO LAYER-PROMOTION HINT. Deliberately no `will-change`, no
+   * `translate3d`. Both target engines already composite every scroller: WebKit
+   * accelerates all `overflow: scroll` since Safari 13 / iOS 13 (which is why
+   * `-webkit-overflow-scrolling: touch` became a no-op), and Chromium's scroll
+   * unification hands every scroller to the compositor in `cc/input`. So a hint buys a
+   * layer the scroller already has, and pays for it: any of `will-change: transform` /
+   * `transform` / `perspective` / `backface-visibility` makes the scroller a containing
+   * block for its `position: fixed` and `absolute` descendants (css-transforms-1 §3,
+   * css-will-change §2) — a fixed child inside a scroller stops being fixed. Ionic goes
+   * further and documents that `translate3d` on a scroll container DEFEATS WebKit's
+   * layer-backing-sharing optimisation and degrades scrolling (WebKit bug 216701); they
+   * use `z-index: 0` instead. → PERFORMANCE-BOOST.md, guarded by `styles/utils.test.ts`.
    */
   const scrollClass = !scrollEnabled
     ? "overflow-hidden"

@@ -92,11 +92,17 @@ function LabAvoidKeyboardPage() {
         title="Six fields in a short scroller"
         description="Only the last one or two are interesting: they are the ones the keyboard would otherwise cover."
       >
+        {/* NOT a ScrollView wrapping this, and not this wrapping one: the
+            reservation lands on THIS element, so it has to be the scroller —
+            padding-bottom outside the scroller shrinks it instead of extending
+            its content, and the focused field never clears the keyboard. So the
+            scroll classes are spelled out here, the same ones ScrollView emits
+            for a vertical scroller. */}
         <AvoidKeyboard
           ref={avoidRef}
           behavior={behavior}
           scrollIntoView={scrollIntoView}
-          className="scrollable-y h-72 rounded-md bg-secondary p-3"
+          className="h-72 overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-x touch-pan-y touch-pinch-zoom rounded-md bg-secondary p-3"
         >
           <div className="flex flex-col gap-y-3">
             {FILLER.map((slot) => (

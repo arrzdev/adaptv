@@ -104,7 +104,7 @@ function LabViewScrollPage() {
 
       <LabSection
         title="ScrollView — vertical"
-        description="Setting overflow on one axis forces the other from visible to auto, so a bare single-axis scroller silently becomes scrollable both ways. scrollable-y pins the cross axis to hidden and contains the overscroll."
+        description="Setting overflow on one axis forces the other from visible to auto, so a bare single-axis scroller silently becomes scrollable both ways. ScrollView pins the cross axis to hidden and contains the overscroll — the classes are locked, so a className cannot undo either."
       >
         <LabActions>
           <LabButton onClick={() => setScrollEnabled((on) => !on)}>
@@ -168,8 +168,8 @@ function LabViewScrollPage() {
           </div>
         </ScrollView>
         <LabCaveat>
-          Do not try to verify this from computed styles. The{" "}
-          <code>clickable</code> utility deliberately writes the longhand{" "}
+          Do not try to verify this from computed styles. Every scroller and
+          every press target deliberately writes the longhand{" "}
           <code>pan-x pan-y pinch-zoom</code> to work around WebKit 240917
           (<code>manipulation</code> suppresses <code>pointercancel</code>
           ), and Chrome canonicalises the longhand back to{" "}

@@ -171,10 +171,11 @@ describe("mergeStyles — the inline-style tier", () => {
 })
 
 describe("the custom behaviour groups must conflict with what they EXPAND to", () => {
-  //`scrollable-y` is a Tailwind `@utility` that expands to overflow-y, overflow-x,
+  //`scrollable-y` WAS a Tailwind `@utility` that expanded to overflow-y, overflow-x,
   //touch-action AND overscroll-behavior-y. tailwind-merge only drops a class it
   //knows conflicts — and a custom group it has never heard of conflicts with
-  //nothing by default.
+  //nothing by default. Spelling the expansion out at the call site is what removed
+  //the problem; these tests are the guard that the replacement really does merge.
   //
   //The consequence is subtle and bad: BOTH classes survive the merge, so which one
   //applies is decided by the order the rules happen to appear in the compiled
@@ -191,7 +192,7 @@ describe("the custom behaviour groups must conflict with what they EXPAND to", (
 
   it("lets a locked overflow class beat a consumer scroll utility", () => {
     //the inverse must hold too: `scrollEnabled={false}` renders `overflow-hidden`
-    //as the locked layer and must win over a consumer `scrollable-y`
+    //as the locked layer and must win over a consumer's own `overflow-y-auto`
     const out = mergeStyles({
       className: "overflow-y-auto",
       locked: "overflow-hidden",

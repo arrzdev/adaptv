@@ -1,3 +1,4 @@
+import { ScrollView } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { formatDeckLabel } from "@/data/collections/decks/constants"
@@ -16,7 +17,7 @@ export function DeckTabs({ decks, value, onChange }: DeckTabsProps) {
   const allHandlers = hapticPointerHandlers(() => onChange(null), "ok")
 
   return (
-    <div className="scrollable-x -mx-6 flex gap-x-2 px-6">
+    <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
       <GhostButton
         onClick={allHandlers.onClick}
         className={cn(
@@ -49,6 +50,6 @@ export function DeckTabs({ decks, value, onChange }: DeckTabsProps) {
           </GhostButton>
         )
       })}
-    </div>
+    </ScrollView>
   )
 }

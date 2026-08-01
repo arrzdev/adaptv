@@ -29,7 +29,14 @@ export interface AvoidKeyboardProps
  * Reserves room for the on-screen keyboard on the chosen box property and scrolls the focused
  * descendant input into view above it. Built for the frozen-viewport regime: hold
  * `freezeViewport` app-wide (see `RoutingShell`) so the layout height stays put, then wrap the
- * `scrollable-y` region of a full-screen form in `<AvoidKeyboard>`.
+ * scrolling region of a full-screen form in `<AvoidKeyboard>`.
+ *
+ * ⚠︎ This element should BE the scroller, not sit outside one. The reservation lands here, so
+ * with a separate scroller inside, `padding-bottom` shrinks that scroller instead of extending
+ * its content and the focused field never clears the keyboard. Give this element the scroll
+ * classes directly (`overflow-y-auto overflow-x-hidden overscroll-y-contain` plus
+ * `touch-pan-x touch-pan-y touch-pinch-zoom`) — the same set `<ScrollView>` emits, and see its
+ * `scrollClass` comment for why each one is load-bearing.
  *
  * - **`behavior="padding"`** (default) — reserves `padding-bottom`; be / contain the scroller.
  * - **`behavior="margin"`** — reserves `margin-bottom`; lifts a bottom-docked bar.
@@ -59,7 +66,7 @@ export interface AvoidKeyboardProps
  *
  * @example
  * ```tsx
- * <AvoidKeyboard className="flex min-h-0 flex-1 flex-col scrollable-y pb-2 pt-safe-offset-2">
+ * <AvoidKeyboard className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-x touch-pan-y touch-pinch-zoom pb-2 pt-safe-offset-2">
  *   <FormFields />
  * </AvoidKeyboard>
  * ```
