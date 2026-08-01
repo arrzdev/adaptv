@@ -31,6 +31,10 @@ declare module "@tanstack/react-start" {
 }
 `
 
+//The same tree after the repair. Used as an INERT watch stimulus: renaming it
+//into place raises a real filesystem event while leaving nothing to repair.
+const OPAQUE = rewriteRouteTree(GENERATED, PKG)
+
 describe("rewriteRouteTree — the tree may not name the machinery underneath", () => {
   const out = rewriteRouteTree(GENERATED, PKG)
 
@@ -190,31 +194,9 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
     expect(opaque()).toBe(false) //disk deliberately untouched here
   })
 
-  it("survives the generator's write-then-rename", async () => {
-    //THE reason the net watches the directory: the generator writes a temp file and
-    //renames it into place, so a file-watch loses its inode on the first
-    //regeneration and goes deaf — silently. Real events, real directory: this is
-    //the one place event DELIVERY is exercised.
-    plugin.configResolved()
-    const tmp = path.join(dir, "incoming.tmp")
-    //RE-TRIGGER each poll rather than renaming once and waiting. `fs.watch` registers with
-    //the OS asynchronously, so a single rename issued straight after `configResolved()` can
-    //land before the watcher exists — and a missed event is missed forever, which no timeout
-    //fixes. It read as flakiness (green alone, red under the full suite, where registration
-    //is slower) and it stayed red at a 30s budget, which is what gave it away.
-    //Check BEFORE re-triggering, so the poll never clobbers the repair it is looking for.
-    await expect
-      .poll(
-        () => {
-          if (opaque()) return true
-          writeFileSync(tmp, GENERATED)
-          renameSync(tmp, tree)
-          return false
-        },
-        { timeout: 15_000 },
-      )
-      .toBe(true)
-  }, 25_000)
+  //write-then-rename survival lives in `describe("watchRouteTree")` below: it
+  //needs the repair callback as an observable signal, which the plugin does not
+  //expose (it builds its own). Arming from each hook is covered above.
 
   it("stops watching when Vite closes its watcher", () => {
     plugin.configResolved()
@@ -286,5 +268,73 @@ describe("watchRouteTree", () => {
     expect(watchRouteTree("\0invalid/routeTree.gen.ts", () => {})).toBe(
       null,
     )
+  })
+
+  it("survives the generator's write-then-rename", async () => {
+    //THE reason the net watches the directory: the generator writes a temp file
+    //and renames it into place, so a file-watch loses its inode on the first
+    //regeneration and goes deaf — silently. Real events, real directory: this is
+    //the one place event DELIVERY is exercised, and it is written against
+    //`watchRouteTree` rather than the plugin because the repair callback is the
+    //only observable proof that the OS is delivering — which the barrier below
+    //needs. (That the plugin arms the net at all is pinned separately, by
+    //injection.)
+    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    const tree = resolveGeneratedPaths(dir).routeTree
+    mkdirSync(path.dirname(tree), { recursive: true })
+    //seeded already-opaque, so the readiness probe has nothing to repair
+    writeFileSync(tree, OPAQUE)
+
+    let delivered = 0
+    const watcher = watchRouteTree(tree, () => {
+      delivered++
+      rewriteRouteTreeOnDisk(tree, PKG)
+    })
+    expect(watcher).not.toBe(null)
+
+    let n = 0
+    //a sibling temp file renamed over the tree — what the generator does
+    const renameOnto = (content: string) => {
+      const tmp = path.join(dir, `incoming-${++n}.tmp`)
+      writeFileSync(tmp, content)
+      renameSync(tmp, tree)
+    }
+    const opaque = () =>
+      !routeTreeMentionsTanStack(readFileSync(tree, "utf8"))
+    const settle = async (ms: number) => {
+      const until = Date.now() + ms
+      while (delivered === 0 && Date.now() < until)
+        await new Promise((r) => setTimeout(r, 5))
+    }
+
+    try {
+      //⚠︎ `fs.watch` returns BEFORE the OS watch under it is live: on macOS libuv
+      //creates the FSEventStream on its own thread, starting from
+      //`kFSEventStreamEventIdSinceNow`, so anything that happens in the meantime
+      //is never reported at all. Idle, that window is sub-millisecond and a
+      //rename issued on the very next line is seen; under the full suite (113
+      //files over 14 cores) it is wide enough to swallow it, and this test then
+      //burned its entire timeout waiting for an event that was never coming.
+      //Measured with the suite running: 1 loss in 80 renames issued immediately
+      //after arming, versus 0 in 400 issued once a single event had been
+      //delivered. So establish delivery with the inert stimulus first — this is
+      //a readiness barrier, not a retry of the assertion — and only then perform
+      //the one rename the assertion is about.
+      for (let i = 0; delivered === 0; i++) {
+        expect(i, "fs.watch never delivered an event").toBeLessThan(50)
+        renameOnto(OPAQUE)
+        await settle(100)
+      }
+      expect(opaque()).toBe(true) //the probe really was inert
+
+      //the property, exercised exactly once: the rename discards the inode the
+      //file watch was holding, and the tree is repaired regardless
+      const before = delivered
+      renameOnto(GENERATED)
+      await expect.poll(opaque, { timeout: 5000 }).toBe(true)
+      expect(delivered).toBeGreaterThan(before) //via a real event, not by luck
+    } finally {
+      watcher?.close()
+    }
   })
 })
