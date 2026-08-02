@@ -1,6 +1,10 @@
 import { act, cleanup, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  __resetKeyboardHeightCacheForTests,
+  recordKeyboardHeight,
+} from "#adaptv/capabilities/keyboard-height-cache"
+import {
   useKeyboard,
   willOpenVirtualKeyboard,
 } from "#adaptv/hooks/use-keyboard"
@@ -9,6 +13,7 @@ const INNER_HEIGHT = 800
 const DEBOUNCE_MS = 50
 const DISMISS_CONFIRM_MS = 150
 const HEIGHT_CONFIRM_MS = 120
+const PREDICT_CONFIRM_MS = 400
 
 /* =============================================================================
  * willOpenVirtualKeyboard
@@ -135,6 +140,8 @@ describe("useKeyboard", () => {
     cleanup()
     input.remove()
     vi.useRealTimers()
+    __resetKeyboardHeightCacheForTests()
+    localStorage.clear()
     Object.defineProperty(window, "visualViewport", {
       value: undefined,
       configurable: true,
@@ -250,5 +257,122 @@ describe("useKeyboard", () => {
     rerender({ isEnabled: false })
 
     expect(result.current).toEqual({ isOpen: false, height: 0 })
+  })
+
+  /* ---------------------------------------------------------------------------
+   * predictive path (predictFromCache) — the lift starts on the focus frame,
+   * before visualViewport reports, then the real measurement confirms/corrects
+   * ------------------------------------------------------------------------- */
+  describe("prediction", () => {
+    it("seeds the height from the cache the moment a field is focused", () => {
+      recordKeyboardHeight(input, 340) //a prior open of this field shape
+
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+      focusInput() //no viewport change yet — the keyboard has not begun to slide
+
+      expect(result.current).toEqual({ isOpen: true, height: 340 })
+    })
+
+    it("does not predict without a cache hit (cold start falls back to reactive)", () => {
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+      focusInput()
+      expect(result.current).toEqual({ isOpen: false, height: 0 })
+
+      //the reactive path still works underneath the (absent) prediction
+      openKeyboard(340)
+      expect(result.current).toEqual({ isOpen: true, height: 340 })
+    })
+
+    it("does not predict for a read-only field", () => {
+      input.readOnly = true
+      recordKeyboardHeight(input, 340)
+
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+      focusInput()
+
+      expect(result.current).toEqual({ isOpen: false, height: 0 })
+    })
+
+    it("corrects a low guess upward the instant the real height arrives", () => {
+      recordKeyboardHeight(input, 320)
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+
+      focusInput()
+      expect(result.current.height).toBe(320) //predicted
+
+      setKeyboardHeight(380) //real keyboard, taller than the guess
+      advance(DEBOUNCE_MS + 10) //grow commits immediately, no stability wait
+
+      expect(result.current).toEqual({ isOpen: true, height: 380 })
+    })
+
+    it("corrects a high guess downward once the real height holds", () => {
+      recordKeyboardHeight(input, 380)
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+
+      focusInput()
+      expect(result.current.height).toBe(380) //predicted
+
+      setKeyboardHeight(340) //real keyboard, shorter than the guess
+      advance(DEBOUNCE_MS + 10)
+      expect(result.current.height).toBe(380) //still inside the stability window
+
+      advance(HEIGHT_CONFIRM_MS + 10)
+      expect(result.current).toEqual({ isOpen: true, height: 340 })
+    })
+
+    it("retracts a prediction that no keyboard ever confirms", () => {
+      recordKeyboardHeight(input, 340)
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+
+      focusInput() //seeds open, but this is a hardware keyboard — nothing slides in
+      expect(result.current.isOpen).toBe(true)
+
+      advance(PREDICT_CONFIRM_MS + 20)
+      expect(result.current).toEqual({ isOpen: false, height: 0 })
+    })
+
+    it("does not retract when the keyboard confirmed mid-window", () => {
+      recordKeyboardHeight(input, 340)
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+
+      focusInput()
+      setKeyboardHeight(340) //keyboard actually slid in, matching the guess
+      advance(DEBOUNCE_MS + 10)
+      advance(PREDICT_CONFIRM_MS + 20) //past the retract window — must stay open
+
+      expect(result.current).toEqual({ isOpen: true, height: 340 })
+    })
+
+    it("learns the height on a real open so the next focus can predict it", () => {
+      const { result } = renderHook(() =>
+        useKeyboard({ predictFromCache: true }),
+      )
+
+      //first open is reactive (cold cache) and records the measured height
+      openKeyboard(360)
+      expect(result.current).toEqual({ isOpen: true, height: 360 })
+      blurInput()
+      advance(20)
+      expect(result.current.isOpen).toBe(false)
+
+      //second focus now has a warm cache — it seeds before any viewport change
+      focusInput()
+      expect(result.current).toEqual({ isOpen: true, height: 360 })
+    })
   })
 })
