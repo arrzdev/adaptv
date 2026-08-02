@@ -29,6 +29,7 @@ import {
   measureDrawerContentNaturalHeight,
   readDrawerKeyboardRoom,
   resolveDrawerKeyboardRoom,
+  shouldPrimeKeyboardFloor,
   useDrawerKeyboardAvoidance,
   writeDrawerKeyboardRoom,
 } from "#adaptv/components/drawer/drawer-keyboard"
@@ -118,6 +119,14 @@ const DRAWER_NO_TRANSITION = "none"
 //transitionend is not reliable when a property lands on its current value, so the settle is
 //driven by duration + this margin (mirrors drawer-motion's own fallback)
 const DRAWER_SETTLE_FALLBACK_MS = 32
+
+// A floor primed on focus (see `primeKeyboardFloor` + the keyboard-room effect's `heldFloor` path)
+// is held this long waiting for the keyboard whose arrival the focus predicted. If none confirms —
+// a hardware keyboard, a programmatic focus, a readonly field the gate missed — the floor eases back
+// down and releases, so a focus that raises no keyboard never leaves the sheet stuck tall. Mirrors
+// use-keyboard's KEYBOARD_PREDICT_CONFIRM_MS: the keyboard's own slide is ~250ms, so the window has
+// to clear it or a genuine keyboard gets retracted mid-appearance and flickers back.
+const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 400
 
 type DrawerMetrics = {
   excessHeight: number
@@ -324,6 +333,10 @@ export function DrawerEngine({
   const lastNaturalRef = useRef(0)
   //the box height one observation ago — the floor a shrink eases down FROM
   const lastBoxRef = useRef(0)
+  //pending retract of a focus-primed floor the keyboard never confirmed (see primeKeyboardFloor)
+  const floorRetractTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null)
   const isClosingRef = useRef(false)
   const closeRunRef = useRef(0)
   const closeTargetRef = useRef(0)
@@ -419,6 +432,9 @@ export function DrawerEngine({
   useEffect(() => {
     return () => {
       if (unmountTimerRef.current) clearTimeout(unmountTimerRef.current)
+      if (floorRetractTimerRef.current) {
+        clearTimeout(floorRetractTimerRef.current)
+      }
     }
   }, [])
 
@@ -477,11 +493,95 @@ export function DrawerEngine({
     endPanelAnimation(runId)
   }, [y, beginPanelAnimation, endPanelAnimation])
 
+  // Release a floor the keyboard never confirmed: ease the box from the floor back down to its own
+  // (collapsed) content height and hand `min-height` back. The keyboard-room effect's `heldFloor`
+  // path takes over any floor the keyboard DOES confirm (it eases + clears it on settle) and clears
+  // this timer, so reaching here means no keyboard came — a FLIP-eased shrink, same discipline as
+  // the reaim path, so a focus that raised nothing settles smoothly instead of dropping in one frame.
+  const releaseKeyboardFloor = useCallback(() => {
+    if (floorRetractTimerRef.current) {
+      clearTimeout(floorRetractTimerRef.current)
+      floorRetractTimerRef.current = null
+    }
+    const content = contentRef.current
+    if (!content || content.style.minHeight === "") return
+    //the keyboard-room effect owns the floor now — let its settle ease and clear it
+    if (appliedRoomRef.current > 0) return
+
+    const panelEl = panelRef.current
+    const boxBefore = content.getBoundingClientRect().height
+    content.style.minHeight = ""
+    void content.offsetHeight
+    const moved = content.getBoundingClientRect().height - boxBefore
+    if (
+      Math.abs(moved) > 0.5 &&
+      panelEl &&
+      !isPointerDraggingRef.current
+    ) {
+      clearDrawerPanelTransition(panelEl)
+      keyboardFlip.set(moved)
+      void content.offsetHeight
+      applyDrawerPanelTransition(panelEl, DRAWER_SHRINK_TRANSITION, true)
+      keyboardFlip.set(0)
+    }
+  }, [keyboardFlip])
+
+  // Focus is the earliest signal a keyboard is imminent — earlier than any height measurement, and
+  // on native the height only lands AFTER focus. If the sheet is at content height with no room held
+  // (the classic being a wheel/date picker open with no keyboard yet), pin a `min-height` floor at
+  // the box's current height now. The picker then collapses UNDER the floor — the sheet's top does
+  // not drop — and when the keyboard's height lands the keyboard-room effect eases the floor to the
+  // final height in one motion. See `shouldPrimeKeyboardFloor` for why only this state qualifies.
+  const primeKeyboardFloor = useCallback(
+    (field: HTMLElement) => {
+      const content = contentRef.current
+      if (!content) return
+      const fieldRaisesKeyboard = !(
+        (field instanceof HTMLInputElement ||
+          field instanceof HTMLTextAreaElement) &&
+        (field.readOnly || field.disabled)
+      )
+      if (
+        !shouldPrimeKeyboardFloor({
+          enabled: open && avoidKeyboard && fieldRaisesKeyboard,
+          isClosing: isClosingRef.current,
+          roomHeld: appliedRoomRef.current > 0,
+          floorHeld: content.style.minHeight !== "",
+          capHeld: content.style.maxHeight !== "",
+        })
+      ) {
+        return
+      }
+
+      const boxHeight = content.getBoundingClientRect().height
+      if (boxHeight <= 0) return
+      content.style.minHeight = `${boxHeight}px`
+      if (floorRetractTimerRef.current) {
+        clearTimeout(floorRetractTimerRef.current)
+      }
+      floorRetractTimerRef.current = setTimeout(
+        releaseKeyboardFloor,
+        DRAWER_KEYBOARD_FLOOR_CONFIRM_MS,
+      )
+    },
+    [open, avoidKeyboard, releaseKeyboardFloor],
+  )
+
+  // One focusin path: prime the floor synchronously (before the picker's collapse re-render lands),
+  // then snap the sheet back open if a drag had left it partway down.
+  const onFieldWillOpenKeyboard = useCallback(
+    (field: HTMLElement) => {
+      primeKeyboardFloor(field)
+      return snapOpenForKeyboard()
+    },
+    [primeKeyboardFloor, snapOpenForKeyboard],
+  )
+
   const keyboard = useDrawerKeyboardAvoidance({
     containerRef: panelRef,
     scrollerRef,
     isEnabled: open && avoidKeyboard,
-    onWillOpenKeyboard: snapOpenForKeyboard,
+    onWillOpenKeyboard: onFieldWillOpenKeyboard,
   })
   keyboardOpenRef.current = keyboard.isOpen
 
@@ -762,6 +862,11 @@ export function DrawerEngine({
     const content = contentRef.current
 
     if (!open || !avoidKeyboard) {
+      //a focus-primed floor is scoped to an open, keyboard-avoiding sheet; drop any pending retract
+      if (floorRetractTimerRef.current) {
+        clearTimeout(floorRetractTimerRef.current)
+        floorRetractTimerRef.current = null
+      }
       // Closing: stay inert. The keyboard dismisses while the sheet slides out, and giving the
       // room back mid-slide relays the box out, fires the content observer and re-aims the close.
       // The panel goes off-screen carrying whatever room it had; a fresh open rebuilds it.
@@ -780,6 +885,13 @@ export function DrawerEngine({
     //nothing in play: skip the measurement block entirely rather than pay for reads that would
     //land mid-open-animation
     if (room === 0 && appliedRoomRef.current === 0) return
+
+    //the keyboard confirmed — its own grow + settle now owns any floor primed on focus (the
+    //heldFloor path below eases it and clears it), so stop the retract that would fire mid-motion
+    if (room > 0 && floorRetractTimerRef.current) {
+      clearTimeout(floorRetractTimerRef.current)
+      floorRetractTimerRef.current = null
+    }
 
     // The stylesheet's cap, read while nothing of ours overrides it — from here until the room
     // is handed back, `max-height` is engine-owned. (A rotation mid-keyboard keeps the stale

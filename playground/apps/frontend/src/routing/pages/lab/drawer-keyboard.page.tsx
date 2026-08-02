@@ -290,6 +290,15 @@ function LabDrawerKeyboardPage() {
     return () => setMockKeyboard(0)
   }, [])
 
+  //`?autorun` opens the sheet on load, so a headless surface that cannot tap (a simulator driven
+  //by `simctl openurl`, `adb ... VIEW -d`) still triggers the self-run — the verdict then reads
+  //off the on-screen overlay in one screenshot. Pairs with `?only=` to isolate a single scenario.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("autorun")) {
+      setOpen(true)
+    }
+  }, [])
+
   // A real keyboard retracts when the field loses focus, and `dismissVirtualKeyboard()` works by
   // blurring — so a mock that ignores blur cannot model the one interaction where the drawer
   // dismisses the keyboard itself. While focus-linked, a `focusout` retracts the mock, which is
@@ -372,6 +381,29 @@ function LabDrawerKeyboardPage() {
       setResults([...collected])
     }
 
+    if (only === "lag") {
+      //the picker-first / keyboard-lagging repro in isolation (no warm-up raise), so a slit-scan
+      //over the top edge reads only this motion — before the fix a dip, after it one descent
+      setExtraRows(8)
+      setKeyboard(0)
+      setMockKeyboard(0)
+      await new Promise((r) => setTimeout(r, SETTLE_MS))
+      const field = content.querySelector<HTMLInputElement>("input")
+      await step(
+        "picker collapses, keyboard lags",
+        kb(0.4),
+        () => {
+          field?.focus()
+          setExtraRows(0)
+        },
+        { mid: { at: 48, apply: () => {
+          setKeyboard(kb(0.4))
+          setMockKeyboard(kb(0.4))
+        } } },
+      )
+      setRunning(false)
+      return
+    }
     if (only !== "picker") {
       await step(`raise 0→${pct(0.4)}`, kb(0.4), () => {
         setKeyboard(kb(0.4))
@@ -516,6 +548,38 @@ function LabDrawerKeyboardPage() {
       setKeyboard(0)
       setMockKeyboard(0)
     })
+
+    // The SAME two changes, but in the order that actually flickers, and with the inter-frame gap
+    // the near-instant mock otherwise hides. The keyboard is DOWN and the picker EXPANDED; on focus
+    // the picker collapses (content SHRINKS) and — a few frames LATER, not together — the keyboard
+    // raises (room GROWS). While only the picker was open no room was held, so the collapse cannot
+    // ride the keyboard-room effect (it early-returns at room 0): without a floor primed on focus
+    // the sheet's top DROPS on the collapse frame and is pulled back UP when the keyboard arrives —
+    // a reversal. The `focus` here is the real signal (the fix listens for it); the mock drives the
+    // height directly, bypassing the web prediction that already coalesces this, so the lag — and
+    // the dip it causes — reproduces the NATIVE path on every platform this harness runs on.
+    setExtraRows(8)
+    setKeyboard(0)
+    setMockKeyboard(0)
+    await new Promise((r) => setTimeout(r, SETTLE_MS))
+    const laggedField = content.querySelector<HTMLInputElement>("input")
+    await step(
+      "picker collapses, keyboard lags",
+      kb(0.4),
+      () => {
+        laggedField?.focus()
+        setExtraRows(0)
+      },
+      { mid: { at: 48, apply: () => {
+        setKeyboard(kb(0.4))
+        setMockKeyboard(kb(0.4))
+      } } },
+    )
+    //back to a clean baseline for the drag section below (keyboard down, nothing focused)
+    laggedField?.blur()
+    setKeyboard(0)
+    setMockKeyboard(0)
+    await new Promise((r) => setTimeout(r, SETTLE_MS))
 
     // ---- drag with the keyboard up ----
     //
