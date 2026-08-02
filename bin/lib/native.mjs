@@ -1640,6 +1640,17 @@ const escDollar = (s) => s.replace(/\$/g, "$$$$")
  * stay on the base id (namespace = code package, applicationId = install identity — the two
  * are allowed to differ), so generated sources (MainActivity, R) never move.
  *
+ * And the Android namespace is PINNED here, not just left alone. `cap add` derives the
+ * scaffolded `namespace` from whatever appId is in the live env-config at that moment — and a
+ * multi-platform prepare flips that to `.dev` (an earlier platform's own `patchNativeIdentity`
+ * mutates the shared `process.env`) BEFORE Android is scaffolded, so the namespace can be born
+ * `.dev`. When it is, the manifest's `.MainActivity` resolves to `<base>.dev.MainActivity` — the
+ * bare Capacitor stub `cap add` writes — and adaptv's edge-to-edge MainActivity (generated into
+ * the BASE package by `patchAndroidSplash`) never launches, so the app slides under the status
+ * bar on old WebViews (NATIVE-SHELL §0.2). Reasserting `namespace = <baseId>` every prepare keeps
+ * the two in the same package whatever `cap add` guessed, and self-heals a project already born
+ * wrong.
+ *
  * Replace-to-target regexes: whatever the files currently hold, they land on the intended
  * value — so switching variants (or re-running) is always safe.
  */
@@ -1667,6 +1678,13 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
       `$1${escDollar(name)}$2`,
     )
   } else {
+    // namespace = the code package (MainActivity + R live here): ALWAYS the base id, never
+    // `.dev`, so `.MainActivity` resolves to adaptv's edge-to-edge activity, not the stub.
+    subInFile(
+      path.join(nd, "app/build.gradle"),
+      /namespace\s*=\s*"[^"]*"/,
+      `namespace = "${escDollar(baseId)}"`,
+    )
     subInFile(
       path.join(nd, "app/build.gradle"),
       /applicationId\s+"[^"]*"/,
