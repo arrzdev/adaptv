@@ -3,6 +3,7 @@ import { DRAWER_CONTENT_LAYOUT_CLASS } from "#adaptv/components/drawer/drawer-en
 import {
   resolveDrawerKeyboardRoom,
   scrollDrawerInputIntoView,
+  shouldPrimeKeyboardFloor,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
 
@@ -61,6 +62,61 @@ describe("the box grows by the room it has to hold", () => {
       room: 0,
       maxHeight: CAP,
     })
+  })
+})
+
+/*
+ * The floor primed on focus, ahead of the keyboard.
+ *
+ * The flicker it closes: a picker open with no keyboard yet (no room held), then a text-input tap.
+ * The picker collapses on the focus frame; the keyboard's height lands a frame or two later. With
+ * no room held the collapse cannot ride the keyboard-room effect (that early-returns at room 0), so
+ * the box shrinks raw and the sheet's top DROPS, then snaps back UP when the keyboard grows it.
+ * Pinning a floor on focus holds the top across the gap; the keyboard-room effect's heldFloor path
+ * then eases it to the final height in one motion. The gate answers ONLY the flicker-prone state.
+ */
+describe("shouldPrimeKeyboardFloor", () => {
+  const flickerProne = {
+    enabled: true,
+    isClosing: false,
+    roomHeld: false,
+    floorHeld: false,
+    capHeld: false,
+  }
+
+  it("primes in the exact flicker-prone state: enabled, at rest, nothing held", () => {
+    expect(shouldPrimeKeyboardFloor(flickerProne)).toBe(true)
+  })
+
+  it("never when disabled — folds in open/avoidKeyboard off and a field that raises no keyboard", () => {
+    //a readonly/disabled field, or a closed / keyboard-blind drawer, all arrive here as enabled:false
+    expect(
+      shouldPrimeKeyboardFloor({ ...flickerProne, enabled: false }),
+    ).toBe(false)
+  })
+
+  it("never when room is already held — a field switch with the keyboard up; reaim owns that collapse", () => {
+    expect(
+      shouldPrimeKeyboardFloor({ ...flickerProne, roomHeld: true }),
+    ).toBe(false)
+  })
+
+  it("never when a floor is already held — don't re-prime a second focus onto the first", () => {
+    expect(
+      shouldPrimeKeyboardFloor({ ...flickerProne, floorHeld: true }),
+    ).toBe(false)
+  })
+
+  it("never when the engine already owns the cap — it is mid-motion, do not perturb it", () => {
+    expect(
+      shouldPrimeKeyboardFloor({ ...flickerProne, capHeld: true }),
+    ).toBe(false)
+  })
+
+  it("never while closing — the sheet is sliding out carrying whatever it held", () => {
+    expect(
+      shouldPrimeKeyboardFloor({ ...flickerProne, isClosing: true }),
+    ).toBe(false)
   })
 })
 

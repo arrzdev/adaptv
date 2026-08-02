@@ -56,6 +56,18 @@ translate would clip the top). At the cap, ignore the live follow and keep room 
 Prediction on `focus` also helps iOS/Android: seed from the cache, let the native payload *confirm*
 rather than *initiate*. It is additive to every row, not a fourth mode.
 
+The **geometry** uses the same focus frame, independently of the height signal. Focusing a text
+field can collapse an expanded picker (a wheel/date picker) in the same instant — content shrinks
+before the keyboard's height is known. While no room is held the shrink cannot ride the room effect
+(it early-returns at room 0), so on the focus frame the drawer pins a `min-height` **floor** at the
+box's current height (`drawer-engine.tsx` `primeKeyboardFloor`, gated by `shouldPrimeKeyboardFloor`):
+the picker collapses under the floor, the sheet's top holds, and the keyboard-room effect's
+`heldFloor` path eases the floor to the final height once the height lands — one motion, no
+shrink-then-grow dip. Like the signal-side prediction it is **reversible**: a focus that raises no
+keyboard retracts the floor after a confirm window (`DRAWER_KEYBOARD_FLOOR_CONFIRM_MS`, mirroring §5).
+On web the predictive seed already starts the grow on the focus frame, so the two coalesce; on native
+(prediction off today) the floor alone is what removes the dip. See `BEHAVIORS.md §4`.
+
 ## 3. The contract
 
 One unified accessor, identical shape on every target — the JS layer above it never learns which
