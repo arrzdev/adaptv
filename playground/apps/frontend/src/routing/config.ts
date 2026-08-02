@@ -23,6 +23,13 @@ export const routes = rootRoute([
     route("/lab/toggles", "pages/lab/toggles.page.tsx"),
     route("/lab/fields", "pages/lab/fields.page.tsx"),
     route("/lab/drawer", "pages/lab/drawer.page.tsx"),
+    //the drawer's keyboard conformance harness — drives adaptv's keyboard test
+    //seam and asserts the sheet's geometry, so one screenshot is the report on
+    //every target (a real software keyboard cannot be scripted)
+    route(
+      "/lab/drawer-keyboard",
+      "pages/lab/drawer-keyboard.page.tsx",
+    ),
     route("/lab/swipeable", "pages/lab/swipeable.page.tsx"),
     route("/lab/pull-to-refresh", "pages/lab/pull-to-refresh.page.tsx"),
     route("/lab/wheel-column", "pages/lab/wheel-column.page.tsx"),

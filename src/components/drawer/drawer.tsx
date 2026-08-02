@@ -85,7 +85,11 @@ export type DrawerRootProps = {
   onOpenChange?: (open: boolean) => void
   /** Fired after the open (`true`) or close (`false`) animation settles. */
   onAnimationEnd?: (open: boolean) => void
-  /** Lift content above the virtual keyboard (default `true`). */
+  /**
+   * Make room for the virtual keyboard (default `true`). The sheet grows into its max height and
+   * holds the keyboard's height as empty room under its content, so the content clears the
+   * keyboard and whatever no longer fits stays reachable by scrolling.
+   */
   avoidKeyboard?: boolean
   /**
    * Blur focused elements outside the drawer on open to clear ghost focus (default `true`).
@@ -94,8 +98,8 @@ export type DrawerRootProps = {
   blurInputs?: boolean
   /**
    * Suppress the user's drag-to-move/dismiss gesture — the drag handle and the whole-sheet
-   * swipe — while `true` (default `false`). Programmatic open/close and the keyboard-avoidance
-   * lift (a focused field still pushes the sheet up) are unaffected. Designed to be toggled live:
+   * swipe — while `true` (default `false`). Programmatic open/close and keyboard avoidance (a
+   * focused field still grows the sheet) are unaffected. Designed to be toggled live:
    * e.g. bind it to a destructive hold-to-confirm button inside the panel so a small finger drift
    * during the hold can't drag the sheet.
    */
@@ -132,11 +136,18 @@ const DRAWER_GRABBER_BASE_CLASS =
 //height-capped and this is the only element allowed to scroll inside it, which the
 //drag engine relies on when it decides whether a downward gesture is a scroll or a
 //dismiss. `overscroll-y-none` is what stops a fling at the end chaining to the page
-//behind the sheet. `contain` scopes content invalidations (e.g. the keyboard scroll
-//spacer) to the scroller, keeping them off the panel's animated layer; the scroller
-//already clips, so paint containment changes nothing visually.
+//behind the sheet. `contain` scopes content invalidations to the scroller, keeping them
+//off the panel's animated layer; the scroller already clips, so paint containment
+//changes nothing visually.
+//
+//`overflow-x-hidden` is not belt-and-braces, it is the OTHER HALF of `overflow-y-auto`:
+//CSS computes an unspecified `overflow-x` to `auto` the moment the other axis scrolls,
+//so a single too-wide child (a chip row, a long unbroken string) silently turned the
+//sheet into a two-axis pane the user could pan sideways — sliding the form out from
+//under the fixed handle and footer. A drawer is a vertical surface; a child that needs
+//to scroll sideways brings its own `ScrollView horizontal` (same pairing there).
 const DRAWER_SCROLLER_LOCKED_CLASS =
-  "min-h-0 overflow-y-auto overscroll-y-none"
+  "min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-none"
 const DRAWER_SCROLLER_BASE_CLASS =
   "flex flex-col contain-[layout_paint_style]"
 
@@ -358,17 +369,32 @@ function DrawerContent({
     syncEdgeFade()
   }, [syncEdgeFade])
 
-  //content can grow without the scroller box changing (an inline picker
-  //expanding under a max-height cap), so watch the content box too
+  // Overflow changes are answered IMMEDIATELY, not on settle. The deferral exists so a mask flip
+  // does not repaint the scroller inside a layer the compositor is animating — but the engine now
+  // lands its layout in one step and animates a transform (FLIP), so the repaint happens once, at
+  // the moment the content actually becomes scrollable. Deferring it meant the fade appeared a
+  // full animation-length after the content it describes, which reads as the gradient lagging.
+  const syncEdgeFadeNow = useCallback(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const top = scroller.scrollTop > 1
+    const bottom =
+      scroller.scrollTop <
+      scroller.scrollHeight - scroller.clientHeight - 1
+    setEdgeFade((prev) =>
+      prev.top === top && prev.bottom === bottom ? prev : { top, bottom },
+    )
+  }, [scrollerRef])
+
   useEffect(() => {
     const scroller = scrollerRef.current
     if (!scroller) return
-    const observer = new ResizeObserver(syncEdgeFade)
+    const observer = new ResizeObserver(syncEdgeFadeNow)
     observer.observe(scroller)
     if (scroller.firstElementChild)
       observer.observe(scroller.firstElementChild)
     return () => observer.disconnect()
-  }, [scrollerRef, syncEdgeFade])
+  }, [scrollerRef, syncEdgeFadeNow])
 
   //flush the deferred sync the moment the panel settles
   useEffect(
@@ -404,6 +430,10 @@ function DrawerContent({
         lockedStyle: engine.panelStyle,
       })}
     >
+      {/*the engine writes this box's keyboard room (padding + the cap it grows into) imperatively
+         — drawer-keyboard.ts owns those; a raise has to prime one value and tween the next inside
+         a single frame, which React's render cadence cannot express. No consumer style channel
+         here, so nothing can collide.*/}
       <div ref={engine.contentRef} className={engine.contentLayoutClass}>
         <div
           //internal region, no consumer className channel — `cn` is the right tool
@@ -441,13 +471,6 @@ function DrawerContent({
           })}
         >
           {body}
-          {engine.keyboardScrollSpace > 0 && (
-            <div
-              aria-hidden
-              className="shrink-0"
-              style={{ height: engine.keyboardScrollSpace }}
-            />
-          )}
         </div>
         {footer}
       </div>

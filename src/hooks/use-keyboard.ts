@@ -90,6 +90,31 @@ function readKeyboardHeight(visualViewportThreshold: number): number {
   return 0
 }
 
+//---- Test seam ----------------
+
+/*
+ * A harness can drive the keyboard directly, because the thing this hook observes cannot be
+ * automated: simulators do not raise a software keyboard for a scripted run, and no web API lets
+ * a page synthesise `visualViewport` geometry. Everything downstream of here — the drawer's whole
+ * room-and-growth behaviour — is therefore untestable end-to-end without a seam.
+ *
+ * Opt-in by construction: nothing sets this global by accident, and while it is set this hook
+ * reports the mock and nothing else, so a harness can drive raise/grow/shrink/dismiss frame by
+ * frame and assert what the sheet did. Install it BEFORE the observer mounts (the drawer's only
+ * mounts when it opens), then dispatch `adaptv:keyboard-mock` on every change.
+ */
+export const KEYBOARD_MOCK_EVENT = "adaptv:keyboard-mock"
+const KEYBOARD_MOCK_KEY = "__adaptvKeyboardMock"
+
+type KeyboardMockHost = { [KEYBOARD_MOCK_KEY]?: Partial<KeyboardState> }
+
+function readKeyboardMock(): KeyboardState | null {
+  if (typeof window === "undefined") return null
+  const mock = (window as unknown as KeyboardMockHost)[KEYBOARD_MOCK_KEY]
+  if (!mock || typeof mock.height !== "number") return null
+  return { isOpen: Boolean(mock.isOpen), height: mock.height }
+}
+
 /** Blur the focused field so the on-screen keyboard can dismiss. */
 export function dismissVirtualKeyboard() {
   if (typeof document === "undefined") return
@@ -400,6 +425,21 @@ export function useKeyboard({
     if (!isEnabled) {
       resetKeyboardState()
       return
+    }
+
+    //driven by a harness (see the test seam above): report the mock and nothing else, so a
+    //scripted raise/grow/shrink is exactly what every consumer sees.
+    if (readKeyboardMock()) {
+      function syncMock() {
+        const mock = readKeyboardMock()
+        if (mock) setKeyboardState(mock)
+      }
+      syncMock()
+      window.addEventListener(KEYBOARD_MOCK_EVENT, syncMock)
+      return () => {
+        window.removeEventListener(KEYBOARD_MOCK_EVENT, syncMock)
+        setState({ isOpen: false, height: 0 })
+      }
     }
 
     //native: the OS reports exact height + will-show/hide, so skip the whole

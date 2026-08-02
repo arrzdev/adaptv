@@ -79,7 +79,7 @@ export function DeckFormDrawer({
     <AppDrawer open={open} onOpenChange={onOpenChange}>
       <AppDrawer.Portal>
         <AppDrawer.Overlay />
-        <AppDrawer.Content hasFooter>
+        <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
             <div className="flex flex-col gap-y-2">
@@ -102,9 +102,8 @@ export function DeckFormDrawer({
               value={selectedEmoji}
               onChange={setSelectedEmoji}
             />
-          </AppDrawer.Shell>
-          {/* pinned below the scroller — at max height the form scrolls, the actions stay */}
-          <AppDrawer.Footer>
+
+            {/* last in the scroll flow, not pinned — the actions follow the form down */}
             <DrawerActionFooter
               errorMessage={errorMessage}
               action={
@@ -127,7 +126,7 @@ export function DeckFormDrawer({
                 </AppDrawer.Close>
               }
             />
-          </AppDrawer.Footer>
+          </AppDrawer.Shell>
         </AppDrawer.Content>
       </AppDrawer.Portal>
     </AppDrawer>

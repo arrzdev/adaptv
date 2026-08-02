@@ -16,6 +16,7 @@ import {
   useState,
 } from "react"
 import { createPortal } from "react-dom"
+import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import {
   DEFAULT_DRAWER_TRANSITION,
   DRAWER_CLOSE_TRANSITION,
@@ -24,21 +25,20 @@ import {
   resolveDrawerDragRelease,
 } from "#adaptv/components/drawer/drawer-constants"
 import {
-  measureHeightAvailableUntilMaxHeightCap,
-  resolveDrawerKeyboardLift,
+  clearDrawerKeyboardRoom,
+  measureDrawerContentNaturalHeight,
+  readDrawerKeyboardRoom,
+  resolveDrawerKeyboardRoom,
   useDrawerKeyboardAvoidance,
+  writeDrawerKeyboardRoom,
 } from "#adaptv/components/drawer/drawer-keyboard"
-import type { DrawerMotionAnimation } from "#adaptv/components/drawer/drawer-motion"
 import {
-  animateDrawerKeyboardOffset,
   animateDrawerY,
   applyDrawerPanelTransition,
   clearDrawerPanelTransition,
   readPanelTranslateY,
   stopDrawerBackdropAnimation,
-  stopDrawerKeyboardOffsetAnimation,
   transitionDrawerBackdropOpacity,
-  willAnimateDrawerKeyboardOffset,
 } from "#adaptv/components/drawer/drawer-motion"
 import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
 import {
@@ -79,25 +79,45 @@ const DRAWER_PANEL_Z = "z-[51]"
 
 // Cap the visible content. Installed PWA: full viewport minus the top safe area so the
 // panel never grows under the notch. Browser tab: 97dvh — leaves a sliver up top and
-// dodges browser chrome (the top inset is 0 in a tab anyway). The keyboard lift clamps
-// against this same cap. (Viewport math is Tier-1's job — not a cosmetic.)
-// `--adaptv-inset-top` is the contract var (styles/safe-area.css).
-const DRAWER_CONTENT_LAYOUT_CLASS = cn(
+// dodges browser chrome (the top inset is 0 in a tab anyway). (Viewport math is Tier-1's
+// job — not a cosmetic.) `--adaptv-inset-top` is the contract var (styles/safe-area.css).
+//
+// Deliberately keyboard-blind: nothing here shrinks when the keyboard opens. The sheet answers
+// a keyboard by GROWING into this cap and holding room under its content (see the keyboard-room
+// effect), which is the same geometry with a far better motion than shrinking the cap and
+// translating the panel up to compensate. While that room is held the engine owns `max-height`
+// inline and this is the ceiling it grows toward.
+// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses this `calc()`,
+// which fails soft. Not in any barrel.)
+export const DRAWER_CONTENT_LAYOUT_CLASS = cn(
   "flex min-h-0 shrink-0 flex-col",
   "app:max-h-[calc(100vh-var(--adaptv-inset-top))] web:max-h-[97dvh]",
 )
 
 const OVERLAY_DURATION = DEFAULT_DRAWER_TRANSITION.duration
 
+function drawerCssTransition(
+  property: string,
+  config: DrawerTransition = DEFAULT_DRAWER_TRANSITION,
+) {
+  const [a, b, c, d] = config.bezier
+  return `${property} ${config.duration}s cubic-bezier(${a}, ${b}, ${c}, ${d})`
+}
+
 // Consumers swap content padding on keyboard state (e.g. dropping the bottom safe-area inset while
 // the keyboard covers it). Left instant, that padding jump resizes the content box mid-animation
 // and breaks the "one continuous motion". Transitioning it on the SAME curve/duration as the panel
 // makes the padding ride along with the lift atomically. Disabled while the panel is closing — a
 // padding transition there would fire the content ResizeObserver every frame and re-aim the close.
-const CONTENT_PADDING_TRANSITION = (() => {
-  const [a, b, c, d] = DEFAULT_DRAWER_TRANSITION.bezier
-  return `padding ${DEFAULT_DRAWER_TRANSITION.duration}s cubic-bezier(${a}, ${b}, ${c}, ${d})`
-})()
+const CONTENT_PADDING_TRANSITION = drawerCssTransition("padding")
+
+//the prime step writes a value that changes nothing on screen; a transition there would spend
+//the curve on an invisible change
+const DRAWER_NO_TRANSITION = "none"
+
+//transitionend is not reliable when a property lands on its current value, so the settle is
+//driven by duration + this margin (mirrors drawer-motion's own fallback)
+const DRAWER_SETTLE_FALLBACK_MS = 32
 
 type DrawerMetrics = {
   excessHeight: number
@@ -163,7 +183,6 @@ export type DrawerEngineContextValue = {
    *  panel (`"none"` while closing). */
   contentPaddingTransition: string
   excessHeight: number
-  keyboardScrollSpace: number
   /** `true` while the on-screen keyboard is up for a field inside this drawer. */
   isKeyboardOpen: boolean
   isDragDisabled: boolean
@@ -231,10 +250,10 @@ export function DrawerEngine({
   const scrollerRef = useRef<HTMLDivElement>(null)
   const metricsRef = useRef<DrawerMetrics | null>(null)
   const y = useMotionValue(0)
-  const keyboardOffset = useMotionValue(0)
-  const keyboardLiftAnimationRef = useRef<DrawerMotionAnimation | null>(
-    null,
-  )
+  //FLIP compensation for the box's growth: the layout lands in one step, this offset makes it
+  //look like it has not moved yet, and animating IT to zero is the motion the user sees. A
+  //transform is composited; the max-height it replaces reflowed the whole sheet every frame.
+  const keyboardFlip = useMotionValue(0)
   const onRequestCloseRef = useRef(onRequestClose)
   const onSettleRef = useRef(onSettle)
   const onKeyboardOpenChangeRef = useRef(onKeyboardOpenChange)
@@ -296,15 +315,20 @@ export function DrawerEngine({
   const [excessHeight, setExcessHeight] = useState(0)
   //mirrors excessHeight so updateMetrics can freeze the anchor while the keyboard is up
   const excessHeightRef = useRef(0)
-  // Extra scroll range (px) appended below the content so fields left behind the
-  // keyboard — when the lift is clamped at the max-height cap — can still scroll up.
-  const [keyboardScrollSpace, setKeyboardScrollSpace] = useState(0)
-  const keyboardScrollSpaceRef = useRef(0)
+  //room currently held under the content stack for the keyboard, and the stylesheet cap read
+  //back while nothing of ours was overriding it (see the keyboard-room effect)
+  const appliedRoomRef = useRef(0)
+  const cssCapRef = useRef(Number.POSITIVE_INFINITY)
+  //the content's own height as of the last time the room target was resolved — the baseline a
+  //content-size change is detected against (see reaimKeyboardRoom)
+  const lastNaturalRef = useRef(0)
+  //the box height one observation ago — the floor a shrink eases down FROM
+  const lastBoxRef = useRef(0)
   const isClosingRef = useRef(false)
   const closeRunRef = useRef(0)
   const closeTargetRef = useRef(0)
-  //true when the close started from a keyboard lift, so driveCloseToTarget over-translates
-  const closingFromLiftRef = useRef(false)
+  //true when the close started with keyboard room held, so driveCloseToTarget over-translates
+  const closingWithKeyboardRoomRef = useRef(false)
 
   const [mounted, setMounted] = useState(open)
   //true for an open that mounts the panel fresh (vs a reopen that interrupts a close while the
@@ -366,7 +390,6 @@ export function DrawerEngine({
   const isDragLockedOut = useCallback(() => {
     return (
       dragDisabledRef.current ||
-      keyboardOpenRef.current ||
       !openRef.current ||
       isGestureClosingRef.current
     )
@@ -469,17 +492,13 @@ export function DrawerEngine({
   }, [keyboard.isOpen])
 
   const applyPanelTransform = useCallback(
-    (
-      gestureY: number,
-      liftOffset: number,
-      drivesBackdropOpacity: boolean,
-    ) => {
+    (gestureY: number, flip: number, drivesBackdropOpacity: boolean) => {
       const panel = panelRef.current
       const backdrop = backdropRef.current
       const contentHeight = metricsRef.current?.contentHeight ?? 1
 
       if (panel) {
-        panel.style.transform = `translate3d(0, ${gestureY + liftOffset}px, 0)`
+        panel.style.transform = `translate3d(0, ${gestureY + flip}px, 0)`
       }
 
       if (!backdrop) return
@@ -498,7 +517,11 @@ export function DrawerEngine({
 
   // Render-level lockout only covers the reactive inputs; the gesture-closing phase (a ref,
   // no re-render) is guarded inside the pointer/touch handlers themselves.
-  const isDragDisabled = disableDrag || keyboard.isOpen || !open
+  //
+  // A raised keyboard does NOT lock the drag. Pulling a sheet down is the instinctive way out of
+  // a form, and suppressing it while a field is focused means the gesture silently does nothing
+  // exactly when the user most wants it — SwiftUI drags the sheet and the keyboard away together.
+  const isDragDisabled = disableDrag || !open
 
   const backdropState: "open" | "closed" = open ? "open" : "closed"
 
@@ -539,6 +562,81 @@ export function DrawerEngine({
     return metrics
   }, [])
 
+  // The content changed size while room is held — the classic being a field focus that collapses
+  // an expanded picker at the same instant the keyboard raises. Two geometry changes, but only the
+  // keyboard's own effect re-aims the box, and the keyboard did not change here: the box is left
+  // easing toward a target computed from a height that no longer exists, so it SNAPS to the new
+  // one instead of easing to it.
+  //
+  // Safe against our own animation, which is why it can live on a ResizeObserver: natural height is
+  // `box - room + hidden`, and those three move in lockstep while the box animates, so the value is
+  // invariant unless the content genuinely changed. No priming either — `max-height` is already
+  // engine-owned at this point, so the tween simply re-aims from wherever it is.
+  const reaimKeyboardRoom = useCallback(() => {
+    const content = contentRef.current
+    if (!content || appliedRoomRef.current <= 0 || isClosingRef.current) {
+      return
+    }
+    const natural = measureDrawerContentNaturalHeight(
+      content,
+      scrollerRef.current,
+      appliedRoomRef.current,
+    )
+    const boxBefore = lastBoxRef.current
+    lastBoxRef.current = content.getBoundingClientRect().height
+    if (Math.abs(natural - lastNaturalRef.current) <= 2) return
+    const shrinking = natural < lastNaturalRef.current
+    lastNaturalRef.current = natural
+
+    const target = resolveDrawerKeyboardRoom(
+      appliedRoomRef.current,
+      natural,
+      cssCapRef.current,
+    )
+
+    // Shrinking needs a FLOOR, not a ceiling — see `minHeight` on DrawerKeyboardRoom. Pinning it at
+    // the height the box had one observation ago holds the sheet up, and easing that floor down IS
+    // the shrink. A ResizeObserver callback runs after layout but before paint, so the collapsed
+    // frame is never drawn.
+    //
+    // This depends entirely on `natural` being exact: an earlier version read it as
+    // `box - room + hidden`, which dips for one frame at the uncapped→capped boundary, and pinned
+    // the floor at the wrong height in three scenarios that never shrank at all.
+    // Same discipline as the keyboard effect: the layout lands in ONE step and a composited
+    // transform carries the motion. Animating these properties here was the last reflow-per-frame
+    // on the hot path — the scenarios that reach this code measured 24-35fps while everything else
+    // sat at 55-60. The floor still pins first, so the collapsed frame is never painted.
+    const boxWas = content.getBoundingClientRect().height
+    if (shrinking && boxBefore > 0) {
+      writeDrawerKeyboardRoom(
+        content,
+        { ...target, minHeight: boxBefore },
+        DRAWER_NO_TRANSITION,
+      )
+      void content.offsetHeight
+    }
+    writeDrawerKeyboardRoom(
+      content,
+      { ...target, minHeight: shrinking ? target.maxHeight : null },
+      DRAWER_NO_TRANSITION,
+    )
+
+    const panelEl = panelRef.current
+    const moved = content.getBoundingClientRect().height - boxWas
+    //same reason as the keyboard effect: a finger on the sheet owns the transform
+    if (
+      Math.abs(moved) > 0.5 &&
+      panelEl &&
+      !isPointerDraggingRef.current
+    ) {
+      clearDrawerPanelTransition(panelEl)
+      keyboardFlip.set(moved)
+      void content.offsetHeight
+      applyDrawerPanelTransition(panelEl, DRAWER_SHRINK_TRANSITION, true)
+      keyboardFlip.set(0)
+    }
+  }, [keyboardFlip])
+
   // Drive the close toward the measured hidden position. Called once when the close starts, then
   // again on mid-close viewport/content shifts. Measures WITHOUT committing excess (no anchor
   // shift, see `updateMetrics`), and only ever re-aims FURTHER DOWN: the keyboard dismissing grows
@@ -561,7 +659,7 @@ export function DrawerEngine({
     // restoring its bottom padding as the keyboard dismisses stays hidden without a re-aim (which
     // would restart the CSS transition mid-slide — the visible stutter). The guard above compares
     // the raw `closedY` against this over-travelled target, so that padding growth no longer re-aims.
-    const overtravel = closingFromLiftRef.current
+    const overtravel = closingWithKeyboardRoomRef.current
       ? DRAWER_CLOSE_OVERTRAVEL_PX
       : 0
     const target = metrics.closedY + overtravel
@@ -598,6 +696,7 @@ export function DrawerEngine({
         return
       }
       updateMetrics()
+      reaimKeyboardRoom()
     }
 
     window.addEventListener("resize", handleResize)
@@ -619,7 +718,7 @@ export function DrawerEngine({
       window.visualViewport?.removeEventListener("resize", handleResize)
       contentObserver?.disconnect()
     }
-  }, [updateMetrics, mounted, driveCloseToTarget])
+  }, [updateMetrics, mounted, driveCloseToTarget, reaimKeyboardRoom])
 
   //vaul: drive transform directly; overlay opacity inline only while dragging. All-refs so the
   //subscriptions attach once per mount instead of detaching at every gesture commit.
@@ -629,210 +728,209 @@ export function DrawerEngine({
     function syncPanelTransform() {
       const drives =
         isPointerDraggingRef.current || isGestureClosingRef.current
-      applyPanelTransform(y.get(), keyboardOffset.get(), drives)
+      applyPanelTransform(y.get(), keyboardFlip.get(), drives)
     }
 
     const unsubY = y.on("change", syncPanelTransform)
-    const unsubLift = keyboardOffset.on("change", syncPanelTransform)
-
+    const unsubFlip = keyboardFlip.on("change", syncPanelTransform)
     syncPanelTransform()
 
     return () => {
       unsubY()
-      unsubLift()
+      unsubFlip()
     }
-  }, [applyPanelTransform, keyboardOffset, y, mounted])
+  }, [applyPanelTransform, y, keyboardFlip, mounted])
 
+  // ---- keyboard room ------------------------------------------------------------------
+  //
+  // The sheet is infinitely tall (`bottom: -excess` + the matching spacer) and only ever grows
+  // to what it needs. So the keyboard is not something to translate away from — it is a slice of
+  // the bottom that stops being usable. Two things happen, together:
+  //
+  //   · the content box holds `room` = the keyboard's height BELOW its stack, so the handle,
+  //     scroller and footer all sit clear of the keyboard;
+  //   · the box is allowed to GROW by that much, so the same amount of content stays visible.
+  //     Capped, and whatever the cap refuses comes out of the scroller — which is exactly what
+  //     keeps the rest reachable by scrolling.
+  //
+  // Both are animated on one curve, and the cap is primed at the box's CURRENT height first, so
+  // the growth starts where the sheet actually is. That priming is what makes the raise a single
+  // ease: unprimed, the cap spends most of its travel in the slack above the content, where it
+  // changes nothing, while the sheet's top has already arrived — measured on device as a 202px
+  // jump in the first ~70ms of a 380ms motion, then a 280ms stall.
   useEffect(() => {
-    const panel = panelRef.current
+    const content = contentRef.current
 
     if (!open || !avoidKeyboard) {
-      stopDrawerKeyboardOffsetAnimation(keyboardLiftAnimationRef)
-      if (panel) panel.style.willChange = ""
-
-      // Closing: stay inert, ignore keyboard changes. The keyboard dismissing flips
-      // `keyboard.isOpen`/`height` and re-runs this effect, but snapping the lift, unpinning the
-      // scroller, or dropping the scroll space here reflows the content and re-aims the close —
-      // exactly the jank we're fixing. The close already carries the panel off-screen (lift folded
-      // into `y` on close-start); the fresh mount on reopen rebuilds this geometry.
+      // Closing: stay inert. The keyboard dismisses while the sheet slides out, and giving the
+      // room back mid-slide relays the box out, fires the content observer and re-aims the close.
+      // The panel goes off-screen carrying whatever room it had; a fresh open rebuilds it.
       if (isClosingRef.current) return
-
-      keyboardOffset.set(0)
-      keyboardScrollSpaceRef.current = 0
-      setKeyboardScrollSpace(0)
-      if (scrollerRef.current) scrollerRef.current.style.maxHeight = ""
+      if (content) clearDrawerKeyboardRoom(content)
+      appliedRoomRef.current = 0
       return
     }
 
-    // Plain open with no lift in play: nothing to animate or undo. Skip the measurement block
-    // (~5 layout/style reads that would land mid-open-animation) entirely — the open effect
-    // below takes its own fresh metrics.
-    if (
-      !keyboard.isOpen &&
-      keyboardOffset.get() === 0 &&
-      keyboardScrollSpaceRef.current === 0
-    ) {
-      return
-    }
+    if (!content) return
 
-    const metrics = updateMetrics() ?? metricsRef.current
-    if (!metrics) return
-
-    const contentEl = contentRef.current
-    const heightAvailableUntilMaxHeightCap = contentEl
-      ? measureHeightAvailableUntilMaxHeightCap(contentEl)
-      : 0
-
-    // Lift target = the LIVE reported keyboard height — nothing cached, seeded, or guessed.
-    // The canonical observer (useKeyboard) only commits STABLE heights: iOS's transient
-    // mid-field-switch geometry never lands here, and a genuine height change (the QuickType
-    // bar appearing/disappearing) arrives as one settled update → one smooth re-aim tracking
-    // exactly what the keyboard occupies right now.
-    const liftHeight =
+    // The LIVE reported height — nothing cached, seeded or guessed. `useKeyboard` only commits
+    // stable heights, so iOS's transient mid-field-switch geometry never reaches here.
+    const room =
       keyboard.isOpen && keyboard.height > 0 ? keyboard.height : 0
+    //nothing in play: skip the measurement block entirely rather than pay for reads that would
+    //land mid-open-animation
+    if (room === 0 && appliedRoomRef.current === 0) return
 
-    // Pin the scroller to its natural content height (scrollHeight minus the spacer already
-    // applied) so the appended spacer becomes pure scroll range. Without this the spacer
-    // would grow the content box up to the cap, and because the panel is bottom-anchored
-    // that growth pushes the top up — stacking on the lift and bleeding past the cap.
-    function applyKeyboardScrollSpace(value: number) {
-      const scroller = scrollerRef.current
-      if (scroller) {
-        if (value > 0) {
-          const naturalScrollerHeight =
-            scroller.scrollHeight - keyboardScrollSpaceRef.current
-          scroller.style.maxHeight = `${naturalScrollerHeight}px`
-        } else {
-          scroller.style.maxHeight = ""
-        }
-      }
-      keyboardScrollSpaceRef.current = value
-      setKeyboardScrollSpace(value)
+    // The stylesheet's cap, read while nothing of ours overrides it — from here until the room
+    // is handed back, `max-height` is engine-owned. (A rotation mid-keyboard keeps the stale
+    // value until the keyboard closes; the sheet is pinned to the keyboard's geometry anyway.)
+    if (!content.style.maxHeight) {
+      const cssCap = Number.parseFloat(getComputedStyle(content).maxHeight)
+      cssCapRef.current = Number.isFinite(cssCap)
+        ? cssCap
+        : Number.POSITIVE_INFINITY
     }
 
-    const target =
-      liftHeight > 0
-        ? resolveDrawerKeyboardLift(
-            liftHeight,
-            metrics.excessHeight,
-            heightAvailableUntilMaxHeightCap,
-          )
-        : 0
-
-    // Shortfall = keyboard height the lift couldn't cover (clamped at the cap). This much
-    // content is left behind the keyboard and needs extra scroll range.
-    const shortfall =
-      liftHeight > 0 ? Math.max(0, liftHeight - Math.abs(target)) : 0
-
-    // Clear any prior scroll space now, but defer *applying* new space until the lift
-    // settles — the spacer/pin are a synchronous layout change and would snap if landed on
-    // the same frame as the transform. They only add below-the-fold scroll range, so
-    // applying them after the animation is visually invisible.
-    if (shortfall === 0) applyKeyboardScrollSpace(0)
-
-    if (panel) {
-      panel.style.willChange = target !== 0 ? "transform" : ""
+    const natural = measureDrawerContentNaturalHeight(
+      content,
+      scrollerRef.current,
+      appliedRoomRef.current,
+    )
+    lastNaturalRef.current = natural
+    lastBoxRef.current = content.getBoundingClientRect().height
+    // The keyboard drives from here, but a floor left by an earlier content shrink must be EASED
+    // to the new height, not dropped. Releasing it outright lets the box fall a whole room in one
+    // frame — which is exactly what `dismiss` and `release after collapse` did once a floor could
+    // exist. It is cleared for real on settle, where it is no longer holding anything up.
+    const heldFloor = content.style.minHeight !== ""
+    const target = {
+      ...resolveDrawerKeyboardRoom(room, natural, cssCapRef.current),
+      ...(heldFloor ? {} : { minHeight: null }),
     }
 
-    let cancelled = false
-
-    // Grow (lift increasing) rides the open curve; shrink (lift returning toward rest) gets its
-    // own slightly quicker settle. Compared by magnitude since the lift offset is <= 0 (upward).
-    const isGrowingLift =
-      Math.abs(target) >= Math.abs(keyboardOffset.get())
-    let liftTransition = isGrowingLift
+    // Grow rides the open curve; giving the room back gets the quicker settle, same as the
+    // sheet's own motions.
+    const isGrowing = room >= appliedRoomRef.current
+    let transition = isGrowing
       ? DEFAULT_DRAWER_TRANSITION
       : DRAWER_SHRINK_TRANSITION
 
-    // Grow-CORRECTION arriving MID-FLIGHT (an upward re-aim while the lift is still animating —
-    // e.g. the raise's first read caught the keyboard mid-slide and the settled height landed
-    // ~74ms later): restarting the full-duration curve for the remaining travel appends a
-    // visible slow tail to the raise. Re-aim over a duration proportional to the REMAINING
-    // travel (read live off the panel transform) at the lift's natural rate, so the correction
-    // blends into the ongoing motion as one continuous raise. Gated to the in-flight window:
-    // a correction landing on a SETTLED panel (QuickType bar change on a field switch) keeps
-    // the normal full transition — proportional there compresses a short travel into the
-    // clamp floor and reads as a snap.
+    // A grow-CORRECTION arriving mid-flight (iOS reports a raise in two steps as a rule: the
+    // first read catches the keyboard mid-slide and the settled height lands ~74ms later).
+    // Restarting a full-duration curve for the remaining travel appends a visible slow tail, so
+    // re-aim over a duration proportional to what is LEFT, at the motion's natural rate.
     if (
-      isGrowingLift &&
-      keyboardOffset.get() !== 0 &&
-      liftHeight > 0 &&
+      isGrowing &&
+      appliedRoomRef.current > 0 &&
       isPanelAnimatingRef.current
     ) {
-      //y is committed (0 while open); live transform = in-flight y + lift contribution
-      const liveTranslateY = readPanelTranslateY(panel)
-      const remainingTravel = Math.abs(liveTranslateY - (y.get() + target))
-      const naturalRatePxPerSec =
-        liftHeight / DEFAULT_DRAWER_TRANSITION.duration
-      const proportionalDuration = clamp(
-        remainingTravel / naturalRatePxPerSec,
-        0.12,
-        DEFAULT_DRAWER_TRANSITION.duration,
-      )
-      liftTransition = {
+      const liveRoom = readDrawerKeyboardRoom(content)
+      const naturalRatePxPerSec = room / DEFAULT_DRAWER_TRANSITION.duration
+      transition = {
         ...DEFAULT_DRAWER_TRANSITION,
-        duration: proportionalDuration,
+        duration: clamp(
+          Math.abs(room - liveRoom) / naturalRatePxPerSec,
+          0.12,
+          DEFAULT_DRAWER_TRANSITION.duration,
+        ),
       }
     }
 
-    //don't begin a run for the epsilon no-op (a stable height report re-landing on the
-    //same target) — it would end-and-flush while the real lift is still mid-flight
-    const runId = willAnimateDrawerKeyboardOffset(keyboardOffset, target)
-      ? beginPanelAnimation()
-      : null
-    void animateDrawerKeyboardOffset(
-      keyboardOffset,
-      panel,
-      target,
-      liftTransition,
-      { activeAnimation: keyboardLiftAnimationRef },
-    ).finally(() => {
-      if (runId !== null) endPanelAnimation(runId)
-      if (cancelled) return
-      if (shortfall > 0) applyKeyboardScrollSpace(shortfall)
-    })
+    // Prime the cap at the box's current height (invisible — a cap equal to the height clamps
+    // nothing) so the growth below is measured from here, then run both properties as one.
+    if (!content.style.maxHeight) {
+      writeDrawerKeyboardRoom(
+        content,
+        {
+          room: appliedRoomRef.current,
+          maxHeight: content.getBoundingClientRect().height,
+        },
+        DRAWER_NO_TRANSITION,
+      )
+      //commit the prime so the tween starts from it, not from where we were
+      void content.offsetHeight
+    }
+
+    appliedRoomRef.current = room
+
+    // FLIP. The box's height lands in ONE step — measured before and after — and the difference
+    // becomes a transform that starts the sheet where it already was and eases to zero. Animating
+    // `max-height` instead put a full sheet reflow on every frame, measured at 23-28fps with
+    // 7-11 dropped frames; a transform is composited and costs the main thread nothing.
+    //
+    // The room lands instantly too. It is an INTERNAL change — the scroller shrinks under the box
+    // — so no transform can fake it, and transitioning it was the last layout property left on the
+    // hot path: every scenario that changed the room measured 24-29fps while every scenario that
+    // did not measured 45-56fps. Applying it in the same step as the growth costs one reflow.
+    //
+    // In the common case this is invisible: when the box can grow by the whole keyboard height the
+    // FLIP offset is exactly the room, so the stack's instant shift is compensated to the pixel and
+    // the user sees one composited slide. Only a sheet already at its cap (which cannot grow) shows
+    // the internal shift, and that case was never the slow one.
+    const boxBefore = content.getBoundingClientRect().height
+    writeDrawerKeyboardRoom(
+      content,
+      heldFloor ? { ...target, minHeight: target.maxHeight } : target,
+      DRAWER_NO_TRANSITION,
+    )
+    const growth = content.getBoundingClientRect().height - boxBefore
+
+    // NOT while a finger is down. A drag dismisses the keyboard itself, which lands here and would
+    // put `transition: transform` back on the panel — so every subsequent `y.set()` from the finger
+    // would be smoothed over 320ms and the sheet would appear frozen under the touch. The drag owns
+    // the transform for as long as it lasts; the layout above has already landed, which is all this
+    // path actually has to guarantee.
+    const panelEl = panelRef.current
+    if (
+      Math.abs(growth) > 0.5 &&
+      panelEl &&
+      !isPointerDraggingRef.current
+    ) {
+      clearDrawerPanelTransition(panelEl)
+      keyboardFlip.set(growth)
+      void content.offsetHeight
+      applyDrawerPanelTransition(panelEl, transition, true)
+      keyboardFlip.set(0)
+    }
+
+    const runId = beginPanelAnimation()
+    let cancelled = false
+    const settleTimer = setTimeout(
+      () => {
+        endPanelAnimation(runId)
+        if (cancelled) return
+        //back at rest: hand `max-height` back to the stylesheet, so the box is free to grow with
+        //its own content again (a picker opening, a field wrapping) instead of staying pinned.
+        if (appliedRoomRef.current === 0) clearDrawerKeyboardRoom(content)
+        //the floor has finished easing to the box's own height: releasing it now changes nothing
+        else content.style.minHeight = ""
+      },
+      transition.duration * 1000 + DRAWER_SETTLE_FALLBACK_MS,
+    )
 
     return () => {
       cancelled = true
-      stopDrawerKeyboardOffsetAnimation(keyboardLiftAnimationRef)
+      clearTimeout(settleTimer)
+      endPanelAnimation(runId)
     }
   }, [
     avoidKeyboard,
     keyboard.isOpen,
     keyboard.height,
-    keyboardOffset,
-    y,
+    keyboardFlip,
     open,
-    updateMetrics,
     beginPanelAnimation,
     endPanelAnimation,
   ])
 
-  useEffect(() => {
-    return () => {
-      stopDrawerKeyboardOffsetAnimation(keyboardLiftAnimationRef)
-    }
-  }, [])
-
   useLayoutEffect(() => {
     if (open) return
-    stopDrawerKeyboardOffsetAnimation(keyboardLiftAnimationRef)
+    //the sheet slides out carrying whatever keyboard room it held (the room effect goes inert
+    //while closing) — the close only needs to know it is there, to over-travel past it
+    closingWithKeyboardRoomRef.current = appliedRoomRef.current > 0
     const panel = panelRef.current
-
-    // Closing with the keyboard up: fold the live lift into `y` so the close runs on a single
-    // motion value. Transition cleared first, so the panel doesn't move (combined transform is
-    // preserved) — but from here `keyboardOffset` stays 0 and `y` alone slides the panel off-screen
-    // as one continuous motion the keyboard dismissing can't tug a rival animation onto.
-    const lift = keyboardOffset.get()
-    closingFromLiftRef.current = lift !== 0
-    if (lift !== 0) {
-      clearDrawerPanelTransition(panel)
-      keyboardOffset.set(0)
-      y.set(y.get() + lift)
-    }
-
     if (panel) panel.style.willChange = ""
-  }, [keyboardOffset, y, open])
+  }, [open])
 
   useLayoutEffect(() => {
     if (!mounted) return
@@ -883,9 +981,8 @@ export function DrawerEngine({
           }
         } else if (resumeFrom !== null) {
           // Freeze at the live position (transition just cleared, so this is instant) — the
-          // animate-to-0 below then starts here, not from the close target. `y` excludes the
-          // keyboard lift, which the rendered transform includes.
-          y.set(resumeFrom - keyboardOffset.get())
+          // animate-to-0 below then starts here, not from the close target.
+          y.set(resumeFrom)
         }
 
         const runId = beginPanelAnimation()
@@ -974,7 +1071,6 @@ export function DrawerEngine({
     open,
     updateMetrics,
     y,
-    keyboardOffset,
     handleExitComplete,
     mounted,
     driveCloseToTarget,
@@ -1221,6 +1317,14 @@ export function DrawerEngine({
     }
 
     function commitSheetDrag(clientY: number) {
+      //Take ownership of the whole transform: an in-flight FLIP is folded into `y` so the finger
+      //drives ONE value. Leaving it split let the flip's own tween fight the drag and the sheet
+      //sat still under the finger.
+      const flip = keyboardFlip.get()
+      if (flip !== 0) {
+        keyboardFlip.set(0)
+        y.set(y.get() + flip)
+      }
       isTouchDragCommittedRef.current = true
       isPointerDraggingRef.current = true
       syncBackdropGestureAttributes()
@@ -1266,22 +1370,18 @@ export function DrawerEngine({
       const deltaX = touch.clientX - touchStartXRef.current
       const draggingDown = deltaY > 0
 
-      // Keyboard up: a downward overscroll PULL at the top of the content dismisses the keyboard
-      // (SwiftUI scroll-dismisses-keyboard). Only when the scroller is already at the top — otherwise
-      // a downward drag is the user scrolling content back up, and dismissing there would eat the
-      // scroll and blur the field mid-content. Below the top we let native scroll run.
-      if (keyboardOpenRef.current) {
-        const scroller = touchScrollerRef.current
-        const atScrollTop = !scroller || scroller.scrollTop <= 0
-        if (
-          draggingDown &&
-          atScrollTop &&
-          Math.abs(deltaY) > DRAG_THRESHOLD_PX
-        ) {
-          dismissVirtualKeyboard()
-          isTouchActiveRef.current = false
-        }
-        return
+      // Keyboard up: a downward pull at the top of the content dismisses the keyboard — and then
+      // FALLS THROUGH, so the sheet comes with it as one gesture (SwiftUI drags both away
+      // together). Only at the top: below it a downward drag is the user scrolling content back
+      // up, and dismissing there would eat the scroll and blur the field mid-content. This used
+      // to swallow the gesture entirely, which left the sheet frozen under the finger.
+      if (
+        keyboardOpenRef.current &&
+        draggingDown &&
+        (touchScrollerRef.current?.scrollTop ?? 0) <= 0 &&
+        Math.abs(deltaY) > DRAG_THRESHOLD_PX
+      ) {
+        dismissVirtualKeyboard()
       }
 
       if (!isTouchDragCommittedRef.current) {
@@ -1373,7 +1473,7 @@ export function DrawerEngine({
       panel.removeEventListener("touchend", onTouchEnd)
       panel.removeEventListener("touchcancel", onTouchCancel)
     }
-  }, [mounted, y, syncBackdropGestureAttributes])
+  }, [mounted, y, keyboardFlip, syncBackdropGestureAttributes])
 
   //memoized so gesture-phase work and unrelated engine renders don't re-render every consumer
   //(Overlay / Content) — all handlers above are stable useCallbacks reading refs
@@ -1394,7 +1494,6 @@ export function DrawerEngine({
       overlayDuration: OVERLAY_DURATION,
       contentPaddingTransition: open ? CONTENT_PADDING_TRANSITION : "none",
       excessHeight,
-      keyboardScrollSpace,
       isKeyboardOpen: keyboard.isOpen,
       isDragDisabled,
       isPanelAnimatingRef,
@@ -1408,7 +1507,6 @@ export function DrawerEngine({
     [
       open,
       excessHeight,
-      keyboardScrollSpace,
       keyboard.isOpen,
       isDragDisabled,
       backdropState,

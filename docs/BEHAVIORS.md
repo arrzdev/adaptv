@@ -77,6 +77,77 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `hw.keyboard=no`): open a drawer whose input is `autoFocus` — the whole sheet lifts above the keyboard
   immediately, no double-shift, dismisses on scroll. Retest the web `visualViewport` path (2/4) after any
   keyboard change.
+- **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
+  infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
+  a keyboard is not something to translate away from — it is a slice of the bottom that stops being
+  usable. Nothing else shrinks the viewport for us either: the OS webview resize is off
+  (`KeyboardResize.None`) and `useFreezeViewport` pins the layout viewport, deliberately. So on a
+  keyboard the content box holds `room` = the keyboard's height BELOW its stack, and is allowed to
+  grow into `max-h` by the same amount — the content that was visible stays visible, and where the
+  cap refuses the growth the scroller absorbs it and the rest stays reachable by scrolling. Both
+  properties animate on one curve, with the cap primed at the box's current height first so the
+  growth starts where the sheet actually is (unprimed, the cap spends most of its travel in the
+  slack above the content, where it changes nothing, and the raise reads as a snap: measured at
+  202px in the first ~70ms of a 380ms motion, then a 280ms stall). Device trace of the raise:
+  `top 264 → 125 → 72 → 65 → 62` with the box growing `610 → 812` and the room `0 → 336`.
+- **Test:** a form drawer tall enough to hit the cap (playground → new task). Focus the field: the
+  sheet must GROW upward as one decelerating motion — no snap, no shrink-then-settle — its actions
+  must end up just above the keyboard, and there must be no empty band under the last field.
+  Dismiss the keyboard: it gives the room back on one ease. Close it with the keyboard still up: no
+  re-aim mid-slide.
+
+- **How you actually test any of this:** `/lab/drawer-keyboard` in the playground. A real software
+  keyboard cannot be scripted — no simulator raises one for an automated run, and no web API lets a
+  page synthesise `visualViewport` geometry — so the page drives adaptv's keyboard observer through
+  its test seam (`window.__adaptvKeyboardMock` + an `adaptv:keyboard-mock` event; while set,
+  `useKeyboard` reports the mock and nothing else) and paints a solid block of the same height over
+  the bottom. From the sheet's point of view that IS the keyboard. It self-runs 600ms after the
+  drawer opens — the trigger cannot live on the page, because once the sheet is up the page is
+  behind its backdrop and every tap dismisses it — and prints the verdict in an overlay above the
+  panel, so ONE screenshot is the whole report on any target. Automation can read
+  `window.__drawerConformance` instead.
+  - 13 scenarios / ~70 assertions: raise · grow · shrink · dismiss · content growing and shrinking
+    under a live keyboard · re-aim mid-raise · dismiss mid-raise · growth past the cap · return from
+    the cap · a 70%-of-screen keyboard · scroll anchoring. Each asserts: never above the safe top ·
+    content clears the keyboard · settles flush · no edge reverses (waived where a step deliberately
+    changes its mind) · eased-not-snapped (90% of travel must take >=120ms).
+  - Keyboard heights are a FRACTION of the viewport, never px: a fixed `320` is ~40% of a phone held
+    upright and ~90% of it on its side.
+  - Two traps worth knowing. Scroll anchoring is measured MID-scroll, because pinned at the bottom
+    the content genuinely must slide to fill the space the keyboard gave back — `UIScrollView` does
+    the same, and demanding otherwise invents a rule iOS does not have. And a browser pane that is
+    open but not on screen reports `document.hidden`, which freezes rAF *and* the animation
+    timeline: the run reports `document hidden` when that happens, because the numbers are then
+    meaningless.
+- **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
+  tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
+  `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.
+  Green on both. Still unverified: the two **installed** targets (4–6), where the `app:` cap, the real
+  safe-area inset and the exact OS keyboard height all differ — those need a native dev run, not a URL
+  open. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
+  but orientation is not the variable that matters (keyboard-vs-reserve is), and the 70% scenario
+  covers it.
+
+- **Two geometry changes at once — content collapsing WHILE the keyboard raises.** Focusing a field
+  that also closes an expanded picker shrinks the content and grows the room in the same instant.
+  Handled, and the shape of the fix is the interesting part:
+  - **A `max-height` cannot animate a shrink.** Once the content is shorter than the box, the
+    *content* is the binding constraint and the cap is not touching anything — easing it animates
+    nothing. Shrinks are eased by a `min-height` FLOOR pinned at the height the box had one
+    observation ago (a ResizeObserver callback runs after layout but before paint, so the collapsed
+    frame is never drawn) and then eased down. Growth keeps using the ceiling. The floor is eased
+    out, never dropped: releasing it outright lets the box fall a whole room in one frame.
+  - **The floor is only as good as the height it is measured against.** `natural` must be SUMMED
+    from the box's children (stable siblings + the scroller's `scrollHeight`), not derived as
+    `box - room + hidden`: the derived form mixes terms that update on different frames, so it dips
+    for exactly one observation at the uncapped→capped boundary and reports a shrink that never
+    happened. That single frame of fiction broke three unrelated scenarios the first time the floor
+    was attempted, and it was invisible until the floor amplified it. → the two failed attempts are
+    in git history; do not re-derive them.
+  - **Verified by pixels, not by the assertion.** `?only=picker` isolates the scenario; a slit-scan
+    (`fps=30,crop=6:H:x:0,tile=Nx1` over the 6px marker on the sheet's top edge) turns the motion
+    into one readable curve. Before: a ~330px two-frame step. After: a graded descent, worst frame
+    ~60px. The jump-ratio assertion scored the broken version as passing — trust the frames.
 
 ### 5. Edge-to-edge + status bar
 - **Problem:** content should draw under the status bar with safe-area padding; native only.
