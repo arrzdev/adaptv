@@ -42,6 +42,41 @@ export function resolveDrawerKeyboardRoom(
 }
 
 /**
+ * Whether focusing a field should PIN a `min-height` floor at the box's current height, ahead of
+ * the keyboard.
+ *
+ * The flicker this closes: a wheel/date picker is open inside the drawer with NO keyboard yet — so
+ * no room is held — and the user taps a text input. Two geometry changes then fire on DIFFERENT
+ * frames: the picker collapses (content SHRINKS) on the focus frame, and the keyboard's height
+ * arrives a frame or two later (room GROWS). With no room held the collapse cannot ride the
+ * keyboard-room effect — that path early-returns at room 0 — so the box shrinks raw and the sheet's
+ * top DROPS, then snaps back UP when the keyboard grows it. `focus` is the earliest signal the
+ * keyboard is imminent; pinning a floor there holds the top across the gap, and the keyboard-room
+ * effect's `heldFloor` path then EASES that floor to the final height in one motion.
+ *
+ * Only in that exact state — the sheet at content height with nothing engine-owned. If `room` is
+ * already held (a field switch with the keyboard already up) the reaim path already floors the
+ * collapse; if a floor or cap is already set the engine is mid-motion and must not be perturbed.
+ * `enabled` folds in `open && avoidKeyboard` and a field that actually raises a keyboard (a
+ * readonly/disabled input raises none, so a floor there would only ever have to retract).
+ */
+export function shouldPrimeKeyboardFloor({
+  enabled,
+  isClosing,
+  roomHeld,
+  floorHeld,
+  capHeld,
+}: {
+  enabled: boolean
+  isClosing: boolean
+  roomHeld: boolean
+  floorHeld: boolean
+  capHeld: boolean
+}): boolean {
+  return enabled && !isClosing && !roomHeld && !floorHeld && !capHeld
+}
+
+/**
  * The height the content box would take with no cap and no room held — its own content's height.
  *
  * Summed from the box's CHILDREN, not derived from the box. The derived form (`box - room +
@@ -152,7 +187,10 @@ type UseDrawerKeyboardAvoidanceOptions = {
   containerRef: RefObject<HTMLElement | null>
   scrollerRef: RefObject<HTMLElement | null>
   isEnabled: boolean
-  onWillOpenKeyboard: () => void | Promise<void>
+  /** Fired on `focusin` for a keyboard-opening field inside the drawer — the earliest the sheet
+   *  knows a keyboard is imminent. Receives the focused field so the engine can prime a height
+   *  floor ahead of the picker collapse (see `shouldPrimeKeyboardFloor`). */
+  onWillOpenKeyboard: (field: HTMLElement) => void | Promise<void>
 }
 
 /** Drawer-internal keyboard avoidance: snap-open on focus + scroll the field into view. */
@@ -188,7 +226,7 @@ export function useDrawerKeyboardAvoidance({
         return
       }
 
-      const snap = onWillOpenKeyboardRef.current()
+      const snap = onWillOpenKeyboardRef.current(event.target)
       if (snap instanceof Promise) await snap
       //bail on any post-await follow-up if the drawer disabled/closed mid-snap
       if (cancelled) return
