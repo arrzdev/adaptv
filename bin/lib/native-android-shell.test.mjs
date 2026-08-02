@@ -97,11 +97,20 @@ describe("generated MainActivity — Android edge-to-edge", () => {
     expect(project()).not.toContain("return WindowInsetsCompat.CONSUMED")
   })
 
-  // the IME resizes the view; padding for the gesture bar on top of that counts it twice
+  // while the IME is up the gesture bar sits behind it, so a bottom pad would sit on top of
+  // the JS keyboard lift — the same 0 env() reports on WebView >= 140.
   it("drops the bottom inset while the keyboard is up", () => {
     expect(project()).toContain(
       "int bottom = keyboardVisible ? 0 : bars.bottom",
     )
+  })
+
+  // adaptv runs Capacitor Keyboard in resize=None and lifts content itself; resizing the view
+  // for the IME here too double-counts the keyboard (full-height sheet with a keyboard-sized
+  // gap under it). The listener must report insets and never touch the view. On WebView >= 140
+  // it isn't installed at all and nothing resizes, so this keeps both eras identical.
+  it("never resizes the webview for the keyboard", () => {
+    expect(project()).not.toContain("setPadding")
   })
 })
 

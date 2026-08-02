@@ -156,6 +156,17 @@ two are allowed to differ, so `.MainActivity` resolves to adaptv's activity whil
 `cap add` already scaffolded wrong. Measured on `emulator-5556` (Android 14, WebView 113): before,
 `--safe-area-inset-top` unset; after, `51px`, header clear of the clock.
 
+**Then the same fix woke a second bug: the shell must not resize for the keyboard.** Launching the real
+`MainActivity` below WebView 140 also activated its inset listener's IME branch, which padded the view by the
+keyboard height — a native resize. But adaptv runs Capacitor Keyboard in `resize=None` and lifts content
+itself in JS (`capabilities/keyboard.ts`), and the drawer *grows* into its `calc(100vh …)` cap to answer the
+keyboard (`drawer-keyboard.ts`). With the view also resized, that lift is paid twice: the sheet grows by the
+keyboard height inside a viewport already shrunk by it, so it fills the shrunken viewport with a
+keyboard-sized empty gap, and unwinds through two fighting animations on dismiss. Measured on `emulator-5556`:
+`innerHeight` 915 → **578** on keyboard-open (shrunk by the 337px keyboard). On WebView ≥ 140 the listener
+isn't installed and nothing resized, so only the old era had it. Fix: the listener reports insets and never
+touches the view — `innerHeight` now holds at 915 across open/close, matching ≥ 140.
+
 ### 🔒 Revised decision: layer on `SystemBars`, do not replace it
 
 The original plan — "phase 1 owns edge-to-edge + inset/IME reporting" — would mean **a second
