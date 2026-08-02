@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { DRAWER_CONTENT_LAYOUT_CLASS } from "#adaptv/components/drawer/drawer-engine"
-import { resolveDrawerKeyboardRoom } from "#adaptv/components/drawer/drawer-keyboard"
+import {
+  resolveDrawerKeyboardRoom,
+  scrollDrawerInputIntoView,
+} from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
+
+//the caret repaint is a real DOM side effect irrelevant to the scroll maths under test
+vi.mock("#adaptv/hooks/use-caret-repaint", () => ({
+  beginCaretHold: () => () => {},
+}))
 
 /*
  * The drawer's answer to the keyboard, which is NOT "move out of its way".
@@ -70,5 +78,105 @@ describe("the cap the box grows into", () => {
     expect(css).toContain("max-height: 97dvh")
     //no keyboard term anywhere in the cap — the room effect owns that, inline and imperatively
     expect(css).not.toContain("--adaptv-drawer-keyboard")
+  })
+})
+
+/*
+ * Bring a focused field into view — and do NOTHING when it is already there.
+ *
+ * The fix under test: `scrollDrawerInputIntoView` used to align the field to the TOP of the scroller
+ * unconditionally, so a perfectly visible field 40px down still scrolled 40px — sliding its label
+ * under the drag handle. It must now be a no-op when the field is in view, and otherwise nudge by the
+ * SMALLEST amount that clears the edge, never align-to-top.
+ *
+ * The geometry is faked because happy-dom lays nothing out: getBoundingClientRect and the scroll
+ * metrics are stubbed to describe a 300px window over 1000px of content.
+ */
+const VIEW_TOP = 100 //the scroller's own top in viewport coords
+const CLIENT_H = 300
+const SCROLL_H = 1000
+
+function makeScroller(scrollTop: number): HTMLElement {
+  const el = document.createElement("div")
+  Object.defineProperty(el, "clientHeight", { value: CLIENT_H })
+  Object.defineProperty(el, "scrollHeight", { value: SCROLL_H })
+  el.scrollTop = scrollTop
+  el.getBoundingClientRect = () =>
+    ({ top: VIEW_TOP, height: CLIENT_H }) as DOMRect
+  el.scrollTo = vi.fn() as unknown as typeof el.scrollTo
+  return el
+}
+
+//a field whose top sits `contentTop` px down the scroller's CONTENT (not the viewport), rendered at
+//the viewport position that content position currently maps to
+function makeField(
+  contentTop: number,
+  scroller: HTMLElement,
+  height = 40,
+): HTMLElement {
+  const el = document.createElement("input")
+  const viewportTop = VIEW_TOP + contentTop - scroller.scrollTop
+  el.getBoundingClientRect = () =>
+    ({ top: viewportTop, height }) as DOMRect
+  return el
+}
+
+describe("scrollDrawerInputIntoView", () => {
+  it("does nothing for a field already comfortably in view", () => {
+    const scroller = makeScroller(0)
+    //40px down at scrollTop 0 — visible, but the old align-to-top would have scrolled here
+    const field = makeField(40, scroller)
+
+    scrollDrawerInputIntoView(scroller, field)
+
+    expect(scroller.scrollTo).not.toHaveBeenCalled()
+  })
+
+  it("nudges up by the minimum when the field sits above the window", () => {
+    const scroller = makeScroller(200)
+    //content-top 150 is 50px above the current viewTop (200) → just clear it, don't align to top
+    const field = makeField(150, scroller)
+
+    scrollDrawerInputIntoView(scroller, field)
+
+    //target = inputTop - MARGIN = 150 - 12 = 138
+    expect(scroller.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ top: 138 }),
+    )
+  })
+
+  it("nudges down by the minimum when the field falls below the window", () => {
+    const scroller = makeScroller(0)
+    //content-top 350 is below the 300px window → reveal its bottom, not align its top
+    const field = makeField(350, scroller)
+
+    scrollDrawerInputIntoView(scroller, field)
+
+    //target = inputBottom - clientHeight + MARGIN = 390 - 300 + 12 = 102 (NOT 338 = align-to-top)
+    expect(scroller.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ top: 102 }),
+    )
+  })
+
+  it("clamps the target to the scrollable range", () => {
+    const scroller = makeScroller(0)
+    //a field far past the end would target beyond max scroll; clamp to scrollHeight - clientHeight
+    const field = makeField(2000, scroller)
+
+    scrollDrawerInputIntoView(scroller, field)
+
+    expect(scroller.scrollTo).toHaveBeenCalledWith(
+      expect.objectContaining({ top: SCROLL_H - CLIENT_H }),
+    )
+  })
+
+  it("does not scroll for a sub-pixel correction", () => {
+    const scroller = makeScroller(0)
+    //field bottom exactly at the margin edge — the computed target rounds to the current scrollTop
+    const field = makeField(CLIENT_H - 12 - 40, scroller) //inputBottom = viewBottom - MARGIN
+
+    scrollDrawerInputIntoView(scroller, field)
+
+    expect(scroller.scrollTo).not.toHaveBeenCalled()
   })
 })
