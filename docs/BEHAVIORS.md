@@ -106,11 +106,12 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   behind its backdrop and every tap dismisses it — and prints the verdict in an overlay above the
   panel, so ONE screenshot is the whole report on any target. Automation can read
   `window.__drawerConformance` instead.
-  - 13 scenarios / ~70 assertions: raise · grow · shrink · dismiss · content growing and shrinking
+  - 14 scenarios / ~75 assertions: raise · grow · shrink · dismiss · content growing and shrinking
     under a live keyboard · re-aim mid-raise · dismiss mid-raise · growth past the cap · return from
-    the cap · a 70%-of-screen keyboard · scroll anchoring. Each asserts: never above the safe top ·
-    content clears the keyboard · settles flush · no edge reverses (waived where a step deliberately
-    changes its mind) · eased-not-snapped (90% of travel must take >=120ms).
+    the cap · a 70%-of-screen keyboard · picker collapsing mid-raise (keyboard first) · picker
+    collapsing with the keyboard LAGGING a few frames (`?only=lag`) · scroll anchoring. Each asserts:
+    never above the safe top · content clears the keyboard · settles flush · no edge reverses (waived
+    where a step deliberately changes its mind) · eased-not-snapped (90% of travel must take >=120ms).
   - Keyboard heights are a FRACTION of the viewport, never px: a fixed `320` is ~40% of a phone held
     upright and ~90% of it on its side.
   - Two traps worth knowing. Scroll anchoring is measured MID-scroll, because pinned at the bottom
@@ -148,6 +149,19 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     (`fps=30,crop=6:H:x:0,tile=Nx1` over the 6px marker on the sheet's top edge) turns the motion
     into one readable curve. Before: a ~330px two-frame step. After: a graded descent, worst frame
     ~60px. The jump-ratio assertion scored the broken version as passing — trust the frames.
+  - **The other ordering: picker first, keyboard LAGGING.** The scenario above raises the keyboard
+    and THEN collapses the picker, so room is already held and `reaimKeyboardRoom` floors the
+    collapse. The flicker in the wild is the reverse: the keyboard is DOWN and the picker EXPANDED,
+    the user taps a text input, the picker collapses on the focus frame and the keyboard's height
+    only lands a frame or two later (on native there is no predictive seed to coalesce them). With
+    no room held yet, `reaimKeyboardRoom` early-returns at room 0 — so the collapse shrinks the box
+    raw and the sheet's top DROPS, then snaps back UP when the keyboard grows it. The fix pins the
+    floor EARLIER, on `focusin` (`primeKeyboardFloor`, gated by `shouldPrimeKeyboardFloor`): the
+    picker collapses UNDER the floor and the keyboard-room effect's `heldFloor` path eases it to the
+    final height in one motion. A focus that raises no keyboard (hardware keyboard, programmatic
+    focus, readonly) retracts the floor after `DRAWER_KEYBOARD_FLOOR_CONFIRM_MS`, mirroring
+    `use-keyboard`'s prediction retract. Isolate + slit-scan with `?only=lag`: before the fix a dip
+    then a climb, after it a single descent.
 
 ### 5. Edge-to-edge + status bar
 - **Problem:** content should draw under the status bar with safe-area padding; native only.
