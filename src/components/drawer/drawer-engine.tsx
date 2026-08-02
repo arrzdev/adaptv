@@ -808,6 +808,19 @@ export function DrawerEngine({
       ...(heldFloor ? {} : { minHeight: null }),
     }
 
+    // Returning to rest (room 0), with no floor to ease: do NOT clamp max-height to the
+    // just-measured `natural`. On old Android WebViews the bottom safe-area inset restores a
+    // frame or two AFTER the `keyboardWillHide` that fired this effect — the keyboard event and
+    // the window-inset dispatch are two independent native signals (see native.mjs) — so
+    // `natural` reads short here by exactly `--safe-area-inset-bottom`, and a cap pinned to it
+    // holds the sheet that much too small until `settle` clears it: the sheet shrinks too far on
+    // dismiss, then snaps up when the cap is released. At rest the content is the binding
+    // constraint anyway, so ride the stylesheet cap and let the box follow its own content up as
+    // the inset lands. (When the cap is unreadable — non-finite — keep the measured target.)
+    if (room === 0 && !heldFloor && Number.isFinite(cssCapRef.current)) {
+      target.maxHeight = cssCapRef.current
+    }
+
     // Grow rides the open curve; giving the room back gets the quicker settle, same as the
     // sheet's own motions.
     const isGrowing = room >= appliedRoomRef.current
