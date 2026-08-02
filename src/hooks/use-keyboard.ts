@@ -3,6 +3,10 @@ import {
   hasNativeKeyboard,
   subscribeNativeKeyboard,
 } from "#adaptv/capabilities/keyboard"
+import {
+  predictKeyboardHeight,
+  recordKeyboardHeight,
+} from "#adaptv/capabilities/keyboard-height-cache"
 
 //---- Text-input detection ----------------
 
@@ -184,6 +188,14 @@ export type UseKeyboardOptions = {
   visualViewportThreshold?: number
   /** Settle delay (ms) for viewport resize/scroll bursts. Default `50`. */
   debounceDelay?: number
+  /**
+   * Seed the height from the learned cache the moment a field is focused, so a consumer can start
+   * lifting on the same frame as the tap instead of waiting for `visualViewport` to report the
+   * keyboard (default `false`). The real measurement then confirms or corrects the guess, and a
+   * prediction that no keyboard confirms retracts. Web/PWA path only — native already reports the
+   * exact height, and the mock path drives the value directly. Opt-in while it is proven on-device.
+   */
+  predictFromCache?: boolean
 }
 
 // The keyboard can vanish while a text field stays focused — iOS password autofill fills the
@@ -195,6 +207,13 @@ export type UseKeyboardOptions = {
 // it. Gated to "already open", the open path (which reads 0 before it has ever opened) never arms
 // this — that gate is what a prior naive "close on any settled 0" fix was missing.
 const KEYBOARD_DISMISS_CONFIRM_MS = 150
+
+// A prediction (seeded from the height cache on focus, before the OS confirms anything) is held
+// this long waiting for a real measurement. The keyboard's own slide is ~250ms, so the window has
+// to clear that — retract sooner and a genuine keyboard gets killed mid-appearance and flickers
+// back. If nothing ever materialises (hardware keyboard, programmatic focus, a readonly field the
+// gate missed), the prediction retracts at the end of this window and the sheet settles back.
+const KEYBOARD_PREDICT_CONFIRM_MS = 400
 
 // Same discipline for a height DECREASE while already open: switching fields makes iOS emit
 // transient mid-animation dips (device-measured: 380 → 335 → 380 within ~85ms) that must not
@@ -217,6 +236,7 @@ export function useKeyboard({
   isEnabled = true,
   visualViewportThreshold = 100,
   debounceDelay = 50,
+  predictFromCache = false,
 }: UseKeyboardOptions = {}): KeyboardState {
   const [state, setState] = useState<KeyboardState>({
     isOpen: false,
@@ -234,6 +254,14 @@ export function useKeyboard({
   //pending confirmation that an already-open keyboard's CHANGED height is stable
   //(vs. transient mid-field-switch geometry). See KEYBOARD_HEIGHT_CONFIRM_MS.
   const heightConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
+  //a prediction is "pending" from the moment it seeds an open state on focus until a real
+  //measurement confirms it (any >0 read) or the confirm window retracts it. While pending, a
+  //zero-height read must NOT arm the normal dismiss confirmation — the prediction timer owns the
+  //retract, and the dismiss path would otherwise close a keyboard that is still sliding in.
+  const predictionPendingRef = useRef(false)
+  const predictionTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
   //latest committed state for the event-path guards (dismiss/height confirms, resize fast-path)
@@ -258,9 +286,20 @@ export function useKeyboard({
       }
     }
 
+    //A prediction is resolved: either a real read confirmed it, or we are tearing down. Stops the
+    //retract timer and drops the "pending" gate so the dismiss path is live again.
+    function clearPrediction() {
+      if (predictionTimer.current) {
+        clearTimeout(predictionTimer.current)
+        predictionTimer.current = null
+      }
+      predictionPendingRef.current = false
+    }
+
     function resetKeyboardState() {
       cancelDismissConfirm()
       cancelHeightConfirm()
+      clearPrediction()
       focusedElementRef.current = null
       setState({ isOpen: false, height: 0 })
     }
@@ -283,6 +322,7 @@ export function useKeyboard({
           Math.abs(height - stateRef.current.height) >= 2
         ) {
           setKeyboardState({ isOpen: true, height })
+          recordKeyboardHeight(active, height)
         }
       }, KEYBOARD_HEIGHT_CONFIRM_MS)
     }
@@ -305,6 +345,46 @@ export function useKeyboard({
           setKeyboardState({ isOpen: false, height: 0 })
         }
       }, KEYBOARD_DISMISS_CONFIRM_MS)
+    }
+
+    //Seed the height from the learned cache the instant a field is focused, so a consumer starts
+    //moving on the same frame as the tap instead of waiting for the viewport to report. Gated: opt
+    //-in, never when a keyboard is already up, and never for a field that raises none (readonly /
+    //disabled). The real measurement that follows confirms or corrects the guess via the normal
+    //grow/shrink paths; if none arrives, the prediction timer retracts it.
+    function maybePredict(el: HTMLElement) {
+      if (!predictFromCache || stateRef.current.isOpen) return
+      const field = el as HTMLInputElement
+      if (field.readOnly || field.disabled) return
+      const predicted = predictKeyboardHeight(el)
+      if (predicted === null) return
+      cancelDismissConfirm()
+      cancelHeightConfirm()
+      predictionPendingRef.current = true
+      setKeyboardState({ isOpen: true, height: predicted })
+      schedulePredictionConfirm()
+    }
+
+    //Retract a prediction the OS never confirmed. Re-reads LIVE at fire time: a real keyboard up by
+    //now means the >0 read path already cleared the prediction; only a still-zero read while still
+    //focused-and-open means the keyboard genuinely never came (hardware keyboard, programmatic
+    //focus) — settle back to closed.
+    function schedulePredictionConfirm() {
+      if (predictionTimer.current) clearTimeout(predictionTimer.current)
+      predictionTimer.current = setTimeout(() => {
+        predictionTimer.current = null
+        predictionPendingRef.current = false
+        const active = getActiveInputElement() ?? focusedElementRef.current
+        const stillFocused =
+          active !== null && willOpenVirtualKeyboard(active)
+        if (
+          stillFocused &&
+          stateRef.current.isOpen &&
+          readKeyboardHeight(visualViewportThreshold) === 0
+        ) {
+          setKeyboardState({ isOpen: false, height: 0 })
+        }
+      }, KEYBOARD_PREDICT_CONFIRM_MS)
     }
 
     function setKeyboardState(nextState: KeyboardState) {
@@ -334,20 +414,26 @@ export function useKeyboard({
       const keyboardHeight = readKeyboardHeight(visualViewportThreshold)
 
       if (keyboardHeight > 0) {
-        //real keyboard present — abort any pending dismiss confirmation
+        //real keyboard present — abort any pending dismiss confirmation, and resolve any
+        //prediction: the keyboard the guess was waiting for has now measurably arrived
         cancelDismissConfirm()
+        clearPrediction()
 
-        //first raise (closed → open): commit immediately, the lift must start now
+        //first raise (closed → open): commit immediately, the lift must start now. Learn the
+        //height so the next open of a same-shape field can be predicted.
         if (!stateRef.current.isOpen) {
           cancelHeightConfirm()
           setKeyboardState({ isOpen: true, height: keyboardHeight })
+          recordKeyboardHeight(active, keyboardHeight)
           return
         }
 
         //already open, same height (± the dedup epsilon): drop any pending change — the
-        //read returned to the committed value, so the change was transient
+        //read returned to the committed value, so the change was transient. Still record it:
+        //this is the steady-state read that confirms a correct prediction's height.
         if (Math.abs(keyboardHeight - stateRef.current.height) < 2) {
           cancelHeightConfirm()
+          recordKeyboardHeight(active, keyboardHeight)
           return
         }
 
@@ -359,6 +445,7 @@ export function useKeyboard({
         if (keyboardHeight > stateRef.current.height) {
           cancelHeightConfirm()
           setKeyboardState({ isOpen: true, height: keyboardHeight })
+          recordKeyboardHeight(active, keyboardHeight)
           return
         }
 
@@ -371,6 +458,9 @@ export function useKeyboard({
       //(iOS autofill); confirm after a delay. If we were never open, it's the pre-open path — the
       //keyboard's real height arrives via a later resize — so ignore.
       if (stateRef.current.isOpen) {
+        //a still-pending prediction reads zero for the whole keyboard slide — the prediction timer
+        //owns that retract, so the dismiss path must not fire here and close it mid-appearance
+        if (predictionPendingRef.current) return
         scheduleDismissConfirm()
       }
     }
@@ -408,6 +498,9 @@ export function useKeyboard({
         willOpenVirtualKeyboard(event.target)
       ) {
         focusedElementRef.current = event.target
+        //seed the lift from the cache before syncing — sync reads a still-zero height at this
+        //instant (the keyboard has not begun to slide), so on its own it would do nothing
+        maybePredict(event.target)
         syncKeyboardState()
         updateKeyboardState()
       }
@@ -487,7 +580,7 @@ export function useKeyboard({
       }
       resetKeyboardState()
     }
-  }, [debounceDelay, isEnabled, visualViewportThreshold])
+  }, [debounceDelay, isEnabled, visualViewportThreshold, predictFromCache])
 
   //register as a publisher for as long as this observer is enabled; the last one out
   //hands the root back to the stylesheet's resting values

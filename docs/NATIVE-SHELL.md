@@ -156,7 +156,10 @@ So:
 - **Own the keyboard height**, and report it **continuously**, not on discrete show/hide events —
   changing an `<input type>` to `tel` or opening the emoji keyboard resizes the IME while firing **no
   events at all** ([#26](https://github.com/ionic-team/capacitor-keyboard/issues/26),
-  [#29](https://github.com/ionic-team/capacitor-keyboard/issues/29)).
+  [#29](https://github.com/ionic-team/capacitor-keyboard/issues/29)). The per-platform design for this
+  — FOLLOW vs REPLAY, the predictive height cache, and how the signal feeds the drawer's PR-#32
+  geometry without reverting it — is **`KEYBOARD-SIGNAL.md`** (web/PWA branch shipped; iOS/Android
+  native designed there).
 - **Never assume `keyboardWillHide` precedes `keyboardDidHide`.** On iOS 26 the order inverts when the
   keyboard hides without animation ([#32](https://github.com/ionic-team/capacitor-keyboard/issues/32)).
 - **Do not build on `visualViewport` on native.** Ionic's own source refuses to, with the reason in a

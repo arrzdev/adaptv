@@ -6,6 +6,7 @@ import {
 import type { ComponentType, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import { initNativeKeyboard } from "#adaptv/capabilities/keyboard"
+import { loadKeyboardHeightCache } from "#adaptv/capabilities/keyboard-height-cache"
 import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
 import { hideNativeSplash } from "#adaptv/capabilities/splash"
 import type { OfflineProps } from "#adaptv/components/offline"
@@ -230,6 +231,9 @@ export function RoutingShell({
     void initKv()
     hideNativeSplash()
     initNativeKeyboard()
+    //hydrate the learned keyboard-height cache before any drawer can open, so the first focus of a
+    //same-shape field already has a prediction to lift from (see keyboard-height-cache)
+    void loadKeyboardHeightCache()
     //seed native storage with the current theme preference so the OS splash colour
     //tracks the app theme (light/dark) on the next launch, not the system setting.
     void persistNativeThemePreference(readPreference())

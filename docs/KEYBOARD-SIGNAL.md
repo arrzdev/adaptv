@@ -1,0 +1,153 @@
+# Keyboard signal — how tall, and when
+
+> Where the drawer's keyboard height comes from, per platform, and how a per-frame / predicted signal
+> feeds the geometry PR #32 already ships without reverting it. This is the keyboard half of
+> `@adaptv/shell` (`NATIVE-SHELL.md` roadmap #2). Web/PWA + Android<30 branch is **built** (PR #34);
+> iOS REPLAY and Android FOLLOW are **designed here, to build against this contract.**
+
+---
+
+## 0. The one distinction the whole design rests on: *geometry* vs *signal*
+
+Two separable problems get conflated whenever someone proposes "just `translateY` the sheet with the
+keyboard":
+
+- **Geometry** — *how the sheet accommodates the keyboard.* This is [drawer-engine](../src/components/drawer/drawer-engine.tsx)
+  + [drawer-keyboard](../src/components/drawer/drawer-keyboard.ts), and **PR #32 already answers it**:
+  the sheet grows into its `max-h`, holds the keyboard as **room** under the content, the scroller
+  absorbs the overflow, and a composited **FLIP transform** carries the visible motion in one step.
+  Unchanged by this work.
+- **Signal** — *what the current keyboard offset is, and when we know it.* This is
+  [capabilities/keyboard](../src/capabilities/keyboard.ts) + [use-keyboard](../src/hooks/use-keyboard.ts).
+  This is the only thing the keyboard-signal work touches.
+
+Keep them apart and the per-platform plan is simple: **every platform produces the same signal; the
+drawer's one geometry consumes it.**
+
+## 1. Why the signal feeds the geometry, and does not replace it
+
+A tempting invariant — *"only ever write `transform: translateY()`; never height/top/padding"* — is
+wrong for this component, for two concrete reasons, both already paid for once:
+
+1. **Transform-only reverts PR #32 for the common case.** A form fills the sheet to its `max-height`
+   cap. A pure `translateY(-keyboard)` then walks the sheet's **top edge off the top of the screen /
+   under the notch**, and still can't reveal the footer/action buttons below the keyboard line — the
+   only way to surface those is room + scroll, i.e. layout. #32's opening paragraph is this exact
+   bug ("the footer stayed buried behind the keyboard"). Transform-only works for a *short* sheet
+   (content < `viewport − keyboard`); the short sheet was never the hard case.
+2. **Per-frame layout is ~25fps.** #32 measured transitioning `max-height`/`min-height`/`padding`
+   every frame at 23–39fps. So a literal per-frame FOLLOW that rewrites layout each frame reintroduces
+   the jank #32 removed.
+
+**Resolution.** REPLAY is the default everywhere — it is what #32's *land-layout-in-one-step + FLIP
+transform* already is. FOLLOW's live per-frame offset may ride a **compositor transform on top of an
+already-committed one-step layout**, and only while the sheet is **not at its cap** (where a live
+translate would clip the top). At the cap, ignore the live follow and keep room + scroll + FLIP.
+
+## 2. Per-platform matrix
+
+| Platform | Source of truth | Mode | Where the animation lives |
+|---|---|---|---|
+| **iOS** | `keyboardWillShow/Hide` `userInfo`: frame-end height, duration, curve (the private curve `7` is a spring: damping 500, stiffness 1000, mass 3, dur 0.5) | **REPLAY** | native spring on the arrival frame; JS gets the target, the engine's FLIP eases to it |
+| **Android 30+** | `WindowInsetsAnimation.Callback.onProgress` → live IME inset per frame | **FOLLOW** | per-frame offset → compositor transform (see §1 cap rule) |
+| **Android <30 / Web / PWA** | predict on `focus` from the height cache → confirm via `visualViewport` | **REPLAY** (predicted) | JS: seed the target on focus, the engine re-aims when the real height lands |
+| **Desktop / Electron** | — | no-op | — |
+
+Prediction on `focus` also helps iOS/Android: seed from the cache, let the native payload *confirm*
+rather than *initiate*. It is additive to every row, not a fourth mode.
+
+## 3. The contract
+
+One unified accessor, identical shape on every target — the JS layer above it never learns which
+platform it is on (`NATIVE-SHELL.md §2`).
+
+- [capabilities/keyboard.ts](../src/capabilities/keyboard.ts) emits `{ isOpen, height }` and
+  [use-keyboard.ts](../src/hooks/use-keyboard.ts) consumes it, publishing `--adaptv-keyboard-height`
+  + `data-keyboard-open` on `<html>` for app chrome.
+- **Native today** reports a single discrete height on will-show. The plugin work upgrades *this
+  source* to continuous (Android `onProgress`) + curve-bearing (iOS `userInfo`) — the consumer shape
+  does not change. If FOLLOW ever needs it, extend the event with a `phase`/`velocity` field; the
+  drawer must keep consuming "current offset", never raw frames.
+- **Prediction** (PR #34) adds *seed-then-correct* to the web path: the height is known on the focus
+  frame and the real measurement corrects it through the existing grow/shrink paths.
+
+## 4. The height cache (built — PR #34)
+
+[keyboard-height-cache.ts](../src/capabilities/keyboard-height-cache.ts). A form is the same shape
+every time it opens on a device, so last time's height predicts this time's.
+
+- **Key** `{ viewportWidth, numeric|text }`. Width identifies the device implicitly and moves on
+  rotation, so it encodes orientation for free — no separate orientation term. `inputmode`/`type`
+  split the digit pad from the full keyboard; finer splitting just fragments the cache.
+- **Durable**: Preferences on native (survives WebView eviction), localStorage on web; hydrated once
+  at boot before any drawer opens; synchronous in-memory lookup on focus.
+- **Self-healing**: every confirmed, stable height is recorded, so a keyboard-app / language / IME
+  switch is absorbed on the next measurement.
+- **Rejected**: a shipped device→height table — wrong too often (third-party keyboards, suggestion
+  bar, CJK IMEs, split/floating iPad keyboards) and needs updating forever.
+
+## 5. Prediction must be reversible
+
+`focus` is a **trigger, not a guarantee**: a hardware keyboard, a programmatic focus, or a readonly
+field focuses without raising a keyboard. So prediction is speculative and **retracts** if no
+keyboard confirms within a window (`use-keyboard`'s `KEYBOARD_PREDICT_CONFIRM_MS`), and is gated off
+`readOnly`/`disabled`. Native can additionally *detect* a hardware keyboard (iOS `GCKeyboard`,
+Android `hasHardwareKeyboard`) and skip prediction outright rather than relying on the retract.
+
+## 6. Invariants (from `NATIVE-SHELL.md`, do not relitigate)
+
+- **`resize: none`** — already set in [capabilities/keyboard.ts](../src/capabilities/keyboard.ts); the
+  OS must not push the WebView, adaptv lifts content itself.
+- **Never build on `visualViewport` on native** — Capacitor resizes shrink the WebView, making the
+  keyboard invisible to it. Web/PWA only.
+- **Report continuously, not on discrete show/hide** — changing `type`→`tel` or opening emoji resizes
+  the IME while firing no events.
+- **Layer on `SystemBars`, do not replace it** — Capacitor 8 ships an unavoidable `SystemBars` core
+  plugin that already installs `setOnApplyWindowInsetsListener`; a second listener on the same view is
+  literally bugs capacitor-keyboard #61/#68.
+- **Never assume `keyboardWillHide` precedes `keyboardDidHide`** — iOS 26 inverts the order on a
+  no-animation hide.
+- **Don't freeze the plugin API against Capacitor 8's inset shape** — Cap 9 (alpha only today; `next`
+  = `9.0.0-alpha.6`, no stable release) changes the inset contract. We ship on stable 8, upgrade when
+  9 lands.
+
+## 7. Open questions (need a device / emulator, which we have — see §8)
+
+1. **Android FOLLOW vs `SystemBars`.** Does `WindowInsetsAnimation.Callback` co-exist with
+   `SystemBars`' `setOnApplyWindowInsetsListener`, or collide? Verify on **API 34 and API 35**
+   emulators (the breakage line).
+2. **Retarget vs. 1–2 frames late** on a wrong prediction. A velocity-preserving retarget should beat
+   being reactive-late on every raise, but the settle must not read as a snap-back — needs a real
+   mid-range Android device.
+3. **iOS FOLLOW (display-link) vs REPLAY.** Recommendation: **REPLAY** — iOS hands you the exact curve
+   in `userInfo`; a per-frame bridge stream only adds jitter to reproduce a curve you already have.
+   FOLLOW earns its place on Android, where the gesture keyboard has no predetermined curve.
+
+## 8. How to verify (in THIS repo — no external harness)
+
+From any worktree root (`docs/DEVELOPMENT.md` is authoritative):
+
+```bash
+pnpm dev:web        # PWA path: real visualViewport + the predictive cache, in a browser
+pnpm dev:ios        # the app on the iOS Simulator — real OS keyboard, native height path
+pnpm dev:android    # the app on the Android emulator — real IME, WindowInsets path
+```
+
+- `dev`/`preview` are turbo **interactive TTY** tasks (need a real terminal); `r` reloads JS, `b`
+  rebuilds the native app. After a framework-only edit use `--force` — the build fingerprint ignores
+  linked adaptv `src` and will otherwise install the previous bundle.
+- **Deterministic conformance** without a real keyboard: `/lab/drawer-keyboard` drives the
+  `__adaptvKeyboardMock` seam and self-reports (`AUTONOMOUS-UI-TESTING.md`, `BEHAVIORS.md §4`).
+- **Unit**: `use-keyboard.test.ts` (observer + predictive path) and `keyboard-height-cache.test.ts`.
+- On Android, inspect the WebView over CDP to read the real inset numbers and catch swallowed bridge
+  rejections.
+
+## 9. Status
+
+- **Built (PR #34):** height cache + the predictive Web / Android<30 branch (seed-on-focus, confirm/
+  retarget via the engine's re-aim, retract, learn).
+- **Designed here:** iOS REPLAY (curve from `userInfo`) and Android 30+ FOLLOW (`onProgress`), both
+  feeding §3's contract; §7 is what to resolve on-device first.
+
+Cross-refs: `NATIVE-SHELL.md` (the plugin this is part of) · `BEHAVIORS.md` / `AUTONOMOUS-UI-TESTING.md`
+(the drawer×keyboard contract + how to test it) · `DEVELOPMENT.md` (how to run native + web).
