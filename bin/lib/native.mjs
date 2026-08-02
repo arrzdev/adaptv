@@ -316,10 +316,16 @@ const ANDROID_EDGE_TO_EDGE_JAVA = `
         ViewCompat.setOnApplyWindowInsetsListener(parent, (v, insets) -> {
             Insets bars = insets.getInsets(barTypes);
             boolean keyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
-            // While the IME is up the page must NOT pad for the gesture bar: the view is
-            // resized for the keyboard instead, so the bottom inset would be counted twice.
+            // The view is deliberately NOT resized for the keyboard. adaptv runs Capacitor
+            // Keyboard in resize=None and lifts content itself from the reported height
+            // (capabilities/keyboard.ts, the suppress-native-then-reimplement rule); padding the
+            // view for the IME here too would double that lift — the sheet grows by the keyboard
+            // height inside a viewport already shrunk by it, which is the full-height drawer with
+            // a keyboard-sized gap under it. On WebView >= 140 this listener isn't installed at
+            // all and SystemBars never resizes either, so leaving the view alone is also what
+            // keeps the two WebView eras identical. While the IME is up the gesture bar sits
+            // behind it, so the bottom inset drops to 0 — the same value env() reports on >= 140.
             int bottom = keyboardVisible ? 0 : bars.bottom;
-            v.setPadding(0, 0, 0, keyboardVisible ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0);
             adaptvInjectInsets(bars.left, bars.top, bars.right, bottom);
             // Deliberately NOT WindowInsetsCompat.CONSUMED — returning that breaks the
             // WebView's own safe-area recalculation (crbug/461332423).
@@ -1640,6 +1646,17 @@ const escDollar = (s) => s.replace(/\$/g, "$$$$")
  * stay on the base id (namespace = code package, applicationId = install identity — the two
  * are allowed to differ), so generated sources (MainActivity, R) never move.
  *
+ * And the Android namespace is PINNED here, not just left alone. `cap add` derives the
+ * scaffolded `namespace` from whatever appId is in the live env-config at that moment — and a
+ * multi-platform prepare flips that to `.dev` (an earlier platform's own `patchNativeIdentity`
+ * mutates the shared `process.env`) BEFORE Android is scaffolded, so the namespace can be born
+ * `.dev`. When it is, the manifest's `.MainActivity` resolves to `<base>.dev.MainActivity` — the
+ * bare Capacitor stub `cap add` writes — and adaptv's edge-to-edge MainActivity (generated into
+ * the BASE package by `patchAndroidSplash`) never launches, so the app slides under the status
+ * bar on old WebViews (NATIVE-SHELL §0.2). Reasserting `namespace = <baseId>` every prepare keeps
+ * the two in the same package whatever `cap add` guessed, and self-heals a project already born
+ * wrong.
+ *
  * Replace-to-target regexes: whatever the files currently hold, they land on the intended
  * value — so switching variants (or re-running) is always safe.
  */
@@ -1667,6 +1684,13 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
       `$1${escDollar(name)}$2`,
     )
   } else {
+    // namespace = the code package (MainActivity + R live here): ALWAYS the base id, never
+    // `.dev`, so `.MainActivity` resolves to adaptv's edge-to-edge activity, not the stub.
+    subInFile(
+      path.join(nd, "app/build.gradle"),
+      /namespace\s*=\s*"[^"]*"/,
+      `namespace = "${escDollar(baseId)}"`,
+    )
     subInFile(
       path.join(nd, "app/build.gradle"),
       /applicationId\s+"[^"]*"/,

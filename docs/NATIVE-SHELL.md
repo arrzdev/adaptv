@@ -137,6 +137,36 @@ Measured on the `Pixel_7` AVD (API 34, WebView 113, `adaptv preview android`):
    `getWebViewMajorVersion() >= 140`; below that `SystemBars` injects `0px` for all four *on purpose*,
    because it assumes the page is not drawing under anything. Once the page is, those zeros are the bug.
 
+### ⚠︎ 0.2.1 The `.dev` build has to *launch* that MainActivity, not a stub beside it (2026-08-02)
+
+All of the above is dead weight if the manifest launches a different class. On the `dev`/`preview` flavour
+it did. Those builds install under `<appId>.dev` so they sit beside a release install, and the install id
+is set by `patchNativeIdentity` mutating the SHARED `ADAPTV_CAPACITOR_CONFIG.appId`. A multi-platform
+prepare scaffolds iOS first, which flips that appId to `.dev` **before** `cap add android` runs — and
+`cap add` derives the Gradle `namespace` from whatever appId it sees. So the namespace was born
+`dev.arrz.projectzero.dev`, the manifest's `android:name=".MainActivity"` resolved to
+`dev.arrz.projectzero.dev.MainActivity` (the bare `cap add` stub), and adaptv's edge-to-edge `MainActivity`
+— written into the BASE package by `patchAndroidSplash` — never launched. `--adaptv-inset-top` resolved to
+`0`, so the drawer's `calc(100vh - var(--adaptv-inset-top))` cap became `100vh`. Invisible on WebView ≥ 140
+(SystemBars passes real insets natively regardless of the shell), only visible below it.
+
+Fix: `namespace` = code package = **always the base id**, `applicationId` = install identity = `.dev`. The
+two are allowed to differ, so `.MainActivity` resolves to adaptv's activity while the app still installs as
+`.dev`. `patchNativeIdentity` now pins the namespace every prepare (idempotent), self-healing a project
+`cap add` already scaffolded wrong. Measured on `emulator-5556` (Android 14, WebView 113): before,
+`--safe-area-inset-top` unset; after, `51px`, header clear of the clock.
+
+**Then the same fix woke a second bug: the shell must not resize for the keyboard.** Launching the real
+`MainActivity` below WebView 140 also activated its inset listener's IME branch, which padded the view by the
+keyboard height — a native resize. But adaptv runs Capacitor Keyboard in `resize=None` and lifts content
+itself in JS (`capabilities/keyboard.ts`), and the drawer *grows* into its `calc(100vh …)` cap to answer the
+keyboard (`drawer-keyboard.ts`). With the view also resized, that lift is paid twice: the sheet grows by the
+keyboard height inside a viewport already shrunk by it, so it fills the shrunken viewport with a
+keyboard-sized empty gap, and unwinds through two fighting animations on dismiss. Measured on `emulator-5556`:
+`innerHeight` 915 → **578** on keyboard-open (shrunk by the 337px keyboard). On WebView ≥ 140 the listener
+isn't installed and nothing resized, so only the old era had it. Fix: the listener reports insets and never
+touches the view — `innerHeight` now holds at 915 across open/close, matching ≥ 140.
+
 ### 🔒 Revised decision: layer on `SystemBars`, do not replace it
 
 The original plan — "phase 1 owns edge-to-edge + inset/IME reporting" — would mean **a second

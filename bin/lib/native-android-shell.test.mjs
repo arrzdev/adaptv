@@ -1,9 +1,15 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
-import { patchAndroidSplash } from "./native.mjs"
+import { patchAndroidSplash, patchNativeIdentity } from "./native.mjs"
 
 // The generated MainActivity is the ONLY thing that puts an Android app under the system
 // bars — nothing in Capacitor asks for it below API 35 (NATIVE-SHELL §0.0). Each
@@ -91,10 +97,104 @@ describe("generated MainActivity — Android edge-to-edge", () => {
     expect(project()).not.toContain("return WindowInsetsCompat.CONSUMED")
   })
 
-  // the IME resizes the view; padding for the gesture bar on top of that counts it twice
+  // while the IME is up the gesture bar sits behind it, so a bottom pad would sit on top of
+  // the JS keyboard lift — the same 0 env() reports on WebView >= 140.
   it("drops the bottom inset while the keyboard is up", () => {
     expect(project()).toContain(
       "int bottom = keyboardVisible ? 0 : bars.bottom",
     )
+  })
+
+  // adaptv runs Capacitor Keyboard in resize=None and lifts content itself; resizing the view
+  // for the IME here too double-counts the keyboard (full-height sheet with a keyboard-sized
+  // gap under it). The listener must report insets and never touch the view. On WebView >= 140
+  // it isn't installed at all and nothing resizes, so this keeps both eras identical.
+  it("never resizes the webview for the keyboard", () => {
+    expect(project()).not.toContain("setPadding")
+  })
+})
+
+// The whole shell above is dead weight if the manifest launches a DIFFERENT MainActivity.
+// The `.dev` install (dev/preview) is where that happens: `cap add` can scaffold the gradle
+// `namespace` on the `.dev` package (a multi-platform prepare flips the shared env id before
+// Android is scaffolded), and `.MainActivity` then resolves to the bare Capacitor stub there,
+// not adaptv's edge-to-edge activity in the base package. This is the bug from NATIVE-SHELL
+// §0.2 as it actually shipped — invisible on WebView >= 140, under the status bar below it.
+const BASE_ID = "dev.arrz.example"
+
+/**
+ * A `.dev`-flavour project scaffolded the way the bug is: namespace + stub MainActivity born
+ * on the `.dev` package. Runs adaptv's two generators in the same order `preparePlatform`
+ * does (identity, then splash/shell), then returns the gradle plus the MainActivity the
+ * manifest would actually launch — resolved FROM the gradle namespace, so the test proves the
+ * launched file, not a path it assumed.
+ */
+function devFlavorProject() {
+  const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-dev-"))
+  dirs.push(appRoot)
+  const appDir = path.join(appRoot, ADAPTV_DIR, "android", "app")
+  mkdirSync(path.join(appDir, "src/main/res/values"), { recursive: true })
+  writeFileSync(
+    path.join(appDir, "build.gradle"),
+    `android {\n    namespace = "${BASE_ID}.dev"\n    defaultConfig {\n        applicationId "${BASE_ID}.dev"\n    }\n}\n`,
+  )
+  const stubDir = path.join(
+    appDir,
+    "src/main/java",
+    `${BASE_ID}.dev`.replace(/\./g, "/"),
+  )
+  mkdirSync(stubDir, { recursive: true })
+  writeFileSync(
+    path.join(stubDir, "MainActivity.java"),
+    `package ${BASE_ID}.dev;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n`,
+  )
+
+  patchNativeIdentity(
+    appRoot,
+    { appId: BASE_ID, appName: "Example" },
+    "android",
+    {
+      dev: true,
+    },
+  )
+  patchAndroidSplash(appRoot, MASK, BASE_ID)
+
+  const gradle = readFileSync(path.join(appDir, "build.gradle"), "utf8")
+  const namespace = gradle.match(/namespace\s*=\s*"([^"]*)"/)?.[1]
+  const launched = readFileSync(
+    path.join(
+      appDir,
+      "src/main/java",
+      String(namespace).replace(/\./g, "/"),
+      "MainActivity.java",
+    ),
+    "utf8",
+  )
+  return { gradle, namespace, launched }
+}
+
+describe("the .dev flavour launches adaptv's MainActivity, not a stub", () => {
+  // The namespace is the code package `.MainActivity` resolves against — pinned to the base id
+  // so it points at adaptv's activity, even though the install identity below is `.dev`.
+  it("pins the gradle namespace to the base id", () => {
+    expect(devFlavorProject().namespace).toBe(BASE_ID)
+  })
+
+  // The install identity still moves, so a dev build installs ALONGSIDE a release one — only
+  // the code package is held back. The two are allowed to differ; that is the whole fix.
+  it("still gives the install identity (applicationId) the `.dev` suffix", () => {
+    expect(devFlavorProject().gradle).toContain(
+      `applicationId "${BASE_ID}.dev"`,
+    )
+  })
+
+  // The payoff: the file the manifest actually launches carries the edge-to-edge shell. If the
+  // namespace ever slid back to `.dev`, this would read the empty stub and fail.
+  it("launches a MainActivity that carries the edge-to-edge shell", () => {
+    const { launched } = devFlavorProject()
+    expect(launched).toContain(
+      "WindowCompat.setDecorFitsSystemWindows(getWindow(), false)",
+    )
+    expect(launched).toContain("adaptvEdgeToEdge()")
   })
 })
