@@ -21,6 +21,25 @@ Explicit on purpose — there is no bare `pnpm dev`. The target is the most impo
 command, and a default target is how you end up running the web loop for ten minutes wondering why
 the simulator never changed.
 
+## Verifying autonomously — the simulators are right here
+
+Everything needed to verify a change on real targets is in this repo. There is **no external
+harness**, and no "native can't be tested here": the iOS Simulator and the Android emulator on this
+machine are driven by the commands above.
+
+- `pnpm dev:web` — the PWA path in a browser: real `visualViewport`, the predictive keyboard-height
+  cache, the web inset fallbacks.
+- `pnpm dev:ios` / `pnpm dev:android` — the app on the local simulator / emulator: the real OS
+  keyboard, the native inset/height path, splash, edge-to-edge.
+
+Reach for these to verify anything native, keyboard, inset, or splash — not only unit tests. A
+`/lab/*` page self-reports a verdict you can screenshot, so one run is the whole report
+(`AUTONOMOUS-UI-TESTING.md`). Two caveats worth internalising: `dev`/`preview` are turbo
+**interactive** tasks and refuse a non-TTY shell (run them in a real terminal), and after a
+framework-only edit pass `--force` or the fingerprint installs the previous bundle (see
+`## Things worth knowing`). When something genuinely needs a physical device (a hardware-keyboard
+quirk, a specific OEM), say *that* — not that it can't be run at all.
+
 ## What the playground is
 
 `playground/` is a **copy of a real app** — chopchop's `adaptv-testing` branch — vendored into this

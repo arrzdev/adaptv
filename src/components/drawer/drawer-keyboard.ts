@@ -162,7 +162,11 @@ export function useDrawerKeyboardAvoidance({
   isEnabled,
   onWillOpenKeyboard,
 }: UseDrawerKeyboardAvoidanceOptions) {
-  const keyboard = useKeyboard({ isEnabled })
+  //predict the lift from the learned height cache: the sheet starts moving on the same frame as the
+  //focus tap, and the real visualViewport measurement then confirms or corrects it. A cold cache
+  //(first ever open of this field shape) simply falls back to the reactive path — no behaviour
+  //change until a height has been learned.
+  const keyboard = useKeyboard({ isEnabled, predictFromCache: true })
 
   const onWillOpenKeyboardRef = useRef(onWillOpenKeyboard)
   onWillOpenKeyboardRef.current = onWillOpenKeyboard
