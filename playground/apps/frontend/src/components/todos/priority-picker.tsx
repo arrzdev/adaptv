@@ -34,6 +34,7 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
       <span className="ps-1 text-sm font-medium text-subtle">
         Priority
       </span>
+      {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {PRIORITY_OPTIONS.map((option) => {
           const isSelected = value === option.value
