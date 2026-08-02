@@ -40,7 +40,6 @@ import {
   stopDrawerBackdropAnimation,
   transitionDrawerBackdropOpacity,
 } from "#adaptv/components/drawer/drawer-motion"
-import { captureDrawerKeyboardTransition } from "#adaptv/components/drawer/drawer-telemetry"
 import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
 import {
   GesturePriority,
@@ -936,22 +935,6 @@ export function DrawerEngine({
     beginPanelAnimation,
     endPanelAnimation,
   ])
-
-  // Telemetry only: record the box geometry across each keyboard open/close so a
-  // reported motion bug can be read off a timeline. Read-only and off unless armed —
-  // see drawer-telemetry.ts. Fires on the isOpen edge, capturing the transition + settle.
-  useEffect(() => {
-    if (!open || !avoidKeyboard) return
-    return captureDrawerKeyboardTransition({
-      content: contentRef.current,
-      scroller: scrollerRef.current,
-      getKeyboard: () => ({
-        isOpen: keyboard.isOpen,
-        height: keyboard.height,
-      }),
-      phase: keyboard.isOpen ? "open" : "close",
-    })
-  }, [keyboard.isOpen, keyboard.height, open, avoidKeyboard])
 
   useLayoutEffect(() => {
     if (open) return
