@@ -584,6 +584,11 @@ export function liveWatcher({ keys = true } = {}) {
   let changed = null
   let clearAt = 0
   let notice = null
+  // A notice whose fix is a RESTART, not a rebuild. `press b` reruns the build with the CLI
+  // modules already loaded in this process, so it cannot apply a change to adaptv's OWN source —
+  // offering it would be the same lie the `keys` guard above exists to prevent. `restart` swaps
+  // the action for the honest one.
+  let noticeRestart = false
   const draw = () => {
     // The activity row: a spinner while HMR applies, otherwise the keys. The keys are ALWAYS
     // the last row now — a notice used to REPLACE them, so the moment adaptv had something to
@@ -598,9 +603,12 @@ export function liveWatcher({ keys = true } = {}) {
     //`  · ` — two spaces before the dot, ONE after, the same as every settled row
     //(`✓ web  · 3.9s`). It used to pad both sides, which is the sort of drift that comes
     //from a row hand-spacing its own separator (R31).
+    const action = noticeRestart
+      ? c.dim("· restart to apply")
+      : `${c.dim("· ")}${c.dim("press ")}${key("b")}${c.dim(" to rebuild and see the changes")}`
     const rows = notice
       ? [
-          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${c.dim("· ")}${c.dim("press ")}${key("b")}${c.dim(" to rebuild and see the changes")}`,
+          `  ${c.yellow(GLYPH.notice)} ${c.bold(notice)}  ${action}`,
           "",
           activity,
         ]
@@ -622,11 +630,13 @@ export function liveWatcher({ keys = true } = {}) {
       changed = files
       clearAt = Date.now() + 900
     },
-    notice: (text) => {
+    notice: (text, { restart = false } = {}) => {
       notice = text
+      noticeRestart = restart
     },
     clearNotice: () => {
       notice = null
+      noticeRestart = false
     },
     stop: () => {
       clearInterval(anim)
