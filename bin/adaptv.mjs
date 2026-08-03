@@ -36,6 +36,7 @@ import { listTargets, resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
 import {
   appConfigFingerprint,
+  cliSourceFingerprint,
   fingerprint,
   nativeFingerprint,
 } from "./lib/fingerprint.mjs"
@@ -650,6 +651,10 @@ async function runLive(appRoot, platforms, opts) {
   let launchAll = null // replays the launch lines (used by the `r` key)
   let nativeFp = null // last-known native fingerprint per platform
   let configFp = null // last-known adaptv.config.ts + icon-art fingerprint
+  // adaptv's OWN bin/ source, captured NOW — the modules this process loaded at startup. Unlike
+  // config/native (which a rebuild re-applies), a change here needs a fresh process, so it is
+  // never re-armed by `armStaleness`; only the poll re-arms it, to notice one edit once.
+  let cliFp = cliSourceFingerprint()
   let tearing = false
 
   let tornDown = false
@@ -1308,22 +1313,32 @@ async function runLive(appRoot, platforms, opts) {
         const changed = ready.filter((p) => nowNative[p] !== nativeFp?.[p])
         const nowConfig = appConfigFingerprint(appRoot, config)
         const configChanged = nowConfig !== configFp
-        if (changed.length === 0 && !configChanged) return
-        // re-arm both, so one edit notices once
+        // adaptv's OWN source (bin/): only ever moves with a `link:`ed adaptv (framework dev), and
+        // the notice is the only signal there is — a generator edit is invisible on screen.
+        const nowCli = cliSourceFingerprint()
+        const cliChanged = nowCli !== cliFp
+        if (changed.length === 0 && !configChanged && !cliChanged) return
+        // re-arm all three, so one edit notices once
         nativeFp = nowNative
         configFp = nowConfig
-        // ONE row, one line (R31) — so the two causes MERGE rather than one winning the slot.
-        // Newer-wins would drop `config change` the moment the sync it implies rewrites the
-        // native tree, which is exactly the case where both are true at once. The action is
-        // identical either way; naming the cause is what tells the dev whether adaptv saw the
-        // edit they just made.
-        watcher.notice(
-          configChanged && changed.length > 0
-            ? `config + native change · ${changed.join(", ")}`
-            : configChanged
-              ? "config change"
-              : `native change · ${changed.join(", ")}`,
-        )
+        cliFp = nowCli
+        // ONE row, one line (R31) — so the causes MERGE rather than one winning the slot. Config
+        // and native name the cause the dev acts on with `r`/`b`. adaptv's OWN source is the
+        // exception and WINS the row: the running process holds the old modules, so `r`/`b` can't
+        // apply the edit — only a restart can, and a restart re-reads config and re-syncs native
+        // too, so naming that superset action is the honest single line.
+        if (cliChanged)
+          // The restart variant: `b` would rebuild with the CLI modules THIS process already
+          // loaded, so it can't apply an edit to adaptv's own source — see liveWatcher's notice.
+          watcher.notice("adaptv source change", { restart: true })
+        else
+          watcher.notice(
+            configChanged && changed.length > 0
+              ? `config + native change · ${changed.join(", ")}`
+              : configChanged
+                ? "config change"
+                : `native change · ${changed.join(", ")}`,
+          )
       }, 3000)
       poll.unref?.()
       cleanups.push(() => clearInterval(poll))

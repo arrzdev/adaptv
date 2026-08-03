@@ -653,13 +653,24 @@ export function patchIosTheme(appRoot, mask) {
  * a second time, halfway through work that had already used them.
  */
 /**
- * Bump when the GENERATOR's output changes — a new slot, a different scale, a fixed mask.
+ * A content hash of THIS module — the single file that generates every native shell artifact:
+ * the launcher icons/splash (`writeAndroidIcons`, `patchAndroidSplash`), the edge-to-edge
+ * `MainActivity` (`androidMainActivity*`), and the namespace/identity (`patchNativeIdentity`).
+ * Folded into the asset cache key below so ANY edit to a generator here invalidates an already-
+ * scaffolded project and re-derives it — the "did the writer change?" half of the guard, now
+ * computed instead of remembered.
  *
- * Non-negotiable, and the one part of the guard below that a human has to maintain: without
- * it, editing `writeAndroidIcons` and re-running would keep the old mipmaps, because the
- * inputs (the art, the config) did not move. It lives next to the writers for that reason.
+ * It REPLACES a hand-bumped `ASSETS_GEN_VERSION`, whose failure mode this is: PR #35 rewrote the
+ * generated `MainActivity`/namespace but nothing bumped the constant, so every project scaffolded
+ * before it kept the stale bare-stub `MainActivity` and edge-to-edge silently broke on old
+ * WebViews (content sat under the status bar) until a clean rebuild. A content hash can't be
+ * forgotten. Over-inclusive by the same rule as every fingerprint here — an unrelated edit to this
+ * file just re-derives byte-identical assets, which is free; a missed generator change shipping
+ * stale native code is not.
  */
-const ASSETS_GEN_VERSION = 1
+export const GENERATOR_FINGERPRINT = createHash("sha1")
+  .update(readFileSync(fileURLToPath(import.meta.url)))
+  .digest("hex")
 
 /** Everything `generateAssets` writes into, per platform. Hashed to answer "is it already there?" */
 const ASSET_OUTPUTS = {
@@ -720,7 +731,8 @@ function assetOutputsHash(appRoot, platform) {
  * halves and needs BOTH to skip:
  *
  *   inputs   `appConfigFingerprint` — the config file plus the icon directory it points at —
- *            with the icon plan, the splash mask, the appId and `ASSETS_GEN_VERSION` folded in.
+ *            with the icon plan, the splash mask, the appId and the generator's own source hash
+ *            (`GENERATOR_FINGERPRINT`) folded in.
  *   outputs  a content hash of the files this function writes, as they are on disk.
  *
  * The outputs half is the whole safety argument, and it is why this is not the usual "trust a
@@ -746,7 +758,7 @@ export async function generateAssets(
     .update(JSON.stringify(icon))
     .update(JSON.stringify(mask))
     .update(String(config?.appId))
-    .update(`v${ASSETS_GEN_VERSION}`)
+    .update(`gen:${GENERATOR_FINGERPRINT}`)
     .digest("hex")
   const remembered = readSection(appRoot, "assets")
 

@@ -10,6 +10,7 @@
 import { createHash } from "node:crypto"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 
 // Directories that never affect the built bundle (deps, outputs, VCS, caches, the
@@ -212,5 +213,53 @@ export function nativeFingerprint(appRoot, platform) {
     }
   }
   walk(nativeRoot)
+  return h.digest("hex")
+}
+
+/**
+ * A fingerprint of the adaptv CLI's OWN source — the `bin/` tree that runs IN this process.
+ *
+ * Everything else `dev` watches is the APP: its `src/` (Vite hot-reloads it) and its config + icon
+ * art (polled via `appConfigFingerprint`). adaptv's own generators and orchestration are different:
+ * a running `adaptv dev` loaded these modules once, at startup, so editing one takes effect only on
+ * a FRESH process. That never matters for an installed adaptv — `bin/` can't change mid-session —
+ * but it is the whole framework-dev story: with a `link:`ed adaptv (the playground), editing a
+ * generator mid-session changes nothing on screen and the next in-session rebuild silently reuses
+ * the old logic. That is exactly how a merged edge-to-edge fix (#35) looked broken until the CLI
+ * was restarted. `dev` polls this so it can SAY "restart to apply" instead of leaving the dev to
+ * wonder why their framework edit did nothing.
+ *
+ * mtime + size, like `fingerprint()`: nothing re-stamps these sources, so an mtime only moves on a
+ * genuine edit. `.test.mjs` is skipped — a test edit changes no runtime behaviour, so it must not
+ * nag for a restart. Zero false notices for a real (installed) consumer; the whole signal for a
+ * framework dev.
+ */
+export function cliSourceFingerprint(
+  binDir = path.resolve(fileURLToPath(import.meta.url), "..", ".."),
+) {
+  const h = createHash("sha1")
+  const walk = (dir) => {
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    entries.sort((a, b) => (a.name < b.name ? -1 : 1))
+    for (const e of entries) {
+      const full = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        walk(full)
+      } else if (e.isFile() && !e.name.endsWith(".test.mjs")) {
+        try {
+          const s = statSync(full)
+          h.update(
+            `${path.relative(binDir, full)}:${s.size}:${Math.round(s.mtimeMs)}\n`,
+          )
+        } catch {}
+      }
+    }
+  }
+  walk(binDir)
   return h.digest("hex")
 }
