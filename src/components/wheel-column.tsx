@@ -1,26 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
-import { clamp } from "#adaptv/utils/clamp"
+import {
+  snapIndex,
+  WHEEL_HEIGHT,
+  WHEEL_ITEM_HEIGHT,
+  WHEEL_PAD,
+  wheelRowTransform,
+} from "#adaptv/components/wheel-column-geometry"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
- * CONSTANTS
+ * CONSTANTS — the item height, layout box and drum projection now live in
+ * wheel-column-geometry.ts (pure + unit-tested); this file drives them.
+ * WHEEL_ITEM_HEIGHT/WHEEL_HEIGHT stay on the public component path via re-export.
  * ============================================================================= */
 
-export const WHEEL_ITEM_HEIGHT = 30
-const VISIBLE_ROWS = 5
-export const WHEEL_HEIGHT = WHEEL_ITEM_HEIGHT * VISIBLE_ROWS
-const WHEEL_PAD = WHEEL_ITEM_HEIGHT * 2
-
-// drum projection (the iOS-native cylinder): rows are re-projected from their
-// flat scroll slots onto a cylinder — tilted, pulled toward the rim, pushed
-// back in Z — so the column reads as a rotating drum, not a flat list. The
-// radius follows from the step angle so one row of scroll = one step of drum.
-const WHEEL_ROW_TILT_DEG = 22
-const WHEEL_MAX_TILT_DEG = 84
-const WHEEL_PERSPECTIVE_PX = 600
-const WHEEL_RADIUS =
-  WHEEL_ITEM_HEIGHT / (2 * Math.tan((WHEEL_ROW_TILT_DEG * Math.PI) / 360))
+export { WHEEL_HEIGHT, WHEEL_ITEM_HEIGHT }
 
 // fade the rows above/below the centered selection
 const WHEEL_MASK =
@@ -130,14 +125,10 @@ export function WheelColumn({
   // tracks the centered row live while scrolling (highlight only, no commit)
   const [activeIndex, setActiveIndex] = useState(selectedIndex)
 
-  function clampIndex(index: number) {
-    return Math.min(items.length - 1, Math.max(0, index))
-  }
-
   function nearestIndex() {
     const el = scrollRef.current
     if (!el) return selectedIndex
-    return clampIndex(Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT))
+    return snapIndex(el.scrollTop, items.length)
   }
 
   // project every row onto the drum for the current scroll position — direct
@@ -150,18 +141,9 @@ export function WheelColumn({
     const centerRow = el.scrollTop / WHEEL_ITEM_HEIGHT
     for (let index = 0; index < list.children.length; index++) {
       const row = list.children[index] as HTMLElement
-      const tiltDeg = clamp(
-        (index - centerRow) * WHEEL_ROW_TILT_DEG,
-        -WHEEL_MAX_TILT_DEG,
-        WHEEL_MAX_TILT_DEG,
-      )
-      const tilt = (tiltDeg * Math.PI) / 180
-      //move the row from its flat slot to its cylinder position: rows bunch
-      //and foreshorten toward the rim exactly like the native drum
-      const flatY = (index - centerRow) * WHEEL_ITEM_HEIGHT
-      const drumY = WHEEL_RADIUS * Math.sin(tilt)
-      const drumZ = WHEEL_RADIUS * (Math.cos(tilt) - 1)
-      row.style.transform = `perspective(${WHEEL_PERSPECTIVE_PX}px) translateY(${drumY - flatY}px) translateZ(${drumZ}px) rotateX(${-tiltDeg}deg)`
+      //project the row from its flat slot onto the cylinder — rows bunch and
+      //foreshorten toward the rim exactly like the native drum
+      row.style.transform = wheelRowTransform(index - centerRow)
     }
   }
 

@@ -37,7 +37,7 @@ const COMPONENTS = [
     to: "/lab/list",
     title: "List",
     summary: "virtualised rows · 2 000 items, a handful of nodes",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/text",
@@ -74,13 +74,13 @@ const COMPONENTS = [
     to: "/lab/toggles",
     title: "Checkbox & Switch",
     summary: "controlled, uncontrolled, indeterminate, dragged",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/fields",
     title: "Input & TextArea",
     summary: "slots, submit key, autoResize · and the caret patch",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/drawer",
@@ -92,19 +92,19 @@ const COMPONENTS = [
     to: "/lab/swipeable",
     title: "Swipeable",
     summary: "row actions · the gesture that must not lose the finger",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/pull-to-refresh",
     title: "PullToRefresh",
     summary: "pull past the threshold without stealing the scroll",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/wheel-column",
     title: "WheelColumn",
     summary: "the iOS picker drum · snap, momentum, haptic tick",
-    isNew: true,
+    isNew: false,
   },
   {
     to: "/lab/avoid-keyboard",
