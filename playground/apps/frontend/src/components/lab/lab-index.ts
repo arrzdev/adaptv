@@ -89,6 +89,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/dropdown",
+    title: "Dropdown",
+    summary: "anchored menu · flip, shift, escape a clipped carousel",
+    isNew: false,
+  },
+  {
     to: "/lab/swipeable",
     title: "Swipeable",
     summary: "row actions · the gesture that must not lose the finger",

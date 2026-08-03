@@ -24,6 +24,10 @@ const COMPONENTS_DIR = resolve(process.cwd(), "src/components")
 const INTERNAL = new Set([
   //the shared press track behind Button and Pressable — not consumer API
   "press-core",
+  //extracted, unit-tested engine math — driven by their components, not exported
+  "swipeable-physics",
+  "wheel-column-geometry",
+  "pull-to-refresh-physics",
 ])
 
 /** Not components: the barrel itself, and this file's own siblings. */
