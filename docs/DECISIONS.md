@@ -693,6 +693,43 @@ Corroborated three ways: caniuse commit *"Safari 26 doesn't use theme-color anym
 
 **So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** adaptv's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism adaptv *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
 
+### B29 — the Android system NAV bar is browser/OS-owned on web + PWA; only native controls it
+
+The recurring ask — *"make the bottom bar follow the app theme"* — is achievable on **native** and
+nowhere else on Android, and that is a **platform ceiling, not an adaptv gap**. Verified exhaustively on
+two emulators (Pixel 7 = Chrome/WebView 113; Pixel 10 = Chrome 149) with CDP + a repro that flips
+`html`/`body` background + `color-scheme` + `theme-color` together, installed as a standalone PWA, against
+device light/dark.
+
+`theme-color` only ever colours the **top** bar; the bottom **nav** bar never follows the app:
+
+| surface | top status bar | bottom nav bar |
+|---|---|---|
+| **Native (Capacitor)** | app theme (SystemBars icons + edge-to-edge) | **app theme** — bg painted under a transparent bar |
+| Web · browser tab · Chrome 113 | `theme-color` | **device theme** (not edge-to-edge; `safe-area-inset-bottom` = 0) |
+| Web · standalone PWA · Chrome 113 | `theme-color` | **opaque black** |
+| Web · browser tab · Chrome 149 | browser's own | **app *background*** — but only while scrolled (the edge-to-edge "chin"); address-bar-visible reverts to the device |
+| Web · standalone PWA · Chrome 149 (shortcut) | device theme | **device theme** — `theme-color`/bg ignored |
+
+The decisive test: a RED app (`theme-color:#e60000`, red bg) still gets black/white system bars that flip
+with the **device** theme, not the app. `theme-color` is a dead end for the nav bar — there is no
+meta/manifest/CSS that colours it directly (*"no feature in PWA that allows specifying navbar colour
+alone"*).
+
+**The only mechanism that ever colours the nav bar is edge-to-edge** — the app draws under the bar and its
+own background shows through. Native does this on **every version** (`setDecorFitsSystemWindows(false)` +
+the inset listener, including old WebView < 140 where SystemBars injects zeros — see `NATIVE-SHELL.md` and
+#30/#35). Chrome browser tabs do it partially from 135+ (the retracting "chin"); standalone WebAPKs do it
+inconsistently. So the honest answer to a dev: **the browser owns its chrome. adaptv already sets every
+page-level signal (`theme-color`, `color-scheme`, `html`/`body` bg, `viewport-fit=cover`) correctly, and
+the INSTALLED app — the whole reason adaptv exists over a PWA — is where both bars follow the theme.** This
+is why the status-bar lab page marks web/pwa as `absent`.
+
+One caveat left unproven: the Google-APIs emulators can't mint real WebAPKs (`Install` degrades to a
+home-screen shortcut, which is NOT edge-to-edge), so whether a *real* WebAPK on a physical device with
+modern edge-to-edge Chrome tracks the app *background* under the nav bar is the single open question.
+Everything else here is settled on-device.
+
 > **⚠︎ Read B25–B26 as design constraints, not a defect list.** `src/` is the code lifted from
 > chopchop's `packages/adaptv`; most of it is expected to be refactored for the standalone package. The
 > value of these entries is **the pattern to avoid carrying forward**, not the line numbers.
