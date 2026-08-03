@@ -414,6 +414,19 @@ is itself what rewrites the native tree — so the causes combine into one sente
 > var nothing re-stamps until something rebuilds. Reported as commenting `icons` out and watching
 > nothing happen.
 
+**R54 — A change to adaptv's OWN source notices a RESTART, not a rebuild.** R40's action is
+identical for config and native because `press b` applies both. adaptv's own `bin/` is the
+exception: a running `adaptv dev` loaded those modules at startup, so `b` reruns the build with the
+old logic still in memory — offering it would be the same lie the `keys` guard prevents, a key that
+does nothing. So this cause wins the row with its own action:
+> ```
+>   ! adaptv source change  · restart to apply
+> ```
+> It only ever fires with a `link:`ed adaptv (framework development) — an installed adaptv's `bin/`
+> cannot change mid-session, so a real consumer never sees it. It exists because a merged
+> edge-to-edge fix looked broken until the CLI was restarted: the running `dev` still held the
+> pre-fix generator and said nothing. Polled off `cliSourceFingerprint`, `.test.mjs` excluded.
+
 **R41 — A notice is added to the live block, never swapped in for something still true.** The
 watch row used to be one row with one slot, so a pending notice REPLACED the keys — the moment
 adaptv had something to say, `r`/`b`/`ctrl-c` disappeared, including the very key the notice was

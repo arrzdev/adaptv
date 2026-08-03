@@ -1,16 +1,19 @@
+import { createHash } from "node:crypto"
 import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   utimesSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
 import { clearIconCaches, DEFAULT_ICONS_DIR } from "./icons.mjs"
-import { generateAssets } from "./native.mjs"
+import { GENERATOR_FINGERPRINT, generateAssets } from "./native.mjs"
 import { readSection } from "./state.mjs"
 
 // `generateAssets` runs on EVERY command and is ~20 sharp encodes re-deriving byte-identical
@@ -145,5 +148,20 @@ describe("generateAssets only writes what is not already there", () => {
     await gen(root, { force: true })
     //Same result, but it did the work — asserted by the record being rewritten intact.
     expect(remembered(root)).toEqual(before)
+  })
+})
+
+describe("the generator's own source is in the cache key, so a shell change can't be forgotten", () => {
+  it("GENERATOR_FINGERPRINT is a content hash of native.mjs — editing a generator moves the inputs automatically (the hand-bumped ASSETS_GEN_VERSION it replaced could be, and once was, left stale)", () => {
+    const nativeMjs = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "native.mjs",
+    )
+    const fromSource = createHash("sha1")
+      .update(readFileSync(nativeMjs))
+      .digest("hex")
+    // If a refactor ever pins this to a static value again, it reintroduces exactly the #35 trap:
+    // a native-shell fix that ships but never regenerates an already-scaffolded project.
+    expect(GENERATOR_FINGERPRINT).toBe(fromSource)
   })
 })

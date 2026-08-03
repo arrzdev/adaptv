@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { appConfigFingerprint } from "./fingerprint.mjs"
+import {
+  appConfigFingerprint,
+  cliSourceFingerprint,
+} from "./fingerprint.mjs"
 
 // The staleness notice on `dev`'s watch row rests entirely on this hash. Every case below is
 // an edit a dev makes mid-session that leaves the INSTALLED app wrong — the symptom being a
@@ -87,5 +90,52 @@ describe("appConfigFingerprint — did the dev change something the running app 
     expect(() =>
       appConfigFingerprint(root, { icons: "./nope" }),
     ).not.toThrow()
+  })
+})
+
+describe("cliSourceFingerprint — did adaptv's OWN source change under a running dev?", () => {
+  // A fake `bin/` tree, since the real one is the module under test's own directory.
+  const bin = (files) => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-cli-"))
+    mkdirSync(path.join(root, "lib"))
+    for (const [name, body] of Object.entries(files))
+      writeFileSync(path.join(root, name), body)
+    return root
+  }
+  // Same-size rewrites can hash equal within one mtime tick — stamp forward so the test asserts
+  // the rule, not the clock (as `writeArt` does above).
+  const stamp = (root, rel, secondsAhead = 5) => {
+    const t = Date.now() / 1000 + secondsAhead
+    utimesSync(path.join(root, rel), t, t)
+  }
+
+  it("moves when a generator source is edited — the whole point, since a linked-adaptv edit is otherwise invisible", () => {
+    const root = bin({
+      "adaptv.mjs": "// entry",
+      "lib/native.mjs": "export const a = 1",
+    })
+    const before = cliSourceFingerprint(root)
+    writeFileSync(path.join(root, "lib/native.mjs"), "export const a = 2")
+    stamp(root, "lib/native.mjs")
+    expect(cliSourceFingerprint(root)).not.toBe(before)
+  })
+
+  it("ignores .test.mjs edits — a test change is no runtime behaviour, so it must not nag for a restart", () => {
+    const root = bin({
+      "lib/native.mjs": "x",
+      "lib/native.test.mjs": "old",
+    })
+    const before = cliSourceFingerprint(root)
+    writeFileSync(
+      path.join(root, "lib/native.test.mjs"),
+      "a much longer, different test body",
+    )
+    stamp(root, "lib/native.test.mjs")
+    expect(cliSourceFingerprint(root)).toBe(before)
+  })
+
+  it("is stable when nothing changed, so the restart notice fires once rather than every 3s poll", () => {
+    const root = bin({ "adaptv.mjs": "// entry", "lib/native.mjs": "x" })
+    expect(cliSourceFingerprint(root)).toBe(cliSourceFingerprint(root))
   })
 })
