@@ -3,6 +3,7 @@ import type {
   NotifyType,
 } from "@arrzdev/adaptv/capabilities"
 import { haptics } from "@arrzdev/adaptv/capabilities"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
@@ -14,7 +15,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/haptics")({
   component: LabHapticsPage,
 })
 

@@ -1,3 +1,4 @@
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useMemo, useState } from "react"
 import { DeckTabs } from "@/components/decks/deck-tabs"
 import { PageWithSmoothEdges } from "@/components/page"
@@ -34,7 +35,7 @@ import { useDataMutation } from "@/hooks/use-data-mutation"
 import { usePersistentState } from "@/hooks/use-persistent-state"
 import { useAppDb } from "@/providers/app-db-provider"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/")({
   component: TodosPage,
 })
 

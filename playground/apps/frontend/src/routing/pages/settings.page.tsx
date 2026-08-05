@@ -1,10 +1,10 @@
-import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
+import { EdgeSwipeGestures, Link } from "@arrzdev/adaptv/components"
 import {
   useVibrate as useBaseVibrate,
   useMediaQuery,
   useTheme,
 } from "@arrzdev/adaptv/hooks"
-import { Link, useRouter } from "@tanstack/react-router"
+import { createFileRoute, useRouter } from "@arrzdev/adaptv/router"
 import {
   ChevronRight,
   FlaskConical,
@@ -31,7 +31,7 @@ import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useDataMutation } from "@/hooks/use-data-mutation"
 import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/settings")({
   component: SettingsPage,
 })
 

@@ -1,4 +1,5 @@
 import { gestureController } from "@arrzdev/adaptv/capabilities"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useCallback, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -13,9 +14,11 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
-  component: LabGestureControllerPage,
-})
+export const Route = createFileRoute("/_providers/lab/gesture-controller")(
+  {
+    component: LabGestureControllerPage,
+  },
+)
 
 const DRAWER = { id: "lab-drawer", priority: 300 }
 const SWIPE = { id: "lab-swipe", priority: 100 }

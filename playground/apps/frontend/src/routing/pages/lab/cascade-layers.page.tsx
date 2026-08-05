@@ -1,4 +1,5 @@
 import { Image } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import labPhotoTallUrl from "@/assets/lab-photo-tall.jpg?url"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -10,7 +11,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/cascade-layers")({
   component: LabCascadeLayersPage,
 })
 

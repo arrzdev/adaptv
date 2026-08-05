@@ -4,6 +4,7 @@ import {
 } from "@arrzdev/adaptv/capabilities"
 import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
 import { readPreference, useTheme } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { isNativePlatform } from "@arrzdev/adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -17,7 +18,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/native-theme")({
   component: LabNativeThemePage,
 })
 
