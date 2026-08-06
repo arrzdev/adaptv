@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test"
  *   - the line clamp: an INLINE style the component writes, so it is deterministic
  *     regardless of the engine's computed-style quirks — and the box grows/shrinks
  *     by whole lines, which is engine-agnostic;
- *   - the `selectable` opt-in and the `data-dynamic-type` presence attribute;
+ *   - the `selectable` opt-in and the `data-scale-with-system` presence marker;
  *   - `render` as a prop: it produces a REAL element (an <h3>, a <label>), not a
  *     wrapper — and a rendered <label> still focuses its control.
  */
@@ -66,15 +66,16 @@ test.describe("Text", () => {
     ).not.toBe("none")
   })
 
-  test("data-dynamic-type is present by default and removed by the opt-out", async ({
+  test("data-scale-with-system marks the opt-in and is absent by default", async ({
     page,
   }) => {
-    const unsized = page.getByText(/this is the one that can follow/)
-    await expect(unsized).toHaveAttribute("data-dynamic-type", "")
+    // opt-in default is off: the plain row carries no attribute at all
+    const plain = page.getByText(/always its built size/)
+    expect(await plain.getAttribute("data-scale-with-system")).toBeNull()
 
-    const opted = page.getByText(/opted out/)
-    // a presence attribute: the opt-out REMOVES it rather than setting "false"
-    expect(await opted.getAttribute("data-dynamic-type")).toBeNull()
+    // a presence marker: the opt-in ADDS it as an empty string
+    const opted = page.getByText(/the same size/)
+    await expect(opted).toHaveAttribute("data-scale-with-system", "")
   })
 
   test("render produces a real element, and a rendered label focuses its control", async ({
