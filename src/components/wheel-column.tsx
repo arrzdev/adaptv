@@ -147,6 +147,35 @@ export function WheelColumn({
     }
   }
 
+  //Drive the drum from a rAF loop while the wheel is in motion, not only from
+  //scroll events. On a hard iOS momentum fling the compositor scrolls ahead of the
+  //main thread and scroll events are coalesced, so a projection written only on
+  //those events LAGS the real scrollTop — the rows shear and stutter, worst at high
+  //velocity ("looks broken when flicked fast"). Painting every animation frame from
+  //the live scrollTop keeps the drum locked to the scroll no matter how sparse the
+  //scroll events are. The loop self-stops the frame the wheel idles.
+  const rafRef = useRef(0)
+  function paintLoop() {
+    paintBarrel()
+    rafRef.current =
+      scrollingRef.current || draggingRef.current
+        ? requestAnimationFrame(paintLoop)
+        : 0
+  }
+  function ensurePaintLoop() {
+    if (rafRef.current === 0) {
+      rafRef.current = requestAnimationFrame(paintLoop)
+    }
+  }
+
+  //stop the loop and the pending commit if we unmount mid-spin
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      window.clearTimeout(commitTimer.current)
+    }
+  }, [])
+
   //rows appear/disappear when items change (e.g. day count) — reproject
   // biome-ignore lint/correctness/useExhaustiveDependencies: items drives the row list
   useLayoutEffect(() => {
@@ -186,7 +215,9 @@ export function WheelColumn({
 
   function handleScroll() {
     scrollingRef.current = true
-    paintBarrel()
+    //rAF owns the per-frame projection now; a scroll event only needs to make sure
+    //the loop is running (and report the live value below)
+    ensurePaintLoop()
     const index = nearestIndex()
     setActiveIndex(index)
     //report live — whatever row is centered right now IS the value, so a
@@ -205,6 +236,8 @@ export function WheelColumn({
   function handleTouchStart() {
     draggingRef.current = true
     window.clearTimeout(commitTimer.current)
+    //paint from the first frame of the drag, before any scroll event fires
+    ensurePaintLoop()
   }
 
   function handleTouchEnd() {
