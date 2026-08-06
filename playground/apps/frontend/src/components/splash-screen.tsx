@@ -1,4 +1,4 @@
-import { PwaSplashOverlay, Text } from "@arrzdev/adaptv/components"
+import { PwaSplashOverlay } from "@arrzdev/adaptv/components"
 import type { SplashScreenProps } from "@arrzdev/adaptv/config"
 import type { CSSProperties } from "react"
 import { useEffect, useRef, useState } from "react"
@@ -64,18 +64,15 @@ export function SplashScreen(_: SplashScreenProps) {
       <ReservedSvgSpace className="w-72 max-h-72">
         <SplashMascot className="block size-full" />
       </ReservedSvgSpace>
-      <Text
-        render={<p />}
-        className="relative m-0 origin-center text-center font-sans text-4xl font-bold tracking-[0.22em] uppercase animate-splash-wordmark-pulse"
-      >
-        <Text className="block text-primary/30">{SPLASH_WORDMARK}</Text>
-        <Text
+      <p className="relative m-0 origin-center text-center font-sans text-4xl font-bold tracking-[0.22em] uppercase animate-splash-wordmark-pulse">
+        <span className="block text-primary/30">{SPLASH_WORDMARK}</span>
+        <span
           aria-hidden
           className="absolute inset-0 block text-primary animate-splash-wordmark-fill"
         >
           {SPLASH_WORDMARK}
-        </Text>
-      </Text>
+        </span>
+      </p>
     </PwaSplashOverlay>
   )
 }

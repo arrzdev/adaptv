@@ -1,5 +1,4 @@
 import { Text, View } from "@arrzdev/adaptv/components"
-import { useShare } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
 import type {
   DragEndEvent,
@@ -17,7 +16,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Pencil, Plus, Share2, Trash2 } from "lucide-react"
+import { Pencil, Plus, Trash2 } from "lucide-react"
 import { useRef } from "react"
 import { SettingsAddRow } from "@/components/settings/settings-list-row"
 import { IconButton } from "@/components/ui"
@@ -167,10 +166,6 @@ function SettingsDeckRow({
     newIndex,
   } = useSortable({ id: deck.id, disabled })
 
-  //share the deck by name via the OS share sheet — only render the affordance
-  //where a sheet actually exists (hidden on desktop Chrome/Firefox)
-  const { supported: canShare, share } = useShare()
-
   //drop dnd-kit's role="button"/tabIndex: this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
   //the drag listeners are untouched, so drag still works
@@ -236,17 +231,6 @@ function SettingsDeckRow({
           className="flex shrink-0 items-center gap-x-1"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {canShare && (
-            <IconButton
-              onClick={() =>
-                void share({ title: deck.name, text: deck.name })
-              }
-              aria-label={`Share ${deck.name}`}
-              className="size-9 bg-transparent hover:bg-secondary"
-            >
-              <Share2 size={18} strokeWidth={1.75} aria-hidden />
-            </IconButton>
-          )}
           <IconButton
             onClick={() => onEdit(deck)}
             aria-label={`Edit ${deck.name}`}
