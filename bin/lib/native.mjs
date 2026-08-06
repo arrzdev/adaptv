@@ -6,6 +6,7 @@
 import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -17,7 +18,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
-import { homedir, networkInterfaces } from "node:os"
+import { homedir, networkInterfaces, tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
@@ -1225,6 +1226,59 @@ export async function capSync(
   else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
+/**
+ * A `PATH` shim that stops the iOS Simulator from stealing the dev's focus.
+ *
+ * adaptv never opens the Simulator itself during a build — Capacitor's `cap run ios` shells out
+ * to `native-run`, which boots the device and then runs, verbatim,
+ * `open <Xcode>/Applications/Simulator.app --args -CurrentDeviceUDID <udid>`. A bare `open`
+ * ACTIVATES the app, so every rebuild yanked the whole screen away from whatever the dev was
+ * typing in. That call is inside a dependency; there is no flag for it.
+ *
+ * So intercept it where it is actually resolved. `native-run` spawns `open` by NAME, looked up on
+ * the PATH it inherits, so a directory of our own at the front of that PATH — holding a one-line
+ * `open` that re-execs the real one with `-g` (launch WITHOUT bringing to the foreground) — turns
+ * that one call into a background launch. Everything else `open` is asked to do passes straight
+ * through untouched, and the shim is scoped to `cap run`'s environment, so it cannot leak into the
+ * dev's shell.
+ *
+ * The result matches the Android emulator, which was always the quieter of the two: the window
+ * appears, the app is fronted INSIDE the device, and which window has your keyboard stays the
+ * dev's own business.
+ */
+const SIM_OPEN_SHIM = `#!/bin/sh
+# adaptv: launch the iOS Simulator in the background instead of stealing the dev's focus.
+# Every other 'open' is passed through exactly as given.
+for arg in "$@"; do
+  case "$arg" in
+  Simulator|*Simulator.app*) exec /usr/bin/open -g "$@" ;;
+  esac
+done
+exec /usr/bin/open "$@"
+`
+
+export function withBackgroundSimulator(env) {
+  //macOS-only by construction (it re-execs /usr/bin/open), and iOS builds are macOS-only too.
+  if (process.platform !== "darwin") return env
+  try {
+    //`tmpdir()` is per-user on macOS (/var/folders/…/T), so a fixed name is a private path
+    //rather than a shared one anybody could plant an executable in.
+    const dir = path.join(tmpdir(), "adaptv-open-shim")
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    const shim = path.join(dir, "open")
+    writeIfChanged(shim, SIM_OPEN_SHIM)
+    chmodSync(shim, 0o755)
+    return {
+      ...env,
+      PATH: `${dir}${path.delimiter}${env.PATH ?? process.env.PATH ?? ""}`,
+    }
+  } catch {
+    //A shim we couldn't write is a Simulator that jumps to the front — an annoyance, not a
+    //reason to fail a build the dev is waiting on. Run without it.
+    return env
+  }
+}
+
 /** `cap run <platform> --target <id>` (build + install + launch). */
 export async function capRun(
   appRoot,
@@ -1245,25 +1299,13 @@ export async function capRun(
   // actually running) to load the fresh install.
   const args = [...pre, "run", platform, "--no-sync"]
   if (target) args.push("--target", target)
+  const childEnv = withLiveCapConfig(env)
   await run(cmd, args, {
     cwd: appRoot,
-    env: withLiveCapConfig(env),
+    env: platform === "ios" ? withBackgroundSimulator(childEnv) : childEnv,
     report,
   })
 }
-
-/**
- * Bring the iOS Simulator to the foreground so the (re)launched app is actually visible
- * without the dev alt-tabbing to find it. iOS only, and deliberately so: iOS builds already
- * require macOS, so `open -a Simulator` is a safe, permission-free standard command there.
- *
- * The Android emulator is left alone on purpose. It has no `.app` to `open`, and neither adb
- * nor the emulator expose a "raise window" command — the only options are OS-specific
- * window-manager hacks (AppleScript on macOS, wmctrl on Linux, …) that need extra
- * permissions, which a framework has no business doing and which don't exist uniformly
- * across the Linux/Windows hosts where Android dev also runs. The app is still fronted
- * *inside* the emulator by the launch; raising the emulator window stays the dev's own.
- */
 
 /**
  * Run a short command and resolve `{ status, stdout }`. The async twin of `spawnSync`, for the
@@ -1299,9 +1341,25 @@ function probe(command, args, { env, encoding = "utf8" } = {}) {
   })
 }
 
-export async function foregroundDevice(platform, target, env) {
+/**
+ * Make sure the iOS Simulator's WINDOW exists, without touching which window has the keyboard.
+ *
+ * The fast paths (a cached install, the `r` reload) never run `cap run`, so nothing else would
+ * start Simulator.app — and a device booted headlessly with `simctl boot` runs the app where
+ * nobody can see it. `-g` is the whole point: launch it, leave it behind whatever the dev is
+ * working in. It used to be a bare `open -a Simulator`, which ACTIVATES — so every rebuild and
+ * every reload stole the screen mid-keystroke.
+ *
+ * iOS only, and deliberately so. The Android emulator has no `.app` to `open`, and neither adb
+ * nor the emulator expose a "show this window" command — the only options are OS-specific
+ * window-manager hacks (AppleScript on macOS, wmctrl on Linux, …) that need extra permissions,
+ * which a framework has no business doing and which don't exist uniformly across the
+ * Linux/Windows hosts where Android dev also runs. iOS now behaves the way Android always did:
+ * the app is fronted INSIDE the device, and the desktop window is the dev's own to raise.
+ */
+export async function ensureDeviceWindow(platform, target, env) {
   if (await isPhysicalTarget(platform, target, env)) return
-  if (platform === "ios") await probe("open", ["-a", "Simulator"])
+  if (platform === "ios") await probe("open", ["-g", "-a", "Simulator"])
 }
 
 /**
