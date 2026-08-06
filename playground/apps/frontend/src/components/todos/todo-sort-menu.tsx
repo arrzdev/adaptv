@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { AppDrawer } from "@/components/ui"
 import type { TodoSort } from "@/data/collections/todos/sort"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 type SortOption = {
   value: TodoSort
@@ -61,10 +61,10 @@ type TodoSortTriggerProps = {
 //lives in the list's first section header — only the trigger, so the volatile
 //section remounting on sort change never takes the drawer down with it
 export function TodoSortTrigger({ open, onOpen }: TodoSortTriggerProps) {
-  const { vibrateOk } = useAppVibrate()
+  const haptic = useHaptics()
 
   function handleOpen() {
-    vibrateOk()
+    haptic.impact("light")
     onOpen()
   }
 
@@ -102,9 +102,10 @@ export function TodoSortDrawer({
   value,
   onChange,
 }: TodoSortDrawerProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
+  const haptic = useHaptics()
 
   function handleSelect(next: TodoSort) {
+    haptic.impact("light")
     onChange(next)
     onOpenChange(false)
   }
@@ -125,16 +126,12 @@ export function TodoSortDrawer({
               {SORT_OPTIONS.map((option) => {
                 const isActive = option.value === value
                 const OptionIcon = option.Icon
-                const handlers = hapticPointerHandlers(
-                  () => handleSelect(option.value),
-                  "ok",
-                )
                 return (
                   // biome-ignore lint/a11y/useSemanticElements: a native radio can't carry this icon + title + description layout; ARIA radio on the button is the intentional single-select pattern
                   <button
                     key={option.value}
                     type="button"
-                    onClick={handlers.onClick}
+                    onClick={() => handleSelect(option.value)}
                     role="radio"
                     aria-checked={isActive}
                     className={cn(

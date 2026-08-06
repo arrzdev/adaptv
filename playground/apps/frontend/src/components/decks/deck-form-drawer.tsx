@@ -11,7 +11,7 @@ import {
   DECK_EMOJI_OPTIONS,
   DEFAULT_DECK_EMOJI,
 } from "@/data/collections/decks/constants"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 export type DeckFormInput = {
   name: string
@@ -39,7 +39,7 @@ export function DeckFormDrawer({
   errorMessage,
   onSubmit,
 }: DeckFormDrawerProps) {
-  const { vibrateCancel, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const [value, setValue] = useState(initialValue)
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(
     initialEmoji ?? null,
@@ -71,7 +71,7 @@ export function DeckFormDrawer({
   function handleSubmit() {
     const trimmed = value.trim()
     if (!trimmed || isSubmitting) return
-    vibrateSuccess()
+    haptic.notify("success")
     onSubmit({ name: trimmed, emoji: selectedEmoji ?? undefined })
   }
 
@@ -110,6 +110,7 @@ export function DeckFormDrawer({
                 <PrimaryButton
                   className="w-full py-3.5 text-base font-semibold leading-none"
                   onClick={handleSubmit}
+                  hapticOnPress={false}
                   loading={isSubmitting}
                   disabled={!value.trim()}
                 >
@@ -119,7 +120,7 @@ export function DeckFormDrawer({
               cancel={
                 <AppDrawer.Close
                   type="button"
-                  onClick={vibrateCancel}
+                  onClick={() => haptic.impact("light")}
                   className={drawerCancelClassName}
                 >
                   Cancel

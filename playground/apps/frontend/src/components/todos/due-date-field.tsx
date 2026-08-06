@@ -8,7 +8,7 @@ import { useEffect, useState } from "react"
 import { DateWheelPicker } from "@/components/todos/date-wheel-picker"
 import { startOfDay } from "@/data/collections/todos/dates"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 function formatFull(date: Date): string {
   return date.toLocaleDateString(undefined, {
@@ -26,7 +26,7 @@ type DueDateFieldProps = {
 
 export function DueDateField({ value, onChange }: DueDateFieldProps) {
   const reducedMotion = useAppReducedMotion()
-  const { vibrateCancel } = useAppVibrate()
+  const haptic = useHaptics()
   const [expanded, setExpanded] = useState(false)
 
   //the wheels commit live — the form value always holds whatever the picker last
@@ -51,7 +51,7 @@ export function DueDateField({ value, onChange }: DueDateFieldProps) {
   }
 
   function handleClear() {
-    vibrateCancel()
+    haptic.impact("light")
     onChange(null)
     setExpanded(false)
   }

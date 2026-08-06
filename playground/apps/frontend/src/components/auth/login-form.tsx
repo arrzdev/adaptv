@@ -12,7 +12,7 @@ import { authClient } from "@/data/auth/client"
 import type { SocialProvider } from "@/data/auth/social-providers"
 import { socialProvidersQueryOptions } from "@/data/auth/social-providers"
 import { consumeSyncReset, requestSyncReset } from "@/data/sync/controller"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 const MIN_PASSWORD = 8
 
@@ -54,7 +54,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
     useState<SocialProvider | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { data: providers = [] } = useQuery(socialProvidersQueryOptions)
-  const { vibrateOk, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const passwordRef = useRef<InputHandle>(null)
   const fieldsRef = useRef<HTMLDivElement>(null)
   //when (performance.now) an autofill burst armed the auto-submit; null = disarmed
@@ -202,7 +202,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
     if (!canSubmit) return
 
     autofillArmedAtRef.current = null
-    vibrateSuccess()
+    haptic.notify("success")
     void handleSubmit()
   })
 
@@ -255,9 +255,10 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
         <PrimaryButton
           className={CONTROL_CLASS}
           onClick={() => {
-            vibrateSuccess()
+            haptic.notify("success")
             void handleSubmit()
           }}
+          hapticOnPress={false}
           disabled={!canSubmit}
           loading={submitting}
         >
@@ -277,10 +278,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
             <SecondaryButton
               key={provider}
               className={CONTROL_CLASS}
-              onClick={() => {
-                vibrateOk()
-                void handleSocial(provider)
-              }}
+              onClick={() => void handleSocial(provider)}
               disabled={isBusy}
               loading={pendingProvider === provider}
             >
@@ -293,7 +291,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
       <button
         type="button"
         onClick={() => {
-          vibrateOk()
+          haptic.impact("light")
           switchMode()
         }}
         className="clickable mt-5 w-full text-center text-sm text-muted"

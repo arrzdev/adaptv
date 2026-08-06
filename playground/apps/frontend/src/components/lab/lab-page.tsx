@@ -12,7 +12,6 @@ import { useEffect, useState } from "react"
 import { LabBadge } from "@/components/lab/lab-kit"
 import { PageWithSmoothEdges } from "@/components/page"
 import { IconButton } from "@/components/ui"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 /**
  * Shell for every lab page: the same header, the same back target, and a strip
@@ -35,12 +34,12 @@ export function LabPage({
 }) {
   const router = useRouter()
   const isStandalone = useMediaQuery("(display-mode: standalone)")
-  const { hapticPointerHandlers } = useAppVibrate()
 
-  const backHandlers = hapticPointerHandlers(() => {
+  //the IconButton fires its own light tap haptic on press
+  function handleBack() {
     if (router.history.canGoBack()) router.history.back()
     else router.navigate({ to: backTo })
-  }, "ok")
+  }
 
   return (
     <PageWithSmoothEdges>
@@ -51,7 +50,7 @@ export function LabPage({
       <header className="flex shrink-0 flex-col gap-y-2">
         <div className="flex items-center gap-x-2">
           <IconButton
-            onClick={backHandlers.onClick}
+            onClick={handleBack}
             aria-label="Back to Testing"
             className="size-auto bg-transparent text-foreground hover:bg-transparent"
           >

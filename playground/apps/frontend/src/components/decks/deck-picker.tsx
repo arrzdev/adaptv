@@ -3,7 +3,6 @@ import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { formatDeckLabel } from "@/data/collections/decks/constants"
 import type { Deck } from "@/data/collections/decks/schema"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type DeckPickerProps = {
   decks: Deck[]
@@ -12,8 +11,6 @@ type DeckPickerProps = {
 }
 
 export function DeckPicker({ decks, value, onChange }: DeckPickerProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
-
   if (decks.length === 0) return null
 
   return (
@@ -23,14 +20,10 @@ export function DeckPicker({ decks, value, onChange }: DeckPickerProps) {
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {decks.map((deck) => {
           const isSelected = value === deck.id
-          const deckHandlers = hapticPointerHandlers(
-            () => onChange(deck.id),
-            "ok",
-          )
           return (
             <GhostButton
               key={deck.id}
-              onClick={deckHandlers.onClick}
+              onClick={() => onChange(deck.id)}
               className={cn(
                 "shrink-0",
                 isSelected &&

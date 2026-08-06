@@ -15,7 +15,7 @@ import { AppSwipeable, PrimaryButton } from "@/components/ui"
 import type { Todo } from "@/data/collections/todos/schema"
 import type { TodoSection } from "@/data/collections/todos/sort"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 type EmptyCreature = "sleeping" | "chilling" | "stressed"
 
@@ -85,15 +85,17 @@ type ArchivedListContextProps = {
 }
 
 function ArchivedListContext({ onShowPending }: ArchivedListContextProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
-  const pendingHandlers = hapticPointerHandlers(onShowPending, "ok")
+  const haptic = useHaptics()
 
   return (
     <p className="pl-1 text-sm text-subtle">
       You are seeing your archived tasks,{" "}
       <button
         type="button"
-        onClick={pendingHandlers.onClick}
+        onClick={() => {
+          haptic.impact("light")
+          onShowPending()
+        }}
         className="underline underline-offset-2 decoration-current/50 hover:decoration-current"
       >
         go back

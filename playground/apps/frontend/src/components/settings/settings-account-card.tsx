@@ -7,7 +7,6 @@ import { signOut } from "@/data/auth/client"
 import { seedInitialDataIfEmpty } from "@/data/seed"
 import { resetLocalStore } from "@/data/store"
 import { pendingChangeCount, setSyncEnabled } from "@/data/sync/controller"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useAuth } from "@/providers/auth-provider"
 
 //account surface in settings: a single row — identity on the left, a pill action
@@ -18,7 +17,6 @@ import { useAuth } from "@/providers/auth-provider"
 //first, since the wipe would lose them.
 export function SettingsAccountCard() {
   const { user, isAuthenticated, isPending, openLogin } = useAuth()
-  const { vibrateOk } = useAppVibrate()
   const [signingOut, setSigningOut] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [unsyncedCount, setUnsyncedCount] = useState(0)
@@ -87,10 +85,7 @@ export function SettingsAccountCard() {
         {!isPending && isAuthenticated && (
           <SecondaryButton
             className="shrink-0 rounded-full px-6 py-2.5 text-base font-semibold"
-            onClick={() => {
-              vibrateOk()
-              void handleSignOutClick()
-            }}
+            onClick={() => void handleSignOutClick()}
             loading={signingOut}
           >
             Sign out
@@ -99,10 +94,7 @@ export function SettingsAccountCard() {
         {!isPending && !isAuthenticated && (
           <PrimaryButton
             className="shrink-0 rounded-full px-5 py-2.5 text-base font-semibold"
-            onClick={() => {
-              vibrateOk()
-              openLogin()
-            }}
+            onClick={openLogin}
           >
             <span className="flex items-center gap-x-2">
               <CloudUpload size={18} aria-hidden />

@@ -5,7 +5,7 @@ import { SyncStatusBar } from "@/components/todos/sync-status-bar"
 import type { TodoFilter } from "@/components/todos/todo-filter"
 import { IconButton } from "@/components/ui"
 import type { Deck } from "@/data/collections/decks/schema"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 import { useAuth } from "@/providers/auth-provider"
 
 type TodosHeaderProps = {
@@ -28,22 +28,21 @@ export function TodosHeader({
   onFilterChange,
 }: TodosHeaderProps) {
   const navigate = useNavigate()
-  const { hapticPointerHandlers } = useAppVibrate()
+  const haptic = useHaptics()
   //the sync indicator is a signed-in concept only — guests are fully local
   const { isAuthenticated } = useAuth()
-  const createHandlers = hapticPointerHandlers(onAdd, "ok")
-  const settingsHandlers = hapticPointerHandlers(
-    () => navigate({ to: "/settings" }),
-    "ok",
-  )
-  const archivedHandlers = hapticPointerHandlers(
-    () => onFilterChange("archived"),
-    "ok",
-  )
-  const pendingHandlers = hapticPointerHandlers(
-    () => onFilterChange("active"),
-    "ok",
-  )
+
+  //the archived/pending toggles are plain text buttons (not IconButtons), so they
+  //fire the tap haptic themselves; the IconButtons below get it from the wrapper
+  function showArchived() {
+    haptic.impact("light")
+    onFilterChange("archived")
+  }
+
+  function showPending() {
+    haptic.impact("light")
+    onFilterChange("active")
+  }
 
   return (
     <header className="flex shrink-0 items-center justify-between gap-4">
@@ -64,7 +63,7 @@ export function TodosHeader({
               <span aria-hidden> • </span>
               <button
                 type="button"
-                onClick={archivedHandlers.onClick}
+                onClick={showArchived}
                 className="underline underline-offset-2 decoration-current/50 hover:decoration-current"
               >
                 {archivedCount} archived
@@ -75,7 +74,7 @@ export function TodosHeader({
             <>
               <button
                 type="button"
-                onClick={pendingHandlers.onClick}
+                onClick={showPending}
                 className="underline underline-offset-2 decoration-current/50 hover:decoration-current"
               >
                 {activeCount} pending
@@ -93,14 +92,14 @@ export function TodosHeader({
       <div className="relative flex shrink-0 items-center self-stretch">
         <div className="flex items-center gap-2">
           <IconButton
-            onClick={createHandlers.onClick}
+            onClick={onAdd}
             aria-label="Create task"
             className="bg-primary text-primary-foreground hover:bg-accent"
           >
             <Plus size={20} strokeWidth={1.75} aria-hidden />
           </IconButton>
           <IconButton
-            onClick={settingsHandlers.onClick}
+            onClick={() => navigate({ to: "/settings" })}
             aria-label="Settings"
             className="bg-surface"
           >

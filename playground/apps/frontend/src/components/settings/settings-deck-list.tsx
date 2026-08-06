@@ -22,7 +22,7 @@ import { IconButton } from "@/components/ui"
 import { resolveDeckEmoji } from "@/data/collections/decks/constants"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 import { useSortableReorder } from "@/hooks/use-sortable-reorder"
 
 export type SettingsDeckListProps = {
@@ -51,8 +51,7 @@ export function SettingsDeckList({
   onEdit,
   onDelete,
 }: SettingsDeckListProps) {
-  const { vibrateSelection, vibrateImpact, hapticPointerHandlers } =
-    useAppVibrate()
+  const haptic = useHaptics()
   const reduceMotion = useAppReducedMotion()
   const { activeId, setActiveId, items, disabled, sensors, onDragEnd } =
     useSortableReorder(decks, onReorder)
@@ -66,10 +65,8 @@ export function SettingsDeckList({
     if (next === overIdRef.current) return
     overIdRef.current = next
     //tick on every slot the dragged deck crosses
-    if (next) vibrateSelection()
+    if (next) haptic.selection()
   }
-
-  const createHandlers = hapticPointerHandlers(onCreate, "ok")
 
   return (
     //no surface on the wrapper — each row + the add-row paint their own, so a
@@ -85,9 +82,9 @@ export function SettingsDeckList({
           setActiveId(String(event.active.id))
           //seed the drop target to the lifted row so the first onDragOver (which
           //reports `over` === the row itself) is a no-op — otherwise it fires a
-          //vibrateSelection tick on top of this lift's vibrateImpact (double buzz)
+          //selection tick on top of this lift's medium impact (double buzz)
           overIdRef.current = String(event.active.id)
-          vibrateImpact()
+          haptic.impact("medium")
         }}
         onDragOver={handleDragOver}
         onDragEnd={(event: DragEndEvent) => {
@@ -130,7 +127,10 @@ export function SettingsDeckList({
         <SettingsAddRow
           icon={Plus}
           label="New deck"
-          onClick={createHandlers.onClick}
+          onClick={() => {
+            haptic.impact("light")
+            onCreate()
+          }}
         />
       </ul>
     </div>
@@ -154,7 +154,6 @@ function SettingsDeckRow({
   onEdit,
   onDelete,
 }: SettingsDeckRowProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
   const {
     attributes,
     listeners,
@@ -170,9 +169,6 @@ function SettingsDeckRow({
   //button-role node containing buttons is invalid nested interactive content.
   //the drag listeners are untouched, so drag still works
   const { role, ...dragAttributes } = attributes
-
-  const editHandlers = hapticPointerHandlers(() => onEdit(deck), "ok")
-  const deleteHandlers = hapticPointerHandlers(() => onDelete(deck), "ok")
 
   //the lifted row morphs its top corners once it will land in the top slot — the
   //one real card edge (the New deck button is the group's bottom)
@@ -231,7 +227,7 @@ function SettingsDeckRow({
           onPointerDown={(e) => e.stopPropagation()}
         >
           <IconButton
-            onClick={editHandlers.onClick}
+            onClick={() => onEdit(deck)}
             aria-label={`Edit ${deck.name}`}
             className="size-9 bg-transparent hover:bg-secondary"
           >
@@ -239,7 +235,7 @@ function SettingsDeckRow({
           </IconButton>
           {canDelete && (
             <IconButton
-              onClick={deleteHandlers.onClick}
+              onClick={() => onDelete(deck)}
               aria-label={`Delete ${deck.name}`}
               className="size-9 bg-transparent text-error hover:bg-secondary"
             >

@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 const DEFAULT_HOLD_DURATION_MS = 3000
 
@@ -61,7 +61,7 @@ export function HoldToConfirmButton({
   onHoldActiveChange,
   className,
 }: HoldToConfirmButtonProps) {
-  const { vibrateCancel, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [canvasWidth, setCanvasWidth] = useState(0)
   const [fillPhase, setFillPhase] = useState<FillPhase>("idle")
@@ -109,14 +109,14 @@ export function HoldToConfirmButton({
   }, [resetFillAnimation, setFillPhaseSafe])
 
   const handleReject = useCallback(() => {
-    vibrateCancel()
+    haptic.impact("light")
     onHoldCancel?.()
-  }, [onHoldCancel, vibrateCancel])
+  }, [onHoldCancel, haptic])
 
   const handleLongPressDown = useCallback(() => {
-    vibrateSuccess()
+    haptic.notify("success")
     onConfirm()
-  }, [onConfirm, vibrateSuccess])
+  }, [onConfirm, haptic])
 
   const handleStateChange = useCallback(
     (state: GestureState) => {

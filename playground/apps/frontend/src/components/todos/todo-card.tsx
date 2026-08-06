@@ -8,7 +8,6 @@ import {
   priorityTextClassName,
 } from "@/data/collections/todos/priority"
 import type { Todo } from "@/data/collections/todos/schema"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type TodoCardProps = {
   todo: Todo
@@ -49,7 +48,6 @@ export function TodoCard({
   dragMode = false,
   onSwipeOpenChange,
 }: TodoCardProps) {
-  const { vibrateOk, vibrateSuccess, vibrateCancel } = useAppVibrate()
   const isArchived = variant === "archived"
 
   //tap-to-open through the gesture engine, not a raw onClick — so a press that
@@ -139,11 +137,7 @@ export function TodoCard({
         <Checkbox
           checked={todo.checked}
           disabled={isArchived}
-          onCheckedChange={(checked) => {
-            if (checked) vibrateSuccess()
-            else vibrateOk()
-            onToggleChecked(checked)
-          }}
+          onCheckedChange={onToggleChecked}
           aria-label={
             isArchived
               ? "Archived task"
@@ -195,10 +189,7 @@ export function TodoCard({
       <AppSwipeable.RightActions>
         {!isArchived && (
           <IconButton
-            onClick={() => {
-              vibrateOk()
-              onArchive()
-            }}
+            onClick={onArchive}
             aria-label={`Archive ${todo.title}`}
             className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
@@ -207,10 +198,7 @@ export function TodoCard({
         )}
         {isArchived && (
           <IconButton
-            onClick={() => {
-              vibrateOk()
-              onUnarchive()
-            }}
+            onClick={onUnarchive}
             aria-label={`Unarchive ${todo.title}`}
             className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
@@ -218,10 +206,7 @@ export function TodoCard({
           </IconButton>
         )}
         <IconButton
-          onClick={() => {
-            vibrateCancel()
-            onDelete()
-          }}
+          onClick={onDelete}
           aria-label={`Delete ${todo.title}`}
           className="h-full min-w-20 rounded-none bg-error text-primary-foreground hover:bg-error active:scale-100"
         >

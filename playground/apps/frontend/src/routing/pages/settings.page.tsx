@@ -1,9 +1,5 @@
 import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
-import {
-  useVibrate as useBaseVibrate,
-  useMediaQuery,
-  useTheme,
-} from "@arrzdev/adaptv/hooks"
+import { useMediaQuery, useTheme } from "@arrzdev/adaptv/hooks"
 import { Link, useRouter } from "@tanstack/react-router"
 import {
   ChevronRight,
@@ -27,8 +23,8 @@ import { reorderDecks } from "@/data/collections/decks/mutations"
 import { useDecks } from "@/data/collections/decks/queries"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useSettings } from "@/data/collections/preferences/settings"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useDataMutation } from "@/hooks/use-data-mutation"
+import { useHaptics } from "@/hooks/use-haptics"
 import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
 export const Route = createFileRoute({
@@ -40,8 +36,7 @@ function SettingsPage() {
   //own the edge-swipe-back only when the OS gesture is neutralised (standalone)
   const isStandalone = useMediaQuery("(display-mode: standalone)")
   const { settings, setSettings } = useSettings()
-  const { vibrateOk, hapticPointerHandlers } = useAppVibrate()
-  const { vibrateOk: baseVibrateOk } = useBaseVibrate()
+  const haptic = useHaptics()
   const [resolvedTheme, toggleTheme] = useTheme()
   const { data: decks } = useDecks()
   const [createOpen, setCreateOpen] = useState(false)
@@ -54,18 +49,17 @@ function SettingsPage() {
 
   const canDeleteDeck = decks.length > 1
 
+  //the Switch wrapper fires the selection haptic on toggle (gated by the haptics
+  //preference), so these handlers only carry the state change
   function handleDarkModeChange() {
-    vibrateOk()
     toggleTheme()
   }
 
   function handleAnimationsChange(checked: boolean) {
-    vibrateOk()
     setSettings({ animations: checked })
   }
 
   function handleHapticsChange(checked: boolean) {
-    baseVibrateOk()
     setSettings({ haptics: checked })
   }
 
@@ -75,11 +69,6 @@ function SettingsPage() {
       "Could not reorder decks.",
     )
   }
-
-  const deleteDataHandlers = hapticPointerHandlers(
-    () => setDeleteDataOpen(true),
-    "ok",
-  )
 
   return (
     <PageWithSmoothEdges>
@@ -175,7 +164,10 @@ function SettingsPage() {
 
       <button
         type="button"
-        onClick={deleteDataHandlers.onClick}
+        onClick={() => {
+          haptic.impact("light")
+          setDeleteDataOpen(true)
+        }}
         className="clickable flex w-full items-center gap-x-3 rounded-md bg-surface px-4 py-4 text-start text-error"
       >
         <Trash2
