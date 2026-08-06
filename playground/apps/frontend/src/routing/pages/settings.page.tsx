@@ -1,10 +1,12 @@
-import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
 import {
-  useVibrate as useBaseVibrate,
-  useMediaQuery,
-  useTheme,
-} from "@arrzdev/adaptv/hooks"
-import { Link, useRouter } from "@tanstack/react-router"
+  EdgeSwipeGestures,
+  Link,
+  Pressable,
+  Text,
+  View,
+} from "@arrzdev/adaptv/components"
+import { useMediaQuery, useTheme } from "@arrzdev/adaptv/hooks"
+import { useRouter } from "@tanstack/react-router"
 import {
   ChevronRight,
   FlaskConical,
@@ -27,8 +29,8 @@ import { reorderDecks } from "@/data/collections/decks/mutations"
 import { useDecks } from "@/data/collections/decks/queries"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useSettings } from "@/data/collections/preferences/settings"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useDataMutation } from "@/hooks/use-data-mutation"
+import { useHaptics } from "@/hooks/use-haptics"
 import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
 export const Route = createFileRoute({
@@ -40,8 +42,7 @@ function SettingsPage() {
   //own the edge-swipe-back only when the OS gesture is neutralised (standalone)
   const isStandalone = useMediaQuery("(display-mode: standalone)")
   const { settings, setSettings } = useSettings()
-  const { vibrateOk, hapticPointerHandlers } = useAppVibrate()
-  const { vibrateOk: baseVibrateOk } = useBaseVibrate()
+  const haptic = useHaptics()
   const [resolvedTheme, toggleTheme] = useTheme()
   const { data: decks } = useDecks()
   const [createOpen, setCreateOpen] = useState(false)
@@ -54,18 +55,17 @@ function SettingsPage() {
 
   const canDeleteDeck = decks.length > 1
 
+  //the Switch wrapper fires the selection haptic on toggle (gated by the haptics
+  //preference), so these handlers only carry the state change
   function handleDarkModeChange() {
-    vibrateOk()
     toggleTheme()
   }
 
   function handleAnimationsChange(checked: boolean) {
-    vibrateOk()
     setSettings({ animations: checked })
   }
 
   function handleHapticsChange(checked: boolean) {
-    baseVibrateOk()
     setSettings({ haptics: checked })
   }
 
@@ -75,11 +75,6 @@ function SettingsPage() {
       "Could not reorder decks.",
     )
   }
-
-  const deleteDataHandlers = hapticPointerHandlers(
-    () => setDeleteDataOpen(true),
-    "ok",
-  )
 
   return (
     <PageWithSmoothEdges>
@@ -95,11 +90,15 @@ function SettingsPage() {
 
       <SettingsAccountCard />
 
-      <section className="flex flex-col gap-y-2">
-        <h2 className="ps-1 text-sm font-medium text-subtle">
+      <View className="flex flex-col gap-y-2">
+        <Text
+          // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+          render={<h2 />}
+          className="ps-1 text-sm font-medium text-subtle"
+        >
           Preferences
-        </h2>
-        <ul className="flex flex-col overflow-hidden rounded-md bg-surface">
+        </Text>
+        <View className="flex flex-col overflow-hidden rounded-md bg-surface">
           <SettingsRow
             label="Dark mode"
             icon={Moon}
@@ -120,13 +119,19 @@ function SettingsPage() {
             checked={settings.haptics}
             onCheckedChange={handleHapticsChange}
           />
-        </ul>
-      </section>
+        </View>
+      </View>
 
-      <section className="flex flex-col gap-y-2">
-        <h2 className="ps-1 text-sm font-medium text-subtle">Framework</h2>
-        <ul className="flex flex-col overflow-hidden rounded-md bg-surface">
-          <li>
+      <View className="flex flex-col gap-y-2">
+        <Text
+          // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+          render={<h2 />}
+          className="ps-1 text-sm font-medium text-subtle"
+        >
+          Framework
+        </Text>
+        <View className="flex flex-col overflow-hidden rounded-md bg-surface">
+          <View>
             {/* the manual-testing surface — one page per component, framework
                 behaviour and capability, each stating the expected result on
                 every target so a hand pass produces a verdict rather than
@@ -142,9 +147,9 @@ function SettingsPage() {
                 aria-hidden
                 className="shrink-0 text-subtle"
               />
-              <span className="flex-1 text-base font-medium text-foreground">
+              <Text className="flex-1 text-base font-medium text-foreground">
                 Testing
-              </span>
+              </Text>
               <ChevronRight
                 size={18}
                 strokeWidth={1.75}
@@ -152,16 +157,25 @@ function SettingsPage() {
                 className="shrink-0 text-subtle"
               />
             </Link>
-          </li>
-        </ul>
-      </section>
+          </View>
+        </View>
+      </View>
 
-      <section className="flex flex-col gap-y-2">
-        <h2 className="ps-1 text-sm font-medium text-subtle">Decks</h2>
+      <View className="flex flex-col gap-y-2">
+        <Text
+          // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+          render={<h2 />}
+          className="ps-1 text-sm font-medium text-subtle"
+        >
+          Decks
+        </Text>
         {reorder.error && (
-          <p className="whitespace-pre-line text-sm text-error">
+          <Text
+            render={<p />}
+            className="whitespace-pre-line text-sm text-error"
+          >
             {reorder.error.message}
-          </p>
+          </Text>
         )}
         <SettingsDeckList
           decks={decks}
@@ -171,11 +185,14 @@ function SettingsPage() {
           onEdit={setEditingDeck}
           onDelete={setDeletingDeck}
         />
-      </section>
+      </View>
 
-      <button
-        type="button"
-        onClick={deleteDataHandlers.onClick}
+      <Pressable
+        render={<button type="button" />}
+        onPress={() => {
+          haptic.impact("light")
+          setDeleteDataOpen(true)
+        }}
         className="clickable flex w-full items-center gap-x-3 rounded-md bg-surface px-4 py-4 text-start text-error"
       >
         <Trash2
@@ -184,8 +201,8 @@ function SettingsPage() {
           aria-hidden
           className="shrink-0"
         />
-        <span className="text-base font-medium">Delete data</span>
-      </button>
+        <Text className="text-base font-medium">Delete data</Text>
+      </Pressable>
 
       <CreateDeckDrawer open={createOpen} onOpenChange={setCreateOpen} />
       <EditDeckDrawer

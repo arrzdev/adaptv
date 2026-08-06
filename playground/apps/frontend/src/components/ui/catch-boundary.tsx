@@ -1,4 +1,4 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
 import { AlertCircle, Check, Copy } from "lucide-react"
 import type { ErrorInfo } from "react"
 import { Component, useState } from "react"
@@ -59,21 +59,28 @@ const DefaultErrorComponent = ({
   }
 
   return (
-    <div className="z-1000 flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden bg-background px-safe-offset-6 py-safe-offset-6">
-      <div className="mx-auto flex w-full max-w-sm shrink-0 flex-col gap-4 sm:max-w-md">
-        <div className="flex shrink-0 flex-col items-center gap-3 text-center md:gap-4">
+    <View className="z-1000 flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden bg-background px-safe-offset-6 py-safe-offset-6">
+      <View className="mx-auto flex w-full max-w-sm shrink-0 flex-col gap-4 sm:max-w-md">
+        <View className="flex shrink-0 flex-col items-center gap-3 text-center md:gap-4">
           <AlertCircle className="h-10 w-10 shrink-0 text-muted sm:h-12 sm:w-12 md:h-14 md:w-14" />
-          <h1 className="font-sans text-base font-bold tracking-tight text-foreground sm:text-lg md:text-xl">
+          <Text
+            // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h1 at runtime (cloneElement), which the static check can't see
+            render={<h1 />}
+            className="font-sans text-base font-bold tracking-tight text-foreground sm:text-lg md:text-xl"
+          >
             Something went wrong
-          </h1>
-          <p className="max-w-prose text-sm wrap-break-word text-muted sm:text-[15px]">
+          </Text>
+          <Text
+            render={<p />}
+            className="max-w-prose text-sm wrap-break-word text-muted sm:text-[15px]"
+          >
             {message}
-          </p>
+          </Text>
           <SecondaryButton onClick={reset}>Retry</SecondaryButton>
-        </div>
+        </View>
 
         {showTrace && traceText && (
-          <div className="relative w-full shrink-0">
+          <View className="relative w-full shrink-0">
             {/* the max-height caps the block; ScrollView is what makes the
                 overflow reachable rather than clipped, and it contains the
                 overscroll so a fling at the end of a long stack does not drag
@@ -82,9 +89,12 @@ const DefaultErrorComponent = ({
               data-trace-logs
               className="max-h-[min(36dvh,18rem)] rounded-lg border border-border bg-surface p-3 pr-10 sm:max-h-[min(40dvh,20rem)] sm:p-4 sm:pr-11"
             >
-              <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap wrap-break-word text-muted sm:text-xs">
+              <Text
+                render={<pre />}
+                className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap wrap-break-word text-muted sm:text-xs"
+              >
                 {traceText}
-              </pre>
+              </Text>
             </ScrollView>
             <IconButton
               onClick={handleCopy}
@@ -97,10 +107,10 @@ const DefaultErrorComponent = ({
               )}
               {!copied && <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
             </IconButton>
-          </div>
+          </View>
         )}
-      </div>
-    </div>
+      </View>
+    </View>
   )
 }
 

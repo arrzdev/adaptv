@@ -3,22 +3,17 @@
 //patterns. Exposed as a plain API (not a hook): firing feedback is fire-and-forget
 //— see the hook-vs-API rule in VISION.md.
 //
-//⚠︎ THIS API IS A NO-OP ON iOS WEB, AND THAT IS NOT FIXABLE HERE.
+//⚠︎ iOS WEB: fires the system tick by toggling a hidden native `<input switch>`
+//(see install-vibrate-polyfill.ts) — but ONLY before iOS 26.5. Apple patched
+//programmatic `.click()` in 26.5, so on 26.5+ the call reports success and produces
+//nothing, with no runtime way to detect the patch. That gap is accepted: the only
+//mechanism surviving 26.5 is a REAL finger on the switch — the declarative
+//`attachHapticTick` / `useHapticTick` transducer (#adaptv/capabilities/haptic-tick)
+//that every primitive's `haptic` prop routes through, so `Button haptic="light"`
+//keeps working on 26.5+ while this imperative call does not.
 //
-//iOS Safari has no navigator.vibrate and never will (WebKit's standards position
-//on the Vibration API is formally `oppose`). Its one route to the Taptic Engine is
-//the system tick fired when a `switch`-styled checkbox is toggled BY A REAL FINGER
-//— Apple patched programmatic .click() in iOS 26.5. You cannot synthesise a touch,
-//so no imperative call can reach it.
-//
-//That is a shape mismatch, not a missing feature: the mechanism is inherently
-//declarative. For tap-triggered feedback use `attachHapticTick` /
-//`useHapticTick` (#adaptv/capabilities/haptic-tick), which every adaptv primitive
-//with a `haptic` prop already routes through — so `Button haptic="light"` works on
-//all six targets while `haptics.impact()` silently does nothing on one of them.
-//
-//Use this API for feedback NOT tied to a tap (a completed upload, a countdown).
-//Accept that iOS web won't feel it. @see docs/DECISIONS.md B10
+//Use this API — or the `useHaptics` hook wrapping it — for feedback not necessarily
+//tied to a tap (a completed upload, a countdown). @see docs/DECISIONS.md B10
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
 import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
 import { isNativePlatform } from "#adaptv/utils/platform"

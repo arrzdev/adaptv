@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { useState } from "react"
 import {
   AppDrawer,
@@ -9,8 +10,8 @@ import { formatCount } from "@/components/ui/format-count"
 import { useDecks } from "@/data/collections/decks/queries"
 import { useTodos } from "@/data/collections/todos/queries"
 import { deleteAllData } from "@/data/delete-data.mutations"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useDataMutation } from "@/hooks/use-data-mutation"
+import { useHaptics } from "@/hooks/use-haptics"
 
 type DeleteDataDrawerProps = {
   open: boolean
@@ -23,7 +24,7 @@ export function DeleteDataDrawer({
   open,
   onOpenChange,
 }: DeleteDataDrawerProps) {
-  const { vibrateCancel } = useAppVibrate()
+  const haptic = useHaptics()
   const { data: decks } = useDecks()
   const { data: todos } = useTodos()
   const { run, error, isPending, reset } = useDataMutation()
@@ -53,7 +54,7 @@ export function DeleteDataDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
+            <View className="flex flex-col gap-y-2">
               <AppDrawer.Title>Delete all data?</AppDrawer.Title>
               <AppDrawer.Description>
                 This permanently removes{" "}
@@ -61,7 +62,7 @@ export function DeleteDataDrawer({
                 {formatCount(todos.length, "task", "tasks")} from this
                 device. Your preferences are kept.
               </AppDrawer.Description>
-            </div>
+            </View>
 
             <DrawerActionFooter
               errorMessage={error?.message}
@@ -79,7 +80,7 @@ export function DeleteDataDrawer({
               cancel={
                 <AppDrawer.Close
                   type="button"
-                  onClick={vibrateCancel}
+                  onClick={() => haptic.impact("light")}
                   disabled={isPending}
                   className={drawerCancelClassName}
                 >

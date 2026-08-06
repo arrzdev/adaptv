@@ -4,6 +4,7 @@ import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { forwardRef } from "react"
 import { ButtonSpinner } from "@/components/ui/button-spinner"
+import { useHaptics } from "@/hooks/use-haptics"
 
 export const secondaryButtonClassName = cn(
   "rounded-md ring-1 ring-inset ring-border bg-surface px-4 py-2 text-sm font-medium text-foreground",
@@ -26,15 +27,20 @@ export const SecondaryButton = forwardRef<
   ButtonHandle,
   SecondaryButtonProps
 >(function SecondaryButton(
-  { children, className, disabled, loading = false, ...props },
+  { children, className, disabled, loading = false, onClick, ...props },
   ref,
 ) {
+  const haptic = useHaptics()
   return (
     <BaseButton
       ref={ref}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(secondaryButtonClassName, className)}
+      onClick={(event) => {
+        haptic.impact("light")
+        onClick?.(event)
+      }}
       {...props}
     >
       <BaseButton.Text>{children}</BaseButton.Text>

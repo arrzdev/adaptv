@@ -1,5 +1,9 @@
 import type { WheelItem } from "@arrzdev/adaptv/components"
-import { WHEEL_ITEM_HEIGHT, WheelColumn } from "@arrzdev/adaptv/components"
+import {
+  View,
+  WHEEL_ITEM_HEIGHT,
+  WheelColumn,
+} from "@arrzdev/adaptv/components"
 import { useMemo, useRef } from "react"
 
 const MONTH_LABELS = [
@@ -72,8 +76,8 @@ export function DateWheelPicker({
   }
 
   return (
-    <div className="relative flex items-stretch">
-      <div
+    <View row className="relative flex items-stretch">
+      <View
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-1/2 z-0 -translate-y-1/2 rounded bg-secondary"
         style={{ height: WHEEL_ITEM_HEIGHT }}
@@ -102,6 +106,6 @@ export function DateWheelPicker({
         ariaLabel="Year"
         onChange={(nextYear) => emit(nextYear, month, day)}
       />
-    </div>
+    </View>
   )
 }

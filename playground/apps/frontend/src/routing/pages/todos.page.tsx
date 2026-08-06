@@ -1,3 +1,4 @@
+import { Text } from "@arrzdev/adaptv/components"
 import { useEffect, useMemo, useState } from "react"
 import { DeckTabs } from "@/components/decks/deck-tabs"
 import { PageWithSmoothEdges } from "@/components/page"
@@ -28,9 +29,9 @@ import {
   sortCompleted,
   TODO_SORT_VALUES,
 } from "@/data/collections/todos/sort"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useConfetti } from "@/hooks/use-confetti"
 import { useDataMutation } from "@/hooks/use-data-mutation"
+import { useHaptics } from "@/hooks/use-haptics"
 import { usePersistentState } from "@/hooks/use-persistent-state"
 import { useAppDb } from "@/providers/app-db-provider"
 
@@ -110,11 +111,10 @@ function TodosPage() {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [sortOpen, setSortOpen] = useState(false)
   const { fire: fireConfetti, cancel: cancelConfetti } = useConfetti()
-  const { vibrateOk } = useAppVibrate()
+  const haptic = useHaptics()
   //one shared slot for the fire-and-forget list actions (toggle/delete/reorder);
   //the create/edit drawers own their own mutation state
   const mutation = useDataMutation()
-
   const activeDeckId = useMemo(() => {
     if (!storedDeckId) return null
     const exists = decks.some((deck) => deck.id === storedDeckId)
@@ -211,7 +211,7 @@ function TodosPage() {
 
   function handleOpenTodo(todo: Todo) {
     //light tick when the edit drawer opens from a task tap
-    vibrateOk()
+    haptic.impact("light")
     setEditingTodo(todo)
   }
 
@@ -269,9 +269,11 @@ function TodosPage() {
         />
       )}
       {mutation.error && (
-        <p className="whitespace-pre-line text-sm text-error">
+        <Text
+          render={<p className="whitespace-pre-line text-sm text-error" />}
+        >
           {mutation.error.message}
-        </p>
+        </Text>
       )}
       <TodoList
         sections={sections}

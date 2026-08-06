@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import tryCatch from "@repo/shared/try-catch"
 import { CloudUpload } from "lucide-react"
 import { useState } from "react"
@@ -7,7 +8,6 @@ import { signOut } from "@/data/auth/client"
 import { seedInitialDataIfEmpty } from "@/data/seed"
 import { resetLocalStore } from "@/data/store"
 import { pendingChangeCount, setSyncEnabled } from "@/data/sync/controller"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useAuth } from "@/providers/auth-provider"
 
 //account surface in settings: a single row — identity on the left, a pill action
@@ -18,7 +18,6 @@ import { useAuth } from "@/providers/auth-provider"
 //first, since the wipe would lose them.
 export function SettingsAccountCard() {
   const { user, isAuthenticated, isPending, openLogin } = useAuth()
-  const { vibrateOk } = useAppVibrate()
   const [signingOut, setSigningOut] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [unsyncedCount, setUnsyncedCount] = useState(0)
@@ -54,43 +53,48 @@ export function SettingsAccountCard() {
   }
 
   return (
-    <section
+    <View
       aria-labelledby="settings-account-heading"
       className="rounded-md bg-surface px-4 py-4"
     >
-      <div className="flex items-center gap-x-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-y-0.5">
+      <View row className="flex items-center gap-x-4">
+        <View className="flex min-w-0 flex-1 flex-col gap-y-0.5">
           {isAuthenticated && (
             <>
-              <h2
+              <Text
+                // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+                render={<h2 />}
                 id="settings-account-heading"
                 className="truncate text-lg font-semibold text-foreground"
               >
                 {user?.name || "Signed in"}
-              </h2>
-              <p className="truncate text-sm text-muted">{user?.email}</p>
+              </Text>
+              <Text render={<p />} className="truncate text-sm text-muted">
+                {user?.email}
+              </Text>
             </>
           )}
           {!isAuthenticated && (
             <>
-              <h2
+              <Text
+                // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+                render={<h2 />}
                 id="settings-account-heading"
                 className="text-lg font-semibold text-foreground"
               >
                 Not signed in
-              </h2>
-              <p className="text-sm text-muted">Saved on this device.</p>
+              </Text>
+              <Text render={<p />} className="text-sm text-muted">
+                Saved on this device.
+              </Text>
             </>
           )}
-        </div>
+        </View>
 
         {!isPending && isAuthenticated && (
           <SecondaryButton
             className="shrink-0 rounded-full px-6 py-2.5 text-base font-semibold"
-            onClick={() => {
-              vibrateOk()
-              void handleSignOutClick()
-            }}
+            onClick={() => void handleSignOutClick()}
             loading={signingOut}
           >
             Sign out
@@ -99,23 +103,24 @@ export function SettingsAccountCard() {
         {!isPending && !isAuthenticated && (
           <PrimaryButton
             className="shrink-0 rounded-full px-5 py-2.5 text-base font-semibold"
-            onClick={() => {
-              vibrateOk()
-              openLogin()
-            }}
+            onClick={openLogin}
           >
-            <span className="flex items-center gap-x-2">
+            <Text className="flex items-center gap-x-2">
               <CloudUpload size={18} aria-hidden />
               Sign in
-            </span>
+            </Text>
           </PrimaryButton>
         )}
-      </div>
+      </View>
 
       {signOutError && (
-        <p role="alert" className="mt-3 text-sm text-error">
+        <Text
+          render={<p />}
+          role="alert"
+          className="mt-3 text-sm text-error"
+        >
           {signOutError}
-        </p>
+        </Text>
       )}
 
       <SignOutConfirmDrawer
@@ -127,6 +132,6 @@ export function SettingsAccountCard() {
         isSigningOut={signingOut}
         onConfirm={() => void doSignOut()}
       />
-    </section>
+    </View>
   )
 }

@@ -1,4 +1,7 @@
-import { Swipeable as BaseSwipeable } from "@arrzdev/adaptv/components"
+import {
+  Swipeable as BaseSwipeable,
+  View,
+} from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentProps, ReactNode } from "react"
 
@@ -27,9 +30,9 @@ function AppSwipeableLeftActions({
 }: SwipeableActionsProps) {
   return (
     <BaseSwipeable.LeftActions>
-      <div className={cn("flex h-full items-stretch", className)}>
+      <View row className={cn("flex h-full items-stretch", className)}>
         {children}
-      </div>
+      </View>
     </BaseSwipeable.LeftActions>
   )
 }
@@ -41,9 +44,9 @@ function AppSwipeableRightActions({
 }: SwipeableActionsProps) {
   return (
     <BaseSwipeable.RightActions>
-      <div className={cn("flex h-full items-stretch", className)}>
+      <View row className={cn("flex h-full items-stretch", className)}>
         {children}
-      </div>
+      </View>
     </BaseSwipeable.RightActions>
   )
 }

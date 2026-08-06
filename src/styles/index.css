@@ -34,12 +34,11 @@
 /* 2. Reset rules and platform patches */
 @import "./patches.css";
 
-/* 3. Component-owned styles (drawer keyframes, swipeable layout, Text's Dynamic Type) */
+/* 3. Component-owned styles (drawer keyframes, swipeable layout) */
 @import "./screen.css";
 @import "./scroll-fade.css";
 @import "./drawer.css";
 @import "./swipeable.css";
-@import "./text.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";

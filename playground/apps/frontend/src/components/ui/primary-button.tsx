@@ -4,6 +4,7 @@ import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { Children, forwardRef, isValidElement } from "react"
 import { ButtonSpinner } from "@/components/ui/button-spinner"
+import { useHaptics } from "@/hooks/use-haptics"
 
 const PRIMARY_BUTTON_CLASSNAME = cn(
   "rounded-md border-0 bg-primary px-4 py-2 text-sm font-medium leading-none text-primary-foreground",
@@ -20,6 +21,12 @@ type PrimaryButtonProps = Omit<
 > & {
   children: ReactNode
   loading?: boolean
+  /**
+   * Fire a light tap haptic on press. Default `true`. Set `false` on buttons
+   * that own a richer haptic at the call site (e.g. a submit firing
+   * `notify("success")`) so the two don't double up.
+   */
+  hapticOnPress?: boolean
 }
 
 const BUTTON_COMPOUND_DISPLAY_NAMES = new Set([
@@ -47,15 +54,28 @@ function normalizePrimaryButtonChildren(children: ReactNode): ReactNode {
 
 export const PrimaryButton = forwardRef<ButtonHandle, PrimaryButtonProps>(
   function PrimaryButton(
-    { children, className, disabled, loading = false, ...props },
+    {
+      children,
+      className,
+      disabled,
+      loading = false,
+      hapticOnPress = true,
+      onClick,
+      ...props
+    },
     ref,
   ) {
+    const haptic = useHaptics()
     return (
       <BaseButton
         ref={ref}
         disabled={disabled || loading}
         aria-busy={loading || undefined}
         className={cn(PRIMARY_BUTTON_CLASSNAME, className)}
+        onClick={(event) => {
+          if (hapticOnPress) haptic.impact("light")
+          onClick?.(event)
+        }}
         {...props}
       >
         {normalizePrimaryButtonChildren(children)}

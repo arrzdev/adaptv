@@ -1,3 +1,4 @@
+import { Text } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { Deck } from "@/data/collections/decks/schema"
 
@@ -9,13 +10,16 @@ type TasksTitleProps = {
 }
 
 export function TasksTitle({ as, className, deck }: TasksTitleProps) {
-  const Tag = as
   const isAll = !deck
 
   return (
-    <Tag className={cn(className)}>
+    <Text
+      // biome-ignore lint/a11y/useHeadingContent: when `as` is "h1" the heading text flows through Text's render prop into the h1 at runtime (cloneElement), which the static check can't see
+      render={as === "h1" ? <h1 /> : <span />}
+      className={cn(className)}
+    >
       {isAll && "Your tasks"}
       {!isAll && deck.name}
-    </Tag>
+    </Text>
   )
 }

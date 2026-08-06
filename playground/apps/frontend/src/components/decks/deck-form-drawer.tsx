@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { EmojiSelector } from "@/components/decks/emoji-selector"
 import {
@@ -11,7 +12,7 @@ import {
   DECK_EMOJI_OPTIONS,
   DEFAULT_DECK_EMOJI,
 } from "@/data/collections/decks/constants"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 export type DeckFormInput = {
   name: string
@@ -39,7 +40,7 @@ export function DeckFormDrawer({
   errorMessage,
   onSubmit,
 }: DeckFormDrawerProps) {
-  const { vibrateCancel, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const [value, setValue] = useState(initialValue)
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(
     initialEmoji ?? null,
@@ -71,7 +72,7 @@ export function DeckFormDrawer({
   function handleSubmit() {
     const trimmed = value.trim()
     if (!trimmed || isSubmitting) return
-    vibrateSuccess()
+    haptic.notify("success")
     onSubmit({ name: trimmed, emoji: selectedEmoji ?? undefined })
   }
 
@@ -82,10 +83,10 @@ export function DeckFormDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
-              <span className="ps-1 text-sm font-medium text-subtle">
+            <View className="flex flex-col gap-y-2">
+              <Text className="ps-1 text-sm font-medium text-subtle">
                 Name
-              </span>
+              </Text>
               <TextInput
                 value={value}
                 onChange={setValue}
@@ -96,7 +97,7 @@ export function DeckFormDrawer({
                 autoFocus
                 fieldClassName="py-3.5 leading-none"
               />
-            </div>
+            </View>
             <EmojiSelector
               options={orderedEmojiOptions}
               value={selectedEmoji}
@@ -110,6 +111,7 @@ export function DeckFormDrawer({
                 <PrimaryButton
                   className="w-full py-3.5 text-base font-semibold leading-none"
                   onClick={handleSubmit}
+                  hapticOnPress={false}
                   loading={isSubmitting}
                   disabled={!value.trim()}
                 >
@@ -119,7 +121,7 @@ export function DeckFormDrawer({
               cancel={
                 <AppDrawer.Close
                   type="button"
-                  onClick={vibrateCancel}
+                  onClick={() => haptic.impact("light")}
                   className={drawerCancelClassName}
                 >
                   Cancel

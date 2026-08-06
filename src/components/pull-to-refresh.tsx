@@ -15,6 +15,19 @@ import {
   useRef,
   useState,
 } from "react"
+import type { GestureAxis } from "#adaptv/components/pull-to-refresh-physics"
+import {
+  ACTIVATION_ROTATION_DEG,
+  clamp,
+  getPullVisuals,
+  ICON_SIZE,
+  PULL_MAX,
+  PULL_THRESHOLD,
+  resolveGestureAxis,
+  SPINNER_APPEAR_OFFSET,
+  STUCK_HEIGHT,
+  STUCK_VERTICAL_PADDING,
+} from "#adaptv/components/pull-to-refresh-physics"
 import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { cn } from "#adaptv/utils/cn"
@@ -26,8 +39,6 @@ import tryCatch from "#adaptv/utils/try-catch"
  * ============================================================================= */
 
 type RefreshPhase = "idle" | "pulling" | "refreshing" | "closing"
-
-type GestureAxis = "pending" | "vertical" | "horizontal"
 
 type CloseCause = "release" | "refresh"
 
@@ -124,24 +135,15 @@ export function usePullToRefresh(): PullToRefreshContextValue {
  * sizes use rem only where SVG attributes cannot read CSS variables.
  * ============================================================================= */
 
-const PULL_THRESHOLD = 80
-const PULL_MAX = 160
 const STUCK_MIN_MS = 750
 const SPIN_DURATION = 0.75
-const ICON_SIZE = 20
 /** Fallback when CSS variables are unavailable in SVG attribute context. */
 const ICON_STROKE = 2
-const STUCK_VERTICAL_PADDING = 24
-const STUCK_HEIGHT = ICON_SIZE + 2 * STUCK_VERTICAL_PADDING
-const INDICATOR_DOCK_CENTER_Y = STUCK_HEIGHT / 2
-const INDICATOR_FOLLOW_RATIO = INDICATOR_DOCK_CENTER_Y / PULL_THRESHOLD
-const SPINNER_APPEAR_OFFSET = 16
 const ARC_COMPLETE_RATIO = 0.78
-const ACTIVATION_ROTATION_DEG = 270
-const SPINNER_SCALE_MIN = 0.75
 const SCROLL_TOP_THRESHOLD = 3
-/** Ignore axis until movement exceeds slop so taps and micro-jitter do not lock. */
-const GESTURE_SLOP = 10
+
+// The pull geometry (thresholds, activation curve, indicator projection) lives in
+// pull-to-refresh-physics.ts, pure and unit-tested; this file drives it.
 
 function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (!ref) return
@@ -149,54 +151,8 @@ function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
   else (ref as MutableRefObject<T | null>).current = value
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function resolveGestureAxis(dx: number, dy: number): GestureAxis {
-  const absX = Math.abs(dx)
-  const absY = Math.abs(dy)
-  if (absX < GESTURE_SLOP && absY < GESTURE_SLOP) return "pending"
-  if (absX >= absY) return "horizontal"
-  return "vertical"
-}
-
 function isFromSwipeable(target: EventTarget | null) {
   return isSwipeableGestureTarget(target)
-}
-
-function getActivationProgress(pullDistance: number) {
-  if (pullDistance < SPINNER_APPEAR_OFFSET) return 0
-  return clamp(
-    (pullDistance - SPINNER_APPEAR_OFFSET) /
-      (PULL_THRESHOLD - SPINNER_APPEAR_OFFSET),
-    0,
-    1,
-  )
-}
-
-function getPullVisuals(pullDistance: number) {
-  const contentY = clamp(pullDistance, 0, PULL_MAX)
-  const activationProgress = getActivationProgress(contentY)
-  const pastActivation = contentY >= PULL_THRESHOLD
-  const showSpinner = contentY >= SPINNER_APPEAR_OFFSET
-  const spinnerCenterY = Math.min(
-    contentY * INDICATOR_FOLLOW_RATIO,
-    INDICATOR_DOCK_CENTER_Y,
-  )
-
-  return {
-    contentY,
-    showSpinner,
-    spinnerTop: Math.max(0, spinnerCenterY - ICON_SIZE / 2),
-    opacity: pastActivation ? 1 : activationProgress,
-    arcProgress: pastActivation ? 1 : activationProgress,
-    rotation: pastActivation
-      ? ACTIVATION_ROTATION_DEG
-      : activationProgress * ACTIVATION_ROTATION_DEG,
-    scale:
-      SPINNER_SCALE_MIN + activationProgress * (1 - SPINNER_SCALE_MIN),
-  }
 }
 
 /* =============================================================================

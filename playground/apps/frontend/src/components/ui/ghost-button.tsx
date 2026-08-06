@@ -3,6 +3,7 @@ import { Button as BaseButton } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { forwardRef } from "react"
+import { useHaptics } from "@/hooks/use-haptics"
 
 const GHOST_BUTTON_CLASSNAME = cn(
   "rounded-full border-0 bg-transparent px-4 py-2 text-sm font-medium text-muted",
@@ -20,11 +21,16 @@ type GhostButtonProps = Omit<
 }
 
 export const GhostButton = forwardRef<ButtonHandle, GhostButtonProps>(
-  function GhostButton({ children, className, ...props }, ref) {
+  function GhostButton({ children, className, onClick, ...props }, ref) {
+    const haptic = useHaptics()
     return (
       <BaseButton
         ref={ref}
         className={cn(GHOST_BUTTON_CLASSNAME, className)}
+        onClick={(event) => {
+          haptic.impact("light")
+          onClick?.(event)
+        }}
         {...props}
       >
         <BaseButton.Text>{children}</BaseButton.Text>

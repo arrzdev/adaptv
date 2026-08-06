@@ -1,11 +1,10 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import {
   DECK_EMOJI_OPTIONS,
   DEFAULT_DECK_EMOJI,
 } from "@/data/collections/decks/constants"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type EmojiSelectorProps = {
   value: string | null
@@ -18,24 +17,19 @@ export function EmojiSelector({
   onChange,
   options = DECK_EMOJI_OPTIONS,
 }: EmojiSelectorProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
   const selectedEmoji = value ?? DEFAULT_DECK_EMOJI
 
   return (
-    <div className="flex flex-col gap-y-2">
-      <span className="ps-1 text-sm font-medium text-subtle">Emoji</span>
+    <View className="flex flex-col gap-y-2">
+      <Text className="ps-1 text-sm font-medium text-subtle">Emoji</Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6 py-1">
         {options.map((emoji) => {
           const isSelected = selectedEmoji === emoji
-          const emojiHandlers = hapticPointerHandlers(
-            () => onChange(emoji),
-            "ok",
-          )
           return (
             <GhostButton
               key={emoji}
-              onClick={emojiHandlers.onClick}
+              onClick={() => onChange(emoji)}
               className={cn(
                 "size-11 shrink-0 px-0 text-xl leading-none",
                 isSelected &&
@@ -49,6 +43,6 @@ export function EmojiSelector({
           )
         })}
       </ScrollView>
-    </div>
+    </View>
   )
 }

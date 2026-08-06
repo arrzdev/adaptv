@@ -5,6 +5,7 @@ import {
 } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { forwardRef } from "react"
+import { useHaptics } from "@/hooks/use-haptics"
 
 function SwitchThumb() {
   const { isDisabled } = useSwitch()
@@ -21,7 +22,8 @@ function SwitchThumb() {
 SwitchThumb.displayName = "Switch.Thumb"
 
 export const Switch = forwardRef<SwitchHandle, SwitchProps>(
-  function Switch({ checked, className, ...props }, ref) {
+  function Switch({ checked, className, onCheckedChange, ...props }, ref) {
+    const haptic = useHaptics()
     return (
       <BaseSwitch
         ref={ref}
@@ -31,6 +33,10 @@ export const Switch = forwardRef<SwitchHandle, SwitchProps>(
           checked && "bg-primary",
           className,
         )}
+        onCheckedChange={(next) => {
+          haptic.selection()
+          onCheckedChange?.(next)
+        }}
         {...props}
       >
         <SwitchThumb />

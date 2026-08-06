@@ -1,4 +1,4 @@
-import { useGestureEngine } from "@arrzdev/adaptv/hooks"
+import { Pressable, Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { Archive, ArchiveRestore, Clock, Flag, Trash2 } from "lucide-react"
 import { AppSwipeable, Checkbox, IconButton } from "@/components/ui"
@@ -8,7 +8,6 @@ import {
   priorityTextClassName,
 } from "@/data/collections/todos/priority"
 import type { Todo } from "@/data/collections/todos/schema"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type TodoCardProps = {
   todo: Todo
@@ -49,15 +48,7 @@ export function TodoCard({
   dragMode = false,
   onSwipeOpenChange,
 }: TodoCardProps) {
-  const { vibrateOk, vibrateSuccess, vibrateCancel } = useAppVibrate()
   const isArchived = variant === "archived"
-
-  //tap-to-open through the gesture engine, not a raw onClick — so a press that
-  //drags off the card (a scroll or stray move) won't open it on release, and the
-  //tap still works via keyboard. a horizontal swipe never opens the card: the
-  //parent Swipeable claims the pointer on lock and vetoes this tap via
-  //lostpointercapture. (reorder/dragMode taps are the row's job.)
-  const tapHandlers = useGestureEngine({ onPressUp: onOpen })
 
   const dueAt = todo.dueAt
   const hasPriority = todo.priority !== undefined
@@ -75,19 +66,26 @@ export function TodoCard({
   const bodyClassName = "flex min-w-0 flex-1 flex-col gap-y-1.5 text-left"
   const body = (
     <>
-      <p
-        className={cn(
-          "line-clamp-2 [overflow-wrap:anywhere] text-base font-medium leading-snug text-foreground",
-          todo.checked && "text-muted line-through",
-        )}
+      <Text
+        render={
+          <p
+            className={cn(
+              "line-clamp-2 [overflow-wrap:anywhere] text-base font-medium leading-snug text-foreground",
+              todo.checked && "text-muted line-through",
+            )}
+          />
+        }
       >
         {todo.title}
-      </p>
+      </Text>
       {/* meta: due leads, then priority — archived tasks show priority only */}
       {showMeta && (
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+        <View
+          row
+          className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs"
+        >
           {showDue && (
-            <span
+            <Text
               className={cn(
                 "inline-flex items-center gap-x-1",
                 tone === "default" && "text-muted",
@@ -97,15 +95,15 @@ export function TodoCard({
             >
               <Clock aria-hidden className="size-3" />
               {dueLabel}
-            </span>
+            </Text>
           )}
           {showDue && showPriority && (
-            <span aria-hidden className="text-muted">
+            <Text aria-hidden className="text-muted">
               ·
-            </span>
+            </Text>
           )}
           {showPriority && (
-            <span
+            <Text
               className={cn(
                 "inline-flex items-center gap-x-1 font-medium",
                 priorityTextClassName(todo.priority),
@@ -113,15 +111,16 @@ export function TodoCard({
             >
               <Flag aria-hidden className="size-3" />
               {priorityLabel(todo.priority)}
-            </span>
+            </Text>
           )}
-        </div>
+        </View>
       )}
     </>
   )
 
   const card = (
-    <article
+    <View
+      row
       className={cn(
         "flex min-h-full w-full gap-x-3 bg-surface px-4 py-3.5",
         showMeta ? "items-start" : "items-center",
@@ -130,7 +129,7 @@ export function TodoCard({
     >
       {/* in drag mode, keep a checkbox tap from arming the row's reorder
           gesture so the box still toggles without starting a drag */}
-      <div
+      <View
         className={cn(showMeta && "pt-0.5")}
         onPointerDown={dragMode ? (e) => e.stopPropagation() : undefined}
       >
@@ -139,11 +138,7 @@ export function TodoCard({
         <Checkbox
           checked={todo.checked}
           disabled={isArchived}
-          onCheckedChange={(checked) => {
-            if (checked) vibrateSuccess()
-            else vibrateOk()
-            onToggleChecked(checked)
-          }}
+          onCheckedChange={onToggleChecked}
           aria-label={
             isArchived
               ? "Archived task"
@@ -152,30 +147,45 @@ export function TodoCard({
                 : "Mark complete"
           }
         />
-      </div>
+      </View>
       {/* archived todos are read-only — the body is inert, no tap-to-open */}
-      {isArchived && <div className={bodyClassName}>{body}</div>}
+      {isArchived && <View className={bodyClassName}>{body}</View>}
       {/* drag mode: a real button so tap-to-open stays keyboard-accessible while
-          the dnd-kit drag listeners on the row own the long-press */}
+          the dnd-kit drag listeners on the row own the long-press. onPress (not a
+          raw onClick) — the row's time-based click guard still swallows the
+          trailing tap after a drop */}
       {!isArchived && dragMode && (
-        <button
-          type="button"
-          onClick={onOpen}
-          className={cn("clickable", bodyClassName)}
+        <Pressable
+          render={
+            <button
+              type="button"
+              className={cn("clickable", bodyClassName)}
+            />
+          }
+          onPress={onOpen}
         >
           {body}
-        </button>
+        </Pressable>
       )}
+      {/* tap-to-open through the press engine, not a raw onClick — so a press that
+          drags off the card (a scroll or stray move) won't open it on release, and
+          the tap still works via keyboard. a horizontal swipe never opens the card:
+          the parent Swipeable claims the pointer on lock and vetoes this tap via
+          lostpointercapture. */}
       {!isArchived && !dragMode && (
-        <button
-          type="button"
-          {...tapHandlers}
-          className={cn("clickable", bodyClassName)}
+        <Pressable
+          render={
+            <button
+              type="button"
+              className={cn("clickable", bodyClassName)}
+            />
+          }
+          onPress={onOpen}
         >
           {body}
-        </button>
+        </Pressable>
       )}
-    </article>
+    </View>
   )
 
   // both sort views render the swipe engine for delete. in drag mode the row's
@@ -195,10 +205,7 @@ export function TodoCard({
       <AppSwipeable.RightActions>
         {!isArchived && (
           <IconButton
-            onClick={() => {
-              vibrateOk()
-              onArchive()
-            }}
+            onClick={onArchive}
             aria-label={`Archive ${todo.title}`}
             className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
@@ -207,10 +214,7 @@ export function TodoCard({
         )}
         {isArchived && (
           <IconButton
-            onClick={() => {
-              vibrateOk()
-              onUnarchive()
-            }}
+            onClick={onUnarchive}
             aria-label={`Unarchive ${todo.title}`}
             className="h-full min-w-20 rounded-none bg-success text-primary-foreground hover:bg-success active:scale-100"
           >
@@ -218,10 +222,7 @@ export function TodoCard({
           </IconButton>
         )}
         <IconButton
-          onClick={() => {
-            vibrateCancel()
-            onDelete()
-          }}
+          onClick={onDelete}
           aria-label={`Delete ${todo.title}`}
           className="h-full min-w-20 rounded-none bg-error text-primary-foreground hover:bg-error active:scale-100"
         >
