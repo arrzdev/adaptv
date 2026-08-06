@@ -1,0 +1,57 @@
+diff --git a/dist/esm/constants.js b/dist/esm/constants.js
+index 9c4d300..1b28287 100644
+--- a/dist/esm/constants.js
++++ b/dist/esm/constants.js
+@@ -4,13 +4,22 @@ var START_ENVIRONMENT_NAMES = {
+ 	client: "client"
+ };
+ var VITE_ENVIRONMENT_NAMES = START_ENVIRONMENT_NAMES;
++//adaptv: the consumer's app should never see @tanstack/* identifiers — not in
++//imports, not in generated files, and not in the script tags of the served HTML.
++//These ids are emitted into the document, so they are renamed at the source.
+ var ENTRY_POINTS = {
+-	client: "virtual:tanstack-start-client-entry",
+-	server: "virtual:tanstack-start-server-entry",
++	client: "virtual:adaptv/client-entry",
++	server: "virtual:adaptv/server-entry",
++	//NOT renamed: these are package subpath imports declared in
++	//@tanstack/start-server-core's own package.json "imports" map, so renaming
++	//them here breaks resolution ("Missing specifier"). They are also internal —
++	//unlike the virtual: ids above, they never appear in the served HTML.
+ 	start: "#tanstack-start-entry",
+ 	router: "#tanstack-router-entry"
+ };
+-var DEV_CLIENT_ENTRY = "virtual:tanstack-start-dev-client-entry";
++//adaptv: the dev-mode client entry is emitted into the served HTML too, so it is
++//renamed for the same reason as ENTRY_POINTS.client/server above.
++var DEV_CLIENT_ENTRY = "virtual:adaptv/dev-client-entry";
+ var SERVER_FN_LOOKUP = "server-fn-module-lookup";
+ var TRANSFORM_ID_REGEX = [/\.[cm]?[tj]sx?($|\?)/];
+ //#endregion
+diff --git a/dist/esm/start-router-plugin/route-tree-footer.js b/dist/esm/start-router-plugin/route-tree-footer.js
+index c1d4a16..9964ae4 100644
+--- a/dist/esm/start-router-plugin/route-tree-footer.js
++++ b/dist/esm/start-router-plugin/route-tree-footer.js
+@@ -1,5 +1,11 @@
+ import path from "pathe";
+ //#region src/start-router-plugin/route-tree-footer.ts
++//adaptv: allow the Start register-declaration specifier to be overridden so the
++//generated route tree points at the framework barrel instead of @tanstack/*.
++//Set by @arrzdev/adaptv's vite plugin. Absent => upstream behaviour, unchanged.
++function adaptvStartPkg(framework) {
++	return (typeof process !== "undefined" && process.env && process.env.ADAPTV_START_PKG) || `@tanstack/${framework}-start`;
++}
+ function buildRouteTreeFileFooter(opts) {
+ 	function getImportPath(absolutePath) {
+ 		let relativePath = path.relative(path.dirname(opts.generatedRouteTreePath), absolutePath);
+@@ -17,8 +23,8 @@ function buildRouteTreeFileFooter(opts) {
+ 	const footer = [];
+ 	appendFooterBlock(footer, `import type { getRouter } from '${getImportPath(opts.routerFilePath)}'`);
+ 	if (opts.startFilePath) appendFooterBlock(footer, `import type { startInstance } from '${getImportPath(opts.startFilePath)}'`);
+-	else appendFooterBlock(footer, `import type { createStart } from '@tanstack/${opts.framework}-start'`);
+-	appendFooterBlock(footer, `declare module '@tanstack/${opts.framework}-start' {
++	else appendFooterBlock(footer, `import type { createStart } from '${adaptvStartPkg(opts.framework)}'`);
++	appendFooterBlock(footer, `declare module '${adaptvStartPkg(opts.framework)}' {
+   interface Register {
+     ssr: true
+     router: Awaited<ReturnType<typeof getRouter>>`);

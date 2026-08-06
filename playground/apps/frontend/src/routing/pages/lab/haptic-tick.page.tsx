@@ -5,6 +5,7 @@ import {
 } from "@arrzdev/adaptv/capabilities"
 import { Button } from "@arrzdev/adaptv/components"
 import { useHapticTick } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
@@ -18,7 +19,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/haptic-tick")({
   component: LabHapticTickPage,
 })
 

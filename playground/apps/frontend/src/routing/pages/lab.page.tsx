@@ -1,11 +1,12 @@
-import { Link } from "@tanstack/react-router"
+import { Link } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { ChevronRight } from "lucide-react"
 import type { LabGroup } from "@/components/lab/lab-index"
 import { LAB_GROUPS } from "@/components/lab/lab-index"
 import { LabBadge } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab")({
   component: LabIndexPage,
 })
 

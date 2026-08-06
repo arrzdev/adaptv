@@ -38,15 +38,19 @@ export type PatchStatus = {
  * one that was patched.
  */
 export function checkPatches(sources: {
-  /** Contents of `start-plugin-core/dist/esm/schema.js`. */
-  startSchema?: string
+  /** Contents of `start-plugin-core/dist/esm/start-router-plugin/route-tree-footer.js`. */
+  startFooter?: string
   /** Contents of `router-generator/dist/esm/template.js`. */
   generatorTemplate?: string
 }): PatchStatus {
   const missing: string[] = []
 
-  //patched => `verboseFileRoutes` no longer appears in the `.omit()` list
-  if (sources.startSchema?.includes("verboseFileRoutes: true")) {
+  //patched => the generated route tree's `declare module` reads adaptv's Start
+  //barrel via the env override, instead of hardcoding `@tanstack/*-start`
+  if (
+    sources.startFooter !== undefined &&
+    !sources.startFooter.includes("ADAPTV_START_PKG")
+  ) {
     missing.push("@tanstack/start-plugin-core")
   }
 

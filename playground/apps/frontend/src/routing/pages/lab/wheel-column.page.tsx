@@ -1,11 +1,12 @@
 import type { WheelItem } from "@arrzdev/adaptv/components"
 import { WHEEL_ITEM_HEIGHT, WheelColumn } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useMemo, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabRow, LabSection } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/wheel-column")({
   component: LabWheelColumnPage,
 })
 

@@ -1,4 +1,5 @@
 import { Button } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { Check, Loader2, Search } from "lucide-react"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -13,7 +14,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/button")({
   component: LabButtonPage,
 })
 

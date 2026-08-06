@@ -1,10 +1,11 @@
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { LabButton, LabSection } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 import { AppDrawer } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/drawer-keyboard")({
   component: LabDrawerKeyboardPage,
 })
 

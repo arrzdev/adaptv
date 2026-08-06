@@ -1,5 +1,6 @@
 import type { DropdownPlacement } from "@arrzdev/adaptv/components"
 import { Dropdown } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -11,7 +12,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/dropdown")({
   component: LabDropdownPage,
 })
 

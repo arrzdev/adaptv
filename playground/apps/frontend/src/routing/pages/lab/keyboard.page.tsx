@@ -6,6 +6,7 @@ import {
   useKeyboard,
   willOpenVirtualKeyboard,
 } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
@@ -18,7 +19,7 @@ import {
 import { LabPage } from "@/components/lab/lab-page"
 import { TextInput } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/keyboard")({
   component: LabKeyboardPage,
 })
 

@@ -1,6 +1,6 @@
 # CI deploy after build: wrangler deploy --config dist/server/wrangler.json
 name = "chopchop-frontend"
-main = "@tanstack/react-start/server-entry"
+main = "@arrzdev/adaptv/server-entry"
 compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat"]
 upload_source_maps = false

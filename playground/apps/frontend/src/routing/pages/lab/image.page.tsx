@@ -3,6 +3,7 @@ import type {
   ImageFit,
 } from "@arrzdev/adaptv/components"
 import { Image } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import type { ReactNode } from "react"
 import { useLayoutEffect, useRef, useState } from "react"
 import labPhoto from "@/assets/lab-photo.jpg?adaptv-image"
@@ -19,7 +20,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/image")({
   component: LabImagePage,
 })
 

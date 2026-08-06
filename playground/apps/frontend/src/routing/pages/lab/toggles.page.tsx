@@ -1,3 +1,4 @@
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -13,7 +14,7 @@ import {
 import { LabPage } from "@/components/lab/lab-page"
 import { Checkbox, Switch } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/toggles")({
   component: LabTogglesPage,
 })
 

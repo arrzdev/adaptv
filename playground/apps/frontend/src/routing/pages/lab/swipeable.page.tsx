@@ -1,3 +1,4 @@
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { Archive, Trash2 } from "lucide-react"
 import { useState } from "react"
 import labPhotoUrl from "@/assets/lab-photo.jpg?url"
@@ -15,7 +16,7 @@ import {
 import { LabPage } from "@/components/lab/lab-page"
 import { AppSwipeable, IconButton } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/swipeable")({
   component: LabSwipeablePage,
 })
 

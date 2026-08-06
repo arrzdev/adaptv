@@ -1,57 +1,48 @@
 /**
- * Replacing TanStack's route-autoimport plugin. → `DECISIONS.md §3.2`
+ * In-memory safety net for the route-factory import. → `DECISIONS.md §3.2`
  *
- * ## The problem, reproduced rather than reasoned about
+ * ## How TanStack opacity works now
  *
- * A route file is supposed to read:
+ * `@tanstack/router-generator` maintains the `createFileRoute` import in route
+ * files itself — it parses each route, normalises the call to
+ * `createFileRoute("/path")({ … })`, and writes the matching import back to disk.
+ * Newer versions removed the `verboseFileRoutes` escape hatch AND the standalone
+ * `tanstack-router:autoimport` plugin adaptv used to fight, folding both into the
+ * generator.
+ *
+ * adaptv keeps that write opaque with a one-line patch on the generator's
+ * `targetModule` (`transform.js`): it reads `ADAPTV_ROUTER_PKG` (set by the vite
+ * plugin) so the import the generator writes points at `@arrzdev/adaptv/router`,
+ * never `@tanstack/*`. So a route file ends up as:
  *
  * ```ts
  * import { createFileRoute } from "@arrzdev/adaptv/router"
  * export const Route = createFileRoute("/settings")({ … })
  * ```
  *
- * Switching a real route file to that import and building produces a **parse
- * error**, and the file on disk ends up with two imports:
+ * with zero `@tanstack/*` in the consumer's source — and the import merges into an
+ * existing `@arrzdev/adaptv/router` import if the file already has one.
  *
- * ```ts
- * import { createFileRoute } from "@tanstack/react-router"   // ← added by TanStack
- * import { createFileRoute } from "@arrzdev/adaptv/router"    // ← what we wrote
- * ```
+ * ## What this plugin is for
  *
- * The cause is `tanstack-router:autoimport` (in `@tanstack/router-plugin`). It
- * transforms any file whose code matches `createFileRoute(`, checks whether that
- * identifier was imported **from the literal specifier `@tanstack/<target>-router`**,
- * and if not, prepends the import itself. An import from anywhere else is
- * invisible to it, so it always fires — producing a duplicate binding.
- *
- * So the barrier to TanStack opacity is not that the generator fails to *find*
- * the route. It is that this plugin actively rewrites the import back.
- *
- * ## The two-part fix
- *
- * Swapping the plugin alone is not enough — there are **two** writers of that
- * import, and they have to be handled together.
- *
- * **1. `verboseFileRoutes: false` disarms the generator.** Read from
- * `@tanstack/router-generator/dist/esm/transform/transform.js`: the generator
- * maintains route-file imports via a `{ required, banned }` policy, and the
- * `verboseFileRoutes === false` branch **bans** `createFileRoute` /
- * `createLazyFileRoute` from `@tanstack/<target>-router` and requires nothing. So
- * instead of fighting the generator, adaptv asks it to strip the import — leaving
- * route files on disk with **no router import at all**, which is exactly the goal:
- * the consumer's source contains zero `@tanstack/*`.
- *
- * **2. This plugin supplies the binding at build time**, from adaptv's specifier.
+ * A **race guard**, not the primary mechanism. In dev a freshly-created route file
+ * can be transformed and served before the generator has written its import — so
+ * `createFileRoute` would be an undefined binding for one beat. This supplies the
+ * barrel binding in-memory to cover that window; once the generator writes the
+ * import to disk, `importsRouteFactory` sees it and this plugin no-ops.
  *
  * ## The gate that makes it safe
  *
- * The replacement MUST gate on `globalThis.TSR_ROUTES_BY_ID_MAP`, populated by the
- * generator to identify *real* route files — exactly as upstream does. Without it
- * the transform also fires on the virtual modules the code-splitter produces
- * (`tanstack-router:code-splitter:compile-virtual-file`), where the import has
- * already been stripped, and re-adds one that then collides:
- * `Identifier 'createFileRoute' has already been declared`, in files that were
- * correct on disk. Measured, not theorised.
+ * It MUST gate on `globalThis.TSR_ROUTES_BY_ID_MAP`, populated by the generator to
+ * identify *real* route files. Without it the transform also fires on the virtual
+ * modules the code-splitter produces
+ * (`tanstack-router:code-splitter:compile-virtual-file`) and can re-add an import
+ * that collides: `Identifier 'createFileRoute' has already been declared`, in files
+ * that were correct on disk. Measured, not theorised.
+ *
+ * `stripTanStackAutoImport` below is now defensive: the upstream
+ * `tanstack-router:autoimport` plugin it removes no longer exists, so the filter is
+ * a no-op unless a future TanStack release re-introduces it.
  */
 import type { Plugin, PluginOption } from "vite"
 
