@@ -1,5 +1,6 @@
 import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
 import { useMediaQuery } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { isNativePlatform } from "@arrzdev/adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -16,7 +17,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/edge-swipe")({
   component: LabEdgeSwipePage,
 })
 

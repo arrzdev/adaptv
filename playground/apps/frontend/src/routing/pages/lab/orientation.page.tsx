@@ -1,5 +1,6 @@
 import type { ScreenOrientationLock } from "@arrzdev/adaptv/capabilities"
 import { useOrientation } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
   LabActions,
@@ -12,7 +13,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/orientation")({
   component: LabOrientationPage,
 })
 

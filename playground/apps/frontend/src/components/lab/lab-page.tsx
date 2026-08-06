@@ -1,11 +1,11 @@
 import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
 import { useMediaQuery } from "@arrzdev/adaptv/hooks"
+import { useRouter } from "@arrzdev/adaptv/router"
 import {
   getOS,
   isNativePlatform,
   isStandaloneDisplay,
 } from "@arrzdev/adaptv/utils"
-import { useRouter } from "@tanstack/react-router"
 import { ChevronLeft } from "lucide-react"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
