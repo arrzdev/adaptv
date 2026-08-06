@@ -16,6 +16,7 @@ import {
   useState,
 } from "react"
 import { createPortal } from "react-dom"
+import { hasNativeKeyboard } from "#adaptv/capabilities/keyboard"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import {
   DEFAULT_DRAWER_TRANSITION,
@@ -25,12 +26,18 @@ import {
   resolveDrawerDragRelease,
 } from "#adaptv/components/drawer/drawer-constants"
 import {
+  startDrawerFpsSample,
+  stopDrawerFpsSample,
+} from "#adaptv/components/drawer/drawer-fps"
+import {
   clearDrawerKeyboardRoom,
   measureDrawerContentNaturalHeight,
   readDrawerKeyboardRoom,
   resolveDrawerKeyboardRoom,
+  resolveShrunkViewportCap,
   shouldPrimeKeyboardFloor,
   useDrawerKeyboardAvoidance,
+  viewportShrinksUnderKeyboard,
   writeDrawerKeyboardRoom,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import {
@@ -46,9 +53,13 @@ import {
   GesturePriority,
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
-import { dismissVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
+import {
+  dismissVirtualKeyboard,
+  getVirtualKeyboardApi,
+} from "#adaptv/hooks/use-keyboard"
 import { clamp } from "#adaptv/utils/clamp"
 import { cn } from "#adaptv/utils/cn"
+import { isIOS } from "#adaptv/utils/platform"
 
 //Unmount as soon as the close settles (the snappy close ends with the panel off-screen, so
 //there's no last frame to wait for). Keeping the panel mounted past that left the overlay
@@ -328,6 +339,9 @@ export function DrawerEngine({
   //back while nothing of ours was overriding it (see the keyboard-room effect)
   const appliedRoomRef = useRef(0)
   const cssCapRef = useRef(Number.POSITIVE_INFINITY)
+  //true while the box is capped to the visible viewport on the unfrozen web path (non-secure
+  //Chromium), where the keyboard shrinks the viewport itself — see the keyboard-room effect
+  const visibleCapAppliedRef = useRef(false)
   //the content's own height as of the last time the room target was resolved — the baseline a
   //content-size change is detected against (see reaimKeyboardRoom)
   const lastNaturalRef = useRef(0)
@@ -363,15 +377,18 @@ export function DrawerEngine({
 
   //track the in-flight panel animation window so parts (the edge-fade mask) can defer
   //repaint-triggering work off the animation and flush once on settle
-  const beginPanelAnimation = useCallback(() => {
+  const beginPanelAnimation = useCallback((label = "drawer") => {
     panelAnimationRunRef.current++
     isPanelAnimatingRef.current = true
+    //dev-only, off by default — records this animation's frame cadence (see drawer-fps.ts)
+    startDrawerFpsSample(label)
     return panelAnimationRunRef.current
   }, [])
 
   const endPanelAnimation = useCallback((runId: number) => {
     if (panelAnimationRunRef.current !== runId) return
     isPanelAnimatingRef.current = false
+    stopDrawerFpsSample()
     for (const listener of panelSettleListenersRef.current) listener()
   }, [])
 
@@ -488,7 +505,7 @@ export function DrawerEngine({
   const snapOpenForKeyboard = useCallback(async () => {
     if (y.get() <= 1) return
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("keyboard-snap")
     await animateDrawerY(y, panelRef.current, 0, DEFAULT_DRAWER_TRANSITION)
     endPanelAnimation(runId)
   }, [y, beginPanelAnimation, endPanelAnimation])
@@ -873,10 +890,82 @@ export function DrawerEngine({
       if (isClosingRef.current) return
       if (content) clearDrawerKeyboardRoom(content)
       appliedRoomRef.current = 0
+      visibleCapAppliedRef.current = false
       return
     }
 
     if (!content) return
+
+    // ── Unfrozen web keyboard path ──────────────────────────────────────────────────────────
+    // Non-secure Chromium (no VirtualKeyboard API, not iOS, not native): `useFreezeViewport` could
+    // NOT stop the keyboard resizing the VISUAL viewport, so it shrinks by the keyboard's own
+    // height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
+    // shrink double-counts, growing the box by the keyboard's height a second time until its top
+    // climbs off-screen behind the URL bar (the plain-http `ip:port` over-grow). Hold no room; cap
+    // the box at the visible viewport (taller content scrolls inside). The frozen paths — iOS
+    // scroll-lock, secure-Chromium `overlaysContent`, native `KeyboardResize.None` — keep the
+    // viewport whole and fall through to the room mechanism below, untouched.
+    if (
+      viewportShrinksUnderKeyboard({
+        isIOS: isIOS(),
+        hasNativeKeyboard: hasNativeKeyboard(),
+        hasVirtualKeyboardApi: getVirtualKeyboardApi() !== null,
+      })
+    ) {
+      // Read the stylesheet cap only while nothing of ours overrides it, same as the room path.
+      if (!content.style.maxHeight) {
+        const parsed = Number.parseFloat(
+          getComputedStyle(content).maxHeight,
+        )
+        cssCapRef.current = Number.isFinite(parsed)
+          ? parsed
+          : Number.POSITIVE_INFINITY
+      }
+      const cap = resolveShrunkViewportCap(
+        keyboard.isOpen && keyboard.height > 0,
+        measureExcessHeight(),
+        cssCapRef.current,
+      )
+      if (cap === null && !visibleCapAppliedRef.current) return
+
+      const boxBefore = content.getBoundingClientRect().height
+      if (cap === null) {
+        clearDrawerKeyboardRoom(content)
+        visibleCapAppliedRef.current = false
+      } else {
+        //no room, no floor — the shrunk viewport already excludes the keyboard, so the box just caps
+        writeDrawerKeyboardRoom(
+          content,
+          { room: 0, maxHeight: cap, minHeight: null },
+          DRAWER_NO_TRANSITION,
+        )
+        visibleCapAppliedRef.current = true
+      }
+      void content.offsetHeight
+
+      // The cap only moves the box for content taller than the viewport; when it does, carry it on
+      // a composited FLIP like every other height change here (never while a finger owns the drag).
+      const panelEl = panelRef.current
+      const moved = content.getBoundingClientRect().height - boxBefore
+      if (
+        Math.abs(moved) > 0.5 &&
+        panelEl &&
+        !isPointerDraggingRef.current
+      ) {
+        clearDrawerPanelTransition(panelEl)
+        keyboardFlip.set(moved)
+        void content.offsetHeight
+        applyDrawerPanelTransition(
+          panelEl,
+          cap === null
+            ? DRAWER_SHRINK_TRANSITION
+            : DEFAULT_DRAWER_TRANSITION,
+          true,
+        )
+        keyboardFlip.set(0)
+      }
+      return
+    }
 
     // The LIVE reported height — nothing cached, seeded or guessed. `useKeyboard` only commits
     // stable heights, so iOS's transient mid-field-switch geometry never reaches here.
@@ -1018,7 +1107,7 @@ export function DrawerEngine({
       keyboardFlip.set(0)
     }
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("keyboard")
     let cancelled = false
     const settleTimer = setTimeout(
       () => {
@@ -1110,7 +1199,7 @@ export function DrawerEngine({
           y.set(resumeFrom)
         }
 
-        const runId = beginPanelAnimation()
+        const runId = beginPanelAnimation("open")
 
         function startOpenMotion(startFromPaintedState: boolean) {
           if (cancelled) return
@@ -1176,7 +1265,7 @@ export function DrawerEngine({
 
       isClosingRef.current = true
       closeTargetRef.current = Number.NaN
-      beginPanelAnimation()
+      beginPanelAnimation("close")
       void transitionDrawerBackdropOpacity(
         backdropRef.current,
         0,
@@ -1247,7 +1336,7 @@ export function DrawerEngine({
       y.set(Math.max(0, dragOffsetY))
 
       //the run ends in handleExitComplete once the close effect confirms the settled position
-      beginPanelAnimation()
+      beginPanelAnimation("drag-close")
       void animateToClosed(dragVelocity).then(() => {
         isGestureClosingRef.current = false
         syncBackdropGestureAttributes()
@@ -1274,7 +1363,7 @@ export function DrawerEngine({
       )
     }
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("snap-open")
     void Promise.resolve(
       animateDrawerY(y, panelRef.current, 0, DEFAULT_DRAWER_TRANSITION),
     ).finally(() => endPanelAnimation(runId))
