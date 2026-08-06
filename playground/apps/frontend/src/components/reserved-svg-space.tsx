@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { CSSProperties, ReactNode } from "react"
 
@@ -21,10 +22,10 @@ export function ReservedSvgSpace({
   const reserveStyle: CSSProperties = { aspectRatio }
 
   return (
-    <div className={cn("shrink-0", className)} style={reserveStyle}>
-      <div className="size-full [&_img]:size-full [&_img]:object-contain [&_svg]:size-full">
+    <View className={cn("shrink-0", className)} style={reserveStyle}>
+      <View className="size-full [&_img]:size-full [&_img]:object-contain [&_svg]:size-full">
         {children}
-      </div>
-    </div>
+      </View>
+    </View>
   )
 }

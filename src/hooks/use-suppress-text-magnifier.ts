@@ -17,28 +17,30 @@ const TAP_MOVE_SLOP_PX = 10
 //tap that opens a double-tap — don't let it arm the next touch
 const TAP_MAX_MS = 700
 
-//interactive controls keep their native touch flow untouched. `.clickable` is the
-//design-system marker every control root carries (Button / Link / Checkbox /
-//Switch); the native + ARIA selectors catch anything that doesn't use it. We skip
-//these so a genuine rapid double-tap on a control never loses its second tap, and
-//so we never interfere with the gesture engine. Activation rides pointer events,
-//which preventDefault on touchstart doesn't touch — but skipping is the clean line.
-const INTERACTIVE_SELECTOR =
-  '.clickable, a[href], button, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"], [role="slider"]'
-
 //editable hosts keep the native caret loupe and double-tap-to-select-word. Covers
 //inherited contenteditable (isContentEditable) plus every explicit editable mode,
 //without matching a `contenteditable="false"` island.
 const EDITABLE_SELECTOR =
   "input, textarea, select, [contenteditable='true'], [contenteditable=''], [contenteditable='plaintext-only']"
 
-//a touch over one of these must be left fully native — never suppressed
+//The loupe is unwanted over EVERYTHING except editable text, so editable hosts are
+//the only exemption. Interactive controls are NOT exempt: the loupe arms on a
+//double-tap over a Button / Link / Pressable exactly as it does over plain text, and
+//there is no reason to want it there — an earlier version skipped `.clickable`,
+//`a[href]`, `button` and the ARIA roles, which is precisely why it kept appearing on
+//them (adaptv's Button IS a `<button>`, its Link an `<a href>`).
+//
+//Suppressing it on a control is safe: adaptv controls activate through the gesture
+//engine's POINTER events (`onPressUp` on `pointerup`), which `preventDefault()` on
+//`touchstart` does not touch, and the engine already swallows the native click. The
+//one cost is a raw, non-engine `<button onClick>`: the second tap of a rapid
+//double-tap loses its native click — but a double-tap on a button is not a touch
+//idiom, and the loupe is the thing users actually see.
 function isProtectedTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
   if (target instanceof HTMLElement && target.isContentEditable)
     return true
-  if (target.closest(EDITABLE_SELECTOR)) return true
-  return target.closest(INTERACTIVE_SELECTOR) !== null
+  return target.closest(EDITABLE_SELECTOR) !== null
 }
 
 /**
@@ -69,7 +71,9 @@ function isProtectedTarget(target: EventTarget | null): boolean {
  *     past it iOS arms no loupe, so there's nothing to suppress.
  *  3. It lands within {@link DOUBLE_TAP_RADIUS_PX} of that first tap.
  *  4. It is single-finger (a second finger is pinch/zoom, never the loupe).
- *  5. Its target is neither editable nor interactive ({@link isProtectedTarget}).
+ *  5. Its target is not an editable host ({@link isProtectedTarget}) — a control is
+ *     not exempt, because the engine's pointer-based activation survives the
+ *     `preventDefault()` on `touchstart` that a control's loupe suppression needs.
  *
  * After a suppression the first-tap anchor is cleared and the consumed touch is
  * not re-recorded, so a third rapid tap starts a fresh pair instead of chaining

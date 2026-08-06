@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { DeckPicker } from "@/components/decks/deck-picker"
 import { DueDateField } from "@/components/todos/due-date-field"
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui"
 import type { Deck } from "@/data/collections/decks/schema"
 import { normalizePriority } from "@/data/collections/todos/priority"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 export type TodoFormValue = {
   title: string
@@ -47,7 +48,7 @@ export function TodoFormDrawer({
   errorMessage,
   onSubmit,
 }: TodoFormDrawerProps) {
-  const { vibrateCancel, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const [value, setValue] = useState(initialValue)
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(
     defaultDeckId,
@@ -84,7 +85,7 @@ export function TodoFormDrawer({
   function handleSubmit() {
     const trimmed = value.trim()
     if (!trimmed || isSubmitting) return
-    vibrateSuccess()
+    haptic.notify("success")
     onSubmit({
       title: trimmed,
       deckId: selectedDeckId ?? undefined,
@@ -100,10 +101,10 @@ export function TodoFormDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
-              <span className="ps-1 text-sm font-medium text-subtle">
+            <View className="flex flex-col gap-y-2">
+              <Text className="ps-1 text-sm font-medium text-subtle">
                 Task
-              </span>
+              </Text>
               <TextArea
                 value={value}
                 onChange={setValue}
@@ -113,7 +114,7 @@ export function TodoFormDrawer({
                 disabled={isSubmitting}
                 rows={2}
               />
-            </div>
+            </View>
             {decks && decks.length > 0 && (
               <DeckPicker
                 decks={orderedDecks}
@@ -131,6 +132,7 @@ export function TodoFormDrawer({
                 <PrimaryButton
                   className="w-full py-3.5 text-base font-semibold leading-none"
                   onClick={handleSubmit}
+                  hapticOnPress={false}
                   loading={isSubmitting}
                   disabled={!value.trim()}
                 >
@@ -140,7 +142,7 @@ export function TodoFormDrawer({
               cancel={
                 <AppDrawer.Close
                   type="button"
-                  onClick={vibrateCancel}
+                  onClick={() => haptic.impact("light")}
                   className={drawerCancelClassName}
                 >
                   Cancel

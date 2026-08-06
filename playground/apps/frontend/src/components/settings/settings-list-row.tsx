@@ -1,5 +1,6 @@
+import { Pressable, Text, View } from "@arrzdev/adaptv/components"
 import type { LucideIcon } from "lucide-react"
-import type { ComponentPropsWithoutRef, ReactNode } from "react"
+import type { ReactNode } from "react"
 
 type SettingsListRowProps = {
   label: string
@@ -17,9 +18,12 @@ export function SettingsListRow({
   showSeparator = false,
 }: SettingsListRowProps) {
   return (
-    <li>
-      <div className="flex items-center justify-between gap-x-3 px-4 py-4">
-        <div className="flex min-w-0 flex-1 items-center gap-x-3">
+    <View>
+      <View
+        row
+        className="flex items-center justify-between gap-x-3 px-4 py-4"
+      >
+        <View row className="flex min-w-0 flex-1 items-center gap-x-3">
           {leading}
           {!leading && Icon && (
             <Icon
@@ -29,40 +33,40 @@ export function SettingsListRow({
               className="shrink-0 text-subtle"
             />
           )}
-          <span className="truncate text-base font-medium text-foreground">
+          <Text className="truncate text-base font-medium text-foreground">
             {label}
-          </span>
-        </div>
+          </Text>
+        </View>
         {trailing}
-      </div>
+      </View>
       {showSeparator && (
-        <div className="mx-4 border-b border-border-subtle" aria-hidden />
+        <View className="mx-4 border-b border-border-subtle" aria-hidden />
       )}
-    </li>
+    </View>
   )
 }
 
 type SettingsAddRowProps = {
   icon: LucideIcon
   label: string
-  onClick: ComponentPropsWithoutRef<"button">["onClick"]
+  onPress: () => void
   showSeparator?: boolean
 }
 
 export function SettingsAddRow({
   icon: Icon,
   label,
-  onClick,
+  onPress,
   showSeparator = false,
 }: SettingsAddRowProps) {
   return (
-    <li>
+    <View>
       {showSeparator && (
-        <div className="mx-4 border-b border-border-subtle" aria-hidden />
+        <View className="mx-4 border-b border-border-subtle" aria-hidden />
       )}
-      <button
-        type="button"
-        onClick={onClick}
+      <Pressable
+        render={<button type="button" />}
+        onPress={onPress}
         className="clickable flex w-full items-center gap-x-3 px-4 py-4 text-start"
       >
         <Icon
@@ -71,10 +75,10 @@ export function SettingsAddRow({
           aria-hidden
           className="shrink-0 text-subtle"
         />
-        <span className="text-base font-medium text-foreground">
+        <Text className="text-base font-medium text-foreground">
           {label}
-        </span>
-      </button>
-    </li>
+        </Text>
+      </Pressable>
+    </View>
   )
 }

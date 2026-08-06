@@ -1,5 +1,5 @@
+import { View } from "@arrzdev/adaptv/components"
 import { AppDrawer, PrimaryButton, SecondaryButton } from "@/components/ui"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type SignOutConfirmDrawerProps = {
   open: boolean
@@ -20,7 +20,6 @@ export function SignOutConfirmDrawer({
   isSigningOut,
   onConfirm,
 }: SignOutConfirmDrawerProps) {
-  const { vibrateOk, vibrateCancel } = useAppVibrate()
   const noun = unsyncedCount === 1 ? "change" : "changes"
   const verb = unsyncedCount === 1 ? "hasn't" : "haven't"
   return (
@@ -37,28 +36,22 @@ export function SignOutConfirmDrawer({
               so
               {unsyncedCount === 1 ? " it" : " they"} will be lost.
             </AppDrawer.Description>
-            <div className="mt-5 flex flex-col gap-3">
+            <View className="mt-5 flex flex-col gap-3">
               <PrimaryButton
                 className={CONTROL_CLASS}
-                onClick={() => {
-                  vibrateOk()
-                  onConfirm()
-                }}
+                onClick={onConfirm}
                 loading={isSigningOut}
               >
                 Sign out anyway
               </PrimaryButton>
               <SecondaryButton
                 className={CONTROL_CLASS}
-                onClick={() => {
-                  vibrateCancel()
-                  onOpenChange(false)
-                }}
+                onClick={() => onOpenChange(false)}
                 disabled={isSigningOut}
               >
                 Cancel
               </SecondaryButton>
-            </div>
+            </View>
           </AppDrawer.Shell>
         </AppDrawer.Content>
       </AppDrawer.Portal>
