@@ -1,3 +1,4 @@
+import { Pressable, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { LucideIcon } from "lucide-react"
 import {
@@ -11,7 +12,7 @@ import {
 } from "lucide-react"
 import { AppDrawer } from "@/components/ui"
 import type { TodoSort } from "@/data/collections/todos/sort"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 type SortOption = {
   value: TodoSort
@@ -61,30 +62,34 @@ type TodoSortTriggerProps = {
 //lives in the list's first section header — only the trigger, so the volatile
 //section remounting on sort change never takes the drawer down with it
 export function TodoSortTrigger({ open, onOpen }: TodoSortTriggerProps) {
-  const { vibrateOk } = useAppVibrate()
+  const haptic = useHaptics()
 
   function handleOpen() {
-    vibrateOk()
+    haptic.impact("light")
     onOpen()
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleOpen}
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      aria-label="Sort tasks"
-      className={cn(
-        //padding grows the tap target to ~46px; the matching negative margin
-        //cancels it so the icon stays pixel-identical and in the same spot
-        "-m-2.5 flex shrink-0 items-center justify-center rounded-md p-3.5 text-muted",
-        "origin-center transition-[transform,color] duration-200 ease-out hover:text-foreground active:duration-0 active:scale-95",
-        open && "text-foreground",
-      )}
+    <Pressable
+      render={
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label="Sort tasks"
+          className={cn(
+            //padding grows the tap target to ~46px; the matching negative margin
+            //cancels it so the icon stays pixel-identical and in the same spot
+            "-m-2.5 flex shrink-0 items-center justify-center rounded-md p-3.5 text-muted",
+            "origin-center transition-[transform,color] duration-200 ease-out hover:text-foreground active:duration-0 active:scale-95",
+            open && "text-foreground",
+          )}
+        />
+      }
+      onPress={handleOpen}
     >
       <ArrowUpDown size={18} strokeWidth={2} aria-hidden />
-    </button>
+    </Pressable>
   )
 }
 
@@ -102,9 +107,10 @@ export function TodoSortDrawer({
   value,
   onChange,
 }: TodoSortDrawerProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
+  const haptic = useHaptics()
 
   function handleSelect(next: TodoSort) {
+    haptic.impact("light")
     onChange(next)
     onOpenChange(false)
   }
@@ -121,27 +127,29 @@ export function TodoSortDrawer({
             </AppDrawer.Title>
             {/* single-select: a radiogroup so assistive tech announces the options
                 as mutually-exclusive choices (not independent pressed toggles) */}
-            <div role="radiogroup" aria-label="Sort tasks by">
+            <View role="radiogroup" aria-label="Sort tasks by">
               {SORT_OPTIONS.map((option) => {
                 const isActive = option.value === value
                 const OptionIcon = option.Icon
-                const handlers = hapticPointerHandlers(
-                  () => handleSelect(option.value),
-                  "ok",
-                )
                 return (
-                  // biome-ignore lint/a11y/useSemanticElements: a native radio can't carry this icon + title + description layout; ARIA radio on the button is the intentional single-select pattern
-                  <button
+                  <Pressable
                     key={option.value}
-                    type="button"
-                    onClick={handlers.onClick}
-                    role="radio"
-                    aria-checked={isActive}
-                    className={cn(
-                      "flex w-full items-center gap-x-3 rounded-lg px-3 py-2.5 text-left",
-                      "transition-colors duration-200 ease-out",
-                      isActive ? "bg-secondary" : "hover:bg-secondary/60",
-                    )}
+                    render={
+                      // biome-ignore lint/a11y/useSemanticElements: a native radio can't carry this icon + title + description layout; ARIA radio on the button is the intentional single-select pattern
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={isActive}
+                        className={cn(
+                          "flex w-full items-center gap-x-3 rounded-lg px-3 py-2.5 text-left",
+                          "transition-colors duration-200 ease-out",
+                          isActive
+                            ? "bg-secondary"
+                            : "hover:bg-secondary/60",
+                        )}
+                      />
+                    }
+                    onPress={() => handleSelect(option.value)}
                   >
                     <OptionIcon
                       size={20}
@@ -152,14 +160,14 @@ export function TodoSortDrawer({
                         isActive ? "text-primary" : "text-muted",
                       )}
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[15px] font-medium leading-tight text-foreground">
+                    <View className="min-w-0 flex-1">
+                      <View className="text-[15px] font-medium leading-tight text-foreground">
                         {option.title}
-                      </div>
-                      <div className="mt-0.5 text-[13px] leading-snug text-muted">
+                      </View>
+                      <View className="mt-0.5 text-[13px] leading-snug text-muted">
                         {option.description}
-                      </div>
-                    </div>
+                      </View>
+                    </View>
                     {isActive && (
                       <Check
                         size={18}
@@ -168,10 +176,10 @@ export function TodoSortDrawer({
                         className="shrink-0 text-primary"
                       />
                     )}
-                  </button>
+                  </Pressable>
                 )
               })}
-            </div>
+            </View>
           </AppDrawer.Shell>
         </AppDrawer.Content>
       </AppDrawer.Portal>

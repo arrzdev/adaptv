@@ -4,8 +4,11 @@ import type {
   ReactElement,
   ReactNode,
 } from "react"
-import { cloneElement } from "react"
+import { cloneElement, useRef } from "react"
+import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
+import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { mergeStyles } from "#adaptv/utils/styles"
+import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
 
 /* =============================================================================
  * TYPES
@@ -57,15 +60,18 @@ export interface TextProps extends ComponentPropsWithRef<"span"> {
    */
   selectable?: boolean
   /**
-   * Participate in the iOS system text-size setting. **Default `true`** — the fix is
-   * worth nothing if it has to be opted into, since the app that needs it is the one
-   * whose author has never heard of `-apple-system-body`.
+   * Scale this text with the iOS system text-size setting (Dynamic Type). **Opt-in,
+   * default `false`** — it MULTIPLIES the element's built font-size by the user's
+   * accessibility text-size factor, so `text-4xl` stays `text-4xl × factor` and every
+   * sized class keeps its relative proportions. It never REPLACES the size, so it is
+   * safe to leave on and does the right thing on any class.
    *
-   * Reaches text you have not given an explicit size: a `className` font-size lands in
-   * a later cascade layer and wins, which cuts the link to the setting. `styles/text.css`
-   * has the mechanism, the `@supports` gate and both bounds written out.
+   * iOS-WebKit only: the factor is measured once at load (see
+   * {@link measureDynamicTypeScale}) and is `1` everywhere else — non-iOS engines,
+   * desktop Safari, SSR — where the element keeps exactly its className size with zero
+   * inline sizing. WebKit resolves the setting at page load, so a change takes a reload.
    */
-  dynamicType?: boolean
+  scaleWithSystem?: boolean
   /** Render something other than a `<span>`. → `STYLING.md §3.3`. */
   render?: TextRender
 }
@@ -130,7 +136,7 @@ export function textClampStyle(
  *
  * | Quirk | Where it lives |
  * |-------|----------------|
- * | **iOS Dynamic Type**, which only the `font` *shorthand* can reach and which the root element cannot own in a rem-based layout | `styles/text.css` |
+ * | **iOS Dynamic Type**, measured as a scalar and multiplied into the element's built font-size so a rem-based layout is left untouched | {@link measureDynamicTypeScale} + a layout effect |
  * | **Line clamping**, whose standard property is still unavailable in both target webviews and whose WebKit fallback hides in `display` | {@link textClampStyle}, inline |
  * | **Per-instance selection** over the app-wide `ui.noSelect` reset | the `selectable` utility |
  *
@@ -142,7 +148,7 @@ export function textClampStyle(
  * | Attribute | When |
  * |-----------|------|
  * | `data-adaptv="text"` | always — target every run of text from global CSS with no imports |
- * | `data-dynamic-type` | `dynamicType` (the default) |
+ * | `data-scale-with-system` | `scaleWithSystem` (opt-in) — a marker only; the sizing is done in JS |
  *
  * ⚠︎ **It does not own the iOS text magnifier.** `useSuppressTextMagnifier` is mounted
  * app-wide by the shell and has to be: it is a document-level double-tap interceptor
@@ -165,11 +171,12 @@ export function textClampStyle(
 export function Text({
   numberOfLines,
   selectable = false,
-  dynamicType = true,
+  scaleWithSystem = false,
   render,
   className,
   style,
   children,
+  ref,
   ...props
 }: TextProps) {
   //An element passed to `render` carries its own className/style, written at the same
@@ -199,15 +206,63 @@ export function Text({
     lockedStyle: textClampStyle(numberOfLines),
   })
 
+  //One ref, whichever element ships. `measureRef` is what the layout effect reads to
+  //scale; merging it with the consumer's `ref` (and putting the merged callback in
+  //`slotProps`) is what makes `scaleWithSystem` work identically on BOTH the `<span>`
+  //path and the `cloneElement(render, …)` path — the same node the consumer's ref sees.
+  const measureRef = useRef<HTMLSpanElement | null>(null)
+  const mergedRef = useMergedRef(measureRef, ref ?? null)
+
+  //iOS Dynamic Type as a MULTIPLY, not a replace. `useLayoutEffect` (isomorphic so SSR
+  //stays quiet) runs before paint, so there is no flash from the built size to the
+  //scaled one. Off iOS the scalar is 1 and this does nothing — the element keeps exactly
+  //its className size with no inline sizing at all (the whole point of the opt-in default).
+  useIsomorphicLayoutEffect(() => {
+    if (!scaleWithSystem) return
+    const el = measureRef.current
+    if (!el) return
+
+    const scale = measureDynamicTypeScale()
+
+    //Start every run from the class-computed size: drop any inline size a previous run —
+    //or a previous `className` — left on the element, so `getComputedStyle` reads the
+    //BUILT size and not our own last answer.
+    el.style.fontSize = ""
+    el.style.lineHeight = ""
+
+    if (scale !== 1) {
+      const built = getComputedStyle(el)
+      const baseFontSize = Number.parseFloat(built.fontSize)
+      //Scale the line-height too, or the taller glyphs collide at the big sizes.
+      const baseLineHeight = Number.parseFloat(built.lineHeight)
+      if (baseFontSize > 0) {
+        el.style.fontSize = `${baseFontSize * scale}px`
+      }
+      //`normal` parses to NaN — leave leading to the cascade rather than pinning a number.
+      if (!Number.isNaN(baseLineHeight)) {
+        el.style.lineHeight = `${baseLineHeight * scale}px`
+      }
+    }
+
+    //Opting back out (or unmounting) must not strand a scaled size on the element.
+    return () => {
+      el.style.fontSize = ""
+      el.style.lineHeight = ""
+    }
+    //`merged.className` IS the built size — re-measure whenever it (or the opt-in) changes.
+  }, [scaleWithSystem, merged.className])
+
   const slotProps: TextSlotProps = {
     ...props,
+    //Only wire the measurement ref when the opt-in is on, so a plain `<Text>` forwards
+    //the consumer's ref exactly as before and carries zero scaling machinery.
+    ref: scaleWithSystem ? mergedRef : ref,
     className: merged.className,
     style: merged.style,
     "data-adaptv": "text",
     //`""`, not `true`: React stringifies a boolean data-* value to "true", and this is
-    //a PRESENCE attribute (§3.1) — `[data-dynamic-type]` in text.css matches on
-    //existence, so the opt-out has to remove it rather than set it to "false".
-    "data-dynamic-type": dynamicType ? "" : undefined,
+    //a PRESENCE attribute (§3.1) — a marker the opt-out has to REMOVE, not set to "false".
+    "data-scale-with-system": scaleWithSystem ? "" : undefined,
   }
 
   if (render) {

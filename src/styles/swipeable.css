@@ -76,12 +76,22 @@
    * width, so the panel-width block always covers the gap. Coloured from the
    * content-adjacent action so it reads as the same surface. Translating a solid
    * block (not scaling a hairline) keeps it flicker-free.
+   *
+   * z-index: -1 keeps the fill BEHIND the action buttons. The buttons are
+   * non-positioned (static), and an absolutely-positioned child paints above
+   * static siblings by default — so without this the fill would cover the whole
+   * panel and mask multi-colour action rows (e.g. green archive + red delete would
+   * both read as the single content-adjacent colour), only revealing the outer
+   * actions on overshoot. Negative z is scoped to the panel's own stacking context
+   * (position:absolute + z-index:1), so the fill stays above the root background
+   * and only shows through the overshoot gap, where no button covers it.
    */
   [data-swipeable-fill] {
     position: absolute;
     top: 0;
     bottom: 0;
     width: 100%;
+    z-index: -1;
     pointer-events: none;
   }
 

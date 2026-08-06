@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import type { OrientationGuardProps } from "@arrzdev/adaptv/config"
 import { Smartphone } from "lucide-react"
 
@@ -9,7 +10,7 @@ import { Smartphone } from "lucide-react"
  */
 export function RotateGuard({ orientation }: OrientationGuardProps) {
   return (
-    <div
+    <View
       role="alert"
       className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-y-6 bg-background px-safe-offset-6 py-safe-offset-8 text-center text-foreground"
     >
@@ -18,10 +19,13 @@ export function RotateGuard({ orientation }: OrientationGuardProps) {
         strokeWidth={1.5}
         aria-hidden
       />
-      <p className="max-w-xs text-balance text-base font-medium text-subtle">
+      <Text
+        render={<p />}
+        className="max-w-xs text-balance text-base font-medium text-subtle"
+      >
         Rotate your device to {orientation} to use ChopChop.
-      </p>
-    </div>
+      </Text>
+    </View>
   )
 }
 

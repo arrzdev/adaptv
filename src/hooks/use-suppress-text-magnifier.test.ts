@@ -161,10 +161,13 @@ describe("useSuppressTextMagnifier", () => {
     expect(prevented).toBe(false)
   })
 
-  it("leaves interactive .clickable targets native", () => {
+  it("cancels the loupe on an interactive control too — only editable text is exempt", () => {
+    //adaptv's Button IS a <button> and its Link an <a href>: the loupe arms on a
+    //double-tap over them like any text, and the engine's pointer-based activation
+    //survives the touchstart preventDefault, so there is nothing to protect.
     tap(clickable, { x: 50, y: 50 })
     vi.advanceTimersByTime(120)
     const prevented = fireTouch("touchstart", clickable, { x: 50, y: 50 })
-    expect(prevented).toBe(false)
+    expect(prevented).toBe(true)
   })
 })

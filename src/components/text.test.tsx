@@ -1,11 +1,16 @@
 import { render } from "@testing-library/react"
 import type { ReactElement } from "react"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Text, textClampStyle } from "#adaptv/components/text"
-import {
-  compileAdaptvStyles,
-  ruleFor,
-} from "#adaptv/styles/compile.test-helper"
+import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
+
+//The scalar is an ambient iOS-WebKit measurement (covered on its own in
+//`utils/text-scale.test.ts`); mock it here so the COMPONENT's scaling wiring is
+//deterministic instead of riding on happy-dom's `-webkit-touch-callout` behaviour.
+vi.mock("#adaptv/utils/text-scale", () => ({
+  measureDynamicTypeScale: vi.fn(() => 1),
+}))
+const mockedScale = vi.mocked(measureDynamicTypeScale)
 
 function firstEl(ui: ReactElement): HTMLElement {
   const { container } = render(ui)
@@ -73,54 +78,65 @@ describe("Text render", () => {
   })
 
   it("still stamps its attributes on the rendered element", () => {
-    const el = firstEl(<Text render={<h1>Inbox</h1>} />)
+    //the opt-in presence attribute has to reach the cloneElement path too, not just <span>
+    const el = firstEl(<Text render={<h1>Inbox</h1>} scaleWithSystem />)
     expect(el.getAttribute("data-adaptv")).toBe("text")
-    expect(el.hasAttribute("data-dynamic-type")).toBe(true)
+    expect(el.hasAttribute("data-scale-with-system")).toBe(true)
   })
 })
 
 /* =============================================================================
- * DYNAMIC TYPE
+ * DYNAMIC TYPE — scaleWithSystem
+ *
+ * The scalar itself is iOS-WebKit only and is exercised in `utils/text-scale.test.ts`;
+ * happy-dom fails the `-webkit-touch-callout` gate, so here the scale is always 1 and
+ * these assertions cover the attribute contract and the "zero inline sizing off iOS"
+ * guarantee that the whole opt-in default rides on.
  * ============================================================================= */
 
-describe("Text dynamicType", () => {
-  //presence, not `data-dynamic-type="true"` (STYLING.md §3.1) — text.css matches
-  //`[data-dynamic-type]`, so the opt-out has to REMOVE the attribute
-  it("is on by default, as a presence attribute", () => {
+describe("Text scaleWithSystem", () => {
+  beforeEach(() => {
+    //default: off iOS, the factor is 1 — reset per test so a multiply case cannot leak
+    mockedScale.mockReturnValue(1)
+  })
+
+  //opt-in, and a PRESENCE attribute (STYLING.md §3.1): unset means the attribute is
+  //ABSENT, never `data-scale-with-system="false"`
+  it("is off by default — the attribute is absent, not present", () => {
     const el = firstEl(<Text />)
-    expect(el.hasAttribute("data-dynamic-type")).toBe(true)
-    expect(el.getAttribute("data-dynamic-type")).toBe("")
+    expect(el.hasAttribute("data-scale-with-system")).toBe(false)
   })
 
-  it("opting out removes the attribute rather than setting it false", () => {
+  it("opting in stamps the presence attribute as an empty string", () => {
+    const el = firstEl(<Text scaleWithSystem />)
+    expect(el.hasAttribute("data-scale-with-system")).toBe(true)
+    expect(el.getAttribute("data-scale-with-system")).toBe("")
+  })
+
+  //The whole point of the opt-in default: with the opt-in ABSENT the layout effect never
+  //runs its body, so a plain sized Text carries zero inline sizing — exactly its class.
+  it("sets no inline font-size on plain Text (zero JS by default)", () => {
+    expect(firstEl(<Text className="text-lg" />).style.fontSize).toBe("")
+  })
+
+  //Opted in but the factor is 1 (every non-iOS target, and iOS at the default size): the
+  //element still keeps exactly its className size — the multiply is a no-op, not a pin.
+  it("sets no inline font-size when the factor is 1", () => {
+    mockedScale.mockReturnValue(1)
     expect(
-      firstEl(<Text dynamicType={false} />).hasAttribute(
-        "data-dynamic-type",
-      ),
-    ).toBe(false)
+      firstEl(<Text scaleWithSystem className="text-lg" />).style.fontSize,
+    ).toBe("")
   })
 
-  //The CSS half. Asserted against the COMPILED bundle, not the source text: the
-  //`font` shorthand is the load-bearing part (a system font "can only be set with the
-  //font property" — `font-size: -apple-system-body` is invalid and dropped), and a
-  //toolchain that did not recognise the keyword would drop the declaration silently.
-  it("compiles to a font SHORTHAND behind the iOS-only @supports gate", async () => {
-    const css = await compileAdaptvStyles([])
-    const body = ruleFor(css, '[data-adaptv="text"][data-dynamic-type]')
-
-    expect(body).not.toBeNull()
-    expect(body).toContain("font: -apple-system-body")
-    //`font-size:` alone would mean the keyword was longhanded somewhere and Dynamic
-    //Type silently stopped working — the exact regression PRIOR-ART.md §10 warns about
-    expect(body).not.toContain("font-size: -apple-system-body")
-
-    //the gate is what keeps macOS Safari (13px system body) and Blink out
-    expect(css).toContain("@supports (-webkit-touch-callout: none)")
-
-    //the shorthand also resets family/weight to the system face; both must be restored
-    //or the app's brand font vanishes on iOS and nowhere else
-    expect(body).toContain("font-family: inherit")
-    expect(body).toContain("font-weight: inherit")
+  //The multiply itself: the effect reads the CLASS-computed (built) size and writes it
+  //back × the factor, so the class size is scaled rather than replaced.
+  it("multiplies the built font-size by the factor when it is > 1", () => {
+    mockedScale.mockReturnValue(2)
+    const base = Number.parseFloat(
+      getComputedStyle(firstEl(<Text />)).fontSize,
+    )
+    const el = firstEl(<Text scaleWithSystem />)
+    expect(el.style.fontSize).toBe(`${base * 2}px`)
   })
 })
 
