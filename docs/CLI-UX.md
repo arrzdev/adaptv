@@ -673,6 +673,29 @@ a second one would put two dots on one line.
 **R12 — `--verbose` is the raw escape hatch.** It streams unfiltered tool output. Every rule in
 §3 applies to the calm path only; never "fix" noise by making `--verbose` quieter.
 
+**R55 — Never take the dev's screen. Show the device; don't raise its window.** A run puts the app
+in front *inside* the device and stops there. Which desktop window has the keyboard is the dev's,
+and a build they started so they could keep working is the worst moment to take it from them.
+> Reported as: the iOS Simulator jumping to the foreground on every `dev ios` / `preview ios` /
+> `build ios`, and again on every `r` reload — mid-keystroke, in the editor, several times a
+> minute. The Android emulator never did this, so the same command behaved like two different
+> tools depending on the platform.
+>
+> Two causes, both `open` without `-g`. adaptv's own was easy (`open -a Simulator` after a
+> launch → `ensureDeviceWindow`, which now passes `-g`: the window still *exists*, for a device
+> booted headlessly with `simctl boot`, but it opens behind whatever is in front). The other is
+> inside a dependency: Capacitor's `cap run ios` shells out to `native-run`, which runs
+> `open <Xcode>/Applications/Simulator.app --args -CurrentDeviceUDID <udid>` verbatim, with no
+> flag to turn it off. `native-run` spawns `open` by NAME, so adaptv puts a one-line `open` of its
+> own at the front of that subprocess's PATH (`withBackgroundSimulator`, scoped to `cap run`'s
+> env alone — it cannot leak into the dev's shell). It adds `-g` to the Simulator call and passes
+> every other `open` through untouched.
+>
+> Android is untouched and always was: no `.app` to `open`, and neither adb nor the emulator
+> expose a "raise this window" command — only OS-specific window-manager hacks that need extra
+> permissions and don't exist uniformly across the Linux/Windows hosts Android dev also runs on.
+> The fix made iOS behave the way Android already did, which is the direction that rule points.
+
 ---
 
 ## 4. Failure detail
@@ -1066,6 +1089,9 @@ Tests do not cover any of this. Run it and read it:
 - [ ] a deliberately broken `adaptv.config.ts` (a colour that isn't hex) — every command must
       refuse under the banner, before it builds or serves anything (R33)
 - [ ] `--verbose` still streams raw output
+- [ ] keep typing in the editor through an `adaptv dev ios` build and through an `r` reload — the
+      Simulator's window may appear, but it must never take the keyboard (R55). Worth doing with
+      the Simulator not running at all, which is when `open` would activate it
 - [ ] no line wraps at a normal terminal width
 - [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,
       or you can read an identifier in it, R22/R23 are broken
