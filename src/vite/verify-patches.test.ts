@@ -10,8 +10,8 @@ import {
   patchInstructions,
 } from "#adaptv/vite/verify-patches"
 
-const PATCHED_SCHEMA = `var tsrConfig = configSchema.omit({ autoCodeSplitting: true, target: true }).partial();`
-const UNPATCHED_SCHEMA = `var tsrConfig = configSchema.omit({ autoCodeSplitting: true, target: true, verboseFileRoutes: true }).partial();`
+const PATCHED_FOOTER = `function adaptvStartPkg(f){return process.env.ADAPTV_START_PKG || \`@tanstack/\${f}-start\`}`
+const UNPATCHED_FOOTER = `declare module '@tanstack/react-start' {`
 const PATCHED_TEMPLATE = `function adaptvRouterPkg(f){return process.env.ADAPTV_ROUTER_PKG || f}`
 const UNPATCHED_TEMPLATE = `fullPkg: "@tanstack/react-router",`
 
@@ -22,15 +22,15 @@ describe("checkPatches — detects behaviour, not pnpm metadata", () => {
   it("passes when both patches are applied", () => {
     expect(
       checkPatches({
-        startSchema: PATCHED_SCHEMA,
+        startFooter: PATCHED_FOOTER,
         generatorTemplate: PATCHED_TEMPLATE,
       }).ok,
     ).toBe(true)
   })
 
-  it("catches the unpatched Start schema", () => {
+  it("catches the unpatched Start footer", () => {
     const status = checkPatches({
-      startSchema: UNPATCHED_SCHEMA,
+      startFooter: UNPATCHED_FOOTER,
       generatorTemplate: PATCHED_TEMPLATE,
     })
     expect(status.ok).toBe(false)
@@ -39,7 +39,7 @@ describe("checkPatches — detects behaviour, not pnpm metadata", () => {
 
   it("catches the unpatched generator template", () => {
     const status = checkPatches({
-      startSchema: PATCHED_SCHEMA,
+      startFooter: PATCHED_FOOTER,
       generatorTemplate: UNPATCHED_TEMPLATE,
     })
     expect(status.ok).toBe(false)
@@ -49,7 +49,7 @@ describe("checkPatches — detects behaviour, not pnpm metadata", () => {
   it("reports both when both are missing", () => {
     expect(
       checkPatches({
-        startSchema: UNPATCHED_SCHEMA,
+        startFooter: UNPATCHED_FOOTER,
         generatorTemplate: UNPATCHED_TEMPLATE,
       }).missing,
     ).toHaveLength(2)
@@ -89,10 +89,10 @@ describe("patch instructions — derived from what actually shipped", () => {
 
   it("decodes a patch filename into its pnpm key", () => {
     expect(
-      parsePatchFilename("@tanstack__router-generator@1.166.22.patch"),
+      parsePatchFilename("@tanstack__router-generator@1.167.21.patch"),
     ).toEqual({
-      key: "@tanstack/router-generator@1.166.22",
-      file: "@tanstack__router-generator@1.166.22.patch",
+      key: "@tanstack/router-generator@1.167.21",
+      file: "@tanstack__router-generator@1.167.21.patch",
     })
     //pnpm's filename convention already carries the leading `@` — decoding only
     //the scope separator. Prepending one produced `@@capacitor/cli`.

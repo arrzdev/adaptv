@@ -212,14 +212,14 @@ export async function adaptv(
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
     adaptvFsAllowPlugin(),
-    //adaptv supplies the route factory binding, from ITS specifier. Paired with
-    //`verboseFileRoutes: false` below, which makes the generator STRIP the
-    //`@tanstack/react-router` import from route files rather than maintain it.
-    //Together: zero `@tanstack/*` in the consumer's source.
-    //→ src/vite/router-autoimport.ts
+    //Race guard: supplies the route-factory binding from adaptv's specifier for
+    //the beat before the generator writes it. The generator itself keeps route
+    //files opaque now — adaptv patches its `targetModule` to the barrel via
+    //ADAPTV_ROUTER_PKG. → src/vite/router-autoimport.ts
     adaptvRouteAutoImportPlugin(options.routerSpecifier),
-    //Start's plugins, minus its own autoimport — upstream hardcodes the
-    //`@tanstack/<target>-router` specifier and would re-add that import.
+    //Defensive: the upstream `tanstack-router:autoimport` plugin was folded into
+    //the generator and no longer exists, so this filter is a no-op unless a future
+    //release re-introduces it.
     stripTanStackAutoImport([
       tanstackStart(
         deriveStartOptions(
@@ -303,13 +303,14 @@ function deriveStartOptions(
       //Formatting of files nobody opens (they live in `.adaptv/`) is adaptv's call,
       //not a config knob. Hardcoded.
       quoteStyle: "double" as const,
-      //THE lever for TanStack opacity, and it is not a verbosity setting despite
-      //the name. Read from the generator's transform source: `false` switches its
-      //import policy from "require `createFileRoute` from @tanstack/<target>-router"
-      //to "BAN it" — so the generator strips the import from route files instead of
-      //writing it. adaptv's autoimport plugin then supplies the binding from the
-      //adaptv barrel at build time. Not overridable: the whole facade rests on it.
-      verboseFileRoutes: false,
+      //TanStack opacity: the generator maintains the `createFileRoute` import in
+      //route files itself (upstream removed `verboseFileRoutes` and the standalone
+      //autoimport plugin). adaptv redirects the specifier it writes from
+      //`@tanstack/<target>-router` to the adaptv barrel via a one-line patch on the
+      //generator's `targetModule`, driven by ADAPTV_ROUTER_PKG (set above). So route
+      //files end up importing `createFileRoute` from `@arrzdev/adaptv/router` — zero
+      //`@tanstack/*` in the consumer's source. → src/vite/router-autoimport.ts,
+      //patches/@tanstack__router-generator@*.patch
       virtualRouteConfig: router.routerConfig ?? "./src/routing/config.ts",
       //adaptv's OWN entry module — a real file in the package, not one written
       //into the consumer's tree. It reaches the app's route tree through the

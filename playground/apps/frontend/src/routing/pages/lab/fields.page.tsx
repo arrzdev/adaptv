@@ -3,6 +3,7 @@ import {
   Input,
 } from "@arrzdev/adaptv/components"
 import { useKeyboard } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import { Search, X } from "lucide-react"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -18,7 +19,7 @@ import {
 import { LabPage } from "@/components/lab/lab-page"
 import { TextArea, TextInput } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/fields")({
   component: LabFieldsPage,
 })
 
