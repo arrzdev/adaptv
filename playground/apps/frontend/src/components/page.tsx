@@ -1,4 +1,4 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 
@@ -30,7 +30,11 @@ const PAGE_CONTENT_CLASS =
 export function Page({ children, className }: PageProps) {
   return (
     <ScrollView
-      className={cn("relative bg-background", PAGE_CONTENT_CLASS, className)}
+      className={cn(
+        "relative bg-background",
+        PAGE_CONTENT_CLASS,
+        className,
+      )}
     >
       {children}
     </ScrollView>
@@ -49,7 +53,7 @@ export function Page({ children, className }: PageProps) {
 export function PageWithSmoothEdges({ children, className }: PageProps) {
   return (
     <ScrollView fade className={cn("bg-background", className)}>
-      <div className={PAGE_CONTENT_CLASS}>{children}</div>
+      <View className={PAGE_CONTENT_CLASS}>{children}</View>
     </ScrollView>
   )
 }

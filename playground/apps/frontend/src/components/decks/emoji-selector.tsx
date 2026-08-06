@@ -1,4 +1,4 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import {
@@ -20,8 +20,8 @@ export function EmojiSelector({
   const selectedEmoji = value ?? DEFAULT_DECK_EMOJI
 
   return (
-    <div className="flex flex-col gap-y-2">
-      <span className="ps-1 text-sm font-medium text-subtle">Emoji</span>
+    <View className="flex flex-col gap-y-2">
+      <Text className="ps-1 text-sm font-medium text-subtle">Emoji</Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6 py-1">
         {options.map((emoji) => {
@@ -43,6 +43,6 @@ export function EmojiSelector({
           )
         })}
       </ScrollView>
-    </div>
+    </View>
   )
 }

@@ -1,3 +1,4 @@
+import { Text } from "@arrzdev/adaptv/components"
 import type { GestureState } from "@arrzdev/adaptv/hooks"
 import { useGestureEngine } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
@@ -188,16 +189,16 @@ export function HoldToConfirmButton({
       className={cn(HOLD_BUTTON_CLASSNAME, className)}
     >
       {/* In-flow sizer — button dimensions come from label + py-3.5, not the spec's w-56 */}
-      <span className="invisible block text-center" aria-hidden>
+      <Text className="invisible block text-center" aria-hidden>
         {children}
-      </span>
+      </Text>
 
       {/* Fill reveal layers (clip-mask) — absolute over the sized canvas */}
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
         {/* Layer 1 — idle base text */}
-        <span aria-hidden className="text-error">
+        <Text aria-hidden className="text-error">
           {children}
-        </span>
+        </Text>
       </span>
 
       {/* Layer 2 — animated fill mask (w-0 → w-full) */}
@@ -214,15 +215,15 @@ export function HoldToConfirmButton({
         }}
       >
         {/* Layer 3 — mask text locked to canvas width */}
-        <span
+        <Text
           className="absolute inset-y-0 left-0 flex items-center justify-center font-semibold text-primary-foreground"
           style={canvasWidth > 0 ? { width: canvasWidth } : undefined}
         >
           {children}
-        </span>
+        </Text>
       </span>
 
-      <span className="sr-only">{children}</span>
+      <Text className="sr-only">{children}</Text>
     </button>
   )
 }

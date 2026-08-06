@@ -1,4 +1,4 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { formatDeckLabel } from "@/data/collections/decks/constants"
@@ -14,8 +14,8 @@ export function DeckPicker({ decks, value, onChange }: DeckPickerProps) {
   if (decks.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-y-2">
-      <span className="ps-1 text-sm font-medium text-subtle">Deck</span>
+    <View className="flex flex-col gap-y-2">
+      <Text className="ps-1 text-sm font-medium text-subtle">Deck</Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {decks.map((deck) => {
@@ -36,6 +36,6 @@ export function DeckPicker({ decks, value, onChange }: DeckPickerProps) {
           )
         })}
       </ScrollView>
-    </div>
+    </View>
   )
 }

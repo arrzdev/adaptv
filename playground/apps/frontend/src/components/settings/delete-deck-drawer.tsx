@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { useState } from "react"
 import {
   AppDrawer,
@@ -66,7 +67,7 @@ export function DeleteDeckDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
+            <View className="flex flex-col gap-y-2">
               <AppDrawer.Title>Delete {deck?.name ?? ""}?</AppDrawer.Title>
               <AppDrawer.Description>
                 {isEmpty &&
@@ -89,7 +90,7 @@ export function DeleteDeckDrawer({
                   </>
                 )}
               </AppDrawer.Description>
-            </div>
+            </View>
 
             <DrawerActionFooter
               errorMessage={error?.message}

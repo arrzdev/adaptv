@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { AppDrawer, PrimaryButton, SecondaryButton } from "@/components/ui"
 
 type SignOutConfirmDrawerProps = {
@@ -35,7 +36,7 @@ export function SignOutConfirmDrawer({
               so
               {unsyncedCount === 1 ? " it" : " they"} will be lost.
             </AppDrawer.Description>
-            <div className="mt-5 flex flex-col gap-3">
+            <View className="mt-5 flex flex-col gap-3">
               <PrimaryButton
                 className={CONTROL_CLASS}
                 onClick={onConfirm}
@@ -50,7 +51,7 @@ export function SignOutConfirmDrawer({
               >
                 Cancel
               </SecondaryButton>
-            </div>
+            </View>
           </AppDrawer.Shell>
         </AppDrawer.Content>
       </AppDrawer.Portal>

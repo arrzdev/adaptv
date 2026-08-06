@@ -1,4 +1,5 @@
 import type { InputHandle } from "@arrzdev/adaptv/components"
+import { Pressable, View } from "@arrzdev/adaptv/components"
 import { Eye, EyeOff } from "lucide-react"
 import { forwardRef, useState } from "react"
 import { TextInput } from "@/components/ui"
@@ -22,7 +23,7 @@ export const PasswordField = forwardRef<InputHandle, PasswordFieldProps>(
     const [show, setShow] = useState(false)
 
     return (
-      <div className="relative">
+      <View className="relative">
         <TextInput
           ref={ref}
           type={show ? "text" : "password"}
@@ -42,16 +43,16 @@ export const PasswordField = forwardRef<InputHandle, PasswordFieldProps>(
           aria-label="Password"
           fieldClassName="h-12 leading-none pe-11"
         />
-        <button
-          type="button"
-          onClick={() => setShow((shown) => !shown)}
+        <Pressable
+          render={<button type="button" />}
+          onPress={() => setShow((shown) => !shown)}
           aria-label={show ? "Hide password" : "Show password"}
           className="clickable absolute inset-y-0 end-0 flex items-center pe-3.5 text-muted"
         >
           {show && <EyeOff size={18} strokeWidth={1.75} aria-hidden />}
           {!show && <Eye size={18} strokeWidth={1.75} aria-hidden />}
-        </button>
-      </div>
+        </Pressable>
+      </View>
     )
   },
 )

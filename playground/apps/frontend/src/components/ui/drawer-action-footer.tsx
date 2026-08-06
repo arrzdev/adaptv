@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import { secondaryButtonClassName } from "@/components/ui/secondary-button"
@@ -32,16 +33,17 @@ export function DrawerActionFooter({
   className,
 }: DrawerActionFooterProps) {
   return (
-    <div className={cn("flex w-full flex-col gap-y-3", className)}>
+    <View className={cn("flex w-full flex-col gap-y-3", className)}>
       {/* reserved one-line slot — always present so an error can't shift the buttons */}
-      <p
+      <Text
+        render={<p />}
         role="alert"
         className="min-h-5 whitespace-pre-line text-sm text-error"
       >
         {errorMessage}
-      </p>
+      </Text>
       {action}
       {cancel}
-    </div>
+    </View>
   )
 }

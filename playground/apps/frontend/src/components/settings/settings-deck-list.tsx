@@ -1,3 +1,5 @@
+import { Text, View } from "@arrzdev/adaptv/components"
+import { useShare } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
 import type {
   DragEndEvent,
@@ -15,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { Pencil, Plus, Share2, Trash2 } from "lucide-react"
 import { useRef } from "react"
 import { SettingsAddRow } from "@/components/settings/settings-list-row"
 import { IconButton } from "@/components/ui"
@@ -71,7 +73,7 @@ export function SettingsDeckList({
   return (
     //no surface on the wrapper — each row + the add-row paint their own, so a
     //faded row reveals the page behind it during a drag (the task-list lift)
-    <div className="overflow-hidden rounded-md">
+    <View className="overflow-hidden rounded-md">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -115,7 +117,7 @@ export function SettingsDeckList({
           </ul>
         </SortableContext>
       </DndContext>
-      <ul
+      <View
         className={cn(
           "flex flex-col bg-surface",
           !reduceMotion && "transition-opacity duration-200 ease-out",
@@ -127,13 +129,13 @@ export function SettingsDeckList({
         <SettingsAddRow
           icon={Plus}
           label="New deck"
-          onClick={() => {
+          onPress={() => {
             haptic.impact("light")
             onCreate()
           }}
         />
-      </ul>
-    </div>
+      </View>
+    </View>
   )
 }
 
@@ -164,6 +166,10 @@ function SettingsDeckRow({
     isSorting,
     newIndex,
   } = useSortable({ id: deck.id, disabled })
+
+  //share the deck by name via the OS share sheet — only render the affordance
+  //where a sheet actually exists (hidden on desktop Chrome/Firefox)
+  const { supported: canShare, share } = useShare()
 
   //drop dnd-kit's role="button"/tabIndex: this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
@@ -209,23 +215,38 @@ function SettingsDeckRow({
       {...dragAttributes}
       {...listeners}
     >
-      <div className="flex items-center justify-between gap-x-3 px-4 py-4">
-        <div className="flex min-w-0 flex-1 items-center gap-x-3">
-          <span
+      <View
+        row
+        className="flex items-center justify-between gap-x-3 px-4 py-4"
+      >
+        <View row className="flex min-w-0 flex-1 items-center gap-x-3">
+          <Text
             className="flex size-5 shrink-0 items-center justify-center text-base leading-none"
             aria-hidden
           >
             {resolveDeckEmoji(deck.emoji)}
-          </span>
-          <span className="truncate text-base font-medium text-foreground">
+          </Text>
+          <Text className="truncate text-base font-medium text-foreground">
             {deck.name}
-          </span>
-        </div>
+          </Text>
+        </View>
         {/* stop pointer-down here so pressing a button never arms the drag */}
-        <div
+        <View
+          row
           className="flex shrink-0 items-center gap-x-1"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {canShare && (
+            <IconButton
+              onClick={() =>
+                void share({ title: deck.name, text: deck.name })
+              }
+              aria-label={`Share ${deck.name}`}
+              className="size-9 bg-transparent hover:bg-secondary"
+            >
+              <Share2 size={18} strokeWidth={1.75} aria-hidden />
+            </IconButton>
+          )}
           <IconButton
             onClick={() => onEdit(deck)}
             aria-label={`Edit ${deck.name}`}
@@ -242,11 +263,11 @@ function SettingsDeckRow({
               <Trash2 size={18} strokeWidth={1.75} aria-hidden />
             </IconButton>
           )}
-        </div>
-      </div>
+        </View>
+      </View>
       {/* divider in the gap: it dims during a drag, and the lifted row hides its
           own (a lifted card shouldn't carry a seam line) */}
-      <div
+      <View
         className={cn(
           "mx-4 border-b border-border-subtle",
           !reduceMotion && "transition-opacity duration-150",

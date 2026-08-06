@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { useState } from "react"
 import {
   AppDrawer,
@@ -53,7 +54,7 @@ export function DeleteDataDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
+            <View className="flex flex-col gap-y-2">
               <AppDrawer.Title>Delete all data?</AppDrawer.Title>
               <AppDrawer.Description>
                 This permanently removes{" "}
@@ -61,7 +62,7 @@ export function DeleteDataDrawer({
                 {formatCount(todos.length, "task", "tasks")} from this
                 device. Your preferences are kept.
               </AppDrawer.Description>
-            </div>
+            </View>
 
             <DrawerActionFooter
               errorMessage={error?.message}

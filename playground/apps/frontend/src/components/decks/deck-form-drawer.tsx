@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { EmojiSelector } from "@/components/decks/emoji-selector"
 import {
@@ -82,10 +83,10 @@ export function DeckFormDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
-              <span className="ps-1 text-sm font-medium text-subtle">
+            <View className="flex flex-col gap-y-2">
+              <Text className="ps-1 text-sm font-medium text-subtle">
                 Name
-              </span>
+              </Text>
               <TextInput
                 value={value}
                 onChange={setValue}
@@ -96,7 +97,7 @@ export function DeckFormDrawer({
                 autoFocus
                 fieldClassName="py-3.5 leading-none"
               />
-            </div>
+            </View>
             <EmojiSelector
               options={orderedEmojiOptions}
               value={selectedEmoji}

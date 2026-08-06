@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useRouter } from "@tanstack/react-router"
 import { ChevronLeft } from "lucide-react"
 import { IconButton } from "@/components/ui"
@@ -13,7 +14,7 @@ export function SettingsHeader() {
   }
 
   return (
-    <header className="flex shrink-0 items-center gap-x-2">
+    <View row className="flex shrink-0 items-center gap-x-2">
       <IconButton
         onClick={handleBack}
         aria-label="Back to tasks"
@@ -21,9 +22,13 @@ export function SettingsHeader() {
       >
         <ChevronLeft size={32} strokeWidth={1.75} aria-hidden />
       </IconButton>
-      <h1 className="min-w-0 truncate text-4xl font-semibold tracking-tight text-foreground">
+      <Text
+        // biome-ignore lint/a11y/useHeadingContent: the heading text flows through Text's render prop into the h1 at runtime (cloneElement), which the static check can't see
+        render={<h1 />}
+        className="min-w-0 truncate text-4xl font-semibold tracking-tight text-foreground"
+      >
         Settings
-      </h1>
-    </header>
+      </Text>
+    </View>
   )
 }
