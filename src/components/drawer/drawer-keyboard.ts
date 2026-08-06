@@ -42,6 +42,47 @@ export function resolveDrawerKeyboardRoom(
 }
 
 /**
+ * Whether the on-screen keyboard resizes the VISUAL viewport out from under the sheet — the one
+ * case the room mechanism must NOT run.
+ *
+ * `useFreezeViewport` normally keeps the layout height whole while a drawer is up (iOS scroll-lock,
+ * or Chromium's `virtualKeyboard.overlaysContent`), so the sheet answers the keyboard by holding
+ * `room` below its content and growing into it. But `virtualKeyboard` is a secure-context-only API,
+ * so over a plain-http `ip:port` origin (a LAN dev build) there is no freeze on Chromium: the
+ * keyboard shrinks the visual viewport itself. Reserving room ON TOP of that shrink double-counts —
+ * the sheet grows by the keyboard's height a second time and its top climbs off-screen behind the
+ * URL bar. iOS still freezes (scroll-lock needs no API) and native reports an exact height without
+ * shrinking, so both stay on the room path; only VK-less non-iOS Chromium falls here.
+ */
+export function viewportShrinksUnderKeyboard({
+  isIOS,
+  hasNativeKeyboard,
+  hasVirtualKeyboardApi,
+}: {
+  isIOS: boolean
+  hasNativeKeyboard: boolean
+  hasVirtualKeyboardApi: boolean
+}): boolean {
+  return !isIOS && !hasNativeKeyboard && !hasVirtualKeyboardApi
+}
+
+/**
+ * The box's `max-height` on the {@link viewportShrinksUnderKeyboard} path: fit the VISIBLE viewport,
+ * never the layout one. The visual viewport has already shrunk by the keyboard, so the sheet holds
+ * no room — it just caps at what's on screen (content taller than that scrolls inside), clamped by
+ * the stylesheet's own cap. `null` while the keyboard is closed: nothing to constrain, so the box
+ * rides the stylesheet cap and follows its own content.
+ */
+export function resolveShrunkViewportCap(
+  keyboardOpen: boolean,
+  visibleViewportHeight: number,
+  cssCap: number,
+): number | null {
+  if (!keyboardOpen || visibleViewportHeight <= 0) return null
+  return Math.min(cssCap, visibleViewportHeight)
+}
+
+/**
  * Whether focusing a field should PIN a `min-height` floor at the box's current height, ahead of
  * the keyboard.
  *

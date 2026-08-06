@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest"
 import { DRAWER_CONTENT_LAYOUT_CLASS } from "#adaptv/components/drawer/drawer-engine"
 import {
   resolveDrawerKeyboardRoom,
+  resolveShrunkViewportCap,
   scrollDrawerInputIntoView,
   shouldPrimeKeyboardFloor,
+  viewportShrinksUnderKeyboard,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
 
@@ -134,6 +136,76 @@ describe("the cap the box grows into", () => {
     expect(css).toContain("max-height: 97dvh")
     //no keyboard term anywhere in the cap — the room effect owns that, inline and imperatively
     expect(css).not.toContain("--adaptv-drawer-keyboard")
+  })
+})
+
+/*
+ * The unfrozen web path: non-secure Chromium (a plain-http ip:port LAN build) has no
+ * VirtualKeyboard API, so `useFreezeViewport` can't hold the layout height — the keyboard shrinks
+ * the visual viewport out from under the sheet. There the room mechanism must NOT run (reserving
+ * room on top of the shrink double-counts and drives the sheet's top behind the URL bar). The sheet
+ * instead holds no room and caps at the visible viewport. iOS (scroll-lock) and native (exact
+ * height, no shrink) stay on the room path.
+ */
+describe("viewportShrinksUnderKeyboard", () => {
+  it("is true only for VK-less, non-iOS, non-native (non-secure Chromium web)", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: false,
+        hasVirtualKeyboardApi: false,
+      }),
+    ).toBe(true)
+  })
+
+  it("is false on iOS — the scroll-lock freeze needs no API", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: true,
+        hasNativeKeyboard: false,
+        hasVirtualKeyboardApi: false,
+      }),
+    ).toBe(false)
+  })
+
+  it("is false on native — the OS reports an exact height without shrinking", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: true,
+        hasVirtualKeyboardApi: false,
+      }),
+    ).toBe(false)
+  })
+
+  it("is false in a secure context — overlaysContent holds the layout height", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: false,
+        hasVirtualKeyboardApi: true,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe("resolveShrunkViewportCap", () => {
+  it("caps at the visible viewport when it is shorter than the stylesheet cap", () => {
+    //keyboard up: 423 of viewport is left above it, well under the 812 dvh cap → fit the 423
+    expect(resolveShrunkViewportCap(true, 423, 812)).toBe(423)
+  })
+
+  it("keeps the stylesheet cap when the viewport is the taller of the two", () => {
+    //a short keyboard on a tall screen: the stylesheet cap still binds
+    expect(resolveShrunkViewportCap(true, 812, 600)).toBe(600)
+  })
+
+  it("returns null while the keyboard is closed — the box rides the stylesheet cap", () => {
+    expect(resolveShrunkViewportCap(false, 423, 812)).toBeNull()
+  })
+
+  it("returns null for a non-positive viewport (never seen a real measurement)", () => {
+    expect(resolveShrunkViewportCap(true, 0, 812)).toBeNull()
   })
 })
 
