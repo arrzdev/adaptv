@@ -139,6 +139,19 @@ const DRAWER_SETTLE_FALLBACK_MS = 32
 // to clear it or a genuine keyboard gets retracted mid-appearance and flickers back.
 const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 400
 
+// iOS raises the keyboard then its ~45px password AutoFill accessory bar as a SECOND height step
+// ~280ms later, by which time the first lift has settled — so untreated the second step is a fresh
+// full-duration animation (the visible "grows once, then grows again" double-bump). Within this
+// window after the last grow, a further grow is treated as a CONTINUATION and re-aimed over the small
+// remaining travel instead. Wide enough for the ~280ms two-step; a genuinely later grow (a field
+// switch) falls outside it and animates normally.
+const DRAWER_KEYBOARD_RAISE_CONTINUATION_MS = 500
+
+// Floor for that re-aim's proportional duration — the bare 45px accessory-bar step computes to ~50ms,
+// which reads as an abrupt SNAP; this holds it to a short-but-smooth step, still well under the
+// ~380ms full curve.
+const DRAWER_KEYBOARD_STEP_MIN_DURATION = 0.22
+
 type DrawerMetrics = {
   excessHeight: number
   contentHeight: number
@@ -347,6 +360,9 @@ export function DrawerEngine({
   const lastNaturalRef = useRef(0)
   //the box height one observation ago — the floor a shrink eases down FROM
   const lastBoxRef = useRef(0)
+  //performance.now() of the last keyboard GROW — the NEW-grow toggle re-aims a further grow within
+  //DRAWER_KEYBOARD_RAISE_CONTINUATION_MS (the iOS two-step accessory bar) as a continuation
+  const lastKeyboardGrowTsRef = useRef(0)
   //pending retract of a focus-primed floor the keyboard never confirmed (see primeKeyboardFloor)
   const floorRetractTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -1029,14 +1045,22 @@ export function DrawerEngine({
       ? DEFAULT_DRAWER_TRANSITION
       : DRAWER_SHRINK_TRANSITION
 
-    // A grow-CORRECTION arriving mid-flight (iOS reports a raise in two steps as a rule: the
-    // first read catches the keyboard mid-slide and the settled height lands ~74ms later).
-    // Restarting a full-duration curve for the remaining travel appends a visible slow tail, so
-    // re-aim over a duration proportional to what is LEFT, at the motion's natural rate.
+    // A grow-CORRECTION to re-aim rather than restart. iOS reports a raise in two steps as a rule:
+    // the first read catches the keyboard mid-slide and the settled height lands ~74ms later, and on
+    // a password field the accessory bar is a SECOND step ~280ms later, by which time the first lift
+    // has usually settled (`isPanelAnimatingRef` false). Restarting a full-duration curve for the
+    // small remaining travel is the visible double-bump; re-aim over a duration proportional to what
+    // is LEFT so it reads as one settling motion. `isRaiseContinuation` extends this across the settle
+    // gap (see DRAWER_KEYBOARD_RAISE_CONTINUATION_MS); the mid-flight check covers iOS's fast two-step.
+    const nowMs = performance.now()
+    const isRaiseContinuation =
+      nowMs - lastKeyboardGrowTsRef.current <
+      DRAWER_KEYBOARD_RAISE_CONTINUATION_MS
+    if (isGrowing) lastKeyboardGrowTsRef.current = nowMs
     if (
       isGrowing &&
       appliedRoomRef.current > 0 &&
-      isPanelAnimatingRef.current
+      (isPanelAnimatingRef.current || isRaiseContinuation)
     ) {
       const liveRoom = readDrawerKeyboardRoom(content)
       const naturalRatePxPerSec = room / DEFAULT_DRAWER_TRANSITION.duration
@@ -1044,7 +1068,7 @@ export function DrawerEngine({
         ...DEFAULT_DRAWER_TRANSITION,
         duration: clamp(
           Math.abs(room - liveRoom) / naturalRatePxPerSec,
-          0.12,
+          DRAWER_KEYBOARD_STEP_MIN_DURATION,
           DEFAULT_DRAWER_TRANSITION.duration,
         ),
       }

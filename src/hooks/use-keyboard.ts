@@ -223,6 +223,37 @@ const KEYBOARD_PREDICT_CONFIRM_MS = 400
 // ONE settled update. Increases and the first raise commit immediately (see syncKeyboardState).
 const KEYBOARD_HEIGHT_CONFIRM_MS = 120
 
+// While a native keyboard is open, iOS toggles the ~45px password AutoFill accessory bar on and off
+// (device-measured: height flicks 346↔301 for as long as the field is focused, each dip lasting
+// ~260ms). A shrink smaller than this is treated as that bar and HELD rather than committed, so the
+// sheet doesn't bounce down and back up on the flicker.
+const NATIVE_KEYBOARD_SHRINK_HYSTERESIS_PX = 60
+
+// How long a small shrink is held before it's honored. Longer than the bar's ~260ms dip so the
+// toggle is absorbed, short enough that a GENUINE small reduction still lands promptly — the sheet
+// is never stuck too tall, which is what keeps the drawer responsive to real keyboard changes.
+const NATIVE_KEYBOARD_SHRINK_HOLD_MS = 350
+
+/**
+ * Whether a native keyboard report is a SMALL shrink to HOLD (the iOS password AutoFill bar hiding)
+ * rather than commit straight away. Only while the keyboard stays open, and only a drop shorter than
+ * `thresholdPx` — a grow, a large shrink or a dismiss all fall through and commit. Pure, so the
+ * hysteresis decision is unit-testable without the timers around it.
+ */
+export function isSuppressibleKeyboardShrink(
+  wasOpen: boolean,
+  committedHeight: number,
+  next: KeyboardState,
+  thresholdPx: number,
+): boolean {
+  return (
+    next.isOpen &&
+    wasOpen &&
+    next.height < committedHeight &&
+    committedHeight - next.height < thresholdPx
+  )
+}
+
 /**
  * Canonical on-screen keyboard observer. Reports a live height + open flag,
  * sourced from the VirtualKeyboard API when available and falling back to
@@ -538,10 +569,52 @@ export function useKeyboard({
     //native: the OS reports exact height + will-show/hide, so skip the whole
     //visualViewport heuristic path (dismiss/height confirms, transient filtering).
     if (hasNativeKeyboard()) {
-      const unsubscribe = subscribeNativeKeyboard((info) => setState(info))
+      let committedHeight = 0
+      let committedOpen = false
+      let shrinkHoldTimer: ReturnType<typeof setTimeout> | null = null
+
+      function commitNative(next: KeyboardState) {
+        committedOpen = next.isOpen
+        committedHeight = next.isOpen ? next.height : 0
+        setState(next)
+      }
+
+      const unsubscribe = subscribeNativeKeyboard((info) => {
+        // Hold the settled height against iOS's password AutoFill bar flickering on/off. A SMALL
+        // shrink while open (the ~45px bar hiding, which iOS reverses ~260ms later) is HELD for a
+        // beat rather than committed: if the height climbs back within the window it was the toggle
+        // and the sheet never bounced; if it STAYS shorter past the window it is a genuine change
+        // and commits — so the sheet is never stuck too tall (the drawer stays responsive). Grows,
+        // large shrinks and a real dismiss (height 0) all commit immediately and cancel any hold.
+        const isSmallShrink = isSuppressibleKeyboardShrink(
+          committedOpen,
+          committedHeight,
+          info,
+          NATIVE_KEYBOARD_SHRINK_HYSTERESIS_PX,
+        )
+
+        if (!isSmallShrink) {
+          if (shrinkHoldTimer) {
+            clearTimeout(shrinkHoldTimer)
+            shrinkHoldTimer = null
+          }
+          commitNative(info)
+          return
+        }
+
+        if (!shrinkHoldTimer) {
+          const held = info.height
+          shrinkHoldTimer = setTimeout(() => {
+            shrinkHoldTimer = null
+            commitNative({ isOpen: true, height: held })
+          }, NATIVE_KEYBOARD_SHRINK_HOLD_MS)
+        }
+      })
+
       return () => {
         unsubscribe()
-        setState({ isOpen: false, height: 0 })
+        if (shrinkHoldTimer) clearTimeout(shrinkHoldTimer)
+        commitNative({ isOpen: false, height: 0 })
       }
     }
 
