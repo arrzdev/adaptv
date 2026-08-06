@@ -1,4 +1,5 @@
 import type { InputHandle } from "@arrzdev/adaptv/components"
+import { Pressable, Text, View } from "@arrzdev/adaptv/components"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { PasswordField } from "@/components/auth/password-field"
@@ -12,7 +13,7 @@ import { authClient } from "@/data/auth/client"
 import type { SocialProvider } from "@/data/auth/social-providers"
 import { socialProvidersQueryOptions } from "@/data/auth/social-providers"
 import { consumeSyncReset, requestSyncReset } from "@/data/sync/controller"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 
 const MIN_PASSWORD = 8
 
@@ -54,7 +55,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
     useState<SocialProvider | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { data: providers = [] } = useQuery(socialProvidersQueryOptions)
-  const { vibrateOk, vibrateSuccess } = useAppVibrate()
+  const haptic = useHaptics()
   const passwordRef = useRef<InputHandle>(null)
   const fieldsRef = useRef<HTMLDivElement>(null)
   //when (performance.now) an autofill burst armed the auto-submit; null = disarmed
@@ -202,7 +203,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
     if (!canSubmit) return
 
     autofillArmedAtRef.current = null
-    vibrateSuccess()
+    haptic.notify("success")
     void handleSubmit()
   })
 
@@ -217,7 +218,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
         {!isSignUp && "Sign in to sync your tasks across devices."}
       </AppDrawer.Description>
 
-      <div ref={fieldsRef} className="mt-3 flex flex-col gap-3">
+      <View ref={fieldsRef} className="mt-3 flex flex-col gap-3">
         <TextInput
           type="email"
           name="email"
@@ -245,55 +246,54 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
         />
 
         {/* reserved one-line slot — always present so an error can't shift the buttons */}
-        <p
+        <Text
+          render={<p />}
           role="alert"
           className="min-h-5 whitespace-pre-line text-sm text-error"
         >
           {error}
-        </p>
+        </Text>
 
         <PrimaryButton
           className={CONTROL_CLASS}
           onClick={() => {
-            vibrateSuccess()
+            haptic.notify("success")
             void handleSubmit()
           }}
+          hapticOnPress={false}
           disabled={!canSubmit}
           loading={submitting}
         >
           {isSignUp && "Create account"}
           {!isSignUp && "Sign in"}
         </PrimaryButton>
-      </div>
+      </View>
 
       {providers.length > 0 && (
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="flex items-center gap-3 text-xs text-muted">
+        <View className="mt-4 flex flex-col gap-3">
+          <View row className="flex items-center gap-3 text-xs text-muted">
             <span className="h-px flex-1 bg-border-subtle" />
             or
             <span className="h-px flex-1 bg-border-subtle" />
-          </div>
+          </View>
           {providers.map((provider) => (
             <SecondaryButton
               key={provider}
               className={CONTROL_CLASS}
-              onClick={() => {
-                vibrateOk()
-                void handleSocial(provider)
-              }}
+              onClick={() => void handleSocial(provider)}
               disabled={isBusy}
               loading={pendingProvider === provider}
             >
               Continue with {PROVIDER_LABEL[provider]}
             </SecondaryButton>
           ))}
-        </div>
+        </View>
       )}
 
-      <button
-        type="button"
-        onClick={() => {
-          vibrateOk()
+      <Pressable
+        render={<button type="button" />}
+        onPress={() => {
+          haptic.impact("light")
           switchMode()
         }}
         className="clickable mt-5 w-full text-center text-sm text-muted"
@@ -314,7 +314,7 @@ export function LoginForm({ onClose }: { onClose: () => void }) {
             </span>
           </>
         )}
-      </button>
+      </Pressable>
     </AppDrawer.Shell>
   )
 }

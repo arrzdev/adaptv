@@ -1,3 +1,4 @@
+import { View } from "@arrzdev/adaptv/components"
 import { useState } from "react"
 import {
   AppDrawer,
@@ -9,8 +10,8 @@ import { formatCount } from "@/components/ui/format-count"
 import { deleteDeck } from "@/data/collections/decks/mutations"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useTodos } from "@/data/collections/todos/queries"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 import { useDataMutation } from "@/hooks/use-data-mutation"
+import { useHaptics } from "@/hooks/use-haptics"
 
 type DeleteDeckDrawerProps = {
   /** The deck to delete; `null` keeps the drawer closed (stays mounted for the exit animation). */
@@ -25,7 +26,7 @@ export function DeleteDeckDrawer({
   deck,
   onClose,
 }: DeleteDeckDrawerProps) {
-  const { vibrateCancel } = useAppVibrate()
+  const haptic = useHaptics()
   const { data: todos } = useTodos()
   const { run, error, isPending, reset } = useDataMutation()
   //lock the sheet's drag while the destructive button is held so finger drift can't move it
@@ -66,7 +67,7 @@ export function DeleteDeckDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
+            <View className="flex flex-col gap-y-2">
               <AppDrawer.Title>Delete {deck?.name ?? ""}?</AppDrawer.Title>
               <AppDrawer.Description>
                 {isEmpty &&
@@ -89,7 +90,7 @@ export function DeleteDeckDrawer({
                   </>
                 )}
               </AppDrawer.Description>
-            </div>
+            </View>
 
             <DrawerActionFooter
               errorMessage={error?.message}
@@ -107,7 +108,7 @@ export function DeleteDeckDrawer({
               cancel={
                 <AppDrawer.Close
                   type="button"
-                  onClick={vibrateCancel}
+                  onClick={() => haptic.impact("light")}
                   disabled={isPending}
                   className={drawerCancelClassName}
                 >

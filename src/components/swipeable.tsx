@@ -14,6 +14,11 @@ import {
   useState,
 } from "react"
 import {
+  resolveSwipeRelease,
+  SPRING_SUBSTEP,
+  springStep,
+} from "#adaptv/components/swipeable-physics"
+import {
   GesturePriority,
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
@@ -70,29 +75,13 @@ type Side = "left" | "right"
 type OpenSide = false | Side
 
 /* =============================================================================
- * PHYSICS
+ * PHYSICS — the spring integrator (springStep/SPRING_SUBSTEP) and the release
+ * decision (resolveSwipeRelease) now live in swipeable-physics.ts, pure and
+ * unit-tested. This file drives them and owns the DOM/RAF side effects.
  * ============================================================================= */
-
-/** Fixed integration step (s). Small enough that `damping·dt/mass` stays well
- *  under the explicit-Euler stability limit of 2 at any real-world damping. */
-const SPRING_SUBSTEP = 1 / 240
 
 /** Trailing sample window (ms) used to compute release velocity on flick. */
 const VELOCITY_WINDOW_MS = 60
-
-function springStep(
-  pos: number,
-  vel: number,
-  target: number,
-  stiffness: number,
-  damping: number,
-  mass: number,
-  dt: number,
-) {
-  const force = -stiffness * (pos - target) - damping * vel
-  const nv = vel + (force / mass) * dt
-  return { pos: pos + nv * dt, vel: nv }
-}
 
 /* =============================================================================
  * GEOMETRY HELPERS
@@ -818,6 +807,27 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         })
     }, [])
 
+    //close after a tray action is activated (iOS Mail). A bubbled native click, so
+    //the action's own handler has already run — this dismisses AFTER it, never
+    //instead of it. Only a deliberate tap/keyboard activation clicks the tray; a
+    //swipe never does. In the app an action usually unmounts the row, making this a
+    //harmless no-op there, while a stay-mounted tray (a toggle, a non-destructive
+    //pick) now dismisses instead of stranding an open row.
+    useEffect(() => {
+      const root = rootRef.current
+      if (!root) return
+      const onClick = (e: MouseEvent) => {
+        if (
+          e.target instanceof Element &&
+          e.target.closest("[data-swipeable-actions]")
+        ) {
+          closeRef.current()
+        }
+      }
+      root.addEventListener("click", onClick)
+      return () => root.removeEventListener("click", onClick)
+    }, [])
+
     /* ---- gesture core ---------------------------------------------------- */
 
     const beginDrag = useCallback((clientX: number, clientY: number) => {
@@ -905,43 +915,16 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         return
       }
 
-      const c = cfgRef.current
-      const x = offsetRef.current
-      const vel = velocity()
-      const lw = hasLeft ? lwRef.current : 0
-      const rw = hasRight ? rwRef.current : 0
-      const wasOpen = openRef.current
-
-      if (wasOpen === "left") {
-        //flick back closes; flick through into right territory swaps sides
-        if (vel < -c.velocityThreshold) {
-          if (x < 0 && rw > 0) return openToRef.current("right")
-          return close(vel)
-        }
-        if (x < lw * (1 - c.closeThreshold)) return close()
-        return openToRef.current("left")
-      }
-      if (wasOpen === "right") {
-        if (vel > c.velocityThreshold) {
-          if (x > 0 && lw > 0) return openToRef.current("left")
-          return close(vel)
-        }
-        if (x > -rw * (1 - c.closeThreshold)) return close()
-        return openToRef.current("right")
-      }
-
-      //from closed — flick wins, else position threshold
-      if (vel > c.velocityThreshold && lw > 0)
-        return openToRef.current("left")
-      if (vel < -c.velocityThreshold && rw > 0) {
-        return openToRef.current("right")
-      }
-      if (lw > 0 && x > lw * c.openThreshold)
-        return openToRef.current("left")
-      if (rw > 0 && x < -rw * c.openThreshold) {
-        return openToRef.current("right")
-      }
-      close()
+      const decision = resolveSwipeRelease({
+        x: offsetRef.current,
+        vel: velocity(),
+        lw: hasLeft ? lwRef.current : 0,
+        rw: hasRight ? rwRef.current : 0,
+        wasOpen: openRef.current,
+        cfg: cfgRef.current,
+      })
+      if (decision.action === "open") openToRef.current(decision.side)
+      else close(decision.velocity)
     }, [close, hasLeft, hasRight, setWillChange, velocity])
 
     //stable handler refs for the imperative touch listeners

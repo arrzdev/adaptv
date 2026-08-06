@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import type {
   DragEndEvent,
@@ -22,7 +23,7 @@ import { IconButton } from "@/components/ui"
 import { resolveDeckEmoji } from "@/data/collections/decks/constants"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
+import { useHaptics } from "@/hooks/use-haptics"
 import { useSortableReorder } from "@/hooks/use-sortable-reorder"
 
 export type SettingsDeckListProps = {
@@ -51,8 +52,7 @@ export function SettingsDeckList({
   onEdit,
   onDelete,
 }: SettingsDeckListProps) {
-  const { vibrateSelection, vibrateImpact, hapticPointerHandlers } =
-    useAppVibrate()
+  const haptic = useHaptics()
   const reduceMotion = useAppReducedMotion()
   const { activeId, setActiveId, items, disabled, sensors, onDragEnd } =
     useSortableReorder(decks, onReorder)
@@ -66,15 +66,13 @@ export function SettingsDeckList({
     if (next === overIdRef.current) return
     overIdRef.current = next
     //tick on every slot the dragged deck crosses
-    if (next) vibrateSelection()
+    if (next) haptic.selection()
   }
-
-  const createHandlers = hapticPointerHandlers(onCreate, "ok")
 
   return (
     //no surface on the wrapper — each row + the add-row paint their own, so a
     //faded row reveals the page behind it during a drag (the task-list lift)
-    <div className="overflow-hidden rounded-md">
+    <View className="overflow-hidden rounded-md">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -85,9 +83,9 @@ export function SettingsDeckList({
           setActiveId(String(event.active.id))
           //seed the drop target to the lifted row so the first onDragOver (which
           //reports `over` === the row itself) is a no-op — otherwise it fires a
-          //vibrateSelection tick on top of this lift's vibrateImpact (double buzz)
+          //selection tick on top of this lift's medium impact (double buzz)
           overIdRef.current = String(event.active.id)
-          vibrateImpact()
+          haptic.impact("medium")
         }}
         onDragOver={handleDragOver}
         onDragEnd={(event: DragEndEvent) => {
@@ -118,7 +116,7 @@ export function SettingsDeckList({
           </ul>
         </SortableContext>
       </DndContext>
-      <ul
+      <View
         className={cn(
           "flex flex-col bg-surface",
           !reduceMotion && "transition-opacity duration-200 ease-out",
@@ -130,10 +128,13 @@ export function SettingsDeckList({
         <SettingsAddRow
           icon={Plus}
           label="New deck"
-          onClick={createHandlers.onClick}
+          onPress={() => {
+            haptic.impact("light")
+            onCreate()
+          }}
         />
-      </ul>
-    </div>
+      </View>
+    </View>
   )
 }
 
@@ -154,7 +155,6 @@ function SettingsDeckRow({
   onEdit,
   onDelete,
 }: SettingsDeckRowProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
   const {
     attributes,
     listeners,
@@ -170,9 +170,6 @@ function SettingsDeckRow({
   //button-role node containing buttons is invalid nested interactive content.
   //the drag listeners are untouched, so drag still works
   const { role, ...dragAttributes } = attributes
-
-  const editHandlers = hapticPointerHandlers(() => onEdit(deck), "ok")
-  const deleteHandlers = hapticPointerHandlers(() => onDelete(deck), "ok")
 
   //the lifted row morphs its top corners once it will land in the top slot — the
   //one real card edge (the New deck button is the group's bottom)
@@ -213,25 +210,29 @@ function SettingsDeckRow({
       {...dragAttributes}
       {...listeners}
     >
-      <div className="flex items-center justify-between gap-x-3 px-4 py-4">
-        <div className="flex min-w-0 flex-1 items-center gap-x-3">
-          <span
+      <View
+        row
+        className="flex items-center justify-between gap-x-3 px-4 py-4"
+      >
+        <View row className="flex min-w-0 flex-1 items-center gap-x-3">
+          <Text
             className="flex size-5 shrink-0 items-center justify-center text-base leading-none"
             aria-hidden
           >
             {resolveDeckEmoji(deck.emoji)}
-          </span>
-          <span className="truncate text-base font-medium text-foreground">
+          </Text>
+          <Text className="truncate text-base font-medium text-foreground">
             {deck.name}
-          </span>
-        </div>
+          </Text>
+        </View>
         {/* stop pointer-down here so pressing a button never arms the drag */}
-        <div
+        <View
+          row
           className="flex shrink-0 items-center gap-x-1"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <IconButton
-            onClick={editHandlers.onClick}
+            onClick={() => onEdit(deck)}
             aria-label={`Edit ${deck.name}`}
             className="size-9 bg-transparent hover:bg-secondary"
           >
@@ -239,18 +240,18 @@ function SettingsDeckRow({
           </IconButton>
           {canDelete && (
             <IconButton
-              onClick={deleteHandlers.onClick}
+              onClick={() => onDelete(deck)}
               aria-label={`Delete ${deck.name}`}
               className="size-9 bg-transparent text-error hover:bg-secondary"
             >
               <Trash2 size={18} strokeWidth={1.75} aria-hidden />
             </IconButton>
           )}
-        </div>
-      </div>
+        </View>
+      </View>
       {/* divider in the gap: it dims during a drag, and the lifted row hides its
           own (a lifted card shouldn't carry a seam line) */}
-      <div
+      <View
         className={cn(
           "mx-4 border-b border-border-subtle",
           !reduceMotion && "transition-opacity duration-150",
