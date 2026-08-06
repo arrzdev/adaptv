@@ -30,33 +30,33 @@ function LabTextPage() {
       subtitle="A run of text with the three platform quirks a <p> does not get: the line clamp, per-instance selection over the app-wide reset, and iOS Dynamic Type."
     >
       <LabBrief
-        what="numberOfLines clamping, the selectable opt-in over ui.noSelect, and whether text follows the iOS system text-size setting."
+        what="numberOfLines clamping, the selectable opt-in over ui.noSelect, and scaleWithSystem — the opt-in that multiplies a Text's built size by the iOS system text-size factor."
         steps={[
           "Cycle the clamp buttons through 1, 2, 3 and none. The paragraph must grow and shrink by whole lines, always ending in an ellipsis when clamped.",
           "Look at the “padding on the clamped element” card: the bottom line is meant to bleed through, and it is there so you recognise the bug when it happens in real code.",
           "Try to select the two paragraphs in the selection card — long-press on touch, drag on desktop. Compare with the data-adaptv-no-select stamp printed above them.",
-          "Read the Dynamic Type card's live font sizes. Only the unsized row can track the OS setting; the text-sm row is meant to stay put.",
-          "On iOS only: Settings → Accessibility → Display & Text Size → Larger Text, drag the slider to the far right, come back, and RELOAD the page (pull down, or relaunch the app). The unsized row's px number must change.",
+          "Read the scaleWithSystem card's live font sizes. Both rows are text-lg; the opted-in row is the built size × the measured factor, the plain row is the built size flat. Off iOS the factor is 1, so the two match.",
+          "On iOS only: Settings → Accessibility → Display & Text Size → Larger Text, drag the slider to the far right, come back, and RELOAD the page (pull down, or relaunch the app). The opted-in row's px must grow while the plain row holds, and the factor must climb above 1.",
         ]}
         expected={{
           web: {
             verdict: "partial",
-            note: "Clamp works. Selection works everywhere by default (the noSelect reset is installed-app-only), so both paragraphs select. Dynamic Type does nothing: the @supports (-webkit-touch-callout) gate excludes desktop Safari and every Chromium, and that exclusion is deliberate — on macOS the keyword resolves to a 13px system face and would SHRINK the text.",
+            note: "Clamp works. Selection works everywhere by default (the noSelect reset is installed-app-only), so both paragraphs select. scaleWithSystem is a no-op: the -webkit-touch-callout gate excludes desktop Safari and every Chromium, so the measured factor is 1 and the opted-in row renders at exactly its text-lg size — deliberately, since off iOS -apple-system-body would resolve to a 13px system face.",
           },
           pwa: {
             verdict: "partial",
-            note: "Clamp works. Now only the `selectable` paragraph selects — that is the noSelect reset doing its job. Dynamic Type: same as the browser on desktop; on an installed iOS PWA it DOES apply, because that is still WebKit.",
+            note: "Clamp works. Now only the `selectable` paragraph selects — that is the noSelect reset doing its job. scaleWithSystem: same no-op as the browser on desktop; on an installed iOS PWA it DOES multiply, because that is still WebKit.",
           },
           ios: {
             verdict: "works",
-            note: "All three. The unsized font-size reads ~17px at the default setting and climbs to the high 20s/30s at the largest accessibility size — after a reload. Changing the slider with the app open does nothing until then; WebKit resolves -apple-system-body once, at load.",
+            note: "All three. The plain text-lg row holds at its built size; the scaleWithSystem row is that size × the factor, ~1 at the default setting and climbing past it at the larger accessibility sizes — after a reload. Changing the slider with the app open does nothing until then; WebKit resolves -apple-system-body once, at load.",
           },
           android: {
             verdict: "partial",
-            note: "Clamp and selection work. Dynamic Type is absent and correct: -webkit-touch-callout is WebKit-only, Blink never shipped it, so the @supports gate is false and the rule never applies. Android's own font-scale setting is not plumbed through here.",
+            note: "Clamp and selection work. scaleWithSystem is absent and correct: -webkit-touch-callout is WebKit-only, Blink never shipped it, so the factor is 1 and nothing is scaled. Android's own font-scale setting is not plumbed through here.",
           },
         }}
-        wrong="A clamped paragraph shows all its lines, or shows N lines with no ellipsis, or collapses to zero height. Selection behaves the same on both paragraphs in an installed app. On iOS, the unsized font size is identical after a reload with Larger Text cranked to maximum — that means the Dynamic Type rule is not reaching the element, and the rest of the app's unsized text is not either."
+        wrong="A clamped paragraph shows all its lines, or shows N lines with no ellipsis, or collapses to zero height. Selection behaves the same on both paragraphs in an installed app. On iOS, the scaleWithSystem row's font size is identical to the plain row after a reload with Larger Text cranked to maximum — that means the factor is not reaching the element. Off iOS, the opted-in row is anything other than its plain text-lg size — that means it is being scaled when the factor should be 1."
       />
 
       <LabSection
@@ -140,21 +140,21 @@ function LabTextPage() {
       </LabSection>
 
       <LabSection
-        title="dynamicType"
-        description="Default true. The ONLY channel WebKit exposes for the iOS system text size is the -apple-system-body keyword, and it only works through the font SHORTHAND — so it cannot be a Tailwind class and has to belong to a primitive."
+        title="scaleWithSystem"
+        description="Opt-in, default false. MULTIPLIES a Text's built font-size (and line-height) by the iOS Dynamic Type factor, measured once at load from the -apple-system-body keyword — so text-4xl stays text-4xl × factor instead of being replaced by a system body face."
       >
-        <DynamicTypeProbe />
+        <ScaleWithSystemProbe />
         <LabCaveat>
-          Two bounds, and both look like breakage if you have not read
-          them.
-          <strong> One:</strong> an explicit size wins and switches this
-          off — <code>utilities</code> is a later cascade layer than{" "}
-          <code>adaptv</code>, so <code>text-sm</code> overrides the
-          shorthand&apos;s font-size and cuts the link to the setting. That
-          is correct precedence; it does mean Dynamic Type reaches UNSIZED
-          text only. <strong>Two:</strong> WebKit resolves the keyword at
-          page load. Changing the slider while the app is open restyles
-          nothing until you reload — nothing CSS can do about it.
+          Two things that look like breakage until you read them.
+          <strong> One:</strong> it MULTIPLIES, it never replaces — every
+          sized class keeps its proportions, so a heading and its caption
+          grow together and nothing overlaps. Off iOS the factor is{" "}
+          <code>1</code>, so an opted-in <code>Text</code> renders at
+          exactly its className size with zero inline sizing — the reason
+          it is safe to leave on. <strong>Two:</strong> the factor is
+          iOS-WebKit only and measured once at page load. Changing the
+          slider while the app is open scales nothing until you reload —
+          nothing JS can do about it.
         </LabCaveat>
       </LabSection>
 
@@ -188,9 +188,9 @@ function LabTextPage() {
           hint="Target every run of text from global CSS with no imports: [data-adaptv='text'] { … }"
         />
         <LabRow
-          label="data-dynamic-type"
-          value="present unless dynamicType={false}"
-          hint="A presence attribute, so the opt-out REMOVES it. React would stringify a boolean to 'true' and [data-dynamic-type] would still match."
+          label="data-scale-with-system"
+          value="present only when scaleWithSystem"
+          hint="A presence marker (the sizing itself is done in JS): opt-in, so it is ABSENT by default and the opt-in ADDS it. React would stringify a boolean to 'true', so it is set to '' not true."
         />
       </LabSection>
     </LabPage>
@@ -231,24 +231,31 @@ function NoSelectStamp() {
 /**
  * The measurement, on the page.
  *
- * Two `Text` runs — one with no size class, one with `text-sm` — and their
- * resolved `font-size` read back from the engine. On iOS the first number moves
- * with the system setting after a reload and the second one never does, which is
- * the entire contract stated as two numbers instead of a paragraph.
+ * Two `Text` runs at the SAME `text-lg` built size — one plain, one `scaleWithSystem` —
+ * and their resolved `font-size` read back from the engine. Because the built size is
+ * identical, the opted-in size ÷ the plain size IS the factor Text multiplied by: `1`
+ * off iOS (the two numbers match), climbing past `1` on iOS after a reload with Larger
+ * Text on. That is the whole multiply contract stated as three numbers, not a paragraph.
  */
-function DynamicTypeProbe() {
-  const unsizedRef = useRef<HTMLSpanElement>(null)
-  const sizedRef = useRef<HTMLSpanElement>(null)
-  const offRef = useRef<HTMLSpanElement>(null)
+function ScaleWithSystemProbe() {
+  const plainRef = useRef<HTMLSpanElement>(null)
+  const scaledRef = useRef<HTMLSpanElement>(null)
   const [sizes, setSizes] = useState<Record<string, string> | null>(null)
 
   useEffect(() => {
     const read = (node: HTMLElement | null) =>
-      node ? getComputedStyle(node).fontSize : "—"
+      node
+        ? Number.parseFloat(getComputedStyle(node).fontSize)
+        : Number.NaN
+    const plain = read(plainRef.current)
+    const scaled = read(scaledRef.current)
+    const factor = plain > 0 ? scaled / plain : Number.NaN
     setSizes({
-      "unsized, dynamicType (default)": read(unsizedRef.current),
-      "className='text-sm' — size wins": read(sizedRef.current),
-      "dynamicType={false}": read(offRef.current),
+      "plain text-lg — the built size, flat": `${plain}px`,
+      "scaleWithSystem text-lg — built × factor": `${scaled}px`,
+      "measured factor (scaled ÷ built)": Number.isNaN(factor)
+        ? "—"
+        : `${factor.toFixed(2)}×`,
       "@supports (-webkit-touch-callout: none)": String(
         typeof CSS !== "undefined" &&
           CSS.supports("-webkit-touch-callout", "none"),
@@ -259,18 +266,15 @@ function DynamicTypeProbe() {
   return (
     <>
       <div className="flex flex-col gap-y-2 rounded-md bg-secondary p-3">
-        <Text ref={unsizedRef} className="block text-foreground">
-          Unsized — this is the one that can follow the OS setting.
-        </Text>
-        <Text ref={sizedRef} className="block text-sm text-foreground">
-          className=&quot;text-sm&quot; — pinned at 14px, on purpose.
+        <Text ref={plainRef} className="block text-lg text-foreground">
+          Plain text-lg — always its built size, on every target.
         </Text>
         <Text
-          ref={offRef}
-          dynamicType={false}
-          className="block text-foreground"
+          ref={scaledRef}
+          scaleWithSystem
+          className="block text-lg text-subtle"
         >
-          dynamicType={"{false}"} — opted out, so unsized but still fixed.
+          scaleWithSystem text-lg — the same size × the iOS factor.
         </Text>
       </div>
       {sizes === null ? (

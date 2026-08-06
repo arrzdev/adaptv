@@ -2,7 +2,7 @@ import type {
   ImpactWeight,
   NotifyType,
 } from "@arrzdev/adaptv/capabilities"
-import { haptics } from "@arrzdev/adaptv/capabilities"
+import { useHaptics } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -23,8 +23,9 @@ const WEIGHTS: ImpactWeight[] = ["light", "medium", "heavy"]
 const NOTIFY: NotifyType[] = ["success", "warning", "error"]
 
 function LabHapticsPage() {
+  const haptic = useHaptics()
   const [supported, setSupported] = useState(false)
-  useEffect(() => setSupported(haptics.isSupported()), [])
+  useEffect(() => setSupported(haptic.isSupported()), [haptic])
 
   return (
     <LabPage
@@ -34,7 +35,7 @@ function LabHapticsPage() {
       <LabBrief
         what="Imperative feedback that is not tied to a tap — a finished upload, a countdown — and an honest answer about where there is no engine to fire at all."
         steps={[
-          "Read the support badge. On iOS Safari it must read unsupported, and that is correct and permanent.",
+          "Read the support badge. On iOS BEFORE 26.5 it reads supported and the buttons fire the system tick through a hidden native switch. On iOS 26.5+ it still reads supported but produces nothing — Apple patched the programmatic trick and there is no runtime way to detect it. Native and Android are unaffected.",
           "Press light, medium and heavy in turn on a real device. They must feel different from each other where the platform has a real engine.",
           "Press success, warning and error. These are patterns, not intensities — they should be distinguishable as rhythms.",
           "Press selection several times quickly.",
@@ -43,7 +44,7 @@ function LabHapticsPage() {
         expected={{
           web: {
             verdict: "partial",
-            note: "Android Chrome approximates the taxonomy with navigator.vibrate patterns — coarse but present. Desktop has no hardware. iOS Safari has nothing and never will: WebKit's standards position on the Vibration API is formally oppose.",
+            note: "Android Chrome approximates the taxonomy with navigator.vibrate patterns — coarse but present. Desktop has no hardware. iOS Safari before 26.5 fires a single system tick via a hidden native <input switch>; iOS 26.5+ produces nothing (Apple patched programmatic triggering). One flavour of tick either way — never the impact weights.",
           },
           pwa: {
             verdict: "partial",
@@ -58,7 +59,7 @@ function LabHapticsPage() {
             note: "The real OS haptic constants. The weights differ, less dramatically than on iOS.",
           },
         }}
-        wrong="The support badge says supported on iOS Safari — it cannot be, and something is lying about a capability. Or every weight feels identical on native, which means the taxonomy is collapsing to one call and the vocabulary is decorative."
+        wrong="Every weight feels identical on native, which means the taxonomy is collapsing to one call and the vocabulary is decorative. Or a pulse on iOS web throws instead of quietly toggling the switch — on 26.5+ it must no-op, not error."
       />
 
       <LabSection title="Support">
@@ -68,20 +69,22 @@ function LabHapticsPage() {
           unsupportedLabel="Nothing to fire here"
           detail="Native uses the real engine; Android/Chrome web approximates the taxonomy with navigator.vibrate patterns."
         />
-        {!supported && (
-          <LabCaveat>
-            If this reads unsupported on iOS Safari, that is correct and
-            not fixable: WebKit&apos;s standards position on the Vibration
-            API is formally <em>oppose</em>. Tap-triggered feedback has to
-            go through the declarative haptic-tick transducer instead.
-          </LabCaveat>
-        )}
+        <LabCaveat>
+          iOS web has no Vibration API, so <code>useHaptics</code> reaches
+          the Taptic Engine by toggling a hidden native{" "}
+          <code>&lt;input switch&gt;</code>. This works on every iOS{" "}
+          <strong>before 26.5</strong>; on 26.5+ Apple patched programmatic
+          triggering, so it reports success and produces nothing — an
+          accepted limitation with no runtime way to detect it. The only
+          mechanism that survives 26.5 is a real finger on the switch (a
+          primitive&apos;s <code>haptic</code> prop).
+        </LabCaveat>
       </LabSection>
 
       <LabSection title="impact(weight)">
         <LabActions>
           {WEIGHTS.map((weight) => (
-            <LabButton key={weight} onClick={() => haptics.impact(weight)}>
+            <LabButton key={weight} onClick={() => haptic.impact(weight)}>
               {weight}
             </LabButton>
           ))}
@@ -91,7 +94,7 @@ function LabHapticsPage() {
       <LabSection title="notify(type)">
         <LabActions>
           {NOTIFY.map((type) => (
-            <LabButton key={type} onClick={() => haptics.notify(type)}>
+            <LabButton key={type} onClick={() => haptic.notify(type)}>
               {type}
             </LabButton>
           ))}
@@ -103,7 +106,7 @@ function LabHapticsPage() {
         description="The light tick for list and segmented-control changes."
       >
         <LabActions>
-          <LabButton onClick={() => haptics.selection()}>
+          <LabButton onClick={() => haptic.selection()}>
             selection
           </LabButton>
         </LabActions>

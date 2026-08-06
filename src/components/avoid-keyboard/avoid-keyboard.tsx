@@ -1,7 +1,8 @@
-import type { CSSProperties, HTMLAttributes, Ref } from "react"
-import { forwardRef, useCallback, useRef } from "react"
+import type { CSSProperties, HTMLAttributes } from "react"
+import { forwardRef, useRef } from "react"
 import type { AvoidKeyboardBehavior } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
+import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
@@ -148,22 +149,3 @@ export const AvoidKeyboard = forwardRef<
 })
 
 AvoidKeyboard.displayName = "AvoidKeyboard"
-
-/* =============================================================================
- * REF MERGE
- * ============================================================================= */
-
-/** Assign a DOM node to both an internal `RefObject` and a forwarded `ref`. */
-function useMergedRef<T>(
-  localRef: { current: T | null },
-  forwardedRef: Ref<T>,
-) {
-  return useCallback(
-    (node: T | null) => {
-      localRef.current = node
-      if (typeof forwardedRef === "function") forwardedRef(node)
-      else if (forwardedRef) forwardedRef.current = node
-    },
-    [localRef, forwardedRef],
-  )
-}

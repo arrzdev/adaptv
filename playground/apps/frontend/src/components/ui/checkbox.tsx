@@ -8,6 +8,7 @@ import {
 } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { forwardRef } from "react"
+import { useHaptics } from "@/hooks/use-haptics"
 
 function CheckboxBox() {
   const { isChecked, isIndeterminate, isDisabled } = useCheckbox()
@@ -54,9 +55,18 @@ function CheckboxIcon() {
 CheckboxIcon.displayName = "Checkbox.Icon"
 
 export const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
-  function Checkbox({ className, ...props }, ref) {
+  function Checkbox({ className, onCheckedChange, ...props }, ref) {
+    const haptic = useHaptics()
     return (
-      <BaseCheckbox ref={ref} className={className} {...props}>
+      <BaseCheckbox
+        ref={ref}
+        className={className}
+        onCheckedChange={(checked) => {
+          haptic.selection()
+          onCheckedChange?.(checked)
+        }}
+        {...props}
+      >
         <CheckboxBox />
       </BaseCheckbox>
     )

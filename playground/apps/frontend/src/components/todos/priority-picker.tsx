@@ -1,8 +1,7 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { PRIORITY_LEVELS } from "@/data/collections/todos/priority"
-import { useAppVibrate } from "@/hooks/use-app-vibrate"
 
 type PriorityOption = {
   value: number | null
@@ -27,25 +26,19 @@ type PriorityPickerProps = {
 }
 
 export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
-  const { hapticPointerHandlers } = useAppVibrate()
-
   return (
-    <div className="flex flex-col gap-y-2">
-      <span className="ps-1 text-sm font-medium text-subtle">
+    <View className="flex flex-col gap-y-2">
+      <Text className="ps-1 text-sm font-medium text-subtle">
         Priority
-      </span>
+      </Text>
       {/* a chip row is its own scroller — the sheet around it only scrolls vertically */}
       <ScrollView horizontal className="-mx-6 gap-x-2 px-6">
         {PRIORITY_OPTIONS.map((option) => {
           const isSelected = value === option.value
-          const handlers = hapticPointerHandlers(
-            () => onChange(option.value),
-            "ok",
-          )
           return (
             <GhostButton
               key={option.label}
-              onClick={handlers.onClick}
+              onClick={() => onChange(option.value)}
               className={cn(
                 "shrink-0",
                 option.textClassName,
@@ -69,6 +62,6 @@ export function PriorityPicker({ value, onChange }: PriorityPickerProps) {
           )
         })}
       </ScrollView>
-    </div>
+    </View>
   )
 }

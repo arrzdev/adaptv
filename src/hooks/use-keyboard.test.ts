@@ -5,6 +5,7 @@ import {
   recordKeyboardHeight,
 } from "#adaptv/capabilities/keyboard-height-cache"
 import {
+  isSuppressibleKeyboardShrink,
   useKeyboard,
   willOpenVirtualKeyboard,
 } from "#adaptv/hooks/use-keyboard"
@@ -374,5 +375,70 @@ describe("useKeyboard", () => {
       focusInput()
       expect(result.current).toEqual({ isOpen: true, height: 360 })
     })
+  })
+})
+
+/*
+ * The native keyboard's height is treated as exact — except iOS toggles a ~45px password AutoFill
+ * accessory bar on and off while the field stays focused. A small shrink is HELD, not committed, so
+ * the sheet doesn't bounce; a grow, a large shrink or a dismiss all commit. Numbers are the
+ * device-measured 346 (keyboard + bar) / 301 (bar hidden), threshold 60.
+ */
+describe("isSuppressibleKeyboardShrink", () => {
+  const THRESHOLD = 60
+
+  it("holds the ~45px accessory-bar shrink (346 → 301) while open", () => {
+    expect(
+      isSuppressibleKeyboardShrink(
+        true,
+        346,
+        { isOpen: true, height: 301 },
+        THRESHOLD,
+      ),
+    ).toBe(true)
+  })
+
+  it("commits a GROW — the bar re-appearing lifts the sheet", () => {
+    expect(
+      isSuppressibleKeyboardShrink(
+        true,
+        301,
+        { isOpen: true, height: 346 },
+        THRESHOLD,
+      ),
+    ).toBe(false)
+  })
+
+  it("commits a LARGE shrink — a genuinely shorter keyboard, not the bar", () => {
+    expect(
+      isSuppressibleKeyboardShrink(
+        true,
+        346,
+        { isOpen: true, height: 200 },
+        THRESHOLD,
+      ),
+    ).toBe(false)
+  })
+
+  it("commits a dismiss (height 0) even though it is a shrink", () => {
+    expect(
+      isSuppressibleKeyboardShrink(
+        true,
+        346,
+        { isOpen: false, height: 0 },
+        THRESHOLD,
+      ),
+    ).toBe(false)
+  })
+
+  it("never holds when the keyboard was not already open (the raise)", () => {
+    expect(
+      isSuppressibleKeyboardShrink(
+        false,
+        0,
+        { isOpen: true, height: 301 },
+        THRESHOLD,
+      ),
+    ).toBe(false)
   })
 })

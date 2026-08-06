@@ -16,6 +16,7 @@ import {
   useState,
 } from "react"
 import { createPortal } from "react-dom"
+import { hasNativeKeyboard } from "#adaptv/capabilities/keyboard"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import {
   DEFAULT_DRAWER_TRANSITION,
@@ -25,12 +26,18 @@ import {
   resolveDrawerDragRelease,
 } from "#adaptv/components/drawer/drawer-constants"
 import {
+  startDrawerFpsSample,
+  stopDrawerFpsSample,
+} from "#adaptv/components/drawer/drawer-fps"
+import {
   clearDrawerKeyboardRoom,
   measureDrawerContentNaturalHeight,
   readDrawerKeyboardRoom,
   resolveDrawerKeyboardRoom,
+  resolveShrunkViewportCap,
   shouldPrimeKeyboardFloor,
   useDrawerKeyboardAvoidance,
+  viewportShrinksUnderKeyboard,
   writeDrawerKeyboardRoom,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import {
@@ -46,9 +53,13 @@ import {
   GesturePriority,
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
-import { dismissVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
+import {
+  dismissVirtualKeyboard,
+  getVirtualKeyboardApi,
+} from "#adaptv/hooks/use-keyboard"
 import { clamp } from "#adaptv/utils/clamp"
 import { cn } from "#adaptv/utils/cn"
+import { isIOS } from "#adaptv/utils/platform"
 
 //Unmount as soon as the close settles (the snappy close ends with the panel off-screen, so
 //there's no last frame to wait for). Keeping the panel mounted past that left the overlay
@@ -127,6 +138,19 @@ const DRAWER_SETTLE_FALLBACK_MS = 32
 // use-keyboard's KEYBOARD_PREDICT_CONFIRM_MS: the keyboard's own slide is ~250ms, so the window has
 // to clear it or a genuine keyboard gets retracted mid-appearance and flickers back.
 const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 400
+
+// iOS raises the keyboard then its ~45px password AutoFill accessory bar as a SECOND height step
+// ~280ms later, by which time the first lift has settled — so untreated the second step is a fresh
+// full-duration animation (the visible "grows once, then grows again" double-bump). Within this
+// window after the last grow, a further grow is treated as a CONTINUATION and re-aimed over the small
+// remaining travel instead. Wide enough for the ~280ms two-step; a genuinely later grow (a field
+// switch) falls outside it and animates normally.
+const DRAWER_KEYBOARD_RAISE_CONTINUATION_MS = 500
+
+// Floor for that re-aim's proportional duration — the bare 45px accessory-bar step computes to ~50ms,
+// which reads as an abrupt SNAP; this holds it to a short-but-smooth step, still well under the
+// ~380ms full curve.
+const DRAWER_KEYBOARD_STEP_MIN_DURATION = 0.22
 
 type DrawerMetrics = {
   excessHeight: number
@@ -328,11 +352,17 @@ export function DrawerEngine({
   //back while nothing of ours was overriding it (see the keyboard-room effect)
   const appliedRoomRef = useRef(0)
   const cssCapRef = useRef(Number.POSITIVE_INFINITY)
+  //true while the box is capped to the visible viewport on the unfrozen web path (non-secure
+  //Chromium), where the keyboard shrinks the viewport itself — see the keyboard-room effect
+  const visibleCapAppliedRef = useRef(false)
   //the content's own height as of the last time the room target was resolved — the baseline a
   //content-size change is detected against (see reaimKeyboardRoom)
   const lastNaturalRef = useRef(0)
   //the box height one observation ago — the floor a shrink eases down FROM
   const lastBoxRef = useRef(0)
+  //performance.now() of the last keyboard GROW — the NEW-grow toggle re-aims a further grow within
+  //DRAWER_KEYBOARD_RAISE_CONTINUATION_MS (the iOS two-step accessory bar) as a continuation
+  const lastKeyboardGrowTsRef = useRef(0)
   //pending retract of a focus-primed floor the keyboard never confirmed (see primeKeyboardFloor)
   const floorRetractTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -363,15 +393,18 @@ export function DrawerEngine({
 
   //track the in-flight panel animation window so parts (the edge-fade mask) can defer
   //repaint-triggering work off the animation and flush once on settle
-  const beginPanelAnimation = useCallback(() => {
+  const beginPanelAnimation = useCallback((label = "drawer") => {
     panelAnimationRunRef.current++
     isPanelAnimatingRef.current = true
+    //dev-only, off by default — records this animation's frame cadence (see drawer-fps.ts)
+    startDrawerFpsSample(label)
     return panelAnimationRunRef.current
   }, [])
 
   const endPanelAnimation = useCallback((runId: number) => {
     if (panelAnimationRunRef.current !== runId) return
     isPanelAnimatingRef.current = false
+    stopDrawerFpsSample()
     for (const listener of panelSettleListenersRef.current) listener()
   }, [])
 
@@ -488,7 +521,7 @@ export function DrawerEngine({
   const snapOpenForKeyboard = useCallback(async () => {
     if (y.get() <= 1) return
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("keyboard-snap")
     await animateDrawerY(y, panelRef.current, 0, DEFAULT_DRAWER_TRANSITION)
     endPanelAnimation(runId)
   }, [y, beginPanelAnimation, endPanelAnimation])
@@ -873,10 +906,82 @@ export function DrawerEngine({
       if (isClosingRef.current) return
       if (content) clearDrawerKeyboardRoom(content)
       appliedRoomRef.current = 0
+      visibleCapAppliedRef.current = false
       return
     }
 
     if (!content) return
+
+    // ── Unfrozen web keyboard path ──────────────────────────────────────────────────────────
+    // Non-secure Chromium (no VirtualKeyboard API, not iOS, not native): `useFreezeViewport` could
+    // NOT stop the keyboard resizing the VISUAL viewport, so it shrinks by the keyboard's own
+    // height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
+    // shrink double-counts, growing the box by the keyboard's height a second time until its top
+    // climbs off-screen behind the URL bar (the plain-http `ip:port` over-grow). Hold no room; cap
+    // the box at the visible viewport (taller content scrolls inside). The frozen paths — iOS
+    // scroll-lock, secure-Chromium `overlaysContent`, native `KeyboardResize.None` — keep the
+    // viewport whole and fall through to the room mechanism below, untouched.
+    if (
+      viewportShrinksUnderKeyboard({
+        isIOS: isIOS(),
+        hasNativeKeyboard: hasNativeKeyboard(),
+        hasVirtualKeyboardApi: getVirtualKeyboardApi() !== null,
+      })
+    ) {
+      // Read the stylesheet cap only while nothing of ours overrides it, same as the room path.
+      if (!content.style.maxHeight) {
+        const parsed = Number.parseFloat(
+          getComputedStyle(content).maxHeight,
+        )
+        cssCapRef.current = Number.isFinite(parsed)
+          ? parsed
+          : Number.POSITIVE_INFINITY
+      }
+      const cap = resolveShrunkViewportCap(
+        keyboard.isOpen && keyboard.height > 0,
+        measureExcessHeight(),
+        cssCapRef.current,
+      )
+      if (cap === null && !visibleCapAppliedRef.current) return
+
+      const boxBefore = content.getBoundingClientRect().height
+      if (cap === null) {
+        clearDrawerKeyboardRoom(content)
+        visibleCapAppliedRef.current = false
+      } else {
+        //no room, no floor — the shrunk viewport already excludes the keyboard, so the box just caps
+        writeDrawerKeyboardRoom(
+          content,
+          { room: 0, maxHeight: cap, minHeight: null },
+          DRAWER_NO_TRANSITION,
+        )
+        visibleCapAppliedRef.current = true
+      }
+      void content.offsetHeight
+
+      // The cap only moves the box for content taller than the viewport; when it does, carry it on
+      // a composited FLIP like every other height change here (never while a finger owns the drag).
+      const panelEl = panelRef.current
+      const moved = content.getBoundingClientRect().height - boxBefore
+      if (
+        Math.abs(moved) > 0.5 &&
+        panelEl &&
+        !isPointerDraggingRef.current
+      ) {
+        clearDrawerPanelTransition(panelEl)
+        keyboardFlip.set(moved)
+        void content.offsetHeight
+        applyDrawerPanelTransition(
+          panelEl,
+          cap === null
+            ? DRAWER_SHRINK_TRANSITION
+            : DEFAULT_DRAWER_TRANSITION,
+          true,
+        )
+        keyboardFlip.set(0)
+      }
+      return
+    }
 
     // The LIVE reported height — nothing cached, seeded or guessed. `useKeyboard` only commits
     // stable heights, so iOS's transient mid-field-switch geometry never reaches here.
@@ -940,14 +1045,22 @@ export function DrawerEngine({
       ? DEFAULT_DRAWER_TRANSITION
       : DRAWER_SHRINK_TRANSITION
 
-    // A grow-CORRECTION arriving mid-flight (iOS reports a raise in two steps as a rule: the
-    // first read catches the keyboard mid-slide and the settled height lands ~74ms later).
-    // Restarting a full-duration curve for the remaining travel appends a visible slow tail, so
-    // re-aim over a duration proportional to what is LEFT, at the motion's natural rate.
+    // A grow-CORRECTION to re-aim rather than restart. iOS reports a raise in two steps as a rule:
+    // the first read catches the keyboard mid-slide and the settled height lands ~74ms later, and on
+    // a password field the accessory bar is a SECOND step ~280ms later, by which time the first lift
+    // has usually settled (`isPanelAnimatingRef` false). Restarting a full-duration curve for the
+    // small remaining travel is the visible double-bump; re-aim over a duration proportional to what
+    // is LEFT so it reads as one settling motion. `isRaiseContinuation` extends this across the settle
+    // gap (see DRAWER_KEYBOARD_RAISE_CONTINUATION_MS); the mid-flight check covers iOS's fast two-step.
+    const nowMs = performance.now()
+    const isRaiseContinuation =
+      nowMs - lastKeyboardGrowTsRef.current <
+      DRAWER_KEYBOARD_RAISE_CONTINUATION_MS
+    if (isGrowing) lastKeyboardGrowTsRef.current = nowMs
     if (
       isGrowing &&
       appliedRoomRef.current > 0 &&
-      isPanelAnimatingRef.current
+      (isPanelAnimatingRef.current || isRaiseContinuation)
     ) {
       const liveRoom = readDrawerKeyboardRoom(content)
       const naturalRatePxPerSec = room / DEFAULT_DRAWER_TRANSITION.duration
@@ -955,7 +1068,7 @@ export function DrawerEngine({
         ...DEFAULT_DRAWER_TRANSITION,
         duration: clamp(
           Math.abs(room - liveRoom) / naturalRatePxPerSec,
-          0.12,
+          DRAWER_KEYBOARD_STEP_MIN_DURATION,
           DEFAULT_DRAWER_TRANSITION.duration,
         ),
       }
@@ -1018,7 +1131,7 @@ export function DrawerEngine({
       keyboardFlip.set(0)
     }
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("keyboard")
     let cancelled = false
     const settleTimer = setTimeout(
       () => {
@@ -1110,7 +1223,7 @@ export function DrawerEngine({
           y.set(resumeFrom)
         }
 
-        const runId = beginPanelAnimation()
+        const runId = beginPanelAnimation("open")
 
         function startOpenMotion(startFromPaintedState: boolean) {
           if (cancelled) return
@@ -1176,7 +1289,7 @@ export function DrawerEngine({
 
       isClosingRef.current = true
       closeTargetRef.current = Number.NaN
-      beginPanelAnimation()
+      beginPanelAnimation("close")
       void transitionDrawerBackdropOpacity(
         backdropRef.current,
         0,
@@ -1247,7 +1360,7 @@ export function DrawerEngine({
       y.set(Math.max(0, dragOffsetY))
 
       //the run ends in handleExitComplete once the close effect confirms the settled position
-      beginPanelAnimation()
+      beginPanelAnimation("drag-close")
       void animateToClosed(dragVelocity).then(() => {
         isGestureClosingRef.current = false
         syncBackdropGestureAttributes()
@@ -1274,7 +1387,7 @@ export function DrawerEngine({
       )
     }
 
-    const runId = beginPanelAnimation()
+    const runId = beginPanelAnimation("snap-open")
     void Promise.resolve(
       animateDrawerY(y, panelRef.current, 0, DEFAULT_DRAWER_TRANSITION),
     ).finally(() => endPanelAnimation(runId))
