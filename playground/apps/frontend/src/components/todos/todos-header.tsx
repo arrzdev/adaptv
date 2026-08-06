@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "@arrzdev/adaptv/components"
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate } from "@arrzdev/adaptv/router"
 import { Plus, Settings } from "lucide-react"
 import { TasksTitle } from "@/components/navigation/tasks-title"
 import { SyncStatusBar } from "@/components/todos/sync-status-bar"

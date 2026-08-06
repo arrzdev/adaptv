@@ -6,7 +6,7 @@ import {
   View,
 } from "@arrzdev/adaptv/components"
 import { useMediaQuery, useTheme } from "@arrzdev/adaptv/hooks"
-import { useRouter } from "@tanstack/react-router"
+import { createFileRoute, useRouter } from "@arrzdev/adaptv/router"
 import {
   ChevronRight,
   FlaskConical,
@@ -33,7 +33,7 @@ import { useDataMutation } from "@/hooks/use-data-mutation"
 import { useHaptics } from "@/hooks/use-haptics"
 import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/settings")({
   component: SettingsPage,
 })
 

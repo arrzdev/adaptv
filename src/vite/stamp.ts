@@ -115,9 +115,10 @@ function ensureGitignored(appRoot: string): void {
  *
  * Two entries, each for a specific failure:
  *
- * 1. **`include` → adaptv's ambient route types.** With `verboseFileRoutes: false`
- *    the route factory has no import, so TypeScript must be told where the name
- *    comes from — otherwise every route file reports `Cannot find name
+ * 1. **`include` → adaptv's ambient route types.** A route file is authored with no
+ *    import — the generator writes the `@arrzdev/adaptv/router` one in later — so
+ *    until it does, TypeScript must be told where `createFileRoute` comes from,
+ *    otherwise a freshly-written route file reports `Cannot find name
  *    'createFileRoute'` in a project whose *build* passes.
  * 2. **`paths` → `#adaptv-route-tree`.** adaptv's router entry is a package module
  *    and cannot reach the app's route tree relatively. Aliasing for the bundler

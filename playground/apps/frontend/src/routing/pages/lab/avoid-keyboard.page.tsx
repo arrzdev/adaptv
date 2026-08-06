@@ -1,5 +1,6 @@
 import { AvoidKeyboard } from "@arrzdev/adaptv/components"
 import { useKeyboard } from "@arrzdev/adaptv/hooks"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import type { RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -14,7 +15,7 @@ import {
 import { LabPage } from "@/components/lab/lab-page"
 import { TextInput } from "@/components/ui"
 
-export const Route = createFileRoute({
+export const Route = createFileRoute("/_providers/lab/avoid-keyboard")({
   component: LabAvoidKeyboardPage,
 })
 
