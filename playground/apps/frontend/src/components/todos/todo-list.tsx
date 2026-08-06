@@ -1,3 +1,5 @@
+import { Pressable, Text, View } from "@arrzdev/adaptv/components"
+import { useAppState } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
 import { Loader2 } from "lucide-react"
 import type { Transition } from "motion/react"
@@ -26,17 +28,15 @@ function isPast8pmNow() {
 function useIsPast8pmLocal() {
   //seed from the real clock so the correct mascot paints on the first frame
   //(the old mount effect flashed the wrong one), then re-check when the app is
-  //brought back to the foreground so a session left open crosses the 8pm boundary
+  //brought back to the foreground so a session left open crosses the 8pm boundary.
+  //useAppState covers both web (visibilitychange/pageshow) and a native WebView
+  //resume — the latter is not a browser focus event, so a raw listener misses it.
   const [isPast8pm, setIsPast8pm] = useState(isPast8pmNow)
+  const appState = useAppState()
 
   useEffect(() => {
-    function refresh() {
-      setIsPast8pm(isPast8pmNow())
-    }
-
-    document.addEventListener("visibilitychange", refresh)
-    return () => document.removeEventListener("visibilitychange", refresh)
-  }, [])
+    if (appState === "active") setIsPast8pm(isPast8pmNow())
+  }, [appState])
 
   return isPast8pm
 }
@@ -88,20 +88,24 @@ function ArchivedListContext({ onShowPending }: ArchivedListContextProps) {
   const haptic = useHaptics()
 
   return (
-    <p className="pl-1 text-sm text-subtle">
+    <Text render={<p className="pl-1 text-sm text-subtle" />}>
       You are seeing your archived tasks,{" "}
-      <button
-        type="button"
-        onClick={() => {
+      <Pressable
+        render={
+          <button
+            type="button"
+            className="underline underline-offset-2 decoration-current/50 hover:decoration-current"
+          />
+        }
+        onPress={() => {
           haptic.impact("light")
           onShowPending()
         }}
-        className="underline underline-offset-2 decoration-current/50 hover:decoration-current"
       >
         go back
-      </button>
+      </Pressable>
       .
-    </p>
+    </Text>
   )
 }
 
@@ -242,10 +246,15 @@ function FlatHeader({
   action?: ReactNode
 }) {
   return (
-    <div className="flex min-h-7 items-center gap-2">
-      <h2 className="pl-1 text-sm font-medium text-subtle">{title}</h2>
-      {action && <div className="ml-auto">{action}</div>}
-    </div>
+    <View row className="flex min-h-7 items-center gap-2">
+      <Text
+        // biome-ignore lint/a11y/useHeadingContent: the title flows through Text's render prop into the h2 at runtime (cloneElement), which the static check can't see
+        render={<h2 className="pl-1 text-sm font-medium text-subtle" />}
+      >
+        {title}
+      </Text>
+      {action && <View className="ml-auto">{action}</View>}
+    </View>
   )
 }
 
@@ -279,22 +288,22 @@ function TodoFlatList({
 
   if (reducedMotion) {
     return (
-      <div className="relative flex w-full flex-col gap-y-4">
+      <View className="relative flex w-full flex-col gap-y-4">
         {rows.map((row, index) => (
-          <div key={row.key} className={rowClass(rows, index)}>
+          <View key={row.key} className={rowClass(rows, index)}>
             {row.type === "header" && (
               <FlatHeader title={row.title} action={row.action} />
             )}
             {row.type === "todo" && renderTodoCard(row.todo, handlers)}
-          </div>
+          </View>
         ))}
-      </div>
+      </View>
     )
   }
 
   return (
-    <div className="relative flex w-full flex-col gap-y-4">
-      {/* section headers snap straight to their slot (plain divs — no layout).
+    <View className="relative flex w-full flex-col gap-y-4">
+      {/* section headers snap straight to their slot (plain Views — no layout).
           only task rows translate: layout="position" FLIPs a checked task to the
           completed block while the rest close the gap. no opacity/scale, so a
           created/removed row just appears or vanishes. gated on `animate` so
@@ -302,9 +311,9 @@ function TodoFlatList({
       {rows.map((row, index) => {
         if (row.type === "header") {
           return (
-            <div key={row.key} className={rowClass(rows, index)}>
+            <View key={row.key} className={rowClass(rows, index)}>
               <FlatHeader title={row.title} action={row.action} />
-            </div>
+            </View>
           )
         }
         return (
@@ -318,7 +327,7 @@ function TodoFlatList({
           </motion.div>
         )
       })}
-    </div>
+    </View>
   )
 }
 
@@ -384,17 +393,19 @@ export function TodoList({
     )
   } else if (isError) {
     content = (
-      <div className="flex min-h-32 flex-col items-center gap-y-4 text-center">
+      <View className="flex min-h-32 flex-col items-center gap-y-4 text-center">
         <ReservedSvgSpace className={EMPTY_CREATURE_SPACE_CLASS}>
           <StressedMascot />
         </ReservedSvgSpace>
-        <p className="whitespace-pre-line text-sm text-error">
+        <Text
+          render={<p className="whitespace-pre-line text-sm text-error" />}
+        >
           {errorMessage || "Could not load tasks."}
-        </p>
+        </Text>
         <PrimaryButton onClick={onRetry} className="w-fit">
           Retry
         </PrimaryButton>
-      </div>
+      </View>
     )
   } else if (onReorder && hasContent) {
     //custom sort: a persistent "Custom" header over one continuous reorder list —
@@ -403,7 +414,7 @@ export function TodoList({
     //snapping across a boundary, and there's no empty-list gap when all are checked
     const pendingTodos = sections[0]?.todos ?? []
     content = (
-      <div className="flex flex-col gap-y-4">
+      <View className="flex flex-col gap-y-4">
         <FlatHeader title="Custom" action={headerAction} />
         <TodoReorderList
           pending={pendingTodos}
@@ -415,17 +426,17 @@ export function TodoList({
           onUnarchive={onUnarchive}
           onDelete={onDelete}
         />
-      </div>
+      </View>
     )
   } else if (isArchived && hasContent) {
     //the "you're seeing archived tasks" line takes the same header-row slot the
     //active view uses for its section title + sort button, so switching views
     //doesn't shift the list down
     content = (
-      <div className="flex flex-col gap-y-4">
-        <div className="flex min-h-7 items-center">
+      <View className="flex flex-col gap-y-4">
+        <View row className="flex min-h-7 items-center">
           <ArchivedListContext onShowPending={onShowPending} />
-        </div>
+        </View>
         <AppSwipeable.Group>
           <TodoFlatList
             sections={sections}
@@ -435,7 +446,7 @@ export function TodoList({
             handlers={handlers}
           />
         </AppSwipeable.Group>
-      </div>
+      </View>
     )
   } else if (hasContent) {
     //grouped active view: one flat, shared-layout list so a checked task animates
@@ -461,7 +472,7 @@ export function TodoList({
     )
 
     content = (
-      <div
+      <View
         className={cn(
           "relative flex flex-col items-center justify-center gap-y-2 text-center",
           EMPTY_STATE_FILL_CLASS,
@@ -471,9 +482,9 @@ export function TodoList({
           //overlay the archived context so it doesn't push the mascot down —
           //the mascot centers in the same region whether or not this line shows,
           //so toggling active↔archived never shifts it vertically
-          <div className="absolute inset-x-0 top-0 text-left">
+          <View className="absolute inset-x-0 top-0 text-left">
             <ArchivedListContext onShowPending={onShowPending} />
-          </div>
+          </View>
         )}
         <Activity mode={creature === "sleeping" ? "visible" : "hidden"}>
           <ReservedSvgSpace className={EMPTY_CREATURE_SPACE_CLASS}>
@@ -490,10 +501,12 @@ export function TodoList({
             <StressedMascot />
           </ReservedSvgSpace>
         </Activity>
-        <p className="max-w-xs text-sm text-muted">{message}</p>
-      </div>
+        <Text render={<p className="max-w-xs text-sm text-muted" />}>
+          {message}
+        </Text>
+      </View>
     )
   }
 
-  return <div className="flex flex-col gap-y-4">{content}</div>
+  return <View className="flex flex-col gap-y-4">{content}</View>
 }

@@ -1,4 +1,6 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useEffect, useRef, useState } from "react"
+import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
 import { useSyncStatus } from "@/hooks/use-sync-status"
 
 //oscilloscope sync indicator on <canvas>. it means exactly ONE thing: a sync is
@@ -84,6 +86,11 @@ export function SyncStatusBar() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const phaseRef = useRef(phase)
   phaseRef.current = phase
+  //reduced-motion is the app-wide preference (system + the animations setting),
+  //read through a ref so the rAF loop sees the live value without re-subscribing
+  const reducedMotion = useAppReducedMotion()
+  const reduceRef = useRef(reducedMotion)
+  reduceRef.current = reducedMotion
   const startRef = useRef<() => void>(() => {})
 
   //one-time canvas setup; the live phase is read through phaseRef in the loop
@@ -93,9 +100,6 @@ export function SyncStatusBar() {
     if (!canvas || !ctx) return
     const cv = canvas
     const cx = ctx
-    const reduce = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches
 
     const st = {
       stage: "idle" as Stage,
@@ -158,6 +162,8 @@ export function SyncStatusBar() {
     function loop(now: number) {
       const dt = Math.min((now - last) / 1000, 0.05)
       last = now
+      //live app-wide reduced-motion (system pref OR the animations setting off)
+      const reduce = reduceRef.current
       const intent = intentOf()
 
       //an active run (syncing|pending) starts the wave display. once it starts
@@ -293,7 +299,7 @@ export function SyncStatusBar() {
   //the button-group width above it. offline/error render no line — just a quiet
   //right-aligned text label in the same slot.
   return (
-    <div
+    <View
       className="relative w-full self-stretch"
       style={{ height: HEIGHT }}
     >
@@ -303,14 +309,14 @@ export function SyncStatusBar() {
         className="absolute inset-0 block size-full"
       />
       {(phase === "offline" || phase === "error") && !wavesVisible && (
-        <span
+        <Text
           aria-live="polite"
           className="absolute inset-y-0 right-0 flex items-center whitespace-nowrap text-[10px] font-medium leading-none text-muted tabular-nums"
         >
           {phase === "offline" ? "Offline" : "Unsynced"}
           {unsynced > 0 ? ` (${unsynced})` : ""}
-        </span>
+        </Text>
       )}
-    </div>
+    </View>
   )
 }

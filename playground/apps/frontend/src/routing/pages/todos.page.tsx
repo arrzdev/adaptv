@@ -1,3 +1,5 @@
+import { Text, View } from "@arrzdev/adaptv/components"
+import { useIsOffline } from "@arrzdev/adaptv/hooks"
 import { useEffect, useMemo, useState } from "react"
 import { DeckTabs } from "@/components/decks/deck-tabs"
 import { PageWithSmoothEdges } from "@/components/page"
@@ -114,6 +116,9 @@ function TodosPage() {
   //one shared slot for the fire-and-forget list actions (toggle/delete/reorder);
   //the create/edit drawers own their own mutation state
   const mutation = useDataMutation()
+  //connectivity truth for the app-wide banner — shown to everyone, guests
+  //included, independent of the signed-in-only sync indicator in the header
+  const isOffline = useIsOffline()
 
   const activeDeckId = useMemo(() => {
     if (!storedDeckId) return null
@@ -252,6 +257,14 @@ function TodosPage() {
 
   return (
     <PageWithSmoothEdges>
+      {isOffline && (
+        <View className="rounded-md bg-surface px-3 py-2 ring-1 ring-inset ring-border">
+          <Text className="text-sm text-warning">
+            You're offline — changes save on this device and sync when you
+            reconnect.
+          </Text>
+        </View>
+      )}
       <TodosHeader
         activeCount={activeCount}
         archivedCount={archivedCount}
@@ -269,9 +282,11 @@ function TodosPage() {
         />
       )}
       {mutation.error && (
-        <p className="whitespace-pre-line text-sm text-error">
+        <Text
+          render={<p className="whitespace-pre-line text-sm text-error" />}
+        >
           {mutation.error.message}
-        </p>
+        </Text>
       )}
       <TodoList
         sections={sections}

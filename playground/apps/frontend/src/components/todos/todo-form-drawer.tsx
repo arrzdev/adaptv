@@ -1,3 +1,4 @@
+import { Text, View } from "@arrzdev/adaptv/components"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { DeckPicker } from "@/components/decks/deck-picker"
 import { DueDateField } from "@/components/todos/due-date-field"
@@ -100,10 +101,10 @@ export function TodoFormDrawer({
         <AppDrawer.Content>
           <AppDrawer.Handle />
           <AppDrawer.Shell className="flex flex-col gap-y-5 pt-4">
-            <div className="flex flex-col gap-y-2">
-              <span className="ps-1 text-sm font-medium text-subtle">
+            <View className="flex flex-col gap-y-2">
+              <Text className="ps-1 text-sm font-medium text-subtle">
                 Task
-              </span>
+              </Text>
               <TextArea
                 value={value}
                 onChange={setValue}
@@ -113,7 +114,7 @@ export function TodoFormDrawer({
                 disabled={isSubmitting}
                 rows={2}
               />
-            </div>
+            </View>
             {decks && decks.length > 0 && (
               <DeckPicker
                 decks={orderedDecks}

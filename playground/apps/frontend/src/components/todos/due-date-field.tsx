@@ -1,3 +1,4 @@
+import { Pressable, Text, View } from "@arrzdev/adaptv/components"
 import {
   dismissVirtualKeyboard,
   willOpenVirtualKeyboard,
@@ -83,17 +84,21 @@ export function DueDateField({ value, onChange }: DueDateFieldProps) {
   const revealDuration = reducedMotion ? 0 : 0.26
 
   return (
-    <div className="flex flex-col gap-y-2">
-      <span className="ps-1 text-sm font-medium text-subtle">
+    <View className="flex flex-col gap-y-2">
+      <Text className="ps-1 text-sm font-medium text-subtle">
         Due date
-      </span>
-      <div className="overflow-hidden rounded-md bg-surface ring-1 ring-inset ring-border">
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={handleToggle}
-            aria-expanded={expanded}
-            className="flex min-w-0 flex-1 items-center gap-x-2 px-3 py-3 text-left text-base"
+      </Text>
+      <View className="overflow-hidden rounded-md bg-surface ring-1 ring-inset ring-border">
+        <View row className="flex items-center">
+          <Pressable
+            render={
+              <button
+                type="button"
+                aria-expanded={expanded}
+                className="flex min-w-0 flex-1 items-center gap-x-2 px-3 py-3 text-left text-base"
+              />
+            }
+            onPress={handleToggle}
           >
             <Calendar
               size={18}
@@ -101,26 +106,30 @@ export function DueDateField({ value, onChange }: DueDateFieldProps) {
               aria-hidden
               className="shrink-0 text-muted"
             />
-            <span
+            <Text
               className={cn(
                 "truncate",
                 isEmpty ? "text-muted" : "text-foreground",
               )}
             >
               {triggerLabel}
-            </span>
-          </button>
+            </Text>
+          </Pressable>
           {showClear && (
-            <button
-              type="button"
-              onClick={handleClear}
-              aria-label="Clear due date"
-              className="mr-2 flex size-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-secondary hover:text-foreground"
+            <Pressable
+              render={
+                <button
+                  type="button"
+                  aria-label="Clear due date"
+                  className="mr-2 flex size-7 shrink-0 items-center justify-center rounded-full text-muted hover:bg-secondary hover:text-foreground"
+                />
+              }
+              onPress={handleClear}
             >
               <X size={16} strokeWidth={2} aria-hidden />
-            </button>
+            </Pressable>
           )}
-        </div>
+        </View>
 
         {/* kept mounted. The footprint snaps open/closed — grid 0fr<->1fr with NO
             transition, so it's the content's natural height with no magic pixel
@@ -130,14 +139,14 @@ export function DueDateField({ value, onChange }: DueDateFieldProps) {
             cross-faded, which read as parallax, and the per-frame resize also
             fired the drawer's content ResizeObservers. `contain:content` keeps
             the wheel's paint self-contained. */}
-        <div
+        <View
           className={cn(
             "grid",
             expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
           )}
         >
-          <div className="overflow-hidden">
-            <div
+          <View className="overflow-hidden">
+            <View
               aria-hidden={!expanded}
               className={cn(
                 "border-t border-border-subtle px-3 pb-3 pt-2 [contain:content] transition-[transform,opacity] ease-out",
@@ -151,10 +160,10 @@ export function DueDateField({ value, onChange }: DueDateFieldProps) {
                 value={shown}
                 onChange={(next) => onChange(startOfDay(next))}
               />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
   )
 }
