@@ -74,8 +74,8 @@ import {
   capCmd,
   capRun,
   capSync,
+  ensureDeviceWindow,
   explainLaunchFailure,
-  foregroundDevice,
   generateAssets,
   iosEnv,
   isAppInstalled,
@@ -1023,7 +1023,7 @@ async function runLive(appRoot, platforms, opts) {
           if (
             await launchInstalledApp(appRoot, platform, target.id, env)
           ) {
-            await foregroundDevice(platform, target.id, env)
+            await ensureDeviceWindow(platform, target.id, env)
             launched.add(platform)
             return `${target.name} · cached`
           }
@@ -1074,7 +1074,7 @@ async function runLive(appRoot, platforms, opts) {
             restart: true,
           })
         }
-        await foregroundDevice(platform, target.id, env)
+        await ensureDeviceWindow(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
         // fingerprint taken before it would never match on the next run.
         runCache.run[key] = {
@@ -1256,7 +1256,7 @@ async function runLive(appRoot, platforms, opts) {
         throw new Error(
           "couldn't relaunch the app. Is it still installed? press b to rebuild.",
         )
-      await foregroundDevice(platform, target.id, envFor(platform))
+      await ensureDeviceWindow(platform, target.id, envFor(platform))
       return `${target.name} · reloaded`
     }
     const reload = async () => {
@@ -1595,7 +1595,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
       await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
       })
-      await foregroundDevice(platform, target.id, env)
+      await ensureDeviceWindow(platform, target.id, env)
       done[platform] = `launched on ${target.name}`
       return `${target.name} · cached`
     }
@@ -1618,7 +1618,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
         restart: true,
       })
     }
-    await foregroundDevice(platform, target.id, env)
+    await ensureDeviceWindow(platform, target.id, env)
     buildCache.run[key] = { id: runIdOf(platform) }
     done[platform] = `launched on ${target.name}`
     return target.name

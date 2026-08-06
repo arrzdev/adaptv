@@ -64,7 +64,9 @@ never an identifier from a phase.
 only what the dev caused. Never print absolute paths — app-root-relative only. Never exceed the
 terminal width or wrap (use the ANSI-preserving `truncate` in `bin/lib/render.mjs`). Parse
 xcodebuild/gradle/CocoaPods output into calm phases rather than echoing it. `--verbose` is the raw
-escape hatch and must stay raw.
+escape hatch and must stay raw. Never take the dev's SCREEN either (R55): the app is fronted inside
+the device, never by raising the simulator's desktop window — `open` gets `-g`, including the one
+`native-run` makes from inside `cap run ios` (`withBackgroundSimulator` shims it onto PATH).
 
 **Failure detail** — the reason goes inline on the failing platform's line, and it must be the most
 meaningful line available (`The sandbox is not in sync with the Podfile.lock`, not `exited with code
