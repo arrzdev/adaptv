@@ -432,6 +432,46 @@ So the obligation lands on the app, is **derivable from the dependency list**, i
 > does with analytics, accounts and telemetry, which adaptv cannot know. A guessed declaration is worse
 > than none — it is a false statement to Apple and to users. The generated file says so in a comment.
 >
+> ### ⚠️ CORRECTED (2026-08-07) — it was deriving from the wrong list
+>
+> "From the app's installed dependencies" was the bug, not the feature. **adaptv owns Capacitor**,
+> so `@capacitor/device` and `@capacitor/preferences` are *adaptv's* dependencies and appear
+> nowhere in the consumer's `package.json`. Every manifest adaptv had ever generated therefore
+> declared **nothing**, while the binary shipped two required-reason APIs — the silent-at-submission
+> failure this feature exists to prevent, reproduced by the feature itself. The verification in the
+> note above passed because it added `@capacitor/preferences` to the *app*, which no real app does.
+> `adaptv doctor`'s matching rule was gated on the same list and so never fired either.
+>
+> Now three tiers, in `stamp-privacy.ts`: **(1)** adaptv's own bundled `@capacitor/*` set, read from
+> adaptv's manifest so a plugin added to adaptv is covered with no second list; plus the app's own
+> deps and its `plugins` registrations. **(2)** the plugin's own `PrivacyInfo.xcprivacy` if it ships
+> one — Apple's actual third-party-SDK mechanism, more authoritative than adaptv's table and correct
+> without an adaptv release. **(3)** `privacy` in `adaptv.config.ts`, the escape hatch: unlisted
+> plugins' APIs, `NSPrivacyTracking`, tracking domains, and `NSPrivacyCollectedDataTypes`.
+>
+> **Tier 3 is not a nicety.** The file is regenerated on every build, so "data collection must be
+> declared by you" — which the generated file said, in a file marked *do not edit* — had nowhere to
+> be declared. adaptv still never *infers* collection; it renders what the app states.
+>
+> The doctor rule is now unconditional for any iOS project (`hasPrivacyManifest` is left `undefined`
+> when there is no project, so web-only apps stay quiet).
+>
+> **Two more failures a real `preview ios` found, both invisible to every test:**
+>
+> - **It was never written on a first run.** The Vite plugin stamps during the capacitor web
+>   build, which happens BEFORE `cap add` creates the project — so the stamper found no
+>   `.adaptv/ios/App` and skipped. The file appeared only on a second build: correct on the
+>   machine that had built twice, missing on CI and on a fresh clone. The CLI now stamps too
+>   (`stampIosPrivacyManifest`, after the project exists), and must pass `adaptvRoot` explicitly
+>   because `load-ts.mjs` bundles the module into a `data:` URL where `import.meta.url` cannot
+>   locate adaptv.
+> - **It was never bundled.** Xcode copies a file into the `.app` only if the target's Resources
+>   build phase lists it, and nothing listed this one. Generated, committed, visible — and absent
+>   from the binary Apple receives. `mergePbxprojResource` now declares it (build file, file
+>   reference, Resources phase, and the navigator group), with stable ids so re-running is a
+>   no-op. **Verified in the installed simulator bundle**, not just on disk.
+>
+
 > **Also built: `adaptv doctor` project checks** (`src/native/doctor.ts`, 13 tests). Selection criterion
 > for every rule: *the broken state still builds, and often still runs*. Currently covers the
 > `WKAppBoundDomains` trap (B22 — the bridge is never injected, `getPlatform()` returns `"web"`, every

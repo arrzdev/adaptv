@@ -66,22 +66,24 @@ describe("runDoctor — Android target SDK (§6.0)", () => {
 })
 
 describe("runDoctor — privacy manifest (§5.0.1)", () => {
-  it("errors when a plugin needs one and it is absent", () => {
-    const [d] = runDoctor({
-      hasPrivacyManifest: false,
-      dependencies: ["@capacitor/preferences"],
-    })
+  it("errors whenever an iOS project has none — the app never has to name a plugin for the obligation to exist", () => {
+    //the rule used to require @capacitor/preferences etc. in the APP's dependencies,
+    //where they never are: adaptv owns Capacitor, so they are adaptv's dependencies.
+    //Every native adaptv app compiles in device + preferences, so the manifest is
+    //always required and this never fired for anyone.
+    const [d] = runDoctor({ hasPrivacyManifest: false })
     expect(d?.severity).toBe("error")
     expect(d?.fix).toContain("adaptv build ios")
   })
 
-  it("is quiet when no installed plugin creates the obligation", () => {
-    expect(
-      runDoctor({
-        hasPrivacyManifest: false,
-        dependencies: ["@capacitor/haptics"],
-      }),
-    ).toHaveLength(0)
+  it("is quiet when the manifest is there", () => {
+    expect(runDoctor({ hasPrivacyManifest: true })).toHaveLength(0)
+  })
+
+  it("is quiet when there is no iOS project to have one (a web-only app)", () => {
+    //`undefined`, not `false` — the CLI only answers the question when
+    //`.adaptv/ios/App` exists
+    expect(runDoctor({})).toHaveLength(0)
   })
 })
 
