@@ -1,6 +1,9 @@
 import type { MotionValue, Transition } from "motion/react"
 import { animate } from "motion/react"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
+import { DEFAULT_DRAWER_TRANSITION } from "#adaptv/components/drawer/drawer-constants"
+import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
+import { splitEasingAt } from "#adaptv/components/drawer/drawer-easing"
 import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
 import { clamp } from "#adaptv/utils/clamp"
 
@@ -130,6 +133,100 @@ export function readPanelTranslateY(panel: HTMLElement | null): number {
     return new DOMMatrixReadOnly(transform).m42
   } catch {
     return 0
+  }
+}
+
+/**
+ * A composited panel transition caught mid-flight. Read it BEFORE
+ * {@link clearDrawerPanelTransition} — `transition: none` cancels the transition, taking its
+ * timing with it.
+ */
+export type PanelFlight = {
+  /** fraction of the easing's duration already consumed, in `[0,1]` */
+  elapsed: number
+  /** seconds of the easing still ahead */
+  left: number
+  bezier: EasingBezier
+}
+
+const CUBIC_BEZIER = /^cubic-bezier\(([^)]+)\)$/
+
+function readPanelEasing(panel: HTMLElement): EasingBezier | null {
+  const declared = getComputedStyle(panel).transitionTimingFunction?.trim()
+  const match = declared ? CUBIC_BEZIER.exec(declared) : null
+  if (!match) return null
+  const points = match[1].split(",").map((n) => Number.parseFloat(n))
+  if (points.length !== 4 || points.some((n) => !Number.isFinite(n)))
+    return null
+  return points as EasingBezier
+}
+
+/**
+ * Where the panel's transform transition is in its own timeline, or `null` if none is running.
+ *
+ * The elapsed fraction comes from the transition object rather than from wall-clock deltas: the
+ * transition starts on the next style recalc, which on a cold first paint can be several frames
+ * after the code that armed it. Timing it from the outside overstated the elapsed time by ~40%
+ * on a physical device, which is the difference between resuming a curve and guessing at one.
+ */
+export function samplePanelFlight(
+  panel: HTMLElement | null,
+): PanelFlight | null {
+  if (!panel || typeof panel.getAnimations !== "function") return null
+  const running = panel
+    .getAnimations()
+    .find(
+      (animation) =>
+        (animation as { transitionProperty?: string })
+          .transitionProperty === "transform",
+    )
+  if (!running) return null
+  const timing = running.effect?.getTiming()
+  const duration =
+    typeof timing?.duration === "number" ? timing.duration : 0
+  const at = Number(running.currentTime)
+  if (duration <= 0 || !Number.isFinite(at)) return null
+  const bezier = readPanelEasing(panel)
+  if (!bezier) return null
+  const elapsed = clamp(at / duration, 0, 1)
+  return { elapsed, left: ((1 - elapsed) * duration) / 1000, bezier }
+}
+
+/**
+ * The transition that CONTINUES `flight` when the panel's target moves mid-motion: the remainder
+ * of the curve it was already on, over a duration that leaves the seam's speed intact.
+ *
+ * `remaining` is the travel the interrupted motion still had; `travel` is what it has now (its own
+ * remainder plus whatever the new geometry added). Restarting the full curve instead makes the
+ * panel *decelerate* at the seam — the open curve enters slower than the speed a motion near its
+ * end has already built — and then spend a whole fresh duration on the little that is left. That
+ * is the "first open feels laggy" of the two-step iOS keyboard raise.
+ *
+ * The duration is `time left + (added travel / seam speed)`: it reduces to the untouched curve
+ * when nothing had started, and never exceeds a fresh motion's duration, which is also the answer
+ * when the interrupt lands so late that the seam speed has decayed to nothing.
+ */
+export function resumeDrawerTransition(
+  flight: PanelFlight | null,
+  remaining: number,
+  travel: number,
+): DrawerTransition {
+  const fresh = DEFAULT_DRAWER_TRANSITION
+  if (!flight || flight.left <= 0) return fresh
+  const split = splitEasingAt(flight.bezier, flight.elapsed)
+  if (!split || !Number.isFinite(split.entrySlope)) return fresh
+  //px/s at the seam, from the curve's own entry slope over the travel/time it had left
+  const speed = (split.entrySlope * Math.abs(remaining)) / flight.left
+  if (!(speed > 0)) return fresh
+  const added = Math.abs(travel) - Math.abs(remaining)
+  return {
+    ...fresh,
+    duration: clamp(
+      flight.left + added / speed,
+      flight.left,
+      Math.max(flight.left, fresh.duration),
+    ),
+    bezier: split.bezier,
   }
 }
 
