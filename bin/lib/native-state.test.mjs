@@ -5,9 +5,11 @@ import {
   gradleProjectName,
   mergeCapacitorBuildGradle,
   mergeClassList,
+  mergePbxprojResource,
   mergePluginsJson,
   mergeSettingsGradle,
   podsNeedInstall,
+  resolvePluginPackages,
 } from "./native-state.mjs"
 
 // Each block below is a bug that shipped once. The comment on each `it` is the symptom the
@@ -285,5 +287,147 @@ describe("mergePluginsJson — compiled in, but never registered", () => {
   it("survives a project with no registry yet, and drops junk entries", () => {
     expect(mergePluginsJson(undefined, ADAPTV)).toEqual(ADAPTV)
     expect(mergePluginsJson([{ pkg: "x" }], ADAPTV)).toEqual(ADAPTV)
+  })
+})
+
+/* The set both injectors declare. The case that matters is an app listing a plugin adaptv
+ * already ships: the playground's config did exactly that, which is what makes it worth a
+ * function instead of two inline `seen` sets that can drift apart. */
+describe("resolvePluginPackages — adaptv's set plus the app's, declared once each", () => {
+  const BASE = ["@capacitor/device", "@capacitor/haptics"]
+
+  it("declares a plugin the app re-lists exactly once (a duplicate pod fails `pod install`; a duplicate gradle project fails the build)", () => {
+    expect(
+      resolvePluginPackages(BASE, ["@capacitor/device"]).packages,
+    ).toEqual(BASE)
+  })
+
+  it("appends a genuine extra after the base set, so adaptv's own plugins keep their order", () => {
+    expect(
+      resolvePluginPackages(BASE, ["@capacitor/camera"]).packages,
+    ).toEqual([...BASE, "@capacitor/camera"])
+  })
+
+  it("dedupes within the app's own list too — an unscoped or repeated entry is still one plugin", () => {
+    expect(
+      resolvePluginPackages(BASE, [
+        "cordova-plugin-thing",
+        "cordova-plugin-thing",
+      ]).packages,
+    ).toEqual([...BASE, "cordova-plugin-thing"])
+  })
+
+  it("never drops one of adaptv's own, whatever the app passes", () => {
+    expect(resolvePluginPackages(BASE, []).packages).toEqual(BASE)
+    expect(resolvePluginPackages(BASE, undefined).packages).toEqual(BASE)
+    expect(resolvePluginPackages(BASE, [""]).packages).toEqual(BASE)
+  })
+
+  /* `extras` decides whether the CLI says `linking plugins` at all. It used to be
+   * `plugins.length > 0`, which announced linking for a config listing a plugin adaptv
+   * already bundles — a line about work that did not happen. */
+  it("counts only what the dev actually added, so a re-listed base plugin says nothing", () => {
+    expect(
+      resolvePluginPackages(BASE, ["@capacitor/device"]).extras,
+    ).toEqual([])
+    expect(resolvePluginPackages(BASE, []).extras).toEqual([])
+  })
+
+  it("counts a genuine extra, which is the one case the CLI may report", () => {
+    expect(
+      resolvePluginPackages(BASE, [
+        "@capacitor/camera",
+        "@capacitor/device",
+      ]).extras,
+    ).toEqual(["@capacitor/camera"])
+  })
+})
+
+/* The privacy manifest was generated correctly and never shipped: Xcode copies a file into
+ * the .app only if the target's Resources phase lists it, and nothing listed this one. No
+ * build error, nothing visible in the project — just an App Store rejection much later. */
+describe("mergePbxprojResource — on disk is not the same as in the bundle", () => {
+  // The Capacitor template, cut to the four lists that matter.
+  const PBXPROJ = `// !$*UTF8*$!
+{
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		504EC3061FED79650016851F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				504EC3131FED79650016851F /* Info.plist */,
+			);
+		};
+/* End PBXGroup section */
+
+/* Begin PBXResourcesBuildPhase section */
+		504EC3021FED79650016851F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+	};
+}
+`
+  const ENTRY = {
+    name: "PrivacyInfo.xcprivacy",
+    fileType: "text.xml",
+    buildFileId: "AAAAAAAAAAAAAAAAAAAAAAA1",
+    fileRefId: "BBBBBBBBBBBBBBBBBBBBBBB2",
+  }
+
+  it("lists the file in the Resources phase — the one edit that decides whether it ships", () => {
+    const out = mergePbxprojResource(PBXPROJ, ENTRY)
+    const phase = out.slice(out.indexOf("isa = PBXResourcesBuildPhase;"))
+    expect(phase).toContain(
+      `${ENTRY.buildFileId} /* PrivacyInfo.xcprivacy in Resources */,`,
+    )
+  })
+
+  it("declares the build file and the file reference it points at", () => {
+    const out = mergePbxprojResource(PBXPROJ, ENTRY)
+    expect(out).toContain(
+      `${ENTRY.buildFileId} /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = ${ENTRY.fileRefId} /* PrivacyInfo.xcprivacy */; };`,
+    )
+    expect(out).toContain(
+      `${ENTRY.fileRefId} /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };`,
+    )
+  })
+
+  it("puts it beside Info.plist in the navigator, where a dev would look for it", () => {
+    const out = mergePbxprojResource(PBXPROJ, ENTRY)
+    const group = out.slice(
+      out.indexOf("/* Begin PBXGroup section */"),
+      out.indexOf("/* End PBXGroup section */"),
+    )
+    expect(group).toContain(
+      `${ENTRY.fileRefId} /* PrivacyInfo.xcprivacy */,`,
+    )
+  })
+
+  it("is idempotent — this runs after every sync, and a second declaration is a corrupt project", () => {
+    const once = mergePbxprojResource(PBXPROJ, ENTRY)
+    expect(mergePbxprojResource(once, ENTRY)).toBe(once)
+  })
+
+  it("leaves a project it does not recognise completely alone", () => {
+    //half-patching someone's Xcode project is worse than not patching it
+    expect(mergePbxprojResource("{ not an xcode project }", ENTRY)).toBe(
+      "{ not an xcode project }",
+    )
+    expect(mergePbxprojResource(undefined, ENTRY)).toBe("")
   })
 })

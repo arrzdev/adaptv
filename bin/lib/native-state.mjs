@@ -73,6 +73,111 @@ export function mergeClassList(existing, adaptvClasses) {
 export const classListChanged = (existing, merged) =>
   merged.length !== (existing ?? []).length
 
+/**
+ * Which plugin packages the native injectors must declare: adaptv's own set, then whatever the
+ * app registered in `adaptv.config.ts` (`plugins`), in that order and with no repeats.
+ *
+ * Returns `{ packages, extras }` — two answers to two questions.
+ *
+ * **`packages`** is what to declare, deduped. The case that needs it is a consumer naming a
+ * plugin adaptv already ships. That reads as reasonable — the playground's own config did it —
+ * but the declaration it produces is not: a repeated `pod` line fails `pod install`, and a
+ * repeated `implementation project(':capacitor-device')` fails the Gradle build. Both injectors
+ * dedupe again downstream, by podspec name and by Gradle module, which is where a collision
+ * between two DIFFERENT packages is caught; this catches the same package named twice, before
+ * either injector pays to resolve and scan it a second time.
+ *
+ * **`extras`** is what the dev actually caused: the registered plugins that are NOT already in
+ * adaptv's set. It is the only thing the CLI may say a word about — adaptv's base set is
+ * plumbing the dev never asked for (CLI-UX R8/L20) — and reporting on `plugins.length` instead
+ * claimed to be linking something whenever the config listed a plugin adaptv already bundles,
+ * which is a line about work that did not happen.
+ *
+ * Both halves are pass-through: adaptv's own plugins are NOT filtered against the config, so an
+ * app that drops a plugin from its list can never drop one of adaptv's out of the build.
+ */
+export function resolvePluginPackages(base, extra) {
+  const packages = []
+  const extras = []
+  const seen = new Set()
+  for (const name of base ?? []) {
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    packages.push(name)
+  }
+  for (const name of extra ?? []) {
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    packages.push(name)
+    extras.push(name)
+  }
+  return { packages, extras }
+}
+
+/**
+ * Declare a generated file in the App target's **Resources** build phase, in
+ * `project.pbxproj`.
+ *
+ * Xcode copies a file into the `.app` only if the target's Resources phase lists it. A file
+ * written next to `Info.plist` and left undeclared is on disk, in git, visible to the dev —
+ * and absent from the shipped binary. That is how `PrivacyInfo.xcprivacy` was: generated
+ * correctly and never bundled, so Apple would never have seen it. There is no build error for
+ * this, and no way to notice from the project either.
+ *
+ * Four edits, because Xcode splits one fact across four lists: the build file, the file
+ * reference, the Resources phase, and the group the dev sees in the navigator. The last is
+ * cosmetic; the third is the one that ships.
+ *
+ * `buildFileId`/`fileRefId` are the caller's to make and must be stable across runs (24 hex
+ * chars, Xcode's format) — a fresh id per run would append a duplicate declaration on every
+ * build. Presence of `fileRefId` IS the idempotency check.
+ *
+ * Returns the input unchanged when the file is already declared, and also when any anchor is
+ * missing: half-patching someone's Xcode project is worse than not patching it.
+ */
+export function mergePbxprojResource(
+  existing,
+  { name, fileType, buildFileId, fileRefId },
+) {
+  const src = existing ?? ""
+  if (src.includes(fileRefId)) return src
+  const resourcesFiles =
+    /(isa = PBXResourcesBuildPhase;[\s\S]*?files = \(\n)/
+  if (
+    !src.includes("/* Begin PBXBuildFile section */") ||
+    !src.includes("/* Begin PBXFileReference section */") ||
+    !resourcesFiles.test(src)
+  )
+    return src
+
+  let out = src
+  out = out.replace(
+    "/* Begin PBXBuildFile section */\n",
+    (m) =>
+      `${m}\t\t${buildFileId} /* ${name} in Resources */ = {isa = PBXBuildFile; fileRef = ${fileRefId} /* ${name} */; };\n`,
+  )
+  out = out.replace(
+    "/* Begin PBXFileReference section */\n",
+    (m) =>
+      `${m}\t\t${fileRefId} /* ${name} */ = {isa = PBXFileReference; lastKnownFileType = ${fileType}; path = ${name}; sourceTree = "<group>"; };\n`,
+  )
+  out = out.replace(
+    resourcesFiles,
+    (m) => `${m}\t\t\t\t${buildFileId} /* ${name} in Resources */,\n`,
+  )
+  //cosmetic: sit next to Info.plist in the navigator, so a dev who opens the project finds
+  //the file where they would look for it rather than nowhere
+  const infoPlist = src.match(
+    /([0-9A-F]{24}) \/\* Info\.plist \*\/ = \{isa = PBXFileReference/,
+  )?.[1]
+  if (infoPlist)
+    out = out.replace(
+      new RegExp(`(\\t+)${infoPlist} \\/\\* Info\\.plist \\*\\/,\\n`),
+      (m, indent) => `${m}${indent}${fileRefId} /* ${name} */,\n`,
+    )
+  return out
+}
+
 /* -----------------------------------------------------------------------------
  * Android: the same problem, three files
  *

@@ -122,11 +122,15 @@ export async function adaptv(
     //No capacitor.config.json is written: the `adaptv` CLI passes the generated config to
     //cap in-memory via the ADAPTV_CAPACITOR_CONFIG env var (its patched @capacitor/cli reads
     //it there), so the consumer's project never carries a Capacitor config file.
-    //Apple's required-reason API manifest, derived from the installed plugins.
-    //Not one of the 22 official Capacitor plugins ships one, the obligation lands
-    //on the app, and a missing manifest fails SILENTLY at App Store submission.
-    //→ DECISIONS.md §5.0.1
-    const privacyManifest = stampPrivacyManifest(appRoot)
+    //Apple's required-reason API manifest, derived from every plugin compiled in —
+    //adaptv's own bundled set included, which is where the whole obligation lives for
+    //an app that registered none of its own. Not one of the 22 official Capacitor
+    //plugins ships a manifest, the obligation lands on the app, and a missing one
+    //fails SILENTLY at App Store submission. → DECISIONS.md §5.0.1
+    const privacyManifest = stampPrivacyManifest(appRoot, {
+      plugins: context.loaded.config.plugins,
+      privacy: context.loaded.config.privacy,
+    })
     if (privacyManifest) {
       console.log(`[adaptv] wrote ${privacyManifest}`)
     }

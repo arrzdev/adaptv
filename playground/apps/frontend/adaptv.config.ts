@@ -3,8 +3,9 @@ import { defineApp } from "@arrzdev/adaptv/config"
 export default defineApp({
   appId: "dev.arrz.projectzero",
   name: "ChopChop",
-  // extra Capacitor plugin registered via config (base set is bundled by adaptv)
-  plugins: ["@capacitor/device"],
+  //NOTE: no `plugins` field. It is for Capacitor plugins adaptv does NOT ship — the base set
+  //(device, haptics, preferences, …) is already bundled and exposed through adaptv's own API,
+  //so listing one of those here declares nothing and only reads like it's required.
   description: "A focused task list for desktop, mobile, and PWA.",
   lang: "en",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
