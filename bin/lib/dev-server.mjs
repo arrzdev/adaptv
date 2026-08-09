@@ -27,8 +27,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * Detection is version-agnostic: while Vite is (re)optimizing, `/` hangs or returns an
  * empty body; once stable it returns the full document. We require two good reads in a
  * row, then a short settle so any post-optimize reload broadcast passes with no client
- * attached. Best-effort: returns `true` if it confirmed stability, `false` on timeout
- * (the caller still proceeds — worst case is the pre-fix behavior).
+ * attached.
+ *
+ * Returns a VERDICT, not a boolean — `{ ok: true }`, or `{ ok: false, why, status }` naming
+ * what the last unhealthy read actually saw:
+ *
+ *   `unreachable` — nothing answered at all (connection refused, or the read timed out).
+ *   `error`       — the server answered, with a 4xx/5xx. The port is OURS and the APP is
+ *                   broken; its own output already says how.
+ *   `thin`        — a 2xx, but too small to be the document. Something else is on the port.
+ *
+ * A boolean could not tell those apart, so the caller worded all three as "another process
+ * is likely using that port" — which is wrong for `error`, the common case, and sent the
+ * dev hunting a port collision that never happened. See `devServerUnhealthy` in adaptv.mjs.
  */
 /**
  * Did Vite say it was re-optimizing? The trailing settle exists ONLY for the reload that
@@ -46,14 +57,21 @@ export async function warmDevServer(
 ) {
   const start = Date.now()
   let good = 0
+  // What the most recent UNHEALTHY read saw. Overwritten only on a bad read, so a warm that
+  // goes good→bad→timeout reports the failure and not the last read of all. Seeded with the
+  // pessimistic case so the verdict is always worded, even if the loop never gets a read in.
+  let last = { why: "unreachable" }
   while (Date.now() - start < timeoutMs) {
     let ok = false
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
       const body = await res.text()
       ok = res.ok && body.length > 500
+      if (!ok)
+        last = { why: res.ok ? "thin" : "error", status: res.status }
     } catch {
       ok = false
+      last = { why: "unreachable" }
     }
     if (ok) {
       good += 1
@@ -68,15 +86,18 @@ export async function warmDevServer(
         // scheduling gap between the last good read and the launch.
         await sleep(sawOptimize() ? 1000 : 150)
         onLine?.("dev server stable")
-        return true
+        return { ok: true }
       }
     } else {
       good = 0
     }
     await sleep(900)
   }
-  onLine?.("dev server warm timed out, launching anyway")
-  return false
+  //NOT "launching anyway" any more: the caller aborts the run on this verdict, and a line
+  //promising the opposite is the kind of thing a dev reads once under `--verbose` and
+  //believes for a year.
+  onLine?.("dev server warm timed out")
+  return { ok: false, ...last }
 }
 
 /**

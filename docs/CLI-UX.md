@@ -564,6 +564,38 @@ caused is named.
 > A plugin the dev registered in `adaptv.config.ts` *is* theirs — name only those
 > (`linking plugins · device`).
 
+**R8b — A tool's own words are not automatically fit to print, and "make the error better" is
+how R8 breaks.** The engines narrate themselves by name; anything that lifts text out of captured
+tool output and onto the screen must pass the opacity boundary FIRST. It is `bin/lib/opacity.mjs`
+now — `namesPlumbing()`, one-way (it can only suppress), enforced by `opacity.test.mjs` and
+`explain.test.mjs` over real captured output. A doc rule was not enough: this was violated by a
+change whose entire purpose was to make a failure more helpful.
+> Violated by: `✖ web  Cannot find module 'tanstack-start-injected-head-scripts:v'` with
+> `at @tanstack/start-server-core/dist/esm/router-manifest.js` under it. Both halves were
+> *technically* the most meaningful lines available (R13) and both taught the consumer the one
+> thing the architecture spends its whole budget hiding, at the moment they were most likely to
+> go and search for it.
+>
+> The shape of the fix generalises. A fault inside the engines is **adaptv's**, and adaptv owns
+> its plumbing out loud but never by name — the same move R7b makes with `could not brand the
+> launcher icon on this platform`. So the `✖` falls back to the thrower's own sentence, and the
+> dim block carries the fact and the ACTION:
+> ```
+>   ✖ web  the app did not render · 33.2s
+>       every request to http://localhost:41730 answered 500 for 30s.
+>       a module adaptv needs could not be resolved. Reinstall dependencies, then run again.
+> ```
+> The dev's OWN error is untouched by any of this — `✖ web  Cannot find module './lib/totals'`
+> prints in full, because that one is theirs. Opacity is not a gag; it is a boundary, and the
+> test suite asserts both sides of it.
+>
+> Two vectors, both closed: `explainFailure` (which is why it moved out of `adaptv.mjs` — that
+> file runs the CLI on import, so nothing could ever test it), and `prettyLine`'s generic
+> fallback, where an unrecognised `Compiling CapacitorSplashScreen.swift` was one lowercase pass
+> from being the live row. NOT hidden: `vite`, `gradle`, `xcodebuild`, `pod`. The contract names
+> those out loud already (R24 has `gradle · assembleDebug`), they cost real diagnostic value, and
+> none of them says anything about how adaptv is built.
+
 **R9 — Never print absolute paths.** Artifact and file paths are app-root-relative.
 > Violated by: `✓ android /Users/arrz/Documents/Github/project-zero/apps/front…`.
 > Want: `✓ android .adaptv/builds/app-debug.apk`.
@@ -734,6 +766,45 @@ the second one prints a duplicate glyph carrying the ugly text.
 the rest can swallow the actual instructions.
 > Violated by: `bin/lib/dev-server.mjs` filtering subprocess output line-by-line on keywords, which
 > printed `"sets 1 key that adaptv no longer reads:"` and dropped the migration steps that followed.
+> Violated a second way by a thrower, not a filter: a three-sentence `new Error(…)` with no
+> `detail` is ONE line to the renderer, so `runLine` clipped the whole diagnosis to
+> `✖ web  dev server at http://localhost:41730 is…`. A reason is a phrase; anything after the
+> first clause belongs in `detail`. An error that knows more than one sentence's worth carries
+> the rest as `err.fix`, which `explainFailure` files dim underneath.
+
+**R56 — Never state a cause you did not check.** A probe that returns a boolean cannot tell
+"nothing answered" from "the app answered 500", so the one sentence written for both asserted the
+wrong one and sent the dev after a process that did not exist. If the code cannot distinguish the
+causes, either distinguish them or describe only what was observed.
+> Violated by the dev server's warm probe. A stale `playground/node_modules` left a TanStack
+> `start-server-core` too old for the vite plugin beside it; every SSR request threw
+> a missing virtual module on every SSR request, the server answered 500 for the full 30s, and
+> the CLI said:
+> ```
+>   ✖ web  dev server at http://localhost:41730 is… · 33.0s
+> ```
+> — clipped from *"…isn't responding. Another process is likely using that port."* The port was
+> ours. `warmDevServer` now returns a verdict (`unreachable` | `error` + status | `thin`), and the
+> port advice is attached ONLY to the two verdicts it can be true for.
+
+**R57 — A stream nobody is reading is a stream that is lying to you.** When a subprocess's output
+has no sink yet, the CLI is blind for exactly as long as that lasts — and startup is when things
+break. Capture from the first byte; wire the live consumer up later if you must.
+> Same failure as R56, and the reason it was unexplainable rather than merely misworded. Vite had
+> already written the real cause to its own stderr, but `dev`'s `onDevLine` is not assigned until
+> the watch phase ~500 lines later, so `onLine: (l) => onDevLine?.(l)` discarded every line the
+> server produced while starting and warming. A rolling `devLog` now records from the moment the
+> server spawns and becomes the failing error's `tail`, which is why the ✖ can name the module.
+
+**R58 — Detail is deduplicated by MEANING, not by string.** One fault repeated with different
+prefixes is still one fault, and three copies of a 200-column line under a `✖` is not detail.
+> Violated on the way to fixing R56: a server that answered 30s of probes logged its stack once
+> per request, and Node files the same sentence under `cause:` beneath the `Error:` it explains,
+> so the first fix printed the same 200-column store path three times. Detail lines are now
+> compared through `toolErrorParts` and dropped when they mean what the `✖` already says. The
+> first fix ALSO split `Cannot find module 'x' imported from '<absolute path>'` like a compiler
+> locator (R13) and put the importer's package on the dim line — see R8b for why that half was
+> wrong, and why the importer is now dropped entirely.
 
 **R17 — Never offer a key that cannot act.** A hint is a promise. `r`/`b` are NATIVE actions
 (relaunch the app on the device, reinstall the binary); on `dev web` their handlers return

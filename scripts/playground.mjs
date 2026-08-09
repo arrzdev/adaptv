@@ -82,6 +82,48 @@ if (!scripts[args[0]]) {
 if (!existsSync(path.join(PLAYGROUND, "node_modules"))) {
   const r = spawnSync(process.execPath, [SETUP], { stdio: "inherit" })
   if (r.status !== 0) process.exit(r.status ?? 1)
+} else if (installStale()) {
+  // The lockfile moved and `node_modules` did not. `existsSync` above only ever asked whether
+  // there was an install, never whether it was the RIGHT one, and nothing else asks either:
+  // pnpm's own pre-run check runs for the project it is invoked in, which is this repo, not
+  // the separate pnpm project under `playground/`. So a `git pull` that bumps a playground
+  // dependency leaves an install from before the bump and the first symptom is the app.
+  //
+  // It cost a real afternoon. A @tanstack bump landed on main; `playground/node_modules` stayed
+  // three weeks old; the app's SSR entry resolved an old `start-server-core` against the new
+  // vite plugin beside it and threw `Cannot find module
+  // 'tanstack-start-injected-head-scripts:v'` on every request. Nothing in the chain mentioned
+  // dependencies. Four seconds of `pnpm install` here is the whole fix.
+  log.info("playground deps are behind its lockfile, installing…")
+  const r = spawnSync("pnpm", ["install"], {
+    cwd: PLAYGROUND,
+    stdio: "inherit",
+  })
+  if (r.status !== 0) {
+    die(
+      "playground install failed.",
+      "run 'pnpm install' in playground/ to see why.",
+    )
+  }
+}
+
+/**
+ * Is the install older than the lockfile it was built from? pnpm writes the lockfile it
+ * resolved into `node_modules/.pnpm/lock.yaml`, byte for byte, so comparing the two answers
+ * exactly the question pnpm itself would ask. Unreadable either way means there is nothing to
+ * compare and nothing to claim: say no rather than reinstalling on a hunch.
+ */
+function installStale() {
+  try {
+    return (
+      readFileSync(
+        path.join(PLAYGROUND, "node_modules", ".pnpm", "lock.yaml"),
+        "utf8",
+      ) !== readFileSync(path.join(PLAYGROUND, "pnpm-lock.yaml"), "utf8")
+    )
+  } catch {
+    return false
+  }
 }
 
 // Cheap assertion, no mutation: the link must resolve INTO this worktree. It can't drift on
