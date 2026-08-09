@@ -190,10 +190,15 @@ export type UseKeyboardOptions = {
   debounceDelay?: number
   /**
    * Seed the height from the learned cache the moment a field is focused, so a consumer can start
-   * lifting on the same frame as the tap instead of waiting for `visualViewport` to report the
-   * keyboard (default `false`). The real measurement then confirms or corrects the guess, and a
-   * prediction that no keyboard confirms retracts. Web/PWA path only — native already reports the
-   * exact height, and the mock path drives the value directly. Opt-in while it is proven on-device.
+   * lifting on the same frame as the tap instead of waiting for the OS to report the keyboard
+   * (default `false`). The real measurement then confirms or corrects the guess, and a prediction
+   * that no keyboard confirms retracts.
+   *
+   * Applies to the web/PWA path AND the native path. Native reports an exact height, but it reports
+   * it in STEPS — iOS raises the keyboard and then, on a login form, its ~45px AutoFill bar ~250ms
+   * later — so without a prediction the sheet animates once per step and lands twice. Seeding the
+   * settled height up front collapses both steps into one motion. The mock path drives the value
+   * directly and is unaffected.
    */
   predictFromCache?: boolean
 }
@@ -579,13 +584,85 @@ export function useKeyboard({
         setState(next)
       }
 
+      //A height the OS actually reported — commit it AND teach the cache, so the next open of a
+      //same-shape field can be predicted. Only reached from the native subscription, so every value
+      //here is a real measurement; `recordKeyboardHeight` ignores a 0 (a dismiss teaches nothing)
+      //and a repeat of the same height, and the last value to survive a session is the settled one.
+      function commitMeasuredNative(next: KeyboardState) {
+        commitNative(next)
+        const active = getActiveInputElement() ?? focusedElementRef.current
+        if (active) recordKeyboardHeight(active, next.height)
+      }
+
+      function cancelNativePrediction() {
+        predictionPendingRef.current = false
+        if (predictionTimer.current) {
+          clearTimeout(predictionTimer.current)
+          predictionTimer.current = null
+        }
+      }
+
+      // Seed the settled height on the FOCUS frame, from what this field shape measured last time.
+      //
+      // The native bridge is exact but stepwise: `keyboardWillShow` carries the bare keyboard, and on
+      // a login form iOS follows it ~250ms later with the AutoFill bar as a SECOND, taller report. By
+      // then the first lift has finished, so the drawer runs a second animation and the sheet visibly
+      // lands twice. Predicting the final height makes the first motion the only motion — the bare
+      // report that follows is a small SHRINK against the prediction, which the hysteresis below
+      // HOLDS, and the real taller report then lands on the value already committed and dedups away.
+      //
+      // A cold cache (first ever focus of this shape on this device) simply predicts nothing and the
+      // stepwise behaviour is unchanged. `commitNative`, not `commitMeasuredNative`: a guess must
+      // never be written back to the cache as if it were a measurement.
+      function predictNative(el: HTMLElement) {
+        if (!predictFromCache || stateRef.current.isOpen) return
+        const field = el as HTMLInputElement
+        if (field.readOnly || field.disabled) return
+        const predicted = predictKeyboardHeight(el)
+        if (predicted === null) return
+        predictionPendingRef.current = true
+        commitNative({ isOpen: true, height: predicted })
+        //Retract a prediction the OS never confirms. Unlike the web path there is nothing to re-read
+        //here — the native signal is push-only — so a keyboard that never arrives (a hardware/Magic
+        //Keyboard, a programmatic focus) would otherwise leave the sheet lifted for a keyboard that
+        //isn't there. Any real report cancels it first (see the subscription below).
+        if (predictionTimer.current) clearTimeout(predictionTimer.current)
+        predictionTimer.current = setTimeout(() => {
+          predictionTimer.current = null
+          if (!predictionPendingRef.current) return
+          predictionPendingRef.current = false
+          commitNative({ isOpen: false, height: 0 })
+        }, KEYBOARD_PREDICT_CONFIRM_MS)
+      }
+
+      function handleNativeFocusIn(event: FocusEvent) {
+        if (!(event.target instanceof HTMLElement)) return
+        if (!willOpenVirtualKeyboard(event.target)) return
+        focusedElementRef.current = event.target
+        predictNative(event.target)
+      }
+
+      document.addEventListener("focusin", handleNativeFocusIn)
+
       const unsubscribe = subscribeNativeKeyboard((info) => {
+        // A real report is the confirmation a prediction was waiting for — retire the retract timer
+        // here, BEFORE deciding what to do with the value. Doing it inside the commit would miss the
+        // held-shrink branch below (which commits nothing yet), and the retract would then fire mid
+        // -raise and close a keyboard that is genuinely on screen.
+        cancelNativePrediction()
+
         // Hold the settled height against iOS's password AutoFill bar flickering on/off. A SMALL
         // shrink while open (the ~45px bar hiding, which iOS reverses ~260ms later) is HELD for a
         // beat rather than committed: if the height climbs back within the window it was the toggle
         // and the sheet never bounced; if it STAYS shorter past the window it is a genuine change
         // and commits — so the sheet is never stuck too tall (the drawer stays responsive). Grows,
         // large shrinks and a real dismiss (height 0) all commit immediately and cancel any hold.
+        //
+        // This is also what absorbs the bare `keyboardWillShow` that follows a PREDICTION: against a
+        // predicted 346 the OS's first 301 is exactly such a small shrink, so it is held rather than
+        // dropping the sheet, and the AutoFill step's real 346 lands on the committed value and
+        // dedups. A prediction that was too tall because the bar genuinely didn't appear is not held
+        // forever — the window expires and the real height commits.
         const isSmallShrink = isSuppressibleKeyboardShrink(
           committedOpen,
           committedHeight,
@@ -598,7 +675,7 @@ export function useKeyboard({
             clearTimeout(shrinkHoldTimer)
             shrinkHoldTimer = null
           }
-          commitNative(info)
+          commitMeasuredNative(info)
           return
         }
 
@@ -606,13 +683,15 @@ export function useKeyboard({
           const held = info.height
           shrinkHoldTimer = setTimeout(() => {
             shrinkHoldTimer = null
-            commitNative({ isOpen: true, height: held })
+            commitMeasuredNative({ isOpen: true, height: held })
           }, NATIVE_KEYBOARD_SHRINK_HOLD_MS)
         }
       })
 
       return () => {
+        document.removeEventListener("focusin", handleNativeFocusIn)
         unsubscribe()
+        cancelNativePrediction()
         if (shrinkHoldTimer) clearTimeout(shrinkHoldTimer)
         commitNative({ isOpen: false, height: 0 })
       }
