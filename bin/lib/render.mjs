@@ -16,6 +16,7 @@ import {
   PHASE_DWELL_MS as THEME_DWELL_MS,
   FRAMES as THEME_FRAMES,
 } from "../ui/theme.mjs"
+import { namesPlumbing } from "./opacity.mjs"
 import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
 
 /* -------------------------------------------------------------------------- */
@@ -841,8 +842,20 @@ export function prettyLine(line) {
   // construction. Showing a clipped slice of somebody's home directory is worse than
   // showing nothing: "" keeps the live line on its last real phase. `--verbose` has it all.
   if (isRawToolNoise(line)) return ""
+  // …and one that names an engine the consumer is not supposed to know exists is tool-internal
+  // for exactly the same reason (R8). This sits below BOTH earlier exits on purpose, so it can
+  // only ever see text adaptv did not choose: `OWN_PHASES` returned adaptv's own vocabulary
+  // untouched at the top (`linking plugins · device` — a plugin the dev registered is THEIRS to
+  // be told about, whatever it is called), and `phaseLabel`'s closed table has already had its
+  // say. What is left is a raw xcodebuild/gradle/CocoaPods line, and those narrate adaptv's
+  // plumbing by name all day — `Compiling CapacitorSplashScreen.swift` is one lowercase pass
+  // away from being the live row. `""` keeps the row on its last real phase, same as above.
+  if (namesPlumbing(line)) return ""
   let s = line
-    .replace(/^\s*\[(capacitor|info|debug)\]\s*/i, "") // tool log prefix
+    //`[capacitor]` used to be listed here too. It is unreachable now — the gate above blanks
+    //the whole line before it can be stripped, which is the correct outcome for a log line
+    //belonging to plumbing (R8), so the alternative is gone rather than left to mislead.
+    .replace(/^\s*\[(info|debug)\]\s*/i, "") // tool log prefix
     .replace(/^[\s>•·✓✔✅✗✘❌⚠–—-]+/u, "") // leading status glyphs / emoji
     .replace(/\bin\s+[\d.]+\s*(?:[µμ]s|ms|us|s|m)\b/i, "") // drop "in 2.52ms" — the duration belongs on the settled ✓ line, not the live one
     .replace(/\s*->\s*\S.*$/, "") // "-> <rest>" arrow clause
