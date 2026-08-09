@@ -1,5 +1,4 @@
 import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
-import { useMediaQuery } from "@arrzdev/adaptv/hooks"
 import { useRouter } from "@arrzdev/adaptv/router"
 import {
   getOS,
@@ -12,6 +11,7 @@ import { useEffect, useState } from "react"
 import { LabBadge } from "@/components/lab/lab-kit"
 import { PageWithSmoothEdges } from "@/components/page"
 import { IconButton } from "@/components/ui"
+import { useIsInstalledApp } from "@/hooks/use-installed-app"
 
 /**
  * Shell for every lab page: the same header, the same back target, and a strip
@@ -33,7 +33,13 @@ export function LabPage({
   children: ReactNode
 }) {
   const router = useRouter()
-  const isStandalone = useMediaQuery("(display-mode: standalone)")
+  //Armed wherever the app is INSTALLED, matching the settings page. The lab runs on
+  //the same shell as the rest of the app: once installed it boots on memory history
+  //(`memoryHistoryInStandalone`), so there is no entry behind the page for the
+  //platform's own back-forward swipe to reach and the chevron above is otherwise the
+  //only way out. Off in a browser tab, where the browser's edge swipe already is
+  //back and a second recogniser would pop twice. See useIsInstalledApp.
+  const isInstalled = useIsInstalledApp()
 
   //the IconButton fires its own light tap haptic on press
   function handleBack() {
@@ -44,7 +50,7 @@ export function LabPage({
   return (
     <PageWithSmoothEdges>
       <EdgeSwipeGestures
-        enabled={isStandalone}
+        enabled={isInstalled}
         left={() => router.navigate({ to: backTo })}
       />
       <header className="flex shrink-0 flex-col gap-y-2">

@@ -5,7 +5,7 @@ import {
   Text,
   View,
 } from "@arrzdev/adaptv/components"
-import { useMediaQuery, useTheme } from "@arrzdev/adaptv/hooks"
+import { useTheme } from "@arrzdev/adaptv/hooks"
 import { createFileRoute, useRouter } from "@arrzdev/adaptv/router"
 import {
   ChevronRight,
@@ -31,6 +31,7 @@ import type { Deck } from "@/data/collections/decks/schema"
 import { useSettings } from "@/data/collections/preferences/settings"
 import { useDataMutation } from "@/hooks/use-data-mutation"
 import { useHaptics } from "@/hooks/use-haptics"
+import { useIsInstalledApp } from "@/hooks/use-installed-app"
 import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
 export const Route = createFileRoute("/_providers/settings")({
@@ -39,8 +40,14 @@ export const Route = createFileRoute("/_providers/settings")({
 
 function SettingsPage() {
   const router = useRouter()
-  //own the edge-swipe-back only when the OS gesture is neutralised (standalone)
-  const isStandalone = useMediaQuery("(display-mode: standalone)")
+  //Own the edge-swipe-back wherever this app is INSTALLED. This app runs on memory
+  //history once installed (`memoryHistoryInStandalone` in adaptv.config.ts), so
+  //there is no history entry behind us and the shell's own back-forward swipe is
+  //inert — leaving the header chevron as the only way out. In a browser tab it
+  //stays off on purpose: the browser's edge swipe already IS back there, and a
+  //second recogniser on the same edge pops two entries. See useIsInstalledApp for
+  //why this is not `(display-mode: standalone)`.
+  const isInstalled = useIsInstalledApp()
   const { settings, setSettings } = useSettings()
   const haptic = useHaptics()
   const [resolvedTheme, toggleTheme] = useTheme()
@@ -79,7 +86,7 @@ function SettingsPage() {
   return (
     <PageWithSmoothEdges>
       <EdgeSwipeGestures
-        enabled={isStandalone}
+        enabled={isInstalled}
         left={() => router.navigate({ to: "/" })}
       />
       <SettingsHeader />

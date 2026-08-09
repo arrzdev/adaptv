@@ -5,6 +5,36 @@
 //
 //Native detection reads the Capacitor-injected `window.Capacitor` GLOBAL — it does
 //NOT import `@capacitor/core`, so a pure web build needs nothing installed.
+//
+//══ TWO AXES. Pick one from each — they are independent ══════════════════════
+//
+//  shell — what is hosting the page?      web  │ standalone │ native
+//      total answer  resolvePlatformTag()
+//      predicates    isStandaloneDisplay()  isNativePlatform()
+//      the union     isInstalledApp()  =  standalone + native  ( = the `app:`
+//                    CSS variant, and the `"app"` ui scope. One concept, and
+//                    these are its three spellings.)
+//
+//  device OS — what is it running on?     ios  │ android    │ web
+//      total answer  getOS()
+//      predicates    isIOS()                        + getOSVersion() /
+//                                                     isOSVersionAtLeast()
+//
+//Reading `isIOS()` and `isNativePlatform()` as if they were alternatives is the
+//mistake this block exists to prevent: iOS Safari is `ios` + `web`, and an iOS
+//Capacitor build is `ios` + `native`. Same OS, different shell, different rules.
+//
+//**There is deliberately NO cross-product** — no `isAndroidNative()`,
+//`isIOSStandalone()`, `isBrowserTab()`. 3 shells × 3 OSes is 9 predicates, and
+//the whole codebase writes a shell×OS condition in exactly ONE load-bearing place
+//(`use-android-back-button.ts`, where the hardware back key only exists on
+//android+native). One call site does not earn a name — and every extra predicate
+//is one more way to reach for the almost-right one, which is precisely how a gate
+//ends up silently off on the target it was written for. Write the `&&`.
+//
+//The browser-tab branch has no predicate for the same reason: in JS it is asked
+//once, while in CSS the `web:` variant carries it ~45 times. That branch is a
+//styling concern, and the styling path costs zero re-renders (see utils.css).
 
 import type {
   AdaptvUiConfig,
