@@ -66,6 +66,20 @@ export {
   rootRoute,
   route,
 } from "#adaptv/routes/adaptv-routes"
+//The generated route tree's footer binds `Register` to `ReturnType<typeof getRouter>`,
+//so it needs a module path exporting `getRouter`. Upstream writes a RELATIVE path to
+//whatever file resolved as `router.entry` — which, for adaptv's own entry, is a path
+//into the framework's install directory (`../../../node_modules/.pnpm/@arrzdev+adaptv@…`
+//under pnpm, since the specifier is computed from a realpath). That is machine-shaped,
+//install-layout-shaped, and gone entirely under Yarn PnP or a dist-only publish. So
+//adaptv rewrites the footer to point here instead — one stable specifier, the same one
+//the `declare module` beside it already uses. → src/vite/route-tree-opacity.ts
+//
+//TYPE-ONLY, and that is load-bearing: `getRouter` reaches the app's route tree through
+//`#adaptv-route-tree`, so a value re-export would put the whole route graph behind every
+//`createFileRoute` import in the app — a runtime cycle for a binding nobody calls.
+//`export type` erases completely, and `typeof getRouter` still resolves through it.
+export type { getRouter } from "#adaptv/routes/router-entry"
 //the router factory the generated entry calls — framework code, not codegen
 export { createAdaptvRouter } from "#adaptv/shell/create-adaptv-router"
 //adaptv's own root route — NOT TanStack's. Generated from adaptv.config.ts.
