@@ -1,9 +1,21 @@
+import type { AnyRoute } from "@tanstack/react-router"
 import { createRouter } from "@tanstack/react-router"
 import { standaloneMemoryHistory } from "#adaptv/shell/standalone-history"
 
-export type AdaptvRouterOptions = {
-  /** The generated route tree. The one genuinely app-specific input. */
-  routeTree: unknown
+export type AdaptvRouterOptions<TRouteTree extends AnyRoute = AnyRoute> = {
+  /**
+   * The generated route tree. The one genuinely app-specific input, and the ONLY
+   * thing in this signature that is generic — deliberately.
+   *
+   * ⚠︎ This was `unknown`, which read as "adaptv does not care what shape it is".
+   * What it actually did was pin the return type: with nothing to infer from, the
+   * router came out as `RouterCore<AnyRoute, …>`, `Register` bound THAT, and every
+   * `to:` in the consumer's app widened to `string` — no autocomplete, no
+   * wrong-route error, and nothing to report because it is a widening, not a
+   * failure. Typed routing is the entire reason a generated route tree exists, so
+   * this parameter is load-bearing. → src/virtual-adaptv-root-route.d.ts
+   */
+  routeTree: TRouteTree
   /** Use in-memory history when installed/standalone. */
   memoryHistoryInStandalone?: boolean
   /** Everything else is forwarded to `createRouter`. */
@@ -22,11 +34,11 @@ export type AdaptvRouterOptions = {
  * re-emitted into every consumer on their next build, and a consumer reading
  * their own `.adaptv/` sees a call, not a copy of adaptv's decisions.
  */
-export function createAdaptvRouter({
+export function createAdaptvRouter<TRouteTree extends AnyRoute>({
   routeTree,
   memoryHistoryInStandalone,
   options = {},
-}: AdaptvRouterOptions) {
+}: AdaptvRouterOptions<TRouteTree>) {
   return createRouter({
     routeTree,
     //Memory history in standalone is opt-in: overriding router history is a real
@@ -42,7 +54,13 @@ export function createAdaptvRouter({
     ...options,
     //The option bag is config-shaped (a plain record from adaptv.config.ts), so
     //it cannot be statically matched against createRouter's deeply-generic
-    //constructor type. The route tree carries the real typing, which is what
-    //`Register` in the generated entry binds.
-  } as never)
+    //constructor type.
+  } as never) as ReturnType<typeof createRouter<TRouteTree>>
+  //⚠︎ The `as never` erases the ARGUMENT, so it erases inference along with it —
+  //which is why the return type has to be restated rather than left to infer. It
+  //used to be left to infer, and the comment above claimed "the route tree carries
+  //the real typing, which is what `Register` binds". It did not: `createRouter` had
+  //nothing to infer `TRouteTree` from and fell back to `AnyRoute`, so `Register`
+  //bound a router over `AnyRoute` and typed routing was silently off. Restating it
+  //re-attaches the tree the caller actually passed.
 }

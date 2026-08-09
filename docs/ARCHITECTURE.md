@@ -470,6 +470,79 @@ Wiring (both adaptv-generated, so the consumer writes neither):
 > than exactly, and it is defence in depth — measured, a live dev server holds one (mtime, content)
 > state across 40 samples, and seeding the generator's own text back three times converges every time.
 
+> ### ✅ FIXED — the tree LOCATED adaptv instead of naming it, and typed routing was dead (2026-08-07)
+>
+> Raised as a question about one line: `routeTree.gen.ts` held
+> `import type { getRouter } from "../../../../src/routes/router-entry.tsx"`, which looks like it only
+> works because the playground shares this repo. It is not repo-special — the playground installs adaptv
+> like any consumer, and Node realpaths the link, so that path IS what a consumer gets, just pointed
+> somewhere else: `../node_modules/.pnpm/@arrzdev+adaptv@0.1.0_<peerhash>/node_modules/@arrzdev/adaptv/…`.
+> The file is regenerated every run, so it is never stale. It is worse than stale: it encodes one
+> machine's node_modules layout, resolves to nothing under an install that keeps none on disk, and dies
+> on the dist cutover, where `src/` is gone and `resolveEntry` is `required: true`.
+>
+> **Upstream cannot emit anything else.** `resolveEntry` prepends `./` to any specifier that is not
+> already relative, so a bare package name is structurally impossible as `router.entry`; the root route
+> reaches the generator through the virtual-route DSL, which is likewise path-shaped. So the finished
+> tree is repaired, in the same pass as the `@tanstack/*` rewrite.
+>
+> **Matched by where an import RESOLVES, not by the name the generator gave it.** That is what makes
+> ejection free: an app writing its own `src/router.tsx` or root layout keeps a path into its own tree,
+> matches nothing, and is left verbatim — repointing it would bind `Register` to adaptv's `getRouter`
+> instead of theirs. It also means a renamed upstream binding cannot silently switch the rewrite off.
+>
+> **A second one existed and nobody knew.** The net (`assertRouteTreeIsPortable`) failed the first real
+> build on `./../../../../src/routes/root-route` — adaptv's root route, a **value** import, so unlike the
+> type-only footer it is a runtime edge. Both are now named through `exports`
+> (`@arrzdev/adaptv/router`, `@arrzdev/adaptv/root-route`); `import.meta.resolve` confirms the specifier
+> and the old relative path are the same file, and the built bundles carry one copy.
+>
+> **The invariant is checked, not the fix.** "No relative import may reach an install directory" — which
+> means outside the app root (a workspace link) *or* through `node_modules` (a normal install). The
+> second rule exists because a test written against the first one passed on the pnpm path: it resolves
+> *inside* the app, so a root check alone waves through the case every consumer actually has.
+>
+> **What the audit turned up on the way: typed routing had never worked.** Three `unknown`s in a row,
+> each individually defensible, each silently widening `to:` to `string` — no autocomplete, no
+> wrong-route error, and nothing to report because a widening is not a failure. In chain order:
+>
+> 1. `virtual-adaptv-router-config.d.ts` shipped an ambient `declare module "#adaptv-route-tree"`. TS
+>    consults ambient modules **before** `paths`, so it shadowed the `.adaptv/routeTree.gen.ts` mapping
+>    `stamp.ts` writes into the app — the mapping existed and was dead. Ambients are program-global;
+>    `paths` is not. The framework's own build now uses a `paths` entry
+>    (`src/routes/route-tree-stub.d.ts`), which cannot leak downstream.
+> 2. `virtual-adaptv-root-route.d.ts` typed the root route `unknown` ("re-stating TanStack's shape here
+>    would mean maintaining a copy"). True, and `ReturnType<typeof createRootRoute>` avoids the copy
+>    without going opaque. The generated tree builds every route off that import, so an opaque root made
+>    the whole tree opaque — invisibly, because the tree carries `@ts-nocheck` and the suppressed error
+>    surfaces as `any` rather than a diagnostic.
+> 3. `createAdaptvRouter` took `routeTree: unknown` and returned whatever `createRouter` inferred from an
+>    `as never` argument — i.e. `AnyRoute`. The comment claimed "the route tree carries the real typing,
+>    which is what `Register` binds". It did not. It is now generic over the tree, with the return type
+>    restated because `as never` erases inference along with the argument.
+>
+> Measured on the playground before and after: `{ to: "/definitely-not-a-real-route" }` was accepted
+> without complaint, and is now rejected against the union of all 40 real routes.
+>
+> **The same widening was waiting in `dist/`, for the cutover to walk into.** `getRouter`'s return
+> type was INFERRED, and an inferred type has to be materialised when `dist/*.d.mts` is emitted — at
+> which point the only route tree in reach is the framework's own stub. So the published types
+> hardcoded `RouterCore<AnyRoute, …>`: correct from source, dead the day `exports` points at `dist/`.
+> Naming it (`export type AdaptvRouter = ReturnType<typeof createAdaptvRouter<typeof routeTree>>`)
+> keeps `#adaptv-route-tree` as a live import in the declaration file, so the app's stamped `paths`
+> still decides what it means. Verified against a dist-shaped fixture — a fake published package, a
+> consumer tsconfig, a marker type on the app's tree — and the marker reaches
+> `ReturnType<typeof getRouter>["routeTree"]`.
+>
+> That leaves one import in the published types that is *supposed* to be unresolvable, which attw
+> reports as a packaging bug. The fix is NOT a `#adaptv-route-tree` entry in the package's own
+> `imports` map: measured, that resolves and the consumer's `paths` still wins, but an app whose
+> mapping never got stamped would then silently fall back to `AnyRoute` instead of failing with
+> "cannot find module" — trading the loud failure for the exact silent one this section is about. So
+> `internal-resolution-error` is ignored for attw's exit code and **re-audited against an allow-list of
+> one specifier**; anything else fails the build, named. Proved by injecting a bogus unresolvable
+> import into `dist/` and watching it fail.
+
 ### 3.3 The one hard spot — generator symbol recognition (spike-gated)
 
 TanStack's route generator matches route files by the `createFileRoute`/`createRootRoute` **identifier
