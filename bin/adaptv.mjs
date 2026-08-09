@@ -397,6 +397,7 @@ async function preparePlatform(
   await capAddIfMissing(appRoot, platform, env, {
     report,
     plugins: config?.plugins,
+    privacy: config?.privacy,
   })
   // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
   // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
@@ -1039,6 +1040,7 @@ async function runLive(appRoot, platforms, opts) {
         await capSync(appRoot, platform, env, {
           report,
           plugins: config?.plugins,
+          privacy: config?.privacy,
         })
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
@@ -1630,6 +1632,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
       await capSync(appRoot, platform, envFor(platform), {
         report,
         plugins: config?.plugins,
+        privacy: config?.privacy,
       })
       buildCache.sync[platform] = syncTag
     } else {
@@ -1749,26 +1752,18 @@ async function runProjectChecks(appRoot) {
   section("Project checks")
   const { runDoctor, formatDiagnostics } =
     await loadAdaptvModule("native/doctor.ts")
-  let deps = []
-  try {
-    const pkg = JSON.parse(
-      readFileSync(path.join(appRoot, "package.json"), "utf8"),
-    )
-    deps = [
-      ...Object.keys(pkg.dependencies ?? {}),
-      ...Object.keys(pkg.devDependencies ?? {}),
-    ]
-  } catch {}
   const ios = nativeDir(appRoot, "ios")
   const android = nativeDir(appRoot, "android")
+  //only an answer when there IS an iOS project: `undefined` keeps the rule quiet, and a
+  //web-only app has no manifest to be missing. Same guard the stamper uses.
+  const hasPrivacyManifest = existsSync(path.join(ios, "App"))
+    ? existsSync(path.join(ios, "App/App/PrivacyInfo.xcprivacy"))
+    : undefined
   const diagnostics = runDoctor({
     iosInfoPlist: readIf(path.join(ios, "App/App/Info.plist")),
     capacitorConfig: process.env.ADAPTV_CAPACITOR_CONFIG ?? undefined,
     androidBuildGradle: readIf(path.join(android, "app/build.gradle")),
-    hasPrivacyManifest: existsSync(
-      path.join(ios, "App/App/PrivacyInfo.xcprivacy"),
-    ),
-    dependencies: deps,
+    hasPrivacyManifest,
   })
   if (diagnostics.length === 0) {
     check(true, "no issues found")
