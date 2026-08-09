@@ -7,6 +7,7 @@ import type {
   SplashScreenProps,
 } from "#adaptv/config/types"
 import type { UiThemePreference } from "#adaptv/hooks/use-theme"
+import type { AdaptvPrivacyConfig } from "#adaptv/native/privacy-manifest"
 import type {
   UiOpenGraphConfig,
   UiTwitterConfig,
@@ -378,6 +379,18 @@ export type AdaptvAppConfig = {
    * rest.
    */
   pluginConfig?: Record<string, Record<string, unknown>>
+  /**
+   * What only your app can know about its privacy manifest (`PrivacyInfo.xcprivacy`).
+   *
+   * adaptv generates the manifest on every iOS build and derives the required-reason
+   * APIs of every plugin compiled in — its own bundled set included, which is most
+   * apps' entire obligation. This is for the rest: an unlisted plugin's APIs, and the
+   * declarations Apple expects from the app itself (tracking, collected data). Since
+   * the file is generated, this is the only place to put them.
+   *
+   * @example privacy: { collectedData: [{ type: "NSPrivacyCollectedDataTypeEmailAddress", linked: true, tracking: false, purposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"] }] }
+   */
+  privacy?: AdaptvPrivacyConfig
 
   /**
    * Native (Capacitor) app id, reverse-domain (e.g. `"com.chopchop.app"`). Setting it
