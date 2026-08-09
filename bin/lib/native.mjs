@@ -25,14 +25,17 @@ import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { exec } from "./exec.mjs"
 import { appConfigFingerprint } from "./fingerprint.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
+import { loadAdaptvModule } from "./load-ts.mjs"
 import {
   classListChanged,
   gradleProjectName,
   mergeCapacitorBuildGradle,
   mergeClassList,
+  mergePbxprojResource,
   mergePluginsJson,
   mergeSettingsGradle,
   podsNeedInstall,
+  resolvePluginPackages,
 } from "./native-state.mjs"
 import { readSection, writeSection } from "./state.mjs"
 
@@ -826,7 +829,7 @@ export async function capAddIfMissing(
   appRoot,
   platform,
   env,
-  { report, plugins } = {},
+  { report, plugins, privacy } = {},
 ) {
   const dir = nativeDir(appRoot, platform)
   if (existsSync(dir)) {
@@ -838,9 +841,10 @@ export async function capAddIfMissing(
     // sandbox is not in sync with the Podfile.lock" — and an Android project generated before
     // adaptv injected its plugins would keep building without them. Cheap when healthy: a few
     // stats and a string compare, then an early return.
-    if (platform === "ios")
+    if (platform === "ios") {
       await injectIosPluginPods(appRoot, env, { report, plugins })
-    else injectAndroidPluginProjects(appRoot, { report, plugins })
+      await stampIosPrivacyManifest(appRoot, { plugins, privacy })
+    } else injectAndroidPluginProjects(appRoot, { report, plugins })
     return
   }
 
@@ -894,9 +898,10 @@ export async function capAddIfMissing(
   //`cap add` writes a core-only project (Capacitor can't discover adaptv's plugins) — a
   //Podfile on iOS, the Gradle/registry trio on Android. Inject now so a first run that
   //skips the (cached) sync still gets them.
-  if (platform === "ios")
+  if (platform === "ios") {
     await injectIosPluginPods(appRoot, env, { report, plugins })
-  else injectAndroidPluginProjects(appRoot, { report, plugins })
+    await stampIosPrivacyManifest(appRoot, { plugins, privacy })
+  } else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
 /** `cap sync <platform>` (copies web assets + updates native deps). */
@@ -992,6 +997,57 @@ function addToIosPackageClassList(appRoot, classNames) {
   writeFileSync(file, `${JSON.stringify(cfg, null, "\t")}\n`)
 }
 
+/** Stable 24-hex-char object ids, Xcode's format — regenerated identically every run. */
+const pbxId = (seed) =>
+  createHash("sha1").update(seed).digest("hex").slice(0, 24).toUpperCase()
+
+const PRIVACY_MANIFEST = "PrivacyInfo.xcprivacy"
+
+/**
+ * Apple's required-reason API manifest, written into the iOS project and declared in it.
+ *
+ * **Why the CLI does this and not just the Vite plugin.** The plugin stamps the manifest
+ * during the capacitor web build, and on a FIRST run that build happens before `cap add`
+ * creates the project — so the stamper found no `.adaptv/ios/App`, skipped, and the app
+ * shipped without a manifest. It appeared only on the second build, which is the worst kind
+ * of bug: correct on the machine that has built twice, missing on CI and on a new clone.
+ * Here the project is guaranteed to exist, so this is the run that counts; the Vite call
+ * stays because it keeps the file current when only the config changed.
+ *
+ * Writing it is half the job — see {@link mergePbxprojResource} for the other half.
+ */
+async function stampIosPrivacyManifest(
+  appRoot,
+  { plugins, privacy } = {},
+) {
+  const { stampPrivacyManifest } = await loadAdaptvModule(
+    "native/stamp-privacy.ts",
+  )
+  //ADAPTV_ROOT explicitly: this module is bundled into a `data:` URL by load-ts.mjs, so it
+  //cannot locate adaptv from its own import.meta.url
+  stampPrivacyManifest(appRoot, {
+    plugins,
+    privacy,
+    adaptvRoot: ADAPTV_ROOT,
+  })
+
+  const pbxproj = path.join(
+    nativeDir(appRoot, "ios"),
+    "App/App.xcodeproj/project.pbxproj",
+  )
+  if (!existsSync(pbxproj)) return
+  const src = readFileSync(pbxproj, "utf8")
+  writeIfChanged(
+    pbxproj,
+    mergePbxprojResource(src, {
+      name: PRIVACY_MANIFEST,
+      fileType: "text.xml",
+      buildFileId: pbxId("adaptv:privacy-manifest:build-file"),
+      fileRefId: pbxId("adaptv:privacy-manifest:file-ref"),
+    }),
+  )
+}
+
 /**
  * Capacitor discovers plugins from the CONSUMER's `package.json` — but adaptv owns
  * the plugins (they're adaptv's deps, not the app's), so `cap sync` only ever writes
@@ -1012,7 +1068,11 @@ async function injectIosPluginPods(
   const pods = []
   const seen = new Set()
   const classNames = []
-  for (const name of [...adaptvCapacitorNativePkgs("ios"), ...plugins]) {
+  const { packages, extras } = resolvePluginPackages(
+    adaptvCapacitorNativePkgs("ios"),
+    plugins,
+  )
+  for (const name of packages) {
     const dir = resolvePkgDir(name)
     if (!dir) {
       report?.(`! plugin ${name} not found, skipped (did you install it?)`)
@@ -1023,7 +1083,9 @@ async function injectIosPluginPods(
       f.endsWith(".podspec"),
     )) {
       const podName = spec.replace(/\.podspec$/, "")
-      if (seen.has(podName)) continue //dedupe (a base plugin also listed in config)
+      //the package list is already deduped (resolvePluginPackages); this catches the rarer
+      //case of two DIFFERENT packages shipping a podspec under the same name
+      if (seen.has(podName)) continue
       seen.add(podName)
       pods.push(`  pod '${podName}', :path => '${rel}'`)
     }
@@ -1063,7 +1125,9 @@ async function injectIosPluginPods(
   //shouldn't have to know adaptv wires Capacitor pods at all (R8/L20).
   //The names used to be listed (`linking plugins · device`), which is R22's identifier in a
   //phase; which plugin is being linked is a `--verbose` question.
-  if (plugins.length > 0) report?.("linking plugins")
+  //`extras`, not `plugins`: a config that lists a plugin adaptv already bundles has caused no
+  //linking, and saying otherwise is a line about work that did not happen.
+  if (extras.length > 0) report?.("linking plugins")
   await run("pod", ["install"], { cwd: podfileDir, env, report })
 }
 
@@ -1121,8 +1185,12 @@ function scanAndroidPluginClasses(srcMainDir) {
  * adaptv's plugins aren't reachable from there — it `fatal`s instead of syncing. It only
  * appears to work in this repo, where the playground sits inside adaptv's own tree and
  * Node's parent-directory walk finds them by accident of layout.
+ *
+ * Exported for `native-plugins.test.mjs`: of the two injectors this is the one that can run
+ * against a scratch directory (it only writes files — iOS ends in `pod install`), so it is
+ * where the shared plugin-set behaviour is asserted end to end.
  */
-function injectAndroidPluginProjects(
+export function injectAndroidPluginProjects(
   appRoot,
   { report, plugins = [] } = {},
 ) {
@@ -1147,10 +1215,11 @@ function injectAndroidPluginProjects(
   const entries = []
   const projects = []
   const classes = []
-  for (const name of [
-    ...adaptvCapacitorNativePkgs("android"),
-    ...plugins,
-  ]) {
+  const { packages, extras } = resolvePluginPackages(
+    adaptvCapacitorNativePkgs("android"),
+    plugins,
+  )
+  for (const name of packages) {
     const dir = resolvePkgDir(name)
     if (!dir) {
       report?.(`! plugin ${name} not found, skipped (did you install it?)`)
@@ -1164,7 +1233,9 @@ function injectAndroidPluginProjects(
     const src = meta.capacitor?.android?.src
     if (!src) continue
     const project = gradleProjectName(name)
-    if (projects.includes(project)) continue //dedupe (a base plugin also listed in config)
+    //as on iOS: the package list is already deduped, so this is the two-different-packages,
+    //one-module-name case
+    if (projects.includes(project)) continue
     projects.push(project)
     entries.push({
       project,
@@ -1204,15 +1275,16 @@ function injectAndroidPluginProjects(
     `${JSON.stringify(mergePluginsJson(existing, classes), null, "\t")}\n`,
   )
   //Same rule as iOS: adaptv's base set is plumbing the dev never asked for and must not be
-  //told about (R8/L20). Only a plugin the CONSUMER registered is worth a word.
-  if (plugins.length > 0) report?.("linking plugins")
+  //told about (R8/L20). Only a plugin the CONSUMER registered — and that adaptv did not
+  //already ship — is worth a word.
+  if (extras.length > 0) report?.("linking plugins")
 }
 
 export async function capSync(
   appRoot,
   platform,
   env,
-  { report, plugins } = {},
+  { report, plugins, privacy } = {},
 ) {
   const { cmd, pre } = capCmd(appRoot)
   await run(cmd, [...pre, "sync", platform], {
@@ -1221,9 +1293,10 @@ export async function capSync(
     report,
   })
   //Capacitor's discovery can't see adaptv-owned plugins; adaptv adds them itself.
-  if (platform === "ios")
+  if (platform === "ios") {
     await injectIosPluginPods(appRoot, env, { report, plugins })
-  else injectAndroidPluginProjects(appRoot, { report, plugins })
+    await stampIosPrivacyManifest(appRoot, { plugins, privacy })
+  } else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
 /**
