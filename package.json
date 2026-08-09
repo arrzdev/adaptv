@@ -57,6 +57,7 @@
     "./biome-shared.json": "./biome-shared.json",
     "./shell": "./src/interface/shell.index.ts",
     "./router": "./src/interface/router.index.ts",
+    "./root-route": "./src/routes/root-route.tsx",
     "./route-globals": "./src/interface/route-globals.d.ts",
     "./server-entry": "./src/interface/server-entry.ts",
     "./config": "./src/interface/config.index.ts",

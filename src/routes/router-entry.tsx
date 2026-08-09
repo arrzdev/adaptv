@@ -21,6 +21,25 @@ import { routeTree } from "#adaptv-route-tree"
  * - **`virtual:adaptv/router-config`** → the `createRouter` options from
  *   `adaptv.config.ts`. Values only, so a virtual module is fine.
  */
-export function getRouter() {
+/**
+ * The router, named in terms of the alias rather than inferred through it.
+ *
+ * ⚠︎ The annotation on `getRouter` below is not decoration. An INFERRED return type has
+ * to be materialised when `dist/*.d.mts` is emitted, and the only route tree reachable
+ * at that moment is the framework's own stub — so the published types would hardcode
+ * `RouterCore<AnyRoute, …>`, and every consumer of the built package would inherit the
+ * exact widening that killed typed routing. Measured: that is what `dist/router.d.mts`
+ * emitted before this alias existed.
+ *
+ * Written as a named type, the emitter keeps `#adaptv-route-tree` as a live import in
+ * the declaration file, so the app's stamped `tsconfig.paths` still decides what it
+ * means — the same indirection that works from source, preserved into dist.
+ * → tsdown.config.ts (`deps.neverBundle`), src/routes/route-tree-stub.d.ts
+ */
+export type AdaptvRouter = ReturnType<
+  typeof createAdaptvRouter<typeof routeTree>
+>
+
+export function getRouter(): AdaptvRouter {
   return createAdaptvRouter({ routeTree, ...routerOptions })
 }

@@ -40,6 +40,12 @@ import { defineConfig } from "tsdown"
 const browserEntry = {
   shell: "src/interface/shell.index.ts",
   router: "src/interface/router.index.ts",
+  //Not an interface barrel — the actual module the generated route tree imports at
+  //RUNTIME. It has an `exports` entry for exactly that reason (the tree names adaptv
+  //rather than locating it on disk), so it needs a dist entry to match, or the
+  //cutover ships an export map pointing at a file that was never built.
+  //→ src/vite/route-tree-opacity.ts
+  "root-route": "src/routes/root-route.tsx",
   components: "src/interface/components.index.ts",
   hooks: "src/interface/hooks.index.ts",
   capabilities: "src/interface/capabilities.index.ts",
@@ -71,7 +77,17 @@ const base = {
   // plugin inside the CONSUMER's build — e.g. `service-worker-shell.ts` imports
   // `virtual:adaptv/pwa-register`. They are never real files here, so they must
   // stay external; declaring it silences the UNRESOLVED_IMPORT guess.
-  deps: { neverBundle: [/^virtual:/] },
+  //
+  // `#adaptv-route-tree` is external for a DIFFERENT and sharper reason: it must
+  // survive into `dist/*.d.mts` as a live import. It is the app's generated route
+  // tree, resolved per-app (Vite alias for the bundler, stamped tsconfig `paths`
+  // for TypeScript), so the ONLY correct thing this build can emit is the
+  // indirection itself. Inlined, it resolves here — against the framework's own
+  // `AnyRoute` stub — and every consumer of the published package inherits
+  // `getRouter(): RouterCore<AnyRoute, …>`, which is precisely the widening that
+  // killed typed routing before. Measured: without this line `dist/router.d.mts`
+  // baked `AnyRoute` in. → src/routes/route-tree-stub.d.ts, ARCHITECTURE §3.2
+  deps: { neverBundle: [/^virtual:/, /^#adaptv-route-tree$/] },
 } satisfies UserConfig
 
 export default defineConfig([
