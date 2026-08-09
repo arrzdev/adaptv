@@ -28,11 +28,14 @@ async function load() {
 }
 
 function inputEl(
-  attrs: { type?: string; inputmode?: string } = {},
+  attrs: { type?: string; inputmode?: string; autocomplete?: string } = {},
 ): HTMLInputElement {
   const el = document.createElement("input")
   if (attrs.type) el.type = attrs.type
   if (attrs.inputmode) el.setAttribute("inputmode", attrs.inputmode)
+  if (attrs.autocomplete) {
+    el.setAttribute("autocomplete", attrs.autocomplete)
+  }
   return el
 }
 
@@ -50,25 +53,25 @@ describe("keyboardCacheKey", () => {
   it("keys full-keyboard fields as text, at the given width", async () => {
     const { keyboardCacheKey } = await load()
     expect(keyboardCacheKey(inputEl({ type: "text" }), 390)).toBe(
-      "390:text",
+      "390:text:-",
     )
     expect(keyboardCacheKey(inputEl({ type: "email" }), 390)).toBe(
-      "390:text",
+      "390:text:-",
     )
     const textarea = document.createElement("textarea")
-    expect(keyboardCacheKey(textarea, 390)).toBe("390:text")
+    expect(keyboardCacheKey(textarea, 390)).toBe("390:text:-")
   })
 
   it("keys the digit pad separately from the full keyboard", async () => {
     const { keyboardCacheKey } = await load()
     expect(keyboardCacheKey(inputEl({ type: "tel" }), 390)).toBe(
-      "390:numeric",
+      "390:numeric:-",
     )
     expect(keyboardCacheKey(inputEl({ type: "number" }), 390)).toBe(
-      "390:numeric",
+      "390:numeric:-",
     )
     expect(keyboardCacheKey(inputEl({ inputmode: "decimal" }), 390)).toBe(
-      "390:numeric",
+      "390:numeric:-",
     )
   })
 
@@ -80,7 +83,61 @@ describe("keyboardCacheKey", () => {
         inputEl({ type: "text", inputmode: "numeric" }),
         390,
       ),
-    ).toBe("390:numeric")
+    ).toBe("390:numeric:-")
+  })
+
+  //The keyboard over a login form carries iOS's ~45px AutoFill bar, so it is a different HEIGHT
+  //from the same device's plain-text keyboard — sharing one entry made each predict the other's
+  //height, which is the sheet landing then stepping again.
+  it("keys an AutoFill (login) field apart from a plain text field", async () => {
+    const { keyboardCacheKey } = await load()
+    const plain = keyboardCacheKey(inputEl({ type: "text" }), 390)
+    expect(keyboardCacheKey(inputEl({ type: "password" }), 390)).toBe(
+      "390:text:af",
+    )
+    expect(
+      keyboardCacheKey(
+        inputEl({ type: "email", autocomplete: "email" }),
+        390,
+      ),
+    ).toBe("390:text:af")
+    expect(plain).toBe("390:text:-")
+  })
+
+  it("groups the whole login form onto ONE key — both fields raise the same keyboard", async () => {
+    const { keyboardCacheKey } = await load()
+    //the sign-in surface: an [autocomplete=email] field above a password field
+    expect(
+      keyboardCacheKey(
+        inputEl({ type: "email", autocomplete: "email" }),
+        390,
+      ),
+    ).toBe(
+      keyboardCacheKey(
+        inputEl({ type: "password", autocomplete: "current-password" }),
+        390,
+      ),
+    )
+  })
+
+  it("reads `autocomplete` as a token list, not a whole string", async () => {
+    const { keyboardCacheKey } = await load()
+    expect(
+      keyboardCacheKey(
+        inputEl({
+          type: "text",
+          autocomplete: "section-blue billing email",
+        }),
+        390,
+      ),
+    ).toBe("390:text:af")
+    //a token that is not an AutoFill-bar field stays on the plain key
+    expect(
+      keyboardCacheKey(
+        inputEl({ type: "text", autocomplete: "organization" }),
+        390,
+      ),
+    ).toBe("390:text:-")
   })
 
   it("encodes orientation via the width — a rotated device is a different key", async () => {
@@ -122,6 +179,25 @@ describe("predict / record", () => {
 
     expect(predictKeyboardHeight(inputEl({ type: "text" }))).toBe(336)
     expect(predictKeyboardHeight(inputEl({ type: "tel" }))).toBe(260)
+  })
+
+  it("keeps the login keyboard's height off the plain-text entry", async () => {
+    const { predictKeyboardHeight, recordKeyboardHeight } = await load()
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    })
+    //device-measured on an iPhone 16 Pro: 346 with the AutoFill bar, 301 without
+    recordKeyboardHeight(
+      inputEl({ type: "email", autocomplete: "email" }),
+      346,
+    )
+    recordKeyboardHeight(inputEl({ type: "text" }), 301)
+
+    //the deck-name field must not inherit the login form's taller keyboard, or it would over-lift
+    //by the bar's height on every open and settle back down
+    expect(predictKeyboardHeight(inputEl({ type: "text" }))).toBe(301)
+    expect(predictKeyboardHeight(inputEl({ type: "password" }))).toBe(346)
   })
 
   it("overwrites a stale height so a keyboard switch self-heals", async () => {

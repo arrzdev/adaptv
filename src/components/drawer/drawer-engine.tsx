@@ -45,6 +45,8 @@ import {
   applyDrawerPanelTransition,
   clearDrawerPanelTransition,
   readPanelTranslateY,
+  resumeDrawerTransition,
+  samplePanelFlight,
   stopDrawerBackdropAnimation,
   transitionDrawerBackdropOpacity,
 } from "#adaptv/components/drawer/drawer-motion"
@@ -695,6 +697,50 @@ export function DrawerEngine({
     return metrics
   }, [])
 
+  /**
+   * Start a FLIP without discarding the slide already in flight.
+   *
+   * Every FLIP here begins by clearing the panel's transition, and `transition: none` makes the
+   * element assume its COMMITTED transform — which, mid-animation, is the target, not where the
+   * browser is currently painting it. So a FLIP that lands during the open slide teleports the
+   * sheet straight to open: device-measured on an iPhone 16 Pro, painted at 605px and snapped to
+   * 0 in a single frame when iOS's password AutoFill bar arrived 40ms into the open. That is the
+   * "the drawer snaps into place instead of animating" report, and it is not specific to the
+   * keyboard — anything that resizes the content mid-open reaches the same three lines.
+   *
+   * Freezing `y` at the painted position first makes clearing the transition invisible: the FLIP
+   * then starts where the sheet actually is. Returns the target the slide was heading for (so the
+   * caller can drive it home rather than leaving it stranded) together with the transition that
+   * CONTINUES the interrupted one — see `resumeDrawerTransition`, without which the sheet lands
+   * correctly but visibly slows down at the seam. `null` when nothing was in flight and the plain
+   * FLIP is already correct.
+   *
+   * `growth` is the layout change this FLIP is about to compensate: it is what the sheet's
+   * remaining travel GAINS, and the resumed duration has to account for it.
+   *
+   * The same freeze-at-the-live-position discipline the close→reopen path uses — see `resumeFrom`
+   * in the open/close effect, and `readPanelTranslateY`'s own warning about `transition: none`.
+   */
+  const freezePanelForFlip = useCallback(
+    (panelEl: HTMLElement, growth: number) => {
+      const target = y.get()
+      const flip = keyboardFlip.get()
+      const liveY = readPanelTranslateY(panelEl)
+      const drift = liveY - (target + flip)
+      //the interrupted curve's own phase, while there is still a transition to read it from
+      const flight = samplePanelFlight(panelEl)
+      clearDrawerPanelTransition(panelEl)
+      //nothing in flight: the committed value IS the painted one, so leave the FLIP alone
+      if (Math.abs(drift) <= 0.5) return null
+      y.set(liveY - flip)
+      return {
+        resumeTo: target,
+        transition: resumeDrawerTransition(flight, drift, drift + growth),
+      }
+    },
+    [y, keyboardFlip],
+  )
+
   // The content changed size while room is held — the classic being a field focus that collapses
   // an expanded picker at the same instant the keyboard raises. Two geometry changes, but only the
   // keyboard's own effect re-aims the box, and the keyboard did not change here: the box is left
@@ -762,13 +808,19 @@ export function DrawerEngine({
       panelEl &&
       !isPointerDraggingRef.current
     ) {
-      clearDrawerPanelTransition(panelEl)
+      const resumed = freezePanelForFlip(panelEl, moved)
       keyboardFlip.set(moved)
       void content.offsetHeight
-      applyDrawerPanelTransition(panelEl, DRAWER_SHRINK_TRANSITION, true)
+      //carrying the slide's remaining travel too — continue that motion, not the shrink's
+      applyDrawerPanelTransition(
+        panelEl,
+        resumed?.transition ?? DRAWER_SHRINK_TRANSITION,
+        true,
+      )
       keyboardFlip.set(0)
+      if (resumed) y.set(resumed.resumeTo)
     }
-  }, [keyboardFlip])
+  }, [keyboardFlip, freezePanelForFlip, y])
 
   // Drive the close toward the measured hidden position. Called once when the close starts, then
   // again on mid-close viewport/content shifts. Measures WITHOUT committing excess (no anchor
@@ -1124,11 +1176,18 @@ export function DrawerEngine({
       panelEl &&
       !isPointerDraggingRef.current
     ) {
-      clearDrawerPanelTransition(panelEl)
+      const resumed = freezePanelForFlip(panelEl, growth)
+      // A step duration is proportional to the step's own small travel; once this FLIP is also
+      // carrying the slide's remaining travel, that duration would cram hundreds of px into ~220ms.
+      // Continue the motion the sheet was already making instead. Reassigned, not shadowed: the
+      // settle below hands `max-height`/`min-height` back once the panel has landed, so it has to
+      // wait out the duration actually applied.
+      if (resumed) transition = resumed.transition
       keyboardFlip.set(growth)
       void content.offsetHeight
       applyDrawerPanelTransition(panelEl, transition, true)
       keyboardFlip.set(0)
+      if (resumed) y.set(resumed.resumeTo)
     }
 
     const runId = beginPanelAnimation("keyboard")
@@ -1159,6 +1218,8 @@ export function DrawerEngine({
     open,
     beginPanelAnimation,
     endPanelAnimation,
+    freezePanelForFlip,
+    y,
   ])
 
   useLayoutEffect(() => {

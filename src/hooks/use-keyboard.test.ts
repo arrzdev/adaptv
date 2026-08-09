@@ -10,6 +10,33 @@ import {
   willOpenVirtualKeyboard,
 } from "#adaptv/hooks/use-keyboard"
 
+//A controllable stand-in for the Capacitor keyboard bridge: `enabled` picks which branch of the
+//observer runs (off by default, so the web suites below are untouched) and `emit` plays the OS's
+//will-show/will-hide reports. Hoisted so the mock factory can close over it.
+const nativeBridge = vi.hoisted(() => {
+  const listeners = new Set<
+    (info: { isOpen: boolean; height: number }) => void
+  >()
+  return {
+    enabled: false,
+    listeners,
+    emit(info: { isOpen: boolean; height: number }) {
+      for (const listener of [...listeners]) listener(info)
+    },
+  }
+})
+
+vi.mock("#adaptv/capabilities/keyboard", () => ({
+  hasNativeKeyboard: () => nativeBridge.enabled,
+  initNativeKeyboard: () => {},
+  subscribeNativeKeyboard: (
+    cb: (info: { isOpen: boolean; height: number }) => void,
+  ) => {
+    nativeBridge.listeners.add(cb)
+    return () => nativeBridge.listeners.delete(cb)
+  },
+}))
+
 const INNER_HEIGHT = 800
 const DEBOUNCE_MS = 50
 const DISMISS_CONFIRM_MS = 150
@@ -440,5 +467,175 @@ describe("isSuppressibleKeyboardShrink", () => {
         THRESHOLD,
       ),
     ).toBe(false)
+  })
+})
+
+/* =============================================================================
+ * useKeyboard — the NATIVE path
+ *
+ * The bridge reports an exact height, but it reports it in STEPS: `keyboardWillShow` carries the
+ * bare keyboard and, on a login form, iOS follows it ~250ms later with the ~45px AutoFill bar as a
+ * second, taller report. Untreated that is two lifts — the sheet lands, then steps again. Seeding
+ * the settled height from the learned cache on the focus frame collapses both into one motion.
+ * Numbers are the device-measured 346 (keyboard + bar) / 301 (bar hidden).
+ * ============================================================================= */
+
+describe("useKeyboard — native", () => {
+  const SHRINK_HOLD_MS = 350
+  let field: HTMLInputElement
+
+  function focusField() {
+    act(() => {
+      field.focus()
+      field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    })
+  }
+
+  function emit(info: { isOpen: boolean; height: number }) {
+    act(() => {
+      nativeBridge.emit(info)
+    })
+  }
+
+  function advance(ms: number) {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  function renderNative() {
+    return renderHook(() =>
+      useKeyboard({ isEnabled: true, predictFromCache: true }),
+    )
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    nativeBridge.enabled = true
+    nativeBridge.listeners.clear()
+    Object.defineProperty(window, "innerWidth", {
+      value: 390,
+      configurable: true,
+      writable: true,
+    })
+    //the sign-in surface's first field: [autocomplete=email], so it keys with the AutoFill bar
+    field = document.createElement("input")
+    field.type = "email"
+    field.setAttribute("autocomplete", "email")
+    document.body.appendChild(field)
+  })
+
+  afterEach(() => {
+    cleanup()
+    field.remove()
+    nativeBridge.enabled = false
+    nativeBridge.listeners.clear()
+    vi.useRealTimers()
+    __resetKeyboardHeightCacheForTests()
+    localStorage.clear()
+  })
+
+  it("learns the settled height from the OS reports", () => {
+    const { result, unmount } = renderNative()
+
+    focusField()
+    expect(result.current).toEqual({ isOpen: false, height: 0 }) //cold cache: no guess
+    emit({ isOpen: true, height: 301 })
+    emit({ isOpen: true, height: 346 }) //the AutoFill bar's second step
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+
+    //the learned height survives the drawer closing, so the NEXT open can predict it
+    emit({ isOpen: false, height: 0 })
+    unmount()
+
+    const second = renderNative()
+    second.result.current //settle the render
+    act(() => {
+      field.focus()
+      field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    })
+    expect(second.result.current).toEqual({ isOpen: true, height: 346 })
+  })
+
+  it("collapses the two-step raise into ONE committed height once warm", () => {
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    //the lift starts on the focus frame, already aimed at the settled height
+    focusField()
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+
+    //the bare keyboard arrives 45px SHORTER than the guess — held, not committed, so the sheet
+    //never drops back down between the two steps
+    emit({ isOpen: true, height: 301 })
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+
+    //the AutoFill step lands on the height already committed: nothing left to animate
+    advance(250)
+    emit({ isOpen: true, height: 346 })
+    advance(SHRINK_HOLD_MS + 50)
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+  })
+
+  it("retracts a prediction the OS never confirms (hardware keyboard)", () => {
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    focusField()
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+
+    //no will-show ever arrives — a Magic Keyboard is attached, or the focus was programmatic
+    advance(PREDICT_CONFIRM_MS + 20)
+    expect(result.current).toEqual({ isOpen: false, height: 0 })
+  })
+
+  it("does not retract when a real report arrived but is being HELD", () => {
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    focusField()
+    //the bare keyboard is a small shrink against the guess, so it commits nothing yet — the
+    //retract must still be cancelled, or it would close a keyboard that is genuinely on screen
+    emit({ isOpen: true, height: 301 })
+    advance(PREDICT_CONFIRM_MS + 20)
+    expect(result.current.isOpen).toBe(true)
+  })
+
+  it("honours a prediction that was too tall — the bar genuinely did not appear", () => {
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 301 })
+    //held for a beat in case it is the bar flickering, then committed: never stuck too tall
+    advance(SHRINK_HOLD_MS + 20)
+    expect(result.current).toEqual({ isOpen: true, height: 301 })
+  })
+
+  it("commits a dismiss straight through", () => {
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({ isOpen: false, height: 0 })
+  })
+
+  it("never predicts for a field that raises no keyboard", () => {
+    const readOnly = document.createElement("input")
+    readOnly.type = "email"
+    readOnly.setAttribute("autocomplete", "email")
+    readOnly.readOnly = true
+    document.body.appendChild(readOnly)
+    recordKeyboardHeight(field, 346)
+
+    const { result } = renderNative()
+    act(() => {
+      readOnly.focus()
+      readOnly.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    })
+    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    readOnly.remove()
   })
 })

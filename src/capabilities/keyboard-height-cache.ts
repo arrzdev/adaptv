@@ -37,6 +37,18 @@ type KeyboardKind = "numeric" | "text"
 
 const NUMERIC_INPUT_MODES = new Set(["numeric", "decimal", "tel"])
 const NUMERIC_INPUT_TYPES = new Set(["number", "tel"])
+//`autocomplete` tokens that make iOS put its AutoFill accessory bar ("Passwords") above the
+//keyboard. Device-measured on an iPhone 16 Pro: that bar is a SECOND height step of ~45px arriving
+//~250ms after the keyboard itself, so a field that raises it and a field that doesn't have
+//genuinely different keyboard heights — and must not share a cache entry, or each would predict
+//the other's height and the sheet would settle, then step again.
+const AUTOFILL_AUTOCOMPLETE_TOKENS = new Set([
+  "username",
+  "email",
+  "current-password",
+  "new-password",
+  "one-time-code",
+])
 //Input types that raise NO keyboard — mirrors use-keyboard's willOpenVirtualKeyboard so a
 //prediction is never keyed for a checkbox or slider. Kept as a local copy rather than an import
 //because use-keyboard imports this module (predict/record) and a back-import would cycle.
@@ -70,13 +82,41 @@ function keyboardKind(el: HTMLElement): KeyboardKind | null {
 }
 
 /**
+ * Whether `el` raises the OS AutoFill accessory bar above the keyboard — the "Passwords" strip iOS
+ * puts over a login form.
+ *
+ * Read from the field's OWN declared intent (its `type` and `autocomplete`) and deliberately NOT
+ * from the surrounding DOM. Walking up for a nearby password field would track WebKit's own
+ * heuristic more closely, but its answer changes with whatever else happens to be mounted at that
+ * moment — the same field would key two different ways across two opens and the cache would thrash.
+ * Declared intent is stable for a given field, which is what a cache key needs.
+ *
+ * A wrong guess is not fatal: this only selects which entry a PREDICTION comes from, and the real
+ * measurement that follows corrects the height through the normal grow/shrink path and re-records
+ * the truth under this key.
+ */
+export function raisesAutofillAccessoryBar(el: HTMLElement): boolean {
+  if (el instanceof HTMLInputElement && el.type === "password") return true
+  const autocomplete = el.getAttribute("autocomplete")?.toLowerCase()
+  if (!autocomplete) return false
+  //a space-separated token list ("section-billing shipping email"), so match any token
+  return autocomplete
+    .split(/\s+/)
+    .some((token) => AUTOFILL_AUTOCOMPLETE_TOKENS.has(token))
+}
+
+/**
  * Cache key for the keyboard `el` will raise, or `null` if `el` raises none.
  *
- * Keyed on `{ viewportWidth, kind }` and deliberately NOT on device model. The layout width
- * already identifies the device implicitly and moves when it rotates — so it encodes orientation
- * for free, and a landscape keyboard (whose height is the interesting, sheet-exceeding case) gets
- * its own entry without a separate orientation term. `kind` keeps the digit pad from being
- * confused with the full keyboard.
+ * Keyed on `{ viewportWidth, kind, autofill }` and deliberately NOT on device model. The layout
+ * width already identifies the device implicitly and moves when it rotates — so it encodes
+ * orientation for free, and a landscape keyboard (whose height is the interesting, sheet-exceeding
+ * case) gets its own entry without a separate orientation term. `kind` keeps the digit pad from
+ * being confused with the full keyboard, and `autofill` keeps a login field (whose keyboard carries
+ * the ~45px AutoFill bar) from being confused with a plain text field on the same device.
+ *
+ * Changing the shape retires previously stored entries — they simply stop matching, so the affected
+ * field shapes fall back to the reactive path once and re-learn. No migration needed.
  */
 export function keyboardCacheKey(
   el: HTMLElement,
@@ -86,7 +126,8 @@ export function keyboardCacheKey(
 ): string | null {
   const kind = keyboardKind(el)
   if (!kind) return null
-  return `${Math.round(viewportWidth)}:${kind}`
+  const autofill = raisesAutofillAccessoryBar(el) ? "af" : "-"
+  return `${Math.round(viewportWidth)}:${kind}:${autofill}`
 }
 
 //---- in-memory hot path ----------------
