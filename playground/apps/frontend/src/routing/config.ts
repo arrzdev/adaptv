@@ -23,6 +23,11 @@ export const routes = rootRoute([
     route("/lab/toggles", "pages/lab/toggles.page.tsx"),
     route("/lab/fields", "pages/lab/fields.page.tsx"),
     route("/lab/drawer", "pages/lab/drawer.page.tsx"),
+    //the three-engine bake-off: the shipped sheet, the rewrite, and the real
+    //vaul package unmodified, all moving identical content
+    route("/lab/drawers", "pages/lab/drawers.page.tsx"),
+    //the settle bisect: a pure-CSS sheet with one piece of the engine's machinery
+    //added per step, so the first step that misbehaves names the mechanism
     route("/lab/dropdown", "pages/lab/dropdown.page.tsx"),
     //the drawer's keyboard conformance harness — drives adaptv's keyboard test
     //seam and asserts the sheet's geometry, so one screenshot is the report on

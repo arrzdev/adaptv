@@ -89,6 +89,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/drawers",
+    title: "Drawers · side by side",
+    summary: "ours, the rewrite and real vaul · same sheet, three engines",
+    isNew: true,
+  },
+  {
     to: "/lab/dropdown",
     title: "Dropdown",
     summary: "anchored menu · flip, shift, escape a clipped carousel",

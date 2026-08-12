@@ -40,6 +40,7 @@ export function DeckFormDrawer({
   errorMessage,
   onSubmit,
 }: DeckFormDrawerProps) {
+  //the engine comes from context so the lab can open this exact drawer on either one
   const haptic = useHaptics()
   const [value, setValue] = useState(initialValue)
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(

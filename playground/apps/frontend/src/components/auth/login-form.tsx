@@ -47,6 +47,8 @@ type Mode = "signin" | "signup"
 //and adopts into the new account (sync pushes it up); on SIGN-IN to an existing
 //account the local guest state is discarded and reset to the clean upstream.
 export function LoginForm({ onClose }: { onClose: () => void }) {
+  //the engine comes from context so the lab can open this exact drawer on either one
+
   const [mode, setMode] = useState<Mode>("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
