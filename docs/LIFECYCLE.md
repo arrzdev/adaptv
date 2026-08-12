@@ -97,6 +97,7 @@ export default defineApp({
   // Screen thunks — statically imported by the plugin, NOT lazy chunks (§3.3, RENDERING.md §3.1.2)
   splashScreen:     () => import("@/components/splash-screen"),
   offlineComponent: () => import("@/components/offline"),
+  bootErrorScreen:  () => import("@/components/boot-error"),
 
   web: {
     render: "ssr",                 // "ssr" (DEFAULT — see DECISIONS.md §6.3) | "spa"
@@ -121,6 +122,12 @@ export default defineApp({
 - **`offlineComponent`** mirrors `splashScreen` exactly: one consumer-owned component with optional
   props, rendered by **adaptv** when the app can't boot far enough for a route to exist, and by the
   **consumer** when a mounted route's data is unavailable. → `RENDERING.md §3.1.2`.
+- **`bootErrorScreen`** is the same shape once more, but for the app that **never booted** — a broken or
+  missing entry chunk, where React never runs. It is the one thunk consumed at *build* time rather than
+  in the bundle: prerendered with `react-dom/server` and embedded in the emitted document, since anything
+  shipped in the bundle is gone in exactly the case it exists for. Runtime errors are deliberately **not**
+  covered — a route that throws is the app's own boundary to catch, and adaptv installs none so it cannot
+  pre-empt one. → `RENDERING.md §3.1.3`, `DECISIONS.md B30`/`B31`.
 - **`web.sw.precacheDocuments`** is empty by default. Route *chunks* are always precached (that's what
   makes navigation instant); this allowlist is only for public HTML documents.
 - `web.host` maps to a TanStack Start deploy preset — this is *precisely* why adaptv keeps Start (roadmap

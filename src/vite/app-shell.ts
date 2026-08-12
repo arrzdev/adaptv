@@ -25,6 +25,13 @@
  * carries no route content by design.
  */
 
+import {
+  APP_ROOT_ID,
+  getBootFallbackCss,
+  getBootFallbackMarkup,
+  getBootFallbackScript,
+} from "#adaptv/shell/boot-fallback.ts"
+
 export type AppShellOptions = {
   lang: string
   title: string
@@ -36,6 +43,15 @@ export type AppShellOptions = {
   entryHref: string
   /** Extra head markup (manifest link, icons, meta) inserted verbatim. */
   headExtra?: string
+  /**
+   * The app's error component, prerendered to static HTML **once per boot code**
+   * (the code is a prop, so an app can branch on it). Embedded hidden and revealed
+   * by the watchdog if the bundle never boots — the one screen that has to survive
+   * its own build being broken. Identical renders collapse to one copy. Omitted →
+   * no fallback is emitted at all, so the shell is byte-identical to what it was
+   * before. → `src/shell/boot-fallback.ts`
+   */
+  bootFallbackByCode?: Readonly<Record<string, string>>
 }
 
 function escapeHtml(value: string): string {
@@ -54,6 +70,7 @@ function escapeHtml(value: string): string {
  * user, for no reason.
  */
 export function renderAppShell(options: AppShellOptions): string {
+  const fallback = options.bootFallbackByCode
   return [
     "<!DOCTYPE html>",
     `<html lang="${escapeHtml(options.lang)}">`,
@@ -66,13 +83,18 @@ export function renderAppShell(options: AppShellOptions): string {
     //init script first — the platform/theme stamp must land before first paint,
     //or the app:/web: variants and the splash policy resolve on the wrong frame
     `<script>${options.headInitScript}</script>`,
-    `<style>${options.criticalCss}</style>`,
+    //the boot watchdog goes in the HEAD, not the body: a script that fails to
+    //LOAD dispatches its error event on the element, and a listener registered
+    //after the fact never sees it. Here it is armed before anything else runs.
+    ...(fallback ? [`<script>${getBootFallbackScript()}</script>`] : []),
+    `<style>${options.criticalCss}${fallback ? getBootFallbackCss() : ""}</style>`,
     options.headExtra ?? "",
     `<link rel="stylesheet" href="${options.stylesHref}">`,
     "</head>",
     "<body>",
     //empty by design — this is the boot scaffolding, not a page
-    '<div id="root"></div>',
+    `<div id="${APP_ROOT_ID}"></div>`,
+    ...(fallback ? [getBootFallbackMarkup(fallback)] : []),
     `<script type="module" src="${options.entryHref}"></script>`,
     "</body>",
     "</html>",
