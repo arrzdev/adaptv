@@ -134,8 +134,73 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
       )
     }
 
+    /*
+     * Then let the page go QUIET before the measured gesture, and prove it did.
+     *
+     * The warm-up commits a press, which mounts the log and re-renders. Chromium will
+     * not turn a touch into a scroll until it has pushed a fresh touch-action region
+     * to the compositor; a gesture issued inside that window is handled on the main
+     * thread instead, so the container never scrolls, `pointercancel` never arrives,
+     * and the press legitimately commits. That is indistinguishable from an engine
+     * that failed to defer — it fails on the assertion below with "the visual is not
+     * deferred" while the engine is in fact perfect. Measured: the warm-up's own
+     * 300ms is not enough on a loaded machine; the gesture is only arbitrated again
+     * once the page has been idle for ~1s.
+     *
+     * So rather than sleep a guessed number, wait for real idle frames — and make the
+     * premise assertable instead of assumed (`cancelled` below).
+     */
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          let idleFrames = 0
+          let last = performance.now()
+          const tick = () => {
+            const now = performance.now()
+            //a frame that arrived on time means nothing else is fighting for the
+            //main thread; 60 of them in a row is a settled page
+            idleFrames = now - last < 24 ? idleFrames + 1 : 0
+            last = now
+            if (idleFrames >= 60) resolve()
+            else requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        }),
+    )
+
     return { cdp, button, aim }
   }
+
+  /**
+   * Record whether the browser CLAIMED the gesture (fired `pointercancel`).
+   *
+   * The whole suite rests on that arbitration happening. When it does not, every
+   * assertion here fails in a way that accuses the engine, so the premise has to be
+   * checked explicitly — a harness that stopped reproducing a scroll must say so.
+   */
+  async function watchCancel(page: Page) {
+    await page.evaluate(() => {
+      const el = document
+        .evaluate(
+          "//button[contains(., 'press, drag off, release')]",
+          document,
+          null,
+          9,
+          null,
+        )
+        .singleNodeValue as HTMLElement | null
+      const w = window as unknown as { __cancelled?: boolean }
+      w.__cancelled = false
+      el?.addEventListener("pointercancel", () => {
+        w.__cancelled = true
+      })
+    })
+  }
+
+  const sawCancel = (page: Page) =>
+    page.evaluate(
+      () => (window as unknown as { __cancelled?: boolean }).__cancelled === true,
+    )
 
   test("a finger laid down and swiped never lights the button", async ({
     page,
@@ -143,6 +208,7 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     const { cdp, aim } = await setup(page)
     const centre = await aim()
     await watchPressed(page)
+    await watchCancel(page)
 
     await touch(cdp, "touchStart", centre)
     //move immediately and keep moving: this is the gesture the user described, and
@@ -152,6 +218,14 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     }
     await touch(cdp, "touchEnd")
     await page.waitForTimeout(300)
+
+    //premise first: if the browser did not claim the gesture there was no scroll to
+    //defer past, and the assertion below would blame the engine for the harness
+    expect(
+      await sawCancel(page),
+      "the browser never claimed the swipe as a scroll — the harness stopped " +
+        "reproducing the gesture under test, so this says nothing about the engine",
+    ).toBe(true)
 
     expect(
       await sawPressed(page),
@@ -206,6 +280,7 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     const centre = await aim()
     const clicks = page.locator("[data-lab-log] li")
     const before = await clicks.count()
+    await watchCancel(page)
 
     await touch(cdp, "touchStart", centre)
     await page.waitForTimeout(140)
@@ -219,6 +294,13 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     await page.waitForTimeout(60)
     await touch(cdp, "touchEnd")
     await page.waitForTimeout(400)
+
+    //same premise check: "cancelled" is the subject, so prove it was cancelled
+    expect(
+      await sawCancel(page),
+      "the browser never claimed the drag as a scroll — the harness stopped " +
+        "reproducing the gesture under test, so this says nothing about the engine",
+    ).toBe(true)
 
     expect(
       await clicks.count(),
