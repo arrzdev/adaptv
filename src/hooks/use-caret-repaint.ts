@@ -66,26 +66,40 @@ const CARET_WATCH_TAIL_FRAMES = 15
 //module-level so non-React movers (drawer motion helpers, scroll utilities) can announce
 //without a hook dependency; the single app-wide controller registers itself here
 let caretHoldCount = 0
-let onCaretHoldsChange: ((count: number) => void) | null = null
+let onCaretHoldsChange:
+  | ((count: number, movementEnded: boolean) => void)
+  | null = null
 
 /**
- * Announce an imminent translation of the focused text field (drawer tween, keyboard lift,
- * programmatic smooth scroll) so the caret is muted BEFORE the first moved frame instead of a
- * few ghost frames after. Returns a release; while any hold is active the caret stays muted.
- * Releasing starts the normal settle/restore cycle, so it is safe to release immediately after
- * kicking off a fire-and-forget scroll — observed movement keeps extending the quiet window.
+ * BRACKET a translation of the focused text field whose end you know — a drawer tween, a
+ * keyboard lift. The caret is muted BEFORE the first moved frame (the reactive tracker alone
+ * leaks ghost frames at motion start), and releasing means the movement is OVER, so the caret
+ * is repainted right then rather than a quiet window later.
+ *
+ * Only bracket what you can actually close. For a mover with no end signal — a smooth scroll,
+ * a finger — use {@link preMuteCaret}, which mutes and hands the field to the quiet window.
  * No-ops when no text field is focused.
  */
 export function beginCaretHold(): () => void {
   caretHoldCount++
-  onCaretHoldsChange?.(caretHoldCount)
+  onCaretHoldsChange?.(caretHoldCount, false)
   let released = false
   return function releaseCaretHold() {
     if (released) return
     released = true
     caretHoldCount--
-    onCaretHoldsChange?.(caretHoldCount)
+    onCaretHoldsChange?.(caretHoldCount, true)
   }
+}
+
+/**
+ * Mute the caret for a movement that cannot say when it finishes — a programmatic smooth
+ * scroll, a scroll the finger started. The quiet window owns the restore from here: every
+ * observed movement pushes it out, so the caret comes back once, after the field is truly
+ * still. No-ops when no text field is focused.
+ */
+export function preMuteCaret(): void {
+  onCaretHoldsChange?.(caretHoldCount, false)
 }
 
 function isTextEntry(
@@ -215,9 +229,9 @@ export function useCaretRepaint({
      * - a scroll / viewport event just fired, and the field may be about to move with it.
      *
      * Outside those, nothing can move the field without telling us first, and a frame spent
-     * measuring is a forced layout bought for nothing. That makes {@link beginCaretHold} a
-     * contract rather than an optimisation: a translation that declares no hold, and rides no
-     * scroll, is one this patch can no longer see.
+     * measuring is a forced layout bought for nothing. That makes {@link beginCaretHold} /
+     * {@link preMuteCaret} a contract rather than an optimisation: a translation that declares
+     * neither, and rides no scroll, is one this patch can no longer see.
      */
     function shouldWatch() {
       return caretHoldCount > 0 || settleTimer !== null || watchFrames > 0
@@ -341,7 +355,7 @@ export function useCaretRepaint({
       markMoving()
     }
 
-    function handleHoldsChange(count: number) {
+    function handleHoldsChange(count: number, movementEnded: boolean) {
       if (!fieldIsLive()) return
       if (count > 0) {
         mute()
@@ -351,8 +365,29 @@ export function useCaretRepaint({
         startWatching()
         return
       }
-      //last mover released — run the normal settle so the caret restores once truly still
-      markMoving()
+      //a pre-mute, or a bracket taken while another was already open: nothing has ended, so
+      //the quiet window owns the restore exactly as it did before
+      if (!movementEnded) {
+        markMoving()
+        return
+      }
+      /*
+       * The last declared mover released, and a declared mover is one with a KNOWN end — a
+       * drawer tween, a keyboard lift. Its release IS the end of the movement, so there is
+       * nothing left to wait out.
+       *
+       * The quiet window exists for the movers that cannot say when they finish: a momentum
+       * scroll's deceleration tail jitters around the move threshold, and restoring on the
+       * first still frame there makes the caret blink on and off. Spending it here bought
+       * nothing and cost everything — measured on the timeline, it put a full-viewport Paint
+       * and a RasterTask 120ms AFTER the sheet had stopped, so the sheet arrived and then
+       * every glyph in it was re-rasterised. That delay was the settle tremor.
+       *
+       * `attemptRestore` re-measures before it commits, so a hold released a touch early still
+       * defers to movement that is genuinely still happening.
+       */
+      clearSettleTimer()
+      attemptRestore()
     }
 
     document.addEventListener("focusin", handleFocusIn, true)

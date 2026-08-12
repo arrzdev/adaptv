@@ -21,6 +21,21 @@ export const DRAWER_TRANSITIONS = {
   // dropped the transform to the main thread (~20fps "stalling"). Snappiness knob; lower = faster.
   // Curve is the vaul/iOS sheet easing (firm shove → long decelerate, kisses flat into place),
   // restored here for the OPEN + keyboard-GROW motions. Shrink and close have their own configs.
+  //
+  // DO NOT "fix" the flat landing. Sampled at 60fps over a 585px sheet, this curve spends its
+  // last four frames moving under a pixel and finishes on a 0.11px step — 67ms in which the sheet
+  // is formally animating and visibly is not. That reads like a defect on a profile and is not
+  // one: it is the kiss, and it is why the sheet feels like an iOS sheet.
+  //
+  // It was changed once, to `(0.25, 0.94)` — ending below y=1 for residual velocity, the same
+  // trick DRAWER_CLOSE_TRANSITION uses. It did remove the sub-pixel tail, and the owner's verdict
+  // was that the whole drawer went "robotic ... too slow": half the travel moved from 16% of the
+  // duration to 22%, so the shove goes and the motion reads as mechanical. The close can end
+  // below 1 because nobody tracks a sheet leaving. An entrance is tracked, and the deceleration
+  // IS the feel.
+  //
+  // The stall that prompted that change was never this curve. It was `useCaretRepaint`'s restore
+  // landing in the tail, repainting a sheet that had already stopped.
   DURATION: 0.38,
   EASE: [0.32, 0.72, 0, 1] as [number, number, number, number],
 } as const
@@ -34,11 +49,45 @@ export const DRAWER_CLOSE_THRESHOLD = 0.25
 export const DRAWER_BORDER_RADIUS = 8
 
 /**
- * Upward-pull resistance for bottom drawers.
- * @see vaul `dampenValue` in helpers.ts
+ * How much of the finger the sheet keeps on the FIRST pixel of an upward pull. Below 1 the sheet
+ * resists from the very start, which is what reads as friction rather than as a sheet that has to
+ * be dragged some distance before it admits anything is happening.
+ */
+const DRAWER_PULL_RESISTANCE = 0.55
+/** px — how far past its rest an upward pull can ever take the sheet, however hard it is pulled. */
+const DRAWER_PULL_LIMIT_PX = 40
+
+/**
+ * Upward-pull resistance for bottom drawers: the sheet gives a little, gives progressively less,
+ * and stops giving at {@link DRAWER_PULL_LIMIT_PX}. Returns the UPWARD travel in px for `v` px of
+ * upward finger movement, always in `[0, DRAWER_PULL_LIMIT_PX)`.
+ *
+ * This used to be vaul's `dampenValue`, `8 * (log(v + 1) - 2)`, and that function is NEGATIVE for
+ * its first 6.4px — `dampenValue(0)` is `-16`. The caller negates it to move the sheet up, so an
+ * upward pull began by throwing the sheet 16px DOWN and then walking it back through +10, +7, +5,
+ * +3, +1.7 before it crossed zero and finally started rising.
+ *
+ * That was not a near-zero edge case: the drag rebases its origin at the takeover
+ * (`pointerStartRef.current = clientY`), so every upward drag started at exactly `v = 0` and every
+ * upward drag opened with that 16px kick. It reads as a shake rather than a jump because a quick
+ * pull covers 6.4px inside one frame and only a slow, exploratory one — the kind you make when you
+ * are feeling for the friction — shows the whole excursion. It was also the reported
+ * over-sensitivity, and the same arithmetic: 4px of finger, the slop the drag commits at, came out
+ * as 16px of sheet.
+ *
+ * The shape now is the standard rubber band (UIScrollView's, and every imitation of it since):
+ * `f(0) = 0` so there is nothing to jump, `f'(0) = DRAWER_PULL_RESISTANCE` so resistance is there
+ * from the first pixel, `f'` strictly decreasing so it builds, and a horizontal asymptote so the
+ * sheet cannot be pulled off the top of the screen. The constants are chosen to keep the old
+ * function's FAR field, which was never the problem — at 50/100/160px of pull this gives
+ * 16.3/23.2/27.5px against the old 15.5/20.9/24.7.
  */
 export function dampenDrawerPull(v: number) {
-  return 8 * (Math.log(v + 1) - 2)
+  if (v <= 0) return 0
+  return (
+    (1 - 1 / ((v * DRAWER_PULL_RESISTANCE) / DRAWER_PULL_LIMIT_PX + 1)) *
+    DRAWER_PULL_LIMIT_PX
+  )
 }
 
 /**
