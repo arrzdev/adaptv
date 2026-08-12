@@ -95,7 +95,9 @@ test.describe("an inner scroller at its end", () => {
           const el = document.elementFromPoint(x as number, y as number)
           return {
             onTarget: !!el?.closest(selector as string),
-            what: el ? `${el.tagName}.${el.className}`.slice(0, 70) : "nothing",
+            what: el
+              ? `${el.tagName}.${el.className}`.slice(0, 70)
+              : "nothing",
           }
         },
         [point.x, point.y, BOX] as const,
@@ -123,7 +125,9 @@ test.describe("an inner scroller at its end", () => {
     })
     await page.waitForTimeout(150)
     const boxAtEnd = await s.box.evaluate((el) => el.scrollTop)
-    const max = await s.box.evaluate((el) => el.scrollHeight - el.clientHeight)
+    const max = await s.box.evaluate(
+      (el) => el.scrollHeight - el.clientHeight,
+    )
     expect(boxAtEnd, "the box must really be at its end").toBeGreaterThan(
       max - TOLERANCE_PX,
     )
