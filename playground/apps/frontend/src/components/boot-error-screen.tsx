@@ -41,7 +41,9 @@ export function BootErrorScreen({ code }: BootErrorProps) {
       className="w-full flex-1 flex-col items-center justify-center gap-6 px-6 text-center text-foreground"
     >
       <div className="flex flex-col gap-2">
-        <h1 className="text-lg font-semibold tracking-tight">{copy.title}</h1>
+        <h1 className="text-lg font-semibold tracking-tight">
+          {copy.title}
+        </h1>
         <p className="max-w-sm text-sm text-muted">{copy.body}</p>
       </div>
 
