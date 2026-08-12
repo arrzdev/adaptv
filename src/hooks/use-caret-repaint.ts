@@ -408,6 +408,10 @@ export function useCaretRepaint({
       capture: true,
       passive: true,
     })
+    //`visualViewport` is optional chained because not every webview has it, and without this
+    //`window` fallback such a webview would get NO viewport signal at all — the one platform
+    //shape where the keyboard resizes the frame instead of the visual viewport.
+    window.addEventListener("resize", handleViewportMovement)
     window.visualViewport?.addEventListener(
       "resize",
       handleViewportMovement,
@@ -437,6 +441,7 @@ export function useCaretRepaint({
         true,
       )
       document.removeEventListener("touchstart", handleTouchStart, true)
+      window.removeEventListener("resize", handleViewportMovement)
       window.visualViewport?.removeEventListener(
         "resize",
         handleViewportMovement,
