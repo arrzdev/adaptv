@@ -21,7 +21,7 @@ test.use({ viewport: { width: 390, height: 844 } })
 
 //the deep-fade demo, by the depth it is given rather than by a class that no longer
 //exists — depth is a prop now, so there is nothing in the class list to match on
-const DEEP_FADE = '[data-fade][style*="--fade-length"]' 
+const DEEP_FADE = '[data-fade][style*="--fade-length"]'
 
 const strengths = (el: Locator) =>
   el.evaluate((node) => ({
@@ -42,7 +42,9 @@ async function expectStrengths(
   expected: { start: number; end: number },
   because: string,
 ) {
-  await expect.poll(() => strengths(el), { message: because }).toEqual(expected)
+  await expect
+    .poll(() => strengths(el), { message: because })
+    .toEqual(expected)
 }
 
 async function scrollTo(el: Locator, offset: number) {
@@ -105,7 +107,9 @@ test.describe("ScrollView fade", () => {
         getComputedStyle(node).getPropertyValue("--fade-length").trim(),
       )
     expect(length).not.toBe("")
-    expect(length, "still the default — the prop never landed").not.toBe("2rem")
+    expect(length, "still the default — the prop never landed").not.toBe(
+      "2rem",
+    )
   })
 
   test("the mask is on the scroller itself, with no wrapper and no colour", async ({
@@ -114,7 +118,9 @@ test.describe("ScrollView fade", () => {
     //the old implementation needed a wrapper element and a `bg-*` class that had to
     //match whatever was behind it; this asserts neither came back
     const box = page.locator(DEEP_FADE).first()
-    const mask = await box.evaluate((node) => getComputedStyle(node).maskImage)
+    const mask = await box.evaluate(
+      (node) => getComputedStyle(node).maskImage,
+    )
     expect(mask).toContain("gradient")
   })
 
@@ -131,7 +137,9 @@ test.describe("ScrollView fade", () => {
     )
   })
 
-  test("a horizontal scroller fades along the inline axis", async ({ page }) => {
+  test("a horizontal scroller fades along the inline axis", async ({
+    page,
+  }) => {
     const strip = page.locator('[data-fade][data-scroll-view="x"]').first()
     await strip.scrollIntoViewIfNeeded()
 

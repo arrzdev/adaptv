@@ -36,7 +36,10 @@ test.describe("the screen frame", () => {
       }
     })
 
-    expect(measured.children, "the rule only applies to an only child").toBe(1)
+    expect(
+      measured.children,
+      "the rule only applies to an only child",
+    ).toBe(1)
     expect(
       measured.declaresFill,
       "the page must NOT be carrying flex-1 itself — that is the boilerplate this removes",
@@ -63,15 +66,18 @@ test.describe("the screen frame", () => {
       const sibling = document.createElement("div")
       sibling.style.height = "40px"
       el.append(sibling)
-      const first = getComputedStyle(el.firstElementChild as HTMLElement).flexGrow
+      const first = getComputedStyle(
+        el.firstElementChild as HTMLElement,
+      ).flexGrow
       const second = getComputedStyle(sibling).flexGrow
       sibling.remove()
       return { first, second }
     })
 
-    expect(grows.first, "the rule must stop applying once there are two").toBe(
-      "0",
-    )
+    expect(
+      grows.first,
+      "the rule must stop applying once there are two",
+    ).toBe("0")
     expect(grows.second).toBe("0")
   })
 

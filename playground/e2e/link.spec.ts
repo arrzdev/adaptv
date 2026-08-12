@@ -69,11 +69,9 @@ test.describe("Link & ExternalLink", () => {
   }) => {
     // scope to the predicate's own section: the same URLs appear as visible link
     // text elsewhere on the page, so an unscoped match would be ambiguous
-    const section = page
-      .locator("section")
-      .filter({
-        has: page.getByRole("heading", { name: "isExternalUrl()" }),
-      })
+    const section = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "isExternalUrl()" }),
+    })
 
     const expectRow = (url: string, verdict: "true" | "false") =>
       expect(

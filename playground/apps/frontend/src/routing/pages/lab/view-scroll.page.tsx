@@ -169,8 +169,8 @@ function LabViewScrollPage() {
           </div>
         </ScrollView>
         <LabCaveat>
-          Do not try to verify this from computed styles. Every scroller and
-          every press target deliberately writes the longhand{" "}
+          Do not try to verify this from computed styles. Every scroller
+          and every press target deliberately writes the longhand{" "}
           <code>pan-x pan-y pinch-zoom</code> to work around WebKit 240917
           (<code>manipulation</code> suppresses <code>pointercancel</code>
           ), and Chrome canonicalises the longhand back to{" "}
@@ -244,13 +244,13 @@ function LabViewScrollPage() {
           ))}
         </ScrollView>
         <LabCaveat>
-          A tall fade used to be unusable because it greyed out the content you were
-          reading even when parked against that edge. That is what the strengths fix,
-          and it is why the depths on this page are deliberately large — at{" "}
-          <code>fadeSize="3rem"</code> a permanently-on fade would be obvious.
+          A tall fade used to be unusable because it greyed out the content
+          you were reading even when parked against that edge. That is what
+          the strengths fix, and it is why the depths on this page are
+          deliberately large — at <code>fadeSize="3rem"</code> a
+          permanently-on fade would be obvious.
         </LabCaveat>
       </LabSection>
-
     </LabPage>
   )
 }

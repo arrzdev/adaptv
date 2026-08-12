@@ -72,14 +72,19 @@ test.describe("full-screen chrome", () => {
     await page.getByRole("link", { name: /client navigation/i }).click()
 
     //the app's screen, identified by content it and only it renders
-    await expect(page.getByText("404", { exact: false }).first()).toBeVisible()
+    await expect(
+      page.getByText("404", { exact: false }).first(),
+    ).toBeVisible()
     const back = page.getByRole("link", { name: /back home/i })
     await expect(back, "the 404 must offer a way out").toBeVisible()
 
     //a raw router error or a blank page is the failure — assert neither
     const body = (await page.locator("body").innerText()).toLowerCase()
     expect(body).not.toContain("unexpected error")
-    expect(body.trim().length, "a blank page is the other failure").toBeGreaterThan(20)
+    expect(
+      body.trim().length,
+      "a blank page is the other failure",
+    ).toBeGreaterThan(20)
   })
 
   test("the server-rendered 404 matches the client-navigated one", async ({
@@ -87,11 +92,17 @@ test.describe("full-screen chrome", () => {
   }) => {
     //different code path: this one never runs the client router's not-found handling
     await page.goto("/lab/definitely-not-a-route")
-    await expect(page.getByText("404", { exact: false }).first()).toBeVisible()
-    await expect(page.getByRole("link", { name: /back home/i })).toBeVisible()
+    await expect(
+      page.getByText("404", { exact: false }).first(),
+    ).toBeVisible()
+    await expect(
+      page.getByRole("link", { name: /back home/i }),
+    ).toBeVisible()
   })
 
-  test("Back home from the 404 lands on a working app", async ({ page }) => {
+  test("Back home from the 404 lands on a working app", async ({
+    page,
+  }) => {
     await page.goto("/lab/definitely-not-a-route")
     //`appReady` works here now: #26 made the splash unmount on the not-found route
     //too. Before that it never did, and waiting on it hung on the bug.
@@ -101,7 +112,9 @@ test.describe("full-screen chrome", () => {
     await expect(page.locator("[data-adaptv-screen] > *")).toBeVisible()
     //…and the shell is genuinely alive, not a rendered husk
     await expect(page.locator("[data-app-shell]")).toBeVisible()
-    expect(new URL(page.url()).pathname).not.toContain("definitely-not-a-route")
+    expect(new URL(page.url()).pathname).not.toContain(
+      "definitely-not-a-route",
+    )
   })
 
   test("the splash overlay leaves nothing behind after boot", async ({
@@ -141,6 +154,8 @@ test.describe("full-screen chrome", () => {
       () => (screen.orientation as ScreenOrientation | undefined)?.type,
     )
     expect(orientation).toBeTruthy()
-    await expect(page.getByText(orientation as string, { exact: true })).toBeVisible()
+    await expect(
+      page.getByText(orientation as string, { exact: true }),
+    ).toBeVisible()
   })
 })

@@ -38,7 +38,8 @@ function LabScreensPage() {
     const deadline = Date.now() + 1500
     const check = () => {
       if (cancelled) return
-      const present = document.querySelector("[data-adaptv-splash]") !== null
+      const present =
+        document.querySelector("[data-adaptv-splash]") !== null
       if (!present || Date.now() > deadline) {
         setSplashSeen(present)
         return
