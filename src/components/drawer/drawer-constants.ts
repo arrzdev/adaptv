@@ -49,11 +49,45 @@ export const DRAWER_CLOSE_THRESHOLD = 0.25
 export const DRAWER_BORDER_RADIUS = 8
 
 /**
- * Upward-pull resistance for bottom drawers.
- * @see vaul `dampenValue` in helpers.ts
+ * How much of the finger the sheet keeps on the FIRST pixel of an upward pull. Below 1 the sheet
+ * resists from the very start, which is what reads as friction rather than as a sheet that has to
+ * be dragged some distance before it admits anything is happening.
+ */
+const DRAWER_PULL_RESISTANCE = 0.55
+/** px — how far past its rest an upward pull can ever take the sheet, however hard it is pulled. */
+const DRAWER_PULL_LIMIT_PX = 40
+
+/**
+ * Upward-pull resistance for bottom drawers: the sheet gives a little, gives progressively less,
+ * and stops giving at {@link DRAWER_PULL_LIMIT_PX}. Returns the UPWARD travel in px for `v` px of
+ * upward finger movement, always in `[0, DRAWER_PULL_LIMIT_PX)`.
+ *
+ * This used to be vaul's `dampenValue`, `8 * (log(v + 1) - 2)`, and that function is NEGATIVE for
+ * its first 6.4px — `dampenValue(0)` is `-16`. The caller negates it to move the sheet up, so an
+ * upward pull began by throwing the sheet 16px DOWN and then walking it back through +10, +7, +5,
+ * +3, +1.7 before it crossed zero and finally started rising.
+ *
+ * That was not a near-zero edge case: the drag rebases its origin at the takeover
+ * (`pointerStartRef.current = clientY`), so every upward drag started at exactly `v = 0` and every
+ * upward drag opened with that 16px kick. It reads as a shake rather than a jump because a quick
+ * pull covers 6.4px inside one frame and only a slow, exploratory one — the kind you make when you
+ * are feeling for the friction — shows the whole excursion. It was also the reported
+ * over-sensitivity, and the same arithmetic: 4px of finger, the slop the drag commits at, came out
+ * as 16px of sheet.
+ *
+ * The shape now is the standard rubber band (UIScrollView's, and every imitation of it since):
+ * `f(0) = 0` so there is nothing to jump, `f'(0) = DRAWER_PULL_RESISTANCE` so resistance is there
+ * from the first pixel, `f'` strictly decreasing so it builds, and a horizontal asymptote so the
+ * sheet cannot be pulled off the top of the screen. The constants are chosen to keep the old
+ * function's FAR field, which was never the problem — at 50/100/160px of pull this gives
+ * 16.3/23.2/27.5px against the old 15.5/20.9/24.7.
  */
 export function dampenDrawerPull(v: number) {
-  return 8 * (Math.log(v + 1) - 2)
+  if (v <= 0) return 0
+  return (
+    (1 - 1 / ((v * DRAWER_PULL_RESISTANCE) / DRAWER_PULL_LIMIT_PX + 1)) *
+    DRAWER_PULL_LIMIT_PX
+  )
 }
 
 /**

@@ -55,6 +55,34 @@ async function touchDrag(
   })
 }
 
+/** {@link touchDrag}, sampling the panel's translate after every move so the drag can be judged
+ *  while it is happening rather than only where it ended up. */
+async function touchDragSampled(
+  page: Page,
+  cdp: CDPSession,
+  from: { x: number; y: number },
+  dy: number,
+  steps = 16,
+) {
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [from],
+  })
+  const samples: number[] = []
+  for (let step = 1; step <= steps; step += 1) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: from.x, y: from.y + (dy * step) / steps }],
+    })
+    samples.push((await readTranslateY(page, PANEL)) ?? Number.NaN)
+  }
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  })
+  return samples
+}
+
 /** The sheet's on-screen box. Read from the visible child rather than the panel, so the test
  *  says the same thing whether or not the hidden tail is a real element. */
 function readSheet(page: Page, SHEET: string) {
@@ -136,14 +164,58 @@ test.describe("the sheet's motion", () => {
     await touchDrag(cdp, { x: 195, y: sheet.top + 40 }, -160)
     await page.waitForTimeout(500)
 
-    //the drag is clamped at rest (`Math.max(0, …)`). A sheet that rides up exposes whatever
-    //backs it and takes the content off the top of the screen — one line of the gesture engine,
-    //and a contract worth a test rather than a comment.
+    //an upward pull is rubber-banded, not free: it gives a little and comes back to rest on
+    //release. A sheet that stayed up would expose whatever backs it and take the content off
+    //the top of the screen.
     expect(Math.round((await readTranslateY(page, PANEL)) ?? -1)).toBe(0)
     const after = await sheetBox(page, SHEET)
     expect(Math.abs(after.top - sheet.top)).toBeLessThanOrEqual(
       REST_TOLERANCE_PX,
     )
+  })
+
+  test("never lurches DOWN while being pulled up", async ({ page }) => {
+    /*
+     * Reported as a shake at the start of an upward drag, and it was one: the resistance curve
+     * (vaul's `dampenValue`) is negative for its first 6.4px and returns -16 at zero, while the
+     * drag rebases its origin at the takeover — so every upward pull opened by throwing the sheet
+     * 16px DOWN and then walking it back up through zero.
+     *
+     * The unit test pins the curve. This pins what a finger actually gets, which is the thing that
+     * was wrong: sample every move of the drag and require the sheet to be at or above rest the
+     * whole way, never below it.
+     */
+    await openSheet(page, BUTTON, PANEL)
+    const sheet = await sheetBox(page, SHEET)
+    const cdp = await page.context().newCDPSession(page)
+
+    /*
+     * ONE PIXEL PER MOVE, and that is the test rather than a detail of it. The excursion being
+     * pinned lives in the first 6.4px of the pull, so a drag dispatched in the usual sixteen
+     * chunks steps straight over it — 120px in 16 moves is 7.5px a move, and the first sample
+     * already lands past the far side. Written that way this test passes against the very curve
+     * it exists to reject (checked). A finger moves about a pixel a frame; so does this.
+     */
+    const samples = await touchDragSampled(
+      page,
+      cdp,
+      { x: 195, y: sheet.top + 40 },
+      -60,
+      60,
+    )
+
+    expect(samples.length).toBeGreaterThan(40)
+    //y grows downward, so anything positive is the sheet moving away from the finger. A whole
+    //pixel of tolerance, because the kick being pinned here was sixteen.
+    const worst = Math.max(...samples)
+    expect(
+      worst,
+      `the sheet dipped ${worst.toFixed(1)}px BELOW rest during an upward pull: ${samples
+        .map((s) => s.toFixed(1))
+        .join(", ")}`,
+    ).toBeLessThanOrEqual(1)
+    //and it did give something, so this is not passing because the drag never engaged
+    expect(Math.min(...samples)).toBeLessThan(-2)
   })
 
   test("snaps back to rest after a short drag down", async ({ page }) => {
