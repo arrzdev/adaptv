@@ -102,18 +102,26 @@ describe("splitEasingAt", () => {
   })
 
   it("enters no slower than a fresh copy of the curve — the point of resuming at all", () => {
-    //A decelerating curve has built up speed by the time it is interrupted, so restarting it
-    //makes the sheet SLOW DOWN at the seam. Over the same travel in the same time, the remainder
-    //never enters below the curve's own entry slope, and mid-flight it enters far above it.
+    /*
+     * A decelerating curve has built up speed by the time it is interrupted, so restarting it
+     * makes the sheet SLOW DOWN at the seam. Both cover the same remaining travel, so compare
+     * them as SPEEDS: the remainder is squeezed into the time the motion had left, and that
+     * squeeze is most of the advantage.
+     *
+     * Comparing the normalised entry SLOPES instead — which this did originally — silently
+     * measures something narrower: it only holds for a curve still accelerating at the seam.
+     * The open curve is, so both forms pass today. They stop agreeing the moment the landing is
+     * retuned, and it was the slope form that failed there, on a curve whose resume was in fact
+     * still leaving the seam at 2.1x a restart. Speeds are the invariant; slopes were a proxy.
+     */
     const fresh = OPEN[1] / OPEN[0]
-    for (let at = 0; at <= 0.7; at += 0.05) {
+    for (let at = 0; at < 0.95; at += 0.05) {
       const split = splitEasingAt(OPEN, at)
       if (!split) throw new Error("expected a split")
-      expect(split.entrySlope).toBeGreaterThanOrEqual(fresh)
+      //travel cancels — it is the same distance either way
+      const resumed = split.entrySlope / (1 - at)
+      expect(resumed).toBeGreaterThanOrEqual(fresh)
     }
-    //past that the two converge, and it stops mattering: the open curve has covered >98% of its
-    //distance by then, so there is no travel left for a hesitation to be visible in.
-    expect(ease(OPEN, 0.7)).toBeGreaterThan(0.98)
     //the interrupt this was built for: iOS's AutoFill bar landing 39% into the open slide,
     //measured on a physical iPhone. A restart entered at 0.66x the speed the sheet already had.
     const seam = splitEasingAt(OPEN, 0.392)

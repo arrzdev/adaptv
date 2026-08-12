@@ -1,5 +1,6 @@
 import type {
   ComponentPropsWithoutRef,
+  CSSProperties,
   HTMLAttributes,
   ReactNode,
   Ref,
@@ -20,6 +21,7 @@ import {
   useState,
 } from "react"
 import {
+  DRAWER_CONTENT_MAX_HEIGHT_VAR,
   DrawerEngine,
   useDrawerEngineContext,
 } from "#adaptv/components/drawer/drawer-engine"
@@ -76,6 +78,21 @@ export interface DrawerContentProps
   shell?: boolean
   /** Extra classes for the inner scroll container. */
   scrollClassName?: string
+  /**
+   * The tallest the sheet may grow, measured as VISIBLE height — a CSS length (`"60dvh"`,
+   * `"32rem"`) or a number of px. Content past it scrolls inside the sheet.
+   *
+   * This is the knob, rather than a `max-h-*` class on this part: `className` here paints the
+   * panel, and the panel is the sheet plus a hidden tail below the fold, so a height set there
+   * is spent on the tail before the sheet (measured: `max-h-[85dvh]` → 269px of sheet at a
+   * 900px viewport). Those utilities are locked out for that reason.
+   *
+   * Only ever lowers the ceiling. adaptv's own cap — the viewport minus the top safe area
+   * installed, 97dvh in a tab — still applies, so a sheet cannot be asked to reach the screen
+   * edge. The keyboard picks this up on its own: room is held below the content and the box
+   * grows into *this* cap rather than the platform one.
+   */
+  maxHeight?: string | number
 }
 
 export type DrawerRootProps = {
@@ -119,15 +136,42 @@ export type DrawerNestedRootProps = DrawerRootProps
 //LOCKED: a dim layer that does not span the viewport is not a dim layer.
 const DRAWER_OVERLAY_LOCKED_CLASS = "inset-0"
 //will-change keeps the full-screen dim promoted while mounted, so it doesn't demote and
-//repaint at every fade end (that repaint stacked with the panel's settle re-raster)
+//repaint at every fade end. This half landed first; the panel below carries the other half of
+//the same demote-on-transition-end repaint, and the two used to stack.
 const DRAWER_OVERLAY_BASE_CLASS = "bg-black/40 will-change-[opacity]"
 //LOCKED: the sheet is translated along Y by the engine and spans the viewport
 //width; `inset-x-0` is the geometry the drag maths and the max-height cap assume.
 //`flex flex-col` is what makes the handle / scroller / footer stack a stack — the
 //scroller's `min-h-0` only means anything inside a flex column.
-const DRAWER_PANEL_LOCKED_CLASS = "inset-x-0 flex flex-col"
+//
+//The three height utilities are locked to their initial values, which is not busywork: this
+//element is NOT the sheet, it is the sheet PLUS the hidden tail below the fold (`bottom:
+//-excessHeight` and a spacer of the same height, ~0.55 viewports). So a height set here is
+//silently spent on the tail first — measured at a 900px viewport, `max-h-[85dvh]` left 269px
+//of sheet on screen, ~30dvh, and pushed 605px of the scroller past the bottom edge. There is
+//no value a consumer could pass that means what it reads as, so the property is not theirs to
+//pass; `maxHeight` on Drawer.Content is, and it lands on the box that actually decides the
+//visible height. → DRAWER_CONTENT_MAX_HEIGHT_VAR
+//
+//`max-h-[none]` and not `max-h-none`, which is the same CSS and does NOT hold: tailwind-merge
+//3.4 does not list `none` among the `max-h` group's values, so `cn("max-h-[85dvh]",
+//"max-h-none")` keeps BOTH and compiled source order picks the winner — the silent
+//failure `cn.ts` documents at length. The arbitrary form goes through tailwind-merge's own
+//arbitrary-value handling and resolves, with no registry to keep in step. (`h-auto` and
+//`min-h-0` are in their groups already; only `max-h` has the gap.)
+const DRAWER_PANEL_LOCKED_CLASS =
+  "inset-x-0 flex flex-col h-auto min-h-0 max-h-[none]"
+//will-change keeps the sheet on its own compositor layer for as long as it is mounted.
+//Without it WebKit promotes the panel when the transition starts and DEMOTES it when the
+//transition ends, re-rasterising the text at the exact moment the sheet arrives — the settle
+//tremor, which does not show up in rAF deltas because no frame is late; the pixels just change.
+//It buys no new containing block for fixed/absolute descendants: the engine writes
+//`translate3d(...)` here from mount onwards and any non-`none` transform already makes this
+//element one (css-transforms-2 §8), so the hint only declares what the panel is about to do.
+//Static and component-scoped — the form PERFORMANCE-BOOST.md §5 permits, and the one
+//`will-change` vaul's whole stylesheet carries.
 const DRAWER_PANEL_BASE_CLASS =
-  "rounded-t-xl bg-white shadow-lg outline-none"
+  "rounded-t-xl bg-white shadow-lg outline-none will-change-transform"
 const DRAWER_HANDLE_REGION_CLASS =
   "flex shrink-0 flex-col items-center pt-3 pb-2"
 const DRAWER_GRABBER_BASE_CLASS =
@@ -336,6 +380,7 @@ function DrawerContent({
   style,
   shell = true,
   scrollClassName,
+  maxHeight,
   ...props
 }: DrawerContentProps) {
   const engine = useDrawerEngineContext()
@@ -427,7 +472,22 @@ function DrawerContent({
           DRAWER_PANEL_LOCKED_CLASS,
         ],
         style,
-        lockedStyle: engine.panelStyle,
+        //the height locks have an inline half for the same reason `lockedStyle` exists at all —
+        //an inline `style={{ maxHeight }}` outranks every class, locked ones included
+        lockedStyle: {
+          ...engine.panelStyle,
+          height: "auto",
+          minHeight: 0,
+          maxHeight: "none",
+          ...(maxHeight === undefined
+            ? undefined
+            : {
+                [DRAWER_CONTENT_MAX_HEIGHT_VAR]:
+                  typeof maxHeight === "number"
+                    ? `${maxHeight}px`
+                    : maxHeight,
+              }),
+        } as CSSProperties,
       })}
     >
       {/*the engine writes this box's keyboard room (padding + the cap it grows into) imperatively

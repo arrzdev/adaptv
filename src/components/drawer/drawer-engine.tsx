@@ -91,21 +91,47 @@ const DRAWER_EXCESS_HEIGHT_CAP_FRACTION = 0.55
 const DRAWER_BACKDROP_Z = "z-[50]"
 const DRAWER_PANEL_Z = "z-[51]"
 
+/**
+ * The consumer's visible-height cap, as a custom property rather than a `max-height`.
+ *
+ * It has to be a variable, because inline `max-height` on the content box is NOT free: the
+ * keyboard-room effect owns that property imperatively — it writes one to grow the box, clears
+ * it to hand the box back, and reads `content.style.maxHeight !== ""` as the test for "is the
+ * cap currently mine?". A consumer value sitting there inline answers that question wrong
+ * forever: the stylesheet cap is never read (`cssCapRef` stays `Infinity`, so keyboard growth
+ * is uncapped), `shouldPrimeKeyboardFloor` sees `capHeld` and never primes, and the first
+ * release deletes the consumer's cap with nothing to restore it. Through a variable the CLASS
+ * stays the cap, `getComputedStyle(content).maxHeight` resolves it, and the keyboard grows into
+ * the consumer's own ceiling for free. (`styles.ts` limit 2 — a per-frame-written property is
+ * won by a race, not by a precedence tier, so the clean channel is a variable.)
+ *
+ * Set on the PANEL (drawer.tsx) and inherited down, so the content box keeps having no consumer
+ * style channel at all.
+ */
+export const DRAWER_CONTENT_MAX_HEIGHT_VAR = "--pwa-drawer-max-height"
+
 // Cap the visible content. Installed PWA: full viewport minus the top safe area so the
 // panel never grows under the notch. Browser tab: 97dvh — leaves a sliver up top and
 // dodges browser chrome (the top inset is 0 in a tab anyway). (Viewport math is Tier-1's
 // job — not a cosmetic.) `--adaptv-inset-top` is the contract var (styles/safe-area.css).
+//
+// The consumer's cap is the FIRST term of the `min()`, which is what makes it a request rather
+// than an override: a sheet may be asked to stop higher up, never to grow past the platform
+// ceiling. A drawer that reaches the screen edge is not a drawer, so that ceiling is adaptv's
+// and stays adaptv's. Unset, the term is a whole viewport and the `min()` resolves to the
+// platform cap unchanged — `100vh` is `lvh`, and both ceilings are strictly under it.
 //
 // Deliberately keyboard-blind: nothing here shrinks when the keyboard opens. The sheet answers
 // a keyboard by GROWING into this cap and holding room under its content (see the keyboard-room
 // effect), which is the same geometry with a far better motion than shrinking the cap and
 // translating the panel up to compensate. While that room is held the engine owns `max-height`
 // inline and this is the ceiling it grows toward.
-// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses this `calc()`,
-// which fails soft. Not in any barrel.)
+// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses these
+// `min()`/`calc()` values, which fails soft. Not in any barrel.)
 export const DRAWER_CONTENT_LAYOUT_CLASS = cn(
   "flex min-h-0 shrink-0 flex-col",
-  "app:max-h-[calc(100vh-var(--adaptv-inset-top))] web:max-h-[97dvh]",
+  "app:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)))]",
+  "web:max-h-[min(var(--pwa-drawer-max-height,100vh),97dvh)]",
 )
 
 const OVERLAY_DURATION = DEFAULT_DRAWER_TRANSITION.duration
@@ -1227,8 +1253,6 @@ export function DrawerEngine({
     //the sheet slides out carrying whatever keyboard room it held (the room effect goes inert
     //while closing) — the close only needs to know it is there, to over-travel past it
     closingWithKeyboardRoomRef.current = appliedRoomRef.current > 0
-    const panel = panelRef.current
-    if (panel) panel.style.willChange = ""
   }, [open])
 
   useLayoutEffect(() => {
