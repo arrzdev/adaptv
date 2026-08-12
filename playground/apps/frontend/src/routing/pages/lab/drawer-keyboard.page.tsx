@@ -842,12 +842,15 @@ function LabDrawerKeyboardPage() {
                 placeholder="Focus me"
                 aria-label="Harness field"
               />
-              {Array.from({ length: 4 + extraRows }, (_, i) => (
+              {Array.from(
+                { length: 4 + extraRows },
+                (_, i) => `Row ${i + 1}`,
+              ).map((row) => (
                 <div
-                  key={`row-${i}`}
+                  key={row}
                   className="rounded-md bg-secondary px-3 py-3 text-sm text-foreground"
                 >
-                  Row {i + 1}
+                  {row}
                 </div>
               ))}
             </AppDrawer.Shell>
