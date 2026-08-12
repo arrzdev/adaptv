@@ -33,6 +33,10 @@ import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
  * - **After restore, re-seed the movement baseline.** The perturbation can nudge the field's
  *   internal scroll a hair; re-seeding stops the next frame reading that as fresh movement and
  *   re-muting (restore → re-mute → restore is a visible blink).
+ * - **The poll only runs while something might be moving.** Sampling the rect forces style +
+ *   layout, so polling for as long as a field merely HAS focus keeps the page off idle for the
+ *   whole time someone is filling in a form — on the timeline, a FunctionCall and a Commit every
+ *   frame, indefinitely, with nothing on screen moving. See {@link shouldWatch}.
  *
  * KNOWN LIMITATION: the caret is the only iOS text overlay we can control (via `caret-color`).
  * The autocorrect / spellcheck suggestion popover, misspelled-word underline, selection handles,
@@ -49,32 +53,53 @@ const CARET_MOVE_THRESHOLD_PX = 0.5
 //quiet window after the last detected movement before the caret is restored. Long enough to ride
 //out a momentum-scroll deceleration tail without flicker, short enough to feel immediate on stop.
 const CARET_SETTLE_MS = 120
+//how long the rect poll keeps looking after a scroll / viewport event, in frames. The event says
+//something is moving NOW, but the field's own rect may not have crossed the threshold yet on the
+//frame the event arrives — and that event can be the last one of the burst. Frames, not ms,
+//because this is a budget for the poll itself: iOS throttles rAF hard during a momentum scroll,
+//and a wall-clock window would expire while the poll had barely looked. It is only a floor on
+//looking, never on restoring — a movement it finds pushes out the quiet window as usual.
+const CARET_WATCH_TAIL_FRAMES = 15
 
 //---- movement holds ----------------
 
 //module-level so non-React movers (drawer motion helpers, scroll utilities) can announce
 //without a hook dependency; the single app-wide controller registers itself here
 let caretHoldCount = 0
-let onCaretHoldsChange: ((count: number) => void) | null = null
+let onCaretHoldsChange:
+  | ((count: number, movementEnded: boolean) => void)
+  | null = null
 
 /**
- * Announce an imminent translation of the focused text field (drawer tween, keyboard lift,
- * programmatic smooth scroll) so the caret is muted BEFORE the first moved frame instead of a
- * few ghost frames after. Returns a release; while any hold is active the caret stays muted.
- * Releasing starts the normal settle/restore cycle, so it is safe to release immediately after
- * kicking off a fire-and-forget scroll — observed movement keeps extending the quiet window.
+ * BRACKET a translation of the focused text field whose end you know — a drawer tween, a
+ * keyboard lift. The caret is muted BEFORE the first moved frame (the reactive tracker alone
+ * leaks ghost frames at motion start), and releasing means the movement is OVER, so the caret
+ * is repainted right then rather than a quiet window later.
+ *
+ * Only bracket what you can actually close. For a mover with no end signal — a smooth scroll,
+ * a finger — use {@link preMuteCaret}, which mutes and hands the field to the quiet window.
  * No-ops when no text field is focused.
  */
 export function beginCaretHold(): () => void {
   caretHoldCount++
-  onCaretHoldsChange?.(caretHoldCount)
+  onCaretHoldsChange?.(caretHoldCount, false)
   let released = false
   return function releaseCaretHold() {
     if (released) return
     released = true
     caretHoldCount--
-    onCaretHoldsChange?.(caretHoldCount)
+    onCaretHoldsChange?.(caretHoldCount, true)
   }
+}
+
+/**
+ * Mute the caret for a movement that cannot say when it finishes — a programmatic smooth
+ * scroll, a scroll the finger started. The quiet window owns the restore from here: every
+ * observed movement pushes it out, so the caret comes back once, after the field is truly
+ * still. No-ops when no text field is focused.
+ */
+export function preMuteCaret(): void {
+  onCaretHoldsChange?.(caretHoldCount, false)
 }
 
 function isTextEntry(
@@ -97,6 +122,7 @@ export function useCaretRepaint({
     let field: HTMLElement | null = null
     let rafId: number | null = null
     let settleTimer: ReturnType<typeof setTimeout> | null = null
+    let watchFrames = 0
     let lastTop = 0
     let lastLeft = 0
     let muted = false
@@ -189,14 +215,66 @@ export function useCaretRepaint({
       mute()
       clearSettleTimer()
       settleTimer = setTimeout(attemptRestore, CARET_SETTLE_MS)
+      startWatching()
+    }
+
+    /*
+     * Whether the poll has anything left to look for. Three things say "something might be
+     * moving", and they are the three shapes of mover this patch knows about:
+     *
+     * - a declared mover holds the caret (a drawer tween, a keyboard lift) — its translation is
+     *   pure transform, which emits no DOM event, so the rect is the only way to see it;
+     * - the quiet window is still counting down, i.e. we saw movement within the last
+     *   {@link CARET_SETTLE_MS} and it may not be over;
+     * - a scroll / viewport event just fired, and the field may be about to move with it.
+     *
+     * Outside those, nothing can move the field without telling us first, and a frame spent
+     * measuring is a forced layout bought for nothing. That makes {@link beginCaretHold} /
+     * {@link preMuteCaret} a contract rather than an optimisation: a translation that declares
+     * neither, and rides no scroll, is one this patch can no longer see.
+     */
+    function shouldWatch() {
+      return caretHoldCount > 0 || settleTimer !== null || watchFrames > 0
+    }
+
+    //Every path back into the poll goes through here, and the `rafId` guard is what keeps it ONE
+    //loop. A frame that finds movement re-arms the quiet window from inside `watch`, which asks
+    //for a frame; without the guard `watch`'s own tail would ask for a second one, `rafId` would
+    //remember only the later, and every moved frame would fork the loop in two.
+    function startWatching() {
+      if (rafId !== null || !field) return
+      rafId = requestAnimationFrame(watch)
+    }
+
+    /*
+     * The poll used to be what noticed a field that stopped being focused without a `focusout`:
+     * a closing drawer takes its input out of the DOM, and the browser moves focus to `<body>`
+     * in silence. Now that the poll stops, every entry point re-checks instead — reading
+     * `activeElement` is free, unlike the rect read the poll was paying for.
+     */
+    function fieldIsLive() {
+      if (!field) return false
+      if (document.activeElement === field) return true
+      detach()
+      return false
     }
 
     //single detect-and-mark step, shared by the rAF poll and the scroll/viewport listeners
     function pump() {
-      if (!field) return
+      if (!fieldIsLive()) return
       if (!observeMovement()) return
       movedWhileMuted = true
       markMoving()
+    }
+
+    //scroll and viewport events are the reactive half of the patch: they say something is moving
+    //without saying whether the FIELD has moved yet. Arm the poll's tail so the frames right
+    //after the event are watched, then let it fall quiet again if nothing came of it.
+    function handleViewportMovement() {
+      if (!fieldIsLive()) return
+      watchFrames = CARET_WATCH_TAIL_FRAMES
+      pump()
+      startWatching()
     }
 
     function attemptRestore() {
@@ -221,13 +299,13 @@ export function useCaretRepaint({
       observeMovement() //seed the baseline
       //mute on every focus so even a stationary focus-switch gets a forced repaint cycle —
       //WebKit otherwise leaves the new field's caret unpainted until a second tap
-      markMoving()
-      if (rafId === null) rafId = requestAnimationFrame(watch)
+      markMoving() //also starts the poll: the mute opens a quiet window to watch out
     }
 
     function detach() {
       restore()
       clearSettleTimer()
+      watchFrames = 0
       if (rafId !== null) {
         cancelAnimationFrame(rafId)
         rafId = null
@@ -237,15 +315,15 @@ export function useCaretRepaint({
 
     function watch() {
       rafId = null
-      if (!field) return
-      if (document.activeElement !== field) {
-        detach()
-        return
-      }
+      if (!fieldIsLive()) return
+      if (watchFrames > 0) watchFrames--
       //transform-driven movement (drawer slide, keyboard lift, page transition) emits no DOM
       //events, so poll the rect each frame; scroll/viewport movement is caught here too
       pump()
-      rafId = requestAnimationFrame(watch)
+      //spend the next frame only if something is still expected to move. `pump` re-arms the
+      //quiet window whenever it finds movement, so a live translation keeps this true by itself
+      //(and may already have booked the frame — hence going through `startWatching`).
+      if (shouldWatch()) startWatching()
     }
 
     function handleFocusIn(event: FocusEvent) {
@@ -273,26 +351,50 @@ export function useCaretRepaint({
     //moves nothing just restores through the quiet window; touches on the system keyboard never
     //reach the page, so typing is unaffected.
     function handleTouchStart() {
-      if (!field) return
+      if (!fieldIsLive()) return
       markMoving()
     }
 
-    function handleHoldsChange(count: number) {
-      if (!field) return
+    function handleHoldsChange(count: number, movementEnded: boolean) {
+      if (!fieldIsLive()) return
       if (count > 0) {
         mute()
         clearSettleTimer()
+        //a bracketed tween moves the field by transform and says nothing more until it releases,
+        //so the poll is the only witness to where the field actually is meanwhile
+        startWatching()
         return
       }
-      //last mover released — run the normal settle so the caret restores once truly still
-      markMoving()
+      //a pre-mute, or a bracket taken while another was already open: nothing has ended, so
+      //the quiet window owns the restore exactly as it did before
+      if (!movementEnded) {
+        markMoving()
+        return
+      }
+      /*
+       * The last declared mover released, and a declared mover is one with a KNOWN end — a
+       * drawer tween, a keyboard lift. Its release IS the end of the movement, so there is
+       * nothing left to wait out.
+       *
+       * The quiet window exists for the movers that cannot say when they finish: a momentum
+       * scroll's deceleration tail jitters around the move threshold, and restoring on the
+       * first still frame there makes the caret blink on and off. Spending it here bought
+       * nothing and cost everything — measured on the timeline, it put a full-viewport Paint
+       * and a RasterTask 120ms AFTER the sheet had stopped, so the sheet arrived and then
+       * every glyph in it was re-rasterised. That delay was the settle tremor.
+       *
+       * `attemptRestore` re-measures before it commits, so a hold released a touch early still
+       * defers to movement that is genuinely still happening.
+       */
+      clearSettleTimer()
+      attemptRestore()
     }
 
     document.addEventListener("focusin", handleFocusIn, true)
     document.addEventListener("focusout", handleFocusOut, true)
     //scroll events don't bubble — capture catches them from any inner scroller. Keeps the settle
     //alive when iOS throttles rAF during momentum scrolling.
-    document.addEventListener("scroll", pump, {
+    document.addEventListener("scroll", handleViewportMovement, {
       capture: true,
       passive: true,
     })
@@ -306,8 +408,14 @@ export function useCaretRepaint({
       capture: true,
       passive: true,
     })
-    window.visualViewport?.addEventListener("resize", pump)
-    window.visualViewport?.addEventListener("scroll", pump)
+    window.visualViewport?.addEventListener(
+      "resize",
+      handleViewportMovement,
+    )
+    window.visualViewport?.addEventListener(
+      "scroll",
+      handleViewportMovement,
+    )
     //single app-wide controller (mounted once by the shell) — last registration wins
     onCaretHoldsChange = handleHoldsChange
 
@@ -317,7 +425,7 @@ export function useCaretRepaint({
       }
       document.removeEventListener("focusin", handleFocusIn, true)
       document.removeEventListener("focusout", handleFocusOut, true)
-      document.removeEventListener("scroll", pump, true)
+      document.removeEventListener("scroll", handleViewportMovement, true)
       document.removeEventListener(
         "compositionstart",
         handleCompositionStart,
@@ -329,8 +437,14 @@ export function useCaretRepaint({
         true,
       )
       document.removeEventListener("touchstart", handleTouchStart, true)
-      window.visualViewport?.removeEventListener("resize", pump)
-      window.visualViewport?.removeEventListener("scroll", pump)
+      window.visualViewport?.removeEventListener(
+        "resize",
+        handleViewportMovement,
+      )
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        handleViewportMovement,
+      )
       detach()
     }
   }, [enabled])

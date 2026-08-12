@@ -21,6 +21,21 @@ export const DRAWER_TRANSITIONS = {
   // dropped the transform to the main thread (~20fps "stalling"). Snappiness knob; lower = faster.
   // Curve is the vaul/iOS sheet easing (firm shove → long decelerate, kisses flat into place),
   // restored here for the OPEN + keyboard-GROW motions. Shrink and close have their own configs.
+  //
+  // DO NOT "fix" the flat landing. Sampled at 60fps over a 585px sheet, this curve spends its
+  // last four frames moving under a pixel and finishes on a 0.11px step — 67ms in which the sheet
+  // is formally animating and visibly is not. That reads like a defect on a profile and is not
+  // one: it is the kiss, and it is why the sheet feels like an iOS sheet.
+  //
+  // It was changed once, to `(0.25, 0.94)` — ending below y=1 for residual velocity, the same
+  // trick DRAWER_CLOSE_TRANSITION uses. It did remove the sub-pixel tail, and the owner's verdict
+  // was that the whole drawer went "robotic ... too slow": half the travel moved from 16% of the
+  // duration to 22%, so the shove goes and the motion reads as mechanical. The close can end
+  // below 1 because nobody tracks a sheet leaving. An entrance is tracked, and the deceleration
+  // IS the feel.
+  //
+  // The stall that prompted that change was never this curve. It was `useCaretRepaint`'s restore
+  // landing in the tail, repainting a sheet that had already stopped.
   DURATION: 0.38,
   EASE: [0.32, 0.72, 0, 1] as [number, number, number, number],
 } as const
