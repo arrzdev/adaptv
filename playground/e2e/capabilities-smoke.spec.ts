@@ -37,8 +37,6 @@ const PAGES = [
   ["/lab/hooks", "Standalone hooks"],
 ] as const
 
-test.describe.configure({ retries: 2 })
-
 test.describe("Capabilities smoke", () => {
   for (const [route, title] of PAGES) {
     test(`${title} mounts and throws nothing uncaught`, async ({

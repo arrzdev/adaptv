@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 /*
@@ -12,8 +13,6 @@ import { expect, test } from "@playwright/test"
  * Image.Invalid on a null src) land inside a box that was already the right size.
  */
 
-test.describe.configure({ retries: 2 })
-
 const IMAGE = '[data-adaptv="image"]'
 
 /*
@@ -23,7 +22,7 @@ const IMAGE = '[data-adaptv="image"]'
  * kicks the loads deterministically; it changes WHEN the bytes are fetched, never
  * WHETHER the box was reserved, which is the only thing under test here.
  */
-async function forceEagerImages(page: import("@playwright/test").Page) {
+async function forceEagerImages(page: Page) {
   await page.evaluate(() => {
     for (const img of document.querySelectorAll(
       '[data-adaptv="image"] img',
@@ -33,9 +32,38 @@ async function forceEagerImages(page: import("@playwright/test").Page) {
   })
 }
 
+/**
+ * Wait for the client to take over before touching the images.
+ *
+ * This one is an ORDERING bug, not just a lost click. Every card is
+ * server-rendered, so `waitFor()` is satisfied by inert HTML and
+ * `forceEagerImages` happily rewrites `loading` on the server's <img> nodes —
+ * then hydration runs and React reconciles those nodes back to the markup it
+ * expects, putting `loading="lazy"` back. The eager flip is undone before it
+ * ever kicks a fetch, headless chromium never fires the load, and the test
+ * waiting on Image.Error times out as though the 404 slot were broken. It is
+ * not load flake: Playwright boots its own dev server and tears it down per
+ * run, so the FIRST test to reach this route pays the cold transform cost and
+ * loses the race while every test after it wins. A dev session left running
+ * hides it, because `reuseExistingServer` then hands the suite a warm server.
+ *
+ * The splash is server-rendered too and self-unmounts only once the client
+ * has hydrated and the local store has seeded, so its disappearance is the
+ * one honest "React is driving now" signal on the page — and here it is what
+ * guarantees the eager flip lands on the elements React has already settled.
+ * Given a generous timeout on purpose — a cold route's first transform can
+ * outrun the 5s default.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
+
 test.describe("Image", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/image")
+    await awaitClientHandover(page)
     await page.locator(IMAGE).first().waitFor()
     await forceEagerImages(page)
   })

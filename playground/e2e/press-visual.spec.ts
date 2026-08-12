@@ -77,9 +77,24 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     "needs CDP touch injection — synthetic events do not drive native scrolling",
   )
 
+  /**
+   * Wait for the client to take over. The page is server-rendered, so
+   * `waitFor()` is satisfied by inert HTML and the gesture engine — attached by
+   * an effect — is not listening yet. The splash self-unmounts only once the
+   * client has hydrated, so its disappearance is the one honest "React is
+   * driving now" signal. Generous timeout: a cold route's first transform can
+   * outrun the 5s default.
+   */
+  async function awaitClientHandover(page: Page) {
+    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+      timeout: 20_000,
+    })
+  }
+
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/button")
+    await awaitClientHandover(page)
     const button = page.getByRole("button", { name: BUTTON_NAME })
     await button.waitFor()
     await button.scrollIntoViewIfNeeded()
@@ -115,43 +130,41 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     }
 
     /*
-     * Warm up until the engine demonstrably responds, rather than sleeping a guessed
-     * number of milliseconds. The FIRST synthetic gesture on a freshly loaded page is
-     * swallowed in this harness — reproducibly, with raw mouse input too, and no
-     * application code can suppress a native listener. Pressing until `data-pressed`
-     * actually appears is a positive signal that input is landing, and it fails loudly
-     * if it never does rather than leaving a green vacuous suite behind.
+     * There used to be a warm-up loop here: press the button up to six times until
+     * `data-pressed` appeared, because "the FIRST synthetic gesture on a freshly
+     * loaded page is swallowed". That was real, but it was this suite's hydration
+     * race wearing a disguise — the gesture engine attaches in an effect, and the
+     * page is server-rendered, so `waitFor()` above returned while nothing was
+     * listening. `awaitClientHandover` is the actual fix, and the warm-up was
+     * ACTIVELY HARMFUL on top of being unnecessary: laying a finger on the button
+     * six times leaves Chromium unwilling to claim the NEXT gesture on it as a
+     * scroll, so `pointercancel` never fires — and the two tests whose entire
+     * subject is "the browser claimed this as a scroll" then failed, blaming the
+     * press engine for an arbitration state the harness had created.
+     *
+     * The vacuity guard the warm-up provided is kept, but moved into the tests
+     * where it cannot poison anything: each one now proves its own gesture landed
+     * (the browser claimed it / the press showed) before asserting what must not
+     * happen.
      */
-    let live = false
-    for (let attempt = 0; attempt < 6 && !live; attempt += 1) {
-      const point = await aim()
-      await touch(cdp, "touchStart", point)
-      await page.waitForTimeout(160)
-      live = await button.evaluate((el) => el.hasAttribute("data-pressed"))
-      await touch(cdp, "touchEnd")
-      await page.waitForTimeout(300)
-    }
-    if (!live) {
-      throw new Error(
-        "the press engine never responded to touch — input is not reaching the page",
-      )
-    }
 
     /*
-     * Then let the page go QUIET before the measured gesture, and prove it did.
+     * Let the page go QUIET before the measured gesture.
      *
-     * The warm-up commits a press, which mounts the log and re-renders. Chromium will
-     * not turn a touch into a scroll until it has pushed a fresh touch-action region
-     * to the compositor; a gesture issued inside that window is handled on the main
-     * thread instead, so the container never scrolls, `pointercancel` never arrives,
-     * and the press legitimately commits. That is indistinguishable from an engine
-     * that failed to defer — it fails on the assertion below with "the visual is not
-     * deferred" while the engine is in fact perfect. Measured: the warm-up's own
-     * 300ms is not enough on a loaded machine; the gesture is only arbitrated again
-     * once the page has been idle for ~1s.
+     * Chromium will not turn a touch into a scroll until it has pushed a fresh
+     * touch-action region to the compositor, and a gesture issued inside that window
+     * is handled on the main thread instead: the container never scrolls,
+     * `pointercancel` never arrives, and the press legitimately commits. That is
+     * indistinguishable from an engine that failed to defer — it fails on the
+     * assertion below with "the visual is not deferred" while the engine is in fact
+     * perfect. That misdirection is why these two tests sat unexplained for so long.
      *
-     * So rather than sleep a guessed number, wait for real idle frames — and make the
-     * premise assertable instead of assumed (`cancelled` below).
+     * The warm-up above was what dirtied that region (committing a press mounts the
+     * log and re-renders), and it is gone. But hydration is itself a re-render, and
+     * `awaitClientHandover` returns on the very frame the splash unmounts — so the
+     * window still exists, just earlier. Rather than sleep a guessed number, wait for
+     * real idle frames, and make the premise assertable instead of assumed
+     * (`sawCancel` below).
      */
     await page.evaluate(
       () =>
@@ -225,8 +238,10 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     await touch(cdp, "touchEnd")
     await page.waitForTimeout(300)
 
-    //premise first: if the browser did not claim the gesture there was no scroll to
-    //defer past, and the assertion below would blame the engine for the harness
+    //premise first: a `false` below is only meaningful if the browser actually
+    //turned the swipe into the scroll this test is about. An engine that never saw
+    //the touch would report "no flash" too, so the vacuous pass has to be excluded
+    //before the engine is accused of anything.
     expect(
       await sawCancel(page),
       "the browser never claimed the swipe as a scroll — the harness stopped " +
@@ -290,6 +305,11 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
 
     await touch(cdp, "touchStart", centre)
     await page.waitForTimeout(140)
+    //vacuity guard, and the precondition of the whole test: the finger is down,
+    //still, and past the 100ms defer, so the press MUST be showing. If it is not,
+    //the touch never reached the engine and every "did not activate" assertion
+    //below would pass for the wrong reason.
+    await expect(button).toHaveAttribute("data-pressed", "")
     for (const dx of [20, 45, 70, 95]) {
       await touch(cdp, "touchMove", { x: centre.x + dx, y: centre.y })
     }
