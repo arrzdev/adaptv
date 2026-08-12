@@ -898,6 +898,50 @@ describe("Drawer", () => {
     expect(overlay.className).not.toContain("bg-black/40")
   })
 
+  //The other half of the panel's promotion, and the half that landed first. The dim's opacity
+  //is driven by an inline transition (`transitionDrawerBackdropOpacity`) so a fade can be
+  //re-aimed mid-flight, and an inline transition is exactly the shape WebKit promotes on start
+  //and demotes on end — repainting a full-viewport layer at the moment the sheet arrives. The
+  //hint holds the layer across the whole mounted lifetime so there is no end to demote at.
+  //
+  //It is worth keeping because it is measurably free. Chromium, /lab/drawer at 430x844, layer
+  //tree read over CDP: with both hints and with both forced to `auto`, the composited tree is
+  //the same 7 layers and the same 15.53MB — the panel is promoted by the engine's own
+  //`translate3d` and the dim by being a fixed child of the portal's stacking context, so
+  //neither hint creates a layer. Over five open/close cycles the hints cost 27 paints against
+  //29 without them. Free, and it removes paints; the WebKit saving is the larger one and is
+  //the bug this was opened for.
+  it("Overlay: the dim is promoted for as long as it is mounted", () => {
+    const overlay = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Overlay />
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer-overlay]",
+    )
+    expect(overlay.className).toContain("will-change-[opacity]")
+  })
+
+  //Same trade as the panel's, same escape hatch, and the same tailwind-merge caveat — except
+  //here the base hint is an ARBITRARY value. `will-change-[opacity]` and `will-change-auto`
+  //resolve to one group only because tailwind-merge handles the arbitrary form; if they did
+  //not, both would survive and compiled source order would pick the winner in silence.
+  it("Overlay: a consumer can turn the promotion hint off, single-variable", () => {
+    const overlay = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Overlay className="will-change-auto" />
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer-overlay]",
+    )
+    expect(overlay.className).toContain("will-change-auto")
+    expect(overlay.className).not.toContain("will-change-[opacity]")
+  })
+
   it("Footer: `shrink-0` is locked — it must survive the panel's height cap", () => {
     const footer = firstEl(
       <Drawer.Footer className="shrink flex-row">x</Drawer.Footer>,
