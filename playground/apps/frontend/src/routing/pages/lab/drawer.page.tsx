@@ -22,25 +22,36 @@ export const Route = createFileRoute("/_providers/lab/drawer")({
 })
 
 /*
- * The cap the tall sheet asks for. A fraction of the viewport rather than a fixed length, so the
- * readout below is a proportion that has to hold on every screen instead of a number that happens
+ * The cap the CAPPED sheet asks for. A fraction of the viewport rather than a fixed length, so
+ * the readout is a proportion that has to hold on every screen instead of a number that happens
  * to be right on one.
  */
 const TALL_CAP_DVH = 60
+//enough that neither sheet can fit its content on any phone — the cap has to be what stops it
 const TALL_ROWS = Array.from({ length: 40 }, (_, i) => i + 1)
+
+type TallSheet = "capped" | "uncapped" | null
 
 /*
  * What the sheet ACTUALLY measures, read off the DOM rather than off the props.
  *
- * The cap is the whole point of the section, and the thing that can go wrong is that it lands
- * somewhere other than where it reads — on the panel (which is the sheet plus a hidden tail, so a
- * cap there is spent on the tail first), or, on a platform whose `dvh` moves with browser chrome,
- * against a viewport nobody re-measured. So take the number from the element, on every resize.
+ * `ceiling` is the load-bearing one: `getComputedStyle(...).maxHeight` is the browser's OWN
+ * resolution of adaptv's cap — a `min()` over the consumer's variable and the platform ceiling,
+ * which is `97dvh` in a browser tab and `100vh - var(--adaptv-inset-top)` in an installed app. So
+ * it is read, never recomputed here. A lab that re-derives the number it is checking will agree
+ * with itself on a platform where both are wrong; this one can only agree with the engine.
+ *
+ * The thing that can go wrong is the cap landing somewhere other than where it reads — on the
+ * panel (which is the sheet PLUS the hidden tail, so a cap there is spent on the tail first), or
+ * against a viewport nobody re-measured when the browser chrome moved. Hence: measured off the
+ * element, on every resize.
  */
-function useSheetMeasurement(open: boolean) {
+function useSheetMeasurement(open: TallSheet) {
   const [box, setBox] = useState<{
     sheet: number
+    ceiling: number
     viewport: number
+    insetTop: string
   } | null>(null)
   useEffect(() => {
     if (!open) {
@@ -55,9 +66,15 @@ function useSheetMeasurement(open: boolean) {
         raf = requestAnimationFrame(measure)
         return
       }
+      const cs = getComputedStyle(sheet)
       setBox({
         sheet: sheet.getBoundingClientRect().height,
+        ceiling: Number.parseFloat(cs.maxHeight),
         viewport: window.visualViewport?.height ?? window.innerHeight,
+        insetTop:
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--adaptv-inset-top")
+            .trim() || "0px",
       })
     }
     raf = requestAnimationFrame(measure)
@@ -119,16 +136,21 @@ function LabDrawerPage() {
   const [nested, setNested] = useState(false)
   const [inner, setInner] = useState(false)
   const [noDrag, setNoDrag] = useState(false)
-  const [tall, setTall] = useState(false)
+  const [tall, setTall] = useState<TallSheet>(null)
   const [promote, setPromote] = useState(true)
   const [realOpen, setRealOpen] = useState<RealDrawer>(null)
   const [draft, setDraft] = useState("")
   const [log, setLog] = useState<LabLogEntry[]>([])
 
   const measured = useSheetMeasurement(tall)
-  const expected = measured
-    ? (measured.viewport * TALL_CAP_DVH) / 100
-    : null
+  //what the sheet SHOULD have stopped at: the consumer's request when there is one, otherwise
+  //adaptv's ceiling — and the ceiling comes off the element either way, never off arithmetic here
+  const expected =
+    measured === null
+      ? null
+      : tall === "capped"
+        ? (measured.viewport * TALL_CAP_DVH) / 100
+        : measured.ceiling
   const drift =
     measured && expected !== null ? measured.sheet - expected : null
 
@@ -368,27 +390,65 @@ function LabDrawerPage() {
       </LabSection>
 
       <LabSection
-        title={`6 · The height cap (maxHeight="${TALL_CAP_DVH}dvh")`}
-        description="Enough content that the sheet cannot fit it — so the cap is what decides where the top edge lands, not the content. The readout is measured off the sheet element, so it is a check and not a restatement of the prop."
+        title="6 · The height cap, and the ceiling under it"
+        description="Two sheets with forty rows each — far more than fits, so the content cannot be what stops them. One asks to stop early; the other asks for nothing and rises until adaptv refuses. Every number below is measured off the sheet element, the ceiling included: it is read as the browser's own resolution of the cap rather than recomputed here."
       >
         <LabActions>
-          <LabButton onClick={() => setTall(true)}>
-            Open tall drawer
+          <LabButton onClick={() => setTall("uncapped")}>
+            Open tall drawer (no cap)
+          </LabButton>
+          <LabButton onClick={() => setTall("capped")}>
+            Open tall drawer ({TALL_CAP_DVH}dvh)
           </LabButton>
         </LabActions>
         <LabRow
-          label="viewport"
+          label="showing"
           value={
-            measured ? `${measured.viewport.toFixed(1)}px` : "— (open it)"
+            tall === null
+              ? "— open one of them"
+              : tall === "uncapped"
+                ? "no maxHeight — adaptv's ceiling alone"
+                : `maxHeight="${TALL_CAP_DVH}dvh"`
           }
         />
         <LabRow
-          label={`expected (${TALL_CAP_DVH}% of it)`}
+          label="viewport"
+          value={measured ? `${measured.viewport.toFixed(1)}px` : "—"}
+        />
+        <LabRow
+          label="safe-area inset-top"
+          value={measured ? measured.insetTop : "—"}
+        />
+        {/*`getComputedStyle` gives the `min()` ALREADY RESOLVED, so with a request in force this
+           is the request, not the ceiling underneath it. Say which one it is rather than calling
+           both "the ceiling" — the uncapped sheet is the only one where they are the same thing.*/}
+        <LabRow
+          label={
+            tall === "capped"
+              ? "cap in force (computed)"
+              : "adaptv's ceiling (computed)"
+          }
+          value={
+            measured
+              ? `${measured.ceiling.toFixed(1)}px · ${((measured.ceiling / measured.viewport) * 100).toFixed(1)}dvh`
+              : "—"
+          }
+        />
+        <LabRow
+          label={
+            tall === "capped"
+              ? `expected (${TALL_CAP_DVH}% of the viewport)`
+              : "expected (the ceiling)"
+          }
           value={expected !== null ? `${expected.toFixed(1)}px` : "—"}
         />
         <LabRow
           label="sheet measured"
-          value={measured ? `${measured.sheet.toFixed(1)}px` : "—"}
+          value={
+            measured
+              ? `${measured.sheet.toFixed(1)}px · ${((measured.sheet / measured.viewport) * 100).toFixed(1)}dvh`
+              : "—"
+          }
         />
         <LabRow
           label="verdict"
@@ -396,22 +456,50 @@ function LabDrawerPage() {
             drift === null
               ? "—"
               : Math.abs(drift) <= 1
-                ? "the cap holds"
-                : `OFF by ${drift.toFixed(1)}px — the cap landed somewhere else`
+                ? tall === "capped"
+                  ? "the request holds"
+                  : "the sheet is standing on the ceiling"
+                : `OFF by ${drift.toFixed(1)}px — it stopped somewhere else`
           }
         />
-        <AppDrawer open={tall} onOpenChange={setTall}>
+        <AppDrawer
+          open={tall === "uncapped"}
+          onOpenChange={(next) => setTall(next ? "uncapped" : null)}
+        >
+          <AppDrawer.Portal>
+            <AppDrawer.Overlay />
+            {/*no `maxHeight` at all — this is the platform ceiling on its own*/}
+            <AppDrawer.Content>
+              <AppDrawer.Handle />
+              <AppDrawer.Shell>
+                <AppDrawer.Title>As tall as it is allowed</AppDrawer.Title>
+                <AppDrawer.Description>
+                  Nothing asked for a cap, so the sheet grows until adaptv
+                  stops it. The sliver left above it is the point: a sheet
+                  that reaches the screen edge stops reading as a sheet.
+                </AppDrawer.Description>
+                {TALL_ROWS.map((row) => (
+                  <p key={row} className="py-3 text-sm text-foreground">
+                    Row {row} of {TALL_ROWS.length}
+                  </p>
+                ))}
+              </AppDrawer.Shell>
+            </AppDrawer.Content>
+          </AppDrawer.Portal>
+        </AppDrawer>
+        <AppDrawer
+          open={tall === "capped"}
+          onOpenChange={(next) => setTall(next ? "capped" : null)}
+        >
           <AppDrawer.Portal>
             <AppDrawer.Overlay />
             <AppDrawer.Content maxHeight={`${TALL_CAP_DVH}dvh`}>
               <AppDrawer.Handle />
               <AppDrawer.Shell>
-                <AppDrawer.Title>
-                  Taller than it is allowed
-                </AppDrawer.Title>
+                <AppDrawer.Title>Asked to stop early</AppDrawer.Title>
                 <AppDrawer.Description>
-                  Forty rows. The sheet must stop at the cap and scroll the
-                  rest, not grow to fit.
+                  The same forty rows, capped at {TALL_CAP_DVH}dvh. It must
+                  stop there and scroll the rest, not grow to fit.
                 </AppDrawer.Description>
                 {TALL_ROWS.map((row) => (
                   <p key={row} className="py-3 text-sm text-foreground">
@@ -423,10 +511,16 @@ function LabDrawerPage() {
           </AppDrawer.Portal>
         </AppDrawer>
         <LabCaveat>
-          adaptv&apos;s own ceiling still applies underneath: the viewport
-          minus the top safe area when installed, 97dvh in a browser tab.
-          This asks the sheet to stop lower, which is the only direction
-          the cap travels — it can never be used to reach the screen edge.
+          The ceiling is <strong>97dvh in a browser tab</strong> and{" "}
+          <strong>
+            the viewport minus the top safe area once installed
+          </strong>
+          , so the two are worth comparing on the same phone: in a tab the
+          inset is 0 and the sliver is the 3%, while installed the sliver
+          becomes the notch and the number moves. <code>maxHeight</code> is
+          the first term of a <code>min()</code> against it, which is why
+          it can only ever lower the ceiling — ask for 200dvh and nothing
+          changes.
         </LabCaveat>
       </LabSection>
 
