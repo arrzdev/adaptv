@@ -183,15 +183,13 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
    */
   async function watchCancel(page: Page) {
     await page.evaluate(() => {
-      const el = document
-        .evaluate(
-          "//button[contains(., 'press, drag off, release')]",
-          document,
-          null,
-          9,
-          null,
-        )
-        .singleNodeValue as HTMLElement | null
+      const el = document.evaluate(
+        "//button[contains(., 'press, drag off, release')]",
+        document,
+        null,
+        9,
+        null,
+      ).singleNodeValue as HTMLElement | null
       const w = window as unknown as { __cancelled?: boolean }
       w.__cancelled = false
       el?.addEventListener("pointercancel", () => {
@@ -202,7 +200,9 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
 
   const sawCancel = (page: Page) =>
     page.evaluate(
-      () => (window as unknown as { __cancelled?: boolean }).__cancelled === true,
+      () =>
+        (window as unknown as { __cancelled?: boolean }).__cancelled ===
+        true,
     )
 
   test("a finger laid down and swiped never lights the button", async ({
