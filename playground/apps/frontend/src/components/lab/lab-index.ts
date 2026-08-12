@@ -85,13 +85,8 @@ const COMPONENTS = [
   {
     to: "/lab/drawer",
     title: "Drawer",
-    summary: "drag to dismiss, nesting, keyboard avoidance",
-    isNew: true,
-  },
-  {
-    to: "/lab/drawers",
-    title: "Drawers · side by side",
-    summary: "ours, the rewrite and real vaul · same sheet, three engines",
+    summary:
+      "drag to dismiss, nesting, keyboard avoidance, the height cap · and the app's own sheets",
     isNew: true,
   },
   {

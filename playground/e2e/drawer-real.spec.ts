@@ -108,7 +108,7 @@ test.describe("the app's own drawers", () => {
   )
 
   test.beforeEach(async ({ page }) => {
-    await page.goto("/lab/drawers")
+    await page.goto("/lab/drawer")
     await page
       .getByRole("button", { name: DRAWERS[0].button, exact: true })
       .first()

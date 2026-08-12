@@ -25,7 +25,7 @@ import { expect, test } from "@playwright/test"
 test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
 test.describe.configure({ mode: "serial" })
 
-const BUTTON = "Open drawer"
+const BUTTON = "Open basic drawer"
 //the panel also carries the hidden tail, so the visible sheet is its first child
 const PANEL = "[data-pwa-drawer]"
 const OVERLAY = "[data-pwa-drawer-overlay]"
@@ -111,7 +111,7 @@ test.describe("the sheet's motion", () => {
   )
 
   test.beforeEach(async ({ page }) => {
-    await page.goto("/lab/drawers")
+    await page.goto("/lab/drawer")
     await page.getByRole("button", { name: BUTTON }).first().waitFor()
   })
 
