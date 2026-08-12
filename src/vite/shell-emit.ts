@@ -13,6 +13,8 @@ import { getPlatformInitScript } from "#adaptv/utils/platform.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
 import { renderAppShell } from "#adaptv/vite/app-shell.ts"
+import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender.ts"
+import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
 
 type ViteManifest = Record<
   string,
@@ -73,7 +75,7 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
       //after the LAST environment — the client build writes the manifest
       return environment.name === "ssr"
     },
-    closeBundle() {
+    async closeBundle() {
       const config = requireAppConfig(context)
       const clientDir = path.resolve(context.appRoot, "dist/client")
       const manifestPath = path.join(clientDir, ".vite", "manifest.json")
@@ -93,6 +95,29 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
       const stylesHref = resolveStylesHref(manifest, clientDir)
 
       const theme = resolveThemeColors(config.themeColor)
+      //Prerendered, because this is the one screen that has to survive its own
+      //build being broken. NOT fatal when it fails: an app must still ship
+      //without its boot fallback — but loudly, because a silently absent safety
+      //net is indistinguishable from a working one until the day it matters.
+      let bootFallbackByCode: Record<string, string> | undefined
+      try {
+        bootFallbackByCode = await prerenderBootFallback({
+          appRoot: context.appRoot,
+          specifier: config.bootErrorScreen
+            ? extractThunkSpecifier(
+                "bootErrorScreen",
+                config.bootErrorScreen,
+              )
+            : null,
+        })
+      } catch (error) {
+        console.warn(
+          `[adaptv] could not prerender the boot error screen — a broken bundle will show a blank page instead: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+      }
+
       const html = renderAppShell({
         lang: config.lang ?? "en",
         title: config.title ?? config.name,
@@ -115,6 +140,7 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
         stylesHref,
         entryHref: `/${entry.file}`,
         headExtra: '<link rel="manifest" href="/manifest.json">',
+        bootFallbackByCode,
       })
 
       writeFileSync(path.join(clientDir, "index.html"), html)

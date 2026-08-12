@@ -2,7 +2,9 @@
 //`src/components/barrels.test.ts`. The drift that hid `Text` from consumers passed
 //typecheck, lint, the unit suite and `build:check` — a missing re-export is invisible
 //to every gate that does not compare the two lists.
+
 export * from "../components/avoid-keyboard"
+export * from "../components/boot-error"
 export * from "../components/button"
 export * from "../components/checkbox"
 export * from "../components/drawer"
