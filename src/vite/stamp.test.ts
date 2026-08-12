@@ -63,6 +63,18 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
     expect(source).not.toContain("offlineComponent")
   })
 
+  it("keeps the boot error screen OUT of the runtime root route", () => {
+    //`bootErrorScreen` is consumed at BUILD time — prerendered into the emitted
+    //document by `shell-emit` — because it exists for the case where the runtime
+    //never starts. Shipping it in the bundle too would be dead weight in every
+    //app, and would imply the runtime can render it. It cannot.
+    const source = renderRootRouteModule(
+      config({ bootErrorScreen: screenThunk("@/components/boot-error") }),
+    )
+    expect(source).not.toContain("bootErrorScreen")
+    expect(source).not.toContain("boot-error")
+  })
+
   it("defaults service-worker registration to prompt, not autoUpdate", () => {
     //B3: autoUpdate applies skipWaiting + reload mid-session, dropping unsaved
     //state AND pruning the precache under open tabs — which is what makes the
