@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
-import { DRAWER_CONTENT_LAYOUT_CLASS } from "#adaptv/components/drawer/drawer-engine"
+import {
+  DRAWER_CONTENT_LAYOUT_CLASS,
+  DRAWER_CONTENT_MAX_HEIGHT_VAR,
+} from "#adaptv/components/drawer/drawer-engine"
 import {
   resolveDrawerKeyboardRoom,
   resolveShrunkViewportCap,
@@ -12,6 +15,7 @@ import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
 //the caret repaint is a real DOM side effect irrelevant to the scroll maths under test
 vi.mock("#adaptv/hooks/use-caret-repaint", () => ({
   beginCaretHold: () => () => {},
+  preMuteCaret: () => {},
 }))
 
 /*
@@ -130,12 +134,45 @@ describe("the cap the box grows into", () => {
     const css = await compileAdaptvStyles(
       DRAWER_CONTENT_LAYOUT_CLASS.split(" "),
     )
-    expect(css).toContain(
-      "max-height: calc(100vh - var(--adaptv-inset-top))",
-    )
-    expect(css).toContain("max-height: 97dvh")
+    expect(css).toContain("calc(100vh - var(--adaptv-inset-top))")
+    expect(css).toContain("97dvh")
     //no keyboard term anywhere in the cap — the room effect owns that, inline and imperatively
     expect(css).not.toContain("--adaptv-drawer-keyboard")
+  })
+
+  /*
+   * The consumer's cap rides in as a variable, and it is the first term of a `min()` — so it can
+   * only ever ask the sheet to stop HIGHER. That ordering is the whole guarantee: a drawer that
+   * reaches the screen edge stops being a drawer, so the platform ceiling is adaptv's to keep.
+   *
+   * Tailwind is the failure mode worth a test here rather than a comment. An arbitrary value it
+   * cannot parse emits NOTHING — no error, no rule, just a class that never matches — so the cap
+   * would silently become "whatever the content is" and the sheet would grow to the full viewport
+   * on a device nobody re-measured.
+   */
+  it("lets the consumer's variable lower it, never raise it", async () => {
+    const css = await compileAdaptvStyles(
+      DRAWER_CONTENT_LAYOUT_CLASS.split(" "),
+    )
+    //both platform caps went through Tailwind intact, each behind the consumer's term
+    expect(css).toContain(
+      "max-height: min(var(--pwa-drawer-max-height,100vh), calc(100vh - var(--adaptv-inset-top)))",
+    )
+    expect(css).toContain(
+      "max-height: min(var(--pwa-drawer-max-height,100vh), 97dvh)",
+    )
+    //`100vh` is `lvh` and both ceilings are strictly under it, so an unset variable resolves
+    //the `min()` to the platform cap unchanged — the default is not a behaviour change
+    expect(css).not.toContain("max-height: var(--pwa-drawer-max-height)")
+  })
+
+  it("keeps the cap on the content box — never on the panel, which carries the tail", () => {
+    //the panel is sheet + hidden tail (`bottom: -excess` + a spacer), so a cap there is spent on
+    //the tail first. This constant is the one that must own it.
+    expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain("max-h-")
+    expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain(
+      DRAWER_CONTENT_MAX_HEIGHT_VAR,
+    )
   })
 })
 

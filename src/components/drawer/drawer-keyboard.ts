@@ -1,7 +1,7 @@
 import type { RefObject } from "react"
 import { useEffect, useRef } from "react"
 import { DRAWER_TRANSITIONS } from "#adaptv/components/drawer/drawer-constants"
-import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
+import { preMuteCaret } from "#adaptv/hooks/use-caret-repaint"
 import {
   useKeyboard,
   willOpenVirtualKeyboard,
@@ -217,11 +217,11 @@ export function scrollDrawerInputIntoView(
   )
   if (Math.abs(clamped - scroller.scrollTop) < 1) return
 
-  //mute the caret before the smooth scroll's first frame; releasing immediately is safe —
-  //the scroll's own events keep it muted until the movement settles
-  const releaseCaretHold = beginCaretHold()
+  //mute the caret before the smooth scroll's first frame. A pre-mute rather than a bracket:
+  //a smooth scroll never says when it stopped, so the quiet window has to decide — its own
+  //scroll events keep the caret muted until the movement settles.
+  preMuteCaret()
   scroller.scrollTo({ top: clamped, behavior: "smooth" })
-  releaseCaretHold()
 }
 
 type UseDrawerKeyboardAvoidanceOptions = {

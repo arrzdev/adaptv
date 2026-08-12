@@ -9,6 +9,41 @@
  * it in a layer would buy nothing and only obscure that.
  */
 
+/*
+ * The panel's motion. Every tween the sheet performs — the entrance, the close, the snap back
+ * from a drag, the keyboard's FLIP — runs through this one rule, aimed by the two custom
+ * properties the engine writes.
+ *
+ * It is a `@keyframes` rule rather than an inline `transition` for a measured reason. The settle
+ * at the end of the open was bisected on a physical iPhone across four ladders of otherwise
+ * identical sheets: a transform driven by an inline CSS transition settles, and so does one driven
+ * by `element.animate()`, while the same curve over the same distance driven by a `@keyframes`
+ * rule does not. Timing, endpoints, units, layer promotion and the end-of-motion handoff were each
+ * exonerated by a step that carries them and behaves. No desktop browser reproduces any of it, so
+ * this cannot be re-derived from a headless measurement — do not "simplify" it back.
+ *
+ * The endpoints stay the engine's: it measures them (a sheet holding keyboard room does not travel
+ * its own height, and a drag release has no curve to inherit) and hands them over as pixels. That
+ * combination — JS starting it, JS aiming it, CSS moving it — is the ladder's R step, confirmed
+ * clean on the same device.
+ */
+/*
+ * `translateY`, not `translate3d`: a running transform animation is composited either way, so the
+ * 3d form would buy nothing here and would put a promotion hint into the shipped stylesheet, which
+ * `styles/utils.test.ts` forbids outright and for good reason. The engine's own inline writes still
+ * use `translate3d` — that is a live drag on one element, not a blanket rule — and the two produce
+ * the same matrix, so the handoff at the end of the motion does not move the panel or drop a layer.
+ */
+@keyframes pwa-drawer-slide {
+  from {
+    transform: translateY(var(--pwa-drawer-from, 0px));
+  }
+
+  to {
+    transform: translateY(var(--pwa-drawer-to, 0px));
+  }
+}
+
 /* Mirrored from vaul style.css — overlay fade on open/close */
 @keyframes pwa-drawer-overlay-fade-in {
   from {

@@ -2,20 +2,23 @@ import { renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   beginCaretHold,
+  preMuteCaret,
   useCaretRepaint,
 } from "#adaptv/hooks/use-caret-repaint"
 
 /*
- * When the poll stops.
+ * When the caret comes back.
  *
- * Sampling the rect is how transform-driven movement is seen at all, and it costs a forced
- * style + layout every frame it happens. Polling for as long as a field HAS focus therefore
- * prices a whole form-filling session at one layout per frame — on the timeline, a FunctionCall
- * and a Commit per frame, indefinitely, with the sheet long since arrived and nothing moving.
+ * The mute is easy and was never wrong. WHEN it un-mutes is the whole cost of this patch, and
+ * it is paid where nobody was looking: restoring re-asserts the field's style and perturbs the
+ * selection, which on a promoted sheet re-rasterises every glyph in it. On the timeline that
+ * repaint was landing 120ms after a drawer had already stopped — the sheet arrived, and then it
+ * shimmered.
  *
- * These drive the frames by hand rather than letting the clock run them: a queued frame that is
- * never executed looks exactly like a poll that stopped, and a test that cannot tell those apart
- * would pass just as happily against the always-on loop it is here to rule out.
+ * So the two shapes have to stay distinguishable. A BRACKET (`beginCaretHold`) is a mover that
+ * knows when it ends: its release is the end, and the caret comes back on that frame. A PRE-MUTE
+ * is a mover that does not — a smooth scroll, a finger — and only there is the quiet window
+ * worth its latency.
  */
 
 function focusedField(): HTMLInputElement {
@@ -31,6 +34,88 @@ function focusedField(): HTMLInputElement {
 const isMuted = (field: HTMLElement) =>
   field.hasAttribute("data-caret-muted")
 
+describe("useCaretRepaint holds", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    document.body.innerHTML = ""
+  })
+
+  it("mutes for a bracket and restores the moment it is released", () => {
+    renderHook(() => useCaretRepaint())
+    const field = focusedField()
+
+    const release = beginCaretHold()
+    expect(isMuted(field)).toBe(true)
+
+    release()
+    //no timer advanced: a drawer tween's release IS the end of the movement, and waiting a
+    //quiet window here is what put the repaint on a settled sheet
+    expect(isMuted(field)).toBe(false)
+  })
+
+  it("keeps the caret muted while any bracket is still open", () => {
+    renderHook(() => useCaretRepaint())
+    const field = focusedField()
+
+    const first = beginCaretHold()
+    const second = beginCaretHold()
+    first()
+    expect(isMuted(field)).toBe(true)
+
+    second()
+    expect(isMuted(field)).toBe(false)
+  })
+
+  it("makes a pre-mute wait out the quiet window instead", () => {
+    renderHook(() => useCaretRepaint())
+    const field = focusedField()
+
+    preMuteCaret()
+    expect(isMuted(field)).toBe(true)
+
+    //a smooth scroll cannot say when it stopped, so this one has to be timed out
+    vi.advanceTimersByTime(60)
+    expect(isMuted(field)).toBe(true)
+
+    vi.advanceTimersByTime(80)
+    expect(isMuted(field)).toBe(false)
+  })
+
+  it("does nothing at all when no field is focused", () => {
+    renderHook(() => useCaretRepaint())
+    const release = beginCaretHold()
+    expect(() => release()).not.toThrow()
+    expect(document.querySelector("[data-caret-muted]")).toBeNull()
+  })
+
+  it("stays out of the way when the patch is switched off", () => {
+    renderHook(() => useCaretRepaint({ enabled: false }))
+    const field = focusedField()
+
+    const release = beginCaretHold()
+    expect(isMuted(field)).toBe(false)
+    //the count lives on the module, not on the hook, so a hold left open here is one every
+    //later test inherits — and "a mover is still holding the caret" is a state the patch acts on
+    release()
+  })
+})
+
+/*
+ * When the poll stops.
+ *
+ * Sampling the rect is how transform-driven movement is seen at all, and it costs a forced
+ * style + layout every frame it happens. Polling for as long as a field HAS focus therefore
+ * prices a whole form-filling session at one layout per frame — on the timeline, a FunctionCall
+ * and a Commit per frame, indefinitely, with the sheet long since arrived and nothing moving.
+ *
+ * These drive the frames by hand rather than letting the clock run them: a queued frame that is
+ * never executed looks exactly like a poll that stopped, and a test that cannot tell those apart
+ * would pass just as happily against the always-on loop it is here to rule out.
+ */
 function frameRunner() {
   const queue: FrameRequestCallback[] = []
   vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
@@ -101,14 +186,14 @@ describe("useCaretRepaint polling", () => {
     expect(frames.pending()).toBe(0)
   })
 
-  it("keeps polling for as long as a hold is open", () => {
+  it("keeps polling for as long as a bracket is open", () => {
     const frames = frameRunner()
     renderHook(() => useCaretRepaint())
     const field = focusedField()
     settle(frames)
 
     const release = beginCaretHold()
-    //a declared tween moves the field by transform and says nothing until it releases, so the
+    //a bracketed tween moves the field by transform and says nothing until it releases, so the
     //poll is the only witness to where the field is meanwhile — and to whether it moved at all,
     //which is what decides if the restore re-syncs the caret POSITION or just repaints it
     expect(frames.pending()).toBe(1)
@@ -116,10 +201,7 @@ describe("useCaretRepaint polling", () => {
     expect(frames.pending()).toBe(1)
     expect(isMuted(field)).toBe(true)
 
-    //release, then ride out the quiet window the release restarts. The hold count lives on the
-    //module rather than the hook, so leaving one open here would be one every later test inherits
     release()
-    vi.advanceTimersByTime(200)
     frames.flush(30)
     expect(isMuted(field)).toBe(false)
     expect(frames.pending()).toBe(0)
