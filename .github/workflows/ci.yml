@@ -46,6 +46,16 @@ jobs:
         if: always()
         run: pnpm biome:check
 
+      # The playground is its own pnpm project, so the root `biome check .` above
+      # never reaches it. Without this step the gate's playground check only binds
+      # whoever runs `pnpm gate` locally — which is how two PRs landed unformatted
+      # playground files on main in a single afternoon. The script provisions the
+      # playground's own install on first run, so no extra install step is needed.
+      - name: Lint (biome, playground)
+        id: biome_playground
+        if: always()
+        run: pnpm biome:check:playground
+
       - name: Test (vitest)
         id: test
         if: always()
@@ -66,6 +76,7 @@ jobs:
             echo "| --- | :---: |"
             echo "| Typecheck (\`tsc --noEmit\`) | $(icon '${{ steps.typecheck.outcome }}') |"
             echo "| Biome (\`biome check\`) | $(icon '${{ steps.biome.outcome }}') |"
+            echo "| Biome (playground) | $(icon '${{ steps.biome_playground.outcome }}') |"
             echo "| Tests (\`vitest\`) | $(icon '${{ steps.test.outcome }}') |"
             echo ""
             [ -n "$files" ] && echo "**${files}** · **${tally}**"
