@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest"
+import {
+  BOOT_CODES,
+  BOOT_FALLBACK_ID,
+  getBootFallbackCss,
+} from "#adaptv/shell/boot-fallback"
 import { renderAppShell } from "#adaptv/vite/app-shell"
 
 const opts = {
@@ -72,5 +77,55 @@ describe("renderAppShell — user-agnostic by construction", () => {
 
   it("is stable across renders — a changing shell breaks precache revisions", () => {
     expect(renderAppShell(opts)).toBe(renderAppShell(opts))
+  })
+})
+
+describe("renderAppShell — the boot error fallback", () => {
+  const FALLBACK =
+    '<div data-adaptv="boot-error">Something went wrong</div>'
+  //a component that ignores `code` renders the same string for every one, which
+  //is exactly what collapses the four variants back to a single copy
+  const withFallback = {
+    ...opts,
+    bootFallbackByCode: Object.fromEntries(
+      Object.values(BOOT_CODES).map((code) => [code, FALLBACK]),
+    ),
+  }
+
+  it("embeds the prerendered screen, hidden", () => {
+    //RENDERING §3.1.3: the one screen that has to survive its own build being
+    //broken, so it ships as markup rather than as anything the bundle produces
+    const html = renderAppShell(withFallback)
+    expect(html).toContain(FALLBACK)
+    expect(html).toContain(`id="${BOOT_FALLBACK_ID}" hidden`)
+  })
+
+  it("arms the watchdog in the HEAD, before the entry script", () => {
+    //a script that fails to LOAD fires its error event on the element; a listener
+    //registered afterwards never sees it. Order here is the whole mechanism.
+    const html = renderAppShell(withFallback)
+    expect(html.indexOf(BOOT_FALLBACK_ID)).toBeLessThan(
+      html.indexOf("client-def456.js"),
+    )
+    expect(html.indexOf("</head>")).toBeGreaterThan(
+      html.indexOf("MutationObserver"),
+    )
+  })
+
+  it("inlines the fallback's own CSS, which cannot depend on the stylesheet", () => {
+    //if the bundle is broken the stylesheet may be missing too; the screen still
+    //has to be a readable, full-viewport surface
+    expect(renderAppShell(withFallback)).toContain(getBootFallbackCss())
+  })
+
+  it("emits nothing at all when there is no fallback to embed", () => {
+    //a failed prerender must leave the shell exactly as it was, not half-wired
+    const html = renderAppShell(opts)
+    expect(html).not.toContain(BOOT_FALLBACK_ID)
+    expect(html).not.toContain("MutationObserver")
+  })
+
+  it("stays deterministic with the fallback in place", () => {
+    expect(renderAppShell(withFallback)).toBe(renderAppShell(withFallback))
   })
 })

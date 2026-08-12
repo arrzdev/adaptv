@@ -284,6 +284,114 @@ to bind the fallback to. adaptv must emit a dedicated static shell at build time
 it must be **generated, never a captured response**, so it is user-agnostic by construction rather than
 by luck (§3.2).
 
+### 3.1.3 🔒 `bootErrorScreen` — the app's screen for a bundle that never ran
+
+**Where the line sits.** A route that throws, a failed fetch, a bad render — handling *those* well is
+the app's job, because only the app knows what to show instead, and adaptv installs no boundary for them
+precisely so it does not take that away. adaptv owns the one failure the app never got to have an
+opinion about: a syntax error in the entry chunk, a 404 on it, a corrupt OTA bundle. React never mounts,
+nothing written in React renders, and the WebView paints blank.
+
+**A sandbox does not solve this, and the reason is the whole design.** The instinct is to isolate the
+error screen in an iframe. That isolates the *execution scope* — fresh globals, clean context — but you
+still have to load a script into it, and a script from a broken build is broken there too. What has to
+be isolated is the **build graph**, not the runtime.
+
+So the component is rendered to static HTML at **build time** with `react-dom/server`, and embedded
+hidden in the document. The dev still writes a normal React component with normal Tailwind — it simply
+runs in Node instead of in the browser. What ships is markup that is already inside the document the
+WebView loaded, depending on no bundle whatsoever.
+
+| | the app's own boundary | `bootErrorScreen` |
+|---|---|---|
+| Owned by | the consumer, wherever they mount it | adaptv |
+| Catches | a route, a render, a fetch — the app running badly | the app never running at all |
+| Runs | in the browser, live React | at build time, `react-dom/server` |
+| Has | the error object, `reset`, hooks, state | markup and a `code` |
+| Retry | `reset()` in place | `location.reload()`, delegated by the watchdog |
+
+**Tailwind comes free.** `styles/index.css` declares `@source "../**\/*.{ts,tsx}"`, so the component's
+classes are already generated into the app stylesheet — a *different file* from the JS that broke. The
+only CSS inlined for this path is a structural floor (full-viewport, centred, padded) for the rarer case
+where the stylesheet is missing too.
+
+**The failure comes through as a `code` prop — and adaptv never renders it.** Four signals are
+distinguishable from outside the bundle, and they point at different culprits:
+
+| Code | Signal | What it means |
+|---|---|---|
+| `BOOT-LOAD` | the entry `<script>` fired `error` | the file is **not being served** — deploy, CDN, offline |
+| `BOOT-THROW` | uncaught error before mount | the file arrived; **the code in it is broken** |
+| `BOOT-REJECT` | unhandled rejection before mount | same, by way of a promise |
+| `BOOT-STALL` | grace period elapsed, nothing mounted | it arrived, it ran, it raised nothing, and still never mounted |
+
+**adaptv's own screen displays none of them**, deliberately — whether a code helps a user or merely
+alarms them is a product decision, and it belongs to the app. The code is on the props so an overriding
+`bootErrorScreen` can *branch* on it: different copy for "we are not serving the file" than for "the file
+we served is broken", a support reference, a telemetry ping. It is also stamped on
+`<html data-adaptv-boot-failed="BOOT-LOAD">`, so telemetry and e2e read one attribute instead of
+scraping the screen.
+
+**A prop is why the component is prerendered four times, not once.** Static markup cannot be handed a
+prop when it is revealed, so the component is rendered once per code at build time and the watchdog
+reveals the matching copy. A component that ignores `code` — adaptv's default, and probably most apps'
+— produces four identical strings, which collapse back to a single copy in the document. Nobody pays
+for variants they did not ask for.
+
+> **This only works because the value space is closed.** Four codes, four renders — exhaustive
+> enumeration, not injection. `code` is the *only* prop the fallback path can pass, and that is a
+> property of the prop, not a limitation of the plumbing: `error`, `errorInfo` and `reset` cannot be
+> enumerated at build time (an infinity of messages and stacks, and a live function), so they are
+> `undefined` there. A custom component that dereferences `error` unconditionally throws **during the
+> build**, which is where you want to find out.
+
+**A custom `bootErrorScreen` is written the obvious way, and its button works.**
+
+```tsx
+import type { BootErrorProps } from "@arrzdev/adaptv/components"
+
+export default function BootScreen({ code }: BootErrorProps) {
+  const copy = code === "BOOT-LOAD"
+    ? "We couldn't reach the server."
+    : "Something went wrong while starting up."
+  return (
+    <View>
+      <p>{copy}</p>
+      <button onClick={() => location.reload()}>Try again</button>
+    </View>
+  )
+}
+```
+
+`onClick` genuinely does not exist in the fallback — a build-time render serializes no event handlers —
+so something has to wire the only action on the screen. Writing it anyway is still right: it is what runs
+if the app ever renders this component itself. An opt-in attribute was the obvious answer and the wrong
+one: a forgotten spread would produce a **dead button** at the exact moment a reload is the only way out,
+which is a silent failure (`DECISIONS.md` L7).
+
+So the watchdog reloads on **any `<button>`** inside the fallback. That is not a guess about intent — in
+a document where no app JavaScript is running, a button has nothing else it could possibly do. Anchors
+still navigate natively and are left alone.
+
+`bootErrorRetryProps` remains as the precision tool for the one case the blanket rule gets wrong — a
+screen with a second button that should *not* reload. Mark one control and only that one does.
+
+**The reveal policy is one rule: show only while the mount point is empty.** No boot flag, nothing for
+the app to call. That single rule gets three cases right at once — a server-rendered page that is merely
+slow to hydrate already has content, so the timeout can never replace good content with an error screen;
+an error thrown *after* mount belongs to the boundary and is ignored without tracking boot state; and a
+late mount that wins the race un-reveals the fallback through a `MutationObserver`.
+
+**What it asks of the component: that it renders standalone, with no props and no browser.** Not a new
+constraint — adaptv defaults to `render: "ssr"`, so every consumer component already has to render in
+Node. A failed prerender is a **loud warning, never a failed build**: an app must still ship without its
+boot fallback, but a silently absent safety net is indistinguishable from a working one until the day it
+matters.
+
+**⛔ The floor this cannot lift: the document itself never loading.** On native that is Capacitor's
+`server.errorPath` (`bin/lib/offline-page.mjs`), which already exists. On web it is a first-ever visit
+while offline — inherent to service workers, not an adaptv gap (§3.1.2).
+
 ### 3.2 🔒 Prefetch **every route's assets**; never prefetch **documents**
 
 The line is not "how much to cache" — it's **what kind of thing**. These two look similar and are
