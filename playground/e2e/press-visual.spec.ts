@@ -25,22 +25,24 @@ import { expect, test } from "@playwright/test"
 //the fact. With emulation enabled late, touch pointer events reach native listeners
 //but never reach React's root — so every gesture read as a dead press engine, and the
 //no-flash assertion would have "passed" without running a line of adaptv code.
-test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+test.use({
+  hasTouch: true,
+  isMobile: true,
+  viewport: { width: 390, height: 844 },
+})
 
 const BUTTON_NAME = /press, drag off, release/i
 
 /** Poll the flag from the page while the gesture runs — a flash is only visible live. */
 async function watchPressed(page: Page) {
   await page.evaluate(() => {
-    const el = document
-      .evaluate(
-        "//button[contains(., 'press, drag off, release')]",
-        document,
-        null,
-        9,
-        null,
-      )
-      .singleNodeValue as HTMLElement | null
+    const el = document.evaluate(
+      "//button[contains(., 'press, drag off, release')]",
+      document,
+      null,
+      9,
+      null,
+    ).singleNodeValue as HTMLElement | null
     const w = window as unknown as { __sawPressed?: boolean }
     w.__sawPressed = false
     const tick = () => {
@@ -54,7 +56,8 @@ async function watchPressed(page: Page) {
 const sawPressed = (page: Page) =>
   page.evaluate(
     () =>
-      (window as unknown as { __sawPressed?: boolean }).__sawPressed === true,
+      (window as unknown as { __sawPressed?: boolean }).__sawPressed ===
+      true,
   )
 
 async function touch(
@@ -148,7 +151,10 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     //move immediately and keep moving: this is the gesture the user described, and
     //it is the one the browser resolves into a page scroll
     for (let step = 1; step <= 16; step += 1) {
-      await touch(cdp, "touchMove", { x: centre.x, y: centre.y - step * 9 })
+      await touch(cdp, "touchMove", {
+        x: centre.x,
+        y: centre.y - step * 9,
+      })
     }
     await touch(cdp, "touchEnd")
     await page.waitForTimeout(300)
@@ -178,9 +184,9 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     ).toBe(true)
 
     await page.waitForTimeout(400)
-    expect(await button.evaluate((el) => el.hasAttribute("data-pressed"))).toBe(
-      false,
-    )
+    expect(
+      await button.evaluate((el) => el.hasAttribute("data-pressed")),
+    ).toBe(false)
   })
 
   test("a drag the browser claims as a scroll never activates the button", async ({

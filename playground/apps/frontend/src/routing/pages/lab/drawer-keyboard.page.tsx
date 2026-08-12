@@ -53,7 +53,8 @@ const FRAME_TOLERANCE = 2
 
 function sampleGeometry(content: HTMLElement, startedAt: number): Sample {
   const rect = content.getBoundingClientRect()
-  const room = Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
+  const room =
+    Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
   const fake = document.querySelector<HTMLElement>(
     '[data-testid="fake-keyboard"]',
   )
@@ -242,7 +243,10 @@ function checkTransition(
   // have missed a vsync; SwiftUI's sheet drops none. `fps` is over the animating window, so a
   // number well under 60 means the main thread was busy — which for this drawer means layout,
   // because animating max-height/min-height/padding reflows the sheet on every frame.
-  const animating = frames.slice(1, Math.max(2, Math.round(frames.length * 0.6)))
+  const animating = frames.slice(
+    1,
+    Math.max(2, Math.round(frames.length * 0.6)),
+  )
   const elapsed = animating.reduce((a, b) => a + b, 0)
   const fps = elapsed > 0 ? (animating.length / elapsed) * 1000 : 0
   const worstFrame = animating.length ? Math.max(...animating) : 0
@@ -397,10 +401,15 @@ function LabDrawerKeyboardPage() {
           field?.focus()
           setExtraRows(0)
         },
-        { mid: { at: 48, apply: () => {
-          setKeyboard(kb(0.4))
-          setMockKeyboard(kb(0.4))
-        } } },
+        {
+          mid: {
+            at: 48,
+            apply: () => {
+              setKeyboard(kb(0.4))
+              setMockKeyboard(kb(0.4))
+            },
+          },
+        },
       )
       setRunning(false)
       return
@@ -434,7 +443,10 @@ function LabDrawerKeyboardPage() {
           setKeyboard(kb(0.4))
           setMockKeyboard(kb(0.4))
         },
-        { monotonic: false, mid: { at: 100, apply: () => setExtraRows(0) } },
+        {
+          monotonic: false,
+          mid: { at: 100, apply: () => setExtraRows(0) },
+        },
       )
       setRunning(false)
       return
@@ -571,10 +583,15 @@ function LabDrawerKeyboardPage() {
         laggedField?.focus()
         setExtraRows(0)
       },
-      { mid: { at: 48, apply: () => {
-        setKeyboard(kb(0.4))
-        setMockKeyboard(kb(0.4))
-      } } },
+      {
+        mid: {
+          at: 48,
+          apply: () => {
+            setKeyboard(kb(0.4))
+            setMockKeyboard(kb(0.4))
+          },
+        },
+      },
     )
     //back to a clean baseline for the drag section below (keyboard down, nothing focused)
     laggedField?.blur()
@@ -610,7 +627,12 @@ function LabDrawerKeyboardPage() {
         new DOMMatrixReadOnly(getComputedStyle(panel).transform).m42
       const startY = Math.round(content.getBoundingClientRect().top + 80)
       const touch = (y: number) =>
-        new Touch({ identifier: 1, target: panel, clientX: 180, clientY: y })
+        new Touch({
+          identifier: 1,
+          target: panel,
+          clientX: 180,
+          clientY: y,
+        })
       const fire = (type: string, y: number) =>
         panel.dispatchEvent(
           new TouchEvent(type, {
@@ -690,7 +712,9 @@ function LabDrawerKeyboardPage() {
       await new Promise((r) => setTimeout(r, 100))
 
       //a row near the top of the viewport, which mid-scroll is nowhere near an extreme
-      const anchor = scroller.querySelector<HTMLElement>("div:first-of-type")
+      const anchor = scroller.querySelector<HTMLElement>(
+        "div:first-of-type",
+      )
       const before = {
         anchor: anchor?.getBoundingClientRect().top ?? 0,
         content: content.getBoundingClientRect().top,
@@ -762,24 +786,24 @@ function LabDrawerKeyboardPage() {
         //a full pass.
         createPortal(
           <pre
-          data-testid="conformance-report"
-          //above the panel and the fake keyboard: the verdict has to survive being screenshotted
-          //mid-run on a device, which is the only way to read it there
-          style={{
-            position: "fixed",
-            insetInline: 0,
-            top: 0,
-            zIndex: 300,
-            margin: 0,
-            padding: 4,
-            background: "rgba(0,0,0,0.85)",
-            color: "#4ade80",
-            font: "9px ui-monospace, monospace",
-            lineHeight: 1.3,
-            whiteSpace: "pre-wrap",
-            pointerEvents: "none",
-          }}
-        >
+            data-testid="conformance-report"
+            //above the panel and the fake keyboard: the verdict has to survive being screenshotted
+            //mid-run on a device, which is the only way to read it there
+            style={{
+              position: "fixed",
+              insetInline: 0,
+              top: 0,
+              zIndex: 300,
+              margin: 0,
+              padding: 4,
+              background: "rgba(0,0,0,0.85)",
+              color: "#4ade80",
+              font: "9px ui-monospace, monospace",
+              lineHeight: 1.3,
+              whiteSpace: "pre-wrap",
+              pointerEvents: "none",
+            }}
+          >
             {`${failed === 0 ? "PASS" : `FAIL ${failed}/${total}`}${document.hidden ? " (document hidden — motion frozen, checks unreliable)" : ""}\n${results
               .map(
                 (r) =>
@@ -797,19 +821,19 @@ function LabDrawerKeyboardPage() {
         <AppDrawer.Portal>
           <AppDrawer.Overlay />
           <AppDrawer.Content>
-              {/*ground-truth marker: a saturated strip at the sheet's top edge, so a frame from a
+            {/*ground-truth marker: a saturated strip at the sheet's top edge, so a frame from a
                  screen recording can be measured by finding a colour instead of by inferring an
                  edge out of two dark greys*/}
-              <div
-                aria-hidden
-                style={{
-                  position: "absolute",
-                  insetInline: 0,
-                  top: 0,
-                  height: 6,
-                  background: "#ff0000",
-                }}
-              />
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                insetInline: 0,
+                top: 0,
+                height: 6,
+                background: "#ff0000",
+              }}
+            />
             <AppDrawer.Handle />
             <AppDrawer.Shell className="flex flex-col gap-y-4 pt-4">
               <AppDrawer.Title>Keyboard conformance</AppDrawer.Title>
@@ -847,7 +871,8 @@ function LabDrawerKeyboardPage() {
             //most for parity: the sheet must track the keyboard's edge the whole way up, not just
             //agree with it once both have stopped.
             transform: `translateY(${keyboardShown ? 0 : keyboard}px)`,
-            transition: "transform 250ms cubic-bezier(0.17, 0.59, 0.21, 1)",
+            transition:
+              "transform 250ms cubic-bezier(0.17, 0.59, 0.21, 1)",
           }}
         />
       )}
