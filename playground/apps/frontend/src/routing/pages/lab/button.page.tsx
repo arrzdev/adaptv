@@ -86,14 +86,16 @@ function LabButtonPage() {
         description="Activation rides onPress, not a DOM click, so a release outside the region is silently dropped — the same forgiving tracking a native control does. The press region carries a 48px outset, so you have to drag properly clear of it."
       >
         <LabCaveat>
-          Drag off and back is a <strong>mouse and stylus</strong> guarantee. With a
-          finger on a page that scrolls it is unreachable: the browser claims the
-          gesture at its own ~10px slop — well inside the 48px outset — and fires{" "}
-          <code>pointercancel</code>, after which the press is over and no JS can take
-          it back. Only <code>touch-action: none</code> could, and that would stop you
-          scrolling the page whenever a drag happens to start on a button. What is
-          guaranteed on touch is the protective half: a gesture the platform turned
-          into a scroll never activates, and never leaves the press style stuck on.
+          Drag off and back is a <strong>mouse and stylus</strong>{" "}
+          guarantee. With a finger on a page that scrolls it is
+          unreachable: the browser claims the gesture at its own ~10px slop
+          — well inside the 48px outset — and fires{" "}
+          <code>pointercancel</code>, after which the press is over and no
+          JS can take it back. Only <code>touch-action: none</code> could,
+          and that would stop you scrolling the page whenever a drag
+          happens to start on a button. What is guaranteed on touch is the
+          protective half: a gesture the platform turned into a scroll
+          never activates, and never leaves the press style stuck on.
         </LabCaveat>
         <Button className={SURFACE} onClick={() => note("onClick")}>
           <Button.Text>press, drag off, release</Button.Text>
