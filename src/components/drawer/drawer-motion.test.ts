@@ -5,7 +5,10 @@ import {
 } from "#adaptv/components/drawer/drawer-constants"
 import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
 import type { PanelFlight } from "#adaptv/components/drawer/drawer-motion"
-import { resumeDrawerTransition } from "#adaptv/components/drawer/drawer-motion"
+import {
+  resumeDrawerTransition,
+  tweenDrawerPanelTransform,
+} from "#adaptv/components/drawer/drawer-motion"
 
 const OPEN: EasingBezier = [...DRAWER_TRANSITIONS.EASE]
 
@@ -56,9 +59,10 @@ describe("resumeDrawerTransition", () => {
       const restart = entrySpeed(DEFAULT_DRAWER_TRANSITION, 104)
       const resumedSpeed = entrySpeed(resumed, 104)
       //a restart would enter at ~615px/s against the ~930px/s the sheet already had — the
-      //visible "it hesitates, then crawls" of the first cold open.
+      //visible "it hesitates, then crawls" of the first cold open. Asserted as a ratio, because
+      //the absolute numbers move whenever the open curve is tuned and the hesitation is the point.
       expect(restart).toBeLessThan(700)
-      expect(resumedSpeed).toBeGreaterThan(1200)
+      expect(resumedSpeed).toBeGreaterThan(restart * 1.5)
     })
 
     it("spends the time the interrupted motion had left, plus the added travel", () => {
@@ -90,5 +94,159 @@ describe("resumeDrawerTransition", () => {
     const interrupted = flight(0.5)
     const resumed = resumeDrawerTransition(interrupted, 200, 120)
     expect(resumed.duration).toBeCloseTo(interrupted.left, 6)
+  })
+})
+
+/*
+ * The keyframe tween — the mechanism the panel's motion moved to.
+ *
+ * These need stubbing, because jsdom has neither `getAnimations` nor `DOMMatrixReadOnly`: without
+ * them every branch below short-circuits and the suite passes whether the code works or not. It
+ * did exactly that, and the re-entrancy bug the last test here pins went in unnoticed — a browser
+ * run caught it. A stub that makes the path executable is worth more than a faithful DOM.
+ */
+describe("tweenDrawerPanelTransform", () => {
+  class FakeAnimation {
+    animationName: string
+    finished: Promise<void>
+    private settle!: () => void
+    constructor(name: string) {
+      this.animationName = name
+      this.finished = new Promise<void>((resolve) => {
+        this.settle = resolve
+      })
+    }
+    finish() {
+      this.settle()
+    }
+  }
+
+  function panelWith(running: FakeAnimation[]) {
+    const vars: Record<string, string> = {}
+    const panel = {
+      style: {
+        transform: "",
+        transition: "",
+        animation: "",
+        setProperty: (key: string, value: string) => {
+          vars[key] = value
+        },
+        removeProperty: (key: string) => {
+          delete vars[key]
+        },
+      },
+      getAnimations: () => running,
+    } as unknown as HTMLElement
+    return { panel, vars }
+  }
+
+  //`readPanelTranslateY` reads computed style and parses a matrix; both are stubbed through to the
+  //inline transform so a `commit` that writes one is visible to the code under test
+  async function withDomStubs(run: () => Promise<void>) {
+    const realComputed = globalThis.getComputedStyle
+    const holder = globalThis as { DOMMatrixReadOnly?: unknown }
+    const realMatrix = holder.DOMMatrixReadOnly
+    globalThis.getComputedStyle = ((element: {
+      style?: { transform?: string }
+    }) => ({
+      transform: element.style?.transform || "none",
+    })) as unknown as typeof globalThis.getComputedStyle
+    holder.DOMMatrixReadOnly = class {
+      m42: number
+      constructor(value: string) {
+        this.m42 = Number.parseFloat(
+          /,\s*(-?[\d.]+)px/.exec(value)?.[1] ?? "0",
+        )
+      }
+    }
+    try {
+      await run()
+    } finally {
+      globalThis.getComputedStyle = realComputed
+      holder.DOMMatrixReadOnly = realMatrix
+    }
+  }
+
+  it("commits the target, then animates to where it landed", async () => {
+    await withDomStubs(async () => {
+      const armed = new FakeAnimation("pwa-drawer-slide")
+      const { panel, vars } = panelWith([armed])
+      panel.style.transform = "translate3d(0, 0px, 0)"
+
+      const pending = tweenDrawerPanelTransform(
+        panel,
+        DEFAULT_DRAWER_TRANSITION,
+        () => {
+          panel.style.transform = "translate3d(0, 229px, 0)"
+        },
+      )
+
+      //the endpoints are whatever `commit` produced — no caller has to know how they compose
+      expect(vars["--pwa-drawer-from"]).toBe("0px")
+      expect(vars["--pwa-drawer-to"]).toBe("229px")
+      expect(panel.style.animation).toContain("pwa-drawer-slide")
+      expect(panel.style.animation).toContain(
+        `${DEFAULT_DRAWER_TRANSITION.duration}s`,
+      )
+
+      armed.finish()
+      await pending
+      //handed back to the inline transform, which `commit` already put at the target. A keyframe
+      //left filling here would swallow every write the next drag makes.
+      expect(panel.style.animation).toBe("")
+    })
+  })
+
+  it("skips the animation when the commit did not move the panel", async () => {
+    await withDomStubs(async () => {
+      const { panel } = panelWith([])
+      panel.style.transform = "translate3d(0, 12px, 0)"
+      let committed = 0
+      await tweenDrawerPanelTransform(
+        panel,
+        DEFAULT_DRAWER_TRANSITION,
+        () => {
+          committed += 1
+        },
+      )
+      expect(committed).toBe(1)
+      expect(panel.style.animation).toBe("")
+    })
+  })
+
+  it("leaves a newer motion alone when an interrupted one finishes", async () => {
+    /*
+     * The panel's motion is superseded mid-flight all the time — a close re-aims on a viewport
+     * shift, the keyboard re-aims when its height lands in two steps, a drag release interrupts an
+     * open. The interrupted call's promise settles moments later, and clearing unconditionally
+     * there strips the animation that just replaced it, dropping the panel onto the inline
+     * transform: the sheet jumps the rest of the way instead of easing.
+     */
+    await withDomStubs(async () => {
+      const first = new FakeAnimation("pwa-drawer-slide")
+      const running = [first]
+      const { panel } = panelWith(running)
+      panel.style.transform = "translate3d(0, 0px, 0)"
+
+      const interrupted = tweenDrawerPanelTransform(
+        panel,
+        DEFAULT_DRAWER_TRANSITION,
+        () => {
+          panel.style.transform = "translate3d(0, 229px, 0)"
+        },
+      )
+
+      //a second tween takes over and arms its own animation
+      const second = new FakeAnimation("pwa-drawer-slide")
+      running[0] = second
+      panel.style.animation = "pwa-drawer-slide 0.32s ease both"
+
+      first.finish()
+      await interrupted
+
+      expect(panel.style.animation).toBe(
+        "pwa-drawer-slide 0.32s ease both",
+      )
+    })
   })
 })

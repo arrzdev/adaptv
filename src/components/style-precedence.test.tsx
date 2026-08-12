@@ -5,6 +5,7 @@ import { AvoidKeyboard } from "#adaptv/components/avoid-keyboard"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
 import { Drawer } from "#adaptv/components/drawer"
+import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import { ExternalLink } from "#adaptv/components/external-link"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
@@ -771,6 +772,116 @@ describe("Drawer", () => {
     expect(panel.className).not.toContain("rounded-t-xl")
   })
 
+  //The sheet and the dim are the two surfaces adaptv animates, and both are promoted for
+  //as long as they are mounted. The panel's hint is the one that stops WebKit demoting it
+  //at transition-end and re-rasterising the text just as the sheet arrives (the settle
+  //tremor). It is safe in the one way `PERFORMANCE-BOOST.md` cares about — it grants no
+  //containing block that was not already there — because the engine writes
+  //`translate3d(...)` on this element from mount, and any non-`none` transform makes it a
+  //containing block for fixed/absolute descendants on its own. Verified in both engines:
+  //a `position: fixed` child of the panel lands on the SAME pixel with and without the
+  //hint, and escapes to the viewport only when the transform itself is removed.
+  it("Content: the panel is promoted for as long as it is mounted", () => {
+    const panel = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer]",
+    )
+    expect(panel.className).toContain("will-change-transform")
+  })
+
+  //The hint sits in the BASE tier, so a consumer can turn it off — a promoted layer is a
+  //trade (memory, and a rasterisation the compositor now owns), and an app that would rather
+  //not make it on every sheet gets to say so. tailwind-merge is the load-bearing part: it has
+  //no `none` in its `max-h` group (see the panel's `max-h-[none]` above), so "the utilities are
+  //in the same group" is not something to assume. If both classes survived here the override
+  //would silently do nothing, and compiled source order would decide which one won.
+  it("Content: a consumer can turn the promotion hint off, single-variable", () => {
+    const panel = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Content className="will-change-auto">
+            body
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer]",
+    )
+    expect(panel.className).toContain("will-change-auto")
+    expect(panel.className).not.toContain("will-change-transform")
+  })
+
+  /*
+   * The panel is NOT the sheet — it is the sheet plus the hidden tail below the fold
+   * (`bottom: -excessHeight` and a spacer of equal height, ~0.55 viewports). So a height set
+   * on it is spent on the tail before it is spent on anything visible. Measured in a real
+   * browser at a 900px viewport: `max-h-[85dvh]` on Content produced a 765px panel box with
+   * 269px of sheet on screen (~30dvh) and 605px of the scroller below the bottom edge — and
+   * nothing said so, because the class landed exactly where it was written.
+   *
+   * There is no value that reads correctly here, so the property is not the consumer's to
+   * pass. `maxHeight` is, and it lands on the box that decides the visible height.
+   */
+  it("Content: height on the panel is locked away — it would be spent on the hidden tail", () => {
+    const panel = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Content
+            className="h-[500px] max-h-[85dvh] min-h-[600px]"
+            style={{ maxHeight: "85dvh" }}
+          >
+            body
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer]",
+    )
+    //`max-h-[none]` deliberately, not `max-h-none` — tailwind-merge has no `none` in its
+    //`max-h` group, so the readable spelling silently keeps both classes. See drawer.tsx.
+    expect(hasClass(panel, "max-h-[none]")).toBe(true)
+    expect(hasClass(panel, "max-h-[85dvh]")).toBe(false)
+    expect(hasClass(panel, "h-auto")).toBe(true)
+    expect(hasClass(panel, "h-[500px]")).toBe(false)
+    expect(hasClass(panel, "min-h-0")).toBe(true)
+    expect(hasClass(panel, "min-h-[600px]")).toBe(false)
+    //…and the inline half, which no class tier could have won against
+    expect(panel.style.maxHeight).toBe("none")
+  })
+
+  it("Content: `maxHeight` reaches the content box as the cap variable", () => {
+    const panel = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Content maxHeight="60dvh">body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer]",
+    )
+    //declared on the panel and INHERITED down, so the content box keeps having no consumer
+    //style channel of its own — nothing there for the keyboard effect's inline writes to
+    //collide with. A number is a px count, the way React's own style prop reads one.
+    expect(
+      panel.style.getPropertyValue(DRAWER_CONTENT_MAX_HEIGHT_VAR),
+    ).toBe("60dvh")
+  })
+
+  it("Content: no `maxHeight` declares no variable, so the platform cap stands alone", () => {
+    const panel = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer]",
+    )
+    expect(
+      panel.style.getPropertyValue(DRAWER_CONTENT_MAX_HEIGHT_VAR),
+    ).toBe("")
+  })
+
   it("Overlay: the full-viewport pin is locked, the dim colour is not", () => {
     const overlay = query(
       <Drawer defaultOpen>
@@ -785,6 +896,50 @@ describe("Drawer", () => {
     expect(overlay.className).not.toContain("static")
     expect(overlay.className).toContain("bg-red-500")
     expect(overlay.className).not.toContain("bg-black/40")
+  })
+
+  //The other half of the panel's promotion, and the half that landed first. The dim's opacity
+  //is driven by an inline transition (`transitionDrawerBackdropOpacity`) so a fade can be
+  //re-aimed mid-flight, and an inline transition is exactly the shape WebKit promotes on start
+  //and demotes on end — repainting a full-viewport layer at the moment the sheet arrives. The
+  //hint holds the layer across the whole mounted lifetime so there is no end to demote at.
+  //
+  //It is worth keeping because it is measurably free. Chromium, /lab/drawer at 430x844, layer
+  //tree read over CDP: with both hints and with both forced to `auto`, the composited tree is
+  //the same 7 layers and the same 15.53MB — the panel is promoted by the engine's own
+  //`translate3d` and the dim by being a fixed child of the portal's stacking context, so
+  //neither hint creates a layer. Over five open/close cycles the hints cost 27 paints against
+  //29 without them. Free, and it removes paints; the WebKit saving is the larger one and is
+  //the bug this was opened for.
+  it("Overlay: the dim is promoted for as long as it is mounted", () => {
+    const overlay = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Overlay />
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer-overlay]",
+    )
+    expect(overlay.className).toContain("will-change-[opacity]")
+  })
+
+  //Same trade as the panel's, same escape hatch, and the same tailwind-merge caveat — except
+  //here the base hint is an ARBITRARY value. `will-change-[opacity]` and `will-change-auto`
+  //resolve to one group only because tailwind-merge handles the arbitrary form; if they did
+  //not, both would survive and compiled source order would pick the winner in silence.
+  it("Overlay: a consumer can turn the promotion hint off, single-variable", () => {
+    const overlay = query(
+      <Drawer defaultOpen>
+        <Drawer.Portal>
+          <Drawer.Overlay className="will-change-auto" />
+          <Drawer.Content>body</Drawer.Content>
+        </Drawer.Portal>
+      </Drawer>,
+      "[data-pwa-drawer-overlay]",
+    )
+    expect(overlay.className).toContain("will-change-auto")
+    expect(overlay.className).not.toContain("will-change-[opacity]")
   })
 
   it("Footer: `shrink-0` is locked — it must survive the panel's height cap", () => {
