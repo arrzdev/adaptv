@@ -1,5 +1,6 @@
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import type { ComponentType } from "react"
+import type { BootErrorProps } from "#adaptv/components/boot-error"
 import type { OfflineProps } from "#adaptv/components/offline"
 import type {
   OrientationGuardProps,
@@ -433,6 +434,27 @@ export type AdaptvAppConfig = {
    * Defaults to adaptv's own `Offline` component.
    */
   offlineComponent?: ScreenThunk<OfflineProps>
+  /**
+   * The screen shown when the app's **bundle never ran** — a 404 on the entry
+   * chunk, a syntax error, a corrupt OTA bundle. The WebView would otherwise be
+   * blank, because no app code got to execute at all.
+   *
+   * ```ts
+   * bootErrorScreen: () => import("@/components/boot-error")
+   * ```
+   *
+   * ⚠︎ **Not for runtime errors.** A route that throws, a failed fetch, a bad
+   * render — those are the app's to catch, with its own boundary around whatever
+   * it wants to protect. adaptv does not install one, deliberately, because it
+   * would take that handling away from the app. This slot is only for the case
+   * the app never got to have an opinion about.
+   *
+   * Prerendered to static HTML at build time, since there is no React alive when
+   * it is needed. It therefore has to render standalone, from a `code` prop and
+   * nothing else — no browser, no hooks. Defaults to adaptv's own `BootError`.
+   * → `RENDERING.md §3.1.3`
+   */
+  bootErrorScreen?: ScreenThunk<BootErrorProps>
   //NOTE: there is deliberately no `providers` field. An app-wide provider tree is
   //just a layout route — declare one in `routerConfig` and wrap `<Outlet />`:
   //

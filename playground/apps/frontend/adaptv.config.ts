@@ -16,6 +16,7 @@ export default defineApp({
   splashScreen: () => import("@/components/splash-screen"),
   orientationGuardScreen: () => import("@/components/rotate-guard"),
   notFoundScreen: () => import("@/components/not-found-screen"),
+  bootErrorScreen: () => import("@/components/boot-error-screen"),
   //NOTE: no `providers` field — adaptv has none. The app-wide provider tree is a
   //layout route: see `src/routing/layouts/providers.layout.tsx`.
 
