@@ -9,8 +9,6 @@ type LoginDrawerProps = {
 //the login surface. kept mounted (toggle `open` only) so the drawer's exit
 //animation can run — see the ui-shell controlled-drawer contract.
 export function LoginDrawer({ open, onOpenChange }: LoginDrawerProps) {
-  //the engine comes from context so the lab can open this exact drawer on either one
-
   return (
     <AppDrawer open={open} onOpenChange={onOpenChange}>
       <AppDrawer.Portal>

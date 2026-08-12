@@ -48,7 +48,6 @@ export function TodoFormDrawer({
   errorMessage,
   onSubmit,
 }: TodoFormDrawerProps) {
-  //the engine comes from context so the lab can open this exact drawer on either one
   const haptic = useHaptics()
   const [value, setValue] = useState(initialValue)
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(

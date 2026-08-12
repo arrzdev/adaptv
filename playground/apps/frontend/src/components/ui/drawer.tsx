@@ -37,6 +37,16 @@ const DRAWER_TITLE_CLASSNAME = cn("text-lg font-semibold text-foreground")
 
 const DRAWER_DESCRIPTION_CLASSNAME = cn("text-sm text-muted")
 
+function AppDrawerOverlay({ className, ...props }: DrawerOverlayProps) {
+  return (
+    <BaseDrawer.Overlay
+      className={cn(DRAWER_OVERLAY_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerOverlay.displayName = "Drawer.Overlay"
+
 type AppDrawerContentProps = DrawerContentProps & {
   /**
    * Set when a `AppDrawer.Footer` is composed inside — the footer takes over
@@ -45,109 +55,87 @@ type AppDrawerContentProps = DrawerContentProps & {
   hasFooter?: boolean
 }
 
-/*
- * The app's drawer, built from the framework's.
- *
- * Still a factory rather than a plain object because the parts close over `Base` — they render
- * that engine's own sub-components, so they cannot be shared across engines. There is only one
- * engine now; the shape is kept because collapsing it buys nothing and the `displayName` wiring
- * below depends on it.
- */
-function createAppDrawer(Base: typeof BaseDrawer, label: string) {
-  function AppDrawerOverlay({ className, ...props }: DrawerOverlayProps) {
-    return (
-      <Base.Overlay
-        className={cn(DRAWER_OVERLAY_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  //Drawer.Content PARTITIONS its children by displayName — `Drawer.Handle` goes to the handle
-  //slot, `Drawer.Footer` gets pinned below the scroller, everything else is body. So these are
-  //protocol names, not labels: renaming them per engine made the handle unrecognisable, which
-  //rendered the default grabber AND dropped the passed one into the body. Two indicators.
-  AppDrawerOverlay.displayName = "Drawer.Overlay"
+function AppDrawerContent({
+  className,
+  scrollClassName,
+  hasFooter = false,
+  ...props
+}: AppDrawerContentProps) {
+  //bottom breathing room for every drawer's content — always the larger inset so the
+  //layout doesn't shift when the keyboard opens (footer drawers keep just a gap;
+  //the footer, last in the scroll flow, carries the safe-area inset instead)
+  return (
+    <BaseDrawer.Content
+      className={cn(DRAWER_CONTENT_CLASSNAME, className)}
+      scrollClassName={cn(
+        hasFooter ? "pb-2" : "web:pb-4 app:pb-safe-offset-2",
+        scrollClassName,
+      )}
+      {...props}
+    />
+  )
+}
+AppDrawerContent.displayName = "Drawer.Content"
 
-  function AppDrawerContent({
-    className,
-    scrollClassName,
-    hasFooter = false,
-    ...props
-  }: AppDrawerContentProps) {
-    //bottom breathing room for every drawer's content — always the larger inset so the
-    //layout doesn't shift when the keyboard opens (footer drawers keep just a gap;
-    //the footer, last in the scroll flow, carries the safe-area inset instead)
-    return (
-      <Base.Content
-        className={cn(DRAWER_CONTENT_CLASSNAME, className)}
-        scrollClassName={cn(
-          hasFooter ? "pb-2" : "web:pb-4 app:pb-safe-offset-2",
-          scrollClassName,
-        )}
-        {...props}
-      />
-    )
-  }
-  AppDrawerContent.displayName = "Drawer.Content"
+function AppDrawerHandle({
+  className,
+  ...props
+}: ComponentPropsWithRef<typeof BaseDrawer.Handle>) {
+  return (
+    <BaseDrawer.Handle
+      className={cn(DRAWER_HANDLE_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerHandle.displayName = "Drawer.Handle"
 
-  function AppDrawerHandle({
-    className,
-    ...props
-  }: ComponentPropsWithRef<typeof BaseDrawer.Handle>) {
-    return (
-      <Base.Handle
-        className={cn(DRAWER_HANDLE_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  AppDrawerHandle.displayName = "Drawer.Handle"
+function AppDrawerShell({ className, ...props }: DrawerShellProps) {
+  return (
+    <BaseDrawer.Shell
+      className={cn(DRAWER_SHELL_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerShell.displayName = "Drawer.Shell"
 
-  function AppDrawerShell({ className, ...props }: DrawerShellProps) {
-    return (
-      <Base.Shell
-        className={cn(DRAWER_SHELL_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  AppDrawerShell.displayName = "Drawer.Shell"
+function AppDrawerFooter({ className, ...props }: DrawerFooterProps) {
+  return (
+    <BaseDrawer.Footer
+      className={cn(DRAWER_FOOTER_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerFooter.displayName = "Drawer.Footer"
 
-  function AppDrawerFooter({ className, ...props }: DrawerFooterProps) {
-    return (
-      <Base.Footer
-        className={cn(DRAWER_FOOTER_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  AppDrawerFooter.displayName = "Drawer.Footer"
+function AppDrawerTitle({ className, ...props }: DrawerTitleProps) {
+  return (
+    <BaseDrawer.Title
+      className={cn(DRAWER_TITLE_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerTitle.displayName = "Drawer.Title"
 
-  function AppDrawerTitle({ className, ...props }: DrawerTitleProps) {
-    return (
-      <Base.Title
-        className={cn(DRAWER_TITLE_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  AppDrawerTitle.displayName = "Drawer.Title"
+function AppDrawerDescription({
+  className,
+  ...props
+}: DrawerDescriptionProps) {
+  return (
+    <BaseDrawer.Description
+      className={cn(DRAWER_DESCRIPTION_CLASSNAME, className)}
+      {...props}
+    />
+  )
+}
+AppDrawerDescription.displayName = "Drawer.Description"
 
-  function AppDrawerDescription({
-    className,
-    ...props
-  }: DrawerDescriptionProps) {
-    return (
-      <Base.Description
-        className={cn(DRAWER_DESCRIPTION_CLASSNAME, className)}
-        {...props}
-      />
-    )
-  }
-  AppDrawerDescription.displayName = "Drawer.Description"
-
-  const Root = forwardRef<DrawerHandle, DrawerRootProps>(
-    function AppDrawerRoot(props, forwardedRef) {
+export const AppDrawer = Object.assign(
+  forwardRef<DrawerHandle, DrawerRootProps>(
+    function AppDrawer(props, forwardedRef) {
       //hold the base drawer's imperative handle so the back handler can read
       //`open` and close it — the ref is merged so a caller's own ref still works
       const handleRef = useRef<DrawerHandle | null>(null)
@@ -170,13 +158,11 @@ function createAppDrawer(Base: typeof BaseDrawer, label: string) {
         return true
       }, BackPriority.Overlay)
 
-      return <Base ref={setRef} {...props} />
+      return <BaseDrawer ref={setRef} {...props} />
     },
-  )
-  Root.displayName = label
-
-  return Object.assign(Root, {
-    Portal: Base.Portal,
+  ),
+  {
+    Portal: BaseDrawer.Portal,
     Overlay: AppDrawerOverlay,
     Content: AppDrawerContent,
     Handle: AppDrawerHandle,
@@ -184,12 +170,10 @@ function createAppDrawer(Base: typeof BaseDrawer, label: string) {
     Footer: AppDrawerFooter,
     Title: AppDrawerTitle,
     Description: AppDrawerDescription,
-    Close: Base.Close,
-    Trigger: Base.Trigger,
-  })
-}
-
-export const AppDrawer = createAppDrawer(BaseDrawer, "AppDrawer")
+    Close: BaseDrawer.Close,
+    Trigger: BaseDrawer.Trigger,
+  },
+)
 
 export { useDrawer }
 export type { DrawerHandle }

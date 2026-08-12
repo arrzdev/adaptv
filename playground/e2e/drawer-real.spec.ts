@@ -109,6 +109,10 @@ test.describe("the app's own drawers", () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/drawer")
+    //the SSR splash self-unmounts on hydration, and it is the only honest "React is driving"
+    //signal here — every trigger below is server-rendered, so waiting on one only proves the
+    //HTML arrived. See the note on `awaitClientHandover` in drawer-motion.spec.ts.
+    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
     await page
       .getByRole("button", { name: DRAWERS[0].button, exact: true })
       .first()
