@@ -8,5 +8,7 @@ declare module "virtual:adaptv/ota-config" {
     requireSignature: boolean
     /** SPKI PEM. `null` only in an explicitly unsigned local build. */
     publicKey: string | null
+    /** Foreground poll interval in ms, or `0` for launch + resume only. */
+    pollIntervalMs: number
   } | null
 }

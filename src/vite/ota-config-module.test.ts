@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import {
   assertReachableOtaOrigin,
+  DEFAULT_OTA_POLL_MINUTES,
   resolveOtaBuildConfig,
   resolveOtaOrigin,
+  resolveOtaPollIntervalMs,
 } from "#adaptv/vite/ota-config-module"
 
 const BASE: AdaptvAppConfig = {
@@ -131,5 +133,50 @@ describe("resolveOtaBuildConfig", () => {
         otaOnNativeSkew: "refuse",
       })?.nativeSkew,
     ).toBe("refuse")
+  })
+})
+
+describe("resolveOtaPollIntervalMs", () => {
+  it("gives an app that configures nothing an hourly look", () => {
+    expect(resolveOtaPollIntervalMs(BASE)).toBe(
+      DEFAULT_OTA_POLL_MINUTES * 60_000,
+    )
+  })
+
+  it("takes 0 as the way to turn the poll off", () => {
+    //Off, not "unset" — launch and resume still check. There is no configuration
+    //that leaves an app never looking for an update.
+    expect(resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: 0 })).toBe(
+      0,
+    )
+  })
+
+  it("converts minutes to milliseconds once, at build time", () => {
+    expect(resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: 15 })).toBe(
+      900_000,
+    )
+  })
+
+  it("refuses a number small enough to be seconds", () => {
+    //🔴 The mistake this exists for. `otaPollMinutes: 30` meaning half a minute
+    //and `otaPollMinutes: 30` meaning half an hour look identical in a config
+    //file and differ by sixty times the traffic — and the difference only ever
+    //shows up on someone's CDN bill, never in testing. Refused rather than
+    //clamped, because a clamp is a silent reinterpretation of what was written.
+    expect(() =>
+      resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: 0.5 }),
+    ).toThrow(/MINUTES, not seconds/)
+    expect(() =>
+      resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: 2 }),
+    ).toThrow(/below the 5-minute minimum/)
+  })
+
+  it("refuses a value that is not a number of minutes at all", () => {
+    expect(() =>
+      resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: -60 }),
+    ).toThrow(/whole number of minutes/)
+    expect(() =>
+      resolveOtaPollIntervalMs({ ...BASE, otaPollMinutes: Number.NaN }),
+    ).toThrow(/whole number of minutes/)
   })
 })

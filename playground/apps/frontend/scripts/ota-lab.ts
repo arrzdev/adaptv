@@ -54,6 +54,23 @@ import { pathToFileURL } from "node:url"
 // So: badge on launch 1 immediately after `fresh` = correct. Badge on launch 1
 // after any later `publish` = wrong, and worth chasing.
 //
+// ## The third check: `publish`, then touch nothing for five minutes
+//
+// This app sets `otaPollMinutes: 5` — the floor, and not a number any shipped app
+// wants (the default is 60). It is here so the poll is watchable: publish, leave
+// the app open and in the foreground, and the download happens DURING the session,
+// with no launch and no resume involved.
+//
+//   publish        → then do not touch the simulator
+//   +5 min         → ✗ still nothing visible. The bundle is on disk and staged.
+//   launch 1       → ✓ the badge. ONE relaunch, not two — the download that used
+//                    to cost a launch already happened.
+//
+// To watch the download without disturbing the session (backgrounding the app to
+// read its localStorage would fire a resume check and prove nothing about the
+// timer), watch the host filesystem instead — the plugin unpacks to
+// `<DataContainer>/Library/NoCloud/ionic_built_snapshots/<buildTag>/`.
+//
 // ## What "publishing" is here, and why it is not a deployment system
 //
 // A channel is two static files in a folder: `manifest.json` and one zip, under

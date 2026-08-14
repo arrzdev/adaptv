@@ -46,6 +46,44 @@ export type OtaBuildConfig = {
   requireSignature: boolean
   /** SPKI PEM — `null` only when the build has explicitly opted out of signing. */
   publicKey: string | null
+  /** `otaPollMinutes` in MILLISECONDS, or `0` for "do not poll". */
+  pollIntervalMs: number
+}
+
+/** Default `otaPollMinutes`. → `AdaptvAppConfig.otaPollMinutes` for the reasoning. */
+export const DEFAULT_OTA_POLL_MINUTES = 60
+
+/**
+ * The floor. Below it the number is almost certainly seconds, and the difference
+ * between meaning `30` seconds and getting `30` minutes is invisible until someone
+ * reads a CDN bill — so this refuses rather than clamps. → `LIFECYCLE.md §5.2`
+ */
+export const MIN_OTA_POLL_MINUTES = 5
+
+/**
+ * The foreground poll interval, in milliseconds, resolved once at build time.
+ *
+ * Resolved HERE for the same reason as {@link OtaBuildConfig.nativeSkew}: the
+ * shipped bundle carries a literal answer, so no runtime has to reproduce the
+ * default and no two runtimes can disagree about it.
+ */
+export function resolveOtaPollIntervalMs(config: AdaptvAppConfig): number {
+  const minutes = config.otaPollMinutes ?? DEFAULT_OTA_POLL_MINUTES
+  if (minutes === 0) return 0
+  if (!Number.isFinite(minutes) || minutes < 0) {
+    throw new Error(
+      `[adaptv] otaPollMinutes must be a whole number of minutes, or 0 to turn the poll off — got ${minutes}.`,
+    )
+  }
+  if (minutes < MIN_OTA_POLL_MINUTES) {
+    throw new Error(
+      `[adaptv] otaPollMinutes is ${minutes}, below the ${MIN_OTA_POLL_MINUTES}-minute minimum.\n` +
+        "  It is MINUTES, not seconds — this is the one mistake worth refusing a build over,\n" +
+        "  because polling every few seconds is invisible in testing and only shows up as traffic.\n" +
+        "  Use 0 to turn the poll off; launch and resume still check.",
+    )
+  }
+  return Math.round(minutes) * 60_000
 }
 
 /**
@@ -222,5 +260,6 @@ export function resolveOtaBuildConfig(
     //runtime needs its own copy to check the manifest's signature — the half the
     //plugin's native check does not cover. → `#adaptv/ota/manifest-signing`
     publicKey: resolveOtaPublicKey(config),
+    pollIntervalMs: resolveOtaPollIntervalMs(config),
   }
 }

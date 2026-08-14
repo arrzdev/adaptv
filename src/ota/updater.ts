@@ -49,6 +49,12 @@ export type OtaOptions = {
    * the manifest's own signature, which is the only thing covering `createdAt`.
    */
   publicKey?: string | null
+  /**
+   * How often to look again **while the app stays in the foreground**, in ms.
+   * `0` (and the default) is launch + resume only. Resolved at build time from
+   * `otaPollMinutes` — nothing here re-derives a default.
+   */
+  pollIntervalMs?: number
   /** Called when a bundle has been downloaded and will apply at next cold start. */
   onUpdateReady?: (buildTag: string) => void
   /**
@@ -420,6 +426,14 @@ async function prune(
  * direct consumer of the coordination layer's `onResume`, which exists precisely
  * because a native WebView resume is not a browser focus event.
  *
+ * **And on a timer, if the app asked for one** — `otaPollMinutes`. That covers
+ * the session neither of the above reaches: one held in the foreground all day,
+ * on a kiosk or a wall-mounted tablet, where nothing is ever backgrounded and
+ * nothing is ever relaunched. It changes only *when the download happens*; the
+ * swap is still the next cold start. The timer is restarted by every other check
+ * rather than running independently, so resuming an app never costs two checks
+ * back to back.
+ *
  * **Never applies in place.** The plugin writes a new bundle directory and flips
  * a pointer. Overwriting the running bundle produces torn reads, and destroys
  * the very thing rollback rolls back to. → `§5.4b`
@@ -603,11 +617,50 @@ export function startOtaUpdates(options: OtaOptions): () => void {
     }
   }
 
-  void check()
-  const stopResume = onResume(() => void check())
+  //🔴 The three entry points below must never overlap, and before the timer
+  //existed they effectively could not: a launch check and a resume check are
+  //separated by the user leaving the app. A timer makes overlap ordinary — a
+  //resume landing on a slow check, or a second tick before the first download
+  //finished — and two concurrent checks both reach `downloadBundle` for the same
+  //tag, which the plugin answers by THROWING. That throw is caught, so the
+  //symptom is not an error: it is the second check silently abandoning its run,
+  //including the `setNextBundle` that would have staged the bundle. The app then
+  //has the bytes on disk and no pointer at them.
+  let inFlight = false
+  let timer: ReturnType<typeof setInterval> | undefined
+
+  /**
+   * One check at a time, and the poll clock restarted by every one of them.
+   *
+   * Restarted rather than free-running so that resuming an app does not cost a
+   * check followed by a tick moments later — the interval means "this long since
+   * we last looked", which is the thing the app actually asked for.
+   */
+  async function checkOnce(): Promise<void> {
+    if (inFlight || disposed) return
+    inFlight = true
+    try {
+      await check()
+    } finally {
+      inFlight = false
+      armPoll()
+    }
+  }
+
+  function armPoll(): void {
+    if (timer) clearInterval(timer)
+    timer = undefined
+    const interval = options.pollIntervalMs ?? 0
+    if (!interval || disposed) return
+    timer = setInterval(() => void checkOnce(), interval)
+  }
+
+  void checkOnce()
+  const stopResume = onResume(() => void checkOnce())
 
   return () => {
     disposed = true
+    if (timer) clearInterval(timer)
     stopResume()
     releaseHold()
   }

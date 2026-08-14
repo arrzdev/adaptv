@@ -34,6 +34,7 @@ export function useOtaUpdates(): void {
       nativeSkew: otaConfig.nativeSkew,
       requireSignature: otaConfig.requireSignature,
       publicKey: otaConfig.publicKey,
+      pollIntervalMs: otaConfig.pollIntervalMs,
     })
   }, [])
 }

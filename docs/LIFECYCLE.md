@@ -447,6 +447,52 @@ nothing** beyond deploying `dist/client` as it already does.
 > look at slightly stale code" stops being the trade the moment the artifact ships. The key is the app's
 > sources + the native plugin set + adaptv's own runtime source.
 
+#### How often an install looks — `otaPollMinutes`
+
+*Decided 2026-08-15.* Launch and resume cover almost every session, and they share one blind spot: a
+session that is **neither relaunched nor backgrounded**. A tablet left on a counter, a phone held open
+through a shift, a device on a stand — those apps check once and then sit as far behind the deploy as
+the session is long. Worse, the two events are *coupled to each other*: because the swap is staged
+(§5.4), a bundle that arrives during a session needs a second cold start to be seen, so the practical
+cost of a missed check is not one launch, it is two.
+
+So there is a third check, on a timer, and it is a **config key with a default** rather than an
+interval adaptv picks:
+
+```ts
+otaPollMinutes: 60   //the default. 0 turns it off; the minimum is 5.
+```
+
+*A key, not a constant,* because the right number is a property of the app and adaptv cannot see it. An
+internal tool on office wifi and a consumer app on a metered connection want different answers, and the
+cost of the wrong one lands on the app's bill, not on the framework's. *With a default,* because the
+blind spot is real and an app that configures nothing should not have it — the same stance as
+`otaOnNativeSkew: "install"`.
+
+**It moves when the download happens, never when the swap does.** A tick that reloaded the WebView
+would tear the live session it was polling from, which is the one thing §5.4 exists to prevent. A poll
+that finds an update stages it exactly as launch and resume do; the user sees it at their next cold
+start, with the bundle already on disk.
+
+Three properties the implementation has to hold (`src/ota/updater.ts`, pinned in `updater.test.ts`):
+
+- **One check at a time.** Two concurrent checks both reach `downloadBundle` for the same tag, and the
+  plugin answers the second by *throwing*. That throw is caught — so the symptom is not an error, it is
+  the second check abandoning its run before `setNextBundle`: bytes on disk and no pointer at them. The
+  overlap that actually happens is a resume landing on a check already in flight over a slow network.
+- **The clock is restarted by every check**, not free-running. "This long since we last looked" is what
+  was asked for; a free-running interval makes resuming an app cost a check and then a tick moments
+  later, which is two requests for one answer.
+- **Resolved at build time** (`resolveOtaPollIntervalMs`), so the shipped bundle carries a literal
+  number of milliseconds and no runtime reproduces the default.
+
+**The 5-minute floor refuses the build rather than clamping.** `otaPollMinutes: 30` meaning half a
+minute and `otaPollMinutes: 30` meaning half an hour are indistinguishable in a config file and differ
+by sixty times the traffic — and the difference shows up on a CDN bill months later, never in testing.
+A clamp would silently reinterpret what someone wrote; the error says which unit it is and points at
+`0` for turning the poll off. `0` is off, not unset: launch and resume still check, and there is no
+configuration in which an installed app never looks for an update.
+
 ### 5.3 The compatibility signal — `nativeFingerprint`
 
 The crux (the thing Capgo's CLI gets right, `RESEARCH.md §5`). At build time adaptv computes a
@@ -572,6 +618,8 @@ fingerprint needs stamping into `Info.plist`/`strings.xml`.
 > for days. It is a direct consumer of the coordination layer's `onResume`, which exists precisely
 > because a native WebView resume is not a browser focus event.
 >
+> **And on a timer, if the app asks for one — `otaPollMinutes`.** See below.
+>
 > The other half is `settleLaunch`, and losing it is silent: it is what tells the watchdog the bundle
 > reached the app. Dropping that call does not disable the watchdog, it **inverts** it — every update
 > rolls itself back one launch later, which looks exactly like updates that never install. Both live in
@@ -581,7 +629,9 @@ fingerprint needs stamping into `Info.plist`/`strings.xml`.
 
 - **Apply on next launch, never mid-session** — swapping the WebView root under a live app tears its
   state. The download happens in the background (on launch + on **resume** — this is a consumer of the
-  `useAppState` resume signal from the coordination layer); the swap happens at the next cold start.
+  `useAppState` resume signal from the coordination layer — and on the `otaPollMinutes` timer); the
+  swap happens at the next cold start.
+
 - **Boot watchdog + rollback** — the shell pings "app ready" after a successful boot. If a freshly
   applied bundle doesn't ping within N seconds, the updater reverts to the last-known-good bundle on the
   next launch. Never brick. Keep ≥1 previous good bundle.

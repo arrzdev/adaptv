@@ -44,6 +44,12 @@ export default defineApp({
   //someone's unsaved work.
   serviceWorkerUpdate:
     process.env.ADAPTV_SW_UPDATE === "prompt" ? "prompt" : "auto",
+
+  //The floor, not a realistic number — a shipped app wants the 60-minute default.
+  //It is here so `ota:lab` can watch the third check actually fire: publish, leave
+  //the app open, and the update stages itself DURING the session, so the colour
+  //lands on the very next launch instead of the one after it.
+  otaPollMinutes: 5,
   router: {
     //route generator — adaptv owns the generated tree's location (.adaptv/) and
     //the generator's formatting, so only these two are ours to set

@@ -601,6 +601,32 @@ export type AdaptvAppConfig = {
   otaOnNativeSkew?: "install" | "refuse"
 
   /**
+   * How often an installed app looks for a new bundle **while it is being used**,
+   * in whole minutes. Default `60`. `0` turns the poll off. → `LIFECYCLE.md §5.2`
+   *
+   * It is a third check, not the only one: adaptv already looks on every launch
+   * and on every resume, and resume is the one that carries a phone. A poll only
+   * changes the session that never goes to the background — a kiosk, a tablet on
+   * a wall, an app someone works in all afternoon — where the other two never
+   * fire and the install can sit a full day behind its own web deploy.
+   *
+   * ⚠︎ **It changes when the download happens, never when the swap does.** The
+   * bundle is still applied at the next cold start, because replacing the
+   * WebView's root under a live app tears its state (`LIFECYCLE.md §5.4b`). What
+   * it buys is that the next cold start has the bundle *already staged*, so the
+   * update appears on the very next launch instead of the one after it.
+   *
+   * A number rather than a switch, because the right interval is a function of
+   * how often you deploy, and that is the one thing adaptv cannot see from
+   * inside the app. The default assumes a team that ships a few times a day; an
+   * app that deploys twice a year should say `0` and rely on resume.
+   *
+   * The minimum is 5. A smaller number is almost always someone writing seconds,
+   * and the build says so rather than quietly polling twelve times a minute.
+   */
+  otaPollMinutes?: number
+
+  /**
    * How the **web** build renders. **Defaults to `"ssr"`.**
    *
    * - `"ssr"` — a server renders the HTML for each request, then the client

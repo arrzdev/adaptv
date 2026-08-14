@@ -707,3 +707,126 @@ describe("holding the launch screen on a first launch", () => {
     await expect(firstLaunchHold()).resolves.toBeUndefined()
   })
 })
+
+describe("the foreground poll", () => {
+  it("does not run at all when the app did not ask for one", async () => {
+    //The default. Launch and resume are the only two checks, exactly as before
+    //this option existed.
+    vi.useFakeTimers()
+    try {
+      const { startOtaUpdates } = await load()
+      startOtaUpdates(unsigned)
+      await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("looks again while the app stays in the foreground", async () => {
+    //The session the other two checks never reach: a kiosk, never backgrounded
+    //and never relaunched, which would otherwise sit a full day behind its own
+    //deploy. → LIFECYCLE.md §5.2
+    vi.useFakeTimers()
+    try {
+      const { startOtaUpdates } = await load()
+      startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(180_000)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("still stages rather than swapping under a live session", async () => {
+    //The poll moves WHEN the download happens, never when the swap does. A tick
+    //that reloaded the WebView would tear the session it polled from.
+    vi.useFakeTimers()
+    try {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify([
+          {
+            buildTag: "old",
+            createdAt: 1,
+            state: "known-good",
+            provenOn: APP,
+          },
+        ]),
+      )
+      knownBinary(APP, "fp-1")
+      const { startOtaUpdates } = await load()
+      startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+      expect(h.plugin?.reload).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("never lets two checks run at once", async () => {
+    //🔴 The regression this pins. Two concurrent checks both reach
+    //`downloadBundle` for the same tag, the plugin THROWS on the second, the
+    //throw is caught — so the visible result is not an error but a check that
+    //abandoned its run before `setNextBundle`. Bytes on disk, no pointer at them.
+    //
+    //Two ticks cannot collide by themselves — the clock is only re-armed once a
+    //check has returned — so the overlap that has to be ruled out is a RESUME
+    //landing on top of a check already in flight, which is the ordinary shape of
+    //a slow network and a user coming back to the app.
+    let release: (() => void) | undefined
+    h.plugin = fakePlugin({
+      getBlockedBundles: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ bundleIds: [] })
+          }),
+      ),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+    //the launch check is now parked inside `getBlockedBundles` and cannot finish
+    await vi.waitFor(() =>
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(1),
+    )
+
+    for (let i = 0; i < 3; i++) for (const fn of h.resume) fn()
+    await settled()
+    expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(1)
+    release?.()
+  })
+
+  it("counts the interval from the last check, not from a clock of its own", async () => {
+    //A resume restarts it. Otherwise coming back to an app costs a check and
+    //then a tick moments later, which is two requests for one answer.
+    vi.useFakeTimers()
+    try {
+      const { startOtaUpdates } = await load()
+      startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(50_000)
+      for (const fn of h.resume) fn()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(2)
+      //the tick that was 10s away has been pushed out a full interval
+      await vi.advanceTimersByTimeAsync(50_000)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("stops when the app tears down", async () => {
+    vi.useFakeTimers()
+    try {
+      const { startOtaUpdates } = await load()
+      startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })()
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(h.plugin?.getBlockedBundles).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
