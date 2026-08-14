@@ -8,6 +8,9 @@ export const routes = rootRoute([
   layout("providers", "layouts/providers.layout.tsx", [
     index("pages/todos.page.tsx"),
     route("/settings", "pages/settings.page.tsx"),
+    //a service-worker e2e fixture, alongside `public/sw-probe.pdf` — a route that
+    //answers with a redirect instead of a document. See the page for why.
+    route("/sw-probe-redirect", "pages/sw-probe-redirect.page.tsx"),
     //the manual-testing surface: an index plus one page per component,
     //framework behaviour and capability/hook. declared flat rather than nested
     //because `/lab` is a real page, not a layout — nesting would force an
@@ -40,6 +43,7 @@ export const routes = rootRoute([
     route("/lab/press-states", "pages/lab/press-states.page.tsx"),
     route("/lab/hover-focus", "pages/lab/hover-focus.page.tsx"),
     route("/lab/safe-area", "pages/lab/safe-area.page.tsx"),
+    route("/lab/service-worker", "pages/lab/service-worker.page.tsx"),
     //capabilities and hooks
     route("/lab/share", "pages/lab/share.page.tsx"),
     route("/lab/clipboard", "pages/lab/clipboard.page.tsx"),

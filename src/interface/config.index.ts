@@ -7,13 +7,11 @@ export {
   type ScreenThunk,
   type UiPatchScope,
 } from "../config/app-config.ts"
-export {
-  defineSwConfig,
-  serviceWorkerRuntime,
-} from "../config/sw-helpers.ts"
+//No `defineSwConfig` / `SwConfig`: an app has no service-worker config to define.
+//adaptv's worker is not configurable, and the app's own modules are named in
+//`serviceWorkers: []`. → `RENDERING.md §3`
 export type {
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
-  SwConfig,
 } from "../config/types.ts"

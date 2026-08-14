@@ -2,7 +2,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { MIN_ANDROID_WEBVIEW as CONFIG_MIN_WEBVIEW } from "#adaptv/vite/capacitor-config"
+import {
+  CAPACITOR_WEB_DIR,
+  MIN_ANDROID_WEBVIEW as CONFIG_MIN_WEBVIEW,
+} from "#adaptv/vite/capacitor-config"
+import { CAP_WEB_DIR } from "./native.mjs"
 import {
   installOfflinePage,
   MIN_ANDROID_WEBVIEW,
@@ -21,10 +25,10 @@ afterEach(() => {
 function render({ url = null } = {}) {
   const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-errpage-"))
   dirs.push(appRoot)
-  mkdirSync(path.join(appRoot, "dist/client"), { recursive: true })
+  mkdirSync(path.join(appRoot, CAP_WEB_DIR), { recursive: true })
   installOfflinePage(appRoot, { url })
   return readFileSync(
-    path.join(appRoot, "dist/client/adaptv-offline.html"),
+    path.join(appRoot, CAP_WEB_DIR, "adaptv-offline.html"),
     "utf8",
   )
 }
@@ -35,6 +39,15 @@ describe("the errorPath page", () => {
   it("reports the same floor the config enforces", () => {
     expect(MIN_ANDROID_WEBVIEW).toBe(CONFIG_MIN_WEBVIEW)
     expect(MIN_ANDROID_WEBVIEW).toBe(111)
+  })
+
+  // The CLI writes this page into the web dir, and the generated Capacitor config points
+  // the WebView at that same dir. They are two constants because the CLI must not import
+  // framework source; drift means the CLI writes the offline page somewhere nothing loads
+  // it from, and `server.errorPath` resolves to a 404 — a blank screen, not a message.
+  it("writes into the directory the generated config points the WebView at", () => {
+    expect(CAP_WEB_DIR).toBe(CAPACITOR_WEB_DIR)
+    expect(CAP_WEB_DIR).toBe(".adaptv/web")
   })
 
   it("bakes the floor into the page, so the screen can name it", () => {

@@ -1,138 +1,213 @@
-import { existsSync, unlinkSync } from "node:fs"
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
 import type { Plugin } from "vite"
 import { injectManifest } from "workbox-build"
-import { resolvePrecacheDocuments } from "#adaptv/config/precache-documents.ts"
 import {
+  appShellFile,
   DEFAULT_SW_GLOB_IGNORES,
   DEFAULT_SW_GLOB_PATTERNS,
   DEFAULT_SW_MAX_FILE_BYTES,
 } from "#adaptv/config/sw-helpers.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
-import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
+import {
+  appRelativePath,
+  captureClientOutDir,
+  requireAppConfig,
+  requireClientOutDir,
+} from "#adaptv/vite/adaptv-context.ts"
+import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir.ts"
 import { computeBuildTag, slugifyName } from "#adaptv/vite/build-tag.ts"
 
-const DEFAULT_SW_ENTRY = "./src/sw.ts"
+/**
+ * adaptv's own worker — a real module in the package, never generated.
+ *
+ * Resolved lazily: at module scope `import.meta.url` is not always a `file:` URL
+ * (vitest serves modules over http), and a top-level `fileURLToPath` there throws
+ * on import, taking down every suite that merely imports the plugin barrel.
+ */
+function adaptvWorkerPath(): string {
+  return fileURLToPath(new URL("../sw/default-worker.ts", import.meta.url))
+}
 
 /**
- * Production precache inject for the app-authored service worker.
+ * Build the service worker. → `RENDERING.md §3`
  *
- * Runs on the SSR build's `closeBundle` (vite-plugin-pwa's own hook never fires
- * when every environment is `build.ssr`). Bundles `sw` with esbuild — injecting
- * the derived `__ADAPTV_BUILD_TAG__` so the worker's cache namespace tracks the
- * deployed assets — then stamps the workbox precache manifest into it.
+ * Runs in `buildApp` at `order: "post"` — after every environment AND after the
+ * deploy plugin has finished assembling the output — and **after** the shell-emit
+ * plugin. See the ordering note in `adaptv-plugin.ts`; both halves are
+ * load-bearing.
+ *
+ * adaptv's worker is always the entry. An app never replaces it and never turns
+ * it off; `serviceWorkers: []` contributes modules that run after it.
  */
 export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
   return {
     name: "adaptv:sw-build",
     apply: "build",
-    applyToEnvironment(environment) {
-      return environment.name === "ssr"
+    configResolved(resolved) {
+      captureClientOutDir(context, resolved)
     },
-    async closeBundle() {
-      const config = requireAppConfig(context)
-      if (config.sw === false) return
-
-      //The app's own worker wins if it wrote one; otherwise adaptv's generated
-      //worker in `.adaptv/`. A normal app authors no service worker at all —
-      //everything it would decide is already in adaptv.config.ts.
-      const explicit =
-        typeof config.sw === "string"
-          ? config.sw
-          : typeof config.sw === "object"
-            ? config.sw.entry
-            : undefined
-      const conventional = path.resolve(context.appRoot, DEFAULT_SW_ENTRY)
-      //Falls back to adaptv's OWN worker module — a real file in the package, not
-      //a generated copy. Nothing in it is app-specific.
-      const swEntry = explicit
-        ? path.resolve(context.appRoot, explicit)
-        : existsSync(conventional)
-          ? conventional
-          : fileURLToPath(
-              new URL("../sw/default-worker.ts", import.meta.url),
-            )
-      const clientDir = path.resolve(context.appRoot, "dist/client")
-
-      if (!existsSync(clientDir)) {
-        throw new Error(
-          `[adaptv] ${clientDir} missing — the client build must finish before the service worker is generated`,
-        )
-      }
-      if (!existsSync(swEntry)) {
-        throw new Error(
-          `[adaptv] service worker entry not found: ${swEntry}`,
-        )
-      }
-
-      const buildTag = await computeBuildTag(
-        clientDir,
-        slugifyName(config.name),
-      )
-      const swSrcBundle = path.join(clientDir, "sw-src.js")
-      const swDest = path.join(clientDir, "sw.js")
-
-      const bundleResult = await esbuild({
-        entryPoints: [swEntry],
-        outfile: swSrcBundle,
-        format: "iife",
-        target: "es2020",
-        bundle: true,
-        minify: true,
-        define: {
-          __ADAPTV_BUILD_TAG__: JSON.stringify(buildTag),
-          //the render mode the app was actually built with
-          __ADAPTV_RENDER_MODE__: JSON.stringify(
-            context.web?.render ?? "ssr",
-          ),
-        },
-      })
-
-      if (bundleResult.errors.length > 0) {
-        throw new Error(
-          `[adaptv] service worker bundle failed: ${bundleResult.errors.map((error) => error.text).join(", ")}`,
-        )
-      }
-
-      //Documents are excluded from the default glob and re-added ONLY from the
-      //explicit allowlist. `**/*.html` would sweep in every prerendered route —
-      //including personalized ones — which is precisely the cross-user leak the
-      //allowlist exists to prevent. → RENDERING.md §3.2
-      const precacheDocuments = resolvePrecacheDocuments(
-        typeof config.sw === "object" && config.sw !== null
-          ? config.sw.precacheDocuments
-          : undefined,
-      )
-
-      const { warnings } = await injectManifest({
-        swSrc: swSrcBundle,
-        swDest,
-        globDirectory: clientDir,
-        globPatterns: [
-          ...DEFAULT_SW_GLOB_PATTERNS.map((pattern) =>
-            pattern.replace(",html", ""),
-          ),
-          ...precacheDocuments,
-        ],
-        globIgnores: [...DEFAULT_SW_GLOB_IGNORES, "sw-src.js", "sw.js"],
-        maximumFileSizeToCacheInBytes: DEFAULT_SW_MAX_FILE_BYTES,
-      })
-
-      if (precacheDocuments.length > 0) {
-        console.log(
-          `[adaptv] precaching ${precacheDocuments.length} document(s): ${precacheDocuments.join(", ")}`,
-        )
-      }
-
-      unlinkSync(swSrcBundle)
-
-      for (const message of warnings) {
-        console.warn(`[adaptv] ${message}`)
-      }
-
-      console.log(`[adaptv] wrote ${swDest} (build tag ${buildTag})`)
+    //`buildApp`, `order: "post"` — MEASURED, and the reason is the precache
+    //manifest. On `closeBundle` the deploy plugin has not finished assembling the
+    //output yet: the glob ran against a directory still missing everything from
+    //`public/`, and the worker shipped with **21 files silently absent** —
+    //favicons, the offline illustrations, robots.txt. No error, no warning; it
+    //only shows up as a broken offline render. → `adaptv-plugin.ts`
+    buildApp: {
+      order: "post",
+      async handler() {
+        await buildServiceWorker(context)
+      },
     },
   }
+}
+
+async function buildServiceWorker(context: AdaptvContext): Promise<void> {
+  const config = requireAppConfig(context)
+  //The ONLY case with no worker, and it comes from the target, not a key.
+  if (context.web?.sw.enabled === false) return
+
+  const clientDir = requireClientOutDir(context)
+  const render = context.web?.render ?? "ssr"
+  const shellFile = appShellFile(render)
+  const shellPath = path.join(clientDir, shellFile)
+
+  if (!existsSync(clientDir)) {
+    throw new Error(
+      `[adaptv] ${clientDir} missing — the client build must finish before the service worker is generated`,
+    )
+  }
+  //Ordering guard, not a sanity check. If the shell is emitted after this
+  //plugin the manifest is built without it, and the resulting worker fails
+  //at RUNTIME in a way no build output reveals.
+  if (!existsSync(shellPath)) {
+    throw new Error(
+      `[adaptv] the app shell (${shellFile}) is missing from ${clientDir} — it must be emitted before the service worker is built`,
+    )
+  }
+
+  const swEntry = resolveWorkerEntry(context, config.serviceWorkers)
+  const buildTag = await computeBuildTag(
+    clientDir,
+    slugifyName(config.name),
+  )
+  const swSrcBundle = path.join(clientDir, "sw-src.js")
+  const swDest = path.join(clientDir, "sw.js")
+
+  const bundleResult = await esbuild({
+    entryPoints: [swEntry],
+    outfile: swSrcBundle,
+    format: "iife",
+    target: "es2020",
+    bundle: true,
+    minify: true,
+    //A service worker IS side effects — every line of it registers a
+    //listener or a route. adaptv's package.json narrows `sideEffects` to CSS
+    //for the React surface, which is right there and wrong here: with the
+    //generated entry, esbuild honoured it and dropped `import
+    //"<default-worker>"` entirely, producing a worker with no
+    //`self.__WB_MANIFEST` to inject into.
+    ignoreAnnotations: true,
+    define: {
+      __ADAPTV_BUILD_TAG__: JSON.stringify(buildTag),
+      //the render mode the app was actually built with
+      __ADAPTV_RENDER_MODE__: JSON.stringify(render),
+      //The shell URL the navigation route binds to. A `define` rather than a
+      //literal in the worker, because the name now varies with the render
+      //mode — and the worker binding one name while the build emitted another
+      //fails only at RUNTIME, offline, where nobody is watching.
+      __ADAPTV_APP_SHELL_URL__: JSON.stringify(`/${shellFile}`),
+    },
+  })
+
+  if (bundleResult.errors.length > 0) {
+    throw new Error(
+      `[adaptv] service worker bundle failed: ${bundleResult.errors.map((error) => error.text).join(", ")}`,
+    )
+  }
+
+  const { warnings } = await injectPrecacheManifest({
+    swSrcBundle,
+    swDest,
+    clientDir,
+    shellFile,
+  })
+
+  unlinkSync(swSrcBundle)
+
+  for (const message of warnings) {
+    console.warn(`[adaptv] ${message}`)
+  }
+
+  console.log(
+    `[adaptv] wrote ${appRelativePath(context, swDest)} (build tag ${buildTag})`,
+  )
+}
+
+/**
+ * The esbuild entry: adaptv's worker alone, or a generated module that pulls in
+ * adaptv's worker and then the app's.
+ *
+ * Order is the contract. adaptv's setup runs first, so its precache and
+ * navigation routes are registered first — and Workbox returns the FIRST
+ * matching route, so an app module can add handlers but cannot take delivery
+ * away from the framework.
+ */
+function resolveWorkerEntry(
+  context: AdaptvContext,
+  serviceWorkers: string[] | undefined,
+): string {
+  const adaptvWorker = adaptvWorkerPath()
+  if (!serviceWorkers || serviceWorkers.length === 0) return adaptvWorker
+
+  const modules = serviceWorkers.map((entry) => {
+    const absolute = path.resolve(context.appRoot, entry)
+    if (!existsSync(absolute)) {
+      throw new Error(
+        `[adaptv] serviceWorkers: "${entry}" does not exist (resolved to ${absolute})`,
+      )
+    }
+    return absolute
+  })
+
+  const { swGen } = resolveGeneratedPaths(context.appRoot)
+  mkdirSync(path.dirname(swGen), { recursive: true })
+  writeFileSync(
+    swGen,
+    [
+      "//GENERATED by adaptv — do not edit. Rewritten on every build.",
+      "//adaptv's worker first, then this app's modules from `serviceWorkers`.",
+      ...[adaptvWorker, ...modules].map(
+        (module) => `import ${JSON.stringify(module)}`,
+      ),
+      "",
+    ].join("\n"),
+  )
+  return swGen
+}
+
+/**
+ * Stamp the Workbox precache manifest into the bundled worker.
+ *
+ * The glob covers every hashed build asset — that is what makes an installed PWA
+ * navigate like the native build — and the shell is appended **by name**. Adding
+ * `**\/*.html` instead would sweep in every prerendered route document, which is
+ * exactly the cross-user leak the split exists to prevent. → `RENDERING.md §3.2`
+ */
+function injectPrecacheManifest(options: {
+  swSrcBundle: string
+  swDest: string
+  clientDir: string
+  shellFile: string
+}) {
+  return injectManifest({
+    swSrc: options.swSrcBundle,
+    swDest: options.swDest,
+    globDirectory: options.clientDir,
+    globPatterns: [...DEFAULT_SW_GLOB_PATTERNS, options.shellFile],
+    globIgnores: [...DEFAULT_SW_GLOB_IGNORES],
+    maximumFileSizeToCacheInBytes: DEFAULT_SW_MAX_FILE_BYTES,
+  })
 }

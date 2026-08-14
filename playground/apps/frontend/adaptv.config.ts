@@ -12,7 +12,10 @@ export default defineApp({
   icons: "./public/favicons",
   orientation: "portrait",
   styles: "./src/styles/main.css",
-  sw: "./src/sw.ts",
+  // adaptv registers and owns the service worker itself — precache, navigation,
+  // updates. This list is only for behaviour that is the APP's; the probe is a
+  // no-op that keeps the extension path exercised.
+  serviceWorkers: ["./src/sw/probe.ts"],
 
   splashScreen: () => import("@/components/splash-screen"),
   orientationGuardScreen: () => import("@/components/rotate-guard"),
@@ -21,8 +24,27 @@ export default defineApp({
   //NOTE: no `providers` field — adaptv has none. The app-wide provider tree is a
   //layout route: see `src/routing/layouts/providers.layout.tsx`.
 
+  //SSR is the default; top-level `render: "spa"` is the only other option.
+  //
+  //Env-driven ONLY so the service-worker e2e suite can build both modes from one
+  //lab app. It matters because the two are genuinely different workers: under
+  //`spa` every navigation is answered from the precache, so a bug like "the shell
+  //answers a link to a PDF" is live and online — under `ssr` the same bug is
+  //invisible, because navigations go to the network either way. A suite that only
+  //ever built `ssr` would have shipped green through exactly that.
+  render: process.env.ADAPTV_RENDER === "spa" ? "spa" : "ssr",
+
+  //Env-driven for the same reason as `render`, and with the same justification:
+  //`prompt` is a genuinely DIFFERENT registration, not a flag read at runtime.
+  //Under `auto` the client applies a waiting worker itself at launch; under
+  //`prompt` it must never apply one and instead hands the app the moment. Exactly
+  //one of those two branches is compiled into any given build, so a suite that
+  //only ever built the default would ship the other one unexercised — and its
+  //failure mode is an update that either never arrives or arrives on top of
+  //someone's unsaved work.
+  serviceWorkerUpdate:
+    process.env.ADAPTV_SW_UPDATE === "prompt" ? "prompt" : "auto",
   router: {
-    render: "ssr",
     //route generator — adaptv owns the generated tree's location (.adaptv/) and
     //the generator's formatting, so only these two are ours to set
     routesDirectory: "./routing",

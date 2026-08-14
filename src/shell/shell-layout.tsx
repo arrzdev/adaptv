@@ -18,7 +18,6 @@ import type {
 } from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
-  PwaServiceWorkerRuntimeConfig,
   SplashScreenProps,
 } from "#adaptv/config/types"
 import { useAndroidBackButton } from "#adaptv/hooks/use-android-back-button"
@@ -135,7 +134,6 @@ type RoutingShellProps = {
   /** Manifest path; its `orientation` field drives the touch-device rotate guard. */
   manifestPath?: string
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
-  serviceWorker?: PwaServiceWorkerRuntimeConfig
   /** Rendered in place of the app when a route chunk is unrecoverably missing. */
   offlineComponent?: ComponentType<OfflineProps>
   shellClassName?: string
@@ -176,7 +174,6 @@ export function RoutingShell({
   splashScreenComponent,
   manifestPath = "/manifest.json",
   orientationGuardComponent,
-  serviceWorker,
   offlineComponent,
   shellClassName,
   patches,
@@ -209,7 +206,7 @@ export function RoutingShell({
   //app-wide iOS caret-repaint patch — mutes a focused field's caret while it moves and
   //force-repaints it on settle, so a translated input never leaves a detached ghost caret
   useCaretRepaint({ enabled: caretRepaint })
-  useRegisterPwaServiceWorker(serviceWorker)
+  useRegisterPwaServiceWorker()
   //kill the iOS WebKit double-tap text-magnifier loupe app-wide (WebKit bug
   //231161 — not fixable in CSS; see the hook for the "safe to remove?" check)
   useSuppressTextMagnifier({ enabled: textMagnifier })

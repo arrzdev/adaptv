@@ -32,20 +32,6 @@ export const ADAPTV_DIR = ".adaptv"
  */
 export const ADAPTV_GEN_ALIAS = "#adaptv-gen"
 
-/**
- * TanStack's own scratch directory, which adaptv redirects into `.adaptv/`.
- *
- * The route generator writes each file to a temp path and then `rename()`s it into
- * place, so the temp dir is real machinery — not something to switch off. Its
- * default is `<cwd>/.tanstack/tmp`, which puts a SECOND dot-directory at the app
- * root, from a package the consumer never installed, and leaves it behind (empty,
- * because every temp file gets renamed away) after every single run.
- *
- * That is the same "framework artifact interleaved with application code" problem
- * `.adaptv/` exists to solve, so it gets the same answer rather than an exception.
- */
-export const LEGACY_TMP_DIR = ".tanstack"
-
 export type GeneratedPaths = {
   /** The stamped router entry (`createRouter` + the Register declaration). */
   routerGen: string
@@ -98,30 +84,6 @@ export function resolveGeneratedPaths(appRoot: string): GeneratedPaths {
  */
 export function resolveGeneratedTmpDir(appRoot: string): string {
   return path.join(appRoot, ADAPTV_DIR, "tmp", "router")
-}
-
-/**
- * Whether a leftover `.tanstack/` is safe to delete.
- *
- * Safe means: empty, or holding nothing but an empty `tmp/` — the exact husk the
- * old default leaves behind. The directory belongs to the CONSUMER'S repo, not to
- * adaptv, and a future TanStack version may well keep something real in there, so
- * anything with actual content is left alone. Pure, and separate from the `fs`
- * call, because "when do we delete a directory we do not own" is the part that
- * needs to be pinned by a test.
- *
- * @param entries    contents of `.tanstack/`
- * @param tmpEntries contents of `.tanstack/tmp/`, or `null` if it is not a readable dir
- */
-export function isPrunableLegacyTmpDir(
-  entries: readonly string[],
-  tmpEntries: readonly string[] | null,
-): boolean {
-  if (entries.length === 0) return true
-  if (entries.length === 1 && entries[0] === "tmp") {
-    return tmpEntries !== null && tmpEntries.length === 0
-  }
-  return false
 }
 
 /**

@@ -4,7 +4,6 @@ import type { Plugin as EsbuildPlugin } from "esbuild"
 import { build as esbuild } from "esbuild"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import type { LoadedAppConfig } from "#adaptv/vite/adaptv-context"
-import { assertNoRemovedConfigKeys } from "#adaptv/vite/removed-config-keys.ts"
 
 export const APP_CONFIG_BASENAME = "adaptv.config.ts"
 
@@ -50,11 +49,6 @@ export async function loadAppConfig(
       `[adaptv] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
     )
   }
-
-  //`defineApp`'s generic signature suppresses TypeScript's excess-property
-  //check, so a key adaptv dropped typechecks clean and then silently does
-  //nothing. Catch it here — this is the only layer that can.
-  assertNoRemovedConfigKeys(config)
 
   const watchFiles = Object.keys(result.metafile?.inputs ?? {}).map(
     (input) => path.resolve(appRoot, input),

@@ -28,7 +28,11 @@
     "tail": "turbo run tail --ui=tui",
     "migrate:local": "turbo run migrate:local",
     "test": "turbo run test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:sw": "playwright test --config playwright.sw.config.ts",
+    "test:e2e:sw:spa": "playwright test --config playwright.sw-spa.config.ts",
+    "test:e2e:sw:prompt": "playwright test --config playwright.sw-prompt.config.ts",
+    "test:e2e:sw:all": "pnpm run test:e2e:sw && pnpm run test:e2e:sw:spa && pnpm run test:e2e:sw:prompt"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",

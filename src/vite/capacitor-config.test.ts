@@ -23,7 +23,7 @@ describe("buildCapacitorConfig", () => {
     const c = buildCapacitorConfig(BASE)
     expect(c.appId).toBe("com.chopchop.app")
     expect(c.appName).toBe("ChopChop")
-    expect(c.webDir).toBe("dist/client")
+    expect(c.webDir).toBe(".adaptv/web")
   })
 
   it("relocates the native projects into the hidden .adaptv/ dir", () => {

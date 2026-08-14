@@ -11,8 +11,8 @@ describe("resolveNavigationPolicy — a pure function of render mode", () => {
   //is served, so the two can't drift.
   it("serves SSR from the network, with the shell only as a fallback", () => {
     //Caching SSR documents is a cross-user data leak (§3.2) AND it silently turns
-    //an SSR app into a stale SPA for every returning visitor. NetworkOnly keeps
-    //the per-request render on every online navigation.
+    //an SSR app into a stale SPA for every returning visitor. Going to the
+    //network keeps the per-request render on every online navigation.
     const policy = resolveNavigationPolicy("ssr")
     expect(policy.kind).toBe("network-only-with-shell-fallback")
     expect(policy.cachesDocuments).toBe(false)

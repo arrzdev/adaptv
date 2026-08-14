@@ -8,7 +8,7 @@
  * `spa: { enabled: true }`. So there is nothing to copy, and two features depend
  * on there being something:
  *
- * - **`host: "static"`** needs a document to serve for every path.
+ * - **A `render: "spa"` deploy** needs a document to serve for every path.
  * - **The SSR service worker's precache fallback** binds to a shell URL; without
  *   the file, the offline path resolves to a 404 instead of booting React.
  *

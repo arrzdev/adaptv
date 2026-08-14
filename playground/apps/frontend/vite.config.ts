@@ -1,21 +1,21 @@
 import { adaptv } from "@arrzdev/adaptv/vite"
-import { cloudflare } from "@cloudflare/vite-plugin"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 import { PORTS } from "./ports"
 
 /*
- * `ports.ts` is the committed pair, and every worktree carries the SAME one — so a
- * second checkout cannot boot a dev server while the first is up. Both ports have to
- * move together: overriding only the app port still dies on `EADDRINUSE` from the
- * Cloudflare inspector, which is a confusing way to be told about a port you did not
- * name. The env pair exists for that case (headless e2e in a sibling worktree); a
- * normal `dev` run passes neither and keeps the committed ports.
+ * `ports.ts` is committed, and every worktree carries the SAME value — so a second
+ * checkout cannot boot a dev server while the first is up. `VITE_APP_PORT` exists
+ * for that case (headless e2e in a sibling worktree); a normal `dev` run passes
+ * nothing and keeps the committed port.
+ *
+ * This used to have to move in lockstep with `supervisorPort`, because overriding
+ * only the app port still died on `EADDRINUSE` from the Cloudflare inspector. That
+ * plugin is gone from this config — adaptv wires the server build now — so the
+ * frontend holds one port again. `PORTS.supervisorPort` stays for the backend,
+ * which is still its own worker.
  */
 const appPort = Number(process.env.VITE_APP_PORT ?? PORTS.appPort)
-const supervisorPort = Number(
-  process.env.VITE_SUPERVISOR_PORT ?? PORTS.supervisorPort,
-)
 
 export default defineConfig({
   envDir: "env",
@@ -35,10 +35,10 @@ export default defineConfig({
     noExternal: ["@arrzdev/adaptv", "@repo/shared"],
   },
   plugins: [
-    cloudflare({
-      viteEnvironment: { name: "ssr" },
-      inspectorPort: supervisorPort,
-    }),
+    //NO deploy plugin. adaptv wires the server build itself, and the target is
+    //auto-detected from the platform (or set with NITRO_PRESET) — so this file
+    //never names a host. → DECISIONS.md §6.4
+    //
     //adaptv owns route tree, entries, router, the web manifest, and
     //the service worker — all driven by adaptv.config.ts, the single source of truth
     adaptv(),

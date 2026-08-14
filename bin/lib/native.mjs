@@ -112,8 +112,16 @@ export function purgeBuildArtifacts(dir, platform) {
   }
 }
 
-/** The SPA build output the Capacitor WebView loads. */
-export const CAP_WEB_DIR = "dist/client"
+/**
+ * The SPA build output the WebView loads. Mirrors `CAPACITOR_WEB_DIR` in
+ * `src/vite/capacitor-config.ts` — duplicated rather than imported so the CLI
+ * never pulls framework source in, and pinned to it by `capacitor-config.test.ts`.
+ *
+ * Under `.adaptv/`, never `dist/`: this is an intermediate the native project
+ * consumes, and it used to share `dist/client` with the web build. See that
+ * constant for what the shared directory silently did to a `render: "spa"` app.
+ */
+export const CAP_WEB_DIR = ".adaptv/web"
 
 /** Path to a local `node_modules/.bin/<name>`, or null. */
 export function localBin(appRoot, name) {

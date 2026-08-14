@@ -100,21 +100,18 @@ importers:
       '@arrzdev/adaptv':
         specifier: link:../../..
         version: link:../../..
-      '@cloudflare/vite-plugin':
-        specifier: 1.30.2
-        version: 1.30.2(vite@node_modules+vite)(workerd@1.20260601.1)(wrangler@4.78.0(@cloudflare/workers-types@4.20260317.1))
       '@dnd-kit/core':
         specifier: 6.3.1
-        version: 6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react)
       '@dnd-kit/modifiers':
         specifier: 9.0.0
-        version: 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
+        version: 9.0.0(@dnd-kit/core@6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react))(react@node_modules+react)
       '@dnd-kit/sortable':
         specifier: 10.0.0
-        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react))(react@node_modules+react)
       '@dnd-kit/utilities':
         specifier: 3.2.2
-        version: 3.2.2(react@19.2.3)
+        version: 3.2.2(react@node_modules+react)
       '@repo/dev':
         specifier: workspace:*
         version: link:../../packages/dev
@@ -132,10 +129,10 @@ importers:
         version: 4.2.4(vite@node_modules+vite)
       '@tanstack/react-query':
         specifier: 5.90.16
-        version: 5.90.16(react@19.2.3)
+        version: 5.90.16(react@node_modules+react)
       better-auth:
         specifier: 1.6.22
-        version: 1.6.22(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.168.32(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite))(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@node_modules+vite))
+        version: 1.6.22(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.168.32(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite))(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2))(react-dom@node_modules+react-dom)(react@node_modules+react)(vitest@4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@node_modules+vite))
       canvas-confetti:
         specifier: 1.9.4
         version: 1.9.4
@@ -144,22 +141,22 @@ importers:
         version: 4.4.2
       dexie-react-hooks:
         specifier: 4.4.0
-        version: 4.4.0(dexie@4.4.2)(react@19.2.3)
+        version: 4.4.0(dexie@4.4.2)(react@node_modules+react)
       hono:
         specifier: 4.11.8
         version: 4.11.8
       lucide-react:
         specifier: 0.544.0
-        version: 0.544.0(react@19.2.3)
+        version: 0.544.0(react@node_modules+react)
       motion:
         specifier: 12.35.0
-        version: 12.35.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        version: 12.35.0(react-dom@node_modules+react-dom)(react@node_modules+react)
       react:
-        specifier: 19.2.3
-        version: 19.2.3
+        specifier: link:../../../node_modules/react
+        version: link:../../../node_modules/react
       react-dom:
-        specifier: 19.2.3
-        version: 19.2.3(react@19.2.3)
+        specifier: link:../../../node_modules/react-dom
+        version: link:../../../node_modules/react-dom
       tailwindcss:
         specifier: 4.2.4
         version: 4.2.4
@@ -524,12 +521,6 @@ packages:
     peerDependenciesMeta:
       workerd:
         optional: true
-
-  '@cloudflare/vite-plugin@1.30.2':
-    resolution: {integrity: sha512-1TG/GyYxMAVhRtbKs9dPCsJY+c4qaPk+NKiLywKLV/BuvgMTBGhrmIvkC9NQSaw9sa5fPOYmv9me68AIs5kXJQ==}
-    peerDependencies:
-      vite: ^6.1.0 || ^7.0.0 || ^8.0.0
-      wrangler: ^4.78.0
 
   '@cloudflare/vitest-pool-workers@0.16.12':
     resolution: {integrity: sha512-NNC4rgp21ldg3MzzlTGgIxGfuapmXE2uPuDEm67HoNdgsTbWPCBn+CoqV3W+Q73MC1ZCwYnpHLxfJ+Bt50sWmw==}
@@ -3159,30 +3150,11 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260317.1
 
-  '@cloudflare/unenv-preset@2.16.0(unenv@2.0.0-rc.24)(workerd@1.20260601.1)':
-    dependencies:
-      unenv: 2.0.0-rc.24
-    optionalDependencies:
-      workerd: 1.20260601.1
-
   '@cloudflare/unenv-preset@2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260601.1)':
     dependencies:
       unenv: 2.0.0-rc.24
     optionalDependencies:
       workerd: 1.20260601.1
-
-  '@cloudflare/vite-plugin@1.30.2(vite@node_modules+vite)(workerd@1.20260601.1)(wrangler@4.78.0(@cloudflare/workers-types@4.20260317.1))':
-    dependencies:
-      '@cloudflare/unenv-preset': 2.16.0(unenv@2.0.0-rc.24)(workerd@1.20260601.1)
-      miniflare: 4.20260317.3
-      unenv: 2.0.0-rc.24
-      vite: link:../node_modules/vite
-      wrangler: 4.78.0(@cloudflare/workers-types@4.20260317.1)
-      ws: 8.18.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-      - workerd
 
   '@cloudflare/vitest-pool-workers@0.16.12(@cloudflare/workers-types@4.20260317.1)(@vitest/runner@4.1.2)(@vitest/snapshot@4.1.2)(vitest@4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@8.0.11(@types/node@22.19.17)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.19.3)(yaml@2.8.3)))':
     dependencies:
@@ -3235,36 +3207,36 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
-  '@dnd-kit/accessibility@3.1.1(react@19.2.3)':
+  '@dnd-kit/accessibility@3.1.1(react@node_modules+react)':
     dependencies:
-      react: 19.2.3
+      react: link:../node_modules/react
       tslib: 2.8.1
 
-  '@dnd-kit/core@6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@dnd-kit/core@6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react)':
     dependencies:
-      '@dnd-kit/accessibility': 3.1.1(react@19.2.3)
-      '@dnd-kit/utilities': 3.2.2(react@19.2.3)
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      '@dnd-kit/accessibility': 3.1.1(react@node_modules+react)
+      '@dnd-kit/utilities': 3.2.2(react@node_modules+react)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
       tslib: 2.8.1
 
-  '@dnd-kit/modifiers@9.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)':
+  '@dnd-kit/modifiers@9.0.0(@dnd-kit/core@6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react))(react@node_modules+react)':
     dependencies:
-      '@dnd-kit/core': 6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@dnd-kit/utilities': 3.2.2(react@19.2.3)
-      react: 19.2.3
+      '@dnd-kit/core': 6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@dnd-kit/utilities': 3.2.2(react@node_modules+react)
+      react: link:../node_modules/react
       tslib: 2.8.1
 
-  '@dnd-kit/sortable@10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react@19.2.3)':
+  '@dnd-kit/sortable@10.0.0(@dnd-kit/core@6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react))(react@node_modules+react)':
     dependencies:
-      '@dnd-kit/core': 6.3.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@dnd-kit/utilities': 3.2.2(react@19.2.3)
-      react: 19.2.3
+      '@dnd-kit/core': 6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@dnd-kit/utilities': 3.2.2(react@node_modules+react)
+      react: link:../node_modules/react
       tslib: 2.8.1
 
-  '@dnd-kit/utilities@3.2.2(react@19.2.3)':
+  '@dnd-kit/utilities@3.2.2(react@node_modules+react)':
     dependencies:
-      react: 19.2.3
+      react: link:../node_modules/react
       tslib: 2.8.1
 
   '@drizzle-team/brocli@0.10.2': {}
@@ -3923,10 +3895,10 @@ snapshots:
 
   '@tanstack/query-core@5.90.16': {}
 
-  '@tanstack/react-query@5.90.16(react@19.2.3)':
+  '@tanstack/react-query@5.90.16(react@node_modules+react)':
     dependencies:
       '@tanstack/query-core': 5.90.16
-      react: 19.2.3
+      react: link:../node_modules/react
 
   '@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
@@ -3938,6 +3910,16 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
     optional: true
 
+  '@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)':
+    dependencies:
+      '@tanstack/history': 1.162.0
+      '@tanstack/react-store': 0.9.3(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@tanstack/router-core': 1.171.15
+      isbot: 5.1.40
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
+    optional: true
+
   '@tanstack/react-start-client@1.168.16(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       '@tanstack/react-router': 1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -3945,6 +3927,15 @@ snapshots:
       '@tanstack/start-client-core': 1.170.14
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
+    optional: true
+
+  '@tanstack/react-start-client@1.168.16(react-dom@node_modules+react-dom)(react@node_modules+react)':
+    dependencies:
+      '@tanstack/react-router': 1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@tanstack/router-core': 1.171.15
+      '@tanstack/start-client-core': 1.170.14
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
     optional: true
 
   '@tanstack/react-start-rsc@0.1.31(esbuild@0.25.12)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@8.0.11(@types/node@22.19.17)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.19.3)(yaml@2.8.3))':
@@ -3975,19 +3966,19 @@ snapshots:
       - webpack
     optional: true
 
-  '@tanstack/react-start-rsc@0.1.31(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite)':
+  '@tanstack/react-start-rsc@0.1.31(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite)':
     dependencies:
-      '@tanstack/react-router': 1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@tanstack/react-router': 1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)
       '@tanstack/router-core': 1.171.15
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-client-core': 1.170.14
       '@tanstack/start-fn-stubs': 1.162.0
-      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@node_modules+vite)
+      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react))(vite@node_modules+vite)
       '@tanstack/start-server-core': 1.169.17
       '@tanstack/start-storage-context': 1.167.17
       pathe: 2.0.3
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rsbuild/core'
@@ -4010,6 +4001,17 @@ snapshots:
       '@tanstack/start-server-core': 1.169.17
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
+    transitivePeerDependencies:
+      - crossws
+    optional: true
+
+  '@tanstack/react-start-server@1.167.22(react-dom@node_modules+react-dom)(react@node_modules+react)':
+    dependencies:
+      '@tanstack/react-router': 1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@tanstack/router-core': 1.171.15
+      '@tanstack/start-server-core': 1.169.17
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
     transitivePeerDependencies:
       - crossws
     optional: true
@@ -4044,19 +4046,19 @@ snapshots:
       - webpack
     optional: true
 
-  '@tanstack/react-start@1.168.32(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite)':
+  '@tanstack/react-start@1.168.32(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite)':
     dependencies:
-      '@tanstack/react-router': 1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@tanstack/react-start-client': 1.168.16(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@tanstack/react-start-rsc': 0.1.31(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite)
-      '@tanstack/react-start-server': 1.167.22(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@tanstack/react-router': 1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@tanstack/react-start-client': 1.168.16(react-dom@node_modules+react-dom)(react@node_modules+react)
+      '@tanstack/react-start-rsc': 0.1.31(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite)
+      '@tanstack/react-start-server': 1.167.22(react-dom@node_modules+react-dom)(react@node_modules+react)
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-client-core': 1.170.14
-      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@node_modules+vite)
+      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react))(vite@node_modules+vite)
       '@tanstack/start-server-core': 1.169.17
       pathe: 2.0.3
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
     optionalDependencies:
       vite: link:../node_modules/vite
     transitivePeerDependencies:
@@ -4080,6 +4082,14 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
       use-sync-external-store: 1.6.0(react@19.2.3)
+    optional: true
+
+  '@tanstack/react-store@0.9.3(react-dom@node_modules+react-dom)(react@node_modules+react)':
+    dependencies:
+      '@tanstack/store': 0.9.3
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
+      use-sync-external-store: 1.6.0(react@node_modules+react)
     optional: true
 
   '@tanstack/router-core@1.171.15':
@@ -4129,7 +4139,7 @@ snapshots:
       - unloader
     optional: true
 
-  '@tanstack/router-plugin@1.168.23(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@node_modules+vite)':
+  '@tanstack/router-plugin@1.168.23(@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react))(vite@node_modules+vite)':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/template': 7.29.7
@@ -4141,7 +4151,7 @@ snapshots:
       unplugin: 3.3.0(vite@node_modules+vite)
       zod: 4.4.3
     optionalDependencies:
-      '@tanstack/react-router': 1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@tanstack/react-router': 1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react)
       vite: link:../node_modules/vite
     transitivePeerDependencies:
       - '@farmfe/core'
@@ -4218,14 +4228,14 @@ snapshots:
       - webpack
     optional: true
 
-  '@tanstack/start-plugin-core@1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@node_modules+vite)':
+  '@tanstack/start-plugin-core@1.171.24(@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react))(vite@node_modules+vite)':
     dependencies:
       '@babel/code-frame': 7.27.1
       '@babel/core': 7.29.0
       '@babel/types': 7.29.7
       '@tanstack/router-core': 1.171.15
       '@tanstack/router-generator': 1.167.21
-      '@tanstack/router-plugin': 1.168.23(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(vite@node_modules+vite)
+      '@tanstack/router-plugin': 1.168.23(@tanstack/react-router@1.170.18(react-dom@node_modules+react-dom)(react@node_modules+react))(vite@node_modules+vite)
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-server-core': 1.169.17
       exsolve: 1.0.8
@@ -4481,7 +4491,7 @@ snapshots:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
 
-  better-auth@1.6.22(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.168.32(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite))(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@node_modules+vite)):
+  better-auth@1.6.22(@cloudflare/workers-types@4.20260317.1)(@tanstack/react-start@1.168.32(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite))(drizzle-kit@0.31.4)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2))(react-dom@node_modules+react-dom)(react@node_modules+react)(vitest@4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@node_modules+vite)):
     dependencies:
       '@better-auth/core': 1.6.22(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260317.1)(better-call@1.3.7(zod@4.3.6))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0)
       '@better-auth/drizzle-adapter': 1.6.22(@better-auth/core@1.6.22(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@4.20260317.1)(better-call@1.3.7(zod@4.3.6))(jose@6.2.3)(kysely@0.29.2)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2))
@@ -4501,11 +4511,11 @@ snapshots:
       nanostores: 1.4.0
       zod: 4.3.6
     optionalDependencies:
-      '@tanstack/react-start': 1.168.32(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@node_modules+vite)
+      '@tanstack/react-start': 1.168.32(react-dom@node_modules+react-dom)(react@node_modules+react)(vite@node_modules+vite)
       drizzle-kit: 0.31.4
       drizzle-orm: 0.45.2(@cloudflare/workers-types@4.20260317.1)(kysely@0.29.2)
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
       vitest: 4.1.2(@types/node@22.19.17)(happy-dom@20.10.6)(vite@node_modules+vite)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
@@ -4576,10 +4586,10 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  dexie-react-hooks@4.4.0(dexie@4.4.2)(react@19.2.3):
+  dexie-react-hooks@4.4.0(dexie@4.4.2)(react@node_modules+react):
     dependencies:
       dexie: 4.4.2
-      react: 19.2.3
+      react: link:../node_modules/react
 
   dexie@4.4.2: {}
 
@@ -4754,14 +4764,14 @@ snapshots:
   fetchdts@0.1.7:
     optional: true
 
-  framer-motion@12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  framer-motion@12.38.0(react-dom@node_modules+react-dom)(react@node_modules+react):
     dependencies:
       motion-dom: 12.38.0
       motion-utils: 12.36.0
       tslib: 2.8.1
     optionalDependencies:
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
 
   fsevents@2.3.2:
     optional: true
@@ -4878,9 +4888,9 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react@0.544.0(react@19.2.3):
+  lucide-react@0.544.0(react@node_modules+react):
     dependencies:
-      react: 19.2.3
+      react: link:../node_modules/react
 
   luxon@3.7.2: {}
 
@@ -4918,13 +4928,13 @@ snapshots:
 
   motion-utils@12.36.0: {}
 
-  motion@12.35.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  motion@12.35.0(react-dom@node_modules+react-dom)(react@node_modules+react):
     dependencies:
-      framer-motion: 12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      framer-motion: 12.38.0(react-dom@node_modules+react-dom)(react@node_modules+react)
       tslib: 2.8.1
     optionalDependencies:
-      react: 19.2.3
-      react-dom: 19.2.3(react@19.2.3)
+      react: link:../node_modules/react
+      react-dom: link:../node_modules/react-dom
 
   ms@2.1.3: {}
 
@@ -4965,6 +4975,7 @@ snapshots:
     dependencies:
       react: 19.2.3
       scheduler: 0.27.0
+    optional: true
 
   react-refresh@0.18.0: {}
 
@@ -5001,7 +5012,8 @@ snapshots:
   rou3@0.8.1:
     optional: true
 
-  scheduler@0.27.0: {}
+  scheduler@0.27.0:
+    optional: true
 
   semver@6.3.1: {}
 
@@ -5155,6 +5167,11 @@ snapshots:
   use-sync-external-store@1.6.0(react@19.2.3):
     dependencies:
       react: 19.2.3
+    optional: true
+
+  use-sync-external-store@1.6.0(react@node_modules+react):
+    dependencies:
+      react: link:../node_modules/react
     optional: true
 
   vite@8.0.11(@types/node@22.19.17)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.19.3)(yaml@2.8.3):

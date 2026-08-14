@@ -66,9 +66,16 @@ export function adaptvRootRoutePlugin(
       return renderRootRouteModule(
         config,
         routerSpecifier,
-        headIconLinks(
-          resolveIconSet(context.appRoot, config, defaultIconFiles()),
-        ),
+        //No favicon links on the native target. A WebView has no tab, no
+        //bookmark bar and no address bar to put one in, so every link here is a
+        //request nothing will ever make — and `native-bundle.ts` deletes the art
+        //itself from that bundle, which would turn each of these into a 404 on
+        //every cold launch.
+        context.target === "capacitor"
+          ? []
+          : headIconLinks(
+              resolveIconSet(context.appRoot, config, defaultIconFiles()),
+            ),
       )
     },
   }
@@ -150,8 +157,9 @@ export function renderRootRouteModule(
   }
   if (config.twitter)
     fields.push(`twitter: ${serializeValue(config.twitter)}`)
-  if (config.sw !== false)
-    fields.push(`serviceWorker: { register: "prompt" }`)
+  //No `serviceWorker` field: registration is not configurable and not
+  //conditional. The shell registers on web and standalone, and skips itself on
+  //native and in dev — decisions the runtime already owns. → RENDERING.md §3.4
   //The favicon / touch-icon links, resolved from the files that actually exist. Baked in
   //HERE rather than invented by `pwaHead` at runtime, because deciding them means reading the
   //icon directory and the shell has no filesystem. → `src/vite/icon-set.ts`

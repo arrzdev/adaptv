@@ -1,37 +1,55 @@
-import { registerSW } from "virtual:adaptv/pwa-register"
-import type { PwaServiceWorkerRuntimeConfig } from "#adaptv/config/types"
+import { DEV_SW_ENABLED, registerSW } from "virtual:adaptv/pwa-register"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
-import {
-  resolveUpdateMode,
-  shouldApplyUpdateNow,
-} from "#adaptv/shell/sw-update-mode"
 import { unregisterForeignServiceWorkers } from "#adaptv/shell/unregister-foreign-service-workers"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
-/** Set when a new worker is installed and waiting. Read by `useServiceWorkerUpdate`. */
+/* ============================================================================
+ * The `serviceWorkerUpdate: "prompt"` signal
+ *
+ * Only ever written under that policy — under `"auto"` a waiting worker is
+ * applied at launch and never surfaces, so `updateAvailable` stays false and
+ * `useServiceWorkerUpdate()` costs an app nothing to call.
+ *
+ * A subscribe/get accessor pair rather than component state (VISION §2.6, L9):
+ * `useSyncExternalStore` reads it without tearing, and a non-React caller can
+ * subscribe to the same signal.
+ * ========================================================================== */
+
 let updateAvailable = false
 let applyWaitingUpdate: (() => void) | null = null
 const updateListeners = new Set<() => void>()
 
-function notifyUpdateListeners(): void {
-  for (const listener of updateListeners) listener()
-}
-
-/** Subscribe to "a new version is waiting". Accessor shape, so non-React callers work too. */
+/** Subscribe to "a new version is waiting". Returns an unsubscribe function. */
 export function subscribeServiceWorkerUpdate(
   listener: () => void,
 ): () => void {
   updateListeners.add(listener)
-  return () => updateListeners.delete(listener)
+  return () => {
+    updateListeners.delete(listener)
+  }
 }
 
 export function getServiceWorkerUpdateAvailable(): boolean {
   return updateAvailable
 }
 
-/** Apply a waiting update now (user-intent path). No-op if nothing is waiting. */
+/**
+ * Apply a waiting update now — the user-intent path.
+ *
+ * A no-op when nothing is waiting, so an app can wire it to a button that is
+ * always mounted without guarding the call.
+ */
 export function applyServiceWorkerUpdate(): void {
   applyWaitingUpdate?.()
+}
+
+function offerUpdate(apply: () => void): void {
+  applyWaitingUpdate = apply
+  //Re-offering an already-offered update must not re-notify: subscribers would
+  //re-render for a state that did not change.
+  if (updateAvailable) return
+  updateAvailable = true
+  for (const listener of updateListeners) listener()
 }
 
 /**
@@ -59,39 +77,41 @@ export async function destroyServiceWorkers(): Promise<void> {
   }
 }
 
-function registerWithMode(
-  mode: Exclude<ReturnType<typeof resolveUpdateMode>, null>,
-): void {
-  const updateSW = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      updateAvailable = true
-      applyWaitingUpdate = () => {
-        void updateSW(true)
-      }
-      notifyUpdateListeners()
-
-      if (mode !== "autoUpdate") return
-
-      //autoUpdate still waits for a SAFE moment. Applying while the tab is
-      //visible reloads out from under someone who may be mid-form.
-      const applyWhenHidden = () => {
-        if (!shouldApplyUpdateNow(mode, document.visibilityState)) return
-        document.removeEventListener("visibilitychange", applyWhenHidden)
-        void updateSW(true)
-      }
-      document.addEventListener("visibilitychange", applyWhenHidden)
-      applyWhenHidden()
-    },
-  })
+/**
+ * Ask the browser to exempt this origin's storage from automatic eviction.
+ *
+ * Without it the precache is "best-effort" and the browser may drop it under disk
+ * pressure or heuristics — which on a PWA means the app silently stops working
+ * offline with nothing to observe. WebKit grants persistence to installed web
+ * apps, Chromium decides from engagement signals; both are a no-op when already
+ * granted, and both fail closed, so an unsupported browser just keeps the old
+ * behaviour.
+ *
+ * Deliberately fire-and-forget: nothing downstream may wait on a permission
+ * decision that some browsers surface to the user.
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.persist) {
+      return false
+    }
+    if (await navigator.storage.persisted?.()) return true
+    return await navigator.storage.persist()
+  } catch {
+    return false
+  }
 }
 
-/** Register the SW — called when the shell mounts. */
-export function registerPwaServiceWorkerRuntime(
-  serviceWorker: PwaServiceWorkerRuntimeConfig | undefined,
-): void {
-  const { register, unregisterForeign = true } = serviceWorker ?? {}
-
+/**
+ * Register the service worker. Called once when the shell mounts.
+ *
+ * Takes no options, and that is the design. The worker is core product
+ * behaviour — the thing that makes a web build navigate like the native one — so
+ * there is no `register` mode, no enable flag and no update prompt. It is applied
+ * automatically, at the only moment where a reload costs nothing.
+ * → `RENDERING.md §3.4`
+ */
+export function registerPwaServiceWorkerRuntime(): void {
   //The stale-chunk net is unconditional: it must be armed even when adaptv never
   //registers a worker, because the failure is a *deploy* artifact, not a SW one.
   installPreloadErrorRecovery()
@@ -102,11 +122,16 @@ export function registerPwaServiceWorkerRuntime(
     return
   }
 
-  const mode = resolveUpdateMode(register)
-  if (mode === null) return
-
-  //SW is production/preview only — Vite dev URLs are not cache-stable
+  //SW is production/preview only — Vite dev URLs are not cache-stable.
   if (import.meta.env.DEV) {
+    //ADAPTV_DEV_SW=1 opts in to serving the APP's own worker modules here, so a
+    //`serviceWorkers: []` module can be exercised without a production build.
+    //adaptv's own worker is still absent: it is precache + navigation + static
+    //delivery, none of which can exist against a dev server. → vite/sw-dev.ts
+    if (DEV_SW_ENABLED) {
+      registerSW(offerUpdate)
+      return
+    }
     //DESTROY any worker+cache in dev, not just foreign ones: a adaptv SW registered
     //in a prior prod/preview session on the same origin (or dragged in by a
     //live-reload dev server) otherwise survives into dev and silently serves the
@@ -115,10 +140,11 @@ export function registerPwaServiceWorkerRuntime(
     return
   }
 
-  if (!unregisterForeign) {
-    registerWithMode(mode)
-    return
-  }
-
-  void unregisterForeignServiceWorkers().then(() => registerWithMode(mode))
+  void requestPersistentStorage()
+  void unregisterForeignServiceWorkers().then(() => {
+    //`offerUpdate` is only ever called under `serviceWorkerUpdate: "prompt"` —
+    //the registration module bakes the policy and, under `"auto"`, applies the
+    //waiting worker itself without telling anyone.
+    registerSW(offerUpdate)
+  })
 }

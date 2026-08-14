@@ -1,19 +1,7 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
-import {
-  ADAPTV_DIR,
-  isPrunableLegacyTmpDir,
-  LEGACY_TMP_DIR,
-  nextGitignore,
-} from "#adaptv/vite/adaptv-dir.ts"
+import { ADAPTV_DIR, nextGitignore } from "#adaptv/vite/adaptv-dir.ts"
 
 /**
  * Project wiring for the generated directory.
@@ -58,35 +46,8 @@ export function stampGeneratedFiles(context: AdaptvContext): EjectState {
   //the per-project babysitting adaptv exists to remove
   ensureGitignored(context.appRoot)
   ensureTsconfigWiring(context.appRoot)
-  pruneLegacyTmpDir(context.appRoot)
 
   return { root: rootEjected, router: routerEjected }
-}
-
-/**
- * Delete the `.tanstack/` husk left behind before the temp dir was redirected.
- *
- * Redirecting stops NEW ones appearing; it does nothing about the empty directory
- * already sitting in every app that ran an older adaptv. Without this the fix
- * looks like it did not work — the folder is still there, still empty, and the
- * consumer has no reason to know it is now inert.
- *
- * Guarded by `isPrunableLegacyTmpDir`, so this only ever removes an empty husk.
- */
-function pruneLegacyTmpDir(appRoot: string): void {
-  const dir = path.resolve(appRoot, LEGACY_TMP_DIR)
-  try {
-    if (!existsSync(dir) || !statSync(dir).isDirectory()) return
-    const tmp = path.join(dir, "tmp")
-    const tmpEntries =
-      existsSync(tmp) && statSync(tmp).isDirectory()
-        ? readdirSync(tmp)
-        : null
-    if (!isPrunableLegacyTmpDir(readdirSync(dir), tmpEntries)) return
-    rmSync(dir, { recursive: true, force: true })
-  } catch {
-    //housekeeping is a courtesy — a read-only tree is not a reason to fail a build
-  }
 }
 
 /**
