@@ -13,8 +13,6 @@ import { expect, test } from "@playwright/test"
  */
 
 test.use({ viewport: { width: 1280, height: 800 } })
-test.describe.configure({ retries: 2 })
-
 test.describe("hover: and focus", () => {
   test.beforeEach(async ({ page, browserName }) => {
     test.skip(

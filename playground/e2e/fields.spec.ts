@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 /*
@@ -9,18 +10,51 @@ import { expect, test } from "@playwright/test"
  * real on-screen keyboard and are a sim/device walk — this file pins the rest:
  * the submit key firing exactly once, the slots, autoResize's cap, and disabled.
  *
- * No touch, no CDP — plain Playwright typing, so it is deterministic.
+ * No touch, no CDP — plain Playwright typing. Deterministic once it waits for the
+ * client to take over; see `awaitClientHandover` for why the wait below is not it.
  */
 
-test.describe.configure({ retries: 1 })
+//The "DESKTOP context" above was a claim, not a setting — and the webkit project is
+//an iPhone profile, so it ran this file WITH touch. `onSubmitKey` is deliberately
+//gated on `!isTouchDevice()` (a soft keyboard's Enter is a newline, not a submit),
+//so the engine correctly did nothing and the test read it as the handler never
+//firing: a hard webkit failure on every run, from a suppression working as designed.
+//Pin the context the file says it needs instead of asserting against a device that
+//can never satisfy it.
+test.use({ hasTouch: false, isMobile: false })
 
 const LOG = "[data-lab-log] li"
-const logTexts = (page: import("@playwright/test").Page) =>
-  page.locator(LOG).allInnerTexts()
+const logTexts = (page: Page) => page.locator(LOG).allInnerTexts()
+
+/**
+ * Wait for the client to take over before typing anything.
+ *
+ * The fields are server-rendered, so the `waitFor()` below is satisfied by
+ * inert HTML and a keypress fired in that window reaches an input React is
+ * not listening to yet: `onSubmitKey` never runs and the log stays empty, so
+ * the count reads 0 where 1 was expected — which looks like the handler being
+ * broken, or worse like a double-fire guard eating the event. It is not load
+ * flake: Playwright boots its own dev server and tears it down per run, so
+ * the FIRST test to reach this route pays the cold transform cost and loses
+ * the race while every test after it wins. A dev session left running hides
+ * it, because `reuseExistingServer` then hands the suite a warm server.
+ *
+ * The splash is server-rendered too and self-unmounts only once the client
+ * has hydrated and the local store has seeded, so its disappearance is the
+ * one honest "React is driving now" signal on the page. Given a generous
+ * timeout on purpose — a cold route's first transform can outrun the 5s
+ * default, and a tight timeout here would re-create the flake it removes.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
 
 test.describe("Input & TextArea (no keyboard needed)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/fields")
+    await awaitClientHandover(page)
     await page.getByRole("searchbox", { name: "Search field" }).waitFor()
   })
 
