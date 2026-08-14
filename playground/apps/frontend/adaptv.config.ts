@@ -3,8 +3,9 @@ import { defineApp } from "@arrzdev/adaptv/config"
 export default defineApp({
   appId: "dev.arrz.projectzero",
   name: "ChopChop",
-  // extra Capacitor plugin registered via config (base set is bundled by adaptv)
-  plugins: ["@capacitor/device"],
+  //NOTE: no `plugins` field. It is for Capacitor plugins adaptv does NOT ship — the base set
+  //(device, haptics, preferences, …) is already bundled and exposed through adaptv's own API,
+  //so listing one of those here declares nothing and only reads like it's required.
   description: "A focused task list for desktop, mobile, and PWA.",
   lang: "en",
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
@@ -19,6 +20,7 @@ export default defineApp({
   splashScreen: () => import("@/components/splash-screen"),
   orientationGuardScreen: () => import("@/components/rotate-guard"),
   notFoundScreen: () => import("@/components/not-found-screen"),
+  bootErrorScreen: () => import("@/components/boot-error-screen"),
   //NOTE: no `providers` field — adaptv has none. The app-wide provider tree is a
   //layout route: see `src/routing/layouts/providers.layout.tsx`.
 

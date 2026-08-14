@@ -7,8 +7,12 @@ import type { PluginOption } from "vite"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import type { ResolvedWebConfig } from "#adaptv/config/web-config.ts"
 import { resolveWebConfig } from "#adaptv/config/web-config.ts"
+import { stampPrivacyManifest } from "#adaptv/native/stamp-privacy.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
-import { createAdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import {
+  appRelativePath,
+  createAdaptvContext,
+} from "#adaptv/vite/adaptv-context.ts"
 import {
   resolveGeneratedPaths,
   resolveGeneratedTmpDir,
@@ -131,11 +135,20 @@ export async function adaptv(
     //No capacitor.config.json is written: the `adaptv` CLI passes the generated config to
     //cap in-memory via the ADAPTV_CAPACITOR_CONFIG env var (its patched @capacitor/cli reads
     //it there), so the consumer's project never carries a Capacitor config file.
-    //Apple's PrivacyInfo.xcprivacy used to be stamped HERE, and that was wrong
-    //twice over: this runs before the native project is scaffolded on a first
-    //build, and not at all on a warm one (the web bundle is fingerprint-cached,
-    //so Vite never starts). It belongs where the native project is known to
-    //exist. → src/native/stamp-privacy.ts, called from the CLI's preparePlatform
+    //Apple's required-reason API manifest, derived from every plugin compiled in —
+    //adaptv's own bundled set included, which is where the whole obligation lives for
+    //an app that registered none of its own. Not one of the 22 official Capacitor
+    //plugins ships a manifest, the obligation lands on the app, and a missing one
+    //fails SILENTLY at App Store submission. → DECISIONS.md §5.0.1
+    const privacyManifest = stampPrivacyManifest(appRoot, {
+      plugins: context.loaded.config.plugins,
+      privacy: context.loaded.config.privacy,
+    })
+    if (privacyManifest) {
+      console.log(
+        `[adaptv] wrote ${appRelativePath(context, privacyManifest)}`,
+      )
+    }
   }
 
   //The route generator emits every import AND every `declare module` in

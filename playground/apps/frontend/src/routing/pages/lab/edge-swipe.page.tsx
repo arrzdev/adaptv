@@ -16,6 +16,7 @@ import {
   labLogEntry,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
+import { useIsInstalledApp } from "@/hooks/use-installed-app"
 
 export const Route = createFileRoute("/_providers/lab/edge-swipe")({
   component: LabEdgeSwipePage,
@@ -23,10 +24,11 @@ export const Route = createFileRoute("/_providers/lab/edge-swipe")({
 
 function LabEdgeSwipePage() {
   const isStandalone = useMediaQuery("(display-mode: standalone)")
+  const installed = useIsInstalledApp()
   const [native, setNative] = useState(false)
-  //off until asked: the lab shell already mounts its own instance (gated on
-  //standalone) that navigates back, and two armed left-edge handlers on one
-  //screen is the exact double-navigation this page warns about
+  //off until asked: on every installed target the lab shell already mounts its own
+  //instance that navigates back, and two armed left-edge handlers on one screen is
+  //the exact double-navigation this page warns about
   const [enabled, setEnabled] = useState(false)
   const [log, setLog] = useState<LabLogEntry[]>([])
 
@@ -38,7 +40,7 @@ function LabEdgeSwipePage() {
   return (
     <LabPage
       title="EdgeSwipeGestures"
-      subtitle="A back gesture for the shells that took the OS one away. In a browser tab the browser already owns the edge; in an installed PWA nobody does, and without this the app is a dead end."
+      subtitle="A back gesture for the shells that took the OS one away. In a browser tab the browser already owns the edge; in an installed app — PWA or native — nobody does, because the app boots on memory history and there is nothing behind it to swipe back to. Without this it is a dead end."
     >
       <LabBrief
         what="That a swipe from the left screen edge fires the left handler and a swipe from the right edge fires the right one — and that it does nothing where the OS already provides the gesture."
@@ -49,30 +51,39 @@ function LabEdgeSwipePage() {
           "Start a swipe from the MIDDLE of the screen and drag sideways. Nothing must fire — only the edge zone arms it.",
           "Start at the edge and move only a few pixels before releasing. Nothing must fire; the threshold has to be crossed.",
           "Turn it off with the toggle and repeat step 1. Nothing must fire.",
-          "Now check it in anger: leave this page with the top-left back arrow, come back, and use the edge swipe to go back. It must return to the testing index, and the log on this page must be gone (it was a real navigation, not a fake one).",
+          "Now check it in anger, on an installed target (the shell's own instance is off in a browser tab, by design — the isInstalledApp() row below says whether it is armed here): disarm the probe, then use the edge swipe to go back. It must return to the testing index ONE page, and the log on this page must be gone (it was a real navigation, not a fake one).",
         ]}
         expected={{
           web: {
             verdict: "absent",
-            note: "The lab pages mount this with enabled={isStandalone}, so in a browser tab it is off — correctly. The browser's own edge swipe is the back gesture here, and a second one on top of it would double-navigate.",
+            note: "The lab shell mounts this with enabled={isInstalledApp()}, which is false in a tab — so it is off here, correctly. The browser's own edge swipe is the back gesture on this target, and a second one on top of it would double-navigate.",
           },
           pwa: {
             verdict: "works",
             note: "The whole reason it exists. An installed PWA has no browser chrome and no OS back gesture, so this is the only way back. Both edges should fire.",
           },
           ios: {
-            verdict: "partial",
-            note: "The WKWebView provides its own interactive back-forward swipe, so this is deliberately not the primary path — but display-mode reads `browser` inside a Capacitor WebView, so the lab's enabled={isStandalone} gate turns it OFF here. Nothing firing on native iOS is the expected result on this page.",
+            verdict: "works",
+            note: "Armed here too, and it has to be: Capacitor never sets allowsBackForwardNavigationGestures, so WebKit never builds the swipe recogniser at all (DECISIONS B15) — the edge is a clean field, not a contested one. Without this the header chevron is the only way out. A left-edge swipe must return to the testing index.",
           },
           android: {
             verdict: "partial",
-            note: "Same gate, same result: off, because the OS gesture-nav back already works. Test the OS gesture instead — it must pop this page rather than exit the app.",
+            note: "The right edge fires cleanly. The LEFT edge is contested — under gesture navigation the system claims it for its own back, which cancels the touch before this recogniser decides, so the OS gesture is what you are testing there: it must pop this page (not exit the app) and pop it ONCE. Under 3-button navigation nothing claims the edge and this recogniser is the back swipe.",
           },
         }}
-        wrong="A swipe from the middle of the screen navigates. In an installed PWA the edge swipe does nothing at all, which leaves the user with no way back. Or the gesture fires TWICE — once from this component and once from the platform — which pops two entries and skips a page."
+        wrong="A swipe from the middle of the screen navigates. In an installed build the edge swipe does nothing at all, which leaves the user with no way back but the chevron. Or the gesture fires TWICE — once from this component and once from the platform — which pops two entries and skips a page."
       />
 
       <LabSection title="Where this is armed">
+        <LabRow
+          label="isInstalledApp()"
+          value={
+            <LabBadge tone={installed ? "ok" : "muted"}>
+              {String(installed)}
+            </LabBadge>
+          }
+          hint="THE GATE. The lab shell and the settings page both arm their edge-swipe-back on this — native OR standalone PWA. The two rows below are why it is this and not the media query."
+        />
         <LabRow
           label="(display-mode: standalone)"
           value={
@@ -80,7 +91,7 @@ function LabEdgeSwipePage() {
               {String(isStandalone)}
             </LabBadge>
           }
-          hint="Reads false inside a Capacitor WebView — which is exactly why isInstalledApp() exists and why nothing in adaptv keys off the media query directly."
+          hint="Reads false inside a Capacitor WebView — which is exactly why isInstalledApp() exists and why nothing in adaptv keys off the media query directly. Gating on this row is what left the native builds with no back gesture."
         />
         <LabRow
           label="isNativePlatform()"
@@ -97,7 +108,7 @@ function LabEdgeSwipePage() {
               {enabled ? "armed" : "off"}
             </LabBadge>
           }
-          hint="Ships disarmed. Once armed it listens on EVERY target so the gesture itself can be exercised — but in an installed PWA the shell's own back swipe is live too, so expect a log entry AND a navigation."
+          hint="Ships disarmed. Once armed it listens on EVERY target so the gesture itself can be exercised — but on any installed target the shell's own back swipe is live too, so expect a log entry AND a navigation."
         />
         <LabActions>
           <LabButton onClick={() => setEnabled((on) => !on)}>
@@ -133,10 +144,16 @@ function LabEdgeSwipePage() {
           The danger is not that this fails — it is that it succeeds
           alongside the platform&apos;s own gesture. If both fire you pop
           two history entries and appear to skip a page. That is why the
-          lab shell gates its instance on{" "}
-          <code>display-mode: standalone</code> rather than arming it
-          everywhere, and why the probe above is deliberately the
-          exception.
+          lab shell gates its instance on <code>isInstalledApp()</code>{" "}
+          rather than arming it everywhere: a browser tab keeps its own
+          edge swipe and gets nothing from us. Installed, nothing else is
+          holding that edge — except Android&apos;s gesture navigation,
+          which claims the left edge and cancels the touch before this
+          recogniser decides. That cancel is what keeps the two from
+          stacking, so it is the one worth watching: back should move one
+          page, never two. The probe above is deliberately the other
+          exception — it arms everywhere, which is why it logs instead of
+          navigating.
         </LabCaveat>
       </LabSection>
     </LabPage>

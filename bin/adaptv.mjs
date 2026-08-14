@@ -34,6 +34,7 @@ import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import { listTargets, resolveTarget } from "./lib/devices.mjs"
 import { exec } from "./lib/exec.mjs"
+import { explainFailure } from "./lib/explain.mjs"
 import {
   appConfigFingerprint,
   cliSourceFingerprint,
@@ -75,7 +76,6 @@ import {
   capRun,
   capSync,
   ensureDeviceWindow,
-  explainLaunchFailure,
   generateAssets,
   iosEnv,
   isAppInstalled,
@@ -92,6 +92,7 @@ import {
 } from "./lib/native.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
+import { namesPlumbing } from "./lib/opacity.mjs"
 import { inspect as inspectApp } from "./lib/preflight.mjs"
 import {
   addresses,
@@ -120,7 +121,7 @@ import {
   wasReported,
 } from "./lib/render.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
-import { errorTail, gradleCause, portInUse } from "./lib/tool-log.mjs"
+import { errorTail, portInUse } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
 
@@ -263,105 +264,63 @@ function snapshotNativeFp(appRoot, platforms) {
  * run / build pipelines
  * ============================================================================= */
 
-/** How much captured tool output a failed line expands into — enough to name the problem,
- *  not a log dump (that's `--verbose`). Generous rather than tight: the lines are already
- *  filtered to the ones that explain the failure, and cutting a diagnostic off mid-
- *  instructions is the one failure mode worse than a few lines too many (CLI-UX R15). */
-const DETAIL_LINES = 10
-// ANSI escape (ESC = char 27), built without a literal control char in the source. Tool
-// output arrives coloured, and a reason rendered inline has to measure as what it prints.
-const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
-
 /**
- * Describe a failure the way the renderer wants it: a concise `reason` shown INLINE on
- * that step's own `✖ <label>` line, plus `detail` lines dim underneath. This is the ONLY
- * place a failure is put into words — every step/lane carries its own outcome, so nothing
- * prints a second `✖ <label> failed — …` afterwards (that duplicated the glyph and, for
- * `all`, separated a platform's reason from its line by the other platform's).
+ * The dev server came up, and then never served the app. THREE different faults land here and
+ * they want three different sentences — the one that used to cover all of them ("Another
+ * process is likely using that port") was flatly wrong for the common case, where the port is
+ * ours and the app itself is throwing, and it sent the dev hunting a collision that never
+ * happened. It was also one 150-column sentence with no `detail`, so `runLine` clipped it to
+ * `dev server at http://localhost:41730 is…` and the fix it named never reached the screen.
  *
- * A recognised cause wins (iOS signing, an unavailable device, Developer Mode off, …):
- * its message is the reason and its fix steps are the detail. Otherwise the first line of
- * the captured tail is — for xcodebuild/gradle `err.message` is only "exited with code
- * 65", while `err.tail` is already filtered down to the lines that name the error.
+ * So: a SHORT reason, and the rest as `fix` lines the renderer prints dim underneath (R13/R15).
  */
-function explainFailure(label) {
-  return (err) => {
-    const text = `${err?.message ?? ""}\n${err?.tail ?? ""}`
-    const known = explainLaunchFailure(label, text)
-    if (known) return { reason: known.msg, detail: known.fix }
-    // A taken port is not a build error and its tail explains nothing: the useful lines are
-    // a Node stack, and the one line that matters (`EADDRINUSE … :41720`) names a port the
-    // dev never chose. Same sentence wherever it surfaces — a build, or the server itself.
-    const busy = portInUse(text)
-    if (busy) return { reason: busy.msg, detail: busy.fix }
-
-    const lines = String(err?.tail ?? "")
-      .split("\n")
-      .map((l) => l.replace(ANSI, "").trim())
-      .filter(Boolean)
-      // `** BUILD FAILED **` & friends only restate the ✖ that's already printing.
-      .filter((l) => !/^\*{2}.*\*{2}$/.test(l))
-    // Gradle never says `error:` — it nests the cause under `* What went wrong:`, so the
-    // generic pass below would settle for `> Task :app:… FAILED` (the task, not the cause).
-    // Ask the gradle-aware extractor first; the boilerplate it skips is exactly what was
-    // being dumped as a 7-line block under the ✖.
-    const gradle = gradleCause(lines)
-    if (gradle)
-      return {
-        reason: gradle,
-        detail: lines
-          .filter(
-            (l) =>
-              /^\s*Execution failed for task/i.test(l) &&
-              !l.includes(gradle),
-          )
-          .slice(0, 1),
-      }
-    // `exec` narrows the tail to error-ISH lines, but the ones that actually say `error:`
-    // are what a dev reads; the rest are trailers ("The following build commands failed:").
-    const errors = lines.filter((l) => /\berror\s*:/i.test(l))
-    const picked = errors.length ? errors : lines
-    if (picked.length === 0)
-      return {
-        reason: String(err?.message ?? err).split("\n")[0],
-        detail: [],
-      }
-    const { message, where } = toolErrorParts(picked[0])
-    return {
-      reason: message,
-      detail: [
-        where && `at ${where}`,
-        ...picked.slice(1, 1 + DETAIL_LINES).map(shortenLocator),
-      ].filter(Boolean),
-    }
+function devServerUnhealthy({ why, status }, url, log) {
+  if (why !== "error") {
+    const err = new Error(
+      why === "thin"
+        ? `${url} is answering, but not with this app`
+        : `dev server at ${url} never answered`,
+    )
+    err.fix = [
+      "Another process is likely using that port. Stop it, or run on a free port:",
+      "'adaptv dev … -- --port <n>'.",
+    ]
+    return err
   }
-}
 
-/**
- * Split a compiler/tool error into what to say and where. clang/swift/gradle prefix the
- * message with an ABSOLUTE `file:line:col: error:` locator — long enough on its own to
- * overflow the line and push the actual message off the end, which is how the reason
- * became unreadable. So the message goes INLINE (it's what's read first) and a short
- * `file:line:col` goes on the dim line under it.
- */
-function toolErrorParts(raw) {
-  const m = raw.match(
-    /^(\S+?):(\d+)(?::(\d+))?:\s*(?:fatal\s+)?error:\s*(.+)$/i,
+  // The server answered, and answered badly, and has already written why to its own stderr.
+  // Only the lines that say so — `explainFailure` falls back to the first line of a tail it
+  // can't narrow, which for a dev server's raw stream is `VITE v8.0.11  ready in 2490 ms`.
+  const said = log.filter((l) => /\berror\s*:/i.test(l))
+
+  // WHOSE fault is it? The answer decides what may be printed at all, not just the wording.
+  //
+  // A consumer's own source never mentions the engines (that is what the barrels are for), so
+  // an error that names them is a fault in adaptv's own graph — and adaptv owns its plumbing
+  // out loud but never by name (R8, R7b's `could not brand the launcher icon on this
+  // platform`). The dev gets the fact and the action; the package stays invisible, and
+  // `explainFailure` will fall back to the message below rather than lift that line onto the ✖.
+  const ours = said.some(namesPlumbing)
+  const unresolved = said.some((l) =>
+    /Cannot find (module|package)|Failed to resolve/i.test(l),
   )
-  if (m)
-    return {
-      message: m[4],
-      where: `${path.basename(m[1])}:${m[2]}${m[3] ? `:${m[3]}` : ""}`,
-    }
-  // no locator — strip any `<tool>: error:` prefix and keep the sentence.
-  return {
-    message: raw.replace(/^.*?\berror\s*:\s*/i, "") || raw,
-    where: "",
-  }
+  const err = new Error("the app did not render")
+  err.fix = [
+    `every request to ${url} answered ${status} for 30s.`,
+    ...(ours
+      ? unresolved
+        ? [
+            //The observed cause, every time: a lockfile moved and an install did not, leaving
+            //two halves of the toolchain that no longer agree. Naming the action is the whole
+            //value of the line — the dev cannot act on anything else here, by design.
+            "a module adaptv needs could not be resolved. Reinstall dependencies, then run again.",
+          ]
+        : ["this is a fault inside adaptv, not in your app."]
+      : []),
+  ]
+  if (said.length) err.tail = said.join("\n")
+  return err
 }
-
-/** Same idea for a detail line: keep the filename, drop the directories. */
-const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
 
 /* =============================================================================
  * prepare — the ONE definition of "ready to sync"
@@ -397,20 +356,8 @@ async function preparePlatform(
   await capAddIfMissing(appRoot, platform, env, {
     report,
     plugins: config?.plugins,
+    privacy: config?.privacy,
   })
-  // Apple's required-reason API manifest, derived from the app's dependencies and
-  // registered in the Xcode project so it actually reaches the `.app`. Here, and not
-  // in the Vite plugin where it started, because the project has to EXIST first: on a
-  // first build the plugin ran before this scaffold and silently wrote nothing, and on
-  // a warm build the web bundle is fingerprint-cached so Vite never runs at all.
-  // SILENT (R4/R8): adaptv derives it, adaptv writes it, and there is nothing for the
-  // dev to do about it. → src/native/stamp-privacy.ts, DECISIONS.md §5.0.1
-  if (platform === "ios") {
-    const { stampPrivacyManifest } = await loadAdaptvModule(
-      "native/stamp-privacy.ts",
-    )
-    stampPrivacyManifest(appRoot)
-  }
   // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
   // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
   // identity afterwards — as `dev` used to — meant teardown wrote back a plist from before
@@ -660,6 +607,19 @@ async function runLive(appRoot, platforms, opts) {
   const cleanups = [] // revert fns, unwound LIFO on exit
   let devServer = null
   let onDevLine = null // set once we're watching; parses HMR events
+  // Everything the dev server has said, kept from the moment it starts. `onDevLine` is not
+  // assigned until the watch phase, ~500 lines down, and until then every line Vite writes
+  // went NOWHERE — which is exactly the window in which a broken app announces itself: Vite
+  // resolves `Local:` as soon as it is listening, then prints the SSR stack for the very
+  // first request the warm makes. That is how a 500-ing app produced one clipped line —
+  // `✖ web  dev server at http://localhost:41730 is…` — and not a word of the
+  // `Cannot find module …` Vite had already written to its own stderr (R15).
+  const devLog = []
+  const recordDevLine = (l) => {
+    devLog.push(l)
+    if (devLog.length > 200) devLog.shift()
+    onDevLine?.(l)
+  }
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
   let nativeFp = null // last-known native fingerprint per platform
@@ -819,7 +779,7 @@ async function runLive(appRoot, platforms, opts) {
           // native surface) keeps the app's normal web config.
           env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
           host: externalPossible,
-          onLine: (l) => onDevLine?.(l),
+          onLine: recordDevLine,
         })
         // Native only: stabilize the server (dep re-optimize + its full-reload) BEFORE
         // launching the WebViews. iOS WKWebView won't survive that reload if it attaches
@@ -827,7 +787,7 @@ async function runLive(appRoot, platforms, opts) {
         if (!webOnly) {
           report(`${devServer.localUrl} · warming`)
           const stable = await warmDevServer(devServer.localUrl, {
-            onLine: (l) => onDevLine?.(l),
+            onLine: recordDevLine,
             //NOT passing `sawOptimize` — so the FULL settle is taken, every time, as before.
             //
             //The short-settle path is built, plumbed and unit-tested, and it is worth ~850ms
@@ -844,16 +804,10 @@ async function runLive(appRoot, platforms, opts) {
             //then pass `sawOptimize`. Do it only after watching an edit reach the simulator
             //twice, cold `.vite` and warm.
           })
-          // Fail SAFE: if the detected URL never serves the app, something else holds
-          // the port (a stray `adaptv dev`/`pnpm dev`, or another server on the same
-          // port). Don't point the native apps at a stranger — abort with a clear fix.
-          if (!stable) {
-            throw new Error(
-              `dev server at ${devServer.localUrl} isn't responding. Another process ` +
-                "is likely using that port. Stop it, or run on a free port: " +
-                "'adaptv dev … -- --port <n>'.",
-            )
-          }
+          // Fail SAFE: the detected URL never served the app, so don't point the native
+          // apps at it. WHY it didn't decides what to say — see `devServerUnhealthy`.
+          if (!stable.ok)
+            throw devServerUnhealthy(stable, devServer.localUrl, devLog)
         }
         //no detail: the addresses are rendered as their own aligned block under this row.
         return ""
@@ -1052,6 +1006,7 @@ async function runLive(appRoot, platforms, opts) {
         await capSync(appRoot, platform, env, {
           report,
           plugins: config?.plugins,
+          privacy: config?.privacy,
         })
         // Was the app already up? If so, it survives the build (capRun no longer kills it)
         // and only cap run's re-front touched it, so we relaunch the fresh install once.
@@ -1643,6 +1598,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
       await capSync(appRoot, platform, envFor(platform), {
         report,
         plugins: config?.plugins,
+        privacy: config?.privacy,
       })
       buildCache.sync[platform] = syncTag
     } else {
@@ -1700,6 +1656,20 @@ async function pipeline(kind, appRoot, platforms, opts) {
  * doctor
  * ============================================================================= */
 
+const ADAPTV_BASE_PLUGINS = [
+  "@capacitor/app",
+  "@capacitor/browser",
+  "@capacitor/core",
+  "@capacitor/geolocation",
+  "@capacitor/haptics",
+  "@capacitor/keyboard",
+  "@capacitor/network",
+  "@capacitor/preferences",
+  "@capacitor/screen-orientation",
+  "@capacitor/splash-screen",
+  "@capacitor/status-bar",
+]
+
 function checkTool(label, argv, { optional = false } = {}) {
   const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" })
   const found = r.status === 0
@@ -1718,19 +1688,15 @@ function readIf(p) {
   return existsSync(p) ? readFileSync(p, "utf8") : undefined
 }
 
-async function checkAppPlugins(_appRoot) {
+function checkAppPlugins(_appRoot) {
   // adaptv OWNS the Capacitor plugins — they're its own dependencies, resolved from
   // the framework, never added to the consumer's app. So verify adaptv's install, not
-  // the app's package.json. The LIST is framework source, shared with the privacy
-  // manifest, which needs the same answer to the same question (R26).
-  const { ADAPTV_BUNDLED_PLUGINS } = await loadAdaptvModule(
-    "native/plugins.ts",
-  )
+  // the app's package.json.
   const resolveFromAdaptv = createRequire(
     path.join(ADAPTV_ROOT, "package.json"),
   )
   const missing = []
-  for (const name of ADAPTV_BUNDLED_PLUGINS) {
+  for (const name of ADAPTV_BASE_PLUGINS) {
     let present = true
     try {
       resolveFromAdaptv.resolve(`${name}/package.json`)
@@ -1752,33 +1718,18 @@ async function runProjectChecks(appRoot) {
   section("Project checks")
   const { runDoctor, formatDiagnostics } =
     await loadAdaptvModule("native/doctor.ts")
-  const { linkedDependencies } = await loadAdaptvModule(
-    "native/plugins.ts",
-  )
-  let appDeps = []
-  try {
-    const pkg = JSON.parse(
-      readFileSync(path.join(appRoot, "package.json"), "utf8"),
-    )
-    appDeps = [
-      ...Object.keys(pkg.dependencies ?? {}),
-      ...Object.keys(pkg.devDependencies ?? {}),
-    ]
-  } catch {}
-  // Plus adaptv's own plugins. Every rule keyed on a plugin name was dead without
-  // them: the app's package.json lists `@arrzdev/adaptv` and no `@capacitor/*`, so
-  // the missing-privacy-manifest rule could not fire on any real app.
-  const deps = linkedDependencies(appDeps)
   const ios = nativeDir(appRoot, "ios")
   const android = nativeDir(appRoot, "android")
+  //only an answer when there IS an iOS project: `undefined` keeps the rule quiet, and a
+  //web-only app has no manifest to be missing. Same guard the stamper uses.
+  const hasPrivacyManifest = existsSync(path.join(ios, "App"))
+    ? existsSync(path.join(ios, "App/App/PrivacyInfo.xcprivacy"))
+    : undefined
   const diagnostics = runDoctor({
     iosInfoPlist: readIf(path.join(ios, "App/App/Info.plist")),
     capacitorConfig: process.env.ADAPTV_CAPACITOR_CONFIG ?? undefined,
     androidBuildGradle: readIf(path.join(android, "app/build.gradle")),
-    hasPrivacyManifest: existsSync(
-      path.join(ios, "App/App/PrivacyInfo.xcprivacy"),
-    ),
-    dependencies: deps,
+    hasPrivacyManifest,
   })
   if (diagnostics.length === 0) {
     check(true, "no issues found")
@@ -1835,7 +1786,7 @@ async function doctor(appRoot) {
     )
 
   section("Plugins (shipped by adaptv; the consumer installs none)")
-  await checkAppPlugins(appRoot)
+  checkAppPlugins(appRoot)
 
   section("Project")
   check(

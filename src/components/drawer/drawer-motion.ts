@@ -1,14 +1,147 @@
 import type { MotionValue, Transition } from "motion/react"
 import { animate } from "motion/react"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
+import { DEFAULT_DRAWER_TRANSITION } from "#adaptv/components/drawer/drawer-constants"
+import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
+import { splitEasingAt } from "#adaptv/components/drawer/drawer-easing"
 import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
 import { clamp } from "#adaptv/utils/clamp"
 
 const TRANSITION_END_FALLBACK_MS = 32
 
+/**
+ * The `@keyframes` rule in `styles/drawer.css` that moves the panel, and the two properties that
+ * aim it. Kept in lockstep with that file by name — a rename on either side is a silent no-op.
+ */
+const PANEL_KEYFRAME = "pwa-drawer-slide"
+const PANEL_FROM_VAR = "--pwa-drawer-from"
+const PANEL_TO_VAR = "--pwa-drawer-to"
+
+function findPanelKeyframe(panel: HTMLElement | null): Animation | null {
+  if (!panel || typeof panel.getAnimations !== "function") return null
+  return (
+    panel
+      .getAnimations()
+      .find(
+        (animation) =>
+          (animation as { animationName?: string }).animationName ===
+          PANEL_KEYFRAME,
+      ) ?? null
+  )
+}
+
+/**
+ * Stop whatever is moving the panel and leave it where it visibly IS.
+ *
+ * `transition: none` alone cannot do this any more: an animation outranks the inline transform, so
+ * dropping one without committing its current value first snaps the panel back to whatever the
+ * inline style last said — which during a tween is the target, i.e. the far end of the motion.
+ */
 export function clearDrawerPanelTransition(panel: HTMLElement | null) {
   if (!panel) return
+  if (findPanelKeyframe(panel)) {
+    const live = readPanelTranslateY(panel)
+    panel.style.animation = ""
+    panel.style.transform = `translate3d(0, ${live}px, 0)`
+  }
   panel.style.transition = "none"
+}
+
+function settleDrawerPanelKeyframe(panel: HTMLElement | null) {
+  if (!panel) return
+  //safe to drop without committing anything: the inline transform was written to the target before
+  //the animation was armed, so the value the animation has been holding is already underneath it
+  panel.style.animation = ""
+  panel.style.removeProperty(PANEL_FROM_VAR)
+  panel.style.removeProperty(PANEL_TO_VAR)
+}
+
+function waitForDrawerPanelKeyframe(
+  panel: HTMLElement | null,
+  duration: number,
+  running: Animation | null,
+): Promise<void> {
+  /*
+   * The animation's own promise, not a timer over its duration. A duration timer backing an event
+   * is a race whenever the animated thing can start later than the timer is armed, and that race
+   * has already produced one bug here: on a throttled device the open's end-snap was a fallback
+   * firing before the keyframe had finished and tearing it off mid-curve.
+   *
+   * The timer survives only for environments with no `getAnimations` (jsdom), where there is no
+   * animation object to await and nothing that can outrun it.
+   */
+  if (running) return running.finished.then(NOOP, NOOP)
+  if (!panel || duration <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    window.setTimeout(
+      resolve,
+      duration * 1000 + TRANSITION_END_FALLBACK_MS,
+    )
+  })
+}
+
+function NOOP() {}
+
+/**
+ * Move the panel to wherever `commit` puts it, over `config`'s curve.
+ *
+ * The engine keeps owning the destination: `commit` writes the composed transform the same way a
+ * drag frame would (`y` plus the keyboard's flip), and this reads back what landed. So a caller
+ * never has to know how the pieces compose — it changes the value it is responsible for, and the
+ * panel eases from wherever it was to whatever that produced.
+ *
+ * The motion itself is the `@keyframes` rule; see `styles/drawer.css` for the device bisect that
+ * says why it cannot be an inline transition.
+ */
+export function tweenDrawerPanelTransform(
+  panel: HTMLElement | null,
+  config: DrawerTransition,
+  commit: () => void,
+): Promise<void> {
+  if (!panel) {
+    commit()
+    return Promise.resolve()
+  }
+
+  //where it is RIGHT NOW, mid-animation included — computed style reports the animated value
+  const from = readPanelTranslateY(panel)
+  //drop the running keyframe without committing it: `from` already holds where it really was, and
+  //the inline transform is about to be overwritten anyway
+  panel.style.animation = ""
+  panel.style.transition = "none"
+
+  commit()
+
+  const to = readPanelTranslateY(panel)
+  //a sub-pixel move is not worth an animation, and a zero-length one would never fire `finished`
+  if (config.duration <= 0 || Math.abs(to - from) < 0.5) {
+    settleDrawerPanelKeyframe(panel)
+    return Promise.resolve()
+  }
+
+  const [a, b, c, d] = config.bezier
+  panel.style.setProperty(PANEL_FROM_VAR, `${from}px`)
+  panel.style.setProperty(PANEL_TO_VAR, `${to}px`)
+  panel.style.animation = `${PANEL_KEYFRAME} ${config.duration}s cubic-bezier(${a}, ${b}, ${c}, ${d}) both`
+
+  const armed = findPanelKeyframe(panel)
+
+  return waitForDrawerPanelKeyframe(panel, config.duration, armed).finally(
+    () => {
+      /*
+       * Only tidy up after the animation THIS call armed.
+       *
+       * The panel's motion is routinely superseded mid-flight — a close re-aims when the viewport
+       * shifts, the keyboard re-aims when its height lands in two steps, a drag release interrupts
+       * an open. Each of those arms a fresh keyframe, and the interrupted call's promise settles
+       * moments later (a cancelled animation's `finished` rejects). Clearing unconditionally there
+       * would strip the animation that just replaced it, dropping the panel onto the inline
+       * transform — the target — so the sheet would jump the rest of the way instead of easing.
+       */
+      if (findPanelKeyframe(panel) === armed)
+        settleDrawerPanelKeyframe(panel)
+    },
+  )
 }
 
 function resolveTransition(config: DrawerTransition): Transition {
@@ -106,14 +239,19 @@ export function animateDrawerY(
     return controls
   }
 
-  // Tween path — set the CSS transition, then set the value once. The browser interpolates
-  // transform on the compositor (native fps), regardless of any drag velocity (a CSS tween
-  // can't carry it; the visual still starts from the panel's current rendered position).
-  applyDrawerPanelTransition(panel, config, useTransition)
-  y.set(target)
-  return waitForDrawerPanelTransition(panel, config.duration).finally(
-    releaseCaretHold,
-  )
+  // Tween path — commit the target, then let a `@keyframes` rule carry the panel to it. Any drag
+  // velocity is dropped on the floor exactly as before: a CSS tween cannot carry one, and the
+  // visual still starts from the panel's current rendered position.
+  //
+  // `useTransition: false` no longer means "no interpolation" — it means "land on the value now",
+  // which is what a zero duration produces.
+  return tweenDrawerPanelTransform(
+    panel,
+    useTransition ? config : { ...config, duration: 0 },
+    () => {
+      y.set(target)
+    },
+  ).finally(releaseCaretHold)
 }
 
 /**
@@ -130,6 +268,119 @@ export function readPanelTranslateY(panel: HTMLElement | null): number {
     return new DOMMatrixReadOnly(transform).m42
   } catch {
     return 0
+  }
+}
+
+/**
+ * A composited panel transition caught mid-flight. Read it BEFORE
+ * {@link clearDrawerPanelTransition} — `transition: none` cancels the transition, taking its
+ * timing with it.
+ */
+export type PanelFlight = {
+  /** fraction of the easing's duration already consumed, in `[0,1]` */
+  elapsed: number
+  /** seconds of the easing still ahead */
+  left: number
+  bezier: EasingBezier
+}
+
+const CUBIC_BEZIER = /^cubic-bezier\(([^)]+)\)$/
+
+function readPanelEasing(
+  panel: HTMLElement,
+  fromKeyframe: boolean,
+): EasingBezier | null {
+  const style = getComputedStyle(panel)
+  //an animation's curve is on `animation-timing-function`; a transition's is on its own property.
+  //Reading the wrong one returns the initial `ease`, which resumes a motion onto a curve it was
+  //never on — a seam that decelerates instead of continuing.
+  const declared = (
+    fromKeyframe
+      ? style.animationTimingFunction
+      : style.transitionTimingFunction
+  )?.trim()
+  const match = declared ? CUBIC_BEZIER.exec(declared) : null
+  if (!match) return null
+  const points = match[1].split(",").map((n) => Number.parseFloat(n))
+  if (points.length !== 4 || points.some((n) => !Number.isFinite(n)))
+    return null
+  return points as EasingBezier
+}
+
+/**
+ * Where the panel's transform transition is in its own timeline, or `null` if none is running.
+ *
+ * The elapsed fraction comes from the transition object rather than from wall-clock deltas: the
+ * transition starts on the next style recalc, which on a cold first paint can be several frames
+ * after the code that armed it. Timing it from the outside overstated the elapsed time by ~40%
+ * on a physical device, which is the difference between resuming a curve and guessing at one.
+ */
+export function samplePanelFlight(
+  panel: HTMLElement | null,
+): PanelFlight | null {
+  if (!panel || typeof panel.getAnimations !== "function") return null
+  //the panel's motion is the keyframe now, but a transition can still be mid-flight on a surface
+  //that armed one (the backdrop shares this element's stylesheet), so both are worth finding
+  const running = panel
+    .getAnimations()
+    .find(
+      (animation) =>
+        (animation as { animationName?: string }).animationName ===
+          PANEL_KEYFRAME ||
+        (animation as { transitionProperty?: string })
+          .transitionProperty === "transform",
+    )
+  if (!running) return null
+  const timing = running.effect?.getTiming()
+  const duration =
+    typeof timing?.duration === "number" ? timing.duration : 0
+  const at = Number(running.currentTime)
+  if (duration <= 0 || !Number.isFinite(at)) return null
+  const bezier = readPanelEasing(
+    panel,
+    (running as { animationName?: string }).animationName ===
+      PANEL_KEYFRAME,
+  )
+  if (!bezier) return null
+  const elapsed = clamp(at / duration, 0, 1)
+  return { elapsed, left: ((1 - elapsed) * duration) / 1000, bezier }
+}
+
+/**
+ * The transition that CONTINUES `flight` when the panel's target moves mid-motion: the remainder
+ * of the curve it was already on, over a duration that leaves the seam's speed intact.
+ *
+ * `remaining` is the travel the interrupted motion still had; `travel` is what it has now (its own
+ * remainder plus whatever the new geometry added). Restarting the full curve instead makes the
+ * panel *decelerate* at the seam — the open curve enters slower than the speed a motion near its
+ * end has already built — and then spend a whole fresh duration on the little that is left. That
+ * is the "first open feels laggy" of the two-step iOS keyboard raise.
+ *
+ * The duration is `time left + (added travel / seam speed)`: it reduces to the untouched curve
+ * when nothing had started, and never exceeds a fresh motion's duration, which is also the answer
+ * when the interrupt lands so late that the seam speed has decayed to nothing.
+ */
+export function resumeDrawerTransition(
+  flight: PanelFlight | null,
+  remaining: number,
+  travel: number,
+): DrawerTransition {
+  const fresh = DEFAULT_DRAWER_TRANSITION
+  if (!flight || flight.left <= 0) return fresh
+  const split = splitEasingAt(flight.bezier, flight.elapsed)
+  if (!split || !Number.isFinite(split.entrySlope)) return fresh
+  //px/s at the seam, from the curve's own entry slope over the travel/time it had left
+  const speed = (split.entrySlope * Math.abs(remaining)) / flight.left
+  if (!(speed > 0)) return fresh
+  const added = Math.abs(travel) - Math.abs(remaining)
+  return {
+    ...fresh,
+    duration: clamp(
+      flight.left + added / speed,
+      flight.left,
+      Math.max(flight.left, fresh.duration),
+    ),
+    bezier: split.bezier,
   }
 }
 

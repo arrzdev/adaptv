@@ -1,6 +1,6 @@
 import type { RefObject } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
+import { preMuteCaret } from "#adaptv/hooks/use-caret-repaint"
 import { useInsets } from "#adaptv/hooks/use-insets"
 import {
   useKeyboard,
@@ -204,11 +204,10 @@ export function scrollFocusedInputIntoView(
   })
 
   if (top === scroller.scrollTop) return
-  //mute the caret before the smooth scroll's first frame; releasing immediately is safe —
-  //the scroll's own events keep it muted until the movement settles
-  const releaseCaretHold = beginCaretHold()
+  //mute the caret before the scroll's first frame. A pre-mute rather than a bracket: this
+  //scroll never says when it stopped, so the quiet window has to decide.
+  preMuteCaret()
   scroller.scrollTo({ top, behavior })
-  releaseCaretHold()
 }
 
 /* =============================================================================

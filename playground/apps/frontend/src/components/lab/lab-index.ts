@@ -85,7 +85,8 @@ const COMPONENTS = [
   {
     to: "/lab/drawer",
     title: "Drawer",
-    summary: "drag to dismiss, nesting, keyboard avoidance",
+    summary:
+      "drag to dismiss, nesting, keyboard avoidance, the height cap · and the app's own sheets",
     isNew: true,
   },
   {

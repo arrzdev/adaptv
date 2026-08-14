@@ -65,14 +65,19 @@ test.describe("a disabled control", () => {
         ) !== null,
       [centre.x, centre.y],
     )
-    expect(onTarget, "the touch point misses the disabled button").toBe(true)
+    expect(onTarget, "the touch point misses the disabled button").toBe(
+      true,
+    )
 
     const scroller = "[data-adaptv-screen] > *"
     const position = () =>
       page.evaluate((sel) => {
         const el = document.querySelector(sel)
         if (!el) return { top: window.scrollY, room: 0 }
-        return { top: el.scrollTop, room: el.scrollHeight - el.clientHeight }
+        return {
+          top: el.scrollTop,
+          room: el.scrollHeight - el.clientHeight,
+        }
       }, scroller)
 
     /*
@@ -82,9 +87,10 @@ test.describe("a disabled control", () => {
      * direction is what makes a 0 here mean something.
      */
     const { top: before, room } = await position()
-    expect(room, "the page must be scrollable for this to test anything").toBeGreaterThan(
-      100,
-    )
+    expect(
+      room,
+      "the page must be scrollable for this to test anything",
+    ).toBeGreaterThan(100)
     const dy = before > room / 2 ? 9 : -9
 
     await cdp.send("Input.dispatchTouchEvent", {

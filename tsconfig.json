@@ -12,7 +12,12 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "#adaptv/*": ["./src/*"]
+      "#adaptv/*": ["./src/*"],
+      // The app supplies the real route tree through this same alias (adaptv stamps
+      // the mapping into the consumer's tsconfig). Here it can only ever be a stub —
+      // a `paths` entry rather than an ambient `declare module`, because an ambient
+      // one would ship and shadow the consumer's mapping. → src/routes/route-tree-stub.d.ts
+      "#adaptv-route-tree": ["./src/routes/route-tree-stub.d.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",

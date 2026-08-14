@@ -31,20 +31,22 @@ afterEach(
     }),
 )
 
-/** A stand-in dev server that answers with a document big enough to look ready. */
-function serving() {
+/** A stand-in server on a free port, answering however the test says. */
+function answering(handler) {
   return new Promise((resolve) => {
-    server = createServer((_req, res) => {
-      res.writeHead(200, { "content-type": "text/html" })
-      res.end(
-        `<!doctype html><html><body>${"x".repeat(600)}</body></html>`,
-      )
-    })
+    server = createServer(handler)
     server.listen(0, "127.0.0.1", () =>
       resolve(`http://127.0.0.1:${server.address().port}`),
     )
   })
 }
+
+/** A stand-in dev server that answers with a document big enough to look ready. */
+const serving = () =>
+  answering((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" })
+    res.end(`<!doctype html><html><body>${"x".repeat(600)}</body></html>`)
+  })
 
 describe("SAW_OPTIMIZE — recognising that Vite re-optimized", () => {
   it.each([
@@ -74,9 +76,9 @@ describe("warmDevServer — the settle is paid when it buys something", () => {
   it("waits the full second when Vite re-optimized", async () => {
     const url = await serving()
     const t = Date.now()
-    expect(await warmDevServer(url, { sawOptimize: () => true })).toBe(
-      true,
-    )
+    expect(await warmDevServer(url, { sawOptimize: () => true })).toEqual({
+      ok: true,
+    })
     //Two good reads with a 900ms gap, then the full 1000ms settle.
     expect(Date.now() - t).toBeGreaterThanOrEqual(1800)
   }, 20000)
@@ -84,8 +86,8 @@ describe("warmDevServer — the settle is paid when it buys something", () => {
   it("settles briefly when it did NOT — the common warm start", async () => {
     const url = await serving()
     const t = Date.now()
-    expect(await warmDevServer(url, { sawOptimize: () => false })).toBe(
-      true,
+    expect(await warmDevServer(url, { sawOptimize: () => false })).toEqual(
+      { ok: true },
     )
     const took = Date.now() - t
     //Still two good reads and their gap; only the tail is short.
@@ -106,9 +108,63 @@ describe("warmDevServer — the settle is paid when it buys something", () => {
     //Port 1 is never a dev server.
     expect(
       await warmDevServer("http://127.0.0.1:1", { timeoutMs: 1200 }),
-    ).toBe(false)
+    ).toEqual({ ok: false, why: "unreachable" })
     expect(Date.now() - t).toBeLessThan(6000)
   })
+})
+
+/**
+ * The verdict has to tell an APP that is throwing apart from a STRANGER on the port, because
+ * the two want opposite advice and for a long time both got the stranger's: "Another process
+ * is likely using that port." A dev whose TanStack SSR entry was failing to resolve a module
+ * spent the run looking for a process that did not exist, while the server sat there
+ * answering 500 and printing the real cause to a stream nothing was reading.
+ */
+describe("warmDevServer — naming WHICH way it failed", () => {
+  it("says `error` with the status when the app itself is throwing", async () => {
+    const url = await answering((_req, res) => {
+      res.writeHead(500, { "content-type": "application/json" })
+      res.end('{"status":500,"unhandled":true,"message":"HTTPError"}')
+    })
+    expect(await warmDevServer(url, { timeoutMs: 1200 })).toEqual({
+      ok: false,
+      why: "error",
+      status: 500,
+    })
+  }, 20000)
+
+  it("says `thin` when something answers 200 but it is not the app", async () => {
+    //A 2xx too small to be a document: the port IS held by a stranger. This is the only
+    //verdict the port-collision advice belongs to.
+    const url = await answering((_req, res) => {
+      res.writeHead(200, { "content-type": "text/plain" })
+      res.end("ok")
+    })
+    expect(await warmDevServer(url, { timeoutMs: 1200 })).toEqual({
+      ok: false,
+      why: "thin",
+      status: 200,
+    })
+  }, 20000)
+
+  it("reports the LAST failure, not the last read", async () => {
+    //Good, then broken, then the budget runs out. The verdict must describe the fault that
+    //stopped it — a lone healthy read early on cannot leave the failure unworded.
+    let n = 0
+    const url = await answering((_req, res) => {
+      if (n++ === 0) {
+        res.writeHead(200, { "content-type": "text/html" })
+        return res.end(`<!doctype html>${"x".repeat(600)}`)
+      }
+      res.writeHead(503)
+      res.end("nope")
+    })
+    expect(await warmDevServer(url, { timeoutMs: 2500 })).toEqual({
+      ok: false,
+      why: "error",
+      status: 503,
+    })
+  }, 20000)
 })
 
 /* -------------------------------------------------------------------------- */

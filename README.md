@@ -39,7 +39,8 @@ can't catch any of them, so the manual checklist at the end is the gate.
 [`FACADE.md`](docs/FACADE.md) (the `createServerFn` ban) · [`ANIMATION.md`](docs/ANIMATION.md) (the
 motion substrate + the iOS 60Hz ceiling) · [`PRIOR-ART.md`](docs/PRIOR-ART.md) (what we port from Ionic,
 and the attribution convention) · [`COOKBOOK.md`](docs/COOKBOOK.md) (consumer recipes — offline UI, auth
-guards, offline-first data).
+guards, offline-first data) · [`docs/research/`](docs/research/) (platform findings — what a device
+does that nothing in the code can tell you, and the experiment that established it).
 
 ---
 

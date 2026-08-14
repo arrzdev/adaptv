@@ -8,6 +8,10 @@ TanStack Router, and TanStack Start.
 > keyboard, insets), **check how Ionic/Capacitor did it and read their open issues** — they've hit the
 > edge cases already. This doc is the index. Links are verified as of 2026-07.
 
+> **Not to be confused with [`research/`](research/)**, the folder beside this file. This document is
+> forward-looking: what is missing and what to watch. That folder is backward-looking: platform facts
+> we now know because something broke, each with the experiment that established it.
+
 ---
 
 ## 1. Missing pieces of the vision

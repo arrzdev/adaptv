@@ -6,7 +6,9 @@
 //
 //`press-core.ts` is deliberately absent: it is the shared press implementation behind
 //`Button` and `Pressable`, not consumer API.
+
 export * from "./avoid-keyboard"
+export * from "./boot-error"
 export * from "./button"
 export * from "./checkbox"
 export * from "./drawer"

@@ -97,6 +97,7 @@ export default defineApp({
   // Screen thunks — statically imported by the plugin, NOT lazy chunks (§3.3, RENDERING.md §3.1.2)
   splashScreen:     () => import("@/components/splash-screen"),
   offlineComponent: () => import("@/components/offline"),
+  bootErrorScreen:  () => import("@/components/boot-error"),
 
   // How the WEB build renders. Top-level, because it decides what a deploy needs:
   // "ssr" wants something that runs per request, "spa" runs anywhere you can put files.
@@ -123,6 +124,12 @@ export default defineApp({
 - **`offlineComponent`** mirrors `splashScreen` exactly: one consumer-owned component with optional
   props, rendered by **adaptv** when the app can't boot far enough for a route to exist, and by the
   **consumer** when a mounted route's data is unavailable. → `RENDERING.md §3.1.2`.
+- **`bootErrorScreen`** is the same shape once more, but for the app that **never booted** — a broken or
+  missing entry chunk, where React never runs. It is the one thunk consumed at *build* time rather than
+  in the bundle: prerendered with `react-dom/server` and embedded in the emitted document, since anything
+  shipped in the bundle is gone in exactly the case it exists for. Runtime errors are deliberately **not**
+  covered — a route that throws is the app's own boundary to catch, and adaptv installs none so it cannot
+  pre-empt one. → `RENDERING.md §3.1.3`, `DECISIONS.md B30`/`B31`.
 - **The service worker takes no config.** Route *chunks* are always precached — that is what makes
   navigation instant, and it is the product rather than a feature of it. No route document is ever
   precached (only the generated shell). → `RENDERING.md §3.2`

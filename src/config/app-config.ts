@@ -1,5 +1,6 @@
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import type { ComponentType } from "react"
+import type { BootErrorProps } from "#adaptv/components/boot-error"
 import type { OfflineProps } from "#adaptv/components/offline"
 import type {
   OrientationGuardProps,
@@ -7,6 +8,7 @@ import type {
   SplashScreenProps,
 } from "#adaptv/config/types"
 import type { UiThemePreference } from "#adaptv/hooks/use-theme"
+import type { AdaptvPrivacyConfig } from "#adaptv/native/privacy-manifest"
 import type {
   UiOpenGraphConfig,
   UiTwitterConfig,
@@ -387,6 +389,18 @@ export type AdaptvAppConfig = {
    * rest.
    */
   pluginConfig?: Record<string, Record<string, unknown>>
+  /**
+   * What only your app can know about its privacy manifest (`PrivacyInfo.xcprivacy`).
+   *
+   * adaptv generates the manifest on every iOS build and derives the required-reason
+   * APIs of every plugin compiled in — its own bundled set included, which is most
+   * apps' entire obligation. This is for the rest: an unlisted plugin's APIs, and the
+   * declarations Apple expects from the app itself (tracking, collected data). Since
+   * the file is generated, this is the only place to put them.
+   *
+   * @example privacy: { collectedData: [{ type: "NSPrivacyCollectedDataTypeEmailAddress", linked: true, tracking: false, purposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"] }] }
+   */
+  privacy?: AdaptvPrivacyConfig
 
   /**
    * Native (Capacitor) app id, reverse-domain (e.g. `"com.chopchop.app"`). Setting it
@@ -442,6 +456,27 @@ export type AdaptvAppConfig = {
    * Defaults to adaptv's own `Offline` component.
    */
   offlineComponent?: ScreenThunk<OfflineProps>
+  /**
+   * The screen shown when the app's **bundle never ran** — a 404 on the entry
+   * chunk, a syntax error, a corrupt OTA bundle. The WebView would otherwise be
+   * blank, because no app code got to execute at all.
+   *
+   * ```ts
+   * bootErrorScreen: () => import("@/components/boot-error")
+   * ```
+   *
+   * ⚠︎ **Not for runtime errors.** A route that throws, a failed fetch, a bad
+   * render — those are the app's to catch, with its own boundary around whatever
+   * it wants to protect. adaptv does not install one, deliberately, because it
+   * would take that handling away from the app. This slot is only for the case
+   * the app never got to have an opinion about.
+   *
+   * Prerendered to static HTML at build time, since there is no React alive when
+   * it is needed. It therefore has to render standalone, from a `code` prop and
+   * nothing else — no browser, no hooks. Defaults to adaptv's own `BootError`.
+   * → `RENDERING.md §3.1.3`
+   */
+  bootErrorScreen?: ScreenThunk<BootErrorProps>
   //NOTE: there is deliberately no `providers` field. An app-wide provider tree is
   //just a layout route — declare one in `routerConfig` and wrap `<Outlet />`:
   //

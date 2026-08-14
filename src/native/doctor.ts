@@ -27,8 +27,6 @@ export type DoctorInput = {
   androidBuildGradle?: string
   /** Whether `.adaptv/ios/App/App/PrivacyInfo.xcprivacy` exists. */
   hasPrivacyManifest?: boolean
-  /** Installed dependency names, for the privacy-manifest obligation. */
-  dependencies?: readonly string[]
 }
 
 /**
@@ -111,31 +109,25 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
 //runtime ordering fact — so it is fixed at the source instead, by re-probing from
 //`capabilities/status-bar.ts` until a pass lands.
 
-/** The privacy manifest — §5.0.1. Fails at submission, not at build. */
+/**
+ * The privacy manifest — §5.0.1. Fails at submission, not at build.
+ *
+ * Unconditional, and that is the fix for the version that wasn't: this used to fire only
+ * when the APP's dependencies named a plugin with a required-reason API, which no adaptv
+ * app ever does — adaptv owns Capacitor, so the plugins are adaptv's dependencies. Every
+ * native adaptv app compiles in `@capacitor/device` (system boot time) and
+ * `@capacitor/preferences` (UserDefaults), so an iOS project without a manifest is always
+ * wrong and the rule never needed a condition.
+ */
 function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
   if (input.hasPrivacyManifest !== false) return null
-  //No iOS project, no obligation — a web-only app has nothing to submit. This
-  //gate became load-bearing the moment `dependencies` started including adaptv's
-  //own bundled plugins (native/plugins.ts): `@capacitor/preferences` is in every
-  //app now, so without it this would report a missing manifest to devs who will
-  //never build for iOS.
-  if (input.iosInfoPlist === undefined) return null
-  const deps = input.dependencies ?? []
-  const needsOne = deps.some(
-    (d) =>
-      d === "@capacitor/preferences" ||
-      d === "@capacitor/filesystem" ||
-      d === "@capacitor/device" ||
-      d === "@aparajita/capacitor-secure-storage",
-  )
-  if (!needsOne) return null
 
   return {
     severity: "error",
     title: ".adaptv/ios/App/App/PrivacyInfo.xcprivacy is missing",
     detail:
-      "Installed plugins touch Apple required-reason APIs. The manifest is not checked at " +
-      "build time — App Store Connect rejects the upload with a generic message, days later.",
+      "The plugins adaptv compiles in touch Apple required-reason APIs. The manifest is not " +
+      "checked at build time — App Store Connect rejects the upload with a generic message, days later.",
     fix: "Run `adaptv build ios` (or `adaptv preview ios`), which regenerates it from the installed plugin set.",
   }
 }

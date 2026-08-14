@@ -45,6 +45,8 @@ import {
   applyDrawerPanelTransition,
   clearDrawerPanelTransition,
   readPanelTranslateY,
+  resumeDrawerTransition,
+  samplePanelFlight,
   stopDrawerBackdropAnimation,
   transitionDrawerBackdropOpacity,
 } from "#adaptv/components/drawer/drawer-motion"
@@ -89,21 +91,47 @@ const DRAWER_EXCESS_HEIGHT_CAP_FRACTION = 0.55
 const DRAWER_BACKDROP_Z = "z-[50]"
 const DRAWER_PANEL_Z = "z-[51]"
 
+/**
+ * The consumer's visible-height cap, as a custom property rather than a `max-height`.
+ *
+ * It has to be a variable, because inline `max-height` on the content box is NOT free: the
+ * keyboard-room effect owns that property imperatively — it writes one to grow the box, clears
+ * it to hand the box back, and reads `content.style.maxHeight !== ""` as the test for "is the
+ * cap currently mine?". A consumer value sitting there inline answers that question wrong
+ * forever: the stylesheet cap is never read (`cssCapRef` stays `Infinity`, so keyboard growth
+ * is uncapped), `shouldPrimeKeyboardFloor` sees `capHeld` and never primes, and the first
+ * release deletes the consumer's cap with nothing to restore it. Through a variable the CLASS
+ * stays the cap, `getComputedStyle(content).maxHeight` resolves it, and the keyboard grows into
+ * the consumer's own ceiling for free. (`styles.ts` limit 2 — a per-frame-written property is
+ * won by a race, not by a precedence tier, so the clean channel is a variable.)
+ *
+ * Set on the PANEL (drawer.tsx) and inherited down, so the content box keeps having no consumer
+ * style channel at all.
+ */
+export const DRAWER_CONTENT_MAX_HEIGHT_VAR = "--pwa-drawer-max-height"
+
 // Cap the visible content. Installed PWA: full viewport minus the top safe area so the
 // panel never grows under the notch. Browser tab: 97dvh — leaves a sliver up top and
 // dodges browser chrome (the top inset is 0 in a tab anyway). (Viewport math is Tier-1's
 // job — not a cosmetic.) `--adaptv-inset-top` is the contract var (styles/safe-area.css).
+//
+// The consumer's cap is the FIRST term of the `min()`, which is what makes it a request rather
+// than an override: a sheet may be asked to stop higher up, never to grow past the platform
+// ceiling. A drawer that reaches the screen edge is not a drawer, so that ceiling is adaptv's
+// and stays adaptv's. Unset, the term is a whole viewport and the `min()` resolves to the
+// platform cap unchanged — `100vh` is `lvh`, and both ceilings are strictly under it.
 //
 // Deliberately keyboard-blind: nothing here shrinks when the keyboard opens. The sheet answers
 // a keyboard by GROWING into this cap and holding room under its content (see the keyboard-room
 // effect), which is the same geometry with a far better motion than shrinking the cap and
 // translating the panel up to compensate. While that room is held the engine owns `max-height`
 // inline and this is the ceiling it grows toward.
-// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses this `calc()`,
-// which fails soft. Not in any barrel.)
+// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses these
+// `min()`/`calc()` values, which fails soft. Not in any barrel.)
 export const DRAWER_CONTENT_LAYOUT_CLASS = cn(
   "flex min-h-0 shrink-0 flex-col",
-  "app:max-h-[calc(100vh-var(--adaptv-inset-top))] web:max-h-[97dvh]",
+  "app:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)))]",
+  "web:max-h-[min(var(--pwa-drawer-max-height,100vh),97dvh)]",
 )
 
 const OVERLAY_DURATION = DEFAULT_DRAWER_TRANSITION.duration
@@ -695,6 +723,50 @@ export function DrawerEngine({
     return metrics
   }, [])
 
+  /**
+   * Start a FLIP without discarding the slide already in flight.
+   *
+   * Every FLIP here begins by clearing the panel's transition, and `transition: none` makes the
+   * element assume its COMMITTED transform — which, mid-animation, is the target, not where the
+   * browser is currently painting it. So a FLIP that lands during the open slide teleports the
+   * sheet straight to open: device-measured on an iPhone 16 Pro, painted at 605px and snapped to
+   * 0 in a single frame when iOS's password AutoFill bar arrived 40ms into the open. That is the
+   * "the drawer snaps into place instead of animating" report, and it is not specific to the
+   * keyboard — anything that resizes the content mid-open reaches the same three lines.
+   *
+   * Freezing `y` at the painted position first makes clearing the transition invisible: the FLIP
+   * then starts where the sheet actually is. Returns the target the slide was heading for (so the
+   * caller can drive it home rather than leaving it stranded) together with the transition that
+   * CONTINUES the interrupted one — see `resumeDrawerTransition`, without which the sheet lands
+   * correctly but visibly slows down at the seam. `null` when nothing was in flight and the plain
+   * FLIP is already correct.
+   *
+   * `growth` is the layout change this FLIP is about to compensate: it is what the sheet's
+   * remaining travel GAINS, and the resumed duration has to account for it.
+   *
+   * The same freeze-at-the-live-position discipline the close→reopen path uses — see `resumeFrom`
+   * in the open/close effect, and `readPanelTranslateY`'s own warning about `transition: none`.
+   */
+  const freezePanelForFlip = useCallback(
+    (panelEl: HTMLElement, growth: number) => {
+      const target = y.get()
+      const flip = keyboardFlip.get()
+      const liveY = readPanelTranslateY(panelEl)
+      const drift = liveY - (target + flip)
+      //the interrupted curve's own phase, while there is still a transition to read it from
+      const flight = samplePanelFlight(panelEl)
+      clearDrawerPanelTransition(panelEl)
+      //nothing in flight: the committed value IS the painted one, so leave the FLIP alone
+      if (Math.abs(drift) <= 0.5) return null
+      y.set(liveY - flip)
+      return {
+        resumeTo: target,
+        transition: resumeDrawerTransition(flight, drift, drift + growth),
+      }
+    },
+    [y, keyboardFlip],
+  )
+
   // The content changed size while room is held — the classic being a field focus that collapses
   // an expanded picker at the same instant the keyboard raises. Two geometry changes, but only the
   // keyboard's own effect re-aims the box, and the keyboard did not change here: the box is left
@@ -762,13 +834,19 @@ export function DrawerEngine({
       panelEl &&
       !isPointerDraggingRef.current
     ) {
-      clearDrawerPanelTransition(panelEl)
+      const resumed = freezePanelForFlip(panelEl, moved)
       keyboardFlip.set(moved)
       void content.offsetHeight
-      applyDrawerPanelTransition(panelEl, DRAWER_SHRINK_TRANSITION, true)
+      //carrying the slide's remaining travel too — continue that motion, not the shrink's
+      applyDrawerPanelTransition(
+        panelEl,
+        resumed?.transition ?? DRAWER_SHRINK_TRANSITION,
+        true,
+      )
       keyboardFlip.set(0)
+      if (resumed) y.set(resumed.resumeTo)
     }
-  }, [keyboardFlip])
+  }, [keyboardFlip, freezePanelForFlip, y])
 
   // Drive the close toward the measured hidden position. Called once when the close starts, then
   // again on mid-close viewport/content shifts. Measures WITHOUT committing excess (no anchor
@@ -1124,11 +1202,18 @@ export function DrawerEngine({
       panelEl &&
       !isPointerDraggingRef.current
     ) {
-      clearDrawerPanelTransition(panelEl)
+      const resumed = freezePanelForFlip(panelEl, growth)
+      // A step duration is proportional to the step's own small travel; once this FLIP is also
+      // carrying the slide's remaining travel, that duration would cram hundreds of px into ~220ms.
+      // Continue the motion the sheet was already making instead. Reassigned, not shadowed: the
+      // settle below hands `max-height`/`min-height` back once the panel has landed, so it has to
+      // wait out the duration actually applied.
+      if (resumed) transition = resumed.transition
       keyboardFlip.set(growth)
       void content.offsetHeight
       applyDrawerPanelTransition(panelEl, transition, true)
       keyboardFlip.set(0)
+      if (resumed) y.set(resumed.resumeTo)
     }
 
     const runId = beginPanelAnimation("keyboard")
@@ -1159,6 +1244,8 @@ export function DrawerEngine({
     open,
     beginPanelAnimation,
     endPanelAnimation,
+    freezePanelForFlip,
+    y,
   ])
 
   useLayoutEffect(() => {
@@ -1166,8 +1253,6 @@ export function DrawerEngine({
     //the sheet slides out carrying whatever keyboard room it held (the room effect goes inert
     //while closing) — the close only needs to know it is there, to over-travel past it
     closingWithKeyboardRoomRef.current = appliedRoomRef.current > 0
-    const panel = panelRef.current
-    if (panel) panel.style.willChange = ""
   }, [open])
 
   useLayoutEffect(() => {

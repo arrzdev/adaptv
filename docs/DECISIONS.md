@@ -473,6 +473,46 @@ So the obligation lands on the app, is **derivable from the dependency list**, i
 > does with analytics, accounts and telemetry, which adaptv cannot know. A guessed declaration is worse
 > than none — it is a false statement to Apple and to users. The generated file says so in a comment.
 >
+> ### ⚠️ CORRECTED (2026-08-07) — it was deriving from the wrong list
+>
+> "From the app's installed dependencies" was the bug, not the feature. **adaptv owns Capacitor**,
+> so `@capacitor/device` and `@capacitor/preferences` are *adaptv's* dependencies and appear
+> nowhere in the consumer's `package.json`. Every manifest adaptv had ever generated therefore
+> declared **nothing**, while the binary shipped two required-reason APIs — the silent-at-submission
+> failure this feature exists to prevent, reproduced by the feature itself. The verification in the
+> note above passed because it added `@capacitor/preferences` to the *app*, which no real app does.
+> `adaptv doctor`'s matching rule was gated on the same list and so never fired either.
+>
+> Now three tiers, in `stamp-privacy.ts`: **(1)** adaptv's own bundled `@capacitor/*` set, read from
+> adaptv's manifest so a plugin added to adaptv is covered with no second list; plus the app's own
+> deps and its `plugins` registrations. **(2)** the plugin's own `PrivacyInfo.xcprivacy` if it ships
+> one — Apple's actual third-party-SDK mechanism, more authoritative than adaptv's table and correct
+> without an adaptv release. **(3)** `privacy` in `adaptv.config.ts`, the escape hatch: unlisted
+> plugins' APIs, `NSPrivacyTracking`, tracking domains, and `NSPrivacyCollectedDataTypes`.
+>
+> **Tier 3 is not a nicety.** The file is regenerated on every build, so "data collection must be
+> declared by you" — which the generated file said, in a file marked *do not edit* — had nowhere to
+> be declared. adaptv still never *infers* collection; it renders what the app states.
+>
+> The doctor rule is now unconditional for any iOS project (`hasPrivacyManifest` is left `undefined`
+> when there is no project, so web-only apps stay quiet).
+>
+> **Two more failures a real `preview ios` found, both invisible to every test:**
+>
+> - **It was never written on a first run.** The Vite plugin stamps during the capacitor web
+>   build, which happens BEFORE `cap add` creates the project — so the stamper found no
+>   `.adaptv/ios/App` and skipped. The file appeared only on a second build: correct on the
+>   machine that had built twice, missing on CI and on a fresh clone. The CLI now stamps too
+>   (`stampIosPrivacyManifest`, after the project exists), and must pass `adaptvRoot` explicitly
+>   because `load-ts.mjs` bundles the module into a `data:` URL where `import.meta.url` cannot
+>   locate adaptv.
+> - **It was never bundled.** Xcode copies a file into the `.app` only if the target's Resources
+>   build phase lists it, and nothing listed this one. Generated, committed, visible — and absent
+>   from the binary Apple receives. `mergePbxprojResource` now declares it (build file, file
+>   reference, Resources phase, and the navigator group), with stable ids so re-running is a
+>   no-op. **Verified in the installed simulator bundle**, not just on disk.
+>
+
 > **Also built: `adaptv doctor` project checks** (`src/native/doctor.ts`, 13 tests). Selection criterion
 > for every rule: *the broken state still builds, and often still runs*. Currently covers the
 > `WKAppBoundDomains` trap (B22 — the bridge is never injected, `getPlatform()` returns `"web"`, every
@@ -733,6 +773,130 @@ One structural note in adaptv's favour: WKWebView bridges the web a11y tree auto
 Corroborated three ways: caniuse commit *"Safari 26 doesn't use theme-color anymore (#7366)"* (2025-08-30); [WebKit 301756](https://bugs.webkit.org/show_bug.cgi?id=301756), where the reporter notes Safari *"now automatically derives the top bar tint from the html or body background color after dropping support for `theme-color`"*; and an Apple WebKit engineer confirming the new model in that thread — a solid tint extension is *"only needed in cases where there's a viewport-constrained (fixed or sticky) element near one of the edges of the viewport."*
 
 **So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** adaptv's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism adaptv *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
+
+### B30 — adaptv installs **no** runtime error boundary; runtime errors are the app's
+
+A framework-level catch-all for render errors was built, tested, and then deleted. Recording why, because
+it is the kind of thing that looks obviously missing to the next person who goes looking for it.
+
+**Not `defaultErrorComponent`, and this is the part that is quietly wrong.** From the router's `Match.js`:
+
+```js
+const routeErrorComponent = route.options.errorComponent ?? router.options.defaultErrorComponent
+const ResolvedCatchBoundary = routeErrorComponent ? CatchBoundary : SafeFragment
+```
+
+With no error component set anywhere, every match renders `SafeFragment` — **no boundary at all** — so a
+render error bubbles past the whole match chain to the nearest boundary the *app* installed. That is not
+an accident consumers tolerate; it is the behaviour they build on. The playground's `CatchBoundary`,
+mounted in a providers layout route, works for exactly this reason. Setting `defaultErrorComponent` flips
+every match to a real boundary and takes those errors one level too early — silently assuming error
+handling the app already owns, with no error, no warning, and no way to notice beyond a boundary going
+quiet. The root route's own `errorComponent` is worse still: the router wraps the root match's
+`MatchInner`, which is what renders the document, so the fallback would replace `<html>` itself.
+
+**Nor a plain React boundary inside the shell**, which is what actually shipped for a while. It was
+strictly additive — React offers an error to the innermost boundary that can take it, so a consumer
+boundary always won and this one saw only what escaped everything. It worked. It was still removed:
+
+- **It is not adaptv's error to have an opinion about.** Only the app knows what belongs on the screen
+  when one of its routes fails. A framework default that renders *something* there is a default that has
+  to be un-chosen, and the appealing version of it is the one that quietly competes with the app's own.
+- **It cost a public surface out of proportion to the floor it added.** `errorComponent` in config, a
+  boundary component, a reset-key policy, and a second meaning for the same error screen — for a case the
+  app is already expected to handle, and handles better.
+
+What it protected against was React 19 unmounting the whole root on an uncaught error — a blank screen.
+That is real, and the answer is one boundary in the app, which is the thing every app already writes.
+
+**One trap worth keeping, for whoever writes that boundary:** clear it on the router's `loadedAt`, not on
+`location.href`. The href changes when a navigation *starts*; clearing on it re-renders the children while
+the outlet is still resolving the old match, which throws again — and by then the key has moved, so the
+boundary re-arms against it and never recovers. `loadedAt` moves when a load *completes*. It is what the
+router's own match boundaries key on, for the same reason. This was found by an end-to-end test, not by
+reading the code.
+
+What adaptv *does* own is the bundle that never executed, where there is no app code to have an opinion —
+**B31**. → `RENDERING.md §3.1.3`
+
+### B31 — a sandbox does not survive a broken bundle; a build-time render does
+
+The bundle that never executes — syntax error, 404 on the entry chunk, corrupt OTA bundle — is the case
+no boundary can reach, because React never runs. The obvious answer is to isolate the error screen in an
+iframe or some other sandbox. **It does not work, and the reason picks the design that does.**
+
+A sandbox isolates the *execution scope*: fresh globals, clean context. But you still have to load a
+script into it, and a script from a broken build is broken inside the sandbox too. The thing that has to
+be isolated is the **build graph**, not the runtime. Once that is the framing, two options remain:
+
+| | Prerender at build time | Second isolated bundle |
+|---|---|---|
+| Delivery | `react-dom/server` → HTML in the document | own vite input, own Preact, own ES target |
+| Runtime cost | none | an eager bundle on every load |
+| Robustness | only needs the document to have loaded | only as good as *its own* import graph |
+| Gives you | markup | a live, interactive component |
+
+**Prerender wins for this screen.** A title, a line of copy and a retry button do not need hooks; the
+second bundle buys interactivity nobody uses here and adds a subtler failure mode — a consumer error
+component that imports an app util re-enters the graph that is already broken, and nothing says so.
+
+Implementation notes worth not rediscovering:
+
+- **The whole thing is bundled, React included.** `loadAppConfig`'s `data:` URL trick only works for a
+  bundle with zero static imports — a `data:` module has no parent path, so it cannot resolve a bare
+  specifier. The generated entry therefore pulls the renderer *in* and exports the finished HTML string.
+- **`react-dom/server` is CJS**, and esbuild's interop emits a `require`, which an ES module does not
+  have. Fixed with a banner that builds one via `createRequire` rooted at the app. Without it the bundle
+  dies on `Dynamic require of "util"`.
+- **React must be forced to a single instance, resolved from the app.** The generated entry resolves
+  `react` beside the *app*; adaptv's own screen resolves it beside *adaptv*. Under pnpm those are
+  different stores even at an identical version, so the bundle gets two Reacts and the render dies on
+  `Cannot read properties of null (reading 'useRef')` — one copy's hook dispatcher, read by the other. An
+  esbuild `onResolve` plugin routes every `react`/`react-dom` specifier through a `createRequire` rooted
+  at the app, exports maps and all. **Every unit test missed this**, because they all pass adaptv's own
+  root as `appRoot`, where there is only one copy to find; the first real app build caught it, which is
+  precisely what the loud warning below is for. The regression test now traps the app's
+  `react/jsx-runtime` — the component's import, not the entry's, since only that one discriminates.
+- **Tailwind is free**: `styles/index.css` already declares `@source "../**\/*.{ts,tsx}"`, so the
+  classes are in the app stylesheet — a different file from the JS that broke.
+- **The reveal policy is "only while the mount point is empty"**, which needs no boot flag and makes it
+  impossible to replace a slow-hydrating SSR page with an error screen.
+- **A failed prerender warns, never fails the build.** An app must still ship without its boot fallback.
+- **The failure arrives as a `code` PROP, and adaptv's own screen never renders it.** `BOOT-LOAD` /
+  `BOOT-THROW` / `BOOT-REJECT` / `BOOT-STALL`. The distinction earns its keep — `LOAD` is a deploy or CDN
+  problem, `THROW`/`REJECT` mean the file arrived and its code is broken, `STALL` means it ran, raised
+  nothing, and still never mounted — but whether to *show* any of that to a user is a product decision,
+  so the framework hands it over and stays out of it. Also stamped on `<html data-adaptv-boot-failed>`
+  for telemetry and e2e.
+- **A prop is what forces four prerenders instead of one.** Static markup cannot be handed a prop at
+  reveal time, so the component is rendered once per code and the watchdog reveals the matching copy.
+  Identical renders — which is what a component that ignores `code` produces, adaptv's default included
+  — collapse back to a single copy, so the mechanism is free to anyone not using it.
+- **It works only because the value space is closed**, and that is the load-bearing condition. Four
+  codes, four renders: exhaustive enumeration, not injection. `code` is therefore the *only* prop the
+  fallback path can pass — `error`, `errorInfo` and `reset` are not enumerable (an infinity of messages
+  and stacks, and a live function), so they are `undefined` there. A component that dereferences `error`
+  unconditionally throws during the **build**, which is the right place to find out.
+- **Any `<button>` in the fallback reloads; nothing is asked of the component.** Its `onClick` was never
+  serialized, so something must wire the screen's only action. Requiring an opt-in attribute was the
+  first design and the wrong one — a forgotten spread would produce a dead button at the exact moment a
+  reload is the only way out, i.e. a silent failure (L7). The blanket rule is sound rather than lucky:
+  in a document with no app JavaScript a button *has* no other reachable behaviour. Anchors navigate
+  natively and are left alone. `bootErrorRetryProps` survives as the precision tool for a screen with a
+  second button that must not reload.
+
+**Where the line sits, and it is deliberate.** A route that fails, a throw nobody caught, data that is
+not there — handling *those* well is the app's job, because only the app knows what to show instead.
+adaptv owns the case the app never got to have an opinion about: the bundle that passed the build and
+died on the first load, where the WebView is black and no app code has run. `boot-failure.test.ts` is
+that scenario end to end — real prerendered component, real emitted document, real watchdog, entry script
+killed. This is the *whole* of adaptv's error surface; the runtime side is B30, and B30 is a decision not
+to have one.
+
+⚠︎ **Adjacent, unverified:** `capBuild` in `bin/lib/native.mjs` copies `_shell.html` over `index.html`
+when it exists, which would clobber the emitted shell — and the fallback with it — on native. In this
+configuration the build produces no `_shell.html` (the measurement behind `app-shell.ts`), so it does
+not fire today. It is a silent one if it ever does.
 
 ### B29 — the Android system NAV bar is browser/OS-owned on web + PWA; only native controls it
 
