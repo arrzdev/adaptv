@@ -36,9 +36,13 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  //No retries, here least of all (#57 settled this for the main suite). This
+  //suite has a KNOWN intermittent — `update.spec.ts` on Chromium, ~1 run in 3-5,
+  //not root-caused — and a single CI retry is precisely what would turn it into a
+  //green run and delete the only evidence that it is still there.
+  retries: 0,
   reporter: process.env.CI ? "line" : "list",
-  use: { baseURL, trace: "on-first-retry" },
+  use: { baseURL, trace: "retain-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     // WebKit ≈ Mobile Safari, the actual target for an installed PWA. Not a real

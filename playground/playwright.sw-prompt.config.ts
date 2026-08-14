@@ -27,9 +27,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  //No retries — #57's rule, and `playwright.sw.config.ts` says why it matters
+  //double for this suite. `on-first-retry` would never fire with none.
+  retries: 0,
   reporter: process.env.CI ? "line" : "list",
-  use: { baseURL, trace: "on-first-retry" },
+  use: { baseURL, trace: "retain-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     { name: "webkit", use: { ...devices["iPhone 13"] } },

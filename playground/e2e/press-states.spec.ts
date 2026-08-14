@@ -14,8 +14,6 @@ import { expect, test } from "@playwright/test"
  * for no one even with a perfectly working engine.
  */
 
-test.describe.configure({ retries: 2 })
-
 const ENGINE = "hold me, drag off, drag back"
 const PLAIN = /a plain .*button.*, same class string/
 
