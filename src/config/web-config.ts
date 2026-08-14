@@ -1,27 +1,29 @@
 /**
- * The `web` deployment block — intent-level config, resolved.
- * → `LIFECYCLE.md §1.2` (D4), `DECISIONS.md §6.3`
+ * The resolved web build settings.
+ * → `LIFECYCLE.md §1.2` (D4), `DECISIONS.md §6.3`, `§6.4`
  *
- * The deploy shape used to be two low-level fields (`router.render` + `sw`) with
- * the web adapter hardcoded in the app's `vite.config`. That is mechanism leaking
- * into config: the consumer states *how* rather than *what*. This resolves an
- * intent-level block instead, and keeps the old fields working as escape hatches
- * so existing apps keep building.
+ * The consumer states *what* (ship SSR), not *how* (which navigation strategy,
+ * which shell filename). Everything mechanical is derived.
+ *
+ * There is no `host` here. It existed, and it was theatre: the only value that
+ * ever changed a byte of output was `"static"`, which is just `render: "spa"`
+ * said twice. → `DECISIONS.md §6.4`
  */
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
-import { resolvePrecacheDocuments } from "#adaptv/config/precache-documents.ts"
-import type { ServiceWorkerUpdateMode } from "#adaptv/config/types.ts"
-
-/** Where the web build is deployed. Maps to a TanStack Start deploy preset. */
-export type AdaptvHost = "cloudflare" | "vercel" | "node" | "static"
 
 export type ResolvedWebConfig = {
   render: "ssr" | "spa"
-  host: AdaptvHost
   sw: {
+    /**
+     * Whether a service worker is built and registered. Derived from the TARGET
+     * alone — there is no config key behind it.
+     *
+     * The worker is core product behaviour, not a feature flag: it is what makes
+     * a web build navigate like the native one. The single case where it is off
+     * is Capacitor, where a worker is impossible on iOS, silently inconsistent on
+     * Android, redundant (the bundle is on-disk) and hostile to OTA. → §3.5
+     */
     enabled: boolean
-    precacheDocuments: string[]
-    register: ServiceWorkerUpdateMode
   }
 }
 
@@ -38,45 +40,31 @@ export function resolveWebConfig(
   config: AdaptvAppConfig,
   target: "web" | "capacitor" = "web",
 ): ResolvedWebConfig {
-  const web = config.web ?? {}
-
   if (target === "capacitor") {
-    return {
-      render: "spa",
-      host: "static",
-      sw: { enabled: false, precacheDocuments: [], register: "manual" },
-    }
+    return { render: "spa", sw: { enabled: false } }
   }
 
-  //`web.render` wins over the legacy `router.render`; absent both, SSR.
   //Defaulting to SSR is the asymmetry argument, not a performance one: a wrong
   //SPA default silently kills SEO and is found late, by someone reading a
   //ranking report. A wrong SSR default costs one config flip, immediately.
-  const render = web.render ?? config.router.render ?? "ssr"
-
-  const legacySwDisabled = config.sw === false
-  const swBlock = web.sw ?? {}
-  const swObject = typeof config.sw === "object" ? config.sw : undefined
-
   return {
-    render,
-    host: web.host ?? "node",
-    sw: {
-      enabled: (swBlock.enabled ?? true) && !legacySwDisabled,
-      precacheDocuments: resolvePrecacheDocuments(
-        swBlock.precacheDocuments ?? swObject?.precacheDocuments,
-      ),
-      register: swBlock.register ?? "prompt",
-    },
+    render: config.render ?? "ssr",
+    //`true`, with no key behind it. Every web build gets the worker.
+    sw: { enabled: true },
   }
 }
 
 /**
  * The files a static host needs, keyed by output-relative path.
  *
- * None of these were emitted before, so `host: "static"` was documented but not
- * actually deployable (`DECISIONS.md` B26). Each one exists for a specific host
- * behaviour, not for symmetry:
+ * Emitted for **every `render: "spa"` build**, not for a nominated host. Each one
+ * is read by a different platform and ignored by the rest, so emitting all four
+ * unconditionally is correct wherever the build lands and inert everywhere else —
+ * which is precisely why adaptv no longer asks *which* host. They are never
+ * emitted under `"ssr"`: `_redirects` there would answer every navigation from a
+ * static file and hijack it away from the server. → `DECISIONS.md §6.4`
+ *
+ * Each one exists for a specific host behaviour, not for symmetry:
  *
  * - **`index.html`** — TanStack Start emits `_shell.html`, and *only* in SPA
  *   mode. GitHub Pages runs Jekyll, which **strips `_`-prefixed files**, and

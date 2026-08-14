@@ -170,6 +170,12 @@ const FRAMEWORK = [
     summary: "noSelect · hideScrollbars · touchCallout stamps",
     isNew: false,
   },
+  {
+    to: "/lab/service-worker",
+    title: "Service worker",
+    summary: "precache · navigation preload · the update flow",
+    isNew: true,
+  },
 ] as const satisfies readonly LabEntry[]
 
 const CAPABILITIES = [
