@@ -27,6 +27,10 @@ import { expect, test } from "@playwright/test"
  *      settle (poll / wait) before asserting.
  *
  * ⚠︎ chromium-only. Android WebView engine; iOS WebKit (longer fling) is a sim walk.
+ * That warning is now ENFORCED by the skip below rather than just written down:
+ * the webkit project is a mobile device profile, where `mouse.wheel` throws
+ * "Mouse wheel is not supported in mobile WebKit". Every webkit run failed on it
+ * deterministically — retries only made it fail three times instead of once.
  */
 
 test.use({ viewport: { width: 390, height: 844 } })
@@ -48,16 +52,73 @@ const expectedLabel = (top: number) =>
 
 // these tests time the async scroll pipeline. Five of them racing each other for
 // one single-threaded dev server starves the timing and they flake; serial mode
-// runs them in one worker (still parallel against OTHER spec files), and retries
-// absorb any residual load spike from those.
-test.describe.configure({ mode: "serial", retries: 2 })
+// runs them in one worker (still parallel against OTHER spec files).
+//
+// The `retries: 2` that used to sit here was charged to "residual load spikes".
+// It was paying for two real bugs instead: the tap test asserting mid-glide, and
+// every test driving a drum React had not mounted yet. Both are fixed above, so
+// the retries are gone and a red run means a real one.
+test.describe.configure({ mode: "serial" })
+
+/**
+ * Wait for the client to actually take over before driving the drum.
+ *
+ * The whole wheel is server-rendered, down to `data-active="true"` on the
+ * start row — so the waits in `setup()` are all satisfied by inert HTML, and
+ * even its `activeHour === START` assertion passes on a page React has never
+ * touched. Everything this spec measures is client-only: `scrollTop` is
+ * seeded to the start row by an effect, the value tracks the drum through
+ * `onScroll`, and a row tap rolls the wheel from `onClick`. Fired before
+ * hydration, every one of those is silently dropped. It is not load flake —
+ * Playwright boots its own dev server and tears it down per run, so the FIRST
+ * test to reach this route pays the cold transform cost and loses the race
+ * while every test after it wins. A dev session left running hides it
+ * entirely, because `reuseExistingServer` then hands the suite a warm server.
+ *
+ * The splash is server-rendered too and self-unmounts only once the client
+ * has hydrated and the local store has seeded, so its disappearance is the
+ * one honest "React is driving now" signal on the page. Given a generous
+ * timeout on purpose — the case it exists for is a cold server, where the
+ * route's first transform can take longer than the 5s default.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
+
+/** Wait for the drum to truly SETTLE. `%ITEM_H≈0` alone is not enough —
+ *  scrollTop sweeps THROUGH whole-row multiples during the glide, so a bare
+ *  snap check returns mid-animation and reads a stale row. Wait for scrollTop
+ *  to stop moving across a window AND be on a row. */
+async function settle(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const a = await hourScrollTop(page)
+        await page.waitForTimeout(120)
+        const b = await hourScrollTop(page)
+        return a === b ? b % ITEM_H : 999 // moving → keep polling
+      },
+      { timeout: 4000 },
+    )
+    .toBeLessThanOrEqual(1)
+}
 
 test.describe("WheelColumn as a native scroller", () => {
   let cx = 0
   let cy = 0
 
+  test.beforeEach(({ browserName }) => {
+    test.skip(
+      browserName !== "chromium",
+      "mouse.wheel is unsupported on the mobile WebKit profile",
+    )
+  })
+
   async function setup(page: Page) {
     await page.goto("/lab/wheel-column")
+    await awaitClientHandover(page)
     await page.locator(HOUR).waitFor()
     await page
       .locator(`${HOUR} button[data-active="true"]`)
@@ -74,24 +135,11 @@ test.describe("WheelColumn as a native scroller", () => {
     expect(await activeHour(page)).toBe(label(START))
   }
 
-  /** Wheel over the drum, then wait for the scroll to truly SETTLE. `%ITEM_H≈0`
-   *  alone is not enough — scrollTop sweeps THROUGH whole-row multiples during the
-   *  glide, so a bare snap check returns mid-animation and reads a stale row. Wait
-   *  for scrollTop to stop moving across a window AND be on a row. */
+  /** Wheel over the drum, then wait for the scroll to truly settle. */
   async function wheel(page: Page, delta: number) {
     await page.mouse.move(cx, cy)
     await page.mouse.wheel(0, delta)
-    await expect
-      .poll(
-        async () => {
-          const a = await hourScrollTop(page)
-          await page.waitForTimeout(120)
-          const b = await hourScrollTop(page)
-          return a === b ? b % ITEM_H : 999 // moving → keep polling
-        },
-        { timeout: 4000 },
-      )
-      .toBeLessThanOrEqual(1)
+    await settle(page)
   }
 
   test("any rest position settles onto a whole row, never between two", async ({
@@ -153,6 +201,13 @@ test.describe("WheelColumn as a native scroller", () => {
       })
       .click()
 
+    // the tap rolls the drum with a SMOOTH scroll, and the value is reported
+    // live off `nearestIndex()` — so it flips to the tapped row the moment
+    // scrollTop crosses the halfway mark, a fraction of a row before the roll
+    // has arrived. Polling the value alone therefore returns mid-glide and the
+    // scrollTop read on the next line was a whole 29 of 30px off the row. Same
+    // rule as `wheel()`: settle first, assert after.
+    await settle(page)
     await expect
       .poll(() => activeHour(page), {
         message: "tapping a row must roll it to the centre",

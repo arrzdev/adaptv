@@ -23,8 +23,6 @@ import { expect, test } from "@playwright/test"
  */
 
 test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
-test.describe.configure({ retries: 2 })
-
 // the inner box is the LAST scroller on the page (the page root is first). Survives
 // enabled=false, which drops the data-adaptv root.
 const SCROLLER = '[data-scroll-view="y"]'
@@ -98,16 +96,37 @@ test.describe("PullToRefresh under real touch", () => {
     "needs CDP touch injection — synthetic touch delivers no touch points",
   )
 
+  /**
+   * Wait for the client to take over. The page is server-rendered, so the
+   * `waitFor()` below is satisfied by inert HTML while PullToRefresh's touch
+   * listeners — attached by an effect — are not up yet. The splash self-unmounts
+   * only once the client has hydrated, so its disappearance is the one honest
+   * "React is driving now" signal. Generous timeout: a cold route's first
+   * transform can outrun the 5s default.
+   */
+  async function awaitClientHandover(page: Page) {
+    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+      timeout: 20_000,
+    })
+  }
+
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/pull-to-refresh")
+    await awaitClientHandover(page)
     await page.locator(SCROLLER).last().waitFor()
     await page.locator(SCROLLER).last().scrollIntoViewIfNeeded()
     await page.waitForTimeout(200)
     // NO warm-up on purpose: this harness reliably pulls only on the FIRST CDP
     // gesture of a page (a throwaway warm-up drag degrades the next one to a stub).
-    // So the measured drag IS the first gesture, and the describe-level retries —
-    // which reload the page — give a fresh first gesture when one is swallowed.
+    // So the measured drag IS the first gesture.
+    //
+    // That constraint used to be paid for with the describe's retries: a swallowed
+    // gesture was retried into a page reload, hoping for a fresh first one. It was
+    // never the harness swallowing it — the gesture landed on a page whose engine
+    // had not mounted, which is why it read as "only the first drag works" and why
+    // it only ever bit on a cold server. The handover above removes the need, and
+    // the failure it used to hide (`maxLift` 0 — no lift at all) is now honest.
     return { cdp }
   }
 
