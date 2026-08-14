@@ -19,9 +19,13 @@ import { expect, test } from "@playwright/test"
 
 test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
 // serial: five of these arming a probe and firing CDP touch at one dev server in
-// parallel starves it, and the arm click races hydration. One worker is instant
-// and deterministic; retries absorb load from other spec files.
-test.describe.configure({ mode: "serial", retries: 2 })
+// parallel starves it. One worker is instant and deterministic.
+//
+// "and the arm click races hydration" used to be written here as a fact of life,
+// with `retries: 2` to ride it out. It is a bug, not a fact of life, and
+// `awaitClientHandover` fixes it — so the retries are gone: a red run here now
+// means something real, reported the first time.
+test.describe.configure({ mode: "serial" })
 
 const LOG = "[data-lab-log] li"
 const VW = 390
@@ -57,6 +61,34 @@ async function swipe(
   await touch(cdp, "touchEnd")
 }
 
+/**
+ * Wait for the client to actually take over. Every control on these pages is
+ * server-rendered, so `toBeVisible()` passes on inert HTML and anything fired
+ * at that moment is lost: a swipe hits a document with no listeners on it yet
+ * (the gesture is attached by an effect), and a click hits a button whose
+ * handler is not attached yet. The splash is SSR-rendered too and self-unmounts
+ * only once the client has hydrated and the local store has seeded, so its
+ * disappearance is the one honest "React is driving now" signal on the page.
+ *
+ * Both describes need it. The probe one looked immune because it *asserts* the
+ * arm click took ("arm the probe" → "disarm the probe"), but that only turns a
+ * lost click into a failing `beforeEach` — which is precisely how it presented:
+ * the first test of a cold run failing on a button label, with its four serial
+ * siblings never running. Playwright boots its own dev server and tears it down
+ * per run, so that first test pays the route's cold transform cost and loses
+ * the race while every test after it wins; a dev session left running hides it
+ * entirely, because `reuseExistingServer` then hands the suite a warm server.
+ *
+ * Given a generous timeout on purpose — the case it exists for is a cold
+ * server, where the route's first transform can take longer than the 5s
+ * default.
+ */
+async function awaitClientHandover(page: import("@playwright/test").Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
+
 test.describe("EdgeSwipeGestures under real touch", () => {
   let cdp: CDPSession
 
@@ -67,6 +99,7 @@ test.describe("EdgeSwipeGestures under real touch", () => {
     )
     cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/edge-swipe")
+    await awaitClientHandover(page)
     // it ships disarmed so it cannot double up with the shell's own back swipe;
     // the button label flipping to "disarm" is the unambiguous armed signal
     await page.getByRole("button", { name: "arm the probe" }).click()
@@ -143,20 +176,6 @@ test.describe("EdgeSwipeGestures under real touch", () => {
 test.describe("the app's edge-swipe back", () => {
   const BACK_TO_TASKS = "Back to tasks" // settings-only control
   const CREATE_TASK = "Create task" // home-only control
-
-  /**
-   * Wait for the client to actually take over. Every control on this page is
-   * server-rendered, so `toBeVisible()` passes on inert HTML and a swipe fired at
-   * that moment hits a document with no listeners on it yet — the gesture is
-   * attached by an effect. The splash is SSR-rendered too and self-unmounts only
-   * once the client has hydrated and the local store has seeded, so its
-   * disappearance is the one honest "React is driving now" signal on the page.
-   */
-  async function awaitClientHandover(
-    page: import("@playwright/test").Page,
-  ) {
-    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
-  }
 
   /** Load a route with the tab claiming to be an installed (standalone) app. */
   async function gotoInstalled(

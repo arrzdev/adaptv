@@ -142,11 +142,11 @@ async function closeAll(page: Page, cdp: CDPSession) {
   await page.waitForTimeout(280)
 }
 
-// real-touch timing is sensitive to many parallel workers sharing one dev server,
-// so a slow frame can make a re-aim land late — retries absorb those load spikes
-// (the components themselves are deterministic; a warm serial run is always 7/7)
-test.describe.configure({ retries: 2 })
-
+// this used to carry `retries: 2`, charged to "a slow frame under many parallel
+// workers". No retries now: the components are deterministic, and if real-touch
+// timing here ever genuinely loses to load, that is worth seeing on the first run
+// rather than absorbing — a retry that hides a load problem hides a real one just
+// as well, which is exactly how the hydration race in this suite survived.
 test.describe("Swipeable rows under real touch", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",

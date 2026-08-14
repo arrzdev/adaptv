@@ -20,7 +20,12 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  //No retries, anywhere. CI used to get one, and every timing-sensitive describe
+  //carried `retries: 2` on top of it — which is how a hydration race that failed
+  //the first test of every cold run stayed filed as "load flake" for as long as it
+  //did. A retried test still reports green, so the signal was gone. If a test here
+  //cannot pass on its first attempt it is telling you something; let it.
+  retries: 0,
   reporter: process.env.CI ? "line" : "list",
   use: {
     baseURL,
