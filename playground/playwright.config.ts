@@ -29,7 +29,10 @@ export default defineConfig({
   reporter: process.env.CI ? "line" : "list",
   use: {
     baseURL,
-    trace: "on-first-retry",
+    //Paired with `retries: 0` above: "on-first-retry" would mean there is never a
+    //first retry to trace on, so every failure lands with no trace at all — the
+    //opposite of what #57 wanted. Capture on the only attempt there is.
+    trace: "retain-on-failure",
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
