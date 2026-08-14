@@ -207,7 +207,6 @@ function DropdownContent({
   }, [insets, placement, triggerRef])
 
   //measure + place before paint so the panel never flashes at the wrong spot
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reposition owns the deps
   useLayoutEffect(() => {
     if (open) reposition()
     else setPos(null)
