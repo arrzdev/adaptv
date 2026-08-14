@@ -17,8 +17,14 @@ export type GestureEvent = React.PointerEvent | React.KeyboardEvent
 //cursor, so touch gets a roomier margin around the element's frame before the
 //press is read as "outside". used only when the caller doesn't pin pressOutset.
 //touch is generous — a normal tap drifts ~35px on release (measured on device).
-const TOUCH_PRESS_OUTSET_PX = 24
-const POINTER_PRESS_OUTSET_PX = 6
+//
+//EXPORTED because `useClickFix` has to agree with them. It serves the case this
+//engine structurally cannot — a hit target with no frame of its own, drawn inside
+//a canvas — so it measures travel where this measures containment. Two budgets
+//for "was that a tap" would mean a button and a canvas shape disagreeing about
+//the same finger on the same screen.
+export const TOUCH_PRESS_OUTSET_PX = 24
+export const POINTER_PRESS_OUTSET_PX = 6
 //how far the pointer may travel from the press anchor before the *pending*
 //long-press is abandoned (distance mode). mirrors UILongPressGestureRecognizer's
 //allowableMovement (10pt). the tap itself is unaffected — it tracks the frame.
