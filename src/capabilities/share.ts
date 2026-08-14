@@ -7,8 +7,8 @@
 //TWO of them, because the Web Share API gates on two independent things:
 //
 //  • {@link isShareSupported} — is there a share sheet here at all? `false` on
-//    desktop Chrome and on every Firefox; `true` on Safari, iOS/Android web,
-//    and every native build.
+//    desktop Chrome and on every Firefox; `true` on Safari, on iOS/Android web,
+//    and on a native build whose BINARY carries the plugin (see `viaPlugin`).
 //  • {@link canShareTarget}   — will THIS payload go through it? A browser with
 //    `navigator.share` still refuses file payloads it has no handler for.
 //

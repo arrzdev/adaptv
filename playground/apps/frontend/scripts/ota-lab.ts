@@ -75,7 +75,6 @@ import { pathToFileURL } from "node:url"
 
 const HERE = process.cwd()
 const CHANNEL_PORT = Number(process.env.ADAPTV_OTA_PORT ?? 41790)
-const CLIENT_DIR = path.join(HERE, "dist/client")
 // Deliberately OUTSIDE `dist/`: every build wipes that directory, and the channel
 // has to survive across builds — it is the thing the old app talks to while the
 // new one is being made. `.adaptv/` is where adaptv already keeps generated state.
@@ -224,6 +223,38 @@ async function otaEmit() {
 }
 
 /**
+ * The directory the native build writes, read from the framework's own constant.
+ *
+ * 🔴 Hard-coding this is how the bench lies. It was `dist/client`, adaptv moved the
+ * native bundle to `.adaptv/web`, and nothing failed: `publish` went on hashing and
+ * zipping the stale `dist/client` from a previous session, so every "published"
+ * bundle carried that session's JavaScript — including its **public key**, which no
+ * longer matched the key the freshly installed binary trusts. The device fetched
+ * each manifest, failed the signature silently (that is the designed behaviour) and
+ * refused every update.
+ *
+ * It stayed invisible because the badge is stamped straight into a CSS asset, so
+ * the colour still changed in `dist/client` and the ladder still read green through
+ * the first hop — the one hop the EMBEDDED bundle, which did have the right key,
+ * was able to accept. Measured on an iOS simulator: `.adaptv/web` held
+ * `index-4FCj-1_6.js` trusting key `57c3f13b`, while the published zip held
+ * `index-ZXJLbVZT.js` from four hours earlier trusting `259536e1`.
+ *
+ * Same rule as {@link otaEmit} and {@link nativeFingerprint}, one level up: the
+ * bench may choose *where its channel lands*, never *what the framework builds*.
+ */
+let clientDirCache: string | null = null
+async function clientDir(): Promise<string> {
+  if (clientDirCache) return clientDirCache
+  const { CAPACITOR_WEB_DIR } = await import(
+    pathToFileURL(path.join(ADAPTV_ROOT, "src/vite/capacitor-config.ts"))
+      .href
+  )
+  clientDirCache = path.join(HERE, CAPACITOR_WEB_DIR)
+  return clientDirCache
+}
+
+/**
  * Colours that are impossible to mistake for each other across a room.
  *
  * The point of the visual change is that it needs no interpretation — if you have
@@ -275,7 +306,8 @@ function listFiles(dir: string, base = dir): string[] {
  * The app as installed from the "store" carries no badge. **The badge appearing
  * at all is the signal**; after that, the name on it is which version you are on.
  */
-function stampBadge(colour: Colour): void {
+async function stampBadge(colour: Colour): Promise<void> {
+  const CLIENT_DIR = await clientDir()
   const rule =
     `\nhtml::after{content:"OTA · ${colour.name.toUpperCase()}";` +
     `position:fixed;left:0;right:0;bottom:0;z-index:2147483647;` +
@@ -497,7 +529,7 @@ async function publish(): Promise<void> {
   await buildCapacitor()
   //before the tag is computed: the tag is a content hash of this directory, so
   //stamping after it would publish a hash that describes bytes nobody ships
-  stampBadge(colour)
+  await stampBadge(colour)
   const plan = await emitChannel()
 
   say(
@@ -542,7 +574,7 @@ async function skew(): Promise<void> {
   say(`building ${colour.name} as if a native plugin had been added`)
   setColour(colour)
   await buildCapacitor()
-  stampBadge(colour)
+  await stampBadge(colour)
 
   const real = await nativeFingerprint()
   //A fingerprint is an opaque hash of the native surface, so "a different native
@@ -594,8 +626,8 @@ async function poison(): Promise<void> {
   say(`building ${colour.name} and then breaking it on purpose`)
   setColour(colour)
   await buildCapacitor()
-  stampBadge(colour)
-  const entry = poisonEntry()
+  await stampBadge(colour)
+  const entry = await poisonEntry()
   const plan = await emitChannel()
 
   say(`published ${plan.buildTag} — ${bold("this bundle cannot boot")}`)
@@ -624,7 +656,8 @@ async function poison(): Promise<void> {
  * reported the watchdog as not firing. A throw in the body's first statement runs
  * once the static imports have, and before anything mounts.
  */
-function poisonEntry(): string {
+async function poisonEntry(): Promise<string> {
+  const CLIENT_DIR = await clientDir()
   const html = readFileSync(path.join(CLIENT_DIR, "index.html"), "utf8")
   const entry = html.match(
     /<script[^>]+type="module"[^>]+src="\/([^"]+\.js)"/,
@@ -643,7 +676,50 @@ function poisonEntry(): string {
 }
 
 /**
- * Write the channel from whatever is in `dist/client` right now.
+ * Refuse to publish a bundle that does not trust the key this bench signs with.
+ *
+ * 🔴 The one invariant here with **no symptom**. Every signature verifies, the
+ * channel is well-formed, the device fetches each manifest — and refuses all of
+ * them, silently, because a manifest whose signature does not check out is not an
+ * error the updater can distinguish from being offline (by design: a bundle under
+ * attack must not be able to report on its own verification). The channel log
+ * shows a healthy 200 for the manifest and no request for the zip, which is also
+ * what a device with nothing to do looks like.
+ *
+ * It caught a real one: the native build's output moved and the bench went on
+ * zipping a stale directory, so every published bundle carried a previous
+ * session's key. See {@link clientDir}. That failure is closed at the root now,
+ * but this is the assertion that would have named it in one line.
+ */
+function assertTrustsBenchKey(
+  clientDirPath: string,
+  publicKey: string,
+): void {
+  const baked = listFiles(clientDirPath)
+    .filter((rel) => rel.endsWith(".js"))
+    .map(
+      (rel) =>
+        readFileSync(path.join(clientDirPath, rel), "utf8").match(
+          /publicKey:\s*[`"'](-----BEGIN PUBLIC KEY-----[\s\S]*?-----END PUBLIC KEY-----)/,
+        )?.[1],
+    )
+    .find(Boolean)
+  if (!baked) {
+    throw new Error(
+      "ota-lab: the built bundle bakes no OTA public key — it was built without ADAPTV_OTA_PUBLIC_KEY, and every update it publishes would be refused",
+    )
+  }
+  const normalise = (pem: string) => pem.replace(/\\n/g, "\n").trim()
+  if (normalise(baked) !== normalise(publicKey)) {
+    throw new Error(
+      `ota-lab: the built bundle trusts ${keyPrint(normalise(baked))}, but this channel signs with ${keyPrint(publicKey)}.\n` +
+        "  Every update would be fetched and then refused in silence. Run `fresh` to reinstall against the current pair.",
+    )
+  }
+}
+
+/**
+ * Write the channel from whatever the native build just produced.
  *
  * `fingerprint` overrides the native fingerprint stamped into the manifest, and
  * only `skew` passes it — see there for why publishing a fingerprint the build
@@ -663,6 +739,9 @@ async function emitChannel(fingerprint?: string): Promise<{
   //Everything from here down is the framework's, unchanged: the tag, the archive,
   //the manifest's shape, and both signatures. The bench's only contribution is
   //where the files land and which key signs them.
+  const CLIENT_DIR = await clientDir()
+  const pair = await signingPair()
+  assertTrustsBenchKey(CLIENT_DIR, pair.publicKey)
   mkdirSync(CHANNEL_DIR, { recursive: true })
   const plan = decideChannelEmission({
     buildTag: computeBuildTag(CLIENT_DIR),
@@ -682,7 +761,7 @@ async function emitChannel(fingerprint?: string): Promise<{
     plan,
     archive: buildBundleArchive(CLIENT_DIR),
     nativeFingerprint: fingerprint ?? (await nativeFingerprint()),
-    privateKey: (await signingPair()).privateKey,
+    privateKey: pair.privateKey,
   })
   return { buildTag: plan.buildTag, bundleBytes: written.bundleBytes }
 }
