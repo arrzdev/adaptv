@@ -207,6 +207,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["e2e-sw/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
     }
   ]
 }

@@ -16,6 +16,10 @@ export * from "../hooks/use-keyboard"
 export * from "../hooks/use-media-query"
 export * from "../hooks/use-orientation"
 export * from "../hooks/use-reduced-motion"
+//the app side of the worker⇄app channel. Its counterpart (`sendToApp`) lives in
+//`@arrzdev/adaptv/sw`, which is where an app's own worker modules import from.
+export * from "../hooks/use-service-worker-message"
+export * from "../hooks/use-service-worker-update"
 export * from "../hooks/use-share"
 export * from "../hooks/use-status-bar"
 export * from "../hooks/use-theme"

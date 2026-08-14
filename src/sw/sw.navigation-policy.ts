@@ -5,7 +5,7 @@
  * reasoned about and tested without a `ServiceWorkerGlobalScope`.
  */
 
-/** The build's render mode. `capacitor` is a target, not a `web.render` value. */
+/** The build's render mode. `capacitor` is a target, not a `render` value. */
 export type NavigationMode = "ssr" | "spa" | "capacitor"
 
 export type NavigationPolicy = {
@@ -26,7 +26,7 @@ export type NavigationPolicy = {
  *
  * | mode | handling | why |
  * |---|---|---|
- * | `ssr` | `NetworkOnly` + precache **fallback** | preserves the per-request render on every *online* navigation. A blanket `NavigationRoute` would hijack online navigations too and silently turn an SSR app into a stale SPA for returning visitors. |
+ * | `ssr` | preload-or-network + precache **fallback** | preserves the per-request render on every *online* navigation. A blanket `NavigationRoute` would hijack online navigations too and silently turn an SSR app into a stale SPA for returning visitors. |
  * | `spa` | `NavigationRoute` → app shell | there is no per-request render to preserve, so the classic app shell is simply correct. |
  * | `capacitor` | none | §3.5 — impossible on iOS (custom scheme origin), silently inconsistent on Android, redundant (the bundle is on-disk), and actively hostile to OTA. |
  */

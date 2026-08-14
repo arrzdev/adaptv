@@ -368,7 +368,7 @@ Full designs exist; the next step is TDD, not more design.
 | O2 | **TanStack facade** | **Tier 1 (curated barrel, TanStack as a named engine dep) ships now; Tier 2 (full opacity) deferred.** Key insight: safety and opacity are **orthogonal** — you don't need to hide TanStack to ban `createServerFn`. → `FACADE.md §1, §3` | ✅ **CLOSED** |
 | O3 | **Enforcing the `createServerFn` ban** | **Layered, with a Vite `resolveId` hook inside `adaptv()` as the unbypassable backstop** (verified live), + Biome `noRestrictedImports` shipped via `extends`, + one GritQL rule for the `server:{handlers}` config-shape gap. Rejected with reasons: `@deprecated`, declaration merging, `exports` maps, pnpm strictness. → `FACADE.md §2` | ✅ **CLOSED** |
 | O4 | **Render default + deploy presets** | Web = SSR **or** static SPA+SW, consumer's choice; capacitor = SPA forced. Static deploy emits `index.html`/`404.html`/`.nojekyll`/`_redirects`/`_headers`. → `RENDERING.md §3`, `LIFECYCLE.md §1.2`. **Default settled: `ssr`** — see §6.3 | ✅ **CLOSED** |
-| O5 | **SW architecture** | **Navigation strategy is a pure function of `render`**: ssr → `NetworkOnly` + precache fallback (never cache documents — it's a cross-user data leak); spa → `NavigationRoute`→shell; capacitor → no SW + active unregister. `prompt` default, nav preload on, activate-time cache sweep, `vite:preloadError` net. Stay on Workbox. → `RENDERING.md §3` | ✅ **CLOSED** |
+| O5 | **SW architecture** | **Navigation strategy is a pure function of `render`**: ssr → preload-or-network + precache fallback (never cache documents — it's a cross-user data leak); spa → `NavigationRoute`→shell; capacitor → no SW + active unregister. `serviceWorkerUpdate: "auto"` default, nav preload on **under ssr and off under spa** (it is a matched pair — `enable()` in activate *and* a handler that reads `event.preloadResponse`; enabled-but-unread costs two renders per navigation), activate-time cache sweep, `vite:preloadError` net. Stay on Workbox. → `RENDERING.md §3` | ✅ **CLOSED** |
 | O6 | **What to port from Ionic** + attribution | Partially answered (theming: **don't** copy — §O1; keyboard: use native events not `visualViewport`, per Ionic's own source comment). The **gesture controller / iOS input shims / back-button chain** inventory is still in flight. | 🔄 **in progress** |
 | O7 | **Lint delivery** | **Biome 2.x — `noRestrictedImports` for imports, GritQL plugins for AST shapes.** Verified working end-to-end on the pinned 2.3.2. Note: `extends` resolves bare npm specifiers; `plugins` does **not** (needs an explicit `node_modules/` path). GritQL has no binding resolution — syntax matching only. → `FACADE.md §2.3–2.4` | ✅ **CLOSED** |
 | O8 | **Plugin picks — OTA** | **Capawesome `@capawesome/capacitor-live-update` (MIT, 8.3.0), self-hosted.** Genuinely backend-free; strongest signature story (RSA PEM + SHA-256). Appflow is **dead** (no new sales since 2025-02-11, sunsets 2027-12-31) — `@capacitor/live-updates` disqualified. **adaptv must force `readyTimeout`** (Capawesome defaults it to `0` = rollback disabled) and **conform to `Library/NoCloud/ionic_built_snapshots/<id>/` on iOS** or persistence silently fails on cold launch. → `LIFECYCLE.md §5` | ✅ **CLOSED** |
@@ -419,10 +419,51 @@ So the obligation lands on the app, is **derivable from the dependency list**, i
 
 > ### ✅ BUILT (2026-07-20) — `src/native/privacy-manifest.ts` + `stamp-privacy.ts`, 9 tests
 >
-> Emitted on the capacitor build (alongside the capacitor.config stamp) from the app's installed
-> dependencies. **Verified in project-zero:** empty with no relevant plugin; adding
-> `@capacitor/preferences` correctly produces `NSPrivacyAccessedAPICategoryUserDefaults` / `CA92.1`.
-> Idempotent, and skipped entirely when there is no iOS project.
+> Generated from the app's installed dependencies. **Verified in project-zero:** empty with no
+> relevant plugin; adding `@capacitor/preferences` correctly produces
+> `NSPrivacyAccessedAPICategoryUserDefaults` / `CA92.1`. Idempotent.
+>
+> #### ⚠︎ Amended (2026-08-13) — it was written, and it never shipped
+>
+> Two bugs, found together, both invisible for the same reason: this feature's whole premise is that
+> a missing manifest fails **silently**, and every check anyone had was of adaptv's own filesystem.
+>
+> **1. It was never in the `.ipa`.** Xcode copies what `project.pbxproj` *declares*. The Capacitor
+> template's `Resources` build phase lists six items and this was never one of them, so the file sat
+> in `.adaptv/ios/App/App/` and no build ever picked it up — while `adaptv doctor`, which checks
+> `existsSync`, reported it green. Confirmed by unzipping the `.ipa`: `Payload/App.app/` had
+> `Capacitor.framework`'s and `CapacitorCordova.framework`'s privacy manifests, and none of the
+> app's own. `stamp-privacy.ts` now registers it in the project too (file reference + build file +
+> the `Resources` slot + the `App` group), and **throws** if it cannot find those anchors — a silent
+> skip there would reproduce the exact failure the module exists to prevent. → the general rule:
+> *a generated file is not a shipped file; verify inside the built `.app`/`.apk`.*
+>
+> **2. It ran at the wrong time — twice over.** The stamp used to live in `adaptv()`'s
+> `target === "capacitor"` branch. On a first build in a fresh checkout it ran *before*
+> `cap add ios`, found no destination, and silently no-opped; on a warm build the web bundle is
+> fingerprint-cached, so Vite never starts and it did not run at all. `doctor` told the dev to
+> "run `adaptv build ios`, which regenerates it" — advice that could not work the first time it
+> was needed. It now runs from the CLI's `preparePlatform`, the one definition of "ready to sync",
+> which is after the scaffold and outside the build cache. The old "no iOS project → return null"
+> branch is gone: that silence *was* the bug, so the precondition throws instead.
+>
+> **3. And it was scanning the wrong dependency list.** Found while verifying the fix: the `.ipa` now
+> contained a manifest, and the manifest declared **nothing** — on an app whose `Frameworks/`
+> directory holds `CapacitorPreferences.framework`. `resolveRequiredReasons` read the *app's*
+> `package.json`, which by design names `@arrzdev/adaptv` and no `@capacitor/*` at all (L20 — adaptv
+> owns the plugins, the consumer installs none). So every adaptv app would have shipped an empty
+> `NSPrivacyAccessedAPITypes` while linking a binary that reaches `UserDefaults`. That is worse than
+> the original bug: not a missing declaration but a **false** one, the exact failure this generator
+> was written to avoid. `doctor`'s missing-manifest rule was keyed off the same list and was dead
+> code for the same reason — it could not fire on any real app. The bundled set now lives in
+> `src/native/plugins.ts` and both read it (`linkedDependencies`), and `checkPrivacyManifest` gained
+> an iOS-project gate so a web-only app is not told to fix a submission it will never make.
+>
+> **Verified end to end in project-zero**, all three: wiped `.adaptv/`, first build ⇒ manifest
+> present at `Payload/App.app/PrivacyInfo.xcprivacy` inside the `.ipa`, declaring
+> `NSPrivacyAccessedAPICategoryUserDefaults` / `CA92.1`; warm rebuild ⇒ still four pbxproj entries,
+> not eight; deleted the manifest ⇒ `doctor` reports it (it never could before) and the fix it
+> prints actually restores it.
 >
 > **The plugin→API map is a small explicit table, not static analysis.** The mapping is *Apple policy,
 > not code structure* — it changes when Apple changes the rules, not when the plugin changes. A table a
@@ -818,7 +859,9 @@ correct since filenames are content-hashed; and a dead `dev-sw.js?dev-sw` specia
 
 **Static-host emit gap:** nothing writes `404.html`, `.nojekyll`, `_redirects` or `_headers`, and
 `_shell.html` is **stripped by Jekyll on GitHub Pages** and invisible to Cloudflare Workers Assets. The
-`host: "static"` preset (`LIFECYCLE.md §1.2`) is not actually deployable as designed.
+static deploy path (`LIFECYCLE.md §1.2`) is not actually deployable as designed. *(Fixed: the files are
+emitted for every `render: "spa"` build on the **web** target — the `target: "capacitor"` half of that
+gate was itself a bug, and cost every native bundle three files it cannot use. §6.4.)*
 
 > **⚠︎ Reliability caveat, stated because the source agent stated it:** this report self-marked several
 > sections `[CUTOFF]` and relied on training knowledge rather than fetched sources for the Workbox,
@@ -1047,7 +1090,16 @@ link, so an intercepting overlay fails the test rather than merely showing up in
 
 ---
 
-## 6.3 🔒 `web.render` defaults to `"ssr"` — and the asymmetry of being wrong settles it
+## 6.3 🔒 `render` defaults to `"ssr"` — and the asymmetry of being wrong settles it
+
+> **Renamed 2026-08-09: `web.render` → a top-level `render`.** The decision below is unchanged; only the
+> key moved. It sits at the top level because it is not a tuning knob next to `host` — it is the choice
+> that determines what a deploy can even be: `"ssr"` needs something that runs per request (a Node
+> process, a Worker, a function), `"spa"` needs nothing but somewhere to put files, which is what makes
+> GitHub Pages, Netlify or a bucket viable.
+>
+> **Amended 2026-08-10:** `web` and `host` are now deleted outright, which makes `render` the *only*
+> deploy-shaping key rather than the most important of two. → §6.4
 
 I previously leaned SPA (client-held token + offline-first ⇒ SSR buys little). **That reasoning was
 scoped too narrowly — to the authenticated app, ignoring everything around it.**
@@ -1077,6 +1129,142 @@ cannot move up to the JS layer (§3.0).
 
 Note this also reconciles `LIFECYCLE.md §1.2`'s flag that the code currently defaults to `spa` — that's
 legacy, and the resolved default is `ssr`.
+
+## 6.4 🔒 `web.host` is deleted — `render` is the only deploy key (2026-08-10)
+
+`AdaptvWebConfig` and the whole `web` block are gone. `render: "ssr" | "spa"` is the only thing in
+`adaptv.config.ts` that shapes a deploy, and the deploy *target* is named nowhere at all — adaptv wires
+the server build itself and the platform is detected at build time. See the second half of this section:
+the target briefly lived in the consumer's `vite.config.ts` (Start's model), and then stopped needing to
+live anywhere.
+
+**The key was theatre, and it was measurable.** `web.host` had exactly one behavioural consumer:
+`static-host.ts`, acting only on `"static"`. `cloudflare`, `vercel` and `node` were indistinguishable at
+build time — setting `host: "node"` still produced `dist/server/wrangler.json`, because the Cloudflare
+plugin in the consumer's Vite config was what decided. And `"static"` was not a fifth thing either: it
+forced `render: "spa"`, so it was the same statement made twice, in two places that could disagree.
+
+**Start has no adapters to expose.** Its plugin schema (`start-plugin-core` 1.171.24) has no `target`,
+`preset`, `deployment` or `host` key at all. The target is *which plugin is present*: `@cloudflare/vite-plugin`
+for Workers, `@netlify/vite-plugin-tanstack-start` for Netlify, and `nitro/vite` for everything else —
+Vercel, Railway, Node, Bun, AWS Amplify, Azure, Firebase, Stormkit, Zeabur, Zephyr. With no plugin at
+all, `vite build` emits a bare fetch handler at `dist/server/server.js` (verified in this repo by
+removing `cloudflare()` from the playground). TanStack's own reasoning: writing ~10 adapters would have
+consumed the framework budget, so they delegate to Nitro on H3.
+
+**So an adaptv enum could only ever be a worse copy of that.** It would be permanently incomplete against
+~20 real targets, it would need updating whenever Nitro adds a provider, and it would drag adaptv through
+the Nitro 2 → 3 migration on its consumers' behalf.
+
+**CI/CD needed nothing from us either.** Nitro auto-detects eight providers with zero configuration (AWS
+Amplify, Azure, Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel, Zeabur), and pipelines that
+build outside the target platform set `NITRO_PRESET` / `SERVER_PRESET` — which Nitro's docs explicitly
+recommend for CI/CD. An `adaptv build web --host vercel` would have been a narrower duplicate of that. It
+would also have collided with `adaptv dev web --host`, where `--host` already means Vite's bind address.
+
+**On opacity — the rule was being applied one layer too wide.** Opacity exists so adaptv can swap
+TanStack or Capacitor without consumers noticing; those are *adaptv's* platform choices. A hosting
+provider is the consumer's own choice, and hiding Cloudflare from the developer who chose Cloudflare buys
+nothing while costing a permanently-wrong enum.
+
+**What replaced the one real behaviour:** `adaptvStaticHostPlugin` now gates on `render === "spa"`. All
+four files (`index.html`, `404.html`, `.nojekyll`, `_redirects`) are written for every SPA build, because
+each is read by one platform and ignored by the rest — correct wherever the bucket lands, and the build
+never has to be told where that is. Under `"ssr"` they are never written: `_redirects` would answer
+navigations from a static file and take them away from the server.
+
+### ✅ adaptv injects the deploy plugin itself (same day)
+
+The deferral above lasted one conversation. The reasoning that ended it: adaptv is pre-alpha with a long
+runway, so adopting the forward path **while it is still beta** costs nothing, whereas building against
+the legacy `@tanstack/nitro-v2-vite-plugin` would buy a migration to perform later on consumers' behalf.
+The version is **pinned exactly** (`nitro@3.0.260610-beta`) so the beta cannot move under a build, and
+the bump is an explicit, reviewable change. → `src/vite/deploy-server.ts`
+
+The consumer's `vite.config.ts` now names no host at all:
+
+```ts
+plugins: [adaptv(), tailwindcss()]
+```
+
+Each deferral reason, resolved:
+
+1. **Beta** — accepted deliberately, pinned. Note it belongs to **UnJS, not TanStack**, so no Start
+   release would have stabilised it; waiting had no end date to wait for.
+2. **Cloudflare** — MEASURED, and it works. `NITRO_PRESET=cloudflare_module` emits
+   `.output/server/wrangler.json` with `assets.directory: "../public"`, and `.output/public` contains
+   `adaptv-shell.html` and **no `index.html`** — so the §3.3 shadowing fix carries over unchanged: no
+   asset matches `/`, and the worker renders it. 111 precache entries, complete.
+
+   **The app's `wrangler.toml` is merged, not replaced** — worth stating precisely, because "the build
+   generates its own wrangler config" reads like the app's is discarded. VERIFIED by adding each binding
+   kind to the playground's toml and reading the generated file back: `vars`, `kv_namespaces`,
+   `d1_databases` and `observability` all came through intact, alongside `name`, `compatibility_date`,
+   `compatibility_flags` and `upload_source_maps`. Nitro *adds* `assets`, `no_bundle` and `rules`.
+
+   The single key the build owns is **`main`**, which has to point at the bundle it just produced — and
+   it says so out loud (`WARN [cloudflare] Wrangler config main is overridden and will be ignored`)
+   rather than silently. An app should simply not declare `main`; the playground's no longer does.
+3. **`dist/client`** — deleted. The client output directory is now read from Vite's resolved config
+   (`captureClientOutDir` in `adaptv-context.ts`) and never assumed.
+
+**The hook is `buildApp` at `order: "post"`, and that distinction was expensive to find.** All three
+emitters used to run on the `ssr` environment's `closeBundle`. With a deploy plugin present that is *too
+early*: Nitro is still assembling the output directory afterwards. The first Nitro build produced a
+worker with **21 files silently missing** from the precache — every favicon, the offline illustrations,
+`robots.txt` — because the glob ran against a half-populated directory. No error, no warning; it would
+have surfaced as a broken offline render months later. `buildApp` at `post` runs after every environment
+*and* after the deploy plugin's own `post` hook. VERIFIED: 111/111, and the six previously-missing assets
+all resolve from Cache Storage with the server killed.
+
+**Also found, and it is a harness bug rather than an adaptv one.** Removing `@cloudflare/vite-plugin`
+from the playground broke Start's SPA prerender with `Cannot read properties of null (reading
+'useEffect')` — two React instances. `playground/` is its own pnpm project, so it had its own `react`
+copy while `react-dom` resolved from the repo root; the Cloudflare plugin had been hiding it by bundling
+everything for workerd. Fixed the way `vite` already was in that file: `"react": "link:../../../node_modules/react"`.
+A real consumer installs adaptv into one tree and cannot hit this.
+
+**What CI/CD looks like now:** nothing. On the eight zero-config providers the preset comes from the
+platform's own build environment; everywhere else it is `NITRO_PRESET`. adaptv adds no key and no flag.
+
+### ✅ The fallout: `render` was answering a question only `target` can answer
+
+Deleting `web.host` left `render` as the only build-shaping key, and three decisions were quietly
+re-pointed at it that are not about rendering at all. A Capacitor bundle is `render: "spa"` too, so
+every `render === "spa"` gate now fires on the native lineage as well. Two things were measured:
+
+1. **Every `.ipa`/`.apk` shipped `_redirects`, `404.html` and `.nojekyll`** — files that answer to an
+   HTTP host a WebView does not have. *(Pre-existing, not a regression from `host`'s deletion: the old
+   code gave the capacitor target `host: "static"`, so the same emitter already fired. The deletion is
+   what made it visible.)*
+2. **`dist/client` was written by both lineages.** They were kept apart *in time* — the CLI runs a fresh
+   `ADAPTV_TARGET=capacitor` build before every `cap sync` — which holds under `ssr` only because the
+   server build relocates the web output to `.output/`. Under `render: "spa"` they collided, and the
+   collision lands in the middle of `adaptv preview all`: web build → **native build** → serve. MEASURED:
+   `sw.js` present after the web build, gone after the native one, `index.html` byte-identical
+   (`572b120d…`) both times. A SPA app previewed with `all` was served the WebView bundle, with no
+   service worker and nothing in the output saying so.
+
+So `AdaptvContext` now carries `target` alongside `web`. `render` says how the app renders; `target`
+says where the bundle is loaded from. Anything a browser tab has and a WebView does not — a URL bar, a
+favicon, an install prompt, an HTTP host — keys off `target`.
+
+**Fixed, and it paid for itself in bytes.** The native lineage moved to `.adaptv/web` (an intermediate
+the native project consumes, not something a host deploys), the static-host emitter is registered only
+on `target: "web"`, and a mirror-image `adaptvNativeBundlePlugin` drops what a WebView can never read:
+the icon art, `.vite/manifest.json`, `registerSW`'s body (`virtual:adaptv/pwa-register` emits a stub when
+`sw.enabled` is false) and the manifest's `icons` array. Head links and manifest entries are suppressed
+at their source, not merely deleted — a dangling `<link rel="icon">` is a burst of 404s on every cold
+launch. **4.5 MB → 3.1 MB on the playground**, 1.3 MB of it icon art. → `LIFECYCLE.md §3.2a`
+
+`manifest.json` itself stays on the native target: `useManifestOrientation` fetches it on device so the
+iOS guard mirrors the `orientation` Android enforces natively.
+
+**One thing was tried and reverted:** moving the `ssr` environment's `outDir` as well, so the native
+build touched no part of `dist/`. The prerender boots the freshly built server to crawl the routes and
+came back `Internal Server Error` on every request — `Failed to fetch /`, zero pages, failed build.
+`dist/server` stays shared. It is scratch nothing syncs; the directory that **ships** is the one that
+had to stop being shared.
 
 ## 6.2 🔒 The dist build — empirically settled
 

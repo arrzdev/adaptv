@@ -19,11 +19,19 @@ import {
  * two never sit in the same folder.
  *
  * Set by adaptv's Vite plugin, which is the only place that knows both
- * `routesDirectory` and the app root. The fallback is the legacy in-tree
- * location, so a stale setup still resolves rather than failing cryptically.
+ * `routesDirectory` and the app root. Reading it unguarded is deliberate: if it
+ * is unset, the route DSL ran outside the plugin and any default would resolve
+ * to a file that is not there — a confusing import error instead of this one.
  */
-const GENERATED_ROOT_FILE =
-  process.env.ADAPTV_ROOT_ROUTE_FILE ?? "layouts/__root.gen.tsx"
+function generatedRootFile(): string {
+  const file = process.env.ADAPTV_ROOT_ROUTE_FILE
+  if (!file) {
+    throw new Error(
+      "[adaptv] ADAPTV_ROOT_ROUTE_FILE is unset — the route config was evaluated outside adaptv's Vite plugin",
+    )
+  }
+  return file
+}
 
 type RootChildren = Parameters<typeof upstreamRootRoute>[1]
 type VirtualRootRoute = ReturnType<typeof upstreamRootRoute>
@@ -54,7 +62,7 @@ export function rootRoute(
   if (typeof fileOrChildren === "string") {
     return upstreamRootRoute(fileOrChildren, maybeChildren)
   }
-  return upstreamRootRoute(GENERATED_ROOT_FILE, fileOrChildren)
+  return upstreamRootRoute(generatedRootFile(), fileOrChildren)
 }
 
 //the rest of the virtual-file-routes DSL passes through unchanged — adaptv has no

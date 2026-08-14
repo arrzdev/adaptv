@@ -7,7 +7,6 @@ import type { PluginOption } from "vite"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import type { ResolvedWebConfig } from "#adaptv/config/web-config.ts"
 import { resolveWebConfig } from "#adaptv/config/web-config.ts"
-import { stampPrivacyManifest } from "#adaptv/native/stamp-privacy.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { createAdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import {
@@ -22,10 +21,12 @@ import {
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
+import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
 import {
   adaptvManifestPlugin,
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
+import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvOpacityCheckPlugin } from "#adaptv/vite/route-tree-opacity.ts"
@@ -37,6 +38,10 @@ import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
 import { stampGeneratedFiles } from "#adaptv/vite/stamp.ts"
 import { adaptvStaticHostPlugin } from "#adaptv/vite/static-host.ts"
 import { adaptvSwBuildPlugin } from "#adaptv/vite/sw-build.ts"
+import {
+  adaptvSwDevPlugin,
+  devServiceWorkerEnabled,
+} from "#adaptv/vite/sw-dev.ts"
 import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 
 /** Default specifier for every generated import. Overridable for aliased installs. */
@@ -108,28 +113,29 @@ export async function adaptv(
   //dev, see service-worker-shell.ts — so no build-time override is needed.) The
   //plain `web` target is kept otherwise, so an SSR/cloudflare dev pipeline still runs.
   if (target === "web" && process.env.ADAPTV_DEV_NATIVE === "1") {
-    context.loaded.config.router.render = "spa"
+    context.loaded.config.render = "spa"
   }
-  //One resolution, used by every downstream plugin — so `render`, `host` and the
-  //SW settings cannot drift between the router wiring, the manifest and the SW
+  //One resolution, used by every downstream plugin — so `render` and the SW
+  //settings cannot drift between the router wiring, the manifest and the SW
   //build. The capacitor target is an OVERRIDE inside this call, not a default.
   const web = resolveWebConfig(context.loaded.config, target)
   context.web = web
+  //The lineage itself, kept separately: `render` says how the app renders, this
+  //says where the bundle is loaded from, and both capacitor and a static web
+  //deploy answer the first one with "spa". → adaptv-context.ts
+  context.target = target
 
   if (target === "capacitor") {
-    context.loaded.config.router.render = "spa"
-    context.loaded.config.sw = false
+    //Nothing to force here: `resolveWebConfig` already returned `render: "spa"`
+    //and `sw.enabled: false` for this target, and those are not overridable.
     //No capacitor.config.json is written: the `adaptv` CLI passes the generated config to
     //cap in-memory via the ADAPTV_CAPACITOR_CONFIG env var (its patched @capacitor/cli reads
     //it there), so the consumer's project never carries a Capacitor config file.
-    //Apple's required-reason API manifest, derived from the installed plugins.
-    //Not one of the 22 official Capacitor plugins ships one, the obligation lands
-    //on the app, and a missing manifest fails SILENTLY at App Store submission.
-    //→ DECISIONS.md §5.0.1
-    const privacyManifest = stampPrivacyManifest(appRoot)
-    if (privacyManifest) {
-      console.log(`[adaptv] wrote ${privacyManifest}`)
-    }
+    //Apple's PrivacyInfo.xcprivacy used to be stamped HERE, and that was wrong
+    //twice over: this runs before the native project is scaffolded on a first
+    //build, and not at all on a warm one (the web bundle is fingerprint-cached,
+    //so Vite never starts). It belongs where the native project is known to
+    //exist. → src/native/stamp-privacy.ts, called from the CLI's preparePlatform
   }
 
   //The route generator emits every import AND every `declare module` in
@@ -200,7 +206,13 @@ export async function adaptv(
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
     adaptvDefaultIconsPlugin(context),
-    adaptvPwaRegisterPlugin(),
+    //The dev hatch only ever arms on the web target: a native build has no dev
+    //server of its own to serve from, and `sw.enabled` is already false there.
+    adaptvPwaRegisterPlugin(
+      web.sw.enabled,
+      target === "web" && devServiceWorkerEnabled(),
+      context.loaded.config.serviceWorkerUpdate ?? "auto",
+    ),
     //Also `enforce: "pre"`, and NOT as a precaution: Vite's own asset plugin
     //claims any unknown query on a known image extension, so at normal
     //enforcement `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL
@@ -231,13 +243,42 @@ export async function adaptv(
         ),
       ) as PluginOption,
     ]),
+    //The server build, and it sits HERE for a documented reason: Start's own
+    //Nitro instructions are `tanstackStart(), nitro(), viteReact()` — after the
+    //framework plugin that defines the server environment, before the React
+    //transform. Empty for `render: "spa"`. → src/vite/deploy-server.ts
+    ...(await adaptvDeployServerPlugins(web.render)),
     viteReact(),
+    //ORDER IS LOAD-BEARING. All three run in `buildApp` at `order: "post"`, and
+    //Vite calls same-order hooks in plugin-array order — so the shell is emitted
+    //BEFORE the SW build globs the precache manifest, and the static-host copy
+    //happens last. Reversed, the worker binds its navigation fallback to a shell
+    //that was not on disk when the manifest was built, and every offline
+    //navigation dies: SSR falls through to the browser error page, and SPA throws
+    //`non-precached-url` at worker evaluation so no SW installs at all.
+    //
+    //`buildApp` rather than `closeBundle`, and that distinction was MEASURED.
+    //`closeBundle` fires per environment, which is before the deploy plugin has
+    //finished assembling the output directory: the precache glob ran against a
+    //half-populated dir and shipped a worker with 21 files silently missing —
+    //every favicon, the offline illustrations, robots.txt. `buildApp` at `post`
+    //runs after the environments AND after the deploy plugin's own `post` hook.
+    adaptvShellEmitPlugin(context),
     adaptvSwBuildPlugin(context),
+    //`apply: "serve"`, and a no-op unless ADAPTV_DEV_SW is set.
+    adaptvSwDevPlugin(context),
+    //Web lineage only. A Capacitor bundle is `render: "spa"` as well, so gating
+    //this on `render` alone put `_redirects`, `404.html` and `.nojekyll` inside
+    //every `.ipa`/`.apk` — files that answer to an HTTP host the WebView does
+    //not have. Not registering the plugin beats an early `return` in its hook:
+    //there is then no hook to reason about in the ordering above.
+    ...(target === "web" ? [adaptvStaticHostPlugin(context)] : []),
+    //The mirror image, for the native lineage: drop what only a browser tab
+    //could ever read. → src/vite/native-bundle.ts
+    ...(target === "capacitor" ? [adaptvNativeBundlePlugin(context)] : []),
     //Assert the opacity invariant on the generated tree once the build is done.
     //If the patches did not reach this install the build would otherwise SUCCEED
     //with the facade silently disabled. → src/vite/verify-patches.ts
-    adaptvShellEmitPlugin(context),
-    adaptvStaticHostPlugin(context),
     adaptvOpacityCheckPlugin(appRoot, routerPkg),
   ]
 }
@@ -259,34 +300,31 @@ function deriveStartOptions(
   //nothing imports and the build fails much later with an unresolved import.
   const fromSrc = (abs: string) =>
     path.relative(path.join(appRoot, "src"), abs)
-  //from the resolved web block — NOT `router.render`, whose legacy default was
-  //"spa" and contradicted the documented "ssr". → DECISIONS.md conflict 3.3
   const isSpa = web.render === "spa"
 
   return {
     //SPA prerenders a static shell + hydrates on the client; SSR server-renders.
     ...(isSpa ? { spa: { enabled: true } } : {}),
-    //Client entry, in precedence order:
-    //  1. app ejected → their `src/client.tsx`.
-    //  2. SPA target → adaptv's OWN client entry (a package module, like the router
-    //     entry). Start's default is `hydrateStart`, which requires a `window.$_TSR`
-    //     bootstrap that only a server/prerender injects — a no-server SPA has none,
-    //     so `hydrateStart` throws `Invariant failed` and the app white-screens.
-    //     adaptv's entry does a plain TanStack Router client render instead.
-    //  3. SSR web → Start's built-in default (server provides `$_TSR`; leave it).
+    //Client entry: the app's own `src/client.tsx` if it ejected, otherwise adaptv's
+    //(a package module, like the router entry) — in BOTH render modes.
+    //
+    //Start's default entry renders `<StartClient />`, which requires a
+    //`window.$_TSR` bootstrap that only a server or a prerender injects; without
+    //it it throws `Invariant failed` before React mounts. That is not just the
+    //no-server SPA case: an SSR app served OFFLINE gets the precached app shell,
+    //which is generated from config and carries no bootstrap either. So the
+    //decision belongs at runtime, to the document — see `client-entry.tsx`.
     ...(clientEjected
       ? { client: { entry: "./client" } }
-      : isSpa
-        ? {
-            client: {
-              entry: `./${fromSrc(
-                fileURLToPath(
-                  new URL("../routes/client-entry.tsx", import.meta.url),
-                ),
-              )}`,
-            },
-          }
-        : {}),
+      : {
+          client: {
+            entry: `./${fromSrc(
+              fileURLToPath(
+                new URL("../routes/client-entry.tsx", import.meta.url),
+              ),
+            )}`,
+          },
+        }),
     ...(router.serverEntry
       ? { server: { entry: router.serverEntry } }
       : {}),

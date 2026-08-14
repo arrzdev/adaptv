@@ -14,8 +14,12 @@ import { registerStaticAssetsRoute } from "#adaptv/sw/sw.static-assets"
  * that *do* vary — the render mode and the build tag — arrive as build-time
  * constants, which is what constants are for.
  *
- * Consumers author no service worker at all. Writing `src/sw.ts` still overrides
- * this entirely, for genuinely app-specific behaviour like push handling.
+ * Consumers author no service worker at all, and there is **no override**: an app
+ * with genuinely app-specific behaviour (push, background sync, its own runtime
+ * caches) lists modules in `serviceWorkers: []`, and those are bundled AFTER this
+ * file into the same single worker. They can add handlers; they cannot take
+ * delivery away, because Workbox answers with the FIRST matching route and this
+ * file's routes are registered first. → `sw-build.ts` `resolveWorkerEntry`
  */
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -25,6 +29,9 @@ declare const self: ServiceWorkerGlobalScope & {
 //Injected by the adaptv Vite plugin via esbuild `define`.
 declare const __ADAPTV_BUILD_TAG__: string
 declare const __ADAPTV_RENDER_MODE__: NavigationMode
+//`/index.html` in a SPA build, `/adaptv-shell.html` in an SSR one — the emitting
+//plugin owns the name, so this is never a literal here. → `sw-helpers.ts`
+declare const __ADAPTV_APP_SHELL_URL__: string
 
 //Every route CHUNK is precached — that is what makes navigation instant offline,
 //and it is deliberately not the same act as caching documents: chunks are
@@ -35,7 +42,7 @@ setupPrecache(self.__WB_MANIFEST)
 //from how the app was actually built.
 registerNavigationRoute({
   mode: __ADAPTV_RENDER_MODE__,
-  appShellUrl: "/index.html",
+  appShellUrl: __ADAPTV_APP_SHELL_URL__,
 })
 
 //Cache-first: a content-hashed filename IS the version, so a cached entry can

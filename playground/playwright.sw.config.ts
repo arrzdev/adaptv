@@ -1,0 +1,58 @@
+import { defineConfig, devices } from "@playwright/test"
+
+/*
+ * Service-worker E2E. A SEPARATE config from `playwright.config.ts`, and it has
+ * to be.
+ *
+ * The main harness drives `vite` — dev, where adaptv actively DESTROYS any
+ * service worker (`RENDERING.md §3.1`). Everything the worker does therefore
+ * ships untested by that suite, which is exactly how the navigation denylist
+ * drifted from its own documentation: the code said one thing, the doc said
+ * another, and nothing in CI could tell them apart.
+ *
+ * So this one BUILDS and serves the built output. It is slower, and that is the
+ * price of testing the thing that actually ships.
+ *
+ * Override the port with E2E_SW_PORT when running two worktrees at once — the
+ * default collides, same as the main harness.
+ */
+//Explicit, so a spec never has to guess which build it is looking at — and so a
+//leftover `ADAPTV_RENDER=spa` in the shell cannot silently turn this run into a
+//second copy of the spa suite.
+process.env.ADAPTV_RENDER = "ssr"
+
+const port = Number(process.env.E2E_SW_PORT ?? 41750)
+const baseURL = `http://localhost:${port}`
+
+export default defineConfig({
+  testDir: "./e2e-sw",
+  //`update-prompt.spec.ts` asserts the OPPOSITE of `update.spec.ts` — nothing is
+  //applied without user intent — and which of the two is correct is decided by
+  //the build, not the spec. It belongs to `playwright.sw-prompt.config.ts` and
+  //fails here by construction.
+  testIgnore: "update-prompt.spec.ts",
+  //Registrations are per-context, so tests do not share worker state — but they
+  //do share one preview server, and several of them take it offline.
+  fullyParallel: false,
+  workers: 1,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? "line" : "list",
+  use: { baseURL, trace: "on-first-retry" },
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // WebKit ≈ Mobile Safari, the actual target for an installed PWA. Not a real
+    // device — escalate device-only quirks to the iOS Simulator.
+    { name: "webkit", use: { ...devices["iPhone 13"] } },
+  ],
+  webServer: {
+    //build THEN preview: `vite preview` serves whatever is on disk, so without
+    //the build a green run can be measuring the previous commit's worker.
+    command: `pnpm --filter @repo/frontend run build && pnpm --filter @repo/frontend exec vite preview --port ${port} --strictPort`,
+    url: baseURL,
+    //never reuse: a server already up is a server built from unknown source, and
+    //this suite exists to catch exactly that kind of silent staleness
+    reuseExistingServer: false,
+    timeout: 240_000,
+  },
+})

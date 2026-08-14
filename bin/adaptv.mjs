@@ -398,6 +398,19 @@ async function preparePlatform(
     report,
     plugins: config?.plugins,
   })
+  // Apple's required-reason API manifest, derived from the app's dependencies and
+  // registered in the Xcode project so it actually reaches the `.app`. Here, and not
+  // in the Vite plugin where it started, because the project has to EXIST first: on a
+  // first build the plugin ran before this scaffold and silently wrote nothing, and on
+  // a warm build the web bundle is fingerprint-cached so Vite never runs at all.
+  // SILENT (R4/R8): adaptv derives it, adaptv writes it, and there is nothing for the
+  // dev to do about it. → src/native/stamp-privacy.ts, DECISIONS.md §5.0.1
+  if (platform === "ios") {
+    const { stampPrivacyManifest } = await loadAdaptvModule(
+      "native/stamp-privacy.ts",
+    )
+    stampPrivacyManifest(appRoot)
+  }
   // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
   // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
   // identity afterwards — as `dev` used to — meant teardown wrote back a plist from before
@@ -1687,20 +1700,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
  * doctor
  * ============================================================================= */
 
-const ADAPTV_BASE_PLUGINS = [
-  "@capacitor/app",
-  "@capacitor/browser",
-  "@capacitor/core",
-  "@capacitor/geolocation",
-  "@capacitor/haptics",
-  "@capacitor/keyboard",
-  "@capacitor/network",
-  "@capacitor/preferences",
-  "@capacitor/screen-orientation",
-  "@capacitor/splash-screen",
-  "@capacitor/status-bar",
-]
-
 function checkTool(label, argv, { optional = false } = {}) {
   const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" })
   const found = r.status === 0
@@ -1719,15 +1718,19 @@ function readIf(p) {
   return existsSync(p) ? readFileSync(p, "utf8") : undefined
 }
 
-function checkAppPlugins(_appRoot) {
+async function checkAppPlugins(_appRoot) {
   // adaptv OWNS the Capacitor plugins — they're its own dependencies, resolved from
   // the framework, never added to the consumer's app. So verify adaptv's install, not
-  // the app's package.json.
+  // the app's package.json. The LIST is framework source, shared with the privacy
+  // manifest, which needs the same answer to the same question (R26).
+  const { ADAPTV_BUNDLED_PLUGINS } = await loadAdaptvModule(
+    "native/plugins.ts",
+  )
   const resolveFromAdaptv = createRequire(
     path.join(ADAPTV_ROOT, "package.json"),
   )
   const missing = []
-  for (const name of ADAPTV_BASE_PLUGINS) {
+  for (const name of ADAPTV_BUNDLED_PLUGINS) {
     let present = true
     try {
       resolveFromAdaptv.resolve(`${name}/package.json`)
@@ -1749,16 +1752,23 @@ async function runProjectChecks(appRoot) {
   section("Project checks")
   const { runDoctor, formatDiagnostics } =
     await loadAdaptvModule("native/doctor.ts")
-  let deps = []
+  const { linkedDependencies } = await loadAdaptvModule(
+    "native/plugins.ts",
+  )
+  let appDeps = []
   try {
     const pkg = JSON.parse(
       readFileSync(path.join(appRoot, "package.json"), "utf8"),
     )
-    deps = [
+    appDeps = [
       ...Object.keys(pkg.dependencies ?? {}),
       ...Object.keys(pkg.devDependencies ?? {}),
     ]
   } catch {}
+  // Plus adaptv's own plugins. Every rule keyed on a plugin name was dead without
+  // them: the app's package.json lists `@arrzdev/adaptv` and no `@capacitor/*`, so
+  // the missing-privacy-manifest rule could not fire on any real app.
+  const deps = linkedDependencies(appDeps)
   const ios = nativeDir(appRoot, "ios")
   const android = nativeDir(appRoot, "android")
   const diagnostics = runDoctor({
@@ -1825,7 +1835,7 @@ async function doctor(appRoot) {
     )
 
   section("Plugins (shipped by adaptv; the consumer installs none)")
-  checkAppPlugins(appRoot)
+  await checkAppPlugins(appRoot)
 
   section("Project")
   check(

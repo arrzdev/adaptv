@@ -56,41 +56,41 @@ generated root. One file, two consumers, identical data.
 | Field | Drives |
 |---|---|
 | `router.render: "spa" \| "ssr"` | web render mode (see §3) |
-| `sw: string \| false` | service-worker entry, or off |
+| `serviceWorkers?: string[]` | the APP's own worker modules, run inside adaptv's. adaptv's worker itself is not configurable (`RENDERING.md §3`) |
 | `appId?: string` | **presence enables the native lineage**; absence = web-only (§6) |
 | `styles`, `themeColor`, `icons`, `orientation`, `splashScreen`, `splashMaskMode`, `patches`, … | manifest, head, splash, native project, WebKit fixes |
 
-> ### ✅ BUILT (2026-07-20) — the `web` block resolves; static emit is wired but blocked on a shell
+> ### ✅ BUILT (2026-07-20) — the web build settings resolve once
 >
-> `src/config/web-config.ts` resolves the block once in `adaptv()` and shares it via `AdaptvContext`, so
-> `render`/`host`/SW settings cannot drift between the router wiring, the manifest and the SW build.
-> 16 tests.
+> `src/config/web-config.ts` resolves them once in `adaptv()` and shares them via `AdaptvContext`, so
+> `render` and the SW settings cannot drift between the router wiring, the manifest and the SW build.
 >
-> - **`web.render` now defaults to `"ssr"`**, resolving the doc-vs-code conflict (`DECISIONS.md §3.3`):
->   the legacy `router.render` defaulted to `"spa"` while the docs said `"ssr"`. Both legacy fields still
->   work as escape hatches, with the `web` block winning.
-> - **`target: "capacitor"` is an override, not a default** (L12) — SPA + no SW + static host, unconditionally.
+> - **The render mode now defaults to `"ssr"`**, resolving the doc-vs-code conflict (`DECISIONS.md §3.3`):
+>   the legacy `router.render` defaulted to `"spa"` while the docs said `"ssr"`. Both legacy fields are
+>   since **deleted** — adaptv is pre-release and carries no compatibility shims — and the key was renamed
+>   from `web.render` to a top-level `render` on 2026-08-09.
+> - **`target: "capacitor"` is an override, not a default** (L12) — SPA + no SW, unconditionally.
 > - **`adaptvStaticHostPlugin`** emits `index.html`, `404.html`, `.nojekyll` and `_redirects`
 >   (`DECISIONS.md` B26). It gates on the **`ssr` environment**, because `closeBundle` fires once per
 >   environment and the client build finishes first — running then looks for a shell that has not been
 >   written yet and fails with a misleading error.
 >
-> ⛔ **`host: "static"` still cannot complete, and the reason corrects an assumption in this doc.**
+> **The static path was blocked on a shell, and the reason corrected an assumption in this doc.**
 > Measured in project-zero: with `spa: { enabled: true }` and the Cloudflare adapter, **Start emitted no
 > HTML at all** — no `_shell.html`, no `index.html`. So "copy Start's shell" is not a foundation adaptv
 > can stand on, and `RENDERING.md §3.1.2`'s requirement that adaptv **generate** its own user-agnostic
-> shell is load-bearing rather than belt-and-braces. The emit plugin is built and wired; it has nothing
-> to copy. It now fails with an accurate message naming the real cause. → CORE 5.
+> shell is load-bearing rather than belt-and-braces. The same missing shell is why the SSR precache
+> fallback was binding to an `/index.html` that did not exist — one gap, two symptoms.
 >
-> The same missing shell is why the **SSR precache fallback** currently binds to an `/index.html` that
-> does not exist — one gap, two symptoms.
+> ✅ **Resolved (2026-07-20):** `adaptvShellEmitPlugin` generates the shell instead of copying one, which
+> unblocked both. → `RENDERING.md §3.1.2`
 
-### 1.2 ⚠︎ Delta — a first-class `web` deployment block
+### 1.2 ✅ BUILT — one deploy key, and it is `render`
 
-Today the deploy shape is expressed as two low-level fields (`router.render` + `sw`) and the web adapter
-is **hardcoded** in the example app (Cloudflare). That's mechanism leaking into config. **Recommended
-target:** a single intent-level `web` block, with `router.render`/`sw` demoted to advanced escape
-hatches:
+The deploy shape is expressed as intent, and it turned out to need exactly one key. `router.render` is
+gone, and so is the `web` block that briefly replaced it — see `DECISIONS.md §6.4`. The deploy *target*
+(Cloudflare, Vercel, a bucket) is named in the consumer's `vite.config.ts`, which is where TanStack
+Start puts it and where the platform's own tooling expects to find it:
 
 ```ts
 export default defineApp({
@@ -98,34 +98,38 @@ export default defineApp({
   splashScreen:     () => import("@/components/splash-screen"),
   offlineComponent: () => import("@/components/offline"),
 
-  web: {
-    render: "ssr",                 // "ssr" (DEFAULT — see DECISIONS.md §6.3) | "spa"
-    host: "cloudflare",            // "cloudflare" | "vercel" | "node" | "static"  → picks the Start adapter
-    sw: {
-      enabled: true,               // default true; `false` for no SW
-      // Public, user-agnostic routes precached AS DOCUMENTS so they cold-load
-      // instantly and work offline. NEVER list a route rendering per-user content
-      // — Cache Storage is per-origin, not per-user. → RENDERING.md §3.2
-      precacheDocuments: ["/", "/pricing"],
-      register: "prompt",          // "prompt" (default) | "autoUpdate" | "manual" → RENDERING.md §3.4
-    },
-  },
+  // How the WEB build renders. Top-level, because it decides what a deploy needs:
+  // "ssr" wants something that runs per request, "spa" runs anywhere you can put files.
+  render: "ssr",                     // "ssr" (DEFAULT — see DECISIONS.md §6.3) | "spa"
+
+  // NO `web` block, and NO `host`. The worker is core behaviour, identical on every
+  // host: always registered, always precaches every route chunk, always updates at
+  // the next cold launch (→ RENDERING.md §3). And the deploy target lives in
+  // vite.config.ts, not here (→ DECISIONS.md §6.4).
+
+  // Your OWN worker modules, run inside adaptv's, after its setup.
+  serviceWorkers: ["./src/sw/push.ts"],
   native: { appId: "com.acme.app" },   // omit the whole block → web-only (§6)
   ota: { channel: "production" },       // ⚠︎ §5 — omit → no OTA
 })
 ```
 
-- `web.render` defaults to **`"ssr"`** — settled in `DECISIONS.md §6.3` on the asymmetry argument
-  (defaulting to SPA silently kills SEO and is discovered late; defaulting to SSR costs a config flip).
-  ⚠︎ the legacy code defaults `router.render` to `"spa"`; `web.render` resolves it.
+- **`render` is TOP-LEVEL**, not `web.render` (renamed 2026-08-09). It is the one key that decides what a
+  deploy even needs — a running server for `"ssr"`, any bucket of files for `"spa"` — so it does not
+  belong under `web`, where it read like a tuning knob. It defaults to **`"ssr"`**, settled in
+  `DECISIONS.md §6.3` on the asymmetry argument (defaulting to SPA silently kills SEO and is discovered
+  late; defaulting to SSR costs a config flip). `web` itself was **deleted** on 2026-08-10 once `host`
+  went with it (`§6.4`) — the block had nothing left in it.
 - **`offlineComponent`** mirrors `splashScreen` exactly: one consumer-owned component with optional
   props, rendered by **adaptv** when the app can't boot far enough for a route to exist, and by the
   **consumer** when a mounted route's data is unavailable. → `RENDERING.md §3.1.2`.
-- **`web.sw.precacheDocuments`** is empty by default. Route *chunks* are always precached (that's what
-  makes navigation instant); this allowlist is only for public HTML documents.
-- `web.host` maps to a TanStack Start deploy preset — this is *precisely* why adaptv keeps Start (roadmap
-  #4): rent its deploy-anywhere adapters instead of owning CD. `host: "static"` + `render: "spa"` is the
-  fully-static PWA path (§3.2).
+- **The service worker takes no config.** Route *chunks* are always precached — that is what makes
+  navigation instant, and it is the product rather than a feature of it. No route document is ever
+  precached (only the generated shell). → `RENDERING.md §3.2`
+- **There is no `host` key and no deploy plugin to add.** Start selects a target by which Vite plugin is
+  present; adaptv adds that plugin itself (`nitro/vite`, pinned), so the target is auto-detected on eight
+  providers and comes from `NITRO_PRESET` everywhere else. An adaptv enum on top of that would be a
+  narrower duplicate of a thing that already works. → `DECISIONS.md §6.4`
 - `native.appId` presence is the **native opt-in/opt-out** switch (§6). `ota` presence enables §5.
 
 ---
@@ -166,31 +170,73 @@ array (`adaptv()` + TanStack Start + React + manifest + SW-build + PWA-register 
 
 The single most important table in the lifecycle — how one codebase resolves to a delivery shape:
 
-| `target` | `web.render` | `web.sw` | → render | → service worker | → server? | Output dir |
-|---|---|---|---|---|---|---|
-| `web` | `ssr` | `true` | **SSR** | yes (adaptv-owned) | yes (adapter) | `dist/` (server + client + `sw.js`) |
-| `web` | `spa` | `true` | **SPA** prerender | yes | no | `dist/client/` (static + `sw.js`) |
-| `web` | `spa` | `false` | **SPA** prerender | no | no | `dist/client/` (static) |
-| `capacitor` | — *forced* — | — *forced* — | **SPA** | **off** | no | `dist-capacitor/client/` |
+| `target` | `render` | → render | → service worker | → server? | Output dir |
+|---|---|---|---|---|---|
+| `web` | `ssr` | **SSR** | yes (adaptv-owned) | yes (server build) | `.output/` (server + public + `sw.js`) |
+| `web` | `spa` | **SPA** prerender | yes (adaptv-owned) | no | `dist/client/` (static + `sw.js`) |
+| `capacitor` | — *forced* — | **SPA** | **off** | no | `.adaptv/web/` |
+
+The service-worker column has no third value on purpose: on web it is always on, and the target is the
+only thing that can turn it off.
+
+**The output column is load-bearing, and it was not always three different values.** The native lineage
+used to write `dist/client` as well, and the two were kept apart *in time only* — the CLI runs a fresh
+`ADAPTV_TARGET=capacitor` build before every `cap sync`. That is safe under `ssr` by accident, because
+the server build relocates the web output to `.output/`. Under `spa` the two collided: the web build
+wrote `dist/client` with a service worker, the native build emptied the same directory and wrote its own
+without one, and `adaptv preview all` then served the WebView bundle on the web surface. Silently — the
+two `index.html` files are byte-identical and only the hashed chunks differ. They are separate in
+**space** now (`src/vite/capacitor-config.ts`). `dist/server` is still shared, deliberately: it is the
+prerender's scratch, nothing syncs it, and relocating it breaks the prerender outright.
 
 **Precedence (the rule the consumer asked for):**
 1. **`target = "capacitor"` is absolute** — always `render:"spa"` + `sw:false`, no matter what the config
    says. A WebView has no server to SSR into, and the on-device bundle *is* the offline shell, so a SW
    would fight it (`RENDERING.md §1`). Only the adaptv CLI ever sets this target (`ADAPTV_TARGET=capacitor`).
-2. **For `target = "web"`, the consumer's `web.render` / `web.sw` win.** So "I want a static SPA + SW on
-   the web anyway" (deploy to a CDN, no server) is just `web: { render: "spa", host: "static", sw: true }`
-   — fully supported, no native involvement.
-
-This already works mechanically today via `options.target ?? ADAPTV_TARGET` + `config.router.render` +
-`config.sw`; the delta is only the nicer `web` config surface (§1.2) feeding it.
+2. **For `target = "web"`, the consumer's `render` wins, full stop.** Nothing else votes: the second
+   voter used to be `host: "static"`, which forced `"spa"` — but that was the same statement made twice,
+   and it is gone (`DECISIONS.md §6.4`). So "I want a static SPA on the web anyway" (deploy to a CDN, no
+   server) is just `render: "spa"` — fully supported, no native involvement, and it still gets the
+   worker plus the static-host files (§3.2).
 
 ### 3.2 Static deploy — the "SPA + SW, no server" path
 
-`web.render:"spa"` prerenders a static shell and hydrates on the client; `web.sw:true` precaches the
+`render: "spa"` prerenders a static shell and hydrates on the client; the worker precaches the
 route chunks + a navigation-fallback to the shell. Result: a fully static PWA that works offline and
-updates via SW revalidate — deployable to any static host (`host:"static"`), no Node server. This is the
-correct path for devs who "just want to deploy statically," and it's a per-app choice that never touches
-the native lineage.
+updates via SW revalidate — deployable to any static host, no Node server. This is the correct path for
+devs who "just want to deploy statically," and it's a per-app choice that never touches the native
+lineage.
+
+`render: "spa"` **on the web lineage** is what triggers `adaptvStaticHostPlugin` to write `index.html`,
+`404.html`, `.nojekyll` and `_redirects` into the client output. They are emitted **unconditionally for
+every web SPA build** rather than for a nominated host, because each is read by one platform and ignored
+by the others — so all four are correct wherever the bucket lands, and the build never has to be told
+where that is. Under `"ssr"` they are never written: `_redirects` there would answer navigations from a
+static file and take them away from the server. → `DECISIONS.md §6.4`
+
+"On the web lineage" is the part that was missing. The gate read `render === "spa"`, and a Capacitor
+bundle is `render: "spa"` too — so every `.ipa` and `.apk` shipped all four, answering to an HTTP host a
+WebView does not have. `render` is the wrong question for that decision; `target` is. → §3.2a
+
+### 3.2a The native lineage drops what only a browser could read
+
+The mirror image, and the reason `AdaptvContext` carries `target` separately from `render`. A native
+build is a normal client build, so it inherits every asset the web build emits for **browser chrome** —
+and inside a WebView reading files off the device there is no tab, no bookmark, no address bar and no
+install prompt to render any of it. `adaptvNativeBundlePlugin` (`src/vite/native-bundle.ts`) prunes it:
+
+| dropped | why it can't be used on device |
+|---|---|
+| the icon art (`icons`, or adaptv's default set) | no browser chrome to draw a favicon in — launcher icons are generated into the native project from the **source** dir, never from here |
+| `.vite/manifest.json` | Vite's source→chunk map, for a **server** emitting preload tags; a static SPA ships those tags in the document |
+| `_redirects`, `404.html`, `.nojekyll` | not emitted at all now — see above |
+| `registerSW`'s body | `virtual:adaptv/pwa-register` emits a stub when `sw.enabled` is false |
+| the manifest's `icons` array | kept as `[]`; `manifest.json` itself stays, because `useManifestOrientation` fetches it on device |
+
+The head links and the manifest entries are suppressed **at their source**, not just deleted from disk:
+a dangling `<link rel="icon">` would cost a burst of 404s inside the WebView on every cold launch.
+
+Measured on the playground: **4.5 MB → 3.1 MB**, of which 1.3 MB was icon art.
 
 ### 3.3 Generated files & the `.adaptv/` future
 
@@ -206,18 +252,30 @@ imports only `adaptv`. That's a build-plumbing change layered on top of this sam
 ### 4.1 Build
 
 `vite build` (via `adaptv()`), driven by §3.1 for `target:"web"`:
-- **SSR:** emits the server bundle + `dist/client/` + `dist/client/sw.js` (the SW build runs on the SSR
-  environment's `closeBundle`, bundles the app-authored `src/sw.ts`, injects the Workbox precache
-  manifest + a content-hashed `__ADAPTV_BUILD_TAG__` so the cache namespace tracks the deployed assets).
+- **SSR:** emits `.output/server/index.mjs` + `.output/public/` + `.output/public/sw.js`.
 - **SPA/static:** emits `dist/client/` (+ `sw.js`) only, no server.
+
+The SW build runs in `buildApp` at `order: "post"` — after every environment **and** after the deploy
+plugin has finished assembling the output. It bundles the app's `serviceWorkers: []` modules, injects the
+Workbox precache manifest and a content-hashed `__ADAPTV_BUILD_TAG__` so the cache namespace tracks the
+deployed assets. The hook matters: on `closeBundle` the glob caught a half-assembled directory and
+shipped a worker missing 21 files, silently. → `DECISIONS.md §6.4`
 
 ### 4.2 Deploy
 
-adaptv deliberately **does not own web CD** — `web.host` selects a TanStack Start adapter and the actual
-deploy is the host's own tool (`wrangler deploy`, `vercel`, a Node process, or copying `dist/client/` to
-a bucket). Renting Start's adapters is the whole reason to keep it (roadmap #4); adaptv's job stops at
-producing the correct adapter output. (⚠︎ delta: today the example hardcodes the Cloudflare adapter in
-`vite.config.ts`; the target is `web.host` selecting it.)
+adaptv deliberately **does not own web CD**, but it does own the server *build*. `adaptv()` wires
+`nitro/vite` for `render: "ssr"` and nothing for `"spa"`, so the consumer's `vite.config.ts` names no
+host — `plugins: [adaptv(), tailwindcss()]`. The deploy itself stays the host's own tool
+(`wrangler deploy`, `vercel`, a Node process, or copying the client output to a bucket).
+
+- **`render: "ssr"`** → `.output/server/index.mjs` + `.output/public/` (the shell, `sw.js`, every asset).
+- **`render: "spa"`** → `dist/client/` only. No server is built, because a bucket of files has nothing to
+  invoke one with.
+
+**CI/CD needs nothing from adaptv, and that is the point.** Nitro auto-detects AWS Amplify, Azure,
+Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel and Zeabur from the platform's own build
+environment; pipelines building elsewhere set `NITRO_PRESET`, which Nitro's docs recommend for exactly
+this case. adaptv adds no config key and no CLI flag on top. → `DECISIONS.md §6.4`
 
 ### 4.3 OTA for web is free
 
@@ -482,7 +540,7 @@ sync (`BEHAVIORS.md §3`).
 
 > **`adaptv run web`** is reserved for a future Vite dev/preview wrapper (adaptv is Vite-based). For now
 > use the app's `vite dev` / `vite preview`. Web *deploy* stays out of the CLI by design — it's the
-> host's tool, driven by `web.host`.
+> host's own tool, and the target is named in `vite.config.ts` (§4.2).
 
 ### 7.2 Testing native builds
 
@@ -508,7 +566,9 @@ flagged in `VISION.md §9`.
 | `adaptv ota build [--channel c]` | §5 — build `dist-capacitor` + compute `buildTag`/`nativeFingerprint` + write manifest + zip into the web `public/.well-known/adaptv/ota/<channel>/` |
 | `adaptv ota status` | inspect the current channel manifest vs the installed build |
 
-Web deploy stays **out** of the CLI on purpose (§4.2) — it's the host's tool, driven by `web.host`.
+Web deploy stays **out** of the CLI on purpose (§4.2) — it's the host's own tool, and the target is
+named in `vite.config.ts`. No `--host`-style deploy flag is planned either: pipelines that need to switch
+target per environment set `NITRO_PRESET`, which is upstream's documented path for CI/CD.
 
 ---
 
@@ -519,7 +579,9 @@ baseline, not hand-assembly:
 - `adaptv.config.ts` (with a `web` block, optional `native.appId`, optional `ota`).
 - `vite.config.ts` with a single `adaptv()` call.
 - A `routing/` dir + one example `View`-rooted route (§`ARCHITECTURE.md §1`).
-- `src/sw.ts`, `src/styles/main.css`. **No icon placeholder**: a scaffolded app with no `icons`
+- `src/styles/main.css`. **No service worker**: adaptv owns the worker end to end and there is no
+  override file — an app that needs its own behaviour adds a module to `serviceWorkers: []`
+  (`RENDERING.md §3`), which is a config edit, not a scaffolded file. **No icon placeholder**: a scaffolded app with no `icons`
   directory already wears adaptv's own mark on every surface, and `adaptv icons <image>`
   replaces it in one command — a committed placeholder set would be twelve files to delete.
 - Scripts wired to `adaptv dev` / `vite build` / `adaptv run`.
@@ -548,4 +610,4 @@ UPDATE ┌── web/PWA:  SW revalidate                (free)
 
 **The invariant:** one config, one codebase; two build lineages that never cross; each target gets the
 delivery + update mechanism that is correct for it, chosen by adaptv, tunable only where the choice is
-legitimately the developer's (`web.render`/`host`/`sw`, `ota.channel`, native opt-out).
+legitimately the developer's (`render`, `ota.channel`, native opt-out).

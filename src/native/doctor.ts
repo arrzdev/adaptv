@@ -114,6 +114,12 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
 /** The privacy manifest — §5.0.1. Fails at submission, not at build. */
 function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
   if (input.hasPrivacyManifest !== false) return null
+  //No iOS project, no obligation — a web-only app has nothing to submit. This
+  //gate became load-bearing the moment `dependencies` started including adaptv's
+  //own bundled plugins (native/plugins.ts): `@capacitor/preferences` is in every
+  //app now, so without it this would report a missing manifest to devs who will
+  //never build for iOS.
+  if (input.iosInfoPlist === undefined) return null
   const deps = input.dependencies ?? []
   const needsOne = deps.some(
     (d) =>

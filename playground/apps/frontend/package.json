@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@arrzdev/adaptv": "link:../../..",
-    "@cloudflare/vite-plugin": "1.30.2",
     "@dnd-kit/core": "6.3.1",
     "@dnd-kit/modifiers": "9.0.0",
     "@dnd-kit/sortable": "10.0.0",
@@ -46,8 +45,8 @@
     "hono": "4.11.8",
     "lucide-react": "0.544.0",
     "motion": "12.35.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "link:../../../node_modules/react",
+    "react-dom": "link:../../../node_modules/react-dom",
     "tailwindcss": "4.2.4",
     "vite": "link:../../../node_modules/vite",
     "workbox-window": "7.4.1",

@@ -68,6 +68,7 @@ describe("runDoctor — Android target SDK (§6.0)", () => {
 describe("runDoctor — privacy manifest (§5.0.1)", () => {
   it("errors when a plugin needs one and it is absent", () => {
     const [d] = runDoctor({
+      iosInfoPlist: "<plist/>",
       hasPrivacyManifest: false,
       dependencies: ["@capacitor/preferences"],
     })
@@ -78,8 +79,21 @@ describe("runDoctor — privacy manifest (§5.0.1)", () => {
   it("is quiet when no installed plugin creates the obligation", () => {
     expect(
       runDoctor({
+        iosInfoPlist: "<plist/>",
         hasPrivacyManifest: false,
         dependencies: ["@capacitor/haptics"],
+      }),
+    ).toHaveLength(0)
+  })
+
+  it("says nothing to an app with no iOS project", () => {
+    //`dependencies` now carries adaptv's own bundled plugins, and
+    //`@capacitor/preferences` is in every app — so without the iOS gate this
+    //would tell a web-only dev to fix an Apple submission they will never make.
+    expect(
+      runDoctor({
+        hasPrivacyManifest: false,
+        dependencies: ["@capacitor/preferences"],
       }),
     ).toHaveLength(0)
   })

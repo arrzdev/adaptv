@@ -1,6 +1,25 @@
-# CI deploy after build: wrangler deploy --config dist/server/wrangler.json
+# Cloudflare is this app's choice of host, not adaptv's — nothing in adaptv.config.ts
+# or vite.config.ts names it. The build picks the target up from the platform, or from
+# NITRO_PRESET when building somewhere else:
+#
+#   NITRO_PRESET=cloudflare_module vite build
+#   npx wrangler deploy
+#
+# That second line needs no `--config`. The build writes `.wrangler/deploy/config.json`
+# next to this file pointing at the generated config, and that is wrangler's own
+# "redirected configuration" mechanism, so a bare `wrangler deploy` here resolves to
+# `.output/server/wrangler.json` by itself. `npx nitro deploy --prebuilt` runs the very
+# same command — each preset records its deploy command in `.output/nitro.json`, and the
+# ones that have none (node-server included) fail loudly rather than guessing.
+#
+# This file stays the source of truth for everything Cloudflare-side. The build MERGES it
+# into `.output/server/wrangler.json` — VERIFIED for `vars`, `kv_namespaces`, `d1_databases`
+# and `observability`, plus the four keys below.
+#
+# The one exception is `main`, which the build owns: it points at the bundled entry it just
+# produced. There is deliberately no `main` here — declaring one only earns a per-build
+# "will be ignored" warning.
 name = "chopchop-frontend"
-main = "@arrzdev/adaptv/server-entry"
 compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat"]
 upload_source_maps = false
