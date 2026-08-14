@@ -13,26 +13,30 @@ export type ServiceWorkerUpdate = {
 }
 
 /**
- * The consumer side of `register: "prompt"` (the default).
+ * The app side of `serviceWorkerUpdate: "prompt"`. → `RENDERING.md §3.4`
  *
- * In prompt mode a new worker installs and **waits** — the old build's chunks
- * stay reachable, and nothing reloads without user intent. This hook is how the
- * app offers that intent:
+ * Under that policy a new worker installs and **waits**: the old build's chunks
+ * stay reachable and nothing reloads without intent. This hook is how the app
+ * offers that intent.
  *
  * ```tsx
  * const { updateAvailable, applyUpdate } = useServiceWorkerUpdate()
  * if (updateAvailable) return <Banner onClick={applyUpdate}>New version ready</Banner>
  * ```
  *
- * Built on a `subscribe`/`get` accessor pair rather than component state, per the
- * reactive-hook rule (VISION §2.6, L9) — a non-React consumer can subscribe to the
- * same signal.
+ * Under the default `"auto"` policy `updateAvailable` is **always false** — the
+ * waiting worker is applied at cold launch and there is no moment to offer. That
+ * is not a failure mode to guard against: calling this in a shared component is
+ * free, and switching the config flips the behaviour without touching the UI.
+ *
+ * Also always false on native and in dev, where adaptv registers no worker at all.
  */
 export function useServiceWorkerUpdate(): ServiceWorkerUpdate {
   const updateAvailable = useSyncExternalStore(
     subscribeServiceWorkerUpdate,
     getServiceWorkerUpdateAvailable,
-    //server snapshot: there is no worker during SSR, so never claim an update
+    //server snapshot: there is no worker during SSR, so never claim an update —
+    //a banner rendered on the server would hydrate into one that cannot be acted on
     () => false,
   )
 

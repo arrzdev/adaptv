@@ -30,14 +30,28 @@ export type CapacitorConfigJson = {
   }
 }
 
-//the SPA build output (see the `capacitor` vite target) that the WebView loads.
-//Start controls the client environment's output dir and emits the SPA to
-//`dist/client`; a plugin-level `build.outDir` is overridden. The lineages are
-//kept separate in TIME — the CLI runs a fresh `ADAPTV_TARGET=capacitor` build
-//before every `cap sync`, so a web build's server bundle is never synced.
-//cap runs with its CWD at the app root (config comes from env, not a file), so paths are
-//app-root-relative, as upstream expects. The native projects live under `.adaptv/`.
-const CAPACITOR_WEB_DIR = "dist/client"
+/**
+ * The SPA build output (see the `capacitor` vite target) that the WebView loads.
+ *
+ * Inside `.adaptv/`, NOT `dist/`, and that is the fix for a measured bug. Both
+ * lineages used to write `dist/client`, and they were kept apart in TIME only —
+ * the CLI runs a fresh `ADAPTV_TARGET=capacitor` build before every `cap sync`.
+ * That holds for `render: "ssr"` by luck, because the server build relocates the
+ * web output to `.output/`. Under `render: "spa"` the two collided: `vite build`
+ * wrote `dist/client` with a service worker, the capacitor build emptied the same
+ * directory and wrote its own without one, and `adaptv preview all` then served
+ * the WebView bundle on the web surface — silently, because the two `index.html`
+ * files are byte-identical and only the hashed chunks differ.
+ *
+ * Separate in SPACE now. `dist/` means what a host deploys; `.adaptv/web` is an
+ * intermediate the native project consumes, which is what it always was — and it
+ * inherits `.adaptv/`'s automatic gitignore entry rather than needing its own.
+ *
+ * cap runs with its CWD at the app root (config comes from env, not a file), so
+ * paths are app-root-relative, as upstream expects. The native projects live
+ * under `.adaptv/` too.
+ */
+export const CAPACITOR_WEB_DIR = ".adaptv/web"
 
 /**
  * The Android WebView adaptv refuses to run below.

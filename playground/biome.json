@@ -19,6 +19,7 @@
       "!!**/.nyc_output",
       "!!**/test-results",
       "!!**/playwright-report",
+      "!!**/blob-report",
       "!!**/playwright/.cache",
       "!!**/*.tsbuildinfo",
       "!!**/database/migrations",
@@ -203,6 +204,16 @@
         "packages/**/src/interface/*.index.ts",
         "packages/**/src/**/index.ts"
       ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["e2e-sw/**/*.ts"],
       "linter": {
         "rules": {
           "style": {

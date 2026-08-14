@@ -189,9 +189,11 @@ a Capacitor config. The native projects live inside the hidden, git-ignored **`.
   storyboard). `splashMaskMode`: `preferences` (follows the app's `useTheme`) / `system` / `light` /
   `dark`. Self-unmounting React splash (returns `null` when ready), no double-splash, Android-12
   system-splash icon stripped, theme-aware on both platforms.
-- **Config** — flat `adaptv.config.ts` (`appId`, `appName`, splash options, and a first-class `web`
-  deployment block — `render` `"spa"`/`"ssr"`, `host` `cloudflare`/`vercel`/`node`/`static`, `sw`)
-  generates the Capacitor config, the web manifest, and the native projects.
+- **Config** — flat `adaptv.config.ts` (`appId`, `appName`, splash options, and a top-level `render`
+  — `"ssr"` (default) or `"spa"`, which is what decides whether your deploy needs a running server)
+  generates the Capacitor config, the web manifest, and the native projects. There is deliberately no
+  `host` key **and no deploy plugin to add** — adaptv wires the server build, and the target is detected
+  from the platform (or set with `NITRO_PRESET` in CI). Your `vite.config.ts` is `[adaptv()]`.
 - **Build switch** — Vite plugin: web = SSR + service worker; capacitor = static SPA, no SW.
 - **Native build** — Capacitor iOS + Android, debug `.apk` + unsigned `.ipa`.
 - **Primitives** — `View`, `List` (virtualized), `Button` (press physics + haptics), `Link`

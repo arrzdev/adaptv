@@ -52,6 +52,13 @@ export function adaptvManifestPlugin(context: AdaptvContext): Plugin {
         requireAppConfig(context),
         context.appRoot,
       )
+      //The manifest still ships to the native target — `useManifestOrientation`
+      //fetches it on device so the iOS guard mirrors the same `orientation`
+      //value Android enforces natively. Its ICONS do not: `native-bundle.ts`
+      //deletes that art from this bundle, and a WebView has no install prompt or
+      //shortcut to read it with, so the array would be nothing but dangling
+      //hrefs inside the app.
+      if (context.target === "capacitor") manifest.icons = []
       this.emitFile({
         type: "asset",
         fileName: "manifest.json",

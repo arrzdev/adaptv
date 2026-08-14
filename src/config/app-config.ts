@@ -67,6 +67,17 @@ export type AdaptvPatches = {
  * no knob and never will — nobody has a legitimate reason to want the broken
  * behaviour, so a flag there would only be a way to break the app.
  */
+/**
+ * When a waiting service worker is applied. → `serviceWorkerUpdate`
+ *
+ * Two values, not four. There is no `"immediate"`: applying mid-session prunes
+ * the previous build's precache out from under a live module graph, so the next
+ * lazy route import 404s at both cache and origin — and the reload that follows
+ * takes unsaved state with it. And there is no `"off"`: a worker that never
+ * activates pins the app to the build it first saw, forever.
+ */
+export type ServiceWorkerUpdatePolicy = "auto" | "prompt"
+
 export type UiPatchScope = "app" | "all" | "off"
 
 /**
@@ -148,8 +159,6 @@ export type AdaptvImagesConfig = {
  * entry is adaptv-generated — no config; eject by writing `src/client.tsx`.)
  */
 export type AdaptvRouterConfig = {
-  /** Rendering mode. Default `"spa"` (prerender a static shell + hydrate); `"ssr"` server-renders each route. */
-  render?: "spa" | "ssr"
   /** Server entry (relative to the app root) for `render: "ssr"`. Optional — Start's built-in is used otherwise. */
   serverEntry?: string
   /**
@@ -205,47 +214,6 @@ export type AdaptvThemeColor =
  * - `"light"` / `"dark"` — a fixed colour, independent of theme + system.
  */
 export type SplashMaskMode = "preferences" | "system" | "light" | "dark"
-
-/** Object form of `sw` — the entry plus service-worker build options. */
-export type AdaptvSwOptions = {
-  /** App-relative entry path. Default `"./src/sw.ts"`. */
-  entry?: string
-  /**
-   * **Public, user-agnostic routes only** — precached as documents so they
-   * cold-load instantly and work offline. Empty by default, and that default is a
-   * safety property: Cache Storage is keyed by URL and scoped per-ORIGIN, not
-   * per-user, so precaching a personalized document serves one user's HTML to the
-   * next. → `RENDERING.md §3.2`
-   */
-  precacheDocuments?: string[]
-}
-
-/** The `web` deployment block — intent-level. → `LIFECYCLE.md §1.2` */
-export type AdaptvWebConfig = {
-  /**
-   * Rendering mode. **Defaults to `"ssr"`.**
-   *
-   * The default is an asymmetry argument, not a performance one: a wrong SPA
-   * default silently kills SEO and is discovered late, by someone reading a
-   * ranking report. A wrong SSR default costs one config flip, immediately, by
-   * the person who wanted SPA. → `DECISIONS.md §6.3`
-   */
-  render?: "ssr" | "spa"
-  /** Deploy target — maps to a TanStack Start deploy preset. Default `"node"`. */
-  host?: "cloudflare" | "vercel" | "node" | "static"
-  sw?: {
-    /** Default `true`. `false` ships without a service worker. */
-    enabled?: boolean
-    /**
-     * **Public, user-agnostic routes only**, precached as documents. Empty by
-     * default — Cache Storage is per-ORIGIN, not per-user, so precaching a
-     * personalized document serves one user's HTML to the next.
-     */
-    precacheDocuments?: string[]
-    /** How a waiting worker is applied. Default `"prompt"`. → `RENDERING.md §3.4` */
-    register?: "prompt" | "autoUpdate" | "manual"
-  }
-}
 
 export type AdaptvAppConfig = {
   /** App name — manifest `name`, and the head `<title>` unless `title` overrides. */
@@ -327,18 +295,59 @@ export type AdaptvAppConfig = {
   /** App stylesheet entry (e.g. `"./src/styles/main.css"`) — built and linked in the head. */
   styles: string
   /**
-   * Service worker. adaptv bundles the entry, injects the precache manifest, and
-   * provides the derived `__ADAPTV_BUILD_TAG__` constant.
+   * **Your** service-worker modules, run inside adaptv's worker.
    *
-   * - `string` — the app-authored entry path (default `"./src/sw.ts"`).
-   * - `false` — ship without a service worker.
-   * - object — the entry plus SW build options, notably `precacheDocuments`.
+   * There is no option to disable, replace or retune adaptv's own worker, and
+   * that is the point: precaching every route chunk is what makes a web build
+   * navigate like the native one, and an app that opts out of it silently stops
+   * being the product. adaptv registers exactly one worker, always, on web and
+   * standalone — never on Capacitor (§3.5).
    *
-   * Forced to `false` on the Capacitor target, unconditionally (L12): the bundle
-   * is already on-device, iOS cannot register a worker on a custom-scheme origin
-   * at all, and a stale worker actively breaks OTA. → `RENDERING.md §3.5`
+   * What this list adds is app behaviour the framework has no opinion about —
+   * push handlers, background sync, a runtime cache for your own API. Each file
+   * is bundled into adaptv's worker and evaluated **after** its setup, so it can
+   * add handlers but cannot take over precaching or navigation: Workbox matches
+   * routes in registration order, and adaptv registers first.
+   *
+   * ```ts
+   * serviceWorkers: ["./src/sw/push.ts"]
+   * ```
+   *
+   * Write them against `@arrzdev/adaptv/sw` (`sendToApp`, `onAppMessage`,
+   * `cacheRoute`); the app side reads them with `useServiceWorkerMessage()`. You
+   * never write registration code — adaptv owns that end to end.
    */
-  sw?: string | false | AdaptvSwOptions
+  serviceWorkers?: string[]
+  /**
+   * When a new build's worker is applied. Default `"auto"`. → `RENDERING.md §3.4`
+   *
+   * | value | behaviour |
+   * |---|---|
+   * | `"auto"` | applied at **cold launch**, invisibly. No UI, no prompt, no API. |
+   * | `"prompt"` | never applied on its own — the app decides, via `useServiceWorkerUpdate()`. |
+   *
+   * **One setting, because there is one worker.** The modules in
+   * `serviceWorkers: []` are bundled into adaptv's own and share its single
+   * registration, so there is no such thing as updating the app's half while the
+   * framework's half waits: the whole worker activates, or none of it does.
+   *
+   * `"auto"` is the default and is what most apps want. The waiting worker
+   * finished installing in an *earlier* session, so applying it costs one reload
+   * and zero downloads, and a document created moments ago has no typed-in form
+   * or in-flight upload to destroy. Nothing is ever applied mid-session.
+   *
+   * Choose `"prompt"` when a session can hold state that outlives a reload and
+   * the app would rather ask — an editor, a long form, a call. Then:
+   *
+   * ```tsx
+   * const { updateAvailable, applyUpdate } = useServiceWorkerUpdate()
+   * if (updateAvailable) return <Banner onClick={applyUpdate}>New version ready</Banner>
+   * ```
+   *
+   * The UI is entirely yours — adaptv ships no update prompt, so it renders in
+   * your design system, with your theme and safe areas.
+   */
+  serviceWorkerUpdate?: ServiceWorkerUpdatePolicy
   /** Extra fields merged verbatim into the generated web manifest. */
   manifestExtra?: Record<string, unknown>
 
@@ -480,11 +489,38 @@ export type AdaptvAppConfig = {
   //second, weaker way to express the same thing.
 
   /**
-   * Deployment intent — rendering mode, host, service worker. Prefer this over
-   * the lower-level `router.render` / `sw` fields, which remain as escape
-   * hatches. → {@link AdaptvWebConfig}
+   * How the **web** build renders. **Defaults to `"ssr"`.**
+   *
+   * - `"ssr"` — a server renders the HTML for each request, then the client
+   *   hydrates it. Every route arrives as real markup, so crawlers and link
+   *   previews see the page without running JavaScript.
+   * - `"spa"` — no per-request render. The host serves one static shell, the
+   *   client router resolves the URL, and React draws the page.
+   *
+   * There is no native equivalent to choose: a Capacitor WebView loads files off
+   * the device, so it is always a static SPA. This key is only about the web.
+   *
+   * **What it really decides is what your deploy needs.** `"ssr"` requires
+   * something that runs your server on every request — a Node process, a
+   * Cloudflare Worker, a Vercel function. `"spa"` needs nothing but a place to put
+   * files, so it is what makes GitHub Pages, Netlify, an S3 bucket or any CDN a
+   * valid target. Pick the render mode you want and let it tell you where you can
+   * deploy, rather than the other way round.
+   *
+   * **This is the only deploy-shaping key, and there is deliberately no `host`.**
+   * The single thing adaptv needs to know is whether a server answers the request,
+   * which is exactly what this key says; *which* server is a question adaptv has no
+   * behaviour behind — a `"cloudflare"` build and a `"node"` build were byte-for-byte
+   * identical when that key existed. Naming the target belongs to the deploy layer:
+   * one Vite plugin in `vite.config.ts`, and `NITRO_PRESET` for pipelines that
+   * switch target per environment. → `DECISIONS.md §6.4`
+   *
+   * The `"ssr"` default is an asymmetry argument, not a performance one: a wrong
+   * SPA default silently kills SEO and is discovered late, by someone reading a
+   * ranking report. A wrong SSR default costs one config flip, immediately, by the
+   * person who wanted SPA. → `DECISIONS.md §6.3`
    */
-  web?: AdaptvWebConfig
+  render?: "ssr" | "spa"
 
   /**
    * Router config — one block for all routing wiring: rendering mode + bundle
