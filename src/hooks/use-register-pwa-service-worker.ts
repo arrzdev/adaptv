@@ -1,16 +1,12 @@
 import { useEffect } from "react"
-import type { PwaServiceWorkerRuntimeConfig } from "#adaptv/config/types"
 import { registerPwaServiceWorkerRuntime } from "#adaptv/shell/service-worker-shell"
 
-/** Wired from `createRootRoute({ serviceWorker })` — apps do not call this directly. */
-export function useRegisterPwaServiceWorker(
-  serviceWorker: PwaServiceWorkerRuntimeConfig | undefined,
-) {
+/**
+ * Mounted by the shell. Apps do not call this, and there is nothing to pass:
+ * adaptv's worker is not configurable. → `RENDERING.md §3.4`
+ */
+export function useRegisterPwaServiceWorker() {
   useEffect(() => {
-    registerPwaServiceWorkerRuntime(serviceWorker)
-  }, [
-    serviceWorker?.register,
-    serviceWorker?.unregisterForeign,
-    serviceWorker,
-  ])
+    registerPwaServiceWorkerRuntime()
+  }, [])
 }

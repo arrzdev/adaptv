@@ -75,13 +75,15 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
     expect(source).not.toContain("boot-error")
   })
 
-  it("defaults service-worker registration to prompt, not autoUpdate", () => {
-    //B3: autoUpdate applies skipWaiting + reload mid-session, dropping unsaved
-    //state AND pruning the precache under open tabs — which is what makes the
-    //next lazy import 404. The default is the whole decision.
+  it("says nothing about the service worker", () => {
+    //The worker is not root-route configuration any more, and there is no
+    //register mode to stamp. It is registered unconditionally on web and
+    //standalone, skipped on native and in dev, and applied at the next cold
+    //launch — all decisions the runtime owns. A field here could only ever
+    //disagree with it. → RENDERING.md §3.4
     const source = renderRootRouteModule(config())
-    expect(source).toContain('serviceWorker: { register: "prompt" }')
-    expect(source).not.toContain("autoUpdate")
+    expect(source).not.toContain("serviceWorker")
+    expect(source).not.toContain("register")
   })
 })
 

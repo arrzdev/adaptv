@@ -12,7 +12,6 @@ import type {
 } from "#adaptv/config/app-config"
 import type {
   OrientationGuardProps,
-  PwaServiceWorkerRuntimeConfig,
   SplashScreenProps,
 } from "#adaptv/config/types"
 import type { UiThemePreference } from "#adaptv/hooks/use-theme"
@@ -76,11 +75,6 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
    * is never affected. To turn the guard off, drop `orientation` from the manifest.
    */
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
-  /**
-   * Service worker registration. When set, the shell registers on mount with
-   * `register: "autoUpdate"`.
-   */
-  serviceWorker?: PwaServiceWorkerRuntimeConfig
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
   /**
@@ -143,7 +137,6 @@ export function createRootRoute(config: CreateRootRouteConfig) {
     notFoundHomeTo = "/",
     shellClassName,
     headScripts = [],
-    serviceWorker,
     patches,
     ui,
     ...headConfig
@@ -206,7 +199,6 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           splashScreenComponent={splashScreenComponent}
           manifestPath={manifestPath}
           orientationGuardComponent={orientationGuardComponent}
-          serviceWorker={serviceWorker}
           offlineComponent={offlineComponent}
           shellClassName={shellClassName}
           patches={patches}

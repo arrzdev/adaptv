@@ -7,11 +7,17 @@ import {
 import path from "node:path"
 import type { Plugin } from "vite"
 import { resolveThemeColors } from "#adaptv/config/app-config.ts"
+import { appShellFile } from "#adaptv/config/sw-helpers.ts"
 import { getCriticalShellCss } from "#adaptv/shell/critical-css.ts"
 import { getUiThemeInitScript } from "#adaptv/shell/theme-init-script.ts"
 import { getPlatformInitScript } from "#adaptv/utils/platform.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
-import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
+import {
+  appRelativePath,
+  captureClientOutDir,
+  requireAppConfig,
+  requireClientOutDir,
+} from "#adaptv/vite/adaptv-context.ts"
 import { renderAppShell } from "#adaptv/vite/app-shell.ts"
 import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
@@ -50,11 +56,14 @@ function resolveStylesHref(
 }
 
 /**
- * Emit `dist/client/index.html` — the app shell. → `RENDERING.md §3.1.2`
+ * Emit the app shell into `dist/client`. → `RENDERING.md §3.1.2`
+ *
+ * Named `index.html` for a SPA build and `adaptv-shell.html` for an SSR one; the
+ * reasoning for the split lives with the constants in `sw-helpers.ts`.
  *
  * Measured: TanStack Start emits no HTML in this configuration, so there is
- * nothing to copy and two features depend on the file existing — `host: "static"`
- * (needs a document for every path) and the SSR service worker's precache
+ * nothing to copy and two features depend on the file existing — a `render: "spa"`
+ * deploy (needs a document for every path) and the SSR service worker's precache
  * fallback (binds to a shell URL; without the file the offline path 404s instead
  * of booting React).
  *
@@ -71,80 +80,92 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
       //the only reliable way to learn them
       return { build: { manifest: true } }
     },
-    applyToEnvironment(environment) {
-      //after the LAST environment — the client build writes the manifest
-      return environment.name === "ssr"
+    configResolved(resolved) {
+      captureClientOutDir(context, resolved)
     },
-    async closeBundle() {
-      const config = requireAppConfig(context)
-      const clientDir = path.resolve(context.appRoot, "dist/client")
-      const manifestPath = path.join(clientDir, ".vite", "manifest.json")
-      if (!existsSync(manifestPath)) return
-
-      const manifest = JSON.parse(
-        readFileSync(manifestPath, "utf8"),
-      ) as ViteManifest
-      const entry = Object.values(manifest).find((chunk) => chunk.isEntry)
-      if (!entry?.file) return
-
-      //Resolve the app stylesheet href. The entry chunk usually carries it, but
-      //in the SPA build the client manifest can leave the CSS unassociated to any
-      //chunk (Start routes CSS through its prerender). So fall back: any chunk's
-      //css, then a scan of the assets dir. Missing this shipped `href="/"`, which
-      //loads index.html as a stylesheet — a fully unstyled app.
-      const stylesHref = resolveStylesHref(manifest, clientDir)
-
-      const theme = resolveThemeColors(config.themeColor)
-      //Prerendered, because this is the one screen that has to survive its own
-      //build being broken. NOT fatal when it fails: an app must still ship
-      //without its boot fallback — but loudly, because a silently absent safety
-      //net is indistinguishable from a working one until the day it matters.
-      let bootFallbackByCode: Record<string, string> | undefined
-      try {
-        bootFallbackByCode = await prerenderBootFallback({
-          appRoot: context.appRoot,
-          specifier: config.bootErrorScreen
-            ? extractThunkSpecifier(
-                "bootErrorScreen",
-                config.bootErrorScreen,
-              )
-            : null,
-        })
-      } catch (error) {
-        console.warn(
-          `[adaptv] could not prerender the boot error screen — a broken bundle will show a blank page instead: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        )
-      }
-
-      const html = renderAppShell({
-        lang: config.lang ?? "en",
-        title: config.title ?? config.name,
-        criticalCss: getCriticalShellCss(
-          theme.light,
-          theme.dark,
-          config.splashScreenInBrowser ?? false,
-        ),
-        //platform stamp first, then theme — both must resolve before first paint.
-        //the ui app-feel stamps are part of the platform script, so the emitted
-        //shell resolves them identically to the runtime document.
-        headInitScript:
-          getPlatformInitScript(config.ui) +
-          getUiThemeInitScript({
-            themeColorLight: theme.light,
-            themeColorDark: theme.dark,
-            defaultThemePreference:
-              config.defaultThemePreference ?? "system",
-          }),
-        stylesHref,
-        entryHref: `/${entry.file}`,
-        headExtra: '<link rel="manifest" href="/manifest.json">',
-        bootFallbackByCode,
-      })
-
-      writeFileSync(path.join(clientDir, "index.html"), html)
-      console.log("[adaptv] wrote dist/client/index.html (app shell)")
+    //`buildApp`, not `closeBundle`, and `order: "post"` — see the note in
+    //`adaptv-plugin.ts`. `closeBundle` fires per ENVIRONMENT, which is too early:
+    //a deploy plugin can still be assembling the output directory afterwards.
+    buildApp: {
+      order: "post",
+      async handler() {
+        await emitShell(context)
+      },
     },
   }
+}
+
+async function emitShell(context: AdaptvContext): Promise<void> {
+  const config = requireAppConfig(context)
+  const clientDir = requireClientOutDir(context)
+  const manifestPath = path.join(clientDir, ".vite", "manifest.json")
+  if (!existsSync(manifestPath)) return
+
+  const manifest = JSON.parse(
+    readFileSync(manifestPath, "utf8"),
+  ) as ViteManifest
+  const entry = Object.values(manifest).find((chunk) => chunk.isEntry)
+  if (!entry?.file) return
+
+  //Resolve the app stylesheet href. The entry chunk usually carries it, but
+  //in the SPA build the client manifest can leave the CSS unassociated to any
+  //chunk (Start routes CSS through its prerender). So fall back: any chunk's
+  //css, then a scan of the assets dir. Missing this shipped `href="/"`, which
+  //loads index.html as a stylesheet — a fully unstyled app.
+  const stylesHref = resolveStylesHref(manifest, clientDir)
+
+  const theme = resolveThemeColors(config.themeColor)
+
+  //Prerendered, because this is the one screen that has to survive its own
+  //build being broken. NOT fatal when it fails: an app must still ship
+  //without its boot fallback — but loudly, because a silently absent safety
+  //net is indistinguishable from a working one until the day it matters.
+  let bootFallbackByCode: Record<string, string> | undefined
+  try {
+    bootFallbackByCode = await prerenderBootFallback({
+      appRoot: context.appRoot,
+      specifier: config.bootErrorScreen
+        ? extractThunkSpecifier("bootErrorScreen", config.bootErrorScreen)
+        : null,
+    })
+  } catch (error) {
+    console.warn(
+      `[adaptv] could not prerender the boot error screen — a broken bundle will show a blank page instead: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    )
+  }
+
+  const html = renderAppShell({
+    lang: config.lang ?? "en",
+    title: config.title ?? config.name,
+    criticalCss: getCriticalShellCss(
+      theme.light,
+      theme.dark,
+      config.splashScreenInBrowser ?? false,
+    ),
+    //platform stamp first, then theme — both must resolve before first paint.
+    //the ui app-feel stamps are part of the platform script, so the emitted
+    //shell resolves them identically to the runtime document.
+    headInitScript:
+      getPlatformInitScript(config.ui) +
+      getUiThemeInitScript({
+        themeColorLight: theme.light,
+        themeColorDark: theme.dark,
+        defaultThemePreference: config.defaultThemePreference ?? "system",
+      }),
+    stylesHref,
+    entryHref: `/${entry.file}`,
+    headExtra: '<link rel="manifest" href="/manifest.json">',
+    bootFallbackByCode,
+  })
+
+  //`index.html` in a SPA build, `adaptv-shell.html` in an SSR one — the SSR
+  //shell must not be a directory index, or an asset-first host serves it for
+  //`/` instead of running the server. → `sw-helpers.ts`
+  const shellFile = appShellFile(context.web?.render ?? "ssr")
+  writeFileSync(path.join(clientDir, shellFile), html)
+  console.log(
+    `[adaptv] wrote ${appRelativePath(context, path.join(clientDir, shellFile))} (app shell)`,
+  )
 }

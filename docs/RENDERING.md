@@ -14,7 +14,7 @@
 
 1. **Capacitor → must be a static SPA.** The WebView loads a static `index.html` from the on-device
    bundle. There is **no server in the app**, so nothing can server-render and no server function can
-   be called. This is why adaptv forces `render:"spa"` + `sw:false` for the capacitor target.
+   be called. This is why adaptv forces `render:"spa"` and no service worker for the capacitor target.
 2. **Web + standalone → SSR is fine (and the default).** A standalone PWA is just the installed web
    app; it loads over the network (or the SW cache) from the same SSR server. **Only Capacitor needs
    the SPA build.** Web can be SSR *or* SPA — a per-app config choice, SSR by default.
@@ -88,32 +88,49 @@ pattern for a client-auth, offline-first app:
 route chunks** (Workbox precache manifest — adaptv builds this). Combined with client-side routing +
 `defaultPreload:"viewport"`, every route is instantly available offline **without** caching documents.
 
-> ### ✅ BUILT — the consumer authors no service worker (2026-07-20)
+> ### 🔒 The worker is core, not configuration (2026-08-08)
 >
-> `src/sw.ts` no longer exists in a normal app. adaptv generates the worker into `.adaptv/sw.gen.ts` from
-> the `web.sw` block and bundles that. **Verified: chopchop builds with no service-worker file at all**,
-> shipping a real `sw.js` with 51 precache entries.
+> **There is no `sw` key, no `web.sw` block, and no way to turn the worker off.**
 >
-> **Why generation rather than a template to copy:** every decision a normal worker makes is *already*
-> stated in `adaptv.config.ts` — the render mode picks the navigation strategy, `sw.register` picks the
-> update policy, `precacheDocuments` picks the allowlist. An app-authored worker restates all of it in a
-> lower-level vocabulary and then drifts. This is not hypothetical: chopchop's hand-written worker was
-> still calling `registerInstallRouteWarmer` long after that function became the B25 privacy bug. A
-> generated worker cannot fall behind, and cannot resurrect a removed API by copy-paste.
+> The reason is not tidiness. Precaching every route chunk is *what makes a web build navigate like the
+> native one* — it is the product, not a feature of it. An app that could switch it off, or narrow it, or
+> point it at a hand-written worker, would silently stop being the thing adaptv ships. So adaptv
+> registers exactly one worker, always, on web and standalone; the single exception is the Capacitor
+> target (§3.5), and that comes from the **target**, never from a key.
+>
+> This also retires the "app-authored worker" escape hatch, deliberately. It is how chopchop's copy was
+> still calling `registerInstallRouteWarmer` long after that became the B25 privacy bug: a worker that
+> restates the delivery contract in a lower-level vocabulary drifts, and cannot be fixed by upgrading the
+> framework. `src/interface/sw.index.ts` no longer exports `setupPrecache`, `registerNavigationRoute`,
+> `registerStaticAssetsRoute` or `registerServiceWorkerLifecycle`, so "adaptv owns delivery" is now a
+> property of the package rather than a rule in this document.
+>
+> **What an app contributes instead** — behaviour the framework has no opinion about:
+>
+> ```ts
+> // adaptv.config.ts
+> serviceWorkers: ["./src/sw/push.ts"]
+> ```
+>
+> Each file is bundled into adaptv's worker and evaluated **after** its setup. Workbox returns the first
+> matching route and adaptv registers first, so an app module can add handlers (push, background sync, a
+> runtime cache for its own API via `cacheRoute`) but cannot take delivery away from the framework. The
+> worker side talks to React with `sendToApp` / `onAppMessage`; the app side reads it with
+> `useServiceWorkerMessage()`. No app ever writes registration code.
 >
 > Same principle as the splash screen, the offline component and the root route: **the consumer declares
-> intent, adaptv writes the machinery.**
->
-> **The escape hatch is unchanged and still wins** — write `src/sw.ts` (or point `web.sw.entry` at one)
-> and adaptv bundles yours instead. That is for genuinely app-specific behaviour like push handling, not
-> for restating config.
+> intent, adaptv writes the machinery.** The difference here is that there is no lower gear to drop into.
 
 > ### ✅ BUILT — adaptv generates the app shell (2026-07-20)
 >
-> `dist/client/index.html` is now emitted by `adaptvShellEmitPlugin` from `renderAppShell`. **Verified in
-> project-zero**, and it unblocked both features that were waiting on it: `host: "static"` now writes
-> `index.html`/`404.html`/`.nojekyll`/`_redirects`, and the SSR precache fallback finally has a real
-> file to bind to.
+> The app shell is now emitted into `dist/client` by `adaptvShellEmitPlugin` from `renderAppShell`.
+> **Verified in project-zero**, and it unblocked both features that were waiting on it: a `render: "spa"`
+> build now writes `index.html`/`404.html`/`.nojekyll`/`_redirects`, and the SSR precache fallback finally
+> has a real file to bind to.
+>
+> **Amended 2026-08-09:** the filename depends on the render mode — `index.html` for SPA,
+> `adaptv-shell.html` for SSR — because `index.html` is a directory index and asset-first hosts served it
+> instead of running the server. See §3.3.
 >
 > **Measured, and it corrects an assumption:** TanStack Start emits **no HTML at all** in this
 > configuration — not `_shell.html`, not `index.html`, even with `spa: { enabled: true }`. So "copy
@@ -171,13 +188,36 @@ redirecting:
 
 | `render` | Navigation handling | Why |
 |---|---|---|
-| `"ssr"` | `NetworkOnly` + `PrecacheFallbackPlugin({ fallbackURL: appShell })` | Preserve the per-request server render on **every** online navigation. The fallback is a build-time, **user-agnostic** shell whose only job is to boot the client router at `location.pathname`. |
+| `"ssr"` | `serveNavigation` — preload-or-network, 3s deadline, then the precached shell | Preserve the per-request server render on **every** online navigation. The fallback is a build-time, **user-agnostic** shell whose only job is to boot the client router at `location.pathname`. **The deadline is not optional:** without one the navigation falls back on network *error* only, so a live-but-terrible connection hangs the cold load indefinitely while a good shell sits in the precache. It costs nothing in privacy terms — there is no cache-write path at all, so the fallback is always the generated shell, never a page someone else's session produced. Written out rather than configured because it has to read `event.preloadResponse`, which no Workbox strategy does — §3.3. |
 | `"spa"` | `NavigationRoute(createHandlerBoundToURL(appShell))` | There is no per-request render to preserve — the classic app shell is correct. |
 | `capacitor` | **no SW at all** + a defensive unregister | §3.5 |
+| *(dev, any mode)* | **no SW at all** + an active destroy | below |
+
+#### Dev is SW-free, and `ADAPTV_DEV_SW=1` is the one way past it
+
+Vite dev URLs are not cache-stable, so a worker registered in dev serves a stale bundle back into
+the next session and breaks hot reload. The shell therefore *destroys* workers and caches in dev
+rather than merely skipping registration.
+
+That left a real gap: an app's own `serviceWorkers: []` module could only be exercised by running a
+full production build plus `vite preview`. `ADAPTV_DEV_SW=1` closes it — the dev server then serves
+**the app's modules and nothing else** at `/sw.js`.
+
+**adaptv's own worker is deliberately still absent, and cannot be turned on here.** It *is* precache
++ navigation + static-asset delivery, and none of the three can exist against a dev server: the
+precache manifest is globbed from the client output directory, which dev does not produce; the build
+tag that namespaces every runtime cache and drives the activate sweep is computed from that same
+output; and a `CacheFirst` route pointed at dev URLs caches the modules HMR is about to replace. A
+dev lookalike would mean testing something that does not exist in production — worse than testing
+nothing. → `src/vite/sw-dev.ts`
+
+The dev worker also `skipWaiting()`s and claims immediately, instead of waiting for the next launch
+like the shipped one. The production policy exists to protect unsaved work in a live session; there
+is none of that here, and an edit that took two reloads to appear would just read as broken.
 
 **The refinement that makes SSR work: the shell must be the _catch handler_, not a blanket
 `NavigationRoute` handler.** A blanket `NavigationRoute` hijacks *online* navigations too — which
-silently converts an SSR app into a stale SPA for every returning visitor. `NetworkOnly` + a precache
+silently converts an SSR app into a stale SPA for every returning visitor. Network-only + a precache
 fallback gives SSR-on-every-navigation **and** a fully functional offline app.
 
 **The fallback is the _app shell_, not an offline page.** It contains no offline-specific markup — it
@@ -194,6 +234,39 @@ offline cold load → SW serves app shell → React boots → router resolves /p
 **The native target gets this for free** — no SW, no shell, no fallback. All routes are already warm
 because the bundle is on-device, so the *only* thing that can fail is data, and the route handles it
 exactly the same way. One mechanism, six targets.
+
+> ### ✅ BUILT — one client entry, and the boot mode is a **runtime** decision (2026-08-09)
+>
+> The flow above says "SW serves app shell → React boots". **In `render: "ssr"` it did not boot.** The
+> cause was a build-time assumption: adaptv installed its own `client.entry` only when `render === "spa"`
+> and left SSR on Start's default, which renders `<StartClient />` and hard-requires a `window.$_TSR`
+> bootstrap that only a server or a prerender injects. The precached shell is *generated*, so it carries
+> none, and `hydrate()` throws `Invariant failed` before React mounts anything. **MEASURED:** the offline
+> SSR cold load rendered nothing but the shell's critical CSS — a flat `#0a0a0c` screen.
+>
+> `render` cannot decide this, because **one build serves both kinds of document**: online from the
+> server (bootstrap present), offline from the precache (bootstrap absent). So `client-entry.tsx` is the
+> entry for **both** modes and branches on what the document actually contains:
+>
+> ```
+> window.$_TSR present → <StartClient />               hydrate the server render
+> window.$_TSR absent  → <RouterProvider router={…}/>  plain client boot against the shell
+> ```
+>
+> Safe against Start's own cleanup: `$_TSR.c()` only runs `delete self.$_TSR` once **both** `hydrated`
+> and `streamEnded` are true, and `hydrated` is set by `hydrateStart` *after* it resolves — long after
+> the entry module evaluates.
+>
+> **VERIFIED in project-zero, `render: "ssr"`:** worker `activated` and controlling, 111 precache
+> entries; server killed → cold load boots from the precache; `/settings` deep-links offline fully
+> rendered. Online, `/settings` is genuinely server-rendered (76 741 bytes, `$_TSR` present) and hydrates
+> with **0 console errors**.
+>
+> **Known and inherent:** the shell path logs one **React #418** at boot. A static shell has no app
+> markup, so the first client render can never match it; React recovers by client rendering, which is the
+> intent, and the shell holds nothing worth preserving. `suppressHydrationWarning` does not cover it — it
+> handles text and attribute drift, not a structural mismatch. Removing the error would mean the root
+> route no longer renders `<html>`, which is a much larger change than the error is worth.
 
 ### 3.1.1 🔒 The framework contract (library-neutral)
 
@@ -413,13 +486,13 @@ TanStack Router navigates client-side from the same chunks in both modes. So pre
 chunk delivers identical instant navigation under `render:"ssr"` and `render:"spa"` — there is nothing
 to trade away, and no reason to choose SPA to get warm routes.
 
-**Documents are a different act that happens to use the same API — and the split is public vs
-personalized, not SSR vs SPA:**
+**Documents are a different act that happens to use the same API.** Exactly one document is precached
+— the generated **app shell** — and no route document ever is.
 
-| Document | Precacheable? | Why |
+| Document | Precached? | Why |
 |---|---|---|
-| Public / user-agnostic (`/`, `/pricing`, a blog post) | **Yes — and useful** | Identical bytes for every visitor. Precaching gives an instant, offline-capable landing page. |
-| Personalized (`/dashboard`, `/account`) | **No** | Cache Storage is per-origin, **not per-user**. |
+| The generated app shell (`index.html` in SPA, `adaptv-shell.html` in SSR — §3.3) | **Always, unconditionally** | It is generated from config, identical for every visitor, and the navigation route **binds to it**. Infrastructure, not a choice. |
+| Any route document (`/`, `/pricing`, `/dashboard`) | **Never** | Cache Storage is keyed by URL and scoped per-ORIGIN, not per-user. Under SSR these carry a session. |
 
 The failure mode for the second row is concrete: fetching documents with `credentials:"same-origin"`
 into a shared bucket means user A logs out, user B logs in on the same profile, and B is served A's
@@ -427,23 +500,20 @@ server-rendered HTML. Forcing `ignoreVary:true` discards `Vary: Cookie`, the one
 would partly protect against it. Secondary: SSR'd HTML embeds server-rendered data that re-hydrates and
 re-fetches anyway, so caching it buys availability, not freshness.
 
-**Only the app knows which routes are which — so it's an explicit allowlist, empty by default:**
+**There is no allowlist for "public" documents**, and that costs a real case: a landing page cannot be
+made instant on cold load. It is worth it. An allowlist that ships with a safety warning attached is a
+footgun with documentation — it works until a listed route turns personalized six months later, and the
+failure is a cross-user leak no test catches. Without one, "a document a session produced can never
+enter a shared cache" is a property of the build rather than a rule someone has to remember.
 
-```ts
-sw: {
-  // Public, user-agnostic routes only. Precached as documents, so they cold-load
-  // instantly and work offline. Never list a route that renders per-user content.
-  precacheDocuments: ["/", "/pricing", "/about"],
-}
-```
+The shell is not an exception to that rule — it is what makes the rule affordable. It is **generated,
+never captured**, so it carries nobody's session, and it is precached by name rather than by a glob
+(`APP_SHELL_FILE`), because a `**/*.html` pattern is precisely how route documents would sneak back in.
 
-Safe by construction: naming a route is a deliberate act, and the default precaches nothing. Staleness
-is handled by the existing build-tag namespacing — a new deploy mints a new precache, so these refresh
-on update like every other asset.
-
-> **This is what makes the "landing page + app in one codebase" case work.** SEO comes from the crawler
-> receiving real SSR HTML (crawlers don't run service workers, so the SW is irrelevant to ranking); the
-> allowlist then additionally makes that same page instant and offline-capable for humans.
+> **The "landing page + app in one codebase" case still works for SEO** — crawlers receive real SSR
+> HTML and do not run service workers, so ranking is unaffected. What is lost is the *instant human
+> cold-load* of that specific page; every navigation after boot is unaffected, because those come from
+> precached chunks either way.
 
 **Consequences:** the legacy `sw.warm-routes.ts` is dropped — **not because prefetching is wrong, but
 because it prefetched the wrong layer** (credentialed HTML instead of chunks). `ignoreVary` stops being
@@ -456,9 +526,18 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   and you get no SW at all. Low risk when the manifest is generated from real build output, but it makes
   deploy races (assets pruned while an install is in flight) a total failure rather than a partial one —
   which is another reason for the no-`--delete` deploy rule in §3.4.
-- **Install downloads the whole app.** For a standalone PWA that is arguably correct — it is the
-  analogue of installing a native app — but it should be a deliberate choice, so `sw.precacheRoutes`
-  stays configurable rather than implicit.
+- **Install downloads the whole app.** For a standalone PWA that is correct — it is the analogue of
+  installing a native app, and it is the whole reason navigation then feels native. It is **not**
+  configurable, because an app that precaches only some routes is an app whose navigation is fast
+  sometimes.
+- **Storage is evictable unless you ask.** Cache Storage is "best-effort" by default, so a browser may
+  drop the precache under disk pressure — the app silently stops working offline with nothing to
+  observe. adaptv calls `navigator.storage.persist()` at boot (`requestPersistentStorage`), which WebKit
+  grants to installed web apps and Chromium decides from engagement. It is one line, it fails closed,
+  and no app would think to write it.
+- **iOS deletes everything after 7 days of no interaction** — SW registration, Cache Storage, IndexedDB
+  — for a site that is *not* installed to the home screen. Nothing can fix this from inside the page; it
+  is the honest limit of "works offline on the web" and one more reason the installed PWA is the target.
 
 ### 3.3 🔒 Everything else the adaptv SW does
 
@@ -466,38 +545,211 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   standalone PWA feels native. Once booted, the app navigates entirely offline with zero document
   caching. TanStack Router's `defaultPreload:"viewport"` remains a complementary warm-up for the
   *online* first visit, not a substitute.
-- **Navigation Preload on.** A registered SW sits in the path of every navigation, so you pay SW boot
-  latency (~50–250ms cold on mobile) even when the SW only passes through. `navigationPreload.enable()`
-  starts the network request in parallel with SW startup. Two lines, strictly better — and it matters
-  *more* in SSR mode (documents always hit the network) than in SPA mode.
-- **Hashed `/assets/*` → `CacheFirst`**, not `StaleWhileRevalidate`. Content-hashed filenames are
-  immutable; revalidating them is pure waste.
-- **Unhashed same-origin static** (icons, manifest, fonts) → `StaleWhileRevalidate` + `ExpirationPlugin`.
-- **API responses are never cached by the SW.** That's the data layer's job, on purpose.
-- **Navigation denylist** borrows Angular ngsw's heuristic — *anything containing a dot is a file, not
-  a navigation* (`/\/[^/?]+\.[^/]+$/`), plus `/api/` and `/_serverFn/`. Workbox's `NavigationRoute` has
-  no such default, so without it you intercept file requests that happen to arrive with `mode:navigate`.
-- **Activate-time cache sweep.** Buckets are namespaced `adaptv:<bucket>:<buildTag>`; on `activate`,
-  every `adaptv:`-prefixed cache not ending in the current tag is deleted. `cleanupOutdatedCaches()`
-  does **not** do this — it only removes precaches written by *older Workbox versions* — so without
-  the sweep every deploy mints buckets that are never freed.
+- **Navigation Preload — on under `ssr`, off under `spa`.** A registered SW sits in the path of every
+  navigation, so you pay SW boot latency (~50–250ms cold on mobile) even when the SW only passes
+  through. `navigationPreload.enable()` starts the document request in parallel with that startup, so
+  the two costs overlap instead of stacking.
 
-### 3.4 🔒 The update flow — `prompt` by default, never auto-reload mid-session
+  It is **not** "two lines", and an earlier draft of this document saying so is why it went years
+  unimplemented. It is a matched pair, and half of it is worse than none:
+
+  1. `self.registration.navigationPreload.enable()`, inside `activate` and inside `waitUntil` —
+     otherwise activation can finish before preload is on, and the very first navigation, the cold one
+     this exists for, does not get it. → `sw.lifecycle.ts` `registerNavigationPreload`
+  2. The navigation handler must **read `event.preloadResponse`**. Workbox's `NetworkOnly` does not,
+     which is why adaptv's SSR navigation is a handler (`serveNavigation`) rather than a configured
+     strategy. An enabled-but-unread preload is *strictly worse than off*: the browser issues the
+     request anyway and the worker then issues a second one, so every navigation costs the server two
+     renders and logs *"the service worker navigation preload request was cancelled before
+     'preloadResponse' settled"*. → `sw.navigation.ts`
+
+  Two consequences that are easy to get wrong. `preloadResponse` resolving `undefined` means *the
+  browser did not preload this one* — not *the network failed* — so it falls through to a normal fetch
+  rather than to the shell; the first navigation after an install lands there, as does any browser
+  without preload. (A POST navigation never reaches the handler at all — `registerRoute` matches `GET`
+  only, so form submits fall straight through to the browser.)
+  And because the enabled flag lives on the **registration**, not on the worker, it survives every
+  update: `spa` builds must call `disable()`, or an app that switches `render` keeps preloading
+  documents its worker will never read.
+
+  The preload is the same request with the same credentials the browser would have sent anyway, and
+  like every other document it is never cached (§3.2).
+- **One runtime asset route, `CacheFirst`** — same-origin GET requests whose destination is a script,
+  style, font or image, plus anything under `/assets/*`. Not `StaleWhileRevalidate`: content-hashed
+  filenames are immutable, so revalidating them is pure waste. → `sw.static-assets.ts`
+
+  **Unhashed files (icons, `manifest.json`, fonts) are on that same route, and that is not an
+  oversight.** CacheFirst normally means "never updated", which would be wrong for a URL that is not
+  versioned — except the bucket itself is: `static-<buildTag>` rotates on every deploy and the previous
+  one is swept at activate, so the entry is refetched exactly when the build changes. A per-asset
+  revalidation would buy nothing the tag rotation does not already give. (They are precached by the
+  glob too; this route is the net for anything the manifest missed.) `createStaleWhileRevalidateStrategy`
+  exists in `sw.strategies.ts` for apps wiring their own route through `sw.cache-route.ts` — adaptv's
+  own worker never uses it.
+- **API responses are never cached by the SW.** That's the data layer's job, on purpose.
+- **Navigation denylist**: prefixes `/api/`, `/assets/`, `/_serverFn/`, plus Angular ngsw's heuristic —
+  *a last path segment containing a dot is a file, not a navigation* (`/\/[^/?]+\.[^/]+$/`). Workbox's
+  `NavigationRoute` has no such default, and `mode:navigate` is exactly what a browser sends for a plain
+  **link** to a file, so without it the SW answers `/whitepaper.pdf` with the app shell's HTML —
+  *online*, in `spa` mode, where the shell handler answers unconditionally and nothing in the precache
+  glob covers a PDF. **Measured**, `render:"spa"`, Chromium, before/after:
+  `/sitemap.xml → text/html (fromServiceWorker)` becomes `→ text/xml (fromServiceWorker: false)`.
+
+  The rule is *"the app shell may not answer a file request"*, and the two modes apply it differently
+  because that is what makes it correct in each:
+
+  | | `spa` | `ssr` |
+  |---|---|---|
+  | file navigation | **not claimed** — the shell is all this mode serves, so declining is the rule | **claimed**, and passed through to the network |
+  | shell fallback for it | n/a | **removed** — no shell, so offline it is a network error, not HTML where a PDF was asked for |
+
+  `ssr` claims them on purpose: the browser has already started a preload, and declining leaves that
+  response unread — measured at **two document hits at the origin for one `/whitepaper.pdf`
+  navigation**, which is the same waste §3.3 exists to avoid. `spa` has preload off, so it costs nothing
+  there. The heuristic's known cost, accepted with ngsw: a route whose last segment contains a dot
+  (`/blog/hello.world`) is read as a file. Earlier segments are unaffected — `/v1.2/docs` is a
+  navigation, verified.
+- **Activate-time cache sweep.** Runtime buckets are named `<bucket>-<buildTag>`; on `activate`, every
+  cache whose name starts with a bucket adaptv **owns** and whose tag is not the current one is
+  deleted. `cleanupOutdatedCaches()` does **not** do this — it only removes precaches written by *older
+  Workbox versions* — so without the sweep every deploy mints buckets that are never freed, ending in a
+  quota error on a frequently-deployed app. → `DECISIONS.md` B2
+
+  The owned list is exactly `static`, `pages`, `documents`, and it is an **allowlist on purpose**: a
+  prefix rule like "delete anything that isn't the current tag" would take caches adaptv did not
+  create — another app on the same origin, a third-party worker, Workbox's own bookkeeping.
+  `pages` and `documents` are there to clean up after builds that predate §3.2 and nothing writes
+  them now. `static` is written only for assets the **precache manifest does not cover**, because
+  Workbox's precache route is registered first and answers everything in the manifest before the
+  runtime route sees it — MEASURED in the lab (iOS Safari and Chromium alike): `caches.keys()` is
+  exactly one entry, `workbox-precache-v2-<origin>`, and no `static-<tag>` bucket exists at all.
+  It appears once something is served that the glob missed (a file over the 5 MB cap, an asset built
+  at runtime). Asserted end-to-end in both engines by `e2e-sw/update.spec.ts`, which plants one cache
+  of each kind and checks that exactly the owned, stale one disappears.
+
+> ### ⚠️ Two failures that come from the **host**, not from adaptv (2026-08-09)
+>
+> Nothing in the SW path sniffs the environment. Registration is gated on `import.meta.env.DEV`, a Vite
+> constant substituted at **build** time — there is no hostname check, no `NODE_ENV` read at runtime, no
+> domain allowlist. Vercel, Cloudflare Pages, Netlify, a VPS, a static bucket: all serve `vite build`
+> output, so all register identically. The only host-dependent value is `BASE_URL`, already handled for
+> subpath deploys. Two things still vary, and both fail *quietly*:
+>
+> **1. A non-secure origin gets no worker at all.** Service workers require a secure context. `localhost`
+> is exempt and every `https://` origin qualifies — a self-hosted deploy over plain `http://` does not,
+> and there `navigator.serviceWorker` is simply **absent**. No registration failure to catch, no
+> exception: the app just loses offline support and instant navigation with nothing to explain why.
+> `registerSW` now says so with a `console.warn`, deliberately **not** dev-gated, since production is the
+> only place it happens. **VERIFIED** by loading the same build over a LAN IP: `isSecureContext === false`,
+> `'serviceWorker' in navigator === false`, app still renders.
+>
+> **2. ✅ FIXED — an asset-first host was shadowing the SSR route.** The shell has to live in
+> `dist/client` — the precache fallback binds to it (§3.1) and a static deploy needs it. It was named
+> `index.html`, which is the **directory index** on every static layer there is, and those layers run
+> *before* the server. **MEASURED on Cloudflare Workers Assets:** `/` returned the 3 079-byte shell while
+> `/settings` returned 76 741 bytes of real server render — the home route silently lost SSR and its SEO,
+> with correct-looking output and no error anywhere.
+>
+> The fix is the name, not the host config. **`index.html` for a SPA build, `adaptv-shell.html` for an SSR
+> one** (`sw-helpers.ts` owns both, and the worker's fallback URL is an esbuild `define` so the two can
+> never drift). No asset matches `/`, so the request falls through to the server, and the shell stays a
+> plain file the worker precaches and serves offline.
+>
+> Rejected: `run_worker_first`, which routes *every* request — assets included — through the worker,
+> trading a correctness bug for a latency and invocation-cost one, and only on one host.
+>
+> **VERIFIED, Cloudflare:** `/` → 70 855 bytes server-rendered with `$_TSR`; precache 111 entries
+> including `adaptv-shell.html`; server killed → `/` cold-boots from the precache and `/settings`
+> deep-links offline. Note that Workers Assets' default `html_handling` **307-redirects**
+> `/adaptv-shell.html` → `/adaptv-shell`; Workbox follows it and caches under the manifest key, so the
+> precache is unaffected — this was true of `/index.html` before, too.
+>
+> **VERIFIED, static-first node host** (A/B on the same running server): with `index.html` present `/`
+> returned 200 and 3 079 bytes and the SSR handler was **never invoked**; with only `adaptv-shell.html`
+> the request fell through to the handler. So the mechanism — and the fix — is not Cloudflare-specific.
+>
+> **A `render: "spa"` build is unaffected and stays `index.html`**: a bucket of files runs no server, so
+> there is nothing to render per request and nothing to shadow. VERIFIED: emits `index.html` +
+> `404.html` + `.nojekyll` + `_redirects`, worker binds `/index.html`, 111 precache entries.
+>
+> **Scope note, amended 2026-08-10.** This section used to end by observing that `web.host` had exactly
+> **one** behavioural consumer — `static-host.ts`, acting only on `"static"` — while `node`, `vercel` and
+> `cloudflare` were inert at build time. That observation is why the key no longer exists: `"static"` was
+> `render: "spa"` said twice, and the other three named a deploy target adaptv had no behaviour behind.
+> The static-host files now ride on `render: "spa"` directly, and the target is named by the Vite plugin
+> the consumer adds. → `DECISIONS.md §6.4`
+>
+> So "per host" still reduces to the two mechanisms measured above — static-first shadowing, and a
+> server-less bucket — and neither is host-specific.
+>
+> **Re-measured on Nitro (same day), because adaptv now injects the server build itself.** Nitro emits to
+> `.output/public`, so the three emitters no longer hardcode `dist/client` — they read the resolved client
+> output dir from Vite. Under `NITRO_PRESET=cloudflare_module` the generated `wrangler.json` points
+> `assets.directory` at `.output/public`, which holds `adaptv-shell.html` and **no `index.html`** — so the
+> fix above carries over untouched, on a completely different deploy mechanism. `/` → 70 855 bytes with
+> `$_TSR`, `/settings` → 76 741, 111 precache entries, offline deep link verified by screenshot with the
+> server killed. Identical numbers to the Workers Assets measurements above.
+
+### 3.4 🔒 The update flow — automatic, silent, and only at a cold launch
+
+**The default ships no update prompt.** The worker is invisible infrastructure; asking a
+user to approve a delivery-layer swap is asking them a question they have no basis to answer. What made
+a prompt look necessary was *when* the old code applied the update, not *that* it applied one.
+
+> #### `serviceWorkerUpdate: "auto" | "prompt"` — one setting, because there is one worker
+>
+> The modules an app lists in `serviceWorkers: []` are bundled into adaptv's own worker and share its
+> single registration. There is no updating the app's half while the framework's half waits: the whole
+> worker activates, or none of it does. So the policy is one config key, not two mechanisms.
+>
+> `"auto"` is the default and is everything described below — applied at cold launch, no UI, no API
+> surface. `useServiceWorkerUpdate()` reports `false` forever under it, which is why an app can call it
+> unconditionally and flip behaviour from the config alone.
+>
+> `"prompt"` suppresses the launch-apply entirely. The worker installs, waits, and the app owns the
+> moment through `useServiceWorkerUpdate() → { updateAvailable, applyUpdate }`. adaptv renders nothing
+> — the banner is the app's, in its design system. Choose it when a session holds state that outlives a
+> reload: an editor, a long form, a call.
+>
+> **Measured** (playground, SSR build, real deploy between launches): under `"auto"` the waiting worker
+> takes control on the second launch; under `"prompt"` it was still waiting after two launches and only
+> took control when the apply path ran. Under both, a worker that finishes installing *mid-session* is
+> left alone.
+>
+> All three of those are now asserted on every run, in Chromium and WebKit, against a real second
+> build — `playground/e2e-sw/update.spec.ts`, §3.7. This path gets a rebuild inside a test because it is
+> the only one whose failure is **unfixable remotely**: a worker that never updates keeps serving the
+> old precache, and no subsequent deploy can reach the user.
 
 `skipWaiting` + `clientsClaim` means a new SW takes control of pages **loaded by the old SW**. Those
 pages hold module graphs referencing the old build's hashed chunks, and precache activation deletes
 them — so the next lazy `import()` in that open tab 404s at both cache and origin. Auto-reloading on
-top of that also drops unsaved form state.
+top of that also drops unsaved form state. So the whole decision reduces to one question: **when is a
+reload free?**
 
-```ts
-register?: "prompt" | "autoUpdate" | "manual"   // default "prompt"
+**Only at a cold launch.** A worker sitting in `waiting` finished installing in an *earlier* session,
+so its precache is already complete on disk — applying it costs one reload and zero downloads. And the
+document was created moments ago: no typed-in form, no open modal, no in-flight upload to destroy.
+
+```
+boot → registration.waiting && navigator.serviceWorker.controller
+     → postMessage({ type: "SKIP_WAITING" }) → controllerchange → location.reload()
 ```
 
-- **`prompt` (default)** — the new SW installs and **waits**; old chunks stay reachable. adaptv exposes
-  `useServiceWorkerUpdate() → { updateAvailable, applyUpdate() }`. Nothing happens without user intent.
-- **`autoUpdate`** — applies automatically, but **only at a safe moment**: on `visibilitychange` back
-  to visible, or the next top-level navigation. Never mid-interaction.
-- **`manual`** — adaptv registers; the app owns everything.
+A worker that finishes installing **during** a session is deliberately left alone; the branch above
+applies it at the next launch. Running one build behind for one session is survivable. Losing what
+someone typed is not.
+
+> **"Hidden" is not the same as "safe", and that distinction is the whole section.** An earlier design
+> applied updates on `visibilitychange → hidden`, reasoning that a reload nobody watches is a reload
+> nobody minds. It is worse: the user switches away for three seconds, comes back to a wiped form, and
+> cannot connect the loss to anything they did. They do not conclude "the update did that" — they
+> conclude the app loses their work.
+
+**The one hole, accepted:** a desktop tab left open for weeks never cold-launches, so it stays on its
+build until reloaded. It degrades gracefully — hashed chunks still resolve under the no-`--delete`
+rule below, and the data layer keeps revalidating. Mobile PWAs, where this matters most, are killed and
+cold-launched constantly.
 
 Three supporting requirements, all unconditional:
 
@@ -542,6 +794,158 @@ post-client-build hook to compute `__ADAPTV_BUILD_TAG__` that the plugin doesn't
 **reimplement three things it gave us**: correct `BASE_URL` handling in `registerSW` (P0 — see the
 bug list), an opt-in dev-mode SW (`sw.dev`), and a `sw:"destroy"` self-destroying kill switch so a
 broken SW has a remediation path.
+
+### 3.7 🔒 The worker is tested against a **build**, in a browser, in both render modes
+
+Everything above is behaviour no unit test can reach. The main e2e harness drives `vite` **dev**, where
+adaptv deliberately destroys any service worker (§3.1) — so for as long as that was the only harness,
+*none* of §3 was covered by anything, and the navigation denylist drifted from this very document
+without a single test turning red.
+
+`playground/e2e-sw/` closes that. It **builds** the lab app and serves the build:
+
+```bash
+pnpm --dir playground run test:e2e:sw:all
+```
+
+The update specs run a real `vite build` **inside the test** (`deploy()`), which is the only honest way
+to produce new bytes at `/sw.js`. It also means interrupting the suite with `pkill` does not stop that
+build: it keeps writing into the very output the next run serves, and the next run fails the update
+flow in a way that will not reproduce. Kill `vite build` alongside the runner.
+
+Three configs, not three projects, because each is a separate **build** of the same app directory —
+`render` and `serviceWorkerUpdate` are both compiled in, so no test can switch between them at
+runtime. `ADAPTV_RENDER` and `ADAPTV_SW_UPDATE` in `playground/apps/frontend/adaptv.config.ts` are
+wired for exactly this:
+
+| | `playwright.sw.config.ts` | `playwright.sw-spa.config.ts` | `playwright.sw-prompt.config.ts` |
+|---|---|---|---|
+| build | `ssr`, `auto` | `spa`, `auto` | `ssr`, **`prompt`** |
+| covers | the network-first path, preload **on**, the offline fallback | the app-shell path, preload **off** | the update policy that applies **nothing** on its own |
+
+**Running all three is not redundancy.** Under `ssr` a navigation reaches the network whatever the
+worker decides, so a worker that wrongly claims `/whitepaper.pdf` still returns a PDF and the suite
+stays green — the bug is only *online*-visible under `spa`, and only *offline*-visible under `ssr`.
+Each mode is the only one that can catch one half. The prompt build is stranger still: its contract is
+the **exact inverse** of the auto build's, so the two update specs would fail each other's build, and
+that is why the third config matches one file rather than the directory.
+
+What it asserts, and why each one earns its runtime:
+
+- **registration** — the worker installs, activates, controls, precaches the whole app *including the
+  shell* (the navigation route binds to it), and precaches **no route document** (§3.2 — the cross-user
+  leak, asserted against the shipped manifest rather than trusted to the glob).
+- **navigation claiming** — `/settings` is served by the worker; neither `/sitemap.xml` nor
+  `/sw-probe.pdf` is ever answered with the app shell; `/v1.2/docs` is still a navigation, so the ngsw
+  heuristic's known cost stays bounded. The two file fixtures are real files in `public/` deliberately
+  **outside** the precache glob — a route that merely 404s would not be the same test.
+- **preload** — enabled under `ssr`, actively disabled under `spa`, read from
+  `navigationPreload.getState()` (§3.3).
+- **offline** — a **never-visited** route boots with `transferSize: 0`, with a control proving the
+  origin is genuinely unreachable, and a file link fails rather than falling back to the shell.
+- **update** — a real second `vite build` mid-test, then: the new worker is noticed, is **held** for
+  the session that found it, and is applied at the next launch, sweeping a planted `static-<old-tag>`
+  cache while leaving a foreign cache alone (§3.4, `DECISIONS.md` B2). `ADAPTV_BUILD_TAG` is what makes
+  a second build cheap enough to do inside a test.
+- **update under `prompt`** — the same deploy, on a build of the other policy: it is **offered**
+  through `useServiceWorkerUpdate()` (read off the lab page, so the assertion covers the signal
+  reaching React and not merely `registration.waiting`), survives a launch **without being applied**,
+  and takes only when the app's own `applyUpdate()` button is clicked. Run against an `auto` build the
+  spec goes red at the first step — the config → baked constant → runtime branch → hook chain is what
+  it measures.
+- **redirects** — `/sw-probe-redirect` throws a router redirect in `beforeLoad`, which under `ssr` is a
+  real `307` from the server. A fetch handler that answers a navigation with a *followed* response
+  (`redirected === true`) makes the browser refuse the document outright — `Response served by service
+  worker has redirections` — so an app whose auth sends users to `/login` would be entirely broken by
+  its own worker. adaptv stays clear of it by fetching the **request** (which carries
+  `redirect: "manual"`) rather than the URL.
+
+> **A green two-engine run can still be walking one branch.** MEASURED while building the redirect
+> spec: with preload enabled, `serveNavigation`'s fallback `io.fetch()` is **never reached** — the
+> preload always resolves first. Breaking that fetch outright changed nothing in Chromium *or* WebKit.
+> It is not dead code, though: **Firefox has no navigation preload at all**, and neither does Safari
+> before 17.4, so for those users it is the path *every* navigation takes. Preload being on is exactly
+> what hides it. The spec therefore calls `navigationPreload.disable()` for one navigation to walk the
+> other branch — and with the bug present, that test alone goes red in both engines.
+
+#### What it deliberately does not cover
+
+Stated because a suite's silence reads as coverage:
+
+- **WebKit offline.** `context.setOffline` + any navigation dies with "WebKit encountered an internal
+  error" before the worker is consulted — measured, not assumed. Those tests skip on WebKit; the gap
+  is closed by hand on the Simulator instead (below).
+- **`response.fromServiceWorker()` on WebKit.** Always `false`, including for a route the worker
+  demonstrably served. The specs use `transferSize` instead, which every engine reports honestly.
+- **`registration.active.state` after an update on WebKit.** Playwright's WebKit reports `activating`
+  indefinitely while every `activate` handler has finished — the sweep ran, the page is controlled, and
+  a *second* deploy still installs and sweeps on top of it. **Real iOS Safari reports `activated`
+  normally**, so this is a Playwright-WebKit artifact rather than an engine one. Either way the update
+  spec asserts what the worker **did**, never its reported state.
+- **One host.** Everything is Nitro `node-server` under `vite preview`. Cloudflare and Vercel resolve
+  static assets before the server (which is why the SSR shell is not named `index.html` — §3.3), and
+  that ordering is verified by reading their config, not by a test.
+- **Firefox.** Playwright ships it and the no-preload branch above is written *because* of it, but the
+  suite runs Chromium and WebKit only — the branch is reached by disabling preload rather than by the
+  engine that actually lacks it.
+
+#### ⚠️ OPEN: `update.spec.ts` is intermittent on Chromium — not root-caused
+
+Roughly 1 run in 3–5 of the full SSR config, **Chromium only**, `update.spec.ts` fails with a waiting
+worker that is never applied. It is recorded here rather than retried away, because a flaky test on the
+one path with no remote fix is itself a production-readiness problem.
+
+What is MEASURED at the moment of failure:
+
+| | |
+|---|---|
+| `registration.waiting` | `installed` — a complete worker, sitting there |
+| `registration.installing` | `null` — nothing is in flight, the poll did not simply time out early |
+| `registration.active` / `controller` | `activated` — the old worker is still in charge |
+| `waiting.postMessage({type:"SKIP_WAITING"})` **by hand** | no effect after 15s |
+| `registration.update()` then post again | no effect after 15s |
+| a further `page.reload()` | **hangs** (hit a 900s test timeout) |
+
+The last row is the interesting one. adaptv has no code that can make a navigation hang — the SSR
+handler falls back to the precached shell after 3s (§3.3) — so this reads as the origin's whole service
+worker machinery wedging under a harness that rebuilds the served output underneath a live
+registration, rather than as the launch-apply branch being wrong. **That is a reading, not a diagnosis;
+it is not root-caused.** Against it being an adaptv defect: WebKit never shows it, and the Simulator
+walk below applied a real deploy across two real cold launches.
+
+Worth knowing when picking this up: `page.reload()` is **not** a cold launch. The client stays alive, so
+the browser never auto-promotes the waiting worker and adaptv's `SKIP_WAITING` is solely responsible —
+in a true relaunch the previous client is gone and the browser promotes it with no message at all. The
+spec wraps its final assertion so any recurrence prints the worker's full state instead of four
+booleans.
+
+#### 📱 Walked on the iOS Simulator — VERIFIED 2026-08-14
+
+The automated suite cannot reach the target the whole layer is for, so the same behaviour is walked by
+hand on real WebKit. `playground` → **Settings → Testing → Service worker** is the instrument: it
+prints the worker's condition as plain text, because on a device there is no DevTools pane to open.
+
+Measured on iPhone 16 Pro / iOS 18.0, SSR build (Nitro `node-server`), served over `http://localhost`
+— which is a secure context, so registration is allowed:
+
+| | |
+|---|---|
+| Safari tab, online | controlled ✓ · `active: activated` · **`navigationPreload: true`** · 112 precached · `caches.keys()` = the precache only |
+| server **killed**, in-tab reload | boots from the precached shell |
+| server killed, unvisited route | `/lab/list` renders in full — its chunk came from the precache, not the HTTP cache |
+| **installed PWA, cold launch, server killed** | launches and navigates offline; 112 precached, no route document |
+| deploy → cold launch #1 | `waiting: true`, and nothing else changes — the running build is left intact |
+| cold launch #2 | applied; `waiting: false` |
+
+Two things this settles that no automated run could. **Navigation preload is genuinely on in Safari**
+(17.4+), so the §3.3 pair is doing its job on the target where SW boot latency costs the most. And the
+`auto` update policy behaves exactly as §3.4 describes *in a standalone home-screen app*, which is the
+only place "cold launch" is a real, frequent event.
+
+> One harness trap, recorded so it is not re-diagnosed as a bug: `xcrun simctl openurl` with the server
+> down lands on Safari's "can't connect" page. An in-tab reload of the same URL, at the same moment,
+> boots from the precache. The external cold navigation is the thing that fails, not the worker — the
+> installed-PWA row above is the case that actually matters, and it passes.
 
 ---
 
