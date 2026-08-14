@@ -17,6 +17,7 @@ function pointer(
     pointerType: string
     clientX: number
     clientY: number
+    timeStamp: number
   }> = {},
 ): React.PointerEvent<HTMLElement> {
   return {
@@ -24,6 +25,7 @@ function pointer(
     pointerType: "touch",
     clientX: 0,
     clientY: 0,
+    timeStamp: 0,
     ...init,
   } as React.PointerEvent<HTMLElement>
 }
@@ -107,6 +109,65 @@ describe("useClickFix", () => {
     result.current.onPointerUp(pointer({ clientX: 5, clientY: 0 }))
 
     expect(onClick).not.toHaveBeenCalled()
+  })
+
+  /*
+   * The reason `maxTravel` takes an object at all. A surface almost never wants
+   * one budget for a fingertip and a cursor, so naming one kind must leave the
+   * other on the engine's default rather than dragging it along.
+   */
+  it("pins one pointer kind and leaves the other adaptive", () => {
+    const onClick = vi.fn()
+    const { result } = renderHook(() =>
+      useClickFix(onClick, { maxTravel: { touch: 2 } }),
+    )
+
+    //the discriminating distance: past the pinned touch budget of 2, but still
+    //inside the engine's mouse budget. Only one reading of `{ touch: 2 }` gets
+    //both of these right.
+    const between = 4
+    expect(between).toBeGreaterThan(2)
+    expect(between).toBeLessThan(POINTER_PRESS_OUTSET_PX)
+
+    //a finger is held to the pin
+    result.current.onPointerDown(pointer({ clientX: 0, clientY: 0 }))
+    result.current.onPointerUp(pointer({ clientX: between, clientY: 0 }))
+    expect(onClick).not.toHaveBeenCalled()
+
+    //the mouse kept the engine's default — the pin did not leak across
+    result.current.onPointerDown(
+      pointer({ pointerType: "mouse", clientX: 0, clientY: 0 }),
+    )
+    result.current.onPointerUp(
+      pointer({ pointerType: "mouse", clientX: between, clientY: 0 }),
+    )
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it("leaves the press unbounded in time unless a duration is set", () => {
+    const onClick = vi.fn()
+    const { result } = renderHook(() => useClickFix(onClick))
+
+    result.current.onPointerDown(pointer({ timeStamp: 0 }))
+    result.current.onPointerUp(pointer({ timeStamp: 60_000 }))
+
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+
+  it("stops firing under a hold once the surface bounds one", () => {
+    const onClick = vi.fn()
+    const { result } = renderHook(() =>
+      useClickFix(onClick, { maxDuration: 400 }),
+    )
+
+    result.current.onPointerDown(pointer({ timeStamp: 1_000 }))
+    result.current.onPointerUp(pointer({ timeStamp: 1_401 }))
+    expect(onClick).not.toHaveBeenCalled()
+
+    //the same press inside the bound is still a tap
+    result.current.onPointerDown(pointer({ timeStamp: 2_000 }))
+    result.current.onPointerUp(pointer({ timeStamp: 2_399 }))
+    expect(onClick).toHaveBeenCalledTimes(1)
   })
 
   /*
