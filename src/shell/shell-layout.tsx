@@ -12,6 +12,7 @@ import { hideNativeSplash } from "#adaptv/capabilities/splash"
 import type { OfflineProps } from "#adaptv/components/offline"
 import { Offline } from "#adaptv/components/offline"
 import { OrientationGuard } from "#adaptv/components/orientation-guard"
+import { UpdateRequired } from "#adaptv/components/update-required"
 import type {
   AdaptvPatches,
   AdaptvUiConfig,
@@ -19,16 +20,19 @@ import type {
 import type {
   OrientationGuardProps,
   SplashScreenProps,
+  UpdateRequiredProps,
 } from "#adaptv/config/types"
 import { useAndroidBackButton } from "#adaptv/hooks/use-android-back-button"
 import { useCaretRepaint } from "#adaptv/hooks/use-caret-repaint"
 import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
+import { useOtaUpdates } from "#adaptv/hooks/use-ota-updates"
 import { useRegisterPwaServiceWorker } from "#adaptv/hooks/use-register-pwa-service-worker"
 import { useStatusBar } from "#adaptv/hooks/use-status-bar"
 import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnifier"
 import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
 import { readPreference, useTheme } from "#adaptv/hooks/use-theme"
+import { firstLaunchHold } from "#adaptv/ota/updater"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import { initKv } from "#adaptv/storage/kv"
 import { cn } from "#adaptv/utils/cn"
@@ -134,6 +138,9 @@ type RoutingShellProps = {
   /** Manifest path; its `orientation` field drives the touch-device rotate guard. */
   manifestPath?: string
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
+  /** Days unreachable by OTA before the screen is taken. Omitted means never. */
+  updateRequiredAfterDays?: number
+  updateRequiredComponent?: ComponentType<UpdateRequiredProps>
   /** Rendered in place of the app when a route chunk is unrecoverably missing. */
   offlineComponent?: ComponentType<OfflineProps>
   shellClassName?: string
@@ -174,6 +181,8 @@ export function RoutingShell({
   splashScreenComponent,
   manifestPath = "/manifest.json",
   orientationGuardComponent,
+  updateRequiredAfterDays,
+  updateRequiredComponent,
   offlineComponent,
   shellClassName,
   patches,
@@ -207,6 +216,9 @@ export function RoutingShell({
   //force-repaints it on settle, so a translated input never leaves a detached ghost caret
   useCaretRepaint({ enabled: caretRepaint })
   useRegisterPwaServiceWorker()
+  //native only, and a no-op unless the app declares `origin`: check the app's
+  //own deploy for a newer JS bundle, and tell the watchdog THIS one booted
+  useOtaUpdates()
   //kill the iOS WebKit double-tap text-magnifier loupe app-wide (WebKit bug
   //231161 — not fixable in CSS; see the hook for the "safe to remove?" check)
   useSuppressTextMagnifier({ enabled: textMagnifier })
@@ -226,7 +238,15 @@ export function RoutingShell({
     //render must never see an empty map and then flip. (Web already hydrated
     //synchronously at module load, so this is a no-op there.)
     void initKv()
-    hideNativeSplash()
+    //Handed over as soon as the app has painted — EXCEPT on a first launch with
+    //OTA on, where it waits (briefly, and behind a ceiling it cannot exceed) for
+    //the update check to say whether the bundle in the binary is the one this
+    //user should be shown at all. A store binary can be many deploys old by the
+    //time someone installs it, and revealing the app first would mean showing a
+    //new user a version of the product that no longer exists, then swapping it
+    //under them. Resolves immediately on every other launch, on the web, and
+    //whenever OTA is off. → `#adaptv/ota/updater`, `firstLaunchHold`
+    void firstLaunchHold().then(() => hideNativeSplash())
     initNativeKeyboard()
     //hydrate the learned keyboard-height cache before any drawer can open, so the first focus of a
     //same-shape field already has a prediction to lift from (see keyboard-height-cache)
@@ -285,6 +305,12 @@ export function RoutingShell({
       <OrientationGuard
         manifestPath={manifestPath}
         component={orientationGuardComponent}
+      />
+      {/* Last, so it sits above the rotate guard: an install that cannot be
+          updated is a harder stop than one that is held the wrong way round. */}
+      <UpdateRequired
+        afterDays={updateRequiredAfterDays}
+        component={updateRequiredComponent}
       />
     </>
   )

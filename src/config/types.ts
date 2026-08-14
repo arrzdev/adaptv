@@ -20,3 +20,19 @@ export type OrientationGuardProps = {
   /** The orientation the app requires — the device is currently rotated away from it. */
   orientation: Exclude<OrientationLock, "any">
 }
+
+/**
+ * Props injected into `updateRequiredComponent` once an install has been unable
+ * to update for longer than `updateRequiredAfterDays`. → `LIFECYCLE.md §5.6`
+ */
+export type UpdateRequiredProps = {
+  /**
+   * Whole days this install has been unable to take what the channel publishes.
+   * Already floored, because "1.7 days behind" is not a sentence anyone writes.
+   */
+  days: number
+  /** When it first fell behind, in ms since the epoch — for a date, or a log line. */
+  since: number
+  /** The build this install refused. Opaque to a user; the thing to put in a report. */
+  buildTag: string
+}

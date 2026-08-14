@@ -63,6 +63,7 @@ export const routes = rootRoute([
     route("/lab/keyboard", "pages/lab/keyboard.page.tsx"),
     route("/lab/native-theme", "pages/lab/native-theme.page.tsx"),
     route("/lab/network", "pages/lab/network.page.tsx"),
+    route("/lab/ota", "pages/lab/ota.page.tsx"),
     route("/lab/splash", "pages/lab/splash.page.tsx"),
     route("/lab/status-bar", "pages/lab/status-bar.page.tsx"),
     route("/lab/hooks", "pages/lab/hooks.page.tsx"),

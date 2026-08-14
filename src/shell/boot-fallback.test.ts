@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   APP_ROOT_ID,
+  BOOT_BUNDLE_ATTR,
   BOOT_CODE_ATTR,
   BOOT_CODES,
   BOOT_FAILED_ATTR,
   BOOT_FALLBACK_ID,
   BOOT_GRACE_MS,
   BOOT_RETRY_ATTR,
+  EMBEDDED_BUNDLE,
   getBootFallbackCss,
   getBootFallbackMarkup,
   getBootFallbackScript,
@@ -79,6 +81,7 @@ afterEach(() => {
   document.head.innerHTML = ""
   document.body.innerHTML = ""
   document.documentElement.removeAttribute(BOOT_FAILED_ATTR)
+  document.documentElement.removeAttribute(BOOT_BUNDLE_ATTR)
 })
 
 describe("the boot fallback markup", () => {
@@ -302,5 +305,259 @@ describe("the boot code", () => {
     ].filter((node) => !node.hasAttribute("hidden"))
     expect(visible).toHaveLength(1)
     expect(visible[0]?.getAttribute(BOOT_CODE_ATTR)).toBe(BOOT_CODES.stall)
+  })
+})
+
+describe("getting out from under the native splash", () => {
+  /** A bridge with both plugins, like a real native launch. */
+  const nativeBridge = (hide: () => void) =>
+    vi.stubGlobal("Capacitor", {
+      Plugins: {
+        SplashScreen: { hide },
+        LiveUpdate: {
+          getCurrentBundle: () => Promise.resolve({ bundleId: null }),
+        },
+      },
+    })
+
+  it("hides it, because the screen is otherwise revealed underneath it", () => {
+    //🔴 Measured on a simulator, and it made every other guarantee here moot: the
+    //launch splash is a NATIVE view held open on purpose (`launchAutoHide: false`),
+    //and the only thing that hides it is the shell — i.e. exactly the code that
+    //just failed to run. The screen was up, correct, and invisible.
+    const hide = vi.fn()
+    nativeBridge(hide)
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    expect(showing()).toBe(true)
+    expect(hide).toHaveBeenCalledOnce()
+  })
+
+  it("does not touch it on a launch that boots", () => {
+    //Hiding it early is the flash `launchAutoHide: false` exists to prevent.
+    const hide = vi.fn()
+    nativeBridge(hide)
+    arm()
+    document
+      .getElementById(APP_ROOT_ID)
+      ?.appendChild(document.createElement("main"))
+    window.dispatchEvent(new Event("unhandledrejection"))
+    expect(showing()).toBe(false)
+    expect(hide).not.toHaveBeenCalled()
+  })
+
+  it("reveals the screen even when hiding it throws", () => {
+    //A bridge that answers badly must not cost the diagnosis it was called to
+    //make visible.
+    nativeBridge(() => {
+      throw new Error("no")
+    })
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    expect(showing()).toBe(true)
+    expect(stampedCode()).toBe(BOOT_CODES.reject)
+  })
+
+  it("asks for nothing on web and PWA, where there is no splash", () => {
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    expect(showing()).toBe(true)
+  })
+})
+
+describe("naming the bundle that failed", () => {
+  const stampedBundle = () =>
+    document.documentElement.getAttribute(BOOT_BUNDLE_ATTR)
+
+  /** A bridge that answers `getCurrentBundle`, like the real plugin. */
+  const bridge = (bundleId: string | null) =>
+    vi.stubGlobal("Capacitor", {
+      Plugins: {
+        LiveUpdate: {
+          getCurrentBundle: () => Promise.resolve({ bundleId }),
+        },
+      },
+    })
+
+  it("stamps the tag of the bundle that was actually running", async () => {
+    //The code alone is not actionable under OTA: `BOOT-LOAD` says a chunk was not
+    //served, and the next question is always WHICH deploy to roll back.
+    bridge("3f2a9c11b4d0e7a5")
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+
+    await vi.waitFor(() =>
+      expect(stampedBundle()).toBe("3f2a9c11b4d0e7a5"),
+    )
+  })
+
+  it("names the built-in bundle rather than staying silent", async () => {
+    //A different fact entirely, and a much worse one: the binary shipped by the
+    //store cannot start. Absence of the attribute would read as "unknown".
+    bridge(null)
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+
+    await vi.waitFor(() => expect(stampedBundle()).toBe(EMBEDDED_BUNDLE))
+  })
+
+  it("reveals the screen without waiting for the bridge to answer", () => {
+    //A user staring at a blank app while a plugin round-trip completes is a worse
+    //outcome than telemetry reading the code a frame before the tag.
+    let settle: (value: { bundleId: string }) => void = () => {}
+    vi.stubGlobal("Capacitor", {
+      Plugins: {
+        LiveUpdate: {
+          getCurrentBundle: () =>
+            new Promise<{ bundleId: string }>((resolve) => {
+              settle = resolve
+            }),
+        },
+      },
+    })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+
+    expect(showing()).toBe(true)
+    expect(stampedCode()).toBe(BOOT_CODES.reject)
+    expect(stampedBundle()).toBeNull()
+    settle({ bundleId: "late" })
+  })
+
+  it("stamps nothing on web and PWA, where there is no bundle to name", () => {
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    expect(showing()).toBe(true)
+    expect(stampedBundle()).toBeNull()
+  })
+
+  it("clears the tag when a late mount wins the race", async () => {
+    //The stamp is a statement about the screen that is up. Leaving it behind on a
+    //recovered document would make every later reader believe a failure it can no
+    //longer see.
+    bridge("3f2a9c11b4d0e7a5")
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    await vi.waitFor(() => expect(stampedBundle()).not.toBeNull())
+
+    document
+      .getElementById(APP_ROOT_ID)
+      ?.appendChild(document.createElement("main"))
+    await vi.waitFor(() => expect(stampedBundle()).toBeNull())
+    expect(stampedCode()).toBeNull()
+  })
+
+  it("survives a bridge that throws or answers with nothing usable", async () => {
+    //Last code standing in a document whose bundle already failed: it must never
+    //be the second thing that breaks.
+    for (const getCurrentBundle of [
+      () => {
+        throw new Error("wedged")
+      },
+      () => undefined,
+      () => Promise.reject(new Error("no")),
+    ]) {
+      vi.stubGlobal("Capacitor", {
+        Plugins: { LiveUpdate: { getCurrentBundle } },
+      })
+      arm()
+      expect(() =>
+        window.dispatchEvent(new Event("unhandledrejection")),
+      ).not.toThrow()
+      expect(showing()).toBe(true)
+      document.documentElement.removeAttribute(BOOT_FAILED_ATTR)
+    }
+  })
+})
+
+/*
+ * Under OTA the running bundle is not the one in the binary — it is one the app
+ * downloaded, chosen by a pointer the bridge reads at LAUNCH. `location.reload()`
+ * does not revisit that pointer, so on a corrupt bundle the retry button is an
+ * infinite loop dressed as a way out. These assert the escape hatch, and equally
+ * that it stays out of the way everywhere it is not needed.
+ */
+describe("retry, when a stale bundle pointer is the thing standing in the way", () => {
+  /** A bridge whose plugin resolves, like the real one. */
+  function bridge(overrides: Record<string, unknown> = {}) {
+    const reset = vi.fn(() => Promise.resolve())
+    const reload = vi.fn(() => Promise.resolve())
+    vi.stubGlobal("Capacitor", {
+      Plugins: { LiveUpdate: { reset, reload, ...overrides } },
+    })
+    return { reset, reload }
+  }
+
+  it("drops to the built-in bundle instead of re-running the broken one", async () => {
+    const reload = vi.fn()
+    vi.stubGlobal("location", { reload })
+    const live = bridge()
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    ;(box()?.querySelector("button") as HTMLElement).click()
+
+    expect(live.reset).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(live.reload).toHaveBeenCalledOnce())
+    //the whole point: a document reload would have re-run the same bundle
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it("still just reloads where there is no bridge — web and PWA", () => {
+    //Correct there rather than a degraded fallback: nothing is holding a stale
+    //pointer, so the document reload IS the fix.
+    const reload = vi.fn()
+    vi.stubGlobal("location", { reload })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    ;(box()?.querySelector("button") as HTMLElement).click()
+
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
+  it("reloads when the bridge is there but the plugin is not", () => {
+    //`offline-page.mjs` documents a real case where the bridge is absent from a
+    //page by origin scoping. Detect, never assume.
+    const reload = vi.fn()
+    vi.stubGlobal("location", { reload })
+    vi.stubGlobal("Capacitor", { Plugins: {} })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    ;(box()?.querySelector("button") as HTMLElement).click()
+
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
+  it("reloads when the escape hatch itself fails", () => {
+    //A button that does nothing is the one outcome worse than a button that
+    //reloads, and this screen exists precisely because things are already broken.
+    const reload = vi.fn()
+    vi.stubGlobal("location", { reload })
+    bridge({
+      reset: () => {
+        throw new Error("bridge is wedged")
+      },
+    })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    ;(box()?.querySelector("button") as HTMLElement).click()
+
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
+  it("reloads when the plugin rejects asynchronously", async () => {
+    const reload = vi.fn()
+    vi.stubGlobal("location", { reload })
+    bridge({ reset: () => Promise.reject(new Error("no")) })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    ;(box()?.querySelector("button") as HTMLElement).click()
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce())
   })
 })

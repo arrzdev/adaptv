@@ -61,11 +61,19 @@ function resolveStylesHref(
  * Named `index.html` for a SPA build and `adaptv-shell.html` for an SSR one; the
  * reasoning for the split lives with the constants in `sw-helpers.ts`.
  *
- * Measured: TanStack Start emits no HTML in this configuration, so there is
- * nothing to copy and two features depend on the file existing — a `render: "spa"`
- * deploy (needs a document for every path) and the SSR service worker's precache
- * fallback (binds to a shell URL; without the file the offline path 404s instead
- * of booting React).
+ * Two features depend on the file existing — a `render: "spa"` deploy (needs a
+ * document for every path) and the SSR service worker's precache fallback (binds
+ * to a shell URL; without the file the offline path 404s instead of booting
+ * React) — and Start cannot be relied on to produce it: with the Cloudflare
+ * adapter it emits no HTML at all.
+ *
+ * ⚠︎ Where it *does* emit, it emits **late**, so "Start emits nothing here" is
+ * not a safe blanket assumption. At `render: "ssr"` built for the Capacitor
+ * target, Start's prerender writes its own shell about a second AFTER this
+ * plugin has written ours (`DECISIONS.md` B31) — measured while chasing why an
+ * OTA bundle booted the wrong document. The safe rule is the one below: this
+ * shell is generated, never adopted, and nothing downstream may prefer Start's
+ * copy over it.
  *
  * The shell is **generated** from config, never captured from a rendered
  * response, which is what makes it user-agnostic by construction rather than by
