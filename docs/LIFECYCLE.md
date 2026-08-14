@@ -1118,14 +1118,27 @@ if (!share.supported) return <p>Update the app from the store to share.</p>
 return <button onClick={() => share.share(target)}>Share</button>
 ```
 
-Underneath, that field consults `Capacitor.PluginHeaders` — injected by the native layer with a
-`{ name, methods }` entry per compiled plugin: authoritative, and precise to the **method**, which is
-what catches the harder half of native skew, a plugin present but one major version behind where only
-the new method is missing.
+Underneath, that field consults `Capacitor.PluginHeaders` (`src/utils/native-plugins.ts`) — injected by
+the native layer with a `{ name, methods }` entry per compiled plugin. It is the one thing on the device
+that describes the **binary** rather than the bundle, and nothing a bundle carries can change it, which
+is exactly the property the answer needs.
 
-⚠︎ Not `Capacitor.isPluginAvailable`, which is the obvious-looking call and the wrong one: it returns
-true when a JS implementation exists for the platform, so any plugin shipping a web fallback reports
-available on a native build carrying none of its native code.
+adaptv reads the plugin **name** only. The headers are precise to the method, and that is the shape that
+would catch the harder half of native skew — a plugin present but one major behind, where only the new
+method is missing — but no capability adaptv ships turns on a single method today, so reading one would
+be a mechanism with no caller. The data is there when one appears.
+
+⚠︎ Not `Capacitor.isPluginAvailable`. It asks whether an implementation is registered for this platform,
+and a JS implementation counts. On native it *happens* to reduce to the header check — every
+`@capacitor/*` package registers its fallback under `"web"` only, which never matches `"ios"`/`"android"`
+— but that is how those packages are written, not a contract. One plugin registering an `"ios"` JS shim
+would make it answer `true` on a binary carrying none of that plugin's native code, and the failure would
+be a rejected bridge call on a user's device rather than a hidden button.
+
+A missing plugin is also not the same statement as "this feature does not exist here". Each capability
+falls **through** to its web path rather than reporting unsupported: an Android WebView on a secure
+origin has a real `navigator.clipboard` and a real `navigator.vibrate`, so a skewed bundle keeps copying
+and keeps buzzing. Only when the WebView has nothing either does `supported` go `false`.
 
 **A plugin adaptv does not ship is the plugin author's contract, not ours.** A community or in-house
 Capacitor plugin should answer through its own bridge when its native half is absent; adaptv deliberately

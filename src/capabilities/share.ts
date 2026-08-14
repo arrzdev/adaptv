@@ -16,6 +16,7 @@
 //desktop Chrome; a caller that only checks the second ships one that silently
 //does nothing. Both are the failure this capability exists to make visible.
 import { Share } from "@capacitor/share"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type ShareTarget = {
@@ -52,17 +53,31 @@ function toWebPayload(target: ShareTarget): ShareData {
 }
 
 /**
+ * Whether the call goes through the native plugin. Every native branch below
+ * asks THIS rather than `isNativePlatform()`: an OTA bundle can be running on a
+ * binary that predates the plugin, and there the native branch is a rejected
+ * bridge call, not a share sheet. → `LIFECYCLE.md §5.6`
+ */
+function viaPlugin(): boolean {
+  return isNativePlatform() && hasNativePlugin("Share")
+}
+
+/**
  * Whether a share sheet exists on this target at all. Synchronous on purpose:
  * this is what lets a share button be *absent* from the first render instead of
  * disappearing a frame later.
  *
- * Native answers `true` without a bridge hop. `Share.canShare()` exists, but on
- * iOS and Android it only ever reports what `isNativePlatform()` already told
- * us, and paying an async round-trip to learn nothing would force every caller
- * into a loading state for a button label.
+ * Native answers without a bridge hop. `Share.canShare()` exists, but it is
+ * async, and paying a round-trip for a button label would force every caller
+ * into a loading state.
+ *
+ * The native branch asks whether the **binary** carries the plugin, not just
+ * whether we are native, because OTA can put a bundle that shares on a binary
+ * built before sharing existed. It falls through rather than returning `false`,
+ * so a WebView that does have `navigator.share` still gets it.
  */
 export function isShareSupported(): boolean {
-  if (isNativePlatform()) return true
+  if (viaPlugin()) return true
   if (typeof navigator === "undefined") return false
   return typeof navigator.share === "function"
 }
@@ -74,8 +89,8 @@ export function isShareSupported(): boolean {
  */
 export function canShareTarget(target: ShareTarget): boolean {
   if (!isShareSupported()) return false
-  //native: no File→URI path (see ShareTarget.files)
-  if (isNativePlatform()) return !target.files?.length
+  //via the plugin: no File→URI path (see ShareTarget.files)
+  if (viaPlugin()) return !target.files?.length
   if (typeof navigator.canShare !== "function") {
     //Web Share level 1 — `share` without `canShare`. Text/URL payloads are the
     //only thing level 1 accepts, so files are the one certain "no".
@@ -111,7 +126,7 @@ export async function share(target: ShareTarget): Promise<ShareOutcome> {
   if (!isShareSupported()) return "unsupported"
   if (!canShareTarget(target)) return "unsupported"
 
-  if (isNativePlatform()) {
+  if (viaPlugin()) {
     try {
       await Share.share({
         title: target.title,
