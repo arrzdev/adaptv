@@ -10,8 +10,6 @@ import { expect, test } from "@playwright/test"
  * sim. chromium — WebKit historically has no geolocation Permissions query.
  */
 
-test.describe.configure({ retries: 2 })
-
 test.describe("Geolocation permission model", () => {
   test.beforeEach(async ({ browserName }) => {
     test.skip(

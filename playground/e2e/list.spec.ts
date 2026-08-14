@@ -12,12 +12,15 @@ import { expect, test } from "@playwright/test"
  * artefact; a real finger scrolls it fine — confirmed #0→#16 on the iOS sim). CDP
  * touch is the instrument that actually moves it, same as scroll-axis.
  *
- * ⚠︎ chromium-only for the scroll cases (CDP). react-virtual is engine-agnostic.
+ * ⚠︎ chromium-only for the scroll cases (CDP) — and that warning is now ENFORCED
+ * by a skip on the two tests that open a CDP session, not just written down.
+ * Without it `newCDPSession` throws "CDP session is only available in Chromium"
+ * on every webkit run: a hard, deterministic failure that retries can only turn
+ * into a slower hard failure. react-virtual itself is engine-agnostic, so the
+ * DOM-window test above still runs on both.
  */
 
 test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
-test.describe.configure({ retries: 2 })
-
 const LIST = '[data-adaptv="list"]'
 const ROW = "[data-lab-row]"
 // the lab paints "bad" at ≥80; a correct window in an h-80 box is ~15–30
@@ -90,7 +93,12 @@ test.describe("List virtualisation", () => {
 
   test("scrolling recycles the window — DOM stays small, indices move", async ({
     page,
+    browserName,
   }) => {
+    test.skip(
+      browserName !== "chromium",
+      "CDP touch injection is chromium-only",
+    )
     const cdp = await page.context().newCDPSession(page)
     const topBefore = Math.min(...(await rowIndices(page)))
 
@@ -116,7 +124,12 @@ test.describe("List virtualisation", () => {
 
   test("the window keeps recycling deeper in, never accumulating", async ({
     page,
+    browserName,
   }) => {
+    test.skip(
+      browserName !== "chromium",
+      "CDP touch injection is chromium-only",
+    )
     const cdp = await page.context().newCDPSession(page)
     let deepest = 0
     for (let burst = 0; burst < 8; burst += 1) {

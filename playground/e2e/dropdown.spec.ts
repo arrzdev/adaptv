@@ -16,8 +16,14 @@ import { expect, test } from "@playwright/test"
 test.use({ viewport: { width: 390, height: 844 } })
 // this page mounts several menus; six of these hammering one dev server in parallel
 // starves it and the menu never paints in time. Serial (one worker) is instant and
-// deterministic; retries absorb any load from other spec files.
-test.describe.configure({ mode: "serial", retries: 2 })
+// deterministic.
+//
+// This used to carry `retries: 2` as well, "to absorb load from other spec files".
+// It was not absorbing load — it was hiding the hydration race `awaitClientHandover`
+// now closes, and it hid it well enough that the failure survived as folklore. No
+// retries here on purpose: if this describe goes red, something is genuinely wrong
+// and the run should say so the first time.
+test.describe.configure({ mode: "serial" })
 
 const VW = 390
 const VH = 844
@@ -27,6 +33,33 @@ const CONTENT = '[data-adaptv="dropdown"]'
 const triggerFor = (page: Page, label: string) =>
   page.getByRole("button", { name: label, exact: true })
 const content = (page: Page): Locator => page.locator(CONTENT)
+
+/**
+ * Wait for the client to take over before opening anything.
+ *
+ * Every trigger on this page is server-rendered, so `waitFor()` is satisfied
+ * by inert HTML: the click that follows lands on a button whose handler is
+ * not attached yet, `open` never flips, and the menu this spec is entirely
+ * about never mounts — the failure is `waitFor()` on the content timing out,
+ * which reads as "the dropdown is broken" or, worse, as load flake. It is
+ * neither: Playwright boots its own dev server and tears it down per run, so
+ * the FIRST test to reach this route pays the cold transform cost and loses
+ * the race while every test after it wins. That is also why the serial
+ * describe only ever lost its first test. A dev session left running hides
+ * it entirely, because `reuseExistingServer` then hands the suite a warm
+ * server.
+ *
+ * The splash is server-rendered too and self-unmounts only once the client
+ * has hydrated and the local store has seeded, so its disappearance is the
+ * one honest "React is driving now" signal on the page. Given a generous
+ * timeout on purpose — the case it exists for is a cold server, where the
+ * route's first transform can take longer than the 5s default.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
 
 async function openMenu(page: Page, label: string) {
   const t = triggerFor(page, label)
@@ -54,6 +87,7 @@ function expectInsideViewport(
 test.describe("Dropdown positioning", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/dropdown")
+    await awaitClientHandover(page)
     await triggerFor(page, "Actions").waitFor()
   })
 

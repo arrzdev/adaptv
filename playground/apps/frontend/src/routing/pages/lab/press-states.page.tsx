@@ -106,13 +106,18 @@ function LabPressStatesPage() {
  * PROBES
  * ============================================================================= */
 
+//`Button`'s ref is its ButtonHandle (`{ disabled, focus() }`) — deliberately the
+//imperative API, not the host node — so this probe cannot reach the element with a
+//ref and has to resolve it from the document. `Button` spreads unknown props onto
+//the underlying <button>, so an id is enough to find it.
+const ENGINE_BUTTON_ID = "lab-press-engine-button"
+
 function EngineProbe() {
-  const ref = useRef<HTMLButtonElement>(null)
   const [attrs, setAttrs] = useState<Record<string, boolean> | null>(null)
   const [presses, setPresses] = useState(0)
 
   useEffect(() => {
-    const node = ref.current
+    const node = document.getElementById(ENGINE_BUTTON_ID)
     if (!node) return
     const read = () =>
       setAttrs(
@@ -132,7 +137,7 @@ function EngineProbe() {
   return (
     <>
       <Button
-        ref={ref}
+        id={ENGINE_BUTTON_ID}
         className={PRESS_CLASS}
         onClick={() => setPresses((n) => n + 1)}
       >

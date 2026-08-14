@@ -11,8 +11,6 @@ import { expect, test } from "@playwright/test"
  * <html> flag reacts with no JS on the element at all.
  */
 
-test.describe.configure({ retries: 2 })
-
 const KEYBOARD_EVENT = "adaptv:keyboard-mock"
 
 async function setKeyboard(page: Page, isOpen: boolean, height: number) {

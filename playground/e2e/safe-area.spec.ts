@@ -14,8 +14,6 @@ import { expect, test } from "@playwright/test"
  * the inset is, so it never assumes a headless 0.
  */
 
-test.describe.configure({ retries: 2 })
-
 /** Read a padding-probe row: its measured px and the px the page expected. */
 async function probeRow(page: Page, label: string) {
   const row = page.getByText(label, { exact: true }).locator("..")

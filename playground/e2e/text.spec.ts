@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 /*
@@ -14,11 +15,37 @@ import { expect, test } from "@playwright/test"
  *     wrapper — and a rendered <label> still focuses its control.
  */
 
-test.describe.configure({ retries: 2 })
+/**
+ * Wait for the client to take over before pressing anything.
+ *
+ * The paragraph and the clamp buttons are all server-rendered, so the
+ * `waitFor()` below is satisfied by inert HTML: a click fired in that window
+ * lands on a button whose handler is not attached yet, `numberOfLines` never
+ * changes, and the assertion reads the page's default clamp ("2") instead of
+ * the "1" it just asked for. It is not load flake — Playwright boots its own
+ * dev server and tears it down per run, so the FIRST test to reach this
+ * route pays the cold transform cost and loses the race while every test
+ * after it wins. A dev session left running hides it entirely, because
+ * `reuseExistingServer` then hands the suite a warm server. Only the one
+ * test here that presses a button was ever affected; the other three assert
+ * on markup the server already emitted.
+ *
+ * The splash is server-rendered too and self-unmounts only once the client
+ * has hydrated and the local store has seeded, so its disappearance is the
+ * one honest "React is driving now" signal on the page. Given a generous
+ * timeout on purpose — the case it exists for is a cold server, where the
+ * route's first transform can take longer than the 5s default.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
 
 test.describe("Text", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/text")
+    await awaitClientHandover(page)
     await page.locator('p[data-adaptv="text"]').first().waitFor()
   })
 

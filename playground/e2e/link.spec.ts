@@ -21,8 +21,6 @@ import { expect, test } from "@playwright/test"
  * orthogonal to these two components, and flagged for its own cleanup.)
  */
 
-test.describe.configure({ retries: 2 })
-
 test.describe("Link & ExternalLink", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/link")
