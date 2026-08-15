@@ -405,6 +405,12 @@ we served is broken", a support reference, a telemetry ping. It is also stamped 
 `<html data-adaptv-boot-failed="BOOT-LOAD">`, so telemetry and e2e read one attribute instead of
 scraping the screen.
 
+On native, a second attribute lands beside it: `data-adaptv-boot-bundle`, carrying the build tag of the
+bundle that was actually running (or `embedded` for the one inside the binary). The code says what broke;
+this says *which deploy* to roll back, which is the only actionable half under OTA. It arrives from the
+native bridge a moment after the reveal, never before it, and is cleared if a late mount wins the race.
+→ `LIFECYCLE.md §5.4c`
+
 **A prop is why the component is prerendered four times, not once.** Static markup cannot be handed a
 prop when it is revealed, so the component is rendered once per code at build time and the watchdog
 reveals the matching copy. A component that ignores `code` — adaptv's default, and probably most apps'

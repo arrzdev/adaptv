@@ -4,11 +4,16 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   assertRouteTreeIsOpaque,
+  checkNativePatch,
   checkPatches,
   describeMissingPatches,
+  missingNativePatchMessage,
+  NATIVE_PATCH_MARKER,
   parsePatchFilename,
   patchInstructions,
 } from "#adaptv/vite/verify-patches"
+
+const WHY = ["it fails silently, so the build still succeeds"]
 
 const PATCHED_FOOTER = `function adaptvStartPkg(f){return process.env.ADAPTV_START_PKG || \`@tanstack/\${f}-start\`}`
 const UNPATCHED_FOOTER = `declare module '@tanstack/react-start' {`
@@ -64,14 +69,20 @@ describe("checkPatches — detects behaviour, not pnpm metadata", () => {
 
 describe("describeMissingPatches", () => {
   it("explains WHY the failure is loud rather than silent", () => {
-    const message = describeMissingPatches(["@tanstack/router-generator"])
+    const message = describeMissingPatches(
+      ["@tanstack/router-generator"],
+      WHY,
+    )
     expect(message).toContain("silently")
     expect(message).toContain("build still")
   })
 
   it("gives the exact fix, including the pnpm-workspace key", () => {
     //a diagnostic that only names the fault sends people reading framework source
-    const message = describeMissingPatches(["@tanstack/router-generator"])
+    const message = describeMissingPatches(
+      ["@tanstack/router-generator"],
+      WHY,
+    )
     expect(message).toContain("patchedDependencies:")
     expect(message).toContain("@arrzdev/adaptv/patches/")
     expect(message).toContain("pnpm install")
@@ -80,7 +91,7 @@ describe("describeMissingPatches", () => {
   it("mentions the incremental-install trap that cost real debugging time", () => {
     //pnpm reported "Already up to date" and skipped the patch even with --force
     //and the package directory deleted; only a full node_modules wipe worked
-    expect(describeMissingPatches(["x"])).toContain("node_modules")
+    expect(describeMissingPatches(["x"], WHY)).toContain("node_modules")
   })
 })
 
@@ -116,7 +127,7 @@ describe("patch instructions — derived from what actually shipped", () => {
     const shipped = readdirSync(patchesDir).filter((f) =>
       f.endsWith(".patch"),
     )
-    const message = describeMissingPatches(["x"])
+    const message = describeMissingPatches(["x"], WHY)
     expect(shipped.length).toBeGreaterThan(0)
     for (const file of shipped) expect(message).toContain(file)
   })
@@ -134,8 +145,62 @@ describe("patch instructions — derived from what actually shipped", () => {
     const advertised = patchInstructions(readdirSync(patchesDir))
       .map((l) => l.trim().split("':")[0].slice(1))
       .sort()
-    expect(declared.length).toBe(3)
+    expect(declared.length).toBe(4)
     expect(advertised).toEqual(declared)
+  })
+})
+
+describe("the native patch, checked where it would be compiled in", () => {
+  const patched = (path: string) => ({
+    path,
+    source: `// ${NATIVE_PATCH_MARKER}: resolve the target first\nclass X {}`,
+  })
+
+  it("passes when both native sources carry adaptv's marker", () => {
+    expect(
+      checkNativePatch([patched("ios/x.swift"), patched("android/x.java")])
+        .ok,
+    ).toBe(true)
+  })
+
+  it("catches one platform patched and the other not", () => {
+    //The likeliest real shape of this failure: a patch re-applied by hand after
+    //an upstream bump, on the platform whoever did it was testing.
+    const status = checkNativePatch([
+      patched("ios/x.swift"),
+      { path: "android/x.java", source: "class X {}" },
+    ])
+    expect(status.ok).toBe(false)
+    expect(status.missing).toEqual(["android/x.java"])
+  })
+
+  it("treats a source it cannot read as missing, not as fine", () => {
+    //🔴 The opposite of `checkPatches`, on purpose. There an unreadable file is a
+    //resolution quirk; here it means the upstream moved the file the patch edits,
+    //which is exactly what the version-pinned key exists to catch.
+    expect(
+      checkNativePatch([{ path: "ios/x.swift", source: null }]).ok,
+    ).toBe(false)
+  })
+
+  it("is quiet on this repo, where the patch is declared and applied", () => {
+    expect(missingNativePatchMessage()).toBeNull()
+  })
+
+  it("states the cost of the absence, which no build would show", () => {
+    const message = missingNativePatchMessage(
+      join(tmpdir(), "no-plugin-here"),
+    )
+    expect(message).toContain("rolls the app back")
+    expect(message).toContain("store release")
+  })
+
+  it("carries the same copy-this-block fix as every other patch", () => {
+    const message = missingNativePatchMessage(
+      join(tmpdir(), "no-plugin-here"),
+    )
+    expect(message).toContain("patchedDependencies:")
+    expect(message).toContain("@capawesome__capacitor-live-update")
   })
 })
 

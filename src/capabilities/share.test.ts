@@ -22,6 +22,14 @@ function forceNative(native: boolean): void {
   )
 }
 
+/** A native shell whose binary carries exactly `plugins` and nothing else. */
+function forceNativeBinary(plugins: string[]): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
 function stubNavigatorProp(key: string, value: unknown): void {
   const prev = Object.getOwnPropertyDescriptor(navigator, key)
   Object.defineProperty(navigator, key, { value, configurable: true })
@@ -56,6 +64,36 @@ describe("share — the support probe", () => {
     forceNative(true)
     expect(isShareSupported()).toBe(true)
     expect(Share.canShare).not.toHaveBeenCalled()
+  })
+
+  it("reports unsupported on a binary that predates the plugin", () => {
+    //The OTA skew, on a device: this bundle was built after `@capacitor/share`
+    //was added; the binary under it was not. Under the `install` default the
+    //bundle runs anyway, so the share button has to be ABSENT rather than
+    //throwing — which is exactly what the app already reads as
+    //`useShare().supported`. → LIFECYCLE.md §5.6
+    forceNativeBinary(["Haptics"])
+    stubNavigatorProp("share", undefined)
+    expect(isShareSupported()).toBe(false)
+  })
+
+  it("falls through to the Web Share API rather than to nothing", () => {
+    //A missing plugin is not the same statement as "no share sheet here". If the
+    //WebView happens to expose `navigator.share`, that is a real share sheet and
+    //the user gets it.
+    forceNativeBinary([])
+    stubNavigatorProp("share", () => Promise.resolve())
+    expect(isShareSupported()).toBe(true)
+  })
+
+  it("shares through the WebView, not the absent bridge", async () => {
+    forceNativeBinary([])
+    const webShare = vi.fn(() => Promise.resolve())
+    stubNavigatorProp("share", webShare)
+    stubNavigatorProp("canShare", undefined)
+    await expect(share({ text: "hi" })).resolves.toBe("shared")
+    expect(Share.share).not.toHaveBeenCalled()
+    expect(webShare).toHaveBeenCalledOnce()
   })
 })
 

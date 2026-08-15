@@ -17,6 +17,7 @@
     "preview:ios": "tsx scripts/preview.ts ios",
     "preview:android": "tsx scripts/preview.ts android",
     "preview:all": "tsx scripts/preview.ts all",
+    "ota:lab": "tsx scripts/ota-lab.ts",
     "build": "vite build",
     "build:ios": "tsx env/check-env.ts && adaptv build ios",
     "build:android": "tsx env/check-env.ts && adaptv build android",
