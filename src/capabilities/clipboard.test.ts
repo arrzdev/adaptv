@@ -24,6 +24,14 @@ function forceNative(native: boolean): void {
   )
 }
 
+/** A native shell whose binary carries exactly `plugins` and nothing else. */
+function forceNativeBinary(plugins: string[]): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
 function stubNavigatorProp(key: string, value: unknown): void {
   const prev = Object.getOwnPropertyDescriptor(navigator, key)
   Object.defineProperty(navigator, key, { value, configurable: true })
@@ -184,5 +192,26 @@ describe("clipboard — read", () => {
       status: "ok",
       text: "native",
     })
+  })
+})
+
+describe("clipboard — a binary that predates the plugin", () => {
+  it("copies through the WebView instead of the absent bridge", async () => {
+    //The OTA skew: this bundle was built after `@capacitor/clipboard` was added,
+    //the binary under it was not. An Android WebView on a secure origin has a
+    //real `navigator.clipboard`, so the copy must reach IT rather than reporting
+    //"unsupported" and losing a working feature. → LIFECYCLE.md §5.6
+    forceNativeBinary([])
+    const writeText = vi.fn(() => Promise.resolve())
+    stubNavigatorProp("clipboard", { writeText })
+    await expect(writeClipboardText("hi")).resolves.toBe("ok")
+    expect(Clipboard.write).not.toHaveBeenCalled()
+    expect(writeText).toHaveBeenCalledWith("hi")
+  })
+
+  it("reports unsupported when the WebView has nothing either", () => {
+    forceNativeBinary(["Share"])
+    stubNavigatorProp("clipboard", undefined)
+    expect(isClipboardReadSupported()).toBe(false)
   })
 })

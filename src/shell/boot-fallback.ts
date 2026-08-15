@@ -62,6 +62,34 @@ export const BOOT_CODE_ATTR = "data-adaptv-boot-code"
 export const BOOT_FAILED_ATTR = "data-adaptv-boot-failed"
 
 /**
+ * Which bundle failed, stamped beside the code once the bridge answers.
+ *
+ * Under OTA the code alone does not identify anything: `BOOT-LOAD` says a chunk
+ * was not served, and the only actionable question after that is *which deploy*
+ * — the one that needs rolling back, or the built-in one, which would mean the
+ * store binary itself is broken. That distinction is why {@link EMBEDDED_BUNDLE}
+ * is stamped rather than the attribute simply being absent.
+ *
+ * It **cannot** be baked in at build time. The build tag is a content hash of the
+ * bundle, and this script ships inside that bundle's `index.html`, so writing the
+ * tag here would change the tag it was describing. The value comes from the
+ * native bridge instead, which is the only thing that knows what actually booted.
+ *
+ * Asynchronous, and never blocking the reveal: the screen is up long before this
+ * lands, because a user waiting on a plugin round-trip to see an error screen is
+ * a worse outcome than a telemetry hook reading the code a frame early.
+ */
+export const BOOT_BUNDLE_ATTR = "data-adaptv-boot-bundle"
+
+/**
+ * The value {@link BOOT_BUNDLE_ATTR} carries for the bundle inside the binary.
+ *
+ * A published tag is a 16-character content hash, so a word can never collide
+ * with one.
+ */
+export const EMBEDDED_BUNDLE = "embedded"
+
+/**
  * Why the boot failed, as far as the document can tell from outside the bundle.
  *
  * These are the four distinguishable signals, and the distinction is the point —
@@ -187,6 +215,48 @@ export function getBootFallbackMarkup(
  * {@link BOOT_RETRY_ATTR} remains as the precision tool: mark one control and only
  * that one reloads, which is what a screen with a second button wants.
  *
+ * ## 🔴 …but on native, reloading is not enough — it re-runs the broken bundle
+ *
+ * Under OTA the running bundle is not the one inside the binary; it is one the
+ * app downloaded, selected by a pointer the native bridge reads **at launch**.
+ * `location.reload()` does not revisit that pointer. So on a corrupt OTA bundle
+ * the honest-looking retry is an infinite loop: fallback → tap → same broken
+ * bundle → fallback. The automatic rollback may already have chosen a target and
+ * it stays inert, because only a real cold start applies it. The user's only way
+ * out is to kill the app, and nothing on screen says so.
+ *
+ * So when the native bridge is reachable, retry drops to the **built-in** bundle
+ * and asks the plugin to apply it — which it can do without a cold start, since
+ * its own `reload()` re-reads the pointer. The built-in bundle can be old; that
+ * is fine and deliberate. This is a user-initiated escape from an app that does
+ * not start, so "working" beats "current", and the normal update cycle carries
+ * them forward again on the next launch.
+ *
+ * The bridge is reachable here because it is injected **natively**, as a
+ * document-start script on the app's own origin — the same property
+ * `bin/lib/offline-page.mjs` relies on to reach `CapacitorHttp` from a page that
+ * is not part of the bundle. It is feature-detected rather than assumed: that
+ * file also documents an origin-scoping case where the bridge is absent, and on
+ * web and PWA there is no bridge at all. Every one of those falls back to a plain
+ * reload, which is exactly right there — nothing else is holding a stale pointer.
+ *
+ * ## 🔴 Revealing the screen is not the same as showing it
+ *
+ * On native the launch splash is a **native view over the WebView**, held open on
+ * purpose (`launchAutoHide: false`) so there is no flash between the OS splash and
+ * the app's own. The only thing that hides it is `hideNativeSplash()`, called from
+ * the shell once React has painted — which is exactly the code that did not run.
+ *
+ * So every path here revealed a screen nobody could see. Measured on a simulator:
+ * a bundle whose entry threw sat under an opaque splash for the full grace period
+ * and past it, and the only visible outcome was the update watchdog reverting
+ * fifteen seconds later. The document was right, the user was looking at a blank
+ * colour.
+ *
+ * `unsplash` is therefore part of the reveal, not a nicety, and it is
+ * feature-detected the same way the rest of the bridge use here is: on web and PWA
+ * there is no `Capacitor` at all, and there the WebView is all there ever was.
+ *
  * ## The first signal wins
  *
  * `show` is a no-op once the screen is up, and that guard is load-bearing rather
@@ -203,17 +273,40 @@ export function getBootFallbackScript(): string {
   return `(function(){
 var R=${JSON.stringify(APP_ROOT_ID)},F=${JSON.stringify(BOOT_FALLBACK_ID)},G=${BOOT_GRACE_MS};
 var BF=${JSON.stringify(BOOT_FAILED_ATTR)},CD=${JSON.stringify(BOOT_CODE_ATTR)};
-var RT=${JSON.stringify(BOOT_RETRY_ATTR)};
+var RT=${JSON.stringify(BOOT_RETRY_ATTR)},BN=${JSON.stringify(BOOT_BUNDLE_ATTR)};
+var EB=${JSON.stringify(EMBEDDED_BUNDLE)};
 function root(){return document.getElementById(R)}
 function box(){return document.getElementById(F)}
 function booted(){var r=root();return !!r&&r.childElementCount>0}
+function live(){var C=window.Capacitor,P=C&&C.Plugins;return P&&P.LiveUpdate}
+function unsplash(){
+var C=window.Capacitor,P=C&&C.Plugins,S=P&&P.SplashScreen;
+if(!S||typeof S.hide!=="function")return;
+try{S.hide()}catch(e){}}
+function stamp(){
+var L=live();if(!L||typeof L.getCurrentBundle!=="function")return;
+var p;try{p=L.getCurrentBundle()}catch(e){return}
+if(!p||typeof p.then!=="function")return;
+p.then(function(r){document.documentElement.setAttribute(BN,(r&&r.bundleId)||EB)},function(){})}
 function show(c){var b=box();if(!b||booted()||!b.hasAttribute("hidden"))return;
 var v=b.querySelectorAll("["+CD+"]"),m=null;
 for(var i=0;i<v.length;i++){if(v[i].getAttribute(CD)===c)m=v[i];else v[i].setAttribute("hidden","")}
 if(!m&&v.length)m=v[0];
 if(m)m.removeAttribute("hidden");
-b.removeAttribute("hidden");document.documentElement.setAttribute(BF,c)}
-function hide(){var b=box();if(!b)return;b.setAttribute("hidden","");document.documentElement.removeAttribute(BF)}
+b.removeAttribute("hidden");document.documentElement.setAttribute(BF,c);
+//Both AFTER the reveal, never before it: the screen must not wait on a bridge
+//call. \`unsplash\` first — without it the screen is revealed under an opaque
+//native view and nobody ever sees it.
+unsplash();stamp()}
+function hide(){var b=box();if(!b)return;b.setAttribute("hidden","");
+document.documentElement.removeAttribute(BF);document.documentElement.removeAttribute(BN)}
+function retry(){
+var L=live();
+if(!L||typeof L.reset!=="function"||typeof L.reload!=="function"){location.reload();return}
+var p;try{p=L.reset()}catch(e){location.reload();return}
+function apply(){try{L.reload()}catch(e){location.reload()}}
+if(!p||typeof p.then!=="function"){apply();return}
+p.then(apply,function(){location.reload()})}
 window.addEventListener("error",function(e){
 if(e&&e.target&&e.target!==window&&e.target.tagName==="SCRIPT"){show(${JSON.stringify(BOOT_CODES.load)});return}
 show(${JSON.stringify(BOOT_CODES.throw)})},true);
@@ -223,8 +316,8 @@ var b=box();
 if(b){b.addEventListener("click",function(e){
 var x=b.querySelector("["+RT+"]");
 for(var n=e.target;n&&n!==b;n=n.parentNode){
-if(n.getAttribute&&n.getAttribute(RT)!==null){location.reload();return}
-if(!x&&n.tagName==="BUTTON"){location.reload();return}}},true)}
+if(n.getAttribute&&n.getAttribute(RT)!==null){retry();return}
+if(!x&&n.tagName==="BUTTON"){retry();return}}},true)}
 var r=root();
 if(r&&window.MutationObserver){new MutationObserver(function(){if(booted())hide()}).observe(r,{childList:true})}
 setTimeout(function(){show(${JSON.stringify(BOOT_CODES.stall)})},G)}

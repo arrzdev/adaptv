@@ -75,11 +75,14 @@ function commandPage(cmd) {
 
   const arg = cmd.args[0]
   if (arg)
+    //Titled from the arg's own word, not the fixed "Surfaces" this used to print:
+    //`keys` takes a KIND, and a page headed "Surfaces" above a row saying `ota`
+    //is the help contradicting itself on the one line the dev came to read.
     section2(
-      "Surfaces",
+      `${arg.name[0].toUpperCase()}${arg.name.slice(1)}s`,
       arg.choices.map((ch) => ({
         left: ch,
-        right: SURFACE_HELP[ch] ?? "",
+        right: CHOICE_HELP[ch] ?? "",
       })),
     )
 
@@ -112,12 +115,15 @@ function commandPage(cmd) {
   spacer()
 }
 
-/** What each surface actually runs — the same words in every command's page. */
-const SURFACE_HELP = {
-  web: "the dev server or web build alone, no device",
+/** What each choice actually means — the same words in every command's page. */
+const CHOICE_HELP = {
+  //"no device" is the whole of it: under `dev` this is the server, under
+  //`preview` the served build, under `build` the directory you deploy.
+  web: "the browser alone, no device",
   ios: "a simulator, or a connected iPhone",
   android: "an emulator, or a connected device",
   all: "every surface at once",
+  ota: "the pair that signs and verifies your updates",
 }
 
 /** `adaptv --help`, or `adaptv <command> --help`. */
@@ -183,7 +189,7 @@ export function renderFault(fault) {
 
     case "missing-surface":
       return usageFail(
-        `'${fault.path.join(" ")}' needs a surface: ${orList(fault.choices)}`,
+        `'${fault.path.join(" ")}' needs a ${fault.noun}: ${orList(fault.choices)}`,
         synopsis(fault.path),
       )
 
@@ -192,8 +198,8 @@ export function renderFault(fault) {
       //names the command that has it rather than listing the ones that don't.
       return usageFail(
         fault.rejection
-          ? `'${fault.path.join(" ")}' has no '${fault.token}' surface. ${fault.rejection}`
-          : `unknown surface '${fault.token}'${where}${didYouMean(fault.suggestions)}`,
+          ? `'${fault.path.join(" ")}' has no '${fault.token}' ${fault.noun}. ${fault.rejection}`
+          : `unknown ${fault.noun} '${fault.token}'${where}${didYouMean(fault.suggestions)}`,
         fault.rejection ? [] : synopsis(fault.path),
       )
 

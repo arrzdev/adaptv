@@ -207,21 +207,23 @@ export const SPEC = {
     },
     {
       path: ["build"],
-      summary: "package the app: an unsigned .ipa or a debug .apk",
+      summary:
+        "package the app: a deployable site, an unsigned .ipa, a debug .apk",
       prose: [
         "Signing is the one thing adaptv can't do for you. For TestFlight or the App Store, open .adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.",
+        //`build web` exists for one reason: it is the only place the update channel can be
+        //published. The two bundles are separate builds of the same app that both write
+        //dist/client, so nothing INSIDE a single vite build can produce both — and a deploy
+        //that ships the site without the channel silently strips every installed app's
+        //updates. `preview web` still exists; it serves, it does not publish.
+        "'build web' also publishes the update channel when adaptv.config.ts names a web origin: the bundle installed apps download, and the manifest pointing at it, both inside dist/client. Deploy that directory and the update is live.",
       ],
-      //No `web`: a web build you can look at is `preview web`. Named explicitly so the error
-      //can say so rather than listing the surfaces back (R7).
       args: [
         {
-          name: "platform",
+          name: "surface",
           required: true,
-          choices: ["ios", "android", "all"],
-          describe: "which platform to package",
-          rejects: {
-            web: "a web build is 'adaptv preview web'",
-          },
+          choices: SURFACES,
+          describe: "which surface to package",
         },
       ],
       flags: [
@@ -239,10 +241,31 @@ export const SPEC = {
         VERBOSE,
       ],
       examples: [
+        "adaptv build web",
         "adaptv build ios",
         "adaptv build all -o ./dist",
         "adaptv build ios --json",
       ],
+    },
+    {
+      path: ["keys"],
+      summary:
+        "generate the key pair that makes your update channel trustworthy",
+      prose: [
+        "An update channel can run any JavaScript inside every installed app, so adaptv signs what it publishes and every app checks the signature before installing anything. This makes the pair that does it. Run it once per app.",
+        "The public half goes in adaptv.config.ts, under otaPublicKey, and is committed on purpose: it is baked into the app you send to the stores, and changing it is a store release. The private half goes in your deploy's secret store as ADAPTV_OTA_PRIVATE_KEY, and nowhere else.",
+        "adaptv keeps no copy of the private half. Lose it and no app already on a device can be updated again until a store release carries a new public half out.",
+      ],
+      args: [
+        {
+          name: "kind",
+          required: true,
+          choices: ["ota"],
+          describe: "which key pair to generate",
+        },
+      ],
+      flags: [QUIET],
+      examples: ["adaptv keys ota"],
     },
     {
       path: ["icons"],

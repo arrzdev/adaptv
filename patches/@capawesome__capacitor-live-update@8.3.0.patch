@@ -1,0 +1,188 @@
+diff --git a/android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java b/android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java
+index bf237cb2a3f1ef82eb8df50bbfd5ad594f44f8fa..7aa30a64dca4964edf42519dce1b7cf18ed15d82 100644
+--- a/android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java
++++ b/android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java
+@@ -1265,6 +1265,9 @@ public class LiveUpdate {
+     private void rollback() {
+         // Set the rollback flag
+         rollbackPerformed = true;
++        // ADAPTV PATCH: resolve the target BEFORE the line below overwrites the
++        // previous-bundle pointer with the bundle that is failing right now.
++        String targetBundleId = adaptvRollbackTargetId();
+         // Set the new previous bundle ID
+         String currentBundleId = getCurrentBundleId();
+         setPreviousBundleId(currentBundleId);
+@@ -1272,13 +1275,44 @@ public class LiveUpdate {
+         if (currentBundleId == null) {
+             Logger.debug(LiveUpdatePlugin.TAG, "App is not ready. Default bundle is already in use.");
+         } else {
+-            Logger.debug(LiveUpdatePlugin.TAG, "App is not ready. Rolling back to default bundle.");
+-            // Rollback to the default bundle
+-            setNextBundleById(null);
+-            setCurrentBundleById(null);
++            Logger.debug(
++                LiveUpdatePlugin.TAG,
++                "App is not ready. Rolling back to " + (targetBundleId == null ? "default" : targetBundleId) + " bundle."
++            );
++            // Rollback to the newest bundle this device is known to be able to start
++            setNextBundleById(targetBundleId);
++            setCurrentBundleById(targetBundleId);
+         }
+     }
+ 
++    /**
++     * ADAPTV PATCH: the bundle a failed launch should fall back to.
++     *
++     * Upstream always rolls back to the embedded bundle — the one the store shipped —
++     * which on a device that has been updating over the air for months can be very old.
++     * `previousBundleId` is the last bundle that reported itself ready, so it is the
++     * newest one this device is known to be able to start.
++     *
++     * Read it before `rollback()` overwrites it, and only trust it while all three hold:
++     * it is not the bundle failing right now, it is still on disk, and it is not already
++     * blocked. Otherwise `null`, which is upstream's behaviour and the bundle that cannot
++     * be missing.
++     */
++    @Nullable
++    private String adaptvRollbackTargetId() {
++        String previousBundleId = getPreviousBundleId();
++        if (previousBundleId == null) {
++            return null;
++        }
++        if (previousBundleId.equals(getCurrentBundleId())) {
++            return null;
++        }
++        if (!hasBundleById(previousBundleId) || isBlockedBundleId(previousBundleId)) {
++            return null;
++        }
++        return previousBundleId;
++    }
++
+     @Nullable
+     private File searchIndexHtmlFile(@NonNull File directory) {
+         File[] files = directory.listFiles();
+@@ -1406,6 +1440,35 @@ public class LiveUpdate {
+                 "App version changed (last: " + lastVersionCode + ", current: " + currentVersionCode + "), resetting config."
+             );
+             resetConfig();
++            // ADAPTV PATCH: forget the bundle pointers that belong to the previous binary.
++            //
++            // `previousBundleId` is the rollback target the patch above introduced — the
++            // newest bundle this device is known to be able to start. Across a store
++            // release that stops being a safe answer: it names a bundle built and proven
++            // against the OLD native layer, which the new binary may no longer satisfy.
++            // Left in place, the first failed launch on a new version would roll the app
++            // INTO exactly the mismatch the native fingerprint exists to keep out.
++            // Upstream has no such hazard because upstream always rolls back to the
++            // embedded bundle; the patch above is what creates it, so this is its
++            // other half rather than a fix for anything upstream does wrong.
++            //
++            // The next-bundle pointer goes with it. That one is belt-and-braces:
++            // Capacitor clears the persisted server path itself when it notices a new
++            // binary, so it does not change which bundle boots. It keeps the plugin's OWN
++            // record of what will boot true from the moment the version change is seen,
++            // instead of resting on an internal of a package this one merely rents.
++            //
++            // 🔴 `setNextBundleById` and NOT `setCurrentBundleById`, which reads as the
++            // more direct one and is the reason this is spelled out. This runs from the
++            // plugin's constructor, and `setCurrentBundleById` is a LIVE operation — it
++            // reaches through the bridge to re-point the local web server and reload it.
++            // At `load()` time that server does not exist yet (Capacitor registers plugins
++            // before it builds it), so on Android the call throws an NPE that the plugin
++            // catches, leaving `implementation` null and the update core dead for the whole
++            // launch. `setNextBundleById` only commits the path preference — which the
++            // bridge reads a few steps later, when it does start the server.
++            setNextBundleById(null);
++            setPreviousBundleId(null);
+             preferences.setLastVersionCode(currentVersionCode);
+         }
+     }
+diff --git a/ios/Plugin/LiveUpdate.swift b/ios/Plugin/LiveUpdate.swift
+index 4b0ee098e0e0b4edb2b8b017f289ec4e6515816d..e35c04451380d32c27653c63f1e38b70430e03be 100644
+--- a/ios/Plugin/LiveUpdate.swift
++++ b/ios/Plugin/LiveUpdate.swift
+@@ -793,19 +793,46 @@ import CommonCrypto
+     private func rollback() {
+         // Set the rollback flag
+         rollbackPerformed = true
++        // ADAPTV PATCH: resolve the target BEFORE the line below overwrites the
++        // previous-bundle pointer with the bundle that is failing right now.
++        let targetBundleId = adaptvRollbackTargetId()
+         // Set the new previous bundle ID
+         let currentBundleId = getCurrentBundleId()
+         setPreviousBundleId(bundleId: currentBundleId)
+         // Perform the rollback
+         if let _ = currentBundleId {
+-            CAPLog.print("[", LiveUpdatePlugin.tag, "] ", "App is not ready. Rolling back to default bundle.")
+-            setNextBundleById(nil)
+-            setCurrentBundleById(nil)
++            CAPLog.print("[", LiveUpdatePlugin.tag, "] ", "App is not ready. Rolling back to ", targetBundleId ?? "default", " bundle.")
++            setNextBundleById(targetBundleId)
++            setCurrentBundleById(targetBundleId)
+         } else {
+             CAPLog.print("[", LiveUpdatePlugin.tag, "] ", "App is not ready. Default bundle is already in use.")
+         }
+     }
+ 
++    /// ADAPTV PATCH: the bundle a failed launch should fall back to.
++    ///
++    /// Upstream always rolls back to the embedded bundle — the one the store
++    /// shipped — which on a device that has been updating over the air for months
++    /// can be very old. `previousBundleId` is the last bundle that reported itself
++    /// ready, so it is the newest one this device is known to be able to start.
++    ///
++    /// Read it before `rollback()` overwrites it, and only trust it while all three
++    /// hold: it is not the bundle failing right now, it is still on disk, and it is
++    /// not already blocked. Otherwise `nil`, which is upstream's behaviour and the
++    /// bundle that cannot be missing.
++    private func adaptvRollbackTargetId() -> String? {
++        guard let previousBundleId = getPreviousBundleId() else {
++            return nil
++        }
++        if previousBundleId == getCurrentBundleId() {
++            return nil
++        }
++        guard hasBundleById(previousBundleId), !isBlockedBundleId(previousBundleId) else {
++            return nil
++        }
++        return previousBundleId
++    }
++
+     private func searchIndexHtmlFile(url: URL) -> URL? {
+         do {
+             let directoryContents = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [])
+@@ -925,6 +952,34 @@ import CommonCrypto
+                 "App version changed (last: \(lastVersionName ?? "nil")/\(lastVersionCode ?? "nil"), current: \(currentVersionName)/\(currentVersionCode)), resetting config."
+             )
+             resetConfig()
++            // ADAPTV PATCH: forget the bundle pointers that belong to the previous binary.
++            //
++            // `previousBundleId` is the rollback target the patch above introduced —
++            // the newest bundle this device is known to be able to start. Across a
++            // store release that stops being a safe answer: it names a bundle built and
++            // proven against the OLD native layer, which the new binary may no longer
++            // satisfy. Left in place, the first failed launch on a new version would
++            // roll the app INTO exactly the mismatch the native fingerprint exists to
++            // keep out. Upstream has no such hazard because upstream always rolls back
++            // to the embedded bundle; the patch above is what creates it, so this is
++            // its other half rather than a fix for anything upstream does wrong.
++            //
++            // The next-bundle pointer goes with it. That one is belt-and-braces:
++            // Capacitor clears the persisted server path itself when it notices a new
++            // binary, so it does not change which bundle boots. It keeps the plugin's
++            // OWN record of what will boot true from the moment the version change is
++            // seen, instead of resting on an internal of a package this one merely rents.
++            //
++            // 🔴 `setNextBundleById` and NOT `setCurrentBundleById`, which reads as the
++            // more direct one and is the reason this is spelled out. This runs from the
++            // plugin's `load()`, and `setCurrentBundleById` is a LIVE operation — it
++            // reaches through the bridge to re-point the web view and reload it. That
++            // early there is no bridge view controller yet, so here it is a silent no-op
++            // and on Android the same line throws, killing the update core for the whole
++            // launch. `setNextBundleById` only writes the path preference, which is what
++            // the web view reads when it does come up.
++            setNextBundleById(nil)
++            setPreviousBundleId(bundleId: nil)
+             preferences.setLastVersionCode(currentVersionCode)
+             preferences.setLastVersionName(currentVersionName)
+         }

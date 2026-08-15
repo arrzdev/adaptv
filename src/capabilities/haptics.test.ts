@@ -36,6 +36,14 @@ function forceNative(native: boolean): void {
   )
 }
 
+/** A native shell whose binary carries exactly `plugins` and nothing else. */
+function forceNativeBinary(plugins: string[]): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
 function withVibrate(): ReturnType<typeof vi.fn> {
   const spy = vi.fn(() => true)
   const prev = Object.getOwnPropertyDescriptor(navigator, "vibrate")
@@ -131,5 +139,27 @@ describe("haptics.isSupported", () => {
     forceNative(false)
     withVibrate()
     expect(haptics.isSupported()).toBe(true)
+  })
+})
+
+describe("haptics — a binary that predates the plugin", () => {
+  it("pulses through navigator.vibrate instead of the absent bridge", () => {
+    //→ LIFECYCLE.md §5.6. Android's WebView has a real `navigator.vibrate`, so a
+    //skewed bundle still buzzes — it just buzzes the web approximation.
+    forceNativeBinary([])
+    const vibrate = withVibrate()
+    haptics.impact("medium")
+    expect(Haptics.impact).not.toHaveBeenCalled()
+    expect(vibrate).toHaveBeenCalled()
+  })
+
+  it("is unsupported when the WebView has no vibrate either", () => {
+    forceNativeBinary(["Share"])
+    const prev = Object.getOwnPropertyDescriptor(navigator, "vibrate")
+    delete (navigator as { vibrate?: unknown }).vibrate
+    restores.push(() => {
+      if (prev) Object.defineProperty(navigator, "vibrate", prev)
+    })
+    expect(haptics.isSupported()).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ import {
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
+import { adaptvOtaConfigPlugin } from "#adaptv/vite/ota-config-module.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvOpacityCheckPlugin } from "#adaptv/vite/route-tree-opacity.ts"
@@ -38,6 +39,7 @@ import {
   adaptvRouteAutoImportPlugin,
   stripTanStackAutoImport,
 } from "#adaptv/vite/router-autoimport.ts"
+import { adaptvSecureStoragePlugin } from "#adaptv/vite/secure-storage-module.ts"
 import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
 import { stampGeneratedFiles } from "#adaptv/vite/stamp.ts"
 import { adaptvStaticHostPlugin } from "#adaptv/vite/static-host.ts"
@@ -226,6 +228,8 @@ export async function adaptv(
       target === "web" && devServiceWorkerEnabled(),
       context.loaded.config.serviceWorkerUpdate ?? "auto",
     ),
+    adaptvOtaConfigPlugin(context),
+    adaptvSecureStoragePlugin(context),
     //Also `enforce: "pre"`, and NOT as a precaution: Vite's own asset plugin
     //claims any unknown query on a known image extension, so at normal
     //enforcement `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL

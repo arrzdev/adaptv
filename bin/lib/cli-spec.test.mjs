@@ -123,10 +123,12 @@ describe("the shape of the surface", () => {
     }
   })
 
-  it("names build's surfaces without 'web', and says where a web build lives", () => {
+  it("offers 'web' as a build surface and rejects none", () => {
     const build = commandAt(["build"])
-    expect(build.args[0].choices).toEqual(["ios", "android", "all"])
-    expect(build.args[0].rejects.web).toContain("preview web")
+    expect(build.args[0].choices).toEqual(["web", "ios", "android", "all"])
+    //`web` first: it is the surface every app has, and the only one that
+    //publishes the update channel.
+    expect(build.args[0].rejects).toBeUndefined()
   })
 
   it("quotes with ' and never a backtick (R43)", () => {

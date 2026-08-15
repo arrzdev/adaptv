@@ -20,6 +20,7 @@
 //throws therefore means "you may ask", not "denied" — the same distinction
 //geolocation draws for browsers without the Permissions API.
 import { Clipboard } from "@capacitor/clipboard"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 /** The four-state shape from `geolocation.ts`. Read only — writing is ungated. */
@@ -49,6 +50,17 @@ function normalize(state: string): ClipboardPermission {
 }
 
 /**
+ * Whether the call goes through the native plugin. Every native branch below
+ * asks THIS rather than `isNativePlatform()`: an OTA bundle can be running on a
+ * binary that predates the plugin. Each caller then falls through to the web
+ * path instead of reporting "unsupported" — an Android WebView on a secure
+ * origin has a real `navigator.clipboard`. → `LIFECYCLE.md §5.6`
+ */
+function viaPlugin(): boolean {
+  return isNativePlatform() && hasNativePlugin("Clipboard")
+}
+
+/**
  * Whether text can be copied here.
  *
  * `navigator.clipboard` is undefined on an **insecure origin** — which is not
@@ -58,7 +70,7 @@ function normalize(state: string): ClipboardPermission {
  * writeClipboardText} falls back to it.
  */
 export function isClipboardWriteSupported(): boolean {
-  if (isNativePlatform()) return true
+  if (viaPlugin()) return true
   if (typeof navigator === "undefined") return false
   if (typeof navigator.clipboard?.writeText === "function") return true
   return (
@@ -73,7 +85,7 @@ export function isClipboardWriteSupported(): boolean {
  * so a missing `navigator.clipboard.readText` is a hard no.
  */
 export function isClipboardReadSupported(): boolean {
-  if (isNativePlatform()) return true
+  if (viaPlugin()) return true
   if (typeof navigator === "undefined") return false
   return typeof navigator.clipboard?.readText === "function"
 }
@@ -86,7 +98,7 @@ export function isClipboardReadSupported(): boolean {
  * read, which is OS chrome and not something the app can query.)
  */
 export async function checkClipboardReadPermission(): Promise<ClipboardPermission> {
-  if (isNativePlatform()) return "granted"
+  if (viaPlugin()) return "granted"
   if (!isClipboardReadSupported()) return "unavailable"
   if (!navigator.permissions) return "prompt"
   try {
@@ -133,12 +145,12 @@ function writeViaExecCommand(text: string): boolean {
 export async function writeClipboardText(
   text: string,
 ): Promise<ClipboardStatus> {
-  if (isNativePlatform()) {
+  if (viaPlugin()) {
     try {
       await Clipboard.write({ string: text })
       return "ok"
     } catch {
-      //the shell was built without the plugin — nothing to fall back to
+      //the plugin is compiled in and still refused — that is the OS, not a gap
       return "unsupported"
     }
   }
@@ -164,7 +176,7 @@ export async function writeClipboardText(
  * background tab returns `"denied"` even with the permission granted.
  */
 export async function readClipboardText(): Promise<ClipboardRead> {
-  if (isNativePlatform()) {
+  if (viaPlugin()) {
     try {
       const result = await Clipboard.read()
       return { status: "ok", text: result.value }

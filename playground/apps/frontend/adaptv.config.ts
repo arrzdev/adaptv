@@ -8,7 +8,7 @@ export default defineApp({
   //so listing one of those here declares nothing and only reads like it's required.
   description: "A focused task list for desktop, mobile, and PWA.",
   lang: "en",
-  themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
+  themeColor: { light: "#f5e6ff", dark: "#1e0033" },
   icons: "./public/favicons",
   orientation: "portrait",
   styles: "./src/styles/main.css",
@@ -44,6 +44,12 @@ export default defineApp({
   //someone's unsaved work.
   serviceWorkerUpdate:
     process.env.ADAPTV_SW_UPDATE === "prompt" ? "prompt" : "auto",
+
+  //The floor, not a realistic number — a shipped app wants the 60-minute default.
+  //It is here so `ota:lab` can watch the third check actually fire: publish, leave
+  //the app open, and the update stages itself DURING the session, so the colour
+  //lands on the very next launch instead of the one after it.
+  otaPollMinutes: 5,
   router: {
     //route generator — adaptv owns the generated tree's location (.adaptv/) and
     //the generator's formatting, so only these two are ours to set

@@ -32,6 +32,8 @@
  * **lazily** so a web-only app never needs it installed.
  */
 import { isNativePlatform } from "#adaptv/utils/platform"
+import type { PluginBox } from "#adaptv/utils/plugin-box"
+import { boxPlugin, NO_PLUGIN } from "#adaptv/utils/plugin-box"
 
 const SECURE_PREFIX = "adaptv:secure:"
 
@@ -41,15 +43,7 @@ type SecureStoragePlugin = {
   remove(options: { key: string }): Promise<void>
 }
 
-/**
- * Held in a variable, not written inline, so TypeScript cannot resolve it
- * statically. That is deliberate: this is an **optional** native peer, and a
- * literal specifier would make `tsc` fail for every web-only consumer who has no
- * reason to install a Keychain plugin.
- */
-const SECURE_STORAGE_MODULE = "@aparajita/capacitor-secure-storage"
-
-let pluginPromise: Promise<SecureStoragePlugin | null> | null = null
+let pluginPromise: Promise<PluginBox<SecureStoragePlugin>> | null = null
 
 /**
  * Load the native plugin lazily and at most once.
@@ -58,15 +52,26 @@ let pluginPromise: Promise<SecureStoragePlugin | null> | null = null
  * app must not be forced to add a native-only dependency, and the failure has to
  * surface as a clear message at the call site rather than as a module-resolution
  * error at import time.
+ *
+ * 🔴 **The specifier must stay this fixed virtual id.** It used to be a `const`
+ * holding the real package name, marked `@vite-ignore`, so that `tsc` would not
+ * demand an optional peer. It hid the name from the compiler and, unavoidably,
+ * from Rollup too — so the shipped bundle asked the WebView to resolve a bare
+ * `@aparajita/capacitor-secure-storage`, which no WebView can do. This import
+ * rejected on every native build, including for apps that HAD installed the
+ * package, and the call sites below then told those developers to install it.
+ * `src/vite/secure-storage-module.ts` now answers the same question at build
+ * time, where the filesystem can actually be consulted.
+ *
+ * 🔴 **And the plugin must come back in a box.** The backend is a Capacitor
+ * `Proxy` that answers `then` with a callable, so returning it straight from this
+ * `.then` makes the promise adopt it as a thenable and hang for ever — silently,
+ * and only on a device. → `#adaptv/utils/plugin-box`
  */
-function loadPlugin(): Promise<SecureStoragePlugin | null> {
-  pluginPromise ??= import(/* @vite-ignore */ SECURE_STORAGE_MODULE)
-    .then(
-      (mod) =>
-        (mod as { SecureStorage?: SecureStoragePlugin }).SecureStorage ??
-        null,
-    )
-    .catch(() => null)
+function loadPlugin(): Promise<PluginBox<SecureStoragePlugin>> {
+  pluginPromise ??= import("virtual:adaptv/secure-storage")
+    .then((mod) => boxPlugin<SecureStoragePlugin>(mod.SecureStorage))
+    .catch(() => NO_PLUGIN)
   return pluginPromise
 }
 
@@ -81,7 +86,7 @@ export const secure = {
   /** Read a secret. Resolves to `undefined` when absent. */
   async get(key: string): Promise<string | undefined> {
     if (isNativePlatform()) {
-      const plugin = await loadPlugin()
+      const { plugin } = await loadPlugin()
       if (!plugin) throw missingPlugin()
       const { value } = await plugin.get({ key: SECURE_PREFIX + key })
       return value ?? undefined
@@ -95,7 +100,7 @@ export const secure = {
 
   async set(key: string, value: string): Promise<void> {
     if (isNativePlatform()) {
-      const plugin = await loadPlugin()
+      const { plugin } = await loadPlugin()
       if (!plugin) throw missingPlugin()
       await plugin.set({ key: SECURE_PREFIX + key, value })
       return
@@ -108,7 +113,7 @@ export const secure = {
 
   async remove(key: string): Promise<void> {
     if (isNativePlatform()) {
-      const plugin = await loadPlugin()
+      const { plugin } = await loadPlugin()
       if (!plugin) throw missingPlugin()
       await plugin.remove({ key: SECURE_PREFIX + key })
       return

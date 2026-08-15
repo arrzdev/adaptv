@@ -212,12 +212,19 @@ export function parse(argv) {
   if (arg) {
     const given = positionals[0]
     if (given === undefined && arg.required)
-      throw new CliFault("missing-surface", { path, choices: arg.choices })
+      throw new CliFault("missing-surface", {
+        path,
+        choices: arg.choices,
+        //The arg's own word. Every command took a `surface` until `keys` took a
+        //`kind`, and a hardcoded noun would have told them to name a surface.
+        noun: arg.name,
+      })
     if (given !== undefined && !arg.choices.includes(given))
       throw new CliFault("unknown-surface", {
         token: given,
         path,
         choices: arg.choices,
+        noun: arg.name,
         //`build web` is a word that means something elsewhere — say where, don't list.
         rejection: arg.rejects?.[given] ?? null,
         suggestions: suggest(given, arg.choices),

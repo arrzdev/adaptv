@@ -7,7 +7,6 @@ import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -818,13 +817,18 @@ export async function buildWeb(appRoot, { report } = {}) {
       report,
     })
 
-  const shell = path.join(appRoot, CAP_WEB_DIR, "_shell.html")
+  // adaptv GENERATES this document (`src/vite/shell-emit.ts`) instead of
+  // capturing whatever the build emitted, and the generated copy is the only one
+  // carrying the prerendered boot fallback (`DECISIONS.md` B31). TanStack Start's
+  // prerender also drops a `_shell.html` beside it — written ~1s LATER, measured —
+  // and this step used to copy that over `index.html`. The two are byte-identical
+  // today, so nothing broke; but "identical" is Start's coincidence to break, and
+  // when it does the swap is silent and lands precisely here: the native target,
+  // where a corrupt OTA bundle is the failure the fallback exists to catch.
+  // So don't prefer it. Ours is the shell.
   const index = path.join(appRoot, CAP_WEB_DIR, "index.html")
-  if (existsSync(shell)) copyFileSync(shell, index)
-  else if (!existsSync(index)) {
-    throw new Error(
-      `SPA build produced no ${CAP_WEB_DIR}/_shell.html or index.html`,
-    )
+  if (!existsSync(index)) {
+    throw new Error(`the SPA build produced no ${CAP_WEB_DIR}/index.html`)
   }
 }
 
@@ -913,16 +917,16 @@ export async function capAddIfMissing(
 }
 
 /** `cap sync <platform>` (copies web assets + updates native deps). */
-/** The Capacitor packages adaptv ships that carry NATIVE code for `platform` — every
- * plugin, plus (on iOS) `@capacitor/ios` for the core pods. Derived from adaptv's own
- * manifest so it can never drift from what's installed. Excludes the JS-only core, the
- * CLI, and the other platform's runtime.
+/** The packages adaptv ships that carry NATIVE code for `platform` — every plugin, plus
+ * (on iOS) `@capacitor/ios` for the core pods. Derived from adaptv's own manifest so it
+ * can never drift from what's installed. Excludes the JS-only core and the CLI.
  *
- * Android's core runtime is excluded too, but for a different reason than iOS's is
- * included: cap writes `include ':capacitor-android'` into `capacitor.settings.gradle`
- * itself (it resolves `@capacitor/android` from the app root, and finds it), so adding it
- * again would declare the same Gradle module twice. */
-function adaptvCapacitorNativePkgs(platform) {
+ * NOTE: membership is decided by inspecting the package, never by its name. This used
+ * to filter on the `@capacitor/` prefix, which silently scoped adaptv to one vendor: a
+ * plugin from anywhere else — `@capawesome/capacitor-live-update`, the OTA mechanism —
+ * compiled fine and then never registered, surfacing at runtime as "plugin is not
+ * implemented" with nothing in the build to explain it. */
+export function adaptvCapacitorNativePkgs(platform) {
   const pkg = JSON.parse(
     readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
   )
@@ -932,8 +936,59 @@ function adaptvCapacitorNativePkgs(platform) {
     "@capacitor/android",
   ])
   if (platform === "android") skip.add("@capacitor/ios")
+
+  // `@capacitor/ios` is the PLATFORM, not a plugin: it declares no `capacitor`
+  // field and has no `ios/` source dir, so the native-code test below says no —
+  // correctly, and uselessly, because its pods are what the core builds from.
+  // Forced in by name for that reason. Android's runtime is not, and must not be:
+  // cap writes `include ':capacitor-android'` into `capacitor.settings.gradle`
+  // itself, so adding it here would declare the same Gradle module twice.
+  const forced = platform === "ios" ? "@capacitor/ios" : null
+
+  const req = createRequire(path.join(ADAPTV_ROOT, "package.json"))
+  const dirOf = (name) => {
+    try {
+      return path.dirname(req.resolve(`${name}/package.json`))
+    } catch {
+      return null
+    }
+  }
+
   return Object.keys(pkg.dependencies ?? {}).filter(
-    (n) => n.startsWith("@capacitor/") && !skip.has(n),
+    (n) => !skip.has(n) && (n === forced || carriesNativeCode(dirOf(n))),
+  )
+}
+
+/**
+ * Does this package contribute code to the native binary?
+ *
+ * IMPORTANT: mirrors `carriesNativeCode` in `src/native/installed-plugins.ts` — the
+ * same question, asked by the OTA fingerprint. The two answers have to agree:
+ * a plugin this says yes to and the fingerprint says no to is native code the
+ * compatibility gate cannot see changing, and the reverse is a bundle allowed to
+ * call a plugin that was never compiled in. `native-plugin-discovery.test.mjs`
+ * runs both over adaptv's real dependencies and fails if they diverge.
+ *
+ * It is duplicated rather than imported because every caller here is synchronous
+ * and the TS module is only reachable through the async `loadAdaptvModule`.
+ *
+ * The test is what the native tooling itself keys on: a `capacitor` field (how a
+ * plugin declares itself) AND a real platform source dir. Both, not either —
+ * `@capacitor/cli` has neither, and a random package can ship an `ios/` folder of
+ * screenshots.
+ */
+function carriesNativeCode(dir) {
+  if (!dir) return false
+  let pkg
+  try {
+    pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"))
+  } catch {
+    return false
+  }
+  if (pkg.capacitor === undefined) return false
+  return (
+    existsSync(path.join(dir, "ios")) ||
+    existsSync(path.join(dir, "android"))
   )
 }
 

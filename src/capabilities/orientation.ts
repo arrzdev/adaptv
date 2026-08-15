@@ -21,6 +21,7 @@
 //natively at launch); this accessor is the imperative one, for a single screen
 //that needs a different orientation from the rest of the app.
 import { ScreenOrientation } from "@capacitor/screen-orientation"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 /** The four concrete orientations, matching the DOM's `OrientationType`. */
@@ -164,8 +165,22 @@ export function subscribeScreenOrientation(cb: () => void): () => void {
  * outside fullscreen/standalone. That is what {@link lockScreenOrientation}'s
  * `"rejected"` outcome is for.
  */
+/**
+ * Whether the lock goes through the native plugin. The lock branches ask THIS
+ * rather than `isNativePlatform()`: an OTA bundle can be running on a binary
+ * that predates the plugin, and the web `screen.orientation.lock` is a real
+ * fallback inside an Android WebView. → `LIFECYCLE.md §5.6`
+ *
+ * Only the LOCK asks. Reading and subscribing to the current orientation stay on
+ * `isNativePlatform()`, because their native path is the plugin's *listener* and
+ * their fallback is the same `screen.orientation` either way.
+ */
+function viaPlugin(): boolean {
+  return isNativePlatform() && hasNativePlugin("ScreenOrientation")
+}
+
 export function isOrientationLockSupported(): boolean {
-  if (isNativePlatform()) return true
+  if (viaPlugin()) return true
   if (typeof window === "undefined") return false
   return typeof webOrientation()?.lock === "function"
 }
@@ -184,7 +199,7 @@ export async function lockScreenOrientation(
   lock: ScreenOrientationLock,
 ): Promise<OrientationLockOutcome> {
   if (!isOrientationLockSupported()) return "unsupported"
-  if (isNativePlatform()) {
+  if (viaPlugin()) {
     try {
       await ScreenOrientation.lock({ orientation: lock })
       return "ok"
@@ -206,7 +221,7 @@ export async function lockScreenOrientation(
 /** Release a lock taken by {@link lockScreenOrientation}. Never rejects. */
 export async function unlockScreenOrientation(): Promise<OrientationLockOutcome> {
   if (!isOrientationLockSupported()) return "unsupported"
-  if (isNativePlatform()) {
+  if (viaPlugin()) {
     try {
       await ScreenOrientation.unlock()
       return "ok"

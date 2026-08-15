@@ -136,3 +136,48 @@ describe("renderRootRouteModule — the head's icon links are baked in", () => {
     expect(renderRootRouteModule(config())).not.toContain("links:")
   })
 })
+
+describe("renderRootRouteModule — the update-required screen", () => {
+  it("emits the threshold on its own, for an app that wants adaptv's screen", () => {
+    //The common case by a distance: one number in the config, no component to
+    //write. If the threshold only travelled alongside a component, that app
+    //would set it and silently get nothing.
+    const source = renderRootRouteModule(
+      config({ updateRequiredAfterDays: 14 }),
+    )
+    expect(source).toContain("updateRequiredAfterDays: 14")
+    expect(source).not.toContain("updateRequiredComponent")
+  })
+
+  it("keeps `0` — the strictest policy, not an absent one", () => {
+    //🔴 A truthiness check here would drop exactly the setting that means
+    //"block the moment the channel moves past this install", which is the one an
+    //app whose server contract broke with the release would choose.
+    expect(
+      renderRootRouteModule(config({ updateRequiredAfterDays: 0 })),
+    ).toContain("updateRequiredAfterDays: 0")
+  })
+
+  it("emits nothing at all when the app never asked to block", () => {
+    //Absent, not `0`: the default is that adaptv never takes the screen from a
+    //working app.
+    expect(renderRootRouteModule(config())).not.toContain(
+      "updateRequiredAfterDays",
+    )
+  })
+
+  it("emits a static import for a custom screen", () => {
+    const source = renderRootRouteModule(
+      config({
+        updateRequiredAfterDays: 7,
+        updateRequiredScreen: screenThunk("@/components/update-required"),
+      }),
+    )
+    expect(source).toContain(
+      'import UpdateRequiredComponent from "@/components/update-required"',
+    )
+    expect(source).toContain(
+      "updateRequiredComponent: UpdateRequiredComponent",
+    )
+  })
+})

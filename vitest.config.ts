@@ -1,10 +1,53 @@
 import { fileURLToPath } from "node:url"
+import type { Plugin } from "vite"
 import { defineConfig } from "vitest/config"
+import {
+  OTA_CONFIG_VIRTUAL_ID,
+  renderOtaConfigModule,
+} from "./src/vite/ota-config-module"
+import {
+  renderSecureStorageModule,
+  SECURE_STORAGE_VIRTUAL_ID,
+} from "./src/vite/secure-storage-module"
 import { adaptvPwaRegisterPlugin } from "./src/vite/virtuals"
 
 //mirror the package's "#adaptv/*" subpath import (package.json "imports") so tests can
 //use the same self-alias the source does instead of brittle relative paths
 const srcDir = fileURLToPath(new URL("./src", import.meta.url))
+
+/**
+ * `virtual:adaptv/ota-config` with OTA off — the real module source, not a stub.
+ *
+ * The plugin that serves this in a build needs an `AdaptvContext` and reads
+ * `node_modules` to compute a fingerprint, neither of which a unit test has. But
+ * `null` is not an invented value: it is exactly what a real build emits for an
+ * app that declares no `web.origin`, so the shell mounts down the same path a
+ * web-only consumer gets.
+ */
+function otaConfigOffPlugin(): Plugin {
+  const resolved = `\0${OTA_CONFIG_VIRTUAL_ID}`
+  return {
+    name: "test:ota-config-off",
+    resolveId: (id) => (id === OTA_CONFIG_VIRTUAL_ID ? resolved : null),
+    load: (id) => (id === resolved ? renderOtaConfigModule(null) : null),
+  }
+}
+
+/**
+ * `virtual:adaptv/secure-storage` with the optional peer absent — again the real
+ * module source, for the case adaptv itself is in: it does not depend on the
+ * Keychain package, so "not installed" is the honest answer here.
+ */
+function secureStorageAbsentPlugin(): Plugin {
+  const resolved = `\0${SECURE_STORAGE_VIRTUAL_ID}`
+  return {
+    name: "test:secure-storage-absent",
+    resolveId: (id) =>
+      id === SECURE_STORAGE_VIRTUAL_ID ? resolved : null,
+    load: (id) =>
+      id === resolved ? renderSecureStorageModule(false) : null,
+  }
+}
 
 //happy-dom gives the hook a document to mount into (Testing Library's
 //renderHook); the engine itself only touches the synthetic events it's handed
@@ -13,7 +56,11 @@ export default defineConfig({
   //provides in a real app build — so any test that mounts the shell needs it too.
   //Reusing the plugin (rather than stubbing the id) keeps the test graph resolving
   //the same module source consumers get.
-  plugins: [adaptvPwaRegisterPlugin()],
+  plugins: [
+    adaptvPwaRegisterPlugin(),
+    otaConfigOffPlugin(),
+    secureStorageAbsentPlugin(),
+  ],
   resolve: {
     alias: { "#adaptv": srcDir },
   },

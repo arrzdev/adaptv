@@ -19,7 +19,8 @@
  */
 
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 export type PatchStatus = {
@@ -122,17 +123,22 @@ function shippedPatchFilenames(): string[] {
   return []
 }
 
-/** The message shown when a patch is missing. States the fix, not just the fault. */
+/**
+ * The message shown when a patch is missing. States the fix, not just the fault.
+ *
+ * `consequence` is the caller's, because the fix is identical for every patch and
+ * the reason to care never is. A shared sentence would have to be vague enough to
+ * cover all of them, and vague is what makes an error skippable.
+ */
 export function describeMissingPatches(
   missing: string[],
+  consequence: string[],
   filenames: string[] = shippedPatchFilenames(),
 ): string {
   return [
     `[adaptv] Required dependency patches are not applied: ${missing.join(", ")}.`,
     "",
-    "Without them the route generator writes `@tanstack/react-router` imports into your",
-    "route files and adaptv's framework facade silently stops working — the build still",
-    "succeeds, which is why this is an error rather than a warning.",
+    ...consequence,
     "",
     "pnpm only applies `patchedDependencies` from the root manifest of the project being",
     "installed, so a library cannot carry its patches to you. Add this to your",
@@ -191,10 +197,130 @@ export function assertRouteTreeIsOpaque(routeTreePath: string): void {
       "files would carry `@tanstack/react-router` imports again — which is why this is an",
       "error rather than a warning.",
       "",
-      describeMissingPatches([
-        "@tanstack/start-plugin-core",
-        "@tanstack/router-generator",
-      ]),
+      describeMissingPatches(
+        ["@tanstack/start-plugin-core", "@tanstack/router-generator"],
+        [
+          "Without them the route generator writes `@tanstack/react-router` imports into your",
+          "route files and adaptv's framework facade silently stops working — the build still",
+          "succeeds, which is why this is an error rather than a warning.",
+        ],
+      ),
     ].join("\n"),
   )
+}
+
+/* ============================================================================
+ * The native patch
+ * ========================================================================== */
+
+/**
+ * The comment adaptv's native patch leaves behind in every file it edits.
+ *
+ * A marker rather than a diff comparison: the check has to survive the upstream
+ * moving around it, and what it needs to know is only "did adaptv's edits land".
+ */
+export const NATIVE_PATCH_MARKER = "ADAPTV PATCH"
+
+/** The rented update core, and the two files adaptv edits inside it. */
+export const UPDATE_PLUGIN = "@capawesome/capacitor-live-update"
+const UPDATE_PLUGIN_SOURCES = [
+  "ios/Plugin/LiveUpdate.swift",
+  "android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java",
+]
+
+/**
+ * Which of the native sources are missing adaptv's edits.
+ *
+ * A source read as `null` (the file is not there) counts as missing: an update
+ * core whose layout moved is exactly the case the version-pinned patch key exists
+ * to catch, and "cannot read it" must never be quieter than "read it and it was
+ * unpatched".
+ */
+export function checkNativePatch(
+  sources: Array<{ path: string; source: string | null }>,
+): PatchStatus {
+  const missing = sources
+    .filter((s) => !s.source?.includes(NATIVE_PATCH_MARKER))
+    .map((s) => s.path)
+  return { ok: missing.length === 0, missing }
+}
+
+/**
+ * 🔴 The native patch, verified where its absence would otherwise be silent.
+ *
+ * Unpatched, the app still builds and updates still install. What changes is the
+ * failure path: a bad bundle rolls back to whatever the **store** shipped rather
+ * than to the newest bundle this device is known to boot. That is a launch of damage
+ * in a situation the user is already unhappy in, it does not show up in a passing
+ * build, and nothing but this check would say.
+ *
+ * Returns the message to print, or `null` when everything is in place. Reading the
+ * files rather than pnpm's metadata, for the reason {@link checkPatches} gives:
+ * a lockfile can claim a patch that a partial install never applied.
+ */
+export function missingNativePatchMessage(
+  adaptvRoot: string = defaultAdaptvRoot(),
+): string | null {
+  const pluginRoot = resolveUpdatePluginRoot(adaptvRoot)
+  const sources = UPDATE_PLUGIN_SOURCES.map((rel) => ({
+    path: rel,
+    //An unresolvable core reads as an unpatched one, and the message is still the
+    //right one: whatever went wrong, this build would ship the unpatched behaviour.
+    source: pluginRoot ? readIfPresent(join(pluginRoot, rel)) : null,
+  }))
+  const { ok, missing } = checkNativePatch(sources)
+  if (ok) return null
+
+  return [
+    `[adaptv] The update core is not patched (${missing.join(", ")}).`,
+    "",
+    describeMissingPatches(
+      [UPDATE_PLUGIN],
+      [
+        "Native builds still succeed and updates still install, so this cannot be caught later.",
+        "What it costs is the failure path: a bundle that will not start rolls the app back to",
+        "whatever the store shipped, rather than to the newest bundle this device is known to",
+        "boot. On a phone that has been updating over the air since its last store release that",
+        "is a very old app, restored at the worst possible moment.",
+      ],
+    ),
+  ].join("\n")
+}
+
+function readIfPresent(file: string): string | null {
+  try {
+    return readFileSync(file, "utf8")
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Where the rented update core is installed, or `null` if it cannot be found.
+ *
+ * Resolved **from adaptv's own directory**, never from the app: the core is
+ * adaptv's dependency, so under pnpm's strict layout the consumer's root cannot
+ * see it by name at all.
+ *
+ * 🔴 Seeded with a real file path rather than `import.meta.url`. The CLI loads
+ * this module by transpiling it to a `data:` URL, and `createRequire` rejects
+ * anything that is not a file — which turned this check into a crash on the first
+ * native build after it was written. Same hazard `shippedPatchFilenames` guards.
+ */
+function resolveUpdatePluginRoot(adaptvRoot: string): string | null {
+  try {
+    const require = createRequire(join(adaptvRoot, "package.json"))
+    return dirname(require.resolve(`${UPDATE_PLUGIN}/package.json`))
+  } catch {
+    return null
+  }
+}
+
+/** adaptv's own package root, when the caller has no better answer. */
+function defaultAdaptvRoot(): string {
+  try {
+    return fileURLToPath(new URL("../..", import.meta.url))
+  } catch {
+    return process.cwd()
+  }
 }
