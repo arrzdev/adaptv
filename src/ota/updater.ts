@@ -211,6 +211,19 @@ function releaseHold(): void {
 }
 
 /**
+ * Whether the app is still behind its launch screen.
+ *
+ * 🔴 The only condition under which a bundle may be applied *without* a cold
+ * start: nothing is on screen to tear, and nothing the user did is lost. Every
+ * release path clears `holdRelease`, including the budget timer, so this goes
+ * false the moment the app becomes visible — which is the moment applying in
+ * place stops being free. → `decideFirstLaunch`
+ */
+function launchScreenStillUp(): boolean {
+  return holdRelease !== null
+}
+
+/**
  * Settle the launch: confirm this bundle works, absorb a rollback, prune.
  *
  * ## The ready ping is the half that is easy to lose
@@ -599,11 +612,22 @@ export function startOtaUpdates(options: OtaOptions): () => void {
       await plugin.setNextBundle({ bundleId: manifest.buildTag })
       options.onUpdateReady?.(manifest.buildTag)
 
-      if (plan.action === "wait") {
+      if (plan.action === "wait" && launchScreenStillUp()) {
         //First launch, and the current build just arrived. There is no session to
         //tear and the splash is still up, so apply it now instead of showing a
         //new user a version of the product that no longer exists. The document is
         //replaced by this call; the hold goes with it.
+        //
+        //🔴 `plan.action` alone is not enough, and this is the trap. `plan` is
+        //computed from `cachedAtStart`, read ONCE when the updater starts — so an
+        //install with nothing proven yet answers `"wait"` for the whole session,
+        //not just for its launch check. Without the second half of this condition
+        //a resume, a poll tick, or a launch check that simply outran its budget
+        //would each apply the bundle by replacing the document under a mounted
+        //app: the user's scroll position, their half-typed input and their open
+        //sheet all vanish, and nothing about it looks like an update. The staged
+        //path below is what those checks get instead, which is the whole rule of
+        //§5.4b — the swap belongs to the next cold start.
         await plugin.reload().catch(() => releaseHold())
       }
     } catch {

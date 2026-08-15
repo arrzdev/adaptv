@@ -66,6 +66,12 @@ import { pathToFileURL } from "node:url"
 //   launch 1       → ✓ the badge. ONE relaunch, not two — the download that used
 //                    to cost a launch already happened.
 //
+// A badge appearing WITHOUT a relaunch is the bug this found: `decideFirstLaunch`
+// answers `"wait"` from a value read once at start-up, so on an install with
+// nothing proven yet every later check kept that answer and applied the bundle in
+// place, replacing the document under a mounted app. The reload is now gated on
+// the launch screen still being up. → `launchScreenStillUp` in `updater.ts`
+//
 // To watch the download without disturbing the session (backgrounding the app to
 // read its localStorage would fire a resume check and prove nothing about the
 // timer), watch the host filesystem instead — the plugin unpacks to

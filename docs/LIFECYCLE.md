@@ -632,6 +632,27 @@ fingerprint needs stamping into `Info.plist`/`strings.xml`.
   `useAppState` resume signal from the coordination layer — and on the `otaPollMinutes` timer); the
   swap happens at the next cold start.
 
+> #### The one exception is a *screen* state, not a device state
+>
+> `decideFirstLaunch` may apply a bundle immediately, and it is right to: a brand-new install whose
+> bundle is already stale should show a new user the current product, not a version of it that no
+> longer exists. Nothing is torn, because nothing is on screen — the native splash is still up.
+>
+> 🔴 **`action: "wait"` is not on its own permission to do that**, and this is the trap the poll
+> exposed. The verdict is computed from `cachedAtStart`, which is read **once** when the updater
+> starts, so an install with nothing proven yet keeps answering `"wait"` for the whole session. Three
+> ordinary paths then reach `plugin.reload()` on a mounted app: a resume, a poll tick, and — the most
+> common of the three — a launch check that simply outran `FIRST_LAUNCH_BUDGET_MS` on a slow network,
+> so the app was revealed while its own check was still in flight. Each one replaces the document
+> underneath the user: scroll position, half-typed input and open sheets all gone, and nothing about
+> it reads as an update.
+>
+> So the reload is gated on `launchScreenStillUp()` — the hold still being held — which is the actual
+> precondition ("nothing is visible to tear") rather than a proxy for it. Every release path clears
+> the hold, including the budget timer, so it goes false at exactly the moment applying in place stops
+> being free. The staged path is what those checks get instead, which is the rule above. Pinned by
+> four tests in `updater.test.ts` ("applying in place, which only a launch may do"); two of them fail
+> against the code as it stood before the poll existed.
 - **Boot watchdog + rollback** — the shell pings "app ready" after a successful boot. If a freshly
   applied bundle doesn't ping within N seconds, the updater reverts to the last-known-good bundle on the
   next launch. Never brick. Keep ≥1 previous good bundle.

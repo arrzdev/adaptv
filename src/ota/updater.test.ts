@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   manifest: null as unknown,
   status: 200,
   resume: [] as Array<() => void>,
+  /** Set to hang the manifest request, for the tests that need a slow network. */
+  gate: null as Promise<void> | null,
 }))
 
 vi.mock("#adaptv/utils/platform", () => ({
@@ -26,7 +28,10 @@ vi.mock("#adaptv/utils/platform", () => ({
 
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {
-    get: async () => ({ status: h.status, data: h.manifest }),
+    get: async () => {
+      if (h.gate) await h.gate
+      return { status: h.status, data: h.manifest }
+    },
   },
 }))
 
@@ -118,6 +123,7 @@ beforeEach(() => {
   h.manifest = manifest()
   h.status = 200
   h.resume = []
+  h.gate = null
 })
 
 /** Options for `startOtaUpdates` with verification turned off. */
@@ -825,6 +831,85 @@ describe("the foreground poll", () => {
       startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })()
       await vi.advanceTimersByTimeAsync(600_000)
       expect(h.plugin?.getBlockedBundles).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe("applying in place, which only a launch may do", () => {
+  //🔴 `decideFirstLaunch` answers `"wait"` from `cachedAtStart`, and that is read
+  //ONCE when the updater starts. On an install with nothing proven yet — the
+  //first launch after a store install, or after a store release wiped what was —
+  //it therefore keeps answering `"wait"` for the entire session. Only the check
+  //running behind the launch screen may act on it.
+
+  it("applies at once behind the launch screen, where nothing can be torn", async () => {
+    //The case the branch exists for: a brand-new install whose bundle is already
+    //stale. The splash is up, so a new user is shown the current product rather
+    //than a version of it that no longer exists.
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await settled()
+    expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+    expect(h.plugin?.reload).toHaveBeenCalled()
+  })
+
+  it("stages instead once a poll tick finds it, with the app on screen", async () => {
+    //Same device, same `"wait"` verdict, and a reload here replaces the document
+    //under a mounted app: scroll position, half-typed input and open sheets all
+    //gone, and nothing about it reads as an update.
+    vi.useFakeTimers()
+    try {
+      h.manifest = null
+      const { startOtaUpdates } = await load()
+      startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+      //the launch check finds nothing, so the hold is released on its own
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(h.plugin?.reload).not.toHaveBeenCalled()
+
+      h.manifest = manifest()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+      expect(h.plugin?.reload).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("stages instead when a resume finds it, with the app on screen", async () => {
+    h.manifest = null
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await settled()
+
+    h.manifest = manifest()
+    for (const fn of h.resume) fn()
+    await settled()
+    expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+    expect(h.plugin?.reload).not.toHaveBeenCalled()
+  })
+
+  it("stages instead when the launch check outran its own budget", async () => {
+    //The hold has a ceiling, so a slow network reveals the app while the check is
+    //still running. The download then lands on an app the user is already using,
+    //which is the same tear by a different route.
+    vi.useFakeTimers()
+    let release: (() => void) | undefined
+    h.gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    try {
+      const { firstLaunchHold, startOtaUpdates } = await load()
+      startOtaUpdates(unsigned)
+      await vi.advanceTimersByTimeAsync(6000)
+      //the budget expired and the app is on screen
+      await expect(firstLaunchHold()).resolves.toBeUndefined()
+
+      release?.()
+      await vi.advanceTimersByTimeAsync(100)
+      expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+      expect(h.plugin?.reload).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
