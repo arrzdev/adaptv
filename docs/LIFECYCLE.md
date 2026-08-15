@@ -876,7 +876,8 @@ not a check. This is written down because the function reads like the natural pl
 > ⏳ **Key rotation is not implemented.** §5.4d's "second *next* public key in the shell" needs the
 > native side to accept two, and the rented plugin's config takes exactly one — so rotation today means
 > a store release, with the usual gap while devices take it. Accepting two keys in JavaScript alone
-> buys nothing: the native check would still refuse a manifest signed with the new one.
+> buys nothing: the native check would still refuse a manifest signed with the new one. The open
+> question is what an install that never takes that release does — see §5.7.
 >
 > `ADAPTV_OTA_PUBLIC_KEY` (only alongside `ADAPTV_OTA_ORIGIN`) overrides the declared key for local
 > verification, and it is not a convenience. The committed key's private half lives in a secret store
@@ -1281,6 +1282,45 @@ resume-driven check. The plugin is only the file-juggling + `serverBasePath` lay
 replaceable — if Capgo's licensing or health changes, the seam is one module wide. If neither plugin
 fits, the DIY path (download → verify → unpack to a new dir → flip pointer → apply next launch) is the
 documented fallback.
+
+### 5.7 What is still open, and what a local bench cannot reach
+
+Two lists, and the second one is the easier to forget. The first is work not done; the second is
+verification that **cannot** be done here, no matter how carefully, because the bench differs from a
+real deployment in ways that hide exactly the failures worth finding.
+
+#### Still open
+
+- **Key rotation (§5.4d).** Genuinely needs a native change — the rented plugin's config takes one key,
+  so accepting a `next` key in JavaScript alone buys nothing. What is undecided is not the mechanism
+  but the fallback: what an install does when it never takes the store release that carries the new
+  key. Today it fetches every manifest and refuses each one in silence, for ever, because a bundle
+  under attack must not narrate its own verification (§5.4d). That silence is right against an
+  attacker and wrong against a rotation, and the two are indistinguishable from inside the app. The
+  `ota-lab` reproduced this by accident once — a stale publish carrying a previous session's key — and
+  the only symptom was an app that looked perfectly healthy.
+- **The watchdog under a partially applied bundle.** The ledger records `pending` before the pointer
+  moves, so a process killed between `recordStaged` and `setNextBundle` is covered. A process killed
+  *inside* the plugin's own unpack is not adaptv's state to reason about, and what the watchdog should
+  do about a half-written bundle directory has not been settled.
+
+#### What the bench structurally cannot catch
+
+`ota-lab` serves the channel from a plain node server on localhost. Three classes of failure are
+invisible to it, and all three need the playground deployed to a real host:
+
+- **CDN caching of `manifest.json`.** The bench sends `Cache-Control: no-store`; a real static host
+  does not. A cached manifest means the device keeps asking and keeps being handed a stale answer for
+  minutes or hours — indistinguishable, from inside the app, from "there is no update". This is the
+  most likely production failure in §5.2's whole design, and nothing local can surface it.
+- **A launch check that outruns its own budget.** On localhost a check never takes 5 seconds, so
+  `FIRST_LAUNCH_BUDGET_MS` never expires and the app is never revealed while its own check is still in
+  flight. On a real network that is ordinary, and it is the most common of the three paths that
+  `launchScreenStillUp` guards (§5.4) — the guard is written and unit-tested, but the deployed
+  environment is what will exercise it for real.
+- **Anything that needs a long-lived install.** Rotation's failure mode, a poll running for hours
+  across real backgrounding, and a device that has been offline across several publishes all need
+  calendar time against a channel that keeps moving. The bench resets on every `fresh`.
 
 ---
 
