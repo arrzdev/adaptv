@@ -16,10 +16,21 @@
 //tied to a tap (a completed upload, a countdown). @see docs/DECISIONS.md B10
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
 import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 export type ImpactWeight = "light" | "medium" | "heavy"
 export type NotifyType = "success" | "warning" | "error"
+
+/**
+ * Whether the pulse goes through the native plugin. The impact/notify/selection
+ * branches ask THIS rather than `isNativePlatform()`: an OTA bundle can be
+ * running on a binary that predates the plugin, and each branch then falls
+ * through to the web pulse instead of doing nothing. → `LIFECYCLE.md §5.6`
+ */
+function viaPlugin(): boolean {
+  return isNativePlatform() && hasNativePlugin("Haptics")
+}
 
 const COOLDOWN_MS = 200
 let lastPulseAt = 0
@@ -68,7 +79,7 @@ function webPulse(pattern: VibratePattern): void {
 export const haptics = {
   /** A physical tap. `weight` maps to the native impact style; approximated on web. */
   impact(weight: ImpactWeight = "light"): void {
-    if (isNativePlatform()) {
+    if (viaPlugin()) {
       try {
         void Haptics.impact({ style: IMPACT_STYLE[weight] })
         return
@@ -80,7 +91,7 @@ export const haptics = {
   },
   /** Notification feedback — success / warning / error. */
   notify(type: NotifyType): void {
-    if (isNativePlatform()) {
+    if (viaPlugin()) {
       try {
         void Haptics.notification({ type: NOTIFY_TYPE[type] })
         return
@@ -92,7 +103,7 @@ export const haptics = {
   },
   /** A light selection tick (list/segmented changes). */
   selection(): void {
-    if (isNativePlatform()) {
+    if (viaPlugin()) {
       try {
         void Haptics.selectionChanged()
         return
@@ -104,7 +115,7 @@ export const haptics = {
   },
   /** Whether haptic feedback is available here (installs the iOS polyfill first). */
   isSupported(): boolean {
-    if (isNativePlatform()) return true
+    if (viaPlugin()) return true
     if (typeof navigator === "undefined") return false
     installVibratePolyfill()
     return typeof navigator.vibrate === "function"

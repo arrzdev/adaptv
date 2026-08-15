@@ -6,6 +6,7 @@ import type {
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
+  UpdateRequiredProps,
 } from "#adaptv/config/types"
 import type { UiThemePreference } from "#adaptv/hooks/use-theme"
 import type { AdaptvPrivacyConfig } from "#adaptv/native/privacy-manifest"
@@ -433,6 +434,43 @@ export type AdaptvAppConfig = {
 
   /** Full-screen prompt shown when a touch device is rotated against the orientation lock. */
   orientationGuardScreen?: ScreenThunk<OrientationGuardProps>
+  /**
+   * How many days the channel may have been **ahead of this app's native layer**
+   * before adaptv takes the screen. Omit it — the default — and adaptv never does.
+   *
+   * It goes ahead when a published build is made against a different set of
+   * native plugins than the installed binary has, and from then on only a store
+   * update brings the two back into line. → `LIFECYCLE.md §5.6`
+   *
+   * 🔴 **That install is working, so blocking it has a real cost.** It is taking
+   * every bundle the channel publishes (or, under
+   * {@link AdaptvAppConfig.otaOnNativeSkew} `"refuse"`, sitting on the last one
+   * that matched), still checking, still covered by the rollback watchdog — with
+   * the features that need the missing native code reporting unavailable. Set
+   * this only when a *server* contract moved with the native release: an API, a
+   * data shape, an auth flow now built for a version this install will never
+   * reach. adaptv cannot see that from the device, which is why it will not guess
+   * a number for you.
+   *
+   * A number rather than a switch, because the channel moves when a release is
+   * **built** — usually before review lets anyone install it. `0` blocks the
+   * moment that happens, which is right when the contract broke with the release
+   * and hostile when it did not. Something like `14` lets the store catch up and
+   * only interrupts the installs that really were left behind.
+   *
+   * For anything short of taking the screen — a banner, a badge, a nag — read the
+   * same state directly with `useStoreRelease()` and render what you like.
+   */
+  updateRequiredAfterDays?: number
+  /**
+   * Your own screen for {@link updateRequiredAfterDays}, instead of adaptv's.
+   *
+   * Receives the age in whole days, the timestamp it started, and the build tag
+   * this install refused. adaptv's default deliberately states the age and never
+   * promises the new version is downloadable yet, for the reason above; if you
+   * know your release is out, say so here.
+   */
+  updateRequiredScreen?: ScreenThunk<UpdateRequiredProps>
   /** Full-screen 404. */
   notFoundScreen?: () => Promise<{ default: NotFoundRouteComponent }>
   /**
@@ -487,6 +525,106 @@ export type AdaptvAppConfig = {
   //That is the router's own composition model, it nests and scopes properly, and
   //it puts providers where the consumer can see them. A config thunk would be a
   //second, weaker way to express the same thing.
+
+  /**
+   * The app's public origin — e.g. `"https://app.acme.com"`. Origin only: no
+   * path, no trailing slash, and `https` outside localhost.
+   *
+   * The `https` part is **enforced at build time**, not advised: both mobile
+   * platforms block cleartext, so an http origin makes the update check fail
+   * inside the network stack, which the updater cannot tell apart from being
+   * offline. Every install would stay on its store version with nothing logged.
+   *
+   * **This is where installed native apps look for their own updates.** The
+   * ordinary web build writes an OTA channel under
+   * `<origin>/.well-known/adaptv/ota/`, the deploy carries it, and every install
+   * polls it on launch and resume. → `LIFECYCLE.md §5.2`
+   *
+   * ⚠︎ **Treat it as permanent, like the bundle ID.** It is baked into the store
+   * binary, so changing it takes a store release — and every install that never
+   * takes that release keeps asking the old origin forever. Those users are not
+   * broken, they are *frozen*: still running, never updating again, and silent
+   * about it. Moving a domain is therefore a migration, not a config edit.
+   *
+   * Omit it and OTA is simply off: the channel is not emitted and the app never
+   * checks. Everything else — web, PWA, the native build itself — is unaffected.
+   * `ADAPTV_OTA_ORIGIN` overrides it for local verification.
+   */
+  origin?: string
+  /**
+   * The public half of the app's OTA signing key — a PEM SPKI RSA public key.
+   *
+   * **Committed on purpose.** A public key is not a secret, and this one has to
+   * be in the repository because it is baked into the store binary at build time,
+   * on machines that must never see the private half. Generate the pair with
+   * `adaptv keys ota`; keep the private key as a CI secret and pass it as
+   * `ADAPTV_OTA_PRIVATE_KEY` to whatever runs `adaptv build web`.
+   *
+   * ⚠︎ **As permanent as {@link AdaptvAppConfig.origin}, and more unforgiving.** It can only
+   * change through a store release, so losing the private key means no install
+   * can be updated again until every user takes a new one from the store. Back it
+   * up the way you back up a signing certificate.
+   *
+   * Omit it and the build refuses to publish a channel, because an unsigned
+   * channel is a remote-code-execution channel into every installed app.
+   * `ADAPTV_OTA_ALLOW_UNSIGNED=1` (with `ADAPTV_OTA_ORIGIN`) is the local-only
+   * escape hatch. → `LIFECYCLE.md §5.4d`
+   *
+   * To verify a signed channel locally without holding the production private
+   * key, override this with `ADAPTV_OTA_PUBLIC_KEY` (also only alongside
+   * `ADAPTV_OTA_ORIGIN`) and build against a throwaway pair.
+   */
+  otaPublicKey?: string
+  /**
+   * What an installed app does with an update built against a **different set of
+   * native plugins** than it has. Default `"install"`. → `LIFECYCLE.md §5.6`
+   *
+   * A native change ships through the store; everything else ships over the air.
+   * The two get out of step whenever a release adds a plugin, because the bundle
+   * is on every device the day it is published and the binary takes as long as
+   * review plus whenever the user updates.
+   *
+   * - `"install"` — take it. Bug fixes, copy, layout, the whole rest of that
+   *   release lands on every install immediately, and the parts that need the
+   *   missing native code report themselves unavailable through adaptv's own
+   *   capability hooks — `useShare().supported` and its peers. **Ask before you
+   *   call**: a native call is a rejected promise on an app that does not have it.
+   * - `"refuse"` — leave the install on its last matching bundle until a store
+   *   release moves it. Choose this when the release changed a contract the JS
+   *   cannot route around — a server API, an auth flow, a data shape — so a
+   *   half-working bundle would be worse than a stale one.
+   *
+   * Either way `useStoreRelease()` reports that the channel has moved past this
+   * app, and {@link AdaptvAppConfig.updateRequiredAfterDays} can take the screen
+   * once it has been true for long enough.
+   */
+  otaOnNativeSkew?: "install" | "refuse"
+
+  /**
+   * How often an installed app looks for a new bundle **while it is being used**,
+   * in whole minutes. Default `60`. `0` turns the poll off. → `LIFECYCLE.md §5.2`
+   *
+   * It is a third check, not the only one: adaptv already looks on every launch
+   * and on every resume, and resume is the one that carries a phone. A poll only
+   * changes the session that never goes to the background — a kiosk, a tablet on
+   * a wall, an app someone works in all afternoon — where the other two never
+   * fire and the install can sit a full day behind its own web deploy.
+   *
+   * ⚠︎ **It changes when the download happens, never when the swap does.** The
+   * bundle is still applied at the next cold start, because replacing the
+   * WebView's root under a live app tears its state (`LIFECYCLE.md §5.4b`). What
+   * it buys is that the next cold start has the bundle *already staged*, so the
+   * update appears on the very next launch instead of the one after it.
+   *
+   * A number rather than a switch, because the right interval is a function of
+   * how often you deploy, and that is the one thing adaptv cannot see from
+   * inside the app. The default assumes a team that ships a few times a day; an
+   * app that deploys twice a year should say `0` and rely on resume.
+   *
+   * The minimum is 5. A smaller number is almost always someone writing seconds,
+   * and the build says so rather than quietly polling twelve times a minute.
+   */
+  otaPollMinutes?: number
 
   /**
    * How the **web** build renders. **Defaults to `"ssr"`.**

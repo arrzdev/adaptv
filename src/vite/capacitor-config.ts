@@ -1,5 +1,10 @@
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import { BOOT_GRACE_MS } from "#adaptv/shell/boot-fallback.ts"
 import { ADAPTV_DIR } from "#adaptv/vite/adaptv-dir.ts"
+import {
+  resolveOtaOrigin,
+  resolveOtaPublicKey,
+} from "#adaptv/vite/ota-config-module.ts"
 
 //The Capacitor config, generated from adaptv.config.ts. It is NEVER written to disk:
 //adaptv's patched `@capacitor/cli` reads it in-memory from the `ADAPTV_CAPACITOR_CONFIG`
@@ -92,6 +97,36 @@ export const MIN_ANDROID_WEBVIEW = 111
  */
 const ERROR_PAGE = "adaptv-offline.html"
 
+/**
+ * How long the update watchdog waits for `markBundleReady()` before reverting.
+ *
+ * 🔴 **Derived, never a literal.** The plugin defaults `readyTimeout` to `0`, which
+ * disables rollback outright — and `autoBlockRolledBackBundles` is documented as
+ * having no effect at `0` either, so a zero silently removes two defences and a
+ * single bad bundle is unrecoverable on every installed device. → `§5.5`
+ *
+ * The plugin README recommends `10000`. adaptv does not use it, because the two
+ * clocks start at different moments (`§5.4`): the rollback timer starts in the
+ * plugin's constructor, *before* the WebView has loaded a document at all, while
+ * `BOOT_GRACE_MS` starts at `DOMContentLoaded`. The constraint is therefore
+ *
+ *     readyTimeout ≥ (native launch → DOMContentLoaded) + BOOT_GRACE_MS + margin
+ *
+ * and `10000` against a `BOOT_GRACE_MS` of `8000` can leave a *negative* margin.
+ * Get it wrong in that direction and a merely **slow** bundle is rolled back
+ * before the document has even given up on it — which `autoBlockRolledBackBundles`
+ * then makes permanent. A false rollback is worse than no rollback.
+ *
+ * The allowance is the slow target, not the fast one: measured at ~0.4 s on an iOS
+ * simulator (plugin init → `WebView loaded`), against the 1–3 s a cold Android
+ * start costs. It is expressed against {@link BOOT_GRACE_MS} so the two cannot
+ * drift apart silently — `capacitor-config.test.ts` fails if they do.
+ */
+const NATIVE_BOOT_ALLOWANCE_MS = 3000
+const ROLLBACK_MARGIN_MS = 4000
+export const OTA_READY_TIMEOUT_MS =
+  BOOT_GRACE_MS + NATIVE_BOOT_ALLOWANCE_MS + ROLLBACK_MARGIN_MS
+
 export function buildCapacitorConfig(
   config: AdaptvAppConfig,
 ): CapacitorConfigJson {
@@ -150,6 +185,54 @@ export function buildCapacitorConfig(
         //(capabilities/status-bar.ts) refines it per resolved theme at runtime.
         style: "DEFAULT",
       },
+      ...liveUpdatePlugin(config),
+    },
+  }
+}
+
+/**
+ * The update plugin's block — emitted **only when OTA is configured**.
+ *
+ * Off means off: with no channel the app never downloads anything, nothing calls
+ * `settleLaunch()`, and arming a watchdog that no code will ever answer would be
+ * a timer waiting for a signal that structurally cannot arrive.
+ *
+ * Every value here is adaptv taking a position, which is the whole of `§5.5` —
+ * own the policy, rent the swap. The plugin is rented for one thing: writing a
+ * bundle directory and flipping `serverBasePath`. Every decision *about* that
+ * swap stays in `src/ota/policy.ts`, where it is testable without a device.
+ */
+function liveUpdatePlugin(
+  config: AdaptvAppConfig,
+): Record<string, unknown> {
+  if (!resolveOtaOrigin(config)) return {}
+  const publicKey = resolveOtaPublicKey(config)
+  return {
+    LiveUpdate: {
+      //adaptv decides WHEN to update — `background` would give the plugin its own
+      //check-and-apply loop running beside `startOtaUpdates`, so two policies
+      //would race over the same pointer and neither would own the outcome.
+      autoUpdateStrategy: "none",
+      readyTimeout: OTA_READY_TIMEOUT_MS,
+      //The device's own memory of what already failed to start here. Without it a
+      //rolled-back bundle is re-downloaded on the very next launch, forever: the
+      //channel keeps advertising it, because a rollback is a local event no server
+      //hears about. `decideUpdate` reads this back via `getBlockedBundles()`.
+      autoBlockRolledBackBundles: true,
+      //MUST stay false. "Unused" is the plugin's judgement, made right after
+      //`ready()`, and the bundle it would consider unused is the last known-good
+      //one — i.e. exactly the rollback target. Pruning is adaptv's
+      //(`selectPrunableBundles`), precisely because it has to keep that.
+      autoDeleteBundles: false,
+      //🔴 The whole of the native defence. The plugin verifies a bundle's
+      //signature ONLY when this is set — no key means no check, silently, and a
+      //channel anyone who can write to the CDN owns. It is therefore emitted
+      //whenever the app declares one, and `adaptv build web` refuses to publish
+      //without it (the `ADAPTV_OTA_ALLOW_UNSIGNED` hatch is local-only).
+      //
+      //Through the shared resolver, so the key the native check uses is the same
+      //one the JS check uses. → `resolveOtaPublicKey`
+      ...(publicKey ? { publicKey } : {}),
     },
   }
 }

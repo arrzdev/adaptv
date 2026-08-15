@@ -188,6 +188,25 @@ export function renderRootRouteModule(
   )
   if (guard) fields.push(`orientationGuardComponent: ${guard}`)
 
+  //The threshold is emitted on its own: an app that only wants adaptv's default
+  //screen sets the number and no component, and one that only wants the state
+  //(`useStoreRelease`) sets neither. A component with no threshold renders
+  //nothing, deliberately — the number is what opts an app into taking the screen.
+  if (config.updateRequiredAfterDays !== undefined) {
+    fields.push(
+      `updateRequiredAfterDays: ${JSON.stringify(config.updateRequiredAfterDays)}`,
+    )
+  }
+  const updateRequired = importThunk(
+    config,
+    "updateRequiredScreen",
+    "UpdateRequiredComponent",
+    imports,
+  )
+  if (updateRequired) {
+    fields.push(`updateRequiredComponent: ${updateRequired}`)
+  }
+
   const notFound = importThunk(
     config,
     "notFoundScreen",
@@ -224,6 +243,7 @@ function importThunk(
   field:
     | "splashScreen"
     | "orientationGuardScreen"
+    | "updateRequiredScreen"
     | "notFoundScreen"
     | "offlineComponent",
   localName: string,
