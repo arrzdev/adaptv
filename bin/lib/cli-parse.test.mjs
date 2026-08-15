@@ -115,10 +115,15 @@ describe("commands and surfaces", () => {
     expect(r.suggestions).toEqual(["ios"])
   })
 
-  it("names where a web BUILD actually lives rather than listing surfaces back", () => {
+  it("accepts a web build, because that is what publishes the update channel", () => {
+    //It used to be rejected with "a web build is 'adaptv preview web'". That
+    //stopped being true when OTA landed: the site and the bundle installed apps
+    //run are two builds that both write dist/client, so only a command
+    //sequencing them can emit the channel — and `preview web` serves, it does
+    //not publish.
     const r = run(["build", "web"])
-    expect(r.fault).toBe("unknown-surface")
-    expect(r.rejection).toContain("preview web")
+    expect(r.fault).toBeUndefined()
+    expect(r.rest).toEqual(["web"])
   })
 
   it("asks for a surface when none is given", () => {

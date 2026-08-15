@@ -349,9 +349,9 @@ Full designs exist; the next step is TDD, not more design.
 | D2 | First-party `@adaptv/shell` Capacitor plugin (edge-to-edge + insets/IME, then splash/status-bar/theme) | NATIVE-SHELL | **HIGH** — the Android-15/SDK-35 inset+keyboard crux |
 | D3 | `create-adaptv` scaffolder | LIFECYCLE §8 | low |
 | D4 | `web` config block (`render`/`host`/`sw`) → Start deploy presets | LIFECYCLE §1.2, §3–4 | low |
-| D5 | Capacitor OTA (fingerprint-gated self-hosted bundle swap) | LIFECYCLE §5 | medium — plugin pick open |
+| D5 | Capacitor OTA (fingerprint-gated self-hosted bundle swap) | LIFECYCLE §5 | medium — plugin picked (O8); policy built, mechanism not |
 | D6 | `adaptv dev [--host ios\|android]` with device live-reload | LIFECYCLE §2.2 | low |
-| D7 | `adaptv ota build` / `ota status` | LIFECYCLE §7.4 | medium |
+| D7 | ~~`adaptv ota build` / `ota status`~~ | LIFECYCLE §5.2 | ❌ **withdrawn** — the channel is emitted by `vite build`, and OTA-vs-store-release is derived, not declared |
 | D8 | `useAppState` accessor + hook | COORDINATION | low |
 | D9 | Back-button priority handler chain | COORDINATION | low |
 | D10 | Global gesture controller (single-capture arbitration) | COORDINATION | medium |
@@ -371,7 +371,7 @@ Full designs exist; the next step is TDD, not more design.
 | O5 | **SW architecture** | **Navigation strategy is a pure function of `render`**: ssr → preload-or-network + precache fallback (never cache documents — it's a cross-user data leak); spa → `NavigationRoute`→shell; capacitor → no SW + active unregister. `serviceWorkerUpdate: "auto"` default, nav preload on **under ssr and off under spa** (it is a matched pair — `enable()` in activate *and* a handler that reads `event.preloadResponse`; enabled-but-unread costs two renders per navigation), activate-time cache sweep, `vite:preloadError` net. Stay on Workbox. → `RENDERING.md §3` | ✅ **CLOSED** |
 | O6 | **What to port from Ionic** + attribution | Partially answered (theming: **don't** copy — §O1; keyboard: use native events not `visualViewport`, per Ionic's own source comment). The **gesture controller / iOS input shims / back-button chain** inventory is still in flight. | 🔄 **in progress** |
 | O7 | **Lint delivery** | **Biome 2.x — `noRestrictedImports` for imports, GritQL plugins for AST shapes.** Verified working end-to-end on the pinned 2.3.2. Note: `extends` resolves bare npm specifiers; `plugins` does **not** (needs an explicit `node_modules/` path). GritQL has no binding resolution — syntax matching only. → `FACADE.md §2.3–2.4` | ✅ **CLOSED** |
-| O8 | **Plugin picks — OTA** | **Capawesome `@capawesome/capacitor-live-update` (MIT, 8.3.0), self-hosted.** Genuinely backend-free; strongest signature story (RSA PEM + SHA-256). Appflow is **dead** (no new sales since 2025-02-11, sunsets 2027-12-31) — `@capacitor/live-updates` disqualified. **adaptv must force `readyTimeout`** (Capawesome defaults it to `0` = rollback disabled) and **conform to `Library/NoCloud/ionic_built_snapshots/<id>/` on iOS** or persistence silently fails on cold launch. → `LIFECYCLE.md §5` | ✅ **CLOSED** |
+| O8 | **Plugin picks — OTA** | **Capawesome `@capawesome/capacitor-live-update` (MIT, 8.3.0), self-hosted.** Genuinely backend-free; strongest signature story (RSA PEM + SHA-256). Appflow is **dead** (no new sales since 2025-02-11, sunsets 2027-12-31) — `@capacitor/live-updates` disqualified. **adaptv must force `readyTimeout`** (Capawesome defaults it to `0`, which disables rollback *and* `autoBlockRolledBackBundles`), and its value is bounded from below by the two-clock ordering in `LIFECYCLE.md §5.4` — the rollback timer starts at plugin `init()`, not at document load. **The `Library/NoCloud/ionic_built_snapshots/` conformance is the plugin's own and already correct** (`LiveUpdate.swift:11`, "DO NOT CHANGE") — an earlier draft wrongly listed it as adaptv's job. **Two patches are adaptv's** (`patchedDependencies`, → `LIFECYCLE.md §5.5`): resolve `rollback()`'s target to the last known-good instead of the embedded bundle, and make the version-changed branch drop the bundle pointer — without it, the first launch after every store release runs the pre-update OTA bundle against the new native layer (§5.3). → `LIFECYCLE.md §5` | ✅ **CLOSED** |
 | O8b | **Plugin picks — secure storage** | **`@aparajita/capacitor-secure-storage` 8.0.0** (MIT, 2026-02-10) — `KeychainSwift` on iOS, `AndroidKeyStore` + `AES/GCM/NoPadding` on Android. **`@capacitor/preferences` is plaintext** (`UserDefaults`/`SharedPreferences`, verified in source) and must never hold tokens. → B23 | ✅ **CLOSED** |
 | O9 | **Capability scope** | in flight | 🔄 **in progress** |
 | O10 | **Animation & transition substrate** | Partially: **`@starting-style` + `transition-behavior: allow-discrete` are usable (iOS 18 floor)** but **`overlay` is Chromium-only and unrequested in WebKit** — so top-layer `<dialog>`/popover exits break on iOS *permanently*. → build overlays as ordinary positioned elements with a JS presence hook, not the top layer. View Transitions can't do interruptible/gesture-driven. **Navigation API is now Baseline (Safari 26.2, Firefox 147)** but gives no gesture-progress surface, and `allowsBackForwardNavigationGestures` is `false` in Capacitor — so swipe-back is hand-built either way. | ✅ **CLOSED** by `ANIMATION.md` |
@@ -893,10 +893,33 @@ that scenario end to end — real prerendered component, real emitted document, 
 killed. This is the *whole* of adaptv's error surface; the runtime side is B30, and B30 is a decision not
 to have one.
 
-⚠︎ **Adjacent, unverified:** `capBuild` in `bin/lib/native.mjs` copies `_shell.html` over `index.html`
-when it exists, which would clobber the emitted shell — and the fallback with it — on native. In this
-configuration the build produces no `_shell.html` (the measurement behind `app-shell.ts`), so it does
-not fire today. It is a silent one if it ever does.
+✅ **Adjacent, now verified — and the reason it was safe was not the stated one.** `buildWeb` in
+`bin/lib/native.mjs` copied `_shell.html` over `index.html` when it existed, which clobbers the emitted
+shell and the fallback with it, on native. The note here used to say the build produces no `_shell.html`
+so it never fires. **That is false.** Measured on the playground frontend at `render: "ssr"` built with
+`ADAPTV_TARGET=capacitor`:
+
+```
+14:56:23.438744  index.html     ← shell-emit (adaptv's, with the fallback)
+14:56:23.438848  404.html       ← static-host, same tick
+14:56:24.788440  _shell.html    ← Start's prerender, ~1.35s LATER
+```
+
+The file **is** there, so the copy **did** fire on every native build. It was harmless only because the
+two documents are currently byte-identical (`diff` clean) — Start's SPA shell round-trips adaptv's
+document unchanged. That is a coincidence owned by a dependency, not an invariant: a Start bump, a
+different adapter, or prerendering more than one page breaks it, and the breakage is silent and lands
+exactly where it hurts most — the native target, where a corrupt OTA bundle is the failure the fallback
+exists to catch (`LIFECYCLE.md §5.4e`).
+
+**Fixed by deletion.** `shell-emit` runs unconditionally and always writes `index.html`, so the copy was
+vestigial as well as hazardous; `buildWeb` now requires `index.html` and never prefers `_shell.html`.
+The rule it encodes: *adaptv generates its shell, so it never adopts someone else's.*
+
+> Consequently the older blanket claim — "TanStack Start emits no HTML in this configuration" — is
+> **stale** where it appears in `shell-emit.ts`'s docstring. It still holds for the Cloudflare-adapter
+> measurement in `static-host.ts` (a different configuration), which is why adaptv generating its own
+> shell remains load-bearing either way.
 
 ### B29 — the Android system NAV bar is browser/OS-owned on web + PWA; only native controls it
 

@@ -30,6 +30,14 @@ function forceNative(native: boolean): void {
   )
 }
 
+/** A native shell whose binary carries exactly `plugins` and nothing else. */
+function forceNativeBinary(plugins: string[]): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
 type ScreenOrientationStub = {
   type?: string
   lock?: (orientation: string) => Promise<void>
@@ -172,5 +180,25 @@ describe("orientation — subscription", () => {
     unsub()
     window.dispatchEvent(new Event("orientationchange"))
     expect(cb).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("orientation — a binary that predates the plugin", () => {
+  it("locks through the web API instead of the absent bridge", async () => {
+    //→ LIFECYCLE.md §5.6. The lock is the only branch that moves: reading the
+    //current orientation resolves the same way with or without the plugin.
+    forceNativeBinary([])
+    const lock = vi.fn(() => Promise.resolve())
+    stubScreenOrientation({ type: "portrait-primary", lock })
+    expect(isOrientationLockSupported()).toBe(true)
+    await expect(lockScreenOrientation("portrait")).resolves.toBe("ok")
+    expect(ScreenOrientation.lock).not.toHaveBeenCalled()
+    expect(lock).toHaveBeenCalledWith("portrait")
+  })
+
+  it("reports unsupported when the WebView cannot lock either", () => {
+    forceNativeBinary(["Share"])
+    stubScreenOrientation({ type: "portrait-primary" })
+    expect(isOrientationLockSupported()).toBe(false)
   })
 })

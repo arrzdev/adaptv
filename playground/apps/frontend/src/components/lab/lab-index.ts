@@ -270,6 +270,12 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/ota",
+    title: "OTA & the store gap",
+    summary: "has the channel moved past this binary",
+    isNew: true,
+  },
+  {
     to: "/lab/splash",
     title: "Splash",
     summary: "the native launch splash handoff",

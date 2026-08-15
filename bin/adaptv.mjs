@@ -14,6 +14,7 @@
 // rendered in-process from the app's icon set (bin/lib/icons.mjs) — no asset generator
 // for the consumer to install.
 import { spawn, spawnSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import {
   copyFileSync,
   cpSync,
@@ -22,6 +23,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs"
 import { createRequire } from "node:module"
 import { homedir } from "node:os"
@@ -251,6 +253,35 @@ async function setCapacitorConfigEnv(config) {
   const json = capacitorConfigJson(config)
   if (json) process.env.ADAPTV_CAPACITOR_CONFIG = json
   else delete process.env.ADAPTV_CAPACITOR_CONFIG
+}
+
+/**
+ * Refuse a native build whose update core is missing adaptv's edits.
+ *
+ * 🔴 The absence is silent by construction: the build succeeds, the app runs, and
+ * updates install. Only the recovery paths change, and only on a device that has
+ * already hit trouble. So the check has to be here, ahead of the compile.
+ *
+ * The message is written out with `log.error` rather than raised as a failure,
+ * because it ends in a block the dev copies verbatim into their workspace file —
+ * and the failure renderer drops any detail line naming the packages that block
+ * has to name (R8, `lib/opacity.mjs`). A stripped fix is worse than a plain one.
+ *
+ * Returns `false` when it printed, so the caller can stop.
+ */
+async function assertUpdateCorePatched() {
+  const { missingNativePatchMessage } = await loadAdaptvModule(
+    "vite/verify-patches.ts",
+  )
+  //ADAPTV_ROOT, passed rather than inferred: this module reaches the CLI as a
+  //transpiled `data:` URL, so it cannot locate itself, and the update core is
+  //resolvable only from adaptv's own directory.
+  const message = missingNativePatchMessage(ADAPTV_ROOT)
+  if (!message) return true
+  for (const line of message.split("\n")) log.error(line)
+  spacer()
+  process.exitCode = 1
+  return false
 }
 
 /** The native fingerprint of each ready platform, keyed by platform. */
@@ -1364,6 +1395,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // whole command — including the web surface it builds ahead of this — and hands the config
   // down rather than having it read, checked and reported a second time.
   const config = opts.config ?? (await preflight(appRoot, platforms))
+  // The update core's patch, checked here because here is where it would be compiled in.
+  // Printed rather than thrown: the fix is a block the dev has to copy verbatim, and the
+  // failure renderer drops lines that name the packages it names.
+  if (!(await assertUpdateCorePatched())) return { ran: true, ok: false }
   // Fresh capacitor.config.json FIRST — a release build must never inherit dev fields
   // (`server.url` etc.) left by a `dev` run that was killed before it could revert.
   await setCapacitorConfigEnv(config)
@@ -2064,6 +2099,323 @@ async function previewWeb(appRoot, opts) {
   )
 }
 
+/**
+ * `adaptv build web` — the site to deploy, with the update channel inside it.
+ *
+ * ## Why this command exists at all
+ *
+ * It is the only place the channel CAN be published. An app has two bundles — the
+ * site (SSR, service worker) and the one a native WebView runs (SPA, no worker) —
+ * and they are separate builds of the same source that both write `dist/client`.
+ * Nothing inside a single `vite build` can produce both, so publishing has to be a
+ * step that sequences them: build the native bundle, archive it, build the site,
+ * then write the archive and its manifest into the site's own output.
+ *
+ * That ordering is the whole design. The archive is taken BEFORE the site build,
+ * because the site build overwrites the directory it was taken from.
+ *
+ * `preview web` is unchanged and still serves a build locally. This one publishes.
+ *
+ * ## What CI has to do
+ *
+ * Deploy `dist/client`. That is the entire contract — the channel rides the
+ * ordinary web deploy, under `.well-known/`, so there is no second artifact, no
+ * bucket to provision and no release step that can be forgotten independently of
+ * the site going out. → `LIFECYCLE.md §5.2`
+ */
+async function buildWebDeploy(appRoot, opts) {
+  header("build web")
+  //A live `dev` session owns the generated Capacitor config; regenerating it under
+  //one would break that run. The same refusal every other build makes.
+  assertNoActiveDevLock(appRoot, "build")
+  const config = await preflight(appRoot, [])
+
+  const { resolveOtaBuildConfig, resolveOtaOrigin } =
+    await loadAdaptvModule("vite/ota-config-module.ts")
+  //null when the app declares no origin — OTA is off, and this is then simply the
+  //web build. Nothing is published, because there is nowhere to publish it to.
+  const ota = resolveOtaBuildConfig(appRoot, config)
+  const origin = ota ? resolveOtaOrigin(config) : null
+
+  //BEFORE the bundle is built, not after: a deploy that cannot sign must not
+  //spend two builds discovering it, and it must never reach the point where a
+  //channel could be half-written.
+  const signing = ota
+    ? await resolveChannelSigning(ota)
+    : { privateKey: null }
+  if (signing.refusal) {
+    fail("channel", signing.refusal.reason, signing.refusal.detail)
+    spacer()
+    process.exitCode = 1
+    return { ran: true, ok: false }
+  }
+
+  let bundle = null
+  if (ota) {
+    try {
+      bundle = await stageOtaBundle(appRoot, config, ota, opts)
+    } catch (err) {
+      const { reason, detail } = explainFailure("web")(err)
+      fail("bundle", reason, detail)
+      spacer()
+      process.exitCode = 1
+      return { ran: true, ok: false }
+    }
+  }
+
+  try {
+    await runLine(
+      "web",
+      async (report) => {
+        const [cmd, args] = viteCommand(appRoot, ["build"])
+        await exec(cmd, args, {
+          cwd: appRoot,
+          env: process.env,
+          onLine: report,
+        })
+        return CAP_WEB_DIR
+      },
+      { verbose: !!opts.verbose },
+    )
+  } catch (err) {
+    const { reason, detail } = explainFailure("web")(err)
+    fail("web", reason, detail)
+    spacer()
+    process.exitCode = 1
+    return { ran: true, ok: false }
+  }
+
+  if (bundle && ota && origin) {
+    await runLine("channel", async (report) => {
+      const {
+        decideChannelEmission,
+        fetchDeployedManifest,
+        writeChannel,
+      } = await loadAdaptvModule("vite/ota-emit.ts")
+      report("reading the published manifest")
+      //What the channel currently serves decides ONE thing: whether this build is
+      //new. An unchanged app keeps the timestamp it was first published with, so a
+      //re-deploy does not read as a release to every device. Unreachable is fine
+      //and means "assume nothing is published" — never a reason to fail a build.
+      const deployed = await fetchDeployedManifest(ota.manifestUrl)
+      const plan = decideChannelEmission({
+        buildTag: bundle.buildTag,
+        deployed,
+        now: Date.now(),
+      })
+      report("writing the channel")
+      //Written on EVERY deploy, unchanged or not: a deploy replaces the whole site,
+      //so skipping the write here deletes the channel from the next one.
+      const written = writeChannel({
+        clientDir: path.join(appRoot, CAP_WEB_DIR),
+        origin,
+        plan,
+        archive: readFileSync(bundle.archivePath),
+        nativeFingerprint: ota.nativeFingerprint,
+        privateKey: signing.privateKey,
+      })
+      const size = `${(written.bundleBytes / 1024 / 1024).toFixed(1)} MB`
+      const unsigned = signing.privateKey ? "" : " · UNSIGNED"
+      return `${plan.buildTag} · ${size}${plan.reused ? " · already live" : ""}${unsigned}`
+    })
+  }
+
+  spacer()
+  return { ran: true, ok: true }
+}
+
+/**
+ * The key this deploy signs with — or the reason it must not publish at all.
+ *
+ * An update channel is a remote-code-execution channel into every installed app.
+ * Publishing one that nothing verifies is not a degraded mode worth warning
+ * about and continuing from; it is the failure. So this refuses, and it refuses
+ * BEFORE any building, so the answer costs a second rather than two builds.
+ *
+ * Every branch below is a way to end up with a channel devices reject while CI
+ * stays green — including the last one, which is the only place a wrong-half key
+ * pair can be caught at all. After this point the evidence is on other people's
+ * phones, and reads as "updates just stopped arriving".
+ */
+async function resolveChannelSigning(ota) {
+  const { isUsableOtaPublicKey, resolveSigningKey, signingKeyMatches } =
+    await loadAdaptvModule("vite/ota-emit.ts")
+
+  let privateKey = null
+  try {
+    privateKey = resolveSigningKey()
+  } catch (err) {
+    return {
+      refusal: {
+        reason: String(err?.message ?? err).replace(/^ota: /, ""),
+        detail: [],
+      },
+    }
+  }
+
+  //Signing turned off. That state cannot be reached by accident — it takes two
+  //environment variables, one of which also has to repoint the channel — so it
+  //is the one case where an unsigned publish is what was asked for.
+  if (!ota.requireSignature) return { privateKey }
+
+  const refuse = (reason, ...detail) => ({ refusal: { reason, detail } })
+
+  if (!ota.publicKey)
+    return refuse(
+      "this app publishes updates but declares no key to verify them with",
+      "run 'adaptv keys ota' and put the public half in adaptv.config.ts, under otaPublicKey",
+    )
+  if (!isUsableOtaPublicKey(ota.publicKey))
+    return refuse(
+      "otaPublicKey in adaptv.config.ts is not a key a device can load",
+      "it must be an RSA public key in PEM form, exactly as 'adaptv keys ota' printed it",
+    )
+  if (!privateKey)
+    return refuse(
+      "nothing to sign the update with",
+      "set ADAPTV_OTA_PRIVATE_KEY to the private half, or ADAPTV_OTA_PRIVATE_KEY_FILE to a path holding it",
+      "in CI that is a secret; on your machine, keep the file outside the repository",
+    )
+  if (!signingKeyMatches(ota.publicKey, privateKey))
+    return refuse(
+      "the key being signed with is not the one this app verifies against",
+      "the private key in the environment is a different pair from otaPublicKey in adaptv.config.ts",
+      "every installed app would reject this update, and say so nowhere you can see",
+    )
+
+  return { privateKey }
+}
+
+/**
+ * Build (or reuse) the bundle installed apps download, and archive it.
+ *
+ * The cache is an accelerator and nothing more: the tag is always recomputed from
+ * the bytes on disk, so a stale cache costs a rebuild, never a wrong manifest.
+ *
+ * 🔴 Its key is NOT `fingerprint(appRoot)` alone, which is what `dev` and
+ * `preview` use. That walk skips `node_modules` — correct for them, wrong here:
+ * upgrading adaptv would leave this cache reporting a hit and publish a bundle
+ * built by the previous version **to every installed device**. The trade a local
+ * cache makes ("worst case you look at slightly stale code") stops being that
+ * trade the moment the artifact ships. So the key folds in three inputs:
+ *
+ *   the app's own sources · the native plugin set · adaptv's runtime source
+ *
+ * The last one also closes the framework-dev trap where a linked adaptv is edited
+ * and the build silently reuses the old framework code.
+ *
+ * The archive is kept under `.adaptv/ota/` rather than in `dist/`, because `dist`
+ * is about to be overwritten by the site build — and because a deploy should carry
+ * exactly one copy of it, the one `writeChannel` puts there.
+ */
+function otaCacheKey(appRoot, ota) {
+  return createHash("sha1")
+    .update(fingerprint(appRoot))
+    .update(ota.nativeFingerprint)
+    .update(cliSourceFingerprint(path.join(ADAPTV_ROOT, "src")))
+    .digest("hex")
+}
+
+async function stageOtaBundle(appRoot, config, ota, opts) {
+  const cacheDir = path.join(appRoot, ADAPTV_DIR, "ota")
+  const cache = readBuildState(appRoot)
+  const fp = otaCacheKey(appRoot, ota)
+  const remembered = cache.ota
+  const archivePath = remembered?.buildTag
+    ? path.join(cacheDir, `bundle-${remembered.buildTag}.zip`)
+    : null
+
+  if (
+    !opts.force &&
+    remembered?.fingerprint === fp &&
+    archivePath &&
+    existsSync(archivePath)
+  ) {
+    //Silent, like every other cache hit in the CLI: the `channel` line below names
+    //the tag, which is the fact worth reading either way.
+    return { buildTag: remembered.buildTag, archivePath }
+  }
+
+  await setCapacitorConfigEnv(config)
+  let staged = null
+  await runLine(
+    "bundle",
+    async (report) => {
+      await buildWeb(appRoot, { report })
+      const { buildBundleArchive, computeBuildTag } =
+        await loadAdaptvModule("vite/ota-emit.ts")
+      const clientDir = path.join(appRoot, CAP_WEB_DIR)
+      const buildTag = computeBuildTag(clientDir)
+      report("archiving")
+      mkdirSync(cacheDir, { recursive: true })
+      const target = path.join(cacheDir, `bundle-${buildTag}.zip`)
+      writeFileSync(target, buildBundleArchive(clientDir))
+      staged = { buildTag, archivePath: target }
+      return buildTag
+    },
+    { verbose: !!opts.verbose, transient: true },
+  )
+
+  //Recomputed AFTER the build, because the build stamps a few of the files the
+  //app-source half of this key hashes — the same reason `pipeline` re-reads it,
+  //and without it every single run is a cache miss.
+  cache.ota = {
+    fingerprint: otaCacheKey(appRoot, ota),
+    buildTag: staged.buildTag,
+  }
+  writeBuildState(appRoot, cache)
+  return staged
+}
+
+/* =============================================================================
+ * keys
+ * ============================================================================= */
+
+/**
+ * `adaptv keys ota` — the pair that makes the update channel trustworthy.
+ *
+ * ## Why adaptv keeps no copy
+ *
+ * The public half is committed, on purpose: it is baked into the store binary,
+ * and changing it is a store release. The private half is never written into the
+ * repository and never remembered — not in `.adaptv/`, which the framework
+ * itself calls disposable, and not anywhere else adaptv can quietly resurrect.
+ *
+ * A key adaptv stores is a key adaptv can lose, and losing it is not a bad
+ * afternoon: every app already on a device verifies against the public half in
+ * its binary, so there is no way back to a working channel except a store
+ * release and the wait that comes with it. Printing it once puts the copy where
+ * it has to live anyway — a secret store — and makes its absence obvious now
+ * rather than at the first urgent fix.
+ *
+ * The private half goes to stdout LAST and alone, so `adaptv keys ota > key.pem`
+ * is not the shape of this command; the pair is meant to be read and placed by
+ * hand, once, per app.
+ */
+async function genOtaKeys() {
+  header("keys ota")
+  const { generateOtaKeyPair } = await loadAdaptvModule("vite/ota-emit.ts")
+  const { publicKey, privateKey } = generateOtaKeyPair()
+
+  section("public: commit this")
+  detail("adaptv.config.ts ▸ otaPublicKey")
+  //`rawOut` because a key is bytes, not prose: anything that wraps, indents or
+  //re-flows it produces a PEM that no longer parses, and the dev finds out on a
+  //device. Same reason `--verbose` is allowed to bypass the renderer.
+  rawOut(`\n${publicKey.trim()}\n`)
+
+  section("private: never commit this")
+  detail("ADAPTV_OTA_PRIVATE_KEY, in the secret store your deploy reads")
+  rawOut(`\n${privateKey.trim()}\n`)
+
+  spacer()
+  log.warn(
+    "shown once. adaptv keeps no copy, and a lost key means no installed app can be updated again until a store release",
+  )
+  spacer()
+  return { ran: true, ok: true }
+}
+
 /* =============================================================================
  * icons
  * ============================================================================= */
@@ -2339,6 +2691,12 @@ async function main() {
     case "icons":
       return await genIcons(appRoot, null, flags)
 
+    //`ota` is the only kind today, and the parser has already checked it. The
+    //argument exists so the second kind is a line in the spec rather than a
+    //renamed command.
+    case "keys":
+      return await genOtaKeys()
+
     case "dev": {
       // `dev` is the live-reload command: one Vite dev server, web + native
       // WebViews all pointed at it. `web` = the dev server alone (no native).
@@ -2424,6 +2782,16 @@ async function main() {
     }
 
     case "build": {
+      //`web` is not a platform — it produces a deployable directory, not a device
+      //artifact — so it does not go through the native pipeline at all.
+      if (rest[0] === "web") {
+        const out = await buildWebDeploy(appRoot, {
+          verbose: !!flags.verbose,
+          force: !!flags.force,
+        })
+        emitJson({ command: "build web", version: pkgVersion() })
+        return out
+      }
       const out = await pipeline(
         "build",
         appRoot,

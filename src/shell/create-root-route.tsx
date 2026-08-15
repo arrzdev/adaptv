@@ -13,6 +13,7 @@ import type {
 import type {
   OrientationGuardProps,
   SplashScreenProps,
+  UpdateRequiredProps,
 } from "#adaptv/config/types"
 import type { UiThemePreference } from "#adaptv/hooks/use-theme"
 import { getUiThemeInitScript } from "#adaptv/hooks/use-theme"
@@ -75,6 +76,14 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
    * is never affected. To turn the guard off, drop `orientation` from the manifest.
    */
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
+  /**
+   * Days an install may be unreachable by OTA before the screen is taken. Omitted
+   * (the default) means never — see `updateRequiredAfterDays` in the app config
+   * for why adaptv refuses to pick a number. → `LIFECYCLE.md §5.6`
+   */
+  updateRequiredAfterDays?: number
+  /** App-supplied screen for the above; falls back to adaptv's own. */
+  updateRequiredComponent?: ComponentType<UpdateRequiredProps>
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
   /**
@@ -128,6 +137,8 @@ export function createRootRoute(config: CreateRootRouteConfig) {
     splashScreenComponent,
     splashScreenInBrowser = false,
     orientationGuardComponent,
+    updateRequiredAfterDays,
+    updateRequiredComponent,
     themeColorLight,
     themeColorDark,
     lang = "en",
@@ -199,6 +210,8 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           splashScreenComponent={splashScreenComponent}
           manifestPath={manifestPath}
           orientationGuardComponent={orientationGuardComponent}
+          updateRequiredAfterDays={updateRequiredAfterDays}
+          updateRequiredComponent={updateRequiredComponent}
           offlineComponent={offlineComponent}
           shellClassName={shellClassName}
           patches={patches}
