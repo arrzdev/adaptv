@@ -16,9 +16,8 @@
  */
 
 import { clamp } from "#adaptv/utils/clamp"
-
-/** `[x1, y1, x2, y2]` — CSS's two control points; P0 is `(0,0)` and P3 is `(1,1)`. */
-export type EasingBezier = [number, number, number, number]
+import type { EasingBezier } from "#adaptv/utils/easing"
+import { easingParamAtX } from "#adaptv/utils/easing"
 
 export type SplitEasing = {
   /** the remainder, renormalised into the unit square */
@@ -30,43 +29,7 @@ export type SplitEasing = {
   entrySlope: number
 }
 
-//one axis of a cubic Bézier with endpoints pinned at 0 and 1
-function axisAt(s: number, c1: number, c2: number) {
-  const t = 1 - s
-  return 3 * t * t * s * c1 + 3 * t * s * s * c2 + s * s * s
-}
-
-function axisSlopeAt(s: number, c1: number, c2: number) {
-  const t = 1 - s
-  return 3 * t * t * c1 + 6 * t * s * (c2 - c1) + 3 * s * s * (1 - c2)
-}
-
 const lerp = (a: number, b: number, s: number) => a + (b - a) * s
-
-/**
- * The curve parameter `s` at which the easing has consumed `x` of its duration. `s` is NOT the
- * elapsed fraction — that is the curve's x axis, and recovering `s` from it is the same solve
- * every browser does per frame. Newton first (the x axis is monotonic and well-behaved), bisection
- * as the guaranteed-convergent fallback.
- */
-export function easingParamAtX(x: number, x1: number, x2: number): number {
-  let s = clamp(x, 0, 1)
-  for (let i = 0; i < 8; i++) {
-    const error = axisAt(s, x1, x2) - x
-    if (Math.abs(error) < 1e-6) return s
-    const slope = axisSlopeAt(s, x1, x2)
-    if (Math.abs(slope) < 1e-6) break
-    s = clamp(s - error / slope, 0, 1)
-  }
-  let lo = 0
-  let hi = 1
-  for (let i = 0; i < 24; i++) {
-    s = (lo + hi) / 2
-    if (axisAt(s, x1, x2) < x) lo = s
-    else hi = s
-  }
-  return s
-}
 
 /**
  * The part of `bezier` that is still ahead after `elapsed` (a fraction of the easing's duration,

@@ -16,11 +16,12 @@
 | Recipe | Status | Framework surface it builds on |
 |---|---|---|
 | [1. Offline UI, rendered in place](#1-offline-ui-rendered-in-place) | ✅ written | `offlineComponent`, `useIsOffline()` |
-| 2. Auth guards in `beforeLoad` | ⚠︎ stub | isomorphic router hooks (`RENDERING.md §2`) |
-| 3. Offline-first data with an IDB persister | ⚠︎ stub | `storage.store` (`ARCHITECTURE.md §2.2`) |
-| 4. Refetch-on-resume | ⚠︎ stub | `useAppState` (`COORDINATION.md`) |
-| 5. Bearer-token auth + secure storage | ⚠︎ stub | `storage.secure` (`ARCHITECTURE.md §2.3`) |
-| 6. Deep-link → route mapping | ⚠︎ stub | `appUrlOpen` normalisation (`DECISIONS.md §5.0.3`) |
+| [2. One screen, its own browser chrome](#2-one-screen-its-own-browser-chrome) | ✅ written | `chromeTint` route option (`DECISIONS.md` B33) |
+| 3. Auth guards in `beforeLoad` | ⚠︎ stub | isomorphic router hooks (`RENDERING.md §2`) |
+| 4. Offline-first data with an IDB persister | ⚠︎ stub | `storage.store` (`ARCHITECTURE.md §2.2`) |
+| 5. Refetch-on-resume | ⚠︎ stub | `useAppState` (`COORDINATION.md`) |
+| 6. Bearer-token auth + secure storage | ⚠︎ stub | `storage.secure` (`ARCHITECTURE.md §2.3`) |
+| 7. Deep-link → route mapping | ⚠︎ stub | `appUrlOpen` normalisation (`DECISIONS.md §5.0.3`) |
 
 ---
 
@@ -162,7 +163,49 @@ successful visit. Browser-first-visit only.
 
 ---
 
-## 2–6. Stubs
+## 2. One screen, its own browser chrome
+
+A route can say what colour the browser's chrome should be while it is on screen — the toolbar above
+a mobile web page, and the bands above and below an installed app.
+
+```tsx
+export const Route = createFileRoute("/settings")({
+  chromeTint: "#1e0033",
+  component: Settings,
+})
+```
+
+That is the whole recipe. There is no hook to call, no effect to write, and no cleanup: a route that
+declares nothing gets the `themeColor` from `adaptv.config.ts`, so leaving is as automatic as
+arriving.
+
+**Three rules, and each is load-bearing.**
+
+**It must be a literal** — written inline, or held by a top-level `const` in the same file. adaptv
+reads the colour out of your source at build time and puts it in the pre-paint script, so a cold
+launch straight onto `/settings` shows the colour on its *first* frame instead of flashing the theme
+first. A computed value cannot be there in time, so the build refuses it and names the file rather
+than shipping the flash.
+
+**One colour, in both themes.** A route that pins the chrome pins it. If a screen should follow the
+app's light/dark theme, declare nothing.
+
+**No inheritance.** A layout's tint does not reach its children; the fallback is always the app's
+global colours. A tinted section means one line per route in it.
+
+**What you will see where.** Android Chrome tints its toolbar. iOS ≤ 18 tints the status bar. iOS 26+
+ignores the meta tag entirely and takes the colour from the rendered page edge instead — adaptv writes
+both, so you do not choose. An installed PWA and a native build have no toolbar, but the safe-area
+bands are the same paint. Firefox does nothing, and desktop browsers mostly do nothing. Nothing here
+needs a platform check at your call site. → `DECISIONS.md` B17, B33; `/lab/route-tint` in the
+playground.
+
+To animate the chrome instead of pinning it — a sheet dimming the toolbar as it slides — that is
+`useChromeTint()`, a different tool for a different job. → `DECISIONS.md` B32.
+
+---
+
+## 3–7. Stubs
 
 Each of these has a decision recorded elsewhere and wants a worked example before 1.0:
 

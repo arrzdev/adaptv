@@ -1,3 +1,8 @@
+//The build-time route→chrome-tint table. Imported here so the pre-paint script
+//can carry it: a cold launch onto a route that pins the chrome has to paint that
+//colour on the FIRST frame, and by the time this route's component runs the
+//frame that mattered is already on screen. → `src/shell/route-tints.ts`
+import { ROUTE_TINTS } from "virtual:adaptv/route-tints"
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import {
   createRootRoute as createTanStackRootRoute,
@@ -177,6 +182,10 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           themeColorLight,
           themeColorDark,
           defaultThemePreference,
+          routeTints: ROUTE_TINTS,
+          //a subpath deploy shifts every pathname; strip the base before
+          //matching or every route tint silently misses
+          base: import.meta.env.BASE_URL,
         }) +
         (splashScreenComponent ? getLaunchViewportInitScript() : ""),
     })

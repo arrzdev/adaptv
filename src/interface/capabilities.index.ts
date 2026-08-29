@@ -54,3 +54,17 @@ export {
 } from "../capabilities/share"
 export * from "../capabilities/splash"
 export * from "../capabilities/status-bar"
+//NOT `export *`: `setThemeColorBase` is withheld. It declares what the app's theme resolves to,
+//and `useSyncTheme` is its one owner — a consumer calling it would win until the next theme flip
+//and then be silently overwritten. Reading the base is public (`getChromeTintBase`), aiming it is
+//not. See `capabilities.barrel.test.ts`.
+export {
+  type ChromeTintOptions,
+  type ChromeTintTransition,
+  getChromeTint,
+  getChromeTintBase,
+  restoreChromeTint,
+  setChromeTint,
+  subscribeChromeTintBase,
+  transitionChromeTint,
+} from "../capabilities/theme-color"

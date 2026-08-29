@@ -20,6 +20,8 @@ import {
 } from "#adaptv/vite/adaptv-context.ts"
 import { renderAppShell } from "#adaptv/vite/app-shell.ts"
 import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender.ts"
+import { collectRouteTints } from "#adaptv/vite/route-tints.ts"
+import { resolveRoutesDir } from "#adaptv/vite/route-tints-module.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
 
 type ViteManifest = Record<
@@ -80,6 +82,7 @@ function resolveStylesHref(
  * discipline. See `app-shell.ts`.
  */
 export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
+  let base = "/"
   return {
     name: "adaptv:shell-emit",
     apply: "build",
@@ -90,6 +93,11 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
     },
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
+      //The emitted shell is served at whatever base the app deploys under, and
+      //the route-tint patterns are matched against `location.pathname` — so the
+      //base has to be baked into the script here too, not just in the runtime
+      //document (`create-root-route.tsx`, which reads `import.meta.env.BASE_URL`).
+      base = resolved.base
     },
     //`buildApp`, not `closeBundle`, and `order: "post"` — see the note in
     //`adaptv-plugin.ts`. `closeBundle` fires per ENVIRONMENT, which is too early:
@@ -97,13 +105,16 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
     buildApp: {
       order: "post",
       async handler() {
-        await emitShell(context)
+        await emitShell(context, base)
       },
     },
   }
 }
 
-async function emitShell(context: AdaptvContext): Promise<void> {
+async function emitShell(
+  context: AdaptvContext,
+  base: string,
+): Promise<void> {
   const config = requireAppConfig(context)
   const clientDir = requireClientOutDir(context)
   const manifestPath = path.join(clientDir, ".vite", "manifest.json")
@@ -161,6 +172,12 @@ async function emitShell(context: AdaptvContext): Promise<void> {
         themeColorLight: theme.light,
         themeColorDark: theme.dark,
         defaultThemePreference: config.defaultThemePreference ?? "system",
+        //scanned here rather than taken from the virtual module: this plugin
+        //runs in Node, outside the module graph. Same function, same table.
+        routeTints: collectRouteTints(
+          resolveRoutesDir(context.appRoot, config.router.routesDirectory),
+        ),
+        base,
       }),
     stylesHref,
     entryHref: `/${entry.file}`,

@@ -17,6 +17,10 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import { hasNativeKeyboard } from "#adaptv/capabilities/keyboard"
+import {
+  clearDrawerChromeTint,
+  setDrawerChromeTint,
+} from "#adaptv/components/drawer/drawer-chrome-tint"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import {
   DEFAULT_DRAWER_TRANSITION,
@@ -666,11 +670,13 @@ export function DrawerEngine({
 
       //vaul: inline overlay opacity only while dragging; open/close use JS transitions
       if (drivesBackdropOpacity && contentHeight > 0) {
+        const opacity = clamp(1 - gestureY / contentHeight, 0, 1)
         stopDrawerBackdropAnimation(backdrop)
         backdrop.style.transition = "none"
-        backdrop.style.opacity = String(
-          clamp(1 - gestureY / contentHeight, 0, 1),
-        )
+        backdrop.style.opacity = String(opacity)
+        //the toolbar tracks the finger with the dim — a scrim that lightens
+        //while the chrome above it stays dark reads as two separate surfaces
+        setDrawerChromeTint(backdrop, opacity)
       }
     },
     [],
@@ -1362,6 +1368,8 @@ export function DrawerEngine({
           backdrop.style.transition = "none"
           backdrop.style.opacity = "0"
         }
+        //nothing animates on this path, and the chrome must not be left dimmed
+        clearDrawerChromeTint()
         return
       }
 

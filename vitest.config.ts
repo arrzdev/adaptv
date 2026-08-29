@@ -6,6 +6,10 @@ import {
   renderOtaConfigModule,
 } from "./src/vite/ota-config-module"
 import {
+  ROUTE_TINTS_VIRTUAL_ID,
+  renderRouteTintsModule,
+} from "./src/vite/route-tints-module"
+import {
   renderSecureStorageModule,
   SECURE_STORAGE_VIRTUAL_ID,
 } from "./src/vite/secure-storage-module"
@@ -49,6 +53,25 @@ function secureStorageAbsentPlugin(): Plugin {
   }
 }
 
+/**
+ * `virtual:adaptv/route-tints` with an empty table — again the real module source.
+ *
+ * adaptv has no app routes of its own, so "no route declares a tint" is the honest
+ * answer here, and it is the same answer a consumer app that declares none gets.
+ * What the table does when it is NOT empty is covered where it can be covered
+ * properly: `shell/route-tints.test.ts`, `vite/route-tints.test.ts` and
+ * `shell/theme-init-script.test.ts` for the pre-paint script, and the playground's
+ * `e2e/route-tint.spec.ts` for the whole path through a real browser.
+ */
+function routeTintsEmptyPlugin(): Plugin {
+  const resolved = `\0${ROUTE_TINTS_VIRTUAL_ID}`
+  return {
+    name: "test:route-tints-empty",
+    resolveId: (id) => (id === ROUTE_TINTS_VIRTUAL_ID ? resolved : null),
+    load: (id) => (id === resolved ? renderRouteTintsModule([]) : null),
+  }
+}
+
 //happy-dom gives the hook a document to mount into (Testing Library's
 //renderHook); the engine itself only touches the synthetic events it's handed
 export default defineConfig({
@@ -60,6 +83,7 @@ export default defineConfig({
     adaptvPwaRegisterPlugin(),
     otaConfigOffPlugin(),
     secureStorageAbsentPlugin(),
+    routeTintsEmptyPlugin(),
   ],
   resolve: {
     alias: { "#adaptv": srcDir },

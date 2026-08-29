@@ -12,13 +12,16 @@ afterEach(() => {
   document.getElementById("theme-color-class-override")?.remove()
 })
 
-function mount(enabled = true) {
-  return renderHook(() =>
-    useSyncTheme({
-      themeColorLight: LIGHT,
-      themeColorDark: DARK,
-      enabled,
-    }),
+function mount(enabled = true, chromeTint: string | null = null) {
+  return renderHook(
+    (props: { chromeTint: string | null }) =>
+      useSyncTheme({
+        themeColorLight: LIGHT,
+        themeColorDark: DARK,
+        chromeTint: props.chromeTint,
+        enabled,
+      }),
+    { initialProps: { chromeTint } },
   )
 }
 
@@ -92,5 +95,38 @@ describe("useSyncTheme — the html/body paint is the load-bearing mechanism", (
     mount()
     expect(themeColorMeta()).toBeNull()
     expect(document.documentElement.style.backgroundColor).toBe("")
+  })
+})
+
+describe("useSyncTheme — a route's own chromeTint", () => {
+  const ROUTE = "#0b6e4f"
+
+  it("outranks the theme on BOTH outputs", () => {
+    //not one of them: the meta tag is the Android/Chrome and iOS <= 18 path, the
+    //html/body paint is the iOS 26+ one. A route tint that moved only the tag
+    //would do nothing at all on a current iPhone.
+    document.documentElement.classList.add("dark")
+    mount(true, ROUTE)
+    expect(themeColorMeta()?.content).toBe(ROUTE)
+    expect(document.documentElement.style.backgroundColor).toBe(ROUTE)
+    expect(document.body.style.backgroundColor).toBe(ROUTE)
+  })
+
+  it("does NOT move when the theme flips — one colour, both themes", () => {
+    document.documentElement.classList.add("light")
+    mount(true, ROUTE)
+    document.documentElement.classList.remove("light")
+    document.documentElement.classList.add("dark")
+    expect(themeColorMeta()?.content).toBe(ROUTE)
+  })
+
+  it("hands the chrome back to the THEME when the route stops declaring one", () => {
+    //leaving a tinted route falls back to the app's global colours, never to
+    //whatever the layout above it wanted
+    document.documentElement.classList.add("dark")
+    const view = mount(true, ROUTE)
+    view.rerender({ chromeTint: null })
+    expect(themeColorMeta()?.content).toBe(DARK)
+    expect(document.documentElement.style.backgroundColor).toBe(DARK)
   })
 })
