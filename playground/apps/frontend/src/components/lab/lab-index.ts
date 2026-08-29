@@ -265,6 +265,13 @@ const CAPABILITIES = [
     isNew: true,
   },
   {
+    to: "/lab/route-tint",
+    title: "Route tint",
+    summary:
+      "a route pinning the chrome to its own colour, before the app boots",
+    isNew: true,
+  },
+  {
     to: "/lab/native-theme",
     title: "Native theme",
     summary: "theme mirrored into native storage for the OS splash",

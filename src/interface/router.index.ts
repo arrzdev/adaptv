@@ -57,6 +57,18 @@ export {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router"
+//The extension point every route option that is not TanStack's own is declared
+//THROUGH — it is how `component` gets onto a route in the first place. adaptv
+//adds `chromeTint` to it (`interface/route-globals.d.ts`), and an app can add its
+//own; both augment it ON THIS MODULE, so it has to be re-exported here or the
+//augmentation has nothing to attach to. Same mechanism as the generated route
+//tree's `FileRoutesByPath` above.
+//
+//Reached through `router-core` rather than `react-router` because that is the
+//package that DECLARES it — react-router only augments it. adaptv depends on
+//router-core at the exact version react-router resolves, so there is one
+//interface, not two.
+export type { UpdatableRouteOptionsExtensions } from "@tanstack/router-core"
 //The virtual-route DSL, with adaptv's opinionated `rootRoute` (the app declares
 //children only; adaptv wires its generated root in).
 export {
