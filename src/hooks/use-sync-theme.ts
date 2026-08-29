@@ -1,6 +1,6 @@
+import { setThemeColorBase } from "#adaptv/capabilities/theme-color"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
-
-const THEME_COLOR_CLASS_OVERRIDE_ID = "theme-color-class-override"
+import { THEME_COLOR_META_ID } from "#adaptv/shell/theme-init-script"
 
 export type UseSyncThemeOptions = {
   themeColorLight: string
@@ -62,23 +62,28 @@ export function useSyncTheme({
       const isLight = root.classList.contains("light")
 
       if (!enabled || (!isDark && !isLight)) {
-        document.getElementById(THEME_COLOR_CLASS_OVERRIDE_ID)?.remove()
+        setThemeColorBase(null)
+        document.getElementById(THEME_COLOR_META_ID)?.remove()
         clearShellBackground()
         return
       }
 
       let el = document.getElementById(
-        THEME_COLOR_CLASS_OVERRIDE_ID,
+        THEME_COLOR_META_ID,
       ) as HTMLMetaElement | null
       if (!el) {
         el = document.createElement("meta")
-        el.id = THEME_COLOR_CLASS_OVERRIDE_ID
+        el.id = THEME_COLOR_META_ID
         el.name = "theme-color"
         document.head.appendChild(el)
       }
 
-      el.content = resolveShellColor(isDark)
       el.removeAttribute("media")
+      //NOT `el.content = …`: the tag can be on loan to a transition
+      //(`capabilities/theme-color.ts`), and this is a theme change, not a
+      //reason to yank it back. The base updates either way, so whatever holds
+      //the tint restores into the theme that is current when it lets go.
+      setThemeColorBase(resolveShellColor(isDark))
       paintShellBackground(isDark)
     }
 
@@ -87,7 +92,8 @@ export function useSyncTheme({
     rootMo.observe(root, { attributes: true, attributeFilter: ["class"] })
     return () => {
       rootMo.disconnect()
-      document.getElementById(THEME_COLOR_CLASS_OVERRIDE_ID)?.remove()
+      setThemeColorBase(null)
+      document.getElementById(THEME_COLOR_META_ID)?.remove()
       clearShellBackground()
     }
   }, [enabled, themeColorDark, themeColorLight])
