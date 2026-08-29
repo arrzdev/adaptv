@@ -258,6 +258,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/chrome-tint",
+    title: "Chrome tint",
+    summary:
+      "the browser toolbar animated along a curve · browser tabs only",
+    isNew: true,
+  },
+  {
     to: "/lab/native-theme",
     title: "Native theme",
     summary: "theme mirrored into native storage for the OS splash",

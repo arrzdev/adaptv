@@ -26,12 +26,28 @@ const BARREL = resolve(
  * hook's `supported` and the call's own `"unsupported"` outcome already answer.
  * Adding to this set is a deliberate act; arriving here by accident is the bug.
  */
-const WITHHELD = new Set([
+const WITHHELD_PREDICATES = new Set([
   "isShareSupported",
   "isClipboardWriteSupported",
   "isClipboardReadSupported",
   "isKeepAwakeSupported",
   "isOrientationLockSupported",
+])
+
+/**
+ * The second reason to withhold, and a different one: not "something else already answers this"
+ * but "this has exactly one owner inside the framework". A consumer calling one of these is not
+ * asking a redundant question — it is fighting the module that owns the state, and winning only
+ * until that module next runs. Each name is paired with the file that owns it, and the last test
+ * here checks that the ownership is real rather than asserted.
+ */
+const WITHHELD_INTERNAL: Record<string, string> = {
+  setThemeColorBase: "src/hooks/use-sync-theme.ts",
+}
+
+const WITHHELD = new Set([
+  ...WITHHELD_PREDICATES,
+  ...Object.keys(WITHHELD_INTERNAL),
 ])
 
 /** Not capability modules: caches and the test files beside them. */
@@ -99,7 +115,7 @@ describe("capabilities barrel", () => {
       isKeepAwakeSupported: ["use-keep-awake", "supported"],
       isOrientationLockSupported: ["use-orientation", "lockSupported"],
     }
-    expect(new Set(Object.keys(answers))).toEqual(WITHHELD)
+    expect(new Set(Object.keys(answers))).toEqual(WITHHELD_PREDICATES)
 
     for (const [predicate, [hook, field]] of Object.entries(answers)) {
       const src = readFileSync(
@@ -111,4 +127,44 @@ describe("capabilities barrel", () => {
       )
     }
   })
+
+  /*
+   * The justification for the second category, checked rather than trusted. "One owner" is the
+   * whole reason these are held back — if a second caller appears inside the framework, the claim
+   * is no longer true and the name needs a different answer than a named list.
+   */
+  it("keeps each internal-only capability down to its one owner", () => {
+    for (const [name, owner] of Object.entries(WITHHELD_INTERNAL)) {
+      const callers = callSitesOf(name).filter(
+        (file) => !file.startsWith("src/capabilities/"),
+      )
+      expect(callers, `${name} must be called only by ${owner}`).toEqual([
+        owner,
+      ])
+    }
+  })
 })
+
+/** Every file under `src/` that names `symbol`, excluding tests and the barrel itself. */
+function callSitesOf(symbol: string): string[] {
+  const pattern = new RegExp(`\\b${symbol}\\b`)
+  const hits: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue
+      if (entry.name.endsWith(".test.ts")) continue
+      if (entry.name.endsWith(".test.tsx")) continue
+      if (full === BARREL) continue
+      if (pattern.test(readFileSync(full, "utf8"))) {
+        hits.push(full.slice(resolve(process.cwd()).length + 1))
+      }
+    }
+  }
+  walk(resolve(process.cwd(), "src"))
+  return hits.sort()
+}

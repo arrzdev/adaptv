@@ -774,6 +774,42 @@ Corroborated three ways: caniuse commit *"Safari 26 doesn't use theme-color anym
 
 **So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** adaptv's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism adaptv *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
 
+### B32 — the chrome tint leads its curve by **half a frame**, and that number was measured
+
+`transitionChromeTint` (and so the drawer's dim) does not write the tint for *now*. It samples the
+curve half a frame ahead. Recording the reason, because the constant looks arbitrary and the obvious
+"fix" — rounding it to a whole frame, or deleting it — makes the thing it fixes come back.
+
+**The problem.** Page pixels are composited by the *renderer*. The browser toolbar is painted by the
+*browser process*, which only learns about the tag an IPC hop later. So a `theme-color` written during
+frame N shows up part-way through the next one, while a compositor-driven `opacity` on the same curve
+is already correct in frame N. Both were on one curve, started in the same task, within ~2–3 ms of each
+other at the DOM — and the toolbar still visibly trailed the scrim. The user's report was exactly right:
+*"chega-se a notar que o backdrop não é uma cena só"*. It read as a second thing chasing the backdrop.
+
+**The measurement.** An iOS 18 simulator, 60fps `simctl io recordVideo`, with the toolbar and the scrim
+sampled from the **same video frames** — the only way to compare two surfaces that no single API can
+read together. Offsets taken in the time domain over the steep part of the open, three runs each:
+
+| lead | median offset (+ = toolbar trails the scrim) |
+|---|---|
+| none | +13.9 +16.0 +11.0 ms |
+| **half a frame** | **+1.3 −5.0 −0.1 ms** |
+| a full frame | −10.0 −2.8 −13.0 ms |
+
+Half, not one, because the toolbar's paint lands *inside* the frame after the write rather than at the
+end of it. A full frame overshoots into visibly running ahead. The lead is a fraction of the last frame's
+**measured** interval, so a 120Hz screen leads by its own 4.2 ms — capped at two 60Hz frames, because a
+longer gap is a stall (a dropped frame, a backgrounded tab), not a refresh rate.
+
+**What guards it.** `playground/e2e/chrome-tint.spec.ts` asserts the tag stays locked to the backdrop's
+own opacity frame by frame, with a deliberately **asymmetric** bound: leading is the fix, trailing is the
+bug. It fails at −0.069 with the lead removed. It is chromium-only, and the reason is itself measured:
+on the first frame that can observe the overlay's animation, Chromium reports `currentTime` 0.0 and
+WebKit reports 17.0, so WebKit hands the scrim a frame of head start that exists only at the DOM. Safari
+is covered by the device capture above, which is the surface that actually matters — see B17 for why this
+whole feature is an Android/Chrome + iOS ≤ 18 progressive enhancement in the first place.
+
 ### B30 — adaptv installs **no** runtime error boundary; runtime errors are the app's
 
 A framework-level catch-all for render errors was built, tested, and then deleted. Recording why, because
