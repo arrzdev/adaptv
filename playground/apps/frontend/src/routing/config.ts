@@ -61,6 +61,8 @@ export const routes = rootRoute([
     route("/lab/haptic-tick", "pages/lab/haptic-tick.page.tsx"),
     route("/lab/haptics", "pages/lab/haptics.page.tsx"),
     route("/lab/keyboard", "pages/lab/keyboard.page.tsx"),
+    route("/lab/chrome-tint", "pages/lab/chrome-tint.page.tsx"),
+    route("/lab/route-tint", "pages/lab/route-tint.page.tsx"),
     route("/lab/native-theme", "pages/lab/native-theme.page.tsx"),
     route("/lab/network", "pages/lab/network.page.tsx"),
     route("/lab/ota", "pages/lab/ota.page.tsx"),
