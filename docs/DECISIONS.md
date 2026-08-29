@@ -772,7 +772,19 @@ One structural note in adaptv's favour: WKWebView bridges the web a11y tree auto
 
 Corroborated three ways: caniuse commit *"Safari 26 doesn't use theme-color anymore (#7366)"* (2025-08-30); [WebKit 301756](https://bugs.webkit.org/show_bug.cgi?id=301756), where the reporter notes Safari *"now automatically derives the top bar tint from the html or body background color after dropping support for `theme-color`"*; and an Apple WebKit engineer confirming the new model in that thread — a solid tint extension is *"only needed in cases where there's a viewport-constrained (fixed or sticky) element near one of the edges of the viewport."*
 
-**So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.** adaptv's critical CSS already sets `html,body{background-color:…}` per theme, so **the behaviour is probably already correct by accident** — but `useSyncTheme` should stop being the mechanism adaptv *relies* on for iOS, and the critical-CSS background becomes load-bearing rather than merely anti-flash. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
+**So on iOS 26+ the status-bar tint comes from your actual rendered `html`/`body` background near the top edge, not from a meta tag.**
+
+**Measured, not inferred.** The paragraph above used to end "probably already correct by accident". It was verified on an iOS 26.1 simulator with a probe page painting three *different* colours — one on `html`, one on `body`, one on the app's own content — and the meta tag set to a fourth that appeared nowhere else:
+
+| Surface | iOS 18 | iOS 26.1 |
+|---|---|---|
+| meta `theme-color` | drives the top bar | **inert — the colour never appears anywhere on screen** |
+| `html`/`body` background | anti-flash only | **drives both bands: the status bar AND the bottom home-indicator area** |
+| app content painted to the edge | covered by the solid bar | **wins — the bars take the content's own edge pixels** |
+
+Two consequences the citation alone did not give. First, it is **both** bands, not just the status bar — so the same paint answers the bottom of the screen too. Second, because content that reaches the edge wins over the shell, an app whose views cover the whole viewport controls the bars *with its own pixels*; the `html`/`body` paint is what shows in the safe-area bands the content leaves. iOS 18 is the exact opposite: the solid bar is painted over the content and only the tag moves it.
+
+So the background paint is **load-bearing**, not merely anti-flash, and `useSyncTheme` writes both outputs deliberately — neither covers the whole matrix. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
 
 ### B32 — the chrome tint leads its curve by **half a frame**, and that number was measured
 
@@ -1937,3 +1949,37 @@ WebKit ships with the OS.
 **adaptv itself uses zero `ring-*` utilities** — every hit is in the consumer app's UI kit. This is not
 an adaptv component bug; it is the framework refusing to ship onto a WebView where a mainstream Tailwind
 family is silently dead.
+
+### B33 — a route's `chromeTint` is read as **source**, at build time, and never off the route
+
+A route can declare the colour the browser's chrome should take:
+
+```tsx
+export const Route = createFileRoute("/settings")({
+  chromeTint: "#1e0033",
+  component: Settings,
+})
+```
+
+The obvious implementation reads the option off the matched route and writes the colour. It is wrong, and the reason is the only thing this feature is for: **a cold launch straight onto that route must not show the theme's colour for a frame first.** By the time a router exists to be asked, that frame is already on screen. So adaptv scans the route files at build time (`src/vite/route-tints.ts`), derives each route's URL path from its id, and inlines a `[pattern, colour]` table into the pre-paint head script. Verified by an e2e test that stalls every script request and reads the DOM while the app provably cannot have run.
+
+Four consequences, each of which looks like an arbitrary restriction until you connect it to the line above.
+
+**The value must be a literal.** A computed tint would typecheck, run, and do nothing on the one frame it exists for — a silent regression of exactly the flash the option removes. The build refuses it and names the file, the same doctrine `extractThunkSpecifier` already applies to config thunks. A top-level `const` in the same file is accepted, because naming the colour is the first thing anyone does and a binding the file declares is as static as the literal it holds; an imported one is not, and says so.
+
+**The runtime reads the same table, not the option.** `useRouteTint` looks the leaf match's route id up in the build-time table. Reading the live option instead would give two sources that can disagree, and the disagreement would appear as the flash. One table, one answer.
+
+**One colour, in both themes.** Not a `{ light, dark }` pair. A route that pins the chrome wants that chrome; a route that should follow the theme declares nothing and gets `themeColor` from `adaptv.config.ts`.
+
+**No inheritance.** A route that declares nothing falls back to the app's **global** colours, never to whatever a layout above it wanted. A tinted section is one tint per route in it, which is more typing and exactly one rule to remember.
+
+It drives **both** outputs — the meta tag and the `html`/`body` paint — for the reason in B17: neither covers the whole matrix, and a route tint that moved only the tag would do nothing at all on a current iPhone. Confirmed on an **iOS 26.1 simulator**, screenshots sampled at the same pixel column:
+
+| route | top band | bottom band |
+|---|---|---|
+| `/lab/route-tint`, `chromeTint: "#0b6e4f"` | `#0b6e4f` | `#0b6d4e` |
+| `/lab`, no tint | `#f5e6ff` | `#f3e4fc` (the app's light theme colour) |
+
+Both bands, and the fallback lands on the theme rather than on the layout above.
+
+**Not in scope, and deliberately.** The *animated* tint (`transitionChromeTint`, B32) still writes only the meta tag, so a drawer that dims the chrome does nothing on iOS 26+. Extending it to the shell background is a separate change with its own cost — a per-frame `style.backgroundColor` on `html` is a full-page repaint, which is a very different proposition from a meta write.

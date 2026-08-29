@@ -34,6 +34,10 @@ import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
 import { adaptvOtaConfigPlugin } from "#adaptv/vite/ota-config-module.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
+import {
+  adaptvRouteTintsPlugin,
+  resolveRoutesDir,
+} from "#adaptv/vite/route-tints-module.ts"
 import { adaptvOpacityCheckPlugin } from "#adaptv/vite/route-tree-opacity.ts"
 import {
   adaptvRouteAutoImportPlugin,
@@ -176,6 +180,14 @@ export async function adaptv(
   //Miss one and the default quietly reappears. → src/vite/adaptv-dir.ts
   process.env.TSR_TMP_DIR = resolveGeneratedTmpDir(appRoot)
 
+  //One resolution of the routes directory, shared by the root-route path below
+  //and the chrome-tint scan — they must look at the same folder or the scan
+  //silently finds nothing. → `route-tints-module.ts`
+  const routesDir = resolveRoutesDir(
+    appRoot,
+    context.loaded.config.router.routesDirectory,
+  )
+
   //Tell the virtual-route DSL where the generated root lives. It sits in
   //`.adaptv/`, but the generator resolves virtual route files against
   //`routesDirectory`, so the DSL needs a path relative to THAT — which only this
@@ -192,11 +204,7 @@ export async function adaptv(
   //guessed from a package name.
   process.env.ADAPTV_ROOT_ROUTE_FILE = path
     .relative(
-      path.resolve(
-        appRoot,
-        "src",
-        context.loaded.config.router.routesDirectory ?? "./routing",
-      ),
+      routesDir,
       fileURLToPath(new URL("../routes/root-route.tsx", import.meta.url)),
     )
     .split(path.sep)
@@ -230,6 +238,7 @@ export async function adaptv(
     ),
     adaptvOtaConfigPlugin(context),
     adaptvSecureStoragePlugin(context),
+    adaptvRouteTintsPlugin(routesDir),
     //Also `enforce: "pre"`, and NOT as a precaution: Vite's own asset plugin
     //claims any unknown query on a known image extension, so at normal
     //enforcement `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL
