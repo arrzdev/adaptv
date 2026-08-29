@@ -1,39 +1,21 @@
 import { describe, expect, it } from "vitest"
 import { DRAWER_TRANSITIONS } from "#adaptv/components/drawer/drawer-constants"
-import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
-import {
-  easingParamAtX,
-  splitEasingAt,
-} from "#adaptv/components/drawer/drawer-easing"
+import { splitEasingAt } from "#adaptv/components/drawer/drawer-easing"
+import type { EasingBezier } from "#adaptv/utils/easing"
+import { easingValueAtX } from "#adaptv/utils/easing"
 
 const OPEN: EasingBezier = [...DRAWER_TRANSITIONS.EASE]
 //an asymmetric curve that does NOT end flat, so a split can't pass by symmetry alone
 const CLOSE: EasingBezier = [0.6, 0.3, 0.15, 0.5]
 
 /** The easing's own output: eased progress at `x` of its duration. */
-function ease([x1, y1, x2, y2]: EasingBezier, x: number) {
-  const s = easingParamAtX(x, x1, x2)
-  const t = 1 - s
-  return 3 * t * t * s * y1 + 3 * t * s * s * y2 + s * s * s
+function ease(bezier: EasingBezier, x: number) {
+  return easingValueAtX(x, bezier)
 }
 
 function slope(bezier: EasingBezier, x: number, h = 1e-4) {
   return (ease(bezier, x + h) - ease(bezier, x - h)) / (2 * h)
 }
-
-describe("easingParamAtX", () => {
-  it("inverts the x axis across the whole domain", () => {
-    for (const bezier of [OPEN, CLOSE]) {
-      const [x1, , x2] = bezier
-      for (let x = 0; x <= 1; x += 0.05) {
-        const s = easingParamAtX(x, x1, x2)
-        const t = 1 - s
-        const back = 3 * t * t * s * x1 + 3 * t * s * s * x2 + s * s * s
-        expect(back).toBeCloseTo(x, 4)
-      }
-    }
-  })
-})
 
 describe("splitEasingAt", () => {
   it("hands back the curve itself when nothing has elapsed", () => {

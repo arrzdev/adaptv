@@ -1,10 +1,22 @@
+import { setThemeColorBase } from "#adaptv/capabilities/theme-color"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
-
-const THEME_COLOR_CLASS_OVERRIDE_ID = "theme-color-class-override"
+import { THEME_COLOR_META_ID } from "#adaptv/shell/theme-init-script"
 
 export type UseSyncThemeOptions = {
   themeColorLight: string
   themeColorDark: string
+  /**
+   * The current route's declared `chromeTint`, or `null` to follow the theme.
+   *
+   * **One colour, and it wins in both themes.** A route that pins the chrome
+   * wants that chrome; a route that should follow the theme declares nothing and
+   * gets `themeColorLight`/`themeColorDark`. There is no inheritance from a
+   * parent route either — the fallback is always the app's global colours.
+   *
+   * The value comes from the build-time table, not from the route object, so it
+   * is the same value the pre-paint script already painted. → `shell/route-tints.ts`
+   */
+  chromeTint?: string | null
   /** When false, remove the theme-color override (e.g. no resolved light/dark class). */
   enabled?: boolean
 }
@@ -33,6 +45,7 @@ export type UseSyncThemeOptions = {
 export function useSyncTheme({
   themeColorLight,
   themeColorDark,
+  chromeTint = null,
   enabled = true,
 }: UseSyncThemeOptions) {
   useIsomorphicLayoutEffect(() => {
@@ -44,7 +57,9 @@ export function useSyncTheme({
     }
 
     function resolveShellColor(isDark: boolean) {
-      return isDark ? themeColorDark : themeColorLight
+      //the route's tint outranks the theme, for BOTH outputs — see the note on
+      //`chromeTint` above, and on why both outputs are needed below
+      return chromeTint ?? (isDark ? themeColorDark : themeColorLight)
     }
 
     function paintShellBackground(isDark: boolean) {
@@ -62,23 +77,28 @@ export function useSyncTheme({
       const isLight = root.classList.contains("light")
 
       if (!enabled || (!isDark && !isLight)) {
-        document.getElementById(THEME_COLOR_CLASS_OVERRIDE_ID)?.remove()
+        setThemeColorBase(null)
+        document.getElementById(THEME_COLOR_META_ID)?.remove()
         clearShellBackground()
         return
       }
 
       let el = document.getElementById(
-        THEME_COLOR_CLASS_OVERRIDE_ID,
+        THEME_COLOR_META_ID,
       ) as HTMLMetaElement | null
       if (!el) {
         el = document.createElement("meta")
-        el.id = THEME_COLOR_CLASS_OVERRIDE_ID
+        el.id = THEME_COLOR_META_ID
         el.name = "theme-color"
         document.head.appendChild(el)
       }
 
-      el.content = resolveShellColor(isDark)
       el.removeAttribute("media")
+      //NOT `el.content = …`: the tag can be on loan to a transition
+      //(`capabilities/theme-color.ts`), and this is a theme change, not a
+      //reason to yank it back. The base updates either way, so whatever holds
+      //the tint restores into the theme that is current when it lets go.
+      setThemeColorBase(resolveShellColor(isDark))
       paintShellBackground(isDark)
     }
 
@@ -87,8 +107,9 @@ export function useSyncTheme({
     rootMo.observe(root, { attributes: true, attributeFilter: ["class"] })
     return () => {
       rootMo.disconnect()
-      document.getElementById(THEME_COLOR_CLASS_OVERRIDE_ID)?.remove()
+      setThemeColorBase(null)
+      document.getElementById(THEME_COLOR_META_ID)?.remove()
       clearShellBackground()
     }
-  }, [enabled, themeColorDark, themeColorLight])
+  }, [chromeTint, enabled, themeColorDark, themeColorLight])
 }

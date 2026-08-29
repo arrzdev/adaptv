@@ -1,11 +1,12 @@
 import type { MotionValue, Transition } from "motion/react"
 import { animate } from "motion/react"
+import { transitionDrawerChromeTint } from "#adaptv/components/drawer/drawer-chrome-tint"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import { DEFAULT_DRAWER_TRANSITION } from "#adaptv/components/drawer/drawer-constants"
-import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
 import { splitEasingAt } from "#adaptv/components/drawer/drawer-easing"
 import { beginCaretHold } from "#adaptv/hooks/use-caret-repaint"
 import { clamp } from "#adaptv/utils/clamp"
+import type { EasingBezier } from "#adaptv/utils/easing"
 
 const TRANSITION_END_FALLBACK_MS = 32
 
@@ -483,6 +484,14 @@ export function transitionDrawerBackdropOpacity(
   const element = backdrop
   const clampedTarget = clamp(target, 0, 1)
   const current = readDrawerBackdropOpacity(element)
+
+  //The browser chrome above the page is the one part of the screen the scrim cannot reach, so it
+  //is dimmed from here — the single seam every open, close, snap and backdrop tap already passes
+  //through. Arming it beside the opacity rather than at those four call sites is what keeps the
+  //toolbar from lagging, overshooting or forgetting one path entirely. No-op outside a browser
+  //tab; the early returns below are deliberately AFTER it, since a dim that lands instantly still
+  //has to take the chrome with it.
+  transitionDrawerChromeTint(element, clampedTarget, config, duration)
 
   if (!options.skipReflow) {
     stopDrawerBackdropAnimation(element)
