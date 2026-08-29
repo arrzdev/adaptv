@@ -61,7 +61,7 @@ const failureTail = (buffer) => errorTail(buffer, TAIL_LINES).join("\n")
  * rejects — returns `{ stdout, stderr, code }` so the caller decides what a non-zero
  * exit means.
  */
-export function capture(command, args, { cwd, env } = {}) {
+export function capture(command, args, { cwd, env, timeoutMs } = {}) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd,
@@ -70,15 +70,28 @@ export function capture(command, args, { cwd, env } = {}) {
     })
     let stdout = ""
     let stderr = ""
+    let timedOut = false
+    //SIGKILL, not SIGTERM: the case this exists for is a child wedged inside a synchronous
+    //XPC call to a platform daemon that never replies, and a polite signal it is not in a
+    //position to handle leaves the CLI waiting exactly as long as it was already waiting.
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true
+          child.kill("SIGKILL")
+        }, timeoutMs)
+      : null
+    timer?.unref?.()
+    const done = (result) => {
+      if (timer) clearTimeout(timer)
+      resolve({ ...result, timedOut })
+    }
     child.stdout.on("data", (b) => {
       stdout += b
     })
     child.stderr.on("data", (b) => {
       stderr += b
     })
-    child.on("error", () => resolve({ stdout, stderr, code: 1 }))
-    child.on("close", (code) =>
-      resolve({ stdout, stderr, code: code ?? 1 }),
-    )
+    child.on("error", () => done({ stdout, stderr, code: 1 }))
+    child.on("close", (code) => done({ stdout, stderr, code: code ?? 1 }))
   })
 }
