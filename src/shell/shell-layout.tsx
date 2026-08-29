@@ -33,6 +33,7 @@ import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnif
 import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
 import { readPreference, useTheme } from "#adaptv/hooks/use-theme"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
+import { useRouteTint } from "#adaptv/shell/use-route-tint"
 import { initKv } from "#adaptv/storage/kv"
 import { cn } from "#adaptv/utils/cn"
 import { applyPlatformStamp } from "#adaptv/utils/platform"
@@ -204,7 +205,12 @@ export function RoutingShell({
   }, [ui])
 
   const [resolvedAppearance] = useTheme()
-  useSyncTheme({ themeColorLight, themeColorDark })
+  //A route may pin the browser chrome to a colour of its own. The pre-paint
+  //script already painted it for the launch URL; this keeps it right across
+  //navigations — and falls back to the theme colours, never to a parent route's
+  //tint. → `shell/route-tints.ts`
+  const chromeTint = useRouteTint()
+  useSyncTheme({ themeColorLight, themeColorDark, chromeTint })
   //native only — keep the OS system bars' icons in sync with the theme + go
   //edge-to-edge, and route the Android hardware back button through the router. No-ops
   //on web. The bar background is CSS-driven (html/body colour under the inset), so this

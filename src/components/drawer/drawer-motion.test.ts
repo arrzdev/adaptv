@@ -3,12 +3,12 @@ import {
   DEFAULT_DRAWER_TRANSITION,
   DRAWER_TRANSITIONS,
 } from "#adaptv/components/drawer/drawer-constants"
-import type { EasingBezier } from "#adaptv/components/drawer/drawer-easing"
 import type { PanelFlight } from "#adaptv/components/drawer/drawer-motion"
 import {
   resumeDrawerTransition,
   tweenDrawerPanelTransform,
 } from "#adaptv/components/drawer/drawer-motion"
+import type { EasingBezier } from "#adaptv/utils/easing"
 
 const OPEN: EasingBezier = [...DRAWER_TRANSITIONS.EASE]
 
