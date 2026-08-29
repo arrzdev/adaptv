@@ -806,6 +806,49 @@ prefixes is still one fault, and three copies of a 200-column line under a `✖`
 > locator (R13) and put the importer's package on the dim line — see R8b for why that half was
 > wrong, and why the importer is now dropped entirely.
 
+**R59 — Every wait the dev can notice has a row, and every wait has a ceiling.** A stretch of the
+run with no live line reads as "nothing else is going to happen", and an unbounded wait on a
+platform service turns that into a hang the dev can only escape with ctrl-c. Resolving the device
+was the last such stretch: the web row settled, and the CLI then sat inside the device listing —
+prefetch included — with nothing on screen until the picker appeared.
+> Reported as `adaptv dev ios` producing this and then stopping, with no simulator ever opening:
+> ```
+>   adaptv · dev ios
+>   ✓ web  · 4.0s
+>     local    http://localhost:41730
+>     network  http://192.168.1.7:41730
+> ```
+> The owner read it as web being the only service that ran. The cause was outside adaptv — macOS's
+> `simdiskimaged` had wedged, so `simctl` never returned — but "a platform daemon stopped
+> answering" is a state a dev machine reaches, and the CLI owns what it says while it happens. The
+> listing now runs under a transient row (`looking for devices`) and `capture()` takes a
+> `timeoutMs`, so a service that has stopped answering fails the platform with a reason and the
+> command that fixes it instead of waiting forever. The row is DEFERRED by 400ms: a listing is
+> normally 176-279ms, and mounting a region for that long is a blip, not information.
+
+**R60 — A picker row must carry whatever tells it apart from its neighbours.** Options are
+disambiguated by data, never by position. `select` has always accepted a `hint`, and `devices.mjs`
+has always passed one — the picker simply never drew it, which stayed invisible while exactly one
+runtime was installed.
+> With iOS 18.0 and 26.1 both installed, the list was pairs of identical rows:
+> ```
+>       iPhone 16 Pro (simulator)
+>     › iPhone 16 Pro (simulator)
+>       iPhone 17 Pro (simulator)
+> ```
+> The hint is dim, follows the label behind a `·` (R25), and stays dim on the highlighted row —
+> it is metadata about the device, not part of its name. A device with nothing to disambiguate it
+> gets no hint rather than a filler one.
+>
+> **And both platforms must state the same KIND of fact.** Upstream they do not — the field is
+> spelled `iOS 26.1` on one side and `API 34` on the other, a version beside an SDK level, which
+> is not what the dev chose the device by. `API 34` is printed as `Android 14`. Two things were
+> only found by running it: the iOS string already carries its platform, so decorating it printed
+> `· iOS iOS 26.1`; and levels now arrive with a minor part (`API 36.1`, and a real emulator here
+> reporting `API 37.1`), so the MAJOR names the release. A level with no entry keeps its own
+> spelling — an unrecognised one still tells two rows apart, and inventing a version number for a
+> release adaptv has never seen would be worse than saying less.
+
 **R17 — Never offer a key that cannot act.** A hint is a promise. `r`/`b` are NATIVE actions
 (relaunch the app on the device, reinstall the binary); on `dev web` their handlers return
 immediately, so listing them made a working CLI look frozen — the dev presses the key the CLI

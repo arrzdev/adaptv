@@ -247,6 +247,38 @@ describe("the device picker", () => {
     expect(left.trim()).toBe("")
   })
 
+  it("draws the hint, which is all that separates two identical device names", async () => {
+    //R60. With two iOS runtimes installed the list is pairs of exact duplicates — the same
+    //`iPhone 16 Pro (simulator)` on 18.0 and on 26.1 — so choosing was a coin toss. `select`
+    //always accepted a `hint` and `devices.mjs` always passed one; the picker never drew it.
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("Choose a ios device", [
+        {
+          value: "sim-18",
+          label: "iPhone 16 Pro (simulator)",
+          hint: "iOS 18.0",
+        },
+        {
+          value: "sim-26",
+          label: "iPhone 16 Pro (simulator)",
+          hint: "iOS 26.1",
+        },
+        { value: "phone", label: "Andre's iPhone" },
+      ])
+      await new Promise((r) => setTimeout(r, 120))
+      //the frame WHILE the question is up — after the answer it is erased on purpose
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      return { asked, chosen: await answer }
+    })
+    expect(out.chosen).toBe("sim-18")
+    expect(out.asked).toContain("iOS 18.0")
+    expect(out.asked).toContain("iOS 26.1")
+    //a device with nothing to disambiguate it gets no hint, not a filler one
+    expect(out.asked).toContain("Andre's iPhone")
+    expect(out.asked).not.toMatch(/Andre's iPhone\s+·/)
+  })
+
   it("returns null when the picker is cancelled, and still erases", async () => {
     const out = await withFakeStdout(async (f, stdin) => {
       const answer = inkSelect("Choose a ios device", [

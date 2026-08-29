@@ -216,6 +216,10 @@ function Picker({ bus, message, options, onDone }) {
           i === index ? { bold: true } : { ...ROLE.quiet.text },
           o.label,
         ),
+        //Dim, and after the label, because it is metadata about the row rather than part of
+        //its name (R25) — and it is the ONLY thing separating two identically-named devices
+        //on different runtimes, so it stays dim on the highlighted row too.
+        o.hint ? h(Text, { ...ROLE.quiet.text }, ` · ${o.hint}`) : null,
       ),
     ),
     h(Text, { ...ROLE.quiet.text }, "  ↑↓ move · ↵ select · esc cancel"),
