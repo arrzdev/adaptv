@@ -802,13 +802,33 @@ end of it. A full frame overshoots into visibly running ahead. The lead is a fra
 **measured** interval, so a 120Hz screen leads by its own 4.2 ms — capped at two 60Hz frames, because a
 longer gap is a stall (a dropped frame, a backgrounded tab), not a refresh rate.
 
-**What guards it.** `playground/e2e/chrome-tint.spec.ts` asserts the tag stays locked to the backdrop's
-own opacity frame by frame, with a deliberately **asymmetric** bound: leading is the fix, trailing is the
-bug. It fails at −0.069 with the lead removed. It is chromium-only, and the reason is itself measured:
-on the first frame that can observe the overlay's animation, Chromium reports `currentTime` 0.0 and
-WebKit reports 17.0, so WebKit hands the scrim a frame of head start that exists only at the DOM. Safari
-is covered by the device capture above, which is the surface that actually matters — see B17 for why this
-whole feature is an Android/Chrome + iOS ≤ 18 progressive enhancement in the first place.
+**What guards it, and what does not.** `playground/e2e/chrome-tint.spec.ts` asserts the tag stays locked
+to the backdrop's own **curve**, frame by frame. It does **not** measure the half-frame lead, and an
+earlier version of it that claimed to was wrong — it failed about one run in three, and instrumenting the
+cadence ruled out the obvious culprit: 8.3 ms median frame, 8.5 ms p90, zero long frames on the failing
+runs too. The confound is **start alignment**. The scrim's clock begins at a style flush and the tween's
+begins when its JS runs; those land one or two frames apart, differently each time, which shifts the whole
+offset series by a constant far larger than the 4 ms being looked for. Taking the lead back out and
+comparing distributions settles it — medians of five opens:
+
+| build | medians across runs |
+|---|---|
+| no lead | −0.047 −0.029 −0.015 −0.012 |
+| lead | −0.014 −0.009 −0.005 −0.002 −0.002 −0.001 +0.001 +0.002 +0.003 |
+
+They overlap, so **no threshold separates them** and one placed between two lucky runs would look like a
+regression test while catching nothing. The lead is verified by the device capture above, which is the
+surface that actually matters.
+
+What the DOM *can* hold is the **shape**: a constant start offset shifts every sample equally, so it
+cannot change how much the offsets vary across the moving window — and that variation is exactly the
+difference between a tint on the scrim's curve and a tint doing something else. Healthy it sits at
+0.011–0.013; a snap reads 0.46 and a wrong duration 0.16, both verified by deliberately breaking the
+tween. The bound is 0.06, and the test survived six consecutive runs at load average 25 where the old one
+failed two in three at load 3. It is chromium-only, and the reason is itself measured: on the first frame
+that can observe the overlay's animation, Chromium reports `currentTime` 0.0 and WebKit reports 17.0, so
+WebKit hands the scrim a frame of head start that exists only at the DOM. See B17 for why this whole
+feature is an Android/Chrome + iOS ≤ 18 progressive enhancement in the first place.
 
 ### B30 — adaptv installs **no** runtime error boundary; runtime errors are the app's
 
