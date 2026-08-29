@@ -37,6 +37,7 @@ function LabSplashPage() {
           "Fully quit the app (not just background it) and relaunch.",
           "Watch the launch closely: the OS splash must give way to the app's own splash with no white flash and no visible seam between them.",
           "Confirm you do not see TWO splashes in sequence with a jump between them — same background colour, same position.",
+          "Time the app's own splash: it must stay up for its full minimum (1s here) AFTER the OS splash lifts, and its wordmark animation must start there rather than arrive part-way through. It is mounted behind the OS splash, so a clock started at mount would already have run down.",
           "Once the app paints, confirm the splash is gone and the app is interactive immediately.",
           "Press hideNativeSplash() on this page. Nothing must happen and nothing must break — it is callable on every target without a platform branch, which is the point.",
         ]}
@@ -58,7 +59,7 @@ function LabSplashPage() {
             note: "Same handoff. Also check the status-bar colour across it — a bar that changes colour mid-handoff reads as a flash.",
           },
         }}
-        wrong="A white frame between the two splashes, or the native splash hanging around after the app has painted. Both make a fast app feel slow, and the second one also swallows the user's first tap."
+        wrong="A white frame between the two splashes, or the native splash hanging around after the app has painted. Both make a fast app feel slow, and the second one also swallows the user's first tap. The third failure is a splash that appears for a blink: its minimum was counted from mount and spent under the OS splash — adaptv hands it `revealedAt` so it counts from the handoff instead."
       />
 
       <LabSection title="What this target shows at launch">
@@ -84,7 +85,7 @@ function LabSplashPage() {
         <LabActions>
           <LabButton
             onClick={() => {
-              hideNativeSplash()
+              void hideNativeSplash()
               setCalled(true)
             }}
           >

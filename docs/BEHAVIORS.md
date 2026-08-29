@@ -45,6 +45,13 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   - Policy: React splash renders only when **installed**; a browser tab gets no splash unless
     `splashScreenInBrowser`. Gated by the critical-CSS splash gate keyed on the platform stamp.
   - The React splash **self-unmounts** (returns `null` when ready) — `RoutingShell` just mounts it.
+  - **Its clock starts at the handoff, not at mount** (`SplashScreenProps.revealedAt`). The splash is
+    painted *underneath* the OS splash on purpose, so a "stay up at least 1s" rule timed from mount
+    spends that second behind the OS splash and flashes the brand for what is left — measured at 282ms
+    on an emulator and ~430ms on a Pixel. `useSplashHandoff` waits for a painted frame, hides the OS
+    splash, waits out its 200ms fade, and only then hands the splash a timestamp. CSS animations inside
+    `[data-adaptv-splash]` are held at frame one until `<html data-adaptv-splash-revealed>` is stamped,
+    so an intro animation cannot play to nobody either. → `DECISIONS.md` B32.
   - **…except on a not-found, where `RoutingShell` retires it.** A not-found boundary (root, since
     `notFoundMode: "root"`) short-circuits the outlet, so no layout route mounts and the app's ready
     signal — which lives in one — can never fire. adaptv mounts the splash, so adaptv takes it down; the

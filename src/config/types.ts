@@ -3,11 +3,33 @@
 //register mode and no app-owned `sw.config.ts` to type. → `RENDERING.md §3`
 
 /**
- * The splash component (`splashScreen`) receives no props — it owns its own lifecycle
- * and dismisses by **returning `null`** when the app is ready (self-unmounts). Kept as
- * a named type for the config thunk's return-shape symmetry.
+ * Props for the splash component (`splashScreen`). It still owns its own lifecycle and
+ * dismisses by **returning `null`** when the app is ready (self-unmounts) — adaptv only
+ * tells it the one thing it cannot know about itself: when it went on screen.
  */
-export type SplashScreenProps = Record<string, never>
+export type SplashScreenProps = {
+  /**
+   * `Date.now()` at the moment the OS launch splash came off — i.e. the first moment
+   * this component is something a person can actually see — and `null` until then.
+   *
+   * The splash is **mounted and painted underneath the OS launch splash**, on purpose:
+   * that overlap is what makes the handoff seamless. So mount time is not view time,
+   * and anything timed from mount (a minimum visible duration, an intro animation)
+   * burns down while the OS splash is still covering it — the bug this prop exists to
+   * remove. On a first launch that waits for an update, the two can be seconds apart.
+   *
+   * Time from **this**, not from mount:
+   *
+   * ```tsx
+   * const delay = Math.max(MIN_MS - (Date.now() - revealedAt), 0)
+   * ```
+   *
+   * `revealedAt !== null` is also the "am I on screen yet?" test. CSS animations inside
+   * adaptv's own `PwaSplashOverlay` are held at their first frame until this flips, so
+   * they play for the viewer rather than for nobody.
+   */
+  revealedAt: number | null
+}
 
 /**
  * Orientation lock for `createRootRoute({ orientation })`. Values mirror the web

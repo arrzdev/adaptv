@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from "react"
 import { initNativeKeyboard } from "#adaptv/capabilities/keyboard"
 import { loadKeyboardHeightCache } from "#adaptv/capabilities/keyboard-height-cache"
 import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
-import { hideNativeSplash } from "#adaptv/capabilities/splash"
 import type { OfflineProps } from "#adaptv/components/offline"
 import { Offline } from "#adaptv/components/offline"
 import { OrientationGuard } from "#adaptv/components/orientation-guard"
@@ -28,11 +27,11 @@ import { useFreezeViewport } from "#adaptv/hooks/use-freeze-viewport"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useOtaUpdates } from "#adaptv/hooks/use-ota-updates"
 import { useRegisterPwaServiceWorker } from "#adaptv/hooks/use-register-pwa-service-worker"
+import { useSplashHandoff } from "#adaptv/hooks/use-splash-handoff"
 import { useStatusBar } from "#adaptv/hooks/use-status-bar"
 import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnifier"
 import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
 import { readPreference, useTheme } from "#adaptv/hooks/use-theme"
-import { firstLaunchHold } from "#adaptv/ota/updater"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import { initKv } from "#adaptv/storage/kv"
 import { cn } from "#adaptv/utils/cn"
@@ -227,9 +226,14 @@ export function RoutingShell({
   //drawer just coexists ("double lock") and behaves exactly as before.
   useFreezeViewport(viewportFreeze)
 
-  //hand off the native launch splash to the custom React splash after first paint
-  //(native only). launchAutoHide in capacitor.config is the fallback if this misses.
-  //Also attach the native keyboard listeners now — eagerly at app start — so an
+  //Hand the OS launch splash over to the app's own splash, and report the instant that
+  //happens — the splash is mounted underneath the OS one, so mount time is not view
+  //time, and `revealedAt` is the only honest clock a splash can time itself against.
+  //launchAutoHide in capacitor.config is the fallback if the handoff misses.
+  //→ `#adaptv/hooks/use-splash-handoff`
+  const splashRevealedAt = useSplashHandoff()
+
+  //Attach the native keyboard listeners now — eagerly at app start — so an
   //[autofocus] drawer opened later never races the async listener registration
   //(the missed-first-event bug that left autofocus sheets stuck behind the keyboard).
   useEffect(() => {
@@ -238,15 +242,6 @@ export function RoutingShell({
     //render must never see an empty map and then flip. (Web already hydrated
     //synchronously at module load, so this is a no-op there.)
     void initKv()
-    //Handed over as soon as the app has painted — EXCEPT on a first launch with
-    //OTA on, where it waits (briefly, and behind a ceiling it cannot exceed) for
-    //the update check to say whether the bundle in the binary is the one this
-    //user should be shown at all. A store binary can be many deploys old by the
-    //time someone installs it, and revealing the app first would mean showing a
-    //new user a version of the product that no longer exists, then swapping it
-    //under them. Resolves immediately on every other launch, on the web, and
-    //whenever OTA is off. → `#adaptv/ota/updater`, `firstLaunchHold`
-    void firstLaunchHold().then(() => hideNativeSplash())
     initNativeKeyboard()
     //hydrate the learned keyboard-height cache before any drawer can open, so the first focus of a
     //same-shape field already has a prediction to lift from (see keyboard-height-cache)
@@ -299,7 +294,7 @@ export function RoutingShell({
   return (
     <>
       {SplashScreenComponent && !splashRetired.current && (
-        <SplashScreenComponent />
+        <SplashScreenComponent revealedAt={splashRevealedAt} />
       )}
       <AppShell className={shellClassName}>{children}</AppShell>
       <OrientationGuard

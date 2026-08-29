@@ -14,6 +14,12 @@
  *   a plain browser tab (`web`) serves the pages instantly with no splash, unless the
  *   app opts into `splashScreenInBrowser`. Gated off the pre-paint platform stamp, so
  *   the overlay never paints where it's suppressed — no hydration mismatch, no flash.
+ * - **Splash animation hold** — the splash is painted *underneath* the OS launch splash,
+ *   so its animations would otherwise play to nobody and be part-way through (or over)
+ *   by the time the OS splash lifts. They are held at their first frame until the shell
+ *   stamps `<html data-adaptv-splash-revealed>` at the handoff (`hooks/use-splash-handoff`
+ *   owns that attribute). Absence is the paused state, so frame one is already right and
+ *   nothing has to be written pre-paint.
  */
 export function getCriticalShellCss(
   themeColorLight: string,
@@ -34,5 +40,8 @@ export function getCriticalShellCss(
   const splashGate = splashScreenInBrowser
     ? ""
     : `html[data-adaptv-platform="web"] [data-adaptv-splash]{display:none!important}`
-  return base + bleed + nativeBleed + splashGate
+  //splash animation hold — see the note above. Scoped to the splash subtree: the app
+  //tree is behind it and its own animations are not adaptv's to freeze.
+  const splashHold = `html:not([data-adaptv-splash-revealed]) [data-adaptv-splash],html:not([data-adaptv-splash-revealed]) [data-adaptv-splash] *{animation-play-state:paused!important}`
+  return base + bleed + nativeBleed + splashGate + splashHold
 }

@@ -418,6 +418,11 @@ export type AdaptvAppConfig = {
    * `null`** when ready (no `hide` prop). A browser tab gets the page instantly with no
    * splash unless {@link splashScreenInBrowser}. The OS launch splash is a flat mask
    * colour ({@link splashMaskMode}) that hands off to this overlay without flicker.
+   *
+   * It is mounted and painted **underneath** the OS launch splash — that overlap is what
+   * makes the handoff seamless — so it is handed `revealedAt`, the moment it actually went
+   * on screen. Time a minimum visible duration from that and never from mount.
+   * → {@link SplashScreenProps}
    */
   splashScreen?: ScreenThunk<SplashScreenProps>
   /** Also show {@link splashScreen} in a browser tab. Default `false` (installed-only). */
