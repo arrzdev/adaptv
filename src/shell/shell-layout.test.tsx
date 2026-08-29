@@ -9,6 +9,7 @@ import type { ReactNode } from "react"
 import { useEffect } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
+import type { SplashScreenProps } from "#adaptv/config/types"
 import { createBootstrapGate } from "#adaptv/hooks/create-bootstrap-gate"
 import { createAdaptvRouter } from "#adaptv/shell/create-adaptv-router"
 import { createRootRoute } from "#adaptv/shell/create-root-route"
@@ -42,10 +43,15 @@ afterEach(() => {
 function buildApp({ readyOnMount }: { readyOnMount: boolean }) {
   //the app's ready gate: module-level, flipped by a provider in a layout route
   const gate = createBootstrapGate()
-  const stats = { splashMounts: 0 }
+  const stats = {
+    splashMounts: 0,
+    //every value of `revealedAt` the splash was rendered with, in order
+    revealedAt: [] as Array<number | null>,
+  }
 
-  function TestSplash() {
+  function TestSplash({ revealedAt }: SplashScreenProps) {
     const ready = gate.useBootstrapReady()
+    stats.revealedAt.push(revealedAt)
     useEffect(() => {
       stats.splashMounts += 1
     }, [])
@@ -129,6 +135,23 @@ describe("RoutingShell — splash vs the not-found boundary", () => {
 
     act(() => gate.setBootstrapReady())
     expect(splash(container)).toBeNull()
+  })
+
+  //A splash is mounted UNDER the OS launch splash, so mount time is not view time.
+  //Handing it `revealedAt` is what lets a "stay up for at least a second" rule mean a
+  //second the user saw — before this, that second was spent behind the OS splash and
+  //the brand flashed for whatever was left.
+  it("tells the splash when it went on screen, not when it mounted", async () => {
+    const { findByText, stats } = renderAt("/", { readyOnMount: false })
+
+    await findByText(HOME_TEXT)
+    //the handoff has not happened on the first render, and saying it had would be
+    //the bug: it is a promise chain behind a painted frame
+    expect(stats.revealedAt[0]).toBeNull()
+
+    await waitFor(() =>
+      expect(stats.revealedAt.at(-1)).toEqual(expect.any(Number)),
+    )
   })
 
   it("never leaves the splash up on a cold start into a 404", async () => {

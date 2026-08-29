@@ -131,8 +131,9 @@ Every piece of the custom-splash-over-masked-native-splash design is in the repo
 - **Theme tracking:** `persistNativeThemePreference` seeds native storage with the app's theme so the
   *next* launch's OS splash colour is already right (1-launch, no "open it twice"), applied at
   startup **and** live via a SharedPreferences listener.
-- **Handoff:** `launchShowDuration`/`launchAutoHide` hold the OS splash; `RoutingShell` calls
-  `hideNativeSplash()` after first paint → no gap, no double-splash.
+- **Handoff:** `launchShowDuration`/`launchAutoHide` hold the OS splash; `useSplashHandoff` waits for a
+  painted frame, calls `hideNativeSplash()`, waits out its fade → no gap, no double-splash — and then
+  hands the React splash `revealedAt`, so its minimum visible time is time the user actually had it (B32).
 - **Policy:** `splashMaskMode: preferences | system | light | dark`.
 - **Browser gate:** critical CSS hides `[data-adaptv-splash]` on `html[data-adaptv-platform="web"]`
   unless `splashScreenInBrowser` — pre-paint, so no flash and no hydration mismatch.
@@ -1274,6 +1275,60 @@ no boot left to cover if the app tree is never going to mount. Two details that 
 Guards: `src/shell/shell-layout.test.ts*` (real router + the playground's providers-layout shape; the
 404 cases fail without the fix) and `playground/e2e/screens.spec.ts` (which also *clicks* the 404's home
 link, so an intercepting overlay fails the test rather than merely showing up in a query).
+
+---
+
+### B32 — The app's splash spends its minimum behind the OS splash, then flashes ✅ **FIXED**
+
+**Symptom, as reported:** the OS splash (a flat colour, so it reads as a dead screen), then the app's own
+splash for a blink, then the app — on a screen written to stay up for at least a second.
+
+**Cause.** The splash is mounted and painted *underneath* the OS launch splash, deliberately: that
+overlap is what makes the handoff seamless (§1.4). But it was mounted with **no props**, so the only
+clock it could time itself against was its own mount — and mount is not when anyone sees it. Every
+millisecond between mount and the OS splash lifting was spent counting down a minimum nobody was
+watching. Same for CSS: a wordmark animation started at mount and was part-way through, or over, by the
+time it was seen.
+
+**Measured** on the playground (`preview android`, a 1s minimum, 100ms post-ready beat):
+
+| | mount → visible | app ready | splash actually seen |
+|---|---|---|---|
+| Pixel (API 37, WebView 149) | 224–242ms | 48ms after mount | **~430ms** → now **1001–1002ms** |
+| Pixel 7 (API 36, WebView 113, ~11s JS boot) | 368–423ms | 321ms after mount | **282ms** → now **1004–1008ms** |
+
+The `ready` column is the shape of it: on a healthy device the app finishes booting **before its splash
+is even visible**, so the dismiss timer had already expired and the splash was torn down almost as soon
+as it appeared. The slower the boot, the *shorter* the splash — the opposite of what a splash is for. A
+first launch that waits on an update (§5.4a) can push the gap to seconds, which is the reported case.
+
+**Fix.** `hooks/use-splash-handoff.ts` owns the launch handoff and reports *when the splash went on
+screen*, which `RoutingShell` hands down as `SplashScreenProps.revealedAt` (`Date.now()`, `null` until
+then). Three parts, each load-bearing:
+
+- **A painted frame before the OS splash lifts.** Two `requestAnimationFrame`s, not one — the first
+  callback runs *before* the paint it precedes. `useEffect` alone does not have that guarantee (React
+  flushes passive effects in a scheduler task that can land either side of the paint), and taking the OS
+  splash off an unpainted WebView is the white flash `launchAutoHide: false` exists to prevent. Behind a
+  400ms ceiling, so a WebView that never runs a frame callback under an opaque native view cannot leave
+  an app that never launches.
+- **`hideNativeSplash()` resolves on the fade, not on the bridge.** The plugin resolves `hide()` the
+  instant it *dispatches* a 200ms fade (iOS literally `call.resolve()` after `UIView.transition`), so
+  awaiting it reports the handoff ~200ms early. It is also never awaited: a hung bridge must not be able
+  to strand the app behind its own splash.
+- **Animations are held, not just timers.** Critical CSS pauses everything inside `[data-adaptv-splash]`
+  until the handoff stamps `<html data-adaptv-splash-revealed>`. Absence is the paused state, so frame
+  one is already correct with nothing written pre-paint. Verified on device over CDP: `paused` before the
+  stamp, `running` after.
+
+**What it is not.** adaptv does not own the minimum — the splash is still app-owned and still dismisses
+itself by returning `null`. adaptv owns the only fact the splash cannot observe about itself, which is
+whether anyone is looking at it.
+
+Guards: `src/hooks/use-splash-handoff.test.tsx` (order: no hide before a painted frame, no reveal before
+the OS splash is gone, the first-launch hold in front of both), `src/capabilities/splash.test.ts` (the
+fade, and that a never-settling bridge call still resolves), `src/shell/critical-css.test.ts` (the hold
+rule, keyed off the attribute the hook actually writes) and `src/shell/shell-layout.test.tsx`.
 
 ---
 
