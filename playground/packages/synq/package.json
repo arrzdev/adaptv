@@ -23,10 +23,6 @@
       "types": "./.tsbuild/interface/protocol.index.d.ts",
       "default": "./src/interface/protocol.index.ts"
     },
-    "./server": {
-      "types": "./.tsbuild/interface/server.index.d.ts",
-      "default": "./src/interface/server.index.ts"
-    },
     "./adapters/indexeddb": {
       "types": "./.tsbuild/interface/adapters.indexeddb.index.d.ts",
       "default": "./src/interface/adapters.indexeddb.index.ts"

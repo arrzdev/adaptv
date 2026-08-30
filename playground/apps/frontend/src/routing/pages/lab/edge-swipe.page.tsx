@@ -64,7 +64,7 @@ function LabEdgeSwipePage() {
           },
           ios: {
             verdict: "works",
-            note: "Armed here too, and it has to be: Capacitor never sets allowsBackForwardNavigationGestures, so WebKit never builds the swipe recogniser at all (DECISIONS B15) — the edge is a clean field, not a contested one. Without this the header chevron is the only way out. A left-edge swipe must return to the testing index.",
+            note: "Armed here too, and it has to be: Capacitor never sets allowsBackForwardNavigationGestures, so WebKit never builds the swipe recogniser at all (`docs/decisions/register.md` B15) — the edge is a clean field, not a contested one. Without this the header chevron is the only way out. A left-edge swipe must return to the testing index.",
           },
           android: {
             verdict: "partial",

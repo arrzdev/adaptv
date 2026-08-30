@@ -105,7 +105,7 @@ test.describe(`navigation preload (render: ${RENDER})`, () => {
     //ssr consumes `event.preloadResponse`, so preload is a win. spa answers every
     //navigation from the precache, so an enabled preload would be a document
     //fetched for every navigation and thrown away — and the flag lives on the
-    //REGISTRATION, so `spa` has to actively turn it off. → RENDERING.md §3.3
+    //REGISTRATION, so `spa` has to actively turn it off. → docs/design/rendering.md §3.3
     expect(state.preloadEnabled).toBe(RENDER === "ssr")
   })
 

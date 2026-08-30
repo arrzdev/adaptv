@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
 /*
- * The cascade contract (`STYLING.md` §2, §5, §6), asserted in a real engine.
+ * The cascade contract (`docs/decisions/styling.md` §2, §5, §6), asserted in a real engine.
  *
  * Every claim in that doc is about RUNTIME PRECEDENCE, and none of it is visible
  * from the CSS text or from the unit suite: happy-dom compiles no Tailwind and
