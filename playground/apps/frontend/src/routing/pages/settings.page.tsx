@@ -16,6 +16,7 @@ import {
   Vibrate,
 } from "lucide-react"
 import { useState } from "react"
+import { LoginDrawer } from "@/components/auth/login-drawer"
 import { CreateDeckDrawer } from "@/components/decks/create-deck-drawer"
 import { EditDeckDrawer } from "@/components/decks/edit-deck-drawer"
 import { PageWithSmoothEdges } from "@/components/page"
@@ -32,7 +33,6 @@ import { useSettings } from "@/data/collections/preferences/settings"
 import { useDataMutation } from "@/hooks/use-data-mutation"
 import { useHaptics } from "@/hooks/use-haptics"
 import { useIsInstalledApp } from "@/hooks/use-installed-app"
-import { GlobalLoginDrawer } from "@/providers/auth-provider"
 
 export const Route = createFileRoute("/_providers/settings")({
   component: SettingsPage,
@@ -56,6 +56,7 @@ function SettingsPage() {
   const [editingDeck, setEditingDeck] = useState<Deck | null>(null)
   const [deletingDeck, setDeletingDeck] = useState<Deck | null>(null)
   const [deleteDataOpen, setDeleteDataOpen] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
   //the only mutation the page still drives directly — create/edit/delete each
   //live in their own drawer now
   const reorder = useDataMutation()
@@ -91,11 +92,13 @@ function SettingsPage() {
       />
       <SettingsHeader />
 
-      {/* Login drawer rendered here (page/outlet scope) — NOT in AuthProvider —
-          so its autofocus can raise the iOS keyboard. See GlobalLoginDrawer. */}
-      <GlobalLoginDrawer />
+      {/* Login drawer rendered here, in page/outlet scope, NOT up at provider
+          level: iOS only raises the keyboard for an autofocus that happens
+          inside the router's outlet scope — a drawer mounted outside it focuses
+          the field but never opens the keyboard. */}
+      <LoginDrawer open={loginOpen} onOpenChange={setLoginOpen} />
 
-      <SettingsAccountCard />
+      <SettingsAccountCard onSignIn={() => setLoginOpen(true)} />
 
       <View className="flex flex-col gap-y-2">
         <Text

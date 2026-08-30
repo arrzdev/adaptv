@@ -82,7 +82,7 @@ import { pathToFileURL } from "node:url"
 // A channel is two static files in a folder: `manifest.json` and one zip, under
 // `.well-known/adaptv/ota/`. That is the whole thing in production too — they ride
 // along inside the ordinary web deploy, so there is no OTA server anywhere
-// (`LIFECYCLE.md §5.2`). Here they are served by a plain static file server on a
+// (`docs/design/ota.md §5.2`). Here they are served by a plain static file server on a
 // port. "Publishing v2" is overwriting two files. "Rolling back" is putting the
 // old two back.
 //
@@ -576,7 +576,7 @@ async function publish(): Promise<void> {
  * an app it is not. adaptv **installs it anyway** — the rest of that release is
  * worth more than the one feature that will be dark — and reports the gap
  * instead: `useStoreRelease()` for the install, `useNativePlugin()` per feature.
- * → `LIFECYCLE.md §5.6`
+ * → `docs/design/ota.md §5.6`
  *
  * ## Why the fingerprint is overridden rather than genuinely moved
  *
@@ -642,7 +642,7 @@ async function skew(): Promise<void> {
  * close to a real "this build is broken" as a bench can get: the document loads,
  * the prerendered HTML paints, and the app never mounts. Nothing calls
  * `settleLaunch`, so nothing calls the plugin's `ready()`, so `readyTimeout`
- * expires and the plugin reverts. → `LIFECYCLE.md §5.4b`
+ * expires and the plugin reverts. → `docs/design/ota.md §5.4b`
  */
 async function poison(): Promise<void> {
   const colour = nextColour()
@@ -834,7 +834,7 @@ function serve(): void {
     //Handed out freely here, and that is a deliberate divergence from production:
     //a real static host sends no `Access-Control-Allow-Origin`, which is exactly
     //why the updater reads the manifest through the native HTTP plugin instead of
-    //`fetch` (`LIFECYCLE.md §5.4`). If this bench were strict about it, a broken
+    //`fetch` (`docs/design/ota.md §5.4`). If this bench were strict about it, a broken
     //updater would look broken for the wrong reason; if you ever want to REPRODUCE
     //that failure, delete this header.
     res.setHeader("Access-Control-Allow-Origin", "*")
