@@ -23,6 +23,7 @@ import {
   loadAppConfig,
 } from "#adaptv/vite/app-config-loader.ts"
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
+import { adaptvBuildStampPlugin } from "#adaptv/vite/build-stamp.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
@@ -92,10 +93,15 @@ export type AdaptvOptions = {
  * - generates the web manifest and the service-worker precache + build tag
  * - serves `virtual:adaptv/pwa-register` for the shell
  *
- * Takes no arguments — the build config (`render`, `router` paths) lives in
- * `adaptv.config.ts` too. It is an ASYNC plugin factory: it loads
- * the config first (so Start is configured from it and the generated files exist
- * before any hook), then returns the plugin array. Vite awaits plugin promises and
+ * Called bare in an app's `vite.config.ts` — the build config (`render`, `router`
+ * paths) lives in `adaptv.config.ts` too. {@link AdaptvOptions} exists for the
+ * callers that cannot read it from there: the CLI's native lineage passes
+ * `target`, and a linked/aliased install passes `appRoot` or `routerSpecifier`.
+ *
+ * It is an ASYNC plugin factory: it loads the config first (so Start is configured
+ * from it and the generated files exist before any hook), then returns the plugin
+ * array — which is also why every plugin's hooks can rely on `AdaptvContext` being
+ * populated. Vite awaits plugin promises and
  * flattens nested arrays, so `plugins: [cloudflare(), adaptv(), tailwindcss()]`
  * needs no `await` and no spread.
  */
@@ -145,7 +151,7 @@ export async function adaptv(
     //adaptv's own bundled set included, which is where the whole obligation lives for
     //an app that registered none of its own. Not one of the 22 official Capacitor
     //plugins ships a manifest, the obligation lands on the app, and a missing one
-    //fails SILENTLY at App Store submission. → DECISIONS.md §5.0.1
+    //fails SILENTLY at App Store submission. → docs/decisions/register.md §5.0.1
     const privacyManifest = stampPrivacyManifest(appRoot, {
       plugins: context.loaded.config.plugins,
       privacy: context.loaded.config.privacy,
@@ -159,13 +165,13 @@ export async function adaptv(
 
   //The route generator emits every import AND every `declare module` in
   //routeTree.gen.ts against a single package specifier. adaptv patches it to read
-  //this env var (patches/@tanstack__router-generator.patch), so the generated
+  //this env var (patches/@tanstack__router-generator@*.patch), so the generated
   //tree points at the adaptv barrel instead of @tanstack/* — the last place
-  //`@tanstack` leaked into the consumer's tree. → DECISIONS.md §2.6a (L19)
+  //`@tanstack` leaked into the consumer's tree. → docs/decisions/register.md §2.6a (L19)
   const routerPkg = options.routerSpecifier ?? DEFAULT_ROUTER_SPECIFIER
   process.env.ADAPTV_ROUTER_PKG = routerPkg
   //same for the Start register-declaration Start injects into the route tree
-  //footer (patches/@tanstack__start-plugin-core.patch)
+  //footer (patches/@tanstack__start-plugin-core@*.patch)
   process.env.ADAPTV_START_PKG = routerPkg
 
   //The route generator's scratch dir defaults to `<cwd>/.tanstack/tmp`, so a
@@ -216,7 +222,7 @@ export async function adaptv(
   return [
     //FIRST, and `enforce: "pre"` — the isomorphism ban has to win the specifier
     //before tanstackStart() can resolve it. This is the one layer a consumer
-    //cannot disable, misconfigure, or forget to install. → FACADE.md §2.2
+    //cannot disable, misconfigure, or forget to install. → docs/decisions/facade-and-opacity.md §2.2
     adaptvBanServerApisPlugin(),
     //Also `enforce: "pre"`, and for the same kind of reason: it has to reach the
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
@@ -243,7 +249,7 @@ export async function adaptv(
     //claims any unknown query on a known image extension, so at normal
     //enforcement `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL
     //string and this plugin's `load` is never called — a build that succeeds with
-    //every dimension silently gone. → src/vite/adaptv-image.ts, IMAGE-COMPONENT §4.2a
+    //every dimension silently gone. → src/vite/adaptv-image.ts, `docs/design/image.md` §4.2a
     adaptvImagePlugin({
       placeholder: context.loaded.config.images?.placeholder,
     }),
@@ -302,6 +308,12 @@ export async function adaptv(
     //The mirror image, for the native lineage: drop what only a browser tab
     //could ever read. → src/vite/native-bundle.ts
     ...(target === "capacitor" ? [adaptvNativeBundlePlugin(context)] : []),
+    //LAST of the emitters, on purpose: it writes down where this build wrote and what
+    //it was built from, and both answers have to describe the FINAL directory — after
+    //the shell, after the worker, after whichever of the two pruners above ran. The CLI
+    //reads it to name the output it produced and to know whether the bundle a native
+    //sync is about to copy still belongs to the config on disk. → src/vite/build-stamp.ts
+    adaptvBuildStampPlugin(context),
     //Assert the opacity invariant on the generated tree once the build is done.
     //If the patches did not reach this install the build would otherwise SUCCEED
     //with the facade silently disabled. → src/vite/verify-patches.ts
@@ -357,7 +369,7 @@ function deriveStartOptions(
     router: {
       //Always into `.adaptv/`, never wherever the config pointed. The route tree
       //is a build artifact, and letting an app place it next to its routes is
-      //what made the generator visible in the first place. ARCHITECTURE §3.2
+      //what made the generator visible in the first place. `docs/design/architecture.md` §3.2
       generatedRouteTree: fromSrc(gen.routeTree),
       //Scratch space for the generator's write-then-rename, into `.adaptv/tmp/`
       //instead of a `.tanstack/` at the app root. Absolute (unlike the two paths
@@ -424,27 +436,18 @@ function adaptvConfigLoaderPlugin(context: AdaptvContext): PluginOption {
 }
 
 /**
- * Resolve `#adaptv-route-tree` to the app's generated route tree.
- *
- * adaptv's router entry is a package module, so it cannot use a relative import to
- * reach a file in the consumer's project. The app's `tsconfig.paths` carries the
- * same mapping (written by the stamper) so the route tree's concrete TYPE reaches
- * the `Register` augmentation — a bundler-only alias builds fine while silently
- * collapsing typed routing to `any`.
- *
- * ⚠︎ Resolved in a `resolveId` HOOK, never via `config().resolve.alias`.
- *
- * That distinction cost a full debugging session. TanStack Start resolves its own
- * entry points — including `virtual:tanstack-start-client-entry` — through
- * `resolve.alias`. A second plugin returning `resolve.alias` from `config()`
- * clobbered that map, so the client entry 404'd, the app never hydrated, and the
- * page rendered perfect SSR HTML with dead buttons and a spinner that never
- * resolved. **`vite build` passed the whole time**, because the build never
- * requests that module the same way.
- *
- * A `resolveId` hook only ever answers for its own specifier, so it cannot
- * collide with another plugin's resolution.
+ * APPEND a root to Vite's resolved `server.fs.allow`, never REPLACE it. Returning
+ * `server.fs.allow` from a plugin's `config()` suppresses Vite's computed default (the
+ * app's own workspace root), which then makes the app's generated files unreadable — and
+ * only in the cloudflare/workerd SSR environment, whose `fetchModule` honours the
+ * allow-list strictly, so every request 500s with "Failed to load url". The client
+ * transform hides it. Pushing in `configResolved` keeps the default AND adds adaptv's own
+ * root. Idempotent so repeated resolves don't duplicate the entry. → offline PR.
  */
+export function addFsAllowRoot(allow: string[], root: string): void {
+  if (!allow.includes(root)) allow.push(root)
+}
+
 /**
  * Let Vite's dev server read files from adaptv's own package.
  *
@@ -459,19 +462,6 @@ function adaptvConfigLoaderPlugin(context: AdaptvContext): PluginOption {
  * buttons and a spinner that never resolves — and **`vite build` passes**, because
  * the build reads from disk instead of going through the dev server's sandbox.
  */
-/**
- * APPEND a root to Vite's resolved `server.fs.allow`, never REPLACE it. Returning
- * `server.fs.allow` from a plugin's `config()` suppresses Vite's computed default (the
- * app's own workspace root), which then makes the app's generated files unreadable — and
- * only in the cloudflare/workerd SSR environment, whose `fetchModule` honours the
- * allow-list strictly, so every request 500s with "Failed to load url". The client
- * transform hides it. Pushing in `configResolved` keeps the default AND adds adaptv's own
- * root. Idempotent so repeated resolves don't duplicate the entry. → offline PR.
- */
-export function addFsAllowRoot(allow: string[], root: string): void {
-  if (!allow.includes(root)) allow.push(root)
-}
-
 export function adaptvFsAllowPlugin(): PluginOption {
   //the package root — two levels up from src/vite/
   const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
@@ -483,6 +473,27 @@ export function adaptvFsAllowPlugin(): PluginOption {
   }
 }
 
+/**
+ * Resolve `#adaptv-route-tree` to the app's generated route tree.
+ *
+ * adaptv's router entry is a package module, so it cannot use a relative import to
+ * reach a file in the consumer's project. The app's `tsconfig.paths` carries the
+ * same mapping (written by the stamper) so the route tree's concrete TYPE reaches
+ * the `Register` augmentation — a bundler-only alias builds fine while silently
+ * collapsing typed routing to `any`.
+ *
+ * ⚠︎ Resolved in a `resolveId` HOOK, never via `config().resolve.alias`, because a
+ * `resolveId` hook only ever answers for its own specifier and so cannot collide
+ * with another plugin's resolution.
+ *
+ * That distinction cost a full debugging session. TanStack Start resolves its own
+ * entry points — including `virtual:tanstack-start-client-entry` — through
+ * `resolve.alias`. A second plugin returning `resolve.alias` from `config()`
+ * clobbered that map, so the client entry 404'd, the app never hydrated, and the
+ * page rendered perfect SSR HTML with dead buttons and a spinner that never
+ * resolved. **`vite build` passed the whole time**, because the build never
+ * requests that module the same way.
+ */
 function adaptvRouteTreeAliasPlugin(appRoot: string): PluginOption {
   const routeTree = resolveGeneratedPaths(appRoot).routeTree
   return {
