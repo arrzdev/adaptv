@@ -17,7 +17,8 @@
 //                  page. Ink is mounted only for as long as something is actually animating,
 //                  and the settled row is written after it unmounts.
 //
-// NO JSX: `bin/` ships as raw source (DECISIONS O12), so there is no build step. `h` is
+// NO JSX: `bin/` ships as raw source (`docs/decisions/dist-build.md` — `bin` is in `files`, and
+//         tsdown does not build it), so there is no build step. `h` is
 // `createElement`.
 import { Box, render, Text, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
@@ -116,10 +117,6 @@ export function makeBus(initial) {
   }
 }
 
-/* -----------------------------------------------------------------------------
- * one row
- * -------------------------------------------------------------------------- */
-
 /**
  * `⠴ ios  compiling`
  *
@@ -180,10 +177,6 @@ export function liveRows(labels) {
     stop: () => eraseRegion(app),
   }
 }
-
-/* -----------------------------------------------------------------------------
- * the picker
- * -------------------------------------------------------------------------- */
 
 /**
  * How many device rows the picker shows at once.

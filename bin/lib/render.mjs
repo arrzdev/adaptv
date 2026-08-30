@@ -7,7 +7,7 @@
 // (see `select` below) — no third-party prompt frame, so it matches every other line.
 //
 //   - TTY      → animated spinner lines, redrawn in place
-//   - non-TTY  → plain "· step" / "✓ step (1.2s)" lines, no cursor tricks (CI-safe)
+//   - non-TTY  → plain "· step" / "✓ step  · 1.2s" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
 import {
   DEFAULT_COLUMNS,
@@ -18,10 +18,6 @@ import {
 } from "../ui/theme.mjs"
 import { namesPlumbing } from "./opacity.mjs"
 import { isRawToolNoise, phaseLabel } from "./tool-log.mjs"
-
-/* -------------------------------------------------------------------------- */
-/* colour (a tiny ANSI helper; honours NO_COLOR)                              */
-/* -------------------------------------------------------------------------- */
 
 const noColor = "NO_COLOR" in process.env
 const paint = (code) => (s) =>
@@ -39,7 +35,7 @@ export const c = {
 const isCI = !!process.env.CI
 const isTTY = !!process.stdout.isTTY && !isCI
 //From the theme, not restated here: the spinner, the glyphs, the widths and the timings are
-//the design system (docs/CLI-VISUAL.md), and a second copy in the renderer is a second design
+//the design system (docs/design/cli-visual.md), and a second copy in the renderer is a second design
 //system waiting to drift.
 const FRAMES = THEME_FRAMES
 /**
@@ -58,15 +54,6 @@ const streams = {
   out: { w: process.stdout, tail: "" },
   err: { w: process.stderr, tail: "" },
 }
-/**
- * Where a failure goes.
- *
- * Errors used to be written to stdout like everything else, so `adaptv build ios > out.json`
- * captured the failure INTO the file it was supposed to be producing. Failures — `log.error`,
- * `fail`, `usageFail`, and the dim detail hanging under them — go to stderr; the banner, the
- * steps, the notices and the addresses stay on stdout, because they are what the dev asked
- * for. A notice is not a failure: it stays on stdout with the rest of the story.
- */
 /**
  * Output MODE — the engine's, not a branch in every command.
  *
@@ -111,6 +98,15 @@ export function emitJson(meta) {
 }
 
 let sink = "out"
+/**
+ * Where a failure goes.
+ *
+ * Errors used to be written to stdout like everything else, so `adaptv build ios > out.json`
+ * captured the failure INTO the file it was supposed to be producing. Failures — `log.error`,
+ * `fail`, `usageFail`, and the dim detail hanging under them — go to stderr; the banner, the
+ * steps, the notices and the addresses stay on stdout, because they are what the dev asked
+ * for. A notice is not a failure: it stays on stdout with the rest of the story.
+ */
 const toStderr = (fn) => {
   sink = "err"
   try {
@@ -192,14 +188,11 @@ const elapsed = (start, offset = 0) => {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
 }
 
-// A phase must hold the line this long before another may replace it.
-//
-// The native toolchains change phase several times a second — an iOS build rewrote the live
-// line 105 times in 13s, alternating compiling↔processing resources as it walked the pods.
-// Each individual line was correct and the effect was a strobe, unreadable and stressful to
-// watch. So the line SAMPLES the stream rather than following it: whatever phase is current
-// when the window opens gets the row and keeps it. Nothing is hidden — a phase that lasts
-// less than a blink was never information, and `--verbose` still streams every line.
+// From the theme, like every other timing here — the measured strobe that set the number is on
+// `PHASE_DWELL_MS` in `ui/theme.mjs`. What it means HERE: the line SAMPLES the stream rather
+// than following it, so whatever phase is current when the window opens gets the row and keeps
+// it. Nothing is hidden — a phase that lasts less than a blink was never information, and
+// `--verbose` still streams every line.
 const PHASE_DWELL_MS = THEME_DWELL_MS
 
 /**
@@ -222,10 +215,6 @@ export function since(start) {
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}m ${s % 60}s`
 }
-
-/* -------------------------------------------------------------------------- */
-/* static output — header, log lines, summary                                 */
-/* -------------------------------------------------------------------------- */
 
 /** The command banner: `  adaptv  dev android`. */
 export function header(title) {
@@ -598,8 +587,8 @@ export function liveWatcher({ keys = true } = {}) {
   //   - raw mode may be unavailable (stdin isn't a TTY), in which case NO key arrives.
   // ctrl-c always works, so it is always worth saying.
   //A pressable key gets ROLE.key (cyan bold), never plain bold — see the note in `theme.mjs`.
-  //Both renderers draw this row, so they have to agree on it or the block changes colour the
-  //moment `ADAPTV_INK=0` is set.
+  //Both renderers draw this row, so they have to agree on it or the block changes colour
+  //between `dev web` (this one) and `dev ios`/`android` (Ink's).
   const key = (s) => c.cyan(c.bold(s))
   const stop = `${key("ctrl-c")}${c.dim(" stop")}`
   //no leading separator: this row IS the hints now, not a suffix on `✓ watching`
@@ -692,16 +681,6 @@ export function liveWatcher({ keys = true } = {}) {
 }
 
 /**
- * Raw-mode key handling for the run loop — Expo-style, and available the WHOLE time
- * rather than only once something is detected: `r` to reinstall on demand is useful
- * whenever a device gets into a state you don't trust, not just after adaptv notices a
- * native change.
- *
- * Raw mode means the terminal stops translating ctrl-c into SIGINT for us, so it has to
- * be forwarded by hand — otherwise the run becomes unkillable. No-op off a TTY (CI,
- * piped output), where there's no one to press anything.
- */
-/**
  * Move the cursor back up `n` rows and clear everything below it.
  *
  * Lets a re-run redraw the SAME rows instead of appending a second copy of the story:
@@ -727,6 +706,16 @@ export const keysAvailable = () =>
   Boolean(process.stdin.isTTY) &&
   typeof process.stdin.setRawMode === "function"
 
+/**
+ * Raw-mode key handling for the run loop — Expo-style, and available the WHOLE time
+ * rather than only once something is detected: `r` to reinstall on demand is useful
+ * whenever a device gets into a state you don't trust, not just after adaptv notices a
+ * native change.
+ *
+ * Raw mode means the terminal stops translating ctrl-c into SIGINT for us, so it has to
+ * be forwarded by hand — otherwise the run becomes unkillable. No-op off a TTY (CI,
+ * piped output), where there's no one to press anything.
+ */
 export function onKeys({ onReload, onRebuild, onQuit }) {
   const stdin = process.stdin
   if (!keysAvailable()) return () => {}
@@ -756,10 +745,6 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
     stdin.pause()
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/* device picker (house style — matches the renderer, no third-party frame)    */
-/* -------------------------------------------------------------------------- */
 
 /**
  * A single-select arrow-key picker, drawn in the SAME visual language as the rest of the
@@ -829,10 +814,6 @@ export async function confirm(message, { yes, no } = {}) {
     { value: false, label: no ?? "cancel" },
   ])
 }
-
-/* -------------------------------------------------------------------------- */
-/* line prettifier — Gradle "NN% EXECUTING" → a block bar, else trim noise      */
-/* -------------------------------------------------------------------------- */
 
 const BAR_WIDTH = 12
 function bar(percent) {
@@ -936,10 +917,6 @@ export function prettyLine(line) {
   return s
 }
 
-/* -------------------------------------------------------------------------- */
-/* the spinner renderer                                                        */
-/* -------------------------------------------------------------------------- */
-
 /**
  * Compose one aligned line, clipping the dim right-hand detail to the width. `keep` is a
  * suffix that must survive that clip — the elapsed time, which is fixed-width and would
@@ -1019,10 +996,16 @@ export async function runLine(
   let pending = "" // the newest phase the stream has reported
   let shownAt = 0
   const report = (line) => {
+    //RAW FIRST, ABOVE THE PHASE GATE (R12). `--verbose` is the escape hatch, and an escape
+    //hatch that only shows the lines the calm path was already going to show is not one. This
+    //write used to sit BELOW the `if (!pretty) return`, so every line `prettyLine` blanked —
+    //the bundle listing, the chunk-size warning, the SSR build, a crash dump — was dropped
+    //from `--verbose` too. Measured on the playground: 6 dim lines out of a 329-line bundler
+    //stream. §3's noise rules govern the CALM path; the raw stream is not theirs to trim.
+    if (verbose) out(`    ${c.dim(line)}\n`)
     const pretty = prettyLine(line)
     if (!pretty) return
     pending = pretty
-    if (verbose) out(`    ${c.dim(line)}\n`)
     //Paint the FIRST phase the moment it is announced, rather than waiting for the next
     //timer tick. The tick may never come: the launch and reload paths are `spawnSync` all
     //the way down (`simctl launch`, `open -a Simulator`, `adb`), and synchronous work blocks
@@ -1168,10 +1151,14 @@ export async function runLanes(lanes, { verbose = false } = {}) {
 
   const runOne = (lane, i) => {
     const report = (line) => {
+      //RAW FIRST, ABOVE THE PHASE GATE (R12) — the same shape as `runLine`'s `report`, and it
+      //has to stay the same shape: this is one idea with two implementations, and the bug it
+      //carries is one bug written down twice. The lane label prefixes the raw line because an
+      //`all` run streams several tools at once and an unlabelled line belongs to nobody.
+      if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
       const pretty = prettyLine(line)
       if (!pretty) return
       state[i].pending = pretty
-      if (verbose) out(`    ${c.dim(`${lane.label}: ${line}`)}\n`)
       //Paint the lane's FIRST phase at once — see the same note in `runLine`. The launch and
       //reload paths are `spawnSync` throughout, so the draw timer cannot fire while they run
       //and the rows would sit frozen on `preparing` until every lane had finished.

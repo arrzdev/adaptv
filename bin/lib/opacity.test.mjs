@@ -5,7 +5,7 @@ import { prettyLine } from "./render.mjs"
 
 /**
  * adaptv's consumers never learn that TanStack Router, TanStack Start or Capacitor are
- * underneath (CLI-UX R8, DECISIONS L20 / O2). Every fixture here is a real line from a real
+ * underneath (`docs/design/cli-contract.md` R8, `docs/decisions/register.md` L20 / O2). Every fixture here is a real line from a real
  * tool, because the leak that prompted this module was a real line from a real tool that
  * nobody thought to invent.
  */

@@ -31,6 +31,11 @@ import path from "node:path"
 import process from "node:process"
 import { build as esbuild } from "esbuild"
 import { measureArtwork } from "./lib/artwork.mjs"
+import {
+  buildIdEnv,
+  builtOutDir,
+  bundleStale,
+} from "./lib/build-stamp.mjs"
 import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
 import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
@@ -126,10 +131,6 @@ import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, portInUse } from "./lib/tool-log.mjs"
 
 const CWD = process.cwd()
-
-/* =============================================================================
- * config loading (esbuild-bundled `adaptv.config.ts`)
- * ============================================================================= */
 
 async function loadConfig(appRoot) {
   const configPath = path.join(appRoot, "adaptv.config.ts")
@@ -291,10 +292,6 @@ function snapshotNativeFp(appRoot, platforms) {
   )
 }
 
-/* =============================================================================
- * run / build pipelines
- * ============================================================================= */
-
 /**
  * The dev server came up, and then never served the app. THREE different faults land here and
  * they want three different sentences — the one that used to cover all of them ("Another
@@ -353,10 +350,6 @@ function devServerUnhealthy({ why, status }, url, log) {
   return err
 }
 
-/* =============================================================================
- * prepare — the ONE definition of "ready to sync"
- * ============================================================================= */
-
 /**
  * Everything that must be true of a platform's native project before anything syncs, builds
  * or installs it: the project exists, it carries the right install identity, its generated
@@ -388,6 +381,13 @@ async function preparePlatform(
     report,
     plugins: config?.plugins,
     privacy: config?.privacy,
+    //Scaffolding is the one place that can find a fact a live row must NOT carry: a
+    //legacy `./ios` it had to move, which is only knowable once the directory is looked
+    //at. It goes to the notice channel `flushNotices` drains right after this prepare
+    //(R33), not onto a phase row that erases it. A configured plugin that isn't
+    //installed used to travel this way too and no longer does — that one needs no native
+    //project to know, so `preflight` refuses over it before this runs at all.
+    warnings,
   })
   // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
   // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
@@ -476,7 +476,7 @@ async function preparePlatforms(
  * settled detail, and an absolute path there is just noise the renderer has to truncate.
  *
  * Both artifacts are UNSIGNED/debug on purpose: adaptv owns the whole native toolchain
- * and the consumer owns none of it (DECISIONS §2 L20 — they never name, install or script
+ * and the consumer owns none of it (`docs/decisions/register.md` §2 L20 — they never name, install or script
  * Capacitor/Xcode), so packaging cannot be delegated to a script in their repo. A signing
  * identity is the one input adaptv cannot invent, so it stays theirs: Xcode ▸ Archive.
  */
@@ -569,7 +569,9 @@ async function packageIpa(appRoot, name, env, output, report) {
       "xcodebuild produced no Release-iphoneos/App.app to package.",
     )
 
-  report("packaging .ipa")
+  //`packaging`, not `packaging .ipa`: a phase says what is happening, never what it is
+  //happening TO (R22), and the android branch above says the same word for the same work.
+  report("packaging")
   // Stage fresh every time: a leftover Payload from an earlier build would be zipped in
   // alongside the new one (zip merges into an existing archive rather than replacing it).
   const stage = path.join(iosDir, "DerivedData/payload")
@@ -751,19 +753,38 @@ async function runLive(appRoot, platforms, opts) {
       // Fresh capacitor.config.json before anything reads or patches it, so a run
       // killed without teardown can never leave dev fields behind for the next command.
       await setCapacitorConfigEnv(config)
-      // cap sync copies the web bundle even though the WebView loads from the dev
-      // server, so make sure one exists (content is irrelevant here).
+      // cap sync copies the web bundle into the native project even though the WebView
+      // loads from the dev server, so one has to exist — and it has to be one THIS config
+      // produced.
+      //
+      // This used to be a bare existence check, on the reasoning that the content is
+      // irrelevant to a live-reload session. The content is irrelevant; the ARTIFACT is
+      // not. `.adaptv/web` is what `cap sync` copies into `public/`, so a `dev` run was
+      // the one path that could bake a shell from a config the dev had already replaced —
+      // while `preparePlatforms`, three lines down, re-derived the iOS splash colourset
+      // and Android's `colors.xml` from the NEW one. One app, two colours, and nothing on
+      // screen to say so. Both halves now answer to `appConfigFingerprint`.
+      //
+      // Deliberately NOT the source fingerprint that `build`/`preview` also check: app
+      // code is exactly what live reload owns, and rebuilding the bundle on every edit
+      // would put a full vite build in front of a loop that exists to avoid one. What
+      // `dev` must not do is ship a shell built from a config that no longer exists.
+      //
       // The bundle is a SUB-ACTION of getting the app onto the device, not a step of its
       // own: it renders live under the SAME `web` label the dev server settles under, and
       // is erased rather than settled (R1 — one settled line per surface). It used to
       // settle as `✓ web bundle (first run)`, so a first `dev ios` printed two different
       // names for the one web surface.
-      if (!existsSync(path.join(appRoot, CAP_WEB_DIR, "index.html"))) {
+      if (await bundleStale(appRoot, "capacitor", config)) {
         try {
-          await runLine("web", (r) => buildWeb(appRoot, { report: r }), {
-            verbose,
-            transient: true,
-          })
+          await runLine(
+            "web",
+            (r) => buildWeb(appRoot, { report: r, config }),
+            {
+              verbose,
+              transient: true,
+            },
+          )
         } catch (err) {
           // A transient row is erased, so the caller owns the ✖ (and `fail` marks it
           // reported, keeping the outer catch from printing a second one).
@@ -816,7 +837,14 @@ async function runLive(appRoot, platforms, opts) {
         // launching the WebViews. iOS WKWebView won't survive that reload if it attaches
         // mid-optimize — it drops the HMR socket for good. Web reconnects fine, so skip.
         if (!webOnly) {
-          report(`${devServer.localUrl} · warming`)
+          //The URL stays OFF the row (R27 — it has its own address block below), and the
+          //phase is the participle alone. `starting server` is what `preview` calls the
+          //same idea: from the dev's side the server is still coming up until this row
+          //settles, and the dep re-optimize it is waiting on is adaptv's business, not
+          //theirs (R8). It used to be `<url> · warming`, which `prettyLine` erased
+          //outright — a `:` and a `/` are not a phase — so the row silently held
+          //`preparing` through the whole settle.
+          report("starting server")
           const stable = await warmDevServer(devServer.localUrl, {
             onLine: recordDevLine,
             //NOT passing `sawOptimize` — so the FULL settle is taken, every time, as before.
@@ -966,7 +994,7 @@ async function runLive(appRoot, platforms, opts) {
       // Generate the offline screen into the web dir BEFORE sync so `cap sync` copies it
       // into each platform's public/. Capacitor's `server.errorPath` (set above) loads
       // it locally when the dev server is unreachable, instead of a black WebView.
-      cleanups.push(installOfflinePage(appRoot, { url }))
+      cleanups.push(await installOfflinePage(appRoot, { url, config }))
       if (ready.includes("ios")) {
         const revert = patchIosAts(appRoot)
         if (revert) cleanups.push(revert)
@@ -1157,16 +1185,21 @@ async function runLive(appRoot, platforms, opts) {
      * rather than growing and shrinking it with cursor arithmetic — the thing that once walked
      * it up the screen and erased the settled rows above it.
      *
-     * `ADAPTV_INK=0` falls back to the string version, kept for one release as an escape
-     * hatch. Both return the same `{ hmr, notice, clearNotice, stop }`, so nothing below can
-     * tell them apart. The flag defaulted the other way while the port was unproven; it is
-     * proven now — `build`, `dev`, the `b` rebuild and the `r` reload have all run through it
-     * on a device.
+     * `dev web` still takes the string version (`liveWatcher`) instead: it draws one row with
+     * no keys, which is not worth 136-177ms of `ink` + `react` on a run that never touches a
+     * device. Both return the same `{ hmr, notice, clearNotice, stop }`, so nothing below can
+     * tell them apart.
      *
-     * Ink also owns the keypresses when it is in play: two raw-mode listeners on one stdin
-     * would each get half the bytes.
+     * There is no longer an `ADAPTV_INK=0` env override. It defaulted the other way while the
+     * port was unproven and was then "kept for one release" as an escape hatch, which is a
+     * promise this repo cannot make: it is unreleased, and it carries no compatibility shims.
+     * The port is proven — `build`, `dev`, the `b` rebuild and the `r` reload have all run
+     * through it on a device — so the flag only bought a second, colder rendering path that
+     * nothing exercised and every change to the block had to keep working.
+     *
+     * Ink also owns the keypresses when it is in play — see `if (!useInk)` below.
      */
-    const useInk = process.env.ADAPTV_INK !== "0" && !webOnly
+    const useInk = !webOnly
     //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
     //a 64ms bare-node floor, and a static import would charge that to `adaptv --help` and to
     //every invocation error — the paths where the <100ms responsiveness rule actually bites.
@@ -1222,7 +1255,33 @@ async function runLive(appRoot, platforms, opts) {
       // here, reusing the revert already registered at startup.
       await setCapacitorConfigEnv(config)
       patchServerUrl(appRoot, url)
+      // …and the offline screen, which bakes the config's theme colours in. `b` exists to
+      // re-read the config, so regenerating here is the same fix as re-stamping the env and
+      // rebuilding the bundle: without it the sync below copies a screen painted in the
+      // colour the dev has already replaced. No new cleanup — the one registered at startup
+      // deletes this exact path.
+      await installOfflinePage(appRoot, { url, config })
       watcher.stop() // clears the watch row; cursor stays on it
+      // …and the BUNDLE, for the config just read. `b` after a `themeColor` edit is the
+      // shortest path to the split-colour app there is: the lanes below re-derive the
+      // native splash from the new config while `cap sync` copies a shell emitted from
+      // the old one. Transient, under the same `web` label as the run's own bundle step,
+      // and erased — so the rewind geometry two lines down is unchanged.
+      if (await bundleStale(appRoot, "capacitor", config)) {
+        try {
+          await runLine(
+            "web",
+            (r) => buildWeb(appRoot, { report: r, config }),
+            { verbose, transient: true },
+          )
+        } catch (err) {
+          const { reason, detail } = explainFailure("web")(err)
+          fail("web", reason, detail)
+          rebuilding = false
+          watcher = await openWatcher()
+          return
+        }
+      }
       // Walk back over the blank separator + one row per platform so the SETTLED
       // platform lines animate again in place, rather than a second copy appearing
       // below them. Off a TTY there's no cursor to move, so just append.
@@ -1376,9 +1435,11 @@ async function runLive(appRoot, platforms, opts) {
   }
 }
 
-/** Shared orchestration for `build` (static artifacts). */
+/**
+ * Shared orchestration for the two static-build commands. `kind` is "preview" (build →
+ * install → launch on a device) or "build" (produce artifacts).
+ */
 async function pipeline(kind, appRoot, platforms, opts) {
-  // kind is "preview" (static build → install → launch) or "build" (produce artifacts).
   const verb = kind
   const single = platforms.length === 1
   // `embedded` = this is one part of a larger command (`preview all`, which serves the web
@@ -1444,27 +1505,34 @@ async function pipeline(kind, appRoot, platforms, opts) {
   }
 
   // build fingerprint cache — skip the web build + sync when nothing that affects the
-  // bundle changed. `--force` (or a missing dist) always rebuilds.
+  // bundle changed. `--force` always rebuilds, and so does a bundle that is missing or
+  // was not emitted from this config.
   const buildCache = readBuildState(appRoot)
-  const distReady = existsSync(
-    path.join(appRoot, CAP_WEB_DIR, "index.html"),
-  )
+  // Two questions, deliberately kept apart. `fingerprint` asks whether the app's SOURCE
+  // moved; the stamp asks whether the bundle on disk was emitted from the config on disk
+  // and is still byte-for-byte the one that build wrote. Only the second is shared with
+  // `dev`, which has no reason to rebuild for a source edit — see the note there.
+  const bundleUnusable = await bundleStale(appRoot, "capacitor", config)
   let fp = fingerprint(appRoot)
 
   // 1. barrier: build the SPA once (shared by every platform). If it fails, abort —
   //    never fall through and ship a stale bundle. A CACHED build is SILENT — like `dev`
   //    never prints the web bundle build when it's already there — so the asset/config
   //    warnings from prepare stay the first thing under the header, not a cache line on top.
-  if (opts.force || !distReady || buildCache.web !== fp) {
+  if (opts.force || bundleUnusable || buildCache.web !== fp) {
     try {
       // Transient, under the plain `web` label: this bundle is what the native targets
       // install, a sub-action of theirs rather than a step the dev asked for — and in
       // `preview all` the served web surface settles its own `web` line afterwards, so a
       // settled one here would print the same name twice for two different things.
-      await runLine("web", (r) => buildWeb(appRoot, { report: r }), {
-        verbose,
-        transient: true,
-      })
+      await runLine(
+        "web",
+        (r) => buildWeb(appRoot, { report: r, config }),
+        {
+          verbose,
+          transient: true,
+        },
+      )
     } catch (err) {
       // The erased row owns no ✖, so this ONE line carries the whole failure — and it is
       // also the whole command, because nothing downstream can run without this bundle.
@@ -1485,7 +1553,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   // Android's `minWebViewVersion` gate loads `server.errorPath` and, with nothing there,
   // Capacitor just logs and boots the app anyway — a silent no-op gate. Unconditional
   // rather than inside the cache branch above, so a cached bundle still gets it.
-  installOfflinePage(appRoot, { url: null })
+  await installOfflinePage(appRoot, { url: null, config })
 
   // The last vite BUILD of the command is done (or was cached away), so it is now safe for
   // the caller to start serving: `preview all` hangs its web server here rather than before
@@ -1687,10 +1755,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
 }
 
-/* =============================================================================
- * doctor
- * ============================================================================= */
-
 const ADAPTV_BASE_PLUGINS = [
   "@capacitor/app",
   "@capacitor/browser",
@@ -1861,10 +1925,6 @@ async function doctor(appRoot) {
   spacer()
 }
 
-/* =============================================================================
- * dispatch
- * ============================================================================= */
-
 /**
  * A validated surface → the native platforms it means.
  *
@@ -1889,15 +1949,6 @@ function pkgVersion() {
   }
 }
 
-/**
- * `adaptv preview web` — the app's real web build, served locally.
- *
- * The web counterpart of `preview ios|android`: what a user would actually get, rather than
- * the dev server. Wrapped by adaptv (instead of leaving the dev to remember `vite build &&
- * vite preview`) so every target is reached the same way and the web build goes through the
- * same adaptv plugin pipeline — SSR/SPA choice, manifest, service worker — that a deploy does.
- * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (LIFECYCLE §0, L14).
- */
 /** `[command, args]` for a vite invocation, preferring the app's own binary. */
 function viteCommand(appRoot, args) {
   const bin = localBin(appRoot, "vite")
@@ -1918,7 +1969,7 @@ function viteCommand(appRoot, args) {
  * bind. It doesn't even take a long-running server in the config to collide: TanStack's
  * prerender step starts its own `vite preview` inside the build to crawl the routes.
  */
-async function buildWebPreview(appRoot, opts) {
+async function buildWebPreview(appRoot, config, opts) {
   const verbose = !!opts.verbose
   const startedAt = Date.now()
   try {
@@ -1929,7 +1980,9 @@ async function buildWebPreview(appRoot, opts) {
         const [cmd, args] = viteCommand(appRoot, ["build"])
         await exec(cmd, args, {
           cwd: appRoot,
-          env: process.env,
+          //Carries the build id like every other vite build adaptv runs, so the
+          //bundle it produces can say which config it came from. → build-stamp.ts
+          env: { ...process.env, ...(await buildIdEnv(appRoot, config)) },
           onLine: (l) => report(l),
         })
       },
@@ -2086,14 +2139,20 @@ async function holdWebPreview(state) {
 
 /**
  * `adaptv preview web` — the app's real web build, served locally, held until Ctrl-C.
+ *
+ * The web counterpart of `preview ios|android`: what a user would actually get, rather than
+ * the dev server. Wrapped by adaptv (instead of leaving the dev to remember `vite build &&
+ * vite preview`) so every target is reached the same way and the web build goes through the
+ * same adaptv plugin pipeline — SSR/SPA choice, manifest, service worker — that a deploy does.
+ * Deliberately NOT `ADAPTV_TARGET=capacitor`: this is the web lineage (`docs/design/lifecycle.md §0`, L14).
  */
 async function previewWeb(appRoot, opts) {
   header("preview web")
   // Before the build, not after it fails inside vite (R33). No platforms: the launcher-icon
   // warnings are about art only a native build uses, and there is nothing native here — but
   // preflight still checks the icon set, because this command serves a manifest too.
-  await preflight(appRoot, [], { optional: true })
-  const offsetMs = await buildWebPreview(appRoot, opts)
+  const config = await preflight(appRoot, [], { optional: true })
+  const offsetMs = await buildWebPreview(appRoot, config, opts)
   return holdWebPreview(
     await serveWebPreview(appRoot, { ...opts, offsetMs }),
   )
@@ -2121,7 +2180,7 @@ async function previewWeb(appRoot, opts) {
  * Deploy `dist/client`. That is the entire contract — the channel rides the
  * ordinary web deploy, under `.well-known/`, so there is no second artifact, no
  * bucket to provision and no release step that can be forgotten independently of
- * the site going out. → `LIFECYCLE.md §5.2`
+ * the site going out. → `docs/design/ota.md §5.2`
  */
 async function buildWebDeploy(appRoot, opts) {
   header("build web")
@@ -2163,6 +2222,13 @@ async function buildWebDeploy(appRoot, opts) {
     }
   }
 
+  //Where this build lands is NOT adaptv's to choose and never was: an `ssr` app is
+  //assembled into `.output/`, a `spa` one into `dist/client`. `.adaptv/web` is the
+  //native lineage's directory and this command does not write a byte of it — yet that
+  //is what the line said, for both render modes, which is twenty minutes of debugging
+  //a directory the command never touched. The build writes down where it wrote; this
+  //reads it back. → src/vite/build-stamp.ts
+  let outDir = null
   try {
     await runLine(
       "web",
@@ -2170,16 +2236,33 @@ async function buildWebDeploy(appRoot, opts) {
         const [cmd, args] = viteCommand(appRoot, ["build"])
         await exec(cmd, args, {
           cwd: appRoot,
-          env: process.env,
+          env: { ...process.env, ...(await buildIdEnv(appRoot, config)) },
           onLine: report,
         })
-        return CAP_WEB_DIR
+        //`null` prints as no location at all rather than as a guess — a build that
+        //left no stamp is one adaptv did not shape, and naming a directory for it
+        //would be the same lie in a new place.
+        outDir = await builtOutDir(appRoot, "web")
+        return outDir ?? ""
       },
       { verbose: !!opts.verbose },
     )
   } catch (err) {
     const { reason, detail } = explainFailure("web")(err)
     fail("web", reason, detail)
+    spacer()
+    process.exitCode = 1
+    return { ran: true, ok: false }
+  }
+
+  //A channel has to be placed INSIDE the deployed site or it is not published at all,
+  //and without the stamp there is no honest answer to where that is. Refuse rather than
+  //write it somewhere plausible: an update channel that silently 404s for every
+  //installed app is the one failure mode this whole path exists to avoid.
+  if (bundle && ota && origin && !outDir) {
+    fail("channel", "the build did not report where it wrote", [
+      "adaptv could not place the update channel inside the deployed site.",
+    ])
     spacer()
     process.exitCode = 1
     return { ran: true, ok: false }
@@ -2206,8 +2289,15 @@ async function buildWebDeploy(appRoot, opts) {
       report("writing the channel")
       //Written on EVERY deploy, unchanged or not: a deploy replaces the whole site,
       //so skipping the write here deletes the channel from the next one.
+      //
+      //Into the directory the build just wrote — the one the deploy uploads. It used
+      //to be `.adaptv/web`, which the web build does not produce and no host ever
+      //receives: the channel was written, the line said it was published, and every
+      //installed app went on polling a URL that answered 404. Same wrong constant as
+      //the success line above, with a worse ending. The playground's own OTA bench
+      //carries a note about this exact failure (`scripts/ota-lab.ts`).
       const written = writeChannel({
-        clientDir: path.join(appRoot, CAP_WEB_DIR),
+        clientDir: path.resolve(appRoot, outDir),
         origin,
         plan,
         archive: readFileSync(bundle.archivePath),
@@ -2341,12 +2431,15 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
   await runLine(
     "bundle",
     async (report) => {
-      await buildWeb(appRoot, { report })
+      await buildWeb(appRoot, { report, config })
       const { buildBundleArchive, computeBuildTag } =
         await loadAdaptvModule("vite/ota-emit.ts")
       const clientDir = path.join(appRoot, CAP_WEB_DIR)
       const buildTag = computeBuildTag(clientDir)
-      report("archiving")
+      //`packaging` — R24's word for "put the built thing into its container", already
+      //what the .ipa/.apk step says. `archiving` was a lone verb and `prettyLine` drops
+      //those, so this row never said anything at all.
+      report("packaging")
       mkdirSync(cacheDir, { recursive: true })
       const target = path.join(cacheDir, `bundle-${buildTag}.zip`)
       writeFileSync(target, buildBundleArchive(clientDir))
@@ -2366,10 +2459,6 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
   writeBuildState(appRoot, cache)
   return staged
 }
-
-/* =============================================================================
- * keys
- * ============================================================================= */
 
 /**
  * `adaptv keys ota` — the pair that makes the update channel trustworthy.
@@ -2415,10 +2504,6 @@ async function genOtaKeys() {
   spacer()
   return { ran: true, ok: true }
 }
-
-/* =============================================================================
- * icons
- * ============================================================================= */
 
 /**
  * `adaptv icons --input <image>`: the app's whole icon set, from one image.
@@ -2748,7 +2833,7 @@ async function main() {
         // `inspectorPort`) is already taken, and the build dies on a port the dev never
         // asked for. Serving is deferred to `onBundleReady`, the moment the last build is
         // done, which still leaves `✓ web` and its addresses above the device lanes (R29).
-        const buildMs = await buildWebPreview(appRoot, {
+        const buildMs = await buildWebPreview(appRoot, config, {
           verbose: !!flags.verbose,
         })
         let web = null

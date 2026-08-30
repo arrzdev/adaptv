@@ -8,12 +8,15 @@
 // "run `adaptv dev`" screen instead of black, and it auto-reconnects the moment the
 // server is back.
 //
-// Why this file is GENERATED per run (not shipped static): the dev server URL is only
-// known at runtime, and the page needs it baked in to navigate back. It's written into
-// the web dir so `cap sync` copies it into each platform's `public/`, and removed on
+// Why this file is GENERATED per run (not shipped static): two things it needs are the
+// APP's, not adaptv's. The dev server URL is only known at runtime and has to be baked in
+// for the page to navigate back, and the colours come from `adaptv.config.ts` so the screen
+// belongs to the app rather than to the framework (see the palette note below). It's written
+// into the web dir so `cap sync` copies it into each platform's `public/`, and removed on
 // teardown so a committed build never ships it.
 import { rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
+import { loadAdaptvModule } from "./load-ts.mjs"
 import { CAP_WEB_DIR } from "./native.mjs"
 
 /** The errorPath filename, relative to the web dir root. Shared with `patchServerUrl`. */
@@ -32,17 +35,241 @@ export const MIN_ANDROID_WEBVIEW = 111
  *
  * `url` is the dev server, baked in so the page can navigate back to it — pass `null` for
  * `preview`/`build`, where there is nothing to reconnect to and the page exists only for
- * the WebView-too-old case. Returns a revert fn that deletes the file; `dev` registers it
+ * the WebView-too-old case. `config` is the app's `adaptv.config.ts`, which is where the
+ * page's colours come from. Returns a revert fn that deletes the file; `dev` registers it
  * as a cleanup (the next `cap sync` drops it from `public/`), production does NOT — there
  * the page has to ship inside the app.
  */
-export function installOfflinePage(appRoot, { url = null } = {}) {
+export async function installOfflinePage(appRoot, { url = null, config }) {
   const dest = path.join(appRoot, CAP_WEB_DIR, OFFLINE_PAGE)
-  writeFileSync(dest, renderOfflineHtml(url))
+  writeFileSync(dest, await renderOfflineHtml(url, config))
   return () => {
     try {
       rmSync(dest)
     } catch {}
+  }
+}
+
+/* =============================================================================
+ * The palette — derived from `adaptv.config.ts`, at build time, in this process.
+ *
+ * This screen used to carry three hardcoded near-black tones. They were the playground's
+ * own `themeColor.dark` and two greys sampled off it, so on that one app the page looked
+ * native and on a light-themed app it was a black rectangle with nothing of the app in
+ * it. `themeColor` is the value every OTHER surface that paints a background already
+ * answers to — the pre-paint script, the critical CSS, the manifest, the iOS splash
+ * colourset, Android's `colors.xml` — and there is no reason for the one screen a dev
+ * sees when things are broken to be the exception.
+ *
+ * ## Why the config's ONE colour becomes a whole ramp
+ *
+ * `themeColor` declares a background per appearance and nothing else, while the page needs
+ * a raised surface, a hairline, and four levels of text. Every tone but the background is
+ * therefore derived, and the derivation is the same idea twice: **mix the base towards the
+ * ink, or the ink back towards the base.**
+ *
+ * Mixing towards the ink rather than towards white (or towards a fixed grey) is the whole
+ * trick, and it is what keeps a saturated or unusual `themeColor` from going muddy. The
+ * ink is neutral, so a mix from the background towards it moves lightness and leaves the
+ * hue alone — a deep indigo page gets a slightly lighter indigo command box, not a grey
+ * one. And because the ink is picked FOR contrast (below), a mix in its direction is
+ * always a mix in the direction that is guaranteed to become visible. A fixed lift would
+ * have to pick a direction blind: lighten, and a white app's surfaces vanish into the
+ * page; darken, and a near-black app's do.
+ *
+ * ## Contrast is computed, never assumed
+ *
+ * The ink is pure white or pure black, whichever measures higher against the resolved
+ * background. That is not a preference, it is a floor with a proof: the two candidates
+ * cross over at a background luminance of 0.179, where both measure 4.58:1, and away from
+ * that point one of them only climbs. So the strongest text on this page clears WCAG AA
+ * (4.5:1) against ANY sRGB colour a config can name, including the worst one.
+ *
+ * The dimmer tones are then mixes back towards the background, and each is defined by the
+ * CONTRAST RATIO it should land on rather than by how far along that mix it sits (see
+ * {@link TONES}). Naming the distance instead was the first attempt and it does not survive
+ * the light case: sRGB is gamma-encoded, so 57% of the way from white towards a near-black
+ * page and 57% of the way from black towards a near-white one are nowhere near the same
+ * step down, and a ramp tuned on the dark theme collapsed into two indistinguishable greys
+ * on the light one. A ratio is the same perceptual distance in both directions by
+ * definition, so ONE table describes the hierarchy for every background, and the numbers in
+ * it are the ratios the hardcoded page already had, measured off its own greys.
+ *
+ * When a background cannot reach a tone's ratio at all, that tone pins to the ink. A
+ * mid-tone background therefore compresses the ramp from the bottom up and the screen reads
+ * flatter. Losing the hierarchy is the correct way to lose: this is the page whose only job
+ * is to be legible after everything else has failed.
+ * ============================================================================= */
+
+/** WCAG AA for body text. The floor for anything on this page that carries the message. */
+const AA = 4.5
+
+/** Surfaces, as a fraction of the way from the background TOWARDS the ink. */
+const SURFACE = 0.045
+const BORDER = 0.12
+const TRACK = 0.14
+
+/**
+ * Text tones, as the contrast ratio each should hit against the command box (the lowest-
+ * contrast surface on the page, so a tone that clears it clears the page background too).
+ *
+ * Every number is measured off the hardcoded page this replaced, so a dark-themed app gets
+ * the screen it already had. The one change is `faint`, the `$` in front of the command:
+ * that was 2.57:1 and is now 3, WCAG's non-text floor. It is the only tone on the page with
+ * no meaning of its own, so it is the one that can afford to sit at the floor, and it should
+ * not sit under it.
+ */
+const TONES = {
+  body: 15.7,
+  muted: 6.67,
+  spinner: 5.38,
+  dim: 3.69,
+  faint: 3,
+}
+
+/** WCAG relative luminance of an 8-bit sRGB colour. */
+function relativeLuminance({ r, g, b }) {
+  const light = (value) => {
+    const c = value / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * light(r) + 0.7152 * light(g) + 0.0722 * light(b)
+}
+
+/** The WCAG contrast ratio between two opaque colours, in `[1, 21]`. */
+export function contrastRatio(a, b) {
+  const la = relativeLuminance(a)
+  const lb = relativeLuminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+/** 8-bit sRGB, which is the only thing the page can actually carry. */
+function quantize({ r, g, b }) {
+  return { r: Math.round(r), g: Math.round(g), b: Math.round(b) }
+}
+
+/**
+ * `from` mixed as far towards `to` as it can go while still clearing `min` against
+ * `against`, and never past `want`.
+ *
+ * Bisection is exact enough because contrast along this segment is monotonic: every channel
+ * moves in one direction as `t` grows, so luminance does too, and so does the ratio. Twenty
+ * halvings of a span no wider than 1 leave an error far under one 8-bit step. When even
+ * `t = 0` cannot reach `min` there is nothing better than `from` itself, and that is what
+ * comes back.
+ *
+ * The candidate is QUANTIZED before it is measured. Bisecting on the continuous mix and
+ * rounding afterwards let a tone land at 4.49:1 against a floor of 4.5 — true of the colour
+ * that was solved for, false of the colour that ships, and a guarantee that is only true of
+ * a number nobody sees is not a guarantee.
+ */
+function cappedMix(mixRgb, from, to, want, against, min) {
+  const at = (t) => quantize(mixRgb(from, to, t))
+  const clears = (t) => contrastRatio(at(t), against) >= min
+  if (clears(want)) return at(want)
+  let lo = 0
+  let hi = want
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2
+    if (clears(mid)) lo = mid
+    else hi = mid
+  }
+  return at(lo)
+}
+
+/**
+ * The full page palette for one background colour, plus the `color-scheme` that background
+ * implies. Every value is `#rrggbb`; the page carries no colour this did not produce.
+ */
+export async function offlinePalette(background) {
+  const { formatHex, mixRgb, parseCssColor } =
+    await loadAdaptvModule("utils/color.ts")
+  const bg = parseCssColor(background)
+  if (!bg)
+    throw new Error(
+      `the offline screen needs a hex theme colour, got ${JSON.stringify(background)}`,
+    )
+  const white = { r: 255, g: 255, b: 255 }
+  const black = { r: 0, g: 0, b: 0 }
+  const ink =
+    contrastRatio(white, bg) >= contrastRatio(black, bg) ? white : black
+
+  // The command box HOLDS text, so its fill answers to the same floor that text does: it may
+  // only lift off the background as far as it can without pushing the ink under AA. On a
+  // mid-tone background the fill flattens away to nothing and the hairline alone draws the
+  // box, which is the right way to lose that one: a box you can read beats a box you can see.
+  const surface = cappedMix(mixRgb, bg, ink, SURFACE, ink, AA)
+  // Every text tone is measured against the SURFACE, not the page background. The surface is
+  // the lower-contrast of the two by construction (it is the background, moved towards the
+  // ink), so a tone that clears it clears the page too, and ONE number then describes that
+  // tone wherever on the page it is used.
+  const tone = (target) =>
+    formatHex(cappedMix(mixRgb, ink, bg, 1, surface, target))
+
+  return {
+    scheme: ink === white ? "dark" : "light",
+    background: formatHex(bg),
+    surface: formatHex(surface),
+    border: formatHex(mixRgb(bg, ink, BORDER)),
+    track: formatHex(mixRgb(bg, ink, TRACK)),
+    strong: formatHex(ink),
+    body: tone(TONES.body),
+    muted: tone(TONES.muted),
+    spinner: tone(TONES.spinner),
+    dim: tone(TONES.dim),
+    faint: tone(TONES.faint),
+  }
+}
+
+/** One palette as custom properties, for a `:root` block. */
+function paletteVars(palette) {
+  return [
+    `--bg:${palette.background}`,
+    `--surface:${palette.surface}`,
+    `--border:${palette.border}`,
+    `--track:${palette.track}`,
+    `--strong:${palette.strong}`,
+    `--body:${palette.body}`,
+    `--muted:${palette.muted}`,
+    `--spinner:${palette.spinner}`,
+    `--dim:${palette.dim}`,
+    `--faint:${palette.faint}`,
+  ].join(";")
+}
+
+/**
+ * The page's two palettes and the `color-scheme` they run under, resolved the way the app's
+ * own pre-paint script resolves them (`src/shell/theme-init-script.ts`): a pinned
+ * `defaultThemePreference` paints that one appearance, and `"system"` follows the device.
+ *
+ * The one arm the script has that this page cannot have is the dev's SAVED preference. That
+ * lives in `localStorage` on the dev server's origin, and this page is served from the local
+ * asset handler — `capacitor://localhost` or `http://localhost` with no port — so it is a
+ * different origin on both platforms and the value is unreachable by construction, not by
+ * omission. A dev who forced light on a dark device therefore sees the dark screen here.
+ * That is one appearance out of step on a screen that used to be one appearance out of step
+ * for everybody.
+ */
+async function themeCss(config) {
+  const { resolveThemeColors } = await loadAdaptvModule(
+    "config/app-config.ts",
+  )
+  const theme = resolveThemeColors(config.themeColor)
+  const preference = config.defaultThemePreference ?? "system"
+  if (preference === "light" || preference === "dark") {
+    const palette = await offlinePalette(theme[preference])
+    return {
+      scheme: palette.scheme,
+      css: `:root { color-scheme: ${palette.scheme}; ${paletteVars(palette)} }`,
+    }
+  }
+  const light = await offlinePalette(theme.light)
+  const dark = await offlinePalette(theme.dark)
+  return {
+    scheme: "light dark",
+    css:
+      `:root { color-scheme: light dark; ${paletteVars(light)} }\n` +
+      `  @media (prefers-color-scheme: dark) { :root { ${paletteVars(dark)} } }`,
   }
 }
 
@@ -85,9 +312,9 @@ export function installOfflinePage(appRoot, { url = null } = {}) {
  * ## The mark
  *
  * `assets/adaptv-mark.svg` with the background rect dropped and the viewBox tightened to the
- * artwork, drawn in `currentColor` so it takes the wordmark's white on this near-black page.
- * Inlined rather than linked: `cap sync` copies this ONE file into each platform's `public/`,
- * so anything it references by URL would 404 on the device.
+ * artwork, drawn in `currentColor` so it takes whichever ink the config's background asked
+ * for. Inlined rather than linked: `cap sync` copies this ONE file into each platform's
+ * `public/`, so anything it references by URL would 404 on the device.
  */
 /*
  * ## Why ONE page serves two unrelated failures
@@ -101,22 +328,23 @@ export function installOfflinePage(appRoot, { url = null } = {}) {
  * is the whole test. The version branch runs FIRST and is terminal — no reconnect loop, no
  * dev-server probing, because neither has anything to do with the failure.
  */
-function renderOfflineHtml(devUrl) {
+async function renderOfflineHtml(devUrl, config) {
   const url = JSON.stringify(devUrl)
+  const theme = await themeCss(config)
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="color-scheme" content="dark" />
+<meta name="color-scheme" content="${theme.scheme}" />
 <title>adaptv · dev build</title>
 <style>
-  :root { color-scheme: dark; }
+  ${theme.css}
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   body {
-    background: #0a0a0c;
-    color: #ededf0;
+    background: var(--bg);
+    color: var(--body);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     display: flex; align-items: center; justify-content: center;
@@ -126,25 +354,25 @@ function renderOfflineHtml(devUrl) {
     overflow: hidden;
   }
   .wrap { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
-  .brand { display: flex; flex-direction: column; align-items: center; gap: 12px; color: #fff; }
+  .brand { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--strong); }
   .brand svg { width: 62px; height: 62px; display: block; }
-  .brand span { font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; color: #6f6f78; }
-  h1 { font-size: 19px; font-weight: 620; letter-spacing: -0.01em; color: #fff; }
-  p { color: #9b9ba4; font-size: 14px; margin-top: 7px; }
+  .brand span { font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--dim); }
+  h1 { font-size: 19px; font-weight: 620; letter-spacing: -0.01em; color: var(--strong); }
+  p { color: var(--muted); font-size: 14px; margin-top: 7px; }
   .cmd {
     width: 100%;
-    background: #141418; border: 1px solid #26262e; border-radius: 11px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 11px;
     padding: 13px 16px; margin-top: 2px;
     font: 13.5px/1.4 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    color: #ededf0; text-align: left;
+    color: var(--body); text-align: left;
     display: flex; align-items: center; gap: 9px;
   }
-  .cmd .sigil { color: #57575f; }
-  .cmd .run { color: #fff; }
-  .status { display: inline-flex; align-items: center; gap: 8px; color: #6f6f78; font-size: 12.5px; }
+  .cmd .sigil { color: var(--faint); }
+  .cmd .run { color: var(--strong); }
+  .status { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12.5px; }
   .spin {
     width: 12px; height: 12px; border-radius: 50%;
-    border: 1.5px solid #2a2a32; border-top-color: #8a8a94;
+    border: 1.5px solid var(--track); border-top-color: var(--spinner);
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
