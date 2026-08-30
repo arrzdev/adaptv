@@ -4,9 +4,14 @@
 > as a **desktop web app, an installable PWA, and native iOS/Android apps** — and *actually feels
 > right on every one of them*, without per-platform babysitting.
 
-This is the north star. It's aspirational: parts exist today (the shell, platform detection, the
-capability layer, the Capacitor build), most of the primitive layer does not yet. This document is the
-map, not the changelog.
+This is the north star. This document is the map, not the changelog.
+
+> ⚠︎ **The status sentence that used to sit here — "most of the primitive layer does not yet
+> [exist]" — was written early and is no longer true.** The public component surface is 27 barrels
+> (`src/interface/components.index.ts`) and the suite is 2542 tests across 164 files, as of
+> **2026-08-30**. Aspiration below, current state in
+> [`../README.md`](../README.md) and [`roadmap/README.md`](roadmap/README.md); this file deliberately
+> carries neither, so it cannot go stale again.
 
 ---
 
@@ -61,7 +66,7 @@ beat on developer joy and correctness, not to copy.
    from the framework-owned shell seeding a full-viewport, inset-aware slot (React Native's navigator
    model) — never from a primitive inspecting the DOM or mutating the consumer's tree. A dumb-but-correct
    `View` fills that frame; there is no `Screen`/`Page` at all. Predictability is a feature.
-   (Mechanism: `ARCHITECTURE.md §0.4`, §1.)
+   (Mechanism: `docs/design/architecture.md §0.4`, §1.)
 5. **One config source.** `adaptv.config.ts` is the single source of truth. It generates the web
    manifest, `capacitor.config`, the native project settings, splash, icons, theme — the consumer never
    hand-edits a second config.
@@ -110,7 +115,7 @@ It was reverted the same day:
 
 The correct primitive for toggled emphasis is **`outline`**: it never participates in layout at any
 width, and it follows `border-radius` in every engine adaptv targets. Same answer as the focus ring
-(`STYLING.md` §D), which is not a coincidence — `outline` exists precisely for decoration that must
+(`docs/decisions/styling.md` §D), which is not a coincidence — `outline` exists precisely for decoration that must
 not move anything.
 
 ### What this licenses
@@ -188,8 +193,8 @@ obvious, because the long tail is the actual work.
 - Auth: cookie-less bearer flow; OAuth redirect + **deep-link callback**; biometric unlock; token refresh on resume.
 
 ### Build, distribution & updates
-> Full model + the hard **isomorphism boundary** (`createServerFn` is forbidden cross-platform): see **`RENDERING.md`**.
-- One app → **SSR web** (default) + **static SPA** (native), auto per target; service worker on/off per target; `VITE_BACKEND_URL` is compile-time.
+> Full model + the hard **isomorphism boundary** (`createServerFn` is forbidden cross-platform): see **`docs/design/rendering.md`**.
+- One app → **SSR web** (default) + **static SPA** (native), auto per target; service worker on/off per target; **build-time env (`VITE_*`) is baked into the bundle**, so anything an app points at — a backend, an OTA channel — is chosen when the artifact is built, not when it launches, and each target's bundle carries its own answer.
 - Code signing; unsigned `.ipa` for sideloading vs signed TestFlight/App Store; debug `.apk`.
 - **OTA / live updates** — the bundle is a snapshot; JS/web-only updates can ship over-the-air (Capgo / `@capacitor/live-updates`, Apple 3.3.2); native changes need a store submission.
 - **Version pinning hell** — Capacitor core vs plugins vs the SPM framework (`capacitor-swift-pm`) vs Xcode toolchain (prebuilt Swift binaries). adaptv should *own* a known-good version set so consumers never fight this.
@@ -206,7 +211,7 @@ obvious, because the long tail is the actual work.
 - Focus management, VoiceOver/TalkBack, `prefers-reduced-motion`, dynamic type / font scaling, contrast, minimum tap targets (44/48px), RTL, locale-aware dates/numbers.
 
 ### Developer experience
-- Testing across **six targets** (see `TESTING.md`); hot reload for web/standalone, rebuild for native; debugging the native WebView; surfacing device logs without manual handoff; **lint rules that enforce the correctness contract**; clear error messages.
+- Testing across **six targets** (see `docs/guides/testing.md`); hot reload for web/standalone, rebuild for native; debugging the native WebView; surfacing device logs without manual handoff; **lint rules that enforce the correctness contract**; clear error messages.
 
 That list is the moat. Nobody solves all of it well; adaptv's job is to solve it *once*, correctly, behind primitives.
 
@@ -277,7 +282,7 @@ dumb-correct `flex-col` box — and there is no second component whose job is "b
 
 The failure it avoids is real: with both a shell frame *and* a `Screen`, "who owns edge-to-edge" has
 two answers, and a route nested one level deeper silently gets a different one. Root-ness must never be
-inferred from position in the DOM. → `ARCHITECTURE.md §1`
+inferred from position in the DOM. → `docs/design/architecture.md §1`
 
 ### `Button` — real press physics
 Wraps the gesture engine (exists: `useGestureEngine`, and the patched `active:` variant). Press feedback that survives finger re-entry, optional haptic, disabled states, keyboard-activatable.
@@ -345,10 +350,10 @@ stays mounted for exit animation.
 ```
 
 ### `Input`, `Text`, `Image`, `Modal`, `Tabs`
-- `Input` — keyboard avoidance, autocorrect/spellcheck static-disable, no-zoom font, caret fixes baked in.
-- `Text` — selectable opt-in, truncation, dynamic-type aware.
-- `Image` — lazy, placeholder/blur, safe intrinsic sizing (no layout shift).
-- `Modal` / `Tabs` — focus trap, stacking, safe-area, back-button integration.
+- ✅ `Input` — keyboard avoidance, autocorrect/spellcheck static-disable, no-zoom font, caret fixes baked in. **Shipped** (`src/components/input.tsx`, `text-area.tsx`, `avoid-keyboard/`).
+- ✅ `Text` — selectable opt-in, truncation, dynamic-type aware. **Shipped** 2026-07-30 (`src/components/text.tsx`); the two-quirk test it passes is in `docs/research/component-surface.md §8.1`.
+- ✅ `Image` — lazy, placeholder/blur, safe intrinsic sizing (no layout shift). **Shipped** 2026-07-30, and this line is delivered by [`design/image.md`](design/image.md), which is the design of record including the build-time placeholder pipeline.
+- 🚧 `Modal` / `Tabs` — focus trap, stacking, safe-area, back-button integration. **Not built** → [`roadmap/component-gaps.md`](roadmap/component-gaps.md) Tiers 2 and 3.
 
 ---
 
@@ -416,7 +421,7 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 
 ## 8. Developer experience
 
-- **Six-target testing** discipline and commands: `TESTING.md`.
+- **Six-target testing** discipline and commands: `docs/guides/testing.md`.
 - **Enforcement**: build-time lint rules (className-behavior misuse, non-`View` route roots), dev-only
   runtime warnings, and types that make illegal states unrepresentable.
 - **Debugging native**: WebView inspection (`chrome://inspect`, Safari ▸ Develop), device log sink.
@@ -427,6 +432,12 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 
 ## 9. Open questions (decide as we go)
 
+> ⚠︎ **Most of this list is closed.** It is kept for the shape of the original questions, not as a
+> status. The live set — and what each closed one was closed *with* — is
+> [`roadmap/open-questions.md`](roadmap/open-questions.md); the full rationale is
+> [`decisions/register.md §5`](decisions/register.md). Only **navigation model** and **testing
+> automation** below are still genuinely open.
+
 - **Styling system** — stay Tailwind-classes-for-presentation, or add a typed style prop? (Leaning: keep
   Tailwind; behavior via props, looks via `className`.)
 - **Lint delivery** — a Biome plugin, an ESLint rule, or a Vite transform for the correctness rules?
@@ -436,7 +447,7 @@ splash policy, orientation lock, service-worker gating, SSR↔SPA per target. **
 - **Secure storage / auth** — how opinionated should adaptv be about the bearer-token + biometric flow?
 - **Testing automation** — can the six-target matrix run in CI (sims/emulators) or stay local?
 - **Distribution** — does adaptv own signing config + fastlane, or stop at the unsigned artifact?
-- ✅ **Scope discipline — ANSWERED, see `ARCHITECTURE.md §5`.** The method: a primitive is *forced* when
+- ✅ **Scope discipline — ANSWERED, see `docs/design/architecture.md §5`.** The method: a primitive is *forced* when
   cross-platform divergence means the consumer would otherwise write the branch (Drawer), or *elective*
   when it's a genuinely better building block (View's `min-h-0` safety). Ship **every layer** of the §4
   ladder as a public export, not just the component. Prioritise from **filtered demand** — Ionic's

@@ -14,7 +14,7 @@ pnpm dev:android    pnpm preview:android    pnpm build:all
 pnpm dev:all        pnpm preview:all
 
 pnpm adaptv doctor          # ad-hoc passthrough to the CLI inside the playground
-pnpm playground:setup       # env + install + local D1 (runs itself on first use)
+pnpm playground:setup       # install (runs itself on first use)
 ```
 
 Explicit on purpose — there is no bare `pnpm dev`. The target is the most important word in the
@@ -42,10 +42,16 @@ quirk, a specific OEM), say *that* — not that it can't be run at all.
 
 ## What the playground is
 
-`playground/` is a **copy of a real app** — chopchop's `adaptv-testing` branch — vendored into this
-repo, tracked in this repo's history, with its own git origin removed. It is a turbo monorepo: a
-React app, a Cloudflare Workers backend, D1, auth, sync. Half of what's worth testing needs that
-backend up, which is why the whole thing is here and not a hand-written demo.
+`playground/` is a **frontend-only app** — seeded from chopchop's `adaptv-testing` branch — vendored
+into this repo, tracked in this repo's history, with its own git origin removed. It is a turbo
+monorepo, but every part of it runs in the browser: a React app, a local-first data layer over
+IndexedDB, and a `/lab/*` page per component, capability and framework behaviour.
+
+It has no backend, no database and no accounts. It used to carry a Cloudflare Workers API, D1, auth
+and sync; none of it was exercising adaptv, and all of it had to be up before anything could be
+tested. Sign-in survives only as a UI facade that always fails — the fields, the drawer and the
+autofocus are what the keyboard, inset and drawer behaviour are tested against, and the auth was
+never the point.
 
 Vendoring it is what makes worktrees work, and it removes every moving part the alternatives needed:
 
@@ -83,27 +89,27 @@ Each `pnpm <target>` here is a one-line passthrough to the identically-named scr
 
 | `pnpm …` here | → in the playground | what runs |
 |---|---|---|
-| `dev:web` | `turbo run dev:web` | wrangler API + `adaptv dev web` |
-| `dev:ios` `dev:android` `dev:all` | `turbo run dev:<t>` | wrangler API + `adaptv dev <t> --latest` |
-| `preview:*` | `turbo run preview:<t>` | wrangler API + `adaptv preview <t>` |
-| `build:ios` `build:android` `build:all` | `pnpm --filter @repo/frontend run build:<t>` | env gate + `adaptv build <t>` |
+| `dev:web` | `turbo run dev:web` | `adaptv dev web` |
+| `dev:ios` `dev:android` `dev:all` | `turbo run dev:<t>` | `adaptv dev <t> --latest` |
+| `preview:*` | `turbo run preview:<t>` | `adaptv preview <t>` |
+| `build:ios` `build:android` `build:all` | `pnpm --filter @repo/frontend run build:<t>` | `adaptv build <t>` |
 | `adaptv <args>` | `pnpm run adaptv <args>` | the CLI, in the app |
 
-`build:*` is the one that skips turbo: a native artifact needs no API, and running it directly gives
-the CLI a real TTY for its progress lanes.
+`build:*` is the one that skips turbo: running it directly gives the CLI a real TTY for its
+progress lanes.
 
 `dev` and `preview` panes are turbo `interactive` tasks — select the pane and press `i` to reach
 adaptv's own keys (`r` reload, `b` rebuild, `Ctrl-C` stop), `Ctrl-Z` to leave. This needs a real
 terminal; turbo refuses an interactive task with no TTY, so none of these run in a non-TTY shell.
 
-**Ports are the playground's job.** Its `runDev` frees every port it owns (app *and* API) before
-starting, which is what makes hopping worktrees free. The CLI must never do this: `adaptv dev`
+**Ports are the playground's job.** Its `runDev` frees every port it owns before starting, which is
+what makes hopping worktrees free. The CLI must never do this: `adaptv dev`
 passes `--strictPort` and fails loudly on a busy port on purpose
 ([bin/lib/dev-server.mjs](../bin/lib/dev-server.mjs)). A framework dev hopping worktrees wants the
 old server gone; a real user wants to be told. Both are right, only one is the product.
 
-The playground runs on **its own port block** — app `41730`, inspector `41740`, API `41830`/`41840`
-— so it never fights a real chopchop dev server on `417x0`/`418x0`. Its `appId` is
+The playground runs on **its own port block** — app `41730`, inspector `41740` — so it never fights
+a real chopchop dev server on `417x0`. Its `appId` is
 `dev.arrz.projectzero`, so native installs don't collide either. Both can run at once.
 
 ## A fresh worktree
@@ -114,20 +120,14 @@ cd .claude/worktrees/my-thing
 pnpm dev:ios
 ```
 
-The first `pnpm dev:*` sees no `playground/node_modules` and runs `playground:setup` itself:
+The first `pnpm dev:*` sees no `playground/node_modules` and runs `playground:setup` itself. It has
+one step — **install**: framework deps if missing, then the playground's own.
 
-1. **env** — `env/.env` files are git-ignored (secrets), so they're copied from the main checkout's
-   playground, then re-stamped with this machine's current LAN IP. A machine that has never had
-   them gets a clear `check:env` failure naming the key.
-2. **install** — framework deps if missing, then the playground's own.
-3. **migrate** — local D1 for the backend. A failure here warns rather than stops.
-
-Both halves of the app's dev URL can go stale, and both fail the same silent way — every request
-lands on something that isn't listening, which reads as "the backend is down" or, worse, as
-offline-first working. So neither is left to memory: the **port** is asserted by the frontend's env
-schema against `apps/backend/ports.ts` (`playground/apps/frontend/env/schema.ts`), and the **host** is
-re-stamped on every `playground:setup`. This is not hypothetical — the env in the real repo had
-been pointing at a port nothing bound since the block moved.
+That is the whole of it because the app reads no environment. There is no `env/.env` to copy from
+the main checkout and no local database to migrate, so the two failure modes that used to live here
+— a dev URL whose port or LAN IP had gone stale, silently pointing every request at something that
+wasn't listening — cannot happen. Both used to need a guard (an env-schema port assertion and a LAN
+re-stamp on every setup); neither guard exists now, because neither problem does.
 
 ## Things worth knowing
 

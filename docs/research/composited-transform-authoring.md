@@ -99,7 +99,7 @@ hints, and with both forced to `auto`:
 and the dim by being a fixed child of the portal's stacking context, so the hints declare a
 promotion that exists either way — and, per css-will-change §2, grant no containing block that the
 transform had not already granted. They are free, they remove paints even in Chromium, and the
-WebKit saving is the larger one. This is the narrow shape `PERFORMANCE-BOOST.md` permits: static,
+WebKit saving is the larger one. This is the narrow shape `docs/design/performance-boost.md` permits: static,
 component-scoped, never toggled, fixing a named bug.
 
 ## Where it is enforced
