@@ -292,3 +292,196 @@ describe("the device picker", () => {
     expect(screen(out.frames).trim()).toBe("")
   })
 })
+
+describe("hintColumn — a list's right-hand side lines up (R65)", () => {
+  const col = async () => (await import("./live.mjs")).hintColumn
+
+  it("pads every label to the longest, so the hints share a column", async () => {
+    const hintColumn = await col()
+    expect(
+      hintColumn(
+        [
+          { label: "iPad (A16) (simulator)", hint: "iOS 26.1" },
+          { label: "iPad Air 11-inch (M2) (simulator)", hint: "iOS 18.0" },
+        ],
+        100,
+      ),
+    ).toBe("iPad Air 11-inch (M2) (simulator)".length)
+  })
+
+  it("pads nothing when no row has a hint", async () => {
+    //`confirm()` is a two-option `select` — padding it would trail invisible spaces after
+    //`replace them` for no reason at all.
+    const hintColumn = await col()
+    expect(
+      hintColumn([{ label: "replace them" }, { label: "cancel" }], 100),
+    ).toBe(0)
+  })
+
+  it("gives up and goes ragged rather than wrapping a row", async () => {
+    //A wrapped picker row costs the window a line, and the block stops being six rows tall.
+    const hintColumn = await col()
+    const wide = [
+      { label: "x".repeat(70), hint: "iOS 26.1" },
+      { label: "y", hint: "iOS 18.0" },
+    ]
+    //2 indent + 2 cursor + 70 label + 4 separator + 8 hint = 86 columns
+    expect(hintColumn(wide, 80)).toBe(0)
+    expect(hintColumn(wide, 86)).toBe(70)
+  })
+})
+
+describe("scrollTo — where the six-row window sits", () => {
+  //Pure arithmetic, so it is imported directly rather than through the fake-stdout harness;
+  //nothing in it touches Ink, stdout or the CI gate.
+  const pure = async () => (await import("./live.mjs")).scrollTo
+
+  it("holds still while the cursor moves inside it", async () => {
+    const scrollTo = await pure()
+    //The point of a sticky window: rows the dev is reading do not move under them.
+    expect(scrollTo(0, 0, 20, 6)).toBe(0)
+    expect(scrollTo(3, 0, 20, 6)).toBe(0)
+    expect(scrollTo(5, 0, 20, 6)).toBe(0)
+  })
+
+  it("follows only once the cursor would leave it", async () => {
+    const scrollTo = await pure()
+    expect(scrollTo(6, 0, 20, 6)).toBe(1)
+    expect(scrollTo(7, 1, 20, 6)).toBe(2)
+  })
+
+  it("follows upward the same way", async () => {
+    const scrollTo = await pure()
+    expect(scrollTo(4, 5, 20, 6)).toBe(4)
+    expect(scrollTo(9, 5, 20, 6)).toBe(5)
+  })
+
+  it("snaps to the far end when the cursor wraps", async () => {
+    const scrollTo = await pure()
+    //`↓` off the last row is index 0, `↑` off the first is the last one.
+    expect(scrollTo(0, 14, 20, 6)).toBe(0)
+    expect(scrollTo(19, 0, 20, 6)).toBe(14)
+  })
+
+  it("never scrolls a list that fits", async () => {
+    const scrollTo = await pure()
+    expect(scrollTo(0, 0, 6, 6)).toBe(0)
+    expect(scrollTo(3, 0, 4, 6)).toBe(0)
+  })
+
+  it("clamps a start that no longer fits the list", async () => {
+    const scrollTo = await pure()
+    expect(scrollTo(2, 99, 20, 6)).toBe(2)
+    expect(scrollTo(19, -5, 20, 6)).toBe(14)
+  })
+})
+
+/** 14 simulators, the shape of a machine with two runtimes installed. */
+const MANY = Array.from({ length: 14 }, (_, i) => ({
+  value: `id-${i}`,
+  label: `device ${i} (simulator)`,
+  hint: i < 8 ? "iOS 18.0" : "iOS 26.1",
+}))
+
+describe("the picker's window (R63)", () => {
+  it("shows six rows and counts what is hidden, instead of the whole list", async () => {
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("Choose a ios device", MANY)
+      await new Promise((r) => setTimeout(r, 120))
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      await answer
+      return asked
+    })
+    //the question is still on screen, which a 14-row block is what took away
+    expect(out).toContain("Choose a ios device")
+    expect(out).toContain("device 0 (simulator)")
+    expect(out).toContain("device 5 (simulator)")
+    expect(out).not.toContain("device 6 (simulator)")
+    expect(out).not.toContain("device 13 (simulator)")
+    //nothing above the first row, eight below it
+    expect(out).toContain("8 more")
+    //the marker line is BLANK rather than absent, so the rows do not jump a line when the
+    //dev scrolls past either end. `↑` still appears in the key hint below the list.
+    expect(out).not.toMatch(/↑ \d+ more/)
+  })
+
+  it("scrolls the window under the cursor and re-counts both ends", async () => {
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("Choose a ios device", MANY)
+      await new Promise((r) => setTimeout(r, 120))
+      for (let i = 0; i < 8; i++) {
+        stdin.press(`${ESC}[B`)
+        await new Promise((r) => setTimeout(r, 40))
+      }
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      return { asked, chosen: await answer }
+    })
+    expect(out.chosen).toBe("id-8")
+    //cursor on row 8 → window holds 3..8
+    expect(out.asked).toContain("device 8 (simulator)")
+    expect(out.asked).not.toContain("device 2 (simulator)")
+    expect(out.asked).not.toContain("device 9 (simulator)")
+    expect(out.asked).toContain("3 more")
+    expect(out.asked).toContain("5 more")
+  })
+
+  it("leaves a short list exactly as it was — no window, no counts", async () => {
+    //`confirm()` is a two-option `select`, so a marker line here would put a blank row
+    //under every yes/no adaptv asks.
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("Choose a ios device", MANY.slice(0, 3))
+      await new Promise((r) => setTimeout(r, 120))
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      await answer
+      return asked
+    })
+    expect(out).toContain("device 2 (simulator)")
+    expect(out).not.toContain("more")
+  })
+})
+
+describe("the picker sits on the body grid (R65)", () => {
+  it("puts the cursor in the glyph column and the label where labels go", async () => {
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("which ios device?", [
+        {
+          value: "a",
+          label: "iPhone 16 Pro (simulator)",
+          hint: "iOS 18.0",
+        },
+        {
+          value: "b",
+          label: "iPhone 17 Pro (simulator)",
+          hint: "iOS 26.1",
+        },
+      ])
+      await new Promise((r) => setTimeout(r, 120))
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      await answer
+      return asked
+    })
+    const rows = out.split("\n")
+    //`  › label` and `    label` — the same columns `  ✓ web` uses for its glyph and label.
+    expect(rows).toContain("  › iPhone 16 Pro (simulator)  · iOS 18.0")
+    expect(rows).toContain("    iPhone 17 Pro (simulator)  · iOS 26.1")
+  })
+
+  it("draws the keys the way the watch block draws them", async () => {
+    const out = await withFakeStdout(async (f, stdin) => {
+      const answer = inkSelect("which ios device?", [
+        { value: "a", label: "iPhone 16 Pro" },
+      ])
+      await new Promise((r) => setTimeout(r, 120))
+      const asked = screen(f.frames)
+      stdin.press("\r")
+      await answer
+      return asked
+    })
+    //three spaces between offers, not a `·` — same shape as `r reload js   b rebuild app`
+    expect(out).toContain("↑↓ move   ↵ select   esc cancel")
+  })
+})

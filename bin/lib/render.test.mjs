@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OWN_PHASES } from "../ui/theme.mjs"
 import {
+  addresses,
   check,
+  detail,
   fail,
   flushNotices,
   header,
@@ -280,5 +282,62 @@ Node.js v26.0.0`
       "computing gzip size",
     )
     expect(prettyLine("launching device")).toBe("launching device")
+  })
+})
+
+describe("a step with lines under it is a GROUP (R64)", () => {
+  it("closes the group before the next step starts", async () => {
+    //Reported from a screenshot of `dev all`: `✓ web` hung two addresses under itself and
+    //`✓ ios` began on the very next row, so the eye had to work out where one step ended.
+    const out = captureOut(() => {
+      skip("web", "4.9s")
+      addresses({
+        local: "http://localhost:41730",
+        network: "http://192.168.1.23:41730",
+      })
+      skip("ios", "41.7s")
+      skip("android", "cached")
+    })
+    const rows = out.join("\n").split("\n")
+    expect(rows).toEqual([
+      "  ✓ web  · 4.9s",
+      "    local    http://localhost:41730",
+      "    network  http://192.168.1.23:41730",
+      "",
+      "  ✓ ios  · 41.7s",
+      "  ✓ android  · cached",
+    ])
+  })
+
+  it("leaves steps with nothing under them back-to-back", async () => {
+    //The other half of the rule, and the reason it is not just "a blank between steps".
+    const out = captureOut(() => {
+      skip("ios", "41.7s")
+      skip("android", "cached")
+    })
+    expect(out.join("\n").split("\n").filter(Boolean)).toHaveLength(2)
+    expect(out.join("")).not.toContain("\n\n")
+  })
+
+  it("closes it before a notice too, not only before a step", async () => {
+    const out = captureOut(() => {
+      skip("web", "4.9s")
+      detail("something hanging under it")
+      flushNotices(["adaptv source change"])
+    })
+    const rows = out.join("\n").split("\n")
+    expect(rows[1]).toContain("something hanging under it")
+    expect(rows[2]).toBe("")
+    expect(rows[3]).toContain("! adaptv source change")
+  })
+
+  it("asks for one blank line, not two, when a spacer follows anyway", async () => {
+    const out = captureOut(() => {
+      skip("web", "4.9s")
+      detail("hanging")
+      spacer()
+      skip("ios", "1.0s")
+    })
+    expect(out.join("")).not.toContain("\n\n\n")
   })
 })
