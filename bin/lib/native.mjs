@@ -21,6 +21,7 @@ import { homedir, networkInterfaces, tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
+import { buildIdEnv } from "./build-stamp.mjs"
 import { exec } from "./exec.mjs"
 import { appConfigFingerprint } from "./fingerprint.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
@@ -131,7 +132,7 @@ export function localBin(appRoot, name) {
 /** Invoke `cap` through adaptv's shim (bin/lib/cap.mjs) — it guarantees the in-memory
  * `ADAPTV_CAPACITOR_CONFIG` behaviour on BOTH a patched install (dev/link) and an unpatched
  * one (published, where pnpm won't carry adaptv's patch). adaptv owns `@capacitor/cli`, so
- * the shim can always resolve it. → bin/lib/cap.mjs, DECISIONS.md L20. */
+ * the shim can always resolve it. → bin/lib/cap.mjs, docs/decisions/register.md L20. */
 export function capCmd(_appRoot) {
   return {
     cmd: process.execPath,
@@ -150,10 +151,6 @@ function writeIfChanged(file, next) {
   if (existsSync(file) && readFileSync(file, "utf8") === next) return
   writeFileSync(file, next)
 }
-
-/* =============================================================================
- * config-derived plans (pure)
- * ============================================================================= */
 
 /**
  * What the launcher icon SITS ON (icon only; the splash is colour-driven).
@@ -244,7 +241,7 @@ function androidLaunchStyles(platform) {
  * Android version, without depending on anything the JS layer did or didn't manage to do.
  *
  * The bar colours only do work below API 35 (from 35 the system owns the bars and ignores
- * them, NATIVE-SHELL §0.0), and that is exactly where they are needed: pre-15 Android
+ * them, `docs/roadmap/native-shell-plugin.md` §0.0), and that is exactly where they are needed: pre-15 Android
  * paints `colorPrimaryDark` behind the status bar otherwise. The contrast opt-outs are
  * API 29+, so they live in `values-v29` rather than making the base theme reference an
  * attribute half the minSdk range has never heard of.
@@ -316,7 +313,7 @@ const ANDROID_EDGE_TO_EDGE_JAVA = `
      * installed after the bridge loaded the plugin, so exactly one remains in the hierarchy.
      * The two-listeners-on-one-hierarchy collision behind capacitor-keyboard#61/#68 cannot
      * happen. On WebView >= 140 this does nothing and SystemBars keeps its whole pipeline,
-     * Chromium workarounds and all — adaptv rents it, per NATIVE-SHELL §0.0.
+     * Chromium workarounds and all — adaptv rents it, per docs/roadmap/native-shell-plugin.md §0.0.
      */
     private void adaptvOwnInsetsOnOldWebView() {
         if (adaptvWebViewMajorVersion() >= ADAPTV_WEBVIEW_WITH_SAFE_AREA_FIX) return;
@@ -533,10 +530,6 @@ export function patchAndroidSplash(appRoot, mask, appId) {
   )
 }
 
-/* =============================================================================
- * iOS splash (colour asset + solid-colour launch storyboard, no image)
- * ============================================================================= */
-
 function hexToRgb(hex) {
   const h = hex.replace("#", "")
   const n =
@@ -648,21 +641,6 @@ export function patchIosTheme(appRoot, mask) {
   }
 }
 
-/* =============================================================================
- * pipeline steps (async, captured)
- * ============================================================================= */
-
-/**
- * Brand the launcher icon + splash for each platform. The splash patches are synchronous
- * file writes (it's a flat colour, not art); the launcher icon is rendered from the app's
- * icon set by `brandLauncherIcon`, which picks the member of that set drawn for the platform
- * being built.
- *
- * Says nothing. What is wrong with the source art is known from the icon directory alone, so
- * the CLI reads it at preflight and prints it above the run (`bin/lib/preflight.mjs`, R33);
- * returning the same sentences from here as well only gave a caller the chance to print them
- * a second time, halfway through work that had already used them.
- */
 /**
  * A content hash of THIS module — the single file that generates every native shell artifact:
  * the launcher icons/splash (`writeAndroidIcons`, `patchAndroidSplash`), the edge-to-edge
@@ -700,6 +678,24 @@ const ASSET_OUTPUTS = {
     "app/src/main/res/mipmap-anydpi-v26",
     "app/src/main/res/values/ic_launcher_background.xml",
     "app/src/main/res/values-night/ic_launcher_background.xml",
+    //The SPLASH half, which this list is missing on the iOS side's own reasoning: iOS
+    //named every file `patchIosTheme` writes (colourset, storyboard, AppDelegate) while
+    //Android named only the launcher art, so `colors.xml` — the one file carrying the
+    //theme colour into the Android shell — was invisible to the outputs guard. The
+    //inputs half still caught a config edit, but a deleted, hand-edited or rescaffolded
+    //colour resource was never repaired, which is exactly what the outputs half exists
+    //for. Everything `patchAndroidSplash` writes now belongs here.
+    "app/src/main/res/values/colors.xml",
+    "app/src/main/res/values-night/colors.xml",
+    "app/src/main/res/values/styles.xml",
+    "app/src/main/res/values-v29/styles.xml",
+    "app/src/main/res/values-v31/styles.xml",
+    "app/src/main/res/drawable/splash_icon.xml",
+    //The generated `MainActivity` lives at a path derived from `appId`, so the whole
+    //source root is walked rather than one computed file. Over-inclusive by the rule
+    //every hash here follows: an app's own hand-written Java re-derives byte-identical
+    //assets ONCE and then hashes stable, while a missing MainActivity is repaired.
+    "app/src/main/java",
   ],
 }
 
@@ -735,7 +731,15 @@ function assetOutputsHash(appRoot, platform) {
 
 /**
  * Write the launcher icons, the splash colours and the launch storyboard into the native
- * projects — unless they are already exactly the files that would be written.
+ * projects — unless they are already exactly the files that would be written. The splash
+ * patches are synchronous file writes (it's a flat colour, not art); the launcher icon is
+ * rendered from the app's icon set by `brandLauncherIcon`, which picks the member of that set
+ * drawn for the platform being built.
+ *
+ * Says nothing. What is wrong with the source art is known from the icon directory alone, so
+ * the CLI reads it at preflight and prints it above the run (`bin/lib/preflight.mjs`, R33);
+ * returning the same sentences from here as well only gave a caller the chance to print them
+ * a second time, halfway through work that had already used them.
  *
  * This runs on EVERY command, and it is ~18-23 sharp encodes (measured ~240ms for both
  * platforms) re-deriving byte-identical files from art that has not changed. The guard has two
@@ -804,10 +808,25 @@ export async function generateAssets(
   writeSection(appRoot, "assets", next)
 }
 
-/** Build the static SPA for the Capacitor target and stamp its `index.html`. */
-export async function buildWeb(appRoot, { report } = {}) {
-  report?.("building SPA (ADAPTV_TARGET=capacitor)")
-  const env = { ...process.env, ADAPTV_TARGET: "capacitor" }
+/**
+ * Build the static SPA for the Capacitor target and stamp its `index.html`.
+ *
+ * `config` is not optional in practice: it carries the build id into the bundle's stamp
+ * (`buildIdEnv`), which is what lets every later command tell a bundle built from the
+ * config on disk from one built before the dev edited it.
+ */
+export async function buildWeb(appRoot, { report, config } = {}) {
+  //`building app` — the same phrase the iOS/Android package steps use, because from the
+  //dev's side it is the same sentence: adaptv is building their app. The old text named
+  //Capacitor and an internal env var, which R8/`opacity.mjs` forbid outright; it never
+  //reached a terminal only because `prettyLine` was erasing it for an unrelated reason
+  //(the parentheses), so a second bug was the only thing keeping the first one off screen.
+  report?.("building app")
+  const env = {
+    ...process.env,
+    ADAPTV_TARGET: "capacitor",
+    ...(config ? await buildIdEnv(appRoot, config) : {}),
+  }
   const vite = localBin(appRoot, "vite")
   if (vite) await run(vite, ["build"], { cwd: appRoot, env, report })
   else
@@ -819,7 +838,7 @@ export async function buildWeb(appRoot, { report } = {}) {
 
   // adaptv GENERATES this document (`src/vite/shell-emit.ts`) instead of
   // capturing whatever the build emitted, and the generated copy is the only one
-  // carrying the prerendered boot fallback (`DECISIONS.md` B31). TanStack Start's
+  // carrying the prerendered boot fallback (`docs/decisions/register.md` B31). TanStack Start's
   // prerender also drops a `_shell.html` beside it — written ~1s LATER, measured —
   // and this step used to copy that over `index.html`. The two are byte-identical
   // today, so nothing broke; but "identical" is Start's coincidence to break, and
@@ -841,7 +860,7 @@ export async function capAddIfMissing(
   appRoot,
   platform,
   env,
-  { report, plugins, privacy } = {},
+  { report, plugins, privacy, warnings } = {},
 ) {
   const dir = nativeDir(appRoot, platform)
   if (existsSync(dir)) {
@@ -870,7 +889,13 @@ export async function capAddIfMissing(
     // project fails to build ("PCH was compiled with module cache path .../ios/...").
     // They're regenerated on the next build/sync; only the source needs to move.
     purgeBuildArtifacts(dir, platform)
-    report?.(`migrated ./${platform} → ${ADAPTV_DIR}/${platform}`)
+    //A NOTICE, not a phase: a directory in the dev's repo just moved, which is a fact they
+    //keep after the row is gone, and R45 says a phase is a present participle — `migrated …`
+    //is neither. It went to `report()` for years and `prettyLine` erased every character of
+    //it (it names two paths), so the move was silent.
+    warnings?.push(
+      `${platform}: moved './${platform}' into '${ADAPTV_DIR}/${platform}'. adaptv owns the native project now; build it with 'adaptv build ${platform}'.`,
+    )
     return
   }
 
@@ -896,7 +921,12 @@ export async function capAddIfMissing(
   // Phrased as a SUB-ACTION, not a step: this now reports onto the platform's own line
   // (`ios` / `android`), so it has to read like something that line is doing right now —
   // and never name `cap`, which is adaptv's plumbing, not the dev's concern.
-  report?.("scaffolding native project (first run)")
+  //`preparing` is the phase every live row opens on, and ` · first run` is R25 metadata on
+  //it — which is the only part the dev cannot already see (this is the wait that takes
+  //minutes). The old text carried the same meaning in a shape `prettyLine` throws away:
+  //parentheses are not in the phrase alphabet, so the row said nothing for the whole
+  //`cap add` + CocoaPods scaffold.
+  report?.("preparing · first run")
   const { cmd, pre } = capCmd(appRoot)
   //iOS: force CocoaPods, never SPM (SPM's binary xcframework fails to compile the
   //plugin sources under Xcode 16; CocoaPods builds from source, BUILD SUCCEEDED).
@@ -916,7 +946,6 @@ export async function capAddIfMissing(
   } else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
 
-/** `cap sync <platform>` (copies web assets + updates native deps). */
 /** The packages adaptv ships that carry NATIVE code for `platform` — every plugin, plus
  * (on iOS) `@capacitor/ios` for the core pods. Derived from adaptv's own manifest so it
  * can never drift from what's installed. Excludes the JS-only core and the CLI.
@@ -994,8 +1023,13 @@ function carriesNativeCode(dir) {
 
 /** Resolve a package directory for the native injectors. adaptv's OWN plugins resolve from
  * the framework; consumer-registered extras (adaptv.config.ts `plugins`) resolve from the
- * app, where the consumer `pnpm add`ed them. Tries both roots so either location works. */
-function pkgDirResolver(appRoot) {
+ * app, where the consumer `pnpm add`ed them. Tries both roots so either location works.
+ *
+ * Exported for `preflight.mjs`, which asks the SAME question before the run starts: is every
+ * name in `plugins` installed? Sharing the resolver is what makes the two answers one answer
+ * (R39) — preflight refuses exactly the names an injector would have had to skip, so the
+ * check can never come to a different conclusion than the code it is protecting. */
+export function pkgDirResolver(appRoot) {
   const reqAdaptv = createRequire(path.join(ADAPTV_ROOT, "package.json"))
   const reqApp = createRequire(path.join(appRoot, "package.json"))
   return (name) => {
@@ -1136,11 +1170,11 @@ async function injectIosPluginPods(
     plugins,
   )
   for (const name of packages) {
+    //Silent when it does not resolve: `preflight` asked this exact question, with this
+    //exact resolver, and ended the run before anything was scaffolded (R33/R18). Nothing
+    //reaches here with a name it could report.
     const dir = resolvePkgDir(name)
-    if (!dir) {
-      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
-      continue
-    }
+    if (!dir) continue
     const rel = path.relative(podfileDir, dir)
     for (const spec of readdirSync(dir).filter((f) =>
       f.endsWith(".podspec"),
@@ -1283,11 +1317,11 @@ export function injectAndroidPluginProjects(
     plugins,
   )
   for (const name of packages) {
+    //Same silence as iOS, for the same reason: `preflight` refused the run over any name
+    //that does not resolve, so this branch is only ever the unreachable tail of a shared
+    //resolver, never a fact the dev still needs to be told (R18).
     const dir = resolvePkgDir(name)
-    if (!dir) {
-      report?.(`! plugin ${name} not found, skipped (did you install it?)`)
-      continue
-    }
+    if (!dir) continue
     // `capacitor.android.src` is where the plugin keeps its Gradle module; a package
     // without it has no Android half (an iOS-only plugin) and is not ours to declare.
     const meta = JSON.parse(
@@ -1343,6 +1377,7 @@ export function injectAndroidPluginProjects(
   if (extras.length > 0) report?.("linking plugins")
 }
 
+/** `cap sync <platform>` (copies web assets + updates native deps). */
 export async function capSync(
   appRoot,
   platform,
@@ -1361,6 +1396,11 @@ export async function capSync(
     await stampIosPrivacyManifest(appRoot, { plugins, privacy })
   } else injectAndroidPluginProjects(appRoot, { report, plugins })
 }
+//^ Neither injector takes a `warnings` channel any more. The one thing they used to push
+//onto it — a configured plugin that is not installed — is knowable from the dev's own files
+//with no native project in sight, so it is `preflight`'s `✖` now and the run never reaches
+//here with it unresolved (R33). Saying it from inside a lane was also the same fact twice on
+//an `all` run, once per platform, for a fact that has no platform (R18/R21).
 
 /**
  * A `PATH` shim that stops the iOS Simulator from stealing the dev's focus.
@@ -1894,7 +1934,7 @@ const escDollar = (s) => s.replace(/\$/g, "$$$$")
  * `.dev`. When it is, the manifest's `.MainActivity` resolves to `<base>.dev.MainActivity` — the
  * bare Capacitor stub `cap add` writes — and adaptv's edge-to-edge MainActivity (generated into
  * the BASE package by `patchAndroidSplash`) never launches, so the app slides under the status
- * bar on old WebViews (NATIVE-SHELL §0.2). Reasserting `namespace = <baseId>` every prepare keeps
+ * bar on old WebViews (`docs/roadmap/native-shell-plugin.md` §0.2). Reasserting `namespace = <baseId>` every prepare keeps
  * the two in the same package whatever `cap add` guessed, and self-heals a project already born
  * wrong.
  *
@@ -1987,10 +2027,6 @@ export async function relaunchAndroidApp(appRoot, env, target) {
     )
   }
 }
-
-/* =============================================================================
- * toolchain env (unchanged behaviour; moved here)
- * ============================================================================= */
 
 function firstExisting(paths) {
   return paths.find((p) => p && existsSync(p)) ?? null
