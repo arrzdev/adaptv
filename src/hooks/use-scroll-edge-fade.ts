@@ -1,9 +1,5 @@
 import { useEffect } from "react"
 
-/* =============================================================================
- * CONSTANTS
- * ============================================================================= */
-
 /**
  * How far you must scroll away from an edge before its fade reaches full strength.
  *
@@ -19,10 +15,6 @@ const FADE_RAMP_PX = 24
 const START_VAR = "--fade-start"
 const END_VAR = "--fade-end"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export interface ScrollEdgeFadeOptions {
   /** Fade the near edge (top, or inline-start when horizontal). */
   start: boolean
@@ -31,10 +23,6 @@ export interface ScrollEdgeFadeOptions {
   /** Read `scrollLeft` instead of `scrollTop`. */
   horizontal: boolean
 }
-
-/* =============================================================================
- * HOOK
- * ============================================================================= */
 
 /**
  * Drive a scroll container's edge-fade strengths from its scroll position.
@@ -71,13 +59,20 @@ export function useScrollEdgeFade(
         : node.scrollHeight - node.clientHeight
 
       /*
-       * `Math.abs` on the offset, and `remaining` floored at 0: iOS rubber-band
+       * Both distances are FLOORED AT ZERO, not made absolute. iOS rubber-band
        * overscroll drives `scrollTop` negative at the top and past `extent` at the
-       * bottom. Without the clamp the strength goes negative mid-bounce, the mask
-       * stops are emitted out of order, and the edge flickers opaque for the length
-       * of the bounce — a glitch that only ever appears on a real device.
+       * bottom; unclamped, the strength goes negative mid-bounce, the mask stops are
+       * emitted out of order, and the edge flickers opaque for the length of the
+       * bounce.
+       *
+       * ⚠︎ `Math.abs` was the original clamp here and it is the WRONG function: it
+       * does not floor, it MIRRORS. Pull the top down 30px and `abs(-30)` is 30, so
+       * the top fade ramps to full strength during an overscroll where there is by
+       * definition nothing above the first line — the gradient appears exactly when
+       * it should be absent. The bottom half always used `Math.max` and was always
+       * right; only the top carried the mirror.
        */
-      const fromStart = Math.abs(offset)
+      const fromStart = Math.max(0, offset)
       const fromEnd = Math.max(0, extent - offset)
 
       const startStrength = start
