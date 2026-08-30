@@ -100,9 +100,36 @@ export async function listTargets(appRoot, platform, env) {
     const match = stdout.match(/\[[\s\S]*\]/)
     parsed = match ? JSON.parse(match[0]) : []
   }
-  return (Array.isArray(parsed) ? parsed : []).filter(
-    (t) => t?.id && t.id !== "?",
+  return dedupeTargets(
+    (Array.isArray(parsed) ? parsed : []).filter(
+      (t) => t?.id && t.id !== "?",
+    ),
   )
+}
+
+/**
+ * One row per DEVICE, keyed on its id.
+ *
+ * The listing walks the installed runtimes and collects each one's devices, and two runtimes
+ * can share an identifier: `xcodebuild -downloadPlatform iOS` installed iOS 26.1 build 23B86
+ * next to the 23B80 already there, and both call themselves
+ * `com.apple.CoreSimulator.SimRuntime.iOS-26-1` (`simctl list devices` prints two `-- iOS
+ * 26.1 --` sections, the first of them empty). Every 26.1 device was then collected once per
+ * runtime and the picker offered 59 rows for 36 devices — all 23 simulators on that version
+ * twice, same name, same version hint, SAME id (R62).
+ *
+ * Which is worse than the ambiguity R60 fixed: there, two rows meant two devices and the
+ * hint could tell them apart. Here both rows ARE one device, so no hint could exist, and
+ * whichever the dev picks is the same pick. Dropping the repeat is the only honest answer.
+ * First wins, so the order the listing chose is kept.
+ */
+export function dedupeTargets(targets) {
+  const seen = new Set()
+  return (targets ?? []).filter((t) => {
+    if (seen.has(t.id)) return false
+    seen.add(t.id)
+    return true
+  })
 }
 
 /**
@@ -175,7 +202,10 @@ async function pickAndCache(appRoot, platform, env, listed) {
     )
   }
   const id = await select(
-    `Choose a ${platform} device`,
+    //Lowercase, and a question — the voice `confirm()` already asks in ('replace 11 icons in
+    //public/icons?'). `Choose a ios device` was also the one line of adaptv's output with an
+    //article it could not get right (R65).
+    `which ${platform} device?`,
     targets.map((t) => ({
       value: t.id,
       label: t.name,
@@ -258,7 +288,7 @@ export async function resolveTarget(
         return { ...cached, source: "latest" }
     }
     // No usable cache — fall through to the picker. The picker itself makes the ask
-    // obvious ("Choose a <platform> device"), so announcing it first is noise.
+    // obvious ("which <platform> device?"), so announcing it first is noise.
   }
 
   return pickAndCache(appRoot, platform, env, listed)

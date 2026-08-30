@@ -133,7 +133,10 @@ function Watch({ bus, keys, available }) {
     Box,
     { flexDirection: "column", marginLeft: 2 },
     state.notice ? h(Notice, { text: state.notice }) : null,
-    state.notice ? h(Text, null, "") : null,
+    //A SPACE, not an empty string: Ink measures a `<Text></Text>` as no rows at all, so the
+    //blank this block has always meant to draw never reached the terminal and the notice sat
+    //flat against the keys row (R64).
+    state.notice ? h(Text, null, " ") : null,
     h(Activity, { changed: state.changed, keys, available }),
   )
 }

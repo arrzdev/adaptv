@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 import {
   errorTail,
   gradleCause,
+  isDestinationEntry,
   isRawToolNoise,
   phaseLabel,
   portInUse,
@@ -244,6 +245,38 @@ describe("errorTail", () => {
     const lines = Array.from({ length: 50 }, (_, i) => `error: line ${i}`)
     expect(errorTail(lines, 5)).toHaveLength(5)
     expect(errorTail(lines, 5).at(-1)).toBe("error: line 49")
+  })
+
+  it("keeps a destination inventory, which is the only place the reason is written", () => {
+    //Deliberate, and the opposite of what it looks like: these records must NOT be dropped
+    //here. The line xcodebuild fails on says only that a specifier missed; the reason a dev
+    //can act on ("iOS 26.1 is not installed") lives inside the records, where
+    //`explainLaunchFailure` reads it. `explain.mjs` is what stops them being PRINTED (R61).
+    const lines = [
+      "xcodebuild: error: Unable to find a destination matching the provided destination specifier:",
+      "{ platform:iOS, arch:arm64e, id:00008140-001615581A10801C, name:iPhone de arrz, error:iOS 26.1 is not installed. Please download and install the platform from Xcode > Settings > Components. }",
+    ]
+    expect(errorTail(lines)).toEqual(lines)
+  })
+})
+
+describe("isDestinationEntry", () => {
+  it("matches a record of the inventory and nothing else on the line", () => {
+    expect(
+      isDestinationEntry(
+        "{ platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device, error:iOS 26.1 is not installed. }",
+      ),
+    ).toBe(true)
+    //The specifier that missed is printed the same way minus the platform, and a real
+    //diagnostic must never be mistaken for the inventory.
+    expect(
+      isDestinationEntry("{ id:74B38563-076B-42D6-A5C3-FC96ABEB7CA8 }"),
+    ).toBe(false)
+    expect(
+      isDestinationEntry(
+        "error: The sandbox is not in sync with the Podfile.lock.",
+      ),
+    ).toBe(false)
   })
 })
 

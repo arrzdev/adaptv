@@ -9,7 +9,7 @@
 import path from "node:path"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
-import { gradleCause, portInUse } from "./tool-log.mjs"
+import { gradleCause, isDestinationEntry, portInUse } from "./tool-log.mjs"
 
 /** How much captured tool output a failed line expands into — enough to name the problem,
  *  not a log dump (that's `--verbose`). Generous rather than tight: the lines are already
@@ -79,6 +79,12 @@ export function explainFailure(label) {
       .filter(Boolean)
       // `** BUILD FAILED **` & friends only restate the ✖ that's already printing.
       .filter((l) => !/^\*{2}.*\*{2}$/.test(l))
+      // xcodebuild answers an unresolvable destination with its whole inventory of
+      // ineligible ones — a ~190-column brace record per device, each carrying `error:`, so
+      // `errorTail` keeps every one and they became the entire dim block under the ✖. The
+      // recognisers above read this same text and say what it MEANS; the records themselves
+      // are a data structure, not a sentence, and are for `--verbose` (R61).
+      .filter((l) => !isDestinationEntry(l))
     // Gradle never says `error:` — it nests the cause under `* What went wrong:`, so the
     // generic pass below would settle for `> Task :app:… FAILED` (the task, not the cause).
     // Ask the gradle-aware extractor first; the boilerplate it skips is exactly what was

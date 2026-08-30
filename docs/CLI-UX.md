@@ -152,9 +152,10 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 ```
   adaptv · gen icons
 
-    replace 27 icons in ./public/favicons (your 'icons' dir)?   ↑↓ move · ↵ select
+  replace 27 icons in ./public/favicons (your 'icons' dir)?
   › replace them
     cancel
+  ↑↓ move   ↵ select   esc cancel
 ```
 ```
   adaptv · gen icons
@@ -231,7 +232,7 @@ is not printed at all (R4). Anything adaptv does say gets the mark.
 
 **R6 — Don't announce what the next thing already says.** No preamble for an interactive prompt.
 > Violated by: `! android: no cached device yet — pick one (it'll be remembered).` immediately
-> above a picker whose header reads *"Choose a android device"*.
+> above a picker whose header reads *"which android device?"*.
 
 **R7 — Errors are terse and name the fix.** `missing 'appId' in adaptv.config.ts` — not
 `run failed — adaptv.config.ts needs an 'appId' for native builds.` A user error is not a crash:
@@ -751,6 +752,66 @@ Never a second glyph, never a raw dump in the calm path.
 > actionable one; `gradleCause()` in `bin/lib/tool-log.mjs` walks to it, and `errorTail()`
 > keeps the whole `* What went wrong:` section rather than a fixed window.
 
+**R61 — A tool's inventory is not a diagnosis, and the dev's own screen must be answered.**
+When xcodebuild cannot resolve a destination it answers with every destination it knows — one
+~190-column brace record per device, each carrying `error:`, which is exactly the shape
+`errorTail()` keeps. So the dim block under the `✖` stopped being sentences and became a data
+structure, while the line the build actually failed on said only that a specifier missed.
+> Violated by `preview ios` on a machine whose Xcode was missing the iOS platform:
+> ```
+>   ✖ ios  Unable to find a destination matching the provided destination… · 3.6s
+>     { platform:iOS, arch:arm64e, id:00008140-001615581A10801C, name:iPhone de arrz, error:iOS 26.1 is not installed. Please download and install the platform from Xcode > Settings > Components. }
+>     { platform:iOS, id:dvtdevice-DVTiPhonePlaceholder-iphoneos:placeholder, name:Any iOS Device, error:iOS 26.1 is not installed. Please download and install the platform from Xcode > Settings > Components. }
+> ```
+> Three faults in five lines. The reason clipped mid-phrase and named a *specifier*, which is
+> not a thing the dev typed. The detail was two identical records of a device they had not
+> chosen — and the one fact worth having (`iOS 26.1 is not installed`) was buried at column
+> 100 of both. And it contradicted adaptv's own picker, which had listed six working
+> simulators seconds earlier: the list comes from the simulator service and was right, while
+> a *build* needs a platform Xcode installs separately and can be missing while every
+> simulator on the machine still boots. Nothing on screen said so, so the CLI read as broken.
+>
+> The records must stay in the TAIL — the reason is written nowhere else, and
+> `explainLaunchFailure()` reads it from there. What changed is what prints: one sentence
+> (`Xcode is missing the iOS 26.1 platform`), a fix that is a command
+> (`'xcodebuild -downloadPlatform iOS'`), and a line answering the question the dev is left
+> holding (*the simulators still boot without it. Only building needs it, which is why they
+> were listed*). `isDestinationEntry()` in `bin/lib/tool-log.mjs` names the shape;
+> `explain.mjs` drops it from the detail so a future rewording cannot dump it again.
+> `--verbose` is untouched.
+
+**R64 — A block that spans more than one line is separated from what follows; single lines are
+not.** A step that hangs anything under it — addresses, dim detail — is a GROUP, and a group has
+to end somewhere the eye can see. Steps with nothing under them read fine back-to-back and stay
+that way; the blank line is earned by having sub-lines, not by being a step.
+> Reported from `dev all`. Three faults, one shape:
+> ```
+>   ✓ web  · 4.9s
+>     local    http://localhost:41730
+>     network  http://192.168.1.23:41730
+>   ✓ ios  iPhone 16 Pro (simulator) · 41.7s      ← runs straight into the addresses
+>   ✓ android  Pixel 10 (emulator) · cached · 365ms
+>
+>   ! adaptv source change  · press b to rebuild and see the changes
+>   r reload js   b rebuild app   ctrl-c stop     ← the notice sits ON the actions
+> ```
+> and, from a `dev all` that had to ask:
+> ```
+>     network  http://192.168.1.6:41730
+>   Choose a android device                       ← a whole prompt glued to a sub-line
+> ```
+> The engine owns it, not the call sites: a command says a step settled, never that a blank line
+> is now due (R26). `render.mjs` remembers that the last thing printed was a sub-line and closes
+> that group before the next top-level row — a step, a `!`, a lane block, the watcher. A picker
+> is a group in its own right (question, rows, key hint), so it opens with the same gap whatever
+> came before it.
+>
+> **A blank row has to be a real row.** The watch block had always composed itself as
+> `[notice, "", keys]`, and the blank never reached the terminal: Ink measures a
+> `<Text></Text>` as no rows at all. The tests missed it because their screen helper filtered
+> blank lines out before asserting — so the one row the block was wrong about was the one row
+> that could not be seen. `" "` is a row; `""` is not.
+
 **R16 — One failure, one `✖` — even when it arrives as two errors.** A single fault can
 surface twice: the dev server rejects with a friendly *"port 41720 is already in use …"*
 while Node separately emits a raw `EADDRINUSE` on the socket. An outer catch that reports
@@ -848,6 +909,93 @@ runtime was installed.
 > reporting `API 37.1`), so the MAJOR names the release. A level with no entry keeps its own
 > spelling — an unrecognised one still tells two rows apart, and inventing a version number for a
 > release adaptv has never seen would be worse than saying less.
+
+**R62 — One row per device. A repeat is not a choice.** The device listing walks the installed
+runtimes and collects each one's devices, and two runtimes can share an identifier — so the same
+simulator is collected twice and offered twice.
+> Reported after `xcodebuild -downloadPlatform iOS` installed iOS 26.1 build 23B86 next to the
+> 23B80 already there. Both call themselves `com.apple.CoreSimulator.SimRuntime.iOS-26-1` (even
+> `simctl list devices` prints two `-- iOS 26.1 --` sections, the first empty), and the picker
+> became 59 rows for 36 devices:
+> ```
+>       iPhone 16 Pro (simulator) · iOS 18.0
+>       iPhone 16 Pro (simulator) · iOS 26.1
+>     › iPhone 16 Pro (simulator) · iOS 26.1
+> ```
+> Worse than the ambiguity R60 fixed, and not fixable the same way. There, two rows meant two
+> devices and a hint could separate them; here both rows carry the same NAME, the same version
+> **and the same id**, so no hint can exist and either pick is the same pick. The dev is left
+> asking what the difference is when there is none. `dedupeTargets()` in `bin/lib/devices.mjs`
+> keys on id and keeps the first, so the listing's own order stands.
+
+**R63 — A picker shows a window, not a list.** Six rows at a time, with a dim count of what is
+hidden above and below. The dev scrolls inside the window; the question and the key hint stay on
+screen the whole time.
+> With two iOS runtimes installed the picker drew all 36 simulators — a 38-line block, taller
+> than a terminal pane, so `Choose a ios device` scrolled off the top and the dev arrowed through
+> a wall of names with nothing on screen saying what was being asked.
+> ```
+>   Choose a ios device
+>
+>     › iPhone 16 Pro (simulator) · iOS 18.0
+>       iPhone 16 Pro Max (simulator) · iOS 18.0
+>       iPhone 16 (simulator) · iOS 18.0
+>       iPhone 16 Plus (simulator) · iOS 18.0
+>       iPhone 14 Pro (simulator) · iOS 18.0
+>       iPhone SE (3rd generation) (simulator) · iOS 18.0
+>       ↓ 8 more
+>     ↑↓ move · ↵ select · esc cancel
+> ```
+> The window is **sticky**: it holds still while the cursor moves inside it and follows only
+> when the cursor would leave, so the rows being read do not move. Recentring on the cursor
+> every keypress scrolls on every press and leaves nothing fixed to read against.
+> `scrollTo()` in `bin/ui/live.mjs` is that arithmetic, and it is pure so it can be tested
+> without a terminal.
+>
+> **Both marker lines are drawn whenever the list is windowed** — blank when that end holds
+> nothing, as above. Drawing a marker only when it has a count changes the block's height at
+> either end of the list, and every row jumps a line under a cursor that never moved. A list
+> that FITS gets no markers at all: `confirm()` is a two-option `select`, and a reserved blank
+> under every yes/no would be a line adaptv prints for nothing.
+
+**R65 — A picker is drawn on the SAME grid as everything else.** It is a list of rows in the
+body of the page, not a widget with a layout of its own. Four things put it off that grid at
+once, and all four are the general rule rather than the picker's own taste:
+> ```
+>   Choose a ios device
+>
+>     › iPad (10th generation) (simulator) · iOS 18.0
+>       iPad (10th generation) (simulator) · iOS 26.1
+>       iPad (A16) (simulator) · iOS 26.1
+>       ↓ 29 more
+>     ↑↓ move · ↵ select · esc cancel
+> ```
+> — **the cursor was not in the glyph column.** `›` sat where a label goes and every device name
+> started two columns to the right of every `✓ web` on the page. The cursor IS that row's glyph.
+> — **the hints rode on the label,** so `· iOS 26.1` landed at a different column on all 36 rows
+> and the one fact that tells two rows apart was the hardest thing there to scan. The CLI already
+> aligns a list's right-hand side (`addresses()` pads its keys, `doctor` lays out a table).
+> `hintColumn()` in `bin/ui/live.mjs` is that width, and it gives up — ragged, rather than
+> wrapped — when an aligned row would not fit the terminal.
+> — **the metadata opened with one space,** where every other row in the CLI opens with two and
+> a `·` (R31).
+> — **the keys were flat dim text.** `↑↓` and `↵` are pressable, and `theme.mjs` names those two
+> characters as the example of `ROLE.key`; the watch block has always drawn `r reload js   b
+> rebuild app   ctrl-c stop` that way. This was the one place in the CLI where a key you can
+> press did not look like one.
+>
+> The question is lowercase and ends in `?`, which is the voice `confirm()` already asks in
+> (`replace 27 icons in ./public/favicons?`). `Choose a ios device` was also the only line of
+> adaptv's output with an article it could not get right.
+> ```
+>   which ios device?
+>
+>   › iPad (10th generation) (simulator)  · iOS 18.0
+>     iPad (10th generation) (simulator)  · iOS 26.1
+>     iPad (A16) (simulator)              · iOS 26.1
+>     ↓ 29 more
+>   ↑↓ move   ↵ select   esc cancel
+> ```
 
 **R17 — Never offer a key that cannot act.** A hint is a promise. `r`/`b` are NATIVE actions
 (relaunch the app on the device, reinstall the binary); on `dev web` their handlers return

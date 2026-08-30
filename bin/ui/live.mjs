@@ -185,44 +185,134 @@ export function liveRows(labels) {
  * the picker
  * -------------------------------------------------------------------------- */
 
+/**
+ * How many device rows the picker shows at once.
+ *
+ * A machine with two iOS runtimes installed lists 36 simulators, and the picker drew every
+ * one: a 38-line block that pushed the question itself off the top of the terminal, so the
+ * dev arrowed through a wall with nothing on screen saying what was being asked (R63). Six
+ * is enough to see the shape of the list and small enough that the whole prompt — question,
+ * window, key hint — is read at a glance.
+ */
+const WINDOW = 6
+
+/**
+ * Where the visible window starts, given where the cursor moved to.
+ *
+ * The window is STICKY: it holds still while the cursor moves inside it and only follows
+ * once the cursor would leave, which is what makes a long list feel like a list rather than
+ * a treadmill. The alternative — recentring on the cursor every keypress — scrolls on every
+ * press and gives the dev no fixed point to read against.
+ *
+ * Pure, and separated from the component for that reason: this is the whole behaviour of the
+ * feature, and it is arithmetic. Wrapping is covered by the clamps — `↓` off the last row
+ * gives index 0 (window snaps to the top), `↑` off the first gives the last (window snaps to
+ * the bottom).
+ */
+export function scrollTo(index, start, count, size = WINDOW) {
+  if (count <= size) return 0
+  const last = count - size
+  let next = Math.min(Math.max(start, 0), last)
+  if (index < next) next = index
+  else if (index >= next + size) next = index - size + 1
+  return Math.min(Math.max(next, 0), last)
+}
+
+/**
+ * How wide the label column is, so the hints line up under each other.
+ *
+ * A picker is a LIST, and the CLI already aligns the right-hand side of a list rather than
+ * letting it ride on the label — `addresses()` pads its keys, `doctor` lays out a table. Left
+ * ragged, 36 device rows put the `· iOS 26.1` at a different column on every line, and the one
+ * fact that tells two rows apart was the hardest thing on screen to scan (R65).
+ *
+ * Returns 0 — no padding — when nothing carries a hint (`confirm()` is a two-option `select`),
+ * or when the aligned row would not fit the terminal. A picker row that WRAPS is worse than a
+ * ragged one: it costs the window a line and the block stops being six rows tall.
+ */
+export function hintColumn(options, columns) {
+  if (!options.some((o) => o.hint)) return 0
+  const label = Math.max(...options.map((o) => String(o.label).length))
+  const hint = Math.max(...options.map((o) => String(o.hint ?? "").length))
+  //2 indent + 2 cursor + label + `  · ` + hint
+  return 4 + label + 4 + hint <= columns ? label : 0
+}
+
 function Picker({ bus, message, options, onDone }) {
-  const { index } = useBus(bus)
+  const { index, start } = useBus(bus)
+  const move = (delta) =>
+    bus.set((s) => {
+      const next = (s.index + delta + options.length) % options.length
+      return {
+        index: next,
+        start: scrollTo(next, s.start, options.length),
+      }
+    })
   useInput((input, key) => {
-    if (key.upArrow || input === "k")
-      bus.set((s) => ({
-        index: (s.index - 1 + options.length) % options.length,
-      }))
-    else if (key.downArrow || input === "j")
-      bus.set((s) => ({ index: (s.index + 1) % options.length }))
+    if (key.upArrow || input === "k") move(-1)
+    else if (key.downArrow || input === "j") move(1)
     //An answer only REPORTS itself. It must not touch the bus (a re-render after the region
     //is taken down would redraw the list) and must not `exit()` — see `eraseRegion`.
     else if (key.return) onDone({ chosen: options[bus.get().index].value })
     else if (key.escape || input === "q" || (key.ctrl && input === "c"))
       onDone({ cancelled: true })
   })
+  const windowed = options.length > WINDOW
+  const shown = windowed ? options.slice(start, start + WINDOW) : options
+  const above = windowed ? start : 0
+  const below = windowed ? options.length - start - shown.length : 0
+  //Both markers are drawn WHENEVER the list is windowed, blank when that direction holds
+  //nothing. Drawing them only when they have a count would change the block's height as the
+  //dev scrolls past either end, and every row would jump a line under a cursor that had not
+  //moved.
+  const marker = (arrow, n) =>
+    h(Text, { ...ROLE.quiet.text }, n > 0 ? `  ${arrow} ${n} more` : " ")
+  const pad = hintColumn(options, process.stdout.columns || 80)
   return h(
     Box,
     { flexDirection: "column", marginLeft: 2 },
-    h(Text, null, message),
-    ...options.map((o, i) =>
-      h(
+    //Bold, like every other heading adaptv prints over a group (`section()`): it is the one
+    //line on screen the dev has to read before they can answer.
+    h(Text, { ...ROLE.strong.text }, message),
+    windowed ? marker("↑", above) : null,
+    ...shown.map((o, i) => {
+      const at = start + i
+      return h(
         Text,
-        { key: String(o.value ?? i) },
-        i === index
-          ? h(Text, { ...ROLE.key.text }, "  › ")
-          : h(Text, null, "    "),
+        { key: String(o.value ?? at) },
+        //The cursor sits in the GLYPH column, so the label starts exactly where a settled
+        //`✓ web` label starts. The picker used to draw itself two columns to the right of
+        //every other line on the page (R65).
+        at === index
+          ? h(Text, { ...ROLE.key.text }, "› ")
+          : h(Text, null, "  "),
         h(
           Text,
-          i === index ? { bold: true } : { ...ROLE.quiet.text },
-          o.label,
+          at === index ? { bold: true } : { ...ROLE.quiet.text },
+          o.label.padEnd(pad),
         ),
         //Dim, and after the label, because it is metadata about the row rather than part of
         //its name (R25) — and it is the ONLY thing separating two identically-named devices
-        //on different runtimes, so it stays dim on the highlighted row too.
-        o.hint ? h(Text, { ...ROLE.quiet.text }, ` · ${o.hint}`) : null,
-      ),
+        //on different runtimes, so it stays dim on the highlighted row too. TWO spaces before
+        //the `·`, which is how every other row in the CLI opens its metadata (R31).
+        o.hint ? h(Text, { ...ROLE.quiet.text }, `  · ${o.hint}`) : null,
+      )
+    }),
+    windowed ? marker("↓", below) : null,
+    //The same row the watch block draws: a pressable key is cyan bold, its label is dim, and
+    //three spaces separate one offer from the next. This was a single flat dim string, so the
+    //picker was the one place in the CLI where a key you can press did not look like one —
+    //and `theme.mjs` names `↑↓` and `↵` as examples of that very role (R65).
+    h(
+      Text,
+      null,
+      h(Text, { ...ROLE.key.text }, "↑↓"),
+      h(Text, { ...ROLE.quiet.text }, " move   "),
+      h(Text, { ...ROLE.key.text }, "↵"),
+      h(Text, { ...ROLE.quiet.text }, " select   "),
+      h(Text, { ...ROLE.key.text }, "esc"),
+      h(Text, { ...ROLE.quiet.text }, " cancel"),
     ),
-    h(Text, { ...ROLE.quiet.text }, "  ↑↓ move · ↵ select · esc cancel"),
   )
 }
 
@@ -238,18 +328,18 @@ function Picker({ bus, message, options, onDone }) {
  * leaves its last frame on screen and forgets it (`eraseRegion`), so the erase that followed
  * erased nothing and every answered picker stayed:
  *
- *     Choose a ios device
- *         iPhone 16 Pro (simulator)
- *       ↑↓ move · ↵ select · esc cancel
- *     Choose a android device
- *       ↑↓ move · ↵ select · esc cancel
+ *     which ios device?
+ *       iPhone 16 Pro (simulator)
+ *     ↑↓ move   ↵ select   esc cancel
+ *     which android device?
+ *     ↑↓ move   ↵ select   esc cancel
  *     ⠏ ios  linking plugins
  *
  * Two answered questions and a lane, all on screen at once. So the keypress resolves a plain
  * promise instead, and the region is still MOUNTED when `eraseRegion` takes it down.
  */
 export async function inkSelect(message, options) {
-  const bus = makeBus({ index: 0 })
+  const bus = makeBus({ index: 0, start: 0 })
   let settle
   const answered = new Promise((resolve) => {
     settle = resolve
