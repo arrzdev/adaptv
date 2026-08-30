@@ -9,6 +9,8 @@ import {
   header,
   nextPhase,
   prettyLine,
+  runLanes,
+  runLine,
   skip,
   spacer,
 } from "./render.mjs"
@@ -35,6 +37,25 @@ function captureOut(fn) {
   ]
   try {
     fn()
+  } finally {
+    for (const s of spies) s.mockRestore()
+  }
+  return lines
+}
+
+/** {@link captureOut} for work that has to be awaited — `runLine` / `runLanes`. */
+async function captureOutAsync(fn) {
+  const lines = []
+  const take = (s) => {
+    lines.push(String(s).replace(ANSI, "").trimEnd())
+    return true
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
+  try {
+    await fn()
   } finally {
     for (const s of spies) s.mockRestore()
   }
@@ -277,11 +298,168 @@ Node.js v26.0.0`
   })
 
   it("keeps a line that already reads like a phase", () => {
-    expect(prettyLine("rendering chunks...")).toBe("rendering chunks")
-    expect(prettyLine("computing gzip size...")).toBe(
-      "computing gzip size",
-    )
     expect(prettyLine("launching device")).toBe("launching device")
+  })
+})
+
+/**
+ * R24 for the WEB lane, which never had it. The native lanes were parsed from the day the
+ * renderer existed; the web lane passed the bundler's stdout straight to the row, so every
+ * line that happened to read like a phrase BECAME the phase:
+ *
+ *     ⠼ web  rendering chunks
+ *     ⠧ web  computing gzip size
+ *
+ * The fixture is the real stream, byte for byte, from `adaptv build web` in the playground
+ * (`ESC[2K` is the reporter erasing its own spinner line — that prefix is why `transforming`
+ * never showed at all, and why it is here).
+ */
+const ESC = String.fromCharCode(27)
+const WEB_BUILD = [
+  "vite v8.0.11 building client environment for production...",
+  `${ESC}[2Ktransforming...✓ 3028 modules transformed.`,
+  "rendering chunks...",
+  "computing gzip size...",
+  ".output/public/assets/main-5aNtl1L4.css                66.58 kB │ gzip:  12.18 kB",
+  "[plugin builtin:vite-reporter]",
+  "(!) Some chunks are larger than 500 kB after minification. Consider:",
+  "- Using dynamic import() to code-split the application",
+  "✓ built in 1.47s",
+  "[nitro] ◐ Building [Nitro] (preset: node-server, compatibility: 2026-08-30)",
+  "ℹ Generated .output/nitro.json",
+  "[adaptv] wrote .output/public/sw.js (build tag chopchop-34bd147964b6)",
+]
+
+/**
+ * Everything a live row is allowed to say: adaptv's own phases (`OWN_PHASES`) and R24's
+ * list, quoted from `docs/design/cli-contract.md`. Written out here rather than derived,
+ * because a set derived from the code under test cannot fail.
+ */
+const CLOSED_VOCABULARY = new Set([
+  ...OWN_PHASES,
+  "preparing build",
+  "configuring",
+  "resolving dependencies",
+  "downloading dependencies",
+  "installing dependencies",
+  "compiling",
+  "compiling assets",
+  "compiling interface",
+  "linking",
+  "processing resources",
+  "running build script",
+  "generating debug symbols",
+  "extracting app metadata",
+  "checking",
+  "optimizing",
+  "signing",
+  "packaging",
+  "installing",
+  "cleaning",
+  "building",
+])
+
+describe("the web lane speaks adaptv's vocabulary, not the bundler's (R24, R8)", () => {
+  it("maps every line of a real web build into the closed vocabulary", () => {
+    const said = WEB_BUILD.map(prettyLine).filter(Boolean)
+    expect(said.filter((p) => !CLOSED_VOCABULARY.has(p))).toEqual([])
+    //…and not by going silent: the row still tells the story, in the same two words an
+    //iOS build uses for the same two steps.
+    expect([...new Set(said)]).toEqual(["compiling", "linking"])
+  })
+
+  it.each([
+    ["transforming...", "compiling"],
+    ["transforming (1240) src/components/todo-row.tsx", "compiling"],
+    ["rendering chunks...", "linking"],
+    ["rendering chunks (12)...", "linking"],
+  ])("says what '%s' MEANS", (line, phase) => {
+    expect(prettyLine(line)).toBe(phase)
+  })
+
+  it.each([
+    "computing gzip size...", // measuring a bundle it already wrote
+    "vite v8.0.11 building client environment for production...", // a banner
+    "✓ 3028 modules transformed.", // a count
+    "✓ built in 1.47s", // the verdict the settled ✓ already carries
+  ])("shows nothing for '%s'", (line) => {
+    expect(prettyLine(line)).toBe("")
+  })
+
+  it("maps a verb it has never seen rather than passing it through", () => {
+    //The vocabulary is closed against the FUTURE too: a bundler adds a phase in a release
+    //nobody reads, and the old failure mode was that it simply appeared on the row.
+    expect(prettyLine("inlining stylesheets...")).toBe("building")
+    expect(prettyLine("minifying assets (12)...")).toBe("building")
+  })
+})
+
+/**
+ * R12 — `--verbose` is the RAW escape hatch, so the phase filter is not on its path.
+ *
+ * The two `report()` closures used to run `prettyLine` first and `return` on a blank
+ * result, with the raw write BELOW that early return. So every line R24 suppresses — the
+ * bundle listing, the chunk-size warning, the SSR build, a crash dump — was suppressed from
+ * `--verbose` as well. Measured on the playground before the fix: `adaptv build web
+ * --verbose` printed 6 dim lines against a 329-line `vite build` stream, and `build ios
+ * --verbose` printed 50 against xcodebuild's 336.
+ *
+ * `WEB_BUILD` is the fixture above — the real stream, byte for byte — and R24 already
+ * asserts that only two of its eleven lines survive `prettyLine`. That is exactly what makes
+ * it the test: `--verbose` has to show all eleven.
+ */
+describe("--verbose is raw — the phase filter is not on its path (R12)", () => {
+  /** The dim sub-lines a `report()` wrote, in order, with their indent removed. */
+  const streamed = (out) =>
+    out
+      .join("\n")
+      .split("\n")
+      .filter((l) => l.startsWith("    "))
+      .map((l) => l.slice(4))
+
+  it("streams every line of a real build, not the two R24 keeps (runLine)", async () => {
+    const out = await captureOutAsync(() =>
+      runLine(
+        "web",
+        async (report) => {
+          for (const line of WEB_BUILD) report(line)
+        },
+        { verbose: true },
+      ),
+    )
+    expect(streamed(out)).toEqual(WEB_BUILD)
+  })
+
+  it("streams every line of a real build, lane-labelled (runLanes)", async () => {
+    //One idea, two implementations: `runLanes` carried the same bug in the same shape, and
+    //a fix applied to only one of them is how the two drift apart again.
+    const out = await captureOutAsync(() =>
+      runLanes(
+        [
+          {
+            label: "ios",
+            run: async (report) => {
+              for (const line of WEB_BUILD) report(line)
+            },
+          },
+        ],
+        { verbose: true },
+      ),
+    )
+    expect(streamed(out)).toEqual(WEB_BUILD.map((l) => `ios: ${l}`))
+  })
+
+  it("still says nothing raw on the DEFAULT path", async () => {
+    //The other half of the rule: raw-first must not leak a byte onto the calm rows. The
+    //default run states the step and its outcome, and nothing the bundler said.
+    const out = await captureOutAsync(() =>
+      runLine("web", async (report) => {
+        for (const line of WEB_BUILD) report(line)
+      }),
+    )
+    expect(streamed(out)).toEqual([])
+    for (const line of WEB_BUILD)
+      expect(out.join("\n")).not.toContain(line)
   })
 })
 

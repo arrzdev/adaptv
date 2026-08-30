@@ -121,7 +121,14 @@ describe("injectAndroidPluginProjects — the twelve plugins cap could not find"
     ).toHaveLength(1)
   })
 
-  it("skips a plugin that isn't installed, says so, and declares the rest anyway", () => {
+  //This injector used to STATE the missing plugin — first onto `report()`, where `prettyLine`
+  //erased every character of it, then onto a `warnings` channel. Neither was its business:
+  //whether a name in `plugins` resolves is knowable from the dev's own files with no native
+  //project in sight, so it is `preflight`'s `✖` now and the run ends before this code is
+  //reached (R33). Its remaining job is not to CRASH on the name, and to declare the rest —
+  //this injector also runs from `capSync` inside a lane, where a throw would take a build
+  //down over a fact already refused above it. The sentence is asserted in `preflight.test.mjs`.
+  it("skips a plugin that isn't installed, silently, and declares the rest anyway", () => {
     const androidDir = scaffold()
     const said = []
     injectAndroidPluginProjects(appRoot, {
@@ -129,9 +136,9 @@ describe("injectAndroidPluginProjects — the twelve plugins cap could not find"
       plugins: ["@capacitor/not-a-real-plugin"],
     })
 
-    expect(said).toContain(
-      "! plugin @capacitor/not-a-real-plugin not found, skipped (did you install it?)",
-    )
+    //Nothing about it on the live row, and nowhere else either — one fact, said once, and
+    //said by preflight (R18).
+    expect(said.filter((l) => l.includes("not-a-real-plugin"))).toEqual([])
     expect(read(androidDir, "capacitor.settings.gradle")).toContain(
       "include ':capacitor-haptics'",
     )

@@ -4,12 +4,12 @@
  * Framework-development only. Nothing here ships: `playground/` and `scripts/` are not in
  * `package.json#files`, no source imports either, and a consumer never sees them.
  *
- * `playground/` is a copy of a real app (chopchop's `adaptv-testing` branch) vendored into
- * THIS repo, git and all — its history is adaptv's history. That single fact removes every
- * moving part the earlier designs needed:
+ * `playground/` is a frontend-only app (seeded from chopchop's `adaptv-testing` branch)
+ * vendored into THIS repo, git and all — its history is adaptv's history. That single fact
+ * removes every moving part the earlier designs needed:
  *
  *   · a worktree gets its own playground for free, checked out with the branch, so two
- *     worktrees can migrate the same API differently without meeting;
+ *     worktrees can take the framework in different directions without meeting;
  *   · the app's committed `"@arrzdev/adaptv": "link:../../.."` resolves to the checkout it
  *     sits in — whichever worktree that is — so nothing repoints anything, ever;
  *   · a framework change and the consumer change it forces land in ONE commit, one diff,
@@ -20,9 +20,8 @@
  * against real chopchop, when the framework is ready.
  *
  * This script is a passthrough and nothing else. The playground is a turbo monorepo that
- * already knows how to bring itself up — `dev:ios` starts the API beside the app, frees its
- * ports, and gates on env — and re-implementing any of that here would be a second, subtly
- * different way to start the same app.
+ * already knows how to bring itself up — `dev:ios` frees its ports and starts the app — and
+ * re-implementing any of that here would be a second, subtly different way to start it.
  *
  * Ports: freed by the playground's own `runDev`, never here and never by the CLI, which
  * passes `--strictPort` and fails loudly on a busy port on purpose (bin/lib/dev-server.mjs).
@@ -76,9 +75,9 @@ if (!scripts[args[0]]) {
   )
 }
 
-// First run in a fresh worktree: the playground needs its own install, env files and local
-// D1 before any of this works. Doing it here rather than making the dev remember a setup
-// step is the entire promise — `git worktree add`, `pnpm dev:ios`, done.
+// First run in a fresh worktree: the playground needs its own install before any of this
+// works. Doing it here rather than making the dev remember a setup step is the entire
+// promise — `git worktree add`, `pnpm dev:ios`, done.
 if (!existsSync(path.join(PLAYGROUND, "node_modules"))) {
   const r = spawnSync(process.execPath, [SETUP], { stdio: "inherit" })
   if (r.status !== 0) process.exit(r.status ?? 1)

@@ -35,10 +35,6 @@ import { hexOf, measureArtwork, monochromeMark } from "./artwork.mjs"
 import { encodeIco } from "./ico.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 
-/* =============================================================================
- * geometry
- * ============================================================================= */
-
 /** Sizes packed into `favicon.ico`. 48 is what Windows uses for a desktop shortcut. */
 const ICO_SIZES = [16, 32, 48]
 
@@ -176,10 +172,6 @@ function slotPlan(
     flatten,
   }
 }
-
-/* =============================================================================
- * rendering
- * ============================================================================= */
 
 /**
  * Render one slot: the source scaled to fit, centred on `canvas` px of `background`.
@@ -322,10 +314,6 @@ export async function generateIcons({
   return written
 }
 
-/* =============================================================================
- * clearing what was there
- * ============================================================================= */
-
 /** Everything `existingIcons` counts and `clearIcons` removes. */
 const REPLACEABLE = new Set([
   ".png",
@@ -373,10 +361,6 @@ function clearIcons(dirAbs, source) {
     } catch {}
   }
 }
-
-/* =============================================================================
- * reading the source
- * ============================================================================= */
 
 /** Formats sharp can decode AND that make sense as a logo master. */
 const SOURCE_EXTS = new Set([

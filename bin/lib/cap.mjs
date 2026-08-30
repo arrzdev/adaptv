@@ -5,7 +5,7 @@
 // `ADAPTV_CAPACITOR_CONFIG` env var, so the consumer's project carries NO
 // `capacitor.config.json`. adaptv patches `@capacitor/cli` (patches/@capacitor__cli@…patch)
 // to read that env — but pnpm applies a patch only from the ROOT project's manifest, so a
-// PUBLISHED consumer's copy of Capacitor is NOT patched (→ DECISIONS.md L20). This shim is
+// PUBLISHED consumer's copy of Capacitor is NOT patched (→ docs/decisions/register.md L20). This shim is
 // the VENDORED half: it ships inside adaptv and re-creates the patch's effect in-process
 // when the installed CLI isn't patched, so the behaviour travels with the framework.
 //
@@ -23,7 +23,7 @@ const cliDir = path.dirname(cliPkg)
 // Capacitor resolves the PLATFORM packages (@capacitor/ios, @capacitor/android) and every
 // plugin from the CONSUMER's app root — `resolveNode(config.app.rootDir, name)` in its
 // dist/util/node.js. But adaptv owns those packages (they're adaptv's deps; the app declares
-// no @capacitor/* at all → DECISIONS.md L20), so from the app root they don't exist and cap
+// no @capacitor/* at all → docs/decisions/register.md L20), so from the app root they don't exist and cap
 // dies with "Could not find the ios platform".
 //
 // It only appeared to work because pnpm's `node_modules/.bin/adaptv` shim happens to export a

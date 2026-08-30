@@ -181,12 +181,79 @@ const TOOL_PHASES = [
 ]
 
 /**
+ * The WEB bundler's own vocabulary → the same closed list xcodebuild and gradle map into.
+ *
+ * The native lanes were parsed from the day the renderer existed; the web lane never was,
+ * so whatever the bundler said reached the row verbatim the moment it happened to read like
+ * a phrase. It does:
+ *
+ *     ⠼ web  rendering chunks
+ *     ⠧ web  computing gzip size
+ *
+ * Neither is a phase adaptv chose — they are a bundler narrating its own internals (R8), in
+ * a vocabulary that is not R24's, on the one row a dev watches. `rendering chunks` is also
+ * the exact shape R24 was written against: short, lowercase, prose, and about the tool.
+ *
+ * The verbs come from the bundler's reporter and are stable across its two spellings — a
+ * bare message and a counted one (`rendering chunks (12)...`) — so match the VERB and let
+ * the count fall away with the rest (R22):
+ *
+ *     vite v8.0.11 building client environment for production...  the banner
+ *     transforming...✓ 3028 modules transformed.                 source → modules
+ *     rendering chunks...                                        modules → output chunks
+ *     computing gzip size...                                     measuring what it wrote
+ *     ✓ built in 1.47s                                           the verdict
+ *
+ * `transforming` IS compiling and chunk rendering IS linking — a bundler runs the same two
+ * steps a native toolchain does, so an `ios` build and a `web` build now narrate themselves
+ * with one vocabulary instead of two (R22's whole point). The other three are bookkeeping:
+ * a banner naming the tool and its version, a count, and a verdict the settled ✓ already
+ * carries — all `""`, so the row keeps its last real phase.
+ */
+const BUNDLER_PHASES = [
+  [/^transforming\b/, "compiling"],
+  [/^rendering chunks\b/, "linking"],
+  //Not `packaging`: the bundle is already written by now and this is the reporter
+  //measuring it for a table adaptv does not print. Naming it would put a bundler's own
+  //accounting on the row.
+  [/^computing gzip size\b/, ""],
+  [/^vite v\S+ building\b/, ""], // its banner — the tool, its version, and the ✓'s job
+  //Both arrive behind the reporter's own tick glyph, allowed for here as "not a word
+  //character" rather than as a second copy of the glyph set (`engine.test.mjs`).
+  [/^\W{0,3}\s*\d+ modules transformed\b/, ""], // a count, not a phase
+  [/^\W{0,3}\s*built in \d/, ""], // the verdict; the settled row states the elapsed time
+]
+
+/**
+ * The SHAPE of a bundler progress message: a lowercase clause, an optional count, and the
+ * ellipsis it would animate a spinner on. Enumerating today's verbs is not enough on its
+ * own — the reason `Node.js v26.0.0` became a phase (R33) is that the filters around it
+ * were accidents rather than rules, and a bundler is free to add a verb in any release.
+ *
+ * So a message of this shape that {@link BUNDLER_PHASES} does not know maps to `building`
+ * — the same answer an unrecognised gradle task gets. Suppressing it instead was the other
+ * option and is worse: the row would go quiet for however long the new phase takes, and
+ * nothing would ever reveal that adaptv had stopped narrating a step. `building` is true of
+ * anything the bundler says here, and it is already in the vocabulary.
+ */
+const BUNDLER_PROGRESS = /^[a-z][a-z ]{0,38}?(?: \(\d+\))?\.\.\./
+
+// A terminal control sequence, built without a literal escape in the source. Tools erase
+// their own spinner line as they go (`ESC[2K` before `transforming...`), and that prefix
+// used to hide the phase from every table below — the line survived only as far as
+// `isRawToolNoise`, which drops it for the `[` it contains. Strip first, then read.
+const CSI = new RegExp(
+  `${String.fromCharCode(27)}\\[[0-9;?]*[a-zA-Z]`,
+  "g",
+)
+
+/**
  * A calm phrase for one raw tool line, or `null` when the line isn't one this knows —
  * the caller then falls back to its generic prettifier. `""` (not null) is a deliberate
  * "show nothing": the line was recognised AND judged not worth saying.
  */
 export function phaseLabel(raw) {
-  const line = String(raw).trim()
+  const line = String(raw).replace(CSI, "").trim()
   if (!line) return ""
 
   for (const [re, label] of TOOL_PHASES) {
@@ -200,12 +267,20 @@ export function phaseLabel(raw) {
     return label
   }
 
+  for (const [re, label] of BUNDLER_PHASES) {
+    if (!re.test(line)) continue
+    return label
+  }
+
   // xcodebuild's own banners ("** BUILD SUCCEEDED **") restate what the ✓/✖ already says.
   if (/^\*{2}.*\*{2}$/.test(line)) return ""
   if (NOT_A_PHASE.some((re) => re.test(line))) return ""
   // A dying process is not a phase — and its tail line looks more like one than the rest of
   // the dump does, which is exactly why it was the piece that got through.
   if (CRASH_DUMP.some((re) => re.test(line))) return ""
+  // LAST, so every rule above gets its say first: a progress message whose verb this does
+  // not know is still the bundler talking, and it may not pass through raw (R24).
+  if (BUNDLER_PROGRESS.test(line)) return "building"
   return null
 }
 
