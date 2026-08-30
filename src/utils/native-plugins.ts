@@ -3,7 +3,7 @@
 //whose value is that the developer never has to know the problem exists cannot
 //also hand him an API for asking. What the app sees is the ordinary
 //`useShare().supported` it already reads — this is only where that answer comes
-//from once OTA is in play. → `LIFECYCLE.md §5.6`
+//from once OTA is in play. → `docs/design/ota.md §5.6`
 
 /**
  * Whether the **installed binary** carries this plugin's native code.

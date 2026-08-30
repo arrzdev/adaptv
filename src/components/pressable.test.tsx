@@ -77,7 +77,7 @@ describe("Pressable — the press engine, made obvious", () => {
     if (!el) throw new Error("no host element")
     press(el)
     expect(onPress).not.toHaveBeenCalled()
-    //boolean presence, per STYLING.md §3.1 — not data-state="disabled"
+    //boolean presence, per docs/decisions/styling.md §3.1 — not data-state="disabled"
     expect(el.getAttribute("data-disabled")).toBe("")
     expect(el.getAttribute("aria-disabled")).toBe("true")
   })

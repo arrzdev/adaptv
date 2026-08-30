@@ -43,10 +43,6 @@ const DISMISS_CONFIRM_MS = 150
 const HEIGHT_CONFIRM_MS = 120
 const PREDICT_CONFIRM_MS = 400
 
-/* =============================================================================
- * willOpenVirtualKeyboard
- * ============================================================================= */
-
 describe("willOpenVirtualKeyboard", () => {
   it("matches text inputs and textareas", () => {
     expect(willOpenVirtualKeyboard(document.createElement("input"))).toBe(

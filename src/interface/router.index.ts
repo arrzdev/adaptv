@@ -1,6 +1,6 @@
 /**
  * The router surface — adaptv's **curated** re-export of TanStack Router.
- * → `ARCHITECTURE.md §3.1`, `FACADE.md §1`
+ * → `docs/design/architecture.md §3.1`, `docs/decisions/facade-and-opacity.md §1`
  *
  * ## Curated, never `export *`
  *

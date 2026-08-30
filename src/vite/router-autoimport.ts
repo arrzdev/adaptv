@@ -1,5 +1,5 @@
 /**
- * In-memory safety net for the route-factory import. → `DECISIONS.md §3.2`
+ * In-memory safety net for the route-factory import. → `docs/decisions/register.md §3.2`
  *
  * ## How TanStack opacity works now
  *

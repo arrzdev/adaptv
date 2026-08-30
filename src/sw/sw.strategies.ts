@@ -23,14 +23,13 @@ function resolveStrategyPlugins(
 }
 
 /**
- * Cache match options.
+ * Cache match options — passed through untouched, and that is the whole point.
  *
- * **`ignoreVary` is deliberately NOT defaulted on.** The previous code forced
- * `ignoreVary: true` on every strategy. On content-hashed assets that is harmless
- * and useful; on *documents* it defeats `Vary: Cookie` — the one HTTP mechanism
- * that would partition a per-user response — so user A's server-rendered HTML
- * could be served to user B on the same device. A privacy bug, not a tuning knob.
- * → `DECISIONS.md` B5/B25, `RENDERING.md §3.2`
+ * **`ignoreVary` must never be defaulted on here.** Forcing `ignoreVary: true`
+ * on every strategy defeats `Vary: Cookie` on *documents* — the one HTTP
+ * mechanism that partitions a per-user response — so user A's server-rendered
+ * HTML can be served to user B on the same device. A privacy bug, not a tuning
+ * knob. → `docs/decisions/register.md` B5/B25, `docs/design/rendering.md §3.2`
  *
  * Opt in per rule where it is provably safe; {@link createHashedAssetStrategy}
  * is the one place adaptv does.

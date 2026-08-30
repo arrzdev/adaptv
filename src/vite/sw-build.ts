@@ -32,7 +32,7 @@ function adaptvWorkerPath(): string {
 }
 
 /**
- * Build the service worker. → `RENDERING.md §3`
+ * Build the service worker. → `docs/design/rendering.md §3`
  *
  * Runs in `buildApp` at `order: "post"` — after every environment AND after the
  * deploy plugin has finished assembling the output — and **after** the shell-emit
@@ -40,7 +40,9 @@ function adaptvWorkerPath(): string {
  * load-bearing.
  *
  * adaptv's worker is always the entry. An app never replaces it and never turns
- * it off; `serviceWorkers: []` contributes modules that run after it.
+ * it off; the modules an app names in `serviceWorkers` are appended after it. An
+ * EMPTY `serviceWorkers` array contributes nothing and the entry stays adaptv's
+ * own worker file — see {@link resolveWorkerEntry}.
  */
 export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
   return {
@@ -194,7 +196,7 @@ function resolveWorkerEntry(
  * The glob covers every hashed build asset — that is what makes an installed PWA
  * navigate like the native build — and the shell is appended **by name**. Adding
  * `**\/*.html` instead would sweep in every prerendered route document, which is
- * exactly the cross-user leak the split exists to prevent. → `RENDERING.md §3.2`
+ * exactly the cross-user leak the split exists to prevent. → `docs/design/rendering.md §3.2`
  */
 function injectPrecacheManifest(options: {
   swSrcBundle: string

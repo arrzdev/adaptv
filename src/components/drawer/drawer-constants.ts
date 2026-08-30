@@ -10,7 +10,7 @@
  * recorded here rather than in a dependency. MIT © 2023 Emil Kowalski — see
  * `THIRD_PARTY_LICENSES`.
  *
- * The SHA is pinned deliberately (`PRIOR-ART.md §0`): vaul is unmaintained, so
+ * The SHA is pinned deliberately (`docs/decisions/prior-art.md §0`): vaul is unmaintained, so
  * `main` is frozen *today*, but a force-push, rename or archive would break every
  * link — and, worse, destroy the ability to diff what we changed.
  */
@@ -110,8 +110,6 @@ export function resolveDrawerDragRelease(
   return { shouldClose, velocityY }
 }
 
-//---- Internal transition ----------------
-
 export type DrawerTransitionMode = "spring" | "tween"
 
 export type DrawerTransition = {
@@ -124,11 +122,10 @@ export type DrawerTransition = {
 
 /**
  * Open + grow motion — a GPU-composited `cubic-bezier` tween (built from `bezier` in
- * drawer-motion.ts). This is the path that runs at native fps on iOS; the duration is the speed
- * knob. The curve is firm-shove → decelerate (the vaul/iOS sheet feel), ending flat at y=1 so the
- * panel kisses into place — right for an entrance the eye tracks. Drives the OPEN slide, the
- * keyboard GROW (lift increasing), and the backdrop fade-in, so the dim reaches full as the panel
- * lands. A close→reopen interrupt resumes on this curve from the panel's live rendered position.
+ * drawer-motion.ts) running {@link DRAWER_TRANSITIONS}, which owns the duration and the curve and
+ * the reasons for both. Drives the OPEN slide, the keyboard GROW (lift increasing), and the
+ * backdrop fade-in, so the dim reaches full as the panel lands. A close→reopen interrupt resumes
+ * on this curve from the panel's live rendered position.
  */
 export const DEFAULT_DRAWER_TRANSITION: DrawerTransition = {
   mode: "tween",

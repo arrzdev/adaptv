@@ -10,7 +10,7 @@ const RESOLVED_REGISTER_ID = `\0${REGISTER_ID}`
  * story and drops that dependency.
  *
  * A waiting worker is applied at **cold launch and nowhere else** — see the
- * reasoning inline. → `RENDERING.md §3.4`
+ * reasoning inline. → `docs/design/rendering.md §3.4`
  *
  * `swEnabled` is false on exactly one build, the Capacitor one, where
  * `resolveWebConfig` turns the worker off and nothing can turn it back on. The
@@ -101,11 +101,11 @@ export function registerSW(onWaiting) {
     try {
       //BASE_URL, never a hardcoded "/sw.js" — a subpath deploy (GitHub Pages, or
       //any non-root base) registers the wrong URL and silently gets no SW at all.
-      //DECISIONS.md B1 / B26.
+      //docs/decisions/register.md B1 / B26.
       //
       //updateViaCache:"none" is required, not tuning: browsers otherwise serve the
       //SW SCRIPT ITSELF from HTTP cache (capped at 24h), so a deploy can go
-      //unnoticed for a day. RENDERING.md §3.3.
+      //unnoticed for a day. docs/design/rendering.md §3.3.
       const swUrl = (import.meta.env.BASE_URL || "/") + "sw.js"
       const registration = await navigator.serviceWorker.register(swUrl, {
         updateViaCache: "none",

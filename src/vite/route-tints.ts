@@ -5,10 +5,12 @@
  * SOURCE, not as a value: the colour has to be in the pre-paint script, which
  * runs before any route module has been evaluated. → `src/shell/route-tints.ts`
  *
- * That is why this refuses anything it cannot read statically instead of falling
- * back to the theme colour. A computed tint would typecheck, run, and quietly do
- * nothing on the one frame the option exists for — the same doctrine as
- * `thunk-specifiers.ts`, which will not guess at a non-literal import either.
+ * That is why a `chromeTint` this cannot read statically is REFUSED rather than
+ * quietly resolved to the theme colour: a computed tint would typecheck, run, and
+ * do nothing on the one frame the option exists for — the same doctrine as
+ * `thunk-specifiers.ts`, which will not guess at a non-literal import either. The
+ * one shape that is passed over in silence is a spread in the options object; see
+ * the note at that check for why complaining there would cost more than it buys.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"

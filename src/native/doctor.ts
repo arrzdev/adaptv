@@ -1,5 +1,5 @@
 /**
- * `adaptv doctor` — detect the silent failures. → `DECISIONS.md` B22, B21, §6.0
+ * `adaptv doctor` — detect the silent failures. → `docs/decisions/register.md` B22, B21, §6.0
  *
  * Every check here shares one property: **the broken state still builds, and
  * often still runs.** That is the whole selection criterion. A misconfiguration

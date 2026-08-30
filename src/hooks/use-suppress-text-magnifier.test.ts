@@ -49,10 +49,6 @@ function tap(target: Element, point: Point) {
   fireTouch("touchend", target, point)
 }
 
-/* =============================================================================
- * FIXTURES
- * ============================================================================= */
-
 function appendEl(html: { tag: string; attrs?: Record<string, string> }) {
   const el = document.createElement(html.tag)
   for (const [name, value] of Object.entries(html.attrs ?? {})) {
@@ -81,10 +77,6 @@ afterEach(() => {
   vi.useRealTimers()
   document.body.innerHTML = ""
 })
-
-/* =============================================================================
- * TESTS
- * ============================================================================= */
 
 describe("useSuppressTextMagnifier", () => {
   it("cancels the second tap of a genuine double-tap over plain content", () => {

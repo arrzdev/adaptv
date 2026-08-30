@@ -74,7 +74,6 @@ afterEach(() => {
   }
 })
 
-// ---- isNativePlatform ------------------------------------------------------
 describe("isNativePlatform", () => {
   it("is false with no Capacitor global (plain web)", () => {
     expect(isNativePlatform()).toBe(false)
@@ -96,7 +95,6 @@ describe("isNativePlatform", () => {
   })
 })
 
-// ---- getOS -----------------------------------------------------------------
 describe("getOS", () => {
   it("trusts Capacitor.getPlatform when native", () => {
     stubCapacitor({
@@ -148,7 +146,6 @@ describe("getOS", () => {
   })
 })
 
-// ---- isIOS -----------------------------------------------------------------
 describe("isIOS", () => {
   it("matches iPhone UA and iPadOS-as-Mac, not desktop", () => {
     stubNavigator({
@@ -167,7 +164,6 @@ describe("isIOS", () => {
   })
 })
 
-// ---- isStandaloneDisplay ---------------------------------------------------
 describe("isStandaloneDisplay", () => {
   it("is true when display-mode:standalone matches", () => {
     stubStandaloneMedia(true)
@@ -186,7 +182,6 @@ describe("isStandaloneDisplay", () => {
   })
 })
 
-// ---- isInstalledApp --------------------------------------------------------
 describe("isInstalledApp", () => {
   it("is true when native, even without standalone display", () => {
     stubCapacitor({ isNativePlatform: () => true })
@@ -205,7 +200,6 @@ describe("isInstalledApp", () => {
   })
 })
 
-// ---- resolvePlatformTag ----------------------------------------------------
 describe("resolvePlatformTag", () => {
   it("prefers native over standalone over web", () => {
     stubCapacitor({ isNativePlatform: () => true })
@@ -224,7 +218,6 @@ describe("resolvePlatformTag", () => {
   })
 })
 
-// ---- getPlatformInitScript -------------------------------------------------
 // The script is a string (it runs pre-hydration and can't import this module), so
 // we assert the CONTRACT: eval'ing it stamps <html data-adaptv-platform/-os> to the
 // same values resolvePlatformTag/getOS would produce.
@@ -267,7 +260,6 @@ describe("getPlatformInitScript", () => {
   })
 })
 
-// ---- ui app-feel stamps ----------------------------------------------------
 // `config × platform` is resolved ONCE, here, and expressed as a boolean-presence
 // attribute — that is what keeps styles.css a single static artifact instead of a
 // per-config build matrix. So the resolution table is the contract worth pinning.
