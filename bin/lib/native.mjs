@@ -1592,6 +1592,41 @@ export function explainLaunchFailure(platform, text = "") {
     }
 
   if (platform === "ios") {
+    // Xcode refuses EVERY iOS destination — simulators included — when the iOS platform
+    // this Xcode build wants has not been downloaded. It says so only inside its inventory
+    // of ineligible destinations, one 190-column brace-delimited record per device, and the
+    // line it actually fails on names none of it ("Unable to find a destination matching the
+    // provided destination specifier", "Found no destinations for the scheme 'App'"). So the
+    // dev reads a destination error, having just picked a device off a list adaptv showed
+    // them, and there is nothing on screen connecting the two (R61).
+    //
+    // The second fix line exists for exactly that: the picker was NOT wrong. Its list comes
+    // from the simulator service — those devices exist, boot and run — while what a build
+    // needs is a platform Xcode installs separately, and can be missing while every
+    // simulator on the machine still works.
+    const noPlatform = t.match(
+      /\b(iOS(?: [\d.]+)?) is not installed\.\s*Please download and install the platform/i,
+    )
+    if (noPlatform)
+      return {
+        msg: `Xcode is missing the ${noPlatform[1]} platform`,
+        fix: [
+          "Install it with 'xcodebuild -downloadPlatform iOS', or from Xcode → Settings → Components.",
+          "The simulators still boot without it. Only building needs it, which is why they were listed.",
+        ],
+      }
+    if (
+      /Unable to find a destination matching|Found no destinations for the scheme/i.test(
+        t,
+      )
+    )
+      return {
+        msg: "Xcode has no iOS destination it can build for",
+        fix: [
+          "Install an iOS platform with 'xcodebuild -downloadPlatform iOS', or from Xcode → Settings → Components.",
+          "A simulator that boots is not enough on its own: building needs that platform too.",
+        ],
+      }
     if (
       /requires a development team|Signing for .* requires|No signing certificate|Code Sign(ing)? Error/i.test(
         t,

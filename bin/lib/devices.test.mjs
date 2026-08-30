@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { versionHint } from "./devices.mjs"
+import { dedupeTargets, versionHint } from "./devices.mjs"
 
 /*
  * R60. The hint is the only thing separating two identically-named devices, so what it says
@@ -34,5 +34,57 @@ describe("the picker's version hint", () => {
   it("gives no hint at all when there is nothing to disambiguate", () => {
     expect(versionHint({})).toBeUndefined()
     expect(versionHint({ api: "" })).toBeUndefined()
+  })
+})
+
+/*
+ * R62. Captured from this machine right after `xcodebuild -downloadPlatform iOS` put iOS 26.1
+ * build 23B86 alongside 23B80: two runtimes, one identifier, and the listing walked both.
+ * 59 rows for 36 devices, every 26.1 simulator twice under the same id.
+ */
+describe("one row per device", () => {
+  it("drops a device the listing collected twice", () => {
+    const listed = [
+      {
+        name: "iPhone 16 Pro (simulator)",
+        api: "iOS 18.0",
+        id: "27DF56D5-CE71-4E64-BF48-24A586C9A64C",
+      },
+      {
+        name: "iPhone 16 Pro (simulator)",
+        api: "iOS 26.1",
+        id: "76A2C5CD-BF8D-4415-B1DA-E5ADF289DD1E",
+      },
+      {
+        name: "iPhone 16 Pro (simulator)",
+        api: "iOS 26.1",
+        id: "76A2C5CD-BF8D-4415-B1DA-E5ADF289DD1E",
+      },
+    ]
+    expect(dedupeTargets(listed).map((t) => t.api)).toEqual([
+      "iOS 18.0",
+      "iOS 26.1",
+    ])
+  })
+
+  it("keeps two devices that only LOOK the same", () => {
+    //The R60 case must survive untouched: same name, same version, different device.
+    const listed = [
+      { name: "iPhone 16 Pro (simulator)", api: "iOS 26.1", id: "aaa" },
+      { name: "iPhone 16 Pro (simulator)", api: "iOS 26.1", id: "bbb" },
+    ]
+    expect(dedupeTargets(listed)).toHaveLength(2)
+  })
+
+  it("keeps the first, so the listing's own order stands", () => {
+    const listed = [
+      { name: "booted one", id: "x" },
+      { name: "the repeat", id: "x" },
+      { name: "another", id: "y" },
+    ]
+    expect(dedupeTargets(listed).map((t) => t.name)).toEqual([
+      "booted one",
+      "another",
+    ])
   })
 })

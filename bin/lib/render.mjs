@@ -131,6 +131,32 @@ const out = (s, level = "step") => {
 }
 /** `spacer()` asks the stream it is CURRENTLY writing to whether it already has a blank line. */
 const currentTail = () => streams[sink].tail
+
+/**
+ * Whether the last thing printed was a SUB-line — an address, a dim detail — so the block it
+ * belongs to is still open.
+ *
+ * A step that hangs lines under itself is a GROUP, and a group has to be told apart from the
+ * next one. Printed flat, `✓ web` and its two addresses ran straight into `✓ ios`, so the
+ * eye had to work out where one step stopped and the next began; steps with nothing under
+ * them read fine back-to-back and stay that way (R64).
+ */
+let openBlock = false
+/** A sub-line: printed, and it leaves its group open. */
+const sub = (s) => {
+  out(s)
+  openBlock = true
+}
+/**
+ * Begin a top-level row, closing any group still open above it.
+ *
+ * In the engine rather than at the call sites, because the rule is about what the OUTPUT
+ * looks like and every command wants it — a command states that a step settled, not that a
+ * blank line is now due (R26).
+ */
+const startRow = () => {
+  if (openBlock) spacer()
+}
 const width = () => process.stdout.columns || DEFAULT_COLUMNS
 
 // Truncate to `max` VISIBLE columns while preserving ANSI colour codes (zero width),
@@ -210,11 +236,22 @@ export function header(title) {
 }
 
 export const log = {
-  info: (m) => out(`  ${c.dim(m)}\n`, "chrome"),
-  warn: (m) => out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`, "notice"),
-  success: (m) => out(`  ${c.green(GLYPH.ok)} ${m}\n`, "result"),
-  error: (m) =>
-    toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`, "error")),
+  info: (m) => {
+    startRow()
+    out(`  ${c.dim(m)}\n`, "chrome")
+  },
+  warn: (m) => {
+    startRow()
+    out(`  ${c.yellow(GLYPH.notice)} ${c.dim(m)}\n`, "notice")
+  },
+  success: (m) => {
+    startRow()
+    out(`  ${c.green(GLYPH.ok)} ${m}\n`, "result")
+  },
+  error: (m) => {
+    startRow()
+    toStderr(() => out(`  ${c.red(GLYPH.fail)} ${m}\n`, "error"))
+  },
 }
 
 /**
@@ -286,6 +323,7 @@ export function check(ok, label, note = "", { optional = false } = {}) {
   //thing a script would ever want from it — existed nowhere but the terminal, and `--json`
   //would have had nothing to serialise.
   record("steps", { label, ok, note: note || undefined, optional })
+  startRow()
   out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
 }
 
@@ -300,6 +338,7 @@ export function helpText(text) {
 
 /** A step that was skipped because its inputs are unchanged (build cache hit). */
 export function skip(label, note = "cached") {
+  startRow()
   out(`  ${c.green(GLYPH.ok)} ${label}  ${c.dim(`· ${note}`)}\n`, "result")
 }
 
@@ -321,6 +360,7 @@ export function skip(label, note = "cached") {
 export function fail(label, reason, detail = []) {
   record("steps", { label, ok: false, reason })
   recordError({ kind: "step-failed", label, message: reason })
+  startRow()
   toStderr(() => {
     out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
     detailBlock(detail)
@@ -335,13 +375,14 @@ export function spacer() {
   //twice as much. Several blocks each end with one (the banner, a notice block, a finished
   //command) and they meet — `preview all` with nothing to warn about put the gap after the
   //banner AND before the first step, and the run started two lines lower than every other.
+  openBlock = false
   if (currentTail() !== "\n\n") out("\n")
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail
  * uses, so an extra address reads as part of that step rather than a new event. */
 export function detail(line) {
-  out(`    ${c.dim(line)}\n`)
+  sub(`    ${c.dim(line)}\n`)
 }
 
 /**
@@ -365,12 +406,12 @@ export function addresses({ local, network } = {}) {
   ].filter(([, url]) => url)
   const pad = Math.max(...rows.map(([k]) => k.length))
   for (const [k, url] of rows)
-    out(`    ${c.dim(k.padEnd(pad))}  ${c.dim(url)}\n`)
+    sub(`    ${c.dim(k.padEnd(pad))}  ${c.dim(url)}\n`)
 }
 
 /** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
 function detailBlock(detail) {
-  for (const d of detail ?? []) out(`    ${c.dim(d)}\n`)
+  for (const d of detail ?? []) sub(`    ${c.dim(d)}\n`)
 }
 
 /* -----------------------------------------------------------------------------
@@ -548,6 +589,7 @@ export const wasReported = (err) =>
  * keys available at any moment.
  */
 export function liveWatcher({ keys = true } = {}) {
+  startRow()
   // Offer a key ONLY when pressing it would do something. Two ways this lied before:
   //   - `r`/`b` are NATIVE actions (relaunch the app on the device, reinstall the binary).
   //     On `dev web` their handlers return immediately, yet the hint still offered them —
@@ -728,10 +770,11 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
  *  - it ERASES itself the instant you choose, leaving NO prompt residue — the picked
  *    device only ever appears in the caller's own line (e.g. `✓ ios  iPhone 16 Pro`).
  *
- * `options` is `[{ value, label, hint? }]`. Long lists scroll in a fixed window so the
- * cursor-rewind maths stays inside one screenful. Non-TTY (CI, piped): can't prompt, so
- * take the first option — callers pass `--target`/`--latest` for a deterministic
- * non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
+ * `options` is `[{ value, label, hint? }]`. A list longer than the window scrolls inside it,
+ * six rows at a time, with a dim count of what is hidden above and below (R63) — 36
+ * simulators drawn in full pushed the question off the top of the terminal. Non-TTY (CI,
+ * piped): can't prompt, so take the first option — callers pass `--target`/`--latest` for a
+ * deterministic non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
  */
 export async function select(message, options) {
   //A prompt has no machine answer — see the note on `--json` in `setOutputMode`.
@@ -743,6 +786,10 @@ export async function select(message, options) {
   //the same answer the hand-rolled picker gave, and what makes a piped run deterministic.
   if (!isTTY || !process.stdin.isTTY) return options[0]?.value
 
+  //A picker is a GROUP — question, rows, key hint — so it is separated from whatever is
+  //above it, not just from a group that happened to be open (R64). Reported glued under the
+  //`network` address of the step before it.
+  spacer()
   //THE PICKER IS INK'S NOW. It used to count its own rows, move the cursor back over them
   //and erase — `\r\x1b[NA\x1b[0J` — on every keypress, which is the same arithmetic that
   //walked the watch block up the screen. Arrow keys are `useInput`; the list is a column.
@@ -966,6 +1013,7 @@ export async function runLine(
   fn,
   { verbose = false, transient = false, offsetMs = 0, explain } = {},
 ) {
+  startRow()
   const start = Date.now()
   let detail = "" // what the row currently SHOWS (updated at most once per dwell)
   let pending = "" // the newest phase the stream has reported
@@ -1101,6 +1149,7 @@ export async function runLine(
  * the old output interleave two platforms and show two ✖ for one failure.
  */
 export async function runLanes(lanes, { verbose = false } = {}) {
+  startRow()
   const state = lanes.map((l) => ({
     label: l.label,
     detail: "",
