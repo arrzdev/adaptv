@@ -80,8 +80,17 @@ function withInteractiveInk() {
   }
 }
 
-/** Mount the block, drive it, and return the final screen as trimmed lines. */
+/**
+ * Mount the block, drive it, and return the final screen as trimmed lines — **blank rows
+ * dropped**, because most assertions here are about which rows exist and in what order.
+ * `screenRaw` keeps them, for the one thing that IS a blank row.
+ */
 async function screen(drive, columns = 100) {
+  return (await screenRaw(drive, columns)).filter((l) => l.trim() !== "")
+}
+
+/** The same, with every row the block drew — blanks included. */
+async function screenRaw(drive, columns = 100) {
   const fake = new FakeStdout(columns)
   const real = Object.getOwnPropertyDescriptor(process, "stdout")
   Object.defineProperty(process, "stdout", {
@@ -103,11 +112,14 @@ async function screen(drive, columns = 100) {
   w.stop()
   restore()
   restore = null
-  return last
-    .replace(ANSI, "")
-    .split("\n")
-    .map((l) => l.trimEnd())
-    .filter((l) => l.trim() !== "")
+  return (
+    last
+      .replace(ANSI, "")
+      .split("\n")
+      .map((l) => l.trimEnd())
+      //a trailing "" is the frame's own closing newline, not a row the block drew
+      .slice(0, -1)
+  )
 }
 
 describe("the watch block — a notice is ADDED, never swapped in", () => {
@@ -198,5 +210,26 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     const esc = String.fromCharCode(27)
     expect(after).toContain(`${esc}[2K`)
     expect(after).toContain(`${esc}[1A`)
+  })
+})
+
+describe("the watch block's own breathing room (R64)", () => {
+  it("keeps a blank row between the notice and the keys", async () => {
+    //It always MEANT to: the blank was `h(Text, null, "")`, which Ink measures as no rows at
+    //all, so nothing reached the terminal and the two rows sat flat against each other —
+    //`! adaptv source change …` with `r reload js   b rebuild app   ctrl-c stop` right under
+    //it. Reported from a screenshot; the assertions here filtered blanks, so nothing caught
+    //it. A single space is a row.
+    const rows = await screenRaw((w) => w.notice("adaptv source change"))
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toContain("! adaptv source change")
+    expect(rows[1].trim()).toBe("")
+    expect(rows[2]).toContain("ctrl-c")
+  })
+
+  it("draws no blank at all when there is no notice", async () => {
+    const rows = await screenRaw(() => {})
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toContain("ctrl-c")
   })
 })

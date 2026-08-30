@@ -59,6 +59,22 @@ const XCODE_PHASES = [
 ]
 
 /**
+ * One record from an xcodebuild destination inventory:
+ *
+ *     { platform:iOS, arch:arm64e, id:00008140-0016…, name:iPhone de arrz, error:iOS 26.1 is
+ *       not installed. Please download and install the platform from Xcode > Settings >
+ *       Components. }
+ *
+ * Printed whenever a destination can't be resolved, once per device it knows, ~190 columns
+ * each and carrying `error:` — so it is neither a phase nor, despite the word, a line that
+ * explains anything a dev acts on. `explainLaunchFailure` reads the SAME text and says what
+ * it means in one sentence; the inventory itself belongs to `--verbose` (R14, R61).
+ */
+const DESTINATION_ENTRY = /^\{\s*platform:/
+export const isDestinationEntry = (line) =>
+  DESTINATION_ENTRY.test(String(line))
+
+/**
  * Lines that are not steps at all — xcodebuild's preamble, its `note:`/`warning:`
  * asides, and the syslog spew of tools it shells out to. They pass the generic
  * prettifier (no path to give them away) but say nothing about WHERE the build is, so
@@ -73,7 +89,7 @@ const NOT_A_PHASE = [
   /^Computing target dependency graph/i,
   /^(?:➜|→)/, // the dependency-graph dump xcodebuild prints before building
   /^Target '[^']+' in project '/i,
-  /^\{\s*platform:/, // the destination list printed with "multiple matching destinations"
+  DESTINATION_ENTRY, // one record of an xcodebuild destination inventory
   /^(?:sent|received) [\d,]+ bytes|^total size is |^transfer starting:/i, // rsync stats
   /^\d+ (?:warnings?|errors?) generated/i,
   /^\/\*.*\*\/$/, // actool's `/* com.apple.actool.compilation-results */` banner
