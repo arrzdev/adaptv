@@ -1,14 +1,14 @@
 import type { Bundle, BundleState } from "#adaptv/ota/policy"
 
 /**
- * What this device knows about the bundles it has downloaded. → `LIFECYCLE.md §5.4b`
+ * What this device knows about the bundles it has downloaded. → `docs/design/ota.md §5.4b`
  *
  * ## Why adaptv keeps its own record
  *
  * Every policy decision in `policy.ts` is a function of three things per bundle:
  * its build tag, its **state**, and the **binary it proved itself on**. The
- * plugin stores none of that — `getBundles()` returns a list of ids and nothing
- * else. Without a ledger, `selectRollbackTarget` cannot tell a known-good bundle
+ * plugin stores none of that — `getDownloadedBundles()` returns a list of ids and
+ * nothing else. Without a ledger, `selectRollbackTarget` cannot tell a known-good bundle
  * from the one that just failed, and `selectPrunableBundles` cannot tell a bundle
  * this binary has actually booted from one left behind by an older native layer.
  * Both would then be guessing about the thing they exist to protect.
@@ -80,7 +80,7 @@ export function lastSeenBinary(): string | null {
  * layer installs — which is the default (`otaOnNativeSkew: "install"`) — the
  * running bundle claims a fingerprint the binary underneath it does not have, and
  * every comparison against it reads "up to date" for an app that is not.
- * → `LIFECYCLE.md §5.6`
+ * → `docs/design/ota.md §5.6`
  */
 export function binaryFingerprint(): string | null {
   return readBinary()?.fingerprint ?? null

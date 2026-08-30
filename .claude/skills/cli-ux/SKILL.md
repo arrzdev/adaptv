@@ -5,7 +5,7 @@ description: The adaptv CLI's output contract — read BEFORE editing anything u
 
 # adaptv CLI output contract
 
-**Canonical source: [`docs/CLI-UX.md`](../../../docs/CLI-UX.md). Read it before editing `bin/`.**
+**Canonical source: [`docs/design/cli-contract.md`](../../../docs/design/cli-contract.md). Read it before editing `bin/`.**
 Every rule there was written because the output broke it once and the owner had to report it. The
 test suite cannot catch any of it — **you must run the command and look at the output.**
 
@@ -14,7 +14,7 @@ test suite cannot catch any of it — **you must run the command and look at the
 The CLI narrates the **developer's intent**, not adaptv's implementation. A dev runs
 `adaptv dev ios` to get their app on a simulator. Print only what tells them how that's going, or
 asks them something only they can decide. The consumer doesn't know adaptv runs on Capacitor and
-TanStack (`DECISIONS.md` L20) — the output must never teach them otherwise.
+TanStack (`docs/decisions/register.md` L20) — the output must never teach them otherwise.
 
 **The default is SMALL.** Short, direct, few steps, from a CLOSED vocabulary of lowercase
 phrases. The default is not "everything, tidied" — it is the handful of things a dev acts on.
@@ -23,7 +23,7 @@ got printed *because it was true*, without asking whether the dev needed it.
 
 ## The rules, compressed
 
-Full text + the violating output that produced each rule: `docs/CLI-UX.md`.
+Full text + the violating output that produced each rule: `docs/design/cli-contract.md`.
 
 **Structure** — one settled line per platform covering its whole story (sub-actions render live on
 that line, then vanish); one glyph per outcome (never `✖ ios` *and* `✖ ios failed — …`); never
@@ -52,7 +52,7 @@ implementations and they drifted.
 **Live phases** — a phase says WHAT IS HAPPENING, never WHAT IT IS HAPPENING TO: `compiling`,
 never `compiling · CapacitorSplashScreen` or `gradle · parseDebugLocalResources`. No target,
 task, or pod names; no camelCase identifiers. The vocabulary is CLOSED (`preparing build`,
-`compiling`, `linking`, `processing resources`, `packaging`, … — full list in `docs/CLI-UX.md`
+`compiling`, `linking`, `processing resources`, `packaging`, … — full list in `docs/design/cli-contract.md`
 R24); map a new tool verb into it rather than inventing a phrase or passing one through. A tool
 that CRASHES says nothing at all — a dump's stack and version footer are not phases (R33). The row
 also SAMPLES the stream instead of following it (`nextPhase()`), so a phase holds for a beat
@@ -91,5 +91,5 @@ and strands the dev ATS exception in `Info.plist`.
 
 ## When the owner reports a new output problem
 
-Fix it **and** add the rule to `docs/CLI-UX.md` in the same commit, quoting the offending output.
+Fix it **and** add the rule to `docs/design/cli-contract.md` in the same commit, quoting the offending output.
 The document only works if it grows every time something slips through.

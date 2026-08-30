@@ -16,8 +16,10 @@ import { ADAPTV_DIR, nextGitignore } from "#adaptv/vite/adaptv-dir.ts"
  * entries. All three touch files the *consumer* owns, so all three are
  * idempotent and never reformat anything.
  *
- * `.adaptv/` now holds exactly one file — TanStack's generated route tree, which
- * genuinely is derived from the app's own route files.
+ * What this file no longer stamps into `.adaptv/` is the point: the only module it
+ * still puts there is TanStack's generated route tree, which genuinely is derived
+ * from the app's own route files. (Other producers write into the same directory —
+ * `sw.gen.ts`, `tmp/router/`, the native `web/` bundle — see `adaptv-dir.ts`.)
  */
 
 //An app can eject either surface by writing the real file; adaptv then defers.

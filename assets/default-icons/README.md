@@ -10,7 +10,7 @@ in [`src/vite/icon-set.ts`](../../src/vite/icon-set.ts), which returns `source: 
 these files. The native launcher icons are branded from `icon.png` / `icon-maskable.png`; the
 web manifest and head are served from `/adaptv-icons/*` by the `adaptv:icons` plugin.
 
-The dev is still told (`CLI-UX.md` R5 — an app wearing someone else's logo is not "handled"):
+The dev is still told (`docs/design/cli-contract.md` R5 — an app wearing someone else's logo is not "handled"):
 
 ```
 ! no icons in ./public/favicons — shipping adaptv's default mark
@@ -23,11 +23,11 @@ they have to exist in the published package. They are produced by adaptv's own g
 [`../adaptv-mark.svg`](../adaptv-mark.svg), which is the only file to edit:
 
 ```bash
-adaptv gen icons --input ../adaptv-mark.svg --yes
+adaptv icons --input ../adaptv-mark.svg --yes
 ```
 
 Run it from a scratch app whose `icons` points at a temp directory, then copy the output here —
-`gen icons` writes into an *app's* icon directory, and pointing it at the framework's own
+`icons` writes into an *app's* icon directory, and pointing it at the framework's own
 `assets/` would mean the framework depended on being an app. Committing the copy is the seam.
 
 The mark is **full bleed on a flat colour**, and both halves are deliberate. Full bleed because

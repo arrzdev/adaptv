@@ -6,7 +6,7 @@ describe("adaptvDeployServerPlugins", () => {
     //The property this pins is that adaptv, not the consumer, owns the deploy
     //plugin. Before this the target came from whatever the app happened to put in
     //its own `vite.config.ts` — so "deploy anywhere" was something each app had to
-    //re-learn per host. → `DECISIONS.md §6.4`
+    //re-learn per host. → `docs/decisions/rendering-and-delivery.md §2`
     const plugins = await adaptvDeployServerPlugins("ssr")
     expect(plugins.length).toBeGreaterThan(0)
   })

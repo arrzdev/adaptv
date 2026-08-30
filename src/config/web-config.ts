@@ -1,13 +1,13 @@
 /**
  * The resolved web build settings.
- * → `LIFECYCLE.md §1.2` (D4), `DECISIONS.md §6.3`, `§6.4`
+ * → `docs/design/lifecycle.md §1.2` (D4), `docs/decisions/rendering-and-delivery.md §1`, `docs/decisions/rendering-and-delivery.md §2`
  *
  * The consumer states *what* (ship SSR), not *how* (which navigation strategy,
  * which shell filename). Everything mechanical is derived.
  *
  * There is no `host` here. It existed, and it was theatre: the only value that
  * ever changed a byte of output was `"static"`, which is just `render: "spa"`
- * said twice. → `DECISIONS.md §6.4`
+ * said twice. → `docs/decisions/rendering-and-delivery.md §2`
  */
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 
@@ -62,7 +62,7 @@ export function resolveWebConfig(
  * unconditionally is correct wherever the build lands and inert everywhere else —
  * which is precisely why adaptv no longer asks *which* host. They are never
  * emitted under `"ssr"`: `_redirects` there would answer every navigation from a
- * static file and hijack it away from the server. → `DECISIONS.md §6.4`
+ * static file and hijack it away from the server. → `docs/decisions/rendering-and-delivery.md §2`
  *
  * Each one exists for a specific host behaviour, not for symmetry:
  *

@@ -94,7 +94,7 @@ function budgetFor(
  * here: `preventDefault` on `pointerdown` suppresses focus and any nested
  * scrolling the surface still wants, and `stopPropagation` hides the pointer
  * from the gesture controller, so the surface silently stops taking part in the
- * arbitration that decides who owns the finger (`COORDINATION.md §3`). Suppress
+ * arbitration that decides who owns the finger (`docs/design/coordination.md §3`). Suppress
  * from the callback, where you know which shape was hit.
  *
  * Both thresholds carry adaptv's answer by default and take the surface's own if

@@ -96,7 +96,7 @@ describe("mergeStyles", () => {
 
 // The inline tier mirrors the class tiers, because inline style is its OWN cascade
 // origin: a `style` prop forwarded straight to the node beats every author rule,
-// `locked` classes included. → STYLING.md §2
+// `locked` classes included. → docs/decisions/styling.md §2
 describe("mergeStyles — the inline-style tier", () => {
   it("stays a plain string for a classes-only call (every existing call site)", () => {
     const out = mergeStyles({ base: "flex", locked: "min-h-0" })

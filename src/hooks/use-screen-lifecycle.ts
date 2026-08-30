@@ -8,7 +8,7 @@ export type ScreenLifecycle = {
 }
 
 /**
- * Enter/leave hooks for a route component. → `COORDINATION.md §4`
+ * Enter/leave hooks for a route component. → `docs/design/coordination.md §4`
  *
  * ## This is sugar, not a retention mechanism — and that is the decision
  *

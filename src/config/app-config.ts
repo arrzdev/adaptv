@@ -15,10 +15,6 @@ import type {
   UiTwitterConfig,
 } from "#adaptv/shell/head"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * A screen reference for `adaptv.config.ts` — a thunk around a literal dynamic
  * import: `splashScreen: () => import("@/components/splash-screen")`.
@@ -56,19 +52,6 @@ export type AdaptvPatches = {
 }
 
 /**
- * How far one of the *questionable* app-feel resets reaches.
- *
- * - `"app"` — installed PWA + native only (the default for every option).
- * - `"all"` — every target, browser tab included.
- * - `"off"` — adaptv does not touch the property at all.
- *
- * Only the resets whose alternative is **different, not broken**, are configurable.
- * The hover-stickiness fix, the `touch-action` longhand (WebKit 240917), the caret
- * mute, the autofill cover and the safe-area `env()` ordering (crbug/40699457) have
- * no knob and never will — nobody has a legitimate reason to want the broken
- * behaviour, so a flag there would only be a way to break the app.
- */
-/**
  * When a waiting service worker is applied. → `serviceWorkerUpdate`
  *
  * Two values, not four. There is no `"immediate"`: applying mid-session prunes
@@ -79,12 +62,25 @@ export type AdaptvPatches = {
  */
 export type ServiceWorkerUpdatePolicy = "auto" | "prompt"
 
+/**
+ * How far one of the *questionable* app-feel resets reaches.
+ *
+ * - `"app"` — installed PWA + native only.
+ * - `"all"` — every target, browser tab included.
+ * - `"off"` — adaptv does not touch the property at all.
+ *
+ * Only the resets whose alternative is **different, not broken**, are configurable.
+ * The hover-stickiness fix, the `touch-action` longhand (WebKit 240917), the caret
+ * mute, the autofill cover and the safe-area `env()` ordering (crbug/40699457) have
+ * no knob and never will — nobody has a legitimate reason to want the broken
+ * behaviour, so a flag there would only be a way to break the app.
+ */
 export type UiPatchScope = "app" | "all" | "off"
 
 /**
  * The `ui` block — the app-feel resets whose right answer depends on what the app
- * *is*, not on correctness. All default to `"app"`, so an installed app keeps the
- * native feel while a browser tab keeps browser behaviour.
+ * *is*, not on correctness. Per-option defaults, because the options do not share a
+ * right answer (`utils/platform.ts`: `UI_SCOPE_DEFAULTS`).
  *
  * Resolved **once**, in the pre-paint init script, against the runtime platform;
  * the result is a boolean-presence attribute on `<html>`. So `styles.css` stays a
@@ -103,14 +99,12 @@ export type AdaptvUiConfig = {
   noSelect?: UiPatchScope
   /**
    * The global `scrollbar-width: none` + `::-webkit-scrollbar { display: none }`
-   * reset. Default `"all"`.
-   *
-   * The earlier default was `"app"`, on the reasoning that a desktop user loses the
-   * scroll-position indicator. That reasoning assumed the consumer had no recourse —
-   * they do: `ScrollView`'s `showsVerticalScrollIndicator` emits `scrollbar-visible`,
-   * which outranks this reset, so a scroller that genuinely wants an indicator asks
-   * for one. With a working per-scroller escape, defaulting to off everywhere is what
-   * makes the same code feel the same on all six targets.
+   * reset. Default `"all"` — the one option that is stricter than `"app"`, because
+   * it is the one with a per-scroller escape: `ScrollView`'s
+   * `showsVerticalScrollIndicator` emits `scrollbar-visible`, which outranks this
+   * reset, so a scroller that genuinely wants a desktop scroll-position indicator
+   * asks for one. That escape is what lets the same code feel the same on all six
+   * targets without stranding a desktop user.
    */
   hideScrollbars?: UiPatchScope
   /**
@@ -153,7 +147,7 @@ export type AdaptvImagesConfig = {
 
 /**
  * The `router` block in `adaptv.config.ts` — the one place all routing wiring lives:
- * the rendering mode, the build-time route-generator paths, AND any runtime
+ * the SSR server entry, the build-time route-generator paths, AND any runtime
  * `createRouter` option. adaptv routes each key it recognizes to the right TanStack
  * Start layer; every other key is spread into the generated `createRouter`. The
  * generator paths are required — no magic codebase-specific directories. (The client
@@ -190,19 +184,22 @@ export type AdaptvRouterConfig = {
   memoryHistoryInStandalone?: boolean
 } & Record<string, unknown>
 
-/** `router` keys adaptv consumes itself (render / entries / generator paths) — never spread into `createRouter`. */
+/**
+ * `router` keys adaptv consumes itself (entries / generator paths) — never spread
+ * into `createRouter`.
+ *
+ * `"render"` used to head this list, back when the render mode was `router.render`.
+ * It is a **top-level** `render` key now (`docs/decisions/rendering-and-delivery.md §1`,
+ * renamed 2026-08-09), so filtering it out of the `router` block guarded a shape that
+ * no longer exists — and adaptv carries no compatibility shims.
+ */
 export const ROUTER_BUILD_KEYS = [
-  "render",
   "serverEntry",
   "routesDirectory",
   "routerConfig",
 ] as const
 
-/**
- * Brand background per theme. Provide `light`, `dark`, or both. When only one is
- * given it is used for BOTH appearances — the `theme-color` meta and the
- * launch-gap background stay that single color regardless of light/dark.
- */
+/** Brand background per theme. See {@link resolveThemeColors} for the one-sided case. */
 export type AdaptvThemeColor =
   | { light: string; dark?: string }
   | { light?: string; dark: string }
@@ -243,11 +240,10 @@ export type AdaptvAppConfig = {
    * The app's icon set — **one directory, every target**. It must live inside `public/` so the
    * files are actually served.
    *
-   * There is **no default directory**. Name one and adaptv reads it; name none and the app
-   * wears adaptv's own mark, on the home screen and in the manifest alike — never Capacitor's
-   * stock icon. `./public/favicons` is the conventional place to put it, not a path adaptv
-   * looks in on its own: a fallback that resolved to a real directory made this key look
-   * ignored, because removing it changed nothing.
+   * There is **no default directory** — name one and adaptv reads it. `./public/favicons` is
+   * the conventional place to put it, not a path adaptv looks in on its own: a fallback that
+   * resolved to a real directory made this key look ignored, because removing it changed
+   * nothing.
    *
    * Generate it with **`adaptv gen icons --input <image>`** (one png/svg, 1024px+) or drop a
    * standard favicon-generator output in. Either way adaptv reads the directory itself — it **measures
@@ -320,7 +316,7 @@ export type AdaptvAppConfig = {
    */
   serviceWorkers?: string[]
   /**
-   * When a new build's worker is applied. Default `"auto"`. → `RENDERING.md §3.4`
+   * When a new build's worker is applied. Default `"auto"`. → `docs/design/rendering.md §3.4`
    *
    * | value | behaviour |
    * |---|---|
@@ -362,8 +358,9 @@ export type AdaptvAppConfig = {
   patches?: AdaptvPatches
   /**
    * The app-feel resets that are genuinely the app's call — text selection,
-   * scrollbar visibility, and the iOS link callout. All default to `"app"`
-   * (installed PWA + native only). See {@link AdaptvUiConfig}.
+   * scrollbar visibility, and the iOS link callout. Selection and the callout
+   * default to `"app"` (installed PWA + native only); scrollbars default to
+   * `"all"`. See {@link AdaptvUiConfig}.
    */
   ui?: AdaptvUiConfig
   /**
@@ -445,7 +442,7 @@ export type AdaptvAppConfig = {
    *
    * It goes ahead when a published build is made against a different set of
    * native plugins than the installed binary has, and from then on only a store
-   * update brings the two back into line. → `LIFECYCLE.md §5.6`
+   * update brings the two back into line. → `docs/design/ota.md §5.6`
    *
    * 🔴 **That install is working, so blocking it has a real cost.** It is taking
    * every bundle the channel publishes (or, under
@@ -483,7 +480,7 @@ export type AdaptvAppConfig = {
    * when the app can't boot far enough for a route to exist (a route chunk fails
    * to load, or the route tree can't resolve), and the consumer renders the *same*
    * component from a route whose data is unavailable. Every prop is optional,
-   * which is what lets one component serve both. → `RENDERING.md §3.1.2`
+   * which is what lets one component serve both. → `docs/design/rendering.md §3.1.2`
    *
    * ```ts
    * offlineComponent: () => import("@/components/offline")
@@ -517,7 +514,7 @@ export type AdaptvAppConfig = {
    * Prerendered to static HTML at build time, since there is no React alive when
    * it is needed. It therefore has to render standalone, from a `code` prop and
    * nothing else — no browser, no hooks. Defaults to adaptv's own `BootError`.
-   * → `RENDERING.md §3.1.3`
+   * → `docs/design/rendering.md §3.1.3`
    */
   bootErrorScreen?: ScreenThunk<BootErrorProps>
   //NOTE: there is deliberately no `providers` field. An app-wide provider tree is
@@ -543,7 +540,7 @@ export type AdaptvAppConfig = {
    * **This is where installed native apps look for their own updates.** The
    * ordinary web build writes an OTA channel under
    * `<origin>/.well-known/adaptv/ota/`, the deploy carries it, and every install
-   * polls it on launch and resume. → `LIFECYCLE.md §5.2`
+   * polls it on launch and resume. → `docs/design/ota.md §5.2`
    *
    * ⚠︎ **Treat it as permanent, like the bundle ID.** It is baked into the store
    * binary, so changing it takes a store release — and every install that never
@@ -573,7 +570,7 @@ export type AdaptvAppConfig = {
    * Omit it and the build refuses to publish a channel, because an unsigned
    * channel is a remote-code-execution channel into every installed app.
    * `ADAPTV_OTA_ALLOW_UNSIGNED=1` (with `ADAPTV_OTA_ORIGIN`) is the local-only
-   * escape hatch. → `LIFECYCLE.md §5.4d`
+   * escape hatch. → `docs/design/ota.md §5.4d`
    *
    * To verify a signed channel locally without holding the production private
    * key, override this with `ADAPTV_OTA_PUBLIC_KEY` (also only alongside
@@ -582,7 +579,7 @@ export type AdaptvAppConfig = {
   otaPublicKey?: string
   /**
    * What an installed app does with an update built against a **different set of
-   * native plugins** than it has. Default `"install"`. → `LIFECYCLE.md §5.6`
+   * native plugins** than it has. Default `"install"`. → `docs/design/ota.md §5.6`
    *
    * A native change ships through the store; everything else ships over the air.
    * The two get out of step whenever a release adds a plugin, because the bundle
@@ -607,7 +604,7 @@ export type AdaptvAppConfig = {
 
   /**
    * How often an installed app looks for a new bundle **while it is being used**,
-   * in whole minutes. Default `60`. `0` turns the poll off. → `LIFECYCLE.md §5.2`
+   * in whole minutes. Default `60`. `0` turns the poll off. → `docs/design/ota.md §5.2`
    *
    * It is a third check, not the only one: adaptv already looks on every launch
    * and on every resume, and resume is the one that carries a phone. A poll only
@@ -617,7 +614,7 @@ export type AdaptvAppConfig = {
    *
    * ⚠︎ **It changes when the download happens, never when the swap does.** The
    * bundle is still applied at the next cold start, because replacing the
-   * WebView's root under a live app tears its state (`LIFECYCLE.md §5.4b`). What
+   * WebView's root under a live app tears its state (`docs/design/ota.md §5.4b`). What
    * it buys is that the next cold start has the bundle *already staged*, so the
    * update appears on the very next launch instead of the one after it.
    *
@@ -656,26 +653,22 @@ export type AdaptvAppConfig = {
    * behaviour behind — a `"cloudflare"` build and a `"node"` build were byte-for-byte
    * identical when that key existed. Naming the target belongs to the deploy layer:
    * one Vite plugin in `vite.config.ts`, and `NITRO_PRESET` for pipelines that
-   * switch target per environment. → `DECISIONS.md §6.4`
+   * switch target per environment. → `docs/decisions/rendering-and-delivery.md §2`
    *
    * The `"ssr"` default is an asymmetry argument, not a performance one: a wrong
    * SPA default silently kills SEO and is discovered late, by someone reading a
    * ranking report. A wrong SSR default costs one config flip, immediately, by the
-   * person who wanted SPA. → `DECISIONS.md §6.3`
+   * person who wanted SPA. → `docs/decisions/rendering-and-delivery.md §1`
    */
   render?: "ssr" | "spa"
 
   /**
-   * Router config — one block for all routing wiring: rendering mode + bundle
-   * entries, build-time route-generator paths, and any runtime `createRouter`
+   * Router config — one block for all routing wiring: the SSR server entry,
+   * build-time route-generator paths, and any runtime `createRouter`
    * option. See {@link AdaptvRouterConfig}.
    */
   router: AdaptvRouterConfig
 }
-
-/* =============================================================================
- * DEFINE
- * ============================================================================= */
 
 /** Identity helper for `adaptv.config.ts` — full typing + a stable anchor for tooling. */
 export function defineApp<const T extends AdaptvAppConfig>(config: T): T {
