@@ -153,6 +153,32 @@ function writeIfChanged(file, next) {
 }
 
 /**
+ * The one answer to "what colour is this app, per appearance".
+ *
+ * `resolveThemeColors` lives in `src/config/app-config.ts` because the vite side needs it too
+ * — the manifest, the shell and the root route all resolve `themeColor` through it, and the
+ * config is the single build-time source of truth for that value. Both functions below used
+ * to spell `theme.dark ?? theme.light` out by hand instead, which is the same rule written
+ * three times and answerable to nobody: a new fallback, a normalisation or a validation added
+ * to the resolver would have left the native launcher and splash on the old one, silently,
+ * with the two halves of the app painting different colours.
+ *
+ * Reached the way `bin/` reaches every other idea that belongs to `src/` (`load-ts.mjs`):
+ * bundled once per process, so this costs nothing after the first call.
+ *
+ * A missing `themeColor` reaches the resolver and is refused there. It used to become black
+ * and white here, which is the guess `preflight` exists to stop — and `preflight` refuses it
+ * under the banner before any of this runs, so the resolver's throw is the backstop and not
+ * the message anyone sees.
+ */
+const themeColors = async (config) => {
+  const { resolveThemeColors } = await loadAdaptvModule(
+    "config/app-config.ts",
+  )
+  return resolveThemeColors(config.themeColor ?? {})
+}
+
+/**
  * What the launcher icon SITS ON (icon only; the splash is colour-driven).
  *
  * WHERE it comes from is not here and must not be: `resolveIconSet` in
@@ -161,9 +187,8 @@ function writeIfChanged(file, next) {
  * a second copy of a fallback rule that nothing read — dead code, and the kind that only
  * looks harmless until someone changes one copy.
  */
-export function resolveIconPlan(config) {
-  const theme = config.themeColor ?? {}
-  const dark = theme.dark ?? theme.light ?? "#000000"
+export async function resolveIconPlan(config) {
+  const { dark } = await themeColors(config)
   return {
     //White, NOT the light theme colour: these icons sit on someone else's home screen, not
     //inside the app, and the PWA set the source comes from is drawn against white too.
@@ -179,16 +204,11 @@ export function resolveIconPlan(config) {
  *   - "system"      → adaptive colours, no override (follows the device)
  *   - "none"        → fixed (both colours identical; theme-independent)
  */
-export function resolveSplashMask(config) {
-  const theme = config.themeColor ?? {}
+export async function resolveSplashMask(config) {
+  const theme = await themeColors(config)
   const light =
-    config.splashMaskLightColor ??
-    config.backgroundColor ??
-    theme.light ??
-    theme.dark ??
-    "#ffffff"
-  const dark =
-    config.splashMaskDarkColor ?? theme.dark ?? theme.light ?? "#000000"
+    config.splashMaskLightColor ?? config.backgroundColor ?? theme.light
+  const dark = config.splashMaskDarkColor ?? theme.dark
   const mode = config.splashMaskMode ?? "preferences"
   if (mode === "light") return { light, dark: light, follow: "none" }
   if (mode === "dark") return { light: dark, dark, follow: "none" }
@@ -765,8 +785,8 @@ export async function generateAssets(
   platforms,
   { report, force = false } = {},
 ) {
-  const icon = resolveIconPlan(config)
-  const mask = resolveSplashMask(config)
+  const icon = await resolveIconPlan(config)
+  const mask = await resolveSplashMask(config)
 
   const inputs = createHash("sha1")
     .update(appConfigFingerprint(appRoot, config))
