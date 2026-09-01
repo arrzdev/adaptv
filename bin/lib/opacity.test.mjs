@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
+import { loadAdaptvModule } from "./load-ts.mjs"
 import { isAppSource, namesPlumbing } from "./opacity.mjs"
 import { prettyLine } from "./render.mjs"
 
@@ -151,5 +152,38 @@ describe("package.json is a user-facing surface", () => {
     //future failure go away must not be able to take this one with it.
     expect(manifestStrings().map((s) => s.at)).toContain("description")
     expect(PKG.description).toBeTruthy()
+  })
+})
+
+describe("doctor's diagnostics are a user-facing surface too", () => {
+  //`adaptv doctor` renders `formatDiagnostics` straight to the terminal, so R8 governs it
+  //like any other row. It leaked for a long time because the two guards that could have
+  //caught it both look elsewhere: `prettyLine` never sees this text (it is not tool output),
+  //and the diagnostics live in `src/`, where a TS test cannot import this untyped module.
+  //So the scan belongs here, driven off the REAL diagnostics rather than fixtures: the
+  //shipped message named the engine four times, and any invented fixture would have passed.
+  const everyDiagnostic = async () => {
+    const { runDoctor, formatDiagnostics } =
+      await loadAdaptvModule("native/doctor.ts")
+    const diagnostics = runDoctor({
+      iosInfoPlist: "<key>WKAppBoundDomains</key><array/>",
+      capacitorConfig: "{}",
+      androidBuildGradle: "targetSdk = 34",
+      hasPrivacyManifest: false,
+    })
+    return { diagnostics, rendered: formatDiagnostics(diagnostics) }
+  }
+
+  it("fires every check, so the scan below is not vacuous", async () => {
+    const { diagnostics } = await everyDiagnostic()
+    expect(diagnostics).toHaveLength(3)
+  })
+
+  it("names no engine underneath, in any rendered line", async () => {
+    const { rendered } = await everyDiagnostic()
+    const leaks = rendered
+      .split("\n")
+      .filter((line) => namesPlumbing(line))
+    expect(leaks).toEqual([])
   })
 })
