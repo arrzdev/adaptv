@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest"
  * Two checks, because neither one alone covers the tree:
  *
  *  - **The allow-list** names every directory and file permitted to touch Node.
- *    It covers all 232 non-test source files, including the 28 that no published
+ *    It covers all 231 non-test source files, including the 28 that no published
  *    entry imports — `src/sw/default-worker.ts` and `src/routes/client-entry.tsx`
  *    reach a browser as *files the CLI hands to Vite*, so an import graph never
  *    sees them and a reachability check alone would wave them through.
@@ -89,7 +89,9 @@ const NODE_ENTRIES = [
  * beside it (`updater.ts`, `use-ota-updates.ts`) are browser code, and
  * `src/interface/ota.index.ts` is a **browser** tsdown entry pointed straight at
  * that directory. It is safe only because the barrel is curated and exports
- * neither `native-fingerprint` nor anything under `build/`.
+ * neither `native-fingerprint` nor anything under `build/` — which
+ * `src/interface/ota.barrel.test.ts` asserts by name, so this file is not the
+ * only thing standing on it.
  * → `docs/roadmap/src-reorg.md` §0.1, §2.2
  *
  * Note what is NOT written here: `src/ota/`. The two entries below name the
@@ -240,7 +242,7 @@ describe("execution boundary", () => {
    * assertion below is `toEqual([])`, so a walk that rots silently reports
    * perfect compliance. → `docs/roadmap/src-reorg.md` §7
    *
-   * The floors are well under today's numbers (232 non-test files, a 154-file
+   * The floors are well under today's numbers (231 non-test files, a 154-file
    * browser closure, a 79-file node closure) and well over zero.
    */
   it("actually walked the tree it claims to have walked", () => {
