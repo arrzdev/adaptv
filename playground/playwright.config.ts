@@ -44,7 +44,14 @@ export default defineConfig({
   webServer: {
     //the inspector port has to move with the app port or the boot dies on an
     //EADDRINUSE for a port nobody asked about — see vite.config.ts
-    command: `pnpm --filter @repo/frontend exec vite --port ${port} --strictPort`,
+    command: `pnpm exec vite --port ${port} --strictPort`,
+    //`cwd` is resolved against THIS config file, so the server can only ever be
+    //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
+    //matches by package NAME — and the header above warns about reusing another
+    //worktree's server. The same hazard exists WITHIN one worktree: a second
+    //member under `apps/*` named `@repo/frontend` makes the filter fan out, and
+    //whichever copy wins the port serves every assertion, silently.
+    cwd: "apps/frontend",
     env: {
       VITE_APP_PORT: String(port),
       VITE_SUPERVISOR_PORT: String(port + 10),
