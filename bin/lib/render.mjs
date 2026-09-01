@@ -294,10 +294,15 @@ export function rawOut(text) {
  * without this the next `check` sees a group still open, calls `spacer()` on its own account,
  * and the report grows a stray blank line between a heading and its first row — visible the
  * first time a `doctor` row carried `detail` under it (R71).
+ *
+ * The gap it opens with comes from `spacer()` rather than a literal `\n`, because a heading is
+ * a block like any other and R26's seam rule applies to it too: the banner already closes with
+ * a blank line, so a command whose first line is a heading — `keys ota` — counted that gap
+ * twice and started two rows lower than every other command.
  */
 export function section(title) {
-  openBlock = false
-  out(`\n  ${c.bold(title)}\n`)
+  spacer()
+  out(`  ${c.bold(title)}\n`)
 }
 
 /**
