@@ -40,7 +40,7 @@ against shipped code are not roadmap items either — those live as `B` entries 
 | 8 | **Owed device verification** | [`owed-device-verification.md`](owed-device-verification.md) | small each | Six checks no unit test can close. Cheap individually; they need hardware. |
 | 9 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |
 | 10 | **Open questions** | [`open-questions.md`](open-questions.md) | — | Four genuinely undecided questions. Not work — decisions owed. |
-| 11 | **`src/` reorganisation** | [`src-reorg.md`](src-reorg.md) | medium | Three separable proposals from the owner (group by domain · tests in their own folder · domain-first filenames). The plan recommends **one, narrowly** and argues against the other two. Sequenced **after** the `dist` cutover. |
+| 11 | **`src/` reorganisation** | [`src-reorg.md`](src-reorg.md) | medium | **§0 answers "what would be ideal"** against the source trees of nine peer frameworks: all nine divide by **where the code executes**, adaptv divides by layer only, and the fix is a rename plus a gate rather than a restructure. **§1–§7** evaluate the owner's three proposals (group by domain · tests in their own folder · domain-first filenames) — **one, narrowly**, and against the other two. No locked decision conflicts. Sequenced **after** the `dist` cutover, except the one step that moves no files. |
 
 ---
 
