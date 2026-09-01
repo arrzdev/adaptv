@@ -287,8 +287,16 @@ export function rawOut(text) {
   out(text)
 }
 
-/** A group heading inside a report (`doctor`): breathing room, then the title. */
+/**
+ * A group heading inside a report (`doctor`): breathing room, then the title.
+ *
+ * A heading CLOSES whatever group was open above it. It already prints its own blank line, so
+ * without this the next `check` sees a group still open, calls `spacer()` on its own account,
+ * and the report grows a stray blank line between a heading and its first row — visible the
+ * first time a `doctor` row carried `detail` under it (R71).
+ */
 export function section(title) {
+  openBlock = false
   out(`\n  ${c.bold(title)}\n`)
 }
 

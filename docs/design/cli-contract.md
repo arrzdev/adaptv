@@ -631,6 +631,48 @@ change whose entire purpose was to make a failure more helpful.
 > those out loud already (R24 has `gradle · assembleDebug`), they cost real diagnostic value, and
 > none of them says anything about how adaptv is built.
 
+**R71 — A report row the dev cannot act on part by part is ONE row, and `--verbose` is where
+its parts are named.** `doctor` answers one question: can this machine build my app, and if not
+what do I install? Every other row in it is something the dev owns and fixes one at a time —
+node, the Android SDK, a JDK, Xcode, their icon directory — and naming each one is how they act
+on it. adaptv's own install is not that: the native command adaptv drives and the native modules
+it ships are adaptv's dependencies, resolved from adaptv's package root and absent from the
+consumer's `package.json` entirely. The dev did not choose them, cannot install one of them, and
+has a single remedy for any of them. One fact, one action, one line — R8b's move, applied to
+adaptv's own authored rows rather than to text lifted out of a tool: adaptv owns its plumbing out
+loud, never by name.
+> Violated by: twelve of `doctor`'s thirty-one lines, every one of them the engine's package
+> name, under a heading that said out loud whose they were.
+> ```
+>   ✓ capacitor cli  · 8.4.2
+>
+>   Plugins (shipped by adaptv; the consumer installs none)
+>   ✓ @capacitor/app
+>   ✓ @capacitor/browser
+>   … nine more
+> ```
+> Want, in `Core`, beside `node`:
+> ```
+>   ✓ adaptv's own install  · complete
+> ```
+> and when it is broken, ONE `✖` carrying the action — not a red row per part and then a `!`
+> repeating the count, which is two announcements of one outcome:
+> ```
+>   ✖ adaptv's own install  · incomplete
+>       Reinstall with 'pnpm install'.
+>       Run with '--verbose' to list what is missing.
+> ```
+> **A diagnostic that hid what was broken would be worse than one that named a vendor**, and this
+> hides nothing the dev could have acted on: the row says the install is the problem, the first
+> line says what to do, and the second says where the rest is. Under `--verbose` that second line
+> goes (R6 — the list is already on the screen) and the names appear, `MISSING` marked. That is
+> the ONE surface in the CLI where the engines may be named, and it is exactly the surface
+> whoever is debugging adaptv rather than an app is already on.
+>
+> The decision this replaced is worth stating so it is not re-made: the section was NOT dropped
+> in favour of printing only failures. A dev runs `doctor` because something is already wrong,
+> and a check that says nothing when it passes cannot be told apart from a check that never ran.
+
 **R9 — Never print absolute paths.** Artifact and file paths are app-root-relative.
 > Violated by: `✓ android /Users/arrz/Documents/Github/project-zero/apps/front…`.
 > Want: `✓ android .adaptv/builds/app-debug.apk`.
@@ -1562,7 +1604,11 @@ Tests do not cover any of this. Run it and read it:
 - [ ] **watch a native build for 10s** — if the phase text moves more than about once a second,
       or you can read an identifier in it, R22/R23 are broken
 - [ ] `adaptv preview web` and `adaptv preview all` — the web server must come up and STAY up
-- [ ] `adaptv doctor` — same banner and glyphs as every other command
+- [ ] `adaptv doctor` — same banner and glyphs as every other command, `Core` carries ONE row for
+      adaptv's own install (R71), and no row anywhere names an engine. Then `doctor --verbose`,
+      where the names must appear. Break the install to see the `✖` (add a package name that
+      cannot resolve to `ADAPTV_BASE_PLUGINS`): one red row, and no blank line opens up between
+      the next heading and its first row
 - [ ] `adaptv icons --input <image>` into an **empty** dir, then again into the **populated** one —
       the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
       without `--yes` exits `1` on the terse `✖` (R34)
