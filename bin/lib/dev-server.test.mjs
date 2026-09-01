@@ -167,10 +167,6 @@ describe("warmDevServer — naming WHICH way it failed", () => {
   }, 20000)
 })
 
-/* -------------------------------------------------------------------------- */
-/* startDevServer — reading the URLs out of Vite's banner                      */
-/* -------------------------------------------------------------------------- */
-
 /**
  * A fake `node_modules/.bin/vite` that prints the ready banner in a controlled number of
  * writes, so a SPLIT between `Local:` and `Network:` can be reproduced on demand.

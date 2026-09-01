@@ -1,6 +1,6 @@
 /**
  * The gesture controller — a single arbiter for the pointer stream.
- * → `COORDINATION.md §3`
+ * → `docs/design/coordination.md §3`
  *
  * ## The problem
  *

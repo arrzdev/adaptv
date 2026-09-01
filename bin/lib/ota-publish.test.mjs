@@ -8,12 +8,12 @@ import { describe, expect, it } from "vitest"
  * `adaptv build web` publishes the update channel, and it is correct only because
  * of an ORDER that nothing in the code's shape enforces.
  *
- * An app has two bundles — the site, and the SPA a native WebView runs — and both
- * builds write `dist/client`. The archive installed apps will download therefore
- * has to be taken *before* the site build overwrites that directory. Move the two
- * steps around and the command still runs, still prints a tag, and publishes the
- * SITE as if it were the native bundle: an update every device downloads and none
- * can boot, discovered only by the rollback.
+ * An app has two bundles — the site, and the SPA a native WebView runs — and the
+ * archive installed apps will download has to be taken *before* the site build,
+ * which re-runs the same vite pipeline over the same app. Move the two steps around
+ * and the command still runs, still prints a tag, and publishes the SITE as if it
+ * were the native bundle: an update every device downloads and none can boot,
+ * discovered only by the rollback.
  *
  * A source guard rather than a behavioural test, for the reason `native-web-shell`
  * gives: the hazard lives between two real `vite build`s that a unit test cannot
@@ -59,7 +59,20 @@ describe("publishing the update channel", () => {
     //Before it, and the site build erases the channel it just wrote.
     const siteBuild = publish.indexOf('viteCommand(appRoot, ["build"])')
     expect(publish.indexOf("writeChannel(")).toBeGreaterThan(siteBuild)
-    expect(publish).toContain("clientDir: path.join(appRoot, CAP_WEB_DIR)")
+    //Into the directory the build REPORTED writing, never a constant. This assertion
+    //used to pin `CAP_WEB_DIR`, and pinning it is how the bug survived: the web build
+    //writes `.output/public` (ssr) or `dist/client` (spa) and never `.adaptv/web`, so
+    //the channel was placed where no deploy would ever upload it — published in the
+    //CLI's own report, 404 on every installed device. → src/vite/build-stamp.ts
+    expect(publish).toContain("clientDir: path.resolve(appRoot, outDir)")
+    expect(publish).toContain('builtOutDir(appRoot, "web")')
+    expect(publish).not.toContain("CAP_WEB_DIR")
+  })
+
+  it("refuses to publish a channel it cannot place", () => {
+    //No stamp means no honest answer to where the site is. Guessing produces a
+    //channel that is silently unreachable, which is worse than a failed build.
+    expect(publish).toMatch(/!outDir[\s\S]{0,200}fail\("channel"/)
   })
 
   it("publishes even when the build is unchanged", () => {

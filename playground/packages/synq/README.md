@@ -15,8 +15,7 @@ the storage/reactivity backends are swappable adapters.
 | `@repo/synq/adapters/memory` | reference in-memory adapter (tests, SSR) |
 | `@repo/synq/react` | `useCollection` / `useSingleton` / `SynqProvider` |
 | `@repo/synq/live` | framework-agnostic live-query engine the react hooks sit on |
-| `@repo/synq/protocol` | the sync wire contract: pull/push request/response types + structural validators (`isStoredDocument`) |
-| `@repo/synq/server` | the backend half: `createSyncServer` over a `ServerDocumentStore` your database implements |
+| `@repo/synq/protocol` | the sync wire contract: the pull/push request/response types a collection transport is written against |
 
 Internal machinery (stitch, coalesce, apply, tx resolution) is deliberately
 not exported — it can change shape without a breaking release.
@@ -41,11 +40,6 @@ Track 2 — sync (db.sync() / db.todos.sync())
 - **Sync** runs entirely inside an in-memory snapshot; on success it commits to
   storage in one transaction so the UI re-renders exactly once. On any failure
   the snapshot is dropped and storage is untouched.
-- **Server** (`createSyncServer`) runs the SAME field-level merge over a
-  `ServerDocumentStore`, validates every pushed document before merging, and
-  derives pull cursors from returned rows (never from the counter), so
-  concurrent pushes can't skip changes or poison a scope.
-
 ## Conflict model
 
 Field-level last-write-wins driven by **Hybrid Logical Clocks**, not raw wall
@@ -83,8 +77,7 @@ Push handlers resolve each change via `ctx.ack` / `ctx.retry` / `ctx.discard`:
 Shipped & green (TDD): ids, hlc, stitch, coalesce, merge (+ conflict
 preservation), apply, snapshot sync engine (+ error surfacing/retry budget),
 memory + IndexedDB adapters (causal HLC op ordering), `createSynqStorage`
-(+ singletons), live queries, react hooks, leader election, wire protocol +
-validators, sync server (+ reference memory store).
+(+ singletons), live queries, react hooks, leader election, wire protocol.
 
 Open (contracts pinned as `it.todo` where applicable): schema-driven storage
 indexes, pull pagination, HLC drift clamping.

@@ -11,9 +11,9 @@ import { expect, test } from "@playwright/test"
  * keyboard, geolocation, clipboard); the device-only capabilities are walked on the
  * simulator, and here we only prove they mount and self-report their support state.
  *
- * Note: TanStack Router's preload throws `_nonReactive` in this workspace from a
- * version skew — a CAUGHT console.error, not a pageerror, so it neither trips this
- * assertion nor should it (uncaught errors are the white-screen signal).
+ * The assertion is on `pageerror` — UNCAUGHT errors — and deliberately not on
+ * console.error: a handled error the app reports itself is not a white screen, and
+ * gating on it would make this spec fail for things it is not here to catch.
  */
 
 const PAGES = [

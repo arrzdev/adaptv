@@ -1,7 +1,7 @@
 import type { PluginOption } from "vite"
 
 /**
- * The server build — adaptv's, not the consumer's. → `DECISIONS.md §6.4`
+ * The server build — adaptv's, not the consumer's. → `docs/decisions/rendering-and-delivery.md §2`
  *
  * ## Why adaptv injects this at all
  *
@@ -17,8 +17,8 @@ import type { PluginOption } from "vite"
  *
  * ## Why Nitro rather than a table of host plugins
  *
- * Nitro is the deploy layer Start itself delegates to, and it covers everything
- * except the two hosts that ship their own plugin. Crucially it **auto-detects
+ * Nitro is the deploy layer Start itself delegates to, and it covers every host,
+ * the two that also ship their own Vite plugin included. Crucially it **auto-detects
  * eight providers with zero configuration** — AWS Amplify, Azure, Cloudflare,
  * Firebase App Hosting, Netlify, Stormkit, Vercel, Zeabur — by reading the
  * platform's own build environment. Nothing is declared, so nothing can be

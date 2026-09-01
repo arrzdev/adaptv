@@ -81,12 +81,15 @@ export function applyUiThemePreference(preference: UiThemePreference) {
 }
 
 /**
- * Blocking inline `<head>` script — runs before first paint. Single source of
- * truth for the pre-hydration theme: resolves the preference, paints the
- * `<html>` class / `color-scheme` / background, and seeds the one
- * `theme-color` meta that {@link useSyncTheme} keeps in sync afterwards.
+ * Re-apply the stored preference to `<html>` on the client, without writing it
+ * back. Called from `useTheme`'s layout effect so React's reconciliation of
+ * `<html>` cannot drop what the pre-paint script already painted.
+ *
+ * The pre-paint pass itself is {@link getUiThemeInitScript} — the blocking inline
+ * `<head>` script that is the single source of truth before hydration: it resolves
+ * the preference, paints the class / `color-scheme` / background, and seeds the one
+ * `theme-color` meta that `useSyncTheme` keeps in sync afterwards.
  */
-
 export function initUiTheme(
   preference: UiThemePreference = readPreference(),
 ) {

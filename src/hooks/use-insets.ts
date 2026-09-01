@@ -1,9 +1,5 @@
 import { useEffect, useState } from "react"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /** Safe-area insets in **px**, one per edge. `0` where there is no inset. */
 export type Insets = {
   top: number
@@ -17,9 +13,8 @@ const ZERO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
 /** Edge order used by the probes below — must match the `Insets` assembly. */
 const INSET_SIDES = ["top", "right", "bottom", "left"] as const
 
-/* =============================================================================
- * MEASUREMENT
- * ============================================================================= */
+const PROBE_BASE_STYLE =
+  "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;"
 
 /**
  * The safe-area insets as px numbers, measured once and outside React. Prefer
@@ -57,9 +52,6 @@ const INSET_SIDES = ["top", "right", "bottom", "left"] as const
  * (no layout engine), which makes every consumer of it untestable. Computed padding
  * is reported without layout.
  */
-const PROBE_BASE_STYLE =
-  "position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;"
-
 export function readSafeAreaInsets(): Insets {
   if (typeof document === "undefined") return ZERO_INSETS
 
@@ -98,10 +90,6 @@ function insetsAreEqual(a: Insets, b: Insets): boolean {
     a.left === b.left
   )
 }
-
-/* =============================================================================
- * HOOK
- * ============================================================================= */
 
 /**
  * Safe-area insets as **numbers in px** — `{ top, right, bottom, left }`.

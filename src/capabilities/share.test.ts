@@ -71,7 +71,7 @@ describe("share — the support probe", () => {
     //was added; the binary under it was not. Under the `install` default the
     //bundle runs anyway, so the share button has to be ABSENT rather than
     //throwing — which is exactly what the app already reads as
-    //`useShare().supported`. → LIFECYCLE.md §5.6
+    //`useShare().supported`. → docs/design/ota.md §5.6
     forceNativeBinary(["Haptics"])
     stubNavigatorProp("share", undefined)
     expect(isShareSupported()).toBe(false)

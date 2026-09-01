@@ -10,7 +10,7 @@ import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender"
  * A real esbuild + `react-dom/server` round trip, deliberately. The value of this
  * step is entirely in whether a React component with Tailwind on it actually
  * comes out the other side as markup — a mocked bundler would assert nothing.
- * → RENDERING.md §3.1.3
+ * → docs/design/rendering.md §3.1.3
  *
  * The bundle is built ONCE for the file. Each call bundles React and
  * `react-dom/server` from scratch, which is ~everything this step costs; running

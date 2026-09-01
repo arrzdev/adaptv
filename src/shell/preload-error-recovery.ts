@@ -1,5 +1,5 @@
 /**
- * Recovery for the stale-chunk failure. → `DECISIONS.md` B3/B4, `RENDERING.md §3.3`
+ * Recovery for the stale-chunk failure. → `docs/decisions/register.md` B3/B4, `docs/design/rendering.md §3.3`
  *
  * ## The failure this exists for
  *
@@ -9,8 +9,8 @@
  * longer lists it, and the host no longer serves it. The import rejects, and the
  * user gets a white screen with no path out.
  *
- * Vite emits a `vite:preloadError` event for exactly this. Nothing in adaptv
- * listened for it, so nothing recovered.
+ * Vite emits a `vite:preloadError` event for exactly this, and this
+ * module is the only thing in adaptv that listens for it.
  *
  * ## Why the guard is not optional
  *
@@ -21,8 +21,9 @@
  *
  * So: **one reload attempt per session**, recorded in `sessionStorage` because
  * the reload itself wipes memory — an in-memory flag would reset on every attempt
- * and guard nothing. Re-armed by {@link clearPreloadErrorGuard} once the app
- * boots successfully, so a later deploy is still recoverable.
+ * and guard nothing. Re-armed by {@link clearPreloadErrorGuard} once the APP
+ * decides it has booted successfully, so a later deploy is still recoverable —
+ * see that function for why the app, and never adaptv, owns that call.
  */
 
 export const PRELOAD_ERROR_GUARD_KEY = "adaptv:preload-error-reload"
@@ -46,7 +47,23 @@ export function shouldReloadAfterPreloadError(): boolean {
   }
 }
 
-/** Re-arm the guard. Call once the app has booted successfully. */
+/**
+ * Re-arm the guard, so a *later* deploy in the same tab session is still
+ * recoverable. Exported from `@arrzdev/adaptv/shell`.
+ *
+ * ## adaptv deliberately never calls this itself, and that is not an omission
+ *
+ * There is no moment inside the framework where calling it is safe. The reload
+ * lands back on the SAME url, so the router immediately re-imports the chunk that
+ * just failed — and if the chunk is *genuinely* missing, clearing the guard on
+ * mount re-arms it a beat before that second failure. That is the infinite reload
+ * this whole module exists to prevent, rebuilt out of its own recovery path.
+ *
+ * "Booted successfully" is therefore an APP-level judgement, not a framework one:
+ * it means whatever the app treats as proof it is alive and past its lazy routes
+ * — first successful data load, first navigation the user drove. Only the app can
+ * name that moment, so only the app calls this.
+ */
 export function clearPreloadErrorGuard(): void {
   try {
     sessionStorage.removeItem(PRELOAD_ERROR_GUARD_KEY)

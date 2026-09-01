@@ -20,9 +20,11 @@ export type NavigationRouteOptions = {
    */
   appShellUrl: string
   /**
-   * Extra path prefixes the SW must not claim, **replacing** the defaults —
-   * API routes, auth callbacks, asset dirs. The file heuristic below applies
-   * either way; it is not a prefix and cannot be switched off.
+   * Path prefixes the SW must not claim — API routes, auth callbacks, asset dirs.
+   * **Replaces** {@link DEFAULT_DENY_PREFIXES}, it does not extend them: pass
+   * `["/auth/"]` and `/api/`, `/assets/` and `/_serverFn/` stop being denied, so
+   * restate the ones you still need. The file heuristic below applies either way;
+   * it is not a prefix and cannot be switched off.
    */
   denyPathPrefixes?: readonly string[]
   /**
@@ -80,9 +82,9 @@ export function isFileLikePath(pathname: string): boolean {
  * - `spa` serves the shell and nothing else, so "may not serve the shell" is the
  *   same as "may not claim it" — the route declines and the browser takes it.
  * - `ssr` goes to the network first and only *falls back* to the shell, so it
- *   still claims the navigation (which is what consumes the preload the browser
- *   already started — declining would leave that response unread and cost a
- *   second request for every file link) and simply has no shell to fall back to.
+ *   still claims the navigation — for why claiming matters there, see the
+ *   matcher comment in {@link registerNavigationRoute} — and simply has no
+ *   shell to fall back to.
  */
 export function mayServeAppShell(
   pathname: string,
@@ -139,7 +141,7 @@ export type NavigationRequestIO = {
  * 'preloadResponse' settled"* on every single navigation. Workbox's `NetworkOnly`
  * does not read it, which is why this handler is written out rather than
  * configured — the two halves (`enable()` in activate, this read) only work as a
- * pair. → `RENDERING.md §3.3`
+ * pair. → `docs/design/rendering.md §3.3`
  *
  * A preload resolving `undefined` means "the browser did not preload this one",
  * **not** "the network failed" — falling back to the shell there would serve a
@@ -187,21 +189,22 @@ export async function serveNavigation(
 /**
  * Register navigation handling for the build's render mode.
  *
- * ## Why documents are never cached
+ * ## Documents are never cached. Route chunks always are.
  *
- * The previous implementation cached navigation responses into a `pages-<tag>`
- * bucket and warmed it at install time by fetching every route's HTML with
- * `credentials: "same-origin"`. Under SSR those responses are **per-user**, and
- * the cache is keyed by URL alone — so user A logs in, their dashboard HTML is
+ * They are **different kinds of thing**: chunks are static, content-hashed and
+ * identical for every user, so precaching all of them is exactly right — it is
+ * what makes an installed PWA navigate like the native build. Documents are
+ * per-request and carry a session, so nothing here writes one to a cache.
+ * → `docs/design/rendering.md §3.2`
+ *
+ * The rule is not "cache less"; it is that caching a document is a **cross-user
+ * data leak**. An earlier implementation cached navigation responses into a
+ * `pages-<tag>` bucket and warmed it at install by fetching every route's HTML
+ * with `credentials: "same-origin"`. Under SSR those responses are per-user and
+ * the cache is keyed by URL alone — user A logs in, their dashboard HTML is
  * cached, and user B on the same device is served it whenever the network is
- * slow. NetworkFirst falls back to cache on timeout, so this was not an
- * offline-only exposure. → `DECISIONS.md` B5/B25
- *
- * The fix is not "cache less". It is that **route chunks and documents are
- * different kinds of thing**: chunks are static, content-hashed and identical for
- * every user, so precaching all of them is exactly right — it is what makes an
- * installed PWA navigate like the native build. Documents are per-request and
- * carry a session. → `RENDERING.md §3.2`
+ * slow. NetworkFirst falls back to cache on timeout, so that was not an
+ * offline-only exposure. → `docs/decisions/register.md` B5/B25
  *
  * ## Why SSR uses a fallback rather than a NavigationRoute
  *

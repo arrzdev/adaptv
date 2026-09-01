@@ -293,10 +293,6 @@ function luminanceOf(px, isArt, box) {
   return n === 0 ? 0.5 : sum / n
 }
 
-/* =============================================================================
- * the themed-icon layer
- * ============================================================================= */
-
 /**
  * The faintest a mark's darkest pixel is allowed to get. Android tints the monochrome layer
  * with `SRC_IN`, so the drawable's ALPHA is the whole picture and a 0-alpha pixel is a hole.

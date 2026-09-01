@@ -3,7 +3,7 @@
 // The CLI is plain `.mjs` that node runs directly, while the framework it drives is TS under
 // `src/`. Several ideas are needed on both sides — the toolchain checks `doctor` reports, the
 // Capacitor config, and now the app's icon set — and each one that gets reimplemented in `bin/`
-// is a second implementation free to drift from the first (CLI-UX R26). This bundles the real
+// is a second implementation free to drift from the first (`docs/design/cli-contract.md` R26). This bundles the real
 // module with esbuild and imports it from memory, so there is one copy of each idea and no
 // build step between editing `src/` and running the CLI.
 //

@@ -27,7 +27,7 @@ export function UiNotFound({
   //(`notFoundScreen` in adaptv.config.ts). Nothing here is structural: it fills the
   //shell because that is the neutral look for a 404, not because anything depends
   //on it — so every part is `base` and `locked` is undefined by decision (§2).
-  //`clickable` is not repeated on the Link either; Link locks it itself.
+  //The interaction utility is not repeated on the Link either; Link locks it itself.
   return (
     <main
       data-adaptv="not-found"

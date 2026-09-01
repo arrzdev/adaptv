@@ -116,15 +116,20 @@ describe("useScrollEdgeFade — the strengths that make a tall fade usable", () 
      * bottom. Unclamped, the strength goes negative, the mask's colour stops come out
      * in the wrong order, and the edge flickers opaque for the length of the bounce —
      * visible only on a real device, which is exactly why it is pinned here.
+     *
+     * ⚠︎ These assert EXACT ZERO, not `>= 0`. The loose bound is what let the bug
+     * live: the top used `Math.abs`, which mirrors instead of flooring, so a 60px
+     * pull reported full strength — and `>= 0` is true of both the mirror and the
+     * clamp, so the test agreed with the bug and the fix alike. An overscrolled edge
+     * has nothing beyond it by definition; the only correct strength is 0.
      */
     const top = makeScroller({ offset: -60 })
     mount(top, BOTH)
-    expect(Number(strengths(top).start)).toBeGreaterThanOrEqual(0)
-    expect(Number(strengths(top).end)).toBeLessThanOrEqual(1)
+    expect(strengths(top).start).toBe("0")
 
     const bottom = makeScroller({ offset: 1060, extent: 1000 })
     mount(bottom, BOTH)
-    expect(Number(strengths(bottom).end)).toBeGreaterThanOrEqual(0)
+    expect(strengths(bottom).end).toBe("0")
   })
 
   it("holds a disabled end at 0 no matter where the scroll is", () => {

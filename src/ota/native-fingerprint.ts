@@ -9,7 +9,7 @@ import {
 
 /**
  * The OTA compatibility gate — a hash of everything a JS bundle can *call*.
- * → `LIFECYCLE.md §5.3`
+ * → `docs/design/ota.md §5.3`
  *
  * An OTA bundle never passes review and never gets a staged rollout, so this is
  * the only thing standing between "shipped a bundle that calls a plugin the

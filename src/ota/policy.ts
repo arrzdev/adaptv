@@ -1,5 +1,5 @@
 /**
- * OTA update policy — the pure decisions. → `LIFECYCLE.md §5` (L13)
+ * OTA update policy — the pure decisions. → `docs/design/ota.md §5` (L13)
  *
  * Deliberately free of plugin calls, filesystem and network: *when* to apply an
  * update, *whether* a bundle may be trusted, and *what* to roll back to are
@@ -16,7 +16,7 @@
  * rules below require the signature to be **present and well-formed** and pass it
  * down; verification happens natively, against a key that can only change through
  * a store release. This is written here because this file reads like the obvious
- * place to put it. → `LIFECYCLE.md §5.4d`
+ * place to put it. → `docs/design/ota.md §5.4d`
  */
 
 export type BundleState = "pending" | "active" | "known-good" | "failed"
@@ -63,7 +63,7 @@ export type UpdateManifest = {
 
 /**
  * What to do with a bundle built against a different set of native plugins than
- * the installed binary has. → `LIFECYCLE.md §5.6`
+ * the installed binary has. → `docs/design/ota.md §5.6`
  *
  * ## `"install"` — the default, and the one adaptv is built around
  *
@@ -118,7 +118,7 @@ export type UpdateDecision =
  * ⚠︎ `nativeFingerprint` must be **the binary's** — `binaryFingerprint()` — and
  * not the running bundle's baked-in constant. Once one skewed bundle installs the
  * two stop being the same value, and comparing against the bundle's own reports
- * every later build as compatible. → `LIFECYCLE.md §5.6`
+ * every later build as compatible. → `docs/design/ota.md §5.6`
  */
 export function decideUpdate(options: {
   manifest: UpdateManifest
@@ -229,19 +229,14 @@ export function decideUpdate(options: {
   }
 }
 
-/**
- * 🔴 **Choosing which bundle boots is not a decision this module gets to make**,
- * and there was once a `selectBootBundle` here that read as though it were.
- *
- * The pointer is resolved in native code before a line of JavaScript runs, so by
- * the time anything here could have an opinion, the bundle it would be choosing
- * between is already the one executing. The same goes for "did it prove itself":
- * the proof is that this code is running at all, which is why `settleLaunch`
- * marks the current bundle rather than asking a predicate about a ping.
- *
- * What adaptv can decide is where the *next* launch lands, which is what
- * `selectRollbackTarget` below is for.
- */
+//🔴 There is deliberately no `selectBootBundle` here — choosing which bundle boots
+//is not a decision this module gets to make. The pointer is resolved in native code
+//before a line of JavaScript runs, so by the time anything here could have an
+//opinion, the bundle it would be choosing between is already the one executing. The
+//same goes for "did it prove itself": the proof is that this code is running at all,
+//which is why `settleLaunch` marks the current bundle rather than asking a predicate
+//about a ping. What adaptv can decide is where the NEXT launch lands, which is what
+//`selectRollbackTarget` below is for.
 
 /**
  * Where to land when a bundle fails to prove itself.
@@ -253,7 +248,7 @@ export function decideUpdate(options: {
  * lose it over a defect it never met.
  *
  * `null` means the embedded bundle — the floor, and the last resort rather than
- * the first. → `LIFECYCLE.md §5.5` (the plugin patch that makes this reachable)
+ * the first. → `docs/design/ota.md §5.5` (the plugin patch that makes this reachable)
  *
  * ⚠︎ `binaryIdentity` is the app the candidate has to have **booted on**, which
  * is not the same as the app it was built for. Under the default skew policy a
@@ -281,7 +276,7 @@ export function selectRollbackTarget(
  * Keeps the booting bundle and **at least one** known-good behind it. That
  * retention is not tidiness — it is the thing rollback rolls back *to*. Pruning
  * it converts a bad deploy into a bricked app with no recovery path, which is
- * the one failure OTA must never have. → `LIFECYCLE.md §5.4b`
+ * the one failure OTA must never have. → `docs/design/ota.md §5.4b`
  *
  * ⚠︎ The retained bundle is the newest one that **booted on this binary**, which
  * under the default skew policy is often a bundle built for a native layer the

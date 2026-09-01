@@ -12,7 +12,7 @@
 //
 //   node scripts/check-colour.mjs
 import { spawnSync } from "node:child_process"
-import { readFileSync, writeFileSync } from "node:fs"
+import { readFileSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -35,16 +35,30 @@ process.exit(0)
 `,
 )
 
-//`script` is how you get a pty without a dependency. It flakes occasionally — retry rather
-//than report a false failure.
+//`script` is how you get a pty without a dependency, but its arguments are NOT portable, and
+//this runs on two platforms now — a dev's mac and CI's ubuntu. util-linux wants
+//`-c "<cmd>" <file>`; BSD/macOS has neither `-c` nor `-e` and wants `<file> <cmd> <args>`.
+//So try both forms, preferred one first, rather than trusting a platform check to have
+//guessed right: the wrong form captures nothing, and "captured nothing" would print as
+//"the live layer is rendering flat" — the one failure this script must never invent.
+//It also flakes occasionally, hence more than one round.
+const COMMAND = `TERM=xterm-256color node ${probe}`
+const UTIL_LINUX = ["-q", "-e", "-c", COMMAND, log]
+const BSD = ["-q", log, "/bin/sh", "-c", COMMAND]
+const FORMS =
+  process.platform === "linux" ? [UTIL_LINUX, BSD] : [BSD, UTIL_LINUX]
+
 let out = ""
-for (let i = 0; i < 3 && !out; i++) {
-  spawnSync(
-    "script",
-    ["-q", log, "/bin/sh", "-c", `TERM=xterm-256color node ${probe}`],
-    { stdio: "ignore" },
-  )
-  out = readFileSync(log, "utf8")
+for (let i = 0; i < 6 && !out; i++) {
+  //a form `script` rejects leaves no file, but never read one a previous form wrote:
+  //a partial capture would be graded as a missing colour.
+  rmSync(log, { force: true })
+  spawnSync("script", FORMS[i % FORMS.length], { stdio: "ignore" })
+  try {
+    out = readFileSync(log, "utf8")
+  } catch {
+    out = "" //no typescript file: that form is not the one this `script` speaks
+  }
 }
 
 const ESC = String.fromCharCode(27)
@@ -60,7 +74,9 @@ for (const [code, what] of EXPECT)
 
 spawnSync("rm", ["-f", probe, log])
 if (!out) {
-  console.error("\n  could not capture a pty — is `script` available?")
+  console.error(
+    "\n  could not capture a pty with either `script` form — is `script` installed?",
+  )
   process.exit(2)
 }
 if (missing.length) {

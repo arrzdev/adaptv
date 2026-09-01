@@ -13,10 +13,6 @@ import type {
 } from "#adaptv/hooks/use-gesture-engine"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * The props {@link Pressable} hands to a `render` function — spread them onto whatever
  * element you return, or the press engine is not wired to anything.
@@ -71,7 +67,7 @@ export type PressableProps = OmitGestureEngineHandlers<
   onPress?: (e: GestureEvent) => void
   /** Pointer/keyboard went down (the moment of contact), before any activation. */
   onPressDown?: (e: GestureEvent) => void
-  /** Drop every gesture. Emits `data-disabled` + `aria-disabled` and locks `non-clickable`. */
+  /** Drop every gesture. Emits `data-disabled` + `aria-disabled` and locks the disabled interaction class. */
   disabled?: boolean
   /**
    * Margin (px) around the frame within which the press stays armed — larger forgives
@@ -80,14 +76,10 @@ export type PressableProps = OmitGestureEngineHandlers<
   pressOutset?: number
   /**
    * Render something other than a `<div>` — an element to clone, or a function
-   * `(props, state) => node`. → `STYLING.md §3.3` (a prop, not `asChild`).
+   * `(props, state) => node`. → `docs/decisions/styling.md §3.3` (a prop, not `asChild`).
    */
   render?: PressableRender
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * Any element, with adaptv's press engine on it.
@@ -155,8 +147,9 @@ export function Pressable({
   const slot = typeof render === "function" ? null : render
   const merged = mergeStyles({
     className: [slot?.props.className, className],
-    //`clickable` is structural: it carries the `touch-action` longhand the engine
-    //needs on iOS (WebKit 240917). A consumer `touch-none` must not strand a gesture.
+    //structural, not styling — {@link PRESS_TARGET_LOCKED_CLASS} carries the
+    //`touch-action` longhand the engine needs, and a consumer `touch-none` landing on
+    //top of it would strand a gesture.
     locked,
     style: { ...slot?.props.style, ...style },
     //nothing about a press target is structural in INLINE style — the touch-action

@@ -4,7 +4,7 @@
 //
 //Icon styling goes through Capacitor 8's core `SystemBars` (@capacitor/core), the
 //supported 2026 path: `@capacitor/status-bar`'s setBackgroundColor is dead on Android
-//API 35+/36 (resolves successfully, does nothing — DECISIONS.md §6.0 / NATIVE-SHELL
+//API 35+/36 (resolves successfully, does nothing — docs/decisions/register.md §6.0 / NATIVE-SHELL
 //§0.0), and its setStyle is status-bar-only. SystemBars.setStyle styles BOTH the status
 //and navigation bars, so nav-bar icon contrast is now first-party too.
 //
@@ -21,7 +21,7 @@ export type StatusBarAppearance = "light" | "dark"
  * Sync the native system bars' icon style to the app's resolved theme. No-op on web.
  * Background colour is deliberately NOT set here: `setBackgroundColor` is dead on modern
  * Android and always was on iOS. The bar background comes from CSS — the rendered
- * html/body colour under the inset (DECISIONS.md B17) — not a native call.
+ * html/body colour under the inset (docs/decisions/register.md B17) — not a native call.
  */
 export function applyStatusBar(appearance: StatusBarAppearance): void {
   if (!isNativePlatform()) return
@@ -136,7 +136,7 @@ function watchAndroidInsets(): void {
  *    the app's boot.
  *
  *    `setOverlaysWebView` is deliberately NOT called there. It is the deprecated
- *    `setSystemUiVisibility` path Play Console warns about (NATIVE-SHELL §0.0 point 4); on
+ *    `setSystemUiVisibility` path Play Console warns about (`docs/roadmap/native-shell-plugin.md` §0.0 point 4); on
  *    Android 15+ it resolves and does nothing, and below 15 it only ever laid the window
  *    out under the *status* bar — a half-overlay, measured at `innerHeight` 891 of 915 on
  *    a Pixel 7 (API 34). Calling it now would re-run the deprecated path over a window

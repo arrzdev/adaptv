@@ -4,10 +4,6 @@ import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
 import { useScrollEdgeFade } from "#adaptv/hooks/use-scroll-edge-fade"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Props for {@link ScrollView}. Extends native `<div>` props (`className`,
  * `style`, `ref`, `onScroll`, `data-*`, …) so it drops in anywhere a scrollable
@@ -82,19 +78,11 @@ export interface ScrollViewProps extends ComponentPropsWithRef<"div"> {
   fadeSize?: string
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 const SCROLL_VIEW_BASE_CLASS = "flex min-h-0 min-w-0"
 //Direction is unconditional; GROWTH is the `fill` prop. Keeping `flex-1` here
 //meant a consumer height could never win — see the `fill` docblock.
 const SCROLL_VIEW_COLUMN_CLASS = "flex-col"
 const SCROLL_VIEW_FILL_CLASS = "flex-1"
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * Managed scroll surface for the native-feel viewport contract (the document
@@ -209,7 +197,7 @@ export function ScrollView({
    * css-will-change §2) — a fixed child inside a scroller stops being fixed. Ionic goes
    * further and documents that `translate3d` on a scroll container DEFEATS WebKit's
    * layer-backing-sharing optimisation and degrades scrolling (WebKit bug 216701); they
-   * use `z-index: 0` instead. → PERFORMANCE-BOOST.md, guarded by `styles/utils.test.ts`.
+   * use `z-index: 0` instead. → docs/design/performance-boost.md, guarded by `styles/utils.test.ts`.
    */
   const scrollClass = !scrollEnabled
     ? "overflow-hidden"
@@ -249,7 +237,7 @@ export function ScrollView({
       //by passing its own, which is why this sits ahead of the `{...props}` spread
       data-adaptv="scroll-view"
       //presence + which ends, so the mask rule has a hook and a test has something
-      //to read; the STRENGTHS are custom properties written by the hook (STYLING.md
+      //to read; the STRENGTHS are custom properties written by the hook (docs/decisions/styling.md
       //§3 — enumerable state is an attribute, measured scalars are variables)
       data-fade={
         fade === true ? "both" : fade === false ? undefined : fade

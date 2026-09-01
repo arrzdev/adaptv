@@ -36,7 +36,7 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
     //resolved to its own lazy chunk, then in the exact situation it exists for —
     //chunks unavailable — that chunk would be unavailable too, and the user would
     //get a blank screen instead of the offline screen.
-    //→ RENDERING.md §3.1.2 ("must be in the eager bundle, never lazily imported")
+    //→ docs/design/rendering.md §3.1.2 ("must be in the eager bundle, never lazily imported")
     const source = renderRootRouteModule(
       config({
         offlineComponent: screenThunk("@/components/offline"),
@@ -80,7 +80,7 @@ describe("renderRootRouteModule — screen thunks become STATIC imports", () => 
     //register mode to stamp. It is registered unconditionally on web and
     //standalone, skipped on native and in dev, and applied at the next cold
     //launch — all decisions the runtime owns. A field here could only ever
-    //disagree with it. → RENDERING.md §3.4
+    //disagree with it. → docs/design/rendering.md §3.4
     const source = renderRootRouteModule(config())
     expect(source).not.toContain("serviceWorker")
     expect(source).not.toContain("register")

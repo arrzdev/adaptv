@@ -25,9 +25,8 @@ export function toTodo(doc: LocalDocument<SyncTodo>): Todo {
   }
 }
 
-//reactive, offline-first read of the shared todos. data is served from the
-//warm in-memory cache instantly and kept live by the local storage stream;
-//the background sync controller (data/sync/controller) refreshes from the server.
+//reactive, offline-first read of the todos. data is served from the warm
+//in-memory cache instantly and kept live by the local storage stream.
 export function useTodos(): { data: Todo[]; isLoading: boolean } {
   const { data, isLoading } = useCollection(store.todos)
   const todos = useMemo(() => data.map(toTodo), [data])
