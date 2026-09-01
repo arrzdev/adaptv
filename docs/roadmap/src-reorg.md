@@ -75,8 +75,10 @@ else in `src/` touches Node. **The tree already sorts by face; it just does not 
 **One of those four sits in a directory a browser barrel points into.** `src/interface/ota.index.ts`
 is a `platform: "browser"` tsdown entry and its directory contains a `node:crypto` module. It is safe
 **only because the barrel is curated** — `ota.index.ts` exports `policy`, `updater` and one type from
-`store-release`, and never `native-fingerprint`. So **L20's curated barrel is currently doing
-platform-safety work nobody wrote it to do** (§2.5 is the reason that still holds).
+`store-release`, and never `native-fingerprint`. So **L20's curated barrel is doing platform-safety
+work nobody wrote it to do** (§2.5 is the reason that still holds). Since the OTA slice that is
+checked rather than trusted, by `src/interface/ota.barrel.test.ts` — which also covers the half
+`execution-boundary.test.ts` cannot: a barrel that falls *behind* its directory.
 
 **`src/config/` imports no `node:*` at all** — which is why the Node-platform tsdown entry is safe in
 the *other* direction too, and why the question in [§0.6](#06-what-this-changes-and-what-it-does-not)
@@ -444,12 +446,17 @@ subsystem.
 
 **L20** and [`../decisions/facade-and-opacity.md §1`](../decisions/facade-and-opacity.md) settle that
 adaptv's barrels are curated — *"every symbol in a adaptv barrel is there because someone decided it
-should be"*. Two tests enforce it by comparing hand-written lists against the directory:
+should be"*. Three tests enforce it by comparing hand-written lists against the directory:
 
 - `src/components/barrels.test.ts` — the two component barrels must cover the same modules, with an
   explicit `INTERNAL` set. It exists because `Text` shipped fully built and **unreachable**.
 - `src/interface/capabilities.barrel.test.ts` — every capability module is exported unless it is in a
   named `WITHHELD` set, each entry paired with the file that owns it.
+- `src/interface/ota.barrel.test.ts` — added with the OTA slice, and the one where the curated barrel
+  is also doing platform safety (§0.1). Its `WITHHELD` set names `native-fingerprint` and each
+  `build/` file **individually**, never as a prefix, and a second test fails if any `node:`-importing
+  file in `src/ota/` is not on that list. `use-store-release` is exported from `hooks.index.ts`, so
+  "exported" here means *reachable from either published barrel*.
 
 A domain reorg makes those directories heterogeneous, and the tempting fix is to glob the new folder
 and generate the barrel. **That would make both tests vacuous** — a generated barrel trivially equals
@@ -683,6 +690,7 @@ fix with it.
 | `pnpm build:check` | `exports` + `tsdown` entries; `scripts/verify-dist.mjs` checks the emitted surface | `bin/`'s runtime loads |
 | `pnpm gate` | all of the above + `check-colour.mjs` | ″ |
 | **[`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts)** *(move A)* | a `node:*` import landing on the browser side of the split, a `config/*` import that stops being `import type`, a test file pulled into a published entry graph, and a `tsdown`/`exports` entry nobody classified | a `node:*` import inside `src/vite/**` or `src/native/**` reaching a browser some other way — the allow-list trusts those directories by name |
+| **[`../../src/interface/ota.barrel.test.ts`](../../src/interface/ota.barrel.test.ts)** *(OTA slice)* | an OTA module that stops being exported — the direction the boundary test structurally cannot see, since a barrel falling behind drags nothing into any graph — and a `node:`-importing file arriving in `src/ota/` unnamed | a module exported under a *different* name than its file, and every barrel that is not this one |
 
 ### ⚠︎ The three things no gate catches
 
@@ -697,8 +705,8 @@ fix with it.
 2. **255 doc references + 49 in-code path comments.** Nothing checks them. A reorg that leaves them
    stale attacks the one property that makes this tree navigable
    ([`../README.md`](../README.md): *"when something ships, move it"*).
-3. **A vacuously-passing guard.** `barrels.test.ts` and `capabilities.barrel.test.ts` scan a
-   directory; point one at a directory that no longer holds components and it compares two empty
+3. **A vacuously-passing guard.** `barrels.test.ts`, `capabilities.barrel.test.ts` and
+   `ota.barrel.test.ts` scan a directory; point one at a directory that no longer holds components and it compares two empty
    lists and goes green. **After any move, delete one export from the barrel by hand and confirm the
    guard goes red.** A guard that cannot fail is worse than no guard, and this is the exact way a
    reorg breaks one.
