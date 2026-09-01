@@ -14,7 +14,7 @@ export type NavigationPolicy = {
    * Always `false`. Present as an explicit, asserted field rather than an
    * unwritten rule, because "cache the HTML too" is the single most tempting
    * wrong turn available here and it is a **cross-user data leak**, not a
-   * performance trade-off. → `RENDERING.md §3.2`, `DECISIONS.md` B5/B25.
+   * performance trade-off. → `docs/design/rendering.md §3.2`, `docs/decisions/register.md` B5/B25.
    */
   cachesDocuments: false
 }
@@ -22,7 +22,7 @@ export type NavigationPolicy = {
 /**
  * The navigation strategy is a pure function of the render mode — the same config
  * that produced the build decides how navigation is served, so the two cannot
- * drift. → `RENDERING.md §3.1`
+ * drift. → `docs/design/rendering.md §3.1`
  *
  * | mode | handling | why |
  * |---|---|---|
@@ -58,7 +58,7 @@ const ADAPTV_RUNTIME_BUCKETS = ["static", "pages", "documents"] as const
  * ones — but only `cleanupOutdatedCaches()` ran, and that purges *precaches*
  * only. Every prior deploy's runtime caches therefore accumulated forever, which
  * on a frequently-deployed app is unbounded storage growth ending in a quota
- * error. → `DECISIONS.md` B2
+ * error. → `docs/decisions/register.md` B2
  *
  * Deliberately conservative: an unrecognised bucket is never touched. Deleting a
  * cache adaptv does not own would break whatever created it — another app on the

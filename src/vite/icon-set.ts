@@ -1,8 +1,8 @@
 // The app's icon set — ONE answer, read by everything that needs one.
 //
-// An app declares a single icon directory (`icons` in adaptv.config.ts, default
-// `./public/favicons`). Three consumers care what is in it, and until this module existed each
-// one asked the question its own way:
+// An app declares a single icon directory (`icons` in adaptv.config.ts — there is deliberately
+// no default; see {@link resolveIconSet}). Three consumers care what is in it, and until this
+// module existed each one asked the question its own way:
 //
 //   - the **web manifest** (`manifest.ts`) took files literally starting `android-` and read
 //     their size out of the FILENAME,
@@ -11,7 +11,7 @@
 //   - the **native launcher icons** (`bin/lib/icons.mjs`) scanned the directory and measured
 //     every file for real.
 //
-// Three implementations of one idea is the failure mode `CLI-UX.md` R26 is about: they drift,
+// Three implementations of one idea is the failure mode `docs/design/cli-contract.md` R26 is about: they drift,
 // and here they had. A `logo.png` branded the iOS app and contributed nothing to the manifest;
 // an `android-chrome-192.png` a designer had resized by hand was trusted to be 192px. So the
 // scan lives here, once, and native/manifest/head all read the same resolved set.
@@ -19,13 +19,9 @@
 // Deliberately NO sharp and NO writing. This module is imported by vite plugins that run on
 // every dev request, and by `bin/` before a run starts (through the CLI's esbuild loader) — it
 // has to be cheap and side-effect-free. Producing icons is `bin/lib/icon-gen.mjs`; branding the
-// native projects from a pick is `bin/lib/icons.mjs`. → DECISIONS.md L8 (one config source).
+// native projects from a pick is `bin/lib/icons.mjs`. → docs/decisions/register.md L8 (one config source).
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
-
-/* =============================================================================
- * what counts as an icon
- * ============================================================================= */
 
 // RASTER ONLY for RANKING, on purpose. A PWA icon set's vector member is usually
 // `safari-pinned-tab.svg` — a flat monochrome silhouette that would make a solid black launcher
@@ -65,7 +61,7 @@ export type IconFile = {
   family: IconFamily
   width: number
   height: number
-  /** Whether the file declares an alpha CHANNEL (not whether it uses it — see `resolveTransparency`). */
+  /** Whether the file declares an alpha CHANNEL (not whether it uses it — see `resolveOpacity` in `bin/lib/icons.mjs`). */
   alpha: boolean
 }
 
@@ -202,10 +198,6 @@ export function scanIcons(dirAbs: string): IconFile[] {
   }
   return found
 }
-
-/* =============================================================================
- * resolving the set
- * ============================================================================= */
 
 // There is deliberately no `DEFAULT_ICONS_DIR` here any more. It was `"./public/favicons"`,
 // and `resolveIconSet` fell back to it whenever `icons` was unset — which meant an app could
@@ -385,10 +377,6 @@ export function resolveIconSet(
   }
 }
 
-/* =============================================================================
- * the web manifest's icon array
- * ============================================================================= */
-
 export type WebManifestIcon = {
   src: string
   sizes: string
@@ -463,7 +451,7 @@ const MANIFEST_FAMILY_ORDER: IconFamily[] = [
  *    consumer — a launcher icon slot is square.
  *
  * Maskable last so a consumer that takes the first match still gets an `any` icon, while
- * Android's adaptive/splash path finds the maskable set. → `RENDERING.md`
+ * Android's adaptive/splash path finds the maskable set. → `docs/design/rendering.md`
  */
 export function manifestIcons(set: IconSet): WebManifestIcon[] {
   if (!set.urlBase) return []
@@ -541,10 +529,6 @@ export function installabilityIssue(
     return `web manifest's largest icon is ${largest}px — a PWA needs 192px`
   return null
 }
-
-/* =============================================================================
- * the head's icon links
- * ============================================================================= */
 
 /** Sizes iOS actually asks for. 180 is the only one a modern device uses. */
 const APPLE_TOUCH_SIZES = [120, 152, 167, 180]

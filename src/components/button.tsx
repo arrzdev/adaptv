@@ -29,10 +29,6 @@ import { mergeStyles } from "#adaptv/utils/styles"
 // taps to neighbours — you only lose the tap by deliberately sliding far off.
 const BUTTON_PRESS_OUTSET_PX = 48
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Imperative API for {@link Button}. Attach with `ref`.
  *
@@ -108,10 +104,6 @@ export function resolveButtonHaptic(
   return haptic === true ? "light" : haptic
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED on the slots: the content row tweens to a MEASURED width, so a slot that
 //shrinks (`shrink`) or stops being an inline flex row changes what `scrollWidth`
 //reports and the animation lands on the wrong size. Everything cosmetic about a
@@ -142,10 +134,6 @@ const BUTTON_ROOT_LAYOUT_CLASS =
 //participates in layout at any width and follows `border-radius`.
 const BUTTON_ROOT_SURFACE_CLASS = "bg-gray-50 text-gray-950"
 
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
-
 /** Programmatic state Tier 2 reads via {@link useButton}. */
 export type ButtonContextValue = {
   isDisabled: boolean
@@ -167,10 +155,6 @@ export function useButton(): ButtonContextValue {
   return ctx
 }
 
-/* =============================================================================
- * SLOT HELPERS
- * ============================================================================= */
-
 function buttonSlotHasContent(children: ReactNode): boolean {
   let hasContent = false
   Children.forEach(children, (child) => {
@@ -187,10 +171,6 @@ function buttonSlotHasContent(children: ReactNode): boolean {
   })
   return hasContent
 }
-
-/* =============================================================================
- * WIDTH MODE
- * ============================================================================= */
 
 const BUTTON_FIXED_WIDTH_UTILITY =
   /^w-(?:full|screen|min|max|\d+|\[\S+\]|\d+\/\d+)$/
@@ -213,18 +193,10 @@ export function buttonHasFixedWidth(className?: string): boolean {
   })
 }
 
-/* =============================================================================
- * MOTION
- * ============================================================================= */
-
 const BUTTON_MOTION_TRANSITION = {
   duration: 0.2,
   ease: [0, 0, 0.2, 1] as const,
 }
-
-/* =============================================================================
- * BUTTON LEADING / TRAILING
- * ============================================================================= */
 
 /**
  * Leading icon or indicator slot. Place before {@link Button.Text} in JSX order.
@@ -313,10 +285,6 @@ function ButtonTrailing({ children, className }: ButtonTrailingProps) {
 
 ButtonTrailing.displayName = "Button.Trailing"
 
-/* =============================================================================
- * BUTTON TEXT
- * ============================================================================= */
-
 /**
  * Button label slot.
  *
@@ -348,10 +316,6 @@ function ButtonText({ children, className }: ButtonTextProps) {
 }
 
 ButtonText.displayName = "Button.Text"
-
-/* =============================================================================
- * BUTTON CONTENT ROW
- * ============================================================================= */
 
 interface ButtonContentRowProps {
   buttonRef: RefObject<HTMLButtonElement | null>
@@ -441,10 +405,6 @@ function ButtonContentRow({
 
 ButtonContentRow.displayName = "ButtonContentRow"
 
-/* =============================================================================
- * ROOT
- * ============================================================================= */
-
 /**
  * Primitive `<button>` composed with {@link Button.Leading}, {@link Button.Text},
  * and {@link Button.Trailing}. Children render in document order.
@@ -456,10 +416,13 @@ ButtonContentRow.displayName = "ButtonContentRow"
  * - `ref.current.focus()` — focuses the underlying button element.
  * - `ref.current.disabled` — reflects the live disabled state (readonly).
  *
- * **Baseline styles**: neutral gray, `w-fit`, `inline-flex`, and a **transparent
- * 1px border** so `className={selected ? "border-orange-500" : ""}` costs no
- * layout — under `box-sizing: border-box` a border that appears later eats the
- * content box and shifts the label. It is `base`, so `border-0` still wins.
+ * **Baseline styles**: neutral gray, `w-fit`, `inline-flex`, and deliberately **no
+ * pre-allocated border**. Under `box-sizing: border-box` a border that appears later
+ * eats the content box and shifts the label, but reserving a transparent 1px one only
+ * cancels that for a border of exactly 1px — see the ⚠︎ note on
+ * `BUTTON_ROOT_SURFACE_CLASS` for why it was tried and reverted. For toggled emphasis
+ * (`className={selected ? "outline-orange-500" : ""}`) reach for `outline`, which never
+ * participates in layout at any width and follows `border-radius`.
  * Provide variants via `className` — no internal variant logic. With intrinsic width, the content
  * row tweens width when slots mount or unmount; with a fixed width on the root
  * (`w-full`, `w-64`, …), size does not animate.
@@ -564,8 +527,9 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
         {...gestureEngineHandlers}
         data-adaptv="button"
         //The interaction utility is LOCKED, the look is not — `pressLocked` is the
-        //press core's structural class (`clickable`, or `non-clickable` when
-        //disabled), and why it cannot be overridden is documented there.
+        //press core's structural class (`PRESS_TARGET_LOCKED_CLASS`, or
+        //`PRESS_TARGET_DISABLED_LOCKED_CLASS` when disabled), and why it cannot be
+        //overridden is documented there.
         //Layout and surface stay overridable: restyling a button is the point.
         className={mergeStyles({
           base: [
@@ -593,10 +557,6 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
 })
 
 Button.displayName = "Button"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const ButtonCompound = Object.assign(Button, {
   Leading: ButtonLeading,

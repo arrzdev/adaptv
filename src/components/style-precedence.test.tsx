@@ -23,7 +23,7 @@ import { View } from "#adaptv/components/view"
 import { WheelColumn } from "#adaptv/components/wheel-column"
 
 /*
- * STYLING.md §2 / bug B8 — the three-layer contract, asserted on EVERY primitive.
+ * docs/decisions/styling.md §2 / bug B8 — the three-layer contract, asserted on EVERY primitive.
  *
  * The contract is one sentence, and it is only worth anything if it holds everywhere:
  *
@@ -90,10 +90,6 @@ function query(ui: ReactElement, selector: string): HTMLElement {
   return el as HTMLElement
 }
 
-/* =============================================================================
- * BOXES
- * ============================================================================= */
-
 describe("View", () => {
   it("className beats base (display)", () => {
     const c = classOf(<View className="grid" />)
@@ -144,10 +140,6 @@ describe("ScrollView", () => {
   })
 })
 
-/* =============================================================================
- * PRESS TARGETS — every one locks the `clickable` touch-action longhand
- * ============================================================================= */
-
 //WebKit 240917: `clickable` is the longhand that keeps `pointercancel` alive, which
 //is how the gesture engine learns a scroll took over. A `touch-none` from the
 //consumer would strand the state machine, so it must lose on every press target.
@@ -173,7 +165,7 @@ describe("press targets lock `clickable`", () => {
 })
 
 /*
- * The `active:` marker (STYLING.md §3.1, patches.css). The variant compiles to two
+ * The `active:` marker (docs/decisions/styling.md §3.1, patches.css). The variant compiles to two
  * branches and picks between them on this attribute, so the attribute has to be on
  * exactly the elements the gesture engine drives — and on nothing else, or a plain
  * `<button className="active:scale-95">` silently stops responding.
@@ -301,10 +293,6 @@ describe("Pressable", () => {
     expect(el.style.color).toBe("rgb(1, 2, 3)")
   })
 })
-
-/* =============================================================================
- * FORM CONTROLS
- * ============================================================================= */
 
 describe("Checkbox", () => {
   it("root: className beats base layout, `clickable` still wins", () => {
@@ -512,10 +500,6 @@ describe("TextArea", () => {
   })
 })
 
-/* =============================================================================
- * SCREENS AND OVERLAYS
- * ============================================================================= */
-
 describe("UiNotFound", () => {
   it("every slot takes the consumer className over adaptv's base", () => {
     const { container } = render(
@@ -572,10 +556,6 @@ describe("PwaSplashOverlay", () => {
     expect(region.className).toContain("bottom-auto")
   })
 })
-
-/* =============================================================================
- * GESTURE SURFACES
- * ============================================================================= */
 
 describe("Swipeable", () => {
   //the escape-hatch shape (§2): every structural declaration is keyed on
@@ -660,10 +640,6 @@ describe("AvoidKeyboard", () => {
   })
 })
 
-/* =============================================================================
- * IMAGE
- * ============================================================================= */
-
 describe("Image", () => {
   //happy-dom reports every <img> as `complete` with `naturalWidth: 0`, which Image
   //correctly reads as a load failure and unmounts the node. Pin `complete` false so
@@ -682,7 +658,7 @@ describe("Image", () => {
   //There is no standalone mode any more — `Image` always renders its reserved
   //root, so the consumer className lands THERE rather than on the `<img>`, and
   //the `<img>`'s own fit is a prop (`fit`) because the placeholder layer has to
-  //mirror it. → docs/IMAGE-COMPONENT.md §7.2, §9.1
+  //mirror it. → docs/design/image.md §7.2, §9.1
   it("root: the consumer className owns the box's look", () => {
     withPendingImages(() => {
       const el = firstEl(
@@ -775,7 +751,7 @@ describe("Drawer", () => {
   //The sheet and the dim are the two surfaces adaptv animates, and both are promoted for
   //as long as they are mounted. The panel's hint is the one that stops WebKit demoting it
   //at transition-end and re-rasterising the text just as the sheet arrives (the settle
-  //tremor). It is safe in the one way `PERFORMANCE-BOOST.md` cares about — it grants no
+  //tremor). It is safe in the one way `docs/design/performance-boost.md` cares about — it grants no
   //containing block that was not already there — because the engine writes
   //`translate3d(...)` on this element from mount, and any non-`none` transform makes it a
   //containing block for fixed/absolute descendants on its own. Verified in both engines:

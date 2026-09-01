@@ -5,10 +5,6 @@ import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyb
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export interface AvoidKeyboardProps
   extends HTMLAttributes<HTMLDivElement> {
   /** How to reserve room for the keyboard. Default `"padding"`. */
@@ -17,13 +13,9 @@ export interface AvoidKeyboardProps
   scrollIntoView?: boolean
   /** Gap (px) kept between the input's bottom and the keyboard line. Default `24`. */
   scrollBuffer?: number
-  /** Disable all behavior (renders a plain `<div>`). Default `true`. */
+  /** Run the avoidance; `false` renders a plain `<div>`. Default `true`. */
   isEnabled?: boolean
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * Keyboard-avoiding wrapper — the web counterpart of React Native's `KeyboardAvoidingView`.

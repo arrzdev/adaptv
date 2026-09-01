@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -104,6 +105,50 @@ describe("generateAssets only writes what is not already there", () => {
     )
     await gen(root)
     //It wrote its own version back, so the hash returns to what the generator produces.
+    expect(remembered(root).outputs).toBe(before)
+  })
+
+  it("regenerates when the SPLASH COLOUR resource is hand-edited", async () => {
+    //The theme colour's Android sink, and the one the outputs list used to leave out. iOS
+    //named every file `patchIosTheme` writes; Android named only the launcher art, so a
+    //`colors.xml` that disagreed with the config was never repaired — the whole point of
+    //the outputs half, missing on exactly the file the reported bug was about.
+    const root = app()
+    await gen(root)
+    const before = remembered(root).outputs
+    const colors = path.join(
+      root,
+      ".adaptv/android/app/src/main/res/values/colors.xml",
+    )
+    expect(readFileSync(colors, "utf8")).toContain("#eeeeec")
+    writeFileSync(
+      colors,
+      '<resources><color name="adaptvSplashBackground">#ff00ff</color></resources>',
+    )
+    await gen(root)
+    expect(readFileSync(colors, "utf8")).toContain("#eeeeec")
+    expect(remembered(root).outputs).toBe(before)
+  })
+
+  it("regenerates when the generated MainActivity is deleted", async () => {
+    //Its path is derived from `appId`, so the whole java source root is walked. Nothing
+    //else regenerates it, and an app that boots without it does not boot at all.
+    const root = app()
+    await gen(root)
+    const before = remembered(root).outputs
+    const activity = path.join(
+      root,
+      ".adaptv/android/app/src/main/java/com/example/app/MainActivity.java",
+    )
+    expect(existsSync(activity)).toBe(true)
+    rmSync(path.join(root, ".adaptv/android/app/src/main/java"), {
+      recursive: true,
+      force: true,
+    })
+    await gen(root)
+    //The FILE is back — not merely "the remembered hash is unchanged", which stays true
+    //when the guard cannot see the deletion at all and is how a vacuous test passes.
+    expect(existsSync(activity)).toBe(true)
     expect(remembered(root).outputs).toBe(before)
   })
 

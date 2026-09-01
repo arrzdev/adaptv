@@ -19,6 +19,12 @@ import type {
   ResolvedPosition,
 } from "#adaptv/components/dropdown/dropdown-position"
 import { resolveDropdownPosition } from "#adaptv/components/dropdown/dropdown-position"
+import {
+  PRESS_TARGET_CURSOR_CLASS,
+  PRESS_TARGET_DISABLED_CURSOR_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_CLASS,
+  PRESS_TARGET_LOCKED_CLASS,
+} from "#adaptv/components/press-core"
 import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { useInsets } from "#adaptv/hooks/use-insets"
 import { mergeStyles } from "#adaptv/utils/styles"
@@ -52,10 +58,6 @@ function useDropdownContext(): DropdownContextValue {
   return ctx
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED structure: the panel is a scroll container (its height is capped by the
 //engine, and content past the cap must scroll, not overflow the viewport), sits
 //above app chrome, and contains its overscroll so a menu fling never scrolls the
@@ -67,11 +69,15 @@ const DROPDOWN_CONTENT_BASE_CLASS =
   "min-w-[8rem] rounded-md bg-surface p-1 shadow-lg ring-1 ring-border"
 const DROPDOWN_ITEM_BASE_CLASS =
   "flex w-full items-center rounded-sm px-3 py-2 text-sm text-foreground disabled:opacity-40"
-const DROPDOWN_ITEM_LOCKED_CLASS = "clickable text-start"
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
+//LOCKED: `text-start` is structure, not paint — an item is a full-width row whose
+//label reads from the inline start, never a centred `<button>` label. Beside it rides
+//the press-target `touch-action` longhand: an item sits INSIDE the panel's own
+//scroller, so it is exactly the "tappable and gesture-driven" case press-core.ts
+//describes (WebKit 240917), and a consumer `touch-none` here would turn every row of
+//a scrolling menu into a dead zone. The cursor is the other half of the pair and
+//stays in the BASE tier, so `className="cursor-wait"` on a pending item still wins.
+const DROPDOWN_ITEM_LOCKED_CLASS = `${PRESS_TARGET_LOCKED_CLASS} text-start`
+const DROPDOWN_ITEM_DISABLED_LOCKED_CLASS = `${PRESS_TARGET_DISABLED_LOCKED_CLASS} text-start`
 
 export type DropdownProps = {
   children: ReactNode
@@ -118,10 +124,6 @@ function Dropdown({
   )
 }
 
-/* =============================================================================
- * TRIGGER
- * ============================================================================= */
-
 export type DropdownTriggerProps = {
   children: ReactNode
   className?: string
@@ -163,10 +165,6 @@ function DropdownTrigger({
   )
 }
 DropdownTrigger.displayName = "Dropdown.Trigger"
-
-/* =============================================================================
- * CONTENT
- * ============================================================================= */
 
 export type DropdownContentProps = {
   children: ReactNode
@@ -299,10 +297,6 @@ function DropdownContent({
 }
 DropdownContent.displayName = "Dropdown.Content"
 
-/* =============================================================================
- * ITEM
- * ============================================================================= */
-
 export type DropdownItemProps = {
   children: ReactNode
   className?: string
@@ -329,9 +323,16 @@ function DropdownItem({
       data-adaptv="dropdown-item"
       disabled={disabled}
       className={mergeStyles({
-        base: DROPDOWN_ITEM_BASE_CLASS,
+        base: [
+          DROPDOWN_ITEM_BASE_CLASS,
+          disabled
+            ? PRESS_TARGET_DISABLED_CURSOR_CLASS
+            : PRESS_TARGET_CURSOR_CLASS,
+        ],
         className,
-        locked: DROPDOWN_ITEM_LOCKED_CLASS,
+        locked: disabled
+          ? DROPDOWN_ITEM_DISABLED_LOCKED_CLASS
+          : DROPDOWN_ITEM_LOCKED_CLASS,
       })}
       onClick={(event) => {
         onClick?.(event)
@@ -346,10 +347,6 @@ function DropdownItem({
   )
 }
 DropdownItem.displayName = "Dropdown.Item"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const DropdownCompound = Object.assign(Dropdown, {
   Trigger: DropdownTrigger,

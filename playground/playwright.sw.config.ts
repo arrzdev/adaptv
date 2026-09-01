@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test"
  * to be.
  *
  * The main harness drives `vite` — dev, where adaptv actively DESTROYS any
- * service worker (`RENDERING.md §3.1`). Everything the worker does therefore
+ * service worker (`docs/design/rendering.md §3.1`). Everything the worker does therefore
  * ships untested by that suite, which is exactly how the navigation denylist
  * drifted from its own documentation: the code said one thing, the doc said
  * another, and nothing in CI could tell them apart.
