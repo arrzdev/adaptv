@@ -182,7 +182,7 @@ const PUBLIC_KEY = path.join(KEY_DIR, "signing.pub.pem")
  * is the part with no unit test that can stand in for a device.
  *
  * `ADAPTV_OTA_PUBLIC_KEY` is honoured only alongside `ADAPTV_OTA_ORIGIN` (see
- * `src/vite/ota-config-module.ts`), so no production build can be re-pointed at a
+ * `src/ota/build/ota-config-module.ts`), so no production build can be re-pointed at a
  * bench key by one variable.
  */
 async function otaEnv(): Promise<Record<string, string>> {
