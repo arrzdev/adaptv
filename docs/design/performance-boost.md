@@ -723,7 +723,7 @@ statement in this document about low-end behaviour is reasoning from specs, and 
 | # | File | Change |
 |---|---|---|
 | 1 | `src/hooks/use-global-fps-sentinel.ts` | **delete the file** |
-| 2 | `src/hooks/index.ts` | drop `export * from "./use-global-fps-sentinel"` |
+| 2 | ~~`src/hooks/index.ts`~~ | **nothing to do — the file is gone.** The export was dropped here when rows 1–7 landed; the barrel itself was then deleted as unreachable (nothing imported it; `exports` points every subpath at `src/interface/*.index.ts`). Row 3 is the only barrel edit this needs. |
 | 3 | `src/interface/hooks.index.ts` | drop `export * from "../hooks/use-global-fps-sentinel"` (public API removal — note it in the changelog) |
 | 4 | `src/shell/shell-layout.tsx` | drop the import, the `const gpuBoost = patches?.gpuBoost ?? true`, the `useGlobalFpsSentinel({ enabled: gpuBoost })` call, and `hardware-boosted` from `APP_SCREEN_FRAME_CLASS` |
 | 5 | `src/config/app-config.ts` | delete the `gpuBoost` field from `AdaptvPatches` **and its doc comment**; do **not** add anything to `AdaptvUiConfig` |
@@ -749,20 +749,22 @@ been run and recorded.
 
 ### 9.1 What actually landed
 
-Rows 1–7, 9, 10, 11, 15 and 16 are **done as written**. There is no
+**Every row in the table is done.** Rows 1–7, 9, 10, 11, 15 and 16 landed as written; rows 8 and 12–14
+followed later and are recorded below. There is no
 `use-global-fps-sentinel.test.ts` to delete — the sentinel shipped without one, which is part of why
 none of §4.6's constants was ever challenged.
 
-Three deviations, each deliberate:
+Two rows landed late, and one item never landed at all:
 
-- **Row 8 (`src/components/text-area.tsx`) is NOT done.** `TEXT_AREA_INNER_AT_MAX_ROWS_OVERFLOW_CLASS`
-  still reads `"overflow-y-auto hardware-boosted"`. The file was owned by a concurrent change and could
-  not be touched. The class is now **inert** — `@utility hardware-boosted` is gone, so it emits no rule
-  — but it is a dead string in a shipped component and should be dropped. Verified present in
-  `dist/components.mjs` after `build:check`; it is the ONLY surviving `hardware-boosted` in the build.
-- **Rows 12–14 are NOT done** (`docs/decisions/register.md` §1.1/§1.3, `docs/decisions/styling.md` §3 + the `--adaptv-gpu-boost` row
-  in §6's custom-property table, `docs/decisions/animation.md` §2.1). Add `docs/research/component-surface.md`'s hooks roster,
-  which also still lists `useGlobalFpsSentinel` and is not in the original table.
+- **Row 8 (`src/components/text-area.tsx`) landed after the rest.** It was held back at first because the
+  file was owned by a concurrent change, which left `TEXT_AREA_INNER_AT_MAX_ROWS_OVERFLOW_CLASS` reading
+  `"overflow-y-auto hardware-boosted"` — inert (`@utility hardware-boosted` was already gone, so it
+  emitted no rule) but a dead string shipped in `dist/components.mjs`, and the last surviving
+  `hardware-boosted` in the build. It now reads `"overflow-y-auto"`, with a comment recording why a
+  scroller needs no promotion hint (§4.2).
+- **Rows 12–14 landed with the docs sweep** (`docs/decisions/register.md` §1.1/§1.3, `docs/decisions/styling.md` §3 + the
+  `--adaptv-gpu-boost` row in §6's custom-property table, `docs/decisions/animation.md` §2.1), and so did
+  `docs/research/component-surface.md`'s hooks roster, which was not in the original table.
 - **`body { transform: translateZ(0) }` was NOT ported.** §7.2's caveat resolves against the port, and
   it resolves on a spec fact rather than a measurement: the `Drawer` portals into `document.body`
   (`drawer-engine.tsx` — `setPortalTarget(document.body)`, `createPortal(tree, portalTarget)`) and both
