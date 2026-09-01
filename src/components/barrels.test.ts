@@ -3,35 +3,60 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 /*
- * The two component barrels must cover exactly the same modules.
+ * `src/interface/components.index.ts` must cover exactly the components on disk.
  *
- * This exists because they silently drifted. `src/components/index.ts` was missing
- * `text`, `view`, `list` and `external-link`; `src/interface/components.index.ts`
- * was missing `text`, `not-found` and `orientation-guard`. The visible symptom was
- * that `import { Text } from "@arrzdev/adaptv/components"` did not resolve — a
- * component that was fully built, fully tested and completely unreachable.
+ * This exists because a barrel drifted from the directory in silence.
+ * `src/components/index.ts` was missing `text`, `view`, `list` and `external-link`;
+ * the interface barrel was missing `text`, `not-found` and `orientation-guard`. The
+ * visible symptom was that `import { Text } from "@arrzdev/adaptv/components"` did
+ * not resolve — a component that was fully built, fully tested and completely
+ * unreachable.
  *
- * Nothing else catches it. `tsc` is happy (both files are valid), lint is happy,
- * every component's own suite is happy (they import the module directly), and
+ * Nothing else catches it. `tsc` is happy (the barrel is valid either way), lint is
+ * happy, every component's own suite is happy (they import the module directly), and
  * `build:check` is happy (it validates the entries that DO exist). A missing
- * re-export is invisible to every gate that does not compare the two lists — so
- * this is the gate that does.
+ * re-export is invisible to every gate that does not compare the barrel to the
+ * directory — so this is the gate that does.
+ *
+ * ## One barrel, not two
+ *
+ * The original pairing was `src/components/index.ts` against the interface barrel,
+ * which only ever proved the two agreed — not that either was right. That second
+ * barrel was unreachable (nothing in `src/`, `bin/`, `scripts/` or the playground
+ * imported it; `exports` points every subpath at `src/interface/*.index.ts`) and is
+ * deleted. The comparison that carries the weight is directory-vs-published-barrel,
+ * with the modules held back named explicitly — the standard
+ * `src/interface/capabilities.barrel.test.ts` and `src/interface/ota.barrel.test.ts`
+ * hold their own withheld sets to.
  */
 
 const COMPONENTS_DIR = resolve(process.cwd(), "src/components")
+const BARREL = resolve(process.cwd(), "src/interface/components.index.ts")
 
-/** Modules internal by design, and therefore expected in NEITHER barrel. */
-const INTERNAL = new Set([
-  //the shared press track behind Button and Pressable — not consumer API
-  "press-core",
-  //extracted, unit-tested engine math — driven by their components, not exported
-  "swipeable-physics",
-  "wheel-column-geometry",
-  "pull-to-refresh-physics",
+/**
+ * The shared press implementation behind every pressable surface. Internal for a
+ * containment reason rather than an ownership one: it has many callers, and the
+ * claim that makes it internal is that all of them are components in this
+ * directory. The moment one is not, it is consumer API that has not admitted it.
+ */
+const WITHHELD_SHARED = ["press-core"]
+
+/**
+ * Extracted, unit-tested engine math, each paired with the one component that
+ * drives it. The pure half exists so the maths can be tested without a DOM, not so
+ * a consumer can run its own gesture; a second driver means the split is now a
+ * shared abstraction and needs a real answer instead of an omission.
+ */
+const WITHHELD_ENGINES: Record<string, string> = {
+  "swipeable-physics": "src/components/swipeable.tsx",
+  "wheel-column-geometry": "src/components/wheel-column.tsx",
+  "pull-to-refresh-physics": "src/components/pull-to-refresh.tsx",
+}
+
+const WITHHELD = new Set([
+  ...WITHHELD_SHARED,
+  ...Object.keys(WITHHELD_ENGINES),
 ])
-
-/** Not components: the barrel itself, and this file's own siblings. */
-const NOT_A_COMPONENT = new Set(["index", "barrels"])
 
 /** Every component module on disk: `foo.tsx` and `foo/index.ts` both count. */
 function modulesOnDisk(): string[] {
@@ -56,46 +81,111 @@ function modulesOnDisk(): string[] {
     const m = entry.match(/^([a-z0-9-]+)\.ts$/)
     if (m?.[1] && !entry.includes(".test.")) found.add(m[1])
   }
-  return [...found]
-    .filter((m) => !INTERNAL.has(m) && !NOT_A_COMPONENT.has(m))
-    .sort()
+  return [...found].sort()
 }
 
-/** The module specifiers a barrel re-exports, normalised to bare names. */
-function modulesInBarrel(path: string): string[] {
-  const src = readFileSync(resolve(process.cwd(), path), "utf8")
-  return [
-    ...src.matchAll(/export \* from "[./]*(?:components\/)?([^"]+)"/g),
-  ]
+/** The module specifiers the barrel re-exports, normalised to bare names. */
+function modulesInBarrel(): string[] {
+  const src = readFileSync(BARREL, "utf8")
+  return [...src.matchAll(/export \* from "\.\.\/components\/([^"]+)"/g)]
     .map((m) => m[1])
     .filter((m): m is string => typeof m === "string")
     .sort()
 }
 
-describe("the component barrels", () => {
-  it("cover exactly the same modules", () => {
-    expect(modulesInBarrel("src/interface/components.index.ts")).toEqual(
-      modulesInBarrel("src/components/index.ts"),
-    )
+describe("the component barrel", () => {
+  /*
+   * The vacuous pass. Both assertions below compare against a directory scan and a
+   * regex over one file, so a walk pointed at nothing — or a parser that stops
+   * matching — compares two empty lists and reports perfect compliance. The floors
+   * are the real counts today (26 exported components, 4 withheld) and well over
+   * zero. → `docs/roadmap/src-reorg.md` §7
+   */
+  it("actually walked the directory it claims to have walked", () => {
+    expect(modulesOnDisk().length).toBeGreaterThanOrEqual(30)
+    expect(modulesInBarrel().length).toBeGreaterThanOrEqual(26)
+    for (const module of WITHHELD) {
+      expect(
+        modulesOnDisk(),
+        `${module} is withheld but not on disk`,
+      ).toContain(module)
+    }
   })
 
-  it("cover every component on disk, and nothing that is not there", () => {
+  it("exports every component it does not deliberately withhold", () => {
     //the failure mode is one-directional and silent: a new component is written,
     //tested, and never exported, so only its author can use it
-    expect(modulesInBarrel("src/interface/components.index.ts")).toEqual(
-      modulesOnDisk(),
+    const missing = modulesOnDisk().filter(
+      (module) =>
+        !WITHHELD.has(module) && !modulesInBarrel().includes(module),
     )
+    expect(missing).toEqual([])
   })
 
-  it("keep internal modules out of the public surface", () => {
-    const publicModules = new Set(
-      modulesInBarrel("src/interface/components.index.ts"),
-    )
-    for (const internal of INTERNAL) {
+  /*
+   * The same comparison from the other end, so the withheld list cannot be padded:
+   * the modules absent from the barrel must be exactly the ones named above.
+   * Exporting `press-core` fails here as an unwithheld module, and padding either
+   * withheld list to silence a failure fails as a module that is exported anyway.
+   */
+  it("withholds exactly the modules it means to withhold", () => {
+    const exported = new Set(modulesInBarrel())
+    const held = new Set(modulesOnDisk().filter((m) => !exported.has(m)))
+    expect(held).toEqual(WITHHELD)
+  })
+
+  /*
+   * The justification for the shared module, checked rather than trusted: it is
+   * internal because it never leaves the directory. A caller anywhere else in `src/`
+   * makes it framework-wide plumbing that consumers cannot reach.
+   */
+  it("keeps the shared press implementation inside the components", () => {
+    for (const module of WITHHELD_SHARED) {
+      const callers = callSitesOf(module)
       expect(
-        publicModules.has(internal),
-        `${internal} is internal — exporting it would make it consumer API`,
-      ).toBe(false)
+        callers.length,
+        `${module} has no callers left`,
+      ).toBeGreaterThan(0)
+      expect(
+        callers.filter((file) => !file.startsWith("src/components/")),
+        `${module} is internal only while every caller is a component`,
+      ).toEqual([])
+    }
+  })
+
+  /*
+   * The justification for the engines, on the stricter standard their split earns:
+   * one driver each. A second one means the pure half is a shared abstraction, and
+   * "the component owns it" is no longer the reason it is unexported.
+   */
+  it("keeps each engine down to the one component that drives it", () => {
+    for (const [module, driver] of Object.entries(WITHHELD_ENGINES)) {
+      expect(
+        callSitesOf(module),
+        `${module} is driven by ${driver}`,
+      ).toEqual([driver])
     }
   })
 })
+
+/** Every non-test file under `src/` importing a component module by that name. */
+function callSitesOf(module: string): string[] {
+  const pattern = new RegExp(`from "[^"]*/${module}(?:\\.ts)?"`)
+  const hits: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = resolve(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue
+      if (/\.test\.tsx?$/.test(entry.name)) continue
+      if (pattern.test(readFileSync(full, "utf8"))) {
+        hits.push(full.slice(resolve(process.cwd()).length + 1))
+      }
+    }
+  }
+  walk(resolve(process.cwd(), "src"))
+  return hits.sort()
+}
