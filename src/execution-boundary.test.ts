@@ -52,11 +52,11 @@ const rel = (file: string) => path.relative(ROOT, file)
 /**
  * The `platform: "browser"` entries of `tsdown.config.ts`, plus `./server-entry`.
  *
- * `server-entry` is the fourth face (a Cloudflare Worker) and is the one `exports`
- * subpath `tsdown.config.ts` builds nothing for — the inconsistency
- * `docs/roadmap/src-reorg.md` §0.6 records. It is classified here rather than
- * skipped, because a Worker is not Node: it has no `node:fs` either, so it belongs
- * on this side of the line whatever the dist build eventually does with it.
+ * `server-entry` is the fourth face (a Cloudflare Worker). `tsdown.config.ts`
+ * builds it from its own `workerEntry` — not `browserEntry`, whose `"use client"`
+ * banner is backwards on the module a Worker boots from, and not `nodeEntry`,
+ * because a Worker is not Node. It has no `node:fs` either, so it is classified
+ * on this side of the line.
  */
 const BROWSER_ENTRIES = [
   "src/interface/shell.index.ts",
@@ -275,12 +275,15 @@ describe("execution boundary", () => {
         .sort()
     }
 
-    //`server-entry` is in `exports` and in no tsdown build at all — §0.6
+    //`server-entry` is the one browser-side entry built outside `browserEntry`
     expect(entriesIn("browserEntry")).toEqual(
       BROWSER_ENTRIES.filter(
         (e) => e !== "src/interface/server-entry.ts",
       ).sort(),
     )
+    expect(entriesIn("workerEntry")).toEqual([
+      "src/interface/server-entry.ts",
+    ])
     expect(entriesIn("nodeEntry")).toEqual([...NODE_ENTRIES].sort())
 
     const pkg = JSON.parse(
