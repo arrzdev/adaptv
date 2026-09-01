@@ -333,7 +333,8 @@ Today a reader can check L11 by opening one directory. That property is what pro
 Two subsystems are torn across four directories each, and in both cases the split is **build-time vs
 runtime**, not layer:
 
-**OTA** — 6 directories, 20 files, plus 5 string references from `bin/`:
+**OTA** — 6 directories, 20 files, plus 5 string references from `bin/`. ✅ **Sliced 2026-09-01**;
+the table below is the state it was diagnosed in:
 
 | Where | Files |
 |---|---|
@@ -382,15 +383,23 @@ Only the two slices above. Everything not listed stays where it is.
 | Before | After |
 |---|---|
 | `src/ota/*.ts` | `src/ota/*.ts` *(unchanged)* |
-| `src/vite/ota-emit.ts` · `ota-zip.ts` · `ota-config-module.ts` | `src/ota/build/…` |
-| `src/hooks/use-ota-updates.ts` · `use-store-release.ts` | `src/ota/use-ota-updates.ts` · `use-store-release.ts` |
+| `src/vite/ota-emit.ts` · `ota-zip.ts` · `ota-config-module.ts` | ✅ `src/ota/build/…` |
+| `src/hooks/use-ota-updates.ts` · `use-store-release.ts` | ✅ `src/ota/use-ota-updates.ts` · `use-store-release.ts` |
 | `src/components/update-required.tsx` | **stays** — it is a public primitive in the component barrel (§2.4) |
-| `src/virtual-adaptv-ota-config.d.ts` | `src/ota/virtual-adaptv-ota-config.d.ts` |
+| `src/virtual-adaptv-ota-config.d.ts` | ✅ `src/ota/virtual-adaptv-ota-config.d.ts` |
 | `src/vite/route-tints.ts` · `route-tints-module.ts` | `src/router/build/route-tints.ts` · `route-tints-module.ts` |
 | `src/vite/route-tree-opacity.ts` · `router-autoimport.ts` · `root-route-module.ts` | `src/router/build/…` |
 | `src/shell/route-tints.ts` · `use-route-tint.ts` · `create-adaptv-router.ts` · `create-root-route.tsx` | `src/router/…` |
 | `src/routes/*` | `src/router/entries/*` |
 | `patches/@tanstack__router-generator@1.167.21.patch` | **stays at `patches/`** — see §2.3 |
+
+⚠︎ **The `.d.ts` carries a consumer-facing glob with it.** `virtual-adaptv-ota-config.d.ts` is one
+of seven ambient declarations delivered by the app-side `include` line
+`node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts` — a flat glob that stops matching the
+moment one of the seven leaves the root of `src/`. Moving it makes that line
+`src/**/virtual-adaptv-*.d.ts`, in the app's tsconfig **and** in `tsdown.config.ts`'s `copy`
+(where the seven still land flat in `dist/`). One consumer-side character; nothing else in §2.4
+priced it. → [`../DEVELOPMENT.md`](../DEVELOPMENT.md), [`dist-cutover.md`](dist-cutover.md)
 
 ⚠︎ `src/ota/native-fingerprint.ts` imports `node:crypto` and `src/ota/updater.ts` is a browser module,
 so **`src/ota/` is already a two-face directory** and the slice makes it a three-part one
@@ -639,8 +648,8 @@ re-opening any of them — this repo records what it **rejected**, and the code 
 |---|---|---|
 | 0 | Land the [`dist` cutover](dist-cutover.md) **first** | — it removes `src` from `files`, which is the only thing that makes the current layout a *shipping* concern |
 | **0a** | ✅ **Move A** — the `node:` boundary test ([§0.5](#05-the-three-moves-worth-making)), [`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts). **Moved no files**, so it landed before step 0 | delete one file. It is the only step here with no revert risk, and every later step is provable because of it |
-| 1 | **OTA slice** (§2.2) — ~20 files | `git revert`; pure renames, no content beyond specifiers |
-| 2 | Sweep OTA doc references (`grep -rn 'src/ota/\|src/vite/ota' docs`) | separate commit, so step 1 stays a clean rename |
+| **1** | ✅ **OTA slice** (§2.2) — 9 files moved, 13 modified. Renames plus specifiers, the five `bin/` string loads, `vitest.config.ts`, `tsdown.config.ts`'s copy glob and one allow-list entry (`src/ota/build/`, deliberately not `src/ota/`) | `git revert`; pure renames, no content beyond specifiers |
+| **2** | ✅ Sweep OTA doc references | separate commit, so step 1 stays a clean rename |
 | 3 | **Router slice** (§2.2) — ~15 files | same shape |
 | 4 | Sweep router doc references + update [`../design/vite-plugin-map.md`](../design/vite-plugin-map.md) §1/§3 | separate commit |
 | **4a** | **Move B** — `src/native/` → `src/build/native/`, 4 files | `git revert` |
@@ -677,11 +686,14 @@ fix with it.
 
 ### ⚠︎ The three things no gate catches
 
-1. **`loadAdaptvModule("vite/ota-emit.ts")` — 16 call sites in `bin/`, 11 of them into `src/vite/`.** Plain strings, resolved by
-   esbuild at runtime, invisible to `tsc` and to Biome. A wrong one fails **only when that CLI
-   command runs**, and `ota-emit.ts` is reached by `adaptv ota publish`, which no unit test invokes.
-   → **the acceptance test for the OTA slice is running `adaptv ota publish` against the playground,
-   not a green gate.**
+1. **`loadAdaptvModule("ota/build/ota-emit.ts")` — 16 call sites in `bin/`, 5 of them into the OTA
+   slice.** Plain strings, resolved by esbuild at runtime, invisible to `tsc` and to Biome. A wrong
+   one fails **only when that CLI command runs**. There is no `adaptv ota publish`: `ota-emit.ts` is
+   reached by **`adaptv build web`** (which publishes the channel when the config names an origin —
+   `resolveOtaBuildConfig`, `computeBuildTag`/`buildBundleArchive`, `resolveSigningKey`,
+   `writeChannel`) and by **`adaptv keys ota`** (`generateOtaKeyPair`). No unit test invokes either.
+   → **the acceptance test for the OTA slice is running both against the playground, signed, and
+   reading the manifest they write — not a green gate.**
 2. **255 doc references + 49 in-code path comments.** Nothing checks them. A reorg that leaves them
    stale attacks the one property that makes this tree navigable
    ([`../README.md`](../README.md): *"when something ships, move it"*).
