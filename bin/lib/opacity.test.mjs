@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { isAppSource, namesPlumbing } from "./opacity.mjs"
 import { prettyLine } from "./render.mjs"
@@ -66,5 +69,87 @@ describe("isAppSource — only the dev's own code may be named", () => {
     ["", "/app", false],
   ])("%s under %s → %s", (file, root, want) => {
     expect(isAppSource(file, root)).toBe(want)
+  })
+})
+
+/**
+ * The manifest is a surface too, and it was the one nothing watched.
+ *
+ * `description` read `… native iOS/Android (Capacitor) …` and survived every test in this
+ * file, because everything above it checks a line on its way to a terminal. npm, GitHub and
+ * every tooling UI render that field on sight, to people who have not run the CLI once. The
+ * README is held to R8; the manifest is the same promise with wider distribution and no
+ * reader between the leak and the audience.
+ *
+ * So the walk is by EXCLUSION, not an allowlist of fields to check. A leak arrives in a field
+ * nobody thought of — `keywords` (absent today), a `homepage`, a `bugs` blurb — and an
+ * allowlist would greet each of them the way the terminal tests greeted `description`.
+ * Keys are scanned as well as values, so a `capacitorVersion` field fails on its own name.
+ */
+const PKG = JSON.parse(
+  readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../package.json",
+    ),
+    "utf8",
+  ),
+)
+
+/**
+ * The dependency graph, which MUST name the engines and is decided to
+ * (`docs/decisions/facade-and-opacity.md` §1 rule 2: `@tanstack/react-router` stays a named
+ * engine dependency, the Expo↔react-native model). Opacity is a promise about what adaptv
+ * SAYS, and a version range is not a sentence. Nothing else is exempt.
+ */
+const STRUCTURAL = new Set([
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "pnpm",
+])
+
+/** Every key and every string value in the manifest, outside the dependency graph. */
+function manifestStrings() {
+  const out = []
+  const walk = (node, at) => {
+    if (typeof node === "string") {
+      out.push({ at, text: node })
+    } else if (Array.isArray(node)) {
+      node.forEach((v, i) => {
+        walk(v, `${at}[${i}]`)
+      })
+    } else if (node && typeof node === "object") {
+      for (const [k, v] of Object.entries(node)) {
+        out.push({ at: `${at}.${k}`, text: k })
+        walk(v, `${at}.${k}`)
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(PKG)) {
+    if (STRUCTURAL.has(k)) continue
+    out.push({ at: k, text: k })
+    walk(v, k)
+  }
+  return out
+}
+
+describe("package.json is a user-facing surface", () => {
+  it("has fields to check at all", () => {
+    //A walker that quietly collected nothing would make the rule below vacuously true, which
+    //is the state this surface was already in.
+    expect(manifestStrings().length).toBeGreaterThan(50)
+  })
+
+  it("names no engine in any field a registry or a UI shows", () => {
+    const bad = manifestStrings().filter((s) => namesPlumbing(s.text))
+    expect(bad.map((b) => `${b.at}  ${b.text}`)).toEqual([])
+  })
+
+  it("still scans the field the leak was actually in", () => {
+    //Pins the walk to `description` by name: an exemption added to STRUCTURAL to make a
+    //future failure go away must not be able to take this one with it.
+    expect(manifestStrings().map((s) => s.at)).toContain("description")
+    expect(PKG.description).toBeTruthy()
   })
 })
