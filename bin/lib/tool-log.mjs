@@ -112,7 +112,7 @@ const NOT_A_PHASE = [
  *
  * The rest of the dump only ever failed those filters by accident — a bracket in one stack
  * frame, a colon in the message, a length that happened to run long — so name the SHAPE
- * rather than trusting punctuation to keep holding. None of it is a phase (R24, R33): the
+ * rather than trusting punctuation to keep holding. None of it is a phase (R24, R70): the
  * row keeps its last real phase and the step fails a beat later with the reason `fail()`
  * renders (`port 41740 is already in use`).
  */
@@ -227,7 +227,7 @@ const BUNDLER_PHASES = [
 /**
  * The SHAPE of a bundler progress message: a lowercase clause, an optional count, and the
  * ellipsis it would animate a spinner on. Enumerating today's verbs is not enough on its
- * own — the reason `Node.js v26.0.0` became a phase (R33) is that the filters around it
+ * own — the reason `Node.js v26.0.0` became a phase (R70) is that the filters around it
  * were accidents rather than rules, and a bundler is free to add a verb in any release.
  *
  * So a message of this shape that {@link BUNDLER_PHASES} does not know maps to `building`

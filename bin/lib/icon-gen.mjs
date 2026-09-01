@@ -97,7 +97,7 @@ export const ICON_SET = [
  * preview disagreeing with the platforms about the one colour the run had just warned about.
  *
  * `chosen` is whether the dev NAMED the colour, and it is the whole precedence: a measurement
- * is adaptv guessing on their behalf, a flag is them answering, and the answer wins (R39).
+ * is adaptv guessing on their behalf, a flag is them answering, and the answer wins (R69).
  */
 export function effectiveBackground(artwork, background, chosen = false) {
   if (chosen) return background

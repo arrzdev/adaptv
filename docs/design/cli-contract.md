@@ -7,6 +7,12 @@
 >
 > The tests can't catch these. **You must run the command and look at the output.**
 >
+> **A rule's number is its identifier.** Code comments, tests and the skill cite rules by
+> number and nothing else, so a number may be defined exactly once and a new rule takes the
+> next one at the end of the range — never a gap, never a number a deleted rule left behind.
+> `bin/lib/rule-numbers.test.mjs` fails the build on a number defined twice, a hole in the
+> range, or a citation anywhere in the repo of a number this file does not define.
+>
 > **Building something NEW rather than changing something old?** Start with
 > [`docs/design/cli-visual.md`](../design/cli-visual.md) — the design system: the grid, the colour and glyph roles,
 > the component inventory, and the checklist for adding a command. This file is the record of
@@ -301,7 +307,7 @@ look exactly like the run, and a failure must end where the `✖` ends.
 > exiting `[ELIFECYCLE]`) and belongs to pnpm, not to adaptv — `pnpm --silent adaptv …` is the
 > quiet form. Everything inside that is adaptv's to keep clean.
 
-**R39 — An explicit flag outranks a measurement, or it is not a flag.** `gen icons` measures the
+**R69 — An explicit flag outranks a measurement, or it is not a flag.** `gen icons` measures the
 colour behind the mark and repaints it on the slots that cannot carry transparency. `--background
 <hex>` was documented as overriding that colour and did not: `slotPlan` read
 `artwork.background ?? background`, so the measurement won and the flag was a silent no-op in the
@@ -366,7 +372,7 @@ to explain what adaptv would do about the missing art:
 > ! no 'icons' in adaptv.config.ts — shipping adaptv's default mark
 > ```
 > Half of each row is adaptv narrating its own fallback. The dev acts on the missing art; what
-> adaptv substitutes meanwhile is its business (R0), and the clause nearly doubled a row that has
+> adaptv substitutes meanwhile is its business (R8), and the clause nearly doubled a row that has
 > to survive a narrow terminal without being clipped (R31). Reported by the owner as wanting just
 > `! no 'icons' in adaptv.config.ts`.
 >
@@ -696,14 +702,14 @@ does not get a new phrase invented for it, and it never passes through raw. The 
 > (measuring a bundle it has already written), and `built in 1.47s`, which is what the
 > settled ✓ says. `BUNDLER_PHASES` in `tool-log.mjs`.
 >
-> Enumerating today's verbs is not the whole rule, for the reason R33 gives: filters that are
+> Enumerating today's verbs is not the whole rule, for the reason R70 gives: filters that are
 > accidents rather than rules eventually let something through. A progress message the table
 > does not know — a lowercase clause, an optional count, the ellipsis it animates a spinner on
 > — maps to `building`, the same answer an unrecognised gradle task gets. Suppressing it was
 > the other option and is worse: the row would go quiet for as long as the new phase takes and
 > nothing would ever say that adaptv had stopped narrating a step.
 
-**R33 — A crash dump is never a phase.** When a tool dies rather than fails — an uncaught
+**R70 — A crash dump is never a phase.** When a tool dies rather than fails — an uncaught
 exception, a stack trace, a signal — none of what it prints on the way out is a status. The row
 holds its last real phase until the step settles and states the reason.
 > Violated by `adaptv build android` when the port `ports.ts` pins was taken, so vite's
@@ -1538,7 +1544,7 @@ Tests do not cover any of this. Run it and read it:
 - [ ] `adaptv dev ios` — **first run** (`rm -rf .adaptv/ios`) and a warm run
 - [ ] `adaptv preview ios` and `adaptv build all` — including a genuine **failure** (force one)
 - [ ] a tool that **crashes** rather than fails (occupy the port `ports.ts` pins, then
-      `adaptv build android`) — the row must hold its last phase, never show the dump (R33)
+      `adaptv build android`) — the row must hold its last phase, never show the dump (R70)
 - [ ] an `all` run, to check platforms don't interleave
 - [ ] the **device picker** path (`rm -f .adaptv/state.json`, no `--target`)
 - [ ] a deliberately broken `adaptv.config.ts` (a colour that isn't hex) — every command must
