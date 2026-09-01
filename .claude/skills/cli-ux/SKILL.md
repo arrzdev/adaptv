@@ -77,7 +77,8 @@ truncate an error whose remaining lines carry the instructions.
 
 Run these and READ the output — `dev ios` (first run *and* warm), `preview ios`, `build all`
 including a forced failure, an `all` run (interleaving), the device picker
-(`rm -f .adaptv/state.json`, no `--target`), `--verbose`, and a deliberately broken
+(`rm -f .adaptv/state.json`, no `--target`), `--verbose`, `doctor` (and `doctor --verbose`, where
+alone the engines may be named — R71), and a deliberately broken
 `adaptv.config.ts` (a colour that isn't hex — it must refuse before building anything).
 **Watch a native build for 10s**:
 if the phase text moves more than ~once a second, or you can read an identifier in it, the live

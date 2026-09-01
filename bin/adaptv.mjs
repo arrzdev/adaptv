@@ -59,6 +59,7 @@ import { artTarget, SAFE_ZONE } from "./lib/icon-geometry.mjs"
 import { writeIconPreview } from "./lib/icon-preview.mjs"
 import { parseTuning } from "./lib/icon-tuning.mjs"
 import { clearIconCaches, loadIconSet, parseHex } from "./lib/icons.mjs"
+import { describeOwnInstall } from "./lib/install-report.mjs"
 import {
   androidReverse,
   healDevAtsLeftover,
@@ -1755,6 +1756,8 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
 }
 
+// The native modules adaptv ships and compiles into the binary. Named here and nowhere the
+// dev can see: `describeOwnInstall` turns the result into one owned row (R71).
 const ADAPTV_BASE_PLUGINS = [
   "@capacitor/app",
   "@capacitor/browser",
@@ -1769,13 +1772,22 @@ const ADAPTV_BASE_PLUGINS = [
   "@capacitor/status-bar",
 ]
 
-function checkTool(label, argv, { optional = false } = {}) {
+/** Run a tool for its version. Answers, rather than printing, so a caller that reports on
+ * several tools as ONE row can still ask about each of them. */
+function toolVersion(argv) {
   const r = spawnSync(argv[0], argv.slice(1), { encoding: "utf8" })
-  const found = r.status === 0
-  const detail = found
-    ? (r.stdout || r.stderr || "").trim().split("\n")[0]
-    : ""
-  check(found, label, detail, { optional })
+  return {
+    found: r.status === 0,
+    version:
+      r.status === 0
+        ? (r.stdout || r.stderr || "").trim().split("\n")[0]
+        : null,
+  }
+}
+
+function checkTool(label, argv, { optional = false } = {}) {
+  const { found, version } = toolVersion(argv)
+  check(found, label, version ?? "", { optional })
   return found
 }
 
@@ -1787,29 +1799,39 @@ function readIf(p) {
   return existsSync(p) ? readFileSync(p, "utf8") : undefined
 }
 
-function checkAppPlugins(_appRoot) {
-  // adaptv OWNS the Capacitor plugins — they're its own dependencies, resolved from
-  // the framework, never added to the consumer's app. So verify adaptv's install, not
-  // the app's package.json.
+/**
+ * adaptv's own install, as ONE row (R71).
+ *
+ * The native command adaptv drives and the native modules it ships are adaptv's
+ * dependencies, resolved from the framework's package root and never added to the
+ * consumer's app, so this verifies adaptv's install and not the app's `package.json`. It
+ * used to verify exactly the same thing and print it as twelve rows naming the engine
+ * twelve times, under a heading that said they were adaptv's; the dev has one action for
+ * any of it. `--verbose` keeps the names, which is where they are worth something.
+ */
+function checkOwnInstall(appRoot) {
+  const { cmd, pre } = capCmd(appRoot)
+  const cli = toolVersion([cmd, ...pre, "--version"])
   const resolveFromAdaptv = createRequire(
     path.join(ADAPTV_ROOT, "package.json"),
   )
-  const missing = []
-  for (const name of ADAPTV_BASE_PLUGINS) {
-    let present = true
+  const missing = ADAPTV_BASE_PLUGINS.filter((name) => {
     try {
       resolveFromAdaptv.resolve(`${name}/package.json`)
+      return false
     } catch {
-      present = false
+      return true
     }
-    check(present, name)
-    if (!present) missing.push(name)
-  }
-  if (missing.length) {
-    log.warn(
-      `${missing.length} plugin(s) missing from adaptv's install. Reinstall with 'pnpm install'`,
-    )
-  }
+  })
+  const report = describeOwnInstall({
+    modules: ADAPTV_BASE_PLUGINS,
+    missing,
+    runnable: cli.found,
+    version: cli.version,
+    verbose: process.env.ADAPTV_VERBOSE === "1",
+  })
+  check(report.ok, report.label, report.note)
+  for (const line of [...report.notices, ...report.detail]) detail(line)
 }
 
 /** Project-level checks (the silent failures), from src/native/doctor.ts. */
@@ -1844,8 +1866,7 @@ async function doctor(appRoot) {
 
   section("Core")
   checkTool("node", ["node", "--version"])
-  const { cmd, pre } = capCmd(appRoot)
-  checkTool("capacitor cli", [cmd, ...pre, "--version"])
+  checkOwnInstall(appRoot)
 
   section("Android")
   const aEnv = { ...process.env }
@@ -1883,9 +1904,6 @@ async function doctor(appRoot) {
       ["bash", "-lc", `PATH="${ie.PATH}" pod --version`],
       { optional: true },
     )
-
-  section("Plugins (shipped by adaptv; the consumer installs none)")
-  checkAppPlugins(appRoot)
 
   section("Project")
   check(
