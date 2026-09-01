@@ -2,7 +2,7 @@
  * Putting a failure into words — the ONE place it happens.
  *
  * Lived in `bin/adaptv.mjs` until it leaked `@tanstack/start-server-core` onto a `✖` line
- * (CLI-UX R8). It is pure text in and text out, and it could not be tested where it was:
+ * (`docs/design/cli-contract.md` R8). It is pure text in and text out, and it could not be tested where it was:
  * `adaptv.mjs` runs the CLI on import, so nothing could hold this to a rule. Here it can be,
  * and `explain.test.mjs` holds it to the opacity boundary using real captured tool output.
  */
@@ -14,7 +14,7 @@ import { gradleCause, isDestinationEntry, portInUse } from "./tool-log.mjs"
 /** How much captured tool output a failed line expands into — enough to name the problem,
  *  not a log dump (that's `--verbose`). Generous rather than tight: the lines are already
  *  filtered to the ones that explain the failure, and cutting a diagnostic off mid-
- *  instructions is the one failure mode worse than a few lines too many (CLI-UX R15). */
+ *  instructions is the one failure mode worse than a few lines too many (`docs/design/cli-contract.md` R15). */
 const DETAIL_LINES = 10
 // ANSI escape (ESC = char 27), built without a literal control char in the source. Tool
 // output arrives coloured, and a reason rendered inline has to measure as what it prints.

@@ -30,7 +30,7 @@ describe("adaptvPwaRegisterPlugin", () => {
     //`sw.enabled` is false on exactly one build, the native one. The shell
     //already refuses to register there at runtime, but a runtime guard still
     //SHIPS the code it guards — the whole registration path was landing in the
-    //`.ipa`/`.apk` to be skipped on its first line. → `LIFECYCLE.md §3.2a`
+    //`.ipa`/`.apk` to be skipped on its first line. → `docs/design/lifecycle.md §3.2a`
     const source = load(false)
     expect(source).toContain("export function registerSW()")
     expect(source).not.toContain("navigator.serviceWorker.register")
@@ -47,7 +47,7 @@ describe("adaptvPwaRegisterPlugin", () => {
   it("bakes `serviceWorkerUpdate` in as a constant, both ways", () => {
     //The policy is a property of the app, not a runtime argument: the shell that
     //calls `registerSW` has never read the app config. `auto` must reach the
-    //client as `false` so the launch-apply branch runs. → `RENDERING.md §3.4`
+    //client as `false` so the launch-apply branch runs. → `docs/design/rendering.md §3.4`
     expect(load(true, "auto")).toContain("const PROMPT = false")
     expect(load(true, "prompt")).toContain("const PROMPT = true")
     //auto is the default, and the default is the silent one

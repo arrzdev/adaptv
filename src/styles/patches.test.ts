@@ -96,7 +96,7 @@ describe("ui.noSelect — the selection reset is stamped, not universal", () => 
 
   it("still lets `selectable` win on layer order alone", async () => {
     //the stamp adds specificity to the reset; `.selectable` is in a LATER layer, so
-    //it does not have to care — and must still carry no `!important` (STYLING §6.0.1)
+    //it does not have to care — and must still carry no `!important` (`docs/decisions/styling.md` §6.0.1)
     const css = await compileAdaptvStyles(["selectable"])
     expect(ruleFor(css, ".selectable")).toBe(
       "-webkit-user-select: text; user-select: text;",

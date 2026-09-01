@@ -14,7 +14,7 @@ describe("appRelativePath", () => {
     //The rule this exists for: build output must never print an absolute path.
     //It is the developer's home directory, in a line they may paste into an
     //issue, and it is unreadable next to `.output/public/sw.js`.
-    //→ `docs/CLI-UX.md`
+    //→ `docs/design/cli-contract.md`
     expect(
       appRelativePath(
         context,

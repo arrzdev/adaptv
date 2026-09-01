@@ -185,7 +185,7 @@ describe("orientation — subscription", () => {
 
 describe("orientation — a binary that predates the plugin", () => {
   it("locks through the web API instead of the absent bridge", async () => {
-    //→ LIFECYCLE.md §5.6. The lock is the only branch that moves: reading the
+    //→ docs/design/ota.md §5.6. The lock is the only branch that moves: reading the
     //current orientation resolves the same way with or without the plugin.
     forceNativeBinary([])
     const lock = vi.fn(() => Promise.resolve())

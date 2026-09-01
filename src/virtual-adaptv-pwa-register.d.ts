@@ -1,6 +1,6 @@
 declare module "virtual:adaptv/pwa-register" {
   /**
-   * Register adaptv's service worker. → `RENDERING.md §3.4`
+   * Register adaptv's service worker. → `docs/design/rendering.md §3.4`
    *
    * `onWaiting` is only ever called under `serviceWorkerUpdate: "prompt"`; it
    * receives the function that applies the waiting worker. Under the default

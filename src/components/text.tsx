@@ -10,13 +10,9 @@ import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { mergeStyles } from "#adaptv/utils/styles"
 import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * The element {@link Text} should render instead of its default `<span>` — a `<p>`, an
- * `<h1>`, a `<label>`, a `<figcaption>`. → `STYLING.md §3.3` (a prop, not `asChild`).
+ * `<h1>`, a `<label>`, a `<figcaption>`. → `docs/decisions/styling.md §3.3` (a prop, not `asChild`).
  *
  * **Element-only, unlike {@link Pressable}'s.** The function form of `render` earns its
  * keep by rendering state-dependent *content*, and `Text` publishes no state to branch
@@ -72,13 +68,9 @@ export interface TextProps extends ComponentPropsWithRef<"span"> {
    * inline sizing. WebKit resolves the setting at page load, so a change takes a reload.
    */
   scaleWithSystem?: boolean
-  /** Render something other than a `<span>`. → `STYLING.md §3.3`. */
+  /** Render something other than a `<span>`. → `docs/decisions/styling.md §3.3`. */
   render?: TextRender
 }
-
-/* =============================================================================
- * LINE CLAMP
- * ============================================================================= */
 
 /**
  * The multi-line ellipsis, as an inline style. Exported for the same reason
@@ -107,7 +99,7 @@ export interface TextProps extends ComponentPropsWithRef<"span"> {
  * 2. **`locked` would not hold.** `cn("line-clamp-2", "overflow-visible")` keeps BOTH —
  *    tailwind-merge has no conflict edge between the two groups — so which one applies
  *    is decided by the order Tailwind happened to emit them. That is the `WheelColumn`
- *    failure `STYLING.md §5.5` documents, on a property the clamp depends on.
+ *    failure `docs/decisions/styling.md §5.5` documents, on a property the clamp depends on.
  * 3. **Inline style is its own cascade origin** (§2.1), so `lockedStyle` is the only
  *    tier that survives a consumer's `flex` or `overflow-auto` at all.
  */
@@ -123,15 +115,11 @@ export function textClampStyle(
   }
 }
 
-/* =============================================================================
- * ROOT
- * ============================================================================= */
-
 /**
  * A run of text, with the platform quirks a `<p>` does not get.
  *
  * The bar a primitive has to clear here is **two platform quirks it would own**
- * (`COMPONENT-SURFACE.md §8.1`) — below that it is a styled element with an import
+ * (`docs/research/component-surface.md §8.1`) — below that it is a styled element with an import
  * cost. `Text` clears it with three:
  *
  * | Quirk | Where it lives |
@@ -152,8 +140,9 @@ export function textClampStyle(
  *
  * ⚠︎ **It does not own the iOS text magnifier.** `useSuppressTextMagnifier` is mounted
  * app-wide by the shell and has to be: it is a document-level double-tap interceptor
- * that skips `.clickable` controls, and the loupe is not text-only.
- * (`COMPONENT-SURFACE.md §8.2` — the whole invisible shell-mounted layer.)
+ * that exempts editable hosts only — controls are deliberately NOT exempt — and the
+ * loupe is not text-only.
+ * (`docs/research/component-surface.md §8.2` — the whole invisible shell-mounted layer.)
  *
  * @example
  * ```tsx

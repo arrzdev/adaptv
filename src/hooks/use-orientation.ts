@@ -18,9 +18,10 @@ export type UseOrientationResult = {
   /** Coarse axis, for the common case where primary/secondary doesn't matter. */
   isPortrait: boolean
   /**
-   * Whether a lock can even be attempted. **`false` on all of iOS** — WebKit
-   * has never shipped `screen.orientation.lock()`. Render `OrientationGuard`
-   * (or your own rotate prompt) instead of a lock button when this is `false`.
+   * Whether a lock can even be attempted. **`false` on iOS WEB** — WebKit has
+   * never shipped `screen.orientation.lock()`. A native iOS build is `true`: it
+   * locks through the ScreenOrientation plugin. Render `OrientationGuard` (or
+   * your own rotate prompt) instead of a lock button when this is `false`.
    */
   lockSupported: boolean
   /** Hold the screen in an orientation. Resolves to the outcome; never rejects. */
@@ -41,8 +42,8 @@ const SERVER_ORIENTATION = (): ScreenOrientationType => "portrait-primary"
  *
  * The reason this returns an object rather than just the orientation string is
  * `lockSupported`. Locking is the half that doesn't exist everywhere, and an
- * app that calls `lock()` and assumes it took is broken on every iPhone — so
- * the gap is a field, not a silent failure.
+ * app that calls `lock()` and assumes it took is broken in every iPhone browser
+ * — so the gap is a field, not a silent failure.
  */
 export function useOrientation(): UseOrientationResult {
   const orientation = useSyncExternalStore(

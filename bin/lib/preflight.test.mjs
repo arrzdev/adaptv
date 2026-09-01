@@ -3,7 +3,12 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { resolveIconSet } from "#adaptv/vite/icon-set"
-import { configErrors, iconWarnings, inspect } from "./preflight.mjs"
+import {
+  configErrors,
+  iconWarnings,
+  inspect,
+  missingPluginErrors,
+} from "./preflight.mjs"
 
 /** A config that passes — every check below starts from this and breaks one thing. */
 const ok = {
@@ -201,6 +206,122 @@ describe("inspect — a broken config is the whole answer", () => {
       ["ios"],
     )
     expect(errors).toHaveLength(1)
+    expect(warnings).toEqual([])
+  })
+})
+
+/**
+ * A name in `plugins` that resolves to nothing.
+ *
+ * The regression: this used to be found inside the native injectors, half-way through a run,
+ * once per platform, and pushed at a channel that renders it after the project has already
+ * been scaffolded. Nothing about it needs a native project — Node's resolver answers it from
+ * the dev's own `node_modules` — so it belongs here, under the banner, and it is an `✖`
+ * rather than a `!` because the alternative is a build that succeeds and an app that rejects
+ * the call the entry was written for (R33/R39).
+ */
+describe("missingPluginErrors — a plugin listed and never installed", () => {
+  const root = () => {
+    dir = mkdtempSync(path.join(tmpdir(), "adaptv-preflight-"))
+    writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "scratch-app", dependencies: {} }),
+    )
+    return dir
+  }
+
+  it("refuses a native run, naming the entry and the fix", () => {
+    expect(
+      missingPluginErrors(
+        root(),
+        { ...ok, plugins: ["@capacitor/not-a-real-plugin"] },
+        ["ios"],
+      ),
+    ).toEqual([
+      "'plugins' names '@capacitor/not-a-real-plugin', which is not installed. Install it, or remove the entry.",
+    ])
+  })
+
+  it("says it ONCE for a run with both platforms in it", () => {
+    //The two injectors each pushed their own `ios:`/`android:` copy, so `build all` stated
+    //one app-level fact twice with a label that carried no information (R21). They share one
+    //resolver and it takes no platform, so they could never have disagreed.
+    expect(
+      missingPluginErrors(
+        root(),
+        { ...ok, plugins: ["@capacitor/not-a-real-plugin"] },
+        ["ios", "android"],
+      ),
+    ).toHaveLength(1)
+  })
+
+  it("says nothing on a web-only run, which consumes `plugins` nowhere", () => {
+    //`dev web` / `build web` / `preview web` pass no platforms. Refusing here would stop a
+    //run with no stake in the plugin; a `!` here would be a native-only sentence on every
+    //web command, true and unactionable (R6).
+    expect(
+      missingPluginErrors(
+        root(),
+        { ...ok, plugins: ["@capacitor/not-a-real-plugin"] },
+        [],
+      ),
+    ).toEqual([])
+  })
+
+  it("accepts a plugin adaptv itself ships, which the app never declares", () => {
+    //The consumer's `package.json` lists no `@capacitor/*` at all — adaptv owns them. A
+    //check that only looked at the app's dependencies would refuse every correct config.
+    expect(
+      missingPluginErrors(
+        root(),
+        { ...ok, plugins: ["@capacitor/haptics"] },
+        ["android"],
+      ),
+    ).toEqual([])
+  })
+
+  it("names a plugin listed twice once, and refuses over no entry at all", () => {
+    expect(
+      missingPluginErrors(
+        root(),
+        { ...ok, plugins: ["@capacitor/nope", "@capacitor/nope", ""] },
+        ["ios"],
+      ),
+    ).toHaveLength(1)
+    expect(missingPluginErrors(root(), ok, ["ios"])).toEqual([])
+  })
+
+  it("is reported by `inspect` alongside every other config problem, not instead of them", () => {
+    //R33: every problem at once. A config fixed one line per run is worse than a list.
+    const errors = missingPluginErrors(
+      root(),
+      { ...ok, plugins: ["@capacitor/nope"] },
+      ["ios"],
+    )
+    expect(errors).toHaveLength(1)
+    expect(
+      configErrors({ ...ok, backgroundColor: "eeeeec" }),
+    ).toHaveLength(1)
+  })
+})
+
+describe("inspect — the plugin check rides with the rest of the config", () => {
+  it("returns both a bad colour and an uninstalled plugin from one run", async () => {
+    const root = appWithIcon("icon.png", png(1024))
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "scratch-app", dependencies: {} }),
+    )
+    const { errors, warnings } = await inspect(
+      root,
+      { ...ok, backgroundColor: "eeeeec", plugins: ["@capacitor/nope"] },
+      ["ios"],
+    )
+    expect(errors).toEqual([
+      "'backgroundColor' must be a hex colour like #1b1b1b, got \"eeeeec\"",
+      "'plugins' names '@capacitor/nope', which is not installed. Install it, or remove the entry.",
+    ])
+    //and no `!` about art underneath a run that is being refused (R6)
     expect(warnings).toEqual([])
   })
 })

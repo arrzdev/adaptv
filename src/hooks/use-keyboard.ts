@@ -8,8 +8,6 @@ import {
   recordKeyboardHeight,
 } from "#adaptv/capabilities/keyboard-height-cache"
 
-//---- Text-input detection ----------------
-
 const NON_TEXT_INPUT_TYPES = new Set([
   "checkbox",
   "radio",
@@ -31,8 +29,6 @@ export function willOpenVirtualKeyboard(target: Element) {
     (target instanceof HTMLElement && target.isContentEditable)
   )
 }
-
-//---- VirtualKeyboard API ----------------
 
 type VirtualKeyboardApi = {
   overlaysContent: boolean
@@ -94,8 +90,6 @@ function readKeyboardHeight(visualViewportThreshold: number): number {
   return 0
 }
 
-//---- Test seam ----------------
-
 /*
  * A harness can drive the keyboard directly, because the thing this hook observes cannot be
  * automated: simulators do not raise a software keyboard for a scripted run, and no web API lets
@@ -128,14 +122,12 @@ export function dismissVirtualKeyboard() {
   }
 }
 
-//---- Root publication ----------------
-
 /*
  * The keyboard is a singleton, so its geometry belongs on `<html>` where any rule in
  * the app can see it — global chrome (a tab bar that lifts, a docked toolbar) must be
  * able to react without living inside an `<AvoidKeyboard>` subtree.
  *
- * `--adaptv-keyboard-height` (STYLING.md §4) is a measured scalar: continuous, and it
+ * `--adaptv-keyboard-height` (docs/decisions/styling.md §4) is a measured scalar: continuous, and it
  * has to compose inside `calc()`, which an attribute cannot. The resting `0px` is
  * declared in styles/keyboard.css so the variable is ALWAYS defined and no call site
  * needs a `, 0px` fallback; the inline value written here overrides it.
@@ -171,8 +163,6 @@ function clearPublishedKeyboardState() {
   root.style.removeProperty(KEYBOARD_HEIGHT_VAR)
   root.removeAttribute(KEYBOARD_OPEN_ATTR)
 }
-
-//---- Hook ----------------
 
 export type KeyboardState = {
   /** `true` while a text field is focused and the on-screen keyboard is up. */

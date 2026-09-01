@@ -53,8 +53,7 @@ export type CapacitorConfigJson = {
  * inherits `.adaptv/`'s automatic gitignore entry rather than needing its own.
  *
  * cap runs with its CWD at the app root (config comes from env, not a file), so
- * paths are app-root-relative, as upstream expects. The native projects live
- * under `.adaptv/` too.
+ * paths here are app-root-relative, as upstream expects.
  */
 export const CAPACITOR_WEB_DIR = ".adaptv/web"
 
@@ -70,7 +69,7 @@ export const CAPACITOR_WEB_DIR = ".adaptv/web"
  * Below it the app's stylesheet is outside what its CSS toolchain claims to compile for, so
  * adaptv cannot honestly promise anything — which is exactly what a floor is for. It costs
  * nothing real: every device Capacitor 8 supports (`minSdk` 24 = Android 7) reaches at least
- * Chromium 119 (DECISIONS.md B21), well above it.
+ * Chromium 119 (docs/decisions/register.md B21), well above it.
  *
  * What it replaces is Capacitor's default of **60** — Chromium 60 shipped in 2017, so the
  * built-in gate can never fire on any device that runs Capacitor 8 (B21). The alternative to
@@ -91,9 +90,10 @@ export const MIN_ANDROID_WEBVIEW = 111
  * itself tells the two causes apart from its own user-agent, so `dev`'s "couldn't reach
  * the dev server" screen keeps its meaning.
  *
- * Duplicated from `bin/lib/error-page.mjs`'s `ERROR_PAGE` rather than imported: this
+ * Duplicated from `bin/lib/offline-page.mjs`'s `OFFLINE_PAGE` rather than imported: this
  * module is framework source and must not pull the CLI into the bundle. Same trade the
- * `CAPACITOR_WEB_DIR` / `CAP_WEB_DIR` pair already makes, and pinned by the same test.
+ * `CAPACITOR_WEB_DIR` / `CAP_WEB_DIR` pair already makes; both sides assert the literal
+ * (`capacitor-config.test.ts` + `offline-page.test.mjs`), which IS the contract.
  */
 const ERROR_PAGE = "adaptv-offline.html"
 
@@ -168,7 +168,7 @@ export function buildCapacitorConfig(
         //edge-to-edge is always on (opinionated): content draws under the status bar,
         //the shell's safe-area utilities pad it back. NOTE: `@capacitor/status-bar`'s
         //overlaysWebView/backgroundColor are dead on Android API 35+/36 (per the plugin
-        //README and DECISIONS.md §6.0). SystemBars below now owns edge-to-edge + insets;
+        //README and docs/decisions/register.md §6.0). SystemBars below now owns edge-to-edge + insets;
         //this block survives only for iOS + older Android until @adaptv/shell (roadmap #4).
         overlaysWebView: true,
         style: "DEFAULT",
@@ -238,10 +238,8 @@ function liveUpdatePlugin(
 }
 
 /**
- * The generated Capacitor config as a JSON string for the `ADAPTV_CAPACITOR_CONFIG` env var
- * (native build), or `null` when there's no `appId` (web-only apps ship no Capacitor config).
- * Never written to disk — adaptv's patched `@capacitor/cli` reads it from the env, so no
- * `capacitor.config.json` exists in the consumer's project.
+ * The generated config as the JSON string for `ADAPTV_CAPACITOR_CONFIG` (see the file
+ * header), or `null` when there's no `appId` — web-only apps ship no Capacitor config.
  *
  * `overrides` carry the per-run tweaks the CLI applies without a file: the `.dev` install
  * identity (dev/preview) and the live-reload `server` block (dev).

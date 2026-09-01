@@ -13,7 +13,7 @@
  *
  * **The scrim's colour is the consumer's**, read off the rendered backdrop rather than
  * configured: the engine owns where the overlay sits and nothing about how it looks
- * (`STYLING.md`), so a `bg-black/40` and a `bg-slate-900/60` must both come out right. What the
+ * (`docs/decisions/styling.md`), so a `bg-black/40` and a `bg-slate-900/60` must both come out right. What the
  * chrome shows is that colour composited over the theme colour underneath it — the pixel the
  * scrim would produce if the toolbar were part of the page.
  */

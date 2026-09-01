@@ -146,7 +146,7 @@ type RoutingShellProps = {
   shellClassName?: string
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
-  /** App-feel resets that are the app's call; each defaults to `"app"`. See {@link AdaptvUiConfig}. */
+  /** App-feel resets that are the app's call; per-option defaults (`UI_SCOPE_DEFAULTS`). See {@link AdaptvUiConfig}. */
   ui?: AdaptvUiConfig
   children: ReactNode
 }
@@ -266,7 +266,7 @@ export function RoutingShell({
   //providers layout) that the boundary skips. The signal never fires, the splash
   //never returns null, and a cold start into a 404 is left under a full-viewport
   //overlay for good — installed/native only, since on web the critical-CSS policy
-  //renders the leftover `display: none`. → DECISIONS.md B28
+  //renders the leftover `display: none`. → docs/decisions/register.md B28
   //
   //adaptv mounts the splash, so adaptv retires it — there is no boot left to cover
   //when the app tree is never going to mount. During render, not in an effect, so
@@ -281,7 +281,7 @@ export function RoutingShell({
   //Adaptv's own offline call site: a route chunk 404'd and the one-shot reload
   //guard is already spent, so reloading cannot help and there is no route left to
   //render its own offline UI. Without this the user gets a blank screen.
-  //RENDERING.md §3.1.2
+  //docs/design/rendering.md §3.1.2
   const OfflineComponent = offlineComponent ?? Offline
   const [bootFailed, setBootFailed] = useState(false)
   useEffect(

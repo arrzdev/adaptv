@@ -8,9 +8,17 @@
     "**/*.tsx",
     "src/**/*.css"
   ],
+  // Every workspace package the app imports is referenced here, so TypeScript
+  // resolves it to its emitted .d.ts instead of pulling the package's raw source
+  // into this program. `@repo/dev` used to arrive transitively (through the
+  // backend project, which referenced it); with the backend gone the chain broke
+  // and `run-dev.ts` was compiled here, where its own `#dev/*` paths don't exist.
   "references": [
     {
-      "path": "../backend/tsconfig.json"
+      "path": "../../packages/dev/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/shared/tsconfig.build.json"
     },
     {
       "path": "../../packages/synq/tsconfig.build.json"
@@ -27,7 +35,6 @@
       // and no consumer can import it at all. The Testing → Text page needs to
       // render the real component, so it reaches past the export map through
       // this alias. DELETE this mapping the moment the barrel exports Text.
-      "@/env/*": ["./env/*"],
       "@/ports": ["./ports.ts"],
       "@/*": ["./src/*"],
       "react": ["./node_modules/@types/react"],
@@ -40,7 +47,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "@cloudflare/workers-types"],
+    "types": ["vite/client"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "noEmit": true,

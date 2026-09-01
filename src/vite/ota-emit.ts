@@ -18,7 +18,7 @@ import type { ZipEntry } from "#adaptv/vite/ota-zip.ts"
 import { createZip } from "#adaptv/vite/ota-zip.ts"
 
 /**
- * Publishing the update channel — the deploy's own half of OTA. → `LIFECYCLE.md §5.2`
+ * Publishing the update channel — the deploy's own half of OTA. → `docs/design/ota.md §5.2`
  *
  * ## The channel is part of the site, not a second pipeline
  *
