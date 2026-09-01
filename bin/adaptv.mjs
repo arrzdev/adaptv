@@ -25,7 +25,6 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs"
-import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
@@ -101,6 +100,7 @@ import {
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import { namesPlumbing } from "./lib/opacity.mjs"
+import { locatePackage, ownNativeModules } from "./lib/own-modules.mjs"
 import { inspect as inspectApp } from "./lib/preflight.mjs"
 import {
   addresses,
@@ -1756,22 +1756,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
 }
 
-// The native modules adaptv ships and compiles into the binary. Named here and nowhere the
-// dev can see: `describeOwnInstall` turns the result into one owned row (R71).
-const ADAPTV_BASE_PLUGINS = [
-  "@capacitor/app",
-  "@capacitor/browser",
-  "@capacitor/core",
-  "@capacitor/geolocation",
-  "@capacitor/haptics",
-  "@capacitor/keyboard",
-  "@capacitor/network",
-  "@capacitor/preferences",
-  "@capacitor/screen-orientation",
-  "@capacitor/splash-screen",
-  "@capacitor/status-bar",
-]
-
 /** Run a tool for its version. Answers, rather than printing, so a caller that reports on
  * several tools as ONE row can still ask about each of them. */
 function toolVersion(argv) {
@@ -1808,23 +1792,29 @@ function readIf(p) {
  * used to verify exactly the same thing and print it as twelve rows naming the engine
  * twelve times, under a heading that said they were adaptv's; the dev has one action for
  * any of it. `--verbose` keeps the names, which is where they are worth something.
+ *
+ * WHICH modules is not written down here. It was — eleven names in an array — and adaptv had
+ * grown to fifteen without it, so four of them, the OTA plugin included, could have been
+ * missing under a green row. `bin/lib/own-modules.mjs` reads adaptv's own `package.json` and
+ * asks the framework's own `carriesNativeCode` which of those reach the binary.
  */
-function checkOwnInstall(appRoot) {
+async function checkOwnInstall(appRoot) {
   const { cmd, pre } = capCmd(appRoot)
   const cli = toolVersion([cmd, ...pre, "--version"])
-  const resolveFromAdaptv = createRequire(
-    path.join(ADAPTV_ROOT, "package.json"),
+  const { carriesNativeCode } = await loadAdaptvModule(
+    "native/installed-plugins.ts",
   )
-  const missing = ADAPTV_BASE_PLUGINS.filter((name) => {
-    try {
-      resolveFromAdaptv.resolve(`${name}/package.json`)
-      return false
-    } catch {
-      return true
-    }
+  const { modules, missing } = ownNativeModules({
+    dependencies: Object.keys(
+      JSON.parse(
+        readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+      ).dependencies ?? {},
+    ),
+    locate: (name) => locatePackage(name, ADAPTV_ROOT),
+    isNative: carriesNativeCode,
   })
   const report = describeOwnInstall({
-    modules: ADAPTV_BASE_PLUGINS,
+    modules,
     missing,
     runnable: cli.found,
     version: cli.version,
@@ -1866,7 +1856,7 @@ async function doctor(appRoot) {
 
   section("Core")
   checkTool("node", ["node", "--version"])
-  checkOwnInstall(appRoot)
+  await checkOwnInstall(appRoot)
 
   section("Android")
   const aEnv = { ...process.env }
