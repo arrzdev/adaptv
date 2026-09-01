@@ -252,7 +252,7 @@ and belongs to the owner, not to this plan:
 > **leave it**, and let the test carry the invariant.
 
 <details>
-<summary>Two inconsistencies found while surveying — neither belongs to this plan</summary>
+<summary>One inconsistency found while surveying — it does not belong to this plan</summary>
 
 - **`./server-entry` and `./root-route` are in `exports` but not in the publish spec.**
   `package.json` exports 16 subpaths; `scripts/verify-dist.mjs`'s `jsEntries` lists 12, and
@@ -260,8 +260,6 @@ and belongs to the owner, not to this plan:
   has **no dist entry at all**, and `./root-route` is built but absent from the publish spec even
   though `tsdown.config.ts`'s own comment says it must be there.
   → [`dist-cutover.md`](dist-cutover.md) is where that closes, not here.
-- **[`../../biome.json`](../../biome.json) exempts `src/client/**` from the import ban, and
-  `src/client/` does not exist.** A stale glob from an earlier shape of the tree. One line.
 
 </details>
 

@@ -70,7 +70,7 @@
       }
     },
     {
-      "includes": ["src/config/**", "src/vite/**", "src/client/**"],
+      "includes": ["src/config/**", "src/vite/**"],
       "linter": {
         "rules": {
           "style": {
