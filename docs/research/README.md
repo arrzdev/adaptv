@@ -21,10 +21,10 @@ Three tests, all of them:
 - **It was established, not inferred.** There is an experiment, and the entry records it precisely
   enough to re-run or falsify.
 
-Not here: API choices → `DECISIONS.md`. What neighbours do → `PRIOR-ART.md`, `VS-IONIC.md`. Gaps in
-the vision and upstream to watch → `RESEARCH.md` (singular, at the docs root — that one is
-forward-looking; this folder is backward-looking). Promotion policy → `PERFORMANCE-BOOST.md`.
-Driving a device → `AUTONOMOUS-UI-TESTING.md`.
+Not here: API choices → `docs/decisions/register.md`. What neighbours do → `docs/decisions/prior-art.md`, `docs/decisions/positioning.md`. Gaps in
+not-yet-built work → `docs/roadmap/`. Upstream issues to watch before a version bump → the
+tail of `capacitor-internals.md` in this folder. Promotion policy → `docs/design/performance-boost.md`.
+Driving a device → `docs/guides/autonomous-ui-testing.md`.
 
 ## Writing an entry
 

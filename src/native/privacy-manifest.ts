@@ -1,5 +1,5 @@
 /**
- * `PrivacyInfo.xcprivacy` generation. → `DECISIONS.md §5.0.1`
+ * `PrivacyInfo.xcprivacy` generation. → `docs/decisions/register.md §5.0.1`
  *
  * ## Why this is adaptv's job
  *

@@ -8,7 +8,7 @@
  * destination is a `theme-color` meta and that is all it can carry.
  *
  * ⚠︎ The compositing and mixing here work on **gamma-encoded sRGB**, deliberately, and that is not the space
- * `STYLING.md` reaches for elsewhere (OKLCH, via `color-mix()`). The difference matters because
+ * `docs/decisions/styling.md` reaches for elsewhere (OKLCH, via `color-mix()`). The difference matters because
  * these numbers are not chosen for perceptual evenness — they have to *match a pixel the browser
  * already painted*. A scrim laid over a page is composited source-over in the device's sRGB, so
  * computing the same result in OKLCH would produce a tint that is visibly not the colour on
@@ -115,8 +115,8 @@ function oklabToRgb(L: number, a: number, b: number): Rgb {
 }
 
 /**
- * Parse a hex, `rgb()`/`rgba()`, `oklab()` or `oklch()` colour. `null` for anything else — including the wide-gamut and
- * `oklch()` forms a modern engine can hand back from `getComputedStyle`.
+ * Parse a hex, `rgb()`/`rgba()`, `oklab()` or `oklch()` colour. `null` for anything else — including the wide-gamut
+ * `color(display-p3 …)` form a modern engine can hand back from `getComputedStyle`.
  *
  * That `null` is the whole error contract, and callers are expected to do nothing rather than
  * guess: a tint that is merely *close* to the surface it is meant to continue reads worse than no

@@ -12,7 +12,7 @@
 //most common mobile lifecycle event — background, then resume — fires NONE of
 //them. Concretely: **a native WebView resume is not a browser focus event**, so
 //TanStack Query's `refetchOnWindowFocus` silently never fires on native. This
-//accessor is the fix. → `COORDINATION.md §1`
+//accessor is the fix. → `docs/design/coordination.md §1`
 import { App } from "@capacitor/app"
 import type { PluginListenerHandle } from "@capacitor/core"
 import { isNativePlatform } from "#adaptv/utils/platform"

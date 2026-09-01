@@ -2,7 +2,7 @@ import type { UserConfig } from "tsdown"
 import { defineConfig } from "tsdown"
 
 /**
- * The dist build. → `docs/DECISIONS.md §6.2` ("The dist build — empirically settled")
+ * The dist build. → `docs/decisions/dist-build.md` ("The dist build — empirically settled")
  *
  * adaptv ships **built output**, not raw `.ts`. §6.2 proves why source-shipping
  * loses on this exact package shape: a dependency's tsconfig `paths` never apply
@@ -67,7 +67,7 @@ const base = {
   format: "esm",
   dts: true,
   // Keep sourcesContent embedded (tsdown's default) so consumers get real stack
-  // traces WITHOUT shipping `src/`. → §6.2 "two smaller settled points".
+  // traces WITHOUT shipping `src/`. → `docs/decisions/dist-build.md` "two smaller settled points".
   sourcemap: true,
   // Force `.mjs` + `.d.mts` on BOTH builds. `platform: "node"` alone makes tsdown
   // pick `.mjs` while the browser build defaults to `.js`; a single exports map
@@ -86,7 +86,7 @@ const base = {
   // `AnyRoute` stub — and every consumer of the published package inherits
   // `getRouter(): RouterCore<AnyRoute, …>`, which is precisely the widening that
   // killed typed routing before. Measured: without this line `dist/router.d.mts`
-  // baked `AnyRoute` in. → src/routes/route-tree-stub.d.ts, ARCHITECTURE §3.2
+  // baked `AnyRoute` in. → src/routes/route-tree-stub.d.ts, `docs/design/architecture.md` §3.2
   deps: { neverBundle: [/^virtual:/, /^#adaptv-route-tree$/] },
 } satisfies UserConfig
 
@@ -99,7 +99,7 @@ export default defineConfig([
     clean: true,
     platform: "browser",
     entry: browserEntry,
-    // 🚨 §6.2 trap: Rolldown silently DROPS `"use client"` from non-entry modules
+    // 🚨 `docs/decisions/dist-build.md` trap: Rolldown silently DROPS `"use client"` from non-entry modules
     // in bundle mode (present with unbundle, absent here). Re-assert it at the
     // Rolldown output layer so every emitted chunk — entries and shared chunks —
     // carries the directive. Browser build ONLY; the Node tools are not client
@@ -113,7 +113,7 @@ export default defineConfig([
     entry: nodeEntry,
     // Copy assets on the LAST build so nothing later cleans over them.
     copy: [
-      // Don't BUILD the CSS. → §6.2: `@tsdown/css` is experimental, carries an
+      // Don't BUILD the CSS. → `docs/decisions/dist-build.md`: `@tsdown/css` is experimental, carries an
       // exact-version peer dep on tsdown, and would run adaptv's hand-authored
       // stylesheet through a second minifier before the consumer's own pipeline.
       // Copy the stylesheets flat so `index.css`'s relative `@import`s still

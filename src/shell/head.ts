@@ -6,7 +6,7 @@ const VIEWPORT_BASE =
   "width=device-width,initial-scale=1,viewport-fit=cover"
 const VIEWPORT_NO_ZOOM = `${VIEWPORT_BASE},user-scalable=no,minimum-scale=1,maximum-scale=1`
 
-/** Viewport meta content; zoom is allowed by default (WCAG 1.4.4). */
+/** Viewport meta content. Zoom is OFF unless `allowZoom` asks for it — `true` is the WCAG 1.4.4 accessible choice. */
 function getViewportContent(allowZoom: boolean) {
   return allowZoom ? VIEWPORT_BASE : VIEWPORT_NO_ZOOM
 }
@@ -41,10 +41,6 @@ function getMsApplicationMeta(themeColorLight: string) {
     { name: "msapplication-TileColor", content: themeColorLight },
   ] as const
 }
-
-/* =============================================================================
- * TanStack Router `head` payload
- * ============================================================================= */
 
 export type UiOpenGraphConfig = {
   title?: string
@@ -157,7 +153,7 @@ export function pwaHead(config: PwaHeadConfig) {
     //icons lived elsewhere shipped a head full of 404s, and even one using the default
     //directory 404'd on every file its favicon generator happened not to emit. The real set is
     //resolved at BUILD time (`headIconLinks` in `src/vite/icon-set.ts`) from the files that
-    //exist, and arrives here through `links`. → `DECISIONS.md` L8.
+    //exist, and arrives here through `links`. → `docs/decisions/register.md` L8.
     ...extraLinks,
   ]
 

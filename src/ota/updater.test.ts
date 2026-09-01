@@ -732,7 +732,7 @@ describe("the foreground poll", () => {
   it("looks again while the app stays in the foreground", async () => {
     //The session the other two checks never reach: a kiosk, never backgrounded
     //and never relaunched, which would otherwise sit a full day behind its own
-    //deploy. → LIFECYCLE.md §5.2
+    //deploy. → docs/design/ota.md §5.2
     vi.useFakeTimers()
     try {
       const { startOtaUpdates } = await load()

@@ -54,7 +54,7 @@ function normalize(state: string): ClipboardPermission {
  * asks THIS rather than `isNativePlatform()`: an OTA bundle can be running on a
  * binary that predates the plugin. Each caller then falls through to the web
  * path instead of reporting "unsupported" — an Android WebView on a secure
- * origin has a real `navigator.clipboard`. → `LIFECYCLE.md §5.6`
+ * origin has a real `navigator.clipboard`. → `docs/design/ota.md §5.6`
  */
 function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("Clipboard")
@@ -137,10 +137,12 @@ function writeViaExecCommand(text: string): boolean {
 }
 
 /**
- * Copy text. Never rejects — every clipboard refusal observed across the six
+ * Copy text. Never rejects — every RECOVERABLE refusal observed across the six
  * targets (no user gesture on Safari, unfocused document on Chrome, permission
- * withheld) is the same recoverable condition and leaves the caller with the
- * same job: tell the user it didn't copy. So they are all `"denied"`.
+ * withheld) is the same condition and leaves the caller with the same job: tell
+ * the user it didn't copy, so they all collapse to `"denied"`. `"unsupported"` is
+ * kept for the two cases a retry cannot fix: no write path at all, and the native
+ * plugin compiled in and still refusing (that is the OS, not a gap).
  */
 export async function writeClipboardText(
   text: string,

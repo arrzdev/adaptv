@@ -39,7 +39,7 @@ export function defaultBootErrorPath(): string {
 }
 
 /**
- * Force **one** React into the bundle. → `DECISIONS.md B31`
+ * Force **one** React into the bundle. → `docs/decisions/register.md B31`
  *
  * Without this, `react` resolves relative to whichever file imported it: the app's
  * own screen finds the app's copy, while adaptv's components find adaptv's. Two

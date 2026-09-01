@@ -3,10 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
 import { CatchBoundary } from "@/components/ui/catch-boundary"
 import { AppDbProvider } from "@/providers/app-db-provider"
-import { AuthProvider } from "@/providers/auth-provider"
 import { queryClient } from "@/providers/tanstack-query-provider"
-//side-effect: exposes window.synqDebug for devtools + e2e (browser-only)
-import "@/data/sync/debug"
 
 //dev-only: forward device/browser console + errors to the LAN log sink. client-only
 //+ import.meta.env.DEV-gated, so it's tree-shaken from production builds.
@@ -26,13 +23,11 @@ export default function AppProviders({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppDbProvider>
-          <CatchBoundary getResetKey={() => location.pathname}>
-            {children}
-          </CatchBoundary>
-        </AppDbProvider>
-      </AuthProvider>
+      <AppDbProvider>
+        <CatchBoundary getResetKey={() => location.pathname}>
+          {children}
+        </CatchBoundary>
+      </AppDbProvider>
     </QueryClientProvider>
   )
 }

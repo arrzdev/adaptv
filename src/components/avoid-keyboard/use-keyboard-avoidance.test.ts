@@ -5,10 +5,6 @@ import {
   resolveReservedSpace,
 } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 
-/* =============================================================================
- * resolveAvoidanceSpace
- * ============================================================================= */
-
 describe("resolveAvoidanceSpace", () => {
   const viewportHeight = 800
 
@@ -55,10 +51,6 @@ describe("resolveAvoidanceSpace", () => {
     ).toBe(0)
   })
 })
-
-/* =============================================================================
- * computeScrollIntoViewTop
- * ============================================================================= */
 
 describe("computeScrollIntoViewTop", () => {
   //keyboardTop well below the 500px scroller bottom → line falls on the scroller bottom
@@ -173,10 +165,6 @@ describe("computeScrollIntoViewTop", () => {
     ).toBe(40)
   })
 })
-
-/* =============================================================================
- * resolveReservedSpace
- * ============================================================================= */
 
 describe("resolveReservedSpace", () => {
   it("reserves the safe-area inset (plus gap) when the keyboard is closed", () => {

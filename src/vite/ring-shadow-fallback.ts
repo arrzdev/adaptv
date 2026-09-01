@@ -1,5 +1,5 @@
 /**
- * Make Tailwind v4's `ring-*` utilities render on Chromium 113–118. → `DECISIONS.md`
+ * Make Tailwind v4's `ring-*` utilities render on Chromium 113–118. → `docs/decisions/register.md`
  *
  * ## The bug, in one line of CSS
  *
@@ -75,8 +75,8 @@ const RING_OFFSET = "--adaptv-tw-ring-offset"
  * A valid, invisible shadow — the fallback every carrier reference carries.
  *
  * It is Tailwind's own "no shadow" value, so a rule that falls back to it renders exactly
- * what an unset ring renders today. See the `ring-inset` replacement for WHY a fallback is
- * mandatory here rather than merely tidy.
+ * what an unset ring renders today. See the `.ring-inset` replacement inside
+ * {@link rewriteRingShadow} for WHY a fallback is mandatory here rather than merely tidy.
  */
 const TRANSPARENT = "0 0 #0000"
 

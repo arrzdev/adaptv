@@ -8,7 +8,7 @@ import {
 } from "#adaptv/styles/compile.test-helper"
 import { cn } from "#adaptv/utils/cn"
 
-//The safe-area inset contract, guarded as text — DECISIONS.md §6.0 (B18). The rule
+//The safe-area inset contract, guarded as text — docs/decisions/register.md §6.0 (B18). The rule
 //is a source-ordering rule (`var(--safe-area-inset-*)` FIRST, `env()` only as
 //fallback) that no DOM we can test against can tell apart from the naive spelling:
 //happy-dom resolves both identically, and so does every engine except Android
@@ -165,7 +165,7 @@ describe("safe-area utilities — the compiled CSS", () => {
 })
 
 /*
- * STYLING.md §5.5 is absolute: a utility tailwind-merge has never heard of conflicts
+ * docs/decisions/styling.md §5.5 is absolute: a utility tailwind-merge has never heard of conflicts
  * with nothing, so an unregistered family silently drops out of `mergeStyles`'
  * precedence contract — `View safe="bottom"` would stop beating a stray `pb-0`.
  */
@@ -190,7 +190,7 @@ describe("safe-area utilities — registered with tailwind-merge", () => {
 })
 
 /*
- * Cascade layers (STYLING.md §6 / §6.0.1). Everything adaptv emits is layered, so an
+ * Cascade layers (docs/decisions/styling.md §6 / §6.0.1). Everything adaptv emits is layered, so an
  * unlayered consumer rule wins at ANY specificity — which is what let the cascade-only
  * `!important`s go. Assert the shape the guarantee rests on, since no jsdom-class
  * environment resolves layer order.

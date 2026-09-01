@@ -9,7 +9,7 @@ export {
 } from "../config/app-config.ts"
 //No `defineSwConfig` / `SwConfig`: an app has no service-worker config to define.
 //adaptv's worker is not configurable, and the app's own modules are named in
-//`serviceWorkers: []`. → `RENDERING.md §3`
+//`serviceWorkers: []`. → `docs/design/rendering.md §3`
 export type {
   OrientationGuardProps,
   OrientationLock,

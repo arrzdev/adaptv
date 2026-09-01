@@ -12,9 +12,11 @@ import { LabPage } from "@/components/lab/lab-page"
 
 /**
  * The tint this route pins — deliberately nothing like EITHER theme colour, so a
- * screenshot cannot accidentally agree with the app (`#f5e6ff` light, `#1e0033`
- * dark). Held in a const because the page prints it too; adaptv resolves a
- * top-level const the same way it resolves an inline literal.
+ * screenshot cannot accidentally agree with the app. The theme colours themselves
+ * are NOT repeated here: `scripts/ota-lab.ts` rewrites `themeColor` in
+ * `adaptv.config.ts` in place, so any copy of them goes stale the first time the
+ * OTA bench runs. Held in a const because the page prints it too; adaptv resolves
+ * a top-level const the same way it resolves an inline literal.
  */
 const ROUTE_TINT = "#0b6e4f"
 

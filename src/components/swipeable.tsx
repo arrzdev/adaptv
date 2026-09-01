@@ -37,10 +37,6 @@ export function isSwipeableGestureTarget(
   return target.closest("[data-swipeable-root]") !== null
 }
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 type SwipeableConfig = {
   /** Fraction of natural width the row must pass to open on release. */
   openThreshold: number
@@ -83,10 +79,6 @@ type OpenSide = false | Side
 /** Trailing sample window (ms) used to compute release velocity on flick. */
 const VELOCITY_WINDOW_MS = 60
 
-/* =============================================================================
- * GEOMETRY HELPERS
- * ============================================================================= */
-
 /** Mirror the root's border-radius onto clip-path — overflow alone lets a
  *  transformed child bleed past rounded corners on iOS WebKit. */
 function syncRootClip(root: HTMLElement) {
@@ -128,10 +120,6 @@ function readAdjacentActionBackground(
   }
   return null
 }
-
-/* =============================================================================
- * DISMISS REGISTRY — close open rows on scroll / outside tap / keyboard open
- * ============================================================================= */
 
 type DismissEntry = { isOpen: () => boolean; close: () => void }
 
@@ -191,10 +179,6 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
   }
   return null
 }
-
-/* =============================================================================
- * COMPOUND SLOTS — Tier 2 wrappers copy these markers onto their function type
- * ============================================================================= */
 
 export const SWIPEABLE_LEFT_ACTIONS_SLOT = Symbol.for(
   "@arrzdev/adaptv:swipeable.left-actions",
@@ -261,10 +245,6 @@ const SwipeableContent = markSlot(function SwipeableContent(
 }, SWIPEABLE_CONTENT_SLOT)
 SwipeableContent.displayName = "Swipeable.Content"
 
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
-
 export type SwipeableContextValue = {
   isOpen: boolean
   openSide: OpenSide
@@ -280,10 +260,6 @@ export function useSwipeable(): SwipeableContextValue {
     throw new Error("useSwipeable must be used within <Swipeable>.")
   return ctx
 }
-
-/* =============================================================================
- * GROUP — close siblings when one opens
- * ============================================================================= */
 
 type SwipeableGroupContextValue = {
   register: (close: () => void) => () => void
@@ -348,10 +324,6 @@ const SwipeableGroup = forwardRef<
   )
 })
 SwipeableGroup.displayName = "Swipeable.Group"
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 export type SwipeableHandle = {
   /** Live open side (`false` when closed). */
@@ -1095,10 +1067,6 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
   },
 )
 SwipeableRoot.displayName = "Swipeable"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const SwipeableCompound = Object.assign(SwipeableRoot, {
   Group: SwipeableGroup,

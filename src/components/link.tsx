@@ -10,10 +10,6 @@ import {
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 //a press held past this is read as a hold, not a tap, and does not navigate
 const HOLD_THRESHOLD_MS = 300
 
@@ -35,10 +31,6 @@ export interface LinkProps {
   smartBack?: boolean
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 const LINK_ROOT_SURFACE_CLASS = "text-gray-950 no-underline"
 //LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
 const LINK_ROOT_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
@@ -46,10 +38,6 @@ const LINK_ROOT_CURSOR_CLASS = "cursor-pointer"
 const LINK_ROOT_NON_INTERACTION_CLASS = PRESS_TARGET_DISABLED_LOCKED_CLASS
 const LINK_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 const LINK_ROOT_LAYOUT_CLASS = "text-left"
-
-/* =============================================================================
- * SMART BACK
- * ============================================================================= */
 
 type AppRouter = ReturnType<typeof useRouter>
 
@@ -86,10 +74,6 @@ function backLandsOn(router: AppRouter, pathname: string): boolean {
   if (index === undefined) return false
   return indexToPathname.get(index - 1) === pathname
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 //arms the engine's long-press path so a stationary hold cancels the tap; the
 //handler is a no-op — we only want the "held, so don't navigate" side effect
@@ -190,11 +174,11 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       onClick={handleClick}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}
-      //LOCKED: the interaction utility, for the press-core reason — `clickable`
-      //carries the `touch-action` longhand that keeps `pointercancel` alive on iOS
-      //(WebKit 240917), which is how this link's engine learns a scroll took over
-      //and cancels the tap; and a `disabled` link must stay untappable whatever
-      //`className` says. Alignment and colour are a neutral default.
+      //LOCKED: the interaction utility, for the press-core reason —
+      //{@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action` longhand that
+      //keeps `pointercancel` alive on iOS (WebKit 240917), which is how this link's
+      //engine learns a scroll took over and cancels the tap, so no `className` may
+      //defeat it. Alignment and colour are a neutral default.
       className={mergeStyles({
         base: [
           LINK_ROOT_LAYOUT_CLASS,

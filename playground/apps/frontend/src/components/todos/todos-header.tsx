@@ -2,12 +2,10 @@ import { Pressable, Text, View } from "@arrzdev/adaptv/components"
 import { useNavigate } from "@arrzdev/adaptv/router"
 import { Plus, Settings } from "lucide-react"
 import { TasksTitle } from "@/components/navigation/tasks-title"
-import { SyncStatusBar } from "@/components/todos/sync-status-bar"
 import type { TodoFilter } from "@/components/todos/todo-filter"
 import { IconButton } from "@/components/ui"
 import type { Deck } from "@/data/collections/decks/schema"
 import { useHaptics } from "@/hooks/use-haptics"
-import { useAuth } from "@/providers/auth-provider"
 
 type TodosHeaderProps = {
   activeCount: number
@@ -30,8 +28,6 @@ export function TodosHeader({
 }: TodosHeaderProps) {
   const navigate = useNavigate()
   const haptic = useHaptics()
-  //the sync indicator is a signed-in concept only — guests are fully local
-  const { isAuthenticated } = useAuth()
 
   //the archived/pending toggles are plain text buttons (not IconButtons), so they
   //fire the tap haptic themselves; the IconButtons below get it from the wrapper
@@ -99,9 +95,7 @@ export function TodosHeader({
         </Text>
       </View>
       {/* self-stretch + items-center keeps the button row vertically centered
-          against the title/subtitle block; the sync indicator is absolutely
-          positioned on the subtitle line, so mounting it on sign-in never
-          nudges the buttons */}
+          against the title/subtitle block */}
       <View
         row
         className="relative flex shrink-0 items-center self-stretch"
@@ -122,14 +116,6 @@ export function TodosHeader({
             <Settings size={20} strokeWidth={1.75} aria-hidden />
           </IconButton>
         </View>
-        {isAuthenticated && (
-          <View
-            row
-            className="absolute inset-x-0 bottom-0 flex translate-y-[3px]"
-          >
-            <SyncStatusBar />
-          </View>
-        )}
       </View>
     </View>
   )

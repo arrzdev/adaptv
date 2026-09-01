@@ -2,7 +2,7 @@
   "name": "@arrzdev/adaptv",
   "version": "0.1.0",
   "private": true,
-  "description": "Cross-platform React framework — one codebase ships as web, installable PWA, and native iOS/Android (Capacitor), correct-by-construction on every target.",
+  "description": "One React codebase, shipped as desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
   "type": "module",
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.1.1",

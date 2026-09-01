@@ -44,8 +44,10 @@ export type ScreenOrientationLock =
 
 /**
  * `"ok"` — the platform accepted it.
- * `"unsupported"` — there is no lock API here (all of iOS); asking again cannot
- * help, and the app should fall back to `OrientationGuard`.
+ * `"unsupported"` — there is no lock API here (iOS on the WEB: WebKit has never
+ * shipped `screen.orientation.lock()`; a native iOS build locks through the
+ * ScreenOrientation plugin). Asking again cannot help, and the app should fall
+ * back to `OrientationGuard`.
  * `"rejected"` — the API exists but refused this call (Chromium outside
  * fullscreen / not installed); a retry from the right context can succeed.
  */
@@ -157,19 +159,10 @@ export function subscribeScreenOrientation(cb: () => void): () => void {
 }
 
 /**
- * Whether a lock can be attempted at all. Synchronous, so a "rotate to
- * landscape" button can be absent from the first render on iOS rather than
- * appearing and then failing.
- *
- * `true` here still does not promise the lock will take — Chromium refuses
- * outside fullscreen/standalone. That is what {@link lockScreenOrientation}'s
- * `"rejected"` outcome is for.
- */
-/**
  * Whether the lock goes through the native plugin. The lock branches ask THIS
  * rather than `isNativePlatform()`: an OTA bundle can be running on a binary
  * that predates the plugin, and the web `screen.orientation.lock` is a real
- * fallback inside an Android WebView. → `LIFECYCLE.md §5.6`
+ * fallback inside an Android WebView. → `docs/design/ota.md §5.6`
  *
  * Only the LOCK asks. Reading and subscribing to the current orientation stay on
  * `isNativePlatform()`, because their native path is the plugin's *listener* and
@@ -179,6 +172,15 @@ function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("ScreenOrientation")
 }
 
+/**
+ * Whether a lock can be attempted at all. Synchronous, so a "rotate to
+ * landscape" button can be absent from the first render on iOS web rather than
+ * appearing and then failing.
+ *
+ * `true` here still does not promise the lock will take — Chromium refuses
+ * outside fullscreen/standalone. That is what {@link lockScreenOrientation}'s
+ * `"rejected"` outcome is for.
+ */
 export function isOrientationLockSupported(): boolean {
   if (viaPlugin()) return true
   if (typeof window === "undefined") return false

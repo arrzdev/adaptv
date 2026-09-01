@@ -85,7 +85,7 @@ test.describe("the screen frame", () => {
     page,
   }) => {
     /*
-     * ARCHITECTURE.md §1.3 left this open: does a route that wants a NON-filling root
+     * docs/design/architecture.md §1.3 left this open: does a route that wants a NON-filling root
      * need a shell prop? It does not — the stretch lives in `adaptv.components` and a
      * Tailwind utility compiles into `utilities`, which outranks it. So the escape
      * hatch is a class the consumer already knows, with no new API and no `!important`.

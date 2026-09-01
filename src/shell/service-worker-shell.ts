@@ -10,7 +10,7 @@ import { isNativePlatform } from "#adaptv/utils/platform"
  * applied at launch and never surfaces, so `updateAvailable` stays false and
  * `useServiceWorkerUpdate()` costs an app nothing to call.
  *
- * A subscribe/get accessor pair rather than component state (VISION §2.6, L9):
+ * A subscribe/get accessor pair rather than component state (`docs/VISION.md` §2.6, L9):
  * `useSyncExternalStore` reads it without tearing, and a non-React caller can
  * subscribe to the same signal.
  * ========================================================================== */
@@ -59,7 +59,7 @@ function offerUpdate(apply: () => void): void {
  * A SW registered during a `server.url` live-reload dev session otherwise survives
  * into the installed app, where it silently serves the old bundle — which also
  * **breaks OTA**: the app "updates", `serverBasePath` moves, and the WebView keeps
- * showing old code with no error anywhere. → `RENDERING.md §3.5`
+ * showing old code with no error anywhere. → `docs/design/rendering.md §3.5`
  */
 export async function destroyServiceWorkers(): Promise<void> {
   try {
@@ -107,9 +107,11 @@ export async function requestPersistentStorage(): Promise<boolean> {
  *
  * Takes no options, and that is the design. The worker is core product
  * behaviour — the thing that makes a web build navigate like the native one — so
- * there is no `register` mode, no enable flag and no update prompt. It is applied
- * automatically, at the only moment where a reload costs nothing.
- * → `RENDERING.md §3.4`
+ * there is no `register` mode and no enable flag. Whether a waiting worker is
+ * applied silently or offered to the app is the one thing that IS configurable,
+ * by `serviceWorkerUpdate`, and the registration module bakes that in — under
+ * `"auto"` it applies at the only moment where a reload costs nothing.
+ * → `docs/design/rendering.md §3.4`
  */
 export function registerPwaServiceWorkerRuntime(): void {
   //The stale-chunk net is unconditional: it must be armed even when adaptv never

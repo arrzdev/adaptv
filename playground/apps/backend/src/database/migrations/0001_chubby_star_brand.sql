@@ -1,1 +1,0 @@
-ALTER TABLE `todos` ADD `counter` integer DEFAULT 0 NOT NULL;

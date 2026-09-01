@@ -10,9 +10,10 @@ export type LoadedAppConfig = {
 }
 
 /**
- * Shared state between the composed adaptv plugins. Populated by the app-config
- * plugin's `config` hook, which vite runs before every later hook of the other
- * plugins in the array.
+ * Shared state between the composed adaptv plugins. `loaded`, `target` and `web`
+ * are populated in the `adaptv()` factory BEFORE the plugin array is returned, so
+ * every hook of every plugin already sees them; `clientOutDir` is filled in later,
+ * by `captureClientOutDir`.
  */
 export type AdaptvContext = {
   appRoot: string
@@ -46,7 +47,7 @@ export type AdaptvContext = {
    * `dist/client missing`. That was the good outcome — the same assumption in the
    * precache manifest, which is globbed off disk, could just as easily have
    * produced a worker that precached nothing and failed at runtime instead.
-   * → `DECISIONS.md §6.4`
+   * → `docs/decisions/rendering-and-delivery.md §2`
    */
   clientOutDir?: string
 }
@@ -58,9 +59,10 @@ export function createAdaptvContext(appRoot: string): AdaptvContext {
 /**
  * Record where the client build actually writes, from Vite's own resolved config.
  *
- * Read off the **client environment** specifically: adaptv's emitters all run on
- * the `ssr` environment's `closeBundle` (that is the only point at which the
- * client output is complete), so `this.environment` there is the wrong one to ask.
+ * Read off the **client environment** specifically: adaptv's emitters all run in
+ * `buildApp` at `order: "post"` (that is the only point at which the client output
+ * is complete — `closeBundle` fires per environment and is too early), so
+ * `this.environment` there is the wrong one to ask.
  *
  * Idempotent, and every emitter calls it — so no plugin depends on another having
  * run first, which is deliberate: the ordering between them is already
@@ -90,7 +92,7 @@ export function requireClientOutDir(context: AdaptvContext): string {
  *
  * Build output names files a dev can act on, and an absolute one is both noise
  * and a small leak — it is their home directory, in a log they may well paste
- * into an issue. `docs/CLI-UX.md`: **app-root-relative only, never absolute.**
+ * into an issue. `docs/design/cli-contract.md`: **app-root-relative only, never absolute.**
  *
  * One helper rather than a `path.relative` at each call site, because there are
  * several emitters printing the same kind of line and "one idea, two

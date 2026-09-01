@@ -11,7 +11,7 @@
 // Under Ink there is no arithmetic. The block is a description of what should be on screen and
 // the layout engine reconciles it — a notice appearing is a state change, not a re-measure.
 //
-// NO JSX: `bin/` ships as raw source (DECISIONS O12, `files: ["bin"]`, and tsdown builds only
+// NO JSX: `bin/` ships as raw source (`docs/decisions/register.md` O12, `files: ["bin"]`, and tsdown builds only
 // `src/`), so there is no build step to compile it. `h` is `createElement`.
 import { Box, render, Text, useApp, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"

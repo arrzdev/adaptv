@@ -94,10 +94,6 @@ afterEach(() => {
   cleanup()
 })
 
-/* =============================================================================
- * TESTS
- * ============================================================================= */
-
 describe("useGestureEngine", () => {
   it("fires onPressUp on a clean tap", () => {
     const onPressUp = vi.fn()
@@ -426,7 +422,7 @@ describe("useGestureEngine", () => {
    * `pointercancel` a few frames after `pointerdown` — so any engine that paints on
    * `pointerdown` flashes every single scroll that happens to start on a control.
    * Ionic solved this in `tap-click` with a 100ms defer before showing and a 150ms
-   * floor once shown (PRIOR-ART.md §6); adaptv adopts the same pair.
+   * floor once shown (docs/decisions/prior-art.md §6); adaptv adopts the same pair.
    *
    * These tests use fake timers because the whole contract IS the timing.
    */

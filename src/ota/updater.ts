@@ -51,8 +51,10 @@ export type OtaOptions = {
   publicKey?: string | null
   /**
    * How often to look again **while the app stays in the foreground**, in ms.
-   * `0` (and the default) is launch + resume only. Resolved at build time from
-   * `otaPollMinutes` — nothing here re-derives a default.
+   * `0` is launch + resume only. Resolved at build time from `otaPollMinutes`
+   * (default 60 minutes — `vite/ota-config-module.ts`, `DEFAULT_OTA_POLL_MINUTES`)
+   * and always supplied by `useOtaUpdates`; the `?? 0` in `armPoll` is the
+   * no-timer fallback for a direct caller, not a default this module picks.
    */
   pollIntervalMs?: number
   /** Called when a bundle has been downloaded and will apply at next cold start. */
@@ -82,7 +84,7 @@ type LiveUpdatePlugin = {
     /**
      * Verified NATIVELY, against a key in the store binary. Passing it is the
      * whole defence: a check run by the code an attacker is replacing is not a
-     * check. → `LIFECYCLE.md §5.4d`
+     * check. → `docs/design/ota.md §5.4d`
      */
     signature?: string
   }): Promise<void>
@@ -327,7 +329,7 @@ export async function settleLaunch(options: {
  * touched no native code still fires — and that is deliberate: the embedded
  * bundle of a new binary is compatible **by construction**, so a false positive
  * costs one download and a reload, while a false negative costs the app.
- * → `LIFECYCLE.md §5.3`
+ * → `docs/design/ota.md §5.3`
  *
  * The version is remembered **before** the reset, so a reload that races a second
  * launch cannot loop: the next pass sees a version it already knows.
@@ -419,7 +421,7 @@ async function prune(
 }
 
 /**
- * Check for, and stage, an over-the-air update. → `LIFECYCLE.md §5` (L13)
+ * Check for, and stage, an over-the-air update. → `docs/design/ota.md §5` (L13)
  *
  * ## The shape, and why each part is what it is
  *
@@ -529,7 +531,7 @@ export function startOtaUpdates(options: OtaOptions): () => void {
       //the fingerprint of the machine that built it, and comparing the channel
       //against that reports every later build as compatible on an app that has
       //not gained a single native plugin. The ledger keeps the real one, learnt
-      //from the embedded bundle. → `LIFECYCLE.md §5.6`
+      //from the embedded bundle. → `docs/design/ota.md §5.6`
       const deviceFingerprint =
         binaryFingerprint() ?? options.nativeFingerprint
 

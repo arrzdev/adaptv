@@ -19,10 +19,6 @@ import { PRESS_TARGET_DISABLED_LOCKED_CLASS } from "#adaptv/components/press-cor
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Imperative API for {@link Input}. Attach with `ref`.
  *
@@ -92,10 +88,6 @@ interface InputGroupProps {
   disabled?: boolean
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED on the slots: `order-*` IS the compound contract. Children render in
 //document order and the field is injected with `order-2`, so leading → field →
 //trailing only holds while these stick; `shrink-0` keeps an icon from collapsing
@@ -126,10 +118,6 @@ const INPUT_FIELD_SURFACE_CLASS = "bg-gray-50 text-gray-950"
 const INPUT_FIELD_GROUPED_CHROMELESS_CLASS =
   "order-2 min-w-0 flex-1 border-none bg-transparent p-0 shadow-none text-inherit"
 
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
-
 /** Programmatic state Tier 2 reads via {@link useInput}. */
 export type InputContextValue = {
   isGrouped: boolean
@@ -150,10 +138,6 @@ export function useInput(): InputContextValue {
   }
   return ctx
 }
-
-/* =============================================================================
- * SLOT HELPERS
- * ============================================================================= */
 
 function inputSlotHasContent(children: ReactNode): boolean {
   let hasContent = false
@@ -181,10 +165,6 @@ function inputHasCompoundChildren(children: ReactNode): boolean {
   })
   return hasChild
 }
-
-/* =============================================================================
- * CLASSNAME PARTITIONING
- * ============================================================================= */
 
 const INPUT_FIELD_CLASS_PREFIXES = ["placeholder:", "caret:"] as const
 
@@ -219,10 +199,6 @@ function partitionInputClassName(className?: string) {
 
 const INPUT_ADDON_INTERACTIVE_SELECTOR =
   "button, a, input, select, textarea, [role='button']"
-
-/* =============================================================================
- * INPUT LEADING / TRAILING
- * ============================================================================= */
 
 /**
  * Leading icon or control slot. Place before {@link Input.Trailing} in JSX order.
@@ -322,10 +298,6 @@ function InputTrailing({ children, className }: InputTrailingProps) {
 
 InputTrailing.displayName = "Input.Trailing"
 
-/* =============================================================================
- * INPUT GROUP
- * ============================================================================= */
-
 function InputGroup({
   children,
   className,
@@ -346,9 +318,10 @@ function InputGroup({
     <label
       data-adaptv="input"
       htmlFor={inputId}
-      //LOCKED: `non-clickable` when disabled — a disabled field that still accepts
-      //a tap (and still shows a text caret) is a bug, not a style. `cursor-text`
-      //when enabled is only a cursor, so it stays base and a consumer can change it.
+      //LOCKED when disabled: {@link PRESS_TARGET_DISABLED_LOCKED_CLASS}, so a
+      //`className` cannot make an inert field selectable or strand its gesture.
+      //`cursor-text` when enabled is only a cursor, so it stays base and a consumer
+      //can change it.
       className={mergeStyles({
         base: [
           INPUT_GROUP_LAYOUT_CLASS,
@@ -367,10 +340,6 @@ function InputGroup({
 }
 
 InputGroup.displayName = "InputGroup"
-
-/* =============================================================================
- * INPUT FIELD
- * ============================================================================= */
 
 const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
   function InputField(
@@ -445,10 +414,6 @@ function dispatchFieldValueEvents(field: HTMLInputElement) {
   field.dispatchEvent(new Event("change", { bubbles: true }))
 }
 
-/* =============================================================================
- * ROOT
- * ============================================================================= */
-
 /**
  * Text field: bare `<input>` when alone; labeled flex group when
  * {@link Input.Leading} / {@link Input.Trailing} children exist. Slot children
@@ -474,13 +439,15 @@ function dispatchFieldValueEvents(field: HTMLInputElement) {
  * - `ref.current.focus()` — focuses the underlying input.
  * - `ref.current.clear()` — clears the native `<input>` and dispatches `input`/`change`.
  *
- * **Baseline styles**: neutral gray surface with a **transparent 1px border**, so
- * a `focus-within:border-primary` or an invalid-state border costs no layout —
- * under `box-sizing: border-box` a border that appears later eats the content box
- * and the text jumps. It is `base`, so `border-0` still wins. Bare fields use
- * native inline-block width (~20 characters via default `size={20}`). Pass
- * `w-full` or another width utility when the field should fill its parent. Border
- * colours and focus rings belong in Tier 2 `className`.
+ * **Baseline styles**: neutral gray surface, and deliberately **no pre-allocated
+ * border**. Under `box-sizing: border-box` a border that appears later eats the content
+ * box and the text jumps, so a `focus-within:` or invalid-state ring belongs on
+ * `outline`, which never participates in layout at any width — reserving a transparent
+ * 1px border instead only cancels the shift for a border of exactly 1px (see the ⚠︎ note
+ * on `BUTTON_ROOT_SURFACE_CLASS` in button.tsx). Bare fields use native inline-block
+ * width (~20 characters via default `size={20}`). Pass `w-full` or another width utility
+ * when the field should fill its parent. Border colours and focus rings belong in Tier 2
+ * `className`.
  *
  * @example
  * ```tsx
@@ -589,10 +556,6 @@ const InputRoot = forwardRef<InputHandle, InputProps>(function Input(
 })
 
 InputRoot.displayName = "Input"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const InputCompound = Object.assign(InputRoot, {
   Leading: InputLeading,

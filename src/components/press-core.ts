@@ -5,12 +5,12 @@
  * on it, and the reason it is a module rather than two copies of four lines:
  *
  * - **The locked interaction class is a correctness decision, not styling.**
- *   The `touch-action: pan-x pan-y pinch-zoom` longhand keeps `pointercancel` alive on
- *   iOS (WebKit 240917) — without it the engine never learns a scroll took over and
- *   strands its state machine. A disabled target flips to `touch-none` so it cannot be
- *   tapped no matter what `className` says. Two components deciding that separately is
- *   how one of them drifts. The CURSOR that goes with each is a separate constant, in
- *   the base tier, so it stays the consumer's to change.
+ *   Live and disabled targets carry the SAME touch pass-through: see
+ *   {@link TOUCH_PASSTHROUGH_CLASS} for why no `className` may defeat it, and
+ *   {@link PRESS_TARGET_DISABLED_LOCKED_CLASS} for why a disabled one is not
+ *   `touch-none`. Two components deciding that separately is how one of them drifts.
+ *   The CURSOR that goes with each is a separate constant, in the base tier, so it
+ *   stays the consumer's to change.
  * - **Activation is the engine's, never the browser's.** The engine swallows the
  *   trailing native click, so a press target's callback is `onPress` and a stray
  *   `onClick` on the same node would silently never fire. Handing back the whole

@@ -10,15 +10,14 @@ import { PORTS } from "./ports"
  * nothing and keeps the committed port.
  *
  * This used to have to move in lockstep with `supervisorPort`, because overriding
- * only the app port still died on `EADDRINUSE` from the Cloudflare inspector. That
- * plugin is gone from this config — adaptv wires the server build now — so the
- * frontend holds one port again. `PORTS.supervisorPort` stays for the backend,
- * which is still its own worker.
+ * only the app port still died on `EADDRINUSE` from a second plugin's inspector.
+ * That plugin is gone from this config — adaptv wires the server build now — so the
+ * frontend holds one port again. `supervisorPort` stays reserved so `runDev` frees
+ * the whole block and the e2e harness has a second port to move.
  */
 const appPort = Number(process.env.VITE_APP_PORT ?? PORTS.appPort)
 
 export default defineConfig({
-  envDir: "env",
   server: {
     host: "0.0.0.0",
     port: appPort,
@@ -37,7 +36,7 @@ export default defineConfig({
   plugins: [
     //NO deploy plugin. adaptv wires the server build itself, and the target is
     //auto-detected from the platform (or set with NITRO_PRESET) — so this file
-    //never names a host. → DECISIONS.md §6.4
+    //never names a host. → docs/decisions/rendering-and-delivery.md §2
     //
     //adaptv owns route tree, entries, router, the web manifest, and
     //the service worker — all driven by adaptv.config.ts, the single source of truth

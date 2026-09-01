@@ -52,8 +52,9 @@ function isProtectedTarget(target: EventTarget | null): boolean {
  * (those control selection, the callout menu, and pan/zoom), so no CSS turns it
  * off. This is WebKit bug 231161. The loupe is armed by the SECOND `touchstart`
  * of a double-tap, so the only thing that stops it is a non-passive `touchstart`
- * listener that `preventDefault()`s exactly that second tap. Wired always-on into
- * {@link RoutingShell} as part of the native-feeling shell.
+ * listener that `preventDefault()`s exactly that second tap. Wired into
+ * {@link RoutingShell} as part of the native-feeling shell — on by default, opt out
+ * per app with `patches.textMagnifier: false`.
  *
  * ## Why this shape (and not a time-only heuristic)
  *

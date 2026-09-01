@@ -15,7 +15,7 @@ import {
  * that produces it (`aspect-ratio` in the root's inline style, which `mergeStyles`
  * puts in the `lockedStyle` tier) rather than as a measured rect. The pixel-level
  * "the rect is identical before and after load" assertion needs a real engine and
- * belongs on the playground — flagged in IMAGE-COMPONENT.md §10.2.
+ * belongs on the playground — flagged in docs/design/image.md §10.2.
  */
 
 //happy-dom reports every <img> as `complete` with `naturalWidth: 0`, which Image

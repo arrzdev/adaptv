@@ -1,6 +1,6 @@
 /**
  * Route-tree opacity — keeping `@tanstack/*` out of the one generated file adaptv
- * does not write itself. → `ARCHITECTURE.md §3.2`, `src/vite/verify-patches.ts`
+ * does not write itself. → `docs/design/architecture.md §3.2`, `src/vite/verify-patches.ts`
  *
  * Split out of `adaptv-plugin.ts` so the repair (and the lifecycle coverage that
  * decides *when* it runs) can be tested directly — the bug it exists to prevent is
@@ -426,7 +426,7 @@ export function adaptvOpacityCheckPlugin(
       if (path.resolve(id) !== path.resolve(routeTree)) return null
       //Compare the OUTPUT rather than pre-checking for `@tanstack` — the entry-path
       //rewrite has nothing to do with TanStack specifiers, and a tree needing only
-      //that one would have been skipped by a `mentionsTanStack` guard.
+      //that one would have been skipped by a `routeTreeMentionsTanStack` guard.
       const rewritten = rewriteRouteTree(code, routerPkg, {
         routeTreePath: routeTree,
         modules,

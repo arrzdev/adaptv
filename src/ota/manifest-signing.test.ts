@@ -88,7 +88,7 @@ describe("verifying a manifest's own signature", () => {
   it("refuses a replayed older bundle wearing a fresh timestamp", async () => {
     //The attack this exists for. The zip is genuine and its native signature
     //verifies perfectly; only `createdAt` was rewritten, and only this check sees
-    //it. → `LIFECYCLE.md §5.4d`
+    //it. → `docs/design/ota.md §5.4d`
     const signed = sign(base)
     expect(
       await verifyManifestSignature({

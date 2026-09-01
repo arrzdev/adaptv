@@ -85,7 +85,6 @@
  * Add them here if a real use appears — do not re-add the plugin.
  */
 
-/* ---- padding ---- */
 @utility p-safe {
   padding-top: var(--adaptv-inset-top, 0px);
   padding-right: var(--adaptv-inset-right, 0px);
@@ -185,7 +184,6 @@
   padding-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
 }
 
-/* ---- margin ---- */
 @utility m-safe {
   margin-top: var(--adaptv-inset-top, 0px);
   margin-right: var(--adaptv-inset-right, 0px);
@@ -285,7 +283,6 @@
   margin-left: max(var(--adaptv-inset-left, 0px), --spacing(--value(integer, [integer])));
 }
 
-/* ---- inset (positioning) ---- */
 @utility inset-safe {
   top: var(--adaptv-inset-top, 0px);
   right: var(--adaptv-inset-right, 0px);

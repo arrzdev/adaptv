@@ -1,10 +1,6 @@
 import type { ComponentPropsWithRef } from "react"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /** Which safe-area edge(s) to pad. Resolves to 0 in a browser tab, the real inset in standalone/native. */
 type SafeEdges = "top" | "bottom" | "x" | "y" | "all"
 
@@ -36,10 +32,6 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
   /** Pad the given safe-area edge(s). Wins over `className` (structural). */
   safe?: SafeEdges
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * The base box primitive — a flex container (RN parity: **column by default**) that

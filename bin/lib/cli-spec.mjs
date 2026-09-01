@@ -5,7 +5,7 @@
 // they had already drifted: the header comment omitted `gen icons` entirely (all seven of its
 // flags), `--margin`/`--padding`/`--background` appeared in the help prose but not its usage
 // line, and `-o` was documented nowhere. That is the same "one idea, several implementations"
-// failure the whole of `docs/CLI-UX.md` was written to stop, sitting in the one part of the CLI
+// failure the whole of `docs/design/cli-contract.md` was written to stop, sitting in the one part of the CLI
 // the doc never covered.
 //
 // So: one description, and everything else derived from it. The parser is built from it
@@ -16,10 +16,6 @@
 // DATA ONLY. Nothing here imports commander, imports the renderer, or prints. That is what
 // makes it safe for the help renderer and the parser to both depend on it without depending on
 // each other.
-
-/* =============================================================================
- * flags
- * ============================================================================= */
 
 /**
  * A flag.
@@ -128,10 +124,6 @@ const image = (long, describe) => ({
   group: "advanced",
   describe,
 })
-
-/* =============================================================================
- * commands
- * ============================================================================= */
 
 const SURFACES = ["web", "ios", "android", "all"]
 

@@ -13,7 +13,7 @@
 //
 //## Why this is a memoised async read and not exported constants
 //
-//CAPABILITY-SURFACE §3.4 records Expo's rule — constants for what cannot change
+//`docs/research/capability-surface.md` §3.4 records Expo's rule — constants for what cannot change
 //during the process lifetime, functions for what can — and `expo-device` ships
 //`Device.modelName` as a plain constant. adaptv cannot: Capacitor's bridge has
 //no synchronous path, so the value simply does not exist at module-evaluation
@@ -41,7 +41,7 @@ export type DeviceInfo = {
   os: PlatformOS
   /** `"18.4"`, `"14"`. `null` on desktop and anywhere the UA has no version. */
   osVersion: string | null
-  /** `"iPhone15,2"`, `"Pixel 8"`. `null` on web — no browser reports it. */
+  /** `"iPhone15,2"`, `"Pixel 8"`. On web only Android Chromium reports it (a high-entropy UA hint); `null` everywhere else. */
   model: string | null
   /** `"Apple"`, `"Google"`. `null` on web. */
   manufacturer: string | null

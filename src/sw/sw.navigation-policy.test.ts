@@ -6,7 +6,7 @@ import {
 } from "#adaptv/sw/sw.navigation-policy"
 
 describe("resolveNavigationPolicy — a pure function of render mode", () => {
-  //RENDERING §3.1. The whole point of making this a *function* is that the SW
+  //`docs/design/rendering.md` §3.1. The whole point of making this a *function* is that the SW
   //never guesses: the same config that produced the build decides how navigation
   //is served, so the two can't drift.
   it("serves SSR from the network, with the shell only as a fallback", () => {

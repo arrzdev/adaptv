@@ -25,10 +25,6 @@ import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Imperative API for {@link Switch}. Attach with `ref`.
  *
@@ -103,10 +99,6 @@ export interface SwitchThumbProps {
   className?: string
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED: `relative` is the positioning context the thumb's `absolute` + computed
 //`left` are measured against — drop it and the thumb flies to the nearest
 //positioned ancestor, usually the page.
@@ -129,10 +121,6 @@ const SWITCH_INPUT_CHROMELESS_CLASS = "peer sr-only"
 const SWITCH_THUMB_LOCKED_LAYOUT_CLASS =
   "pointer-events-none absolute top-1/2 -translate-y-1/2 shrink-0"
 const SWITCH_THUMB_SURFACE_CLASS = "bg-gray-950"
-
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
 
 const SwitchContext = createContext<SwitchContextValue | null>(null)
 
@@ -193,10 +181,6 @@ function switchThumbStyle(
   }
 }
 
-/* =============================================================================
- * CHILDREN PARTITIONING
- * ============================================================================= */
-
 function isSwitchThumbElement(
   child: ReactNode,
 ): child is ReactElement<SwitchThumbProps> {
@@ -225,10 +209,6 @@ function resolveSwitchThumbChild(children: ReactNode): ReactNode {
 
   return thumb ?? <SwitchThumb />
 }
-
-/* =============================================================================
- * SWITCH THUMB
- * ============================================================================= */
 
 /**
  * Thumb pill inside the track. Rendered by default; replace with
@@ -371,8 +351,10 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
         //`left` is computed from this exact track width, so an inline `width` from
         //the consumer resizes the track and leaves the thumb parked at the old
         //offset. `size={n}` is the supported way to change it, and it moves both.
-        //`clickable` / `non-clickable` are locked for the press-core reason
-        //(WebKit 240917 + a disabled control must stay untappable).
+        //The interaction class is locked for the press-core reason (WebKit 240917) —
+        //see {@link PRESS_TARGET_LOCKED_CLASS}, and
+        //{@link PRESS_TARGET_DISABLED_LOCKED_CLASS} for why a disabled track keeps the
+        //same touch pass-through rather than going `touch-none`.
         {...mergeStyles({
           base: [
             SWITCH_TRACK_BASE_LAYOUT_CLASS,
@@ -422,10 +404,6 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
 })
 
 Switch.displayName = "Switch"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const SwitchCompound = Object.assign(Switch, { Thumb: SwitchThumb })
 

@@ -17,7 +17,7 @@ const opts = {
 }
 
 describe("renderAppShell — user-agnostic by construction", () => {
-  //RENDERING §3.1.2: the shell must be GENERATED, never captured from a
+  //`docs/design/rendering.md` §3.1.2: the shell must be GENERATED, never captured from a
   //response. A captured document is whatever the server rendered for whoever
   //triggered the build — user-specific by construction, and it would be cached
   //and served to everyone. Generating it makes the property structural rather
@@ -93,7 +93,7 @@ describe("renderAppShell — the boot error fallback", () => {
   }
 
   it("embeds the prerendered screen, hidden", () => {
-    //RENDERING §3.1.3: the one screen that has to survive its own build being
+    //`docs/design/rendering.md` §3.1.3: the one screen that has to survive its own build being
     //broken, so it ships as markup rather than as anything the bundle produces
     const html = renderAppShell(withFallback)
     expect(html).toContain(FALLBACK)

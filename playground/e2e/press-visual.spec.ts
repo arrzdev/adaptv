@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test"
  * every scroll that happened to begin on a control flashed it for the frames before
  * the browser fired `pointercancel`. The engine now DEFERS the visual past that
  * window (100ms) and floors it once shown (150ms) — Ionic's `tap-click` pair, see
- * PRIOR-ART.md §6.
+ * docs/decisions/prior-art.md §6.
  *
  * The unit tests pin the timers deterministically. What they CANNOT show is whether
  * the browser cancels the pointer inside that window, because synthetic events never

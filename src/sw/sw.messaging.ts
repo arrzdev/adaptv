@@ -6,7 +6,7 @@ import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
  * The worker ⇄ app channel, for modules listed in `serviceWorkers: []`.
  *
  * This exists instead of an "update prompt" API, and the distinction is the whole
- * point. adaptv's own update is invisible and needs no UI (`RENDERING.md §3.4`).
+ * point. adaptv's own update is invisible and needs no UI (`docs/design/rendering.md §3.4`).
  * What an app's worker actually needs is to *tell the app something* — a push
  * arrived, a background sync finished — and then let React decide what to render,
  * with the app's design system, theme and safe areas. Mechanisms at the JS layer;

@@ -7,7 +7,7 @@ import { namesPlumbing } from "./opacity.mjs"
  * The opacity boundary, enforced on the only path that ever crossed it.
  *
  * A consumer writes `adaptv.config.ts` and imports from `@arrzdev/adaptv`. They are never told
- * that TanStack Router, TanStack Start or Capacitor are underneath (CLI-UX R8, DECISIONS L20).
+ * that TanStack Router, TanStack Start or Capacitor are underneath (`docs/design/cli-contract.md` R8, `docs/decisions/register.md` L20).
  * That held for as long as failures were worded by hand, and broke the moment one was taught
  * to lift the real cause out of captured tool output onto the `✖` line: the real cause was
  * `Cannot find module 'tanstack-start-injected-head-scripts:v'`, and it shipped.

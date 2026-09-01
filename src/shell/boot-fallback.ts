@@ -1,15 +1,15 @@
 /**
  * The boot fallback — the app's error screen, **without any JavaScript of its own**.
- * → `RENDERING.md §3.1.3`, `DECISIONS.md B31`
+ * → `docs/design/rendering.md §3.1.3`, `docs/decisions/register.md B31`
  *
  * ## The failure the React boundary cannot reach
  *
  * Runtime errors are the app's own to catch — a route that throws, a failed fetch,
  * a bad render. adaptv installs no boundary for those, deliberately, because doing
  * so would take that handling away from the app. This exists for the one failure
- * the app never got to have an opinion about: the bundle that never executes at all — a syntax error, a 404
- * on the entry chunk, a corrupt OTA bundle. React never runs, so nothing written
- * in React can render, and the WebView paints blank.
+ * the app never got to have an opinion about: the bundle that never executes at
+ * all — a syntax error, a 404 on the entry chunk, a corrupt OTA bundle. React
+ * never runs, so nothing written in React can render, and the WebView paints blank.
  *
  * ## Why a sandbox does not solve it, and what does
  *
@@ -48,9 +48,8 @@ export const BOOT_RETRY_ATTR = "data-adaptv-boot-retry"
  * The code reaches the component as a **prop**, which is the only shape that lets
  * an app branch on it in JSX. Static markup cannot be handed a prop at reveal
  * time, so the component is rendered once per code at build time and the watchdog
- * reveals the matching copy. When a component ignores `code` — as adaptv's default
- * deliberately does — every render is identical and collapses back to one copy,
- * so the mechanism costs nothing to anyone who does not use it.
+ * reveals the matching copy. Identical renders cost nothing — see
+ * {@link getBootFallbackMarkup}.
  */
 export const BOOT_CODE_ATTR = "data-adaptv-boot-code"
 
@@ -205,7 +204,7 @@ export function getBootFallbackMarkup(
  * handlers — so something has to wire the only action on the screen. Requiring an
  * opt-in attribute would have made a forgotten spread produce a **dead button** at
  * the exact moment a reload is the only way out: a silent failure, which is the
- * one kind this codebase refuses to ship (`DECISIONS.md` L7).
+ * one kind this codebase refuses to ship (`docs/decisions/register.md` L7).
  *
  * It is also unnecessary, because in a document where no app JavaScript is running
  * a `<button>` **has no other thing it could possibly do**. Anchors still navigate
@@ -215,46 +214,44 @@ export function getBootFallbackMarkup(
  * {@link BOOT_RETRY_ATTR} remains as the precision tool: mark one control and only
  * that one reloads, which is what a screen with a second button wants.
  *
- * ## 🔴 …but on native, reloading is not enough — it re-runs the broken bundle
+ * ## 🔴 On native, retry resets to the built-in bundle — a reload is not enough
  *
- * Under OTA the running bundle is not the one inside the binary; it is one the
- * app downloaded, selected by a pointer the native bridge reads **at launch**.
- * `location.reload()` does not revisit that pointer. So on a corrupt OTA bundle
- * the honest-looking retry is an infinite loop: fallback → tap → same broken
- * bundle → fallback. The automatic rollback may already have chosen a target and
- * it stays inert, because only a real cold start applies it. The user's only way
- * out is to kill the app, and nothing on screen says so.
+ * When the native bridge is reachable, retry drops to the **built-in** bundle and
+ * asks the plugin to apply it, which it can do without a cold start because its
+ * own `reload()` re-reads the bundle pointer. `location.reload()` does not: under
+ * OTA the running bundle is one the app downloaded, selected by a pointer the
+ * bridge reads **at launch**, so on a corrupt bundle a plain reload is an infinite
+ * loop — fallback → tap → same broken bundle → fallback. The automatic rollback
+ * may already have chosen a target and stays inert, because only a real cold start
+ * applies it. The user's only way out would be to kill the app, and nothing on
+ * screen says so.
  *
- * So when the native bridge is reachable, retry drops to the **built-in** bundle
- * and asks the plugin to apply it — which it can do without a cold start, since
- * its own `reload()` re-reads the pointer. The built-in bundle can be old; that
- * is fine and deliberate. This is a user-initiated escape from an app that does
- * not start, so "working" beats "current", and the normal update cycle carries
- * them forward again on the next launch.
+ * The built-in bundle can be old; that is deliberate. This is a user-initiated
+ * escape from an app that does not start, so "working" beats "current", and the
+ * normal update cycle carries them forward again on the next launch.
  *
- * The bridge is reachable here because it is injected **natively**, as a
- * document-start script on the app's own origin — the same property
- * `bin/lib/offline-page.mjs` relies on to reach `CapacitorHttp` from a page that
- * is not part of the bundle. It is feature-detected rather than assumed: that
- * file also documents an origin-scoping case where the bridge is absent, and on
- * web and PWA there is no bridge at all. Every one of those falls back to a plain
- * reload, which is exactly right there — nothing else is holding a stale pointer.
+ * Feature-detected, never assumed. The bridge is reachable here only because it is
+ * injected **natively**, as a document-start script on the app's own origin — the
+ * same property `bin/lib/offline-page.mjs` relies on to reach `CapacitorHttp` from
+ * a page that is not part of the bundle. That file also documents an origin-scoping
+ * case where the bridge is absent, and on web and PWA there is no bridge at all.
+ * Every one of those falls back to a plain reload, which is exactly right there —
+ * nothing else is holding a stale pointer.
  *
- * ## 🔴 Revealing the screen is not the same as showing it
+ * ## 🔴 `unsplash` is part of the reveal, not a nicety
  *
  * On native the launch splash is a **native view over the WebView**, held open on
  * purpose (`launchAutoHide: false`) so there is no flash between the OS splash and
  * the app's own. The only thing that hides it is `hideNativeSplash()`, called from
  * the shell once React has painted — which is exactly the code that did not run.
+ * Without this, every path here reveals a screen nobody can see.
  *
- * So every path here revealed a screen nobody could see. Measured on a simulator:
- * a bundle whose entry threw sat under an opaque splash for the full grace period
- * and past it, and the only visible outcome was the update watchdog reverting
- * fifteen seconds later. The document was right, the user was looking at a blank
- * colour.
+ * Measured on a simulator: a bundle whose entry threw sat under an opaque splash
+ * for the full grace period and past it, and the only visible outcome was the
+ * update watchdog reverting fifteen seconds later. The document was right, the user
+ * was looking at a blank colour.
  *
- * `unsplash` is therefore part of the reveal, not a nicety, and it is
- * feature-detected the same way the rest of the bridge use here is: on web and PWA
+ * Feature-detected the same way the rest of the bridge use here is: on web and PWA
  * there is no `Capacitor` at all, and there the WebView is all there ever was.
  *
  * ## The first signal wins
@@ -287,7 +284,12 @@ function stamp(){
 var L=live();if(!L||typeof L.getCurrentBundle!=="function")return;
 var p;try{p=L.getCurrentBundle()}catch(e){return}
 if(!p||typeof p.then!=="function")return;
-p.then(function(r){document.documentElement.setAttribute(BN,(r&&r.bundleId)||EB)},function(){})}
+//Only while the screen it describes is still up. The bridge answers on its own
+//schedule and a late mount can win that race, so without this guard the tag lands
+//on a document that RECOVERED, with no code attribute beside it — naming a failure
+//every later reader believes and nobody can see.
+p.then(function(r){if(!document.documentElement.hasAttribute(BF))return;
+document.documentElement.setAttribute(BN,(r&&r.bundleId)||EB)},function(){})}
 function show(c){var b=box();if(!b||booted()||!b.hasAttribute("hidden"))return;
 var v=b.querySelectorAll("["+CD+"]"),m=null;
 for(var i=0;i<v.length;i++){if(v[i].getAttribute(CD)===c)m=v[i];else v[i].setAttribute("hidden","")}

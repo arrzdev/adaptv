@@ -51,7 +51,7 @@ test.describe("registration", () => {
     //document in there is served to whoever asks next. The glob deliberately has
     //no `html` in it and the shell is added BY NAME; this asserts that property
     //of the shipped manifest rather than trusting the glob to stay that way.
-    //→ DECISIONS.md B5/B25, RENDERING.md §3.2
+    //→ docs/decisions/register.md B5/B25, docs/design/rendering.md §3.2
     const documents = state.precached
       .map((url) => new URL(url).pathname)
       .filter((pathname) => pathname.endsWith(".html"))

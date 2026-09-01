@@ -26,10 +26,6 @@ import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Imperative API for {@link Checkbox}. Attach with `ref`.
  *
@@ -116,10 +112,6 @@ export interface CheckboxIconProps {
   children?: ReactNode
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 const CHECKBOX_ROOT_LAYOUT_CLASS =
   "relative inline-flex shrink-0 items-center justify-center"
 //LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
@@ -140,10 +132,6 @@ const CHECKBOX_BOX_SURFACE_CLASS = "bg-gray-50"
 //LOCKED: the mark sits over the box; if it took pointer events it would swallow the
 //tap the label's gesture engine is waiting for and the checkbox would stop toggling.
 const CHECKBOX_ICON_LOCKED_LAYOUT_CLASS = "pointer-events-none"
-
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
 
 const CheckboxContext = createContext<CheckboxContextValue | null>(null)
 
@@ -208,10 +196,6 @@ function checkboxIconMarkOpacity(
   return isChecked ? 1 : 0
 }
 
-/* =============================================================================
- * CHILDREN PARTITIONING
- * ============================================================================= */
-
 function isCheckboxBoxElement(
   child: ReactNode,
 ): child is ReactElement<CheckboxBoxProps> {
@@ -246,10 +230,6 @@ function resolveCheckboxBoxChild(children: ReactNode): ReactNode {
 
   return <CheckboxBox>{children}</CheckboxBox>
 }
-
-/* =============================================================================
- * CHECKBOX BOX
- * ============================================================================= */
 
 /**
  * Visual checkbox square. Rendered by default; replace with
@@ -296,10 +276,6 @@ function CheckboxBox({ className, style, children }: CheckboxBoxProps) {
 }
 
 CheckboxBox.displayName = "Checkbox.Box"
-
-/* =============================================================================
- * CHECKBOX ICON
- * ============================================================================= */
 
 /**
  * Checkmark (or custom mark) centered in `Checkbox.Box`. Omitted for box-only
@@ -478,9 +454,9 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
           data-adaptv="checkbox"
           htmlFor={resolvedInputId}
           //ONLY the interaction utility is locked, for the reason press-core gives:
-          //`clickable` carries the `touch-action` longhand that keeps
-          //`pointercancel` alive on iOS (WebKit 240917), and a disabled control must
-          //stay untappable whatever `className` says. The layout is deliberately
+          //{@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action` longhand that
+          //keeps `pointercancel` alive on iOS (WebKit 240917), and no `className` may
+          //defeat it. The layout is deliberately
           //BASE — nothing inside the label is positioned against it (the mark is a
           //flex child of the box, not absolute), so `inline-flex` / `shrink-0` are a
           //default, and a consumer turning this into a full-width `flex` row hit
@@ -533,10 +509,6 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
 )
 
 Checkbox.displayName = "Checkbox"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const CheckboxCompound = Object.assign(Checkbox, {
   Box: CheckboxBox,

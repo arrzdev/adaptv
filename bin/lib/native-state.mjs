@@ -89,7 +89,7 @@ export const classListChanged = (existing, merged) =>
  *
  * **`extras`** is what the dev actually caused: the registered plugins that are NOT already in
  * adaptv's set. It is the only thing the CLI may say a word about — adaptv's base set is
- * plumbing the dev never asked for (CLI-UX R8/L20) — and reporting on `plugins.length` instead
+ * plumbing the dev never asked for (`docs/design/cli-contract.md` R8/L20) — and reporting on `plugins.length` instead
  * claimed to be linking something whenever the config listed a plugin adaptv already bundles,
  * which is a line about work that did not happen.
  *

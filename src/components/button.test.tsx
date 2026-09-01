@@ -49,7 +49,7 @@ describe("Button haptic — the one surface that works on iOS web", () => {
   //needs a real finger on a real element, and iOS 26.5 killed the programmatic
   //workaround. `Button haptic=…` was already declarative at the consumer's level,
   //so it can route through the transducer overlay and keep working everywhere.
-  //@see docs/DECISIONS.md B10, src/capabilities/haptic-tick.ts
+  //@see docs/decisions/register.md B10, src/capabilities/haptic-tick.ts
   it("mounts the transducer when a haptic is requested", () => {
     forceIOSWeb()
     const { container } = render(<Button haptic="medium">Save</Button>)

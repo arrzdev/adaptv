@@ -101,7 +101,7 @@ test.describe(`update flow (render: ${RENDER})`, () => {
     //it. Waiting on that state hangs the test for 60s on a worker that is doing
     //its job. REAL iOS Safari reports `activated` here, so it is a Playwright
     //artifact and not an engine one — either way, what is asserted below is what
-    //the worker DID, which every engine agrees on. → RENDERING.md §3.7
+    //the worker DID, which every engine agrees on. → docs/design/rendering.md §3.7
 
     //Wrapped so a failure can say WHY. The four booleans below establish that the
     //update did not take; none of them says which half stalled, and this is the

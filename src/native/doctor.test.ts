@@ -37,7 +37,11 @@ describe("runDoctor — WKAppBoundDomains (B22)", () => {
       capacitorConfig: "{}",
     })
     expect(d?.detail).toContain("silently")
-    expect(d?.detail).toContain("getPlatform")
+    //`isNativePlatform()`, not the bridge's own `getPlatform()`: it is adaptv's answer to
+    //the same question, exported to consumers from `@arrzdev/adaptv/utils`, and it degrades
+    //identically here because it wraps the bridge. Naming a symbol the dev cannot import
+    //from adaptv would send them somewhere adaptv does not go.
+    expect(d?.detail).toContain("isNativePlatform()")
   })
 })
 
@@ -107,5 +111,37 @@ describe("runDoctor — ordering and output", () => {
       runDoctor({ androidBuildGradle: "targetSdk = 34" }),
     )
     expect(output).toContain("fix:")
+  })
+})
+
+describe("what a diagnostic is allowed to say (R8)", () => {
+  //`doctor` output is a surface the dev reads, so the opacity rule governs it: the
+  //message names the mechanism, never whose code implements it. The scan itself lives in
+  //`bin/lib/opacity.test.mjs`, beside the one guarding the manifest, because it needs the
+  //repo's own `namesPlumbing` and a TS test cannot import an untyped `.mjs`. What stays
+  //here is the other half: that satisfying the rule did not cost the diagnosis.
+  const everyDiagnostic = runDoctor({
+    iosInfoPlist: "<key>WKAppBoundDomains</key><array/>",
+    capacitorConfig: "{}",
+    androidBuildGradle: "targetSdk = 34",
+    hasPrivacyManifest: false,
+  })
+
+  it("fires every check, so the scan below is not vacuous", () => {
+    expect(everyDiagnostic).toHaveLength(3)
+  })
+
+  it("still names the mechanism and adaptv's own platform answer", () => {
+    //The reason this is not a find-and-replace: strip the mechanism to satisfy the rule
+    //above and the worst failure the native surface can report stops diagnosing anything.
+    const [appBound] = everyDiagnostic
+    expect(appBound?.detail).toContain("WKUserScript")
+    expect(appBound?.detail).toContain("isNativePlatform()")
+  })
+
+  it("uses no em dash, which the house copy rules ban", () => {
+    for (const d of everyDiagnostic) {
+      expect(`${d.title} ${d.detail} ${d.fix}`).not.toContain("\u2014")
+    }
   })
 })

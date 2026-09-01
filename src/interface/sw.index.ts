@@ -1,5 +1,5 @@
 //The toolkit for an app's OWN service-worker modules — the files listed in
-//`serviceWorkers: []`. → `AdaptvAppConfig.serviceWorkers`, `RENDERING.md §3`
+//`serviceWorkers: []`. → `AdaptvAppConfig.serviceWorkers`, `docs/design/rendering.md §3`
 //
 //Note what is NOT here, and why: `setupPrecache`, `registerNavigationRoute`,
 //`registerStaticAssetsRoute` and `registerServiceWorkerLifecycle` are the worker

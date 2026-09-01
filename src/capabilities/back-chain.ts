@@ -1,5 +1,5 @@
 /**
- * The back-handler chain. → `COORDINATION.md §2`
+ * The back-handler chain. → `docs/design/coordination.md §2`
  *
  * ## The problem
  *

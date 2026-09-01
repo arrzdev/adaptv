@@ -8,9 +8,9 @@ import { PORTS } from "@/ports"
 // a second, subtly different way to start the app (adaptv also stamps the generated files and
 // resolves the toolchain env) and the two would drift.
 //
-// Only the app is started here — the API is its own turbo task, so each gets its own pane and
-// neither writes over the other. (An earlier version started the backend as a side process,
-// which meant its startup banner landed in the middle of adaptv's redrawn status line.)
+// Only the app is started here. This app is frontend-only — there is no API, no env gate and
+// no side process; runDev is here for the port clearing, which is what makes hopping worktrees
+// free (docs/DEVELOPMENT.md).
 //
 // adaptv's dev command is interactive: it redraws a live status line and reads raw keys
 // (`r` reload, `b` rebuild, ctrl-c stop). Those work under turbo's TUI via
@@ -30,9 +30,6 @@ const target = arg as NativeTarget | undefined
 
 runDev({
   ports: Object.values(PORTS),
-  // fatal env gate: the same `check:env` the `pnpm dev` prefix used to run,
-  // folded in so `tsx scripts/dev.ts` alone validates env before starting.
-  preflight: [{ command: "tsx", args: ["env/check-env.ts"] }],
   // `--latest` reuses the device picked last time so a pane never blocks on the interactive
   // picker. Run `pnpm exec adaptv dev <target>` directly to choose a different device.
   command: "adaptv",

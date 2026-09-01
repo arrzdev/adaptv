@@ -200,7 +200,7 @@ describe("clipboard — a binary that predates the plugin", () => {
     //The OTA skew: this bundle was built after `@capacitor/clipboard` was added,
     //the binary under it was not. An Android WebView on a secure origin has a
     //real `navigator.clipboard`, so the copy must reach IT rather than reporting
-    //"unsupported" and losing a working feature. → LIFECYCLE.md §5.6
+    //"unsupported" and losing a working feature. → docs/design/ota.md §5.6
     forceNativeBinary([])
     const writeText = vi.fn(() => Promise.resolve())
     stubNavigatorProp("clipboard", { writeText })

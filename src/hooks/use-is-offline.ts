@@ -7,7 +7,7 @@ import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
  * One of exactly **two** obligations adaptv takes on for the offline story — the
  * other is shipping an `Offline` component. adaptv owns connectivity *truth*; it
  * never decides when to render offline UI, because that depends on a data layer
- * adaptv deliberately does not assume. → `RENDERING.md §3.1.1`
+ * adaptv deliberately does not assume. → `docs/design/rendering.md §3.1.1`
  *
  * Backed by the accessor pair, so it is accurate on every target:
  * `@capacitor/network` on native, `navigator.onLine` + `online`/`offline` events
@@ -21,7 +21,7 @@ import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
  *   user cannot tell the difference and does not care.
  *
  * The better question is *"do I have anything to show?"*, however the app's data
- * layer expresses it. `COOKBOOK.md §1` has the worked example — with TanStack
+ * layer expresses it. `docs/guides/cookbook.md §1` has the worked example — with TanStack
  * Query, `fetchStatus === "paused"` is a far more precise signal, and it recovers
  * automatically on reconnect.
  *

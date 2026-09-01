@@ -28,10 +28,6 @@ import {
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export type DrawerRootHandle = {
   readonly open: boolean
   show: () => void
@@ -168,7 +164,7 @@ const DRAWER_PANEL_LOCKED_CLASS =
 //It buys no new containing block for fixed/absolute descendants: the engine writes
 //`translate3d(...)` here from mount onwards and any non-`none` transform already makes this
 //element one (css-transforms-2 §8), so the hint only declares what the panel is about to do.
-//Static and component-scoped — the form PERFORMANCE-BOOST.md §5 permits, and the one
+//Static and component-scoped — the form docs/design/performance-boost.md §5 permits, and the one
 //`will-change` vaul's whole stylesheet carries.
 const DRAWER_PANEL_BASE_CLASS =
   "rounded-t-xl bg-white shadow-lg outline-none will-change-transform"
@@ -211,10 +207,6 @@ function drawerEdgeFadeMask(
 }
 const DRAWER_SHELL_LAYOUT_CLASS = "flex flex-col"
 const DRAWER_ROOT_LAYOUT_CLASS = "contents"
-
-/* =============================================================================
- * HELPER FUNCTIONS
- * ============================================================================= */
 
 function partitionDrawerChildren(children: ReactNode) {
   let handle: ReactNode = null
@@ -267,10 +259,6 @@ function activeBlur() {
     activeEl.blur()
   }
 }
-
-/* =============================================================================
- * CONTEXTS
- * ============================================================================= */
 
 const DrawerScopeContext = createContext(0)
 const DrawerContext = createContext<DrawerContextValue | null>(null)
@@ -715,10 +703,6 @@ function DrawerDescription({
 }
 DrawerDescription.displayName = "Drawer.Description"
 
-/* =============================================================================
- * CORE CONTEXT ENGINE
- * ============================================================================= */
-
 type DrawerTreeProps = DrawerRootProps & {
   nested: boolean
   rootRef?: RefObject<HTMLDivElement | null>
@@ -845,10 +829,6 @@ function DrawerTree({
     </DrawerScopeContext.Provider>
   )
 }
-
-/* =============================================================================
- * EXPORTS EXPOSURE
- * ============================================================================= */
 
 const DrawerRoot = forwardRef<DrawerRootHandle, DrawerRootProps>(
   function DrawerRoot({ children, ...props }, ref) {

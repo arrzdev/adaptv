@@ -7,9 +7,9 @@
  * no server at all — the app is a folder of files on the device. The failure lands
  * at the end of the pipeline, on a device, long after the code was written.
  *
- * So the rule is not documentation. It is a build failure. → `RENDERING.md §2` (L3)
+ * So the rule is not documentation. It is a build failure. → `docs/design/rendering.md §2` (L3)
  *
- * ## Layering (`FACADE.md §2.2`, §2.6b)
+ * ## Layering (`docs/decisions/facade-and-opacity.md §2.2`, §2.6b)
  *
  * This module is the **backstop**, not the primary surface. A bundler error gives
  * no editor squiggles — there is no LSP in the picture, and a file the running page
@@ -102,7 +102,7 @@ export function describeServerApiBan(
     `fail on iOS and Android.\n` +
     `Move the logic to your API and call it over the network, or use a route ` +
     `\`loader\`, which is isomorphic and fully supported.\n` +
-    `See docs/RENDERING.md §2.`
+    `See docs/design/rendering.md §2.`
   )
 }
 
@@ -131,7 +131,7 @@ function stripNonCode(code: string): string {
  *
  * `createServerFileRoute` **does not exist** in the pinned
  * `@tanstack/react-start@1.167.13` — that API generation replaced it with a
- * `server` property on `createFileRoute`'s options object. (`RENDERING.md §2` still
+ * `server` property on `createFileRoute`'s options object. (`docs/design/rendering.md §2` still
  * lists the old symbol and is stale on this point.)
  *
  * A config-object property is not an importable symbol, so *no* import-restriction
@@ -187,10 +187,6 @@ export function findServerRouteHandlers(code: string): number | null {
   return null
 }
 
-/* ============================================================================
- * The plugin
- * ========================================================================== */
-
 /**
  * The unbypassable backstop. Baked into the array `adaptv()` returns, so it is not
  * a devDependency a consumer opts into — it is inside the framework's own plugin.
@@ -228,7 +224,7 @@ export function adaptvBanServerApisPlugin(): Plugin {
             "It needs a server to run, and a Capacitor build has none.\n" +
             "Move the handler to your API and call it over the network, or use the " +
             "route's `loader`, which is isomorphic and fully supported.\n" +
-            "See docs/RENDERING.md §2.",
+            "See docs/design/rendering.md §2.",
           id,
         },
         at,

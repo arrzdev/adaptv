@@ -11,7 +11,7 @@ import {
 const APP = "/app"
 
 describe("resolveGeneratedPaths — everything generated lives in one hidden dir", () => {
-  //ARCHITECTURE §3.2. Today these land in the app's own src tree
+  //`docs/design/architecture.md` §3.2. Today these land in the app's own src tree
   //(`src/router.gen.tsx`, `src/routing/layouts/__root.gen.tsx`), so the consumer
   //sees framework artifacts sitting next to their code and has to gitignore each
   //one. One hidden dir, treated like `dist/`.

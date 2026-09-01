@@ -9,7 +9,8 @@ export type GestureState =
   | "outside"
   //a long-press was recognized; the hold/drag now owns the gesture
   | "longpress"
-  //a hard cancel (scroll-steal, capture loss, disabled mid-press) — never fires
+  //a hard cancel (scroll-steal, capture loss, disabled mid-press) — the state IS
+  //notified, but `onPressUp` never fires and any trailing click is swallowed
   | "cancelled"
 export type GestureEvent = React.PointerEvent | React.KeyboardEvent
 

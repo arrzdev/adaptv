@@ -27,10 +27,6 @@ import { PRESS_TARGET_DISABLED_LOCKED_CLASS } from "#adaptv/components/press-cor
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * Imperative API for {@link TextArea}. Attach with `ref`.
  *
@@ -135,10 +131,6 @@ export type TextAreaContextValue = {
   errorId: string | undefined
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED: the shell layout is chosen by the `autoResize` PROP — `box-border` is what
 //makes the auto-resize measurement agree with the painted height, and the fill
 //variant's `flex h-full min-h-0 flex-col` is the whole of how a fixed-height field
@@ -163,7 +155,7 @@ const TEXT_AREA_INNER_CHROMELESS_CLASS =
   "border-none bg-transparent p-0 shadow-none text-inherit outline-none ring-0"
 const TEXT_AREA_INNER_FILL_CLASS = "min-h-0 w-full flex-1"
 //no layer-promotion hint here on purpose: `hardware-boosted` was deleted with the
-//gpu-boost mechanism (PERFORMANCE-BOOST.md). A scroller is already composited on
+//gpu-boost mechanism (docs/design/performance-boost.md). A scroller is already composited on
 //every target — Chromium grants it `kOverflowScrolling` on its own merits, and WebKit
 //has accelerated all `overflow: scroll` since iOS 13 — so a promotion hint buys
 //nothing and costs cull-rect expansion plus a containing block for fixed descendants.
@@ -172,10 +164,6 @@ const TEXT_AREA_FIELDSET_LAYOUT_CLASS =
   "flex w-full min-w-0 flex-col gap-2 border-0 p-0 m-0"
 
 const TEXT_AREA_FIELD_CLASS_PREFIXES = ["placeholder:", "caret:"] as const
-
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
 
 const TextAreaContext = createContext<TextAreaContextValue | null>(null)
 
@@ -196,10 +184,6 @@ export function useTextArea(): TextAreaContextValue {
 function useTextAreaContext(): TextAreaContextValue {
   return useTextArea()
 }
-
-/* =============================================================================
- * CLASSNAME PARTITIONING
- * ============================================================================= */
 
 function isTextAreaFieldClassToken(token: string) {
   return TEXT_AREA_FIELD_CLASS_PREFIXES.some((prefix) =>
@@ -232,10 +216,6 @@ function partitionTextAreaClassName(className?: string) {
       innerTokens.length > 0 ? innerTokens.join(" ") : undefined,
   }
 }
-
-/* =============================================================================
- * CHILDREN PARTITIONING
- * ============================================================================= */
 
 function isTextAreaLabelElement(
   child: ReactNode,
@@ -820,10 +800,6 @@ function useTextAreaAutoResize({
   return { atMaxRows, notifyFieldInput, resizeTextarea: scheduleSyncField }
 }
 
-/* =============================================================================
- * TEXT AREA SHELL
- * ============================================================================= */
-
 type TextAreaShellProps = {
   /**
    * Set only when the shell IS the component root (no label/hint/error slots) — the
@@ -898,10 +874,6 @@ const TextAreaShell = forwardRef<HTMLDivElement, TextAreaShellProps>(
 
 TextAreaShell.displayName = "TextAreaShell"
 
-/* =============================================================================
- * TEXT AREA LABEL
- * ============================================================================= */
-
 /**
  * Accessible label for the field. Must be a direct child of `<TextArea>`.
  *
@@ -928,10 +900,6 @@ function TextAreaLabel({ children, className }: TextAreaLabelProps) {
 
 TextAreaLabel.displayName = "TextArea.Label"
 
-/* =============================================================================
- * TEXT AREA HINT
- * ============================================================================= */
-
 /**
  * Helper text below the field. Must be a direct child of `<TextArea>`.
  *
@@ -956,10 +924,6 @@ function TextAreaHint({ children, className }: TextAreaHintProps) {
 }
 
 TextAreaHint.displayName = "TextArea.Hint"
-
-/* =============================================================================
- * TEXT AREA ERROR
- * ============================================================================= */
 
 /**
  * Error message below the field. Must be a direct child of `<TextArea>`.
@@ -988,10 +952,6 @@ function TextAreaError({ children, className }: TextAreaErrorProps) {
 
 TextAreaError.displayName = "TextArea.Error"
 
-/* =============================================================================
- * ROOT
- * ============================================================================= */
-
 /**
  * Multiline field with optional auto-grow. Set `autoResize={false}` for a fixed-height
  * field that scrolls inside itself (height from `rows` and/or `className`).
@@ -1007,9 +967,11 @@ TextAreaError.displayName = "TextArea.Error"
  * - `ref.current.focus()` — focuses the underlying textarea.
  * - `ref.current.clear()` — clears the native `<textarea>` and dispatches `input`/`change`.
  *
- * **Baseline styles**: neutral gray shell surface with a **transparent 1px border**
- * (so a `focus-within:` border costs no layout — and here it would also perturb the
- * height the auto-resize measures), full width, chromeless inner field. Border
+ * **Baseline styles**: neutral gray shell surface, full width, chromeless inner field,
+ * and deliberately **no pre-allocated border** (see the ⚠︎ note on
+ * `BUTTON_ROOT_SURFACE_CLASS` in button.tsx). A border that appears on focus costs
+ * layout — and here it also perturbs the height the auto-resize measures — so a
+ * `focus-within:` ring belongs on `outline`, which never participates in layout. Border
  * colours, padding, and focus belong in Tier 2 `className` on the shell.
  *
  * @example
@@ -1193,10 +1155,6 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
 )
 
 TextAreaRoot.displayName = "TextArea"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const TextAreaCompound = Object.assign(TextAreaRoot, {
   Label: TextAreaLabel,

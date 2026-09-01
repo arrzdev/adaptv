@@ -1,7 +1,9 @@
 name: CI
 
-# Simple test-only CI: no envs, no deploys — typecheck + biome + vitest on every
-# PR and on pushes to main, with a rendered job summary.
+# Simple test-only CI: no envs, no deploys — typecheck + biome + vitest + the live
+# layer's colour check on every PR and on pushes to main, with a rendered job summary.
+# These are `pnpm gate` minus nothing: a check that only runs locally binds only the
+# person who remembered to run it.
 
 on:
   pull_request:
@@ -63,6 +65,18 @@ jobs:
           set -o pipefail
           pnpm test 2>&1 | tee vitest-output.txt
 
+      # The one check no unit test can make. Ink drops props it does not recognise in
+      # SILENCE, so a mis-named role (`ink:` for `color`, `dim` for `dimColor`) renders the
+      # whole live layer flat and every assertion still passes — chalk fixes its colour level
+      # from the real stdout at import time, and vitest's fake stdout is not a terminal, so a
+      # unit test there measures the harness. This runs the components under a pty and greps
+      # the bytes. It was in `pnpm gate` only, which binds whoever remembers to run the gate —
+      # the same gap that put unformatted playground files on main twice.
+      - name: Colour (live layer)
+        id: colour
+        if: always()
+        run: node scripts/check-colour.mjs
+
       - name: Job summary
         if: always()
         run: |
@@ -78,6 +92,7 @@ jobs:
             echo "| Biome (\`biome check\`) | $(icon '${{ steps.biome.outcome }}') |"
             echo "| Biome (playground) | $(icon '${{ steps.biome_playground.outcome }}') |"
             echo "| Tests (\`vitest\`) | $(icon '${{ steps.test.outcome }}') |"
+            echo "| Colour (live layer) | $(icon '${{ steps.colour.outcome }}') |"
             echo ""
             [ -n "$files" ] && echo "**${files}** · **${tally}**"
             echo ""

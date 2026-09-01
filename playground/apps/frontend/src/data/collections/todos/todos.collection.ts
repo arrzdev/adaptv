@@ -1,11 +1,10 @@
 import type { CollectionConfig } from "@repo/synq/types"
-import { backendTransport } from "@/data/sync/transport"
 
 //---- Todos collection ---------------------------------------------
-//offline-first todos shared by every user (no accounts). this file owns the
-//collection's row shape + its transport; data/store.ts registers it and the
-//synq engine drives the merge + outbox. timestamps are epoch ms (JSON-safe);
-//the UI converts to Date at the edge (see data/todos/queries.ts).
+//local-only todos. this file owns the collection's row shape; data/store.ts
+//registers it and synq persists it to IndexedDB. no transport: this app is
+//frontend-only, so a row never leaves the device. timestamps are epoch ms
+//(JSON-safe); the UI converts to Date at the edge (see data/todos/queries.ts).
 
 export type SyncTodo = {
   title: string
@@ -27,5 +26,4 @@ export type SyncTodo = {
 
 export const todosCollection: CollectionConfig<SyncTodo> = {
   name: "todos",
-  ...backendTransport<SyncTodo>("todos"),
 }

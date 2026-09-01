@@ -188,7 +188,7 @@ describe("active: — the press variant, patched rather than renamed", () => {
 })
 
 /*
- * The utilities that used to carry a cascade-only `!important` (STYLING.md §6.0.1).
+ * The utilities that used to carry a cascade-only `!important` (docs/decisions/styling.md §6.0.1).
  * They now win on LAYER order — `utilities` is declared after `adaptv.*` — so the
  * declarations must be plain, or the important-inversion trap comes straight back.
  */
@@ -206,7 +206,7 @@ describe("utils.css — no !important survives in the utilities", () => {
 /*
  * The `gpuBoost` patch — a rAF sentinel that flipped `will-change` / `translate3d` /
  * `perspective` / `backface-visibility` on the app frame and every scroller when it
- * decided frames were scarce — is DELETED, and must not come back. → PERFORMANCE-BOOST.md
+ * decided frames were scarce — is DELETED, and must not come back. → docs/design/performance-boost.md
  *
  * Three findings, each sufficient on its own:
  *   1. The remedy mutates layout. Every one of those four declarations independently
@@ -240,7 +240,7 @@ describe("the gpu boost is gone and cannot be reintroduced by accident", () => {
      * This used to check the two `scrollable-*` utilities specifically. adaptv no
      * longer owns them — scroll surfaces are spelled in raw Tailwind at the call site —
      * so the guard is now the broader and stronger claim: nothing adaptv ships promotes
-     * a layer. `PERFORMANCE-BOOST.md` is the measurement behind it; the short version is
+     * a layer. `docs/design/performance-boost.md` is the measurement behind it; the short version is
      * that a blanket `will-change`/`translateZ` costs memory on every one of these
      * elements and buys nothing, and it is the kind of thing that gets pasted back in
      * because it "feels faster".

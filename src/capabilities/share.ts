@@ -3,7 +3,7 @@
 //  • web/PWA  → Web Share API (navigator.share / navigator.canShare)
 //
 //Sharing needs no permission, so this does NOT use geolocation's four-state
-//enum — it uses the boolean probe from CAPABILITY-SURFACE §3.2, and it needs
+//enum — it uses the boolean probe from `docs/research/capability-surface.md` §3.2, and it needs
 //TWO of them, because the Web Share API gates on two independent things:
 //
 //  • {@link isShareSupported} — is there a share sheet here at all? `false` on
@@ -56,7 +56,7 @@ function toWebPayload(target: ShareTarget): ShareData {
  * Whether the call goes through the native plugin. Every native branch below
  * asks THIS rather than `isNativePlatform()`: an OTA bundle can be running on a
  * binary that predates the plugin, and there the native branch is a rejected
- * bridge call, not a share sheet. → `LIFECYCLE.md §5.6`
+ * bridge call, not a share sheet. → `docs/design/ota.md §5.6`
  */
 function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("Share")

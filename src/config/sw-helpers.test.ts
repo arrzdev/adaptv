@@ -10,7 +10,7 @@ import {
 /**
  * These pin the two halves of one decision that had no test and was broken in
  * both directions at once: the shell MUST be precached, and route documents must
- * NOT be. → `RENDERING.md §3.2`
+ * NOT be. → `docs/design/rendering.md §3.2`
  */
 describe("precache glob — the shell is in, documents are out", () => {
   it.each(["ssr", "spa"] as const)(

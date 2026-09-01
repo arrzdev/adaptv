@@ -33,8 +33,9 @@
 //ends up silently off on the target it was written for. Write the `&&`.
 //
 //The browser-tab branch has no predicate for the same reason: in JS it is asked
-//once, while in CSS the `web:` variant carries it ~45 times. That branch is a
-//styling concern, and the styling path costs zero re-renders (see utils.css).
+//once (`standalone-history.ts`), while in CSS any rule can reach it through the
+//`web:` variant. That branch is a styling concern, and the styling path costs
+//zero re-renders (see utils.css).
 
 import type {
   AdaptvUiConfig,
@@ -226,8 +227,8 @@ export function resolveUiStamp(
  *
  * `ui` is the app's {@link AdaptvUiConfig}; the same resolution the init script did
  * pre-paint is re-run here, for the same reason and against the same defaults. Pass
- * the config — calling this bare re-resolves against the `"app"` defaults, which
- * would silently drop a stamp an `"all"` config asked for.
+ * the config — calling this bare re-resolves against `UI_SCOPE_DEFAULTS`, which would
+ * silently drop a stamp an `"all"` config asked for.
  */
 export function applyPlatformStamp(ui?: AdaptvUiConfig): void {
   if (typeof document === "undefined") return

@@ -21,7 +21,7 @@ function config(extra: Partial<AdaptvAppConfig> = {}): AdaptvAppConfig {
 
 describe("resolveWebConfig — render default", () => {
   it("defaults to SSR", () => {
-    //DECISIONS §6.3, on the asymmetry: defaulting to SPA silently kills SEO and
+    //`docs/decisions/rendering-and-delivery.md` §1, on the asymmetry: defaulting to SPA silently kills SEO and
     //is discovered late (usually by someone else, in a search ranking);
     //defaulting to SSR costs one config flip, immediately, by the person who
     //wanted SPA. Cheap-to-correct beats cheap-to-run.
@@ -36,7 +36,7 @@ describe("resolveWebConfig — render default", () => {
   })
 
   it("is the ONLY deploy-shaping key — a `web` block is not read", () => {
-    //The regression this pins: `web.host` is gone (`DECISIONS.md §6.4`). It named
+    //The regression this pins: `web.host` is gone (`docs/decisions/rendering-and-delivery.md §2`). It named
     //a deploy target adaptv had no behaviour behind — `"cloudflare"` and `"node"`
     //produced byte-identical output, and its one real value, `"static"`, was just
     //`render: "spa"` said twice. Anything left in a `web` block is now inert, so
@@ -87,9 +87,9 @@ describe("resolveWebConfig — the service worker is not a feature flag", () => 
 })
 
 describe("staticHostFiles — what a static host actually needs", () => {
-  //DECISIONS B26: nothing emitted these, so a static deploy was not deployable as
+  //`docs/decisions/register.md` B26: nothing emitted these, so a static deploy was not deployable as
   //designed even though it was documented. They now ride on `render: "spa"`
-  //rather than on a nominated host (§6.4) — each is read by one platform and
+  //rather than on a nominated host (`docs/decisions/rendering-and-delivery.md §2`) — each is read by one platform and
   //ignored by the rest, so all four are correct wherever the bucket lands.
   const files = staticHostFiles("<!doctype html><html></html>")
 

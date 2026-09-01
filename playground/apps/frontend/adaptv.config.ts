@@ -8,7 +8,7 @@ export default defineApp({
   //so listing one of those here declares nothing and only reads like it's required.
   description: "A focused task list for desktop, mobile, and PWA.",
   lang: "en",
-  themeColor: { light: "#f5e6ff", dark: "#1e0033" },
+  themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
   icons: "./public/favicons",
   orientation: "portrait",
   styles: "./src/styles/main.css",

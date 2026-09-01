@@ -1,5 +1,5 @@
 /**
- * Cascade-layer order, injected into the app's stylesheet. → `STYLING.md §6.0`
+ * Cascade-layer order, injected into the app's stylesheet. → `docs/decisions/styling.md §6.0`
  *
  * ## The trap this removes
  *

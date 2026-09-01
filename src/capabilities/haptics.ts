@@ -13,7 +13,7 @@
 //keeps working on 26.5+ while this imperative call does not.
 //
 //Use this API — or the `useHaptics` hook wrapping it — for feedback not necessarily
-//tied to a tap (a completed upload, a countdown). @see docs/DECISIONS.md B10
+//tied to a tap (a completed upload, a countdown). @see docs/decisions/register.md B10
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics"
 import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
 import { hasNativePlugin } from "#adaptv/utils/native-plugins"
@@ -26,7 +26,7 @@ export type NotifyType = "success" | "warning" | "error"
  * Whether the pulse goes through the native plugin. The impact/notify/selection
  * branches ask THIS rather than `isNativePlatform()`: an OTA bundle can be
  * running on a binary that predates the plugin, and each branch then falls
- * through to the web pulse instead of doing nothing. → `LIFECYCLE.md §5.6`
+ * through to the web pulse instead of doing nothing. → `docs/design/ota.md §5.6`
  */
 function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("Haptics")

@@ -1,6 +1,6 @@
 /**
  * `storage.kv` — fast key/value, **synchronous**, memory-backed.
- * → `ARCHITECTURE.md §2.1`
+ * → `docs/design/architecture.md §2.1`
  *
  * The MMKV model, chosen over async-everywhere for one reason: **reads never
  * `await`**, so a feature flag is readable *during render*. An async KV forces a

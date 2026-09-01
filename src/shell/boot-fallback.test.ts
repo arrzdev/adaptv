@@ -71,6 +71,37 @@ const onScreen = () => {
 const stampedCode = () =>
   document.documentElement.getAttribute(BOOT_FAILED_ATTR)
 
+//captured before `useFakeTimers` installs, which is the whole reason it is real
+const realSetTimeout = globalThis.setTimeout.bind(globalThis)
+
+/**
+ * Yield until everything the previous line set in motion has actually happened.
+ *
+ * Every asynchronous signal the watchdog produces is a MICROTASK: the bundle stamp
+ * is a `.then` on the bridge's answer, the clear is the `MutationObserver` callback
+ * the mount schedules, and retry's `reload()` is a `.then` on `reset()`. None of
+ * them is observable on the line after the line that causes it, and none of them is
+ * a question about timing — they are ORDERED, and a test should assert that order
+ * rather than go looking for the result.
+ *
+ * `vi.waitFor` cannot express that, and is actively misleading here. It runs its
+ * first check SYNCHRONOUSLY — before any microtask can run, so that check always
+ * fails — then re-checks on a REAL 50ms interval against a REAL 1s deadline, and on
+ * timeout reports the error from that first doomed check. Under suite-wide
+ * contention the deadline beats the first re-check, and the failure reads
+ * `expected '<bundle>' to be null` about a document whose tag was cleared one
+ * microtask after the mount: an assertion stating the opposite of what happened.
+ *
+ * A macrotask boundary says the real thing. The microtask queue is drained at the
+ * checkpoint before a task runs, so every signal above has landed by the time this
+ * resolves, and the assertion after it can be flat. It carries no deadline, so load
+ * can delay it but can never fail it.
+ */
+const landed = () =>
+  new Promise<void>((resolve) => {
+    realSetTimeout(resolve, 0)
+  })
+
 beforeEach(() => {
   vi.useFakeTimers()
 })
@@ -386,9 +417,8 @@ describe("naming the bundle that failed", () => {
     arm()
     window.dispatchEvent(new Event("unhandledrejection"))
 
-    await vi.waitFor(() =>
-      expect(stampedBundle()).toBe("3f2a9c11b4d0e7a5"),
-    )
+    await landed()
+    expect(stampedBundle()).toBe("3f2a9c11b4d0e7a5")
   })
 
   it("names the built-in bundle rather than staying silent", async () => {
@@ -398,7 +428,8 @@ describe("naming the bundle that failed", () => {
     arm()
     window.dispatchEvent(new Event("unhandledrejection"))
 
-    await vi.waitFor(() => expect(stampedBundle()).toBe(EMBEDDED_BUNDLE))
+    await landed()
+    expect(stampedBundle()).toBe(EMBEDDED_BUNDLE)
   })
 
   it("reveals the screen without waiting for the bridge to answer", () => {
@@ -439,13 +470,44 @@ describe("naming the bundle that failed", () => {
     bridge("3f2a9c11b4d0e7a5")
     arm()
     window.dispatchEvent(new Event("unhandledrejection"))
-    await vi.waitFor(() => expect(stampedBundle()).not.toBeNull())
+    await landed()
+    expect(stampedBundle()).not.toBeNull()
 
     document
       .getElementById(APP_ROOT_ID)
       ?.appendChild(document.createElement("main"))
-    await vi.waitFor(() => expect(stampedBundle()).toBeNull())
+    await landed()
+    expect(stampedBundle()).toBeNull()
     expect(stampedCode()).toBeNull()
+  })
+
+  it("does not stamp a document that already recovered", async () => {
+    //The same leak through the other ordering, and this one is the bridge's to
+    //lose: the mount can beat the plugin round-trip. A tag written after the screen
+    //came down names a failure with no code beside it and no screen to explain it.
+    let settle: (value: { bundleId: string }) => void = () => {}
+    vi.stubGlobal("Capacitor", {
+      Plugins: {
+        LiveUpdate: {
+          getCurrentBundle: () =>
+            new Promise<{ bundleId: string }>((resolve) => {
+              settle = resolve
+            }),
+        },
+      },
+    })
+
+    arm()
+    window.dispatchEvent(new Event("unhandledrejection"))
+    document
+      .getElementById(APP_ROOT_ID)
+      ?.appendChild(document.createElement("main"))
+    await landed()
+    expect(stampedCode()).toBeNull()
+
+    settle({ bundleId: "3f2a9c11b4d0e7a5" })
+    await landed()
+    expect(stampedBundle()).toBeNull()
   })
 
   it("survives a bridge that throws or answers with nothing usable", async () => {
@@ -499,7 +561,8 @@ describe("retry, when a stale bundle pointer is the thing standing in the way", 
     ;(box()?.querySelector("button") as HTMLElement).click()
 
     expect(live.reset).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(live.reload).toHaveBeenCalledOnce())
+    await landed()
+    expect(live.reload).toHaveBeenCalledOnce()
     //the whole point: a document reload would have re-run the same bundle
     expect(reload).not.toHaveBeenCalled()
   })
@@ -558,6 +621,7 @@ describe("retry, when a stale bundle pointer is the thing standing in the way", 
     window.dispatchEvent(new Event("unhandledrejection"))
     ;(box()?.querySelector("button") as HTMLElement).click()
 
-    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce())
+    await landed()
+    expect(reload).toHaveBeenCalledOnce()
   })
 })

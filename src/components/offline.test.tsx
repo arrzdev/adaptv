@@ -29,7 +29,7 @@ function pressRetry(): void {
 }
 
 describe("Offline — one component, two call sites", () => {
-  //RENDERING §3.1.2. adaptv renders this when the app can't boot far enough for a
+  //`docs/design/rendering.md` §3.1.2. adaptv renders this when the app can't boot far enough for a
   //route to exist; the consumer renders the SAME component when a route mounted
   //fine but its data is unavailable. Every prop is optional, which is what lets
   //one component serve both without a framework-flavoured screen that looks

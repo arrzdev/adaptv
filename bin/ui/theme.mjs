@@ -1,4 +1,4 @@
-// The executable half of `docs/CLI-VISUAL.md`.
+// The executable half of `docs/design/cli-visual.md`.
 //
 // Every visual constant the CLI has lives here — the indents, the glyph set, the colour roles,
 // the spinner. Components import these rather than writing `"  "` or `"✓"` inline, so the
@@ -8,10 +8,6 @@
 // Deliberately data, with no imports: it is the one module both the Ink components and the
 // string renderer can share while the port is in progress, so the two cannot drift apart on
 // the way.
-
-/* -----------------------------------------------------------------------------
- * the grid
- * -------------------------------------------------------------------------- */
 
 /** Every top-level row. Two spaces, always. */
 export const INDENT = 2
@@ -65,7 +61,7 @@ export const FRAME_MS = 80
 //
 // The prop is `dimColor`, NOT `dim` — Ink's name, and the reason `quiet` was flat too. Both
 // mistakes are the same mistake: a prop Ink does not know is silently dropped, so the only
-// honest check is the BYTES on a real terminal. `docs/CLI-UX.md` R49 has the pty one-liner.
+// honest check is the BYTES on a real terminal. `docs/design/cli-contract.md` R49 has the pty one-liner.
 //
 // `quiet` maps to `dim` alone, NOT `color: "gray"` plus dim. The settled rows are written by the
 // string renderer as ANSI 2 (dim), and a live row that is gray AND dim visibly changes shade the
@@ -114,6 +110,18 @@ export const ROLE = {
  * these used to be bare nouns — `sync` and `package` — which read as a command being issued
  * rather than work being done, and sat oddly beside `compiling` and `launching device` on the
  * very same row. `package` was a duplicate of `packaging` on top of that.
+ *
+ * The list is the REGISTER, not a nicety: a phase adaptv chose that is missing from it is
+ * handed to the build-tool filter, and whether it survives is then luck. `looking for devices`,
+ * `reading the published manifest` and `writing the channel` shipped for months outside this
+ * set — they happened to start with a participle, which is the filter's last-ditch escape
+ * hatch for an unrecognised tool line, so they rendered by coincidence and any rewording
+ * would have deleted them. Four of their neighbours were less lucky and rendered as nothing
+ * at all. `bin/lib/own-phases.test.mjs` now walks every `report()` call site in `bin/` and
+ * fails the build on a phrase that is not in here, so the register cannot go stale again.
+ *
+ * ` · ` metadata is NOT part of an entry: `prettyLine` matches the head, so `syncing · cached`
+ * and `preparing · first run` are this list's words with a fact hung off them (R25).
  * -------------------------------------------------------------------------- */
 
 export const OWN_PHASES = new Set([
@@ -121,19 +129,18 @@ export const OWN_PHASES = new Set([
   "launching device",
   "linking plugins",
   "linking server",
+  "looking for devices",
   "packaging",
   "preparing",
   "preparing build",
   "processing resources",
+  "reading the published manifest",
   "relaunching device",
   "reloading device",
   "starting server",
   "syncing",
+  "writing the channel",
 ])
-
-/* -----------------------------------------------------------------------------
- * timing
- * -------------------------------------------------------------------------- */
 
 /**
  * How long a phase must hold a row before another may replace it.
@@ -155,10 +162,6 @@ export const HMR_FLASH_MS = 900
 //NO live elapsed constant here on purpose. A running clock on a live row was tried and
 //removed: the spinner already says the row is alive, and a number ticking in place is motion
 //with no information in it. The duration is stated once, on the settled row.
-
-/* -----------------------------------------------------------------------------
- * layout rules with a number in them
- * -------------------------------------------------------------------------- */
 
 /**
  * Below this many columns of room, a two-column table stacks instead of aligning — the

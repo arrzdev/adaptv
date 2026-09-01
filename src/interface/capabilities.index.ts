@@ -2,8 +2,10 @@
 //`@arrzdev/adaptv/hooks` wrap these; import them directly for non-React wiring —
 //e.g. feeding `getOnline`/`subscribeOnline` into TanStack Query's `onlineManager`.
 //
-//🔴 Four of these are named lists rather than `export *`, and the reason is the
-//same in all four: a standalone `isXSupported()` predicate is a second way to ask
+//🔴 Four of these are named lists rather than `export *` for one shared reason —
+//clipboard, keep-awake, orientation and share (theme-color is the fifth named
+//list, and withholds something else; its own note is above it). The shared
+//reason: a standalone `isXSupported()` predicate is a second way to ask
 //a question the surface already answers, so it stays module-internal for the hook
 //to use and never reaches a consumer. Both existing answers are better than it —
 //`useShare().supported` before you render, `share()` returning `"unsupported"`

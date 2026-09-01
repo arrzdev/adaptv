@@ -9,7 +9,7 @@ import {
 
 //The whole point of the statement is that it is the FIRST rule in the file: CSS
 //fixes layer order by first mention, and a `@layer` statement is one of only two
-//rules the spec allows before `@import`. → STYLING.md §6.0
+//rules the spec allows before `@import`. → docs/decisions/styling.md §6.0
 const firstRule = (css: string) =>
   css
     .split("\n")

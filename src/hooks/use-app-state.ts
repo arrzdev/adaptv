@@ -10,7 +10,7 @@ import {
  *
  * Backed by the accessor pair, so it is accurate on every target:
  * `@capacitor/app` `resume`/`pause` on native, `visibilitychange` + `pageshow` on
- * web. Optimistically `"active"` during SSR. → `COORDINATION.md §1`
+ * web. Optimistically `"active"` during SSR. → `docs/design/coordination.md §1`
  */
 export function useAppState(): AppState {
   return useSyncExternalStore(

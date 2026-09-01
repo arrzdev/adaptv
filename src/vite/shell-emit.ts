@@ -58,7 +58,7 @@ function resolveStylesHref(
 }
 
 /**
- * Emit the app shell into `dist/client`. → `RENDERING.md §3.1.2`
+ * Emit the app shell into `dist/client`. → `docs/design/rendering.md §3.1.2`
  *
  * Named `index.html` for a SPA build and `adaptv-shell.html` for an SSR one; the
  * reasoning for the split lives with the constants in `sw-helpers.ts`.
@@ -72,7 +72,7 @@ function resolveStylesHref(
  * ⚠︎ Where it *does* emit, it emits **late**, so "Start emits nothing here" is
  * not a safe blanket assumption. At `render: "ssr"` built for the Capacitor
  * target, Start's prerender writes its own shell about a second AFTER this
- * plugin has written ours (`DECISIONS.md` B31) — measured while chasing why an
+ * plugin has written ours (`docs/decisions/register.md` B31) — measured while chasing why an
  * OTA bundle booted the wrong document. The safe rule is the one below: this
  * shell is generated, never adopted, and nothing downstream may prefer Start's
  * copy over it.

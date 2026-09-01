@@ -22,7 +22,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * later edit. The failure only happens because `cap run` launches the WebView DURING
  * this window. So we trigger the optimize ourselves and wait for the server to go
  * quiet FIRST — by the time the native apps launch, the graph is optimized and the
- * socket they open is stable. → live-reload PR / RENDERING.md (iOS HMR).
+ * socket they open is stable. → live-reload PR / docs/design/rendering.md (iOS HMR).
  *
  * Detection is version-agnostic: while Vite is (re)optimizing, `/` hangs or returns an
  * empty body; once stable it returns the full document. We require two good reads in a
@@ -100,17 +100,17 @@ export async function warmDevServer(
   return { ok: false, ...last }
 }
 
+/** How long a `Local:` line waits for the `Network:` line under it. See `handle`. */
+const NETWORK_GRACE_MS = 250
+/** Re-entry into `handle` with nothing to add — it re-reads what has been seen so far. */
+const EMPTY = Buffer.alloc(0)
+
 /**
  * Start `vite` (dev) and resolve once it reports a ready URL. `args` is passed through
  * verbatim (the `-- …` passthrough). `onLine` receives every output line (so the
  * caller can stream HMR logs). Resolves `{ localUrl, networkUrl, host, port, stop() }`;
  * rejects if Vite exits before becoming ready.
  */
-/** How long a `Local:` line waits for the `Network:` line under it. See `handle`. */
-const NETWORK_GRACE_MS = 250
-/** Re-entry into `handle` with nothing to add — it re-reads what has been seen so far. */
-const EMPTY = Buffer.alloc(0)
-
 export function startDevServer(
   appRoot,
   { args = [], env = {}, onLine, host = false } = {},

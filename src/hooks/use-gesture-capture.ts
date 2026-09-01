@@ -12,7 +12,7 @@ export type GestureCapture = {
 }
 
 export type GestureCaptureOptions = CaptureOptions & {
-  /** Higher wins a contested start. See `BackPriority`-style bands in the controller. */
+  /** Higher wins a contested start. See {@link GesturePriority} for the built-in bands. */
   priority: number
   /** Fires when a higher-priority gesture takes the pointer away. Reset state here. */
   onLost?: () => void

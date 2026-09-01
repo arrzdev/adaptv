@@ -17,7 +17,7 @@ import { compile } from "tailwindcss"
  */
 const STYLES_DIR = resolve(process.cwd(), "src/styles")
 
-/** The `@layer` statement a consumer's entry stylesheet must open with (STYLING.md §6.0). */
+/** The `@layer` statement a consumer's entry stylesheet must open with (docs/decisions/styling.md §6.0). */
 export const CONSUMER_LAYER_ORDER =
   "@layer theme, base, adaptv, components, utilities;"
 

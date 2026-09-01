@@ -54,10 +54,6 @@ const WHEEL_ITEM_NEUTRAL_CLASS =
 //selections. The touch-action longhand is the press-target contract (WebKit 240917).
 const WHEEL_ITEM_LOCKED_CLASS = `${TOUCH_PASSTHROUGH_CLASS} h-full w-full`
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export type WheelItem = { value: number; label: string }
 
 export interface WheelColumnProps {
@@ -83,10 +79,6 @@ export interface WheelColumnProps {
    */
   itemClassName?: string
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 // FREE momentum scroll — no CSS scroll-snap. `y mandatory` on iOS truncates
 // flings to a crawl (the browser aims for a nearby snap point instead of

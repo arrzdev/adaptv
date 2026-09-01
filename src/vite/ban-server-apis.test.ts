@@ -87,7 +87,7 @@ describe("describeServerApiBan — the decision and the message", () => {
       describeServerApiBan("@tanstack/react-start", APP) ?? ""
     expect(message).toContain("@tanstack/react-start")
     expect(message.toLowerCase()).toContain("capacitor")
-    expect(message).toContain("RENDERING.md")
+    expect(message).toContain("docs/design/rendering.md")
   })
 
   it("allows the same import from a dependency", () => {
@@ -148,10 +148,6 @@ describe("findServerRouteHandlers — the gap no import rule can reach", () => {
     expect(findServerRouteHandlers(code)).toBeNull()
   })
 })
-
-/* ---------------------------------------------------------------------------
- * The plugin hooks
- * ------------------------------------------------------------------------ */
 
 type Reported = { message: string; id?: string; pos?: unknown }
 

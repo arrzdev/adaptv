@@ -144,7 +144,7 @@ describe("haptics.isSupported", () => {
 
 describe("haptics — a binary that predates the plugin", () => {
   it("pulses through navigator.vibrate instead of the absent bridge", () => {
-    //→ LIFECYCLE.md §5.6. Android's WebView has a real `navigator.vibrate`, so a
+    //→ docs/design/ota.md §5.6. Android's WebView has a real `navigator.vibrate`, so a
     //skewed bundle still buzzes — it just buzzes the web approximation.
     forceNativeBinary([])
     const vibrate = withVibrate()

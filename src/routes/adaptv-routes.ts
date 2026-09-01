@@ -7,11 +7,8 @@ import {
 } from "@tanstack/virtual-file-routes"
 
 /**
- * The generated root route file adaptv stamps (gitignored, like
- * `routeTree.gen.ts`). Consumers never write it.
- */
-/**
- * Where the generated root route lives, **relative to `routesDirectory`**.
+ * Where the generated root route lives, **relative to `routesDirectory`**. adaptv
+ * stamps that file (gitignored, like `routeTree.gen.ts`); consumers never write it.
  *
  * The generator resolves virtual route files against `routesDirectory`, so this
  * escapes upward into `.adaptv/`. That keeps the consumer's routes tree free of

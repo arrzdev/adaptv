@@ -211,7 +211,7 @@ test.describe("the drawer consuming it", () => {
      * would look like a regression test while catching nothing. **The half-frame lead is verified
      * on a device instead** — a 60fps simulator capture with the toolbar and the scrim sampled
      * from the same video frames, which is what settled the constant in the first place and is
-     * recorded in `theme-color.ts` and `DECISIONS.md` B32.
+     * recorded in `theme-color.ts` and `docs/decisions/register.md` B32.
      *
      * What IS clean here is the SHAPE. A constant start offset shifts every sample equally, so it
      * cannot change how much the offsets vary ACROSS the moving window — and that variation is

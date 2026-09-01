@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 
@@ -26,6 +28,40 @@ test.use({ viewport: { width: 390, height: 844 } })
 /** Declared by `/lab/route-tint`, and deliberately neither theme colour. */
 const ROUTE_TINT = "#0b6e4f"
 const ROUTE_TINT_RGB = "rgb(11, 110, 79)"
+
+/*
+ * The app's own theme colours, READ OUT OF `adaptv.config.ts` rather than copied here.
+ *
+ * They used to be written into the assertion below as literals, and that quietly coupled this
+ * spec to whatever colour was last in the config: `scripts/ota-lab.ts` REWRITES that field in
+ * place to prove a bundle landed, so a lab run left the app violet, this test pinned the violet,
+ * and putting the original colour back would have failed a green suite. The residue outlived the
+ * run that caused it. Reading the field keeps the real claim — that the CONFIGURED colour is what
+ * the chrome falls back to — and makes the lab's rewrites invisible to the suite.
+ *
+ * Parsed as text, the same way `ota-lab.ts` reads it, so this file needs no module resolution
+ * into the app.
+ */
+const APP_THEME = (() => {
+  //Resolved from cwd, not from `import.meta.url`: Playwright transpiles specs to
+  //CJS, where `import.meta` is a syntax error. Every disk-reading test in this repo
+  //anchors on cwd for the same class of reason. Playwright runs from the directory
+  //holding `playwright.config.ts`, i.e. the playground root.
+  const source = readFileSync(
+    resolve(process.cwd(), "apps/frontend/adaptv.config.ts"),
+    "utf8",
+  )
+  const match = source.match(
+    /themeColor:\s*\{\s*light:\s*"([^"]+)"\s*,\s*dark:\s*"([^"]+)"/,
+  )
+  if (!match) {
+    throw new Error(
+      "route-tint.spec: could not read themeColor out of adaptv.config.ts — " +
+        "the field moved or changed shape, and this spec asserts against it.",
+    )
+  }
+  return { light: match[1].toLowerCase(), dark: match[2].toLowerCase() }
+})()
 
 /** The two surfaces, read together. */
 async function chrome(page: Page) {
@@ -118,8 +154,7 @@ test.describe("once the app is running", () => {
     const configured = await page.evaluate(() =>
       document.documentElement.classList.contains("dark"),
     )
-    //the app's own theme colours, from adaptv.config.ts
-    expect(themed.meta).toBe(configured ? "#1e0033" : "#f5e6ff")
+    expect(themed.meta).toBe(configured ? APP_THEME.dark : APP_THEME.light)
   })
 
   test("takes the colour back on the way in", async ({ page }) => {

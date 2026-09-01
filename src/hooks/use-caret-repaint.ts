@@ -61,8 +61,6 @@ const CARET_SETTLE_MS = 120
 //looking, never on restoring — a movement it finds pushes out the quiet window as usual.
 const CARET_WATCH_TAIL_FRAMES = 15
 
-//---- movement holds ----------------
-
 //module-level so non-React movers (drawer motion helpers, scroll utilities) can announce
 //without a hook dependency; the single app-wide controller registers itself here
 let caretHoldCount = 0

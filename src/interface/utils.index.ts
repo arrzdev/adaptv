@@ -1,5 +1,6 @@
-//the cubic-bezier tuple every animated adaptv API takes. Exported so a consumer can name the
-//type — `ChromeTintOptions["easing"]` works structurally, but a shared curve wants a name.
+//the cubic-bezier tuple adaptv's animated APIs take — today `ChromeTintOptions` is the only
+//public one. Exported so a consumer can name the type: `ChromeTintOptions["easing"]` works
+//structurally, but a shared curve wants a name.
 
 export * from "../utils/cn"
 export type { EasingBezier } from "../utils/easing"

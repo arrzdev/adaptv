@@ -58,10 +58,6 @@ afterAll(async () => {
   if (dir) await rm(dir, { recursive: true, force: true })
 })
 
-/* =============================================================================
- * PURE HELPERS
- * ============================================================================= */
-
 describe("parseAdaptvImageId", () => {
   it("answers only for its own suffix", () => {
     expect(parseAdaptvImageId(`/a/hero.jpg${ADAPTV_IMAGE_QUERY}`)).toBe(
@@ -201,10 +197,6 @@ describe("renderImageAssetModule", () => {
     expect(code).not.toContain("lqip")
   })
 })
-
-/* =============================================================================
- * THE LOAD HOOK, END TO END
- * ============================================================================= */
 
 type LoadHook = (this: unknown, id: string) => Promise<string | null>
 

@@ -293,7 +293,7 @@ function LabImagePage() {
  * ============================================================================= */
 
 /**
- * `IMAGE-COMPONENT.md §10.2`, rendered live: measure the box at first layout,
+ * `docs/design/image.md §10.2`, rendered live: measure the box at first layout,
  * measure it again whenever it changes, and print both.
  *
  * This is on the page rather than in DevTools because the Layout Instability API

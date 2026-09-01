@@ -1,5 +1,5 @@
 /**
- * `.adaptv/` — the hidden generated directory. → `ARCHITECTURE.md §3.2` (D1)
+ * `.adaptv/` — the hidden generated directory. → `docs/design/architecture.md §3.2` (D1)
  *
  * ## Why hide them rather than eliminate them
  *

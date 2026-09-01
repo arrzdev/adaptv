@@ -16,7 +16,7 @@ export type UpdateRequiredHostProps = {
 
 /**
  * Take the screen when this install can no longer be reached over the air.
- * → `LIFECYCLE.md §5.6`
+ * → `docs/design/ota.md §5.6`
  *
  * ## Why this is opt-in, and opt-in by a *number*
  *

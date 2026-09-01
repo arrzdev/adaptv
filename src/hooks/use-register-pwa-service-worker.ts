@@ -3,7 +3,7 @@ import { registerPwaServiceWorkerRuntime } from "#adaptv/shell/service-worker-sh
 
 /**
  * Mounted by the shell. Apps do not call this, and there is nothing to pass:
- * adaptv's worker is not configurable. → `RENDERING.md §3.4`
+ * adaptv's worker is not configurable. → `docs/design/rendering.md §3.4`
  */
 export function useRegisterPwaServiceWorker() {
   useEffect(() => {

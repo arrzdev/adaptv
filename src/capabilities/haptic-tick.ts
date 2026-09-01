@@ -38,7 +38,7 @@
  * intensity. WebKit-only. Requires the user to have System Haptics enabled, which
  * is not detectable. Costs one DOM node per tap target.
  *
- * @todo DEVICE VERIFICATION REQUIRED — the tests below pin structure and
+ * @todo DEVICE VERIFICATION REQUIRED — `haptic-tick.test.ts` pins structure and
  * lifecycle, which is all a DOM can prove. Whether the tick actually *fires*
  * can only be confirmed on physical iOS ≥ 26.5 hardware; simulators do not
  * produce haptics.

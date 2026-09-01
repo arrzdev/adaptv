@@ -15,13 +15,13 @@
  *
  * ⚠︎ Three limits, all of them the platform's and none of them fixable here:
  *
- * - **iOS 26.0–26.5 ignores the tag entirely** (`DECISIONS.md` B17). WebKit dropped it and now
+ * - **iOS 26.0–26.5 ignores the tag entirely** (`docs/decisions/register.md` B17). WebKit dropped it and now
  *   derives the top-bar tint from the rendered `html`/`body` background near the viewport edge,
  *   so this is the **Android/Chrome + iOS ≤ 18** path. It is a progressive enhancement: where the
  *   tag is inert, callers get a no-op, not a broken frame.
  * - **Firefox has never supported it.**
  * - **The top bar only.** Android's navigation bar tracks the *device* theme and cannot be made
- *   to follow the app on web or PWA — measured across four Chrome versions in `DECISIONS.md` B29.
+ *   to follow the app on web or PWA — measured across four Chrome versions in `docs/decisions/register.md` B29.
  *
  * The tag is written per frame from a `requestAnimationFrame` loop, because a meta tag is not a
  * style and no CSS transition can reach it. That is real main-thread work landing in the same
@@ -116,7 +116,7 @@ function metaElement(): HTMLMetaElement | null {
 
 /**
  * Whether there is a tag to write at all. NOT "whether anyone will see it" — that depends on the
- * browser and the platform and is not knowable here. Deliberately not exported past the barrel:
+ * browser and the platform and is not knowable here. Deliberately not exported at all:
  * the hook's `supported` and this module's no-op already answer it, and a third way to ask is a
  * third thing to disagree.
  */

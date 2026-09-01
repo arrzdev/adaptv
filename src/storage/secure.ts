@@ -1,6 +1,6 @@
 /**
  * `storage.secure` — secrets. Async, strings only, no reactive hook.
- * → `ARCHITECTURE.md §2.3`
+ * → `docs/design/architecture.md §2.3`
  *
  * ## The hard platform truth, stated loudly
  *
@@ -26,7 +26,7 @@
  * `UserDefaults` on iOS, `SharedPreferences(MODE_PRIVATE)` on Android, verified
  * in source, with no warning in its README. That is why `storage.kv` and
  * `storage.secure` have different backends rather than one shared one.
- * → `DECISIONS.md` B23
+ * → `docs/decisions/register.md` B23
  *
  * The native backend is `@aparajita/capacitor-secure-storage` (MIT), imported
  * **lazily** so a web-only app never needs it installed.

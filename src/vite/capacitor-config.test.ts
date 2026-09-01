@@ -84,7 +84,7 @@ describe("buildCapacitorConfig", () => {
   })
 
   it("configures SystemBars insetsHandling:css so Android injects --safe-area-inset-*", () => {
-    //The native half of the safe-area contract (DECISIONS.md §6.0): Capacitor 8 core
+    //The native half of the safe-area contract (docs/decisions/register.md §6.0): Capacitor 8 core
     //injects the CSS vars styles/safe-area.css consumes var-first, working around
     //broken env() in Android WebView < 140.
     const systemBars = buildCapacitorConfig(BASE).plugins
@@ -102,7 +102,7 @@ describe("buildCapacitorConfig", () => {
 // The plugin ships `readyTimeout: 0`, and 0 means the watchdog does not exist —
 // a bundle that never boots is never reverted, on every installed device at once.
 // It also silently disables `autoBlockRolledBackBundles`, so a zero here costs two
-// defences, not one. → LIFECYCLE.md §5.5
+// defences, not one. → docs/design/ota.md §5.5
 describe("the update watchdog", () => {
   const withOta: AdaptvAppConfig = {
     ...BASE,

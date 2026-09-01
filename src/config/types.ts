@@ -1,6 +1,6 @@
 //Shared config types. Everything service-worker-shaped that used to live here
 //is gone: adaptv's worker is not configurable, so there is no entry, no
-//register mode and no app-owned `sw.config.ts` to type. → `RENDERING.md §3`
+//register mode and no app-owned `sw.config.ts` to type. → `docs/design/rendering.md §3`
 
 /**
  * Props for the splash component (`splashScreen`). It still owns its own lifecycle and
@@ -32,8 +32,13 @@ export type SplashScreenProps = {
 }
 
 /**
- * Orientation lock for `createRootRoute({ orientation })`. Values mirror the web
- * app manifest `orientation` vocabulary. `"any"` (default) disables the guard.
+ * Orientation lock. Set it as `orientation` in `adaptv.config.ts` — there is no
+ * `createRootRoute` option for it, because the manifest is the single source of
+ * truth and the runtime guard reads it back from there
+ * (`hooks/use-manifest-orientation.ts`). Narrower than the web app manifest's
+ * vocabulary on purpose: `portrait*` collapses to `"portrait"`, `landscape*` to
+ * `"landscape"`, and everything else — `any`, `natural` — to `"any"`, which
+ * disables the guard and is what an absent manifest field reads as.
  */
 export type OrientationLock = "portrait" | "landscape" | "any"
 
@@ -45,7 +50,7 @@ export type OrientationGuardProps = {
 
 /**
  * Props injected into `updateRequiredComponent` once an install has been unable
- * to update for longer than `updateRequiredAfterDays`. → `LIFECYCLE.md §5.6`
+ * to update for longer than `updateRequiredAfterDays`. → `docs/design/ota.md §5.6`
  */
 export type UpdateRequiredProps = {
   /**

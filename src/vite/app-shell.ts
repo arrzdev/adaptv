@@ -1,5 +1,5 @@
 /**
- * The generated app shell. → `RENDERING.md §3.1.2`, `LIFECYCLE.md §1.2`
+ * The generated app shell. → `docs/design/rendering.md §3.1.2`, `docs/design/lifecycle.md §1.2`
  *
  * ## Why adaptv generates this rather than reusing Start's
  *

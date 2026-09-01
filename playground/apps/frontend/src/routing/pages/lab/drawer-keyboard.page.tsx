@@ -185,7 +185,7 @@ function checkTransition(
    * wrong in both directions is not a loose threshold, it is not a measurement.
    *
    * The property it was reaching for — does this motion ease or step — is answered properly by
-   * `?only=<scenario>` plus a slit-scan over the marker on the sheet's top edge (BEHAVIORS.md §4).
+   * `?only=<scenario>` plus a slit-scan over the marker on the sheet's top edge (docs/design/behaviors.md §4).
    * That reads the painted frames, so there is nothing to tune and nothing to fool.
    */
   const checks: Check[] = [

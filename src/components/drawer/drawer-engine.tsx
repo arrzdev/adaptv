@@ -72,9 +72,8 @@ import { isIOS } from "#adaptv/utils/platform"
 //blocking the page while nothing was visible.
 const DRAWER_EXIT_UNMOUNT_DELAY_MS = 0
 
-//Closing from a keyboard lift, over-translate the slide by this much so the consumer restoring its
-//bottom padding as the keyboard dismisses stays hidden without a mid-close re-aim (covers safe-area
-//insets). It lands off-screen, so it's invisible. Gated to keyboard closes — plain closes don't grow.
+//px of extra slide on a close that starts with keyboard room held — `driveCloseToTarget` owns why.
+//It lands off-screen, so it's invisible, and it is gated to keyboard closes: plain closes don't grow.
 const DRAWER_CLOSE_OVERTRAVEL_PX = 64
 
 // A visual viewport this many px shorter than the layout viewport means the on-screen
@@ -171,12 +170,10 @@ const DRAWER_SETTLE_FALLBACK_MS = 32
 // to clear it or a genuine keyboard gets retracted mid-appearance and flickers back.
 const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 400
 
-// iOS raises the keyboard then its ~45px password AutoFill accessory bar as a SECOND height step
-// ~280ms later, by which time the first lift has settled — so untreated the second step is a fresh
-// full-duration animation (the visible "grows once, then grows again" double-bump). Within this
-// window after the last grow, a further grow is treated as a CONTINUATION and re-aimed over the small
-// remaining travel instead. Wide enough for the ~280ms two-step; a genuinely later grow (a field
-// switch) falls outside it and animates normally.
+// Window after a keyboard GROW in which a further grow is re-aimed as a CONTINUATION rather than
+// restarted — the grow-correction block in the keyboard-room effect owns why. Wide enough for iOS's
+// ~280ms password-AutoFill-bar second step; a genuinely later grow (a field switch) falls outside it
+// and animates normally.
 const DRAWER_KEYBOARD_RAISE_CONTINUATION_MS = 500
 
 // Floor for that re-aim's proportional duration — the bare 45px accessory-bar step computes to ~50ms,
@@ -216,8 +213,6 @@ function measureDrawerMetrics(
 function isDrawerYClosed(yValue: number, closedY: number) {
   return Math.abs(yValue - closedY) < 1
 }
-
-//---- Context ----------------
 
 /**
  * Behavior + refs the engine controls; the compound parts (Overlay / Content / Handle)
@@ -269,8 +264,6 @@ export function useDrawerEngineContext() {
   }
   return ctx
 }
-
-//---- Engine ----------------
 
 export type DrawerEngineProps = {
   open: boolean

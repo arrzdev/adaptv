@@ -7,7 +7,7 @@ import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
 
 /**
  * `virtual:adaptv/ota-config` — what an installed app needs to find its own
- * updates, resolved at build time. → `LIFECYCLE.md §5.2`
+ * updates, resolved at build time. → `docs/design/ota.md §5.2`
  *
  * ## Why a virtual module and not root-route config
  *
@@ -33,7 +33,7 @@ const RESOLVED_OTA_CONFIG_ID = `\0${OTA_CONFIG_VIRTUAL_ID}`
  *
  * `.well-known` because the channel rides the ORDINARY web deploy — the same
  * artifact that serves the PWA also serves every native install its updates, so
- * there is no second pipeline to keep in step. → `LIFECYCLE.md §5.2`
+ * there is no second pipeline to keep in step. → `docs/design/ota.md §5.2`
  */
 export const OTA_CHANNEL_PATH = "/.well-known/adaptv/ota"
 export const OTA_MANIFEST_PATH = `${OTA_CHANNEL_PATH}/manifest.json`
@@ -44,7 +44,7 @@ export type OtaBuildConfig = {
   /** `otaOnNativeSkew`, defaulted here so the runtime never has to. */
   nativeSkew: NativeSkewPolicy
   requireSignature: boolean
-  /** SPKI PEM — `null` only when the build has explicitly opted out of signing. */
+  /** SPKI PEM, or `null` when the build declares no key. See {@link resolveOtaPublicKey}. */
   publicKey: string | null
   /** `otaPollMinutes` in MILLISECONDS, or `0` for "do not poll". */
   pollIntervalMs: number
@@ -56,7 +56,7 @@ export const DEFAULT_OTA_POLL_MINUTES = 60
 /**
  * The floor. Below it the number is almost certainly seconds, and the difference
  * between meaning `30` seconds and getting `30` minutes is invisible until someone
- * reads a CDN bill — so this refuses rather than clamps. → `LIFECYCLE.md §5.2`
+ * reads a CDN bill — so this refuses rather than clamps. → `docs/design/ota.md §5.2`
  */
 export const MIN_OTA_POLL_MINUTES = 5
 
@@ -183,7 +183,7 @@ export function assertReachableOtaOrigin(origin: string): void {
  *
  * Signing is mandatory by default: an update channel is a remote-code-execution
  * channel into every installed app, and without a signature anyone who can write
- * to the CDN owns it. → `LIFECYCLE.md §5.4d`
+ * to the CDN owns it. → `docs/design/ota.md §5.4d`
  *
  * The opt-out is an env var rather than a config field **because a config field
  * gets committed** — one person disables it to test locally, it lands on main, and
@@ -253,7 +253,7 @@ export function resolveOtaBuildConfig(
     manifestUrl: `${origin}${OTA_MANIFEST_PATH}`,
     nativeFingerprint: fingerprint,
     //Defaulted at build time, so the shipped bundle carries a literal answer and
-    //no runtime has to reproduce the default. → `LIFECYCLE.md §5.6`
+    //no runtime has to reproduce the default. → `docs/design/ota.md §5.6`
     nativeSkew: config.otaOnNativeSkew ?? "install",
     requireSignature: !allowsUnsignedManifests(),
     //Shipped in the bundle as well as in the native config. It is public, and the

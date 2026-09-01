@@ -1,5 +1,5 @@
 /**
- * `adaptv doctor` — detect the silent failures. → `DECISIONS.md` B22, B21, §6.0
+ * `adaptv doctor` — detect the silent failures. → `docs/decisions/register.md` B22, B21, §6.0
  *
  * Every check here shares one property: **the broken state still builds, and
  * often still runs.** That is the whole selection criterion. A misconfiguration
@@ -56,17 +56,17 @@ function checkAppBoundDomains(input: DoctorInput): Diagnostic | null {
 
   return {
     severity: "error",
-    title: "WKAppBoundDomains is set without the Capacitor opt-in",
+    title: "WKAppBoundDomains is set without the matching adaptv opt-in",
     detail:
-      "WebKit will refuse WKUserScript injection, which is how Capacitor injects its " +
-      "native bridge. Capacitor.getPlatform() will return 'web' and EVERY plugin will " +
-      "silently fall back to its web implementation — no error, no crash, just an app " +
-      "that quietly has no native capabilities.",
+      "WebKit will refuse WKUserScript injection, which is how the native bridge reaches " +
+      "the page. 'isNativePlatform()' will return false and EVERY native capability will " +
+      "silently fall back to its web implementation. No error, no crash, just an app that " +
+      "quietly has none of the native surface it was built for.",
     fix:
       "Remove WKAppBoundDomains from .adaptv/ios/App/App/Info.plist. adaptv never adds it, and the " +
-      "usual reason for adding it (relaxing ITP's storage cap) does not work — WebKit's " +
+      "usual reason for adding it (relaxing ITP's storage cap) does not work: WebKit's " +
       "isAppBoundITPRelaxationEnabled is a constexpr false. If you genuinely need it, also " +
-      "set ios.limitsNavigationsToAppBoundDomains: true in adaptv.config.ts.",
+      "set 'ios.limitsNavigationsToAppBoundDomains: true' in adaptv.config.ts.",
   }
 }
 
@@ -90,7 +90,7 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
     detail:
       "Deadline 2026-08-31 (extensions to 11-01). API 36 also removes the edge-to-edge " +
       "opt-out, and setStatusBarColor / setNavigationBarColor become NO-OPS rather than " +
-      "errors — an app relying on them keeps compiling and silently stops tinting.",
+      "errors, so an app relying on them keeps compiling and silently stops tinting.",
     fix:
       "Raise targetSdk to 36 and move status-bar tinting to CSS: viewport-fit=cover plus a " +
       "background painted under the inset is the only portable approach left.",
@@ -127,7 +127,7 @@ function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
     title: ".adaptv/ios/App/App/PrivacyInfo.xcprivacy is missing",
     detail:
       "The plugins adaptv compiles in touch Apple required-reason APIs. The manifest is not " +
-      "checked at build time — App Store Connect rejects the upload with a generic message, days later.",
+      "checked at build time, so App Store Connect rejects the upload with a generic message, days later.",
     fix: "Run `adaptv build ios` (or `adaptv preview ios`), which regenerates it from the installed plugin set.",
   }
 }

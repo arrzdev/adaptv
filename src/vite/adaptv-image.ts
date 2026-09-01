@@ -4,10 +4,6 @@ import path from "node:path"
 import type { Plugin } from "vite"
 import type { AdaptvImageAsset } from "#adaptv/components/image.tsx"
 
-/* =============================================================================
- * THE QUERY
- * ============================================================================= */
-
 /**
  * The suffix that opts an import into this pipeline.
  *
@@ -67,10 +63,6 @@ export const LQIP_WARN_BYTES = 1024
 export const LQIP_PIPELINE_VERSION = 1
 
 const CACHE_DIR = path.join("node_modules", ".cache", "adaptv", "lqip")
-
-/* =============================================================================
- * PURE HELPERS
- * ============================================================================= */
 
 /** The absolute file path behind an `…?adaptv-image` module id, or `null`. */
 export function parseAdaptvImageId(id: string): string | null {
@@ -145,10 +137,11 @@ export function svgIntrinsicSize(
  * Why this source gets no placeholder — or `null` if it gets one.
  *
  * ⚠︎ **A missing placeholder is cosmetic. A missing dimension is a layout shift.**
- * Every reason here is therefore silent; the two cases that cost a *dimension*
- * (no `sharp`, an unreadable file) are build ERRORS instead. The plugin may
- * silently decline to produce a placeholder; it may never silently decline to
- * produce a reservation.
+ * Every reason here is therefore silent; every case that costs a *dimension* is a
+ * build ERROR instead — no `sharp`, an unreadable file, an SVG with neither size
+ * nor `viewBox`, an undecodable image, an image that reports no dimensions. The
+ * plugin may silently decline to produce a placeholder; it may never silently
+ * decline to produce a reservation.
  */
 export function lqipSkipReason(input: {
   enabled: boolean
@@ -229,10 +222,6 @@ export function imageCacheKey(input: {
     .slice(0, 24)
 }
 
-/* =============================================================================
- * THE PLUGIN
- * ============================================================================= */
-
 export type AdaptvImageOptions = {
   /**
    * Generate the low-resolution placeholder. `false` still resolves `width` and
@@ -279,7 +268,7 @@ type BuildStats = {
  * time costs nothing at runtime, creates no compositing layer, and sidesteps
  * Next's #86264 and #53329.
  *
- * @see docs/IMAGE-COMPONENT.md §4
+ * @see docs/design/image.md §4
  */
 export function adaptvImagePlugin(
   options: AdaptvImageOptions = {},
@@ -385,10 +374,6 @@ export function adaptvImagePlugin(
     },
   }
 }
-
-/* =============================================================================
- * THE WORK
- * ============================================================================= */
 
 async function resolveImageMeta(input: {
   file: string

@@ -99,7 +99,7 @@ function shippedRequiredReasons(
 
 /**
  * Write `.adaptv/ios/App/App/PrivacyInfo.xcprivacy` from everything compiled into
- * the app. → `DECISIONS.md §5.0.1`
+ * the app. → `docs/decisions/register.md §5.0.1`
  *
  * Runs on the capacitor build, alongside the capacitor.config stamp, because the
  * obligation is derivable and nothing else needs to happen first. The alternative —

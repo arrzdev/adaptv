@@ -16,10 +16,6 @@ import {
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /**
  * What a statically-imported image resolves to.
  *
@@ -28,7 +24,7 @@ import { mergeStyles } from "#adaptv/utils/styles"
  * ```
  *
  * `width` and `height` are the product, not the blur — they are the entire CLS
- * mechanism, and `lqip` is decoration on top of it. → `docs/IMAGE-COMPONENT.md` §1.
+ * mechanism, and `lqip` is decoration on top of it. → `docs/design/image.md` §1.
  * Produced by `adaptvImagePlugin()` (`src/vite/adaptv-image.ts`); the shape is
  * mirrored in `src/virtual-adaptv-image-asset.d.ts` for the ambient module
  * declaration, so the two must be changed together.
@@ -73,9 +69,9 @@ export type ImageContextValue = {
  *
  * The un-reservable call is a TYPE error rather than a dev-time throw, because
  * `VISION.md` principle 1 is that the wrong thing becomes impossible, and a
- * compile error is the only guardrail that cannot be scrolled past. The runtime
- * check below is a backstop for the callers who escape the types (plain JS, an
- * `as string`, a spread props object), not the mechanism.
+ * compile error is the only guardrail that cannot be scrolled past. The dev
+ * guardrails below are a backstop for the callers who escape the types, not the
+ * mechanism — see the block that defines them for which callers those are.
  *
  * | Written as | Reserves from |
  * |---|---|
@@ -146,7 +142,7 @@ type ImageOwnProps = Omit<
    *
    * A BlurHash or ThumbHash string is rejected in dev: both need a JS decoder
    * that cannot paint before hydration, so they are database formats rather
-   * than web placeholders. → `docs/IMAGE-COMPONENT.md` §3.
+   * than web placeholders. → `docs/design/image.md` §3.
    */
   placeholder?: string | false
   /** LCP intent: `loading="eager"` + `fetchpriority="high"`. */
@@ -184,23 +180,19 @@ export interface ImageInvalidProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED: the root is the in-flow reserved box. `relative` is what makes every
 //layer below it a card in one stack, and `isolate` is what keeps that stack out
 //of the consumer's — without it the z-0/z-10/z-20 below participate in the
 //nearest ancestor stacking context and can interleave with their own layers.
+//`overflow-hidden` rather than `overflow: clip`, which is the better tool (no
+//scroll container, no scrollport) but is Safari 16 — not a baseline while adaptv
+//supports iOS 15. Revisit with contain-intrinsic-size at the same floor.
 const IMAGE_ROOT_LOCKED_LAYOUT_CLASS = "relative isolate overflow-hidden"
 //`fill` swaps the reservation for the parent's: the root stops being in-flow and
 //stretches to a box somebody else owns. Same stack, no ratio.
 const IMAGE_ROOT_FILL_LOCKED_LAYOUT_CLASS =
   "absolute inset-0 isolate size-full overflow-hidden"
 const IMAGE_ROOT_BASE_LAYOUT_CLASS = "block w-full"
-//`overflow-hidden` rather than `overflow: clip`, which is the better tool (no
-//scroll container, no scrollport) but is Safari 16 — not a baseline while adaptv
-//supports iOS 15. Revisit with contain-intrinsic-size at the same floor.
 const IMAGE_SURFACE_CLASS = "bg-gray-50"
 
 //LOCKED: a slot layer is one card in a stack over the same box as the `<img>`.
@@ -240,10 +232,6 @@ const IMAGE_BACKGROUND_SIZE: Record<ImageFit, string> = {
   "scale-down": "contain",
 }
 
-/* =============================================================================
- * SRC VALIDATION
- * ============================================================================= */
-
 /**
  * The three facts the runtime can actually establish about a `src`.
  *
@@ -252,7 +240,7 @@ const IMAGE_BACKGROUND_SIZE: Record<ImageFit, string> = {
  * `?query`-only relative reference — a guess that is wrong in both directions,
  * and being wrong towards `invalid` means a working URL is never attempted.
  * Everything that is not one of these two facts goes to the network, and a
- * failure lands in `error`. → `docs/IMAGE-COMPONENT.md` §6.3.
+ * failure lands in `error`. → `docs/design/image.md` §6.3.
  */
 export function classifyImageSrc(src: string | undefined): {
   trimmed: string
@@ -264,10 +252,6 @@ export function classifyImageSrc(src: string | undefined): {
     trimmed.startsWith("data:") && !trimmed.startsWith("data:image/")
   return { trimmed, invalid: missing || badDataUrl }
 }
-
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
 
 const ImageContext = createContext<ImageContextValue | null>(null)
 
@@ -325,10 +309,6 @@ function warnOnce(key: string, message: string): void {
 export function unstable_resetImageWarnings(): void {
   warned.clear()
 }
-
-/* =============================================================================
- * SLOT LAYER
- * ============================================================================= */
 
 type ImageSlotLayerProps = HTMLAttributes<HTMLDivElement> & {
   visible: boolean
@@ -402,12 +382,12 @@ function ImageSlotLayer({
  * sharing one (scope, part) coordinate is the Radix #602 failure in miniature —
  * `[data-adaptv="image"] [data-part="placeholder"]` would reach both, and a
  * consumer could not address the slot without also hitting the blur underneath it.
- * → STYLING.md §3 / §3.1.
+ * → docs/decisions/styling.md §3 / §3.1.
  *
  * ⚠︎ The blur is baked into the WebP at build time, so there is no runtime
  * `filter: blur()` here. A filter promotes the element and makes it a containing
  * block for every `fixed`/`absolute` descendant — one per on-screen image is not
- * free on a 4 GB Android. → `PERFORMANCE-BOOST.md` §4.1.
+ * free on a 4 GB Android. → `docs/design/performance-boost.md` §4.1.
  */
 function ImageLqipLayer({
   url,
@@ -470,10 +450,6 @@ function imageFitStyle(
     : { objectFit: fit, objectPosition: position }
 }
 
-/* =============================================================================
- * COMPOUND SLOTS
- * ============================================================================= */
-
 function ImageError({ children, ...props }: ImageErrorProps) {
   const { isErrorVisible } = useImageSlotContext()
   if (children !== undefined && !imageSlotHasContent(children)) return null
@@ -534,10 +510,6 @@ function ImagePlaceholder({ children, ...props }: ImagePlaceholderProps) {
 }
 
 ImagePlaceholder.displayName = "Image.Placeholder"
-
-/* =============================================================================
- * IMAGE ROOT
- * ============================================================================= */
 
 /**
  * An `<img>` that reserves its box before the bytes arrive.
@@ -701,7 +673,7 @@ function ImageRoot(props: ImageProps) {
         `placeholder must be a "data:image/*" URL. A BlurHash or ThumbHash ` +
           `string needs a JS decoder that cannot paint until the bundle has ` +
           `downloaded, parsed and run — convert it to a data URL on your ` +
-          `server instead. → docs/IMAGE-COMPONENT.md §3.`,
+          `server instead. → docs/design/image.md §3.`,
       )
     }
   }
@@ -802,7 +774,7 @@ function ImageRoot(props: ImageProps) {
       ref={rootRef}
       data-adaptv="image"
       data-part="root"
-      //presence attributes, per STYLING.md §3.1 — `""`, never `true`, which React
+      //presence attributes, per docs/decisions/styling.md §3.1 — `""`, never `true`, which React
       //would stringify to the string "true" and make `[data-image-loading]` match
       //in every state.
       data-image-loading={state === "loading" ? "" : undefined}
@@ -860,10 +832,6 @@ function ImageRoot(props: ImageProps) {
 }
 
 ImageRoot.displayName = "Image"
-
-/* =============================================================================
- * COMPOUND EXPORT
- * ============================================================================= */
 
 const ImageCompound = Object.assign(ImageRoot, {
   Placeholder: ImagePlaceholder,

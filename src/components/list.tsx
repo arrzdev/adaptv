@@ -4,10 +4,6 @@ import { useEffect, useRef } from "react"
 import type { ScrollViewProps } from "#adaptv/components/scroll-view"
 import { ScrollView } from "#adaptv/components/scroll-view"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export interface ListProps<T> {
   /** Row data. */
   data: readonly T[]
@@ -46,10 +42,6 @@ const ROW_STYLE_BASE: CSSProperties = {
   left: 0,
   width: "100%",
 }
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * Virtualized list — only the visible rows are in the DOM, so a 10k-row list scrolls

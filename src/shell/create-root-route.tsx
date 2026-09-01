@@ -60,14 +60,14 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
    *
    * The **same** component is what the consumer renders from a route whose data
    * is unavailable; every prop is optional so one component serves both call
-   * sites. Defaults to adaptv's `Offline`. → `RENDERING.md §3.1.2`
+   * sites. Defaults to adaptv's `Offline`. → `docs/design/rendering.md §3.1.2`
    */
   offlineComponent?: ComponentType<OfflineProps>
   /** Built app stylesheet URL (`import appCss from "…/main.css?url"`). */
   stylesEntryPoint?: string
   /** Extra inline scripts rendered by `<Scripts/>`. */
   headScripts?: RootHeadScript[]
-  /** App-owned splash; self-dismisses by returning `null` when ready (no props). */
+  /** App-owned splash; self-dismisses by returning `null` when ready. Receives {@link SplashScreenProps} — `revealedAt`, the moment it became visible. */
   splashScreenComponent?: ComponentType<SplashScreenProps>
   /** Show the splash in a browser tab too. Default `false` (installed-only). */
   splashScreenInBrowser?: boolean
@@ -84,7 +84,7 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
   /**
    * Days an install may be unreachable by OTA before the screen is taken. Omitted
    * (the default) means never — see `updateRequiredAfterDays` in the app config
-   * for why adaptv refuses to pick a number. → `LIFECYCLE.md §5.6`
+   * for why adaptv refuses to pick a number. → `docs/design/ota.md §5.6`
    */
   updateRequiredAfterDays?: number
   /** App-supplied screen for the above; falls back to adaptv's own. */
@@ -92,9 +92,10 @@ export type CreateRootRouteConfig = PwaHeadConfig & {
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
   /**
-   * The app-feel resets that are the app's call — text selection, scrollbars. Each
-   * defaults to `"app"`. Resolved against the runtime platform in the pre-paint init
-   * script and stamped on `<html>`. See {@link AdaptvUiConfig}.
+   * The app-feel resets that are the app's call — text selection, scrollbar
+   * visibility, and the iOS link callout. Per-option defaults (`utils/platform.ts`:
+   * `UI_SCOPE_DEFAULTS`), not a uniform one. Resolved against the runtime platform
+   * in the pre-paint init script and stamped on `<html>`. See {@link AdaptvUiConfig}.
    */
   ui?: AdaptvUiConfig
 }

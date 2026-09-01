@@ -1,7 +1,7 @@
 import type { UpdateManifest } from "#adaptv/ota/policy"
 
 /**
- * The signed form of a manifest, and the check that reads it. → `LIFECYCLE.md §5.4d`
+ * The signed form of a manifest, and the check that reads it. → `docs/design/ota.md §5.4d`
  *
  * ## Two signatures, because they defend different things
  *
