@@ -44,10 +44,6 @@ describe("Text", () => {
   })
 })
 
-/* =============================================================================
- * RENDER (STYLING.md §3.3)
- * ============================================================================= */
-
 describe("Text render", () => {
   it("renders the element it is given", () => {
     expect(firstEl(<Text render={<p />}>body</Text>).tagName).toBe("P")
@@ -100,7 +96,7 @@ describe("Text scaleWithSystem", () => {
     mockedScale.mockReturnValue(1)
   })
 
-  //opt-in, and a PRESENCE attribute (STYLING.md §3.1): unset means the attribute is
+  //opt-in, and a PRESENCE attribute (docs/decisions/styling.md §3.1): unset means the attribute is
   //ABSENT, never `data-scale-with-system="false"`
   it("is off by default — the attribute is absent, not present", () => {
     const el = firstEl(<Text />)
@@ -139,10 +135,6 @@ describe("Text scaleWithSystem", () => {
     expect(el.style.fontSize).toBe(`${base * 2}px`)
   })
 })
-
-/* =============================================================================
- * LINE CLAMP
- * ============================================================================= */
 
 /*
  * ⚠︎ Asserted on the returned object, not the rendered node. happy-dom's CSS parser
@@ -184,10 +176,6 @@ describe("textClampStyle", () => {
     )
   })
 })
-
-/* =============================================================================
- * PRECEDENCE — STYLING.md §2 / §2.1
- * ============================================================================= */
 
 describe("Text style precedence", () => {
   //The `base` half of §2's pair, and it is deliberately EMPTY: a run of text has no

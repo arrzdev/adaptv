@@ -12,7 +12,7 @@ import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { patchAndroidSplash, patchNativeIdentity } from "./native.mjs"
 
 // The generated MainActivity is the ONLY thing that puts an Android app under the system
-// bars — nothing in Capacitor asks for it below API 35 (NATIVE-SHELL §0.0). Each
+// bars — nothing in Capacitor asks for it below API 35 (`docs/roadmap/native-shell-plugin.md` §0.0). Each
 // expectation below is a symptom measured on a Pixel 7 emulator (API 34, WebView 113),
 // so a change that drops one has to argue with the screenshot.
 
@@ -118,8 +118,9 @@ describe("generated MainActivity — Android edge-to-edge", () => {
 // The `.dev` install (dev/preview) is where that happens: `cap add` can scaffold the gradle
 // `namespace` on the `.dev` package (a multi-platform prepare flips the shared env id before
 // Android is scaffolded), and `.MainActivity` then resolves to the bare Capacitor stub there,
-// not adaptv's edge-to-edge activity in the base package. This is the bug from NATIVE-SHELL
-// §0.2 as it actually shipped — invisible on WebView >= 140, under the status bar below it.
+// not adaptv's edge-to-edge activity in the base package. This is the bug from
+// `docs/roadmap/native-shell-plugin.md` §0.2 as it actually shipped — invisible on
+// WebView >= 140, under the status bar below it.
 const BASE_ID = "dev.arrz.example"
 
 /**

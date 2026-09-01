@@ -4,7 +4,6 @@ import type { ErrorInfo } from "react"
 import { Component, useState } from "react"
 import { IconButton } from "@/components/ui/icon-button"
 import { SecondaryButton } from "@/components/ui/secondary-button"
-import { apiErrorMessage } from "@/utils/api-error-message"
 import { copyToClipboard } from "@/utils/copy-to-clipboard"
 
 const isDev = import.meta.env.DEV
@@ -47,9 +46,10 @@ const DefaultErrorComponent = ({
   //raw error text can leak technical strings (e.g. "NetworkError when
   //attempting to fetch resource."), so only surface it in dev. prod gets a
   //generic next-step line.
-  const message = isDev
-    ? apiErrorMessage(error)
-    : "Please try again in a moment."
+  const message =
+    isDev && error instanceof Error && error.message
+      ? error.message
+      : "Please try again in a moment."
 
   const handleCopy = async () => {
     if (!traceText) return

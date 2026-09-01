@@ -1,5 +1,5 @@
 /**
- * Build-time constants for the service worker. → `RENDERING.md §3`
+ * Build-time constants for the service worker. → `docs/design/rendering.md §3`
  *
  * There is no `defineSwConfig` any more, and no app-owned `sw.config.ts`. The
  * worker is framework-owned: an app contributes modules through
@@ -27,7 +27,7 @@
  * with it. Vercel resolves static before functions the same way. Naming the SSR
  * shell something that is not a directory index means no asset matches `/`, the
  * request falls through to the server, and the shell stays a plain file the
- * worker can still precache and serve offline. → `RENDERING.md §3.3`
+ * worker can still precache and serve offline. → `docs/design/rendering.md §3.3`
  */
 export const SPA_APP_SHELL_FILE = "index.html"
 
@@ -51,7 +51,7 @@ export function appShellFile(render: "ssr" | "spa"): string {
  * and Cache Storage is keyed by URL and scoped per-ORIGIN, not per-user — so a
  * pattern that swept them in would serve one user's rendered page to the next.
  * The shell is the single exception and it is added by name, because it is
- * generated and identical for everybody. → `RENDERING.md §3.2`
+ * generated and identical for everybody. → `docs/design/rendering.md §3.2`
  */
 export const DEFAULT_SW_GLOB_PATTERNS = [
   "**/*.{js,css,ico,png,svg,woff2,json,txt}",

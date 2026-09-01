@@ -4,10 +4,6 @@ import {
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 export interface EdgeSwipeGesturesProps {
   /**
    * Fired on a swipe in from the **left** screen edge (a rightward drag) — the
@@ -33,16 +29,8 @@ export interface EdgeSwipeGesturesProps {
   threshold?: number
 }
 
-/* =============================================================================
- * CONSTANTS
- * ============================================================================= */
-
 const DEFAULT_EDGE_ZONE_PX = 30
 const DEFAULT_THRESHOLD_PX = 56
-
-/* =============================================================================
- * ROOT
- * ============================================================================= */
 
 /**
  * Custom edge-swipe gesture surface — renders nothing, just listens. Fires

@@ -34,10 +34,6 @@ import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 import tryCatch from "#adaptv/utils/try-catch"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 type RefreshPhase = "idle" | "pulling" | "refreshing" | "closing"
 
 type CloseCause = "release" | "refresh"
@@ -84,10 +80,6 @@ export interface PullToRefreshProps {
   scrollContainerRef?: RefObject<HTMLElement | null>
 }
 
-/* =============================================================================
- * CLASSES
- * ============================================================================= */
-
 //LOCKED: `relative` is the containing block the indicator track is absolutely
 //positioned against — without it the spinner escapes to the nearest positioned
 //ancestor and animates somewhere else entirely. `shrink-0 grow-0` is BASE: it is a
@@ -105,10 +97,6 @@ const PULL_TO_REFRESH_INDICATOR_SPIN_CLASS = "animate-spin"
 const PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS =
   "relative z-0 motion-reduce:transition-none"
 const PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS = "relative z-0"
-
-/* =============================================================================
- * CONTEXT
- * ============================================================================= */
 
 const PullToRefreshContext =
   createContext<PullToRefreshContextValue | null>(null)
@@ -154,10 +142,6 @@ function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
 function isFromSwipeable(target: EventTarget | null) {
   return isSwipeableGestureTarget(target)
 }
-
-/* =============================================================================
- * MOTION
- * ============================================================================= */
 
 const PULL_TO_REFRESH_MOTION_INSTANT = { duration: 0 } as const
 
@@ -253,10 +237,6 @@ function buildSpinnerRotateTransition(
   return { rotate: transition }
 }
 
-/* =============================================================================
- * PULL INDICATOR
- * ============================================================================= */
-
 function PullIndicatorArc({
   arcProgress,
   spinning,
@@ -302,10 +282,6 @@ function PullIndicatorArc({
     </svg>
   )
 }
-
-/* =============================================================================
- * PULL TO REFRESH
- * ============================================================================= */
 
 /**
  * Scroll-top pull gesture that runs `onRefresh` and animates a neutral indicator.

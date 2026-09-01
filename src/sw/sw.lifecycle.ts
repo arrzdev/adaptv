@@ -3,11 +3,9 @@ import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
 import type { ServiceWorkerLifecycleOptions } from "#adaptv/sw/sw.types"
 
 /**
- * Delete previous builds' runtime caches. → `DECISIONS.md` B2
- *
- * `cleanupOutdatedCaches()` only purges *precaches*, so adaptv's runtime buckets
- * (`static-<tag>`, `pages-<tag>`, `documents-<tag>`) accumulated one full set per
- * deploy, forever, ending in a quota error on a frequently-deployed app.
+ * Delete previous builds' runtime caches. Which ones qualify, and why the sweep
+ * is needed at all: {@link selectStaleCaches} / `isStaleRuntimeCache` in
+ * `sw.navigation-policy.ts`.
  *
  * **Never rejects.** This runs inside `event.waitUntil()` during activate, and a
  * rejection there can leave the worker stuck and the app unbootable. Losing a
@@ -57,7 +55,7 @@ export function registerRuntimeCacheSweep(buildTag: string) {
 }
 
 /**
- * Turn Navigation Preload on — or deliberately off. → `RENDERING.md §3.3`
+ * Turn Navigation Preload on — or deliberately off. → `docs/design/rendering.md §3.3`
  *
  * A registered worker sits in the path of every navigation, so the browser pays
  * SW startup (~50–250ms cold on mobile) *before* the document request even

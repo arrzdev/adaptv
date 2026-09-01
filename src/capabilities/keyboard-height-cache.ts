@@ -146,9 +146,10 @@ export function predictKeyboardHeight(el: HTMLElement): number | null {
 }
 
 /**
- * Record a *confirmed, stable* keyboard height. Callers pass only settled measurements (the web
- * observer commits a height only after its stability window), so the cache always trends toward
- * the truth of whatever keyboard the user is actually running — and a keyboard-app or language
+ * Record a keyboard height a caller has committed to. Not every one of those went through the
+ * web observer's stability window — a first raise and an upward correction commit (and record)
+ * immediately, because the lift has to start now; only a DROP waits for the window. What the
+ * cache therefore trends toward is the height this device actually settles at — and a keyboard-app or language
  * switch is absorbed the next time that field is measured. A no-op for a non-field or an
  * unchanged height, so it is cheap to call on every measurement.
  */

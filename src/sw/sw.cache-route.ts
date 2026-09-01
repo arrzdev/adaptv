@@ -11,7 +11,7 @@ import {
  *
  * The strategy is a string rather than a constructed object on purpose: the
  * caching library is an implementation detail adaptv reserves the right to swap
- * (`RENDERING.md §3.6`), and a signature that takes its objects would make every
+ * (`docs/design/rendering.md §3.6`), and a signature that takes its objects would make every
  * app that caches anything a blocker on that decision.
  */
 
@@ -45,7 +45,7 @@ export type CacheRouteOptions = {
  * ⚠︎ Never route **navigation** requests or credentialed documents through this.
  * Cache Storage is keyed by URL and scoped per-ORIGIN, not per-user, so a cached
  * personalized response is served to whoever asks for the same URL next — a
- * cross-user leak rather than a stale-data bug. → `RENDERING.md §3.2`
+ * cross-user leak rather than a stale-data bug. → `docs/design/rendering.md §3.2`
  */
 export function cacheRoute(options: CacheRouteOptions): void {
   const expiration =
@@ -72,9 +72,12 @@ export function cacheRoute(options: CacheRouteOptions): void {
           })
 
   registerRoute(({ url, request }) => {
-    //Navigations belong to adaptv's route, which is registered first and
-    //therefore already won — this guard is for the case where an app matcher is
-    //broad enough to claim one anyway.
+    //An app route may never answer a navigation. On `ssr`/`spa` adaptv's own
+    //navigation route is registered first and normally wins anyway; on the
+    //`capacitor` target NO navigation route is registered at all
+    //(`sw.navigation-policy.ts`: `kind: "none"`), so there is nothing in front
+    //and this guard is the only thing stopping a broad app matcher from
+    //serving a document out of a runtime cache.
     if (request.mode === "navigate") return false
     return options.match(url, request)
   }, strategy)

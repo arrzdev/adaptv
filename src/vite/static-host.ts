@@ -10,7 +10,7 @@ import {
 } from "#adaptv/vite/adaptv-context.ts"
 
 /**
- * Emit the files a static host needs. -> `DECISIONS.md` B26, `§6.4`, `LIFECYCLE.md 1.2`
+ * Emit the files a static host needs. -> `docs/decisions/register.md` B26, `docs/decisions/rendering-and-delivery.md §2`, `docs/design/lifecycle.md 1.2`
  *
  * Gated on `render: "spa"`, not on a nominated host. A SPA build produces a bucket
  * of files and has no idea which platform will serve them; each of these four is

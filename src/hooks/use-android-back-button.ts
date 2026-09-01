@@ -17,7 +17,7 @@ import { getOS, isNativePlatform } from "#adaptv/utils/platform"
  * `canGoBack() ? back() : exitApp()` with no interception point, so an open
  * drawer had no way to claim the press and back navigated out from under it.
  * That behaviour is now the lowest-priority entry in a shared chain: overlays
- * register above it and consume the press first. → `COORDINATION.md §2`
+ * register above it and consume the press first. → `docs/design/coordination.md §2`
  *
  * Android-native only for the *hardware* button (iOS and web have none), but the
  * chain itself is cross-platform and drives {@link adaptvBack} everywhere.

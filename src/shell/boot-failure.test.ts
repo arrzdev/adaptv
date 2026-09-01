@@ -17,7 +17,7 @@ import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender"
  * prerendered component, puts it in the real emitted document, runs the real
  * inline watchdog, kills the entry script, and asserts on what a user would be
  * looking at. Nothing here is a stand-in.
- * → RENDERING.md §3.1.3
+ * → docs/design/rendering.md §3.1.3
  */
 
 const ENTRY = "/assets/client-def456.js"

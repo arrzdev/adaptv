@@ -1,6 +1,5 @@
 //@repo/synq/protocol — the sync wire contract: the pull/push request +
-//response shapes shared by client transports and sync servers, plus the
-//dependency-free structural validators for documents crossing the wire.
+//response shapes a collection transport is written against.
 
 export type {
   SyncPullRequest,
@@ -10,8 +9,3 @@ export type {
   SyncPushResponse,
   SyncPushResultStatus,
 } from "../protocol/protocol.types"
-export {
-  isDocMeta,
-  isHlc,
-  isStoredDocument,
-} from "../protocol/validate"

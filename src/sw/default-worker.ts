@@ -45,8 +45,7 @@ registerNavigationRoute({
   appShellUrl: __ADAPTV_APP_SHELL_URL__,
 })
 
-//Cache-first: a content-hashed filename IS the version, so a cached entry can
-//never be stale and revalidating it is guaranteed-useless traffic.
+//Cache-first — see `createHashedAssetStrategy` in sw.strategies.ts.
 registerStaticAssetsRoute({ buildTag: __ADAPTV_BUILD_TAG__ })
 
 registerServiceWorkerLifecycle({

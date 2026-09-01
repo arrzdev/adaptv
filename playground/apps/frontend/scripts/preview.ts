@@ -8,10 +8,8 @@ import { PORTS } from "@/ports"
 // only a production bundle shows — a missing precache entry, a service worker serving a
 // stale shell, an asset path that only worked because Vite was serving it.
 //
-// Same shape as dev on purpose: ports freed first (web preview binds the app port, and a
-// dev server from the last run is usually still holding it), the same fatal env gate, and
-// the backend running beside it as its own turbo task — a preview build talks to the real
-// API, so previewing without it would only prove the app renders offline.
+// Same shape as dev on purpose: ports freed first — web preview binds the app port, and a
+// dev server from the last run is usually still holding it.
 //
 // `--latest` for the same reason dev uses it: a turbo pane must never block on the
 // interactive device picker. Run `pnpm exec adaptv preview <target>` to pick another device.
@@ -29,7 +27,6 @@ const target = arg as NativeTarget | undefined
 
 runDev({
   ports: Object.values(PORTS),
-  preflight: [{ command: "tsx", args: ["env/check-env.ts"] }],
   command: "adaptv",
   args: target ? ["preview", target, "--latest"] : ["preview", "web"],
 })

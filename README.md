@@ -1,261 +1,135 @@
-# adaptv
+<p align="center">
+  <img alt="adaptv" src="assets/adaptv-mark.svg" height="104" />
+</p>
 
-**One React codebase → desktop web, an installable PWA, and native iOS/Android — correct on every target, no per-platform babysitting.**
+<h1 align="center">adaptv</h1>
 
-adaptv is a cross-platform React framework. You write ordinary React (DOM/CSS), and adaptv makes it
-behave like a native app on six runtimes: desktop browser, mobile browser (iOS/Android), installed PWA
-(iOS/Android), and a native Capacitor build (iOS/Android). Native capability comes through **Capacitor
-as a thin seam**; on top sit **primitives that are correct-by-construction** — a `View` that can't
-scroll wrong, a splash that follows the app theme, capability hooks that transparently pick
-browser / polyfill / native.
+<p align="center">
+  <b>One React codebase → desktop web, mobile web, an installable home-screen app,<br />and real iOS and Android apps that don't feel like a website in a box.</b>
+</p>
 
-> **It's Expo's ambition on Capacitor's mechanism — and, unlike Expo, the web is the _primary_ target,
-> not a bolt-on.** Closest existing thing is Ionic; adaptv beats it on correctness and developer joy by
-> being opinionated end-to-end.
+<p align="center">
+  You write ordinary React against the DOM, and ordinary CSS. adaptv owns everything<br />
+  between that and an app that feels right on every target — the shell, the platform<br />
+  divergences, the native project, and the tooling that runs it all.
+</p>
 
-This is a **private, personal framework** (extracted from the `chopchop` app, where it lived as
-`@repo/adaptv`). Not public — yet, maybe ever.
+<p align="center">
+  <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-orange?style=flat-square" />
+  <a href=".github/workflows/ci.yml"><img alt="CI: typecheck, lint, tests" src="https://img.shields.io/badge/CI-typecheck%20%C2%B7%20lint%20%C2%B7%20tests-blue?style=flat-square" /></a>
+  <img alt="License: UNLICENSED" src="https://img.shields.io/badge/license-UNLICENSED-lightgrey?style=flat-square" />
+  <img alt="Node >= 22.12" src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen?style=flat-square" />
+</p>
 
-🧭 **Continuing development?** Start with [`HANDOFF.md`](HANDOFF.md) — current state, how to develop, roadmap, and locked-in decisions.
+<p align="center">
+  <a href="docs/README.md"><b>Documentation</b></a>
+&ensp;•&ensp;
+  <a href="docs/design/architecture.md">Architecture</a>
+&ensp;•&ensp;
+  <a href="docs/decisions/positioning.md">Why it exists</a>
+&ensp;•&ensp;
+  <a href="docs/roadmap/README.md">Roadmap</a>
+</p>
 
-🧭 **Start with [`docs/DECISIONS.md`](docs/DECISIONS.md)** — the decision register (🔒 locked / 📐 designed /
-🔀 conflicted / ❓ open), every doc-vs-code conflict, the recorded bugs, and the time-sensitive items.
-
-📖 **Read these first:** [`docs/VISION.md`](docs/VISION.md) (the north star + doctrine) ·
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (the cross-platform contracts: shell/frame/`View`,
-storage, TanStack opacity) · [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) (config → build → deploy → native
-→ OTA, the Vite-plugin decision model + CLI) · [`docs/COORDINATION.md`](docs/COORDINATION.md) (the runtime
-app lifecycle: app state/resume, back chain, gesture controller, route lifecycle) ·
-[`docs/RENDERING.md`](docs/RENDERING.md)
-(rendering/delivery + the hard `createServerFn` limit) · [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) (what
-adaptv fixes, how, and how to test each) · [`docs/TESTING.md`](docs/TESTING.md) ·
-[`docs/capacitor-internals.md`](docs/capacitor-internals.md).
-
-⌨️ **Changing the CLI?** [`docs/CLI-UX.md`](docs/CLI-UX.md) is the **output contract** — read it
-before touching `bin/`. Every rule there exists because the output broke it once; the test suite
-can't catch any of them, so the manual checklist at the end is the gate.
-
-**Reference:** [`STYLING.md`](docs/STYLING.md) (how consumers restyle primitives) ·
-[`FACADE.md`](docs/FACADE.md) (the `createServerFn` ban) · [`ANIMATION.md`](docs/ANIMATION.md) (the
-motion substrate + the iOS 60Hz ceiling) · [`PRIOR-ART.md`](docs/PRIOR-ART.md) (what we port from Ionic,
-and the attribution convention) · [`COOKBOOK.md`](docs/COOKBOOK.md) (consumer recipes — offline UI, auth
-guards, offline-first data) · [`docs/research/`](docs/research/) (platform findings — what a device
-does that nothing in the code can tell you, and the experiment that established it).
+> [!WARNING]
+> **Pre-alpha and private — there is no install command.** The package is `private: true` and its
+> `exports` still resolve to `./src/**`. It is consumed today by linking a local checkout, which is
+> exactly what [`playground/`](playground/) does. See [Status](#-status).
 
 ---
 
-## The one boundary that makes it work
+## 🚀 What you get
 
-A single codebase runs on all targets **only because adaptv code is isomorphic**:
+| | |
+|---|---|
+| 🧾 **One config file** | `adaptv.config.ts` generates the web manifest, native projects, launch screens, icons, theme and service worker. There is no second config. |
+| 🖼️ **A frame you inherit** | The shell owns the document, critical CSS, the pre-paint theme stamp, safe areas and the edge-to-edge frame. Your route root is just a `View`. |
+| 🧱 **Primitives that carry the divergences** | `View` · `List` · `Drawer` · `Swipeable` · `PullToRefresh` · `WheelColumn` · `Image` · `Input` · `ScrollView` — plus offline, not-found and boot-error screens. |
+| 🔌 **Capabilities, branch already taken** | 19 modules and 40 hooks: haptics, keyboard, network, clipboard, share, geolocation, orientation, status bar, back. Web and native branches, chosen internally. |
+| 💾 **Storage in three tiers** | Sync key-value · async blob store · secure, on the platform keychain — and documented *best-effort, not secure*, on the web. |
+| 📡 **Offline and updates** | A framework-owned service worker, plus a self-hosted **signed** over-the-air update channel for installed apps. |
+| 🎨 **Icons from one image** | The whole set, including iOS's dark and tinted variants and Android's themed icon, sized against the mask each platform actually applies. |
 
-- ✅ **`loader` / `beforeLoad`** are Router features, not SSR — they run on the server for SSR's first
-  paint and in the browser everywhere else. Use them freely.
-- ❌ **`createServerFn`, server routes, server-only request/cookie reads** — these need the app's own
-  server and die in a static Capacitor bundle.
-- **Rule: don't ban loaders — ban server-only calls.** Data is consumer-wired (TanStack Query +
-  IndexedDB persister, client-held token). Full model in [`docs/RENDERING.md`](docs/RENDERING.md).
-
----
-
-## Quick start
+One tool drives the whole loop:
 
 ```bash
-# 1. auth to GitHub Packages (read:packages token in GITHUB_TOKEN)
-#    the app's .npmrc needs:  @arrzdev:registry=https://npm.pkg.github.com
-pnpm add @arrzdev/adaptv
-
-# ...or during framework dev, link the local checkout instead:
-#    "@arrzdev/adaptv": "link:../adaptv"   in the app's package.json
+adaptv doctor                        # does this machine have what a native build needs?
+adaptv dev     web|ios|android|all   # live reload, incl. a physical device over the LAN
+adaptv preview web|ios|android|all   # the real build, no live reload
+adaptv build   web|ios|android|all   # deployable site · unsigned .ipa · debug .apk
+adaptv keys ota                      # the signing pair for the update channel
+adaptv icons --input ./mark.png      # every icon your app needs
 ```
 
-```ts
-import { useTheme } from "@arrzdev/adaptv/hooks"
-import { View, Button } from "@arrzdev/adaptv/components"
-import { adaptv } from "@arrzdev/adaptv/vite"
-import { defineApp } from "@arrzdev/adaptv/config"
-```
+## ✨ Why it exists
 
-Subpath exports: `/shell` `/router` `/route-globals` `/config` `/components` `/hooks` `/capabilities`
-`/storage` `/ota` `/routes` `/utils` `/sw` `/vite` `/styles.css`.
+Anyone who wants one codebase on every screen ends up at the same fork:
 
-### The CLI
+| Road | You get | You give up |
+|---|---|---|
+| Render to **native views** | real native rendering | the web platform — a second rendering model, a second styling system |
+| Keep the **DOM**, put it in an app | React, CSS, the whole web ecosystem | nothing… except every place a web page does not behave like an app |
 
-```bash
-adaptv doctor                          # check the native toolchain (JDK, SDK, Xcode, pod)
-adaptv dev     web|ios|android|all     # live reload: one Vite dev server, native WebViews attached
-adaptv preview ios|android|all         # build SPA → sync → install → launch (static, no reload)
-adaptv build   ios|android|all         # build SPA → sync → produce the .ipa / .apk
-adaptv icons --input <image>       # the whole icon set — web + native — from one image
+**adaptv takes the second road and refuses to pay its usual price.** That price is not vague rough
+edges. It is a specific catalogue — safe areas landing after first paint, three unrelated keyboard
+mechanisms, overscroll chaining, `:active` that can't be cleared from JS, edge-swipe fighting the OS
+gesture, two splash screens colliding, cookies that simply do not work on device. Each is solvable in
+an afternoon. Together they are why *"we'll just wrap the web app"* ends up feeling wrapped.
 
-# icons
-#   --input <image>    png or svg, 1024px+ — the only thing you normally pass
-#   --output <dir>     where to write. Defaults to `icons` in adaptv.config.ts; with
-#                      neither set, adaptv refuses rather than guessing a directory
-#   --yes              skip the "replace them?" prompt (required with no TTY)
-# icons — iOS 18 appearances (derived from --input unless you override)
-#   --dark <image>     the dark-mode icon: your mark with NO background, since iOS draws
-#                      its own near-black one
-#   --tinted <image>   the tinted icon: greyscale on black. In "Tinted" home-screen mode
-#                      the user picks ONE colour and iOS recolours every icon with it,
-#                      mapping that colour onto the luminance — bright greys take the
-#                      colour, dark ones stay dark
-# Apple recommends shipping all three: the system only generates them for designs simple
-# enough to have clear foreground/background contrast, and with no tinted variant supplied
-# it applies the tint over the ORIGINAL icon — background and all. adaptv always writes
-# them, from the isolated mark on true black, so the ramp uses the full range. Supply your
-# own when even that loses it: a DARK mark needs INVERTING for both (black art on a black
-# backdrop is nothing), and a mark whose internal colours share a luminance loses its
-# structure. adaptv measures the mark and says which of the two you need.
-# icons — Android themed icons (derived from --input unless you override)
-#   --monochrome <image>
-#                      the themed-icon layer. On Android 13+ the home screen recolours every
-#                      icon to match the wallpaper: the launcher takes this layer's ALPHA,
-#                      fills it with an ink it chose, and draws it on a background it chose.
-#                      An app with no <monochrome> layer opts out and sits there in full
-#                      colour. adaptv derives one from your mark's luminance — internal
-#                      contrast kept where the mark has any, a flat silhouette where it
-#                      hasn't — so a black wordmark themes correctly instead of vanishing.
-#                      Supply your own to draw the simplified one-ink version yourself
-# icons — tuning (you shouldn't need these)
-#   --margin <pct>     room left inside EVERY slot's limit (0–50, default 10) — the mask
-#                      safe ring on Android, the tile itself on iOS and the favicons.
-#                      adaptv warns below the default and above 30
-#   --padding <pct>    extra inset on EVERY icon, on top of the fit above (0–40, default 0)
-#   --background <hex> the colour behind the mark, for the slots that can't carry
-#                      transparency (iOS, favicons, Android's adaptive tile). adaptv
-#                      normally MEASURES this off your source's border and says which
-#                      colour it read; pass this to overrule that reading. The iOS dark
-#                      variant and Android's adaptive foreground stay transparent either
-#                      way — those are layers the OS composites itself
-# Every run writes .adaptv/icons-preview.html — every icon under the mask its platform
-# actually applies, both safe-zone rings, and the manifest adaptv will emit. adaptv reads the
-# source's pixels to find where the background stops, then sizes the mark for each slot: by
-# RADIUS where a mask cuts a circle, by BOUNDING BOX where nothing crops it. Art you already
-# framed with room around it keeps that room — adaptv only ever adds. It WARNS about a source
-# that will make worse icons (too small, not square, no isolable background) and generates
-# anyway — it never refuses.
-# dev / preview flags
-#   --target <id>   launch on a specific device/simulator id (skips the picker)
-#   --latest        reuse the last device you picked for this platform
-#   --host          (dev) serve on this machine's LAN address for a PHYSICAL device — auto when the target is
-#                   a real device; pass an ip to pin it
-#   --force         reinstall even when nothing native changed (otherwise dev/preview skip the
-#                   rebuild and just relaunch the installed app)
-#   -- <vite args>  (dev) forwarded to the Vite dev server (e.g. `-- --port 4000`)
-# build flags
-#   --output <path> where to write the artifact (default: .adaptv/builds/)
-#   --force         rebuild even when unchanged (the web build + sync are cached)
-# all commands
-#   --verbose       show the full underlying tool logs (raw passthrough)
-```
+Three convictions shape the answer: behaviour with cross-platform consequences goes through a **typed
+prop**, not a class name, so the ergonomic path is the correct path; **layout shift is a named enemy**,
+because a button that moves out from under a thumb is a correctness bug; and **some problems can only
+be fixed by a framework** — code that needs a server at request time is fine on the web and dead in a
+shipped mobile bundle, so adaptv turns it into a build error with a caret on the offending line.
 
-`dev` and `preview` show a branded device picker (arrow keys) and **remember your choice per platform**
-in `.adaptv/state.json`, so the next `adaptv dev ios --latest` skips straight to the same device (shown
-as a `· latest` tag on the launch line). The `all` target drives both platforms **in parallel** with a
-clean two-column progress board; the inner cap/gradle/xcode/pod logs are captured and only surfaced on
-failure (or with `--verbose`).
+📖 The full argument, *including the reasons to be sceptical of it*, is in
+[`decisions/positioning.md`](docs/decisions/positioning.md). The divergence catalogue in full is
+[`VISION.md` §3](docs/VISION.md), and how each one is verified is
+[`design/behaviors.md`](docs/design/behaviors.md).
 
-**Build cache** — a source fingerprint lets a re-run **skip the web build
-and sync** when nothing that affects the bundle changed (`✓ web build · cached`), so an unchanged
-`preview`/`build` goes almost straight to launch. `--force` rebuilds unconditionally.
+## 🚦 Status
 
-Everything the CLI remembers between runs — that fingerprint, what is already synced/installed, your
-device picks — lives in the single git-ignored **`.adaptv/state.json`**. Deleting it costs one rebuild
-and one picker prompt, nothing else.
+| | |
+|---|---|
+| 📦 **Published?** | **No.** `private: true`, `exports` resolve to `./src/**` — there is no install command to give you. |
+| 🔗 **How it's consumed** | A local checkout linked into the app — `"@arrzdev/adaptv": "link:../../.."`, as [`playground/`](playground/) does. |
+| 🏗️ **Dist build** | Built and verified (`pnpm build:check`); the cutover hasn't happened → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
+| ✅ **Green today** | typecheck · lint · **2,618 unit tests across 167 files** — all gated in CI on every pull request |
+| 📱 **Verified on device** | iOS Simulator and Android emulator, driven from this repo, plus a browser e2e suite in the playground |
+| 🚧 **Not built yet** | a first-party native shell module · a scaffolder for new apps · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
 
-The CLI owns the native toolchain env and **owns the native project templates** (it patches
-`MainActivity` / `AppDelegate` / launch storyboard / colour resources) so the consumer never touches
-a Capacitor config. The native projects live inside the hidden, git-ignored **`.adaptv/`** dir
-(`.adaptv/ios`, `.adaptv/android`) — regenerated artifacts, like `dist/`, not app source.
+## 📚 Documentation
 
-> `adaptv dev web` runs the Vite dev server on its own (no native WebView); web *deploy* stays your
-> host's tool.
+[**`docs/README.md`**](docs/README.md) is the index — five folders, split by the *kind of claim* a file makes.
 
----
+| Read | To find out |
+|---|---|
+| [`VISION.md`](docs/VISION.md) | the north star, the ten principles, and the divergence catalogue in full |
+| [`design/architecture.md`](docs/design/architecture.md) | the load-bearing contracts: the three layers of the frame, `View`, storage |
+| [`design/rendering.md`](docs/design/rendering.md) | rendering, delivery and the offline model |
+| [`design/lifecycle.md`](docs/design/lifecycle.md) | config → build → native → update ([`design/ota.md`](docs/design/ota.md) for the channel) |
+| [`decisions/register.md`](docs/decisions/register.md) | every locked decision, open question and recorded bug |
+| [`guides/cookbook.md`](docs/guides/cookbook.md) | building an app on it: offline UI, auth guards, offline-first data |
+| [`research/`](docs/research/README.md) | what a device actually does, each with the experiment that established it |
 
-## Status — what's done vs not
+> [!IMPORTANT]
+> **Changing the CLI?** [`design/cli-contract.md`](docs/design/cli-contract.md) first, without
+> exception. Every rule in it exists because the output broke it once, and the test suite cannot
+> catch most of them.
 
-### ✅ Working (transported from chopchop, verified on both simulators)
+## 🗺️ Repository layout
 
-- **Platform foundation** — `isNativePlatform` / `isInstalledApp` / `getOS`, pre-paint
-  `data-adaptv-platform` + `data-adaptv-os` stamp, `app:` / `web:` style variants (a native WebView lies
-  about `display-mode`, so nothing keys off it).
-- **Shell** — root document, critical CSS, memory-history-when-installed (edge-swipe/back inert),
-  edge-to-edge by default, safe-area utilities.
-- **Capabilities** (browser / polyfill / native behind `isNativePlatform`) — haptics, keyboard,
-  network, status bar, geolocation, Android hardware back, native theme mirror, splash, external-link
-  browser.
-- **Splash** — colour-driven mask (Android launch theme + `colors.xml`; iOS colour asset + solid launch
-  storyboard). `splashMaskMode`: `preferences` (follows the app's `useTheme`) / `system` / `light` /
-  `dark`. Self-unmounting React splash (returns `null` when ready), no double-splash, Android-12
-  system-splash icon stripped, theme-aware on both platforms.
-- **Config** — flat `adaptv.config.ts` (`appId`, `appName`, splash options, and a top-level `render`
-  — `"ssr"` (default) or `"spa"`, which is what decides whether your deploy needs a running server)
-  generates the Capacitor config, the web manifest, and the native projects. There is deliberately no
-  `host` key **and no deploy plugin to add** — adaptv wires the server build, and the target is detected
-  from the platform (or set with `NITRO_PRESET` in CI). Your `vite.config.ts` is `[adaptv()]`.
-- **Build switch** — Vite plugin: web = SSR + service worker; capacitor = static SPA, no SW.
-- **Native build** — Capacitor iOS + Android, debug `.apk` + unsigned `.ipa`.
-- **Primitives** — `View`, `List` (virtualized), `Button` (press physics + haptics), `Link`
-  (internal/external split), `ExternalLink`, `ScrollView`, `Image`, `Swipeable`, `PullToRefresh`,
-  `Drawer`/`Sheet`, `Input`, `TextArea`, `Checkbox`, `Switch`, `WheelColumn`, and `AvoidKeyboard`
-  (hybrid native+web keyboard avoidance — the autofocus race is fixed by eager listener attach).
-- **Router facade** — a curated re-export of TanStack Router from `adaptv/router` (no `export *`, no
-  server-only APIs); generated `*.gen` files live under `.adaptv/`, so apps import `adaptv`, not
-  `@tanstack/*`.
-- **Storage** — the three-tier `adaptv/storage` namespace (`local` / `secure` / `preferences`),
-  platform-correct across web and native.
-- **OTA** — self-hosted, pointer-flip bundle swaps via `adaptv/ota` (pure, testable policy + updater).
-- **Live reload** — `adaptv dev` runs one Vite dev server with the native WebViews attached and
-  hot-reloading on save, including over the LAN to a physical device (`--host`).
-- **Icons** — one directory (`icons` in `adaptv.config.ts`), every target. `adaptv icons
-  <image>` produces the set from a single png/svg; adaptv then **measures** what's there and
-  derives the web manifest, the head links, and the native launcher icons from it — full-bleed
-  art for iOS and Android's legacy square, safe-zoned maskable art for Android's adaptive
-  foreground. An app with no icons ships **adaptv's own mark**, never Capacitor's stock one.
+- [`src/`](src) — the framework: the build plugin, the runtime primitives, capabilities, storage, OTA.
+- [`bin/`](bin) — the `adaptv` CLI. Read [`design/cli-contract.md`](docs/design/cli-contract.md) before touching it.
+- [`docs/`](docs) — five folders, split by the kind of claim each file makes.
+- [`playground/`](playground) — a real app vendored into the repo and linked against the local checkout.
+- [`scripts/`](scripts) — repo tooling. Nothing here ships.
 
-> **The seed is green:** `pnpm typecheck` (0), `pnpm test` (515/515), `pnpm biome:check` (0). CI runs all
-> three on every PR.
+## 🛠️ Developing on adaptv
 
-### 🚧 Not done yet (see [`docs/BEHAVIORS.md`](docs/BEHAVIORS.md) §status + [`docs/RESEARCH.md`](docs/RESEARCH.md))
-
-- **First-party `@adaptv/shell` Capacitor plugin** — collapse edge-to-edge + splash + status/nav bar +
-  theme into one native module we own (instead of composing community plugins + CLI patches); owns the
-  Android-15/SDK-35 inset+keyboard fix. **Designed:** [`docs/NATIVE-SHELL.md`](docs/NATIVE-SHELL.md).
-- **`create-adaptv`** — `pnpm create adaptv` scaffolder. **Designed:** [`docs/LIFECYCLE.md`](docs/LIFECYCLE.md) §8.
-- **Published build** — currently ships **TypeScript source** (works via local link / bundler compile).
-  For real GitHub Packages publishing, add a `dist` build (tsup/unbuild) + `.d.ts`.
-- **Primitive breadth** — `Text` / `Modal` / `Tabs` polish.
-
----
-
-## Repo layout
-
-```
-src/            framework: shell · components · capabilities · config · hooks · routes · storage · ota · native · vite plugin · sw
-  interface/    the public export barrels (map to package.json "exports")
-bin/adaptv.mjs   the CLI (self-contained Node ESM; owns the native toolchain + templates)
-  lib/          CLI internals: dev-server · devices · cache · build · doctor · privacy-manifest
-playground/     a real app (chopchop) vendored for dogfooding — see docs/DEVELOPMENT.md
-docs/           VISION · ARCHITECTURE · DECISIONS · LIFECYCLE · COORDINATION · NATIVE-SHELL · RENDERING · BEHAVIORS ·
-                TESTING · RESEARCH · STYLING · FACADE · ANIMATION · PRIOR-ART · COOKBOOK · VS-IONIC · capacitor-internals
-```
-
-## Distribution & versioning
-
-- **Now:** private GitHub Packages (`@arrzdev/adaptv`), or a local `link:` during framework dev. Pin per
-  project; a deploy builds from the lockfile — **updates never propagate automatically** (bump +
-  commit the lockfile in each project). See [`docs/RENDERING.md`](docs/RENDERING.md) / the versioning
-  notes.
-- **Consumers need** two `.npmrc` lines (`@arrzdev:registry=…` + the auth token) and a `GITHUB_TOKEN`
-  with `read:packages`.
-
-## Develop against a real app
-
-`playground/` is a real app vendored into this repo — chopchop's `adaptv-testing` branch (React app
-+ Cloudflare Workers API + D1), linked to its own checkout via `"@arrzdev/adaptv": "link:../../.."`.
-Every worktree gets its own copy with the branch, so a framework change and the consumer change it
-forces land in one commit. Drive it from the root of any checkout **or worktree**:
+`playground/` is a real frontend app linked against the local checkout, so a framework change and the
+app change it forces land together. Framework development only — nothing in `playground/` or
+`scripts/` ships.
 
 ```bash
 pnpm dev:web        pnpm preview:web        pnpm build:ios
@@ -263,18 +137,13 @@ pnpm dev:ios        pnpm preview:ios        pnpm build:android
 pnpm dev:android    pnpm preview:android    pnpm build:all
 pnpm dev:all        pnpm preview:all
 
-pnpm adaptv doctor                     # ad-hoc passthrough to the CLI in the app
+pnpm gate           # typecheck, lint, unit tests, colour — everything CI runs
 ```
 
-Full loop — fresh worktrees, ports, what the playground is (and is not):
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+The full loop — fresh worktrees, ports, what the playground is and is not — is in
+[`DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
-## Verify
+## License
 
-```bash
-pnpm typecheck     # 0 errors
-pnpm biome:check   # 0 errors
-pnpm test          # vitest (happy-dom) — 515/515
-```
-
-All three are green today and gated in CI on every PR (`.github/workflows/ci.yml`).
+`UNLICENSED` — private and unpublished. Third-party notices for code adaptv ports are in
+[`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).

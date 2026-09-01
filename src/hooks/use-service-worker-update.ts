@@ -13,7 +13,7 @@ export type ServiceWorkerUpdate = {
 }
 
 /**
- * The app side of `serviceWorkerUpdate: "prompt"`. → `RENDERING.md §3.4`
+ * The app side of `serviceWorkerUpdate: "prompt"`. → `docs/design/rendering.md §3.4`
  *
  * Under that policy a new worker installs and **waits**: the old build's chunks
  * stay reachable and nothing reloads without intent. This hook is how the app

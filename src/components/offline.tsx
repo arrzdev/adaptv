@@ -5,7 +5,7 @@ import { mergeStyles } from "#adaptv/utils/styles"
 /**
  * Props for the offline UI. **Every one is optional**, and that is the design:
  * the same component is rendered from two places with different amounts of
- * context. → `RENDERING.md §3.1.2`
+ * context. → `docs/design/rendering.md §3.1.2`
  *
  * | Rendered by | When | `onRetry` |
  * |---|---|---|
