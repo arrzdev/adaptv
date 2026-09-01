@@ -269,7 +269,7 @@ describe("prettyLine — the vocabulary is closed (R24)", () => {
     expect(prettyLine("2576 modules transformed.")).toBe("")
   })
 
-  it("drops every line of a crash dump (R33)", () => {
+  it("drops every line of a crash dump (R70)", () => {
     //`adaptv build android` with the port ports.ts pins already taken. Only the last line
     //ever reached the row (`⠴ web  node.js v26.0.0`); assert the WHOLE dump renders nothing,
     //so no future reshuffle of these filters lets a different line of it through.
