@@ -84,15 +84,22 @@ const NODE_ENTRIES = [
  * convenience: these run on the developer's machine, inside Vite or the CLI, and
  * never enter a bundle.
  *
- * `src/ota/native-fingerprint.ts` is the sharp one. `src/ota/` is already a
- * two-face directory — `updater.ts` beside it is browser code, and
+ * `src/ota/` is the sharp one, and the OTA slice made it sharper: it is now a
+ * three-part directory — `src/ota/build/` runs on the dev's machine, the files
+ * beside it (`updater.ts`, `use-ota-updates.ts`) are browser code, and
  * `src/interface/ota.index.ts` is a **browser** tsdown entry pointed straight at
- * that directory. It is safe only because the barrel is curated and never exports
- * the fingerprint. → `docs/roadmap/src-reorg.md` §0.1
+ * that directory. It is safe only because the barrel is curated and exports
+ * neither `native-fingerprint` nor anything under `build/`.
+ * → `docs/roadmap/src-reorg.md` §0.1, §2.2
+ *
+ * Note what is NOT written here: `src/ota/`. The two entries below name the
+ * build face and the one stray Node file by their exact paths, so the browser
+ * half of the same directory stays covered by the allow-list.
  */
 const NODE_ALLOWED = [
   "src/vite/",
   "src/native/",
+  "src/ota/build/",
   "src/ota/native-fingerprint.ts",
   "src/styles/compile.test-helper.ts",
 ]

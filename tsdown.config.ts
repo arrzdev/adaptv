@@ -126,7 +126,7 @@ export default defineConfig([
       { from: "src/interface/route-globals.d.ts", to: "dist" },
       // Ambient `*?adaptv-image` module — same category, and the consumer picks it
       // up through the `virtual-adaptv-*` include glob. → `src/virtual-adaptv-image-asset.d.ts`.
-      { from: "src/virtual-adaptv-*.d.ts", to: "dist" },
+      { from: "src/**/virtual-adaptv-*.d.ts", to: "dist" },
     ],
   },
 ])
