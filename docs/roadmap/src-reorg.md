@@ -276,12 +276,13 @@ and belongs to the owner, not to this plan:
 <details>
 <summary>One inconsistency found while surveying — it does not belong to this plan</summary>
 
-- **`./server-entry` and `./root-route` are in `exports` but not in the publish spec.**
-  `package.json` exports 16 subpaths; `scripts/verify-dist.mjs`'s `jsEntries` lists 12, and
-  `tsdown.config.ts` builds 13. `./server-entry` (the Cloudflare Worker handler — the fourth face)
-  has **no dist entry at all**, and `./root-route` is built but absent from the publish spec even
-  though `tsdown.config.ts`'s own comment says it must be there.
-  → [`dist-cutover.md`](dist-cutover.md) is where that closes, not here.
+- **`./server-entry` and `./root-route` were in `exports` but not in the publish spec.**
+  `package.json` exported 16 subpaths; `scripts/verify-dist.mjs`'s `jsEntries` listed 12, and
+  `tsdown.config.ts` built 13. `./server-entry` (the Cloudflare Worker handler — the fourth face)
+  had **no dist entry at all**, and `./root-route` was built but absent from the publish spec.
+  **Closed in `9bf94b2`**: `jsEntries` is now read off `exports`, so a subpath nothing builds is
+  a named failure; `server-entry` builds from its own `workerEntry` in `tsdown.config.ts`.
+  → [`dist-cutover.md`](dist-cutover.md) carries the rest of the cutover, not here.
 
 </details>
 
