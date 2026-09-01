@@ -215,13 +215,33 @@ And the return is lopsided:
 
 | | Move | Files | Why it earns its cost |
 |---|---|---:|---|
-| **A** | **A `node:` boundary test.** A vitest file that walks `src/`, asserts no `node:*` import outside a named allow-list — today exactly `src/vite/**`, `src/native/**`, `src/ota/native-fingerprint.ts` and `src/styles/compile.test-helper.ts` — and asserts every browser-surface import of `config/*` is `import type`. | **0** | Turns [`../../tsdown.config.ts`](../../tsdown.config.ts)'s hand-verified comment into `pnpm gate`. Same shape as the guards already in `src/interface/capabilities.barrel.test.ts`. **Do this first — it is the only item here with no revert risk, and it makes every later move provable.** |
+| **A** | **A `node:` boundary test.** ✅ **Landed** as [`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts). It walks `src/`, asserts no `node:*` import outside a named allow-list — exactly `src/vite/**`, `src/native/**`, `src/ota/native-fingerprint.ts` and `src/styles/compile.test-helper.ts`, re-derived from the tree and confirmed — and asserts every browser-surface import of `config/*` is `import type` (8 of them, all type-only). `*.test.ts` is out of the allow-list, but only because a second assertion proves no test file is reachable from a published entry. | **0** | Turns [`../../tsdown.config.ts`](../../tsdown.config.ts)'s hand-verified comment into `pnpm gate`. Same shape as the guards already in `src/interface/capabilities.barrel.test.ts`. **It is the net under every later move, not a standalone item** — each step below is provable because it is there. |
 | **B** | `src/native/` → `src/build/native/` | **4** | 100 % Node, and its current name reads as a runtime capability sitting beside `capabilities/`. It is adaptv's `@expo/config-plugins` — build-time native-project mutation — and both Expo and Capacitor put that inside the build tool. |
 | **C** | `src/vite/` → `src/build/`, with `plugins/` · `modules/` · `support/` inside | **36** | **The name is already wrong.** [`../design/vite-plugin-map.md §3`](../design/vite-plugin-map.md) lists 15 of its files as *"support modules (not plugins)"*, and **11 of the CLI's 16 string loads target it** — `bin/` treats `src/vite/` as "adaptv's Node library", not "the Vite plugin". SvelteKit calls this `core/`; Astro calls it `core/` + `vite-plugin-*/`; TanStack calls it `start-plugin-core`. **This subsumes §3.5's fallback suggestion** and does the extra job of naming the face. |
 
-**Do not** add `src/runtime/` or `src/shared/` (§0.4). If the shared set ever needs a name, the cheap
-form is a comment header in each of the ten files, not a directory — and move A makes the boundary
-checkable without one either way.
+**The order is A → OTA slice → router slice → B + C**, and §6 sequences it. A is not the first of
+three moves; it is the floor the other two stand on. The slices come before C for a reason worth
+stating on its own, because it is also the reason the paragraph after it is right:
+
+> 📐 **Cohesion decides the tree; the execution boundary is a rule, not a directory.**
+> Build-time, runtime and CLI are not separable products. The pieces together are what makes adaptv a
+> **framework** rather than parts of an incomplete puzzle — an app author writes one config, runs one
+> CLI, and imports from one package, and the seam between the faces is one they never see. A tree
+> that leads with the execution face divides the thing along that invisible seam and scatters each
+> subsystem across it. So the tree is organised by **cohesion — domain first** — and the boundary
+> that genuinely must hold is held by **move A's test**, which is exactly what a rule is for.
+>
+> **That settles the ordering mechanically too.** Move C renames `src/vite/` → `src/build/`. Run it
+> first and the OTA and router build-halves land in `src/build/`, then move *again* into
+> `src/ota/build/` and `src/router/build/` — two moves where there should be one, and each one
+> rewrites the CLI string loads that [§7](#7-how-to-prove-a-move-changed-nothing) says no gate
+> catches. Slices first, and every one of those files moves exactly once.
+
+**Do not** add `src/runtime/` or `src/shared/`. Not merely because they are expensive — [§0.4](#04-the-distance-and-why-the-full-move-is-the-wrong-trade)
+prices them at ~190 files — but because they are the same mistake one scale up: a directory whose
+whole content is *"this half runs somewhere else"* buys nothing move A's test does not already
+assert, and it spends the cohesion the slices exist to gain. If the shared set ever needs a name, the
+cheap form is a comment header in each of the ten files, not a directory.
 
 > ⚠︎ **A and B are cheap; C is not, and the cost is concentrated in the one place §7 says no gate
 > catches.** Renaming `src/vite/` rewrites 11 CLI string loads that fail only when that command runs.
@@ -613,11 +633,12 @@ re-opening any of them — this repo records what it **rejected**, and the code 
 ## 6. Sequencing
 
 **Incremental. One subsystem per PR. Never one big cut.**
+**A → OTA slice → router slice → B + C**, which is [§0.5](#05-the-three-moves-worth-making)'s order.
 
 | Step | What | Revertible by |
 |---|---|---|
 | 0 | Land the [`dist` cutover](dist-cutover.md) **first** | — it removes `src` from `files`, which is the only thing that makes the current layout a *shipping* concern |
-| **0a** | **Move A** — the `node:` boundary test ([§0.5](#05-the-three-moves-worth-making)). **Moves no files**, so it can land before or beside step 0 | delete one file. It is the only step here with no revert risk, and every later step is provable because of it |
+| **0a** | ✅ **Move A** — the `node:` boundary test ([§0.5](#05-the-three-moves-worth-making)), [`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts). **Moved no files**, so it landed before step 0 | delete one file. It is the only step here with no revert risk, and every later step is provable because of it |
 | 1 | **OTA slice** (§2.2) — ~20 files | `git revert`; pure renames, no content beyond specifiers |
 | 2 | Sweep OTA doc references (`grep -rn 'src/ota/\|src/vite/ota' docs`) | separate commit, so step 1 stays a clean rename |
 | 3 | **Router slice** (§2.2) — ~15 files | same shape |
@@ -626,10 +647,14 @@ re-opening any of them — this repo records what it **rejected**, and the code 
 | **4b** | **Move C** — `src/vite/` → `src/build/` + `plugins/` `modules/` `support/`. ~28 files by now, the slices having taken 8 out | `git revert`, **but** see the ⚠︎ in §0.5: 11 CLI string loads change and no gate sees them |
 | 5 | **Stop.** Do not add `src/runtime/` or `src/shared/` — [§0.4](#04-the-distance-and-why-the-full-move-is-the-wrong-trade) is the argument | — |
 
-**Why B and C come after the slices, not before.** The two slices remove 8 files from `src/vite/`
-(3 OTA, 5 router), so doing them first means move C renames a smaller directory *once* instead of
-renaming files the slices are about to move again. Move A is the exception and goes first because it
-is not a move at all.
+**Why B and C come after the slices, not before.** Because cohesion decides the tree and the
+execution boundary is a rule, not a directory — [§0.5](#05-the-three-moves-worth-making) states the
+principle. Its consequence here is concrete: move C renames `src/vite/` → `src/build/`, so running it
+first drags the OTA and router build-halves into `src/build/` and then moves them a **second** time
+into `src/ota/build/` and `src/router/build/`. Two moves where there should be one, each rewriting
+CLI string loads no gate catches (§7). Done in this order, the 8 files the slices claim (3 OTA,
+5 router) leave `src/vite/` once and never come back, and C renames the smaller directory that
+remains. Move A is not an exception to the ordering — it is not a move at all, it is the net.
 
 **What makes a step safely revertible:** each PR is renames plus import-specifier rewrites and
 *nothing else*. `git diff -M --stat` should show `R###` for every file, and every line in
@@ -648,7 +673,7 @@ fix with it.
 | `pnpm test` (2 618) | The 15 path-reading tests, both barrel guards, the opacity assertions | anything only the CLI executes |
 | `pnpm build:check` | `exports` + `tsdown` entries; `scripts/verify-dist.mjs` checks the emitted surface | `bin/`'s runtime loads |
 | `pnpm gate` | all of the above + `check-colour.mjs` | ″ |
-| **move A's boundary test** *(does not exist yet — [§0.5](#05-the-three-moves-worth-making))* | a `node:*` import landing on the browser side of the split, and a `config/*` import that stops being `import type` | — |
+| **[`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts)** *(move A)* | a `node:*` import landing on the browser side of the split, a `config/*` import that stops being `import type`, a test file pulled into a published entry graph, and a `tsdown`/`exports` entry nobody classified | a `node:*` import inside `src/vite/**` or `src/native/**` reaching a browser some other way — the allow-list trusts those directories by name |
 
 ### ⚠︎ The three things no gate catches
 
@@ -680,9 +705,12 @@ paths by design, so those differ legitimately.)
 
 **Per step, not for the whole plan** — every step in §6 is its own PR and clears this list on its own.
 
-0. **Move A only:** the boundary test **fails** when a `node:fs` import is added to a runtime file by
-   hand, and **fails** when one `import type { AdaptvAppConfig }` in `src/utils/platform.ts` loses its
-   `type` keyword. A guard that cannot fail is worse than no guard (§7).
+0. **Move A only:** ✅ done. The boundary test **failed** on a hand-added `import { readFileSync } from
+   "node:fs"` in `src/utils/color.ts` — a browser-build file, and the one `bin/` also string-loads —
+   naming it in both the allow-list check and the browser-graph check; and **failed** when
+   `src/components/orientation-guard.tsx` lost the `type` keyword on its `#adaptv/config/types`
+   import. Both reverted. It also carries its own floor (232 non-test files, a 154-file browser
+   closure, a 79-file node closure), so the vacuous pass in §7 cannot happen to it.
 1. `pnpm gate` and `pnpm build:check` green.
 2. Emitted `.d.mts` files byte-identical to the pre-move build.
 3. `adaptv ota publish` and `adaptv build ios` both run on the playground — the only exercise the 14
