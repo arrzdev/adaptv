@@ -2208,7 +2208,7 @@ async function buildWebDeploy(appRoot, opts) {
   const config = await preflight(appRoot, [])
 
   const { resolveOtaBuildConfig, resolveOtaOrigin } =
-    await loadAdaptvModule("vite/ota-config-module.ts")
+    await loadAdaptvModule("ota/build/ota-config-module.ts")
   //null when the app declares no origin — OTA is off, and this is then simply the
   //web build. Nothing is published, because there is nowhere to publish it to.
   const ota = resolveOtaBuildConfig(appRoot, config)
@@ -2292,7 +2292,7 @@ async function buildWebDeploy(appRoot, opts) {
         decideChannelEmission,
         fetchDeployedManifest,
         writeChannel,
-      } = await loadAdaptvModule("vite/ota-emit.ts")
+      } = await loadAdaptvModule("ota/build/ota-emit.ts")
       report("reading the published manifest")
       //What the channel currently serves decides ONE thing: whether this build is
       //new. An unchanged app keeps the timestamp it was first published with, so a
@@ -2347,7 +2347,7 @@ async function buildWebDeploy(appRoot, opts) {
  */
 async function resolveChannelSigning(ota) {
   const { isUsableOtaPublicKey, resolveSigningKey, signingKeyMatches } =
-    await loadAdaptvModule("vite/ota-emit.ts")
+    await loadAdaptvModule("ota/build/ota-emit.ts")
 
   let privateKey = null
   try {
@@ -2451,7 +2451,7 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
     async (report) => {
       await buildWeb(appRoot, { report, config })
       const { buildBundleArchive, computeBuildTag } =
-        await loadAdaptvModule("vite/ota-emit.ts")
+        await loadAdaptvModule("ota/build/ota-emit.ts")
       const clientDir = path.join(appRoot, CAP_WEB_DIR)
       const buildTag = computeBuildTag(clientDir)
       //`packaging` — R24's word for "put the built thing into its container", already
@@ -2501,7 +2501,9 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
  */
 async function genOtaKeys() {
   header("keys ota")
-  const { generateOtaKeyPair } = await loadAdaptvModule("vite/ota-emit.ts")
+  const { generateOtaKeyPair } = await loadAdaptvModule(
+    "ota/build/ota-emit.ts",
+  )
   const { publicKey, privateKey } = generateOtaKeyPair()
 
   section("public: commit this")

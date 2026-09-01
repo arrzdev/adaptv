@@ -241,7 +241,7 @@ async function newSigningPair(): Promise<{
  */
 async function otaEmit() {
   return await import(
-    pathToFileURL(path.join(ADAPTV_ROOT, "src/vite/ota-emit.ts")).href
+    pathToFileURL(path.join(ADAPTV_ROOT, "src/ota/build/ota-emit.ts")).href
   )
 }
 
