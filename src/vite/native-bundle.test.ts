@@ -83,7 +83,7 @@ describe("adaptvNativeBundlePlugin", () => {
   it("sends the native lineage to its own output directory", () => {
     //The whole point. Both lineages used to write `dist/client`, kept apart in
     //time only — and under `render: "spa"` the native build emptied the web
-    //build's directory mid-`preview all`. → `DECISIONS.md §6.4`
+    //build's directory mid-`preview all`. → `docs/decisions/rendering-and-delivery.md §2`
     const { context } = scaffold()
     const plugin = adaptvNativeBundlePlugin(context)
     const hook = plugin.config

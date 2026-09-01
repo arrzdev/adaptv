@@ -5,7 +5,7 @@
 // icons. There is deliberately no second `assets/logo.png` convention: a PWA icon set already
 // ships platform-specific art, so the framework's job is to PICK the right member of that set
 // for the build being produced — not to ask the dev to maintain another file that says the same
-// thing. → DECISIONS.md L8 (one config source).
+// thing. → docs/decisions/register.md L8 (one config source).
 //
 // **Reading** the directory is not here — it is `src/vite/icon-set.ts`, because the manifest and
 // the head need exactly the same answer and used to compute their own (see that file's header).
@@ -17,16 +17,12 @@
 // native build step, and the surface it would generate for us is tiny and fully known: one
 // 1024px PNG for iOS, fifteen mipmaps plus a colour resource for Android. adaptv already
 // hand-writes the native splash + theme resources next door (`patchAndroidSplash`,
-// `patchIosTheme`), so the launcher icon belongs in the same place. → DECISIONS.md L20.
+// `patchIosTheme`), so the launcher icon belongs in the same place. → docs/decisions/register.md L20.
 import { mkdirSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { hexOf, monochromeMark } from "./artwork.mjs"
 import { fitScale, TRANSPARENT } from "./icon-geometry.mjs"
 import { ADAPTV_ROOT, loadAdaptvModule } from "./load-ts.mjs"
-
-/* =============================================================================
- * the resolved set
- * ============================================================================= */
 
 /** adaptv's own icon set, shipped in the package. → `DEFAULT_ICONS_URL_BASE` */
 export const DEFAULT_ICONS_DIR = path.join(
@@ -207,10 +203,6 @@ export function iconIssue(pick, platform) {
     return `android launcher icon is opaque. Add one with a transparent background`
   return null
 }
-
-/* =============================================================================
- * writing the native launcher icons
- * ============================================================================= */
 
 /** Android mipmap buckets: `[density, legacy icon px, adaptive foreground px]`. */
 const ANDROID_DENSITIES = [

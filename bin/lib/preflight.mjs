@@ -5,19 +5,23 @@
 //
 //   errors   the run cannot produce what was asked for. A hex colour that isn't one becomes
 //            `<color name="ic_launcher_background">midnightblue</color>`, and the dev finds
-//            out four minutes later, from aapt, in the middle of a gradle failure. Terse
-//            one-liner naming the fix (R7), and the command exits without starting.
+//            out four minutes later, from aapt, in the middle of a gradle failure. A plugin
+//            named in `plugins` that is not installed is declared into nothing, and the app
+//            rejects the call it was listed for on a device. Terse one-liner naming the fix
+//            (R7), and the command exits without starting.
 //   warnings the run WILL work and the result is worse than it should be — a launcher icon
 //            upscaled from 512px. It is about the dev's source art, which the build does not
 //            change, so it is known up front and belongs above the run rather than under it.
 //
-// Everything here reads config values and the icon directory. Nothing writes, nothing
-// scaffolds, nothing shells out — that is what makes it safe to run before the first step.
+// Everything here reads config values, the icon directory, and `node_modules` through Node's
+// own resolver. Nothing writes, nothing scaffolds, nothing shells out — that is what makes it
+// safe to run before the first step.
 import {
   iconSetModule,
   loadIconSet,
   resolveLauncherSource,
 } from "./icons.mjs"
+import { pkgDirResolver } from "./native.mjs"
 
 /** `#rgb` / `#rrggbb`. The same shape `parseHex` accepts and the native colour resources need. */
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
@@ -71,6 +75,57 @@ export function configErrors(config) {
     errors.push(
       `'icons' must be a path to the app's icon directory, got ${JSON.stringify(config.icons)}`,
     )
+  return errors
+}
+
+/**
+ * Names in `plugins` that do not resolve to an installed package.
+ *
+ * **Why this is an `✖` and not a `!`.** `plugins` is the dev listing native capabilities the
+ * app is going to call. A name that resolves to nothing is declared into no Podfile, no
+ * `capacitor.settings.gradle` and no plugin registry, so the build succeeds and the app
+ * rejects the very call the entry was written for — at runtime, on a device, as "plugin is
+ * not implemented". That is the exact family R33 names: a value the dev wrote and adaptv
+ * silently ignored, where guessing is the bug and saying so is the fix. R39 then decides the
+ * severity — there is ONE answer to "is this config usable", and a run that cannot use the
+ * value ends rather than carrying on with a softer version of it. A `!` would be precisely
+ * the softer answer R39 threw out for the `b` key: work that continues, one yellow line
+ * above it, and a result that does not match the file on disk.
+ *
+ * **Why it is silent on a web-only run.** `platforms` is the native platforms this command
+ * was asked for, and `[]` for `dev web` / `build web` / `preview web`. `plugins` is consumed
+ * by nothing else — it reaches the native injectors and no web code path — so on a web-only
+ * run there is no value being ignored and nothing for the dev to act on. Refusing there
+ * would stop runs with no stake in the plugin; a `!` there would be a native-only sentence
+ * printed on every `dev web`, true and unactionable (R6). This is not a second answer to
+ * R39's question, it is the same answer with the question scoped: every run that would
+ * consume the value refuses, every run that would not says nothing. `iconWarnings` already
+ * splits the same way — its launcher half is per-platform, its manifest half is not.
+ *
+ * **No platform prefix.** The two injectors each pushed their own `ios:` / `android:`
+ * sentence, so `build all` said one app-level fact twice (R21) with a label carrying no
+ * information: they share one resolver, which takes no platform, so they could never
+ * disagree about a name in `plugins`. One sentence.
+ *
+ * `pkgDirResolver` is imported rather than reimplemented for the same reason: it is the
+ * predicate the injectors skip on, so what preflight refuses and what a build would drop are
+ * the same set by construction, not by two implementations agreeing today.
+ */
+export function missingPluginErrors(appRoot, config, platforms) {
+  if (platforms.length === 0) return []
+  const resolve = pkgDirResolver(appRoot)
+  const errors = []
+  const seen = new Set()
+  //`plugins` is the dev's own array; a name listed twice is one fact, and an empty entry is
+  //what `resolvePluginPackages` already drops rather than something to refuse over.
+  for (const name of Array.isArray(config.plugins) ? config.plugins : []) {
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    if (!resolve(name))
+      errors.push(
+        `'plugins' names '${name}', which is not installed. Install it, or remove the entry.`,
+      )
+  }
   return errors
 }
 
@@ -131,7 +186,12 @@ export async function iconWarnings(set, platforms) {
  * stays pure so the ordering rule can be tested without a terminal.
  */
 export async function inspect(appRoot, config, platforms) {
-  const errors = configErrors(config)
+  //One list, not two passes: a config with a bad colour AND an uninstalled plugin names both
+  //on the same run. Fixing a config one line per run is worse than reading the list (R33).
+  const errors = [
+    ...configErrors(config),
+    ...missingPluginErrors(appRoot, config, platforms),
+  ]
   // A bad config is the answer. Reading the icon set on top would add `!` lines about art
   // for a run that is not going to happen — noise under the one line that matters (R6).
   if (errors.length > 0) return { errors, warnings: [] }

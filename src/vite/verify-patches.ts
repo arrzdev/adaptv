@@ -1,6 +1,6 @@
 /**
  * Fail loudly when adaptv's dependency patches are not applied.
- * → `DECISIONS.md §2.6a` (L19), `§2.6b`
+ * → `docs/decisions/register.md §2.6a` (L19), `§2.6b`
  *
  * ## Why this exists
  *
@@ -69,8 +69,9 @@ export function checkPatches(sources: {
 /**
  * The `patchedDependencies` filename convention, decoded.
  *
- * The filename IS the pnpm key: `@tanstack__router-generator@1.166.22.patch`
- * means `'@tanstack/router-generator@1.166.22'`. Keeping one encoding is what
+ * The filename IS the pnpm key: `@scope__name@version.patch` means
+ * `'@scope/name@version'` — today `@tanstack__router-generator@1.167.21.patch`
+ * decodes to `'@tanstack/router-generator@1.167.21'`. Keeping one encoding is what
  * makes the instructions below trustworthy — they are derived from the patches
  * that actually shipped, so a version bump (which renames the file, per L21)
  * updates the message on its own. They used to be hardcoded, and version-keying
@@ -85,7 +86,8 @@ export function parsePatchFilename(
   //pnpm's own convention already carries the leading `@`, so only the scope
   //separator is decoded — prepending one produced `@@capacitor/cli`.
   const key = stem.replace("__", "/")
-  //L21: an unversioned key would let a drifting upstream patch changed code
+  //L21: refuse an unversioned key — it would let a patch written against one
+  //release keep applying as upstream drifts underneath it
   if (!/.@\d/.test(key)) return null
   return { key, file }
 }
@@ -152,10 +154,6 @@ export function describeMissingPatches(
   ].join("\n")
 }
 
-/* ============================================================================
- * Wiring
- * ========================================================================== */
-
 /**
  * Verify the invariant **on the generated output**, which is the only reliable
  * signal available.
@@ -209,10 +207,6 @@ export function assertRouteTreeIsOpaque(routeTreePath: string): void {
   )
 }
 
-/* ============================================================================
- * The native patch
- * ========================================================================== */
-
 /**
  * The comment adaptv's native patch leaves behind in every file it edits.
  *
@@ -252,7 +246,7 @@ export function checkNativePatch(
  * failure path: a bad bundle rolls back to whatever the **store** shipped rather
  * than to the newest bundle this device is known to boot. That is a launch of damage
  * in a situation the user is already unhappy in, it does not show up in a passing
- * build, and nothing but this check would say.
+ * build, and nothing but this check would say so.
  *
  * Returns the message to print, or `null` when everything is in place. Reading the
  * files rather than pnpm's metadata, for the reason {@link checkPatches} gives:

@@ -1,5 +1,5 @@
 /**
- * The one update that cannot arrive over the air, made observable. → `LIFECYCLE.md §5.6`
+ * The one update that cannot arrive over the air, made observable. → `docs/design/ota.md §5.6`
  *
  * ## What this state means, and what it does not
  *

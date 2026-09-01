@@ -1,18 +1,18 @@
 /**
  * `storage.store` — large / structured values, **async**.
- * → `ARCHITECTURE.md §2.2` (L10)
+ * → `docs/design/architecture.md §2.2` (L10)
  *
  * ## Scope boundary, and it is the important part
  *
  * This is an **async large-value KV. It is not a query engine and not an ORM.**
  * A real query layer — indexes, where-clauses, migrations — stays consumer-owned,
- * because `RENDERING.md` already makes the data layer the consumer's. adaptv's job
+ * because `docs/design/rendering.md` already makes the data layer the consumer's. adaptv's job
  * is to (a) provide the simple async blob store the framework itself needs for
  * offline, and (b) guarantee the substrate exists. Not to grow into a database.
  *
  * ## Why raw IndexedDB rather than Dexie
  *
- * `ARCHITECTURE.md §2.2` names Dexie, and Dexie is a fine library — but every
+ * `docs/design/architecture.md §2.2` names Dexie, and Dexie is a fine library — but every
  * reason to reach for it (queries, indexes, schema migrations, live queries) is
  * explicitly **out of scope** above. What remains is `get`/`set`/`remove`/`keys`
  * over one object store, which is about eighty lines against the platform API.

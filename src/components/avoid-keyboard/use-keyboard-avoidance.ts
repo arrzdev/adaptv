@@ -8,10 +8,6 @@ import {
 } from "#adaptv/hooks/use-keyboard"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 
-/* =============================================================================
- * TYPES
- * ============================================================================= */
-
 /** Which box property reserves room for the keyboard. */
 export type AvoidKeyboardBehavior = "padding" | "margin"
 
@@ -25,9 +21,9 @@ export type UseKeyboardAvoidanceOptions = {
   behavior?: AvoidKeyboardBehavior
   /** Scroll the focused descendant input above the keyboard. Default `true`. */
   scrollIntoView?: boolean
-  /** Gap (px) kept between the input's bottom and the keyboard line. */
+  /** Gap (px) kept between the input's bottom and the keyboard line. Default `24` ({@link DEFAULT_AVOID_KEYBOARD_SCROLL_BUFFER}). */
   scrollBuffer?: number
-  /** Disable all behavior (reports closed, reserves nothing). Default `true`. */
+  /** Run the avoidance; `false` reports closed and reserves nothing. Default `true`. */
   isEnabled?: boolean
 }
 
@@ -41,10 +37,6 @@ export type KeyboardAvoidanceState = {
   /** The resolved reserve strategy. */
   behavior: AvoidKeyboardBehavior
 }
-
-/* =============================================================================
- * PURE GEOMETRY (DOM-free, unit-tested)
- * ============================================================================= */
 
 /**
  * px of the wrapper hidden behind the keyboard. With `virtualKeyboard.overlaysContent` held
@@ -138,10 +130,6 @@ export function computeScrollIntoViewTop({
   return scrollTop
 }
 
-/* =============================================================================
- * DOM HELPERS
- * ============================================================================= */
-
 function isScrollable(node: Element): boolean {
   if (!(node instanceof HTMLElement)) return false
 
@@ -209,10 +197,6 @@ export function scrollFocusedInputIntoView(
   preMuteCaret()
   scroller.scrollTo({ top, behavior })
 }
-
-/* =============================================================================
- * HOOK
- * ============================================================================= */
 
 /**
  * Headless keyboard avoidance for a wrapper element. Observes the on-screen keyboard

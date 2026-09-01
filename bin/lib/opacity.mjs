@@ -3,7 +3,8 @@
  *
  * adaptv is a framework, not a wrapper: a consumer writes `adaptv.config.ts`, imports from
  * `@arrzdev/adaptv`, and is never told that TanStack Router, TanStack Start or Capacitor are
- * underneath (CLI-UX R8, `DECISIONS.md` L20 / O2). That is a promise about the WHOLE surface,
+ * underneath (`docs/design/cli-contract.md` R8, `docs/decisions/register.md` L20 / O2). That is a
+ * promise about the WHOLE surface,
  * and output is part of the surface — a `✖` naming `@tanstack/start-server-core` teaches the
  * dev the one thing the framework spent its architecture hiding, and does it at the exact
  * moment they are most likely to go and search for it.

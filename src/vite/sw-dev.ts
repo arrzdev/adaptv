@@ -24,7 +24,7 @@ export function devServiceWorkerEnabled(): boolean {
 const DEV_SW_PATH = "/sw.js"
 
 /**
- * The dev worker is the app's modules and **nothing else**. → `RENDERING.md §3`
+ * The dev worker is the app's modules and **nothing else**. → `docs/design/rendering.md §3`
  *
  * Not a dev build of adaptv's worker, and this is the whole design. adaptv's
  * worker is precache + navigation + static-asset delivery, and none of the three

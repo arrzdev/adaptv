@@ -15,7 +15,7 @@ export function LoginDrawer({ open, onOpenChange }: LoginDrawerProps) {
         <AppDrawer.Overlay />
         <AppDrawer.Content>
           <AppDrawer.Handle />
-          <LoginForm onClose={() => onOpenChange(false)} />
+          <LoginForm />
         </AppDrawer.Content>
       </AppDrawer.Portal>
     </AppDrawer>

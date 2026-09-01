@@ -56,7 +56,11 @@
 }
 
 /*
- * Tap target. The `touch-action` value is the expanded longhand ON PURPOSE.
+ * There is no tap-target utility here, and NO utility in this file may ever set
+ * `touch-action: manipulation`. The tap-target value now lives as three composable
+ * Tailwind classes in `components/press-core.ts` (`TOUCH_PASSTHROUGH_CLASS`); this
+ * note stays behind only to keep the bug reference in the file where the shorthand
+ * is the tempting "simplification" — src/styles/utils.test.ts asserts both.
  *
  * WebKit 240917 (NEW, filed 2022): `pointercancel` is not dispatched on an element
  * with `touch-action: manipulation`. The longhand `pan-x pan-y pinch-zoom` is
@@ -64,10 +68,9 @@
  * DOES dispatch it. Ionic hit this and documents the same workaround in content.scss.
  * @see https://bugs.webkit.org/show_bug.cgi?id=240917
  *
- * Why it matters here: `pointercancel` is how a gesture learns a scroll took over.
+ * Why it matters: `pointercancel` is how a gesture learns a scroll took over.
  * Anything both tappable and gesture-driven — a Button inside Swipeable, a drawer
- * handle — strands its gesture state machine on iOS under the shorthand. Do not
- * "simplify" this back; src/styles/utils.test.ts guards it.
+ * handle — strands its gesture state machine on iOS under the shorthand.
  */
 
 /*

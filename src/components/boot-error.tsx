@@ -23,7 +23,7 @@ export const bootErrorRetryProps = { [BOOT_RETRY_ATTR]: "" } as const
 export type BootErrorProps = {
   /**
    * How the boot failed — `BOOT-LOAD`, `BOOT-THROW`, `BOOT-REJECT`, `BOOT-STALL`.
-   * → `RENDERING.md §3.1.3` for what each one means.
+   * → `docs/design/rendering.md §3.1.3` for what each one means.
    *
    * **adaptv's own screen never renders it**, deliberately: whether a code helps
    * or just alarms a user is a product decision, and it belongs to the app. It is
@@ -68,7 +68,7 @@ function AdaptvMark() {
 }
 
 /**
- * The default boot error screen. → `RENDERING.md §3.1.3`
+ * The default boot error screen. → `docs/design/rendering.md §3.1.3`
  *
  * ## Where this renders, and what is true there
  *

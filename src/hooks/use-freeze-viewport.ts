@@ -38,8 +38,6 @@ let restoreScrollLock: (() => void) | null = null
 let virtualKeyboardOverlayUsers = 0
 let initialVirtualKeyboardOverlaysContent: boolean | null = null
 
-//---- Helpers ----------------
-
 function setStyle(element: HTMLElement, property: string, value: string) {
   const previous = element.style.getPropertyValue(property)
   element.style.setProperty(property, value)
@@ -139,9 +137,11 @@ function lockScrollMobileSafari() {
 
     //a touch over a non-scrollable region resolves to document/body — pin it so the
     //page can't scroll/shift. a real inner scroller is left alone to scroll +
-    //rubber-band natively; overscroll-behavior:contain on the scroll utilities
-    //keeps that bounce from bleeding to the page (replacing the old
-    //boundary-preventDefault that killed pull-to-overscroll at rest)
+    //rubber-band natively; `overscroll-*-contain` on the scroller itself (ScrollView
+    //and WheelColumn spell it in raw Tailwind — there are no adaptv scroll utilities
+    //any more) keeps that bounce from bleeding to the page, and `overscroll-none` on
+    //the document shell stops it there. That pair replaced a boundary-preventDefault
+    //which killed pull-to-overscroll at rest.
     if (
       scrollable === document.documentElement ||
       scrollable === document.body
@@ -251,8 +251,6 @@ function disableScrollLock() {
   restoreScrollLock = null
 }
 
-//---- virtualKeyboard overlay ----------------
-
 /** Imperatively opt the document into `virtualKeyboard.overlaysContent`; returns a release fn. */
 function acquireVirtualKeyboardOverlay() {
   const vk = getVirtualKeyboardApi()
@@ -277,8 +275,6 @@ function acquireVirtualKeyboardOverlay() {
     }
   }
 }
-
-//---- Hook ----------------
 
 /**
  * Freeze the layout viewport so the keyboard / url bar can't shift the page,
