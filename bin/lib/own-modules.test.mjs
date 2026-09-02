@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { carriesNativeCode } from "../../src/native/installed-plugins.ts"
+import { carriesNativeCode } from "#adaptv/native/installed-plugins"
 import { ADAPTV_ROOT } from "./load-ts.mjs"
 import { locatePackage, ownNativeModules } from "./own-modules.mjs"
 
