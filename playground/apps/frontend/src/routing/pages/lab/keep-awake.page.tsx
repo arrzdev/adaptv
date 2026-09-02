@@ -49,11 +49,11 @@ function LabKeepAwakePage() {
           },
           ios: {
             verdict: "partial",
-            note: "There is no official Capacitor plugin, so the native build uses the SAME Screen Wake Lock API through WKWebView. Whether an embedded webview honours it is exactly the open question this page exists to answer — if the badge reads unsupported inside the native build, that IS the finding.",
+            note: "Same Screen Wake Lock API through WKWebView, and the same mechanism as Safari: on the iOS 26.1 simulator the app's own process logs WebCore's ScreenSleepDisabler taking the lock at Request and dropping it at Release, the identical line MobileSafari logs. The simulator never idle-locks, so the screen staying lit is owed to a physical iPhone; on one, step 3 is the check.",
           },
           android: {
-            verdict: "partial",
-            note: "Same web API inside the Android WebView, so the same open question. Android also drops the lock under power-save or a low battery, which comes back as `rejected` — temporary, not a capability gap.",
+            verdict: "works",
+            note: "Same web API inside the Android WebView, and it holds the screen: on a Pixel 10 emulator (API 36, WebView Chrome/149) `dumpsys power` shows the app's SCREEN_BRIGHT_WAKE_LOCK while held and none after Release; at a 15 s screen-off timeout the display is asleep 25 s after Release and awake 25 s after Request. Power-save or a low battery still comes back as `rejected` — temporary, not a capability gap.",
           },
         }}
         wrong="`active` reads true while the screen dims anyway (a lock the platform accepted and ignored — the caveat box is there for exactly this and should be saying so). Or the lock does not come back after backgrounding, which means every long-running screen silently stops working after the first phone call."
@@ -64,7 +64,7 @@ function LabKeepAwakePage() {
           supported={supported}
           supportedLabel="navigator.wakeLock present"
           unsupportedLabel="No wake-lock API on this target"
-          detail="Chrome 84+, Firefox 126+, Safari 16.4+. Embedded webviews are the open question — if this reads unsupported inside the native build, that is the answer."
+          detail="Chrome 84+, Firefox 126+, Safari 16.4+. Both native WebViews have it too (verified 2026-09-02): the Android WebView holds a real wake lock, the WKWebView takes Safari's own sleep disabler."
         />
         {caveat && <LabCaveat>{caveat}</LabCaveat>}
         {supported && !caveat && (
