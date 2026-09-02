@@ -204,6 +204,23 @@ describe("errorTail", () => {
     ])
   })
 
+  it("keeps a crash that names its class, which has no word boundary before `Error`", () => {
+    //Captured from `vite build` on the playground, 2026-09-02. `error during build:` was
+    //kept and the TypeError under it — the only line saying what broke — was not.
+    const lines = [
+      "error during build:",
+      'TypeError [ERR_INVALID_ARG_TYPE]: The "paths[2]" argument must be of type string. Received type number (42)',
+      "    at Object.resolve (node:path:1257:7)",
+      "    at resolveRoutesDir (file:///Users/x/adaptv/src/vite/route-tints-module.ts:23:15)",
+      "  code: 'ERR_INVALID_ARG_TYPE'",
+      "}",
+    ]
+    expect(errorTail(lines)).toEqual([
+      "error during build:",
+      'TypeError [ERR_INVALID_ARG_TYPE]: The "paths[2]" argument must be of type string. Received type number (42)',
+    ])
+  })
+
   it("keeps a CocoaPods sandbox mismatch, which is the whole diagnosis", () => {
     const lines = [
       "note: Using new build system",

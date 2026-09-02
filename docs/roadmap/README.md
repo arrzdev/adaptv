@@ -70,7 +70,7 @@ being surprising.
 | `useAppState` | `src/capabilities/app-state.ts`, `src/hooks/use-app-state.ts` |
 | Back-button priority chain | `src/capabilities/back-chain.ts`, `src/hooks/use-back-handler.ts` |
 | Gesture arbitration | `src/capabilities/gesture-controller.ts` + three consumers |
-| **OTA for native** ("not built") | `src/ota/` (12 files), `src/vite/ota-*.ts`, `adaptv keys ota` → [`../design/ota.md`](../design/ota.md) |
+| **OTA for native** ("not built") | `src/ota/` (9 runtime files) + `src/ota/build/` (3), `adaptv keys ota` → [`../design/ota.md`](../design/ota.md) |
 | `.adaptv/` generated dir + `adaptv` barrel | `src/vite/adaptv-dir.ts`, `route-tree-opacity.ts`; enforced by `bin/lib/opacity.mjs` |
 | SSR app shell + static-host files | `src/vite/app-shell.ts`, `src/vite/static-host.ts` |
 | `dist` build (as opposed to the cutover) | `tsdown.config.ts`, `pnpm build:check`, `scripts/verify-dist.mjs` |
