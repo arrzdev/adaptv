@@ -2061,7 +2061,14 @@ async function serveWebPreview(appRoot, opts) {
           const onData = (buf) => {
             const text = String(buf)
             if (verbose) rawOut(text)
-            for (const l of text.split("\n")) if (l.trim()) seen.push(l)
+            for (const l of text.split("\n")) {
+              if (!l.trim()) continue
+              seen.push(l)
+              //Bounded, because this listener stays attached for as long as the
+              //server does — `preview all` holds it for the whole session — and
+              //what it is kept for is the last few lines before it stopped.
+              if (seen.length > 200) seen.shift()
+            }
             const local = text.match(/Local:\s+(https?:\/\/\S+)/)
             const net = text.match(/Network:\s+(https?:\/\/\S+)/)
             if (net) found.network = net[1].replace(/\/$/, "")
