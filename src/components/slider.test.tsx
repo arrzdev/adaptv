@@ -319,6 +319,59 @@ describe("Slider pointer (touch): the axis lock", () => {
     expect(gestureController.getCaptured()).toBeNull()
   })
 
+  it("a touch that lifts where it landed is a tap: the lift sets the value and commits once", () => {
+    //what the simulators showed before this existed: idb and `adb shell input
+    //tap` on the track left the value where it was, because only a horizontal
+    //move ever began a drag and a pointer that never dragged was ignored on up
+    const onValueChange = vi.fn()
+    const onValueCommit = vi.fn()
+    const { container } = render(
+      <Slider
+        aria-label="v"
+        defaultValue={40}
+        onValueChange={onValueChange}
+        onValueCommit={onValueCommit}
+      />,
+    )
+    const root = rootOf(container)
+    layOut(root)
+    fireEvent.pointerDown(root, pointer("touch", xFor(75), 20))
+    //the press alone decides nothing: the finger may be about to scroll
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(inputOf(container).value).toBe("40")
+    fireEvent.pointerUp(root, pointer("touch", xFor(75), 20))
+    expect(onValueChange).toHaveBeenCalledTimes(1)
+    expect(onValueChange).toHaveBeenCalledWith(75)
+    expect(onValueCommit).toHaveBeenCalledTimes(1)
+    expect(onValueCommit).toHaveBeenCalledWith(75)
+    expect(inputOf(container).value).toBe("75")
+    expect(root.hasAttribute("data-dragging")).toBe(false)
+    expect(gestureController.getCaptured()).toBeNull()
+  })
+
+  it("a pointercancel before any axis is the platform's scroll, not a tap", () => {
+    const onValueChange = vi.fn()
+    const onValueCommit = vi.fn()
+    const { container } = render(
+      <Slider
+        aria-label="v"
+        defaultValue={40}
+        onValueChange={onValueChange}
+        onValueCommit={onValueCommit}
+      />,
+    )
+    const root = rootOf(container)
+    layOut(root)
+    fireEvent.pointerDown(root, pointer("touch", xFor(75), 20))
+    fireEvent.pointerCancel(root, pointer("touch", xFor(75), 20))
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(onValueCommit).not.toHaveBeenCalled()
+    expect(inputOf(container).value).toBe("40")
+    //and the pointer is forgotten: a stray up afterwards is nobody's tap
+    fireEvent.pointerUp(root, pointer("touch", xFor(75), 20))
+    expect(onValueChange).not.toHaveBeenCalled()
+  })
+
   it("a touch that locks horizontal claims the arbiter, drags, and commits once", () => {
     const onValueChange = vi.fn()
     const onValueCommit = vi.fn()

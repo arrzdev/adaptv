@@ -19,8 +19,12 @@ import { expect, test } from "@playwright/test"
  * horizontal one past 6px locks and drags — is NOT here. Synthetic touch does not
  * drive the engine's native scroll arbitration headless (see swipeable.spec.ts),
  * so the scroll-box card is walked with a real finger: `adb shell input swipe` on
- * the Android emulator and idb on the iOS simulator. Both projects run here
- * because a mouse pointer reaches React identically on either engine.
+ * the Android emulator and idb on the iOS simulator. The one touch gesture that
+ * IS here is the tap: a finger that lifts where it landed asks nothing of the
+ * scroll arbitration, so `touchscreen.tap` proves it on both engines, and it is
+ * the gesture both simulators showed doing nothing before the lift became the
+ * set. Both projects run here because a mouse pointer reaches React identically
+ * on either engine.
  *
  * No retries, no warm-ups: a flake in this file is logic.
  */
@@ -371,5 +375,40 @@ test.describe("Slider", () => {
       "a mouse drag must not scroll the box",
     ).toBe(before)
     await expect(readout(page, "box-scroll-top")).toHaveText(`${before}px`)
+  })
+
+  test.describe("touch", () => {
+    // portrait on purpose: a touch device at the desktop project's 1280x720 is a
+    // phone held sideways, and the playground's rotate guard covers the page
+    test.use({ hasTouch: true, viewport: { width: 390, height: 844 } })
+
+    test("a finger that lifts where it landed sets the value on the lift and commits once", async ({
+      page,
+    }) => {
+      const controlled = root(page, "Controlled")
+      await expect(readout(page, "controlled")).toHaveText("25")
+      await expect(readout(page, "controlled-changes")).toHaveText("0")
+
+      const point = await pointAt(controlled, 0.75)
+      await page.touchscreen.tap(point.x, point.y)
+
+      await expect
+        .poll(() => readNumber(page, "controlled"), {
+          message: "the tap itself sets the value, no drag needed",
+        })
+        .toBeGreaterThanOrEqual(73)
+      await expect(
+        readout(page, "controlled-changes"),
+        "one tap is one change",
+      ).toHaveText("1")
+      await expect(
+        readout(page, "controlled-commits"),
+        "and one commit",
+      ).toHaveText("1")
+      expect(await readNumber(page, "controlled-committed")).toBe(
+        await readNumber(page, "controlled"),
+      )
+      await expect(controlled).not.toHaveAttribute("data-dragging")
+    })
   })
 })
