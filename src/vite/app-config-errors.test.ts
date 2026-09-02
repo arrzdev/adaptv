@@ -75,9 +75,10 @@ describe("appConfigErrors", () => {
     ])
   })
 
-  it("says the same sentence the CLI's preflight says for its keys", () => {
-    //`bin/lib/preflight.mjs` `configErrors` — verbatim, so the two faces never
-    //disagree about one value
+  it("is the sentence the CLI's preflight prints — it calls this", () => {
+    //`bin/lib/preflight.mjs` `configErrors` delegates here, so the two faces
+    //cannot disagree about one value. These are the rows it used to print
+    //from its own copy, kept verbatim.
     expect(appConfigErrors({ ...ok, appId: "myapp" })).toEqual([
       "'appId' must be reverse-DNS like com.example.app, got \"myapp\"",
     ])
