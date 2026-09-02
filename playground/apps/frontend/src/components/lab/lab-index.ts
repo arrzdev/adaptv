@@ -210,6 +210,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/notifications",
+    title: "Notifications",
+    summary:
+      "ask · show one now · schedule one for later, where the OS allows it",
+    isNew: true,
+  },
+  {
     to: "/lab/keep-awake",
     title: "Keep awake",
     summary: "screen wake lock · the caveat the API can't report",
