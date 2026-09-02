@@ -697,12 +697,19 @@ fix with it.
 
 1. **`loadAdaptvModule("ota/build/ota-emit.ts")` — 16 call sites in `bin/`, 5 of them into the OTA
    slice.** Plain strings, resolved by esbuild at runtime, invisible to `tsc` and to Biome. A wrong
-   one fails **only when that CLI command runs**. There is no `adaptv ota publish`: `ota-emit.ts` is
-   reached by **`adaptv build web`** (which publishes the channel when the config names an origin —
-   `resolveOtaBuildConfig`, `computeBuildTag`/`buildBundleArchive`, `resolveSigningKey`,
+   one used to fail **only when that CLI command runs**. ✅ The *existence* of every target is now
+   checked by [`../../bin/lib/load-ts.test.mjs`](../../bin/lib/load-ts.test.mjs): it walks the
+   non-test `bin/**/*.mjs`, strips comments, collects every `loadAdaptvModule("…")` literal (16
+   today, over 12 targets — the doc-comment example on the loader itself is not one of them), and
+   fails naming each `file:line → src/<target>` that does not exist, with a floor of 10 sites so a
+   rotted regex cannot pass on an empty list. Proven on a scratch copy of `bin/` with two literals
+   moved: `4 dangling`, each named. What it does NOT check is that the module still exports what the
+   caller destructures, or that the command works. There is no `adaptv ota publish`: `ota-emit.ts`
+   is reached by **`adaptv build web`** (which publishes the channel when the config names an
+   origin — `resolveOtaBuildConfig`, `computeBuildTag`/`buildBundleArchive`, `resolveSigningKey`,
    `writeChannel`) and by **`adaptv keys ota`** (`generateOtaKeyPair`). No unit test invokes either.
-   → **the acceptance test for the OTA slice is running both against the playground, signed, and
-   reading the manifest they write — not a green gate.**
+   → **the acceptance test for the OTA slice is still running both against the playground, signed,
+   and reading the manifest they write — not a green gate.**
 2. **255 doc references + 49 in-code path comments.** Nothing checks them. A reorg that leaves them
    stale attacks the one property that makes this tree navigable
    ([`../README.md`](../README.md): *"when something ships, move it"*).
