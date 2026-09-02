@@ -37,9 +37,11 @@ import {
   clearDrawerKeyboardRoom,
   measureDrawerContentNaturalHeight,
   readDrawerKeyboardRoom,
+  readDrawerStylesheetCap,
   resolveDrawerKeyboardRoom,
   resolveShrunkViewportCap,
   shouldPrimeKeyboardFloor,
+  unpaidKeyboardHeight,
   useDrawerKeyboardAvoidance,
   viewportShrinksUnderKeyboard,
   writeDrawerKeyboardRoom,
@@ -63,6 +65,7 @@ import {
   dismissVirtualKeyboard,
   getVirtualKeyboardApi,
 } from "#adaptv/hooks/use-keyboard"
+import { useLayoutViewportShrink } from "#adaptv/hooks/use-layout-viewport-shrink"
 import { clamp } from "#adaptv/utils/clamp"
 import { cn } from "#adaptv/utils/cn"
 import { isIOS } from "#adaptv/utils/platform"
@@ -642,6 +645,11 @@ export function DrawerEngine({
     onWillOpenKeyboard: onFieldWillOpenKeyboard,
   })
   keyboardOpenRef.current = keyboard.isOpen
+  // What the layout viewport itself gave up for this keyboard. The Android WebView gives up all of
+  // it (SystemBars pads the WebView by the IME inset), iOS none; the room below is the difference.
+  const layoutShrink = useLayoutViewportShrink(
+    open && avoidKeyboard && keyboard.isOpen,
+  )
 
   //surface keyboard-open state to consumers (e.g. an app wrapper toggling padding) so
   //they don't each mount a parallel keyboard observer fighting the same events.
@@ -989,34 +997,35 @@ export function DrawerEngine({
 
     if (!content) return
 
-    // ── Unfrozen web keyboard path ──────────────────────────────────────────────────────────
-    // Non-secure Chromium (no VirtualKeyboard API, not iOS, not native): `useFreezeViewport` could
-    // NOT stop the keyboard resizing the VISUAL viewport, so it shrinks by the keyboard's own
-    // height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
-    // shrink double-counts, growing the box by the keyboard's height a second time until its top
-    // climbs off-screen behind the URL bar (the plain-http `ip:port` over-grow). Hold no room; cap
-    // the box at the visible viewport (taller content scrolls inside). The frozen paths — iOS
-    // scroll-lock, secure-Chromium `overlaysContent`, native `KeyboardResize.None` — keep the
-    // viewport whole and fall through to the room mechanism below, untouched.
+    // ── Shrunk viewport path ────────────────────────────────────────────────────────────────
+    // The viewport has already paid for the keyboard, so the sheet only has to FIT what is left;
+    // reserving `room` on top of the shrink double-counts, growing the box by the keyboard's height
+    // a second time. Two ways in: measured — the layout viewport shrank by the keyboard's height,
+    // which is every Android WebView under Capacitor 8 (`SystemBars` pads it by the IME inset,
+    // `innerHeight` 923 → 587 for a 336px keyboard, `overlaysContent` true all along); and guessed
+    // — VK-less non-iOS Chromium (a plain-http `ip:port` origin), where `useFreezeViewport` has no
+    // API to hold the viewport and the shrink is known before it can be measured. Hold no room; cap
+    // the box at the visible viewport (taller content scrolls inside). iOS — scroll-lock, the OS
+    // resize off, shrink 0 — falls through to the room mechanism below, untouched.
+    const keyboardHeight =
+      keyboard.isOpen && keyboard.height > 0 ? keyboard.height : 0
     if (
       viewportShrinksUnderKeyboard({
         isIOS: isIOS(),
         hasNativeKeyboard: hasNativeKeyboard(),
         hasVirtualKeyboardApi: getVirtualKeyboardApi() !== null,
+        keyboardHeight,
+        layoutShrink,
+        capHeld: visibleCapAppliedRef.current,
       })
     ) {
-      // Read the stylesheet cap only while nothing of ours overrides it, same as the room path.
-      if (!content.style.maxHeight) {
-        const parsed = Number.parseFloat(
-          getComputedStyle(content).maxHeight,
-        )
-        cssCapRef.current = Number.isFinite(parsed)
-          ? parsed
-          : Number.POSITIVE_INFINITY
-      }
+      // The stylesheet cap re-read against the CURRENT viewport, not the one cached at rest: the
+      // rule is in viewport units and the viewport is what just changed (869 at rest, 533 shrunk).
+      // And the layout viewport's own height, not the visual one, which is mid-animation here.
+      cssCapRef.current = readDrawerStylesheetCap(content)
       const cap = resolveShrunkViewportCap(
-        keyboard.isOpen && keyboard.height > 0,
-        measureExcessHeight(),
+        keyboardHeight > 0,
+        window.innerHeight,
         cssCapRef.current,
       )
       if (cap === null && !visibleCapAppliedRef.current) return
@@ -1034,6 +1043,11 @@ export function DrawerEngine({
         )
         visibleCapAppliedRef.current = true
       }
+      // Whatever room the other path wrote before the resize was measurable is gone now, and the
+      // resize re-aim keys on this: left at the keyboard's height it would write that room straight
+      // back on the next content observation (measured: room 336 and a 533px floor re-applied over
+      // a cap of 0 room on the second raise).
+      appliedRoomRef.current = 0
       void content.offsetHeight
 
       // The cap only moves the box for content taller than the viewport; when it does, carry it on
@@ -1060,10 +1074,10 @@ export function DrawerEngine({
       return
     }
 
-    // The LIVE reported height — nothing cached, seeded or guessed. `useKeyboard` only commits
-    // stable heights, so iOS's transient mid-field-switch geometry never reaches here.
-    const room =
-      keyboard.isOpen && keyboard.height > 0 ? keyboard.height : 0
+    // The LIVE reported height minus what the viewport already gave up — nothing cached, seeded or
+    // guessed. `useKeyboard` only commits stable heights, so iOS's transient mid-field-switch
+    // geometry never reaches here; the shrink is 0 there and the room is the whole keyboard.
+    const room = unpaidKeyboardHeight(keyboardHeight, layoutShrink)
     //nothing in play: skip the measurement block entirely rather than pay for reads that would
     //land mid-open-animation
     if (room === 0 && appliedRoomRef.current === 0) return
@@ -1239,6 +1253,7 @@ export function DrawerEngine({
     avoidKeyboard,
     keyboard.isOpen,
     keyboard.height,
+    layoutShrink,
     keyboardFlip,
     open,
     beginPanelAnimation,
