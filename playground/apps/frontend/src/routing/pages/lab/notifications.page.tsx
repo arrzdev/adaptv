@@ -3,7 +3,10 @@ import type {
   NotifyPermission,
   ScheduleOutcome,
 } from "@arrzdev/adaptv/capabilities"
-import { useNotifications } from "@arrzdev/adaptv/hooks"
+import {
+  useNotificationOpened,
+  useNotifications,
+} from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -52,9 +55,16 @@ function LabNotificationsPage() {
   const [last, setLast] = useState<NotifyOutcome | ScheduleOutcome | null>(
     null,
   )
+  const [opened, setOpened] = useState<string | null>(null)
   const [log, setLog] = useState<LabLogEntry[]>([])
   const append = (entry: string) =>
     setLog((entries) => [...entries, labLogEntry(entry)])
+
+  useNotificationOpened(({ id, data }) => {
+    const where = data.where ?? "no payload"
+    setOpened(`${id} ${where}`)
+    append(`opened: ${id} ${where}`)
+  })
 
   async function ask() {
     const state = await request()
@@ -66,6 +76,7 @@ function LabNotificationsPage() {
       title: "Two items saved",
       body: "This one was posted by the app itself.",
       id: 4001,
+      data: { where: "now" },
     })
     setLast(outcome)
     append(`notify: ${outcome}`)
@@ -78,6 +89,7 @@ function LabNotificationsPage() {
       body: "Scheduled while the app was open; the OS fired it.",
       at,
       id: 4002,
+      data: { where: "later" },
     })
     setLast(outcome)
     append(`schedule ${at.toLocaleTimeString()}: ${outcome}`)
@@ -94,12 +106,13 @@ function LabNotificationsPage() {
       subtitle="A banner the app asks for itself: now, or at a time the OS keeps for it. Push is a different thing and is not here."
     >
       <LabBrief
-        what="That the permission is the four-state answer and not a boolean, that a notification the app shows now arrives on every target that can carry one, and that scheduling says plainly where the OS keeps the alarm and where nothing does."
+        what="That the permission is the four-state answer and not a boolean, that a notification the app shows now arrives on every target that can carry one, that scheduling says plainly where the OS keeps the alarm and where nothing does, and that tapping one hands the app back the payload it was sent with."
         steps={[
           "Press “Ask”. The first press raises the OS prompt; after an answer the row must hold it, and a second press must not raise it again.",
           "Press “Show one now”. On native, send the app to the background first: the banner arrives there.",
           "Press “Schedule in 15 s” on native, then leave the app. The banner must arrive with the app closed, and the pending row must list it until it fires.",
           "On the web, scheduling reads `unsupported`: no browser can fire one later, and a timer in the page would only run while the page is open.",
+          "Tap the banner itself, from the shade or the notification centre, with the app in the background. The “last opened” row must name the notification and the payload it carried.",
         ]}
         expected={{
           web: {
@@ -119,7 +132,7 @@ function LabNotificationsPage() {
             note: "The runtime notification permission, the banner, and the scheduled alarm — as an inexact one, so pressing a button never opens the system alarms settings screen. It can arrive a little late while the device dozes.",
           },
         }}
-        wrong="A press leaves the app for a system settings screen. Or the row reads granted where nothing can carry a banner. Or schedule reads scheduled on the web, which would be a timer pretending to be an alarm. Or the pending row keeps listing one that already fired."
+        wrong="A tap on the banner opens the app and the last opened row stays empty, which is a notification nobody can act on. Or a press leaves the app for a system settings screen. Or the row reads granted where nothing can carry a banner. Or schedule reads scheduled on the web, which would be a timer pretending to be an alarm. Or the pending row keeps listing one that already fired."
       />
 
       <LabSection
@@ -188,6 +201,15 @@ function LabNotificationsPage() {
               <span data-testid="notify-last">{last ?? "—"}</span>
             </LabBadge>
           }
+        />
+        <LabRow
+          label="last opened"
+          value={
+            <LabBadge tone={opened ? "ok" : "muted"}>
+              <span data-testid="notify-opened">{opened ?? "—"}</span>
+            </LabBadge>
+          }
+          hint="Fills in when a notification is tapped, with the payload it was sent carrying. On the web this survives a tap that had to start the app."
         />
         <LabRow
           label="pending"
