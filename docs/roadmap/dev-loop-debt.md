@@ -33,34 +33,56 @@ afternoon.
 
 ## A. Replace the hand-rolled HMR socket with Vite's own events
 
-**Today.** `src/shell/native-live-reload-client.ts` (227 lines) fetches
-`/@vite/client`, pulls the per-session `wsToken` out of it *with a regex*, opens a
-second `vite-hmr` WebSocket mirroring Vite's, and layers on a 4s liveness poll, a
-`visibilitychange` hook, and a no-token fallback.
+**Today.** `src/shell/native-live-reload-client.ts` fetches `/@vite/client`, pulls
+the per-session `wsToken` out of it *with a regex*, opens a second `vite-hmr`
+WebSocket mirroring Vite's, and layers on a 4s liveness poll and a
+`visibilitychange` hook. Since 2026-09-02 it ALSO subscribes to
+`import.meta.hot.on("vite:ws:disconnect")`, and the no-token fallback (a
+3s-background heuristic) is gone: the event is the exact signal that needed no
+token.
 
-**Why it looks like that.** We needed to know when the channel died. Vite's client
-gives up on a clean close (WKWebView closes cleanly on idle), and at the time the
-only visible signal we found was the socket itself.
+**Why it looks like that.** We needed to know when the channel died. The file said
+Vite's client gives up on a clean close (`if (wasClean) return`). That is Vite 5's
+client; this repo has been on Vite 8.0.11 since before the proxy was written
+(399ce94 built it against 8.0.11), and 8.0.11's client emits `vite:ws:disconnect`
+from its socket's `close` listener whatever the close code, logs "server
+connection lost. Polling for restart...", pings with a `vite-ping` socket gated on
+window visibility, and reloads (`dist/client/client.mjs`, the close listener in
+`createWebSocketModuleRunnerTransport` and the `vite:ws:disconnect` branch of the
+message handler). `src/shell/dev-server-client-contract.test.ts` reads that
+script and pins both facts, so an upgrade that changes either shows up in the
+unit suite.
 
-**What we know now.** Vite 8 emits `vite:ws:disconnect` and `vite:ws:connect` as
-custom HMR events, and the `close` listener that emits them stays attached after
-the socket opens — so a later close *should* fire it:
+**Measured (2026-09-02, iOS 26.1 simulator and a Pixel 10 API 37 emulator, the
+client instrumented to POST every signal to a local sink).**
 
-```ts
-import.meta.hot.on("vite:ws:disconnect", () => recover())
-```
+- The deaf state did not reproduce on the simulator. 60 s background: 2
+  connections to the dev server throughout, no close. 120 s locked: the same. A
+  6 min foreground idle: the same. Only `visibilitychange` reached the sink. The
+  clean-close-on-suspend and the socket-dead-without-close are device
+  behaviours, and the doc's condition for deleting the proxy ("confirm the event
+  arrives on the exact WKWebView clean-close path") cannot be met on this harness.
+- An induced close (the server child stopped, the CLI still up) fires the event
+  on both WebViews. iOS: `vite:ws:disconnect` at T+0 started the recovery, the
+  proxy's `close` (1006, not clean) came 61 ms later and was a no-op; the offline
+  screen followed. Android: the proxy's close at T+0, the event 2 ms later, the
+  offline screen at `http://localhost/adaptv-offline.html`. Server restarted:
+  the offline page reconnected in 6 s and the app came back with its recovery
+  installed.
+- `vite:ws:connect` is not observable for the first socket. The entry module
+  loads after Vite's socket opened, so the listener is registered too late and
+  the socket handle the event carries never reaches app code. A zombie guard
+  (poll the real socket's `readyState`) therefore cannot be built on the event;
+  the token scrape is what makes it possible.
 
-If that holds, the token scrape, the mirror socket, and probably the liveness poll
-all delete, leaving just the recovery policy (probe → reload, or → offline screen).
-That regex against Vite's internals is the most fragile thing we own; it breaks
-silently on any Vite refactor, and the symptom is "hot reload quietly stopped".
-
-**Risk / how to prove it.** Emitting the event and *reconnecting* are different
-things — Vite may fire it and still not retry, which is fine (we do the retrying).
-The real question is whether it fires on the exact WKWebView clean-close path the
-proxy was built for. Reproduce the deaf state on iOS (`lsof -nP -iTCP:7171 | grep -c
-com.apple` = 0 while the server still serves) and confirm the event arrives. If it
-doesn't fire there, keep the proxy and delete nothing.
+**What to do.** Nothing more without a device reproduction. The event is the
+better trigger for every close that fires; the proxy stays for the close that
+does not. If a physical iPhone shows the socket dying WITH a close event, the
+proxy, the token scrape and the poll all delete and the recovery policy is all
+that remains; if it dies without one, the proxy is the only thing that can
+notice, and Vite's own client would sit there too. Reproduce on a device first
+(`lsof -nP -iTCP:<port> | grep -c com.apple` = 0 while the server still serves,
+with the app foreground), then decide.
 
 ---
 
@@ -155,8 +177,9 @@ is the transport, and the only document that travels over it is a static page ad
 
 ## Suggested order
 
-1. **A** (Vite's ws events) — deletes the most fragile code we own, *if* it proves out.
-   Still live: `src/shell/native-live-reload-client.ts` is **228 lines** (this doc said 227).
+1. **A** (Vite's ws events) — measured 2026-09-02 (§A): the event is now subscribed and the
+   no-token fallback is gone; the proxy stays until a physical device shows whether the
+   socket dies with or without a `close`. Nothing further deletes without that.
 2. **B** (unify fingerprints) — measured (§B, 2026-09-02): ~8 ms either way, so the pick is on
    honesty, not speed; the `.output` hole the measurement turned up is already fixed. ⚠️ **This is the same bug
    `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
