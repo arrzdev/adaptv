@@ -86,7 +86,10 @@ describe("describeServerApiBan — the decision and the message", () => {
     const message =
       describeServerApiBan("@tanstack/react-start", APP) ?? ""
     expect(message).toContain("@tanstack/react-start")
-    expect(message.toLowerCase()).toContain("capacitor")
+    expect(message).toContain("iOS and Android")
+    //the target is named as the dev knows it, never as the engine underneath (L20);
+    //`bin/lib/opacity.test.mjs` holds the whole message to that
+    expect(message).not.toMatch(/capacitor/i)
     expect(message).toContain("docs/design/rendering.md")
   })
 

@@ -232,7 +232,7 @@ To animate the chrome instead of pinning it — a sheet dimming the toolbar as i
 Each of these has a decision recorded elsewhere and wants a worked example before 1.0:
 
 - **Auth guards in `beforeLoad`** — client-side only; `beforeLoad` is a *Router* feature and runs
-  isomorphically, so it works in a Capacitor bundle. The trap is calling anything server-only from it.
+  isomorphically, so it works in the native apps. The trap is calling anything server-only from it.
   → `docs/design/rendering.md §2`, `docs/decisions/facade-and-opacity.md`.
 - **Offline-first data with an IDB persister** — `storage.store` is an async blob KV, deliberately
   **not** a query engine; the persister and query layer are consumer-wired.
