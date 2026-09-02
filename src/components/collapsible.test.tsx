@@ -49,6 +49,17 @@ function fakeHeightTransition(
   })
 }
 
+/**
+ * The panel's phase as the DOM spells it: two presence attributes, never both,
+ * neither at rest (docs/decisions/styling.md §3.1).
+ */
+function phase(panel: HTMLElement): "opening" | "closing" | null {
+  const opening = panel.hasAttribute("data-collapsible-opening")
+  const closing = panel.hasAttribute("data-collapsible-closing")
+  if (opening && closing) throw new Error("opening and closing at once")
+  return opening ? "opening" : closing ? "closing" : null
+}
+
 function transitionEvent(type: string, propertyName: string): Event {
   const event = new Event(type, { bubbles: true })
   Object.defineProperty(event, "propertyName", { value: propertyName })
@@ -63,23 +74,50 @@ describe("Collapsible — state", () => {
   it("is closed by default and opens on a trigger press", () => {
     const { container } = render(<Basic />)
     const { root, trigger, panel } = parts(container)
-    expect(root.dataset.state).toBe("closed")
-    expect(trigger.dataset.state).toBe("closed")
-    expect(panel.dataset.state).toBe("closed")
+    expect(root.hasAttribute("data-collapsible-open")).toBe(false)
+    expect(trigger.hasAttribute("data-collapsible-open")).toBe(false)
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(false)
     expect(trigger.getAttribute("aria-expanded")).toBe("false")
     expect(panel.hasAttribute("hidden")).toBe(true)
 
     fireEvent.click(trigger)
 
-    expect(root.dataset.state).toBe("open")
-    expect(trigger.dataset.state).toBe("open")
-    expect(panel.dataset.state).toBe("open")
+    expect(root.hasAttribute("data-collapsible-open")).toBe(true)
+    expect(trigger.hasAttribute("data-collapsible-open")).toBe(true)
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
     expect(trigger.getAttribute("aria-expanded")).toBe("true")
     expect(panel.hasAttribute("hidden")).toBe(false)
 
     fireEvent.click(trigger)
-    expect(panel.dataset.state).toBe("closed")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(false)
     expect(panel.hasAttribute("hidden")).toBe(true)
+  })
+
+  //docs/decisions/styling.md §3.1: a valueless attribute namespaced per component,
+  //and `data-disabled` verbatim beside the native attribute
+  it("spells open and disabled as presence attributes on every part", () => {
+    const { container } = render(<Basic defaultOpen disabled />)
+    const { root, trigger, panel } = parts(container)
+    for (const part of [root, trigger, panel]) {
+      expect(part.getAttribute("data-collapsible-open")).toBe("")
+    }
+    expect(root.getAttribute("data-disabled")).toBe("")
+    expect(trigger.getAttribute("data-disabled")).toBe("")
+    expect(trigger.disabled).toBe(true)
+    expect(panel.hasAttribute("data-disabled")).toBe(false)
+  })
+
+  it("marks only the trigger when the trigger itself is disabled", () => {
+    const { container } = render(
+      <Collapsible>
+        <Collapsible.Trigger disabled>Details</Collapsible.Trigger>
+        <Collapsible.Panel>Body</Collapsible.Panel>
+      </Collapsible>,
+    )
+    const { root, trigger } = parts(container)
+    expect(trigger.getAttribute("data-disabled")).toBe("")
+    expect(trigger.disabled).toBe(true)
+    expect(root.hasAttribute("data-disabled")).toBe(false)
   })
 
   it("starts open with defaultOpen", () => {
@@ -87,7 +125,7 @@ describe("Collapsible — state", () => {
     const { trigger, panel } = parts(container)
     expect(trigger.getAttribute("aria-expanded")).toBe("true")
     expect(panel.hasAttribute("hidden")).toBe(false)
-    expect(panel.dataset.state).toBe("open")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
   })
 
   it("lets a controlled `open` win and reports through onOpenChange", () => {
@@ -232,11 +270,11 @@ describe("Collapsible — hidden until found", () => {
       panel.dispatchEvent(new Event("beforematch"))
     })
     expect(onOpenChange).toHaveBeenCalledWith(true)
-    expect(panel.dataset.state).toBe("open")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
     expect(trigger.getAttribute("aria-expanded")).toBe("true")
     expect(panel.hasAttribute("hidden")).toBe(false)
     //instant: the scroll target must not move under the browser
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
   })
 
@@ -252,7 +290,7 @@ describe("Collapsible — hidden until found", () => {
     })
     expect(onOpenChange).toHaveBeenCalledWith(true)
     expect(panel.getAttribute("hidden")).toBe("until-found")
-    expect(panel.dataset.state).toBe("closed")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(false)
   })
 })
 
@@ -263,14 +301,14 @@ describe("Collapsible — height transition", () => {
     expect(typeof panel.getAnimations).toBe("undefined")
 
     fireEvent.click(trigger)
-    expect(panel.dataset.state).toBe("open")
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
     expect(panel.hasAttribute("hidden")).toBe(false)
 
     fireEvent.click(trigger)
-    expect(panel.dataset.state).toBe("closed")
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(false)
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
     expect(panel.getAttribute("hidden")).toBe("until-found")
   })
@@ -287,27 +325,27 @@ describe("Collapsible — height transition", () => {
 
     fireEvent.click(trigger)
     expect(panel.hasAttribute("hidden")).toBe(false)
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     expect(panel.style.height).toBe("120px")
 
     //an end for some OTHER property, or from a descendant, is not ours
     act(() => {
       panel.dispatchEvent(transitionEvent("transitionend", "opacity"))
     })
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     const child = panel.firstElementChild as HTMLElement
     act(() => {
       child.dispatchEvent(transitionEvent("transitionend", "height"))
     })
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
 
     running.value = false
     act(() => {
       panel.dispatchEvent(transitionEvent("transitionend", "height"))
     })
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
-    expect(panel.dataset.state).toBe("open")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
   })
 
   it("keeps the panel displayed through the close and hides it only on settle", () => {
@@ -317,8 +355,8 @@ describe("Collapsible — height transition", () => {
     fakeHeightTransition(panel, running)
 
     fireEvent.click(trigger)
-    expect(panel.dataset.state).toBe("closed")
-    expect(panel.dataset.transition).toBe("close")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(false)
+    expect(phase(panel)).toBe("closing")
     expect(panel.hasAttribute("hidden")).toBe(false)
     expect(panel.style.height).toBe("0px")
 
@@ -326,7 +364,7 @@ describe("Collapsible — height transition", () => {
     act(() => {
       panel.dispatchEvent(transitionEvent("transitionend", "height"))
     })
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
     expect(panel.getAttribute("hidden")).toBe("until-found")
   })
@@ -345,28 +383,28 @@ describe("Collapsible — height transition", () => {
     })
 
     fireEvent.click(trigger)
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     fireEvent.click(trigger)
-    expect(panel.dataset.transition).toBe("close")
+    expect(phase(panel)).toBe("closing")
     expect(panel.style.height).toBe("0px")
     fireEvent.click(trigger)
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     //mid-flight: only the target is written, never a snap back to 0
     expect(panel.style.height).toBe("80px")
 
     act(() => {
       panel.dispatchEvent(transitionEvent("transitioncancel", "height"))
     })
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     expect(panel.hasAttribute("hidden")).toBe(false)
 
     running.value = false
     act(() => {
       panel.dispatchEvent(transitionEvent("transitionend", "height"))
     })
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
-    expect(panel.dataset.state).toBe("open")
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
     expect(panel.hasAttribute("hidden")).toBe(false)
   })
 
@@ -391,13 +429,13 @@ describe("Collapsible — height transition", () => {
     fakeHeightTransition(panel, { value: true })
 
     fireEvent.click(trigger)
-    expect(panel.dataset.state).toBe("open")
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(panel.hasAttribute("data-collapsible-open")).toBe(true)
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
     expect(panel.hasAttribute("hidden")).toBe(false)
 
     fireEvent.click(trigger)
-    expect(panel.dataset.transition).toBeUndefined()
+    expect(phase(panel)).toBeNull()
     expect(panel.style.height).toBe("")
     expect(panel.getAttribute("hidden")).toBe("until-found")
   })
@@ -430,7 +468,7 @@ describe("Collapsible — height transition", () => {
     if (!bump) throw new Error("bump missing")
     fireEvent.click(bump)
     //an unrelated commit leaves the running phase alone
-    expect(panel.dataset.transition).toBe("open")
+    expect(phase(panel)).toBe("opening")
     expect(panel.style.height).toBe("50px")
   })
 })

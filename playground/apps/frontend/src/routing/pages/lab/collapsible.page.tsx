@@ -27,12 +27,15 @@ const NEEDLE = "until-found-needle-7f3a"
 const TRIGGER_CLASS =
   "clickable flex w-full items-center justify-between gap-x-3 px-3 py-2 text-start text-sm font-medium text-foreground"
 
-/** Rotates with the root's `data-state`, no JS: the root carries `group`. */
+/**
+ * Rotates with the root's `data-collapsible-open`, no JS: the root carries `group`,
+ * and a presence attribute is what Tailwind v4's bare variant reads — no brackets.
+ */
 function Chevron() {
   return (
     <span
       aria-hidden
-      className="shrink-0 text-subtle transition-transform duration-200 group-data-[state=open]:rotate-180"
+      className="shrink-0 text-subtle transition-transform duration-200 group-data-collapsible-open:rotate-180"
     >
       ▾
     </span>
@@ -73,7 +76,7 @@ function LabCollapsiblePage() {
             note: 'Everything, including until-found: the WebView floor is Chromium 119 and until-found shipped in 102. The support row reads true and the closed panel carries hidden="until-found".',
           },
         }}
-        wrong="A panel that jumps open or shut instead of animating (with Reduce Motion OFF). A grown panel whose new lines are clipped, or an inline-height row that reads present while the panel is open at rest. A panel that ends closed WITHOUT `hidden`, or open WITH it. A chevron that does not follow data-state. A beforematch that slides instead of snapping open."
+        wrong="A panel that jumps open or shut instead of animating (with Reduce Motion OFF). A grown panel whose new lines are clipped, or an inline-height row that reads present while the panel is open at rest. A panel that ends closed WITHOUT `hidden`, or open WITH it. A chevron that does not follow data-collapsible-open. A beforematch that slides instead of snapping open."
       />
 
       <UncontrolledSection />
@@ -95,14 +98,19 @@ function LabCollapsiblePage() {
           hint="Root, trigger and panel — target any of them from global CSS with no imports."
         />
         <LabRow
-          label="data-state"
-          value="open | closed"
-          hint="On all three. It is what the chevron above keys its rotation on, through the root's `group`."
+          label="data-collapsible-open"
+          value="present | absent"
+          hint="On all three while open, valueless, gone while closed — a presence attribute namespaced per component (styling.md §3.1). It is what the chevron above keys its rotation on, through the root's `group` and the bare `group-data-collapsible-open:` variant."
         />
         <LabRow
-          label="data-transition"
-          value="open | close · absent at rest"
-          hint="On the panel only while a height transition is running. Absent under reduced motion, absent after beforematch, absent at rest — so an open panel is never clipped by a stale inline height."
+          label="data-disabled"
+          value="present | absent"
+          hint="On the root and the trigger while disabled, next to the native `disabled` on the button."
+        />
+        <LabRow
+          label="data-collapsible-opening · data-collapsible-closing"
+          value="one while sliding · neither at rest"
+          hint="On the panel only while a height transition is running, one or the other. Neither under reduced motion, neither after beforematch, neither at rest — so an open panel is never clipped by a stale inline height."
         />
         <LabRow
           label="--collapsible-duration"
@@ -127,7 +135,7 @@ function UncontrolledSection() {
   return (
     <LabSection
       title="Uncontrolled"
-      description="defaultOpen={false}. The component owns the state; the chevron follows data-state on the root through `group`."
+      description="defaultOpen={false}. The component owns the state; the chevron follows data-collapsible-open on the root through `group`."
     >
       <Collapsible className="group rounded-md bg-secondary">
         <Collapsible.Trigger className={TRIGGER_CLASS}>
@@ -346,9 +354,9 @@ function UntilFoundSection() {
         hint="The engine's until-found support. false is correct on WebKit — nothing to fix."
       />
       <LabRow
-        label="data-transition"
-        value={probe ? (probe.transition ?? "absent") : undefined}
-        hint="Must stay absent through a beforematch open."
+        label="transition phase"
+        value={probe ? (probe.phase ?? "absent") : undefined}
+        hint="data-collapsible-opening / data-collapsible-closing on the panel. Must stay absent through a beforematch open."
       />
       {!supportsBeforematch && (
         <LabCaveat>
@@ -368,8 +376,8 @@ function UntilFoundSection() {
 
 type PanelProbe = {
   hidden: string | null
-  state: string | null
-  transition: string | null
+  open: boolean
+  phase: "opening" | "closing" | null
   inlineHeight: string
   clientHeight: number
 }
@@ -377,11 +385,11 @@ type PanelProbe = {
 /**
  * The panel inside `hostRef`, read live.
  *
- * A MutationObserver for the attributes the contract moves (`hidden`, `data-state`,
- * `data-transition`, the inline `style`) and a ResizeObserver for the height, so the
- * readouts follow the transition frame by frame instead of the last render. `null`
- * until mounted: the server has no panel to read, and a guessed value would mismatch
- * the hydration.
+ * A MutationObserver for the attributes the contract moves (`hidden`,
+ * `data-collapsible-open`, `data-collapsible-opening` / `-closing`, the inline
+ * `style`) and a ResizeObserver for the height, so the readouts follow the
+ * transition frame by frame instead of the last render. `null` until mounted: the
+ * server has no panel to read, and a guessed value would mismatch the hydration.
  */
 function usePanelProbe(hostRef: RefObject<HTMLDivElement | null>) {
   const [probe, setProbe] = useState<PanelProbe | null>(null)
@@ -395,8 +403,12 @@ function usePanelProbe(hostRef: RefObject<HTMLDivElement | null>) {
     const read = () =>
       setProbe({
         hidden: panel.getAttribute("hidden"),
-        state: panel.getAttribute("data-state"),
-        transition: panel.getAttribute("data-transition"),
+        open: panel.hasAttribute("data-collapsible-open"),
+        phase: panel.hasAttribute("data-collapsible-opening")
+          ? "opening"
+          : panel.hasAttribute("data-collapsible-closing")
+            ? "closing"
+            : null,
         inlineHeight: panel.style.height,
         clientHeight: panel.clientHeight,
       })

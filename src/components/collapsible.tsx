@@ -68,7 +68,11 @@ function useCollapsibleContext(): CollapsibleContextValue {
   return ctx
 }
 
-/** Programmatic state from {@link useCollapsible} for Tier 2 branch paint. */
+/**
+ * Programmatic state from {@link useCollapsible} for Tier 2 branch paint. The
+ * same state is on the DOM as presence attributes (`data-collapsible-open`,
+ * `data-disabled`) for a class-only branch; see {@link Collapsible}.
+ */
 export type CollapsibleState = {
   isOpen: boolean
   isDisabled: boolean
@@ -121,6 +125,15 @@ export type CollapsibleProps = Omit<
  * The panel animates its measured height open and closed, rests at `height: auto`
  * so later growth is never clipped, and is `hidden="until-found"` while closed so
  * find-in-page still reaches the text inside it.
+ *
+ * Its state is spelled as PRESENCE attributes, per docs/decisions/styling.md §3.1:
+ * `data-collapsible-open` on the root, the trigger and the panel while open and
+ * absent while closed; `data-disabled` on the root and the trigger while disabled,
+ * next to the native `disabled` on the button. A Tier 2 class therefore branches
+ * with the bare Tailwind v4 variants — `data-collapsible-open:` on the part itself,
+ * `group-data-collapsible-open:` from a descendant of a root that carries `group` —
+ * and never on a value. The name is namespaced per component so a second adaptv
+ * trigger composed onto the same element cannot overwrite it.
  *
  * @example
  * ```tsx
@@ -190,7 +203,12 @@ function Collapsible({
     <CollapsibleContext.Provider value={contextValue}>
       <div
         data-adaptv="collapsible"
-        data-state={isOpen ? "open" : "closed"}
+        //Presence attributes, not a `state="open|closed"` value
+        //(docs/decisions/styling.md §3.1): namespaced per component so a second
+        //adaptv trigger on the same element cannot overwrite it, and valueless so
+        //Tailwind v4's bare `data-collapsible-open:` variant matches it.
+        data-collapsible-open={isOpen ? "" : undefined}
+        data-disabled={isDisabled ? "" : undefined}
         //Both tiers undefined by decision: the root is a plain grouping element with
         //no neutral look of its own, so the consumer's classes are the whole story.
         {...mergeStyles({
@@ -237,6 +255,7 @@ function CollapsibleTrigger({
     panelId,
     registerTriggerId,
   } = useCollapsibleContext()
+  const isTriggerDisabled = Boolean(disabled) || isDisabled
 
   useIsomorphicLayoutEffect(() => {
     registerTriggerId(idProp)
@@ -247,10 +266,13 @@ function CollapsibleTrigger({
       type="button"
       id={idProp ?? triggerId}
       data-adaptv="collapsible-trigger"
-      data-state={isOpen ? "open" : "closed"}
+      data-collapsible-open={isOpen ? "" : undefined}
+      //`data-disabled` verbatim (styling.md §3.1) beside the native attribute, so
+      //a parent can style the disabled trigger without a `:disabled` reach-in.
+      data-disabled={isTriggerDisabled ? "" : undefined}
       aria-expanded={isOpen}
       aria-controls={panelId}
-      disabled={disabled || isDisabled ? true : undefined}
+      disabled={isTriggerDisabled || undefined}
       //Both tiers undefined by decision (like Dropdown.Trigger): a trigger is a plain
       //button adaptv wires open/close onto, with no neutral look of its own.
       {...mergeStyles({
@@ -307,7 +329,10 @@ function commitStyle(panel: HTMLElement): void {
 
 /**
  * The content of a {@link Collapsible}. A `<div role="region">` labelled by the
- * trigger, `hidden="until-found"` while closed.
+ * trigger, `hidden="until-found"` while closed. Carries `data-collapsible-open`
+ * while open and, while a height transition runs, `data-collapsible-opening` or
+ * `data-collapsible-closing` — presence attributes (styling.md §3.1), so a
+ * consumer's `data-collapsible-opening:` class needs no brackets.
  *
  * Put padding and borders on a CHILD of the panel, not on the panel itself: the
  * open animation starts from `height: 0px` on the panel's border box, and the
@@ -332,8 +357,8 @@ function CollapsiblePanel({
 
   //The transition phase is derived DURING render from the change in `isOpen`, so
   //the commit that removes `hidden` is the same commit that carries
-  //`data-transition="open"`: the panel is never displayed with the transition rule
-  //off, which is what would let it paint at full height for a frame.
+  //`data-collapsible-opening`: the panel is never displayed with the transition
+  //rule off, which is what would let it paint at full height for a frame.
   const [prevOpen, setPrevOpen] = useState(isOpen)
   const [transition, setTransition] = useState<PanelTransition>(null)
   //Find-in-page has already revealed the content by the time the reveal lands here,
@@ -366,8 +391,9 @@ function CollapsiblePanel({
       panel.removeAttribute("hidden")
     }
     //At rest the panel is `height: auto`, so later growth is not clipped. Cleared
-    //here, in the commit that also drops `data-transition`, so the px-to-auto jump
-    //happens with the transition rule already off and never animates.
+    //here, in the commit that also drops `data-collapsible-opening` /
+    //`data-collapsible-closing`, so the px-to-auto jump happens with the
+    //transition rule already off and never animates.
     if (transition === null && panel.style.height !== "") {
       panel.style.height = ""
     }
@@ -449,14 +475,17 @@ function CollapsiblePanel({
       ref={panelRef}
       id={idProp ?? panelId}
       data-adaptv="collapsible-panel"
-      data-state={isOpen ? "open" : "closed"}
-      data-transition={transition ?? undefined}
+      data-collapsible-open={isOpen ? "" : undefined}
+      //The phase is two presence attributes, never both and neither at rest,
+      //rather than one attribute carrying an `open|close` value (styling.md §3.1).
+      data-collapsible-opening={transition === "open" ? "" : undefined}
+      data-collapsible-closing={transition === "close" ? "" : undefined}
       role="region"
       aria-labelledby={triggerId}
       hidden={isClosedAtRest || undefined}
       //Both tiers undefined by decision: overflow and the transition live in
-      //collapsible.css keyed on `data-transition`, where a consumer class cannot
-      //reach them, and the panel has no neutral look beyond that.
+      //collapsible.css keyed on the opening/closing attributes, where a consumer
+      //class cannot reach them, and the panel has no neutral look beyond that.
       {...mergeStyles({
         base: undefined,
         className,
