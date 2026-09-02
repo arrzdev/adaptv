@@ -2644,7 +2644,7 @@ async function genIcons(appRoot, _positional, flags) {
   //the default is indistinguishable from someone typing `--background #ffffff`.
   const backgroundChosen = typeof flags.background === "string"
   const background = parseHex(
-    flags.background ?? (await resolveIconPlan(config)).iconBackground,
+    flags.background ?? (await resolveIconPlan()).iconBackground,
   )
   //What the mark will actually sit on. Shared with `slotPlan` rather than restated, so the
   //preview sheet cannot disagree with the files it is previewing.
