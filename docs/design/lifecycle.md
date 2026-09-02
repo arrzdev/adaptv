@@ -345,8 +345,9 @@ second copy to keep in step.
 **Native projects live in `.adaptv/`.** `cap add`/`sync`/`run` are pointed at `.adaptv/ios` and
 `.adaptv/android` via `android.path`/`ios.path` in the generated `capacitor.config.json` (relative to the
 app root, where `cap` reads it). So *everything* adaptv generates — the route tree and both native
-projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. A legacy app-root
-`ios/`/`android/` is migrated into `.adaptv/` on the next run.
+projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. An `ios/` or `android/`
+at the app root is not adaptv's and is left alone: the one-time move into `.adaptv/` that used to run
+was a compatibility shim for a layout no published install ever had, and adaptv carries none.
 
 **Device targeting.** adaptv owns the picker (rather than Capacitor's opaque one) so it can cache your
 choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and

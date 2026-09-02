@@ -90,7 +90,7 @@ export async function destroyServiceWorkers(): Promise<void> {
  * Deliberately fire-and-forget: nothing downstream may wait on a permission
  * decision that some browsers surface to the user.
  */
-export async function requestPersistentStorage(): Promise<boolean> {
+async function requestPersistentStorage(): Promise<boolean> {
   try {
     if (typeof navigator === "undefined" || !navigator.storage?.persist) {
       return false

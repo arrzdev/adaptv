@@ -1,5 +1,6 @@
 import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import type { ComponentType } from "react"
+import type { UiThemePreference } from "#adaptv/capabilities/native-theme"
 import type { BootErrorProps } from "#adaptv/components/boot-error"
 import type { OfflineProps } from "#adaptv/components/offline"
 import type {
@@ -8,7 +9,6 @@ import type {
   SplashScreenProps,
   UpdateRequiredProps,
 } from "#adaptv/config/types"
-import type { UiThemePreference } from "#adaptv/hooks/use-theme"
 import type { AdaptvPrivacyConfig } from "#adaptv/native/privacy-manifest"
 import type {
   UiOpenGraphConfig,

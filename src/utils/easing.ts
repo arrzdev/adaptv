@@ -18,12 +18,12 @@ import { clamp } from "#adaptv/utils/clamp"
 export type EasingBezier = [number, number, number, number]
 
 /** One axis of a cubic Bézier with endpoints pinned at 0 and 1. */
-export function easingAxisAt(s: number, c1: number, c2: number) {
+function easingAxisAt(s: number, c1: number, c2: number) {
   const t = 1 - s
   return 3 * t * t * s * c1 + 3 * t * s * s * c2 + s * s * s
 }
 
-export function easingAxisSlopeAt(s: number, c1: number, c2: number) {
+function easingAxisSlopeAt(s: number, c1: number, c2: number) {
   const t = 1 - s
   return 3 * t * t * c1 + 6 * t * s * (c2 - c1) + 3 * s * s * (1 - c2)
 }

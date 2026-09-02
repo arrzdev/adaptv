@@ -11,7 +11,7 @@ function getViewportContent(allowZoom: boolean) {
   return allowZoom ? VIEWPORT_BASE : VIEWPORT_NO_ZOOM
 }
 
-export const defaultMetaTags = [
+const defaultMetaTags = [
   { charSet: "utf-8" as const },
   {
     name: "viewport",

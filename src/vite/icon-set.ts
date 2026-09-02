@@ -226,7 +226,7 @@ let defaultIconsCache: IconFile[] | null = null
  * missing its assets yields null — the app then ships with no icons, exactly as it did before
  * adaptv had a mark, rather than the whole config load throwing.
  */
-export function defaultIconsDir(): string | null {
+function defaultIconsDir(): string | null {
   if (defaultIconsDirCache !== undefined) return defaultIconsDirCache
   let dir = import.meta.dirname
   for (let up = 0; up < 6; up++) {

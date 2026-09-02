@@ -80,9 +80,7 @@ function withoutExt(file: string): string {
  * both are reachable by name through `package.json` `exports`, which is what makes the
  * rewrite below resolve to the SAME module the relative path did.
  */
-export function adaptvRouteTreeModules(
-  routerPkg: string,
-): RouteTreeModule[] {
+function adaptvRouteTreeModules(routerPkg: string): RouteTreeModule[] {
   return [
     {
       //typed through the barrel's `export type { getRouter }`, so the tree's
@@ -196,7 +194,7 @@ export function findUnportableImports(
  * and the build would keep succeeding — with a route tree whose type layer only
  * resolves on the machine that generated it. → src/vite/verify-patches.ts
  */
-export function assertRouteTreeIsPortable(
+function assertRouteTreeIsPortable(
   routeTreePath: string,
   appRoot: string,
 ): void {

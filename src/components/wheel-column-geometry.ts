@@ -10,7 +10,7 @@
 import { clamp } from "#adaptv/utils/clamp"
 
 export const WHEEL_ITEM_HEIGHT = 30
-export const WHEEL_VISIBLE_ROWS = 5
+const WHEEL_VISIBLE_ROWS = 5
 export const WHEEL_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS
 /** The list is padded two rows top and bottom so scrollTop 0 centres index 0. */
 export const WHEEL_PAD = WHEEL_ITEM_HEIGHT * 2
@@ -22,7 +22,7 @@ export const WHEEL_PAD = WHEEL_ITEM_HEIGHT * 2
 const WHEEL_ROW_TILT_DEG = 22
 const WHEEL_MAX_TILT_DEG = 84
 const WHEEL_PERSPECTIVE_PX = 600
-export const WHEEL_RADIUS =
+const WHEEL_RADIUS =
   WHEEL_ITEM_HEIGHT / (2 * Math.tan((WHEEL_ROW_TILT_DEG * Math.PI) / 360))
 
 /**

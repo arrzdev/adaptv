@@ -4,6 +4,7 @@ import type { Plugin as EsbuildPlugin } from "esbuild"
 import { build as esbuild } from "esbuild"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import type { LoadedAppConfig } from "#adaptv/vite/adaptv-context"
+import { appConfigErrors } from "#adaptv/vite/app-config-errors.ts"
 
 export const APP_CONFIG_BASENAME = "adaptv.config.ts"
 
@@ -43,12 +44,28 @@ export async function loadAppConfig(
   }
 
   const module = await importFromSource(output.text)
-  const config = module.default as AdaptvAppConfig | undefined
-  if (!config || typeof config !== "object") {
+  const loaded = module.default
+  if (!loaded || typeof loaded !== "object") {
     throw new Error(
       `[adaptv] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
     )
   }
+  //The boundary. Nothing type-checks the config before it is evaluated, so a
+  //value the type forbids arrives here anyway — and every consumer past this
+  //line reads it as if it were right. Refuse it here, naming the key, or the
+  //first consumer to touch it names nothing (`styles` missing used to die as
+  //`Cannot read properties of undefined (reading 'replace')`, and
+  //`orientation: "sideways"` built green). All of them at once: fixing a
+  //config one line per build is a worse experience than reading the list.
+  const problems = appConfigErrors(loaded)
+  if (problems.length > 0) {
+    throw new Error(
+      problems
+        .map((problem) => `[adaptv] ${APP_CONFIG_BASENAME}: ${problem}`)
+        .join("\n"),
+    )
+  }
+  const config = loaded as AdaptvAppConfig
 
   const watchFiles = Object.keys(result.metafile?.inputs ?? {}).map(
     (input) => path.resolve(appRoot, input),

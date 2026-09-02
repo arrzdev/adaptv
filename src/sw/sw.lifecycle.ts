@@ -24,7 +24,7 @@ export async function sweepStaleRuntimeCaches(
   }
 }
 
-export function registerSkipWaitingOnMessage() {
+function registerSkipWaitingOnMessage() {
   const sw = serviceWorkerScope()
 
   sw.addEventListener("message", (event: ExtendableMessageEvent) => {
@@ -34,7 +34,7 @@ export function registerSkipWaitingOnMessage() {
   })
 }
 
-export function registerClientsClaimOnActivate() {
+function registerClientsClaimOnActivate() {
   const sw = serviceWorkerScope()
 
   sw.addEventListener("activate", (event: ExtendableEvent) => {
@@ -46,7 +46,7 @@ export function registerClientsClaimOnActivate() {
  * Sweep previous builds' runtime caches on activate. Pass the build tag the
  * worker was stamped with (`__ADAPTV_BUILD_TAG__`).
  */
-export function registerRuntimeCacheSweep(buildTag: string) {
+function registerRuntimeCacheSweep(buildTag: string) {
   const sw = serviceWorkerScope()
 
   sw.addEventListener("activate", (event: ExtendableEvent) => {

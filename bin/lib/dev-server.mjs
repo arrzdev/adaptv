@@ -14,6 +14,19 @@ const strip = (s) => s.replace(ANSI, "")
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
+ * What the warm reads the time from and waits by.
+ *
+ * Real time by default. A test hands in a virtual one so it can assert on the settle
+ * `warmDevServer` CHOSE — the exact milliseconds — instead of sleeping through the real
+ * thing and reading a wall clock afterwards, which is how the unit suite came to spend
+ * thirteen seconds proving that one branch picks 1000 and the other 150.
+ * @typedef {{ now: () => number, sleep: (ms: number) => Promise<void> }} Clock
+ */
+
+/** @type {Clock} */
+export const realClock = { now: () => Date.now(), sleep }
+
+/**
  * Warm the dev server until it is STABLE, before any native WebView attaches.
  *
  * Vite re-optimizes its dependency graph on the first real request ("Re-optimizing
@@ -55,19 +68,24 @@ export const SAW_OPTIMIZE =
 
 /**
  * @param {string} url
- * @param {{ timeoutMs?: number, onLine?: (line: string) => void, sawOptimize?: () => boolean }} [opts]
+ * @param {{ timeoutMs?: number, onLine?: (line: string) => void, sawOptimize?: () => boolean, clock?: Clock }} [opts]
  */
 export async function warmDevServer(
   url,
-  { timeoutMs = 30000, onLine, sawOptimize = () => true } = {},
+  {
+    timeoutMs = 30000,
+    onLine,
+    sawOptimize = () => true,
+    clock = realClock,
+  } = {},
 ) {
-  const start = Date.now()
+  const start = clock.now()
   let good = 0
   // What the most recent UNHEALTHY read saw. Overwritten only on a bad read, so a warm that
   // goes good→bad→timeout reports the failure and not the last read of all. Seeded with the
   // pessimistic case so the verdict is always worded, even if the loop never gets a read in.
   let last = { why: "unreachable" }
-  while (Date.now() - start < timeoutMs) {
+  while (clock.now() - start < timeoutMs) {
     let ok = false
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
@@ -90,14 +108,14 @@ export async function warmDevServer(
         // re-optimizes and there is no broadcast to miss. A flat second on every native `dev`
         // was paying the cold-start price on every warm start. A short settle still covers the
         // scheduling gap between the last good read and the launch.
-        await sleep(sawOptimize() ? 1000 : 150)
+        await clock.sleep(sawOptimize() ? 1000 : 150)
         onLine?.("dev server stable")
         return { ok: true }
       }
     } else {
       good = 0
     }
-    await sleep(900)
+    await clock.sleep(900)
   }
   //NOT "launching anyway" any more: the caller aborts the run on this verdict, and a line
   //promising the opposite is the kind of thing a dev reads once under `--verbose` and

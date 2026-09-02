@@ -75,9 +75,7 @@ describe("flushNotices — severity and repetition", () => {
     const out = captureOut(() =>
       flushNotices([
         "ios launcher icon upscaled from 512px — add a 1024px icon",
-        {
-          note: "no icons in ./public/favicons — add one to brand the launcher icon",
-        },
+        "no icons in ./public/favicons — add one to brand the launcher icon",
       ]),
     )
     expect(out[0]).toContain("!")
@@ -88,21 +86,15 @@ describe("flushNotices — severity and repetition", () => {
   it("prints an app-level fact once, not once per platform", () => {
     //Regression: asset config is discovered per platform, so `build all` printed the
     //same sentence twice — reading as two separate problems when it is one.
-    const same = {
-      note: "no icons in ./public/favicons — add one to brand the launcher icon",
-    }
-    const out = captureOut(() => flushNotices([{ ...same }, { ...same }]))
+    const same =
+      "no icons in ./public/favicons — add one to brand the launcher icon"
+    const out = captureOut(() => flushNotices([same, same]))
     expect(said(out)).toHaveLength(1)
   })
 
-  it("dedupes warnings and notes independently of each other", () => {
+  it("dedupes each distinct sentence on its own", () => {
     const out = captureOut(() =>
-      flushNotices([
-        "same text",
-        "same text",
-        { note: "other" },
-        { note: "other" },
-      ]),
+      flushNotices(["same text", "same text", "other", "other"]),
     )
     expect(said(out)).toHaveLength(2)
   })
@@ -110,7 +102,7 @@ describe("flushNotices — severity and repetition", () => {
   it("empties the list so a later flush cannot reprint it", () => {
     //Notices surface next to the step that produced them; a second flush at the end
     //of the run must not repeat them.
-    const notices = [{ note: "a" }, "b"]
+    const notices = ["a", "b"]
     captureOut(() => flushNotices(notices))
     expect(notices).toHaveLength(0)
     expect(captureOut(() => flushNotices(notices))).toHaveLength(0)

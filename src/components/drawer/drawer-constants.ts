@@ -41,12 +41,10 @@ export const DRAWER_TRANSITIONS = {
 } as const
 
 /** px/ms — release closes when `abs(distMoved) / timeTaken` exceeds this */
-export const DRAWER_VELOCITY_THRESHOLD = 0.4
+const DRAWER_VELOCITY_THRESHOLD = 0.4
 
 /** Fraction of drawer height — release closes when dragged at or past this */
-export const DRAWER_CLOSE_THRESHOLD = 0.25
-
-export const DRAWER_BORDER_RADIUS = 8
+const DRAWER_CLOSE_THRESHOLD = 0.25
 
 /**
  * How much of the finger the sheet keeps on the FIRST pixel of an upward pull. Below 1 the sheet

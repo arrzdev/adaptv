@@ -130,9 +130,12 @@ export const OTA_READY_TIMEOUT_MS =
 export function buildCapacitorConfig(
   config: AdaptvAppConfig,
 ): CapacitorConfigJson {
+  //`preflight` refuses a missing `appId` before any build starts (R33); this is the
+  //backstop, and it speaks the same way — the key, quoted, and what needs it. Not the
+  //file it would have generated, which is one the consumer never sees (L20).
   if (!config.appId) {
     throw new Error(
-      "adaptv.config.ts: `appId` is required to generate capacitor.config (native build)",
+      "'appId' is missing from adaptv.config.ts — the native apps need one",
     )
   }
   return {

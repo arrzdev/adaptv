@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { loadAdaptvModule } from "./load-ts.mjs"
+import { ownInstallMissingPlatform } from "./native.mjs"
 import { isAppSource, namesPlumbing } from "./opacity.mjs"
 import { prettyLine } from "./render.mjs"
 
@@ -186,4 +187,122 @@ describe("doctor's diagnostics are a user-facing surface too", () => {
       .filter((line) => namesPlumbing(line))
     expect(leaks).toEqual([])
   })
+})
+
+/**
+ * The server-API ban is a user-facing surface three times over.
+ *
+ * It fires in the dev's terminal (`vite build`), in the dev overlay, and — through
+ * `biome-shared.json`, which a consumer `extends` — as an editor squiggle. All three said
+ * "a Capacitor build has none", and the doctor scan above could not see it because none of
+ * this text passes through `prettyLine` or `formatDiagnostics`. The one engine word a ban
+ * may carry is the specifier the dev typed: it is their import, in their file, and the
+ * caret frame points at it. Everything around it is adaptv's sentence about adaptv's rule.
+ */
+describe("the server-API ban is a user-facing surface", () => {
+  it("names no engine beyond the import the dev wrote", async () => {
+    const { describeServerApiBan, SERVER_ROUTE_HANDLERS_MESSAGE } =
+      await loadAdaptvModule("vite/ban-server-apis.ts")
+    const source = "@tanstack/react-start"
+    const message =
+      describeServerApiBan(source, "/app/src/routes/index.tsx") ?? ""
+    //the scan below is vacuous on an empty message, and a null here means the
+    //fixture stopped being application source, not that the ban went quiet
+    expect(message).not.toBe("")
+    const leaks = message
+      .replaceAll(source, "")
+      .split("\n")
+      .filter((line) => namesPlumbing(line))
+    expect(leaks).toEqual([])
+    expect(
+      SERVER_ROUTE_HANDLERS_MESSAGE.split("\n").filter((line) =>
+        namesPlumbing(line),
+      ),
+    ).toEqual([])
+  })
+
+  it("names none in the shared lint config either", () => {
+    const shared = JSON.parse(
+      readFileSync(
+        path.resolve(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "../../biome-shared.json",
+        ),
+        "utf8",
+      ),
+    )
+    //The KEYS are the banned specifiers, which is what the rule is about — structural,
+    //like the dependency graph. The messages are what the dev reads.
+    const paths =
+      shared.linter.rules.style.noRestrictedImports.options.paths
+    const messages = Object.values(paths).map((p) => p.message)
+    expect(messages.length).toBeGreaterThan(0)
+    expect(messages.filter((m) => namesPlumbing(m))).toEqual([])
+  })
+})
+
+/**
+ * Refusals thrown from build-time code land on a `✖` line through `explainFailure`, whose
+ * fallback for a reason that names plumbing is the thrower's OWN first line — so a thrown
+ * message that names an engine is printed verbatim. These are the two that did.
+ */
+describe("build-time refusals are a user-facing surface", () => {
+  it("reports adaptv's own broken install without naming the engine", () => {
+    //`@capacitor/ios is missing from adaptv's install` was thrown straight onto the
+    //platform's line. The fact is adaptv's; the fix is `pnpm install`; neither needs the name.
+    for (const platform of ["ios", "android"]) {
+      const message = ownInstallMissingPlatform(platform)
+      expect(message).toContain(platform)
+      expect(namesPlumbing(message)).toBe(false)
+    }
+  })
+
+  it("refuses a missing appId in adaptv's words", async () => {
+    //`preflight` catches this first (R33); the backstop said `to generate
+    //capacitor.config`, naming a file the consumer never sees.
+    const { buildCapacitorConfig } = await loadAdaptvModule(
+      "vite/capacitor-config.ts",
+    )
+    let message = ""
+    try {
+      buildCapacitorConfig({ name: "x" })
+    } catch (err) {
+      message = String(err?.message ?? err)
+    }
+    expect(message).toContain("'appId'")
+    expect(namesPlumbing(message)).toBe(false)
+  })
+})
+
+/**
+ * The consumer-facing docs, held to the same line. `docs/README.md` names them: the root
+ * `README.md` and `guides/cookbook.md` must never name the machinery underneath (L20).
+ *
+ * One thing is stripped before the scan, and it is not an engine: `@tanstack/react-query`
+ * is the cookbook author's own data library, chosen by the consumer and installed by the
+ * consumer. Opacity hides adaptv's platform choices, not the consumer's
+ * (`docs/decisions/rendering-and-delivery.md` §2, on hosting providers) — and it is
+ * stripped by exact name so a mention of the router or Start next to it still fails.
+ */
+describe("the consumer-facing docs are a user-facing surface", () => {
+  const CONSUMER_OWN_LIBRARY = /@tanstack\/react-query|TanStack Query/g
+  const ROOT = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../..",
+  )
+
+  it.each(["README.md", "docs/guides/cookbook.md"])(
+    "%s names no engine",
+    (file) => {
+      const lines = readFileSync(path.join(ROOT, file), "utf8").split("\n")
+      expect(lines.length).toBeGreaterThan(20)
+      const leaks = lines
+        .map((line, i) => ({
+          at: `${file}:${i + 1}`,
+          text: line.replace(CONSUMER_OWN_LIBRARY, ""),
+        }))
+        .filter((l) => namesPlumbing(l.text))
+      expect(leaks.map((l) => `${l.at}  ${l.text.trim()}`)).toEqual([])
+    },
+  )
 })

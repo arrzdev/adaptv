@@ -40,7 +40,7 @@
     "dexie": "4.4.2",
     "dexie-react-hooks": "4.4.0",
     "lucide-react": "0.544.0",
-    "motion": "12.35.0",
+    "motion": "link:../../../node_modules/motion",
     "react": "link:../../../node_modules/react",
     "react-dom": "link:../../../node_modules/react-dom",
     "tailwindcss": "4.2.4",

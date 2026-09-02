@@ -11,13 +11,13 @@
 //and by Node — `src/vite/shell-emit.ts` imports it to generate the built shell,
 //and Node's ESM resolver will not add an extension for it. The rest of `src/vite`
 //already writes it this way; this is the first file outside it that has to.
+
+import type { UiThemePreference } from "#adaptv/capabilities/native-theme"
 import type { RouteTint } from "#adaptv/shell/route-tints.ts"
 import {
   routePathToPattern,
   sortRouteTints,
 } from "#adaptv/shell/route-tints.ts"
-
-export type UiThemePreferenceValue = "light" | "dark" | "system"
 
 export const UI_THEME_STORAGE_KEY = "ui-theme-preference" as const
 export const PREFERENCE_ATTR = "data-ui-theme"
@@ -38,7 +38,7 @@ export function getUiThemeInitScript({
 }: {
   themeColorLight: string
   themeColorDark: string
-  defaultThemePreference?: UiThemePreferenceValue
+  defaultThemePreference?: UiThemePreference
   /**
    * Routes that pin the chrome to a colour of their own, most specific first
    * (see {@link sortRouteTints}). The script matches `location.pathname` against

@@ -66,7 +66,7 @@ export function canonicalManifest(manifest: SignableManifest): string {
 }
 
 /** Decode a PEM public key to the SPKI bytes WebCrypto wants. */
-export function pemToSpki(pem: string): Uint8Array {
+function pemToSpki(pem: string): Uint8Array {
   const base64 = pem
     .replace(/-----BEGIN PUBLIC KEY-----/, "")
     .replace(/-----END PUBLIC KEY-----/, "")

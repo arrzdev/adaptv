@@ -30,7 +30,7 @@ export const ADAPTV_DIR = ".adaptv"
  * A distinct namespace from `#adaptv/*` (which is the framework's own internal
  * self-alias) so the two can never be confused when reading a stack trace.
  */
-export const ADAPTV_GEN_ALIAS = "#adaptv-gen"
+const ADAPTV_GEN_ALIAS = "#adaptv-gen"
 
 export type GeneratedPaths = {
   /** The stamped router entry (`createRouter` + the Register declaration). */

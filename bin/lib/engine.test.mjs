@@ -27,7 +27,7 @@ function cliModules() {
   const files = []
   //`ui/` too: the Ink components are held to the same glyph and stdout rules as everything
   //else — a second visual language is exactly as possible there as anywhere.
-  for (const entry of ["", "lib", "ui"]) {
+  for (const entry of ["", "commands", "lib", "ui"]) {
     const dir = join(BIN, entry)
     let names = []
     try {

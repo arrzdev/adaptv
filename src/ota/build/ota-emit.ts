@@ -85,7 +85,7 @@ export function computeBuildTag(clientDir: string): string {
 }
 
 /** Every file under `clientDir`, as archive entries with forward-slashed names. */
-export function collectBundleEntries(clientDir: string): ZipEntry[] {
+function collectBundleEntries(clientDir: string): ZipEntry[] {
   return listFiles(clientDir).map((rel) => ({
     name: rel.split(path.sep).join("/"),
     data: readFileSync(path.join(clientDir, rel)),

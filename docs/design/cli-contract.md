@@ -63,6 +63,16 @@ and then print `✖ ios failed — …` underneath.
 >     Usually a running 'adaptv dev', a stray 'pnpm dev', or a worker left behind by one.
 > ```
 > Whichever branch draws the ✖ owns the report, on every path it can take.
+>
+> And by a row given no `explain` at all. `build web` ran its bundle through `runLine` without one,
+> so the row settled on the raw message — an absolute path, clipped to the width — and the
+> command's catch then printed the calm reason as a second ✖ under it:
+> ```
+> ✖ web  /Users/arrz/Documents/Github/adaptv/.claude/worktrees/playgro… · 280ms
+> ✖ web  · Build failed with 1 error:
+>     [UNRESOLVED_IMPORT] Error: Could not resolve './definitely-missing-module' in vite.config.ts
+> ```
+> A settled row takes `explain`, and its catch asks `wasReported` before it says anything.
 
 **R3 — Never interleave platforms.** In an `all` run, a platform's failure detail must sit with
 its own line, never after another platform's. Collect and group; don't emit as you go.

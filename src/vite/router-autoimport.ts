@@ -50,7 +50,7 @@ import type { Plugin, PluginOption } from "vite"
 export const TANSTACK_AUTOIMPORT_PLUGIN = "tanstack-router:autoimport"
 
 /** The specifier adaptv's route files import the route factory from. */
-export const ADAPTV_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
+const ADAPTV_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
 
 const ROUTE_FACTORIES = ["createFileRoute", "createLazyFileRoute"] as const
 
@@ -139,7 +139,7 @@ function isKnownRouteFile(id: string): boolean {
 }
 
 /** The generator stores POSIX-separated paths; match that on every platform. */
-export function normalizeId(id: string): string {
+function normalizeId(id: string): string {
   return id.replace(/\\/g, "/")
 }
 

@@ -15,15 +15,15 @@ import { serializeValue } from "#adaptv/vite/serialize.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
 
 /** Virtual module id the shipped root route imports. */
-export const ROOT_ROUTE_VIRTUAL_ID = "virtual:adaptv/root-route"
+const ROOT_ROUTE_VIRTUAL_ID = "virtual:adaptv/root-route"
 const RESOLVED_ROOT_ROUTE_ID = `\0${ROOT_ROUTE_VIRTUAL_ID}`
 
 /** Virtual module carrying the app's `createRouter` options. */
-export const ROUTER_CONFIG_VIRTUAL_ID = "virtual:adaptv/router-config"
+const ROUTER_CONFIG_VIRTUAL_ID = "virtual:adaptv/router-config"
 const RESOLVED_ROUTER_CONFIG_ID = `\0${ROUTER_CONFIG_VIRTUAL_ID}`
 
 /** Router options from `adaptv.config.ts`, as a module. Values only — no types needed. */
-export function renderRouterConfigModule(config: AdaptvAppConfig): string {
+function renderRouterConfigModule(config: AdaptvAppConfig): string {
   const router = config.router
   const options: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(router)) {
