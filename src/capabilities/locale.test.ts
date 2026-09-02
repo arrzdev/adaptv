@@ -44,7 +44,9 @@ function withoutLocaleInfo(name: string): void {
   //the same information under the older accessor name too (`getWeekInfo` and
   //`weekInfo`), so an engine that carries both, as Node 22's V8 does, is left
   //with neither and the fallback is what gets exercised.
-  const accessor = name.replace(/^get(\w)/, (_, c: string) => c.toLowerCase())
+  const accessor = name.replace(/^get(\w)/, (_, c: string) =>
+    c.toLowerCase(),
+  )
   for (const key of [name, accessor]) {
     const prev = Object.getOwnPropertyDescriptor(proto, key)
     if (!prev) continue
