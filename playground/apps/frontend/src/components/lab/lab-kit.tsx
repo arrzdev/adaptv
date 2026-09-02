@@ -52,8 +52,15 @@ export function LabSection({
   return (
     <section className="flex flex-col gap-y-2">
       <h2 className="ps-1 text-sm font-medium text-subtle">{title}</h2>
+      {/*
+       * A `div`, not a `p`: the description is a ReactNode and pages put blocks in it
+       * — `/lab/image` opens one with a {@link LabActions} row. A `<p>` cannot contain
+       * a `<div>`, so the browser closes the paragraph early while React does not,
+       * the hydration mismatches, and React regenerates the tree on the client with
+       * ten errors in the console for a page that then looks right.
+       */}
       {description && (
-        <p className="ps-1 text-sm text-muted">{description}</p>
+        <div className="ps-1 text-sm text-muted">{description}</div>
       )}
       <div className="flex flex-col gap-y-3 rounded-md bg-surface p-4">
         {children}
