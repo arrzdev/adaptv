@@ -45,14 +45,14 @@ const SUPPORTED_EXTENSIONS = new Set([
  * ============================================================================= */
 
 /** Longest edge of the placeholder, in pixels. */
-export const LQIP_EDGE = 16
+const LQIP_EDGE = 16
 /** Baked at build time. There is no runtime `filter: blur()` anywhere in `Image`. */
-export const LQIP_BLUR_SIGMA = 1.2
-export const LQIP_QUALITY = 50
+const LQIP_BLUR_SIGMA = 1.2
+const LQIP_QUALITY = 50
 /** Below this, the placeholder would be larger than the image it stands in for. */
 export const LQIP_MIN_SOURCE_EDGE = 40
 /** Warn above this: it means the source is a giant flat PNG and the resize did not help. */
-export const LQIP_WARN_BYTES = 1024
+const LQIP_WARN_BYTES = 1024
 
 /**
  * Bumped whenever any constant above, or the encode chain itself, changes.
@@ -60,7 +60,7 @@ export const LQIP_WARN_BYTES = 1024
  * It is a component of the cache key precisely so that a change here invalidates
  * every entry without anyone having to remember to clean a directory.
  */
-export const LQIP_PIPELINE_VERSION = 1
+const LQIP_PIPELINE_VERSION = 1
 
 const CACHE_DIR = path.join("node_modules", ".cache", "adaptv", "lqip")
 
