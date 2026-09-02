@@ -388,17 +388,13 @@ async function preparePlatform(
   env,
   { dev, healAts = true, force = false, report, warnings },
 ) {
+  //Nothing scaffolding finds travels to the notice channel: a configured plugin that
+  //isn't installed used to, and no longer does — that one needs no native project to
+  //know, so `preflight` refuses over it before this runs at all.
   await capAddIfMissing(appRoot, platform, env, {
     report,
     plugins: config?.plugins,
     privacy: config?.privacy,
-    //Scaffolding is the one place that can find a fact a live row must NOT carry: a
-    //legacy `./ios` it had to move, which is only knowable once the directory is looked
-    //at. It goes to the notice channel `flushNotices` drains right after this prepare
-    //(R33), not onto a phase row that erases it. A configured plugin that isn't
-    //installed used to travel this way too and no longer does — that one needs no native
-    //project to know, so `preflight` refuses over it before this runs at all.
-    warnings,
   })
   // Before the assets, and before `dev` patches its ATS exception in: the identity rewrites
   // Info.plist, and `patchIosAts` snapshots that file to restore on teardown. Patching the
