@@ -1929,13 +1929,35 @@ function readAppId(_appRoot) {
   return capConfigFromEnv()?.appId ?? null
 }
 
-/** Read a file, apply one regex replacement, write back only if it changed. Best-effort. */
-function subInFile(file, re, replacement) {
+/**
+ * Read a file, apply one regex replacement, write back only if it changed.
+ *
+ * A file that is not there is left alone: the identity lands in whichever of the
+ * project's files exist, and a project without one of them has nothing for that value
+ * to land in. Every OTHER failure is raised. This used to swallow all of them, and a
+ * file adaptv can see but cannot read or write is a bundle id or a display name that
+ * quietly stays wrong — on a build the dev goes on to install, with nothing on screen
+ * to say the project was never patched.
+ */
+function subInFile(appRoot, file, re, replacement) {
+  const fault = (err) =>
+    new Error(
+      `could not write ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
+    )
+  let before
   try {
-    const before = readFileSync(file, "utf8")
-    const after = before.replace(re, replacement)
-    if (after !== before) writeFileSync(file, after)
-  } catch {}
+    before = readFileSync(file, "utf8")
+  } catch (err) {
+    if (err?.code === "ENOENT") return
+    throw fault(err)
+  }
+  const after = before.replace(re, replacement)
+  if (after === before) return
+  try {
+    writeFileSync(file, after)
+  } catch (err) {
+    throw fault(err)
+  }
 }
 
 /** `$` in a String.replace replacement is special ($1, $$…) — neutralise it for literals. */
@@ -1983,11 +2005,13 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
   if (platform === "ios") {
     // bundle id (Debug + Release configs) + the home-screen display name.
     subInFile(
+      appRoot,
       path.join(nd, "App/App.xcodeproj/project.pbxproj"),
       /PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/g,
       `PRODUCT_BUNDLE_IDENTIFIER = ${escDollar(id)};`,
     )
     subInFile(
+      appRoot,
       path.join(nd, "App/App/Info.plist"),
       /(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/,
       `$1${escDollar(name)}$2`,
@@ -1996,22 +2020,26 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
     // namespace = the code package (MainActivity + R live here): ALWAYS the base id, never
     // `.dev`, so `.MainActivity` resolves to adaptv's edge-to-edge activity, not the stub.
     subInFile(
+      appRoot,
       path.join(nd, "app/build.gradle"),
       /namespace\s*=\s*"[^"]*"/,
       `namespace = "${escDollar(baseId)}"`,
     )
     subInFile(
+      appRoot,
       path.join(nd, "app/build.gradle"),
       /applicationId\s+"[^"]*"/,
       `applicationId "${escDollar(id)}"`,
     )
     const strings = path.join(nd, "app/src/main/res/values/strings.xml")
     subInFile(
+      appRoot,
       strings,
       /(<string name="app_name">)[^<]*(<\/string>)/,
       `$1${escDollar(name)}$2`,
     )
     subInFile(
+      appRoot,
       strings,
       /(<string name="title_activity_main">)[^<]*(<\/string>)/,
       `$1${escDollar(name)}$2`,
