@@ -1,10 +1,10 @@
 import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
 import {
   BackPriority,
   registerBackHandler,
 } from "#adaptv/capabilities/back-chain"
+import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
 
 afterEach(cleanup)
 
@@ -51,7 +51,10 @@ describe("EdgeSwipeGestures", () => {
   it("fires left when nothing in the chain claims the swipe", () => {
     const left = vi.fn()
     const deferring = vi.fn(() => false)
-    const unregister = registerBackHandler(deferring, BackPriority.Transient)
+    const unregister = registerBackHandler(
+      deferring,
+      BackPriority.Transient,
+    )
     render(<EdgeSwipeGestures left={left} />)
     swipe({ clientX: 5, clientY: 200 }, { clientX: 120, clientY: 205 })
     expect(deferring).toHaveBeenCalledTimes(1)
@@ -65,7 +68,10 @@ describe("EdgeSwipeGestures", () => {
     const unregister = registerBackHandler(menu, BackPriority.Transient)
     render(<EdgeSwipeGestures right={right} />)
     const w = window.innerWidth
-    swipe({ clientX: w - 5, clientY: 200 }, { clientX: w - 120, clientY: 205 })
+    swipe(
+      { clientX: w - 5, clientY: 200 },
+      { clientX: w - 120, clientY: 205 },
+    )
     expect(menu).not.toHaveBeenCalled()
     expect(right).toHaveBeenCalledTimes(1)
     unregister()
