@@ -1,4 +1,5 @@
 import { useCallback, useReducer, useState } from "react"
+import type { UiThemePreference } from "#adaptv/capabilities/native-theme"
 import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import {
@@ -11,7 +12,7 @@ import tryCatch from "#adaptv/utils/try-catch"
 //at build time; re-exported here so runtime call sites are unchanged
 export { getUiThemeInitScript } from "#adaptv/shell/theme-init-script"
 
-export type UiThemePreference = "light" | "dark" | "system"
+export type { UiThemePreference }
 
 function readStoredPreference(): UiThemePreference | null {
   if (typeof window === "undefined") return null

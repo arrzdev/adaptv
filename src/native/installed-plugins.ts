@@ -64,7 +64,7 @@ export function adaptvRoots(given: string | undefined): string[] {
 }
 
 /** A module path resolution can start from, inside adaptv's own tree. */
-export function adaptvResolveFrom(given: string | undefined): string {
+function adaptvResolveFrom(given: string | undefined): string {
   if (given) return path.join(given, "package.json")
   try {
     return fileURLToPath(import.meta.url)
