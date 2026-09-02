@@ -119,7 +119,7 @@ finding: the fix was one file, the audit is the return on it.
 | Site | Mechanism | Verdict |
 |---|---|---|
 | anywhere in `src/` | `element.animate()` | **none left.** The construct that fails ladder steps L and N does not appear in the framework at all |
-| `animateDrawerKeyboardOffset` (`drawer-motion.ts`) via `applyDrawerPanelTransition` | inline transition driving **transform** | **suspect — the last one.** Same shape as the F–K steps. Safe today (the freeze primitive stops a keyframe too, so the two cannot fight) but unconverted; disclosed in PR #52 as a follow-up because converting it means re-testing iOS's two-step keyboard height |
+| `animateDrawerKeyboardOffset` (`drawer-motion.ts`) via `applyDrawerPanelTransition` | inline transition driving **transform** | **gone.** It had no caller — the keyboard lift moved to `drawer-keyboard.ts` in #47 and the settle to CSS in #52 — and was deleted with the rest of that path (f5a3788). Nothing in the framework drives a transform through an inline transition any more |
 | `transitionDrawerBackdropOpacity` (`drawer-motion.ts`) | inline transition driving **opacity** | **fine.** The symptom is a transform arrival; opacity has no arrival geometry to get wrong. Its own half of the demote-repaint is covered by the permanent hint above |
 | `writeDrawerKeyboardRoom` (`drawer-keyboard.ts`) | inline transition driving `padding-bottom` / `max-height` | **out of scope.** Layout properties are not composited at all — a different risk class, not a quieter version of this one |
 | every other `style.transition =` in the drawer | `"none"` | **not a driver.** These kill a transition rather than install one |
