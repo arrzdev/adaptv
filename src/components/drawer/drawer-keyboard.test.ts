@@ -4,10 +4,12 @@ import {
   DRAWER_CONTENT_MAX_HEIGHT_VAR,
 } from "#adaptv/components/drawer/drawer-engine"
 import {
+  readDrawerStylesheetCap,
   resolveDrawerKeyboardRoom,
   resolveShrunkViewportCap,
   scrollDrawerInputIntoView,
   shouldPrimeKeyboardFloor,
+  unpaidKeyboardHeight,
   viewportShrinksUnderKeyboard,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
@@ -177,12 +179,14 @@ describe("the cap the box grows into", () => {
 })
 
 /*
- * The unfrozen web path: non-secure Chromium (a plain-http ip:port LAN build) has no
- * VirtualKeyboard API, so `useFreezeViewport` can't hold the layout height — the keyboard shrinks
- * the visual viewport out from under the sheet. There the room mechanism must NOT run (reserving
- * room on top of the shrink double-counts and drives the sheet's top behind the URL bar). The sheet
- * instead holds no room and caps at the visible viewport. iOS (scroll-lock) and native (exact
- * height, no shrink) stay on the room path.
+ * The shrunk-viewport path: the layout viewport has already lost the keyboard, so the room
+ * mechanism must NOT run (reserving room on top of the shrink double-counts: a keyboard-sized blank
+ * band above the keyboard and the footer below the viewport). The sheet instead holds no room and
+ * caps at what is visible. Two ways in — measured, when `useLayoutViewportShrink` reports a shrink
+ * that covers the keyboard (the Android WebView under Capacitor 8, `innerHeight` 923 → 587 for a
+ * 336px keyboard); and guessed, for VK-less non-iOS Chromium (a plain-http ip:port LAN build), where
+ * `useFreezeViewport` has no API to hold the viewport and the shrink is known before it can be
+ * measured. iOS (scroll-lock, the OS resize off, shrink 0) stays on the room path.
  */
 describe("viewportShrinksUnderKeyboard", () => {
   it("is true only for VK-less, non-iOS, non-native (non-secure Chromium web)", () => {
@@ -205,14 +209,64 @@ describe("viewportShrinksUnderKeyboard", () => {
     ).toBe(false)
   })
 
-  it("is false on native — the OS reports an exact height without shrinking", () => {
+  it("is false on native until the layout viewport is measured to have shrunk", () => {
     expect(
       viewportShrinksUnderKeyboard({
         isIOS: false,
         hasNativeKeyboard: true,
         hasVirtualKeyboardApi: false,
+        keyboardHeight: 336,
+        layoutShrink: 0,
       }),
     ).toBe(false)
+  })
+
+  it("is true on native once the shrink covers the keyboard — the Android WebView pays for it", () => {
+    //Pixel 10 emulator: innerHeight 923 → 587 for a 336px keyboard, overlaysContent true throughout
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: true,
+        hasVirtualKeyboardApi: true,
+        keyboardHeight: 336,
+        layoutShrink: 336,
+      }),
+    ).toBe(true)
+    //a sub-pixel disagreement between the plugin's height and the inset padding still counts
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: true,
+        hasVirtualKeyboardApi: true,
+        keyboardHeight: 336,
+        layoutShrink: 335,
+      }),
+    ).toBe(true)
+  })
+
+  it("is false for a partial shrink — the remainder is room, not a cap", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: true,
+        hasVirtualKeyboardApi: true,
+        keyboardHeight: 360,
+        layoutShrink: 336,
+      }),
+    ).toBe(false)
+  })
+
+  it("stays true while the cap is held, so the keyboard's close releases it on the same path", () => {
+    expect(
+      viewportShrinksUnderKeyboard({
+        isIOS: false,
+        hasNativeKeyboard: true,
+        hasVirtualKeyboardApi: true,
+        keyboardHeight: 0,
+        layoutShrink: 0,
+        capHeld: true,
+      }),
+    ).toBe(true)
   })
 
   it("is false in a secure context — overlaysContent holds the layout height", () => {
@@ -223,6 +277,47 @@ describe("viewportShrinksUnderKeyboard", () => {
         hasVirtualKeyboardApi: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe("unpaidKeyboardHeight", () => {
+  it("is the whole keyboard when the viewport kept its height (iOS)", () => {
+    expect(unpaidKeyboardHeight(345, 0)).toBe(345)
+  })
+
+  it("is zero when the viewport gave the whole keyboard up (the Android WebView)", () => {
+    expect(unpaidKeyboardHeight(336, 336)).toBe(0)
+  })
+
+  it("is the remainder for a partial shrink, and never negative", () => {
+    expect(unpaidKeyboardHeight(360, 336)).toBe(24)
+    expect(unpaidKeyboardHeight(336, 400)).toBe(0)
+    expect(unpaidKeyboardHeight(336, -5)).toBe(336)
+  })
+})
+
+describe("readDrawerStylesheetCap", () => {
+  it("reads the stylesheet's cap under the engine's inline override and puts the override back", () => {
+    const style = document.createElement("style")
+    style.textContent = ".capped { max-height: 533px }"
+    document.head.append(style)
+    const el = document.createElement("div")
+    el.className = "capped"
+    el.style.maxHeight = "250.667px"
+    document.body.append(el)
+
+    expect(readDrawerStylesheetCap(el)).toBe(533)
+    expect(el.style.maxHeight).toBe("250.667px")
+
+    el.remove()
+    style.remove()
+  })
+
+  it("is unbounded when the stylesheet sets none", () => {
+    const el = document.createElement("div")
+    document.body.append(el)
+    expect(readDrawerStylesheetCap(el)).toBe(Number.POSITIVE_INFINITY)
+    el.remove()
   })
 })
 
