@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   getDeviceId,
   getDeviceInfo,
-  getLanguageTag,
   resetDeviceInfo,
 } from "#adaptv/capabilities/device"
 
@@ -137,14 +136,5 @@ describe("device — web", () => {
     forceNative(false)
     await expect(getDeviceId()).resolves.toBeNull()
     expect(Device.getId).not.toHaveBeenCalled()
-  })
-})
-
-describe("device — the mutable half", () => {
-  it("re-reads the language tag on every call", () => {
-    stubNavigatorProp("language", "pt-PT")
-    expect(getLanguageTag()).toBe("pt-PT")
-    stubNavigatorProp("language", "en-GB")
-    expect(getLanguageTag()).toBe("en-GB")
   })
 })

@@ -81,7 +81,7 @@ describe("capabilities barrel", () => {
    * The vacuous pass: every assertion below compares against a directory scan and
    * a parse of one file, so a walk pointed at nothing — or a parser that stops
    * matching — compares two empty lists and reports perfect compliance. The floors
-   * are well under the real counts today (18 modules, 84 names, 22 export lines)
+   * are well under the real counts today (19 modules, 89 names, 19 export lines)
    * and well over zero. → `docs/roadmap/src-reorg.md` §7
    */
   it("actually walked the directory it claims to have walked", () => {
