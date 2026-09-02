@@ -6,6 +6,7 @@ import {
   resetBackChain,
   runBackChain,
 } from "#adaptv/capabilities/back-chain"
+import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import { Select, useSelect } from "#adaptv/components/select"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
 
@@ -456,6 +457,41 @@ describe("Select — dismissal", () => {
     fireEvent.click(s.trigger())
     fireEvent.pointerDown(s.option("apple") as Element)
     expect(s.listbox()).not.toBeNull()
+  })
+
+  it("an edge swipe closes the list through the back chain, not the outside press", () => {
+    //The sequence the iOS simulator produced before the fix: the swipe's first
+    //touch lands outside the list, `pointerdown` closed it, and by `touchend`
+    //the back chain had nothing left to consume, so the swipe navigated. Touch
+    //is now decided at `touchstart`, after the recogniser has claimed the
+    //arbiter, and a claimed pointer is not a press.
+    const s = mount()
+    fireEvent.click(s.trigger())
+    document.addEventListener(
+      "touchstart",
+      () => gestureController.requestCapture("edge-swipe", 400),
+      { once: true },
+    )
+    fireEvent.pointerDown(document.body, { pointerType: "touch" })
+    fireEvent.touchStart(document.body)
+    expect(s.listbox()).not.toBeNull()
+    //what the swipe's touchend does: run the chain, then let go of the pointer
+    let consumed = false
+    act(() => {
+      consumed = runBackChain()
+    })
+    gestureController.release("edge-swipe")
+    expect(consumed).toBe(true)
+    expect(s.listbox()).toBeNull()
+  })
+
+  it("a plain touch outside the list closes it at touchstart", () => {
+    const s = mount()
+    fireEvent.click(s.trigger())
+    fireEvent.pointerDown(document.body, { pointerType: "touch" })
+    expect(s.listbox()).not.toBeNull()
+    fireEvent.touchStart(document.body)
+    expect(s.listbox()).toBeNull()
   })
 
   it("the back chain closes it while open, and defers while closed", () => {

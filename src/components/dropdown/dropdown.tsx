@@ -19,6 +19,7 @@ import type {
   ResolvedPosition,
 } from "#adaptv/components/dropdown/dropdown-position"
 import { resolveDropdownPosition } from "#adaptv/components/dropdown/dropdown-position"
+import { subscribeOutsidePress } from "#adaptv/components/dropdown/outside-press"
 import {
   PRESS_TARGET_CURSOR_CLASS,
   PRESS_TARGET_DISABLED_CURSOR_CLASS,
@@ -223,21 +224,17 @@ function DropdownContent({
     }
   }, [open, reposition])
 
-  //outside press dismisses (capture so it beats the pressed element's own handler)
+  //outside press dismisses; touch is decided after the gesture recognisers have
+  //run, so an edge swipe closes the panel through the back chain instead of
+  //finding it already gone (see outside-press.ts)
   useEffect(() => {
     if (!open) return
-    const onDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (
-        contentRef.current?.contains(target) ||
-        triggerRef.current?.contains(target)
-      ) {
-        return
-      }
-      setOpen(false)
-    }
-    window.addEventListener("pointerdown", onDown, true)
-    return () => window.removeEventListener("pointerdown", onDown, true)
+    return subscribeOutsidePress(
+      (target) =>
+        contentRef.current?.contains(target as Node | null) === true ||
+        triggerRef.current?.contains(target as Node | null) === true,
+      () => setOpen(false),
+    )
   }, [open, setOpen, triggerRef])
 
   //Escape dismisses, and does not bubble to close anything behind it
