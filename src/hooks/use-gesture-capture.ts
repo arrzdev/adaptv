@@ -90,6 +90,9 @@ export function useGestureCapture(
 export const GesturePriority = {
   EdgeSwipe: 400,
   DrawerDrag: 300,
+  //direct manipulation of a control under the finger outranks a row swipe, and a
+  //drawer only requests on a vertical lock, so the two never contest
+  Slider: 250,
   SwipeableRow: 200,
   Scroll: 100,
 } as const
