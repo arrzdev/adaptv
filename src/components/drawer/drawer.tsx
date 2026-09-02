@@ -20,11 +20,13 @@ import {
   useRef,
   useState,
 } from "react"
+import { BackPriority } from "#adaptv/capabilities/back-chain"
 import {
   DRAWER_CONTENT_MAX_HEIGHT_VAR,
   DrawerEngine,
   useDrawerEngineContext,
 } from "#adaptv/components/drawer/drawer-engine"
+import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 
@@ -773,6 +775,23 @@ function DrawerTree({
   const handleRequestClose = useCallback(() => {
     handleOpenChange(false)
   }, [handleOpenChange])
+
+  //An open drawer is the most modal thing on screen, so it claims the back press
+  //before the router sees it. `use-android-back-button.ts` already describes this
+  //("overlays register above it and consume the press first") and
+  //`BackPriority.Overlay` is documented as the band for drawers and sheets, but
+  //nothing registered there — so a back press on an open drawer navigated the
+  //route out from under it, which is the exact behaviour that comment says was
+  //replaced. Deferring while closed is what lets the press reach the router.
+  //
+  //Stacked drawers need no extra work: ties inside a band break
+  //most-recently-registered first, so the innermost drawer consumes the press and
+  //one press closes one drawer.
+  useBackHandler(() => {
+    if (!isOpen) return false
+    handleRequestClose()
+    return true
+  }, BackPriority.Overlay)
 
   useImperativeHandle(
     imperativeRef,
