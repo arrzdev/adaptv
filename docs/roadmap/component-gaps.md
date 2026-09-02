@@ -34,8 +34,8 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` ·
-grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · grouped-settings form
+(`FieldGroup` / `ion-list inset`) · `Icon`.
 
 **`Slider` and a real `Select` are the clearest holes in the form-control set** — adaptv has
 button / input / textarea / checkbox / switch and stops. `WheelColumn` is a partial `Picker`.
@@ -96,6 +96,18 @@ where the `font` **shorthand** is required, `font-size` does not work
 ([`../decisions/prior-art.md §10`](../decisions/prior-art.md)) — plus `text-size-adjust` on rotation,
 line clamping, and per-instance selection semantics. **`Modal` and `Tabs` are the real remainder**
 (Tier 2 and Tier 3 above).
+
+**`Collapsible` shipped** (`src/components/collapsible.tsx`, 2026-09-02) and passes the two-quirk
+test with three. `height: auto` cannot animate anywhere adaptv ships — `interpolate-size` is
+Chrome 129+ only ([`../decisions/animation.md §2`](../decisions/animation.md)) — so the panel
+transitions a measured pixel height and rests at `auto`, and a toggle mid-transition retargets from
+the current height for free. React 19 serialises `hidden="until-found"` as plain `hidden`, so the
+value is written after mount and reconciled on every commit; a `beforematch` open skips the
+transition, because the browser has already stripped the attribute and is about to scroll. And
+reduced motion, a 0s `--collapsible-duration` or a `display: none` ancestor means no transition ever
+starts, so the settle is read from `getAnimations()` and completes synchronously — there is no timer
+fallback. WebKit on the iOS 18 floor has no `until-found`; the attribute degrades to plain `hidden`
+with no separate code path.
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline
