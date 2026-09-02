@@ -5,6 +5,10 @@ import { storage } from "#adaptv/storage/index"
 import { kv } from "#adaptv/storage/kv"
 import { secure } from "#adaptv/storage/secure"
 import { store } from "#adaptv/storage/store"
+import {
+  declaredExports,
+  exportsOf,
+} from "#adaptv/test-utils/barrel-guard"
 
 /*
  * `@arrzdev/adaptv/storage` is the one published subpath whose barrel does not
@@ -79,31 +83,19 @@ function modulesOnDisk(): string[] {
 }
 
 /** Top-level `export` names in a storage module, types included. */
-function exportedNames(module: string): string[] {
-  const src = readFileSync(resolve(STORAGE_DIR, `${module}.ts`), "utf8")
-  const names: string[] = []
-  const pattern =
-    /^export\s+(?:async\s+)?(?:function|const|type|class|interface)\s+([A-Za-z0-9_$]+)/gm
-  let match = pattern.exec(src)
-  while (match) {
-    names.push(match[1])
-    match = pattern.exec(src)
-  }
-  return names
-}
+const exportedNames = (module: string) =>
+  declaredExports(
+    readFileSync(resolve(STORAGE_DIR, `${module}.ts`), "utf8"),
+  )
 
 const BARREL_SOURCE = readFileSync(BARREL, "utf8")
-const INTERFACE_SOURCE = readFileSync(INTERFACE_BARREL, "utf8")
+const INTERFACE_EXPORTS = exportsOf(readFileSync(INTERFACE_BARREL, "utf8"))
 
-/** The `export { … } from "#adaptv/storage/<module>"` list, or `null`. */
-function namedListFor(module: string): string | null {
-  return (
-    new RegExp(
-      `export (?:type )?\\{[^}]*\\}\\s*from "#adaptv/storage/${module}"`,
-      "s",
-    ).exec(BARREL_SOURCE)?.[0] ?? null
-  )
-}
+/** The names in the `export { … } from "#adaptv/storage/<module>"` list, or `null`. */
+const namedListFor = (module: string) =>
+  exportsOf(BARREL_SOURCE).find(
+    (e) => e.spec === `#adaptv/storage/${module}` && e.names !== null,
+  )?.names ?? null
 
 describe("the storage barrel", () => {
   /*
@@ -134,11 +126,10 @@ describe("the storage barrel", () => {
    * whole suite guarding a file that no longer decides anything.
    */
   it("is the file the published subpath actually resolves to", () => {
-    expect(INTERFACE_SOURCE).toContain('export * from "../storage/index"')
     expect(
-      /^\s*export\s*\{/m.test(INTERFACE_SOURCE),
+      INTERFACE_EXPORTS,
       "the interface file must stay a pass-through — a named list here would move the public surface",
-    ).toBe(false)
+    ).toEqual([{ spec: "../storage/index", names: null, typeOnly: false }])
   })
 
   /*
@@ -181,7 +172,7 @@ describe("the storage barrel", () => {
         `${module} must be exported by a named list`,
       ).not.toBeNull()
       for (const name of exportedNames(module)) {
-        if (!new RegExp(`\\b${name}\\b`).test(named ?? "")) held.push(name)
+        if (!named?.includes(name)) held.push(name)
       }
     }
     expect(new Set(held)).toEqual(WITHHELD)

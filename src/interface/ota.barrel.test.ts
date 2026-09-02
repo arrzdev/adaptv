@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
 
 /*
  * `src/interface/ota.index.ts` is a `platform: "browser"` tsdown entry pointed at
@@ -110,15 +111,20 @@ function nodeTouchingModules(): string[] {
   )
 }
 
-/** Whether a barrel re-exports a module at all — `export *` or a named list. */
-function barrelReaches(barrel: string, module: string): boolean {
-  return new RegExp(`from "\\.\\./ota/${module}"`).test(barrel)
-}
-
 const OTA_SOURCE = readFileSync(OTA_BARREL, "utf8")
 const HOOKS_SOURCE = readFileSync(HOOKS_BARREL, "utf8")
+const OTA_EXPORTS = exportsOf(OTA_SOURCE)
+const HOOKS_EXPORTS = exportsOf(HOOKS_SOURCE)
+
+/** Whether a barrel re-exports a module at all — `export *` or a named list. */
+const barrelReaches = (
+  exports: ReturnType<typeof exportsOf>,
+  module: string,
+) => exports.some((e) => e.spec === `../ota/${module}`)
+
 const isExported = (module: string) =>
-  barrelReaches(OTA_SOURCE, module) || barrelReaches(HOOKS_SOURCE, module)
+  barrelReaches(OTA_EXPORTS, module) ||
+  barrelReaches(HOOKS_EXPORTS, module)
 
 describe("the OTA barrel", () => {
   /*
@@ -200,15 +206,14 @@ describe("the OTA barrel", () => {
    * app's own UI shows, and only the updater knows when either is true.
    */
   it("exports the store-release type without its mutators", () => {
-    const named =
-      /export type \{([^}]*)\} from "\.\.\/ota\/store-release"/.exec(
-        OTA_SOURCE,
-      )
+    const named = OTA_EXPORTS.find(
+      (e) => e.spec === "../ota/store-release",
+    )
     expect(
-      named,
+      named?.typeOnly,
       "store-release must be a named type export",
-    ).not.toBeNull()
-    expect(named?.[1].trim()).toBe("StoreReleaseRequired")
+    ).toBe(true)
+    expect(named?.names).toEqual(["StoreReleaseRequired"])
     for (const mutator of [
       "noteStoreReleaseRequired",
       "clearStoreRelease",
@@ -227,8 +232,8 @@ describe("the OTA barrel", () => {
    * state lives in `src/ota/` would break every app using it, for tidiness.
    */
   it("keeps useStoreRelease on the hooks subpath, not the ota one", () => {
-    expect(barrelReaches(HOOKS_SOURCE, "use-store-release")).toBe(true)
-    expect(barrelReaches(OTA_SOURCE, "use-store-release")).toBe(false)
+    expect(barrelReaches(HOOKS_EXPORTS, "use-store-release")).toBe(true)
+    expect(barrelReaches(OTA_EXPORTS, "use-store-release")).toBe(false)
   })
 
   /*
@@ -239,31 +244,9 @@ describe("the OTA barrel", () => {
   it("keeps each withheld runtime module down to its owners", () => {
     for (const [module, owners] of Object.entries(WITHHELD_INTERNAL)) {
       expect(
-        callSitesOf(module),
+        callSitesOf(new RegExp(`from "#adaptv/ota/${module}(?:\\.ts)?"`)),
         `${module} is owned by ${owners}`,
       ).toEqual([...owners].sort())
     }
   })
 })
-
-/** Every non-test file under `src/` importing `#adaptv/ota/<module>`. */
-function callSitesOf(module: string): string[] {
-  const pattern = new RegExp(`from "#adaptv/ota/${module}(?:\\.ts)?"`)
-  const hits: string[] = []
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = resolve(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!/\.tsx?$/.test(entry.name)) continue
-      if (/\.test\.tsx?$/.test(entry.name)) continue
-      if (pattern.test(readFileSync(full, "utf8"))) {
-        hits.push(full.slice(resolve(process.cwd()).length + 1))
-      }
-    }
-  }
-  walk(resolve(process.cwd(), "src"))
-  return hits.sort()
-}
