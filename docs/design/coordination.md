@@ -237,6 +237,9 @@ If a future screen genuinely needs to survive back (retain scroll/state), that's
 
 ```
 BACK press ─────▶ back chain (§2): open Drawer's handler consumes → else router back → else exit
+                  (a LEFT-EDGE swipe is a back press too: `EdgeSwipeGestures` walks the chain
+                   before its `left` callback, since 2026-09-02 — an open menu or Select closes
+                   under it instead of being popped with the route)
 DRAG at edge ───▶ gesture controller (§3): grants ONE of edge-swipe-back / scroll / swipeable
 RESUME ─────────▶ app state (§1): token refresh + Query refetch + OTA check (LIFECYCLE §5.4)
 NAVIGATE ───────▶ route lifecycle (§4): enter/leave via mount/unmount; memory history when installed
