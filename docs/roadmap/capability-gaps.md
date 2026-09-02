@@ -82,7 +82,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
+Sensors / motion · battery · brightness · contacts · calendar · ~~SMS + mail~~ (shipped 2026-09-02: `src/capabilities/compose.ts` builds `mailto:`/`sms:` drafts with the per-OS body separator, asks the OS for a handler through `@capacitor/app-launcher` on native, and names `no-handler` instead of opening nothing) · print · speech ·
 store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 
