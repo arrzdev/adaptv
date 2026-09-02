@@ -1607,8 +1607,9 @@ Tests do not cover any of this. Run it and read it:
 - [ ] `adaptv doctor` — same banner and glyphs as every other command, `Core` carries ONE row for
       adaptv's own install (R71), and no row anywhere names an engine. Then `doctor --verbose`,
       where the names must appear. Break the install to see the `✖` (add a package name that
-      cannot resolve to `ADAPTV_BASE_PLUGINS`): one red row, and no blank line opens up between
-      the next heading and its first row
+      cannot resolve to adaptv's own `package.json` `dependencies` — the row is derived from it,
+      never from a list in `bin/`): one red row, and no blank line opens up between the next
+      heading and its first row
 - [ ] `adaptv icons --input <image>` into an **empty** dir, then again into the **populated** one —
       the confirm appears, erases itself on choice, `--yes` skips it, and piping it (no TTY)
       without `--yes` exits `1` on the terse `✖` (R34)

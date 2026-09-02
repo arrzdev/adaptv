@@ -34,7 +34,7 @@ today breaks `typecheck`; after the cutover all three are dead weight.
    vite from *their own* location, which path mapping never reaches.
 2. `react` / `react-dom` pinned in `playground/apps/frontend/tsconfig.json` `paths` — the same story
    with two `@types/react` copies of one version.
-3. `node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts` in that tsconfig's `include` — ambient
+3. `node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts` in that tsconfig's `include` — ambient
    declarations for the modules adaptv's Vite plugin serves at build time. The package ships them;
    the app currently has to go looking.
 
@@ -44,7 +44,7 @@ today breaks `typecheck`; after the cutover all three are dead weight.
   `external` entry or the build breaks in a way that **only reproduces on the consumer's machine**.
 - **Shim 3 is the ambient-declaration question, and `"./image-asset"` is not its answer.** That
   entry used to read "`"./image-asset"` is still missing from `exports`"; it is missing on purpose
-  (`../design/image.md` §13 row 12). All seven `src/virtual-adaptv-*.d.ts` files reach the consumer
+  (`../design/image.md` §13 row 12). All seven `src/**/virtual-adaptv-*.d.ts` files reach the consumer
   through that `include` glob and none is in `exports`, because a subpath export does not load an
   ambient declaration either — it is one consumer-side line whichever way it is delivered. What the
   cutover actually owes is a **path that survives it**: the glob names `…/adaptv/src/`, and after the

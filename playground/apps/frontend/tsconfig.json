@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "include": [
     "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
-    "node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts",
+    "node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts",
     ".adaptv/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
