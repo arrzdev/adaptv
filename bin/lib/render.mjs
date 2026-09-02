@@ -252,8 +252,9 @@ export const log = {
  * is not "how bad is this" but "does the dev need to know" — if the answer is no, it is not
  * printed at all (R4).
  *
- * Entries are strings; `{ note }` is still accepted so callers can be migrated, and renders
- * identically.
+ * Entries are strings, and only strings. A `{ note }` object was accepted for a while "so
+ * callers can be migrated"; every caller was, and a second accepted shape is how the same
+ * sentence ends up carried two ways and deduped as two.
  *
  * Deduped, because the same app-level fact (an icon source, a config key) is
  * discovered once per platform: printing it per platform reads as several separate
@@ -264,11 +265,11 @@ export const log = {
  * than at the call sites because every command flushes and every one of them wants it — and
  * `spacer()` collapses it into a neighbouring blank line, so a flush next to a banner or a
  * finished command never opens a second gap.
+ * @param {string[]} notices
  */
 export function flushNotices(notices) {
   const seen = new Set()
-  for (const n of notices) {
-    const text = typeof n === "string" ? n : n.note
+  for (const text of notices) {
     if (seen.has(text)) continue
     seen.add(text)
     record("notices", text)
