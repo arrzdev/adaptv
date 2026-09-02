@@ -74,8 +74,17 @@ and `Slot`/`Navigator` for headless composition.
 
 ## Tier 4 — display chrome
 
-`Badge` · `Divider` · `Card` · `Chip` · `Skeleton` · `FAB` · `Avatar`. Cheap, high-frequency,
+`Badge` · `Divider` · `Card` · `Chip` · ~~`Skeleton`~~ · `FAB` · `Avatar`. Cheap, high-frequency,
 low-risk, mostly CSS in a DOM framework.
+
+**`Skeleton` shipped** (`src/components/skeleton.tsx`, `src/styles/skeleton.css`) and passes the
+admission test on three quirks: `prefers-reduced-motion` stops the pulse **in CSS**, before the
+first paint and with no hydration mismatch (the `useReducedMotion` hook is `false` on the server, so
+it is exactly the wrong tool); a background-only box paints as nothing under `forced-colors: active`,
+so it carries `forced-color-adjust: none` and a `CanvasText` border there; and the placeholder is
+`aria-hidden` while `Skeleton.Region` announces the state once through a live region, rather than
+per row. Shape and size are the consumer's `className` — no `shape` prop
+([`../decisions/styling.md §5.4.1`](../decisions/styling.md)).
 
 ---
 
