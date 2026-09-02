@@ -50,6 +50,7 @@ export const routes = rootRoute([
     route("/lab/device", "pages/lab/device.page.tsx"),
     route("/lab/orientation", "pages/lab/orientation.page.tsx"),
     route("/lab/keep-awake", "pages/lab/keep-awake.page.tsx"),
+    route("/lab/privacy-screen", "pages/lab/privacy-screen.page.tsx"),
     route("/lab/app-state", "pages/lab/app-state.page.tsx"),
     route("/lab/back-chain", "pages/lab/back-chain.page.tsx"),
     route("/lab/browser", "pages/lab/browser.page.tsx"),
