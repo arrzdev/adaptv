@@ -24,6 +24,7 @@ export {
   writeClipboardText,
 } from "../capabilities/clipboard"
 export * from "../capabilities/device"
+export * from "../capabilities/filesystem"
 export * from "../capabilities/geolocation"
 export * from "../capabilities/gesture-controller"
 export * from "../capabilities/haptic-tick"
