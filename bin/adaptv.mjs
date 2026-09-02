@@ -131,6 +131,8 @@ import {
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, portInUse } from "./lib/tool-log.mjs"
 
+/** @typedef {import("./lib/exec.mjs").CliError} CliError */
+
 const CWD = process.cwd()
 
 async function loadConfig(appRoot) {
@@ -305,6 +307,7 @@ function snapshotNativeFp(appRoot, platforms) {
  */
 function devServerUnhealthy({ why, status }, url, log) {
   if (why !== "error") {
+    /** @type {CliError} */
     const err = new Error(
       why === "thin"
         ? `${url} is answering, but not with this app`
@@ -333,6 +336,7 @@ function devServerUnhealthy({ why, status }, url, log) {
   const unresolved = said.some((l) =>
     /Cannot find (module|package)|Failed to resolve/i.test(l),
   )
+  /** @type {CliError} */
   const err = new Error("the app did not render")
   err.fix = [
     `every request to ${url} answered ${status} for 30s.`,

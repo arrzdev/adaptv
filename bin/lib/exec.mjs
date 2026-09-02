@@ -10,6 +10,13 @@ import { spawn } from "node:child_process"
 import { StringDecoder } from "node:string_decoder"
 import { errorTail } from "./tool-log.mjs"
 
+/**
+ * The error a failed step rejects with. `tail` is the captured output that explains it,
+ * already narrowed to the lines that do; `fix` is what the thrower knew that no output
+ * shows — an HTTP status, a flag to pass. `explain.mjs` reads both to word the ✖.
+ * @typedef {Error & { tail?: string, fix?: string[] }} CliError
+ */
+
 /** Keep at most this many lines buffered for the failure tail (bounds memory). */
 const MAX_BUFFER = 800
 /** How many trailing lines to show when a step fails. */
@@ -103,7 +110,7 @@ export function exec(command, args, { cwd, env, onLine } = {}) {
     const flush = () => {
       for (const r of readers) r.end()
     }
-    child.on("error", (err) => {
+    child.on("error", (/** @type {CliError} */ err) => {
       flush()
       err.tail = failureTail(buffer)
       reject(err)
@@ -111,6 +118,7 @@ export function exec(command, args, { cwd, env, onLine } = {}) {
     child.on("close", (code) => {
       flush()
       if (code === 0) return resolve()
+      /** @type {CliError} */
       const err = new Error(
         `${command} ${args.join(" ")} exited with code ${code}`,
       )
