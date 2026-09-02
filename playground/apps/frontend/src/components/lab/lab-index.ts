@@ -77,6 +77,12 @@ const COMPONENTS = [
     isNew: false,
   },
   {
+    to: "/lab/slider",
+    title: "Slider",
+    summary: "tap the track · drag anywhere · yields to a vertical scroll",
+    isNew: true,
+  },
+  {
     to: "/lab/fields",
     title: "Input & TextArea",
     summary: "slots, submit key, autoResize · and the caret patch",
