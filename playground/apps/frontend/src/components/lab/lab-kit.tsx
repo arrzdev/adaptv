@@ -178,17 +178,21 @@ export function LabButton({
   disabled,
   tone = "default",
   children,
+  "data-testid": testId,
 }: {
   onClick: () => void
   disabled?: boolean
   tone?: "default" | "danger"
   children: ReactNode
+  /** A stable hook for e2e, for a page whose buttons share a visible label. */
+  "data-testid"?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={testId}
       className={cn(
         "clickable rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition-colors",
         "disabled:opacity-40",
