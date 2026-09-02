@@ -19,6 +19,9 @@ const SKIP_DIRS = new Set([
   "node_modules",
   ADAPTV_DIR,
   "dist",
+  //`.output/` is the SSR lineage's build, and the capacitor lineage never reads it (register
+  //L14: two lineages that never cross) — so `build web` rewriting it must not rebuild native.
+  ".output",
   "ios",
   "android",
   ".git",
@@ -43,11 +46,11 @@ const SKIP_FILES = new Set(["capacitor.config.json", ".DS_Store"])
  * intentionally different for a reason: the native tree is re-stamped by `generateAssets`
  * every run (byte-identical files, fresh mtimes) so mtime there false-positives forever —
  * hence content. The web SOURCE tree has no such re-stamping: a file's mtime only moves
- * when it's genuinely edited, so mtime is both correct AND cheap here. Measured on a real
- * app (249 files, 26 MB): mtime 1.6 ms/run vs content 22.9 ms/run — a 14× cost for zero
- * correctness gain, and it grows with the asset tree. So this stays mtime; the divergence
- * is by design, not an oversight. Over-inclusive either way: a false rebuild is free, a
- * missed edit shipping stale code is not.
+ * when it's genuinely edited, so mtime is both correct AND cheap here. Measured 2026-09-02
+ * on the playground app (182 files / 3.5 MB): 1.7 ms median per walk, against ~4× that for
+ * content over the same files — a cost that grows with the asset tree, for zero correctness
+ * gain. So this stays mtime; the divergence is by design, not an oversight. Over-inclusive
+ * either way: a false rebuild is free, a missed edit shipping stale code is not.
  */
 export function fingerprint(appRoot) {
   const h = createHash("sha1")
@@ -162,7 +165,8 @@ const NATIVE_SKIP_FILES = new Set([".DS_Store", "local.properties"])
  * native project on every single run, writing byte-identical files with fresh mtimes. An
  * mtime-based hash therefore changed every run and the cache never hit once (measured).
  * Content hashing is also just the honest question — what the project CONTAINS, not when
- * it was last touched — and at ~90 files / 0.3 MB per platform it costs nothing.
+ * it was last touched — and it costs nothing: measured 2026-09-02 on the playground app,
+ * 1.1 ms for iOS (28 files / 0.8 MB) and 2.1 ms for Android (74 files / 0.5 MB).
  *
  * Compute it AFTER a sync/build, never before: `cap sync` rewrites files in the native
  * project, so a pre-sync fingerprint would never match the post-sync state.
