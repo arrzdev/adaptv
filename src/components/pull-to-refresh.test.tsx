@@ -1,5 +1,4 @@
 import { act, fireEvent, render } from "@testing-library/react"
-import { createElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   PullToRefresh,
@@ -50,14 +49,12 @@ describe("usePullToRefresh", () => {
       renders.count++
       const { isPulling } = usePullToRefresh()
       seen.push(isPulling ? "pulling" : "idle")
-      return createElement("i", { "data-pulling": String(isPulling) })
+      return <i data-pulling={String(isPulling)} />
     }
     const { container } = render(
-      createElement(
-        PullToRefresh,
-        { onRefresh: async () => {} },
-        createElement(Probe),
-      ),
+      <PullToRefresh onRefresh={async () => {}}>
+        <Probe />
+      </PullToRefresh>,
     )
     const root = container.querySelector('[data-adaptv="pull-to-refresh"]')
     if (!(root instanceof HTMLElement)) throw new Error("no gesture root")
