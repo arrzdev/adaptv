@@ -1,4 +1,3 @@
-import { BackPriority } from "@arrzdev/adaptv/capabilities"
 import type {
   DrawerContentProps,
   DrawerDescriptionProps,
@@ -13,10 +12,9 @@ import {
   Drawer as BaseDrawer,
   useDrawer,
 } from "@arrzdev/adaptv/components"
-import { useBackHandler } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef } from "react"
-import { forwardRef, useCallback, useRef } from "react"
+import { forwardRef } from "react"
 
 const DRAWER_OVERLAY_CLASSNAME = cn("bg-overlay")
 
@@ -136,29 +134,11 @@ AppDrawerDescription.displayName = "Drawer.Description"
 export const AppDrawer = Object.assign(
   forwardRef<DrawerHandle, DrawerRootProps>(
     function AppDrawer(props, forwardedRef) {
-      //hold the base drawer's imperative handle so the back handler can read
-      //`open` and close it — the ref is merged so a caller's own ref still works
-      const handleRef = useRef<DrawerHandle | null>(null)
-      const setRef = useCallback(
-        (node: DrawerHandle | null) => {
-          handleRef.current = node
-          if (typeof forwardedRef === "function") forwardedRef(node)
-          else if (forwardedRef) forwardedRef.current = node
-        },
-        [forwardedRef],
-      )
-
-      //OS/hardware back closes an open drawer before it can reach the router. The
-      //base Drawer carries no back-chain wiring of its own, so every drawer built
-      //on AppDrawer opts in here once, at the Overlay band (above router back). A
-      //closed drawer defers so the press falls through to the next handler.
-      useBackHandler(() => {
-        if (!handleRef.current?.open) return false
-        handleRef.current.hide()
-        return true
-      }, BackPriority.Overlay)
-
-      return <BaseDrawer ref={setRef} {...props} />
+      //No back wiring here any more: the base Drawer registers itself at the
+      //Overlay band while open, so this wrapper is presentation only. It used to
+      //hold the imperative handle purely to run that handler, and a nested
+      //drawer never got one at all.
+      return <BaseDrawer ref={forwardedRef} {...props} />
     },
   ),
   {
