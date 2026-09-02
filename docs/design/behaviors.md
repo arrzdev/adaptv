@@ -149,14 +149,33 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     `innerHeight` 923 throughout), so the reversal is the sheet's own motion, not a second keyboard.
   - **Standalone PWA on Android, target 5:** not run; the session ran out before an Add-to-Home-Screen
     in the emulator's Chrome, and nothing was measured for it.
-  So the one thing the installed targets add is an **installed-only content-edge reversal** in the
-  scenario where the picker collapses first and the keyboard lands 48ms later: the content bottom
-  turns around once between its start (the screen bottom) and its rest above the keyboard, on the
-  standalone PWA and on both native WebViews, and not in the browser tab on the same simulator the
-  same day. The variable is the installed geometry (the `app:` cap and the real bottom inset), not
-  the engine. The harness records only the check's endpoints
-  (`StepResult` carries `checks` and `perf`, not the sample series), so the shape of the turn is the
-  next measurement, not this one. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
+  So the one thing the installed targets add is a **content-edge reversal** in the scenario where
+  the picker collapses first and the keyboard lands 48ms later: the content bottom turns around
+  once between its start (the screen bottom) and its rest above the keyboard. It was first read as
+  installed-only, because the browser tab on the same simulator passed geometry the same day; the
+  e2e spec that followed (`playground/e2e/drawer-keyboard.spec.ts`) shows it on headless Chromium
+  and on Playwright's WebKit at a 390 × 844 viewport too, so the variable is the viewport the
+  scenario runs in, not the shell. The harness now names the turn on the overlay and carries the
+  sample series on every `StepResult`, and the series says what the turn is: an **overshoot**.
+  The content edge sits at the screen bottom while the picker collapses, then moves in ONE frame
+  to a point past its rest, and eases back to the rest over the next ~300ms:
+
+  ```
+  Android native, /lab/drawer-keyboard?autorun, content bottom (t ms → px), rest 554
+  18 → 923   50 → 923   89 → 472   105 → 472   117 → 481   183 → 518   231 → 545   316 → 551   397 → 554
+  overlay: content edge never reverses — 923 → 554, turned 37px at 183ms (481 → 518)
+  headless Chromium 390 × 844, rest 506: 844 → 506, turned 8px at 129ms (463 → 471)
+  native iOS (probe .app, index-DRcMfQ2I.js), rest 524: 874 → 524, turned 6px at 248ms (503 → 509)
+  standalone PWA on iOS (two cold launches from the icon), rest 487: 812 → 487, turned 21px at 261ms (411 → 432)
+  ```
+
+  The jump lands 82px past the rest on Android, 76px on the PWA, 43px on Chromium and 21px on
+  native iOS, which is the height the collapsing picker gives back: the rows leave the layout in the same frame the keyboard room
+  arrives, so the sheet is measured short and then re-grows to the height its motion is
+  still easing toward. That names the fix without prescribing it (the drawer's settle and curve
+  are not the variable, the order of the two geometry changes is) and it stays open here.
+  Until it lands, the spec allows exactly that one failure by step and check name and fails on
+  any other geometry failure, and on the day the turn disappears. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
   but orientation is not the variable that matters (keyboard-vs-reserve is), and the 70% scenario
   covers it.
 
