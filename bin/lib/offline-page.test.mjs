@@ -11,7 +11,9 @@ import {
   contrastRatio,
   installOfflinePage,
   MIN_ANDROID_WEBVIEW,
+  NOT_READY_LIMIT,
   offlinePalette,
+  reconnectDecision,
 } from "./offline-page.mjs"
 
 // One page, two unrelated failures — Capacitor routes a failed main-frame load AND a
@@ -243,5 +245,75 @@ describe("contrast, on whatever background the config names", () => {
     expect(near(p.border, "#26262e")).toBeLessThanOrEqual(5)
     expect(near(p.body, "#ededf0")).toBeLessThanOrEqual(3)
     expect(near(p.muted, "#9b9ba4")).toBeLessThanOrEqual(7)
+  })
+})
+
+// The reconnect probe once navigated on ANY answer with a status (dev-loop debt §H) — including
+// the 500 Vite throws while it re-optimizes deps, which bounced the app onto an error page for
+// a beat. The decision now lives in `reconnectDecision`, whose SOURCE the page embeds, so these
+// exercise the page's own logic and not a copy of it.
+describe("the reconnect decision", () => {
+  /** Feed one status `n` times from a fresh counter; return every verdict, in order. */
+  const feed = (status, n, decide = reconnectDecision) => {
+    const verdicts = []
+    let tries = 0
+    for (let i = 0; i < n; i++) {
+      const d = decide(status, tries, NOT_READY_LIMIT)
+      tries = d.tries
+      verdicts.push(d.verdict)
+    }
+    return { verdicts, tries }
+  }
+
+  it("goes at once on 2xx and 3xx — the app is actually serving", () => {
+    expect(feed(200, 1)).toEqual({ verdicts: ["go"], tries: 0 })
+    expect(feed(302, 1)).toEqual({ verdicts: ["go"], tries: 0 })
+  })
+
+  it("waits out a 500 four times and goes on the fifth, so a real app error is not a dead end", () => {
+    expect(NOT_READY_LIMIT).toBe(5)
+    expect(feed(500, 5)).toEqual({
+      verdicts: ["wait", "wait", "wait", "wait", "go"],
+      tries: 5,
+    })
+  })
+
+  it("treats a 404 exactly like a 500 — reachable, not ready", () => {
+    expect(feed(404, 5).verdicts).toEqual(feed(500, 5).verdicts)
+  })
+
+  //The screen must not flicker while the server is DOWN. Status 0 is "nothing answered", and
+  //it neither navigates nor counts towards the limit, however long it goes on.
+  it("never goes on 0, however many times", () => {
+    const { verdicts, tries } = feed(0, 50)
+    expect(new Set(verdicts)).toEqual(new Set(["never"]))
+    expect(tries).toBe(0)
+  })
+
+  it("is the same function the page runs, and it stands alone there", async () => {
+    const html = await render({ url: "http://localhost:41730" })
+    expect(html).toContain(`var NOT_READY_LIMIT = ${NOT_READY_LIMIT};`)
+    expect(html).toContain(String(reconnectDecision))
+    expect(html).toContain(
+      "reconnectDecision(s, notReadyTries, NOT_READY_LIMIT)",
+    )
+    //Re-hydrate the page's COPY in an empty scope: a free variable — the limit reached through
+    //a closure, say — would make it throw here while the CLI's own tests kept passing.
+    const embedded = new Function(
+      `return (${String(reconnectDecision)})`,
+    )()
+    expect(feed(500, 5, embedded).verdicts).toEqual([
+      "wait",
+      "wait",
+      "wait",
+      "wait",
+      "go",
+    ])
+    expect(feed(0, 3, embedded).verdicts).toEqual([
+      "never",
+      "never",
+      "never",
+    ])
+    expect(feed(302, 1, embedded).verdicts).toEqual(["go"])
   })
 })
