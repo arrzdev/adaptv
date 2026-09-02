@@ -119,7 +119,7 @@ and a dumb-correct `View`.
   when installed/native.
 - **Behavior is props (`row`/`center`/`fill`/`safe`); look is `className`.** Unchanged from today.
 
-`Screen` is **removed**. It was never in the public barrel (`components/index.ts`) and its class contract
+`Screen` is **removed**. It was never in the public barrel (`src/interface/components.index.ts`) and its class contract
 (`flex min-h-0 w-full flex-1 flex-col`) is exactly `View fill` (the `w-full` is redundant under a
 flex-col parent's default `align-stretch`). Static full-screen surfaces (404, empty states, rotate
 prompt) use a plain `<View>` at the route root — it fills automatically (§1.3).

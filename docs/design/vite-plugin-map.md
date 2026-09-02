@@ -1,7 +1,12 @@
 # adaptv — a map of `src/vite/`
 
-**35 non-test files. This page says which are core seams, which are one-off shims, and — the part
+**33 non-test files. This page says which are core seams, which are one-off shims, and — the part
 that matters most — where the ORDER is load-bearing.**
+
+Two of the plugins below are composed here but no longer *live* here: the OTA slice moved
+`ota-config-module.ts`, `ota-emit.ts` and `ota-zip.ts` to [`src/ota/build/`](../../src/ota/build/),
+beside the policy and updater they serve. The array is unchanged; only the import path is.
+→ [`../roadmap/src-reorg.md`](../roadmap/src-reorg.md) §2.2
 
 Everything is composed by one function: `adaptvPlugin()` in
 [`src/vite/adaptv-plugin.ts`](../../src/vite/adaptv-plugin.ts). That file returns a single flat array,
@@ -21,7 +26,7 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | 5 | `adaptvManifestPlugin` | `manifest.ts` | The web app manifest. |
 | 6 | `adaptvDefaultIconsPlugin` | `default-icons.ts` | Falls back to the shipped icon set. |
 | 7 | `adaptvPwaRegisterPlugin` | `virtuals.ts` | `virtual:adaptv/pwa-register`. The dev hatch arms **only** on the web target. |
-| 8 | `adaptvOtaConfigPlugin` | `ota-config-module.ts` | `virtual:adaptv/ota-config`. |
+| 8 | `adaptvOtaConfigPlugin` | `src/ota/build/ota-config-module.ts` | `virtual:adaptv/ota-config`. |
 | 9 | `adaptvSecureStoragePlugin` | `secure-storage-module.ts` | `virtual:adaptv/secure-storage` — the Keychain/KeyStore backend. |
 | 10 | `adaptvRouteTintsPlugin` | `route-tints-module.ts` | Reads `chromeTint` out of route files at build time. |
 | 11 | `adaptvImagePlugin` | `adaptv-image.ts` | **`enforce: "pre"`, and not as a precaution.** See §2.1. |
@@ -90,8 +95,6 @@ These are imported by the plugins above, or by `bin/`. They register no Vite hoo
 | `route-tints.ts` | Extracts `chromeTint` from route files. | `route-tints-module.ts`, `shell-emit.ts`, `src/shell/` |
 | `icon-set.ts` | The resolved icon set. | 5 plugins + 5 `bin/` modules — **the widest-reach module here** |
 | `build-tag.ts` | Service-worker cache namespace, derived once per production build. | `sw-build.ts` |
-| `ota-emit.ts` | Emits the OTA bundle. → [`ota.md`](ota.md) | `bin/adaptv.mjs` |
-| `ota-zip.ts` | A **deterministic** ZIP writer — the OTA container. | `ota-emit.ts` |
 | `thunk-specifiers.ts` | Reads the literal import specifier out of a component thunk. | `shell-emit.ts`, `root-route-module.ts` |
 | `serialize.ts` | Serializes a config value into a JS source expression. | `root-route-module.ts` |
 | `verify-patches.ts` | Fails loudly when the dependency patches are absent. → [`patches.md`](patches.md) | `route-tree-opacity.ts`, `adaptv-plugin.ts`, `bin/` |
