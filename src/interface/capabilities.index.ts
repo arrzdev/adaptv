@@ -37,6 +37,7 @@ export {
   subscribeKeepAwake,
 } from "../capabilities/keep-awake"
 export * from "../capabilities/keyboard"
+export * from "../capabilities/motion"
 export * from "../capabilities/native-theme"
 export * from "../capabilities/network"
 export {
