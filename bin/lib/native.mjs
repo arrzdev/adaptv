@@ -477,6 +477,58 @@ ${ANDROID_EDGE_TO_EDGE_JAVA}}
 `
 }
 
+//The schemes the compose capability asks the OS about. Android 11+ package visibility
+//hides every other app from `PackageManager.resolveActivity` unless the manifest names
+//the intent, so without this block `AppLauncher.canOpenUrl("mailto:…")` answers false
+//on an emulator whose Messages app then opens the very same URL (measured 2026-09-02,
+//Pixel 10, API 36). The probe is `ACTION_VIEW` + the scheme, so that is what is declared.
+const ANDROID_QUERY_SCHEMES = ["mailto", "sms"]
+const ANDROID_QUERIES_OPEN = "<!-- adaptv:queries -->"
+const ANDROID_QUERIES_CLOSE = "<!-- /adaptv:queries -->"
+
+function androidQueriesXml() {
+  const intents = ANDROID_QUERY_SCHEMES.map(
+    (scheme) => `        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="${scheme}" />
+        </intent>`,
+  ).join("\n")
+  return `    ${ANDROID_QUERIES_OPEN}
+    <queries>
+${intents}
+    </queries>
+    ${ANDROID_QUERIES_CLOSE}
+`
+}
+
+/**
+ * Declare the composer schemes in the Android manifest, so the OS answers the
+ * "is there a handler" question truthfully. Idempotent: adaptv's own block is
+ * replaced in place, and a project without a manifest is left alone.
+ */
+export function patchAndroidQueries(appRoot) {
+  const manifest = path.join(
+    nativeDir(appRoot, "android"),
+    "app/src/main/AndroidManifest.xml",
+  )
+  if (!existsSync(manifest)) return
+  const current = readFileSync(manifest, "utf8")
+  const open = current.indexOf(ANDROID_QUERIES_OPEN)
+  const close = current.indexOf(ANDROID_QUERIES_CLOSE)
+  let next
+  if (open !== -1 && close !== -1) {
+    const before = current.slice(0, current.lastIndexOf("\n", open) + 1)
+    const after = current.slice(current.indexOf("\n", close) + 1)
+    next = before + androidQueriesXml() + after
+  } else {
+    next = current.replace(
+      /[ \t]*<\/manifest>/,
+      `${androidQueriesXml()}</manifest>`,
+    )
+  }
+  if (next !== current) writeFileSync(manifest, next)
+}
+
 /**
  * Patch the Android themes: the launch theme (flat mask colour + transparent icon) and
  * the post-splash app theme (app-coloured window, transparent system bars).
@@ -693,6 +745,9 @@ const ASSET_OUTPUTS = {
     "app/src/main/res/values-v29/styles.xml",
     "app/src/main/res/values-v31/styles.xml",
     "app/src/main/res/drawable/splash_icon.xml",
+    //The composer schemes `patchAndroidQueries` declares; a rescaffolded manifest loses
+    //them and the handler probe silently answers false again.
+    "app/src/main/AndroidManifest.xml",
     //The generated `MainActivity` lives at a path derived from `appId`, so the whole
     //source root is walked rather than one computed file. Over-inclusive by the rule
     //every hash here follows: an app's own hand-written Java re-derives byte-identical
@@ -791,8 +846,10 @@ export async function generateAssets(
   )
   if (stale.length === 0) return
 
-  if (stale.includes("android"))
+  if (stale.includes("android")) {
     patchAndroidSplash(appRoot, mask, config.appId)
+    patchAndroidQueries(appRoot)
+  }
   if (stale.includes("ios")) patchIosTheme(appRoot, mask)
 
   //One scan for the whole run, even an `all` one: the same set brands both platforms, and
