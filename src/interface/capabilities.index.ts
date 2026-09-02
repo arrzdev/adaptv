@@ -14,6 +14,7 @@
 //away from the modules the way the component barrels once did.
 export * from "../capabilities/app-state"
 export * from "../capabilities/back-chain"
+export * from "../capabilities/battery"
 export * from "../capabilities/browser"
 export {
   type ClipboardPermission,
