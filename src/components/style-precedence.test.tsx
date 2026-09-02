@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { AvoidKeyboard } from "#adaptv/components/avoid-keyboard"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
+import { Divider } from "#adaptv/components/divider"
 import { Drawer } from "#adaptv/components/drawer"
 import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import { ExternalLink } from "#adaptv/components/external-link"
@@ -89,6 +90,23 @@ function query(ui: ReactElement, selector: string): HTMLElement {
   expect(el, `no element matched ${selector}`).not.toBeNull()
   return el as HTMLElement
 }
+
+describe("Divider", () => {
+  it("className repaints the base colour, and nothing is locked", () => {
+    //the colour is the only class adaptv puts on the rule; the width, its edge and the
+    //stretch are CSS on `data-adaptv`, so there is nothing here for a consumer to lose
+    //against — `locked` is passed as `undefined` on purpose
+    const c = classOf(<Divider className="border-red-500 ms-4" />)
+    expect(hasClass(c, "border-red-500")).toBe(true)
+    expect(hasClass(c, "border-border")).toBe(false)
+    expect(hasClass(c, "ms-4")).toBe(true)
+  })
+
+  it("forwards the consumer style, and declares no locked inline tier", () => {
+    const el = firstEl(<Divider style={{ marginBlock: "4px" }} />)
+    expect(el.style.marginBlock).toBe("4px")
+  })
+})
 
 describe("View", () => {
   it("className beats base (display)", () => {

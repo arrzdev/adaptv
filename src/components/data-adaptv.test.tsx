@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
+import { Divider } from "#adaptv/components/divider"
 import { ExternalLink } from "#adaptv/components/external-link"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
@@ -90,6 +91,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["input", <Input key="input" />],
   ["text-area", <TextArea key="text-area" />],
   ["checkbox", <Checkbox key="checkbox" />],
+  ["divider", <Divider key="divider" />],
   ["switch", <Switch key="switch" />],
   [
     "external-link",
