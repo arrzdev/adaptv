@@ -185,6 +185,9 @@ function slotPlan(
  * `fit: "contain"` rather than `"cover"`: a logo is not a photograph, and cropping the top off
  * a wordmark to fill a square is never the right answer. A non-square source gets letterboxed
  * into the transparent (or brand-coloured) surround, which is what the dev can see and fix.
+ * @param {import("./artwork.mjs").Sharp} sharp
+ * @param {Buffer|string} source
+ * @param {{ canvas: number, scale: number, background: { r: number, g: number, b: number, alpha: number }, flatten: boolean, greyscale?: boolean, mono?: boolean }} plan
  */
 async function render(
   sharp,
@@ -201,6 +204,7 @@ async function render(
   // the composited art in full colour — a "tinted" icon that iOS would map a colour onto a
   // picture that already had its own. The backdrop it lands on is black, which is grey already.
   if (greyscale) art = art.greyscale()
+  /** @type {Buffer} */
   let mark = await art.png().toBuffer()
   // After the resize, so the ramp is computed over the pixels that actually ship — and on the
   // MARK rather than the canvas, so the transparent surround never enters its range.
@@ -403,6 +407,8 @@ export function sourceError(ext) {
  *
  * Each line names what is wrong with THEIR file and what it costs, never what adaptv wanted.
  * A good source — a big square transparent mark — trips none of them.
+ * @param {{ width?: number, height?: number, isolable: boolean, luminance: number, hasDark: boolean, hasTinted: boolean, background: { r: number, g: number, b: number, alpha: number } | null, backgroundChosen: boolean }} source
+ * @param {string} ext
  */
 export function sourceWarnings(
   {

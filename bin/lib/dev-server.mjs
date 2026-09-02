@@ -53,6 +53,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 export const SAW_OPTIMIZE =
   /(re-?optimiz|new dependencies optimized|optimized dependencies changed|dependencies updated)/i
 
+/**
+ * @param {string} url
+ * @param {{ timeoutMs?: number, onLine?: (line: string) => void, sawOptimize?: () => boolean }} [opts]
+ */
 export async function warmDevServer(
   url,
   { timeoutMs = 30000, onLine, sawOptimize = () => true } = {},
@@ -112,6 +116,8 @@ const EMPTY = Buffer.alloc(0)
  * verbatim (the `-- …` passthrough). `onLine` receives every output line (so the
  * caller can stream HMR logs). Resolves `{ localUrl, networkUrl, host, port, stop() }`;
  * rejects if Vite exits before becoming ready.
+ * @param {string} appRoot
+ * @param {{ args?: string[], env?: NodeJS.ProcessEnv, onLine?: (line: string) => void, host?: boolean }} [opts]
  */
 export function startDevServer(
   appRoot,
