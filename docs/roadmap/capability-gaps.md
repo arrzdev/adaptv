@@ -84,7 +84,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
 store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
-barcode scanning · text zoom.
+barcode scanning · text zoom. Not on the original list but in the same tier and shipped 2026-09-02: **screen reader** (`src/capabilities/screen-reader.ts` over the official `@capacitor/screen-reader`: VoiceOver / TalkBack status with the plugin's `stateChange` and a resume re-read, `unknown` on the web because no browser can detect a reader, and `announce()` as a polite ARIA live region on the web and the OS announcement on native).
 
 ---
 
