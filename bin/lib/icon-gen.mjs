@@ -41,6 +41,11 @@ const ICO_SIZES = [16, 32, 48]
 const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
 
 /**
+ * One slot of the set: the file, its size, and the treatment as its two halves.
+ * @typedef {[name: string, px: number, shape: "box" | "circle", alpha: "keep" | "layer" | "mono" | "flat" | "tint"]} IconSlot
+ */
+
+/**
  * Every file `gen icons` writes, as `[name, px, treatment]`.
  *
  * `treatment` is the whole design in two letters — `<shape><alpha>`:
@@ -65,6 +70,7 @@ const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
  * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
  * tile. The margin is one number and it now applies everywhere — only the LIMIT it is measured
  * against changes (`LIMIT` in `icon-geometry.mjs`).
+ * @type {IconSlot[]}
  */
 export const ICON_SET = [
   //the native masters — biggest of their family, which is how `pickIcon` finds them
