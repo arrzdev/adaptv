@@ -21,9 +21,18 @@
 // two platforms read as the same command instead of two tools narrating themselves.
 
 /**
+ * One row of a phase table: the shape of a line, and the phrase the live line shows for
+ * it — `""` when the line is recognised and worth nothing. A function label reads the
+ * match and the whole line, and answers the same way.
+ * @typedef {[RegExp, string]} PhaseRow
+ * @typedef {[RegExp, string | ((m: RegExpMatchArray, line: string) => string)]} PhaseRule
+ */
+
+/**
  * xcodebuild's step verbs → what they mean. First match wins, so order is significance,
  * not alphabetical. `""` means "this step is bookkeeping" — the live line keeps its last
  * real phase rather than flickering through `MkDir`/`Touch`/`WriteAuxiliaryFile`.
+ * @type {PhaseRow[]}
  */
 const XCODE_PHASES = [
   [
@@ -138,6 +147,7 @@ const NOT_PROSE = /[{}[\]|^~<>\\@$#"]/
  * (`gradle · parseDebugLocalResources`): a raw camelCase identifier, a different one every
  * few hundred ms. Matching on the verb inside the name collapses them to a handful of
  * phrases that hold still, and makes an Android build read like the iOS one.
+ * @type {PhaseRow[]}
  */
 const GRADLE_TASK = [
   [/lint|check|verify/i, "checking"],
@@ -155,7 +165,10 @@ const GRADLE_TASK = [
 /** A gradle task that did no work — the live line keeps its last real phase (R4). */
 const GRADLE_NO_WORK = /\b(?:UP-TO-DATE|FROM-CACHE|NO-SOURCE|SKIPPED)\s*$/
 
-/** CocoaPods + gradle + Capacitor phase lines, same contract as {@link XCODE_PHASES}. */
+/**
+ * CocoaPods + gradle + Capacitor phase lines, same contract as {@link XCODE_PHASES}.
+ * @type {PhaseRule[]}
+ */
 const TOOL_PHASES = [
   [
     /^>\s*Task\s+(:\S+)/,
@@ -209,6 +222,7 @@ const TOOL_PHASES = [
  * with one vocabulary instead of two (R22's whole point). The other three are bookkeeping:
  * a banner naming the tool and its version, a count, and a verdict the settled ✓ already
  * carries — all `""`, so the row keeps its last real phase.
+ * @type {PhaseRow[]}
  */
 const BUNDLER_PHASES = [
   [/^transforming\b/, "compiling"],

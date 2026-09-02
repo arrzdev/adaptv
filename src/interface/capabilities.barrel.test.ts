@@ -1,6 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import {
+  callSitesOf,
+  declaredExports,
+  exportsOf,
+} from "#adaptv/test-utils/barrel-guard"
 
 /*
  * The capability barrel is mostly `export *`, and four entries are named lists.
@@ -16,10 +21,7 @@ import { describe, expect, it } from "vitest"
  */
 
 const CAPABILITIES_DIR = resolve(process.cwd(), "src/capabilities")
-const BARREL = resolve(
-  process.cwd(),
-  "src/interface/capabilities.index.ts",
-)
+const BARREL = "src/interface/capabilities.index.ts"
 
 /**
  * The whole point of the named lists — a standalone predicate answering what the
@@ -61,43 +63,53 @@ function moduleNames(): string[] {
 }
 
 /** Top-level `export` names in a capability module, types included. */
-function exportedNames(module: string): string[] {
-  const src = readFileSync(
-    resolve(CAPABILITIES_DIR, `${module}.ts`),
-    "utf8",
+const exportedNames = (module: string) =>
+  declaredExports(
+    readFileSync(resolve(CAPABILITIES_DIR, `${module}.ts`), "utf8"),
   )
-  const names: string[] = []
-  const pattern =
-    /^export\s+(?:async\s+)?(?:function|const|type|class|interface)\s+([A-Za-z0-9_$]+)/gm
-  let match = pattern.exec(src)
-  while (match) {
-    names.push(match[1])
-    match = pattern.exec(src)
-  }
-  return names
-}
+
+const EXPORTS = exportsOf(
+  readFileSync(resolve(process.cwd(), BARREL), "utf8"),
+)
+
+/** The barrel's export line for a module, `export *` or named — or `undefined`. */
+const lineFor = (module: string) =>
+  EXPORTS.find((e) => e.spec === `../capabilities/${module}`)
 
 describe("capabilities barrel", () => {
-  const barrel = readFileSync(BARREL, "utf8")
+  /*
+   * The vacuous pass: every assertion below compares against a directory scan and
+   * a parse of one file, so a walk pointed at nothing — or a parser that stops
+   * matching — compares two empty lists and reports perfect compliance. The floors
+   * are well under the real counts today (18 modules, 84 names, 22 export lines)
+   * and well over zero. → `docs/roadmap/src-reorg.md` §7
+   */
+  it("actually walked the directory it claims to have walked", () => {
+    expect(moduleNames().length).toBeGreaterThanOrEqual(15)
+    const names = moduleNames().flatMap(exportedNames)
+    expect(names.length).toBeGreaterThanOrEqual(60)
+    expect(EXPORTS.length).toBeGreaterThanOrEqual(15)
+    for (const name of WITHHELD) {
+      expect(
+        names,
+        `${name} is withheld but nothing exports it`,
+      ).toContain(name)
+    }
+  })
 
   it("re-exports every capability module", () => {
-    const missing = moduleNames().filter(
-      (name) => !barrel.includes(`"../capabilities/${name}"`),
-    )
+    const missing = moduleNames().filter((name) => !lineFor(name))
     expect(missing).toEqual([])
   })
 
   it("withholds exactly the predicates it means to withhold", () => {
     const held: string[] = []
     for (const module of moduleNames()) {
+      //`export *` carries everything, so only a named list can hold anything back
+      const named = lineFor(module)?.names
+      if (!named) continue
       for (const name of exportedNames(module)) {
-        //`export *` carries everything, so only a named list can hold anything back
-        const named = new RegExp(
-          `export \\{[^}]*\\}\\s*from "\\.\\./capabilities/${module}"`,
-          "s",
-        ).exec(barrel)
-        if (!named) continue
-        if (!new RegExp(`\\b${name}\\b`).test(named[0])) held.push(name)
+        if (!named.includes(name)) held.push(name)
       }
     }
     expect(new Set(held)).toEqual(WITHHELD)
@@ -135,36 +147,12 @@ describe("capabilities barrel", () => {
    */
   it("keeps each internal-only capability down to its one owner", () => {
     for (const [name, owner] of Object.entries(WITHHELD_INTERNAL)) {
-      const callers = callSitesOf(name).filter(
-        (file) => !file.startsWith("src/capabilities/"),
-      )
+      const callers = callSitesOf(new RegExp(`\\b${name}\\b`), [
+        BARREL,
+      ]).filter((file) => !file.startsWith("src/capabilities/"))
       expect(callers, `${name} must be called only by ${owner}`).toEqual([
         owner,
       ])
     }
   })
 })
-
-/** Every file under `src/` that names `symbol`, excluding tests and the barrel itself. */
-function callSitesOf(symbol: string): string[] {
-  const pattern = new RegExp(`\\b${symbol}\\b`)
-  const hits: string[] = []
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = resolve(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!/\.tsx?$/.test(entry.name)) continue
-      if (entry.name.endsWith(".test.ts")) continue
-      if (entry.name.endsWith(".test.tsx")) continue
-      if (full === BARREL) continue
-      if (pattern.test(readFileSync(full, "utf8"))) {
-        hits.push(full.slice(resolve(process.cwd()).length + 1))
-      }
-    }
-  }
-  walk(resolve(process.cwd(), "src"))
-  return hits.sort()
-}

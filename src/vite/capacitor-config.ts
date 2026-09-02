@@ -1,10 +1,10 @@
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
-import { BOOT_GRACE_MS } from "#adaptv/shell/boot-fallback.ts"
-import { ADAPTV_DIR } from "#adaptv/vite/adaptv-dir.ts"
 import {
   resolveOtaOrigin,
   resolveOtaPublicKey,
-} from "#adaptv/vite/ota-config-module.ts"
+} from "#adaptv/ota/build/ota-config-module.ts"
+import { BOOT_GRACE_MS } from "#adaptv/shell/boot-fallback.ts"
+import { ADAPTV_DIR } from "#adaptv/vite/adaptv-dir.ts"
 
 //The Capacitor config, generated from adaptv.config.ts. It is NEVER written to disk:
 //adaptv's patched `@capacitor/cli` reads it in-memory from the `ADAPTV_CAPACITOR_CONFIG`

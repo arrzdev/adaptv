@@ -75,9 +75,21 @@ principle — any step that rewrites an identical file invalidates it — and th
 being different is a trap for whoever reads this next. Content hashing is the
 honest question ("what does it contain"), and at native scale it costs nothing.
 
-**Risk.** The web tree is much larger than the native one. Measure the hash cost on
-a real app before switching; if it's material, keep mtime there and *document why
-they differ* instead of leaving it implicit.
+**Measured (2026-09-02, M3 Max, warm cache, median of 5×30).** Over `fingerprint()`'s
+exact walk of the playground app — 422 files / 11.0 MB — mtime costs **3.0 ms** and a
+sha1 content hash costs **11.3 ms**: 3.8×, ~8 ms absolute, called twice per
+`build ios` (both times with the same answer) in a build that takes 29 s. The native
+set is 0.93 ms (ios, 28 files) / 1.81 ms (android, 73 files) by content — the
+"22.9 ms" figure the code once cited does not reproduce. So the cost is not material
+either way; pick on honesty, not speed.
+
+**The larger finding the measurement turned up.** 242 of those 422 files (57%) and
+8.1 of the 11.0 MB (74%) were `.output/` — the SSR lineage's build output, which
+`SKIP_DIRS` did not list (it had `dist`, not `.output`). Reproduced twice:
+`build ios` 34.5 s → `build web` 4.1 s (rewrites `.output/`) → `build ios` **33.9 s**
+full rebuild with nothing under `src/` changed → `build ios` 4.2 s. Fixed in the
+same PR as this note by adding `.output` to the skip list, with a test — L14 says
+the two lineages never cross, and the fingerprint was the one place they did.
 
 ---
 

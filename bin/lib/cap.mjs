@@ -42,7 +42,8 @@ if (!nodePath?.split(path.delimiter).includes(adaptvModules)) {
   process.env.NODE_PATH = nodePath
     ? `${nodePath}${path.delimiter}${adaptvModules}`
     : adaptvModules
-  Module._initPaths() //re-read NODE_PATH into the resolver's global folders
+  // @ts-expect-error `_initPaths` is undocumented: it is Node's own re-read of NODE_PATH, and nothing public makes a change to it take effect at runtime.
+  Module._initPaths()
 }
 
 const envConfig = process.env.ADAPTV_CAPACITOR_CONFIG
