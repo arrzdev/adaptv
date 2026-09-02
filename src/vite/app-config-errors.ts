@@ -97,6 +97,14 @@ export function appConfigErrors(config: unknown): string[] {
     )
   if (!isObject(config.router))
     errors.push(`'router' must be an object, got ${show(config.router)}`)
+  else if (
+    config.router.routesDirectory !== undefined &&
+    typeof config.router.routesDirectory !== "string"
+  )
+    //resolved with `path.resolve`, which throws a TypeError naming `paths[2]`
+    errors.push(
+      `'router.routesDirectory' must be a path to the routes directory, got ${show(config.router.routesDirectory)}`,
+    )
 
   if (config.appId !== undefined && !APP_ID.test(String(config.appId)))
     errors.push(
