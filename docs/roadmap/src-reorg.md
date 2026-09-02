@@ -75,8 +75,10 @@ else in `src/` touches Node. **The tree already sorts by face; it just does not 
 **One of those four sits in a directory a browser barrel points into.** `src/interface/ota.index.ts`
 is a `platform: "browser"` tsdown entry and its directory contains a `node:crypto` module. It is safe
 **only because the barrel is curated** — `ota.index.ts` exports `policy`, `updater` and one type from
-`store-release`, and never `native-fingerprint`. So **L20's curated barrel is currently doing
-platform-safety work nobody wrote it to do** (§2.5 is the reason that still holds).
+`store-release`, and never `native-fingerprint`. So **L20's curated barrel is doing platform-safety
+work nobody wrote it to do** (§2.5 is the reason that still holds). Since the OTA slice that is
+checked rather than trusted, by `src/interface/ota.barrel.test.ts` — which also covers the half
+`execution-boundary.test.ts` cannot: a barrel that falls *behind* its directory.
 
 **`src/config/` imports no `node:*` at all** — which is why the Node-platform tsdown entry is safe in
 the *other* direction too, and why the question in [§0.6](#06-what-this-changes-and-what-it-does-not)
@@ -274,12 +276,13 @@ and belongs to the owner, not to this plan:
 <details>
 <summary>One inconsistency found while surveying — it does not belong to this plan</summary>
 
-- **`./server-entry` and `./root-route` are in `exports` but not in the publish spec.**
-  `package.json` exports 16 subpaths; `scripts/verify-dist.mjs`'s `jsEntries` lists 12, and
-  `tsdown.config.ts` builds 13. `./server-entry` (the Cloudflare Worker handler — the fourth face)
-  has **no dist entry at all**, and `./root-route` is built but absent from the publish spec even
-  though `tsdown.config.ts`'s own comment says it must be there.
-  → [`dist-cutover.md`](dist-cutover.md) is where that closes, not here.
+- **`./server-entry` and `./root-route` were in `exports` but not in the publish spec.**
+  `package.json` exported 16 subpaths; `scripts/verify-dist.mjs`'s `jsEntries` listed 12, and
+  `tsdown.config.ts` built 13. `./server-entry` (the Cloudflare Worker handler — the fourth face)
+  had **no dist entry at all**, and `./root-route` was built but absent from the publish spec.
+  **Closed in `9bf94b2`**: `jsEntries` is now read off `exports`, so a subpath nothing builds is
+  a named failure; `server-entry` builds from its own `workerEntry` in `tsdown.config.ts`.
+  → [`dist-cutover.md`](dist-cutover.md) carries the rest of the cutover, not here.
 
 </details>
 
@@ -333,7 +336,8 @@ Today a reader can check L11 by opening one directory. That property is what pro
 Two subsystems are torn across four directories each, and in both cases the split is **build-time vs
 runtime**, not layer:
 
-**OTA** — 6 directories, 20 files, plus 5 string references from `bin/`:
+**OTA** — 6 directories, 20 files, plus 5 string references from `bin/`. ✅ **Sliced 2026-09-01**;
+the table below is the state it was diagnosed in:
 
 | Where | Files |
 |---|---|
@@ -382,15 +386,23 @@ Only the two slices above. Everything not listed stays where it is.
 | Before | After |
 |---|---|
 | `src/ota/*.ts` | `src/ota/*.ts` *(unchanged)* |
-| `src/vite/ota-emit.ts` · `ota-zip.ts` · `ota-config-module.ts` | `src/ota/build/…` |
-| `src/hooks/use-ota-updates.ts` · `use-store-release.ts` | `src/ota/use-ota-updates.ts` · `use-store-release.ts` |
+| `src/vite/ota-emit.ts` · `ota-zip.ts` · `ota-config-module.ts` | ✅ `src/ota/build/…` |
+| `src/hooks/use-ota-updates.ts` · `use-store-release.ts` | ✅ `src/ota/use-ota-updates.ts` · `use-store-release.ts` |
 | `src/components/update-required.tsx` | **stays** — it is a public primitive in the component barrel (§2.4) |
-| `src/virtual-adaptv-ota-config.d.ts` | `src/ota/virtual-adaptv-ota-config.d.ts` |
+| `src/virtual-adaptv-ota-config.d.ts` | ✅ `src/ota/virtual-adaptv-ota-config.d.ts` |
 | `src/vite/route-tints.ts` · `route-tints-module.ts` | `src/router/build/route-tints.ts` · `route-tints-module.ts` |
 | `src/vite/route-tree-opacity.ts` · `router-autoimport.ts` · `root-route-module.ts` | `src/router/build/…` |
 | `src/shell/route-tints.ts` · `use-route-tint.ts` · `create-adaptv-router.ts` · `create-root-route.tsx` | `src/router/…` |
 | `src/routes/*` | `src/router/entries/*` |
 | `patches/@tanstack__router-generator@1.167.21.patch` | **stays at `patches/`** — see §2.3 |
+
+⚠︎ **The `.d.ts` carries a consumer-facing glob with it.** `virtual-adaptv-ota-config.d.ts` is one
+of seven ambient declarations delivered by the app-side `include` line
+`node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts` — a flat glob that stops matching the
+moment one of the seven leaves the root of `src/`. Moving it makes that line
+`src/**/virtual-adaptv-*.d.ts`, in the app's tsconfig **and** in `tsdown.config.ts`'s `copy`
+(where the seven still land flat in `dist/`). One consumer-side character; nothing else in §2.4
+priced it. → [`../DEVELOPMENT.md`](../DEVELOPMENT.md), [`dist-cutover.md`](dist-cutover.md)
 
 ⚠︎ `src/ota/native-fingerprint.ts` imports `node:crypto` and `src/ota/updater.ts` is a browser module,
 so **`src/ota/` is already a two-face directory** and the slice makes it a three-part one
@@ -435,12 +447,17 @@ subsystem.
 
 **L20** and [`../decisions/facade-and-opacity.md §1`](../decisions/facade-and-opacity.md) settle that
 adaptv's barrels are curated — *"every symbol in a adaptv barrel is there because someone decided it
-should be"*. Two tests enforce it by comparing hand-written lists against the directory:
+should be"*. Three tests enforce it by comparing hand-written lists against the directory:
 
 - `src/components/barrels.test.ts` — the two component barrels must cover the same modules, with an
   explicit `INTERNAL` set. It exists because `Text` shipped fully built and **unreachable**.
 - `src/interface/capabilities.barrel.test.ts` — every capability module is exported unless it is in a
   named `WITHHELD` set, each entry paired with the file that owns it.
+- `src/interface/ota.barrel.test.ts` — added with the OTA slice, and the one where the curated barrel
+  is also doing platform safety (§0.1). Its `WITHHELD` set names `native-fingerprint` and each
+  `build/` file **individually**, never as a prefix, and a second test fails if any `node:`-importing
+  file in `src/ota/` is not on that list. `use-store-release` is exported from `hooks.index.ts`, so
+  "exported" here means *reachable from either published barrel*.
 
 A domain reorg makes those directories heterogeneous, and the tempting fix is to glob the new folder
 and generate the barrel. **That would make both tests vacuous** — a generated barrel trivially equals
@@ -639,8 +656,8 @@ re-opening any of them — this repo records what it **rejected**, and the code 
 |---|---|---|
 | 0 | Land the [`dist` cutover](dist-cutover.md) **first** | — it removes `src` from `files`, which is the only thing that makes the current layout a *shipping* concern |
 | **0a** | ✅ **Move A** — the `node:` boundary test ([§0.5](#05-the-three-moves-worth-making)), [`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts). **Moved no files**, so it landed before step 0 | delete one file. It is the only step here with no revert risk, and every later step is provable because of it |
-| 1 | **OTA slice** (§2.2) — ~20 files | `git revert`; pure renames, no content beyond specifiers |
-| 2 | Sweep OTA doc references (`grep -rn 'src/ota/\|src/vite/ota' docs`) | separate commit, so step 1 stays a clean rename |
+| **1** | ✅ **OTA slice** (§2.2) — 9 files moved, 13 modified. Renames plus specifiers, the five `bin/` string loads, `vitest.config.ts`, `tsdown.config.ts`'s copy glob and one allow-list entry (`src/ota/build/`, deliberately not `src/ota/`) | `git revert`; pure renames, no content beyond specifiers |
+| **2** | ✅ Sweep OTA doc references | separate commit, so step 1 stays a clean rename |
 | 3 | **Router slice** (§2.2) — ~15 files | same shape |
 | 4 | Sweep router doc references + update [`../design/vite-plugin-map.md`](../design/vite-plugin-map.md) §1/§3 | separate commit |
 | **4a** | **Move B** — `src/native/` → `src/build/native/`, 4 files | `git revert` |
@@ -670,26 +687,41 @@ fix with it.
 |---|---|---|
 | `pnpm typecheck` | Every broken `#adaptv/*` and barrel path in `.ts`/`.tsx` | anything in a string, anything in `.mjs` |
 | `pnpm biome:check` | The reflex fix — re-introducing `./`/`../` when an alias breaks | the four exempted globs (`src/config`, `src/vite`, the barrels, `bin/**`) |
-| `pnpm test` (2 618) | The 15 path-reading tests, both barrel guards, the opacity assertions | anything only the CLI executes |
+| `pnpm test` | The 15 path-reading tests, the five barrel guards, the opacity assertions, the `bin/` string loads | anything only the CLI executes |
 | `pnpm build:check` | `exports` + `tsdown` entries; `scripts/verify-dist.mjs` checks the emitted surface | `bin/`'s runtime loads |
 | `pnpm gate` | all of the above + `check-colour.mjs` | ″ |
 | **[`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts)** *(move A)* | a `node:*` import landing on the browser side of the split, a `config/*` import that stops being `import type`, a test file pulled into a published entry graph, and a `tsdown`/`exports` entry nobody classified | a `node:*` import inside `src/vite/**` or `src/native/**` reaching a browser some other way — the allow-list trusts those directories by name |
+| **[`../../src/interface/ota.barrel.test.ts`](../../src/interface/ota.barrel.test.ts)** *(OTA slice)* | an OTA module that stops being exported — the direction the boundary test structurally cannot see, since a barrel falling behind drags nothing into any graph — and a `node:`-importing file arriving in `src/ota/` unnamed | a module exported under a *different* name than its file, and every barrel that is not this one |
 
 ### ⚠︎ The three things no gate catches
 
-1. **`loadAdaptvModule("vite/ota-emit.ts")` — 16 call sites in `bin/`, 11 of them into `src/vite/`.** Plain strings, resolved by
-   esbuild at runtime, invisible to `tsc` and to Biome. A wrong one fails **only when that CLI
-   command runs**, and `ota-emit.ts` is reached by `adaptv ota publish`, which no unit test invokes.
-   → **the acceptance test for the OTA slice is running `adaptv ota publish` against the playground,
-   not a green gate.**
+1. **`loadAdaptvModule("ota/build/ota-emit.ts")` — 16 call sites in `bin/`, 5 of them into the OTA
+   slice.** Plain strings, resolved by esbuild at runtime, invisible to `tsc` and to Biome. A wrong
+   one used to fail **only when that CLI command runs**. ✅ The *existence* of every target is now
+   checked by [`../../bin/lib/load-ts.test.mjs`](../../bin/lib/load-ts.test.mjs): it walks the
+   non-test `bin/**/*.mjs`, strips comments, collects every `loadAdaptvModule("…")` literal (16
+   today, over 12 targets — the doc-comment example on the loader itself is not one of them), and
+   fails naming each `file:line → src/<target>` that does not exist, with a floor of 10 sites so a
+   rotted regex cannot pass on an empty list. Proven on a scratch copy of `bin/` with two literals
+   moved: `4 dangling`, each named. What it does NOT check is that the module still exports what the
+   caller destructures, or that the command works. There is no `adaptv ota publish`: `ota-emit.ts`
+   is reached by **`adaptv build web`** (which publishes the channel when the config names an
+   origin — `resolveOtaBuildConfig`, `computeBuildTag`/`buildBundleArchive`, `resolveSigningKey`,
+   `writeChannel`) and by **`adaptv keys ota`** (`generateOtaKeyPair`). No unit test invokes either.
+   → **the acceptance test for the OTA slice is still running both against the playground, signed,
+   and reading the manifest they write — not a green gate.**
 2. **255 doc references + 49 in-code path comments.** Nothing checks them. A reorg that leaves them
    stale attacks the one property that makes this tree navigable
    ([`../README.md`](../README.md): *"when something ships, move it"*).
-3. **A vacuously-passing guard.** `barrels.test.ts` and `capabilities.barrel.test.ts` scan a
-   directory; point one at a directory that no longer holds components and it compares two empty
-   lists and goes green. **After any move, delete one export from the barrel by hand and confirm the
-   guard goes red.** A guard that cannot fail is worse than no guard, and this is the exact way a
-   reorg breaks one.
+3. **A vacuously-passing guard.** Every barrel guard scans a directory; point one at a directory
+   that no longer holds anything and it compares two empty lists and goes green. ✅ All five —
+   `components/barrels.test.ts` and `interface/{capabilities,hooks,ota,storage}.barrel.test.ts` —
+   now open with a floor test (`actually walked the directory it claims to have walked`), and share
+   one walk and one barrel reader in [`../../src/test-utils/barrel-guard.ts`](../../src/test-utils/barrel-guard.ts)
+   rather than three copies; the `safe-area` sweep carries the same floor. A floor is not proof
+   the *invariant* still fires, though: **after any move, delete one export from the barrel by
+   hand and confirm the guard goes red.** A guard that cannot fail is worse than no guard, and
+   this is the exact way a reorg breaks one.
 
 ### The strong proof
 

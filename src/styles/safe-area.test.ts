@@ -321,19 +321,30 @@ describe("safe-area contract — bare env(safe-area-inset) is banned outside saf
   //bare env() silently reads 0 on the large Android WebView < 140 base. Reference the
   //contract var (`var(--adaptv-inset-*)`) instead. This test itself and the contract
   //file are the only allowed occurrences.
+  //
+  //One invariant, one test: the walk covers ~370 files, and a test per file reported
+  //each of them as a separate pass — the suite count moved every time a file landed,
+  //for one grep. A violation is listed as `file:line`, all of them at once.
   const files = walk(SRC, [".ts", ".tsx", ".css"]).filter(
     (f) => f !== SAFE_AREA_CSS && !f.endsWith("safe-area.test.ts"),
   )
 
-  it.each(files.map((f) => [f.slice(SRC.length + 1), f] as const))(
-    "%s consumes the contract var, not bare env()",
-    (_rel, full) => {
+  it("finds bare env() nowhere but the contract file", () => {
+    //the vacuous pass: a walk pointed at nothing has no violations either
+    expect(files.length).toBeGreaterThanOrEqual(300)
+
+    const violations: string[] = []
+    for (const full of files) {
       //strip comments so prose that *names* the banned spelling to explain it doesn't
       //read as a violation
       const code = readFileSync(full, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/[^\n]*/g, "")
-      expect(code).not.toMatch(/env\(\s*safe-area-inset/)
-    },
-  )
+      for (const match of code.matchAll(/env\(\s*safe-area-inset/g)) {
+        const line = code.slice(0, match.index).split("\n").length
+        violations.push(`${full.slice(SRC.length + 1)}:${line}`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
 })

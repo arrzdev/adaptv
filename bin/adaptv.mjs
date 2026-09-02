@@ -25,7 +25,6 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs"
-import { createRequire } from "node:module"
 import { homedir } from "node:os"
 import path from "node:path"
 import process from "node:process"
@@ -101,6 +100,7 @@ import {
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import { namesPlumbing } from "./lib/opacity.mjs"
+import { locatePackage, ownNativeModules } from "./lib/own-modules.mjs"
 import { inspect as inspectApp } from "./lib/preflight.mjs"
 import {
   addresses,
@@ -130,6 +130,8 @@ import {
 } from "./lib/render.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, portInUse } from "./lib/tool-log.mjs"
+
+/** @typedef {import("./lib/exec.mjs").CliError} CliError */
 
 const CWD = process.cwd()
 
@@ -198,6 +200,9 @@ async function loadConfig(appRoot) {
  * usable", and it is the same at startup and at minute forty: print every problem and stop.
  * A session whose config no longer parses is serving something that does not match the file
  * on disk, which is a worse place to be than back at the shell.
+ * @param {string} appRoot
+ * @param {string[]} platforms
+ * @param {{ optional?: boolean, icons?: boolean, beforeExit?: () => void }} [opts]
  */
 async function preflight(
   appRoot,
@@ -302,9 +307,13 @@ function snapshotNativeFp(appRoot, platforms) {
  * `dev server at http://localhost:41730 is…` and the fix it named never reached the screen.
  *
  * So: a SHORT reason, and the rest as `fix` lines the renderer prints dim underneath (R13/R15).
+ * @param {{ ok: boolean, why?: string, status?: number }} verdict
+ * @param {string} url
+ * @param {string[]} log
  */
 function devServerUnhealthy({ why, status }, url, log) {
   if (why !== "error") {
+    /** @type {CliError} */
     const err = new Error(
       why === "thin"
         ? `${url} is answering, but not with this app`
@@ -333,6 +342,7 @@ function devServerUnhealthy({ why, status }, url, log) {
   const unresolved = said.some((l) =>
     /Cannot find (module|package)|Failed to resolve/i.test(l),
   )
+  /** @type {CliError} */
   const err = new Error("the app did not render")
   err.fix = [
     `every request to ${url} answered ${status} for 30s.`,
@@ -441,6 +451,7 @@ async function preparePlatforms(
   { dev, healAts = true, force = false, envFor, verbose, warnings },
 ) {
   const prepared = new Set()
+  /** @type {Record<string, number>} */
   const prepareMs = {}
   for (const platform of platforms) {
     const fresh = !existsSync(nativeDir(appRoot, platform))
@@ -639,6 +650,7 @@ async function runLive(appRoot, platforms, opts) {
 
   const verbose = opts.verbose
   const cleanups = [] // revert fns, unwound LIFO on exit
+  /** @type {Awaited<ReturnType<typeof startDevServer>> | null} */
   let devServer = null
   let onDevLine = null // set once we're watching; parses HMR events
   // Everything the dev server has said, kept from the moment it starts. `onDevLine` is not
@@ -741,6 +753,7 @@ async function runLive(appRoot, platforms, opts) {
     // billed to that platform's launch line further down (it runs before the line exists).
     // Declared out here because the launch phase lives in a separate `if (!webOnly)` block.
     let ready = []
+    /** @type {Record<string, number>} */
     let prepareMs = {}
     // Re-arm BOTH staleness fingerprints together, always. They answer one question — does
     // what is installed still match what the dev wrote — so arming one without the other is
@@ -1125,6 +1138,7 @@ async function runLive(appRoot, platforms, opts) {
       // sitting blank for a second while sharp re-renders the launcher icons; doing it AT ALL
       // is what stops a rebuild from being a subset of a startup. `healAts: false` because the
       // ATS exception in the plist right now is this session's own and still in force.
+      /** @param {{ force?: boolean, offsets?: Record<string, number>, prepare?: boolean }} opts */
       launchAll = async ({
         force,
         offsets = {},
@@ -1756,22 +1770,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
   )
 }
 
-// The native modules adaptv ships and compiles into the binary. Named here and nowhere the
-// dev can see: `describeOwnInstall` turns the result into one owned row (R71).
-const ADAPTV_BASE_PLUGINS = [
-  "@capacitor/app",
-  "@capacitor/browser",
-  "@capacitor/core",
-  "@capacitor/geolocation",
-  "@capacitor/haptics",
-  "@capacitor/keyboard",
-  "@capacitor/network",
-  "@capacitor/preferences",
-  "@capacitor/screen-orientation",
-  "@capacitor/splash-screen",
-  "@capacitor/status-bar",
-]
-
 /** Run a tool for its version. Answers, rather than printing, so a caller that reports on
  * several tools as ONE row can still ask about each of them. */
 function toolVersion(argv) {
@@ -1808,23 +1806,29 @@ function readIf(p) {
  * used to verify exactly the same thing and print it as twelve rows naming the engine
  * twelve times, under a heading that said they were adaptv's; the dev has one action for
  * any of it. `--verbose` keeps the names, which is where they are worth something.
+ *
+ * WHICH modules is not written down here. It was — eleven names in an array — and adaptv had
+ * grown to fifteen without it, so four of them, the OTA plugin included, could have been
+ * missing under a green row. `bin/lib/own-modules.mjs` reads adaptv's own `package.json` and
+ * asks the framework's own `carriesNativeCode` which of those reach the binary.
  */
-function checkOwnInstall(appRoot) {
+async function checkOwnInstall(appRoot) {
   const { cmd, pre } = capCmd(appRoot)
   const cli = toolVersion([cmd, ...pre, "--version"])
-  const resolveFromAdaptv = createRequire(
-    path.join(ADAPTV_ROOT, "package.json"),
+  const { carriesNativeCode } = await loadAdaptvModule(
+    "native/installed-plugins.ts",
   )
-  const missing = ADAPTV_BASE_PLUGINS.filter((name) => {
-    try {
-      resolveFromAdaptv.resolve(`${name}/package.json`)
-      return false
-    } catch {
-      return true
-    }
+  const { modules, missing } = ownNativeModules({
+    dependencies: Object.keys(
+      JSON.parse(
+        readFileSync(path.join(ADAPTV_ROOT, "package.json"), "utf8"),
+      ).dependencies ?? {},
+    ),
+    locate: (name) => locatePackage(name, ADAPTV_ROOT),
+    isNative: carriesNativeCode,
   })
   const report = describeOwnInstall({
-    modules: ADAPTV_BASE_PLUGINS,
+    modules,
     missing,
     runnable: cli.found,
     version: cli.version,
@@ -1866,7 +1870,7 @@ async function doctor(appRoot) {
 
   section("Core")
   checkTool("node", ["node", "--version"])
-  checkOwnInstall(appRoot)
+  await checkOwnInstall(appRoot)
 
   section("Android")
   const aEnv = { ...process.env }
@@ -2208,7 +2212,7 @@ async function buildWebDeploy(appRoot, opts) {
   const config = await preflight(appRoot, [])
 
   const { resolveOtaBuildConfig, resolveOtaOrigin } =
-    await loadAdaptvModule("vite/ota-config-module.ts")
+    await loadAdaptvModule("ota/build/ota-config-module.ts")
   //null when the app declares no origin — OTA is off, and this is then simply the
   //web build. Nothing is published, because there is nowhere to publish it to.
   const ota = resolveOtaBuildConfig(appRoot, config)
@@ -2292,7 +2296,7 @@ async function buildWebDeploy(appRoot, opts) {
         decideChannelEmission,
         fetchDeployedManifest,
         writeChannel,
-      } = await loadAdaptvModule("vite/ota-emit.ts")
+      } = await loadAdaptvModule("ota/build/ota-emit.ts")
       report("reading the published manifest")
       //What the channel currently serves decides ONE thing: whether this build is
       //new. An unchanged app keeps the timestamp it was first published with, so a
@@ -2347,7 +2351,7 @@ async function buildWebDeploy(appRoot, opts) {
  */
 async function resolveChannelSigning(ota) {
   const { isUsableOtaPublicKey, resolveSigningKey, signingKeyMatches } =
-    await loadAdaptvModule("vite/ota-emit.ts")
+    await loadAdaptvModule("ota/build/ota-emit.ts")
 
   let privateKey = null
   try {
@@ -2445,13 +2449,14 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
   }
 
   await setCapacitorConfigEnv(config)
+  /** @type {{ buildTag: string, archivePath: string } | null} */
   let staged = null
   await runLine(
     "bundle",
     async (report) => {
       await buildWeb(appRoot, { report, config })
       const { buildBundleArchive, computeBuildTag } =
-        await loadAdaptvModule("vite/ota-emit.ts")
+        await loadAdaptvModule("ota/build/ota-emit.ts")
       const clientDir = path.join(appRoot, CAP_WEB_DIR)
       const buildTag = computeBuildTag(clientDir)
       //`packaging` — R24's word for "put the built thing into its container", already
@@ -2501,7 +2506,9 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
  */
 async function genOtaKeys() {
   header("keys ota")
-  const { generateOtaKeyPair } = await loadAdaptvModule("vite/ota-emit.ts")
+  const { generateOtaKeyPair } = await loadAdaptvModule(
+    "ota/build/ota-emit.ts",
+  )
   const { publicKey, privateKey } = generateOtaKeyPair()
 
   section("public: commit this")
@@ -2652,7 +2659,7 @@ async function genIcons(appRoot, _positional, flags) {
   //the default is indistinguishable from someone typing `--background #ffffff`.
   const backgroundChosen = typeof flags.background === "string"
   const background = parseHex(
-    flags.background ?? (await resolveIconPlan(config)).iconBackground,
+    flags.background ?? (await resolveIconPlan()).iconBackground,
   )
   //What the mark will actually sit on. Shared with `slotPlan` rather than restated, so the
   //preview sheet cannot disagree with the files it is previewing.
@@ -2854,6 +2861,7 @@ async function main() {
         const buildMs = await buildWebPreview(appRoot, config, {
           verbose: !!flags.verbose,
         })
+        /** @type {Awaited<ReturnType<typeof serveWebPreview>> | null} */
         let web = null
         const native = await pipeline("preview", appRoot, platforms, {
           ...opts,

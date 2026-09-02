@@ -33,7 +33,7 @@ vi.mock("./load-ts.mjs", async (importOriginal) => {
   }
 })
 
-const { resolveIconPlan, resolveSplashMask } = await import("./native.mjs")
+const { resolveSplashMask } = await import("./native.mjs")
 
 //Both sides present, so a hand-rolled `?? ` chain would never even reach its fallback arm and
 //would still return the config's own colours. This is the case a value assertion misses.
@@ -42,14 +42,6 @@ const BOTH = { themeColor: { light: "#eeeeec", dark: "#0a0a0c" } }
 const ONE_SIDED = { themeColor: { light: "#eeeeec" } }
 
 describe("the native theme colours come from the shared resolver", () => {
-  it("resolves the launcher icon's dark background through it", async () => {
-    expect(await resolveIconPlan(BOTH)).toEqual({
-      //White, and deliberately not a theme colour: see `resolveIconPlan`.
-      iconBackground: "#ffffff",
-      iconBackgroundDark: RESOLVED.dark,
-    })
-  })
-
   it("resolves both splash-mask colours through it", async () => {
     expect(await resolveSplashMask(BOTH)).toEqual({
       light: RESOLVED.light,
@@ -66,9 +58,6 @@ describe("the native theme colours come from the shared resolver", () => {
 
   it("goes through it for the one-sided config too", async () => {
     //The arm a hand-rolled copy exists to serve. It must not be served locally.
-    expect((await resolveIconPlan(ONE_SIDED)).iconBackgroundDark).toBe(
-      RESOLVED.dark,
-    )
     expect(await resolveSplashMask(ONE_SIDED)).toEqual({
       light: RESOLVED.light,
       dark: RESOLVED.dark,

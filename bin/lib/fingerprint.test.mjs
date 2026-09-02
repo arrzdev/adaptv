@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 import {
   appConfigFingerprint,
   cliSourceFingerprint,
+  fingerprint,
 } from "./fingerprint.mjs"
 
 // The staleness notice on `dev`'s watch row rests entirely on this hash. Every case below is
@@ -137,5 +138,37 @@ describe("cliSourceFingerprint — did adaptv's OWN source change under a runnin
   it("is stable when nothing changed, so the restart notice fires once rather than every 3s poll", () => {
     const root = bin({ "adaptv.mjs": "// entry", "lib/native.mjs": "x" })
     expect(cliSourceFingerprint(root)).toBe(cliSourceFingerprint(root))
+  })
+})
+
+describe("fingerprint — did anything the web bundle is built FROM change?", () => {
+  const tree = () => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-web-"))
+    mkdirSync(path.join(root, "src"))
+    mkdirSync(path.join(root, ".output", "server"), { recursive: true })
+    writeFileSync(path.join(root, "src", "app.tsx"), "export const a = 1")
+    writeFileSync(path.join(root, ".output", "server", "index.mjs"), "v1")
+    return root
+  }
+
+  it("ignores `.output/` — the SSR build is one lineage's output, never the other's input (L14), and `build web` rewrites it every run", () => {
+    const root = tree()
+    const before = fingerprint(root)
+    writeFileSync(
+      path.join(root, ".output", "server", "index.mjs"),
+      "v2, rather longer, as a rebuilt server bundle is",
+    )
+    writeFileSync(path.join(root, ".output", "nitro.json"), "{}")
+    expect(fingerprint(root)).toBe(before)
+  })
+
+  it("moves when a source file changes — the reason the walk exists", () => {
+    const root = tree()
+    const before = fingerprint(root)
+    const file = path.join(root, "src", "app.tsx")
+    writeFileSync(file, "export const a = 2")
+    const t = Date.now() / 1000 + 5
+    utimesSync(file, t, t)
+    expect(fingerprint(root)).not.toBe(before)
   })
 })

@@ -3,7 +3,8 @@
 > ✅ **SHIPPED.** This is a description of machinery that exists, not a plan.
 >
 > `src/ota/{policy,updater,ledger,manifest-signing,native-fingerprint,store-release}.ts` (each with
-> tests) · `src/vite/{ota-emit,ota-zip,ota-config-module}.ts` · `adaptv keys ota` generates the
+> tests) · `src/ota/build/{ota-emit,ota-zip,ota-config-module}.ts` · `src/ota/{use-ota-updates,
+> use-store-release}.ts` · `adaptv keys ota` generates the
 > signing pair · `adaptv build web` publishes the update channel into the deploy when the config
 > names an origin · config keys `otaPublicKey` / `otaPollMinutes` / `otaOnNativeSkew` /
 > `updateRequiredAfterDays`. The end-to-end bench is `playground/apps/frontend/scripts/ota-lab.ts`.
@@ -571,7 +572,7 @@ well-formed** and passes it down; it never verifies it. Verification is native, 
 lives in the store binary, because a check performed by the code an attacker is trying to replace is
 not a check. This is written down because the function reads like the natural place to put it.
 
-> ### ✅ BUILT — `adaptv keys ota`, `src/ota/manifest-signing.ts`, `src/vite/ota-emit.ts`
+> ### ✅ BUILT — `adaptv keys ota`, `src/ota/manifest-signing.ts`, `src/ota/build/ota-emit.ts`
 >
 > **The contract was measured, not assumed.** The plugin's native check is RSASSA-PKCS1-v1_5 over
 > SHA-256 of the zip — Android builds the key through `X509EncodedKeySpec` (SPKI) and iOS through

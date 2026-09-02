@@ -294,10 +294,15 @@ export function rawOut(text) {
  * without this the next `check` sees a group still open, calls `spacer()` on its own account,
  * and the report grows a stray blank line between a heading and its first row — visible the
  * first time a `doctor` row carried `detail` under it (R71).
+ *
+ * The gap it opens with comes from `spacer()` rather than a literal `\n`, because a heading is
+ * a block like any other and R26's seam rule applies to it too: the banner already closes with
+ * a blank line, so a command whose first line is a heading — `keys ota` — counted that gap
+ * twice and started two rows lower than every other command.
  */
 export function section(title) {
-  openBlock = false
-  out(`\n  ${c.bold(title)}\n`)
+  spacer()
+  out(`  ${c.bold(title)}\n`)
 }
 
 /**
@@ -395,6 +400,7 @@ export function detail(line) {
  *
  * `network` is printed only when the server reports one (R19) — adaptv binds the LAN only
  * when a physical device needs it, so a computed address would often point at nothing.
+ * @param {{ local?: string, network?: string | null }} [urls]
  */
 export function addresses({ local, network } = {}) {
   const rows = [
@@ -810,6 +816,8 @@ export async function select(message, options) {
  * error naming the flag that decides it non-interactively (R7).
  *
  * `message` carries the fact, so there is no `!` line above it saying the same thing (R6).
+ * @param {string} message
+ * @param {{ yes?: string, no?: string }} [labels]
  */
 export async function confirm(message, { yes, no } = {}) {
   if (jsonMode)
@@ -992,6 +1000,9 @@ const stripLen = (s) => s.replace(ANSI, "").length
  * A failure settles as `✖ <label>  <reason> · <time>`: the ✖ line CARRIES its own reason,
  * so the caller only has to swallow the rejection — printing a second `✖ … failed — …`
  * afterwards is what used to double every glyph. `explain(err)` supplies that reason.
+ * @param {string} label
+ * @param {(report: (line: string) => void) => Promise<any>} fn
+ * @param {{ verbose?: boolean, transient?: boolean, offsetMs?: number, explain?: (err: any) => any }} [opts]
  */
 export async function runLine(
   label,

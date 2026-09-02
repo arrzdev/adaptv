@@ -11,6 +11,7 @@ import {
   LabRow,
   LabSection,
   LabSupport,
+  useClientValue,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
@@ -27,6 +28,33 @@ const WITH_URL: ShareTarget = {
   text: "One codebase, six targets.",
   url: "https://example.com/adaptv",
   dialogTitle: "Send adaptv to…",
+}
+
+/**
+ * One per-payload row. `canShare` is the bare `canShareTarget` — the point of the
+ * row is its raw answer — so it is read after hydration, not during it, or the
+ * server's `refused` and the client's `shareable` collide. See useClientValue.
+ */
+function PayloadGate({
+  label,
+  target,
+  canShare,
+}: {
+  label: string
+  target: ShareTarget
+  canShare: (target: ShareTarget) => boolean
+}) {
+  const shareable = useClientValue(() => canShare(target), false)
+  return (
+    <LabRow
+      label={label}
+      value={
+        <LabBadge tone={shareable ? "ok" : "bad"}>
+          {shareable ? "shareable" : "refused"}
+        </LabBadge>
+      }
+    />
+  )
 }
 
 /** A real File, built in the page so the file-payload gate is exercised honestly. */
@@ -98,14 +126,11 @@ function LabSharePage() {
         description="canShare() answers a different question from supported. A browser with a sheet still refuses payloads it cannot handle — a file share is the usual one."
       >
         {payloads.map(({ label, target }) => (
-          <LabRow
+          <PayloadGate
             key={label}
             label={label}
-            value={
-              <LabBadge tone={canShare(target) ? "ok" : "bad"}>
-                {canShare(target) ? "shareable" : "refused"}
-              </LabBadge>
-            }
+            target={target}
+            canShare={canShare}
           />
         ))}
         {files.length === 0 && (

@@ -41,6 +41,11 @@ const ICO_SIZES = [16, 32, 48]
 const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
 
 /**
+ * One slot of the set: the file, its size, and the treatment as its two halves.
+ * @typedef {[name: string, px: number, shape: "box" | "circle", alpha: "keep" | "layer" | "mono" | "flat" | "tint"]} IconSlot
+ */
+
+/**
  * Every file `gen icons` writes, as `[name, px, treatment]`.
  *
  * `treatment` is the whole design in two letters — `<shape><alpha>`:
@@ -65,6 +70,7 @@ const BLACK = { r: 0, g: 0, b: 0, alpha: 1 }
  * it used to take the source whole at scale 1, so a mark drawn to fill its frame filled the
  * tile. The margin is one number and it now applies everywhere — only the LIMIT it is measured
  * against changes (`LIMIT` in `icon-geometry.mjs`).
+ * @type {IconSlot[]}
  */
 export const ICON_SET = [
   //the native masters — biggest of their family, which is how `pickIcon` finds them
@@ -179,6 +185,9 @@ function slotPlan(
  * `fit: "contain"` rather than `"cover"`: a logo is not a photograph, and cropping the top off
  * a wordmark to fill a square is never the right answer. A non-square source gets letterboxed
  * into the transparent (or brand-coloured) surround, which is what the dev can see and fix.
+ * @param {import("./artwork.mjs").Sharp} sharp
+ * @param {Buffer|string} source
+ * @param {{ canvas: number, scale: number, background: { r: number, g: number, b: number, alpha: number }, flatten: boolean, greyscale?: boolean, mono?: boolean }} plan
  */
 async function render(
   sharp,
@@ -195,6 +204,7 @@ async function render(
   // the composited art in full colour — a "tinted" icon that iOS would map a colour onto a
   // picture that already had its own. The backdrop it lands on is black, which is grey already.
   if (greyscale) art = art.greyscale()
+  /** @type {Buffer} */
   let mark = await art.png().toBuffer()
   // After the resize, so the ramp is computed over the pixels that actually ship — and on the
   // MARK rather than the canvas, so the transparent surround never enters its range.
@@ -397,6 +407,8 @@ export function sourceError(ext) {
  *
  * Each line names what is wrong with THEIR file and what it costs, never what adaptv wanted.
  * A good source — a big square transparent mark — trips none of them.
+ * @param {{ width?: number, height?: number, isolable: boolean, luminance: number, hasDark: boolean, hasTinted: boolean, background: { r: number, g: number, b: number, alpha: number } | null, backgroundChosen: boolean }} source
+ * @param {string} ext
  */
 export function sourceWarnings(
   {

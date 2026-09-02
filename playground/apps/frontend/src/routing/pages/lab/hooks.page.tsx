@@ -15,6 +15,7 @@ import {
   LabButton,
   LabRow,
   LabSection,
+  useClientValue,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
@@ -38,6 +39,9 @@ function LabHooksPage() {
   const [resolvedTheme, toggleTheme] = useTheme()
   const reduceMotion = useReducedMotion()
   const vibrate = useVibrate()
+  //the raw answer is what this row is for, so it is read after hydration, not
+  //during it — see useClientValue
+  const canVibrate = useClientValue(vibrate.canVibrate, false)
   const gateReady = DEMO_GATE.useBootstrapReady()
 
   //useStatusBar is wiring, not a value: it syncs the native bars to the theme
@@ -124,8 +128,8 @@ function LabHooksPage() {
         <LabRow
           label="canVibrate()"
           value={
-            <LabBadge tone={vibrate.canVibrate() ? "ok" : "bad"}>
-              {String(vibrate.canVibrate())}
+            <LabBadge tone={canVibrate ? "ok" : "bad"}>
+              {String(canVibrate)}
             </LabBadge>
           }
         />

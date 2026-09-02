@@ -1,5 +1,13 @@
 // @vitest-environment node
-import { readdirSync, readFileSync, statSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
@@ -73,6 +81,13 @@ const SKIP_DIRS = new Set([
   "coverage",
   "ios",
   "android",
+  //Playwright's report output: a trace viewer bundle it writes next to the e2e suite, whose
+  //minified source cites `R0` by accident. It is generated, transient and nobody's citation —
+  //and the walk went red on it for anyone who ran the e2e suite before the gate.
+  "playwright-report",
+  "test-results",
+  "blob-report",
+  ".playwright",
 ])
 const TEXT = new Set([
   ".md",
@@ -121,6 +136,20 @@ function citations() {
 const CITED = citations()
 
 describe("the CLI contract's rule numbers", () => {
+  it("does not read Playwright's report output as citations", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-rules-"))
+    mkdirSync(path.join(root, "playground", "playwright-report"), {
+      recursive: true,
+    })
+    writeFileSync(
+      path.join(root, "playground", "playwright-report", "x.js"),
+      "R0",
+    )
+    mkdirSync(path.join(root, "src"))
+    writeFileSync(path.join(root, "src", "ok.ts"), "// R1")
+    expect(textFiles(root)).toEqual([path.join(root, "src", "ok.ts")])
+  })
+
   it("finds the rules at all (the scan itself can rot)", () => {
     // A heading style that drifts would turn this whole file green and useless.
     expect(DEFINED.length).toBeGreaterThanOrEqual(70)

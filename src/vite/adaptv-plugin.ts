@@ -8,6 +8,7 @@ import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import type { ResolvedWebConfig } from "#adaptv/config/web-config.ts"
 import { resolveWebConfig } from "#adaptv/config/web-config.ts"
 import { stampPrivacyManifest } from "#adaptv/native/stamp-privacy.ts"
+import { adaptvOtaConfigPlugin } from "#adaptv/ota/build/ota-config-module.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import {
   appRelativePath,
@@ -32,7 +33,6 @@ import {
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
-import { adaptvOtaConfigPlugin } from "#adaptv/vite/ota-config-module.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import {

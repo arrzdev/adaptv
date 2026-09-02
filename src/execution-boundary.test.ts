@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest"
  * Two checks, because neither one alone covers the tree:
  *
  *  - **The allow-list** names every directory and file permitted to touch Node.
- *    It covers all 232 non-test source files, including the 28 that no published
+ *    It covers all 227 non-test source files, including the 28 that no published
  *    entry imports — `src/sw/default-worker.ts` and `src/routes/client-entry.tsx`
  *    reach a browser as *files the CLI hands to Vite*, so an import graph never
  *    sees them and a reachability check alone would wave them through.
@@ -36,8 +36,9 @@ import { describe, expect, it } from "vitest"
  * exemption is not taken on trust: `no test file is reachable from a published
  * entry` below proves the premise, and the moment a shipped module imports one,
  * that test fails and the exemption stops applying to it. Note that
- * `*.test-helper.ts` is **not** exempt — it is a plain module that anything may
- * import, so it is named in the allow-list like any other Node-touching file.
+ * `*.test-helper.ts` and `src/test-utils/` are **not** exempt — they are plain
+ * modules that anything may import, so each is named in the allow-list like any
+ * other Node-touching file, and the same test proves no entry reaches them.
  *
  * **The browser surface is read off `tsdown.config.ts` and `package.json`, not off
  * directory names.** `the entry lists match the build` below re-derives both entry
@@ -52,11 +53,11 @@ const rel = (file: string) => path.relative(ROOT, file)
 /**
  * The `platform: "browser"` entries of `tsdown.config.ts`, plus `./server-entry`.
  *
- * `server-entry` is the fourth face (a Cloudflare Worker) and is the one `exports`
- * subpath `tsdown.config.ts` builds nothing for — the inconsistency
- * `docs/roadmap/src-reorg.md` §0.6 records. It is classified here rather than
- * skipped, because a Worker is not Node: it has no `node:fs` either, so it belongs
- * on this side of the line whatever the dist build eventually does with it.
+ * `server-entry` is the fourth face (a Cloudflare Worker). `tsdown.config.ts`
+ * builds it from its own `workerEntry` — not `browserEntry`, whose `"use client"`
+ * banner is backwards on the module a Worker boots from, and not `nodeEntry`,
+ * because a Worker is not Node. It has no `node:fs` either, so it is classified
+ * on this side of the line.
  */
 const BROWSER_ENTRIES = [
   "src/interface/shell.index.ts",
@@ -84,17 +85,29 @@ const NODE_ENTRIES = [
  * convenience: these run on the developer's machine, inside Vite or the CLI, and
  * never enter a bundle.
  *
- * `src/ota/native-fingerprint.ts` is the sharp one. `src/ota/` is already a
- * two-face directory — `updater.ts` beside it is browser code, and
+ * `src/ota/` is the sharp one, and the OTA slice made it sharper: it is now a
+ * three-part directory — `src/ota/build/` runs on the dev's machine, the files
+ * beside it (`updater.ts`, `use-ota-updates.ts`) are browser code, and
  * `src/interface/ota.index.ts` is a **browser** tsdown entry pointed straight at
- * that directory. It is safe only because the barrel is curated and never exports
- * the fingerprint. → `docs/roadmap/src-reorg.md` §0.1
+ * that directory. It is safe only because the barrel is curated and exports
+ * neither `native-fingerprint` nor anything under `build/` — which
+ * `src/interface/ota.barrel.test.ts` asserts by name, so this file is not the
+ * only thing standing on it.
+ * → `docs/roadmap/src-reorg.md` §0.1, §2.2
+ *
+ * Note what is NOT written here: `src/ota/`. The two entries below name the
+ * build face and the one stray Node file by their exact paths, so the browser
+ * half of the same directory stays covered by the allow-list.
  */
 const NODE_ALLOWED = [
   "src/vite/",
   "src/native/",
+  "src/ota/build/",
   "src/ota/native-fingerprint.ts",
   "src/styles/compile.test-helper.ts",
+  //the barrel guards' shared walk — a plain module the tests import, named by
+  //file rather than as `src/test-utils/` so a second file there is a decision
+  "src/test-utils/barrel-guard.ts",
 ]
 
 const isTest = (file: string) => /\.test\.tsx?$/.test(file)
@@ -233,7 +246,7 @@ describe("execution boundary", () => {
    * assertion below is `toEqual([])`, so a walk that rots silently reports
    * perfect compliance. → `docs/roadmap/src-reorg.md` §7
    *
-   * The floors are well under today's numbers (232 non-test files, a 154-file
+   * The floors are well under today's numbers (227 non-test files, a 154-file
    * browser closure, a 79-file node closure) and well over zero.
    */
   it("actually walked the tree it claims to have walked", () => {
@@ -266,12 +279,15 @@ describe("execution boundary", () => {
         .sort()
     }
 
-    //`server-entry` is in `exports` and in no tsdown build at all — §0.6
+    //`server-entry` is the one browser-side entry built outside `browserEntry`
     expect(entriesIn("browserEntry")).toEqual(
       BROWSER_ENTRIES.filter(
         (e) => e !== "src/interface/server-entry.ts",
       ).sort(),
     )
+    expect(entriesIn("workerEntry")).toEqual([
+      "src/interface/server-entry.ts",
+    ])
     expect(entriesIn("nodeEntry")).toEqual([...NODE_ENTRIES].sort())
 
     const pkg = JSON.parse(
@@ -328,6 +344,9 @@ describe("execution boundary", () => {
     const shipped = [...BROWSER_CLOSURE, ...NODE_CLOSURE]
     expect(shipped.filter(isTest)).toEqual([])
     expect(shipped.filter((f) => f.includes(".test-helper."))).toEqual([])
+    expect(shipped.filter((f) => f.startsWith("src/test-utils/"))).toEqual(
+      [],
+    )
   })
 
   /*

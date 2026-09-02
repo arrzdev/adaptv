@@ -11,13 +11,21 @@
 
 ## Still open
 
-### O11 — Six-target test automation
+### O11a — Browser suite in CI
+
+**Answered.** `.github/workflows/ci.yml` step `Test (playwright, chromium)` runs the playground's
+main Playwright config — chromium project, `CI=1`, the config's own server on `E2E_PORT` — on every
+PR and push to `main`, and uploads the HTML report with traces when it fails. Chromium only, because
+that is where every network, permission and touch test lives (WebKit runs 67 fewer); the three SW
+configs each `vite build` first and are a follow-up. `pnpm gate` still does not run it — minutes
+against seconds — so CI is the gate for this one.
+
+### O11b — Native matrix
 
 **Can the native matrix run in CI, or does it stay local?**
 
-Real today: CI runs **four** web-only gates (typecheck, biome, biome:playground, vitest); the native
-matrix is local. `pnpm gate` additionally runs `scripts/check-colour.mjs`, which **is not in CI** —
-so that check binds only whoever runs the gate by hand (roadmap **L3**).
+Real today: CI runs the web-only gates (typecheck, biome, biome:playground, vitest,
+`scripts/check-colour.mjs`, and now the browser suite above); the native matrix is local.
 
 This is the question that gates
 [`owed-device-verification.md`](owed-device-verification.md): six of those checks are owed precisely
@@ -77,7 +85,7 @@ Recorded here so the next reader does not reopen one. Full rationale in
 | Lint delivery | ✅ **O7** — Biome 2.3.2, verified end-to-end. `noRestrictedImports` for imports, GritQL for AST shapes. The oxlint option was prototyped and dropped. |
 | `List` virtualization | ✅ Wraps `@tanstack/react-virtual`; shipped. |
 | OTA — bundle a live-update client? | ✅ **O8** — `@capawesome/capacitor-live-update` 8.3.0, self-hosted. **Not Capgo**, and Appflow is dead. → [`../design/ota.md`](../design/ota.md) |
-| Testing automation | ❓ still open — **O11** above |
+| Testing automation | ✅ browser suite — **O11a** above · ❓ native matrix still open — **O11b** above |
 | Distribution / signing | ✅ **O16** — stop at the artifact. No fastlane. Unsigned `.ipa`, debug `.apk`; signed builds stay in Xcode ▸ Archive. |
 | Navigation model | ❓ still open — **O15** above |
 

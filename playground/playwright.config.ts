@@ -26,7 +26,12 @@ export default defineConfig({
   //did. A retried test still reports green, so the signal was gone. If a test here
   //cannot pass on its first attempt it is telling you something; let it.
   retries: 0,
-  reporter: process.env.CI ? "line" : "list",
+  //Under CI the line reporter says WHICH test failed and the HTML report, uploaded
+  //as the job's artifact on failure, carries the trace that says why. Locally the
+  //list is enough and the trace is on disk under test-results/.
+  reporter: process.env.CI
+    ? [["line"], ["html", { open: "never" }]]
+    : "list",
   use: {
     baseURL,
     //Paired with `retries: 0` above: "on-first-retry" would mean there is never a
@@ -44,7 +49,14 @@ export default defineConfig({
   webServer: {
     //the inspector port has to move with the app port or the boot dies on an
     //EADDRINUSE for a port nobody asked about — see vite.config.ts
-    command: `pnpm --filter @repo/frontend exec vite --port ${port} --strictPort`,
+    command: `pnpm exec vite --port ${port} --strictPort`,
+    //`cwd` is resolved against THIS config file, so the server can only ever be
+    //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
+    //matches by package NAME — and the header above warns about reusing another
+    //worktree's server. The same hazard exists WITHIN one worktree: a second
+    //member under `apps/*` named `@repo/frontend` makes the filter fan out, and
+    //whichever copy wins the port serves every assertion, silently.
+    cwd: "apps/frontend",
     env: {
       VITE_APP_PORT: String(port),
       VITE_SUPERVISOR_PORT: String(port + 10),

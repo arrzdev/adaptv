@@ -6,7 +6,7 @@ import {
   resolveOtaBuildConfig,
   resolveOtaOrigin,
   resolveOtaPollIntervalMs,
-} from "#adaptv/vite/ota-config-module"
+} from "#adaptv/ota/build/ota-config-module"
 
 const BASE: AdaptvAppConfig = {
   name: "ChopChop",

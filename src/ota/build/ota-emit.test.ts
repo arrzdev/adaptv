@@ -9,11 +9,6 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
-  canonicalManifest,
-  verifyManifestSignature,
-} from "#adaptv/ota/manifest-signing.ts"
-import type { UpdateManifest } from "#adaptv/ota/policy.ts"
-import {
   buildBundleArchive,
   computeBuildTag,
   decideChannelEmission,
@@ -23,7 +18,12 @@ import {
   resolveSigningKey,
   signingKeyMatches,
   writeChannel,
-} from "#adaptv/vite/ota-emit.ts"
+} from "#adaptv/ota/build/ota-emit.ts"
+import {
+  canonicalManifest,
+  verifyManifestSignature,
+} from "#adaptv/ota/manifest-signing.ts"
+import type { UpdateManifest } from "#adaptv/ota/policy.ts"
 
 function clientDir(files: Record<string, string>): string {
   const dir = mkdtempSync(path.join(tmpdir(), "adaptv-ota-"))

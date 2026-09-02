@@ -145,6 +145,7 @@ function Watch({ bus, keys, available }) {
  * Mount the watch block. Returns the SAME interface `liveWatcher` in `render.mjs` returns —
  * `hmr`, `notice`, `clearNotice`, `stop` — so `runLive` cannot tell which renderer it got.
  * That is what makes the port switchable one component at a time.
+ * @param {{ keys?: boolean, onReload?: () => void, onRebuild?: () => void, onQuit?: () => void }} [handlers]
  */
 export function inkWatcher({
   keys = true,

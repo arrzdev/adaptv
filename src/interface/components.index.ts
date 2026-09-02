@@ -1,7 +1,7 @@
-//The PUBLIC component surface, kept in lockstep with `src/components/index.ts` by
-//`src/components/barrels.test.ts`. The drift that hid `Text` from consumers passed
-//typecheck, lint, the unit suite and `build:check` — a missing re-export is invisible
-//to every gate that does not compare the two lists.
+//The PUBLIC component surface, kept in lockstep with the `src/components/`
+//directory by `src/components/barrels.test.ts`. The drift that hid `Text` from
+//consumers passed typecheck, lint, the unit suite and `build:check` — a missing
+//re-export is invisible to every gate that does not compare the list to the disk.
 
 export * from "../components/avoid-keyboard"
 export * from "../components/boot-error"

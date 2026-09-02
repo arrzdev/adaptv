@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config"
 import {
   OTA_CONFIG_VIRTUAL_ID,
   renderOtaConfigModule,
-} from "./src/vite/ota-config-module"
+} from "./src/ota/build/ota-config-module"
 import {
   ROUTE_TINTS_VIRTUAL_ID,
   renderRouteTintsModule,

@@ -73,6 +73,9 @@ export function writeIconPreview({ dest, dirAbs, names, manifest, meta }) {
    * but every state is rendered from one generated file — so the caption names the state and
    * the line under it names the file. Either alone leaves a question open: a filename does not
    * say where it is used, and a state does not say what to re-draw when it looks wrong.
+   * @param {string} name
+   * @param {string} state
+   * @param {{ cls?: string, backdrop?: string, note?: string }} [opts]
    */
   const screen = (name, state, { cls = "", backdrop, note } = {}) =>
     has(name)

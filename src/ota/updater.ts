@@ -52,7 +52,7 @@ export type OtaOptions = {
   /**
    * How often to look again **while the app stays in the foreground**, in ms.
    * `0` is launch + resume only. Resolved at build time from `otaPollMinutes`
-   * (default 60 minutes — `vite/ota-config-module.ts`, `DEFAULT_OTA_POLL_MINUTES`)
+   * (default 60 minutes — `ota/build/ota-config-module.ts`, `DEFAULT_OTA_POLL_MINUTES`)
    * and always supplied by `useOtaUpdates`; the `?? 0` in `armPoll` is the
    * no-timer fallback for a direct caller, not a default this module picks.
    */

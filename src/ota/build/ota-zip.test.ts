@@ -5,8 +5,8 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { crc32, inflateRawSync } from "node:zlib"
 import { describe, expect, it } from "vitest"
-import type { ZipEntry } from "#adaptv/vite/ota-zip.ts"
-import { createZip } from "#adaptv/vite/ota-zip.ts"
+import type { ZipEntry } from "#adaptv/ota/build/ota-zip.ts"
+import { createZip } from "#adaptv/ota/build/ota-zip.ts"
 
 /**
  * The archive is unpacked by native code on a device, so "it looked fine" is not

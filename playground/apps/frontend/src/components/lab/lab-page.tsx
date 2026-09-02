@@ -66,7 +66,10 @@ export function LabPage({
             {title}
           </h1>
         </div>
-        {subtitle && <p className="ps-1 text-sm text-muted">{subtitle}</p>}
+        {/* a `div` for the same reason LabSection's description is one: it takes a node */}
+        {subtitle && (
+          <div className="ps-1 text-sm text-muted">{subtitle}</div>
+        )}
         <TargetStrip />
       </header>
       {children}

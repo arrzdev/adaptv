@@ -28,29 +28,46 @@ const pkg = JSON.parse(
   readFileSync(path.join(repo, "package.json"), "utf8"),
 )
 
-/** Every JS/TS subpath, `.mjs` + `.d.mts` (types first, per Node's own advice). */
-const jsEntries = [
-  "shell",
-  "router",
-  "config",
-  "components",
-  "hooks",
-  "capabilities",
-  "storage",
-  "ota",
-  "routes",
-  "utils",
-  "sw",
-  "vite",
-]
-const publishExports = {
-  "./package.json": "./package.json",
-  "./biome-shared.json": "./biome-shared.json",
-  // Ambient route factories — types-only, no runtime.
-  "./route-globals": "./dist/route-globals.d.ts",
-  // Plain CSS, consumed via `@import`; attw can't model it, so it's excluded below.
-  "./styles.css": "./dist/styles/index.css",
+/**
+ * The subpaths that are NOT JavaScript, each with the one shape it publishes as.
+ *
+ * These are listed rather than derived because each one is a different kind of file with a
+ * different destination, and there is nothing in `exports` that says which. Everything not
+ * named here is a JS entry — so a new subpath is checked by default, and forgetting it is
+ * not one of the available outcomes.
+ */
+const rootFile = {
+  //Copied verbatim into the tarball; `staged.files` below is what puts them there.
+  "./package.json": "package.json",
+  "./biome-shared.json": "biome-shared.json",
 }
+/** Ambient route factories — types-only, no runtime. Hand-authored, copied by tsdown. */
+const typesOnly = { "./route-globals": "dist/route-globals.d.ts" }
+/** Plain CSS, consumed via `@import`; attw can't model it, so it's excluded below. */
+const stylesheet = { "./styles.css": "dist/styles/index.css" }
+
+/**
+ * Every JS/TS subpath, `.mjs` + `.d.mts` (types first, per Node's own advice) — DERIVED
+ * from `package.json` `exports`, never listed again here.
+ *
+ * It was listed, and it had already gone wrong: `exports` published `./root-route` and
+ * `./server-entry`, this file knew about neither, and `./server-entry` had no dist entry in
+ * `tsdown.config.ts` at all. A script whose whole purpose is to prove `dist/` matches what
+ * the package promises was reporting green over a promised subpath that was never built —
+ * the exact failure it exists to catch, invisible because the spec it checked against was a
+ * second copy of the map instead of the map.
+ */
+const jsEntries = Object.keys(pkg.exports)
+  .filter((k) => !(k in rootFile || k in typesOnly || k in stylesheet))
+  .map((k) => k.replace(/^\.\//, ""))
+
+const publishExports = {}
+for (const [subpath, file] of Object.entries({
+  ...rootFile,
+  ...typesOnly,
+  ...stylesheet,
+}))
+  publishExports[subpath] = `./${file}`
 for (const e of jsEntries) {
   publishExports[`./${e}`] = {
     types: `./dist/${e}.d.mts`,
@@ -61,9 +78,22 @@ for (const e of jsEntries) {
 // ── 1. Structural invariants the validators don't cover ──────────────────────
 const problems = []
 const read = (p) => readFileSync(path.join(repo, p), "utf8")
+/**
+ * Which runtime each entry is for — the ONE thing `exports` cannot say, and the reason these
+ * three lists are still written out. They mirror the three build objects in
+ * `tsdown.config.ts` one for one.
+ *
+ * `root-route` is a React module the generated route tree imports at runtime, so it belongs
+ * with the client surface; `server-entry` is the Cloudflare Worker handler and belongs with
+ * neither — it is not Node, and a `"use client"` banner on the module a Worker boots from is
+ * backwards. The guard below is what keeps the lists honest: an entry in `exports` and in
+ * none of them is a problem, not an omission, so the next subpath cannot be quietly skipped
+ * the way these two were.
+ */
 const browser = [
   "shell",
   "router",
+  "root-route",
   "components",
   "hooks",
   "capabilities",
@@ -73,8 +103,14 @@ const browser = [
   "utils",
 ]
 const node = ["vite", "sw", "config"]
+const worker = ["server-entry"]
+const classified = [...browser, ...node, ...worker]
 
-for (const e of [...browser, ...node]) {
+for (const e of jsEntries) {
+  if (!classified.includes(e))
+    problems.push(
+      `exports publishes './${e}' — say which runtime it is for in scripts/verify-dist.mjs`,
+    )
   for (const ext of ["mjs", "d.mts"]) {
     try {
       read(`dist/${e}.${ext}`)
@@ -83,14 +119,40 @@ for (const e of [...browser, ...node]) {
     }
   }
 }
+for (const e of classified)
+  if (!jsEntries.includes(e))
+    problems.push(
+      `'${e}' is classified here but exports no longer publishes it`,
+    )
+// The non-JS subpaths get their own existence check — omitting one is not an exemption.
+for (const [subpath, file] of Object.entries({
+  ...rootFile,
+  ...typesOnly,
+  ...stylesheet,
+})) {
+  try {
+    read(file)
+  } catch {
+    problems.push(`missing ${file} (exports ${subpath})`)
+  }
+}
 // 🚨 §6.2: Rolldown drops `"use client"` from non-entry modules in bundle mode.
 // The banner re-asserts it — on the browser build ONLY.
+// An entry that was never emitted is already reported above; reading it here would throw
+// over the top of that and lose every other problem in the list.
+const emitted = (e) => {
+  try {
+    return read(`dist/${e}.mjs`)
+  } catch {
+    return null
+  }
+}
 for (const e of browser) {
-  if (!read(`dist/${e}.mjs`).startsWith('"use client"'))
+  if (emitted(e)?.startsWith('"use client"') === false)
     problems.push(`${e}.mjs missing "use client"`)
 }
-for (const e of node) {
-  if (read(`dist/${e}.mjs`).startsWith('"use client"'))
+for (const e of [...node, ...worker]) {
+  if (emitted(e)?.startsWith('"use client"'))
     problems.push(`${e}.mjs must NOT carry "use client"`)
 }
 // `index.css`'s relative `@import`s must resolve to co-located siblings.
@@ -109,7 +171,7 @@ if (problems.length) {
 }
 console.log(
   "✔ structural checks:",
-  browser.length + node.length,
+  jsEntries.length,
   "entries, banners, styles",
 )
 

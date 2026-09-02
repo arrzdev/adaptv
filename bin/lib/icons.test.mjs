@@ -251,7 +251,6 @@ async function fixture(sources) {
     brandLauncherIcon(nativeRoot(platform), platform, {
       set: resolveIconSet(appRoot, { icons: "./public/favicons" }, []),
       background: "#ffffff",
-      backgroundDark: "#101014",
     })
   return { appRoot, nativeRoot, brand, sharp }
 }

@@ -198,7 +198,7 @@ doc you read.
 > | §3.2 | TanStack opacity — two contradictory decisions | **Shipped and mechanically enforced.** `src/vite/route-tree-opacity.ts`, `src/vite/router-autoimport.ts`, `src/vite/thunk-specifiers.ts`, `bin/lib/opacity.mjs` (+ `opacity.test.mjs`). The spike evidence lives on in [`facade-and-opacity.md`](facade-and-opacity.md); the doctrine is **L20** in §2. |
 > | §3.3 | `render` default: docs say SSR, code says SPA | **`"ssr"`.** [`rendering-and-delivery.md §1`](rendering-and-delivery.md) + `src/config/web-config.ts` (`render: config.render ?? "ssr"`). |
 > | §3.4 | SW navigation: docs say shell-fallback, code does NetworkFirst | **Preload-or-network with a deadline, then the precached shell.** `src/sw/sw.navigation.ts`, [`../design/rendering.md §3.3`](../design/rendering.md). |
-> | §3.5 | `Screen` — documented as removed, still shipped | **Removed.** No `Screen` export in `src/components/index.ts` or `src/interface/components.index.ts`. |
+> | §3.5 | `Screen` — documented as removed, still shipped | **Removed.** No `Screen` export in `src/interface/components.index.ts`. |
 
 ### 3.1 ✅ The styling contract is built, decided, and enforced
 

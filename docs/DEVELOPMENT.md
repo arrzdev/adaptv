@@ -151,7 +151,7 @@ re-stamp on every setup); neither guard exists now, because neither problem does
     location, which path mapping never reaches.
   - `react` / `react-dom` pinned in `apps/frontend/tsconfig.json` `paths` — same story, two
     `@types/react` copies of the same version.
-  - `node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts` in that tsconfig's `include` — the
+  - `node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts` in that tsconfig's `include` — the
     declarations for the modules adaptv's Vite plugin serves at build time. The package ships them;
     the app just has to look.
 

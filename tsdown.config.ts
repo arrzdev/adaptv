@@ -55,6 +55,24 @@ const browserEntry = {
   utils: "src/interface/utils.index.ts",
 }
 
+/**
+ * The edge face — the Cloudflare Worker handler a consumer's `wrangler.toml` points `main`
+ * at, and nothing else.
+ *
+ * It had an `exports` entry and no dist entry in any build here, so the one subpath that is
+ * a whole runtime of its own was the one the publish spec promised and never produced.
+ * `scripts/verify-dist.mjs` now derives its checks from `exports` and says so out loud.
+ *
+ * Its own build object rather than a line in either list above, because it belongs to
+ * neither: a Worker is not Node (no `node:*`, so it cannot join `nodeEntry`), and it is not
+ * a React client module either — the browser build stamps `"use client"` on every chunk it
+ * emits, and that directive on the module a Worker BOOTS from is backwards, an RSC-aware
+ * bundler's cue to replace the server handler with a client reference.
+ */
+const workerEntry = {
+  "server-entry": "src/interface/server-entry.ts",
+}
+
 /** The Node tools — build-time (`/vite`, `/config`) and the SW toolkit. */
 const nodeEntry = {
   vite: "src/interface/vite.index.ts",
@@ -109,6 +127,14 @@ export default defineConfig([
   {
     ...base,
     clean: false,
+    // Same resolution as the React surface — no `node:*` here either — but deliberately
+    // NOT the same build, so it gets none of that build's `"use client"` banner.
+    platform: "browser",
+    entry: workerEntry,
+  },
+  {
+    ...base,
+    clean: false,
     platform: "node",
     entry: nodeEntry,
     // Copy assets on the LAST build so nothing later cleans over them.
@@ -126,7 +152,7 @@ export default defineConfig([
       { from: "src/interface/route-globals.d.ts", to: "dist" },
       // Ambient `*?adaptv-image` module — same category, and the consumer picks it
       // up through the `virtual-adaptv-*` include glob. → `src/virtual-adaptv-image-asset.d.ts`.
-      { from: "src/virtual-adaptv-*.d.ts", to: "dist" },
+      { from: "src/**/virtual-adaptv-*.d.ts", to: "dist" },
     ],
   },
 ])

@@ -1,6 +1,6 @@
 import type { ComponentType } from "react"
 import type { UpdateRequiredProps } from "#adaptv/config/types"
-import { useStoreRelease } from "#adaptv/hooks/use-store-release"
+import { useStoreRelease } from "#adaptv/ota/use-store-release"
 
 const MS_PER_DAY = 86_400_000
 

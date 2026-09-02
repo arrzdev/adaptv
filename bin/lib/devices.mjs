@@ -228,7 +228,7 @@ export async function resolveTarget(
   appRoot,
   platform,
   env,
-  { target, latest, prefetch },
+  { target, latest, prefetch = null },
 ) {
   /**
    * The device list, from a listing started earlier if one was.
