@@ -104,12 +104,12 @@ describe("the component barrel", () => {
    * The vacuous pass. Both assertions below compare against a directory scan and a
    * regex over one file, so a walk pointed at nothing — or a parser that stops
    * matching — compares two empty lists and reports perfect compliance. The floors
-   * are the real counts today (26 exported components, 4 withheld) and well over
+   * are the real counts today (27 exported components, 4 withheld) and well over
    * zero. → `docs/roadmap/src-reorg.md` §7
    */
   it("actually walked the directory it claims to have walked", () => {
-    expect(modulesOnDisk().length).toBeGreaterThanOrEqual(30)
-    expect(modulesInBarrel().length).toBeGreaterThanOrEqual(26)
+    expect(modulesOnDisk().length).toBeGreaterThanOrEqual(31)
+    expect(modulesInBarrel().length).toBeGreaterThanOrEqual(27)
     for (const module of WITHHELD) {
       expect(
         modulesOnDisk(),

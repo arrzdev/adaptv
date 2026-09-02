@@ -13,6 +13,7 @@ import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { ScrollView } from "#adaptv/components/scroll-view"
+import { Select } from "#adaptv/components/select"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { Text } from "#adaptv/components/text"
@@ -109,6 +110,15 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
       keyExtractor={(n: number) => String(n)}
       renderItem={(n: number) => <span>{n}</span>}
     />,
+  ],
+  [
+    "select",
+    <Select key="select" aria-label="s">
+      <Select.Trigger />
+      <Select.Content>
+        <Select.Option value="a">A</Select.Option>
+      </Select.Content>
+    </Select>,
   ],
   ["swipeable", <Swipeable key="swipeable">s</Swipeable>],
   [
