@@ -52,6 +52,13 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/divider",
+    title: "Divider",
+    summary:
+      "one device pixel at every density · a border, not a background",
+    isNew: true,
+  },
+  {
     to: "/lab/button",
     title: "Button",
     summary: "press engine + haptics + slots, with real semantics",
