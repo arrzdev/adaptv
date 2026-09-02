@@ -306,8 +306,16 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
   `src/components/text.tsx`, `src/components/image.tsx`.
 - **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
+- **`Select` (2026-09-02):** `src/components/select.tsx`. iOS renders `<select>` as a wheel, never a
+  menu, and focusing it scrolls the page and raises the Done bar — so `Select` paints its own trigger
+  and an anchored listbox on every target, keeps a real `<select>` mounted, hidden and never focused
+  only so `name` / `required` / autofill and form submission keep working, closes on hardware and
+  gesture back instead of navigating (Transient band, the rule `Dropdown` records), rides the
+  `Dropdown` positioning engine, owns its keyboard model (arrows skip disabled options, Home/End,
+  Enter/Space, Escape refocuses, typeahead), and gives options the press-core `touch-action`
+  longhand ([`../decisions/register.md`](../decisions/register.md) B13).
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
-  The public surface is 26 barrels — `src/interface/components.index.ts` is the list, and
+  The public surface is 27 barrels — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
   That test exists because **the drift which hid `Text` from consumers passed typecheck, lint, the
   unit suite and `build:check`**: a missing re-export is invisible to every gate that does not

@@ -34,11 +34,10 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` ·
-grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Collapsible` · grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
 
-**`Slider` and a real `Select` are the clearest holes in the form-control set** — adaptv has
-button / input / textarea / checkbox / switch and stops. `WheelColumn` is a partial `Picker`.
+The form-control set now runs button / input / textarea / checkbox / switch / select. **`Slider` is
+the remaining hole in it**, and the grouped-settings form (`FieldGroup`) is the next one after that.
 
 ## Tier 2 — the feedback layer
 
@@ -96,6 +95,18 @@ where the `font` **shorthand** is required, `font-size` does not work
 ([`../decisions/prior-art.md §10`](../decisions/prior-art.md)) — plus `text-size-adjust` on rotation,
 line clamping, and per-instance selection semantics. **`Modal` and `Tabs` are the real remainder**
 (Tier 2 and Tier 3 above).
+
+**`Select` shipped 2026-09-02** (`src/components/select.tsx`) — the *menu* appearance; `WheelColumn`
+remains the wheel appearance. It passes the two-quirk test five times over: iOS renders `<select>` as
+a wheel and scrolls the page when it is focused, so `Select` paints its own trigger and an anchored
+listbox on every target and keeps a real `<select>` mounted, hidden and never focused, only so
+`name` / `required` / autofill and form submission still work; hardware and gesture back close the
+list instead of navigating (the Transient band, the rule `Dropdown` records); the list rides the
+`Dropdown` positioning engine (fixed layer, flip, height cap with an inner scroller, shift); the
+keyboard model — arrows that skip disabled options, Home/End, Enter/Space, Escape, typeahead — is
+adaptv's, not the browser's; and options carry the press-core `touch-action` longhand because
+`manipulation` kills `pointercancel` on iOS
+([`../decisions/register.md`](../decisions/register.md) B13).
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline
