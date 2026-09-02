@@ -87,6 +87,13 @@ export function isApplicationSource(
  * someone searching the codebase for a policy; naming the target that breaks tells
  * them immediately whether they care — and they usually haven't built that target
  * yet, which is exactly why they wrote the import.
+ *
+ * The target is "the native app", never the engine it is built with. This text reaches
+ * the dev's terminal, the dev overlay and (via `biome-shared.json`) their editor, and
+ * every one of those is a surface the consumer must not learn the machinery from
+ * (`docs/decisions/register.md` L20; `bin/lib/opacity.mjs`). The one engine word it
+ * carries is `source` — the import the dev wrote, in their own file. `opacity.test.mjs`
+ * holds both messages to this.
  */
 export function describeServerApiBan(
   source: string,
@@ -97,7 +104,7 @@ export function describeServerApiBan(
 
   return (
     `"${source}" is server-only and cannot be imported from application source.\n` +
-    `It needs a server to run, and a Capacitor build has none — the app is a folder ` +
+    `It needs a server to run, and the native app has none — the app is a folder ` +
     `of files on the device, so this would work in dev and in an SSR deploy, then ` +
     `fail on iOS and Android.\n` +
     `Move the logic to your API and call it over the network, or use a route ` +
@@ -188,6 +195,17 @@ export function findServerRouteHandlers(code: string): number | null {
 }
 
 /**
+ * The diagnostic for the config-shape gap. Same rule as {@link describeServerApiBan}:
+ * the target that breaks is named as what it is to the dev, not as what it is built with.
+ */
+export const SERVER_ROUTE_HANDLERS_MESSAGE =
+  "`server: { handlers }` on a route is server-only and cannot be used in an adaptv app.\n" +
+  "It needs a server to run, and the native app has none.\n" +
+  "Move the handler to your API and call it over the network, or use the " +
+  "route's `loader`, which is isomorphic and fully supported.\n" +
+  "See docs/design/rendering.md §2."
+
+/**
  * The unbypassable backstop. Baked into the array `adaptv()` returns, so it is not
  * a devDependency a consumer opts into — it is inside the framework's own plugin.
  *
@@ -217,18 +235,7 @@ export function adaptvBanServerApisPlugin(): Plugin {
       const at = findServerRouteHandlers(code)
       if (at === null) return null
 
-      this.error(
-        {
-          message:
-            "`server: { handlers }` on a route is server-only and cannot be used in a adaptv app.\n" +
-            "It needs a server to run, and a Capacitor build has none.\n" +
-            "Move the handler to your API and call it over the network, or use the " +
-            "route's `loader`, which is isomorphic and fully supported.\n" +
-            "See docs/design/rendering.md §2.",
-          id,
-        },
-        at,
-      )
+      this.error({ message: SERVER_ROUTE_HANDLERS_MESSAGE, id }, at)
     },
   }
 }

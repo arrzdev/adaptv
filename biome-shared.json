@@ -9,10 +9,10 @@
             "paths": {
               "@tanstack/react-start": {
                 "importNames": ["createServerFn", "createMiddleware"],
-                "message": "Server functions need a server, and a Capacitor build has none — this works in dev and in an SSR deploy, then fails on iOS and Android. Move the logic to your API and call it over the network, or use a route `loader`, which is isomorphic. See docs/design/rendering.md §2."
+                "message": "Server functions need a server, and the native app has none — this works in dev and in an SSR deploy, then fails on iOS and Android. Move the logic to your API and call it over the network, or use a route `loader`, which is isomorphic. See docs/design/rendering.md §2."
               },
               "@tanstack/react-start/server": {
-                "message": "The server-only entrypoint (getRequest, setCookie, setResponseHeaders, …) cannot run in a adaptv app — a Capacitor build has no server. See docs/design/rendering.md §2."
+                "message": "The server-only entrypoint (getRequest, setCookie, setResponseHeaders, …) cannot run in an adaptv app — the native app has no server. See docs/design/rendering.md §2."
               }
             }
           }
