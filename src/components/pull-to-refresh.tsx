@@ -12,6 +12,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react"
@@ -326,12 +327,18 @@ export const PullToRefresh = forwardRef<
   const isRefreshing = phase === "refreshing"
   const isClosing = phase === "closing"
 
-  const contextValue: PullToRefreshContextValue = {
-    isPulling: isDragging,
-    isRefreshing,
-    isClosing,
-    isEnabled: enabled,
-  }
+  //Every field is a function of the PHASE, which moves a few times per gesture;
+  //the offset moves on every pointer frame. Built once per phase so a consumer
+  //of `usePullToRefresh()` renders when its answer changes, not per frame.
+  const contextValue = useMemo<PullToRefreshContextValue>(
+    () => ({
+      isPulling: isDragging,
+      isRefreshing,
+      isClosing,
+      isEnabled: enabled,
+    }),
+    [isDragging, isRefreshing, isClosing, enabled],
+  )
 
   const setScrollRef = useCallback(
     (el: HTMLDivElement | null) => {

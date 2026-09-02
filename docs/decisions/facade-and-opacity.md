@@ -26,6 +26,9 @@ spike-gated typing problem. Unbundle them and both get easy answers:
 - **Safety → solved now, completely, at build time** (§2). No spike, no patch, no type gymnastics.
 - **Opacity → deliberately deferred** (§3). Tier 1 (a *curated* barrel) ships today and delivers most
   of the perceived benefit; Tier 2 (full invisibility) stays spike-proven-but-unbuilt.
+  > ⚠︎ **Overtaken five days later.** The deferral was reversed by **L20** (2026-07-25) and Tier 2
+  > shipped — see the status note on §3.3. The orthogonality argument above still holds; only the
+  > "deferred" half of this line is history.
 
 ---
 
@@ -37,10 +40,13 @@ adaptv re-exports **only what it endorses.** Three rules:
    stays deleted — a star-export re-exports tomorrow's unsafe API automatically, which is exactly the
    failure mode adaptv exists to prevent. Every symbol in a adaptv barrel is there because someone
    decided it should be.
-2. **`@tanstack/react-router` stays a named engine dependency** (the Expo↔react-native model). The
-   consumer's `package.json` lists it; route files import `createFileRoute` from it. This is the
-   07-06 "honest split," and it holds — the 07-05 evidence against barrel-based type hiding is real
-   and unrefuted (§3.1).
+2. ~~**`@tanstack/react-router` stays a named engine dependency** (the Expo↔react-native model). The
+   consumer's `package.json` lists it; route files import `createFileRoute` from it.~~ **Superseded
+   by L20 (2026-07-25).** Route files import `createFileRoute` from `@arrzdev/adaptv/router`
+   (`src/interface/router.index.ts`, injected by `src/vite/router-autoimport.ts`), and the consumer's
+   `package.json` names no `@tanstack/*` at all — the playground's lists only its own
+   `@tanstack/react-query`. The 07-05 evidence against barrel-based type hiding (§3.1) is still real;
+   what changed is that the shipped path (§3.2's Path X) does not hide types through a barrel.
 3. **`createServerFn` and friends are simply never exported by adaptv, *and* are hard-banned from
    consumer source by the build** (§2). Not re-exporting is not enough on its own — the consumer can
    always import the package directly.
@@ -305,7 +311,13 @@ the DX gap: oxlint ships `--lsp` plus an official VS Code extension, with Zed/Je
 
 - `src/vite/adaptv-plugin.ts` — add the `resolveId` ban plugin to `adaptv()`'s array, before `tanstackStart()`.
 - `biome-shared.json` at the package root, added to `files` + `exports`.
-- `plugins/ban-server-apis.grit` — the call-shape rule **plus** a `createFileRoute($opts)`-where-`$opts`-has-`server` pattern.
+- ~~`plugins/ban-server-apis.grit` — the call-shape rule **plus** a `createFileRoute($opts)`-where-`$opts`-has-`server` pattern.~~
+  **Never shipped.** There is no `plugins/` directory in the package. The gap it was for — the
+  `server: { handlers }` config shape — is closed inside the Vite plugin itself by the brace-depth
+  scan (`findServerRouteHandlers`, the BUILT block at the top of §2), which fails the build with a
+  caret on the right line. A GritQL rule would add an editor squiggle for that one shape and nothing
+  else; §2.4's two documented limits (no binding resolution, no bare-specifier `plugins` path) are
+  why it has not been worth carrying.
 - Correct `docs/design/rendering.md §2`'s `createServerFileRoute` entry to `server: { handlers }`.
 
 ---
@@ -349,10 +361,20 @@ an isolated worktree.
 
 ### 3.3 🔒 Decision: Tier 1 now, Tier 2 only if adaptv goes public
 
+> ✅ **Tier 2 SHIPPED — this decision was reversed by L20 (2026-07-25), and the table below is the
+> record of what was decided on 07-20, not the state of the tree.** The owner made "the consumer
+> never sees @tanstack" the requirement rather than waiting for a public release, and the mechanism is
+> exactly Path X from §3.2: `src/vite/route-tree-opacity.ts` post-processes `routeTree.gen.ts`,
+> `src/vite/router-autoimport.ts` replaces TanStack's autoimport plugin, `src/vite/thunk-specifiers.ts`
+> repoints the generated specifiers, and `bin/lib/opacity.mjs` holds every byte the CLI prints to the
+> same line. The recurring cost predicted below is real and is paid: two version-keyed patches under
+> `patches/` (L21) and `assertRouteTreeIsOpaque`, which fails the build the day the rewrite stops
+> reaching the file. → `register.md` §3.2 (resolved), L20.
+
 | | Scope | Cost | Status |
 |---|---|---|---|
-| **Tier 1 — curated barrel** | adaptv exports only what it endorses; TanStack is a named engine dep; unsafe APIs banned at build time (§2) | ~zero | **ship now** |
-| **Tier 2 — full opacity** | consumer's source and `package.json` never mention `@tanstack/*` | a permanent re-typed-hook surface + a generator post-processor to maintain across every TanStack upgrade | **deferred** |
+| **Tier 1 — curated barrel** | adaptv exports only what it endorses; TanStack is a named engine dep; unsafe APIs banned at build time (§2) | ~zero | **shipped 2026-07-20** |
+| **Tier 2 — full opacity** | consumer's source and `package.json` never mention `@tanstack/*` | a permanent re-typed-hook surface + a generator post-processor to maintain across every TanStack upgrade | ~~deferred~~ **shipped 2026-07-25 (L20)** |
 
 Tier 2's cost is *recurring* and lands on the exact seam TanStack changes most often. It buys
 branding, not correctness — and it was already tried once and abandoned. Revisit **only** when

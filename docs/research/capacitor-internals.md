@@ -205,7 +205,7 @@ native projects live **inside the hidden `.adaptv/` dir** (alongside the generat
 at the app root — `capacitor.config.json` itself stays at the root, where `cap` reads it. Those projects
 plus `.adaptv/web` and native build artifacts (`Pods/`, `DerivedData/`, `.gradle/`, `build/`) are all
 under the already-gitignored `.adaptv/` / gitignored. Treat them like `node_modules`: regenerated, not
-authored. A legacy app-root `ios/`/`android/` is moved into `.adaptv/` on the next `adaptv run`.
+authored. An `ios/`/`android/` at the app root is not adaptv's and is never adopted or moved.
 
 ## App icons + splash — branded, never the Capacitor default
 
