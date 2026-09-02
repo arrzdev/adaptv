@@ -111,6 +111,17 @@ export type FileStat = {
   entry: FileEntry | null
 }
 
+export type FileUri = {
+  status: FileStatus
+  /**
+   * A `file://` URI the native side can hand to another plugin, or `null`. The
+   * web has no such thing: an origin-private file is reachable only through
+   * its handle, so the status there is `"unsupported"` and a caller shares the
+   * bytes instead (`share()` does exactly that for `storedFiles`).
+   */
+  uri: string | null
+}
+
 export type FileOptions = {
   /** Defaults to `"data"`. */
   scope?: FileScope
@@ -418,6 +429,25 @@ async function nativeStat(
   }
 }
 
+async function nativeUri(
+  path: string,
+  options: FileOptions | undefined,
+): Promise<FileUri> {
+  //the plugin answers `getUri` for any path, present or not; stat first so a
+  //file that was never written is `"missing"` here rather than a URI to nothing
+  const stat = await nativeStat(path, options)
+  if (stat.status !== "ok") return { status: stat.status, uri: null }
+  try {
+    const { uri } = await Filesystem.getUri({
+      path,
+      directory: nativeDirectory(options),
+    })
+    return { status: "ok", uri }
+  } catch {
+    return { status: "failed", uri: null }
+  }
+}
+
 async function nativeDelete(
   path: string,
   options: FileOptions | undefined,
@@ -688,6 +718,24 @@ export async function statFile(
   if (support.backend === "native")
     return nativeStat(nativePath(parts, options), options)
   return opfsStat(parts, options)
+}
+
+/**
+ * Where the file lives, as a URI another native plugin can open. Native only:
+ * on the web the status is `"unsupported"`, because an origin-private file has
+ * no URI and the bytes are the only way to hand it on.
+ */
+export async function getFileUri(
+  path: string,
+  options?: FileOptions,
+): Promise<FileUri> {
+  const support = await getFilesystemSupport()
+  if (!support.supported) return { status: "unsupported", uri: null }
+  const parts = segments(path)
+  if (!parts || parts.length === 0) return { status: "failed", uri: null }
+  if (support.backend === "native")
+    return nativeUri(parts.join("/"), options)
+  return { status: "unsupported", uri: null }
 }
 
 /** Remove one file. Deleting what is not there is `"missing"`, not a failure. */
