@@ -140,7 +140,12 @@ export function capCmd(_appRoot) {
   }
 }
 
-/** Run a captured command; each raw line goes to `report`. Throws on failure. */
+/**
+ * Run a captured command; each raw line goes to `report`. Throws on failure.
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, report?: (line: string) => void }} [opts]
+ */
 function run(cmd, args, { cwd, env, report } = {}) {
   return exec(cmd, args, { cwd, env, onLine: (l) => report?.(l) })
 }
@@ -187,13 +192,13 @@ const themeColors = async (config) => {
  * a second copy of a fallback rule that nothing read — dead code, and the kind that only
  * looks harmless until someone changes one copy.
  */
-export async function resolveIconPlan(config) {
-  const { dark } = await themeColors(config)
+export async function resolveIconPlan() {
   return {
     //White, NOT the light theme colour: these icons sit on someone else's home screen, not
     //inside the app, and the PWA set the source comes from is drawn against white too.
+    //One colour for both appearances, too — `writeAndroidIcons` says why the launcher tile
+    //never follows the dark theme.
     iconBackground: "#ffffff",
-    iconBackgroundDark: dark,
   }
 }
 
@@ -778,6 +783,10 @@ function assetOutputsHash(appRoot, platform) {
  * work, which is the only direction a build cache may fail in.
  *
  * `--force` bypasses it, like every other cache here.
+ * @param {string} appRoot
+ * @param {Record<string, any>} config
+ * @param {string[]} platforms
+ * @param {{ report?: (line: string) => void, force?: boolean }} [opts]
  */
 export async function generateAssets(
   appRoot,
@@ -785,7 +794,7 @@ export async function generateAssets(
   platforms,
   { report, force = false } = {},
 ) {
-  const icon = await resolveIconPlan(config)
+  const icon = await resolveIconPlan()
   const mask = await resolveSplashMask(config)
 
   const inputs = createHash("sha1")
@@ -816,7 +825,6 @@ export async function generateAssets(
     await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
       set,
       background: icon.iconBackground,
-      backgroundDark: icon.iconBackgroundDark,
       report,
     })
   }
@@ -834,6 +842,8 @@ export async function generateAssets(
  * `config` is not optional in practice: it carries the build id into the bundle's stamp
  * (`buildIdEnv`), which is what lets every later command tell a bundle built from the
  * config on disk from one built before the dev edited it.
+ * @param {string} appRoot
+ * @param {{ report?: (line: string) => void, config?: Record<string, any> }} [opts]
  */
 export async function buildWeb(appRoot, { report, config } = {}) {
   //`building app` — the same phrase the iOS/Android package steps use, because from the
@@ -875,6 +885,10 @@ export async function buildWeb(appRoot, { report, config } = {}) {
  * Scaffold the native project if it isn't there yet. Also migrates a legacy
  * app-root `ios/`/`android/` (pre-`.adaptv/` layout) into `.adaptv/` so existing
  * projects keep working after the relocation.
+ * @param {string} appRoot
+ * @param {string} platform
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ report?: (line: string) => void, plugins?: string[], privacy?: object, warnings?: string[] }} [opts]
  */
 export async function capAddIfMissing(
   appRoot,
@@ -1132,6 +1146,8 @@ const PRIVACY_MANIFEST = "PrivacyInfo.xcprivacy"
  * stays because it keeps the file current when only the config changed.
  *
  * Writing it is half the job — see {@link mergePbxprojResource} for the other half.
+ * @param {string} appRoot
+ * @param {{ plugins?: string[], privacy?: object }} [opts]
  */
 async function stampIosPrivacyManifest(
   appRoot,
@@ -1172,6 +1188,9 @@ async function stampIosPrivacyManifest(
  * plugin pods here — resolved from adaptv's install, keyed by each package's
  * `.podspec` — then re-runs `pod install`. Runs after every sync (which regenerates
  * the Podfile), so it is self-healing rather than a one-time patch.
+ * @param {string} appRoot
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ report?: (line: string) => void, plugins?: string[] }} [opts]
  */
 async function injectIosPluginPods(
   appRoot,
@@ -1306,6 +1325,8 @@ function scanAndroidPluginClasses(srcMainDir) {
  * Exported for `native-plugins.test.mjs`: of the two injectors this is the one that can run
  * against a scratch directory (it only writes files — iOS ends in `pod install`), so it is
  * where the shared plugin-set behaviour is asserted end to end.
+ * @param {string} appRoot
+ * @param {{ report?: (line: string) => void, plugins?: string[] }} [opts]
  */
 export function injectAndroidPluginProjects(
   appRoot,
@@ -1397,7 +1418,13 @@ export function injectAndroidPluginProjects(
   if (extras.length > 0) report?.("linking plugins")
 }
 
-/** `cap sync <platform>` (copies web assets + updates native deps). */
+/**
+ * `cap sync <platform>` (copies web assets + updates native deps).
+ * @param {string} appRoot
+ * @param {string} platform
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ report?: (line: string) => void, plugins?: string[], privacy?: object }} [opts]
+ */
 export async function capSync(
   appRoot,
   platform,
@@ -1475,7 +1502,14 @@ export function withBackgroundSimulator(env) {
   }
 }
 
-/** `cap run <platform> --target <id>` (build + install + launch). */
+/**
+ * `cap run <platform> --target <id>` (build + install + launch).
+ * @param {string} appRoot
+ * @param {string} platform
+ * @param {string} target
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ report?: (line: string) => void }} [opts]
+ */
 export async function capRun(
   appRoot,
   platform,
@@ -1516,6 +1550,9 @@ export async function capRun(
  * Deliberately not `exec()` from `exec.mjs`: that one streams every line to a phase reporter and
  * keeps a failure tail, which is right for xcodebuild and gradle and pure overhead for
  * `simctl launch`. This wants the exit code and, sometimes, a line of stdout.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ env?: NodeJS.ProcessEnv, encoding?: BufferEncoding }} [opts]
  */
 function probe(command, args, { env, encoding = "utf8" } = {}) {
   return new Promise((resolve) => {
@@ -1619,8 +1656,7 @@ export function lanIp() {
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     if (SKIP_IFACE.test(name)) continue
     for (const a of addrs ?? []) {
-      const fam = a.family === "IPv4" || a.family === 4
-      if (!fam || a.internal) continue
+      if (a.family !== "IPv4" || a.internal) continue
       if (a.address.startsWith("169.254.")) continue
       candidates.push({ name, address: a.address })
     }
@@ -1909,7 +1945,7 @@ export async function launchInstalledApp(
         "android.intent.category.LAUNCHER",
         "1",
       ],
-      { env, stdio: "ignore" },
+      { env },
     )
     return r.status === 0
   }
@@ -2043,7 +2079,7 @@ export async function relaunchAndroidApp(appRoot, env, target) {
         "android.intent.category.LAUNCHER",
         "1",
       ],
-      { env, stdio: "ignore" },
+      { env },
     )
   }
 }
@@ -2089,6 +2125,7 @@ export function androidEnv() {
 
 /** LANG (CocoaPods on Ruby 3.4 needs UTF-8) + `pod` on PATH. */
 export function iosEnv() {
+  /** @type {NodeJS.ProcessEnv} */
   const env = { ...process.env, LANG: process.env.LANG ?? "en_US.UTF-8" }
   const onPath = spawnSync("sh", ["-c", "command -v pod"], { env })
   if (onPath.status !== 0) {

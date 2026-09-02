@@ -1,5 +1,6 @@
 import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
+import { useSyncExternalStore } from "react"
 
 /**
  * The lab's shared vocabulary.
@@ -52,8 +53,15 @@ export function LabSection({
   return (
     <section className="flex flex-col gap-y-2">
       <h2 className="ps-1 text-sm font-medium text-subtle">{title}</h2>
+      {/*
+       * A `div`, not a `p`: the description is a ReactNode and pages put blocks in it
+       * — `/lab/image` opens one with a {@link LabActions} row. A `<p>` cannot contain
+       * a `<div>`, so the browser closes the paragraph early while React does not,
+       * the hydration mismatches, and React regenerates the tree on the client with
+       * ten errors in the console for a page that then looks right.
+       */}
       {description && (
-        <p className="ps-1 text-sm text-muted">{description}</p>
+        <div className="ps-1 text-sm text-muted">{description}</div>
       )}
       <div className="flex flex-col gap-y-3 rounded-md bg-surface p-4">
         {children}
@@ -140,6 +148,25 @@ export function LabCaveat({ children }: { children: ReactNode }) {
       ⚠︎ {children}
     </p>
   )
+}
+
+const NEVER_CHANGES = () => () => {}
+
+/**
+ * A browser's answer the page wants to show exactly as the function returns it —
+ * `canVibrate()`, `canShare(payload)` — read the way the framework's own hooks read
+ * theirs: through `useSyncExternalStore` with a server snapshot, so SSR renders
+ * `serverValue` and the client corrects it AFTER hydration rather than during it.
+ *
+ * Called during render instead, the server (no `navigator`) says `false`, the
+ * client says `true`, and React throws a text mismatch and regenerates the page.
+ * That surfaced as an intermittent uncaught error on `/lab/hooks` and `/lab/share`
+ * — 2 in 108 smoke runs — because a page whose hydration is interrupted by an
+ * update is client-rendered without the comparison, and only a page that hydrates
+ * cleanly gets caught. The rate is the load; the bug is every load.
+ */
+export function useClientValue<T>(read: () => T, serverValue: T): T {
+  return useSyncExternalStore(NEVER_CHANGES, read, () => serverValue)
 }
 
 export function LabActions({ children }: { children: ReactNode }) {

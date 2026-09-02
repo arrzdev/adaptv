@@ -29,7 +29,7 @@ export { initKv, KV_PREFIX, kv, subscribeKv } from "#adaptv/storage/kv"
 export { secure } from "#adaptv/storage/secure"
 export { store } from "#adaptv/storage/store"
 export { useKv } from "#adaptv/storage/use-kv"
-export { useStore } from "#adaptv/storage/use-store"
+export { type StoreValue, useStore } from "#adaptv/storage/use-store"
 
 import { kv } from "#adaptv/storage/kv"
 import { secure } from "#adaptv/storage/secure"

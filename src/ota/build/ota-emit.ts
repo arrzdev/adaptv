@@ -11,11 +11,11 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
+import { OTA_CHANNEL_PATH } from "#adaptv/ota/build/ota-config-module.ts"
+import type { ZipEntry } from "#adaptv/ota/build/ota-zip.ts"
+import { createZip } from "#adaptv/ota/build/ota-zip.ts"
 import { canonicalManifest } from "#adaptv/ota/manifest-signing.ts"
 import type { UpdateManifest } from "#adaptv/ota/policy.ts"
-import { OTA_CHANNEL_PATH } from "#adaptv/vite/ota-config-module.ts"
-import type { ZipEntry } from "#adaptv/vite/ota-zip.ts"
-import { createZip } from "#adaptv/vite/ota-zip.ts"
 
 /**
  * Publishing the update channel — the deploy's own half of OTA. → `docs/design/ota.md §5.2`

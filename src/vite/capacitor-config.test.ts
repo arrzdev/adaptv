@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import { resolveOtaPublicKey } from "#adaptv/ota/build/ota-config-module"
 import { BOOT_GRACE_MS } from "#adaptv/shell/boot-fallback"
 import {
   buildCapacitorConfig,
   MIN_ANDROID_WEBVIEW,
   OTA_READY_TIMEOUT_MS,
 } from "#adaptv/vite/capacitor-config"
-import { resolveOtaPublicKey } from "#adaptv/vite/ota-config-module"
 
 const BASE: AdaptvAppConfig = {
   name: "ChopChop",
