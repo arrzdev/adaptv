@@ -204,7 +204,10 @@ export function iconIssue(pick, platform) {
   return null
 }
 
-/** Android mipmap buckets: `[density, legacy icon px, adaptive foreground px]`. */
+/**
+ * Android mipmap buckets: `[density, legacy icon px, adaptive foreground px]`.
+ * @type {[density: string, legacyPx: number, foregroundPx: number][]}
+ */
 const ANDROID_DENSITIES = [
   ["mdpi", 48, 108],
   ["hdpi", 72, 162],
@@ -632,6 +635,9 @@ export async function resolveLauncherSource(
  * which is worth telling the dev about but is never a reason to fail their build. The caller
  * has normally already PRINTED that warning at preflight; it is returned rather than dropped
  * so this stays the whole answer for anyone branding without one.
+ * @param {string} nativeRoot
+ * @param {string} platform
+ * @param {{ set: { icons: object[], source: string }, background: string, report?: (line: string) => void, source?: Awaited<ReturnType<typeof resolveLauncherSource>> }} opts
  */
 export async function brandLauncherIcon(
   nativeRoot,

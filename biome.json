@@ -81,9 +81,8 @@
     },
     {
       "includes": [
-        "src/index.ts",
         "src/interface/*.index.ts",
-        "src/**/index.ts"
+        "src/components/*/index.ts"
       ],
       "linter": {
         "rules": {

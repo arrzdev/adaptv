@@ -6,6 +6,8 @@
 import { spawn } from "node:child_process"
 import { localBin } from "./native.mjs"
 
+/** @typedef {import("./exec.mjs").CliError} CliError */
+
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const strip = (s) => s.replace(ANSI, "")
 
@@ -51,6 +53,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 export const SAW_OPTIMIZE =
   /(re-?optimiz|new dependencies optimized|optimized dependencies changed|dependencies updated)/i
 
+/**
+ * @param {string} url
+ * @param {{ timeoutMs?: number, onLine?: (line: string) => void, sawOptimize?: () => boolean }} [opts]
+ */
 export async function warmDevServer(
   url,
   { timeoutMs = 30000, onLine, sawOptimize = () => true } = {},
@@ -110,6 +116,8 @@ const EMPTY = Buffer.alloc(0)
  * verbatim (the `-- …` passthrough). `onLine` receives every output line (so the
  * caller can stream HMR logs). Resolves `{ localUrl, networkUrl, host, port, stop() }`;
  * rejects if Vite exits before becoming ready.
+ * @param {string} appRoot
+ * @param {{ args?: string[], env?: NodeJS.ProcessEnv, onLine?: (line: string) => void, host?: boolean }} [opts]
  */
 export function startDevServer(
   appRoot,
@@ -217,6 +225,7 @@ export function startDevServer(
       // dev server and the preview server and a build that dies the same way — three
       // copies of one sentence is how the ✖ for one cause ends up reading three ways
       // (R26). The EADDRINUSE line is in the tail below, which is what it reads.
+      /** @type {CliError} */
       const err = new Error(
         `vite dev exited (code ${code}) before it was ready`,
       )

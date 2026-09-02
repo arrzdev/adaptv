@@ -37,7 +37,14 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["iPhone 13"] } },
   ],
   webServer: {
-    command: `pnpm --filter @repo/frontend run build && pnpm --filter @repo/frontend exec vite preview --port ${port} --strictPort`,
+    command: `pnpm run build && pnpm exec vite preview --port ${port} --strictPort`,
+    //`cwd` is resolved against THIS config file, so the server can only ever be
+    //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
+    //matches by package NAME: any second workspace member under `apps/*` calling
+    //itself `@repo/frontend` makes the filter fan out, and each copy raced this
+    //same `--strictPort`. The losers die with EADDRINUSE — and if a copy had won,
+    //the whole suite would have run green against the wrong app.
+    cwd: "apps/frontend",
     url: baseURL,
     reuseExistingServer: false,
     timeout: 240_000,
