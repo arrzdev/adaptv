@@ -68,9 +68,13 @@ therefore mostly already-built infrastructure, which makes this cheaper than it 
 `@capacitor/camera` covers all three natively; `getUserMedia` and `<input type="file">` cover web.
 High-frequency in real apps.
 
-### 4. Filesystem
+### 4. ~~Filesystem~~ — shipped 2026-09-02
 
-`@capacitor/filesystem` plus OPFS on web.
+`src/capabilities/filesystem.ts`: `@capacitor/filesystem` on native (Data and Cache), the
+origin-private file system on the web, one status-shaped surface over both and no IndexedDB
+fallback — a browser with a directory and no `createWritable()` reports itself unsupported and
+says which piece is missing. Lab page `/lab/filesystem`; the per-engine measurements are in the
+PR that shipped it.
 
 ### 5. Biometrics
 
