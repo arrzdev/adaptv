@@ -1910,7 +1910,7 @@ export async function launchInstalledApp(
         "android.intent.category.LAUNCHER",
         "1",
       ],
-      { env, stdio: "ignore" },
+      { env },
     )
     return r.status === 0
   }
@@ -2044,7 +2044,7 @@ export async function relaunchAndroidApp(appRoot, env, target) {
         "android.intent.category.LAUNCHER",
         "1",
       ],
-      { env, stdio: "ignore" },
+      { env },
     )
   }
 }
