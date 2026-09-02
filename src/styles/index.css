@@ -39,6 +39,7 @@
 @import "./scroll-fade.css";
 @import "./drawer.css";
 @import "./swipeable.css";
+@import "./divider.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";
