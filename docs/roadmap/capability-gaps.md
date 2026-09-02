@@ -82,7 +82,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
+Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · ~~print~~ (shipped 2026-09-02: `src/capabilities/print.ts` calls `window.print()` and reads the outcome off `beforeprint`/`afterprint` — `opened` when the dialog opened and closed, `silent` when nothing followed within the wait; a native WebView reads `unsupported` up front, measured: the Android WebView (API 36) returns at once and fires nothing, the iOS WKWebView (iOS 26 simulator) does the same, no print sheet) · speech ·
 store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 
