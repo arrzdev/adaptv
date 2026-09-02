@@ -178,15 +178,19 @@ export function LabButton({
   disabled,
   tone = "default",
   children,
+  "data-testid": testId,
 }: {
   onClick: () => void
   disabled?: boolean
   tone?: "default" | "danger"
   children: ReactNode
+  /** A stable hook for e2e, for a page whose buttons a spec has to press by id. */
+  "data-testid"?: string
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className={cn(

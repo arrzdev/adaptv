@@ -216,6 +216,12 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/speech",
+    title: "Speech",
+    summary: "text to speech · spoke, cancelled, silent, failed",
+    isNew: true,
+  },
+  {
     to: "/lab/app-state",
     title: "App state",
     summary: "foreground / background across resume and bfcache",

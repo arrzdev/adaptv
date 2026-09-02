@@ -54,6 +54,7 @@ export {
   type ShareTarget,
   share,
 } from "../capabilities/share"
+export * from "../capabilities/speech"
 export * from "../capabilities/splash"
 export * from "../capabilities/status-bar"
 //NOT `export *`: `setThemeColorBase` is withheld. It declares what the app's theme resolves to,
