@@ -55,10 +55,17 @@ export function engineSupportsOffline(browserName: string): boolean {
  * new worker, same assets — while leaving the precache revisions alone so the
  * new worker installs in a moment.
  *
- * `workspaceRoot` comes from `testInfo.config.rootDir` — the directory the config
- * lives in. Not `process.cwd()`, which is wherever the developer happened to be
- * standing, and not `import.meta.dirname`, which Playwright's CJS transpile does
- * not have.
+ * `workspaceRoot` comes from `testInfo.config.rootDir`, which is the resolved
+ * `testDir` — `playground/e2e-sw` — and NOT the directory the config file lives
+ * in. Measured with `playwright test --list --reporter=json`, which prints it.
+ * The name still holds because `pnpm --filter` matches by package NAME and finds
+ * the workspace by walking UP from its cwd, so any directory inside the repo
+ * works. Anything keyed on the PATH instead — a `--filter ./apps/frontend`, a
+ * `join(root, "apps/frontend")` — resolves one level too deep, matches no
+ * package, and pnpm exits 0 having built nothing.
+ *
+ * Not `process.cwd()`, which is wherever the developer happened to be standing,
+ * and not `import.meta.dirname`, which Playwright's CJS transpile does not have.
  */
 export function deploy(buildTag: string, workspaceRoot: string): void {
   execFileSync("pnpm", ["--filter", "@repo/frontend", "run", "build"], {
