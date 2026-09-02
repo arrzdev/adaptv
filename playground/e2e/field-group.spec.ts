@@ -196,21 +196,14 @@ test.describe("FieldGroup behaviour", () => {
   test("clicking the row's title toggles its switch, once", async ({
     page,
   }) => {
-    test.fixme(
-      true,
-      "OPEN in adaptv: the Switch's gesture engine swallows the label activation. " +
-        "Measured on chromium: the title click makes the browser fire a click on the " +
-        "checkbox (checked=true during dispatch), Switch's onClick preventDefaults it, " +
-        "and the browser reverts (checked=false a tick later). A <label> row is inert " +
-        "until Switch lets a click whose target is its own input through to toggle().",
-    )
     const { title, sw } = driver(page)
     await expect(readout(page, "pref-dark")).toHaveText("off")
     await expect(readout(page, "toggles")).toHaveText("0")
     await expect(sw("Dark mode")).not.toBeChecked()
 
     //the TITLE text, deliberately far from the track: this is the browser's
-    //label activation reaching the checkbox, not the switch's own gesture
+    //label activation clicking the checkbox, which the switch's engine hands to
+    //toggle() as a click no press of its own produced
     await title("Preferences", "Dark mode").click()
 
     await expect(readout(page, "pref-dark")).toHaveText("on")
@@ -287,25 +280,18 @@ test.describe("FieldGroup behaviour", () => {
     ])
   })
 
-  test("a Link row carries the row's part", async ({ page }) => {
-    test.fixme(
-      true,
-      "OPEN in adaptv: Link destructures its own props and never spreads the rest " +
-        "onto the anchor, so the data-part / data-disabled / aria-disabled a Row " +
-        "hands its render element are dropped. The Framework rows box holds an " +
-        "anchor with no data-part, which breaks the only-rows contract for it.",
-    )
-    const { rows } = driver(page)
-    const link = rows("Framework").locator('a[data-adaptv="link"]')
-    await expect(link).toHaveAttribute("data-part", "row")
-  })
-
   test("the navigation row is a real link to the testing index, and back returns", async ({
     page,
   }) => {
     const { rows } = driver(page)
-    const link = rows("Framework").locator('a[data-adaptv="link"]')
+    const box = rows("Framework")
+    const link = box.locator('a[data-adaptv="link"]')
     await expect(link).toHaveAttribute("href", "/lab")
+    //the row's part lands on the anchor: Link spreads what the row hands it, so
+    //the rows box still holds only rows when one of them is a link
+    await expect(link).toHaveAttribute("data-part", "row")
+    await expect(box.locator(":scope > *")).toHaveCount(1)
+    await expect(box.locator(':scope > [data-part="row"]')).toHaveCount(1)
     await expect(link.locator('[data-part="title"]')).toHaveText("Testing")
 
     //a plain click navigates headless: the engine's onClickCapture only swallows
@@ -332,12 +318,6 @@ test.describe("FieldGroup under a finger", () => {
   })
 
   test("a tap on the row's title toggles its switch", async ({ page }) => {
-    test.fixme(
-      true,
-      "OPEN in adaptv: same swallow as the mouse case — the tap lands on the row's " +
-        "text, the label activation clicks the checkbox, and Switch's engine " +
-        "preventDefaults the click it did not start.",
-    )
     const { title, sw } = driver(page)
     await expect(readout(page, "pref-animations")).toHaveText("on")
     const target = title("Preferences", "Animations")

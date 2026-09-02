@@ -188,7 +188,7 @@ function LabFieldGroupPage() {
           <FieldGroup.Row
             label="Testing"
             description="Opens the testing index"
-            render={<Link to="/lab">{null}</Link>}
+            render={<Link to="/lab" />}
             className={cn(ROW_CLASS, "clickable")}
           >
             <span aria-hidden className="text-subtle">
@@ -229,15 +229,6 @@ function LabFieldGroupPage() {
           </FieldGroup.Row>
         </FieldGroup.Section>
       </FieldGroup>
-
-      <LabCaveat>
-        Known open as of the page's first commit: tapping a row's text does
-        NOT toggle its switch on any target. The browser's label activation
-        does click the checkbox, but the Switch's gesture engine
-        preventDefaults a click it did not start and the browser reverts
-        the toggle. The e2e suite pins the intended behaviour as a fixme.
-        Same for the Testing row: Link drops the row's data-part.
-      </LabCaveat>
 
       <LabSection
         title="Readout"
