@@ -17,9 +17,10 @@
  *    {@link GesturePriority.Slider}, `blocksScroll: true`, and `onLost` ends the
  *    drag. A touch that goes vertical first abandons the gesture and leaves the
  *    value UNCHANGED, so scrolling a page by dragging across a slider never
- *    moves it. Mouse and pen set the value on pointerdown: there is no scroll
- *    to protect against, and a click-to-set that waited for movement would feel
- *    broken.
+ *    moves it. A touch that lifts where it landed is a TAP, and the lift is the
+ *    set: the press deferred it only until the finger said it was not a scroll.
+ *    Mouse and pen set the value on pointerdown: there is no scroll to protect
+ *    against, and a click-to-set that waited for movement would feel broken.
  *
  * 3. **`pointercancel` must end the drag cleanly, and on iOS it only fires if
  *    sibling pointer listeners exist** (WebKit 194173, register B13). pointerdown,
@@ -498,9 +499,35 @@ function SliderRoot({
     }
   }
 
+  /**
+   * A touch that lifted where it landed. The press could not set the value
+   * (the finger might have been about to scroll), so the lift does, once, and
+   * commits: one tap is one `onValueChange` and one `onValueCommit`, the same
+   * shape a mouse press-and-release has. Through the arbiter like a drag, so a
+   * tap under a live drawer or edge swipe stays theirs; a tap holds nothing,
+   * so the claim is released at once.
+   */
+  const tapAt = useCallback(
+    (clientX: number) => {
+      if (!captureRef.current.request()) return
+      captureRef.current.release()
+      inputRef.current?.focus({ preventScroll: true })
+      setValue(valueAtPointer(clientX))
+      onValueCommitRef.current?.(valueRef.current)
+    },
+    [setValue, valueAtPointer],
+  )
+
   const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
     const tracking = pointerRef.current
     if (!tracking || tracking.id !== e.pointerId) return
+    if (!tracking.dragging) {
+      //a finger that never chose an axis is a tap, unless the platform took it:
+      //a pointercancel is the browser starting its own scroll, never a set
+      pointerRef.current = null
+      if (e.type === "pointerup") tapAt(e.clientX)
+      return
+    }
     endDrag()
   }
 
