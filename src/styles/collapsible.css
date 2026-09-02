@@ -1,0 +1,44 @@
+/*
+ * Collapsible panel motion — structure only. The component (collapsible.tsx)
+ * writes the inline `height` (0 to the measured px on open, the measured px to 0
+ * on close); this file supplies the transition that carries it and the clip that
+ * makes the measurement meaningful.
+ *
+ * The transition is keyed on `data-transition`, which is present ONLY while a
+ * phase is running, and not on the panel at rest, for two reasons:
+ *
+ * 1. At rest the panel is `height: auto` and `overflow: visible`, so a focus ring
+ *    on a control inside it is not clipped, and content that grows after the open
+ *    (an image that loads, a list that fetches) pushes the panel taller instead of
+ *    being cut at the height it opened to.
+ * 2. `height: auto` cannot animate (interpolate-size is Chrome 129+ only; WebKit
+ *    bug 295132), so the panel rests at `auto` after animating a px value. An
+ *    always-on `transition: height` would see that px-to-auto jump at the end of
+ *    every open and, on some engines, animate it as a visible pop. With the rule
+ *    gone before the inline height is cleared, there is nothing to transition.
+ *
+ * Duration and easing are the panel-local custom properties `--collapsible-duration`
+ * and `--collapsible-easing` (unprefixed because they are scoped to one component,
+ * docs/decisions/styling.md §3.2); a consumer sets them on the panel or any
+ * ancestor. The reduced-motion rule is belt and braces: the component already skips
+ * the phases under `prefers-reduced-motion`, and this keeps the CSS honest on its
+ * own for a consumer who reuses the attribute.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) so a consumer can
+ * override any of it with an ordinary unlayered rule, at any specificity and with
+ * no `!important`.
+ */
+
+@layer adaptv.components {
+  [data-adaptv="collapsible-panel"][data-transition] {
+    overflow: hidden;
+    transition: height var(--collapsible-duration, 200ms)
+      var(--collapsible-easing, cubic-bezier(0.2, 0, 0, 1));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="collapsible-panel"][data-transition] {
+      transition: none;
+    }
+  }
+}
