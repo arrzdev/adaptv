@@ -1515,6 +1515,9 @@ export async function capRun(
  * Deliberately not `exec()` from `exec.mjs`: that one streams every line to a phase reporter and
  * keeps a failure tail, which is right for xcodebuild and gradle and pure overhead for
  * `simctl launch`. This wants the exit code and, sometimes, a line of stdout.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ env?: NodeJS.ProcessEnv, encoding?: BufferEncoding }} [opts]
  */
 function probe(command, args, { env, encoding = "utf8" } = {}) {
   return new Promise((resolve) => {
