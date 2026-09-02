@@ -40,6 +40,12 @@ const COLOUR_TOLERANCE = 14
 const MASTER_PX = 1024
 
 /**
+ * The `sharp` constructor, as every caller hands it in. Named because `import("sharp")` in a
+ * type position is the module, not the function it default-exports.
+ * @typedef {typeof import("sharp").default} Sharp
+ */
+
+/**
  * What `measureArtwork` returns.
  *
  * @typedef {object} Artwork
@@ -347,7 +353,7 @@ const MONO_TRIM = 0.02
  * outline in a dark tint, so the mark's lightest region reads darkest. That inversion is the
  * format, not a bug: there is one ink and the background is the wallpaper's.
  *
- * @param {import("sharp")} sharp
+ * @param {Sharp} sharp
  * @param {Buffer|string} input  The mark, already isolated and square.
  * @returns {Promise<Buffer>} PNG bytes.
  */
