@@ -21,61 +21,25 @@ import {
   loadIconSet,
   resolveLauncherSource,
 } from "./icons.mjs"
+import { loadAdaptvModule } from "./load-ts.mjs"
 import { pkgDirResolver } from "./native.mjs"
-
-/** `#rgb` / `#rrggbb`. The same shape `parseHex` accepts and the native colour resources need. */
-const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
-
-// A Capacitor `appId` is also the Android package and the iOS bundle id: at least two
-// dot-separated segments, each starting with a letter. `com.4d.app` and `myapp` both compile
-// into a project that fails in the toolchain rather than here.
-const APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/
-
-const SPLASH_MASK_MODES = ["preferences", "system", "light", "dark"]
-
-/** The colour-valued keys, as the dev wrote them in `adaptv.config.ts`. */
-const colorKeys = (config) => [
-  ["themeColor.light", config.themeColor?.light],
-  ["themeColor.dark", config.themeColor?.dark],
-  ["backgroundColor", config.backgroundColor],
-  ["splashMaskLightColor", config.splashMaskLightColor],
-  ["splashMaskDarkColor", config.splashMaskDarkColor],
-]
 
 /**
  * Config values that cannot produce the app that was asked for — each a finished sentence
  * naming the key, the shape, and what was actually there.
  *
- * Only values the NATIVE build consumes are checked here; the vite side owns its own. And
- * only values that fail *silently* — an unparseable colour used to fall back to white, an
- * unknown `splashMaskMode` to `preferences`, so the app shipped with a setting the dev wrote
- * and adaptv ignored. Guessing is the bug; saying so is the fix.
+ * The rules are the build's own (`src/vite/app-config-errors.ts`), asked here before the run
+ * starts instead of four minutes in, from whichever consumer touched the value first. This
+ * used to be a second copy covering only the keys the native build reads — an unparseable
+ * colour, an unknown `splashMaskMode` — which meant `orientation: "sideways"` passed preflight
+ * and died inside the web build, worded by the tool that hit it. One list, one set of sentences,
+ * and nothing for the two faces to disagree about (R26).
  */
-export function configErrors(config) {
-  const errors = []
-  if (!APP_ID.test(String(config.appId ?? "")))
-    errors.push(
-      `'appId' must be reverse-DNS like com.example.app, got ${JSON.stringify(config.appId)}`,
-    )
-  if (!config.themeColor?.light && !config.themeColor?.dark)
-    errors.push("'themeColor' needs at least one of 'light' / 'dark'")
-  for (const [key, value] of colorKeys(config)) {
-    if (value === undefined) continue
-    if (typeof value !== "string" || !HEX.test(value.trim()))
-      errors.push(
-        `'${key}' must be a hex colour like #1b1b1b, got ${JSON.stringify(value)}`,
-      )
-  }
-  const mode = config.splashMaskMode
-  if (mode !== undefined && !SPLASH_MASK_MODES.includes(mode))
-    errors.push(
-      `'splashMaskMode' must be preferences, system, light or dark, got ${JSON.stringify(mode)}`,
-    )
-  if (config.icons !== undefined && typeof config.icons !== "string")
-    errors.push(
-      `'icons' must be a path to the app's icon directory, got ${JSON.stringify(config.icons)}`,
-    )
-  return errors
+export async function configErrors(config) {
+  const { appConfigErrors } = await loadAdaptvModule(
+    "vite/app-config-errors.ts",
+  )
+  return appConfigErrors(config)
 }
 
 /**
@@ -189,7 +153,7 @@ export async function inspect(appRoot, config, platforms) {
   //One list, not two passes: a config with a bad colour AND an uninstalled plugin names both
   //on the same run. Fixing a config one line per run is worse than reading the list (R33).
   const errors = [
-    ...configErrors(config),
+    ...(await configErrors(config)),
     ...missingPluginErrors(appRoot, config, platforms),
   ]
   // A bad config is the answer. Reading the icon set on top would add `!` lines about art
