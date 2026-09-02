@@ -18,18 +18,28 @@ const collapsibleCss = readFileSync(
 const declarations = collapsibleCss.replace(/\/\*[\s\S]*?\*\//g, "")
 
 const PANEL_IN_TRANSITION =
-  '[data-adaptv="collapsible-panel"][data-transition]'
+  '[data-adaptv="collapsible-panel"]:is([data-collapsible-opening], [data-collapsible-closing])'
 
 describe("collapsible.css — the height transition", () => {
   //`height: auto` cannot animate (WebKit 295132, interpolate-size Chrome 129+),
   //so the panel rests at `auto` with no inline height. A transition that is
   //always on would animate the px-to-auto jump at the end of every open.
-  it("keys the transition on data-transition, never on the resting panel", () => {
+  it("keys the transition on the opening/closing attributes, never on the resting panel", () => {
     expect(declarations).toContain(PANEL_IN_TRANSITION)
     const resting = declarations.match(
-      /\[data-adaptv="collapsible-panel"\](?!\[data-transition\])/g,
+      /\[data-adaptv="collapsible-panel"\](?!:is\(\[data-collapsible-opening\], \[data-collapsible-closing\]\))/g,
     )
     expect(resting).toBeNull()
+  })
+
+  //docs/decisions/styling.md §3.1: state is a PRESENCE attribute namespaced per
+  //component, never a multiplexed value attribute. The resting `data-collapsible-open`
+  //is on the panel too, and must not be what the transition keys on.
+  it("spells the phase as presence attributes, with no value attribute anywhere", () => {
+    expect(collapsibleCss).not.toMatch(/data-(state|transition)\b/)
+    expect(declarations).not.toContain("[data-collapsible-open]")
+    //the part selector (`data-adaptv="…"`, §3) carries a value; the state never does
+    expect(declarations).not.toMatch(/\[data-collapsible-[a-z-]+=/)
   })
 
   it("transitions height only, from the panel-local custom properties", () => {
@@ -80,5 +90,7 @@ describe("collapsible.css — the height transition", () => {
     const css = await compileAdaptvStyles([])
     expect(css).toContain("--collapsible-duration")
     expect(css).toContain("--collapsible-easing")
+    expect(css).toContain("[data-collapsible-opening]")
+    expect(css).toContain("[data-collapsible-closing]")
   })
 })
