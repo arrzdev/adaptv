@@ -36,7 +36,7 @@ const RESOLVED_OTA_CONFIG_ID = `\0${OTA_CONFIG_VIRTUAL_ID}`
  * there is no second pipeline to keep in step. → `docs/design/ota.md §5.2`
  */
 export const OTA_CHANNEL_PATH = "/.well-known/adaptv/ota"
-export const OTA_MANIFEST_PATH = `${OTA_CHANNEL_PATH}/manifest.json`
+const OTA_MANIFEST_PATH = `${OTA_CHANNEL_PATH}/manifest.json`
 
 export type OtaBuildConfig = {
   manifestUrl: string
@@ -58,7 +58,7 @@ export const DEFAULT_OTA_POLL_MINUTES = 60
  * between meaning `30` seconds and getting `30` minutes is invisible until someone
  * reads a CDN bill — so this refuses rather than clamps. → `docs/design/ota.md §5.2`
  */
-export const MIN_OTA_POLL_MINUTES = 5
+const MIN_OTA_POLL_MINUTES = 5
 
 /**
  * The foreground poll interval, in milliseconds, resolved once at build time.
@@ -192,7 +192,7 @@ export function assertReachableOtaOrigin(origin: string): void {
  * already pointed at a hand-specified channel: a production build cannot reach
  * this state by setting one variable.
  */
-export function allowsUnsignedManifests(): boolean {
+function allowsUnsignedManifests(): boolean {
   return (
     process.env.ADAPTV_OTA_ALLOW_UNSIGNED === "1" &&
     Boolean(process.env.ADAPTV_OTA_ORIGIN)

@@ -375,4 +375,46 @@ describe("execution boundary", () => {
     expect(violations).toEqual([])
     expect(checked).toBeGreaterThanOrEqual(8)
   })
+
+  /*
+   * The Node face is RUN AS SOURCE, not bundled: a consumer's `vite.config.ts`
+   * imports `@arrzdev/adaptv/vite`, Node strips the types and resolves every
+   * `#adaptv/*` through `package.json` `imports` — whose first target is the
+   * bare `./src/*`, and Node does not fall through to the `.ts` pattern when
+   * that file does not exist. So a value import written without its extension
+   * type-checks, lints and passes every unit test, and dies as
+   * `ERR_MODULE_NOT_FOUND` the first time an app builds (2026-09-02,
+   * `app-config-loader.ts` → `#adaptv/vite/app-config-errors`). Type imports
+   * are erased and may go bare; the browser graph is bundled and may too.
+   *
+   * The walk here follows VALUE edges only — `NODE_CLOSURE` follows type
+   * imports as well (it guards what a bundle can drag in), and through
+   * `config/app-config.ts`'s type-only imports of the boot screens it reaches
+   * half the component tree, which Node never loads. `sw.index.ts` is out
+   * for the same reason: Vite bundles an app's own worker modules into the
+   * service worker, so those specifiers are resolved by a bundler, not Node.
+   */
+  it("keeps every value import in the node graph extension-explicit", () => {
+    const seen = new Set<string>()
+    const pending = NODE_ENTRIES.filter(
+      (entry) => entry !== "src/interface/sw.index.ts",
+    )
+    const violations: string[] = []
+    let checked = 0
+    while (pending.length) {
+      const file = pending.pop()
+      if (!file || seen.has(file)) continue
+      seen.add(file)
+      for (const { spec, typeOnly } of importsOf(file)) {
+        if (typeOnly) continue
+        const target = resolveSpec(spec, file)
+        if (!target) continue
+        checked += 1
+        if (!/\.tsx?$/.test(spec)) violations.push(`${file} → ${spec}`)
+        if (!seen.has(target)) pending.push(target)
+      }
+    }
+    expect(violations).toEqual([])
+    expect(checked).toBeGreaterThanOrEqual(60)
+  })
 })
