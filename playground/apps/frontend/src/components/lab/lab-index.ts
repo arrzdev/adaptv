@@ -102,6 +102,13 @@ const COMPONENTS = [
     isNew: false,
   },
   {
+    to: "/lab/select",
+    title: "Select",
+    summary:
+      "menu on every target · keyboard + typeahead · back closes it · a native select for forms",
+    isNew: true,
+  },
+  {
     to: "/lab/swipeable",
     title: "Swipeable",
     summary: "row actions · the gesture that must not lose the finger",
