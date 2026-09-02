@@ -47,25 +47,48 @@ describe("runDoctor — WKAppBoundDomains (B22)", () => {
 
 describe("runDoctor — Android target SDK (§6.0)", () => {
   it("warns below 36", () => {
-    const [d] = runDoctor({ androidBuildGradle: "targetSdkVersion 34" })
+    const [d] = runDoctor({
+      androidVariablesGradle: "targetSdkVersion = 34",
+    })
     expect(d?.severity).toBe("warning")
     expect(d?.title).toContain("36")
   })
 
   it("is quiet at 36 and above", () => {
     expect(
-      runDoctor({ androidBuildGradle: "targetSdk = 36" }),
+      runDoctor({ androidVariablesGradle: "targetSdkVersion = 36" }),
     ).toHaveLength(0)
   })
 
   it("names the no-op behaviour, which is the part that bites", () => {
     //the app keeps compiling and silently stops tinting
-    const [d] = runDoctor({ androidBuildGradle: "targetSdk = 35" })
+    const [d] = runDoctor({
+      androidVariablesGradle: "targetSdkVersion = 35",
+    })
     expect(d?.detail).toContain("NO-OPS")
   })
 
   it("says nothing when there is no android project", () => {
     expect(runDoctor({})).toHaveLength(0)
+  })
+
+  it("says to RUN, not to edit: the level is adaptv's and the next android run stamps it", () => {
+    const [d] = runDoctor({
+      androidVariablesGradle: "targetSdkVersion = 35",
+    })
+    expect(d?.fix).toContain("'adaptv dev android'")
+    expect(d?.fix).not.toMatch(/raise .* by hand/i)
+  })
+
+  it("is silent on app/build.gradle's reference shape, which is why it must not be fed that file", () => {
+    //`targetSdkVersion rootProject.ext.targetSdkVersion` carries no number. The check was
+    //fed exactly this text for the life of the project and never fired once.
+    expect(
+      runDoctor({
+        androidVariablesGradle:
+          "targetSdkVersion rootProject.ext.targetSdkVersion",
+      }),
+    ).toHaveLength(0)
   })
 })
 
@@ -94,7 +117,7 @@ describe("runDoctor — privacy manifest (§5.0.1)", () => {
 describe("runDoctor — ordering and output", () => {
   it("reports errors before warnings", () => {
     const diagnostics = runDoctor({
-      androidBuildGradle: "targetSdk = 34",
+      androidVariablesGradle: "targetSdkVersion = 34",
       iosInfoPlist: "WKAppBoundDomains",
       capacitorConfig: "{}",
     })
@@ -108,7 +131,7 @@ describe("runDoctor — ordering and output", () => {
 
   it("prints the fix, not only the fault", () => {
     const output = formatDiagnostics(
-      runDoctor({ androidBuildGradle: "targetSdk = 34" }),
+      runDoctor({ androidVariablesGradle: "targetSdkVersion = 34" }),
     )
     expect(output).toContain("fix:")
   })
@@ -123,7 +146,7 @@ describe("what a diagnostic is allowed to say (R8)", () => {
   const everyDiagnostic = runDoctor({
     iosInfoPlist: "<key>WKAppBoundDomains</key><array/>",
     capacitorConfig: "{}",
-    androidBuildGradle: "targetSdk = 34",
+    androidVariablesGradle: "targetSdkVersion = 34",
     hasPrivacyManifest: false,
   })
 
