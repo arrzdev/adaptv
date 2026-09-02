@@ -23,6 +23,7 @@ export {
   readClipboardText,
   writeClipboardText,
 } from "../capabilities/clipboard"
+export * from "../capabilities/compose"
 export * from "../capabilities/device"
 export * from "../capabilities/geolocation"
 export * from "../capabilities/gesture-controller"
