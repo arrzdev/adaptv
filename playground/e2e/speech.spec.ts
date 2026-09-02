@@ -8,9 +8,16 @@ import { expect, test } from "@playwright/test"
  * bundled chromium and webkit): both have speechSynthesis on localhost; chromium
  * reports an empty voice list synchronously and 191 voices after voiceschanged
  * (default "Samantha"); webkit has 223 synchronously (default "Majed"); on both,
- * an utterance fires start and then end within a few seconds even headless. So
- * both engines are expected to reach `ready`, a voice count above zero, and
- * `spoke` — a skip here would be hiding a real answer.
+ * an utterance fires start and then end within a few seconds even headless.
+ *
+ * CI measures something else. On ubuntu-latest the headless chromium has the
+ * API but no speech-dispatcher behind it, so getVoices() stays empty for good
+ * and the status settles on `no-voices` after the module's bounded wait. That
+ * is a real, different answer, not a broken run, so the spec branches on the
+ * settled status rather than pinning `ready`: with voices, the engine must list
+ * them and reach `spoke`; without, it must never claim to have spoken. What it
+ * never accepts is `unsupported` (the API is in every browser we run), a
+ * status that fails to settle, or a voiceless engine resolving `spoke`.
  */
 
 /**
@@ -28,6 +35,31 @@ async function awaitClientHandover(page: Page) {
   })
 }
 
+/** What the page renders for "nothing to report" — the one glyph it uses. */
+const NONE = "—"
+
+/**
+ * The status once the module has stopped moving: `loading` is chromium's beat
+ * before voiceschanged (or before the wait gives up), so it is waited through;
+ * `unsupported` fails here on purpose, since every engine in the matrix has
+ * the API.
+ */
+async function settledStatus(page: Page): Promise<"ready" | "no-voices"> {
+  const status = page.getByTestId("speech-status")
+  await expect(status).toHaveText(/^(ready|no-voices)$/, {
+    timeout: 5_000,
+  })
+  return (await status.innerText()).trim() as "ready" | "no-voices"
+}
+
+/**
+ * Every outcome a voiceless engine is allowed to settle on. The module
+ * resolves `silent` when no start event arrives, `cancelled` when Stop lands
+ * first, and `failed` when the engine says so itself; `spoke` is never one of
+ * them, and neither is the outcome row staying empty.
+ */
+const NOT_SPOKEN = /^(cancelled|silent|failed)$/
+
 /** About forty words — long enough that Stop lands while the engine is still talking. */
 const LONG_SENTENCE =
   "The quick brown fox jumps over the lazy dog while the patient grey heron " +
@@ -40,59 +72,98 @@ test.describe("Speech", () => {
     await awaitClientHandover(page)
   })
 
-  test("the engine reports ready with a voice list and a default", async ({
+  test("the engine settles on ready with voices, or on no-voices with none", async ({
     page,
   }) => {
-    //chromium passes through `loading` until voiceschanged; webkit is ready at once
-    await expect(page.getByTestId("speech-status")).toHaveText("ready", {
-      timeout: 5_000,
-    })
+    const status = await settledStatus(page)
     const voices = Number(
       await page.getByTestId("speech-voices").innerText(),
     )
-    expect(voices).toBeGreaterThan(0)
-    await expect(page.getByTestId("speech-default")).not.toHaveText("—")
-    await expect(page.getByTestId("speech-last")).toHaveText("—")
-    await expect(page.getByTestId("speech-reason")).toHaveText("—")
+    if (status === "ready") {
+      expect(voices).toBeGreaterThan(0)
+      await expect(page.getByTestId("speech-default")).not.toHaveText(NONE)
+    } else {
+      expect(voices).toBe(0)
+      await expect(page.getByTestId("speech-default")).toHaveText(NONE)
+    }
+    await expect(page.getByTestId("speech-last")).toHaveText(NONE)
+    await expect(page.getByTestId("speech-reason")).toHaveText(NONE)
   })
 
-  test("Speak runs the utterance to its end and resolves spoke", async ({
+  test("Speak resolves spoke with voices, and never spoke without them", async ({
     page,
   }) => {
-    await expect(page.getByTestId("speech-status")).toHaveText("ready", {
-      timeout: 5_000,
-    })
+    const status = await settledStatus(page)
     await page.getByTestId("speech-speak").click()
 
-    await expect(page.getByTestId("speech-speaking")).toHaveText("true", {
-      timeout: 5_000,
-    })
-    await expect(page.getByTestId("speech-last")).toHaveText("spoke", {
-      timeout: 15_000,
-    })
+    if (status === "ready") {
+      await expect(page.getByTestId("speech-speaking")).toHaveText(
+        "true",
+        {
+          timeout: 5_000,
+        },
+      )
+      await expect(page.getByTestId("speech-last")).toHaveText("spoke", {
+        timeout: 15_000,
+      })
+      await expect(page.getByTestId("speech-reason")).toHaveText(NONE)
+    } else {
+      //no start event ever comes, so the module's silent wait (2 s) is the
+      //slowest honest answer; 4 s leaves it room without waiting on a clock
+      await expect(page.getByTestId("speech-last")).toHaveText(
+        NOT_SPOKEN,
+        {
+          timeout: 4_000,
+        },
+      )
+      const last = (
+        await page.getByTestId("speech-last").innerText()
+      ).trim()
+      if (last === "failed") {
+        await expect(page.getByTestId("speech-reason")).not.toHaveText(
+          NONE,
+        )
+      } else {
+        await expect(page.getByTestId("speech-reason")).toHaveText(NONE)
+      }
+    }
     await expect(page.getByTestId("speech-speaking")).toHaveText("false")
-    await expect(page.getByTestId("speech-reason")).toHaveText("—")
     await expect(page.locator("[data-lab-log] li")).toHaveCount(2)
   })
 
-  test("Stop mid-utterance resolves cancelled, not spoke", async ({
+  test("Stop after Speak resolves cancelled with voices, and never spoke without them", async ({
     page,
   }) => {
-    await expect(page.getByTestId("speech-status")).toHaveText("ready", {
-      timeout: 5_000,
-    })
+    const status = await settledStatus(page)
     await page.getByTestId("speech-text").fill(LONG_SENTENCE)
     await page.getByTestId("speech-speak").click()
-    await expect(page.getByTestId("speech-speaking")).toHaveText("true", {
-      timeout: 5_000,
-    })
+    if (status === "ready") {
+      await expect(page.getByTestId("speech-speaking")).toHaveText(
+        "true",
+        {
+          timeout: 5_000,
+        },
+      )
+    }
 
     await page.getByTestId("speech-stop").click()
 
-    await expect(page.getByTestId("speech-last")).toHaveText("cancelled", {
-      timeout: 5_000,
-    })
+    if (status === "ready") {
+      await expect(page.getByTestId("speech-last")).toHaveText(
+        "cancelled",
+        {
+          timeout: 5_000,
+        },
+      )
+      await expect(page.getByTestId("speech-reason")).toHaveText(NONE)
+    } else {
+      await expect(page.getByTestId("speech-last")).toHaveText(
+        NOT_SPOKEN,
+        {
+          timeout: 4_000,
+        },
+      )
+    }
     await expect(page.getByTestId("speech-speaking")).toHaveText("false")
-    await expect(page.getByTestId("speech-reason")).toHaveText("—")
   })
 })
