@@ -18,8 +18,9 @@
 //`Device.modelName` as a plain constant. adaptv cannot: Capacitor's bridge has
 //no synchronous path, so the value simply does not exist at module-evaluation
 //time. {@link getDeviceInfo} is the rule kept in spirit — it resolves once and
-//caches forever, because none of it can change — while {@link getLanguageTag},
-//which the user CAN change from Settings, is a plain call that re-reads.
+//caches forever, because none of it can change. The one device fact the user
+//CAN change from Settings — the language — is therefore not here at all: it is
+//`capabilities/locale`, a plain call that re-reads, with a subscription.
 import { Device } from "@capacitor/device"
 import type { PlatformOS, PlatformTag } from "#adaptv/utils/platform"
 import {
@@ -162,19 +163,4 @@ export async function getDeviceId(): Promise<string | null> {
   } catch {
     return null
   }
-}
-
-/**
- * Current BCP-47 language tag (`"en-GB"`). A function, not part of
- * {@link DeviceInfo}, because the user can change it in Settings and come back
- * — §3.4's mutable half.
- *
- * Synchronous, and reads `navigator.language` on native too: a Capacitor
- * WebView inherits the OS locale, so `Device.getLanguageTag()` returns the same
- * string one bridge hop later. Reach for the plugin directly only if you need
- * its exact normalisation.
- */
-export function getLanguageTag(): string {
-  if (typeof navigator === "undefined") return "en"
-  return navigator.language || "en"
 }
