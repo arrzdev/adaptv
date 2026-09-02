@@ -1,5 +1,5 @@
 //tailwind spacing: unit n → n * 0.25rem (e.g. 8 → 2rem)
-export const TAILWIND_UNIT_REM = 0.25
+const TAILWIND_UNIT_REM = 0.25
 
 export type DynamicValuesContext = {
   size: number

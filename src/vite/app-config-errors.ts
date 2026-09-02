@@ -1,0 +1,147 @@
+/**
+ * The values in `adaptv.config.ts` that cannot produce the app that was asked
+ * for — each a finished sentence naming the key, the shape, and what was there.
+ *
+ * `adaptv.config.ts` is bundled and evaluated as data, so nothing type-checks
+ * it before it is read: a key the type marks required can be missing, and a
+ * union can hold any string. Without this check those values fail deep inside
+ * whichever consumer touches them first, which is either a `TypeError` naming
+ * no key (`styles` missing → `Cannot read properties of undefined (reading
+ * 'replace')`) or, worse, nothing at all — `orientation: "sideways"` shipped
+ * into the manifest, `render: "static"` silently treated as SSR. Guessing is
+ * the bug; saying so is the fix.
+ *
+ * Only values the build consumes and gets wrong are checked. Keys that are
+ * merely optional, or whose wrong value is inert, are not — a sentence about a
+ * key that would have worked anyway is noise (`docs/design/cli-contract.md` R4).
+ *
+ * The CLI's own preflight (`bin/lib/preflight.mjs`) says these same sentences
+ * for the keys the native build consumes; the two must not disagree about a
+ * value, which is why the wording is shared verbatim.
+ */
+
+/** `#rgb` / `#rrggbb` — the shape `parseHex` accepts and the native colour resources need. */
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/**
+ * A Capacitor `appId` is also the Android package and the iOS bundle id: at
+ * least two dot-separated segments, each starting with a letter.
+ */
+const APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/
+
+type Raw = Record<string, unknown>
+
+const isObject = (value: unknown): value is Raw =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const show = (value: unknown): string =>
+  value === undefined ? "undefined" : JSON.stringify(value)
+
+/** `a, b or c` — the list as a sentence reads it. */
+const oneOf = (values: readonly string[]): string =>
+  values.length < 2
+    ? values.join("")
+    : `${values.slice(0, -1).join(", ")} or ${values.at(-1)}`
+
+/** The colour-valued keys, as the dev wrote them in `adaptv.config.ts`. */
+function colorKeys(config: Raw): Array<[string, unknown]> {
+  const theme = isObject(config.themeColor) ? config.themeColor : {}
+  return [
+    ["themeColor.light", theme.light],
+    ["themeColor.dark", theme.dark],
+    ["backgroundColor", config.backgroundColor],
+    ["splashMaskLightColor", config.splashMaskLightColor],
+    ["splashMaskDarkColor", config.splashMaskDarkColor],
+  ]
+}
+
+/** The keys whose value is one of a closed set, and what the set is. */
+const ENUMS: ReadonlyArray<[string, readonly string[]]> = [
+  ["orientation", ["portrait", "landscape", "any"]],
+  ["render", ["ssr", "spa"]],
+  ["serviceWorkerUpdate", ["auto", "prompt"]],
+  ["defaultThemePreference", ["light", "dark", "system"]],
+  ["splashMaskMode", ["preferences", "system", "light", "dark"]],
+  ["otaOnNativeSkew", ["install", "refuse"]],
+]
+
+/** The keys that must be a plain number when present. */
+const NUMBERS: ReadonlyArray<[string, string]> = [
+  ["otaPollMinutes", "a number of minutes"],
+  ["updateRequiredAfterDays", "a number of days"],
+]
+
+/** The keys that must be a list of strings when present. */
+const STRING_LISTS: ReadonlyArray<[string, string]> = [
+  ["plugins", "a list of package names"],
+  ["serviceWorkers", "a list of file paths"],
+]
+
+/**
+ * Every problem in the config, as one sentence each. Empty when the config
+ * can be built. Pure: reads the object, touches nothing else.
+ */
+export function appConfigErrors(config: unknown): string[] {
+  if (!isObject(config)) return ["the config must be an object"]
+  const errors: string[] = []
+
+  //the required keys the build reads unconditionally — each crashes or ships
+  //a hole when missing (`name` → a manifest and a `<title>` with no name;
+  //`styles` → a TypeError in the root-route module; `router` → one in the
+  //plugin factory)
+  if (typeof config.name !== "string" || config.name.trim() === "")
+    errors.push(`'name' must be the app's name, got ${show(config.name)}`)
+  if (typeof config.styles !== "string" || config.styles.trim() === "")
+    errors.push(
+      `'styles' must be a path to the app's stylesheet, got ${show(config.styles)}`,
+    )
+  if (!isObject(config.router))
+    errors.push(`'router' must be an object, got ${show(config.router)}`)
+
+  if (config.appId !== undefined && !APP_ID.test(String(config.appId)))
+    errors.push(
+      `'appId' must be reverse-DNS like com.example.app, got ${show(config.appId)}`,
+    )
+
+  const theme = isObject(config.themeColor) ? config.themeColor : null
+  if (!theme?.light && !theme?.dark)
+    errors.push("'themeColor' needs at least one of 'light' / 'dark'")
+  for (const [key, value] of colorKeys(config)) {
+    if (value === undefined) continue
+    if (typeof value !== "string" || !HEX.test(value.trim()))
+      errors.push(
+        `'${key}' must be a hex colour like #1b1b1b, got ${show(value)}`,
+      )
+  }
+
+  if (config.icons !== undefined && typeof config.icons !== "string")
+    errors.push(
+      `'icons' must be a path to the app's icon directory, got ${show(config.icons)}`,
+    )
+
+  for (const [key, values] of ENUMS) {
+    const value = config[key]
+    if (value === undefined) continue
+    if (typeof value !== "string" || !values.includes(value))
+      errors.push(`'${key}' must be ${oneOf(values)}, got ${show(value)}`)
+  }
+
+  for (const [key, shape] of NUMBERS) {
+    const value = config[key]
+    if (value === undefined) continue
+    if (typeof value !== "number" || !Number.isFinite(value))
+      errors.push(`'${key}' must be ${shape}, got ${show(value)}`)
+  }
+
+  for (const [key, shape] of STRING_LISTS) {
+    const value = config[key]
+    if (value === undefined) continue
+    if (
+      !Array.isArray(value) ||
+      !value.every((entry) => typeof entry === "string")
+    )
+      errors.push(`'${key}' must be ${shape}, got ${show(value)}`)
+  }
+
+  return errors
+}

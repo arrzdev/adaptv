@@ -216,7 +216,7 @@ export function assertRouteTreeIsOpaque(routeTreePath: string): void {
 export const NATIVE_PATCH_MARKER = "ADAPTV PATCH"
 
 /** The rented update core, and the two files adaptv edits inside it. */
-export const UPDATE_PLUGIN = "@capawesome/capacitor-live-update"
+const UPDATE_PLUGIN = "@capawesome/capacitor-live-update"
 const UPDATE_PLUGIN_SOURCES = [
   "ios/Plugin/LiveUpdate.swift",
   "android/src/main/java/io/capawesome/capacitorjs/plugins/liveupdate/LiveUpdate.java",
