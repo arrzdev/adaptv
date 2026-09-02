@@ -6,6 +6,8 @@
 import { spawn } from "node:child_process"
 import { localBin } from "./native.mjs"
 
+/** @typedef {import("./exec.mjs").CliError} CliError */
+
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const strip = (s) => s.replace(ANSI, "")
 
@@ -217,6 +219,7 @@ export function startDevServer(
       // dev server and the preview server and a build that dies the same way — three
       // copies of one sentence is how the ✖ for one cause ends up reading three ways
       // (R26). The EADDRINUSE line is in the tail below, which is what it reads.
+      /** @type {CliError} */
       const err = new Error(
         `vite dev exited (code ${code}) before it was ready`,
       )
