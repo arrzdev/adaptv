@@ -1,7 +1,8 @@
 import type { ShareTarget } from "@arrzdev/adaptv/capabilities"
+import { writeFile } from "@arrzdev/adaptv/capabilities"
 import { useShare } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
   LabActions,
@@ -57,6 +58,14 @@ function PayloadGate({
   )
 }
 
+/** A file the app wrote itself, the shape that shares on every target. */
+const STORED_PATH = "lab/share.txt"
+const STORED_TEXT = "hello from the lab, stored"
+const STORED: ShareTarget = {
+  ...TEXT_ONLY,
+  storedFiles: [{ path: STORED_PATH }],
+}
+
 /** A real File, built in the page so the file-payload gate is exercised honestly. */
 function textFile(): File {
   return new File(["hello from the lab"], "lab.txt", {
@@ -70,11 +79,24 @@ function LabSharePage() {
   const [files] = useState(() =>
     typeof File === "undefined" ? [] : [textFile()],
   )
+  const [storedWrite, setStoredWrite] = useState("not written yet")
+
+  //the stored-file row shares a file the app wrote, so write it first
+  useEffect(() => {
+    let live = true
+    void writeFile(STORED_PATH, STORED_TEXT).then((outcome) => {
+      if (live) setStoredWrite(outcome)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
 
   const payloads: Array<{ label: string; target: ShareTarget }> = [
     { label: "text only", target: TEXT_ONLY },
     { label: "title + text + url", target: WITH_URL },
     { label: "a text file", target: { ...TEXT_ONLY, files } },
+    { label: "a stored file", target: STORED },
   ]
 
   return (
@@ -90,6 +112,7 @@ function LabSharePage() {
           "Dismiss the sheet WITHOUT choosing anything. The last outcome must read `dismissed`, and no error must appear.",
           "Share it again and actually pick a target. The outcome must read `shared`.",
           "Press “Share a text file”. If the row above said `refused`, nothing must open and the outcome must say so rather than throwing.",
+          "Press “Share a stored file”. The sheet must open with share.txt in it on every target that has a sheet — this is the file shape that works on native.",
         ]}
         expected={{
           web: {
@@ -102,7 +125,7 @@ function LabSharePage() {
           },
           ios: {
             verdict: "works",
-            note: "Always supported: the native branch does not pay a bridge round-trip to find out. The sheet is the real UIActivityViewController.",
+            note: "Always supported: the native branch does not pay a bridge round-trip to find out. The sheet is the real UIActivityViewController. A File object is refused (no URI); a stored file goes through as one.",
           },
           android: {
             verdict: "works",
@@ -139,6 +162,13 @@ function LabSharePage() {
             empty rather than absent.
           </p>
         )}
+        <LabRow
+          label="stored file write"
+          value={
+            <output data-testid="share-stored-write">{storedWrite}</output>
+          }
+          hint="The stored row shares lab/share.txt, written by this page through the filesystem capability — a URI on native, the bytes on the web."
+        />
       </LabSection>
 
       <LabSection
