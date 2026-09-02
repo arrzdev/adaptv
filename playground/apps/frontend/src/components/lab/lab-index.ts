@@ -192,6 +192,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/print",
+    title: "Print",
+    summary:
+      "window.print · the dialog where one exists, named silence where none does",
+    isNew: true,
+  },
+  {
     to: "/lab/clipboard",
     title: "Clipboard",
     summary: "copy is ungated, paste is permission-gated",
