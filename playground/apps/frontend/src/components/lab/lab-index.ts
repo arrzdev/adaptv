@@ -58,6 +58,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/fab",
+    title: "Fab",
+    summary: "a Button pinned to the safe corner · rides the keyboard up",
+    isNew: true,
+  },
+  {
     to: "/lab/pressable",
     title: "Pressable",
     summary:
