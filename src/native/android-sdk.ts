@@ -16,7 +16,7 @@
  * than errors, so an app that relies on them keeps compiling and simply stops
  * tinting. adaptv paints the chrome from CSS already (`capabilities/theme-color.ts`),
  * which is why the bump is a number and not an architecture change.
- * → `docs/roadmap/android-api-36.md`, `docs/decisions/register.md` §6.0
+ * → `docs/decisions/register.md` B9 (§6.0)
  */
 export const ANDROID_SDK_LEVELS = { compile: 36, target: 36 } as const
 
