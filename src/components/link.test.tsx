@@ -15,12 +15,18 @@ vi.mock("@tanstack/react-router", () => ({
     children,
     to,
     className,
+    params: _params,
+    search: _search,
+    ...rest
   }: {
-    children: ReactNode
+    children?: ReactNode
     to: string
     className?: string
+    params?: unknown
+    search?: unknown
+    [attribute: string]: unknown
   }) => (
-    <a data-internal href={to} className={className}>
+    <a data-internal href={to} className={className} {...rest}>
       {children}
     </a>
   ),
@@ -32,6 +38,27 @@ afterEach(() => {
 })
 
 describe("Link", () => {
+  it("forwards the anchor's own attributes, so a wrapper rendering as a link keeps its parts", () => {
+    //FieldGroup.Row render={<Link to="…" />} clones data-part / aria-disabled
+    //onto the element; a Link that dropped them would break the rows contract
+    const { getByRole } = render(
+      <Link to="/settings" data-part="row" aria-disabled="true" id="row-1">
+        Settings
+      </Link>,
+    )
+    const a = getByRole("link")
+    expect(a.getAttribute("data-part")).toBe("row")
+    expect(a.getAttribute("aria-disabled")).toBe("true")
+    expect(a.id).toBe("row-1")
+    //and nothing the anchor forwards can take the link's own identity
+    expect(a.getAttribute("data-adaptv")).toBe("link")
+  })
+
+  it("renders without children, which is what a row becomes before its content is cloned in", () => {
+    const { getByRole } = render(<Link to="/settings" />)
+    expect(getByRole("link").getAttribute("href")).toBe("/settings")
+  })
+
   it("routes an internal path through the router link", () => {
     const { getByRole } = render(<Link to="/settings">Settings</Link>)
     const a = getByRole("link")
