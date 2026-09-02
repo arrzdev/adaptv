@@ -15,9 +15,10 @@
 
 **Can the native matrix run in CI, or does it stay local?**
 
-Real today: CI runs **four** web-only gates (typecheck, biome, biome:playground, vitest); the native
-matrix is local. `pnpm gate` additionally runs `scripts/check-colour.mjs`, which **is not in CI** —
-so that check binds only whoever runs the gate by hand (roadmap **L3**).
+Real today: CI runs **five** web-only gates (typecheck, biome, biome:playground, vitest,
+`scripts/check-colour.mjs`); the native matrix is local. The 305 Playwright tests under
+`playground/` run on a developer's machine only — the browser half of this question is a CI job,
+not a research problem, and is the part `pnpm gate` never covered either.
 
 This is the question that gates
 [`owed-device-verification.md`](owed-device-verification.md): six of those checks are owed precisely

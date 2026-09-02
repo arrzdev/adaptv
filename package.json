@@ -43,7 +43,7 @@
     "preview:ios": "node scripts/playground.mjs preview:ios",
     "preview:web": "node scripts/playground.mjs preview:web",
     "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "imports": {
