@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest"
  * Two checks, because neither one alone covers the tree:
  *
  *  - **The allow-list** names every directory and file permitted to touch Node.
- *    It covers all 231 non-test source files, including the 28 that no published
+ *    It covers all 227 non-test source files, including the 28 that no published
  *    entry imports — `src/sw/default-worker.ts` and `src/routes/client-entry.tsx`
  *    reach a browser as *files the CLI hands to Vite*, so an import graph never
  *    sees them and a reachability check alone would wave them through.
@@ -36,8 +36,9 @@ import { describe, expect, it } from "vitest"
  * exemption is not taken on trust: `no test file is reachable from a published
  * entry` below proves the premise, and the moment a shipped module imports one,
  * that test fails and the exemption stops applying to it. Note that
- * `*.test-helper.ts` is **not** exempt — it is a plain module that anything may
- * import, so it is named in the allow-list like any other Node-touching file.
+ * `*.test-helper.ts` and `src/test-utils/` are **not** exempt — they are plain
+ * modules that anything may import, so each is named in the allow-list like any
+ * other Node-touching file, and the same test proves no entry reaches them.
  *
  * **The browser surface is read off `tsdown.config.ts` and `package.json`, not off
  * directory names.** `the entry lists match the build` below re-derives both entry
@@ -104,6 +105,9 @@ const NODE_ALLOWED = [
   "src/ota/build/",
   "src/ota/native-fingerprint.ts",
   "src/styles/compile.test-helper.ts",
+  //the barrel guards' shared walk — a plain module the tests import, named by
+  //file rather than as `src/test-utils/` so a second file there is a decision
+  "src/test-utils/barrel-guard.ts",
 ]
 
 const isTest = (file: string) => /\.test\.tsx?$/.test(file)
@@ -242,7 +246,7 @@ describe("execution boundary", () => {
    * assertion below is `toEqual([])`, so a walk that rots silently reports
    * perfect compliance. → `docs/roadmap/src-reorg.md` §7
    *
-   * The floors are well under today's numbers (231 non-test files, a 154-file
+   * The floors are well under today's numbers (227 non-test files, a 154-file
    * browser closure, a 79-file node closure) and well over zero.
    */
   it("actually walked the tree it claims to have walked", () => {
@@ -340,6 +344,9 @@ describe("execution boundary", () => {
     const shipped = [...BROWSER_CLOSURE, ...NODE_CLOSURE]
     expect(shipped.filter(isTest)).toEqual([])
     expect(shipped.filter((f) => f.includes(".test-helper."))).toEqual([])
+    expect(shipped.filter((f) => f.startsWith("src/test-utils/"))).toEqual(
+      [],
+    )
   })
 
   /*

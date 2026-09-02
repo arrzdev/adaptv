@@ -687,7 +687,7 @@ fix with it.
 |---|---|---|
 | `pnpm typecheck` | Every broken `#adaptv/*` and barrel path in `.ts`/`.tsx` | anything in a string, anything in `.mjs` |
 | `pnpm biome:check` | The reflex fix — re-introducing `./`/`../` when an alias breaks | the four exempted globs (`src/config`, `src/vite`, the barrels, `bin/**`) |
-| `pnpm test` (2 618) | The 15 path-reading tests, both barrel guards, the opacity assertions | anything only the CLI executes |
+| `pnpm test` | The 15 path-reading tests, the five barrel guards, the opacity assertions, the `bin/` string loads | anything only the CLI executes |
 | `pnpm build:check` | `exports` + `tsdown` entries; `scripts/verify-dist.mjs` checks the emitted surface | `bin/`'s runtime loads |
 | `pnpm gate` | all of the above + `check-colour.mjs` | ″ |
 | **[`../../src/execution-boundary.test.ts`](../../src/execution-boundary.test.ts)** *(move A)* | a `node:*` import landing on the browser side of the split, a `config/*` import that stops being `import type`, a test file pulled into a published entry graph, and a `tsdown`/`exports` entry nobody classified | a `node:*` import inside `src/vite/**` or `src/native/**` reaching a browser some other way — the allow-list trusts those directories by name |
@@ -713,11 +713,15 @@ fix with it.
 2. **255 doc references + 49 in-code path comments.** Nothing checks them. A reorg that leaves them
    stale attacks the one property that makes this tree navigable
    ([`../README.md`](../README.md): *"when something ships, move it"*).
-3. **A vacuously-passing guard.** `barrels.test.ts`, `capabilities.barrel.test.ts` and
-   `ota.barrel.test.ts` scan a directory; point one at a directory that no longer holds components and it compares two empty
-   lists and goes green. **After any move, delete one export from the barrel by hand and confirm the
-   guard goes red.** A guard that cannot fail is worse than no guard, and this is the exact way a
-   reorg breaks one.
+3. **A vacuously-passing guard.** Every barrel guard scans a directory; point one at a directory
+   that no longer holds anything and it compares two empty lists and goes green. ✅ All five —
+   `components/barrels.test.ts` and `interface/{capabilities,hooks,ota,storage}.barrel.test.ts` —
+   now open with a floor test (`actually walked the directory it claims to have walked`), and share
+   one walk and one barrel reader in [`../../src/test-utils/barrel-guard.ts`](../../src/test-utils/barrel-guard.ts)
+   rather than three copies; the `safe-area` sweep carries the same floor. A floor is not proof
+   the *invariant* still fires, though: **after any move, delete one export from the barrel by
+   hand and confirm the guard goes red.** A guard that cannot fail is worse than no guard, and
+   this is the exact way a reorg breaks one.
 
 ### The strong proof
 

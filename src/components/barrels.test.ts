@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
+import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
 
 /*
  * `src/interface/components.index.ts` must cover exactly the components on disk.
@@ -84,14 +85,19 @@ function modulesOnDisk(): string[] {
   return [...found].sort()
 }
 
-/** The module specifiers the barrel re-exports, normalised to bare names. */
+/** The modules the barrel re-exports whole (`export *`), as bare names. */
 function modulesInBarrel(): string[] {
-  const src = readFileSync(BARREL, "utf8")
-  return [...src.matchAll(/export \* from "\.\.\/components\/([^"]+)"/g)]
-    .map((m) => m[1])
-    .filter((m): m is string => typeof m === "string")
+  return exportsOf(readFileSync(BARREL, "utf8"))
+    .filter((e) => e.names === null)
+    .map((e) => e.spec)
+    .filter((spec) => spec.startsWith("../components/"))
+    .map((spec) => spec.slice("../components/".length))
     .sort()
 }
+
+/** Every non-test file under `src/` importing a component module by that name. */
+const importersOf = (module: string) =>
+  callSitesOf(new RegExp(`from "[^"]*/${module}(?:\\.ts)?"`))
 
 describe("the component barrel", () => {
   /*
@@ -141,7 +147,7 @@ describe("the component barrel", () => {
    */
   it("keeps the shared press implementation inside the components", () => {
     for (const module of WITHHELD_SHARED) {
-      const callers = callSitesOf(module)
+      const callers = importersOf(module)
       expect(
         callers.length,
         `${module} has no callers left`,
@@ -161,31 +167,9 @@ describe("the component barrel", () => {
   it("keeps each engine down to the one component that drives it", () => {
     for (const [module, driver] of Object.entries(WITHHELD_ENGINES)) {
       expect(
-        callSitesOf(module),
+        importersOf(module),
         `${module} is driven by ${driver}`,
       ).toEqual([driver])
     }
   })
 })
-
-/** Every non-test file under `src/` importing a component module by that name. */
-function callSitesOf(module: string): string[] {
-  const pattern = new RegExp(`from "[^"]*/${module}(?:\\.ts)?"`)
-  const hits: string[] = []
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = resolve(dir, entry.name)
-      if (entry.isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!/\.tsx?$/.test(entry.name)) continue
-      if (/\.test\.tsx?$/.test(entry.name)) continue
-      if (pattern.test(readFileSync(full, "utf8"))) {
-        hits.push(full.slice(resolve(process.cwd()).length + 1))
-      }
-    }
-  }
-  walk(resolve(process.cwd(), "src"))
-  return hits.sort()
-}
