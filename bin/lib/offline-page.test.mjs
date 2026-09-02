@@ -245,3 +245,168 @@ describe("contrast, on whatever background the config names", () => {
     expect(near(p.muted, "#9b9ba4")).toBeLessThanOrEqual(7)
   })
 })
+
+// ---- the reconnect probe, run for real -------------------------------------------------
+// The page's script is evaluated in a vm with a stub bridge, so these bite on the probe's
+// logic rather than on its text: a 2xx/3xx reconnects at once, a not-ready answer (4xx/5xx
+// from a server that is up but still booting) is waited out, and only a streak of them
+// reconnects anyway so a genuinely failing app is not a dead end.
+
+import { setImmediate as tick } from "node:timers/promises"
+import vm from "node:vm"
+
+const DEV_URL = "http://192.168.1.20:41730"
+
+/**
+ * Boot the page against a bridge whose HEAD answers come from `answers` (an array of
+ * statuses, consumed in order; the last one repeats). Returns a `probe()` that runs one
+ * scheduled tick and settles its promise chain, plus the navigations the page made.
+ */
+async function boot({ answers, origin = "capacitor:", bridge = true }) {
+  const html = await render({ url: DEV_URL })
+  const src = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1]
+  expect(src).toBeTruthy()
+  const replaced = []
+  const scheduled = []
+  const element = () => ({
+    textContent: "",
+    innerHTML: "",
+    appendChild() {},
+    remove() {},
+  })
+  const requests = []
+  let i = 0
+  const next = () => answers[Math.min(i++, answers.length - 1)]
+  const sandbox = {
+    navigator: {
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0) AppleWebKit",
+    },
+    document: {
+      title: "",
+      getElementById: element,
+      createTextNode: (t) => t,
+    },
+    location: {
+      protocol: origin,
+      hostname: "localhost",
+      href: "",
+      replace(u) {
+        replaced.push(u)
+      },
+    },
+    setInterval(fn) {
+      scheduled.push(fn)
+    },
+    setTimeout(fn) {
+      scheduled.push(fn)
+    },
+    fetch(url) {
+      requests.push(url)
+      return Promise.resolve({ type: "opaque", status: 0 })
+    },
+  }
+  sandbox.window = {
+    Capacitor: {
+      getPlatform: () => "ios",
+      Plugins: {
+        SplashScreen: { hide() {} },
+        ...(bridge
+          ? {
+              CapacitorHttp: {
+                request(req) {
+                  requests.push(req.url)
+                  return Promise.resolve({ status: next() })
+                },
+              },
+            }
+          : {}),
+      },
+    },
+  }
+  if (!bridge) sandbox.window.Capacitor = undefined
+  vm.runInNewContext(src, sandbox)
+  expect(scheduled).toHaveLength(2) // the interval and the first early tick
+  return {
+    replaced,
+    requests,
+    async probe(times = 1) {
+      for (let n = 0; n < times; n++) {
+        scheduled[0]()
+        await tick()
+        await tick()
+      }
+    },
+  }
+}
+
+describe("the reconnect probe", () => {
+  it("asks the dev server with a HEAD and reconnects on a 2xx at once", async () => {
+    const page = await boot({ answers: [200] })
+    await page.probe()
+    expect(page.requests).toEqual([DEV_URL])
+    expect(page.replaced).toEqual([DEV_URL])
+  })
+
+  it("a 3xx is the server serving too", async () => {
+    const page = await boot({ answers: [302] })
+    await page.probe()
+    expect(page.replaced).toEqual([DEV_URL])
+  })
+
+  it("navigates once, however many ticks follow", async () => {
+    const page = await boot({ answers: [200] })
+    await page.probe(4)
+    expect(page.replaced).toEqual([DEV_URL])
+  })
+
+  it("waits out a server that answers but is not ready", async () => {
+    const page = await boot({ answers: [500, 500, 500, 500, 200] })
+    await page.probe(4)
+    expect(page.replaced).toEqual([])
+    await page.probe()
+    expect(page.replaced).toEqual([DEV_URL])
+  })
+
+  it("reconnects anyway after five not-ready answers in a row, so a failing app is not a dead end", async () => {
+    const page = await boot({ answers: [503] })
+    await page.probe(4)
+    expect(page.replaced).toEqual([])
+    await page.probe()
+    expect(page.replaced).toEqual([DEV_URL])
+    expect(page.requests).toHaveLength(5)
+  })
+
+  it("a 4xx counts as not ready, not as reachable", async () => {
+    const page = await boot({ answers: [404] })
+    await page.probe(4)
+    expect(page.replaced).toEqual([])
+  })
+
+  it("an unreachable server (no status) is neither ready nor a strike", async () => {
+    const page = await boot({ answers: [0, 0, 0, 0, 0, 0, 0, 0] })
+    await page.probe(8)
+    expect(page.replaced).toEqual([])
+  })
+
+  it("without the bridge on a cleartext origin, any answered fetch reconnects (an opaque response has no status to read)", async () => {
+    const page = await boot({
+      answers: [],
+      origin: "http:",
+      bridge: false,
+    })
+    await page.probe()
+    expect(page.requests).toEqual([DEV_URL])
+    expect(page.replaced).toEqual([DEV_URL])
+  })
+
+  it("without the bridge on a native origin there is nothing to probe with", async () => {
+    const page = await boot({
+      answers: [],
+      origin: "capacitor:",
+      bridge: false,
+    })
+    await page.probe(3)
+    expect(page.requests).toEqual([])
+    expect(page.replaced).toEqual([])
+  })
+})

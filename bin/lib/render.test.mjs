@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OWN_PHASES } from "../ui/theme.mjs"
 import {
@@ -8,6 +9,7 @@ import {
   flushNotices,
   header,
   nextPhase,
+  onKeys,
   prettyLine,
   runLanes,
   runLine,
@@ -509,5 +511,75 @@ describe("a step with lines under it is a GROUP (R64)", () => {
       skip("ios", "1.0s")
     })
     expect(out.join("")).not.toContain("\n\n\n")
+  })
+})
+
+// ---- the run loop's keys ---------------------------------------------------------------
+// `r` reloads the running app's JS (0.4 s); `b` rebuilds and reinstalls the native app
+// (~15 s). Two lowercase keys on purpose: a shift typo must never swap the cheap action for
+// the expensive one, so `R` does nothing. Off a TTY there is no one to press anything.
+
+describe("onKeys", () => {
+  const real = Object.getOwnPropertyDescriptor(process, "stdin")
+  afterEach(() => {
+    if (real) Object.defineProperty(process, "stdin", real)
+  })
+
+  function fakeTty({ isTTY = true } = {}) {
+    const stdin = new EventEmitter()
+    stdin.isTTY = isTTY
+    stdin.raw = null
+    stdin.setRawMode = (on) => {
+      stdin.raw = on
+    }
+    stdin.resume = () => {}
+    stdin.pause = () => {}
+    stdin.setEncoding = () => {}
+    Object.defineProperty(process, "stdin", {
+      value: stdin,
+      configurable: true,
+      enumerable: true,
+    })
+    return stdin
+  }
+
+  it("r reloads, b rebuilds, and R does neither", () => {
+    const stdin = fakeTty()
+    const onReload = vi.fn()
+    const onRebuild = vi.fn()
+    const onQuit = vi.fn()
+    const off = onKeys({ onReload, onRebuild, onQuit })
+    expect(stdin.raw).toBe(true)
+    stdin.emit("data", "r")
+    expect(onReload).toHaveBeenCalledTimes(1)
+    expect(onRebuild).not.toHaveBeenCalled()
+    stdin.emit("data", "b")
+    expect(onRebuild).toHaveBeenCalledTimes(1)
+    expect(onReload).toHaveBeenCalledTimes(1)
+    stdin.emit("data", "R")
+    expect(onReload).toHaveBeenCalledTimes(1)
+    expect(onRebuild).toHaveBeenCalledTimes(1)
+    expect(onQuit).not.toHaveBeenCalled()
+    off()
+    stdin.emit("data", "r")
+    expect(onReload).toHaveBeenCalledTimes(1)
+  })
+
+  it("q and ctrl-c quit", () => {
+    const stdin = fakeTty()
+    const onQuit = vi.fn()
+    onKeys({ onQuit })
+    stdin.emit("data", "q")
+    stdin.emit("data", String.fromCharCode(3))
+    expect(onQuit).toHaveBeenCalledTimes(2)
+  })
+
+  it("does nothing off a TTY", () => {
+    const stdin = fakeTty({ isTTY: false })
+    const onReload = vi.fn()
+    onKeys({ onReload })
+    expect(stdin.raw).toBe(null)
+    stdin.emit("data", "r")
+    expect(onReload).not.toHaveBeenCalled()
   })
 })
