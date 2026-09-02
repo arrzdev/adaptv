@@ -523,9 +523,11 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
         type="button"
         disabled={disabled}
         aria-disabled={disabled || undefined}
+        //the component the CONSUMER wrote; a composing primitive (Fab) overrides it
+        //by passing its own, which is why this sits ahead of the `{...props}` spread
+        data-adaptv="button"
         {...props}
         {...gestureEngineHandlers}
-        data-adaptv="button"
         //The interaction utility is LOCKED, the look is not — `pressLocked` is the
         //press core's structural class (`PRESS_TARGET_LOCKED_CLASS`, or
         //`PRESS_TARGET_DISABLED_LOCKED_CLASS` when disabled), and why it cannot be
