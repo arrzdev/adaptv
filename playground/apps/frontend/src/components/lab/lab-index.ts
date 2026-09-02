@@ -210,6 +210,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/screen-reader",
+    title: "Screen reader",
+    summary:
+      "VoiceOver / TalkBack status · announce to the reader, or to a live region",
+    isNew: true,
+  },
+  {
     to: "/lab/keep-awake",
     title: "Keep awake",
     summary: "screen wake lock · the caveat the API can't report",
