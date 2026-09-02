@@ -187,13 +187,13 @@ const themeColors = async (config) => {
  * a second copy of a fallback rule that nothing read — dead code, and the kind that only
  * looks harmless until someone changes one copy.
  */
-export async function resolveIconPlan(config) {
-  const { dark } = await themeColors(config)
+export async function resolveIconPlan() {
   return {
     //White, NOT the light theme colour: these icons sit on someone else's home screen, not
     //inside the app, and the PWA set the source comes from is drawn against white too.
+    //One colour for both appearances, too — `writeAndroidIcons` says why the launcher tile
+    //never follows the dark theme.
     iconBackground: "#ffffff",
-    iconBackgroundDark: dark,
   }
 }
 
@@ -785,7 +785,7 @@ export async function generateAssets(
   platforms,
   { report, force = false } = {},
 ) {
-  const icon = await resolveIconPlan(config)
+  const icon = await resolveIconPlan()
   const mask = await resolveSplashMask(config)
 
   const inputs = createHash("sha1")
@@ -816,7 +816,6 @@ export async function generateAssets(
     await brandLauncherIcon(nativeDir(appRoot, platform), platform, {
       set,
       background: icon.iconBackground,
-      backgroundDark: icon.iconBackgroundDark,
       report,
     })
   }
