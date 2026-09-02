@@ -52,7 +52,7 @@ never run in the same process.**
 
 | Face | Where it lives | Src files | Runs on | Enters the user's phone? |
 |---|---|---:|---|---|
-| 🖥 **CLI** | `bin/` (`.mjs`, no typecheck) | 28 | the dev's machine, as a process | ❌ never |
+| 🖥 **CLI** | `bin/` (`.mjs`, type-checked through `tsconfig.bin.json`) | 37 | the dev's machine, as a process | ❌ never |
 | 🔧 **Build-time plugin** | `src/vite/` · `src/native/` | 40 | the dev's machine, inside Vite | ❌ never |
 | 📱 **Client runtime** | `components` `hooks` `capabilities` `shell` `storage` `utils` `routes` `styles` `sw` `ota` | 175 | the user's browser / WebView | ✅ **every byte** |
 | ☁️ **Edge entry** | `src/interface/server-entry.ts` | 1 | a Cloudflare Worker | ❌ (SSR only) |
@@ -110,8 +110,9 @@ build), so no browser entry drags a `node:` builtin into its graph."* **Verified
 `noRestrictedImports` bans `./` and `../`, and nothing else; there is no rule on `node:*` and no test
 over the tree. One `import { defineApp }` in a component and the browser bundle changes shape.
 
-**The CLI reaches into four directories by string.** 16 `loadAdaptvModule("…")` call sites resolve
-paths at runtime, invisible to `tsc` and Biome (§7): 11 into `vite/`, 2 into `config/`, 2 into
+**The CLI reaches into five directories by string.** 18 `loadAdaptvModule("…")` call sites resolve
+paths at runtime, invisible to `tsc` and Biome but each checked for existence by
+`bin/lib/load-ts.test.mjs` (§7): 7 into `vite/`, 5 into `ota/build/`, 2 into `config/`, 3 into
 `native/`, and **1 into `utils/color.ts` — a file in the browser build.**
 
 </details>
@@ -438,7 +439,7 @@ subsystem.
 | `src/interface/*.index.ts` | **93 relative `../` lines** across 14 barrels — these are deliberately exempted from the `noRestrictedImports` ban in [`../../biome.json`](../../biome.json), so every barrel line is a literal path that moves | `pnpm typecheck` |
 | `package.json` `exports` | `"./root-route": "./src/routes/root-route.tsx"` is the only entry pointing outside `interface/`. **The consumer-facing subpath name does not change**, so already-generated route trees keep resolving | `pnpm build:check` |
 | `tsdown.config.ts` | 13 hardcoded entry paths (`src/interface/*.index.ts`, `src/routes/root-route.tsx`) | `pnpm build:check` |
-| `bin/` string loads | **16 `loadAdaptvModule("…")` call sites** across 6 `bin/` modules — plain strings, resolved at runtime. Re-counted 2026-09-01: **11 into `vite/`**, 2 `config/`, 2 `native/`, and **1 into `utils/color.ts`, a file in the *browser* build** | ❌ **nothing** — see §7 |
+| `bin/` string loads | **18 `loadAdaptvModule("…")` call sites** across 8 `bin/` modules — plain strings, resolved at runtime. Re-counted 2026-09-02: **7 into `vite/`**, 5 `ota/build/`, 2 `config/`, 3 `native/`, and **1 into `utils/color.ts`, a file in the *browser* build** | `bin/lib/load-ts.test.mjs` — every target must exist (§7) |
 | Filesystem-reading tests | **15 tests** read the tree by path (`barrels.test.ts`, `capabilities.barrel.test.ts`, `plugin-box.test.ts`, `offline-page-name.test.ts`, the four `styles/*.test.ts`, …) | `pnpm test`, loudly |
 | Docs | **255 inline `src/…` references across 38 files**, plus 10 markdown links | ❌ **nothing** |
 | In-code comments | **49 distinct `src/…` path strings across 63 files** (`→ src/vite/icon-set.ts` style cross-references) | ❌ **nothing** |
@@ -447,10 +448,13 @@ subsystem.
 
 **L20** and [`../decisions/facade-and-opacity.md §1`](../decisions/facade-and-opacity.md) settle that
 adaptv's barrels are curated — *"every symbol in a adaptv barrel is there because someone decided it
-should be"*. Three tests enforce it by comparing hand-written lists against the directory:
+should be"*. Five tests enforce it by comparing hand-written lists against the directory — the
+three below plus `hooks.barrel.test.ts` and `storage.barrel.test.ts`, all sharing one walk and one
+barrel reader in `src/test-utils/barrel-guard.ts`:
 
-- `src/components/barrels.test.ts` — the two component barrels must cover the same modules, with an
-  explicit `INTERNAL` set. It exists because `Text` shipped fully built and **unreachable**.
+- `src/components/barrels.test.ts` — every component module is exported unless it is in a named
+  `WITHHELD` set (`press-core` and the per-engine internals), and the set holds exactly what the
+  barrel withholds. It exists because `Text` shipped fully built and **unreachable**.
 - `src/interface/capabilities.barrel.test.ts` — every capability module is exported unless it is in a
   named `WITHHELD` set, each entry paired with the file that owns it.
 - `src/interface/ota.barrel.test.ts` — added with the OTA slice, and the one where the curated barrel
@@ -549,10 +553,10 @@ not apply, and neither does the usual reason they separate (a build that must ex
 
 ### 3.4 The part of this the ask did not mention
 
-`bin/lib/` is **31 test files against 28 source files** — the only directory in the repo where tests
+`bin/lib/` is **39 test files against 32 source files** — the only directory in the repo where tests
 outnumber source, and the strongest instance of the owner's complaint. It is also the directory where
-a move is *least* safe: `bin/**` is exempted from the import ban, the modules are `.mjs` with no
-typecheck behind them, and `bin/lib/opacity.test.mjs`, `cli-spec.test.mjs` and friends are the only
+a move is *least* safe: `bin/**` is exempted from the import ban, the modules are `.mjs` (type-checked
+through `tsconfig.bin.json`, but every reach into `src/` is a string), and `bin/lib/opacity.test.mjs`, `cli-spec.test.mjs` and friends are the only
 enforcement the [`cli-contract`](../design/cli-contract.md) has. If any part of proposal 2 is ever
 attempted, `bin/` is the part to attempt **last**, not first.
 
@@ -685,7 +689,7 @@ fix with it.
 
 | Gate | Catches | Misses |
 |---|---|---|
-| `pnpm typecheck` | Every broken `#adaptv/*` and barrel path in `.ts`/`.tsx` | anything in a string, anything in `.mjs` |
+| `pnpm typecheck` | Every broken `#adaptv/*` and barrel path in `.ts`/`.tsx`, and `bin/`'s `.mjs` through `tsconfig.bin.json` | anything in a string — which is every reach from `bin/` into `src/` |
 | `pnpm biome:check` | The reflex fix — re-introducing `./`/`../` when an alias breaks | the four exempted globs (`src/config`, `src/vite`, the barrels, `bin/**`) |
 | `pnpm test` | The 15 path-reading tests, the five barrel guards, the opacity assertions, the `bin/` string loads | anything only the CLI executes |
 | `pnpm build:check` | `exports` + `tsdown` entries; `scripts/verify-dist.mjs` checks the emitted surface | `bin/`'s runtime loads |
@@ -695,12 +699,12 @@ fix with it.
 
 ### ⚠︎ The three things no gate catches
 
-1. **`loadAdaptvModule("ota/build/ota-emit.ts")` — 16 call sites in `bin/`, 5 of them into the OTA
+1. **`loadAdaptvModule("ota/build/ota-emit.ts")` — 18 call sites in `bin/`, 5 of them into the OTA
    slice.** Plain strings, resolved by esbuild at runtime, invisible to `tsc` and to Biome. A wrong
    one used to fail **only when that CLI command runs**. ✅ The *existence* of every target is now
    checked by [`../../bin/lib/load-ts.test.mjs`](../../bin/lib/load-ts.test.mjs): it walks the
-   non-test `bin/**/*.mjs`, strips comments, collects every `loadAdaptvModule("…")` literal (16
-   today, over 12 targets — the doc-comment example on the loader itself is not one of them), and
+   non-test `bin/**/*.mjs`, strips comments, collects every `loadAdaptvModule("…")` literal (18
+   today, over 13 targets — the doc-comment example on the loader itself is not one of them), and
    fails naming each `file:line → src/<target>` that does not exist, with a floor of 10 sites so a
    rotted regex cannot pass on an empty list. Proven on a scratch copy of `bin/` with two literals
    moved: `4 dangling`, each named. What it does NOT check is that the module still exports what the

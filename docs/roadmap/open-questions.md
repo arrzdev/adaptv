@@ -59,6 +59,76 @@ Marked 🔄 *in progress*, and **superseded in practice** by
 (ranked, tiered, with the render-vs-delegate decision named explicitly). Worth closing formally as
 "answered by the tiering" rather than leaving a second, vaguer entry alive.
 
+### O17 — Who declares a bundled plugin's OS permission?
+
+**Does adaptv stamp the permission a bundled plugin needs, or does the app?**
+
+Evidence: `@capacitor/geolocation` is the one plugin in adaptv's bundled set that needs an Android
+`<uses-permission>` (`ACCESS_FINE_LOCATION`) and an iOS `NSLocationWhenInUseUsageDescription`;
+`src/native/` generates neither, so the first call fails on a device with nothing in the build saying
+why. Stamping both for every app is not the answer: an unused location permission costs store review,
+and the iOS string is user-facing copy adaptv cannot write.
+
+Candidate shape: one config declaration (`permissions: { location: "…why…" }`) that stamps both.
+Decided by: whether `adaptv.config.ts` may carry per-platform, user-facing copy at all — L20 draws
+that line for plugin names; nothing has drawn it for permission text.
+
+### O18 — L20 against L21 on `pnpm.patchedDependencies`
+
+**Whose sentence is the patch instruction?**
+
+L20: adaptv never asks the consumer to add `pnpm.patchedDependencies`. L21: the install instructions
+adaptv shows are derived from the patches that actually shipped. Evidence:
+`describeMissingPatches` in `src/vite/verify-patches.ts` follows L21 — when a shipped patch is not
+applied it prints the exact `patchedDependencies:` block to add to `pnpm-workspace.yaml`, which is
+the ask L20 forbids. Both cannot hold as written.
+
+Decided by: whether the patches travel inside adaptv at all. If the `dist` cutover ships the patched
+packages vendored, the sentence is never printed and L20 wins by construction; if not, L20 has to say
+"never asks *silently*" and L21 is the wording of the ask.
+
+### O19 — Is `notFoundScreen` in the entry chunk on purpose?
+
+**Should the one config screen with no boot-failure role become the lazy chunk its syntax promises?**
+
+Evidence: every screen in `adaptv.config.ts` is written `() => import("…")` and rewritten by
+`importThunk` (`src/vite/root-route-module.ts`) into a static `import` in the generated root route,
+so all of them ride in the entry chunk. The comment there justifies it for `offlineComponent` only —
+the offline UI must not live in a chunk that can fail to load — and the others inherit the mechanism
+without a reason of their own. Measured on the playground: a lazy `notFoundScreen` cuts the entry by
+131 KB raw / 46 KB gzipped on every load, for a screen most sessions never render.
+
+Decided by: whether the static rewrite is the contract (then the config syntax should stop looking
+lazy) or the exception (then `offlineComponent` stays static and the rest split). Either answer ends
+the mismatch between what the config says and what ships.
+
+### O20 — OTA has no outcome channel
+
+**When an update check fails, who hears about it?**
+
+Evidence: `check()` in `src/ota/updater.ts` reads the manifest through `fetchManifest`, which answers
+`null` for a malformed one, and `check()` returns on `null` — the same exit as "nothing new". Right
+for the user (the app carries on) and blind for the developer: a channel publishing garbage looks
+exactly like a channel with nothing to say, and today the only oracle is the ota-lab log on a dev
+machine.
+
+Decided by: whether adaptv owns any telemetry surface at all. It has none; this would be the first,
+and its shape — an event the app can log, a last-outcome `doctor` can read, or a hook — is the whole
+question.
+
+### O21 — `syncKeyboardState` as a decision table
+
+**Should the keyboard-state decision be pure, so each device finding is a fixture?**
+
+Evidence: `syncKeyboardState` in `src/hooks/use-keyboard.ts` is one closure that reads
+`visualViewport`, the VirtualKeyboard API and the platform flags and writes state in the same body.
+Every branch is a device-measured finding (iOS's two-step height, the VK-less Chromium double-count,
+the native dip) and none is unit-tested, because the reads and the decision are one body.
+`(inputs) → decision` plus a reader would make each finding a row in a table.
+
+Decided by: whether the device ladders in `docs/research/` stay the test of record — in which case a
+unit table is a second truth to keep in step — or become the source of the table's fixtures.
+
 ---
 
 ## The one live question `VISION.md §9` has that the register does not

@@ -9,16 +9,22 @@ import { appConfigErrors } from "#adaptv/vite/app-config-errors.ts"
 export const APP_CONFIG_BASENAME = "adaptv.config.ts"
 
 /**
- * Load `adaptv.config.ts` in Node as data. We bundle it with esbuild so
- * `defineApp` inlines, but mark every dynamic import (`() => import(...)`)
+ * Read `adaptv.config.ts` in Node as data: the module's default export, untyped
+ * and unchecked, plus the files it was bundled from. We bundle it with esbuild
+ * so `defineApp` inlines, but mark every dynamic import (`() => import(...)`)
  * external — the component thunks must NOT be resolved or executed here. The
  * bundle therefore has zero static imports and evaluates cleanly from a
  * `data:` URL, leaving each thunk as an inert closure whose specifier we later
  * read with `.toString()`.
+ *
+ * The CLI reads the file through here too (`bin/lib/load-config.mjs`), so
+ * there is one bundler configuration for it and one way the thunks stay inert.
+ * What each face refuses on top is its own: the build validates through
+ * `loadAppConfig` below, the CLI through its preflight.
  */
-export async function loadAppConfig(
+export async function readAppConfig(
   appRoot: string,
-): Promise<LoadedAppConfig> {
+): Promise<{ loaded: unknown; watchFiles: string[] }> {
   const configPath = path.resolve(appRoot, APP_CONFIG_BASENAME)
   if (!existsSync(configPath)) {
     throw new Error(
@@ -44,7 +50,20 @@ export async function loadAppConfig(
   }
 
   const module = await importFromSource(output.text)
-  const loaded = module.default
+
+  const watchFiles = Object.keys(result.metafile?.inputs ?? {}).map(
+    (input) => path.resolve(appRoot, input),
+  )
+  if (!watchFiles.includes(configPath)) watchFiles.push(configPath)
+
+  return { loaded: module.default, watchFiles }
+}
+
+/** The config the build runs from — read, then refused if it cannot be built. */
+export async function loadAppConfig(
+  appRoot: string,
+): Promise<LoadedAppConfig> {
+  const { loaded, watchFiles } = await readAppConfig(appRoot)
   if (!loaded || typeof loaded !== "object") {
     throw new Error(
       `[adaptv] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
@@ -65,14 +84,7 @@ export async function loadAppConfig(
         .join("\n"),
     )
   }
-  const config = loaded as AdaptvAppConfig
-
-  const watchFiles = Object.keys(result.metafile?.inputs ?? {}).map(
-    (input) => path.resolve(appRoot, input),
-  )
-  if (!watchFiles.includes(configPath)) watchFiles.push(configPath)
-
-  return { config, watchFiles }
+  return { config: loaded as AdaptvAppConfig, watchFiles }
 }
 
 /**
