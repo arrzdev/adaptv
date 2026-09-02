@@ -26,7 +26,12 @@ export default defineConfig({
   //did. A retried test still reports green, so the signal was gone. If a test here
   //cannot pass on its first attempt it is telling you something; let it.
   retries: 0,
-  reporter: process.env.CI ? "line" : "list",
+  //Under CI the line reporter says WHICH test failed and the HTML report, uploaded
+  //as the job's artifact on failure, carries the trace that says why. Locally the
+  //list is enough and the trace is on disk under test-results/.
+  reporter: process.env.CI
+    ? [["line"], ["html", { open: "never" }]]
+    : "list",
   use: {
     baseURL,
     //Paired with `retries: 0` above: "on-first-retry" would mean there is never a
