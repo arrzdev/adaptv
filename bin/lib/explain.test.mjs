@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest"
 import { explainFailure, toolErrorParts } from "./explain.mjs"
 import { namesPlumbing } from "./opacity.mjs"
+import { errorTail } from "./tool-log.mjs"
 
 /**
  * The opacity boundary, enforced on the only path that ever crossed it.
@@ -96,7 +97,100 @@ describe("the dev's OWN errors still reach them in full", () => {
   })
 })
 
+/**
+ * Captured verbatim from `vite build` stderr on a playground copy, 2026-09-02, with
+ * `router: { routesDirectory: 42 }`. `appConfigErrors` refuses that value now, before the
+ * build; the SHAPE is what any crash inside the plugin prints, and it is the shape that lost
+ * the ✖ line to `error during build:` — the trailer above it, which says nothing.
+ */
+const VITE_TYPEERROR = [
+  "error during build:",
+  'TypeError [ERR_INVALID_ARG_TYPE]: The "paths[2]" argument must be of type string. Received type number (42)',
+  "    at Object.resolve (node:path:1257:7)",
+  "    at resolveRoutesDir (file:///Users/arrz/Documents/Github/adaptv/.claude/worktrees/playground-repo-cleanup-8e176e/src/vite/route-tints-module.ts:23:15)",
+  "    at adaptv (file:///Users/arrz/Documents/Github/adaptv/.claude/worktrees/playground-repo-cleanup-8e176e/src/vite/adaptv-plugin.ts:192:21)",
+  "    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "    at async Promise.all (index 0)",
+  "    at async asyncFlatten (file:///Users/arrz/Documents/Github/adaptv/.claude/worktrees/playground-repo-cleanup-8e176e/node_modules/.pnpm/vite@8.0.11_@types+node@26.1.1_esbuild@0.28.0_jiti@2.7.0_terser@5.49.0/node_modules/vite/dist/node/chunks/node.js:2348:10)",
+  "  code: 'ERR_INVALID_ARG_TYPE'",
+  "}",
+]
+
+/**
+ * Same capture, same day, with `styles` removed: the sentence `src/vite/app-config-errors.ts`
+ * writes, thrown from the plugin's config hook and printed by the tool with its own `Error:`
+ * in front and adaptv's `[adaptv]` tag behind it.
+ */
+const VITE_CONFIG_REFUSED = [
+  "error during build:",
+  "Error: [adaptv] adaptv.config.ts: 'styles' must be a path to the app's stylesheet, got undefined",
+  "    at loadAppConfig (file:///Users/arrz/Documents/Github/adaptv/.claude/worktrees/playground-repo-cleanup-8e176e/src/vite/app-config-loader.ts:62:11)",
+  "    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "    at async adaptv (file:///Users/arrz/Documents/Github/adaptv/.claude/worktrees/playground-repo-cleanup-8e176e/src/vite/adaptv-plugin.ts:118:20)",
+  "    at async Promise.all (index 0)",
+]
+
+/** What `exec` hands the explainer: the captured stream, narrowed by `errorTail`. */
+const buildFailure = (captured) => {
+  const err = new Error("vite build exited with code 1")
+  err.tail = errorTail(captured).join("\n")
+  return err
+}
+
+describe("a crash inside the web build names itself on the ✖ line", () => {
+  it("puts the TypeError's sentence on the ✖, not the trailer above it", () => {
+    //Through `errorTail` deliberately: the line was lost twice, once by the tail filter
+    //and once by the pick here, and both had the same missing word boundary.
+    const { reason, detail } = explainFailure("web")(
+      buildFailure(VITE_TYPEERROR),
+    )
+    expect(reason).toBe(
+      'The "paths[2]" argument must be of type string. Received type number (42)',
+    )
+    expect(detail).toEqual([])
+  })
+
+  it("says the config sentence as adaptv's own, file first, no tag", () => {
+    const { reason, detail } = explainFailure("web")(
+      buildFailure(VITE_CONFIG_REFUSED),
+    )
+    expect(reason).toBe(
+      "adaptv.config.ts: 'styles' must be a path to the app's stylesheet, got undefined",
+    )
+    expect(detail).toEqual([])
+  })
+
+  it("prints no absolute path and no engine on either", () => {
+    for (const captured of [VITE_TYPEERROR, VITE_CONFIG_REFUSED]) {
+      const { reason, detail } = explainFailure("web")(
+        buildFailure(captured),
+      )
+      for (const line of [reason, ...detail]) {
+        expect(line).not.toMatch(/\/Users\//)
+        expect(namesPlumbing(line)).toBe(false)
+      }
+    }
+  })
+})
+
 describe("toolErrorParts", () => {
+  it("strips an error's class and code, and adaptv's own tag", () => {
+    expect(
+      toolErrorParts("TypeError [ERR_INVALID_ARG_TYPE]: The x argument")
+        .message,
+    ).toBe("The x argument")
+    expect(
+      toolErrorParts("TypeError: Cannot read properties").message,
+    ).toBe("Cannot read properties")
+    expect(toolErrorParts("[adaptv] Error: no routes").message).toBe(
+      "no routes",
+    )
+    expect(
+      toolErrorParts("Error: [adaptv] adaptv.config.ts: 'x' must be y")
+        .message,
+    ).toBe("adaptv.config.ts: 'x' must be y")
+  })
+
   it("carries no importer for an ESM resolution failure", () => {
     //The importer WAS carried, as its package, which is exactly how
     //`at @tanstack/start-server-core/dist/esm/router-manifest.js` reached a user's terminal.

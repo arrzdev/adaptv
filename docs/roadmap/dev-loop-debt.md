@@ -178,7 +178,8 @@ instead of needing a full reinstall.
 2. **D** (target the right device) — small, latent bug
 3. **H** — small correctness/robustness
 4. **I** (`r` semantics) — UX, cheap
-5. **B** (unify fingerprints) — needs a perf measurement first. ⚠️ **This is the same bug
+5. **B** (unify fingerprints) — measured (§B, 2026-09-02): ~8 ms either way, so the pick is on
+   honesty, not speed; the `.output` hole the measurement turned up is already fixed. ⚠️ **This is the same bug
    `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
    that doc names "a real bug". Two fingerprints with two hashing strategies is the cause.
 6. **E**, **G** — only if already in the file
