@@ -87,6 +87,9 @@ export function lineReader(emit) {
  * Run a command with captured stdout+stderr. Each non-empty line is forwarded to
  * `onLine` (for the live spinner line) and buffered. Resolves on exit 0; rejects
  * with an Error carrying `.tail` (the last {@link TAIL_LINES} lines) otherwise.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, onLine?: (line: string) => void }} [opts]
  */
 export function exec(command, args, { cwd, env, onLine } = {}) {
   return new Promise((resolve, reject) => {
@@ -135,6 +138,9 @@ const failureTail = (buffer) => errorTail(buffer, TAIL_LINES).join("\n")
  * Run a command purely to collect its stdout (e.g. `cap run --list --json`). Never
  * rejects — returns `{ stdout, stderr, code }` so the caller decides what a non-zero
  * exit means.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number }} [opts]
  */
 export function capture(command, args, { cwd, env, timeoutMs } = {}) {
   return new Promise((resolve) => {

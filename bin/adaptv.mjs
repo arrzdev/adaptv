@@ -200,6 +200,9 @@ async function loadConfig(appRoot) {
  * usable", and it is the same at startup and at minute forty: print every problem and stop.
  * A session whose config no longer parses is serving something that does not match the file
  * on disk, which is a worse place to be than back at the shell.
+ * @param {string} appRoot
+ * @param {string[]} platforms
+ * @param {{ optional?: boolean, icons?: boolean, beforeExit?: () => void }} [opts]
  */
 async function preflight(
   appRoot,
@@ -304,6 +307,9 @@ function snapshotNativeFp(appRoot, platforms) {
  * `dev server at http://localhost:41730 is…` and the fix it named never reached the screen.
  *
  * So: a SHORT reason, and the rest as `fix` lines the renderer prints dim underneath (R13/R15).
+ * @param {{ ok: boolean, why?: string, status?: number }} verdict
+ * @param {string} url
+ * @param {string[]} log
  */
 function devServerUnhealthy({ why, status }, url, log) {
   if (why !== "error") {
@@ -445,6 +451,7 @@ async function preparePlatforms(
   { dev, healAts = true, force = false, envFor, verbose, warnings },
 ) {
   const prepared = new Set()
+  /** @type {Record<string, number>} */
   const prepareMs = {}
   for (const platform of platforms) {
     const fresh = !existsSync(nativeDir(appRoot, platform))
@@ -643,6 +650,7 @@ async function runLive(appRoot, platforms, opts) {
 
   const verbose = opts.verbose
   const cleanups = [] // revert fns, unwound LIFO on exit
+  /** @type {Awaited<ReturnType<typeof startDevServer>> | null} */
   let devServer = null
   let onDevLine = null // set once we're watching; parses HMR events
   // Everything the dev server has said, kept from the moment it starts. `onDevLine` is not
@@ -745,6 +753,7 @@ async function runLive(appRoot, platforms, opts) {
     // billed to that platform's launch line further down (it runs before the line exists).
     // Declared out here because the launch phase lives in a separate `if (!webOnly)` block.
     let ready = []
+    /** @type {Record<string, number>} */
     let prepareMs = {}
     // Re-arm BOTH staleness fingerprints together, always. They answer one question — does
     // what is installed still match what the dev wrote — so arming one without the other is
@@ -1129,6 +1138,7 @@ async function runLive(appRoot, platforms, opts) {
       // sitting blank for a second while sharp re-renders the launcher icons; doing it AT ALL
       // is what stops a rebuild from being a subset of a startup. `healAts: false` because the
       // ATS exception in the plist right now is this session's own and still in force.
+      /** @param {{ force?: boolean, offsets?: Record<string, number>, prepare?: boolean }} opts */
       launchAll = async ({
         force,
         offsets = {},
@@ -2439,6 +2449,7 @@ async function stageOtaBundle(appRoot, config, ota, opts) {
   }
 
   await setCapacitorConfigEnv(config)
+  /** @type {{ buildTag: string, archivePath: string } | null} */
   let staged = null
   await runLine(
     "bundle",
@@ -2850,6 +2861,7 @@ async function main() {
         const buildMs = await buildWebPreview(appRoot, config, {
           verbose: !!flags.verbose,
         })
+        /** @type {Awaited<ReturnType<typeof serveWebPreview>> | null} */
         let web = null
         const native = await pipeline("preview", appRoot, platforms, {
           ...opts,

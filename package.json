@@ -44,7 +44,7 @@
     "preview:web": "node scripts/playground.mjs preview:web",
     "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.bin.json"
   },
   "imports": {
     "#adaptv/*": [
