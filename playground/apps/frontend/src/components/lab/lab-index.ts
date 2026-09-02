@@ -284,6 +284,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/motion",
+    title: "Motion",
+    summary:
+      "accelerometer + gyroscope · the permission step and the silence, named",
+    isNew: true,
+  },
+  {
     to: "/lab/network",
     title: "Network",
     summary: "reachability · accurate on native, coarse on web",
