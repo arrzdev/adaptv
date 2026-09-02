@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   deleteFile,
   getFilesystemSupport,
+  getFileUri,
   listFiles,
   readFile,
   readTextFile,
@@ -109,6 +110,9 @@ vi.mock("@capacitor/filesystem", () => {
     deleteFile: vi.fn(async (o: { path: string; directory?: string }) => {
       if (!nativeFiles.delete(key(o.directory, o.path))) throw missing()
     }),
+    getUri: vi.fn(async (o: { path: string; directory?: string }) => ({
+      uri: `file:///container/${o.directory ?? "DATA"}/${o.path}`,
+    })),
   }
   return { Directory, Encoding, Filesystem }
 })
@@ -551,6 +555,23 @@ describe("native specifics", () => {
     expect(nativeFiles.get(bundle)?.data).toBe(btoa("<html>"))
   })
 
+  it("hands out a file URI for a file that exists, and missing for one that does not", async () => {
+    await writeFile("export/backup.json", "{}", { scope: "cache" })
+    expect(
+      await getFileUri("export/backup.json", { scope: "cache" }),
+    ).toEqual({
+      status: "ok",
+      uri: "file:///container/CACHE/export/backup.json",
+    })
+    expect(
+      await getFileUri("export/nope.json", { scope: "cache" }),
+    ).toEqual({
+      status: "missing",
+      uri: null,
+    })
+    expect(Filesystem.getUri).toHaveBeenCalledTimes(1)
+  })
+
   it("maps a full disk to quota and any other rejection to failed", async () => {
     const write = Filesystem.writeFile as ReturnType<typeof vi.fn>
     write.mockRejectedValueOnce(new Error("No space left on device"))
@@ -571,6 +592,14 @@ describe("opfs specifics", () => {
     expect([
       ...(adaptv.children.get("data") as FakeDir).children.keys(),
     ]).toEqual(["a.txt"])
+  })
+
+  it("has no URI to give: an origin-private file is reachable only through its handle", async () => {
+    await writeFile("a.txt", "x")
+    expect(await getFileUri("a.txt")).toEqual({
+      status: "unsupported",
+      uri: null,
+    })
   })
 
   it("reports the quota as quota", async () => {
