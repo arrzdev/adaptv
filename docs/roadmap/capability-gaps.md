@@ -83,7 +83,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 ## Tier 3 — the long tail
 
 Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
-store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
+store review · ~~screen-capture blocking~~ (shipped 2026-09-02: `src/capabilities/privacy-screen.ts` over the official `@capacitor/privacy-screen`; Android sets FLAG_SECURE so captures come back black and the recents card is blank, iOS can only cover the switcher and the caveat string says so, web/PWA read `unsupported` because no browser exposes a way to refuse a capture) · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 
 ---
