@@ -3,6 +3,7 @@
 import { registerServiceWorkerLifecycle } from "#adaptv/sw/sw.lifecycle"
 import { registerNavigationRoute } from "#adaptv/sw/sw.navigation"
 import type { NavigationMode } from "#adaptv/sw/sw.navigation-policy"
+import { registerNotificationOpenRoute } from "#adaptv/sw/sw.notifications"
 import { setupPrecache } from "#adaptv/sw/sw.precache"
 import { registerStaticAssetsRoute } from "#adaptv/sw/sw.static-assets"
 
@@ -47,6 +48,10 @@ registerNavigationRoute({
 
 //Cache-first — see `createHashedAssetStrategy` in sw.strategies.ts.
 registerStaticAssetsRoute({ buildTag: __ADAPTV_BUILD_TAG__ })
+
+//A tapped notification has to reach the page, and the page is not what the tap
+//arrives at. → sw.notifications.ts
+registerNotificationOpenRoute()
 
 registerServiceWorkerLifecycle({
   claimClients: true,

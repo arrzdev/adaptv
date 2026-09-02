@@ -6,9 +6,14 @@ import {
   getNotifyCaveat,
   listScheduledNotifications,
   notify,
+  onNotificationOpened,
   requestNotifyPermission,
   scheduleNotification,
 } from "#adaptv/capabilities/notifications"
+import {
+  NOTIFICATION_OPENED,
+  NOTIFICATION_OPENED_QUERY,
+} from "#adaptv/sw/sw.notification-protocol"
 import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isIOS, isNativePlatform } from "#adaptv/utils/platform"
 
@@ -19,6 +24,7 @@ vi.mock("@capacitor/local-notifications", () => ({
     schedule: vi.fn(async () => ({ notifications: [] })),
     getPending: vi.fn(async () => ({ notifications: [] })),
     cancel: vi.fn(async () => {}),
+    addListener: vi.fn(async () => ({ remove: vi.fn(async () => {}) })),
   },
 }))
 vi.mock("#adaptv/utils/platform", () => ({
@@ -30,6 +36,12 @@ vi.mock("#adaptv/utils/native-plugins", () => ({
 }))
 
 const showNotification = vi.fn(async () => {})
+/** Everything the page posted to its worker, and the listener it registered. */
+const worker = {
+  posted: [] as unknown[],
+  listeners: [] as Array<(event: MessageEvent) => void>,
+  removed: 0,
+}
 const close = vi.fn()
 const getNotifications = vi.fn(async () => [{ close }])
 let hasRegistration = true
@@ -42,13 +54,22 @@ function web(
     permission,
     requestPermission: vi.fn(async () => permission),
   })
+  const active = {
+    postMessage: (message: unknown) => worker.posted.push(message),
+  }
   vi.stubGlobal("navigator", {
     serviceWorker: {
       getRegistration: vi.fn(async () =>
         hasRegistration
-          ? { showNotification, getNotifications, active: {} }
+          ? { showNotification, getNotifications, active }
           : undefined,
       ),
+      ready: Promise.resolve({ active }),
+      addEventListener: (_type: string, fn: (e: MessageEvent) => void) =>
+        worker.listeners.push(fn),
+      removeEventListener: () => {
+        worker.removed += 1
+      },
     },
     //Only present when a test wants the Permissions API in play; the others
     //exercise the constructor fallback an older Safari leaves behind.
@@ -76,6 +97,12 @@ beforeEach(() => {
     notifications: [],
   })
   hasRegistration = true
+  worker.posted = []
+  worker.listeners = []
+  worker.removed = 0
+  vi.mocked(LocalNotifications.addListener).mockResolvedValue({
+    remove: vi.fn(async () => {}),
+  } as never)
   vi.mocked(isNativePlatform).mockReturnValue(false)
   vi.mocked(isIOS).mockReturnValue(false)
   vi.mocked(hasNativePlugin).mockReturnValue(true)
@@ -96,6 +123,7 @@ describe("notifications — the web", () => {
     expect(showNotification).toHaveBeenCalledWith("Done", {
       body: "Two saved",
       tag: "7",
+      data: { id: 7, data: {} },
     })
     expect(LocalNotifications.schedule).not.toHaveBeenCalled()
   })
@@ -153,6 +181,7 @@ describe("notifications — the web", () => {
     expect(showNotification).toHaveBeenCalledWith("Done", {
       body: "x",
       tag: "8",
+      data: { id: 8, data: {} },
     })
     web("granted", "denied")
     expect(await checkNotifyPermission()).toBe("denied")
@@ -201,6 +230,7 @@ describe("notifications — the web", () => {
     expect(showNotification).toHaveBeenCalledWith("Done", {
       body: "x",
       tag: "9",
+      data: { id: 9, data: {} },
     })
     expect(activated.active).toBeTruthy()
   })
@@ -360,5 +390,118 @@ describe("notifications — native", () => {
         expect(n.isExactNotification).toBe(false)
       }
     }
+  })
+})
+
+describe("notifications — a tap comes back", () => {
+  it("carries the payload into the web notification and back out of the worker's message", async () => {
+    const seen: unknown[] = []
+    const stop = onNotificationOpened((opened) => seen.push(opened))
+    await notify({
+      title: "Done",
+      body: "Two saved",
+      id: 7,
+      data: { route: "/inbox" },
+    })
+    expect(showNotification).toHaveBeenCalledWith("Done", {
+      body: "Two saved",
+      tag: "7",
+      data: { id: 7, data: { route: "/inbox" } },
+    })
+
+    for (const listener of worker.listeners)
+      listener({
+        data: {
+          type: NOTIFICATION_OPENED,
+          id: 7,
+          data: { route: "/inbox" },
+        },
+      } as MessageEvent)
+    expect(seen).toEqual([{ id: 7, data: { route: "/inbox" } }])
+
+    stop()
+    expect(worker.removed).toBe(1)
+  })
+
+  it("asks the worker for a tap that arrived before the page existed", async () => {
+    const stop = onNotificationOpened(() => {})
+    //the ready promise is what the subscription waits on
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(worker.posted).toEqual([{ type: NOTIFICATION_OPENED_QUERY }])
+    stop()
+  })
+
+  it("ignores a message that is not a tap", async () => {
+    const seen: unknown[] = []
+    onNotificationOpened((opened) => seen.push(opened))
+    for (const listener of worker.listeners)
+      for (const data of [{ type: "push" }, { type: NOTIFICATION_OPENED }])
+        listener({ data } as MessageEvent)
+    expect(seen).toEqual([])
+  })
+
+  it("native subscribes to the plugin's own tap event and reads the extras", async () => {
+    native()
+    const seen: unknown[] = []
+    onNotificationOpened((opened) => seen.push(opened))
+    const [event, handler] = vi.mocked(LocalNotifications.addListener).mock
+      .calls[0] as [string, (e: unknown) => void]
+    expect(event).toBe("localNotificationActionPerformed")
+
+    handler({
+      actionId: "tap",
+      notification: { id: 4, extra: { route: "/inbox", count: 3 } },
+    })
+    //a button on the notification is not the notification
+    handler({
+      actionId: "snooze",
+      notification: { id: 4, extra: { route: "/later" } },
+    })
+    expect(seen).toEqual([{ id: 4, data: { route: "/inbox" } }])
+    expect(worker.listeners).toEqual([])
+  })
+
+  it("native carries the payload as the plugin's extras, now and later", async () => {
+    native()
+    await notify({ title: "a", body: "b", id: 1, data: { route: "/x" } })
+    expect(LocalNotifications.schedule).toHaveBeenCalledWith({
+      notifications: [
+        {
+          id: 1,
+          title: "a",
+          body: "b",
+          extra: { route: "/x" },
+          isExactNotification: false,
+        },
+      ],
+    })
+    const at = new Date(Date.now() + 60_000)
+    await scheduleNotification({
+      title: "a",
+      body: "b",
+      id: 2,
+      at,
+      data: { route: "/y" },
+    })
+    expect(LocalNotifications.schedule).toHaveBeenLastCalledWith({
+      notifications: [
+        {
+          id: 2,
+          title: "a",
+          body: "b",
+          extra: { route: "/y" },
+          schedule: { at },
+          isExactNotification: false,
+        },
+      ],
+    })
+  })
+
+  it("a binary built before the plugin subscribes to nothing and never throws", () => {
+    native(false)
+    vi.stubGlobal("navigator", {})
+    expect(() => onNotificationOpened(() => {})()).not.toThrow()
+    expect(LocalNotifications.addListener).not.toHaveBeenCalled()
   })
 })

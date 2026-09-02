@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { NOTIFICATION_OPENED_QUERY } from "#adaptv/sw/sw.notification-protocol"
 import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
 
 /**
@@ -25,6 +26,7 @@ export type ServiceWorkerMessage = {
  */
 const ADAPTV_INTERNAL_TYPES: ReadonlySet<string> = new Set([
   "SKIP_WAITING",
+  NOTIFICATION_OPENED_QUERY,
 ])
 
 /**
