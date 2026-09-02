@@ -1618,8 +1618,7 @@ export function lanIp() {
   for (const [name, addrs] of Object.entries(networkInterfaces())) {
     if (SKIP_IFACE.test(name)) continue
     for (const a of addrs ?? []) {
-      const fam = a.family === "IPv4" || a.family === 4
-      if (!fam || a.internal) continue
+      if (a.family !== "IPv4" || a.internal) continue
       if (a.address.startsWith("169.254.")) continue
       candidates.push({ name, address: a.address })
     }
