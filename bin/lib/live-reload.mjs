@@ -47,7 +47,9 @@ export function patchServerUrl(_appRoot, url) {
   // nulls the local-server injector). With `http`, the offline page's origin matches the
   // dev server's scheme, so a plain `fetch` reachability probe works and Android can
   // auto-reconnect. Safe here precisely BECAUSE live-reload is on: the app itself runs
-  // from the dev-server origin, so this local origin only ever serves the offline page.
+  // from the dev-server origin, so this local origin only ever serves the offline page —
+  // and that is a test, not a claim: `live-reload.test.mjs` fails if the page ever reads
+  // storage or a secure-context API, or if a built config carries this scheme.
   const server = {
     url,
     cleartext: true,
