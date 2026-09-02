@@ -46,6 +46,7 @@ const PAGES = [
   ["/lab/share", "Share"],
   ["/lab/clipboard", "Clipboard"],
   ["/lab/device", "Device"],
+  ["/lab/locale", "Locale"],
   ["/lab/orientation", "Orientation"],
   ["/lab/keep-awake", "Keep awake"],
   ["/lab/app-state", "App state"],
