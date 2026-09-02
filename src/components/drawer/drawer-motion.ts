@@ -180,35 +180,6 @@ export function applyDrawerPanelTransition(
   panel.style.transition = `transform ${config.duration}s cubic-bezier(${a}, ${b}, ${c}, ${d})`
 }
 
-export function waitForDrawerPanelTransition(
-  panel: HTMLElement | null,
-  duration: number,
-) {
-  if (!panel || duration <= 0) return Promise.resolve()
-
-  const element = panel
-
-  return new Promise<void>((resolve) => {
-    let settled = false
-
-    function finish() {
-      if (settled) return
-      settled = true
-      element.removeEventListener("transitionend", onTransitionEnd)
-      resolve()
-    }
-
-    function onTransitionEnd(event: TransitionEvent) {
-      if (event.target === element && event.propertyName === "transform") {
-        finish()
-      }
-    }
-
-    element.addEventListener("transitionend", onTransitionEnd)
-    window.setTimeout(finish, duration * 1000 + TRANSITION_END_FALLBACK_MS)
-  })
-}
-
 type AnimateDrawerYOptions = {
   dragVelocity?: number
   useTransition?: boolean
@@ -385,76 +356,7 @@ export function resumeDrawerTransition(
   }
 }
 
-type DrawerMotionAnimation = ReturnType<typeof animate>
-
-export type { DrawerMotionAnimation }
-
-type AnimateDrawerKeyboardOffsetOptions = {
-  activeAnimation?: { current: DrawerMotionAnimation | null }
-}
-
-/** `true` when the lift would actually move (vs the epsilon no-op below). Exposed so the
- *  engine can skip animation-window bookkeeping for the no-op re-runs. */
-export function willAnimateDrawerKeyboardOffset(
-  offset: MotionValue<number>,
-  target: number,
-): boolean {
-  return Math.abs(offset.get() - target) >= 0.5
-}
-
-export function animateDrawerKeyboardOffset(
-  offset: MotionValue<number>,
-  panel: HTMLElement | null,
-  target: number,
-  config: DrawerTransition,
-  options: AnimateDrawerKeyboardOffsetOptions = {},
-) {
-  // A two-step iOS keyboard report re-runs the lift with the SAME max-height target; skipping
-  // here (instead of restarting the animation) keeps the raise one continuous motion.
-  if (!willAnimateDrawerKeyboardOffset(offset, target)) {
-    return Promise.resolve()
-  }
-
-  options.activeAnimation?.current?.stop()
-  if (options.activeAnimation) {
-    options.activeAnimation.current = null
-  }
-
-  //the keyboard lift translates the panel under the focused field — mute the caret before the
-  //first moved frame; released on settle
-  const releaseCaretHold = beginCaretHold()
-  const resolved = resolveTransition(config)
-
-  if (config.mode === "spring") {
-    clearDrawerPanelTransition(panel)
-    const controls = animate(offset, target, resolved)
-    if (options.activeAnimation) {
-      options.activeAnimation.current = controls
-    }
-
-    return controls.finished.finally(() => {
-      releaseCaretHold()
-      if (options.activeAnimation?.current === controls) {
-        options.activeAnimation.current = null
-      }
-    })
-  }
-
-  applyDrawerPanelTransition(panel, config, true)
-  offset.set(target)
-  return waitForDrawerPanelTransition(panel, config.duration).finally(
-    releaseCaretHold,
-  )
-}
-
-export function stopDrawerKeyboardOffsetAnimation(activeAnimation: {
-  current: DrawerMotionAnimation | null
-}) {
-  activeAnimation.current?.stop()
-  activeAnimation.current = null
-}
-
-export function readDrawerBackdropOpacity(backdrop: HTMLElement): number {
+function readDrawerBackdropOpacity(backdrop: HTMLElement): number {
   const value = Number.parseFloat(getComputedStyle(backdrop).opacity)
   if (!Number.isFinite(value)) return 0
   return clamp(value, 0, 1)
