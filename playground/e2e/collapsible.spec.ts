@@ -5,14 +5,18 @@ import { expect, test } from "@playwright/test"
  * Collapsible — a disclosure whose whole contract is its PHASES:
  *
  *   closed at rest  → `hidden` (server: "", upgraded to "until-found" where the
- *                     engine has it), data-state=closed, no inline height
- *   opening         → hidden gone, data-state=open, data-transition=open,
+ *                     engine has it), no data-collapsible-open, no inline height
+ *   opening         → hidden gone, data-collapsible-open, data-collapsible-opening,
  *                     inline height 0 → measured px over --collapsible-duration
- *   open at rest    → NO inline height, no data-transition (later growth is not clipped)
- *   closing         → data-state=closed, data-transition=close, px → 0
+ *   open at rest    → NO inline height, no opening/closing attribute (later growth
+ *                     is not clipped)
+ *   closing         → data-collapsible-open gone, data-collapsible-closing, px → 0
  *                     and `hidden` ONLY after the transition settles
- *   reduced motion  → no data-transition phase at all: one commit
+ *   reduced motion  → no opening/closing phase at all: one commit
  *   beforematch     → opens instantly, no transition (the browser's find-in-page path)
+ *
+ * The state is PRESENCE attributes (docs/decisions/styling.md §3.1), so every read
+ * below is `getAttribute(...) !== null`, never a value compare.
  *
  * Every test here pins one of those phases in a real engine. Both projects run:
  * the `hidden` upgrade is the one place engines legitimately differ (the iOS 18
@@ -45,8 +49,8 @@ const rowValue = (sec: Locator, label: string): Locator =>
 type Snapshot = {
   expanded: string | null
   hidden: string | null
-  state: string | null
-  transition: string | null
+  open: boolean
+  phase: "opening" | "closing" | null
   inlineHeight: string
   clientHeight: number
 }
@@ -60,8 +64,13 @@ const snapshot = (sec: Locator): Promise<Snapshot> =>
       return {
         expanded: trigger.getAttribute("aria-expanded"),
         hidden: panel.getAttribute("hidden"),
-        state: panel.getAttribute("data-state"),
-        transition: panel.getAttribute("data-transition"),
+        open: panel.getAttribute("data-collapsible-open") !== null,
+        phase:
+          panel.getAttribute("data-collapsible-opening") !== null
+            ? "opening"
+            : panel.getAttribute("data-collapsible-closing") !== null
+              ? "closing"
+              : null,
         inlineHeight: panel.style.height,
         clientHeight: panel.clientHeight,
       }
@@ -96,7 +105,7 @@ async function awaitClientHandover(page: Page) {
 /** Poll until no transition is running on the section's panel. */
 async function awaitRest(sec: Locator) {
   await expect
-    .poll(async () => (await snapshot(sec)).transition, {
+    .poll(async () => (await snapshot(sec)).phase, {
       message: "the panel never left its transition phase",
     })
     .toBeNull()
@@ -164,7 +173,7 @@ test.describe("Collapsible", () => {
     const first = await snapshot(sec)
     expect(first.expanded).toBe("true")
     expect(first.hidden).toBeNull()
-    expect(first.state).toBe("open")
+    expect(first.open).toBe(true)
 
     // sample the height through the slide: it must only ever grow
     const heights: number[] = [first.clientHeight]
@@ -183,7 +192,7 @@ test.describe("Collapsible", () => {
     await awaitRest(sec)
     const rest = await snapshot(sec)
     expect(rest.inlineHeight).toBe("")
-    expect(rest.transition).toBeNull()
+    expect(rest.phase).toBeNull()
     expect(rest.clientHeight).toBeGreaterThan(0)
     expect(rest.hidden).toBeNull()
   })
@@ -201,7 +210,7 @@ test.describe("Collapsible", () => {
     // the slide runs — `hidden` now would make it jump shut
     const closing = await snapshot(sec)
     expect(closing.expanded).toBe("false")
-    expect(closing.state).toBe("closed")
+    expect(closing.open).toBe(false)
     expect(closing.hidden).toBeNull()
 
     // the first frame `hidden` appears on is the settled one: no inline height left
@@ -216,7 +225,7 @@ test.describe("Collapsible", () => {
       )
       .not.toBeNull()
     expect((settled as unknown as Snapshot).inlineHeight).toBe("")
-    expect((settled as unknown as Snapshot).transition).toBeNull()
+    expect((settled as unknown as Snapshot).phase).toBeNull()
   })
 
   test("reduced motion flips in one commit", async ({ page }) => {
@@ -230,7 +239,7 @@ test.describe("Collapsible", () => {
     await trigger.click()
     const opened = await snapshot(sec)
     expect(
-      opened.transition,
+      opened.phase,
       "no transition phase under reduced motion",
     ).toBeNull()
     expect(opened.expanded).toBe("true")
@@ -241,7 +250,7 @@ test.describe("Collapsible", () => {
     await trigger.click()
     const closed = await snapshot(sec)
     expect(
-      closed.transition,
+      closed.phase,
       "no transition phase under reduced motion",
     ).toBeNull()
     expect(closed.expanded).toBe("false")
@@ -269,7 +278,7 @@ test.describe("Collapsible", () => {
     const opened = await snapshot(found)
     expect(opened.expanded).toBe("true")
     expect(opened.hidden).toBeNull()
-    expect(opened.transition).toBeNull()
+    expect(opened.phase).toBeNull()
     expect(opened.inlineHeight).toBe("")
     await expect(found.getByText(NEEDLE)).toBeVisible()
 
@@ -303,7 +312,7 @@ test.describe("Collapsible", () => {
       rest.hidden !== null,
       `hidden=${JSON.stringify(rest.hidden)} disagrees with aria-expanded=${rest.expanded}`,
     ).toBe(rest.expanded === "false")
-    expect(rest.state).toBe(rest.expanded === "true" ? "open" : "closed")
+    expect(rest.open).toBe(rest.expanded === "true")
   })
 
   test("the trigger is a real button", async ({ page }) => {
