@@ -2,7 +2,7 @@
 //
 // The CLI is plain `.mjs` that node runs directly, while the framework it drives is TS under
 // `src/`. Several ideas are needed on both sides — the toolchain checks `doctor` reports, the
-// Capacitor config, and now the app's icon set — and each one that gets reimplemented in `bin/`
+// Capacitor config, the app's icon set, the app's config and what makes it usable — and each one that gets reimplemented in `bin/`
 // is a second implementation free to drift from the first (`docs/design/cli-contract.md` R26). This bundles the real
 // module with esbuild and imports it from memory, so there is one copy of each idea and no
 // build step between editing `src/` and running the CLI.
@@ -35,6 +35,21 @@ export function loadAdaptvModule(relFromSrc) {
   return pending
 }
 
+// A bare package import (`esbuild`, `sharp`) is left where it is and pointed at by absolute
+// URL. Inlining it would be wrong twice: a `data:` module cannot resolve a bare specifier at
+// all, and esbuild's own API refuses to run from anywhere but its package (it locates its
+// binary relative to itself). `node:` builtins need no help and are left alone.
+const packagesStayOnDisk = {
+  name: "adaptv-packages-stay-on-disk",
+  setup(build) {
+    build.onResolve({ filter: /^[^./#]/ }, (args) =>
+      args.path.startsWith("node:")
+        ? null
+        : { path: import.meta.resolve(args.path), external: true },
+    )
+  },
+}
+
 async function bundle(relFromSrc) {
   const result = await esbuild({
     entryPoints: [path.join(ADAPTV_ROOT, "src", relFromSrc)],
@@ -44,6 +59,7 @@ async function bundle(relFromSrc) {
     platform: "node",
     target: "es2022",
     alias: { "#adaptv": path.join(ADAPTV_ROOT, "src") },
+    plugins: [packagesStayOnDisk],
   })
   const source = result.outputFiles?.[0]?.text
   if (!source) throw new Error(`failed to bundle ${relFromSrc}`)

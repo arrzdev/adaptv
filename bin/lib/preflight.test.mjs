@@ -13,6 +13,9 @@ import {
 /** A config that passes — every check below starts from this and breaks one thing. */
 const ok = {
   appId: "com.example.app",
+  name: "Probe",
+  styles: "./src/styles/main.css",
+  router: { routesDirectory: "./routing" },
   themeColor: { light: "#ffffff", dark: "#101010" },
 }
 
@@ -62,12 +65,12 @@ function png(width, { alpha = true } = {}) {
 }
 
 describe("configErrors — a value adaptv cannot use stops the run", () => {
-  it("passes a config that is fine, silently", () => {
+  it("passes a config that is fine, silently", async () => {
     //The bar every check has to clear: a warning or error every project sees teaches devs
     //to ignore them.
-    expect(configErrors(ok)).toEqual([])
+    expect(await configErrors(ok)).toEqual([])
     expect(
-      configErrors({
+      await configErrors({
         ...ok,
         backgroundColor: "#FFF",
         splashMaskMode: "system",
@@ -76,38 +79,52 @@ describe("configErrors — a value adaptv cannot use stops the run", () => {
     ).toEqual([])
   })
 
-  it("names the key, the shape and what was actually there", () => {
+  it("names the key, the shape and what was actually there", async () => {
     //R7 — an error is terse and names the fix. These used to be SILENT: an unparseable
     //colour fell back to white and an unknown mode to `preferences`, so the app shipped
     //with a setting the dev wrote and adaptv ignored.
-    const [color] = configErrors({
+    const [color] = await configErrors({
       ...ok,
       themeColor: { light: "midnightblue", dark: "#101010" },
     })
     expect(color).toBe(
       `'themeColor.light' must be a hex colour like #1b1b1b, got "midnightblue"`,
     )
-    const [mode] = configErrors({ ...ok, splashMaskMode: "auto" })
+    const [mode] = await configErrors({ ...ok, splashMaskMode: "auto" })
     expect(mode).toBe(
       `'splashMaskMode' must be preferences, system, light or dark, got "auto"`,
     )
   })
 
-  it("rejects an appId the native toolchains would reject four minutes later", () => {
+  it("rejects an appId the native toolchains would reject four minutes later", async () => {
     //It is the Android package AND the iOS bundle id. `myapp` and `com.4d.app` both
-    //scaffold happily and then fail deep inside gradle.
-    expect(configErrors({ ...ok, appId: "myapp" })[0]).toContain(
+    //scaffold happily and then fail deep inside gradle. A MISSING appId is refused one step
+    //earlier, by `loadConfig` — the build can run without one, no command here can.
+    expect((await configErrors({ ...ok, appId: "myapp" }))[0]).toContain(
       "reverse-DNS",
     )
-    expect(configErrors({ ...ok, appId: "com.4d.app" })).toHaveLength(1)
-    expect(configErrors({ ...ok, appId: undefined })).toHaveLength(1)
-    expect(configErrors({ ...ok, appId: "com.example.my_app_2" })).toEqual(
-      [],
-    )
+    expect(
+      await configErrors({ ...ok, appId: "com.4d.app" }),
+    ).toHaveLength(1)
+    expect(
+      await configErrors({ ...ok, appId: "com.example.my_app_2" }),
+    ).toEqual([])
   })
 
-  it("reports every problem at once, not one per run", () => {
-    const errors = configErrors({
+  it("refuses what the web build would refuse, before the run starts", async () => {
+    //The rules are the build's own. `orientation: "sideways"` used to pass this check and
+    //die inside the web build, worded by the tool that hit it (R33).
+    expect(await configErrors({ ...ok, orientation: "sideways" })).toEqual(
+      [`'orientation' must be portrait, landscape or any, got "sideways"`],
+    )
+    expect(await configErrors({ ...ok, styles: undefined })).toEqual([
+      "'styles' must be a path to the app's stylesheet, got undefined",
+    ])
+  })
+
+  it("reports every problem at once, not one per run", async () => {
+    const errors = await configErrors({
+      ...ok,
       appId: "nope",
       themeColor: {},
       splashMaskDarkColor: "black",
@@ -291,7 +308,7 @@ describe("missingPluginErrors — a plugin listed and never installed", () => {
     expect(missingPluginErrors(root(), ok, ["ios"])).toEqual([])
   })
 
-  it("is reported by `inspect` alongside every other config problem, not instead of them", () => {
+  it("is reported by `inspect` alongside every other config problem, not instead of them", async () => {
     //R33: every problem at once. A config fixed one line per run is worse than a list.
     const errors = missingPluginErrors(
       root(),
@@ -300,7 +317,7 @@ describe("missingPluginErrors — a plugin listed and never installed", () => {
     )
     expect(errors).toHaveLength(1)
     expect(
-      configErrors({ ...ok, backgroundColor: "eeeeec" }),
+      await configErrors({ ...ok, backgroundColor: "eeeeec" }),
     ).toHaveLength(1)
   })
 })

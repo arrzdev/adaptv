@@ -2,7 +2,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { loadAppConfig } from "#adaptv/vite/app-config-loader"
+import {
+  loadAppConfig,
+  readAppConfig,
+} from "#adaptv/vite/app-config-loader"
 
 let dir: string
 
@@ -63,6 +66,18 @@ describe("loadAppConfig", () => {
       "[adaptv] adaptv.config.ts: 'themeColor.light' must be a hex colour like #1b1b1b, got \"white\"",
       "[adaptv] adaptv.config.ts: 'orientation' must be portrait, landscape or any, got \"sideways\"",
     ])
+  })
+
+  it("reads the file without judging it, for the CLI's own checks", async () => {
+    //`bin/lib/load-config.mjs` goes through `readAppConfig`: the same bundle,
+    //the thunks left inert, and no verdict — the CLI's preflight gives that
+    await writeConfig(`name: 42, splashScreen: () => import("./splash")`)
+    const { loaded, watchFiles } = await readAppConfig(dir)
+    expect((loaded as { name: unknown }).name).toBe(42)
+    expect(typeof (loaded as { splashScreen: unknown }).splashScreen).toBe(
+      "function",
+    )
+    expect(watchFiles).toContain(path.join(dir, "adaptv.config.ts"))
   })
 
   it("still refuses a file with no default export", async () => {

@@ -65,9 +65,20 @@ describe("appConfigErrors", () => {
     ])
   })
 
-  it("says the same sentence the CLI's preflight says for its keys", () => {
-    //`bin/lib/preflight.mjs` `configErrors` — verbatim, so the two faces never
-    //disagree about one value
+  it("refuses a routes directory that is not a path", () => {
+    //`path.resolve` threw `The "paths[2]" argument must be of type string`
+    //from inside the plugin, naming no key (playground, 2026-09-02)
+    expect(
+      appConfigErrors({ ...ok, router: { routesDirectory: 42 } }),
+    ).toEqual([
+      "'router.routesDirectory' must be a path to the routes directory, got 42",
+    ])
+  })
+
+  it("is the sentence the CLI's preflight prints — it calls this", () => {
+    //`bin/lib/preflight.mjs` `configErrors` delegates here, so the two faces
+    //cannot disagree about one value. These are the rows it used to print
+    //from its own copy, kept verbatim.
     expect(appConfigErrors({ ...ok, appId: "myapp" })).toEqual([
       "'appId' must be reverse-DNS like com.example.app, got \"myapp\"",
     ])

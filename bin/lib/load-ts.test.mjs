@@ -17,7 +17,7 @@ import { ADAPTV_ROOT } from "./load-ts.mjs"
  * Comments are stripped first, and that is a decision: the doc-comment on
  * `loadAdaptvModule` itself carries an example call, and an example cannot break a
  * command. What this guards is the set of strings the CLI *resolves*, so the count
- * below is of those alone — 16 today, over 12 targets.
+ * below is of those alone — 18 today, over 13 targets.
  */
 
 const BIN = path.resolve(import.meta.dirname, "..")
@@ -75,7 +75,7 @@ describe("loadAdaptvModule — the strings bin/ resolves against src/", () => {
   /*
    * The vacuous pass: a regex that stops matching, or a walk pointed at the wrong
    * directory, finds zero loads and zero dangling ones. The floor is well under
-   * today's 16 and well over zero.
+   * today's 18 and well over zero.
    */
   it("actually found the call sites it claims to check", () => {
     expect(loads.length).toBeGreaterThanOrEqual(10)

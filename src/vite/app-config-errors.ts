@@ -15,9 +15,9 @@
  * merely optional, or whose wrong value is inert, are not — a sentence about a
  * key that would have worked anyway is noise (`docs/design/cli-contract.md` R4).
  *
- * The CLI's own preflight (`bin/lib/preflight.mjs`) says these same sentences
- * for the keys the native build consumes; the two must not disagree about a
- * value, which is why the wording is shared verbatim.
+ * The CLI's preflight (`bin/lib/preflight.mjs`) asks this same function before
+ * a run starts, so the CLI and the build refuse the same configs with the same
+ * sentences — one definition of "usable", not two that agree today.
  */
 
 /** `#rgb` / `#rrggbb` — the shape `parseHex` accepts and the native colour resources need. */
@@ -97,6 +97,14 @@ export function appConfigErrors(config: unknown): string[] {
     )
   if (!isObject(config.router))
     errors.push(`'router' must be an object, got ${show(config.router)}`)
+  else if (
+    config.router.routesDirectory !== undefined &&
+    typeof config.router.routesDirectory !== "string"
+  )
+    //resolved with `path.resolve`, which throws a TypeError naming `paths[2]`
+    errors.push(
+      `'router.routesDirectory' must be a path to the routes directory, got ${show(config.router.routesDirectory)}`,
+    )
 
   if (config.appId !== undefined && !APP_ID.test(String(config.appId)))
     errors.push(
@@ -114,17 +122,17 @@ export function appConfigErrors(config: unknown): string[] {
       )
   }
 
-  if (config.icons !== undefined && typeof config.icons !== "string")
-    errors.push(
-      `'icons' must be a path to the app's icon directory, got ${show(config.icons)}`,
-    )
-
   for (const [key, values] of ENUMS) {
     const value = config[key]
     if (value === undefined) continue
     if (typeof value !== "string" || !values.includes(value))
       errors.push(`'${key}' must be ${oneOf(values)}, got ${show(value)}`)
   }
+
+  if (config.icons !== undefined && typeof config.icons !== "string")
+    errors.push(
+      `'icons' must be a path to the app's icon directory, got ${show(config.icons)}`,
+    )
 
   for (const [key, shape] of NUMBERS) {
     const value = config[key]

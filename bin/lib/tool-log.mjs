@@ -310,8 +310,11 @@ export const isRawToolNoise = (line) =>
 
 // Lines that actually name a problem. xcodebuild/gradle print thousands of progress lines
 // AFTER the real error, so a plain last-N tail buries it — prefer these when present.
+// `\w*Error(?: [CODE])?:` is a crash naming its class the way Node prints one —
+// `TypeError [ERR_INVALID_ARG_TYPE]: …` — and there is no word boundary before the `Error`
+// in `TypeError`, so the first alternative never kept the one line that said what broke.
 const ERROR_LINE =
-  /(?:\berror\b[: ]|\bfatal\b|BUILD FAILED|FAILURE:|\bfailed\b|xcodebuild: error|The sandbox is not in sync)/i
+  /(?:\berror\b[: ]|^\s*\w*Error(?:\s*\[\w+\])?:|\bfatal\b|BUILD FAILED|FAILURE:|\bfailed\b|xcodebuild: error|The sandbox is not in sync)/i
 // "N errors generated" is a COUNT, not the error; keeping it would win the "first error
 // line" race against the diagnostic that explains what to fix.
 const NOT_ERROR = /^\s*(?:\d+\s+errors?\s+generated|0\s+error)/i

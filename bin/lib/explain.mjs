@@ -19,6 +19,12 @@ const DETAIL_LINES = 10
 // ANSI escape (ESC = char 27), built without a literal control char in the source. Tool
 // output arrives coloured, and a reason rendered inline has to measure as what it prints.
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+// A line that names an error by its class, the way Node prints a crash: `TypeError: …`,
+// `TypeError [ERR_INVALID_ARG_TYPE]: …`, `Error: …`, with or without a `[tag]` in front. The
+// generic `error:` test wants a word boundary before `error`, which `TypeError` has not got,
+// so a crash inside the web build lost the ✖ line to the trailer above it
+// (`error during build:`) — a line that says nothing.
+const NAMED_ERROR = /^(?:\[\w+\]\s*)?\w*Error(?:\s*\[\w+\])?\s*:/
 
 /**
  * Describe a failure the way the renderer wants it: a concise `reason` shown INLINE on
@@ -103,7 +109,9 @@ export function explainFailure(label) {
       })
     // `exec` narrows the tail to error-ISH lines, but the ones that actually say `error:`
     // are what a dev reads; the rest are trailers ("The following build commands failed:").
-    const errors = lines.filter((l) => /\berror\s*:/i.test(l))
+    const errors = lines.filter(
+      (l) => /\berror\s*:/i.test(l) || NAMED_ERROR.test(l),
+    )
     const picked = errors.length ? errors : lines
     if (picked.length === 0)
       return settle({
@@ -158,11 +166,17 @@ export function toolErrorParts(raw) {
     /^(?:.*?\berror:\s*)?(Cannot find (?:module|package) '[^']+')\s+imported from\s+'?(\S+?)'?$/i,
   )
   if (esm) return { message: esm[1], where: "" }
-  // no locator — strip any `<tool>: error:` prefix and keep the sentence.
-  return {
-    message: raw.replace(/^.*?\berror\s*:\s*/i, "") || raw,
-    where: "",
-  }
+  // no locator — strip the `<tool>: error:` or `TypeError [CODE]:` prefix and keep the
+  // sentence. A `[adaptv]` tag goes too: it marks the line as adaptv's inside a tool's own
+  // log, and on the ✖ line adaptv is already the one speaking.
+  const message = (
+    NAMED_ERROR.test(raw)
+      ? raw.replace(NAMED_ERROR, "")
+      : raw.replace(/^.*?\berror\s*:\s*/i, "")
+  )
+    .replace(/^\s*\[adaptv\]\s*/, "")
+    .trim()
+  return { message: message || raw, where: "" }
 }
 
 /** Same idea for a detail line: keep the filename, drop the directories. */
