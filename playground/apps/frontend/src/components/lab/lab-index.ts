@@ -83,6 +83,13 @@ const COMPONENTS = [
     isNew: false,
   },
   {
+    to: "/lab/field-group",
+    title: "FieldGroup",
+    summary:
+      "grouped settings rows · label rows, link rows, first:/last: corners",
+    isNew: true,
+  },
+  {
     to: "/lab/drawer",
     title: "Drawer",
     summary:
