@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "@arrzdev/adaptv/components"
+import { Divider, Pressable, Text, View } from "@arrzdev/adaptv/components"
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
@@ -40,7 +40,7 @@ export function SettingsListRow({
         {trailing}
       </View>
       {showSeparator && (
-        <View className="mx-4 border-b border-border-subtle" aria-hidden />
+        <Divider decorative className="mx-4 border-border-subtle" />
       )}
     </View>
   )
@@ -62,7 +62,7 @@ export function SettingsAddRow({
   return (
     <View>
       {showSeparator && (
-        <View className="mx-4 border-b border-border-subtle" aria-hidden />
+        <Divider decorative className="mx-4 border-border-subtle" />
       )}
       <Pressable
         render={<button type="button" />}
