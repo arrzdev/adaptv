@@ -54,7 +54,7 @@ const WITHHELD_SHELL: Record<string, string[]> = {
 
 /**
  * Internal plumbing with named callers. None of these is a capability an app
- * would ask for by name: the gesture capture is the shared half of three
+ * would ask for by name: the gesture capture is the shared half of four
  * components' engines, and the rest exist so a component can be written without
  * repeating a React idiom. A consumer wanting one of these wants the component.
  */
@@ -62,6 +62,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
   "use-gesture-capture": [
     "src/components/drawer/drawer-engine.tsx",
     "src/components/edge-swipe-gestures.tsx",
+    "src/components/slider.tsx",
     "src/components/swipeable.tsx",
   ],
   "use-isomorphic-layout-effect": [
