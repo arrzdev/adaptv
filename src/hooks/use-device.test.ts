@@ -1,11 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DeviceInfo } from "#adaptv/capabilities/device"
-import {
-  getDeviceId,
-  getDeviceInfo,
-  getLanguageTag,
-} from "#adaptv/capabilities/device"
+import { getDeviceId, getDeviceInfo } from "#adaptv/capabilities/device"
 import { useDevice } from "#adaptv/hooks/use-device"
 
 const WEB_INFO: DeviceInfo = {
@@ -21,7 +17,6 @@ const WEB_INFO: DeviceInfo = {
 vi.mock("#adaptv/capabilities/device", () => ({
   getDeviceInfo: vi.fn(),
   getDeviceId: vi.fn(() => Promise.resolve(null)),
-  getLanguageTag: vi.fn(() => "en-GB"),
 }))
 
 afterEach(() => {
@@ -38,8 +33,6 @@ describe("useDevice", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.info).toEqual(WEB_INFO)
-    expect(result.current.languageTag).toBe("en-GB")
-    expect(getLanguageTag).toHaveBeenCalled()
   })
 
   it("keeps the web nulls rather than inventing values", async () => {
