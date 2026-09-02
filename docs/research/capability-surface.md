@@ -16,7 +16,7 @@
 | Expo SDK | `expo@57.0.8` `bundledNativeModules.json`, then **50 `expo-*` packages** downloaded and their `build/**/*.d.ts` parsed | 123 listed / 50 inventoried |
 | React Native non-visual APIs | `react-native@0.86.2` `types/index.d.ts` export list | ~30 |
 | Capacitor | npm registry probe of `@capacitor/*` | **33 official plugins** |
-| adaptv today | `src/interface/capabilities.index.ts`, `hooks.index.ts`, `src/storage/`, `src/ota/`, `package.json` | **18 capability modules + 27 hook modules** (re-counted 2026-08-30; this row said 17 + 23 and §4 said 12 — neither matched the barrel) |
+| adaptv today | `src/interface/capabilities.index.ts`, `hooks.index.ts`, `src/storage/`, `src/ota/`, `package.json` | **19 capability modules + 28 hook modules** (re-counted 2026-09-02 with `locale`; on 2026-08-30 this row said 17 + 23 and §4 said 12 — neither matched the barrel) |
 
 ---
 
@@ -108,7 +108,7 @@ adaptv's web tier is free and only the native tier needs a plugin.
 | Speech | `expo-speech` | — | — | SpeechSynthesis | ❌ |
 | Store review | `expo-store-review` | — | — | none | ❌ |
 | Screen-capture block | `expo-screen-capture` | — | ✅ `privacy-screen` | none | ❌ |
-| Localization | `expo-localization` | `I18nManager` | — | `Intl` | ❌ |
+| Localization | `expo-localization` | `I18nManager` | — | `Intl` | ✅ `locale` — the tag, direction, hour cycle, week shape, separators, zone, calendar; see the note under the table |
 | Fonts | `expo-font` | — | — | `@font-face` | ❌ (CSS) |
 | Audio / video playback | `expo-audio`, `expo-video` | — | — | `<audio>`/`<video>`, WebAudio | ❌ (DOM) |
 | SQL database | `expo-sqlite` | — | ❌ community | OPFS + wa-sqlite | ❌ |
@@ -117,6 +117,16 @@ adaptv's web tier is free and only the native tier needs a plugin.
 | Android nav bar | `expo-navigation-bar` | — | — | none | ⚠️ handled in native shell |
 | Barcode scanning | `expo-camera` (built in) | — | ✅ `barcode-scanner` | BarcodeDetector (Chromium) | ❌ |
 | Text zoom / dynamic type | — | `PixelRatio` | ✅ `text-zoom` | `rem` + browser zoom | ❌ |
+
+**Localization has one quirk that decides its shape** (measured 2026-09-02, Pixel 10 emulator API 37,
+Android System WebView Chrome/149, an adaptv-built APK read over CDP, the language changed per app):
+`navigator.language` follows the OS in the same process (en-US → pt-PT → ar-EG), but the engine's
+*default* `Intl` locale is frozen at process start — `toLocaleTimeString(undefined, …)` kept printing
+"3:07 PM" while `toLocaleTimeString("pt-PT", …)` printed "15:07". So `locale` passes the tag to every
+`Intl` call and never trusts the default, and a consumer has to do the same with `languageTag`. The
+per-app change also reloads the WebView document in place, so on Android native the record is right
+at boot and `languagechange` never fires; the subscription is for the browser tab and the installed
+PWA. iOS was measured separately — see the `locale` capability's header.
 
 ---
 
@@ -314,8 +324,8 @@ with `storage.secure`, which already exists and already documents the web/native
 ### Tier 3 — long tail
 
 Sensors/motion · battery · brightness · contacts · calendar · SMS/mail · print · speech ·
-store review · screen-capture blocking · localization (`Intl` makes the web tier free) · barcode
-scanning · text zoom.
+store review · screen-capture blocking · ~~localization~~ (✅ `locale`, 2026-09-02 — `Intl` made the
+web tier free, and it turned out to be the native tier too) · barcode scanning · text zoom.
 
 ### What adaptv has that this comparison *doesn't* diminish
 
