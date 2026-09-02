@@ -315,7 +315,9 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   ([`image.md`](image.md)); the component sub-packages (`drawer/`, `dropdown/`, `avoid-keyboard/`)
   are a recorded documentation gap.
 - `Slider` (2026-09-02) paints its own track because iOS ignores a touch that starts on a native
-  range track, and yields to a vertical scroll through the gesture arbiter.
+  range track, and yields to a vertical scroll through the gesture arbiter. A touch that lifts
+  where it landed sets the value on the lift: the press cannot, because the finger may be about to
+  scroll, and both simulators showed a tap doing nothing until the lift became the set.
 
 ---
 
