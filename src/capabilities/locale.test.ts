@@ -33,14 +33,16 @@ function setVisibility(state: DocumentVisibilityState): void {
   document.dispatchEvent(new Event("visibilitychange"))
 }
 
-/** Removes one Intl Locale Info function for the test, the way an engine without it looks. */
+/**
+ * Removes one Intl Locale Info function for the test, the way an engine without
+ * it looks. An engine that never had it (Node 22's V8 exposes the older accessor
+ * shape, not the functions) is already the case under test, so there is nothing
+ * to remove and nothing to restore.
+ */
 function withoutLocaleInfo(name: string): void {
   const proto = Intl.Locale.prototype as unknown as Record<string, unknown>
   const prev = Object.getOwnPropertyDescriptor(proto, name)
-  if (!prev)
-    throw new Error(
-      `${name} is not on Intl.Locale here — nothing to remove`,
-    )
+  if (!prev) return
   delete proto[name]
   restores.push(() => {
     Object.defineProperty(proto, name, prev)
