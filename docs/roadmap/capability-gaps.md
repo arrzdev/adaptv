@@ -18,6 +18,12 @@ its intro says *"17 capabilities + 23 hooks"* and §4, ten lines later, says *"a
 capabilities"*. **Neither is right.** Counted from `src/interface/capabilities.index.ts` on
 2026-08-30: **18 capability modules and 27 hook modules.**
 
+**App identity is no longer part of that remainder.** `src/capabilities/app-info.ts` shipped
+2026-09-02 over the official app plugin: the name, the bundle id, the store version and the build
+number, with the app's own web manifest as the floor on every target and an explicit `null` for the
+two fields a page cannot have. It is deliberately not the OTA bundle — one names the binary, the
+other names the JavaScript, and a bug report needs both.
+
 The §4 prose list also omits `theme-color` entirely — a whole shipped capability with 8 exported
 symbols (`src/capabilities/theme-color.ts`), landed in PR #64, which drives per-route browser chrome
 tinting. Read the barrel, not either list.

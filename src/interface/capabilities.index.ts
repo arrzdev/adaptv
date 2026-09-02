@@ -12,6 +12,7 @@
 //after you call — and a third one only creates the chance for two of them to
 //disagree. `capabilities.barrel.test.ts` is what keeps these lists from drifting
 //away from the modules the way the component barrels once did.
+export * from "../capabilities/app-info"
 export * from "../capabilities/app-state"
 export * from "../capabilities/back-chain"
 export * from "../capabilities/browser"
