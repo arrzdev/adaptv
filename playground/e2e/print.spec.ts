@@ -1,0 +1,91 @@
+import type { Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
+
+/*
+ * Print — one call, `window.print()`, and an outcome that says what the engine did
+ * with it. The two headless engines answer it differently, and both answers are
+ * real behaviour rather than harness noise:
+ *
+ *   chromium: headless Chromium runs the print pipeline with no dialog, and fires
+ *   `beforeprint` and `afterprint` synchronously inside the call — about 2 ms end
+ *   to end. The accessor sees `afterprint` and resolves `opened`.
+ *
+ *   webkit: headless WebKit (the iPhone 13 descriptor) returns from the call at
+ *   once and never fires either event. Nothing arrives within the 1.5 s wait, so
+ *   the accessor resolves `silent` — the same answer a real WKWebView would give
+ *   if it were not already refused up front as `unsupported`.
+ *
+ * Both are `available` (window.print exists, neither is a native WebView), which
+ * is the point: availability says the call can be made, the outcome says what it
+ * did.
+ */
+
+/**
+ * Wait for the client to take over before pressing anything. The button is
+ * server-rendered, so an actionability check alone is satisfied by inert HTML
+ * whose handler is not attached yet. The splash self-unmounts only once the
+ * client has hydrated, so its disappearance is the honest handover signal.
+ * Generous on purpose: a cold dev server can take longer than 5 s on the
+ * route's first transform.
+ */
+async function awaitClientHandover(page: Page) {
+  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
+    timeout: 20_000,
+  })
+}
+
+/** What each headless engine measurably does with `window.print()`. */
+const MEASURED_OUTCOME: Record<"chromium" | "webkit", string> = {
+  chromium: "opened",
+  webkit: "silent",
+}
+
+function expectedOutcome(browserName: string): string {
+  if (browserName in MEASURED_OUTCOME) {
+    return MEASURED_OUTCOME[browserName as keyof typeof MEASURED_OUTCOME]
+  }
+  throw new Error(`no measured print outcome for engine "${browserName}"`)
+}
+
+test.describe("Print", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/lab/print")
+    await awaitClientHandover(page)
+  })
+
+  test("reads available with no outcome before the first call", async ({
+    page,
+  }) => {
+    await expect(page.getByTestId("print-status")).toHaveText("available")
+    await expect(page.getByTestId("print-last")).toHaveText("—")
+    await expect(page.getByTestId("print-printing")).toHaveText("false")
+  })
+
+  test("resolves the outcome this engine was measured to give", async ({
+    page,
+    browserName,
+  }) => {
+    const outcome = expectedOutcome(browserName)
+
+    await page.getByTestId("print-open").click()
+
+    await expect(page.getByTestId("print-last")).toHaveText(outcome)
+    await expect(page.locator("[data-lab-log] li")).toHaveText([
+      new RegExp(`outcome → ${outcome}$`),
+      /print\(\) called$/,
+    ])
+  })
+
+  test("printing reads false once the outcome is in", async ({
+    page,
+    browserName,
+  }) => {
+    const outcome = expectedOutcome(browserName)
+
+    await page.getByTestId("print-open").click()
+
+    await expect(page.getByTestId("print-last")).toHaveText(outcome)
+    await expect(page.getByTestId("print-printing")).toHaveText("false")
+    await expect(page.getByTestId("print-open")).toBeEnabled()
+  })
+})

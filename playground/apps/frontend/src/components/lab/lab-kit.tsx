@@ -79,10 +79,13 @@ export function LabRow({
   label,
   value,
   hint,
+  testId,
 }: {
   label: string
   value: ReactNode
   hint?: ReactNode
+  /** Lands on the value span as `data-testid`, so a spec reads the value alone. */
+  testId?: string
 }) {
   const missing = value === null || value === undefined || value === ""
   return (
@@ -97,6 +100,7 @@ export function LabRow({
          * broken component rather than as elided text. Rich values wrap instead.
          */}
         <span
+          data-testid={testId}
           className={cn(
             "min-w-0 text-end font-mono text-sm",
             typeof value === "string" || missing
@@ -177,16 +181,20 @@ export function LabButton({
   onClick,
   disabled,
   tone = "default",
+  testId,
   children,
 }: {
   onClick: () => void
   disabled?: boolean
   tone?: "default" | "danger"
+  /** Lands on the button as `data-testid`. */
+  testId?: string
   children: ReactNode
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className={cn(
