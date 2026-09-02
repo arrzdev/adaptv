@@ -19,8 +19,8 @@ const SKIP_DIRS = new Set([
   "node_modules",
   ADAPTV_DIR,
   "dist",
-  //`.output/` is the SSR lineage's build, and the capacitor lineage never reads it (register
-  //L14: two lineages that never cross) — so `build web` rewriting it must not rebuild native.
+  // `.output/` is the SSR lineage's build, and the capacitor lineage never reads it (register
+  // L14: two lineages that never cross) — so `build web` rewriting it must not rebuild native.
   ".output",
   "ios",
   "android",
