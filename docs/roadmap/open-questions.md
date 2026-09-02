@@ -129,6 +129,70 @@ the native dip) and none is unit-tested, because the reads and the decision are 
 Decided by: whether the device ladders in `docs/research/` stay the test of record — in which case a
 unit table is a second truth to keep in step — or become the source of the table's fixtures.
 
+### O22 — Overlays: render them, or delegate to the OS?
+
+**Does adaptv render its own alert, action sheet and toast, or hand them to the OS?**
+
+[`capability-gaps.md`](capability-gaps.md) Tier 2 #1 and [`component-gaps.md`](component-gaps.md)
+Tier 2 are the same question asked from the capability side and the component side. Both defer to
+"record it in `../decisions/`", and neither can move until this is answered. It is recorded here so
+there is one place to answer it.
+
+**The delegate option's web tier was measured, because that is the half the table asserted without
+a number.** A page's whole vocabulary there is `window.confirm`, and this is what it renders:
+
+    iOS 26 simulator, Safari, http://localhost:41860
+      a centred rounded card over a dimmed page
+      the message string, no title
+      two buttons: Cancel, OK
+      no origin line
+
+    Pixel 10 emulator, the app's own WebView, https://localhost
+      a Material dialog
+      the message string, no title
+      two buttons: CANCEL, OK
+      no origin line
+
+So the web tier under `delegate` is: one string, two fixed buttons, no title, no third choice, no
+destructive styling, and a synchronous block of the main thread that cannot be awaited beside React
+state. Any screen that needs a title, a red destructive button, or three options has **no** web path
+at all. That is the load-bearing fact, because it means delegating does not remove the rendered
+engine from the framework — an app still has to ship one for the web — it adds a second
+implementation beside it, and a second accessibility model to keep in step.
+
+**The back chain already reserves a band for this.** `BackPriority.Overlay` in
+`src/capabilities/back-chain.ts` is documented as "Drawers, modals, sheets — registered while open",
+and an OS-owned dialog can never occupy it: the OS dismisses its own dialog before the app hears the
+press. Delegating puts the most modal thing in the app outside the one mechanism that orders
+modality.
+
+*(Checked while writing this: nothing outside `use-back-handler.test.ts` registers at that band
+today — `Dropdown` uses `Transient`, and `Drawer` registers no handler at all. That is a separate
+gap from this question, and it does not change the answer; it means the band's first real consumer
+will be whatever this question produces.)*
+
+**The question is not uniform across the five overlays.** Ranked by how strong the delegate case is:
+
+| Overlay | Delegate case |
+|---|---|
+| Toast | **Strongest.** Android's is a real OS affordance outside the app window; it outlives navigation, and a rendered one cannot. |
+| Action sheet | Strong on look — the iOS sheet is instantly recognisable, and getting it wrong is more visible than not having it. |
+| Alert | **Weakest.** Measured above: two buttons and a string, on both engines. |
+| Spinner, progress | Not a dialog at all; nobody delegates these. |
+
+Answering "render" for the set and then delegating toast on Android alone is a defensible split, but
+it should be chosen, not discovered.
+
+**Recommendation: render, with one engine and thin presets.** The web is a primary target, the
+delegate path has no usable web tier, `Drawer` is already an overlay with a gesture engine and a
+positioning layer behind it, and modality ordering is already adaptv's. The cost is that
+accessibility becomes adaptv's problem rather than free, which is real work and should be priced
+into the item rather than discovered during it.
+
+**Decided by the owner.** The counter-case is that the genuine platform look on native is worth more
+than one look across targets, and that is a positioning call, not a measurement.
+
+
 ---
 
 ## The one live question `VISION.md §9` has that the register does not
