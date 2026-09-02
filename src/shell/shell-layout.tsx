@@ -52,11 +52,7 @@ export type AppShellProps = {
   frameClassName?: string
 }
 
-export function AppShell({
-  children,
-  className,
-  frameClassName,
-}: AppShellProps) {
+function AppShell({ children, className, frameClassName }: AppShellProps) {
   return (
     <div data-app-shell className={cn(APP_SHELL_CLASS, className)}>
       {/* `data-adaptv-screen` is what `styles/screen.css` hooks: a page's root element

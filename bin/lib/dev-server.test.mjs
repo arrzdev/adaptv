@@ -3,6 +3,7 @@ import { createServer } from "node:http"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import {
+  realClock,
   SAW_OPTIMIZE,
   startDevServer,
   warmDevServer,
@@ -20,6 +21,13 @@ import {
 // So the settle is correct and must stay. What was wrong is paying it EVERY time: on a warm
 // `node_modules/.vite` Vite never re-optimizes, there is no broadcast, and a flat second was
 // being spent waiting for nothing on every native `dev`.
+//
+// The reads here are real; the WAITS are not. `warmDevServer` takes a clock, and the one
+// below records every sleep it is asked for and moves its own time forward by that much, so
+// a test asserts the exact milliseconds the warm chose — `[900, 1000]` against `[900, 150]` —
+// rather than sleeping through them and reading a wall clock afterwards. These used to be
+// the whole unit suite's wall time: 13.8s of real sleeping, with `toBeGreaterThanOrEqual`
+// bounds loose enough to survive a loaded machine.
 
 let server = null
 afterEach(
@@ -48,6 +56,27 @@ const serving = () =>
     res.end(`<!doctype html><html><body>${"x".repeat(600)}</body></html>`)
   })
 
+/**
+ * A clock that never waits. Each `sleep` is recorded and advances `now` by exactly that
+ * much, so the timeout loop runs the same number of reads it would against real time and
+ * the settle is visible as the number it was.
+ */
+function virtualClock() {
+  let t = 0
+  /** @type {number[]} */
+  const sleeps = []
+  return {
+    sleeps,
+    clock: {
+      now: () => t,
+      sleep: async (ms) => {
+        sleeps.push(ms)
+        t += ms
+      },
+    },
+  }
+}
+
 describe("SAW_OPTIMIZE — recognising that Vite re-optimized", () => {
   it.each([
     "[vite] Re-optimizing dependencies because lockfile has changed",
@@ -70,46 +99,56 @@ describe("SAW_OPTIMIZE — recognising that Vite re-optimized", () => {
   })
 })
 
-//These genuinely sleep ~2s each (two reads, their gap, the settle), so they carry an explicit
-//timeout — vitest's 5s default is too tight for that on a loaded machine.
 describe("warmDevServer — the settle is paid when it buys something", () => {
   it("waits the full second when Vite re-optimized", async () => {
     const url = await serving()
-    const t = Date.now()
-    expect(await warmDevServer(url, { sawOptimize: () => true })).toEqual({
-      ok: true,
-    })
-    //Two good reads with a 900ms gap, then the full 1000ms settle.
-    expect(Date.now() - t).toBeGreaterThanOrEqual(1800)
-  }, 20000)
+    const { clock, sleeps } = virtualClock()
+    expect(
+      await warmDevServer(url, { sawOptimize: () => true, clock }),
+    ).toEqual({ ok: true })
+    //Two good reads with their gap, then the full settle.
+    expect(sleeps).toEqual([900, 1000])
+  })
 
   it("settles briefly when it did NOT — the common warm start", async () => {
     const url = await serving()
-    const t = Date.now()
-    expect(await warmDevServer(url, { sawOptimize: () => false })).toEqual(
-      { ok: true },
-    )
-    const took = Date.now() - t
+    const { clock, sleeps } = virtualClock()
+    expect(
+      await warmDevServer(url, { sawOptimize: () => false, clock }),
+    ).toEqual({ ok: true })
     //Still two good reads and their gap; only the tail is short.
-    expect(took).toBeGreaterThanOrEqual(900)
-    expect(took).toBeLessThan(1700)
-  }, 20000)
+    expect(sleeps).toEqual([900, 150])
+  })
 
   it("defaults to the full settle, so a caller that says nothing is safe", async () => {
     //The default matters: an omitted `sawOptimize` must not silently opt into the fast path.
     const url = await serving()
-    const t = Date.now()
-    await warmDevServer(url)
-    expect(Date.now() - t).toBeGreaterThanOrEqual(1800)
-  }, 20000)
+    const { clock, sleeps } = virtualClock()
+    await warmDevServer(url, { clock })
+    expect(sleeps).toEqual([900, 1000])
+  })
 
   it("reports failure rather than hanging when nothing is listening", async () => {
-    const t = Date.now()
     //Port 1 is never a dev server.
+    const { clock, sleeps } = virtualClock()
     expect(
-      await warmDevServer("http://127.0.0.1:1", { timeoutMs: 1200 }),
+      await warmDevServer("http://127.0.0.1:1", {
+        timeoutMs: 1200,
+        clock,
+      }),
     ).toEqual({ ok: false, why: "unreachable" })
-    expect(Date.now() - t).toBeLessThan(6000)
+    //Read, wait, read, wait — and the second wait carries it past the budget.
+    expect(sleeps).toEqual([900, 900])
+    expect(clock.now()).toBeGreaterThanOrEqual(1200)
+  })
+
+  it("waits by the wall clock when nobody hands it another", async () => {
+    //The seam above must not be how the real settle quietly stops settling. The default
+    //clock is the one thing here that has to actually take time.
+    const t = Date.now()
+    await realClock.sleep(30)
+    expect(Date.now() - t).toBeGreaterThanOrEqual(25)
+    expect(realClock.now()).toBeGreaterThanOrEqual(t)
   })
 })
 
@@ -126,12 +165,13 @@ describe("warmDevServer — naming WHICH way it failed", () => {
       res.writeHead(500, { "content-type": "application/json" })
       res.end('{"status":500,"unhandled":true,"message":"HTTPError"}')
     })
-    expect(await warmDevServer(url, { timeoutMs: 1200 })).toEqual({
+    const { clock } = virtualClock()
+    expect(await warmDevServer(url, { timeoutMs: 1200, clock })).toEqual({
       ok: false,
       why: "error",
       status: 500,
     })
-  }, 20000)
+  })
 
   it("says `thin` when something answers 200 but it is not the app", async () => {
     //A 2xx too small to be a document: the port IS held by a stranger. This is the only
@@ -140,12 +180,13 @@ describe("warmDevServer — naming WHICH way it failed", () => {
       res.writeHead(200, { "content-type": "text/plain" })
       res.end("ok")
     })
-    expect(await warmDevServer(url, { timeoutMs: 1200 })).toEqual({
+    const { clock } = virtualClock()
+    expect(await warmDevServer(url, { timeoutMs: 1200, clock })).toEqual({
       ok: false,
       why: "thin",
       status: 200,
     })
-  }, 20000)
+  })
 
   it("reports the LAST failure, not the last read", async () => {
     //Good, then broken, then the budget runs out. The verdict must describe the fault that
@@ -159,12 +200,16 @@ describe("warmDevServer — naming WHICH way it failed", () => {
       res.writeHead(503)
       res.end("nope")
     })
-    expect(await warmDevServer(url, { timeoutMs: 2500 })).toEqual({
+    const { clock, sleeps } = virtualClock()
+    expect(await warmDevServer(url, { timeoutMs: 2500, clock })).toEqual({
       ok: false,
       why: "error",
       status: 503,
     })
-  }, 20000)
+    //One good read, two bad ones, and every wait between them was the retry gap — the
+    //settle never fired, because a single good read is not stable.
+    expect(sleeps).toEqual([900, 900, 900])
+  })
 })
 
 /**

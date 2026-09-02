@@ -34,7 +34,7 @@ function adaptvSrcDir(): string {
 }
 
 /** The default screen's module path — adaptv's own `BootError`. */
-export function defaultBootErrorPath(): string {
+function defaultBootErrorPath(): string {
   return path.join(adaptvSrcDir(), "components", "boot-error.tsx")
 }
 

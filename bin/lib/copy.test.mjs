@@ -20,6 +20,8 @@ const BIN = path.resolve(
 )
 const FILES = [
   "adaptv.mjs",
+  "commands/doctor.mjs",
+  "lib/load-config.mjs",
   "lib/cli-spec.mjs",
   "lib/cli-help.mjs",
   "lib/render.mjs",

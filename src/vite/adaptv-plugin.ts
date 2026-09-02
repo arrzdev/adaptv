@@ -462,7 +462,7 @@ export function addFsAllowRoot(allow: string[], root: string): void {
  * buttons and a spinner that never resolves — and **`vite build` passes**, because
  * the build reads from disk instead of going through the dev server's sandbox.
  */
-export function adaptvFsAllowPlugin(): PluginOption {
+function adaptvFsAllowPlugin(): PluginOption {
   //the package root — two levels up from src/vite/
   const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
   return {
