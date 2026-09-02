@@ -500,7 +500,7 @@ ecosystem only.
 | TextInput / Input | ✅ | ✅ | ✅ | ✅ | ✅ | | `input` + `text-area` |
 | Switch / Toggle | ✅ | ✅ | ✅ | ✅ | ✅ | | `useSwitch` |
 | Checkbox | ✅ | (expo-checkbox) | ✅ | ✅ | ✅ | | `useCheckbox` |
-| **Slider / Range** | ✅ | | ✅ | ✅ | ✅ | | **—** |
+| Slider / Range | ✅ | | ✅ | ✅ | ✅ | | `Slider` |
 | **Picker / Select** | ✅ | | ✅ | ✅ | ✅ | | `wheel-column` (partial) |
 | List + row | ✅ | ✅ | ✅ | ✅ | ✅ | | `List` (virtualized) |
 | ScrollView | ✅ | ✅ | ✅ | ✅ | ✅ | | `ScrollView` |

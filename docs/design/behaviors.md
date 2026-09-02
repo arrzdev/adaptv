@@ -307,13 +307,15 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `src/components/text.tsx`, `src/components/image.tsx`.
 - **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
-  The public surface is 26 barrels — `src/interface/components.index.ts` is the list, and
+  The public surface is 27 barrels — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
   That test exists because **the drift which hid `Text` from consumers passed typecheck, lint, the
   unit suite and `build:check`**: a missing re-export is invisible to every gate that does not
   compare the barrel to the directory. `Image` has its own design doc
   ([`image.md`](image.md)); the component sub-packages (`drawer/`, `dropdown/`, `avoid-keyboard/`)
   are a recorded documentation gap.
+- `Slider` (2026-09-02) paints its own track because iOS ignores a touch that starts on a native
+  range track, and yields to a vertical scroll through the gesture arbiter.
 
 ---
 
