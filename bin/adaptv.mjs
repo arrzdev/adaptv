@@ -2052,11 +2052,19 @@ async function buildWebDeploy(appRoot, opts) {
         outDir = await builtOutDir(appRoot, "web")
         return outDir ?? ""
       },
-      { verbose: !!opts.verbose },
+      //The row settles the ✖ itself, worded by `explainFailure` like every other
+      //lane. Without `explain` it settled on the raw message — an absolute path,
+      //clipped — and the catch below then printed a second ✖ with the calm
+      //reason under it: two glyphs for one failure (R2), the first unreadable.
+      { verbose: !!opts.verbose, explain: explainFailure("web") },
     )
   } catch (err) {
-    const { reason, detail } = explainFailure("web")(err)
-    fail("web", reason, detail)
+    //`runLine` owns the ✖ on a TTY and off it; only a failure that never reached
+    //the row (the build stamp, say) is still unreported here.
+    if (!wasReported(err)) {
+      const { reason, detail } = explainFailure("web")(err)
+      fail("web", reason, detail)
+    }
     spacer()
     process.exitCode = 1
     return { ran: true, ok: false }
