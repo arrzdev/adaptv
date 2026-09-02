@@ -62,7 +62,7 @@ export const ADAPTV_LAYER_ORDER =
   "@layer theme, base, adaptv, components, utilities;"
 
 /** What is printed when no stylesheet in the build declares a Tailwind entry. */
-export const NO_TAILWIND_ENTRY_MESSAGE = `no stylesheet imports tailwindcss — add \`${ADAPTV_LAYER_ORDER}\` as the first line of your CSS entry, or adaptv's styles will beat your own utilities`
+const NO_TAILWIND_ENTRY_MESSAGE = `no stylesheet imports tailwindcss — add \`${ADAPTV_LAYER_ORDER}\` as the first line of your CSS entry, or adaptv's styles will beat your own utilities`
 
 /**
  * A Tailwind ENTRY import: `@import "tailwindcss"` and the à-la-carte

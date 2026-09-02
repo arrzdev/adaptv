@@ -9,7 +9,7 @@ export type GestureAxis = "pending" | "vertical" | "horizontal"
 
 /** Distance (px) the finger must travel before the gesture commits to an axis —
  *  below it, a tap or micro-jitter stays "pending" and locks nothing. */
-export const GESTURE_SLOP = 10
+const GESTURE_SLOP = 10
 /** Pull distance (px) past which a release runs `onRefresh`. */
 export const PULL_THRESHOLD = 80
 /** Hard cap on how far the content follows the finger. */
