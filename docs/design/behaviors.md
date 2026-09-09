@@ -180,10 +180,28 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   ```
 
   The jump lands 82px past the rest on Android, 76px on the PWA, 43px on Chromium and 21px on
-  native iOS, which is the height the collapsing picker gives back: the rows leave the layout in the same frame the keyboard room
-  arrives, so the sheet is measured short and then re-grows to the height its motion is
-  still easing toward. That names the fix without prescribing it (the drawer's settle and curve
-  are not the variable, the order of the two geometry changes is) and it stays open here.
+  native iOS. That distance is NOT the picker's height. The samples carry the box's raw inline
+  geometry now, and they name it (headless Chromium, 390 × 844, the same run warm and cold):
+
+  ```
+  t    bottom  top  room  min  max  box  rectBottom
+  56   844     25   0     819  819  819  844      floor primed on focus, picker already collapsed under it
+  63   427     25   338   740  740  740  765      keyboard lands: room + floor + cap written in ONE step,
+  71   431     29   338   740  740  740  769        panel FLIPped by the box delta (-79) and easing back
+  130  472     70   338   740  740  740  810
+  180  494     92   338   740  740  740  832      -> rest 506 / 104
+  ```
+
+  The distance past the rest is the floored box's net shrink: the floor primed at 819 on focus
+  becomes `min(natural + room, cap)` = 740 when the keyboard lands, and the FLIP that carries that
+  79px holds the TOP edge where it was, so the content edge, which also just took the room's 338px,
+  starts 79px too high and rides the same transform back. In the plain raise the box grows by
+  exactly the room, the two cancel, and both edges slide; whenever `Δbox ≠ Δroom` one transform
+  can hold one edge only. The reaim path (a collapse with the room already held) has the same
+  property by design, since every layout animation on that path measured 24–35fps. So the fix is
+  a motion-model choice, recorded as D9 in the ledger: a second composited transform on the
+  content stack (`Δroom − Δbox`, eased with the panel) is the recommendation, and it is not
+  started here.
   Until it lands, the spec allows exactly that one failure by step and check name and fails on
   any other geometry failure, and on the day the turn disappears. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
   but orientation is not the variable that matters (keyboard-vs-reserve is), and the 70% scenario
