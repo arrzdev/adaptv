@@ -13,7 +13,8 @@
       "!!**/*.log",
       "!!**/.DS_Store",
       "!!**/.project-zero",
-      "!!**/playground"
+      "!!**/playground",
+      "!!**/.claude"
     ],
     "ignoreUnknown": true
   },
