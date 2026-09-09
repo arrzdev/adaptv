@@ -96,11 +96,16 @@ export default defineConfig({
     //adaptv end-to-end. It has its own suites (and its own vitest/playwright
     //configs), which must never be collected into the framework's gate — they
     //would fail here for reasons that say nothing about adaptv.
+    //`.claude/worktrees/` is the same problem from the other direction: each
+    //worktree is a whole second checkout of this repo, so collecting it runs
+    //every suite again against another branch's source. Left in, the gate
+    //reports on code the working tree does not contain.
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
       ".project-zero/**",
       "playground/**",
+      ".claude/**",
     ],
   },
 })

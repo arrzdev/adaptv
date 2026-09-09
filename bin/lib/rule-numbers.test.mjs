@@ -1,10 +1,10 @@
 // @vitest-environment node
 import {
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
-  statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -88,6 +88,14 @@ const SKIP_DIRS = new Set([
   "test-results",
   "blob-report",
   ".playwright",
+  //Cloudflare's dev output under `.project-zero/`: bundled worker source that
+  //cites `R0` by accident, the same way the trace viewer above does.
+  ".wrangler",
+  //Xcode's build output under `.project-zero/`. Same category as the two above —
+  //generated, transient, nobody's citation — but it fails differently: its
+  //ModuleCache holds absolute symlinks written before this repo was renamed, so
+  //they dangle and a `stat` that follows them throws ENOENT mid-walk.
+  "DerivedData",
 ])
 const TEXT = new Set([
   ".md",
@@ -100,12 +108,29 @@ const TEXT = new Set([
   ".mts",
 ])
 
+/**
+ * Skipped by path rather than by name, because the name alone is load-bearing
+ * elsewhere. `.claude/` is a real citation site — `skills/cli-ux/SKILL.md` cites
+ * six rules — so it cannot go in `SKIP_DIRS`; but `.claude/worktrees/` holds whole
+ * second checkouts of this repo, and reading those makes the scan report on
+ * branches the working tree does not contain. It also reads a *copy* of this file,
+ * which quotes retired numbers as examples and is exempted below only by its own
+ * exact path.
+ */
+const SKIP_PATHS = new Set([path.join(".claude", "worktrees")])
+
 function textFiles(dir) {
   const out = []
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue
     const full = path.join(dir, entry)
-    if (statSync(full).isDirectory()) out.push(...textFiles(full))
+    if (SKIP_PATHS.has(path.relative(ROOT, full))) continue
+    //`lstat`, not `stat`: a dangling symlink answers the only question asked here
+    //("is this a directory to descend into?") without being followed, and a walk
+    //that throws on one reports nothing at all about rule numbers. It also means
+    //a symlinked directory is not descended into, which is the safe answer — it
+    //cannot loop, and no citation site in this repo is reached only that way.
+    if (lstatSync(full).isDirectory()) out.push(...textFiles(full))
     else if (TEXT.has(path.extname(entry))) out.push(full)
   }
   return out.sort()
