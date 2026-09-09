@@ -18,7 +18,7 @@
   <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-orange?style=flat-square" />
   <a href=".github/workflows/ci.yml"><img alt="CI: typecheck, lint, tests" src="https://img.shields.io/badge/CI-typecheck%20%C2%B7%20lint%20%C2%B7%20tests-blue?style=flat-square" /></a>
   <img alt="License: UNLICENSED" src="https://img.shields.io/badge/license-UNLICENSED-lightgrey?style=flat-square" />
-  <img alt="Node >= 22.12" src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen?style=flat-square" />
+  <img alt="Node 22.12 or newer" src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen?style=flat-square" />
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@
 
 ## 🚀 What you get
 
-| | |
+| The piece | What it does |
 |---|---|
 | 🧾 **One config file** | `adaptv.config.ts` generates the web manifest, native projects, launch screens, icons, theme and service worker. There is no second config. |
 | 🖼️ **A frame you inherit** | The shell owns the document, critical CSS, the pre-paint theme stamp, safe areas and the edge-to-edge frame. Your route root is just a `View`. |
@@ -89,7 +89,7 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 
 ## 🚦 Status
 
-| | |
+| The question | Where it stands |
 |---|---|
 | 📦 **Published?** | **No.** `private: true`, `exports` resolve to `./src/**` — there is no install command to give you. |
 | 🔗 **How it's consumed** | A local checkout linked into the app — `"@arrzdev/adaptv": "link:../../.."`, as [`playground/`](playground/) does. |
