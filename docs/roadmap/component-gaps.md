@@ -50,11 +50,12 @@ all share one interface, and adaptv's `Drawer` is *already* an overlay with a ge
 it — so the engine largely exists.
 
 ⚠️ **Owes the same render-vs-delegate decision as
-[`capability-gaps.md`](capability-gaps.md) Tier 2.** These are one question asked from two sides, not
-two entries: rendering gives one look on all targets and full styling control; delegating to
-`@capacitor/dialog` / `action-sheet` / `toast` gives the genuine platform look and free
-accessibility, but has no web tier beyond `window.confirm`. Decide once, record it in
-[`../decisions/`](../decisions/README.md), then build both sides against it.
+[`capability-gaps.md`](capability-gaps.md) Tier 2, and it is now one entry:
+[`open-questions.md` O22](open-questions.md).** These are one question asked from two sides:
+rendering gives one look on all targets and full styling control; delegating gives the genuine
+platform look and free accessibility, but its web tier was measured on two engines and is one
+string with two fixed buttons. O22 also notes that the answer need not be uniform — toast has the
+strongest delegate case of the five, alert the weakest.
 
 ## Tier 3 — the app frame (most leverage, most design work)
 
