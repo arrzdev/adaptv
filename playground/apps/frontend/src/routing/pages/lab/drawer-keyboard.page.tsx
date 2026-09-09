@@ -860,6 +860,22 @@ function LabDrawerKeyboardPage() {
     (n, r) => n + r.checks.filter((c) => !c.pass).length,
     0,
   )
+  //A surface that paints at a few frames a second cannot be judged by a sampler that reads
+  //geometry on requestAnimationFrame: a 700ms step yields three samples, the "eased" and
+  //"flush" checks read a motion that is still in flight, and the verdict says FAIL about the
+  //sampler. Measured on the Pixel 10 emulator's Chrome (tab and standalone alike, 3–20fps)
+  //while the WebView in the same emulator sampled at full rate. The header says so, the same
+  //way it says the document was hidden, so a screenshot cannot be read as a sheet verdict.
+  const starvedFps = (() => {
+    const perStep = results
+      .map((r) => r.samples.length)
+      .filter((n) => n > 0)
+    if (perStep.length === 0) return null
+    const sorted = [...perStep].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    const fps = (median / SETTLE_MS) * 1000
+    return fps < 20 ? Math.round(fps) : null
+  })()
 
   return (
     <LabPage title="Drawer × keyboard">
@@ -897,7 +913,7 @@ function LabDrawerKeyboardPage() {
               pointerEvents: "none",
             }}
           >
-            {`${failed === 0 ? "PASS" : `FAIL ${failed}/${total}`}${document.hidden ? " (document hidden — motion frozen, checks unreliable)" : ""}\n${results
+            {`${failed === 0 ? "PASS" : `FAIL ${failed}/${total}`}${document.hidden ? " (document hidden — motion frozen, checks unreliable)" : ""}${starvedFps !== null ? ` (starved — ${starvedFps}fps median, checks unreliable)` : ""}\n${results
               .map(
                 (r) =>
                   `${r.checks.every((c) => c.pass) ? "ok  " : "FAIL"} ${r.step}  ${r.perf ?? ""}\n${r.checks
