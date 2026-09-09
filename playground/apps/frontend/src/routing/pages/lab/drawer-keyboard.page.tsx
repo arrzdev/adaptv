@@ -41,6 +41,15 @@ type Sample = {
   height: number
   /** distance from the content's bottom edge to the keyboard's painted top edge */
   gap: number
+  /** the box's raw inline geometry the derived numbers came from, so a turn can be attributed
+   *  to the room, the floor, the cap or the box itself instead of guessed at */
+  raw: {
+    room: number
+    min: number
+    max: number
+    box: number
+    rectBottom: number
+  }
 }
 type Check = { name: string; pass: boolean; detail: string }
 /** `samples` is the geometry series the checks were read from, so a reader over CDP can see the
@@ -69,6 +78,7 @@ function sampleGeometry(content: HTMLElement, startedAt: number): Sample {
     ? fake.getBoundingClientRect().top
     : window.innerHeight
   const bottom = Math.round(rect.bottom - room)
+  const style = getComputedStyle(content)
   return {
     t: Math.round(performance.now() - startedAt),
     top: Math.round(rect.top),
@@ -76,6 +86,13 @@ function sampleGeometry(content: HTMLElement, startedAt: number): Sample {
     bottom,
     height: Math.round(rect.height),
     gap: Math.round(bottom - Math.min(keyboardTop, window.innerHeight)),
+    raw: {
+      room: Math.round(room),
+      min: Math.round(Number.parseFloat(style.minHeight) || 0),
+      max: Math.round(Number.parseFloat(style.maxHeight) || 0),
+      box: Math.round(rect.height),
+      rectBottom: Math.round(rect.bottom),
+    },
   }
 }
 
