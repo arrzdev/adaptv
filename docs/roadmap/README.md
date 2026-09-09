@@ -41,6 +41,7 @@ against shipped code are not roadmap items either — those live as `B` entries 
 | 9 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |
 | 10 | **Open questions** | [`open-questions.md`](open-questions.md) | — | Ten undecided questions plus one the register never carried. Not work — decisions owed. |
 | 11 | **`src/` reorganisation** | [`src-reorg.md`](src-reorg.md) | medium | **§0 answers "what would be ideal"** against the source trees of nine peer frameworks: all nine divide by **where the code executes**, adaptv divides by layer only, and the fix is a rename plus a gate rather than a restructure. **§1–§7** evaluate the owner's three proposals (group by domain · tests in their own folder · domain-first filenames) — **one, narrowly**, and against the other two. No locked decision conflicts. Sequenced **after** the `dist` cutover, except the one step that moves no files. |
+| 12 | **Core / binding split** | [`core-binding-split.md`](core-binding-split.md) | medium–large | **L22**, decided 2026-09-09. Pull the imperative DOM work out of React into framework-free modules; **9,306 LOC across 18 files**, no behaviour change. Justified as organisation — whether a second framework binding is ever built is **O23** and is *not* decided. Wants a clean tree and an agreed order against #3 and #11, which move the same directories. |
 
 ---
 
