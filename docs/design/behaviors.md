@@ -147,8 +147,18 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     the SAME geometry check fails on every run: `picker collapses, keyboard lags: content edge never
     reverses — 923 → 554`. Programmatic focus does not raise the emulator's IME (`mInputShown=false`,
     `innerHeight` 923 throughout), so the reversal is the sheet's own motion, not a second keyboard.
-  - **Standalone PWA on Android, target 5:** not run; the session ran out before an Add-to-Home-Screen
-    in the emulator's Chrome, and nothing was measured for it.
+  - **Standalone PWA on Android, target 5 (Pixel 10 emulator, Chrome 149):** reached, and not a
+    measurement of the sheet. `adb reverse tcp:41800 tcp:41800` makes the preview `localhost` on the
+    device, so Chrome sees a secure context, a controlling service worker and `manifest.json`, offers
+    the "Install app" dialog, and launches the icon as `WebappActivity` with
+    `(display-mode: standalone)` true on `index-nm-k7Jpk.js`. The run there reports `FAIL 7/91`, and
+    every step sampled three frames in 700ms (the lag step: `226 → 845, 428 → 394, 897 → 394`):
+    Chrome on this emulator paints at 3–20fps in the standalone window AND in the ordinary tab
+    (`FAIL 11/95`, 7–20fps), while the WebView probe on the same emulator sampled 35–43 frames per
+    step the same hour. The failures are the sampler reading motion still in flight, so the
+    harness now stamps such a run `starved — Nfps median, checks unreliable` in its header, the
+    way it stamps a hidden document. What target 5 owes is a device, or an emulator whose Chrome
+    has a GPU process; the WebView result stands for the engine.
   So the one thing the installed targets add is a **content-edge reversal** in the scenario where
   the picker collapses first and the keyboard lands 48ms later: the content bottom turns around
   once between its start (the screen bottom) and its rest above the keyboard. It was first read as
