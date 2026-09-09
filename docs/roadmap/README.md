@@ -36,7 +36,7 @@ against shipped code are not roadmap items either — those live as `B` entries 
 | 4 | **`create-adaptv` scaffolder** | [`create-adaptv.md`](create-adaptv.md) | medium | Unblocked, low risk. |
 | 5 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, filesystem, biometrics) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
 | 6 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text` is **done**. |
-| 7 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Seven named items. Two of the original nine are discharged and were removed. |
+| 7 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Four named items. Five of the original nine are discharged and were removed. |
 | 8 | **Owed device verification** | [`owed-device-verification.md`](owed-device-verification.md) | small each | Six checks no unit test can close. Cheap individually; they need hardware. |
 | 9 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |
 | 10 | **Open questions** | [`open-questions.md`](open-questions.md) | — | Nine undecided questions plus one the register never carried; O22 (overlays) was answered 2026-09-09. Not work — decisions owed. |

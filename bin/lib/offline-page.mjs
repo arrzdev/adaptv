@@ -31,6 +31,46 @@ export const OFFLINE_PAGE = "adaptv-offline.html"
 export const MIN_ANDROID_WEBVIEW = 111
 
 /**
+ * How many consecutive reachable-but-not-ready answers (a 4xx/5xx) the reconnect probe waits
+ * out before navigating anyway. Vite throws a 500 while it re-optimizes deps on the first
+ * request, and navigating into that boots the app onto an error page for a beat; but a
+ * genuinely 500-ing app must still let the dev back in to see the error, so the wait is bounded.
+ */
+export const NOT_READY_LIMIT = 5
+
+/**
+ * The reconnect probe's one decision, given the status the dev server answered with.
+ *
+ * Returns the verdict and the consecutive-not-ready count to carry to the next probe:
+ *  - `go`    — 2xx/3xx, the app is actually serving; or a not-ready answer that has now
+ *              persisted for `limit` tries.
+ *  - `wait`  — reachable but not ready (a 4xx/5xx under the limit).
+ *  - `never` — status 0: nothing answered. The screen must not flicker while the server is
+ *              down, so an unreachable server never navigates however long it stays that way.
+ *
+ * This function's SOURCE is embedded in the page (`String(reconnectDecision)`), which is what
+ * lets a unit test exercise the page's own logic rather than a copy of it. So it must stay plain
+ * ES5 with no free variables: the limit arrives as an argument, not through a closure.
+ *
+ * @param {number} status
+ * @param {number} notReadyTries
+ * @param {number} limit
+ * @returns {{ verdict: "go" | "wait" | "never", tries: number }}
+ */
+export function reconnectDecision(status, notReadyTries, limit) {
+  if (status >= 200 && status < 400)
+    return { verdict: "go", tries: notReadyTries }
+  if (status > 0) {
+    notReadyTries += 1
+    return {
+      verdict: notReadyTries >= limit ? "go" : "wait",
+      tries: notReadyTries,
+    }
+  }
+  return { verdict: "never", tries: notReadyTries }
+}
+
+/**
  * Write the error screen into `<appRoot>/<webDir>/adaptv-offline.html`.
  *
  * `url` is the dev server, baked in so the page can navigate back to it — pass `null` for
@@ -441,7 +481,9 @@ async function renderOfflineHtml(devUrl, config) {
     // navigating into a broken boot — but give up waiting after this many, so a genuinely
     // 500-ing app still lets the dev back in to see the error.
     var notReadyTries = 0;
-    var NOT_READY_LIMIT = 5;
+    var NOT_READY_LIMIT = ${NOT_READY_LIMIT};
+    // The decision itself, verbatim from the CLI module so the test and the page agree.
+    ${String(reconnectDecision)}
 
     // Platform for the command hint. Prefer the bridge; fall back to the local origin's
     // scheme, which is set even before the bridge is injected (iOS = capacitor:, Android
@@ -503,8 +545,9 @@ async function renderOfflineHtml(devUrl, config) {
             // 2xx/3xx = the app is actually serving → reconnect. A 5xx/4xx means the
             // server answered but isn't ready (Vite still booting): wait it out, but
             // reconnect anyway once it persists, so a real app error isn't a dead end.
-            if (s >= 200 && s < 400) { go(); return; }
-            if (s > 0 && ++notReadyTries >= NOT_READY_LIMIT) go();
+            var d = reconnectDecision(s, notReadyTries, NOT_READY_LIMIT);
+            notReadyTries = d.tries;
+            if (d.verdict === "go") go();
           })
           .catch(function () {});
         return;
