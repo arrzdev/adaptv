@@ -128,7 +128,7 @@
     "@types/react-dom": "19.2.3",
     "clsx": "2.1.1",
     "fake-indexeddb": "^6.2.5",
-    "happy-dom": "20.10.6",
+    "happy-dom": "20.11.2",
     "motion": "12.35.0",
     "publint": "0.3.22",
     "react": "19.2.3",
