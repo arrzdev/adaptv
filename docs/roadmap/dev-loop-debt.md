@@ -1,15 +1,18 @@
 # adaptv — dev-loop debt
 
-> 📐 **Seven named items of debt against machinery that already works.** Was
+> 📐 **Four named items of debt against machinery that already works.** Was
 > `DEV-LOOP-REVIEW.md`; renamed and moved here 2026-08-30 because every remaining item is work not yet
 > done.
 >
-> **Two of the original nine are discharged and have been removed:**
+> **Five of the original nine are discharged and have been removed:**
 >
 > | Was | Discharged by |
 > |---|---|
 > | **§C** — "the `adb reverse` keeper treats a symptom; add the instance lock instead" | `bin/lib/lock.mjs` **is** that instance lock. A second `dev` now fails fast naming the pid and url, and `preview`/`build` refuse while a `dev` run owns the config. |
+> | **§D** — "`relaunchAndroidApp` still touches every connected device" | `bin/lib/native.mjs` `relaunchAndroidApp` resolves the run's serial through `androidSerialForTarget` and force-stops / relaunches on that ONE serial; the all-devices sweep is reached only when the target cannot be resolved. Pinned by `bin/lib/native-relaunch.test.mjs` — "force-stops and relaunches on the ONE serial the AVD name resolves to" and "falls back to every connected device only when the target is unresolvable". |
 > | **§F** — "`OFFLINE_PAGE` is duplicated with a *keep in sync* comment" | Still duplicated, but the duplication is now **mechanised** by `src/shell/offline-page-name.test.ts`, so drift fails the suite. The concern, not the duplication, was the item. |
+> | **§H** — "the offline page navigates on *any* HTTP answer" | `bin/lib/offline-page.mjs` `reconnectDecision`: 2xx/3xx navigate at once, a 4xx/5xx waits and navigates only once it has persisted for `NOT_READY_LIMIT` (5) consecutive probes, and status 0 (nothing answered) never navigates. The page embeds that function's source, so the test runs the page's own logic. Pinned by `bin/lib/offline-page.test.mjs` "the reconnect decision" — five cases, including "never goes on 0, however many times" and "is the same function the page runs, and it stands alone there". |
+> | **§I** — "`r` means a full native rebuild" | `bin/lib/render.mjs` `onKeys`: `r` → `onReload` (the JS, no reinstall), `b` → `onRebuild` (the native app), `q` / ctrl-c → `onQuit`, and `R` is deliberately nothing so a shift typo cannot swap a 0.4s reload for a 15s reinstall. `bin/adaptv.mjs` wires `reload` / `rebuild` to both the raw-mode `onKeys` and the Ink `inkWatcher` (`bin/ui/watch.mjs` maps the same three keys). Pinned by `bin/lib/render-keys.test.mjs` — "'r' reloads the JS and nothing else", "'b' rebuilds the native app and nothing else", "'R' does nothing — a shift typo never swaps a reload for a reinstall", "'q' and ctrl-c both quit", and "the disposer removes the listener and leaves raw mode off". |
 
 Written after landing #3–#7 (live-reload, offline screen, config-as-artifact, run
 cache, `r`/native-change detection). Everything here works and is stress-tested on
@@ -93,18 +96,6 @@ the two lineages never cross, and the fingerprint was the one place they did.
 
 ---
 
-## D. `relaunchAndroidApp` still touches every connected device
-
-`launchInstalledApp` correctly resolves the target's serial via
-`androidSerialForTarget` (an AVD name like `Pixel_10` is not a serial like
-`emulator-5554`). `relaunchAndroidApp` — used on the cache-miss path — still
-force-stops and launches on **every** connected emulator.
-
-Latent bug: running nativ against one emulator disturbs the others. Same fix,
-already written, just not applied there.
-
----
-
 ## E. `warmDevServer`'s heuristic could become a real signal
 
 Waiting for "two reads >500 bytes, then 1s of quiet" is a proxy for "Vite finished
@@ -132,30 +123,6 @@ from the local origin during a dev run.
 
 ---
 
-## H. The offline page navigates on *any* HTTP answer
-
-The reconnect probe treats `status > 0` as "server is back", including a `500`
-thrown while Vite/workerd is still booting. That can bounce the app onto an error
-page for a beat before it settles.
-
-Tighten to 2xx/3xx, or accept 5xx only after N consecutive attempts (so a genuinely
-500-ing app still reconnects rather than sitting on the offline screen forever).
-
----
-
-## I. `r` means something different here than in Expo
-
-| | Expo | nativ |
-|---|---|---|
-| `r` | reload the JS bundle — instant | full native rebuild + reinstall — ~15s |
-
-The cheap action is the one you want most often; ours costs 15s and drops app
-state. Split them: `r` reloads the WebView, `shift-R` (or `b`) rebuilds natively.
-This also softens the tradeoff from #7 — a wedged-JS app gets an instant fix
-instead of needing a full reinstall.
-
----
-
 ## Known-unfixed (pre-existing, not from this work)
 
 - **Hydration mismatch on every boot.** The prerendered shell contains the splash
@@ -175,14 +142,14 @@ instead of needing a full reinstall.
 
 1. **A** (Vite's ws events) — deletes the most fragile code we own, *if* it proves out.
    Still live: `src/shell/native-live-reload-client.ts` is **228 lines** (this doc said 227).
-2. **D** (target the right device) — small, latent bug
-3. **H** — small correctness/robustness
-4. **I** (`r` semantics) — UX, cheap
-5. **B** (unify fingerprints) — measured (§B, 2026-09-02): ~8 ms either way, so the pick is on
+2. **B** (unify fingerprints) — measured (§B, 2026-09-02): ~8 ms either way, so the pick is on
    honesty, not speed; the `.output` hole the measurement turned up is already fixed. ⚠️ **This is the same bug
    `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
    that doc names "a real bug". Two fingerprints with two hashing strategies is the cause.
-6. **E**, **G** — only if already in the file
+3. **E**, **G** — only if already in the file
+4. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet;
+   the hydration mismatch is the one with a cost paid on every launch.
 
 **A** is now the one item that changes how much code exists (**C**, its partner, has shipped as
-`bin/lib/lock.mjs`). The rest is tidying.
+`bin/lib/lock.mjs`, and **D**, **H** and **I** were already in the code — what they lacked was a
+test, and each now has one). The rest is tidying.
