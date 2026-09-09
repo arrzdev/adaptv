@@ -89,7 +89,7 @@ adaptv's web tier is free and only the native tier needs a plugin.
 | **Native toast** | — | `ToastAndroid` | ✅ `toast` | — | ❌ |
 | Device info | `expo-device`, `expo-application` | `Platform`, `Dimensions` | ✅ `device` | `userAgentData` | ✅ `device`, `useDevice` |
 | Screen orientation | `expo-screen-orientation` | — | ✅ `screen-orientation` | `screen.orientation.lock()` | ✅ `orientation`, `useOrientation` |
-| Keep awake | `expo-keep-awake` | — | ❌ community | **Screen Wake Lock API** | ✅ `keep-awake`, `useKeepAwake` — ⚠︎ unverified inside a WebView |
+| Keep awake | `expo-keep-awake` | — | ❌ community | **Screen Wake Lock API** | ✅ `keep-awake`, `useKeepAwake` — holds the screen in the Android WebView (dumpsys, 2026-09-02); the WKWebView takes Safari's disabler |
 | **Local notifications** | `expo-notifications` | — | ✅ `local-notifications` | Notification API + SW | ❌ |
 | **Push notifications** | `expo-notifications` | `PushNotificationIOS` | ✅ `push-notifications` | Push API + SW | ❌ |
 | **Camera capture** | `expo-camera` | — | ✅ `camera` | `getUserMedia` | ❌ |
@@ -279,7 +279,7 @@ degradation paths, and a lab page that renders the unsupported state visibly.
 | `clipboard` | Write is a boolean probe; read uses the four-state permission enum. The asymmetry is real (read is permission-gated on web, write generally is not) and is deliberately **not** flattened. |
 | `device` | Memoised `getDeviceInfo()`; delegates `platform`/`os` to `utils/platform` rather than re-detecting. §3.4's constants-vs-functions rule is kept in spirit — Capacitor's bridge has no sync path. |
 | `orientation` | read · subscribe · lock · unlock, with `"ok" \| "unsupported" \| "rejected"` as three distinct outcomes. Chromium rejects a lock outside fullscreen; **iOS reports `unsupported` outright**. |
-| `keep-awake` | Screen Wake Lock only — no community plugin was added without a decision. ⚠︎ **Unverified inside a Capacitor WebView**; caniwebview lists it unsupported in both WKWebView and Android WebView, while the browser tables don't cover webviews at all. A native run is the outstanding check. |
+| `keep-awake` | Screen Wake Lock only — no community plugin was added without a decision, and the native runs of 2026-09-02 showed none is needed. **Android WebView: supported and it holds the screen** (Pixel 10 emulator API 36, WebView Chrome/149.0.7827.5, `adaptv build android`): `adb shell dumpsys power` shows a `SCREEN_BRIGHT_WAKE_LOCK 'WindowManager/displayId:0'` row attributed to the app's package while held and none after `release()`; at a 15 s `screen_off_timeout` the display is `Asleep` 25 s after a release and `Awake` 25 s after a request, the row at ACQ=-27s. caniwebview's "unsupported" is wrong for this WebView. **WKWebView: the same WebCore disabler as Safari**, taken by the app's own UI process (iPhone 17 Pro simulator, iOS 26.1): `ScreenSleepDisabler::updateState() shouldKeepScreenAwake=1` at the request, `=0` at the release, the identical line MobileSafari logs for the same page; `isIdleTimerDisabled` stays NO, so it is not the idle-timer property. The simulator never idle-locks, so the lit screen is owed to a physical iPhone (`../roadmap/owed-device-verification.md` row 3). |
 
 **One shape worth carrying forward.** `keep-awake` exposes `supported` *and* a `getKeepAwakeCaveat()`
 string, because "the API exists and resolves but does nothing" is a third state distinct from

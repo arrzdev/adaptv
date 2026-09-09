@@ -106,10 +106,30 @@ describe("keep-awake — the silent-failure caveat", () => {
     expect(getKeepAwakeCaveat()).toBeNull()
   })
 
-  it("warns inside a Capacitor WebView, which is unverified", () => {
+  it("has no caveat in the native Android app, where the lock holds the screen", () => {
+    //2026-09-02, Pixel 10 emulator API 36, WebView Chrome/149: `dumpsys power`
+    //shows the SCREEN_BRIGHT_WAKE_LOCK row while held and none after release
     forceNative(true)
+    stubNavigatorProp(
+      "userAgent",
+      "Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7827.5 Mobile Safari/537.36",
+    )
     stubWakeLock(() => Promise.resolve(fakeSentinel()))
-    expect(getKeepAwakeCaveat()).toMatch(/WebView/)
+    expect(getKeepAwakeCaveat()).toBeNull()
+  })
+
+  it("has no caveat in the native iOS app, even below 18.4", () => {
+    //WebKit 254545 is a Home Screen web app bug (a ViewService with no
+    //UIApplication). A Capacitor app has one and takes WebCore's own
+    //ScreenSleepDisabler exactly as Safari does, so the version branch is
+    //web-only and must not fire here.
+    forceNative(true)
+    stubNavigatorProp(
+      "userAgent",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)",
+    )
+    stubWakeLock(() => Promise.resolve(fakeSentinel()))
+    expect(getKeepAwakeCaveat()).toBeNull()
   })
 })
 

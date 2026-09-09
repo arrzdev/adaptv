@@ -14,13 +14,30 @@
 //    worst failure shape there is — a success value that isn't one — and JS
 //    cannot detect it, so it is reported through {@link getKeepAwakeCaveat}
 //    rather than pretended away.
-//  • **Capacitor WKWebView / Android WebView**: NOT verified on device. The
-//    browser support tables do not cover embedded webviews, and caniwebview
-//    lists both as unsupported. If `navigator.wakeLock` is absent there,
-//    {@link isKeepAwakeSupported} returns `false` and the app renders the gap;
-//    if it is present but inert, the caveat below says so. Either way nothing
-//    silently no-ops. Adding `@capacitor-community/keep-awake` is the fix if a
-//    device run shows it's needed — flag it before taking the dependency.
+//  • **Capacitor Android WebView** — supported, and it holds the screen.
+//    Measured 2026-09-02: Pixel 10 emulator API 36, Android System WebView
+//    Chrome/149.0.7827.5, the playground built with `adaptv build android`,
+//    driven over CDP. `navigator.wakeLock` is present, `request('screen')`
+//    resolves with `released: false`. `adb shell dumpsys power` shows a
+//    `SCREEN_BRIGHT_WAKE_LOCK 'WindowManager/displayId:0'` row attributed to
+//    the app's package while held and no such row after `release()` — the
+//    WebView maps the JS lock to the window's keep-screen-on flag. With
+//    `screen_off_timeout` at 15 s: released, `mWakefulness=Asleep` after 25 s;
+//    held again, `mWakefulness=Awake` after 25 s with the row at ACQ=-27s.
+//    caniwebview's "unsupported" is wrong for this WebView.
+//  • **Capacitor WKWebView** — the same mechanism as Safari. Measured
+//    2026-09-02 on an iPhone 17 Pro simulator, iOS 26.1: present, the request
+//    resolves and holds, the release drops it. A Capacitor app is a full app
+//    with a `UIApplication`, so the ViewService gap above is not its gap: the
+//    unified log shows the app's own UI process taking WebCore's disabler
+//    (`ScreenSleepDisabler::updateState() shouldKeepScreenAwake=1` at the
+//    request, `=0` at the release), and MobileSafari on the same simulator
+//    logs the identical line for the same page. `isIdleTimerDisabled` read
+//    over lldb while held is NO — it is WebKit's own sleep disabler (Safari's
+//    since 16.4), not the idle-timer property. The simulator has no Auto-Lock
+//    (no Display & Brightness row) and never idle-locks, so the lit screen
+//    itself is owed to a physical iPhone — docs/roadmap/owed-device-verification.md.
+//    Both runs showed the community plugin is not needed; the rule above stands.
 import {
   isIOS,
   isNativePlatform,
@@ -74,12 +91,17 @@ export function isKeepAwakeSupported(): boolean {
  * A known way this can fail *while reporting success*, or `null` when there
  * isn't one. Render it next to the toggle: this is the one platform gap the
  * return values genuinely cannot express, because the platform lies.
+ *
+ * The platform that lies is an installed PWA on iOS below 18.4 (WebKit 254545,
+ * a Home Screen web app bug). The native app never gets a caveat: the Android
+ * WebView holds the screen (dumpsys-verified 2026-09-02), and the WKWebView in
+ * a Capacitor app has a `UIApplication` and takes Safari's own sleep disabler,
+ * so the ViewService bug is not its bug. The native check comes first so the
+ * iOS-version branch stays web-only.
  */
 export function getKeepAwakeCaveat(): string | null {
   if (!isKeepAwakeSupported()) return null
-  if (isNativePlatform()) {
-    return "Not verified inside a Capacitor WebView — the lock may resolve without holding the screen."
-  }
+  if (isNativePlatform()) return null
   //WebKit 254545: fixed in 18.4, broken (silently) in every installed PWA below
   if (isIOS() && !isOSVersionAtLeast(18, 4)) {
     return "iOS below 18.4 resolves the wake lock but still dims the screen in an installed PWA (WebKit bug 254545)."
