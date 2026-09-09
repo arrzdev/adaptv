@@ -96,6 +96,23 @@ const realSetTimeout = globalThis.setTimeout.bind(globalThis)
  * checkpoint before a task runs, so every signal above has landed by the time this
  * resolves, and the assertion after it can be flat. It carries no deadline, so load
  * can delay it but can never fail it.
+ *
+ * ## The same failure text, from the environment rather than from the wait
+ *
+ * `expected '<bundle>' to be null` came back afterwards anyway — about one run in
+ * three, only ever with the whole file running, and never with the test on its own.
+ * Nothing was late that time: the tag was never cleared at all, because the
+ * `MutationObserver` callback never ran. happy-dom before 20.11.2 kept each
+ * observer's internal callback in a `WeakRef` that nothing else referenced, so any
+ * GC between `observe()` and the mutation collected it and the dispatch skipped it
+ * in silence. Running the file alone allocates too little to trigger a collection,
+ * which is exactly why the flake looked like contention.
+ *
+ * The watchdog drops the observer handle on purpose — under DOM a node keeps its
+ * registered observers alive, so there is nothing to hold — which left this file
+ * carrying the whole cost of that bug. The floor in `package.json` is the fix. If
+ * this text ever returns, confirm the observer FIRED before touching the wait: the
+ * signature has had two causes and only one of them was ever about timing.
  */
 const landed = () =>
   new Promise<void>((resolve) => {
