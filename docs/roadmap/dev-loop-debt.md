@@ -115,11 +115,26 @@ Set for the dev session so the offline page can `fetch`-probe the dev server
 isn't available). It earns its keep: it's what makes Android's offline → live
 seamless.
 
-But it changes the local origin in dev, and the reasoning that it's harmless
-("live-reload means the app runs from the dev-server origin, so the local origin
-only ever serves the offline page") deserves an explicit test rather than a
-comment — specifically that nothing app-side reads storage or a secure-context API
-from the local origin during a dev run.
+**Pinned 2026-09-02.** The reasoning is now `bin/lib/live-reload.test.mjs` rather than a
+comment: the dev session points the app at the dev-server origin and the local origin at one
+document; teardown takes the cleartext scheme away again; a built config never carries it; and
+the offline page reads none of storage, cookies, credentials, service workers, notifications,
+geolocation or `crypto.subtle`, reaching the dev server by a plain `fetch` and nothing else.
+The last one bites: adding a single `localStorage` read to the page fails it.
+
+Measured on the Pixel emulator during a real `dev android` run (app id `dev.arrz.projectzero.dev`,
+dev server on 41840). With the server up, the app runs from the dev-server origin, which is what
+makes the local origin's scheme a question about one page and not about the app:
+
+    {"origin":"http://localhost:41840","href":"http://localhost:41840/","secure":true}
+
+With the server stopped, the WebView falls to the local origin, and it is the offline page:
+
+    {"origin":"http://localhost","href":"http://localhost/adaptv-offline.html","secure":true}
+
+`isSecureContext` is **true on both**. `http://localhost` is potentially trustworthy by
+specification, so the dev scheme costs the local origin no capability at all — the thing it changes
+is the transport, and the only document that travels over it is a static page adaptv generates.
 
 ---
 
@@ -146,7 +161,7 @@ from the local origin during a dev run.
    honesty, not speed; the `.output` hole the measurement turned up is already fixed. ⚠️ **This is the same bug
    `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
    that doc names "a real bug". Two fingerprints with two hashing strategies is the cause.
-3. **E**, **G** — only if already in the file
+3. **E** — only if already in the file. **G** is discharged: its claim is a test now.
 4. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet;
    the hydration mismatch is the one with a cost paid on every launch.
 
