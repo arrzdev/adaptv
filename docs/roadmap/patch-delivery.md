@@ -25,7 +25,7 @@
 | **What is already built** | More than half of it. `UiPatchScope` (`"app" \| "all" \| "off"`) with per-option defaults, the pre-paint stamp, `patches: {caretRepaint, textMagnifier, viewportFreeze}`, a shipped CSS hatch (`&:active:not([data-press-engine])`) and a shipped JS hatch (`isProtectedTarget()`'s `closest()`). → §1 |
 | **The finding that shrinks the work** | **Half the patches need no marker at all.** Where a patch is a CSS *property*, the hatch is re-declaring the property, and `@layer adaptv.*` already guarantees a consumer's unlayered rule wins at any specificity — for any consumer, in any CSS dialect, with nothing to learn. Only the **behavioural** patches need a marker, and there are five. → §2.2 |
 | **The uniform part** | The **registry**, not the enforcement. Enforcement is irreducibly three shapes (layered CSS, a rewritten selector, a JS handler) and forcing one would break patches that work today. |
-| **The risky part** | The post-processor's blast radius: `@custom-variant` only touches what a consumer opted into by typing `hover:`; a post-processor touches **every** `:hover` in the bundle, third-party CSS included. → §4.3 |
+| **The risky part** | The post-processor's blast radius: `@custom-variant` only touches what a consumer opted into by typing `hover:`; a post-processor touches **every** `:hover` in the bundle, third-party CSS included — deliberately, per §6.2. The local hatch is what makes that survivable, so §2 ships first. → §4.3, §5 |
 | **Locked decisions** | **No conflict.** The `data-*` spelling follows §3.1 and §5.4 of [`../decisions/styling.md`](../decisions/styling.md) rather than amending them. **L7** is in tension with §4 and §5 says how. |
 
 ---
@@ -81,6 +81,7 @@ One declaration per patch, in one file, generating every surface that mentions i
   scope: "boolean",             // "boolean" | UiPatchScope  (keep today's split — §1.1)
   default: true,
   hatch: true,                  // false ⇒ no local opt-out exists, deliberately (§2.4)
+  reach: "all",                 // "all" (node_modules included) | "app" — §6.2
   why: "WebKit 231161 — the double-tap loupe is not fixable in CSS",
 }
 ```
@@ -147,8 +148,18 @@ implicit in a comment, which is the only part of these that changes.
 | `-webkit-tap-highlight-color` on `a[href]` | *"DOCTRINE and stays universal: it is a second, uglier press feedback drawn on top of the one adaptv already draws"* |
 | safe-area `env()` ordering (crbug/40699457) | same line as the autofill cover — *"no knob and never will"* |
 
-**The rule the registry encodes:** a knob exists where **both** behaviours are legitimate. It is not
-*"every patch gets an escape hatch"* — uniformity in the *registry*, not in the *hatch*.
+**The rule the registry encodes**, refined by the owner **2026-09-10**: a hatch exists **unless using
+it would harm the user** — an accessibility guarantee, or a UA fight where the un-patched state is
+genuinely broken rather than merely different. That is a wider rule than *"both behaviours are
+legitimate"*, and deliberately so: where opting out costs the user nothing, the developer gets the
+choice (§6.3). It is still not *"every patch gets a hatch"* — uniformity lives in the *registry*,
+not in the *hatch*.
+
+Three of the four above fail that test on harm — unreadable autofilled text, a missing keyboard
+focus indicator, a broken safe-area layout. The fourth, `-webkit-tap-highlight-color` on `a[href]`,
+rests on **doctrine** instead (*"a second, uglier press feedback drawn on top of the one adaptv
+already draws"*), which is a weaker footing than the other three. Worth knowing when someone asks
+for it later.
 
 The ring-shadow rewrite is a fifth case and needs no row of its own reasoning: it is **byte-identical
 on browsers that were never broken** (measured on device), so there is nothing to detect and nothing
@@ -173,8 +184,8 @@ Every patch adaptv applies today, its enforcement layer, and what it gets.
 
 | Patch | Layer | Global tier today | Species | Local tier |
 |---|---|---|---|---|
-| `hover:` sticky + focus | css-rewrite | none | B | `data-adaptv-no-hover` |
-| `active:` press | css-rewrite | none | B | `data-adaptv-no-active` (replaces the ad-hoc `[data-press-engine]` branch? — §6) |
+| `hover:` sticky + focus | css-rewrite | none | B | `data-adaptv-no-hover` (§6.3) |
+| `active:` press | css-rewrite | none | B | `data-adaptv-no-active`, **beside** `[data-press-engine]` — §6.1 |
 | `noSelect` | css-layered | `ui.noSelect` | A | `selectable`, already shipped |
 | `hideScrollbars` | css-layered | `ui.hideScrollbars` | A | `scrollbar-visible`, already shipped |
 | `touchCallout` | css-layered | `ui.touchCallout` | A | re-declare `-webkit-touch-callout` |
@@ -228,8 +239,9 @@ mechanism to build.
 1. **Blast radius — opt-in becomes opt-out.** `@custom-variant hover` only affects a rule the consumer
    *typed* as `hover:`. A post-processor affects **every** `:hover` in the bundle, including CSS from
    third parties — a date picker, an editor, `normalize.css` — some of which mean the raw thing. This
-   is a policy decision, not an implementation detail: which stylesheets are in scope (the consumer's
-   own? everything but `node_modules`? everything?), and what the global off-switch is.
+   was a policy decision, and it is **settled in §6.2**: everything in the app's final output,
+   `node_modules` included — which is what `isTransformableCssId` already admits — with a per-patch
+   `reach` field for the narrower case. The hatch (§2) is what makes that safe to live with.
 2. **Rewriting selectors is not rewriting declarations.** The ring regex is safe because a declaration
    body contains no `;` or brace. Selector lists need real tokenizing — commas inside `:is()`, strings,
    escapes — and the wrap must be an `@media` at-rule, **not** a selector prefix like
@@ -272,17 +284,70 @@ only reaches what the consumer opted into by typing `hover:`. §4 removes that o
 
 ---
 
-## 6. Open inside this plan
+## 6. Decided inside this plan (2026-09-10)
 
-- **Does `data-adaptv-no-active` replace the `[data-press-engine]` branch, or sit beside it?** They
-  answer different questions — the marker is *"do not patch this element"*, the branch is *"which press
-  mechanism owns this element"* — so beside is probably right, but that makes two `:not()` clauses on
-  one selector and the specificity arithmetic in §3.1 has to be re-checked.
-- **Scope policy for §4.3.1**, which is the only genuinely undecided piece of the post-processor.
-- **Does the `hover:` patch get a hatch at all?** It is in the inventory with one, but §2.4's rule —
-  a knob exists where both behaviours are legitimate — may argue it out. Sticky hover after a tap is
-  close to *"nobody has a legitimate reason"*, and a hatch nobody should use is a hatch that should not
-  exist.
+### 6.1 The hatch sits **beside** `[data-press-engine]`, it does not replace it
+
+The owner asked for one mechanism end-to-end, and the hatch **is** that mechanism — every patch, one
+attribute, one shared helper. `[data-press-engine]` is not a competing hatch and deleting it is a
+behaviour regression on all eight press primitives:
+
+- **It is a routing selector, not an opt-out.** It answers *"which press implementation owns this
+  element"* — the engine's `data-pressed`, or native `:active` — and adaptv decides that, not the
+  developer.
+- **Native `:active` is excluded on engine elements on purpose, twice over.** `data-pressed` is
+  **reentrant** — it drops when the finger drags off the target and returns when it slides back in
+  (`components/button.tsx`), which native `:active` cannot do and which cannot be cleared from JS. And
+  keyboard activation must **not** set it: `hooks/use-gesture-engine.ts` — *"no data-pressed: keyboard
+  activation must not animate (motion contract)"* — where native `:active` fires on Enter/Space.
+
+The tree already contains the same category one patch over: the magnifier's `EDITABLE_SELECTOR`
+exemption is *where the patch does not apply by definition* (an `<input>` keeps the loupe because that
+is correct), not *a developer opting out*. **Applicability is per-patch implementation; the hatch is
+uniform.** That distinction is what makes the registry a single mechanism without flattening patches
+that differ for real reasons.
+
+**The composed variant, with specificity preserved:**
+
+```css
+@custom-variant active {
+  &[data-pressed]:not([data-adaptv-no-active])                        { @slot; }
+  &:active:not(:is([data-press-engine], [data-adaptv-no-active]))     { @slot; }
+}
+```
+
+⚠︎ **`:not(:is(a, b))`, never `:not(a):not(b)`.** [`../decisions/styling.md`](../decisions/styling.md)
+§3.1 records that the chained form cost (0,4,0) where the grouped one is (0,2,0) — *"two extra
+class-level points every consumer override had to out-specify"*. Adding the hatch must not spend that
+again; `styles/utils.test.ts` already asserts the compiled selector and is where this is proven.
+
+### 6.2 Scope — everything in the app's final output, `node_modules` included
+
+Decided by the owner: a library shipping a custom component should get the correction too, so the
+post-processor works on the app's whole emitted CSS rather than only on first-party source. **The
+shipped mechanism already behaves this way** — `isTransformableCssId` excludes `?raw` / `?url` /
+`?worker` (those hand the source to the app as *data*, so injecting into them would be silent
+corruption), `/.vite/`, and `?commonjs-proxy`, and admits every other real `.css`. No `node_modules`
+exclusion exists, and `ring-shadow-fallback.ts` has been rewriting on that basis in production.
+
+**Scope is nonetheless a per-patch registry field**, not a global constant: a correction that is safe
+to force on a third-party date picker is not the same class of change as one that is only ever right
+for the app's own surfaces. The registry carries `reach: "all" | "app"` beside `scope`, defaulting to
+`"all"`, so the narrow case is expressible without a second mechanism.
+
+### 6.3 `hover:` gets a hatch
+
+Decided by the owner: *the toggle costs nobody anything, and the developer should be free to choose.*
+This is the case that widened §2.4's rule from *"both behaviours are legitimate"* to *"unless using it
+would harm the user"* — sticky hover after a tap is an annoyance, not a broken guarantee, so there is
+no reason to withhold the choice.
+
+**One detail the hatch must respect:** adaptv only owns *half* of the `hover:` fix. §0.1 of the styling
+decision is explicit — Tailwind v4 already compiles `hover:` inside `@media (hover: hover)`, and *"the
+sticky-hover-after-tap fix is THEIRS, not ours"*; adaptv adds the `:not(:is(:focus, :focus-within))`
+half so hover cannot beat a focus ring. So `data-adaptv-no-hover` removes **adaptv's half only** and
+leaves stock Tailwind behaviour, rather than dropping the element back to raw `:hover`. Opting out of
+adaptv is not opting out of the framework underneath it.
 
 ---
 
