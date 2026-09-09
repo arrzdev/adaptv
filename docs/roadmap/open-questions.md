@@ -131,6 +131,12 @@ unit table is a second truth to keep in step — or become the source of the tab
 
 ### O22 — Overlays: render them, or delegate to the OS?
 
+**Answered 2026-09-09 by the owner: render, one engine with thin presets.** The rationale, and
+what the answer rejected, are recorded in [`../decisions/register.md §5`](../decisions/register.md)
+O22. [`capability-gaps.md`](capability-gaps.md) Tier 2 #1 and [`component-gaps.md`](component-gaps.md)
+Tier 2 are unblocked by it and no longer owe a decision. The question as it was put, and the
+measurement that decided it, are kept below because the measurement is the reusable part.
+
 **Does adaptv render its own alert, action sheet and toast, or hand them to the OS?**
 
 [`capability-gaps.md`](capability-gaps.md) Tier 2 #1 and [`component-gaps.md`](component-gaps.md)
@@ -189,8 +195,9 @@ positioning layer behind it, and modality ordering is already adaptv's. The cost
 accessibility becomes adaptv's problem rather than free, which is real work and should be priced
 into the item rather than discovered during it.
 
-**Decided by the owner.** The counter-case is that the genuine platform look on native is worth more
-than one look across targets, and that is a positioning call, not a measurement.
+**Decided by the owner** — render, 2026-09-09. The counter-case put was that the genuine platform
+look on native is worth more than one look across targets; it is a positioning call rather than a
+measurement, and it did not win.
 
 
 ---
