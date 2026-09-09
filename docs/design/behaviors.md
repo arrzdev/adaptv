@@ -131,9 +131,32 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.
-  Green on both. Still unverified: the two **installed** targets (4–6), where the `app:` cap, the real
-  safe-area inset and the exact OS keyboard height all differ — those need a native dev run, not a URL
-  open. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
+  Green on both. **Run on the installed targets (2026-09-02, the page is now in the Testing index so
+  every target can reach it by tap):**
+  - **iOS Safari, target 2, same day, as the control:** `FAIL 2/104`, both frame-rate only (`picker
+    collapses mid-raise` 56fps 3 dropped; `picker collapses, keyboard lags` 38fps worst 187ms); every
+    geometry check green.
+  - **Standalone PWA on iOS, target 4 (Add-to-Home-Screen, two cold launches from the icon):**
+    `FAIL 1/107` — the one failure is `picker collapses, keyboard lags: content edge never reverses —
+    812 → 487`; every other check green at 58–62fps, including that scenario's frame rate.
+  - **Native iOS, target 6 (probe app, iOS 26 simulator):** `FAIL 2/107` — both in ONE scenario,
+    `picker collapses, keyboard lags`: `content edge never reverses — 874 → 524` and 39fps with a
+    172ms worst frame. Every other scenario green at 56–60fps.
+  - **Native Android, target 6 (probe app, Pixel 10 emulator, API 36):** three full runs, `FAIL 7/108`
+    to `9/108`; the frame-rate checks come and go with the emulator (42–55fps, worst 34–92ms), and
+    the SAME geometry check fails on every run: `picker collapses, keyboard lags: content edge never
+    reverses — 923 → 554`. Programmatic focus does not raise the emulator's IME (`mInputShown=false`,
+    `innerHeight` 923 throughout), so the reversal is the sheet's own motion, not a second keyboard.
+  - **Standalone PWA on Android, target 5:** not run; the session ran out before an Add-to-Home-Screen
+    in the emulator's Chrome, and nothing was measured for it.
+  So the one thing the installed targets add is an **installed-only content-edge reversal** in the
+  scenario where the picker collapses first and the keyboard lands 48ms later: the content bottom
+  turns around once between its start (the screen bottom) and its rest above the keyboard, on the
+  standalone PWA and on both native WebViews, and not in the browser tab on the same simulator the
+  same day. The variable is the installed geometry (the `app:` cap and the real bottom inset), not
+  the engine. The harness records only the check's endpoints
+  (`StepResult` carries `checks` and `perf`, not the sample series), so the shape of the turn is the
+  next measurement, not this one. Landscape is unreachable while the playground is portrait-locked by `orientation: "portrait"`,
   but orientation is not the variable that matters (keyboard-vs-reserve is), and the 70% scenario
   covers it.
 
