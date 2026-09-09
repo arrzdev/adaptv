@@ -31,10 +31,12 @@ tinting. Read the barrel, not either list.
 `@capacitor/dialog`, `@capacitor/action-sheet`, `@capacitor/toast`; RN's `Alert`, `ActionSheetIOS`,
 `ToastAndroid`.
 
-⚠️ **This owes a decision before it owes an implementation, and the decision is
-`render` vs `delegate`. It is written up as
-[`open-questions.md` O22](open-questions.md), with the web tier measured on two engines and a
-recommendation; answer it there, not here.**
+✅ **The decision this owed is made: render.** [`open-questions.md` O22](open-questions.md) was
+answered by the owner on 2026-09-09 — one overlay engine plus thin presets, not a delegation to
+`@capacitor/dialog` / `action-sheet` / `toast`. This item is now implementation work with no
+question in front of it; the rationale and what it rejected are in
+[`../decisions/register.md §5`](../decisions/register.md) O22. **The accessibility work is part of
+the item, not a discovery during it.**
 
 |  | Render them (Ionic's model) | Delegate to the OS (RN/Capacitor's model) |
 |---|---|---|

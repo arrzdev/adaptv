@@ -49,13 +49,13 @@ has them, adaptv has none of them.
 all share one interface, and adaptv's `Drawer` is *already* an overlay with a gesture engine behind
 it — so the engine largely exists.
 
-⚠️ **Owes the same render-vs-delegate decision as
-[`capability-gaps.md`](capability-gaps.md) Tier 2, and it is now one entry:
-[`open-questions.md` O22](open-questions.md).** These are one question asked from two sides:
-rendering gives one look on all targets and full styling control; delegating gives the genuine
-platform look and free accessibility, but its web tier was measured on two engines and is one
-string with two fixed buttons. O22 also notes that the answer need not be uniform — toast has the
-strongest delegate case of the five, alert the weakest.
+✅ **The render-vs-delegate decision is made: render.**
+[`open-questions.md` O22](open-questions.md) was answered by the owner on 2026-09-09, and it is the
+same answer on the capability side ([`capability-gaps.md`](capability-gaps.md) Tier 2). One engine
+plus five thin presets, one look on all six targets, full styling control, and modality that stays
+inside `BackPriority.Overlay`. The per-platform exception that was on the table — delegating toast
+on Android, where it is a real affordance outside the app window — was **considered and not taken**.
+The cost carried knowingly is that accessibility for all five is adaptv's work.
 
 ## Tier 3 — the app frame (most leverage, most design work)
 
