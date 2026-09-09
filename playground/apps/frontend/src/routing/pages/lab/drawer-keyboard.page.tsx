@@ -43,7 +43,14 @@ type Sample = {
   gap: number
 }
 type Check = { name: string; pass: boolean; detail: string }
-type StepResult = { step: string; checks: Check[]; perf?: string }
+/** `samples` is the geometry series the checks were read from, so a reader over CDP can see the
+ *  shape of a motion and not only its endpoints. */
+type StepResult = {
+  step: string
+  checks: Check[]
+  perf?: string
+  samples: Sample[]
+}
 
 /** Frame intervals in ms, in order — the only thing that can tell smooth from janky. */
 type Trace = { samples: Sample[]; frames: number[] }
@@ -146,17 +153,49 @@ function timeToFraction(
   return samples[samples.length - 1].t
 }
 
-function isMonotonic(samples: Sample[], pick: (s: Sample) => number) {
+type Reversal = { px: number; t: number; before: number; after: number }
+
+/**
+ * The worst step AGAINST the direction of travel, or null when every sample moves the same way.
+ * Reported with its time and both values, because "812 → 487" says only that an edge turned
+ * around somewhere: an installed target can show that line and nothing else, and whether the
+ * turn is an overshoot past the rest, a late step before the keyboard lands or a one-frame
+ * wobble is the whole diagnosis. One overlay screenshot has to carry it.
+ */
+function worstReversal(
+  samples: Sample[],
+  pick: (s: Sample) => number,
+): Reversal | null {
   const from = pick(samples[0])
   const to = pick(samples[samples.length - 1])
   const sign = Math.sign(to - from)
-  if (sign === 0) return true
-  let worst = 0
+  if (sign === 0) return null
+  let worst: Reversal | null = null
   for (let i = 1; i < samples.length; i++) {
-    const delta = (pick(samples[i]) - pick(samples[i - 1])) * sign
-    worst = Math.min(worst, delta)
+    const before = pick(samples[i - 1])
+    const after = pick(samples[i])
+    const delta = (after - before) * sign
+    if (delta < 0 && (!worst || delta < -worst.px)) {
+      worst = { px: -delta, t: Math.round(samples[i].t), before, after }
+    }
   }
-  return worst >= -FRAME_TOLERANCE
+  return worst
+}
+
+function reversalCheck(
+  name: string,
+  samples: Sample[],
+  pick: (s: Sample) => number,
+): Check {
+  const turn = worstReversal(samples, pick)
+  const path = `${pick(samples[0])} → ${pick(samples[samples.length - 1])}`
+  return {
+    name,
+    pass: !turn || turn.px <= FRAME_TOLERANCE,
+    detail: turn
+      ? `${path}, turned ${Math.round(turn.px)}px at ${turn.t}ms (${turn.before} → ${turn.after})`
+      : path,
+  }
 }
 
 function checkTransition(
@@ -212,16 +251,12 @@ function checkTransition(
   //step must not, because a reversal is the sheet correcting something it should not have done
   if (expected.monotonic !== false) {
     checks.push(
-      {
-        name: "top edge never reverses",
-        pass: isMonotonic(samples, (s) => s.top),
-        detail: `${samples[0].top} → ${last.top}`,
-      },
-      {
-        name: "content edge never reverses",
-        pass: isMonotonic(samples, (s) => s.bottom),
-        detail: `${samples[0].bottom} → ${last.bottom}`,
-      },
+      reversalCheck("top edge never reverses", samples, (s) => s.top),
+      reversalCheck(
+        "content edge never reverses",
+        samples,
+        (s) => s.bottom,
+      ),
     )
   }
 
@@ -264,6 +299,7 @@ function checkTransition(
     step,
     checks,
     perf: `${fps.toFixed(0)}fps w${worstFrame.toFixed(0)}ms d${dropped}`,
+    samples,
   }
 }
 
@@ -342,98 +378,238 @@ function LabDrawerKeyboardPage() {
       setRunning(false)
       return
     }
-
-    const viewportHeight = window.innerHeight
-    //the highest the sheet may ever reach: the stylesheet's own cap, read at rest (the engine
-    //owns `max-height` inline only while it is holding keyboard room)
-    const cssCap = Number.parseFloat(getComputedStyle(content).maxHeight)
-    const safeTop = Number.isFinite(cssCap)
-      ? Math.round(viewportHeight - cssCap)
-      : 0
     const collected: StepResult[] = []
-
-    // Keyboard heights as a FRACTION of the viewport, never px. A fixed 320 is ~40% of a phone
-    // held upright and ~90% of the same phone on its side, so a px literal quietly turns a
-    // realistic test into an absurd one the moment the device rotates — and landscape is exactly
-    // where the interesting case lives (a keyboard taller than the sheet's hidden reserve).
-    const kb = (fraction: number) => Math.round(viewportHeight * fraction)
-    const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
-
-    async function step(
-      name: string,
-      keyboardHeight: number,
-      apply: () => void,
-      options: {
-        mid?: { at: number; apply: () => void }
-        monotonic?: boolean
-      } = {},
-    ) {
-      const trace = await recordTransition(
-        content as HTMLElement,
-        apply,
-        options.mid,
-      )
-      collected.push(
-        checkTransition(name, trace, {
-          safeTop,
-          contentBottom: viewportHeight - keyboardHeight,
-          animated: true,
-          monotonic: options.monotonic,
-          //a mid-flight correction rides the 0.12s clamp, less one 16ms sample interval
-          easeFloorMs: options.mid ? 104 : undefined,
-        }),
-      )
+    const publish = () => {
+      ;(
+        window as unknown as { __drawerConformance?: StepResult[] }
+      ).__drawerConformance = collected
+    }
+    try {
+      await scenarios(content, only, collected)
+    } catch (error) {
+      //a scenario that throws is a verdict too, and it must reach the overlay and the window
+      //property rather than leaving both readers waiting on a run that silently stopped
+      collected.push({
+        step: "run aborted",
+        samples: [],
+        checks: [
+          {
+            name: "every scenario ran",
+            pass: false,
+            detail: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      })
       setResults([...collected])
+    } finally {
+      setExtraRows(0)
+      publish()
+      setRunning(false)
     }
 
-    if (only === "lag") {
-      //the picker-first / keyboard-lagging repro in isolation (no warm-up raise), so a slit-scan
-      //over the top edge reads only this motion — before the fix a dip, after it one descent
-      setExtraRows(8)
-      setKeyboard(0)
-      setMockKeyboard(0)
-      await new Promise((r) => setTimeout(r, SETTLE_MS))
-      const field = content.querySelector<HTMLInputElement>("input")
-      await step(
-        "picker collapses, keyboard lags",
-        kb(0.4),
-        () => {
-          field?.focus()
-          setExtraRows(0)
-        },
-        {
-          mid: {
-            at: 48,
-            apply: () => {
-              setKeyboard(kb(0.4))
-              setMockKeyboard(kb(0.4))
+    //hoisted: the scenarios read `step`, `kb` and the refs the run set up above
+    async function scenarios(
+      content: HTMLElement,
+      only: string | null,
+      collected: StepResult[],
+    ) {
+      const viewportHeight = window.innerHeight
+      //the highest the sheet may ever reach: the stylesheet's own cap, read at rest (the engine
+      //owns `max-height` inline only while it is holding keyboard room)
+      const cssCap = Number.parseFloat(getComputedStyle(content).maxHeight)
+      const safeTop = Number.isFinite(cssCap)
+        ? Math.round(viewportHeight - cssCap)
+        : 0
+
+      // Keyboard heights as a FRACTION of the viewport, never px. A fixed 320 is ~40% of a phone
+      // held upright and ~90% of the same phone on its side, so a px literal quietly turns a
+      // realistic test into an absurd one the moment the device rotates — and landscape is exactly
+      // where the interesting case lives (a keyboard taller than the sheet's hidden reserve).
+      const kb = (fraction: number) =>
+        Math.round(viewportHeight * fraction)
+      const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
+
+      async function step(
+        name: string,
+        keyboardHeight: number,
+        apply: () => void,
+        options: {
+          mid?: { at: number; apply: () => void }
+          monotonic?: boolean
+        } = {},
+      ) {
+        const trace = await recordTransition(
+          content as HTMLElement,
+          apply,
+          options.mid,
+        )
+        collected.push(
+          checkTransition(name, trace, {
+            safeTop,
+            contentBottom: viewportHeight - keyboardHeight,
+            animated: true,
+            monotonic: options.monotonic,
+            //a mid-flight correction rides the 0.12s clamp, less one 16ms sample interval
+            easeFloorMs: options.mid ? 104 : undefined,
+          }),
+        )
+        setResults([...collected])
+      }
+
+      if (only === "lag") {
+        //the picker-first / keyboard-lagging repro in isolation (no warm-up raise), so a slit-scan
+        //over the top edge reads only this motion — before the fix a dip, after it one descent
+        setExtraRows(8)
+        setKeyboard(0)
+        setMockKeyboard(0)
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        const field = content.querySelector<HTMLInputElement>("input")
+        await step(
+          "picker collapses, keyboard lags",
+          kb(0.4),
+          () => {
+            field?.focus()
+            setExtraRows(0)
+          },
+          {
+            mid: {
+              at: 48,
+              apply: () => {
+                setKeyboard(kb(0.4))
+                setMockKeyboard(kb(0.4))
+              },
             },
           },
-        },
-      )
-      setRunning(false)
-      return
-    }
-    if (only !== "picker") {
-      await step(`raise 0→${pct(0.4)}`, kb(0.4), () => {
-        setKeyboard(kb(0.4))
-        setMockKeyboard(kb(0.4))
+        )
+        return
+      }
+      if (only !== "picker") {
+        await step(`raise 0→${pct(0.4)}`, kb(0.4), () => {
+          setKeyboard(kb(0.4))
+          setMockKeyboard(kb(0.4))
+        })
+      }
+      if (only === "dismiss") {
+        //raise, settle, then the release under test — nothing else in the recording
+        await step(`raise 0→${pct(0.37)}`, kb(0.37), () => {
+          setKeyboard(kb(0.37))
+          setMockKeyboard(kb(0.37))
+        })
+        await step(`dismiss ${pct(0.37)}→0`, 0, () => {
+          setKeyboard(0)
+          setMockKeyboard(0)
+        })
+        return
+      }
+      if (only) {
+        setExtraRows(8)
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        await step(
+          "picker collapses mid-raise",
+          kb(0.4),
+          () => {
+            setKeyboard(kb(0.4))
+            setMockKeyboard(kb(0.4))
+          },
+          {
+            monotonic: false,
+            mid: { at: 100, apply: () => setExtraRows(0) },
+          },
+        )
+        return
+      }
+      await step(`grow ${pct(0.4)}→${pct(0.47)}`, kb(0.47), () => {
+        setKeyboard(kb(0.47))
+        setMockKeyboard(kb(0.47))
       })
-    }
-    if (only === "dismiss") {
-      //raise, settle, then the release under test — nothing else in the recording
-      await step(`raise 0→${pct(0.37)}`, kb(0.37), () => {
+      await step(`shrink ${pct(0.47)}→${pct(0.37)}`, kb(0.37), () => {
         setKeyboard(kb(0.37))
         setMockKeyboard(kb(0.37))
+      })
+      await step(`content grows (kb ${pct(0.37)})`, kb(0.37), () => {
+        setExtraRows(6)
+      })
+      await step(`content shrinks (kb ${pct(0.37)})`, kb(0.37), () => {
+        setExtraRows(0)
       })
       await step(`dismiss ${pct(0.37)}→0`, 0, () => {
         setKeyboard(0)
         setMockKeyboard(0)
       })
-      setRunning(false)
-      return
-    }
-    if (only) {
+
+      // ---- the hard half: nothing below settles from rest ----
+
+      //iOS reports a raise in two steps as a rule; the correction lands mid-motion
+      await step(
+        `re-aim mid-raise ${pct(0.42)}→${pct(0.47)}`,
+        kb(0.47),
+        () => {
+          setKeyboard(kb(0.42))
+          setMockKeyboard(kb(0.42))
+        },
+        {
+          mid: {
+            at: 100,
+            apply: () => {
+              setKeyboard(kb(0.47))
+              setMockKeyboard(kb(0.47))
+            },
+          },
+        },
+      )
+
+      //changed its mind: dismissed while still rising. Must land at rest with no residue.
+      await step(
+        "flip: dismiss mid-raise",
+        0,
+        () => {
+          setKeyboard(kb(0.45))
+          setMockKeyboard(kb(0.45))
+        },
+        {
+          monotonic: false,
+          mid: {
+            at: 120,
+            apply: () => {
+              setKeyboard(0)
+              setMockKeyboard(0)
+            },
+          },
+        },
+      )
+
+      //content that outgrows the cap while the keyboard holds its room — the top must stop at the
+      //cap and the overflow must become scroll, not a sheet that walks off the top of the screen
+      await step(`grow past the cap (kb ${pct(0.4)})`, kb(0.4), () => {
+        setKeyboard(kb(0.4))
+        setMockKeyboard(kb(0.4))
+        setExtraRows(24)
+      })
+
+      //and back down again, from a sheet that is now pinned at its cap
+      await step("keyboard off, content still tall", 0, () => {
+        setKeyboard(0)
+        setMockKeyboard(0)
+      })
+
+      // An EXTREME keyboard — more of the screen than the sheet's hidden reserve (55% of the
+      // viewport) and more than half the room it had. Landscape is the usual way to meet this, but
+      // orientation is not the variable that matters: what matters is keyboard-vs-reserve, and a
+      // portrait phone with a 70% keyboard is the same test without needing to rotate a device the
+      // app refuses to render in.
+      await step(`raise 0→${pct(0.7)} (extreme)`, kb(0.7), () => {
+        setExtraRows(2)
+        setKeyboard(kb(0.7))
+        setMockKeyboard(kb(0.7))
+      })
+      await step(`release ${pct(0.7)}→0`, 0, () => {
+        setKeyboard(0)
+        setMockKeyboard(0)
+      })
+
+      // Two geometry changes at once: focusing a field collapses an expanded picker (content
+      // SHRINKS) at the same moment the keyboard raises (room GROWS). Each is animated correctly on
+      // its own; together they are two updates racing over the same box.
       setExtraRows(8)
       await new Promise((r) => setTimeout(r, SETTLE_MS))
       await step(
@@ -448,316 +624,233 @@ function LabDrawerKeyboardPage() {
           mid: { at: 100, apply: () => setExtraRows(0) },
         },
       )
-      setRunning(false)
-      return
-    }
-    await step(`grow ${pct(0.4)}→${pct(0.47)}`, kb(0.47), () => {
-      setKeyboard(kb(0.47))
-      setMockKeyboard(kb(0.47))
-    })
-    await step(`shrink ${pct(0.47)}→${pct(0.37)}`, kb(0.37), () => {
-      setKeyboard(kb(0.37))
-      setMockKeyboard(kb(0.37))
-    })
-    await step(`content grows (kb ${pct(0.37)})`, kb(0.37), () => {
-      setExtraRows(6)
-    })
-    await step(`content shrinks (kb ${pct(0.37)})`, kb(0.37), () => {
-      setExtraRows(0)
-    })
-    await step(`dismiss ${pct(0.37)}→0`, 0, () => {
-      setKeyboard(0)
-      setMockKeyboard(0)
-    })
-
-    // ---- the hard half: nothing below settles from rest ----
-
-    //iOS reports a raise in two steps as a rule; the correction lands mid-motion
-    await step(
-      `re-aim mid-raise ${pct(0.42)}→${pct(0.47)}`,
-      kb(0.47),
-      () => {
-        setKeyboard(kb(0.42))
-        setMockKeyboard(kb(0.42))
-      },
-      {
-        mid: {
-          at: 100,
-          apply: () => {
-            setKeyboard(kb(0.47))
-            setMockKeyboard(kb(0.47))
-          },
-        },
-      },
-    )
-
-    //changed its mind: dismissed while still rising. Must land at rest with no residue.
-    await step(
-      "flip: dismiss mid-raise",
-      0,
-      () => {
-        setKeyboard(kb(0.45))
-        setMockKeyboard(kb(0.45))
-      },
-      {
-        monotonic: false,
-        mid: {
-          at: 120,
-          apply: () => {
-            setKeyboard(0)
-            setMockKeyboard(0)
-          },
-        },
-      },
-    )
-
-    //content that outgrows the cap while the keyboard holds its room — the top must stop at the
-    //cap and the overflow must become scroll, not a sheet that walks off the top of the screen
-    await step(`grow past the cap (kb ${pct(0.4)})`, kb(0.4), () => {
-      setKeyboard(kb(0.4))
-      setMockKeyboard(kb(0.4))
-      setExtraRows(24)
-    })
-
-    //and back down again, from a sheet that is now pinned at its cap
-    await step("keyboard off, content still tall", 0, () => {
-      setKeyboard(0)
-      setMockKeyboard(0)
-    })
-
-    // An EXTREME keyboard — more of the screen than the sheet's hidden reserve (55% of the
-    // viewport) and more than half the room it had. Landscape is the usual way to meet this, but
-    // orientation is not the variable that matters: what matters is keyboard-vs-reserve, and a
-    // portrait phone with a 70% keyboard is the same test without needing to rotate a device the
-    // app refuses to render in.
-    await step(`raise 0→${pct(0.7)} (extreme)`, kb(0.7), () => {
-      setExtraRows(2)
-      setKeyboard(kb(0.7))
-      setMockKeyboard(kb(0.7))
-    })
-    await step(`release ${pct(0.7)}→0`, 0, () => {
-      setKeyboard(0)
-      setMockKeyboard(0)
-    })
-
-    // Two geometry changes at once: focusing a field collapses an expanded picker (content
-    // SHRINKS) at the same moment the keyboard raises (room GROWS). Each is animated correctly on
-    // its own; together they are two updates racing over the same box.
-    setExtraRows(8)
-    await new Promise((r) => setTimeout(r, SETTLE_MS))
-    await step(
-      "picker collapses mid-raise",
-      kb(0.4),
-      () => {
-        setKeyboard(kb(0.4))
-        setMockKeyboard(kb(0.4))
-      },
-      {
-        monotonic: false,
-        mid: { at: 100, apply: () => setExtraRows(0) },
-      },
-    )
-    await step("release after collapse", 0, () => {
-      setKeyboard(0)
-      setMockKeyboard(0)
-    })
-
-    // The SAME two changes, but in the order that actually flickers, and with the inter-frame gap
-    // the near-instant mock otherwise hides. The keyboard is DOWN and the picker EXPANDED; on focus
-    // the picker collapses (content SHRINKS) and — a few frames LATER, not together — the keyboard
-    // raises (room GROWS). While only the picker was open no room was held, so the collapse cannot
-    // ride the keyboard-room effect (it early-returns at room 0): without a floor primed on focus
-    // the sheet's top DROPS on the collapse frame and is pulled back UP when the keyboard arrives —
-    // a reversal. The `focus` here is the real signal (the fix listens for it); the mock drives the
-    // height directly, bypassing the web prediction that already coalesces this, so the lag — and
-    // the dip it causes — reproduces the NATIVE path on every platform this harness runs on.
-    setExtraRows(8)
-    setKeyboard(0)
-    setMockKeyboard(0)
-    await new Promise((r) => setTimeout(r, SETTLE_MS))
-    const laggedField = content.querySelector<HTMLInputElement>("input")
-    await step(
-      "picker collapses, keyboard lags",
-      kb(0.4),
-      () => {
-        laggedField?.focus()
-        setExtraRows(0)
-      },
-      {
-        mid: {
-          at: 48,
-          apply: () => {
-            setKeyboard(kb(0.4))
-            setMockKeyboard(kb(0.4))
-          },
-        },
-      },
-    )
-    //back to a clean baseline for the drag section below (keyboard down, nothing focused)
-    laggedField?.blur()
-    setKeyboard(0)
-    setMockKeyboard(0)
-    await new Promise((r) => setTimeout(r, SETTLE_MS))
-
-    // ---- drag with the keyboard up ----
-    //
-    // SwiftUI lets you pull a sheet down while the keyboard is up; the keyboard rides along and
-    // both leave together. Suppressing the gesture instead — which is what adaptv did — means the
-    // one instinctive way out of a form silently does nothing while a field is focused.
-    const panel = content.parentElement
-    if (panel) {
-      //Start from the top of the scroller. A downward drag on SCROLLED content is a scroll, not a
-      //sheet drag — that is the drawer being right, and a test that inherits a scroll position
-      //from an earlier scenario is just asserting the wrong thing.
-      const dragScroller = [...content.children].find(
-        (el) => getComputedStyle(el).overflowY === "auto",
-      ) as HTMLElement | undefined
-      if (dragScroller) dragScroller.scrollTop = 0
-      //focus a real field, so the drawer's own dismissal (a blur) retracts the mock like the OS would
-      focusLinkedRef.current = true
-      content.querySelector<HTMLInputElement>("input")?.focus()
-      setKeyboard(kb(0.4))
-      setMockKeyboard(kb(0.4))
-      await new Promise((r) => setTimeout(r, SETTLE_MS))
-      const roomBefore = Number.parseFloat(
-        getComputedStyle(content).paddingBottom,
-      )
-
-      const readY = () =>
-        new DOMMatrixReadOnly(getComputedStyle(panel).transform).m42
-      const startY = Math.round(content.getBoundingClientRect().top + 80)
-      const touch = (y: number) =>
-        new Touch({
-          identifier: 1,
-          target: panel,
-          clientX: 180,
-          clientY: y,
-        })
-      const fire = (type: string, y: number) =>
-        panel.dispatchEvent(
-          new TouchEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            touches: type === "touchend" ? [] : [touch(y)],
-            changedTouches: [touch(y)],
-          }),
-        )
-
-      // Deliberately SHORT and slow — 60px at ~0.33px/ms, under both the 25%-of-travel and the
-      // 0.4px/ms release thresholds. A longer, faster pull dismisses the sheet, which is correct
-      // and is why the first version of this scenario read a detached node: it was labelled
-      // "released short" while actually flinging the drawer closed.
-      fire("touchstart", startY)
-      let followed = 0
-      for (let i = 1; i <= 6; i++) {
-        fire("touchmove", startY + i * 10)
-        await new Promise((r) => setTimeout(r, 30))
-        followed = Math.max(followed, readY())
-      }
-      fire("touchend", startY + 60)
-      await new Promise((r) => setTimeout(r, SETTLE_MS))
-      const roomAfter =
-        Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
-
-      collected.push({
-        step: "drag with the keyboard up",
-        checks: [
-          {
-            name: "the sheet follows the finger",
-            pass: followed > 20,
-            detail: `moved ${Math.round(followed)}px (need >20)`,
-          },
-          {
-            name: "snaps back when released short",
-            pass: Math.abs(readY()) <= 2,
-            detail: `resting at ${Math.round(readY())}`,
-          },
-          {
-            //the drag dismisses the keyboard; the room it was holding has to come back too, or
-            //the sheet is left carrying empty space for a keyboard that is no longer there
-            name: "the room unwinds with it",
-            pass: roomBefore > 20 && roomAfter <= 2,
-            detail: `${Math.round(roomBefore)}px → ${Math.round(roomAfter)}px`,
-          },
-        ],
-      })
-      setResults([...collected])
-
-      focusLinkedRef.current = false
-      setKeyboard(0)
-      setMockKeyboard(0)
-      await new Promise((r) => setTimeout(r, SETTLE_MS))
-    }
-
-    // ---- scroll anchoring: the sheet may move, your place may not ----
-    //
-    // When the box grows back, the scroller's viewport grows with it and the content can slide
-    // under the user. Measured from MID-scroll deliberately: pinned at the very bottom the
-    // content genuinely must slide to fill the space the keyboard gave back — UIScrollView does
-    // exactly the same when a bottom inset shrinks, and demanding otherwise would be inventing a
-    // rule iOS does not have. Mid-scroll there is no such excuse: nothing is clamped, so whatever
-    // row you were looking at must stay where it was relative to the sheet.
-    const scroller = [...content.children].find(
-      (el) => getComputedStyle(el).overflowY === "auto",
-    ) as HTMLElement | undefined
-
-    if (scroller) {
-      setExtraRows(14)
-      setKeyboard(kb(0.4))
-      setMockKeyboard(kb(0.4))
-      await new Promise((r) => setTimeout(r, SETTLE_MS))
-      scroller.scrollTop = Math.round(
-        (scroller.scrollHeight - scroller.clientHeight) / 2,
-      )
-      await new Promise((r) => setTimeout(r, 100))
-
-      //a row near the top of the viewport, which mid-scroll is nowhere near an extreme
-      const anchor = scroller.querySelector<HTMLElement>(
-        "div:first-of-type",
-      )
-      const before = {
-        anchor: anchor?.getBoundingClientRect().top ?? 0,
-        content: content.getBoundingClientRect().top,
-      }
-
-      const trace = await recordTransition(content, () => {
+      await step("release after collapse", 0, () => {
         setKeyboard(0)
         setMockKeyboard(0)
       })
 
-      const drift =
-        anchor && content
-          ? Math.abs(
-              anchor.getBoundingClientRect().top -
-                before.anchor -
-                (content.getBoundingClientRect().top - before.content),
-            )
-          : 0
-
-      const anchored = checkTransition(
-        "scroll anchored on dismiss (mid-scroll)",
-        trace,
+      // The SAME two changes, but in the order that actually flickers, and with the inter-frame gap
+      // the near-instant mock otherwise hides. The keyboard is DOWN and the picker EXPANDED; on focus
+      // the picker collapses (content SHRINKS) and — a few frames LATER, not together — the keyboard
+      // raises (room GROWS). While only the picker was open no room was held, so the collapse cannot
+      // ride the keyboard-room effect (it early-returns at room 0): without a floor primed on focus
+      // the sheet's top DROPS on the collapse frame and is pulled back UP when the keyboard arrives —
+      // a reversal. The `focus` here is the real signal (the fix listens for it); the mock drives the
+      // height directly, bypassing the web prediction that already coalesces this, so the lag — and
+      // the dip it causes — reproduces the NATIVE path on every platform this harness runs on.
+      setExtraRows(8)
+      setKeyboard(0)
+      setMockKeyboard(0)
+      await new Promise((r) => setTimeout(r, SETTLE_MS))
+      const laggedField = content.querySelector<HTMLInputElement>("input")
+      await step(
+        "picker collapses, keyboard lags",
+        kb(0.4),
+        () => {
+          laggedField?.focus()
+          setExtraRows(0)
+        },
         {
-          safeTop,
-          contentBottom: viewportHeight,
-          animated: true,
+          mid: {
+            at: 48,
+            apply: () => {
+              setKeyboard(kb(0.4))
+              setMockKeyboard(kb(0.4))
+            },
+          },
         },
       )
-      anchored.checks.push({
-        name: "content keeps its place",
-        pass: drift <= 4,
-        detail: `drifted ${Math.round(drift)}px past the sheet (need <=4)`,
-      })
-      collected.push(anchored)
-      setResults([...collected])
+      //back to a clean baseline for the drag section below (keyboard down, nothing focused)
+      laggedField?.blur()
+      setKeyboard(0)
+      setMockKeyboard(0)
+      await new Promise((r) => setTimeout(r, SETTLE_MS))
+
+      // ---- drag with the keyboard up ----
+      //
+      // SwiftUI lets you pull a sheet down while the keyboard is up; the keyboard rides along and
+      // both leave together. Suppressing the gesture instead — which is what adaptv did — means the
+      // one instinctive way out of a form silently does nothing while a field is focused.
+      const panel = content.parentElement
+      //Desktop WebKit (Playwright's webkit) constructs a TouchEvent but not a Touch — `new Touch()`
+      //is an illegal constructor there, where iOS WebKit and every Chromium build it. The synthetic
+      //drag cannot be fired without one, and a step that throws must say so instead of taking the
+      //whole run with it — every reader of `__drawerConformance` waited on a verdict that never came.
+      const canSynthesiseTouch = (() => {
+        try {
+          new TouchEvent("touchstart", {
+            touches: [
+              new Touch({
+                identifier: 1,
+                target: document.body,
+                clientX: 0,
+                clientY: 0,
+              }),
+            ],
+          })
+          return true
+        } catch {
+          return false
+        }
+      })()
+      if (panel && !canSynthesiseTouch) {
+        collected.push({
+          step: "drag with the keyboard up",
+          samples: [],
+          checks: [],
+          perf: "skipped — this engine cannot construct a TouchEvent",
+        })
+        setResults([...collected])
+      }
+      if (panel && canSynthesiseTouch) {
+        //Start from the top of the scroller. A downward drag on SCROLLED content is a scroll, not a
+        //sheet drag — that is the drawer being right, and a test that inherits a scroll position
+        //from an earlier scenario is just asserting the wrong thing.
+        const dragScroller = [...content.children].find(
+          (el) => getComputedStyle(el).overflowY === "auto",
+        ) as HTMLElement | undefined
+        if (dragScroller) dragScroller.scrollTop = 0
+        //focus a real field, so the drawer's own dismissal (a blur) retracts the mock like the OS would
+        focusLinkedRef.current = true
+        content.querySelector<HTMLInputElement>("input")?.focus()
+        setKeyboard(kb(0.4))
+        setMockKeyboard(kb(0.4))
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        const roomBefore = Number.parseFloat(
+          getComputedStyle(content).paddingBottom,
+        )
+
+        const readY = () =>
+          new DOMMatrixReadOnly(getComputedStyle(panel).transform).m42
+        const startY = Math.round(content.getBoundingClientRect().top + 80)
+        const touch = (y: number) =>
+          new Touch({
+            identifier: 1,
+            target: panel,
+            clientX: 180,
+            clientY: y,
+          })
+        const fire = (type: string, y: number) =>
+          panel.dispatchEvent(
+            new TouchEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              touches: type === "touchend" ? [] : [touch(y)],
+              changedTouches: [touch(y)],
+            }),
+          )
+
+        // Deliberately SHORT and slow — 60px at ~0.33px/ms, under both the 25%-of-travel and the
+        // 0.4px/ms release thresholds. A longer, faster pull dismisses the sheet, which is correct
+        // and is why the first version of this scenario read a detached node: it was labelled
+        // "released short" while actually flinging the drawer closed.
+        fire("touchstart", startY)
+        let followed = 0
+        for (let i = 1; i <= 6; i++) {
+          fire("touchmove", startY + i * 10)
+          await new Promise((r) => setTimeout(r, 30))
+          followed = Math.max(followed, readY())
+        }
+        fire("touchend", startY + 60)
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        const roomAfter =
+          Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
+
+        collected.push({
+          step: "drag with the keyboard up",
+          //a finger-driven step: the sheet is read where the finger is, not on a frame series
+          samples: [],
+          checks: [
+            {
+              name: "the sheet follows the finger",
+              pass: followed > 20,
+              detail: `moved ${Math.round(followed)}px (need >20)`,
+            },
+            {
+              name: "snaps back when released short",
+              pass: Math.abs(readY()) <= 2,
+              detail: `resting at ${Math.round(readY())}`,
+            },
+            {
+              //the drag dismisses the keyboard; the room it was holding has to come back too, or
+              //the sheet is left carrying empty space for a keyboard that is no longer there
+              name: "the room unwinds with it",
+              pass: roomBefore > 20 && roomAfter <= 2,
+              detail: `${Math.round(roomBefore)}px → ${Math.round(roomAfter)}px`,
+            },
+          ],
+        })
+        setResults([...collected])
+
+        focusLinkedRef.current = false
+        setKeyboard(0)
+        setMockKeyboard(0)
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+      }
+
+      // ---- scroll anchoring: the sheet may move, your place may not ----
+      //
+      // When the box grows back, the scroller's viewport grows with it and the content can slide
+      // under the user. Measured from MID-scroll deliberately: pinned at the very bottom the
+      // content genuinely must slide to fill the space the keyboard gave back — UIScrollView does
+      // exactly the same when a bottom inset shrinks, and demanding otherwise would be inventing a
+      // rule iOS does not have. Mid-scroll there is no such excuse: nothing is clamped, so whatever
+      // row you were looking at must stay where it was relative to the sheet.
+      const scroller = [...content.children].find(
+        (el) => getComputedStyle(el).overflowY === "auto",
+      ) as HTMLElement | undefined
+
+      if (scroller) {
+        setExtraRows(14)
+        setKeyboard(kb(0.4))
+        setMockKeyboard(kb(0.4))
+        await new Promise((r) => setTimeout(r, SETTLE_MS))
+        scroller.scrollTop = Math.round(
+          (scroller.scrollHeight - scroller.clientHeight) / 2,
+        )
+        await new Promise((r) => setTimeout(r, 100))
+
+        //a row near the top of the viewport, which mid-scroll is nowhere near an extreme
+        const anchor = scroller.querySelector<HTMLElement>(
+          "div:first-of-type",
+        )
+        const before = {
+          anchor: anchor?.getBoundingClientRect().top ?? 0,
+          content: content.getBoundingClientRect().top,
+        }
+
+        const trace = await recordTransition(content, () => {
+          setKeyboard(0)
+          setMockKeyboard(0)
+        })
+
+        const drift =
+          anchor && content
+            ? Math.abs(
+                anchor.getBoundingClientRect().top -
+                  before.anchor -
+                  (content.getBoundingClientRect().top - before.content),
+              )
+            : 0
+
+        const anchored = checkTransition(
+          "scroll anchored on dismiss (mid-scroll)",
+          trace,
+          {
+            safeTop,
+            contentBottom: viewportHeight,
+            animated: true,
+          },
+        )
+        anchored.checks.push({
+          name: "content keeps its place",
+          pass: drift <= 4,
+          detail: `drifted ${Math.round(drift)}px past the sheet (need <=4)`,
+        })
+        collected.push(anchored)
+        setResults([...collected])
+      }
     }
-
-    setExtraRows(0)
-
-    ;(
-      window as unknown as { __drawerConformance?: StepResult[] }
-    ).__drawerConformance = collected
-    setRunning(false)
   }, [])
 
   runRef.current = run
