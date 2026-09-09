@@ -21,9 +21,9 @@
 
 ---
 
-## Two traps recorded with these
+## Three traps recorded with these
 
-Both have cost time before and will again.
+All three have cost time before and will again.
 
 - **The simulator's hardware keyboard hides keyboard bugs.** "Only reproduces on the physical device"
   is usually `Connect Hardware Keyboard` being on — the software keyboard never appears, so the
@@ -32,6 +32,11 @@ Both have cost time before and will again.
   the LAN-IP dev path "works on the sim, fails on the device" — the most confusing possible signal.
   → [`../decisions/positioning.md §2`](../decisions/positioning.md), which records that everything
   *up to* the permission prompt is already proven.
+- **A pty on stdin brings the device picker back.** `script -q <file> <cmd> < /dev/null` still hands
+  the child a pty, so `process.stdin.isTTY` is true and `adaptv preview ios` waits on the picker
+  forever whenever more than one target is listed — `bin/lib/render.mjs` `select` takes the first
+  option only when there is NO tty, so this is not a CLI bug. A headless run passes the choice
+  itself: `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv preview ios --target <udid>`.
 
 ## Also outstanding, same class
 
