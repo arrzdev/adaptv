@@ -220,6 +220,40 @@ Decided by: whether adaptv ever has a second consumer asking, and by one person'
 **Explicitly not decided by the split itself** — that work is justified as organisation, and answering
 this question `no` does not undo it.
 
+### O24 — Does adaptv keep Tailwind as a hard requirement?
+
+**`styling.md` §0.1 locked Tailwind v4 as a hard requirement on 2026-07-28 and named its own revisit
+condition — *"revisit as an additive path, not a replacement, if a non-Tailwind consumer ever becomes a
+target."* Going to alpha with a hard dependency on someone else's build is the owner raising exactly
+that. Does it change?**
+
+Evidence. **The pillar has moved.** §0.1's decisive argument is not cost — it is that a
+`@custom-variant` delivers a correctness fix to idiomatic consumer code, and *"there is no CSS
+mechanism for this"*. That is an argument for the **rewriting**, not for **Tailwind**: the post-processor
+in [`patch-delivery.md`](patch-delivery.md) §4 delivers the same fix to any CSS dialect. If it ships,
+Tailwind stops being load-bearing for correctness and becomes ergonomics.
+
+**What leaving costs, measured 2026-09-09.** The components are the cheap half — 344 distinct utilities
+across `components`/`shell`/`routes`, only 9 of them carrying a variant, i.e. a structural vocabulary
+(`flex`, `min-h-0`, `shrink-0`) and a mechanical rewrite. The expensive half is elsewhere:
+`safe-area.css` declares **81 `@utility`** — `p-safe`, `pt-safe-offset-*`, `mb-safe-or-*` — which is
+public vocabulary a consumer types and which §5.4.1 blessed precisely because Tailwind cannot spell it;
+`tailwind-merge` is the spine of the three-layer precedence contract (§2, §5.5) with `mergeStyles` in 26
+files, so `locked` — the whole of bug **B8**'s remedy — is defined in its terms. Leaving is not
+"rewrite the components in CSS"; it is re-deciding §2, §5, §6 and §7 of `styling.md`.
+
+**One knot it unties:** §0.1's third coupling, `index.css`'s `@source "../**/*.{ts,tsx}"`, binds the
+styling layer to shipping-as-source, and [`dist-cutover.md`](dist-cutover.md) has to carry that path or
+every internal utility silently stops being generated.
+
+**Unproven either way: the bundle.** Utilities are *shared* — one `.flex` rule serves adaptv and the
+app — where per-component CSS is not, though it is per-component tree-shakeable. Nobody has measured
+it, and it should not be argued without measuring.
+
+Decided by: whether a non-Tailwind consumer is a real target for alpha, and not before
+[`patch-delivery.md`](patch-delivery.md) §4 exists — doing it in the other order pays the cost while
+the capability that replaces it is still hypothetical.
+
 ## The one live question `VISION.md §9` has that the register does not
 
 **Secure storage / auth — how opinionated should adaptv be about the bearer-token + biometric flow?**
