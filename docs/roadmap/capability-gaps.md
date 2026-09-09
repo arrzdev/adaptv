@@ -32,7 +32,9 @@ tinting. Read the barrel, not either list.
 `ToastAndroid`.
 
 ⚠️ **This owes a decision before it owes an implementation, and the decision is
-`render` vs `delegate`.**
+`render` vs `delegate`. It is written up as
+[`open-questions.md` O22](open-questions.md), with the web tier measured on two engines and a
+recommendation; answer it there, not here.**
 
 |  | Render them (Ionic's model) | Delegate to the OS (RN/Capacitor's model) |
 |---|---|---|
@@ -48,6 +50,10 @@ Given adaptv's positioning — correct-by-construction primitives, the web as a 
 Note this **overlaps** the component gap in `../research/component-surface.md §8` Tier 2. That
 overlap is the decision above, not a duplicated entry — the two docs are not asking for the same
 thing twice.
+
+The row that said the web tier is "nothing beyond `window.confirm`" now has a number behind it: on
+the iOS simulator and on the Android emulator that is one string, two fixed buttons, no title and no
+destructive styling. See O22.
 
 ### 2. Notifications (local + push)
 
