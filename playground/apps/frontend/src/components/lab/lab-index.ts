@@ -90,6 +90,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/drawer-keyboard",
+    title: "Drawer & keyboard",
+    summary: "the 14-scenario conformance run · one tap, one verdict",
+    isNew: true,
+  },
+  {
     to: "/lab/dropdown",
     title: "Dropdown",
     summary: "anchored menu · flip, shift, escape a clipped carousel",
