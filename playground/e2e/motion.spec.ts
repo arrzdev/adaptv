@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Motion on the two engines the suite runs. Chromium has DeviceMotionEvent on
@@ -12,12 +12,6 @@ import { expect, test } from "@playwright/test"
  * without the descriptor has no constructor at all. The row here pins the
  * emulated engine the suite runs.
  */
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Motion where the engine has the API and no sensor", () => {
   test("is granted and goes silent on emulated WebKit", async ({
