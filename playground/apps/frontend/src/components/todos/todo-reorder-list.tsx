@@ -249,9 +249,12 @@ function TodoSortableRow({
   //reader. the drag listeners are untouched, so drag still works
   const {
     role,
-    "aria-disabled": _dragDisabled,
-    ...dragAttributes
+    "aria-disabled": cannotDrag,
+    ...sortableAttributes
   } = attributes
+  //a row that cannot be dragged is not a sortable item: no tab stop that Space
+  //cannot pick up, no "sortable" role description, and no drag instructions
+  const dragAttributes = cannotDrag ? {} : sortableAttributes
 
   return (
     <motion.li
