@@ -105,8 +105,10 @@ function LabSkeletonPage() {
           className="flex min-h-40 flex-col gap-y-3 rounded-md bg-secondary p-3"
         >
           {/* the inline swap: loading=false renders the children with NO
-              wrapper element, so the loaded line is a plain <p> */}
-          <Skeleton loading={loading} className="h-4 w-40 rounded-md">
+              wrapper element, so the loaded line is a plain <p>. h-5 is the
+              line box of that text-sm line (20px), not its glyph height: an
+              h-4 placeholder grew the region by 4px on the swap */}
+          <Skeleton loading={loading} className="h-5 w-40 rounded-md">
             <p className="text-sm text-subtle">
               {TASKS.length} tasks · synced just now
             </p>
