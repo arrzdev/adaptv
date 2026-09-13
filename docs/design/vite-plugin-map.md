@@ -22,7 +22,7 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | 1 | `adaptvBanServerApisPlugin` | `ban-server-apis.ts` | **`enforce: "pre"`, and FIRST.** The isomorphism ban must win the specifier before the framework plugin resolves it. The one layer a consumer cannot disable, misconfigure, or forget. |
 | 2 | `adaptvCssLayerOrderPlugin` | `css-layer-order.ts` | Also `pre` — must reach the app's stylesheet **before** `@tailwindcss/vite` compiles the Tailwind import away. |
 | 3 | `adaptvRingShadowPlugin` | `ring-shadow-fallback.ts` | The mirror image: `enforce: "post"`, because it rewrites what `@tailwindcss/vite` **produced**. |
-| 4 | `adaptvConfigLoaderPlugin` | *(local to `adaptv-plugin.ts`)* | Serves the loaded `adaptv.config.ts` as a module. |
+| 4 | `adaptvConfigLoaderPlugin` | `adaptv-plugin.ts` (exported for its test) | Dev watcher: re-loads `adaptv.config.ts` on a save, and keeps the last config that loaded when a save does not. → [`lifecycle.md`](lifecycle.md) §2.1 |
 | 5 | `adaptvManifestPlugin` | `manifest.ts` | The web app manifest. |
 | 6 | `adaptvDefaultIconsPlugin` | `default-icons.ts` | Falls back to the shipped icon set. |
 | 7 | `adaptvPwaRegisterPlugin` | `virtuals.ts` | `virtual:adaptv/pwa-register`. The dev hatch arms **only** on the web target. |
