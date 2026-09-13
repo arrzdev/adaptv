@@ -360,6 +360,45 @@ describe("store — a wipe from outside", () => {
 })
 
 describe("store — subscribers", () => {
+  /** Subscribe `key` and keep every read a wake-up triggers, in order. */
+  function watchReads(key: string) {
+    const reads: Promise<unknown>[] = []
+    const off = subscribeStore(key, () => {
+      reads.push(store.get(key))
+    })
+    return {
+      off,
+      wakes: () => reads.length,
+      last: async () => (await Promise.all(reads)).at(-1),
+    }
+  }
+
+  it("wakes a key's subscribers when the database is deleted from outside", async () => {
+    await store.set("k", 1)
+    const watch = watchReads("k")
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    watch.off()
+    expect(outcome).toBe("deleted")
+    expect(watch.wakes()).toBeGreaterThan(0)
+    expect(await watch.last()).toBeUndefined()
+  })
+
+  it("leaves a refused clear's subscribers on the cleared answer", async () => {
+    //their first re-read queues behind a clear that then does not land, so it
+    //sees the old value — the marker has to wake them again
+    await store.set("a", 1)
+    const watch = watchReads("a")
+    failNth("clear", 1)
+    await store.clear()
+    watch.off()
+    expect(await store.get("a")).toBeUndefined()
+    expect(await watch.last()).toBeUndefined()
+  })
+
   it("an unsubscribe called twice does not drop a newer subscriber", async () => {
     //an unsubscribe is expected to be idempotent; a stale second call must not
     //delete the set a later subscriber now lives in

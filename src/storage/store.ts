@@ -96,7 +96,11 @@ function openDatabase(): Promise<IDBDatabase | null> {
           //a null newVersion is a deleteDatabase — the logout wipe. What only
           //memory held goes with it, or a refused value would outlive the wipe
           //for the session. An upgrade elsewhere wipes nothing, so it keeps them.
-          if (event.newVersion === null) forgetMemory()
+          if (event.newVersion === null) {
+            forgetMemory()
+            //their re-reads reopen, and the open queues behind the delete
+            for (const key of [...listeners.keys()]) emit(key)
+          }
         }
         resolve(db)
       }
@@ -297,6 +301,9 @@ export const store = {
       if (memory.has(key)) continue
       memory.set(key, { value: REMOVED })
       unpersisted.add(key)
+      //the re-read the clear triggered queued behind a clear that did not
+      //land, so it saw the old value: wake the key again now the marker is in
+      emit(key)
     }
   },
 
