@@ -24,8 +24,8 @@ const baseURL = `http://localhost:${port}`
 export default defineConfig({
   testDir: "./e2e-sw",
   //belongs to `playwright.sw-prompt.config.ts`, whose build inverts it — see the
-  //note there
-  testIgnore: "update-prompt.spec.ts",
+  //note there; `subpath.spec.ts` to `playwright.sw-subpath.config.ts`
+  testIgnore: ["update-prompt.spec.ts", "subpath.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,

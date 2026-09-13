@@ -29,8 +29,9 @@ export default defineConfig({
   //`update-prompt.spec.ts` asserts the OPPOSITE of `update.spec.ts` — nothing is
   //applied without user intent — and which of the two is correct is decided by
   //the build, not the spec. It belongs to `playwright.sw-prompt.config.ts` and
-  //fails here by construction.
-  testIgnore: "update-prompt.spec.ts",
+  //fails here by construction. `subpath.spec.ts` needs a build under a base
+  //and belongs to `playwright.sw-subpath.config.ts`.
+  testIgnore: ["update-prompt.spec.ts", "subpath.spec.ts"],
   //Registrations are per-context, so tests do not share worker state — but they
   //do share one preview server, and several of them take it offline.
   fullyParallel: false,
