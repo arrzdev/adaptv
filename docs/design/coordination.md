@@ -113,8 +113,8 @@ adaptvBack()                         // platform-agnostic programmatic back for 
 
 > ### ✅ BUILT — controller + React binding; one primitive migrated
 >
-> `capabilities/gesture-controller.ts` (16 tests) is the pure arbiter; `hooks/use-gesture-capture.ts`
-> (6 tests) is the React binding, giving each mounted instance its own identity so two `Swipeable` rows
+> `capabilities/gesture-controller.ts` (20 tests) is the pure arbiter; `hooks/use-gesture-capture.ts`
+> (9 tests) is the React binding, giving each mounted instance its own identity so two `Swipeable` rows
 > on one screen genuinely compete rather than aliasing into a single gesture.
 >
 > **`Swipeable` is migrated** and is the pattern for the rest. The integration point matters more than
@@ -187,6 +187,11 @@ const capture = useGestureCapture({
   captured gesture blocks others until it releases. `blocksScroll`/`disableScroll` stop the scroll
   container while a drag owns the pointer (the reliable cross-platform way, since `touch-action` can't
   change mid-touch on iOS).
+- **Disabling is not unregistering.** `setEnabled(id, false)` remembers the id so it stays refused;
+  `unregister(id)` releases the same way (with `onLost`) and then forgets it. The React binding
+  unregisters on unmount, because `useId` never reissues an id: disabling there kept one id per
+  unmounted `Drawer`/`Swipeable`/`EdgeSwipeGestures` forever — 9 per `/` ↔ `/settings` round trip in
+  the playground, 5400 after 600, measured with heap snapshots.
 - `useGestureEngine` (the per-element press/long-press/reentrant engine) stays; the controller is the
   **layer above** it that decides *which* element's gesture starts when several could.
 
