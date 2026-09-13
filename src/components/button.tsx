@@ -1,4 +1,4 @@
-import { motion } from "motion/react"
+import { domMin, LazyMotion, m } from "motion/react"
 import type { ComponentProps, ReactNode, RefObject } from "react"
 import {
   Children,
@@ -387,19 +387,28 @@ function ButtonContentRow({
     )
   }
 
+  //`m` + a component-owned `LazyMotion`, not `motion.span`: the full component
+  //statically carries drag and layout projection into every bundle that imports
+  //Button, which is the shell's. `domMin` (renderer + `animate`) is all this row
+  //uses, and owning the provider keeps the tween alive wherever Button renders.
+  //→ docs/decisions/animation.md §3.1
   return (
-    <motion.span
-      className={BUTTON_CONTENT_MOTION_SHELL_CLASS}
-      initial={false}
-      animate={{ width: contentWidth > 0 ? contentWidth : "auto" }}
-      transition={
-        widthTransitionEnabled ? BUTTON_MOTION_TRANSITION : { duration: 0 }
-      }
-    >
-      <span ref={measureRef} className={BUTTON_CONTENT_INNER_ROW_CLASS}>
-        {children}
-      </span>
-    </motion.span>
+    <LazyMotion features={domMin}>
+      <m.span
+        className={BUTTON_CONTENT_MOTION_SHELL_CLASS}
+        initial={false}
+        animate={{ width: contentWidth > 0 ? contentWidth : "auto" }}
+        transition={
+          widthTransitionEnabled
+            ? BUTTON_MOTION_TRANSITION
+            : { duration: 0 }
+        }
+      >
+        <span ref={measureRef} className={BUTTON_CONTENT_INNER_ROW_CLASS}>
+          {children}
+        </span>
+      </m.span>
+    </LazyMotion>
   )
 }
 
