@@ -710,9 +710,11 @@ function ImageRoot(props: ImageProps) {
     else setErrored(true)
   }, [trimmed, invalid])
 
-  //Memoized, so a re-render keeps the same callback and React does not detach and
-  //re-attach the consumer's ref on every pass; and merged through the hook, so a
-  //callback ref's React 19 cleanup runs on detach instead of a call with null.
+  //Memoized on both refs, so while the consumer's ref is stable a re-render keeps
+  //the same callback and React does not detach and re-attach it on every pass (an
+  //inline callback ref still does, as it would on a bare <img>); and merged
+  //through the hook, so a callback ref's React 19 cleanup runs on detach instead
+  //of a call with null.
   const setImgRef = useMergedRef(imgRef, ref)
 
   function handleLoad(event: SyntheticEvent<HTMLImageElement>) {
