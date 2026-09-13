@@ -254,6 +254,9 @@ export type AdaptvAppConfig = {
    *   excluded (that is head-linked), and so are 1024px masters, which no browser asks for.
    * - **Head links** — `<link rel=icon>` per size plus the Apple touch icons, for the files
    *   that **exist**. Nothing is linked speculatively.
+   * - **Service worker precache** — exactly the files the head and the manifest link. The
+   *   rest of the directory (the 1024px master, the appearance layers) is still served, but a
+   *   browser installing the app does not download it.
    * - **Native launcher icons** — the right member per slot: full-bleed art for iOS and for
    *   Android's legacy square, safe-zoned `maskable` art for Android's adaptive foreground.
    *   A lone `icon.png` is a perfectly good set of one.

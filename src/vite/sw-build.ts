@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
 import type { Plugin } from "vite"
 import { injectManifest } from "workbox-build"
+import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import {
   appShellFile,
   DEFAULT_SW_GLOB_IGNORES,
@@ -19,6 +20,12 @@ import {
 } from "#adaptv/vite/adaptv-context.ts"
 import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir.ts"
 import { computeBuildTag, slugifyName } from "#adaptv/vite/build-tag.ts"
+import {
+  defaultIconFiles,
+  headIconLinks,
+  resolveIconSet,
+} from "#adaptv/vite/icon-set.ts"
+import { buildManifest } from "#adaptv/vite/manifest.ts"
 
 /**
  * adaptv's own worker — a real module in the package, never generated.
@@ -135,6 +142,7 @@ async function buildServiceWorker(context: AdaptvContext): Promise<void> {
     swDest,
     clientDir,
     shellFile,
+    unlinkedIcons: unlinkedIconFiles(context.appRoot, config),
   })
 
   unlinkSync(swSrcBundle)
@@ -197,12 +205,18 @@ function resolveWorkerEntry(
  * navigate like the native build — and the shell is appended **by name**. Adding
  * `**\/*.html` instead would sweep in every prerendered route document, which is
  * exactly the cross-user leak the split exists to prevent. → `docs/design/rendering.md §3.2`
+ *
+ * The icon art no web surface links is then taken back out — see
+ * {@link unlinkedIconFiles}. A manifest transform rather than `globIgnores`,
+ * because the names come from the app's directory and a glob would read a `[`
+ * or a `(` in one of them as syntax; an exact URL match cannot.
  */
 function injectPrecacheManifest(options: {
   swSrcBundle: string
   swDest: string
   clientDir: string
   shellFile: string
+  unlinkedIcons: ReadonlySet<string>
 }) {
   return injectManifest({
     swSrc: options.swSrcBundle,
@@ -211,5 +225,69 @@ function injectPrecacheManifest(options: {
     globPatterns: [...DEFAULT_SW_GLOB_PATTERNS, options.shellFile],
     globIgnores: [...DEFAULT_SW_GLOB_IGNORES],
     maximumFileSizeToCacheInBytes: DEFAULT_SW_MAX_FILE_BYTES,
+    manifestTransforms: [
+      async (entries) => ({
+        manifest: entries.filter(
+          (entry) => !options.unlinkedIcons.has(entry.url),
+        ),
+        warnings: [],
+      }),
+    ],
   })
+}
+
+/**
+ * The icon files the precache must NOT carry, as client-output-relative URLs.
+ *
+ * The icon directory has to live inside `public/` so the head and the manifest
+ * can point at it (`resolveIconSet`), which puts ALL of it in the glob — and most
+ * of it is native source art no browser ever asks for: the 1024px master, the
+ * iOS 18 dark and tinted appearances, Android's monochrome layer, the maskable
+ * master, and any same-size duplicate the head and manifest tie-break away.
+ * MEASURED on the playground: 909 900 of the precache's 3 749 343 bytes (24%),
+ * downloaded by every first install for nothing.
+ *
+ * Derived from what the web surfaces actually link rather than from names: an
+ * icon is precached if and only if `headIconLinks` or the built manifest points
+ * at it, so a custom file name, adaptv's default set and a duplicate 512 are all
+ * decided by the same rule the head and the manifest already apply. The manifest
+ * is the built one (`buildManifest`), so an `icons` array an app supplies through
+ * `manifestExtra` keeps its files too.
+ *
+ * Only the members `resolveIconSet` measured are candidates. Anything else in the
+ * directory (a `safari-pinned-tab.svg`, an `.ico` the head does not probe for) is
+ * not art adaptv knows the use of, so it is left to the glob. Nothing is removed
+ * from the OUTPUT: an unlinked file is still served, and the worker's runtime
+ * static route still caches it the first time something fetches it (§3.3).
+ */
+function unlinkedIconFiles(
+  appRoot: string,
+  config: AdaptvAppConfig,
+): ReadonlySet<string> {
+  const set = resolveIconSet(appRoot, config, defaultIconFiles())
+  //Outside `public/` nothing is served, so nothing of it was globbed either.
+  if (!set.urlBase) return new Set()
+
+  const linked = new Set(
+    [
+      ...headIconLinks(set).map((link) => link.href),
+      ...buildManifest(config, appRoot).icons.map((icon) => icon.src),
+    ].map(precacheUrl),
+  )
+
+  return new Set(
+    set.icons
+      .map((icon) => precacheUrl(`${set.urlBase}/${icon.name}`))
+      .filter((url) => !linked.has(url)),
+  )
+}
+
+/**
+ * An href as Workbox writes a manifest URL: the path relative to the client
+ * output, with no leading slash. Compared raw on both sides — the head and the
+ * manifest write the file name into the href unencoded, and Workbox takes it
+ * from the disk the same way.
+ */
+function precacheUrl(href: string): string {
+  return href.replace(/^\//, "")
 }
