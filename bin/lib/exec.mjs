@@ -6,7 +6,7 @@
 // buffered, so on success the noise stays hidden and on failure we surface only the
 // tail. `--verbose` pipes the same lines through unfiltered (the caller wires the
 // verbose renderer). → plan Part 4.
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { StringDecoder } from "node:string_decoder"
 import { errorTail } from "./tool-log.mjs"
 
@@ -84,6 +84,127 @@ export function lineReader(emit) {
 }
 
 /**
+ * Every child a step has running right now — so a quit can stop them (`stopChildren`).
+ *
+ * A dev run keeps the terminal in raw mode, so ctrl-c and `q` reach adaptv as bytes, never as
+ * the SIGINT a cooked terminal sends the whole foreground process group. That SIGINT is what
+ * used to stop the tools a step was running (the relaunch's `simctl`, the rebuild's `cap`), so
+ * without it a quit mid-step would leave them running after adaptv had gone.
+ */
+const running = new Set()
+
+/**
+ * Whether a step's child leads its own process group. POSIX only: on Windows `detached` gives
+ * the child a console window of its own, and there are no signals to send a group anyway. A
+ * real ctrl-c there still reaches every process attached to the console, but a `q` or a raw
+ * ctrl-c reaches none of them, so `stopChildren` ends each tool's whole tree with `taskkill`
+ * instead: forcibly, since Windows has no SIGINT to deliver. The one platform branch in how a
+ * step is stopped.
+ */
+const OWN_GROUP = process.platform !== "win32"
+
+/**
+ * Spawn a step's child, counted among the running until its pipes close.
+ *
+ * detached → its own process group, so `stopChildren` can take down the tool AND its children.
+ * Signalling the child alone was not enough: a rebuild's child is `cap`, a Node process, and
+ * Node's default SIGINT exits without passing it on, so the `xcodebuild` or gradle it started
+ * ran on after adaptv had quit, gradle's locks with it. `dev`'s own vite has always been
+ * spawned this way (`startDevServer`), for the same reason.
+ *
+ * Its own group is also out of the terminal's reach: a real ctrl-c in a cooked terminal no
+ * longer arrives at it directly. So adaptv stops its children on every way out it can see: the
+ * `exit` hook below, and any SIGINT, SIGTERM or SIGHUP that lands while a step runs (`relay`).
+ * A kill adaptv cannot catch (SIGKILL) leaves them running with their output pipes closed; the
+ * next line they write fails with EPIPE, which is how most tools find out and stop.
+ *
+ * On POSIX `detached` is `setsid`: the tool runs in a session of its own, with no controlling
+ * terminal. Its stdin is already ignored, and now it cannot open the terminal either, so a tool
+ * that would prompt there (a git credential or an ssh host-key question during `pod install`)
+ * fails at once instead of waiting on a prompt nobody can see.
+ *
+ * Tracked until `close`, not `exit`: a tool that has exited can leave children behind that still
+ * hold its pipes, and the step is still waiting on them.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {import("node:child_process").SpawnOptions} options
+ */
+export function spawnStep(command, args, options) {
+  const child = spawn(command, args, { ...options, detached: OWN_GROUP })
+  running.add(child)
+  if (running.size === 1) relayOn()
+  const forget = () => {
+    running.delete(child)
+    if (running.size === 0) relayOff()
+  }
+  child.once("close", forget)
+  child.once("error", forget)
+  return child
+}
+
+/**
+ * SIGINT every child still running, and whatever each of them started — what ctrl-c in a cooked
+ * terminal sent them (on Windows, `taskkill /T /F` on each tree). Synchronous: the caller exits
+ * right after, so their exits are never waited for and a step that rejects because of it has no
+ * event-loop turn left in which to print anything.
+ */
+export function stopChildren() {
+  for (const child of running) {
+    try {
+      //the whole GROUP (`-pid`), or on Windows the whole tree; the child alone if that fails
+      if (!child.pid) child.kill("SIGINT")
+      else if (OWN_GROUP) process.kill(-child.pid, "SIGINT")
+      else {
+        const tree = spawnSync(
+          "taskkill",
+          ["/pid", String(child.pid), "/T", "/F"],
+          { stdio: "ignore", windowsHide: true },
+        )
+        if (tree.error || tree.status !== 0) child.kill("SIGINT")
+      }
+    } catch {
+      try {
+        child.kill("SIGINT")
+      } catch {}
+    }
+  }
+  running.clear()
+  relayOff()
+}
+
+//Every exit adaptv takes on purpose runs through here: the dev session's teardown, `preview`'s
+//quit, a failed build's `process.exit(1)`.
+process.on("exit", stopChildren)
+
+const RELAYED = ["SIGINT", "SIGTERM", "SIGHUP"]
+
+/**
+ * A signal adaptv receives while a step is running: stop the step's children, which no longer
+ * receive it themselves, and step aside. It runs FIRST (prepended) and stops listening before
+ * anything else hears the signal, so every other listener sees the process exactly as it would
+ * have without this one: the dev session's teardown and `preview`'s quit still decide how
+ * adaptv exits, and a library that ends the process only when it is the sole listener (Ink's
+ * exit hook does) still does. With no listener left (a `build`, a `doctor`), the signal is
+ * raised again and ends adaptv the way it would have, rather than being swallowed.
+ * @param {NodeJS.Signals} signal
+ */
+function relay(signal) {
+  stopChildren()
+  if (process.listenerCount(signal) === 0)
+    process.kill(process.pid, signal)
+}
+
+/** Listen only while a step is running, so an idle adaptv keeps Node's own signal handling. */
+function relayOn() {
+  if (!OWN_GROUP) return
+  for (const signal of RELAYED) process.prependListener(signal, relay)
+}
+
+function relayOff() {
+  for (const signal of RELAYED) process.off(signal, relay)
+}
+
+/**
  * Run a command with captured stdout+stderr. Each non-empty line is forwarded to
  * `onLine` (for the live spinner line) and buffered. Resolves on exit 0; rejects
  * with an Error carrying `.tail` (the last {@link TAIL_LINES} lines) otherwise.
@@ -93,7 +214,7 @@ export function lineReader(emit) {
  */
 export function exec(command, args, { cwd, env, onLine } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawnStep(command, args, {
       cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -144,7 +265,7 @@ const failureTail = (buffer) => errorTail(buffer, TAIL_LINES).join("\n")
  */
 export function capture(command, args, { cwd, env, timeoutMs } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, {
+    const child = spawnStep(command, args, {
       cwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],

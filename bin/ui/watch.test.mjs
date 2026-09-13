@@ -233,3 +233,134 @@ describe("the watch block's own breathing room (R64)", () => {
     expect(rows[0]).toContain("ctrl-c")
   })
 })
+
+/**
+ * A terminal's stdin, down to the one property this bug lives in: the LINE DISCIPLINE.
+ *
+ * In raw mode a keypress is a byte the process reads at once. In cooked mode the terminal
+ * echoes it and holds it for a newline that a dev pressing `q` never types, so it is never a
+ * key at all. A fake whose `setRawMode` is a no-op cannot see that, so this one keeps what
+ * cooked mode swallowed in `echoed`.
+ *
+ * Both of Node's reading styles are modelled, because both have been in play: `onKeys` listens
+ * for `data`, and Ink drains `read()` on `readable` (a `read()` also emits `data`, as Node's
+ * does).
+ */
+class TerminalStdin extends EventEmitter {
+  isTTY = true
+  isRaw = false
+  flowing = false
+  echoed = ""
+  queued = []
+  setRawMode(on) {
+    this.isRaw = on
+    return this
+  }
+  setEncoding() {
+    return this
+  }
+  resume() {
+    this.flowing = true
+    return this
+  }
+  pause() {
+    this.flowing = false
+    return this
+  }
+  ref() {}
+  unref() {}
+  read() {
+    const chunk = this.queued.shift() ?? null
+    if (chunk !== null) this.emit("data", chunk)
+    return chunk
+  }
+  /** A keypress, as the terminal delivers it in whichever mode it is in right now. */
+  type(key) {
+    if (!this.isRaw) {
+      this.echoed += key
+      return
+    }
+    if (this.listenerCount("readable") > 0) {
+      this.queued.push(key)
+      this.emit("readable")
+    } else if (this.flowing) this.emit("data", key)
+  }
+}
+
+describe("the session's keys outlive the watch block", () => {
+  //`r` and `b` take the watch block DOWN for as long as they run (the rewind needs its rows
+  //back), and the block's own `useInput` was the only key listener a native `dev` had. So for
+  //the whole relaunch the terminal sat in cooked mode with nobody reading it:
+  //
+  //    1789315629.764 KEY r
+  //    1789315630.093 KEY q
+  //    1789315630.093 out: 'q'
+  //    1789315630.190 out: '  ✓ ios  night-a-ios26 (simulator) · reloaded · 426ms'
+  //    1789315630.192 out: '  r reload js   b rebuild app   ctrl-c stop'
+  //    ... nothing for 601 s, until a manual SIGINT
+  //
+  //The listener belongs to the SESSION, and the block only draws the keys row.
+  it.each([
+    ["q", "q"],
+    ["ctrl-c", String.fromCharCode(3)],
+  ])(
+    "%s pressed while a reload has the block down still quits",
+    async (_, key) => {
+      const fake = new FakeStdout(100)
+      const stdin = new TerminalStdin()
+      const realOut = Object.getOwnPropertyDescriptor(process, "stdout")
+      const realIn = Object.getOwnPropertyDescriptor(process, "stdin")
+      Object.defineProperty(process, "stdout", {
+        value: fake,
+        configurable: true,
+      })
+      Object.defineProperty(process, "stdin", {
+        value: stdin,
+        configurable: true,
+      })
+      const restoreCi = withInteractiveInk()
+      let dispose = () => {}
+      restore = () => {
+        dispose()
+        restoreCi()
+        Object.defineProperty(process, "stdout", realOut)
+        Object.defineProperty(process, "stdin", realIn)
+      }
+      vi.resetModules()
+      const { inkWatcher } = await import("./watch.mjs")
+      const { onKeys } = await import("../lib/render.mjs")
+
+      //The order `dev` uses: the block goes up, then the session starts listening.
+      let w = inkWatcher({ keys: true })
+      await settled(fake)
+      const onQuit = vi.fn()
+      let reloadDone = () => {}
+      const onReload = vi.fn(() => {
+        //What `reload()` does first; then it waits on the device.
+        w.stop()
+        return new Promise((r) => {
+          reloadDone = r
+        })
+      })
+      dispose = onKeys({ onReload, onRebuild: vi.fn(), onQuit })
+
+      stdin.type("r")
+      expect(onReload).toHaveBeenCalledTimes(1)
+      await settled(fake)
+
+      //Mid-reload: the block is gone and the device is still relaunching.
+      stdin.type(key)
+      expect(stdin.echoed).toBe("")
+      expect(onQuit).toHaveBeenCalledTimes(1)
+
+      //When the block comes back it is not a second reader: one key, one quit.
+      reloadDone()
+      w = inkWatcher({ keys: true })
+      await settled(fake)
+      stdin.type(key)
+      expect(onQuit).toHaveBeenCalledTimes(2)
+      expect(stdin.echoed).toBe("")
+      w.stop()
+    },
+  )
+})
