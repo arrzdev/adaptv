@@ -20,13 +20,15 @@ import {
   useRef,
   useState,
 } from "react"
-import { BackPriority } from "#adaptv/capabilities/back-chain"
+import {
+  BackPriority,
+  registerBackHandler,
+} from "#adaptv/capabilities/back-chain"
 import {
   DRAWER_CONTENT_MAX_HEIGHT_VAR,
   DrawerEngine,
   useDrawerEngineContext,
 } from "#adaptv/components/drawer/drawer-engine"
-import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 
@@ -782,16 +784,25 @@ function DrawerTree({
   //`BackPriority.Overlay` is documented as the band for drawers and sheets, but
   //nothing registered there — so a back press on an open drawer navigated the
   //route out from under it, which is the exact behaviour that comment says was
-  //replaced. Deferring while closed is what lets the press reach the router.
+  //replaced. Not being registered while closed is what lets the press reach the
+  //router.
   //
-  //Stacked drawers need no extra work: ties inside a band break
-  //most-recently-registered first, so the innermost drawer consumes the press and
-  //one press closes one drawer.
-  useBackHandler(() => {
-    if (!isOpen) return false
-    handleRequestClose()
-    return true
-  }, BackPriority.Overlay)
+  //It registers when it OPENS, not when it mounts, because ties inside a band
+  //break most-recently-registered first and the drawer on top is the one opened
+  //last. Registering at mount ordered two sibling drawers by where they sit in
+  //the tree: open the second, then the first from inside it, and back closed the
+  //sheet underneath while the top one stayed. A nested drawer mounts inside its
+  //parent's open content, so it opens after the parent and closes first either
+  //way; one press closes one drawer.
+  const requestCloseRef = useRef(handleRequestClose)
+  requestCloseRef.current = handleRequestClose
+  useEffect(() => {
+    if (!isOpen) return
+    return registerBackHandler(() => {
+      requestCloseRef.current()
+      return true
+    }, BackPriority.Overlay)
+  }, [isOpen])
 
   useImperativeHandle(
     imperativeRef,
