@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Speech — text to speech over speechSynthesis, driven headless on BOTH engines.
@@ -19,21 +20,6 @@ import { expect, test } from "@playwright/test"
  * never accepts is `unsupported` (the API is in every browser we run), a
  * status that fails to settle, or a voiceless engine resolving `spoke`.
  */
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The buttons are server-rendered, so a click that lands before hydration hits
- * a button with no handler and the outcome row never moves. The splash
- * self-unmounts only once the client has hydrated, so its disappearance is the
- * one honest "React is driving now" signal — see clipboard.spec.ts for the full
- * account of why this is not load flake.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** What the page renders for "nothing to report" — the one glyph it uses. */
 const NONE = "—"
