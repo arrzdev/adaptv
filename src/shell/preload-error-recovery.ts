@@ -73,13 +73,49 @@ export function clearPreloadErrorGuard(): void {
 }
 
 /**
+ * Set once THIS document has asked for a reload, and never cleared: the reload
+ * replaces the document, and this module with it.
+ *
+ * The guard alone cannot answer "is a reload already on its way". It is spent the
+ * instant the first error reloads, so every later error in the same document
+ * reads exactly like the case the guard exists for — a reload that already
+ * happened and did not help — and would render the offline screen over a recovery
+ * that is still in flight. Later errors are routine, not exotic: Vite dispatches
+ * one event per failed dependency of an import and one more for the module itself.
+ *
+ * Module scope rather than per installation, so the answer is the document's
+ * whatever installed the listener. adaptv's shell is the one net; an app that also
+ * calls {@link installPreloadErrorRecovery} gets the same answer instead of a
+ * second, contradictory one.
+ */
+let reloadRequested = false
+
+/**
  * Install the `vite:preloadError` net. Returns a teardown function.
  *
- * `onUnrecoverable` fires when a chunk is missing and a reload has already been
- * tried — the point at which adaptv renders the offline/error UI rather than
- * leaving a blank page. Calling `event.preventDefault()` first is required: it
- * stops Vite's default of rethrowing, which would surface as an unhandled
- * rejection.
+ * adaptv's shell installs it once, with the offline screen as `onUnrecoverable`.
+ * That callback fires only when the chunk is missing in a document that a reload
+ * already produced — the guard was spent before this document existed, so
+ * reloading again cannot help, and the offline UI beats a blank page.
+ *
+ * ## Why the reloading document leaves the error alone
+ *
+ * `event.preventDefault()` does not make a failed import go away: it stops Vite
+ * rethrowing, and the import then RESOLVES — to `undefined`. The router reads a
+ * component off that, throws, and the app's error boundary is drawn over the
+ * reload while it is in flight (measured in Chromium: "Something went wrong" for
+ * the reload's whole round trip). Left alone, the import rejects with the
+ * engine's own missing-module error, which the router holds as a reload in
+ * progress and draws nothing for. So the net prevents the default only where it
+ * takes the failure over itself — the unrecoverable case, which renders the
+ * offline screen — and every error in a document that is already reloading,
+ * first or later, is left exactly as the engine raised it.
+ *
+ * What that cannot reach, measured in `e2e-sw/stale-chunk.spec.ts`: the router
+ * recognises the missing-module wordings, not every failure. WebKit behind a host
+ * that rewrites a missing chunk to the index rejects with a MIME-type error
+ * instead, and the error boundary is drawn over the reload there. Nothing an
+ * event listener does can hold the import pending, so that one is the router's.
  */
 export function installPreloadErrorRecovery(
   onUnrecoverable?: (error: unknown) => void,
@@ -87,11 +123,13 @@ export function installPreloadErrorRecovery(
   if (typeof window === "undefined") return () => {}
 
   const handler = (event: Event) => {
-    event.preventDefault()
+    if (reloadRequested) return
     if (shouldReloadAfterPreloadError()) {
+      reloadRequested = true
       window.location.reload()
       return
     }
+    event.preventDefault()
     onUnrecoverable?.((event as Event & { payload?: unknown }).payload)
   }
 

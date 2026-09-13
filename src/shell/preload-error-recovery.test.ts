@@ -69,3 +69,63 @@ describe("shouldReloadAfterPreloadError — B4", () => {
     expect(() => clearPreloadErrorGuard()).not.toThrow()
   })
 })
+
+describe("installPreloadErrorRecovery — one answer per document", () => {
+  //the in-flight flag is module state that dies with the document, so each test
+  //imports a fresh module: a fresh document
+  async function freshNet() {
+    vi.resetModules()
+    return import("#adaptv/shell/preload-error-recovery")
+  }
+
+  function staleChunk() {
+    window.dispatchEvent(
+      new Event("vite:preloadError", { cancelable: true }),
+    )
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("a second installation cannot turn the first one's reload into a failure", async () => {
+    //an app calling the exported net next to the shell's must not reproduce the
+    //shell's old double arming: reload, then "unrecoverable" for the same error
+    const reload = vi
+      .spyOn(window.location, "reload")
+      .mockImplementation(() => {})
+    const { installPreloadErrorRecovery } = await freshNet()
+    const unrecoverable = vi.fn()
+    const teardowns = [
+      installPreloadErrorRecovery(unrecoverable),
+      installPreloadErrorRecovery(unrecoverable),
+    ]
+
+    staleChunk()
+    staleChunk()
+    for (const teardown of teardowns) teardown()
+
+    expect({
+      reloads: reload.mock.calls.length,
+      unrecoverable: unrecoverable.mock.calls.length,
+    }).toEqual({ reloads: 1, unrecoverable: 0 })
+  })
+
+  it("reports unrecoverable, without reloading, in the document a reload produced", async () => {
+    const reload = vi
+      .spyOn(window.location, "reload")
+      .mockImplementation(() => {})
+    sessionStorage.setItem(PRELOAD_ERROR_GUARD_KEY, "1")
+    const { installPreloadErrorRecovery } = await freshNet()
+    const unrecoverable = vi.fn()
+    const teardown = installPreloadErrorRecovery(unrecoverable)
+
+    staleChunk()
+    teardown()
+
+    expect({
+      reloads: reload.mock.calls.length,
+      unrecoverable: unrecoverable.mock.calls.length,
+    }).toEqual({ reloads: 0, unrecoverable: 1 })
+  })
+})

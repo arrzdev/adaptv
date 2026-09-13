@@ -1,5 +1,4 @@
 import { DEV_SW_ENABLED, registerSW } from "virtual:adaptv/pwa-register"
-import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import { unregisterForeignServiceWorkers } from "#adaptv/shell/unregister-foreign-service-workers"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
@@ -114,10 +113,6 @@ async function requestPersistentStorage(): Promise<boolean> {
  * → `docs/design/rendering.md §3.4`
  */
 export function registerPwaServiceWorkerRuntime(): void {
-  //The stale-chunk net is unconditional: it must be armed even when adaptv never
-  //registers a worker, because the failure is a *deploy* artifact, not a SW one.
-  installPreloadErrorRecovery()
-
   //Capacitor never gets a service worker — not configurable. §3.5
   if (isNativePlatform()) {
     void destroyServiceWorkers()
