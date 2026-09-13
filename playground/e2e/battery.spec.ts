@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The battery capability on the two engines the suite runs. Chromium has
@@ -18,12 +18,6 @@ declare global {
       fire: (t: string) => void
     }
   }
-}
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
 }
 
 test.describe("Battery where the engine has no API", () => {
