@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Compose — a mail or SMS draft handed to the OS composer through a mailto: or
@@ -12,23 +13,6 @@ import { expect, test } from "@playwright/test"
  * are the second witness: the outcome badge and the URL row must agree with the
  * intercept.
  */
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The buttons are server-rendered, so Playwright's actionability check is
- * satisfied by inert HTML: a click fired before hydration lands on a button
- * whose handler is not attached yet and the outcome row never moves. The splash
- * is server-rendered too and self-unmounts only once the client has hydrated,
- * so its disappearance is the one honest "React is driving now" signal. Given a
- * generous timeout on purpose — the first test to reach the route on a cold
- * server pays the transform cost.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 type Opened = { url: string; target?: string }
 /** The page's window, with the intercept the init script installs on it. */
