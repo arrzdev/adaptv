@@ -66,6 +66,13 @@ const unpersisted = new Set<string>()
  */
 let clearRefused = false
 
+/** Drop everything held only in memory, and with it the not-persistent report. */
+function forgetMemory(): void {
+  memory.clear()
+  unpersisted.clear()
+  clearRefused = false
+}
+
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
 function openDatabase(): Promise<IDBDatabase | null> {
@@ -83,9 +90,13 @@ function openDatabase(): Promise<IDBDatabase | null> {
         //a connection that ignores versionchange blocks every deleteDatabase
         //(a consumer's wipe on logout) and every upgrade from another tab for
         //as long as this page lives. Step aside, and reopen on the next call.
-        db.onversionchange = () => {
+        db.onversionchange = (event) => {
           db.close()
           dbPromise = null
+          //a null newVersion is a deleteDatabase — the logout wipe. What only
+          //memory held goes with it, or a refused value would outlive the wipe
+          //for the session. An upgrade elsewhere wipes nothing, so it keeps them.
+          if (event.newVersion === null) forgetMemory()
         }
         resolve(db)
       }
@@ -204,9 +215,7 @@ export const store = {
    * was meant to drop.
    */
   async clear(): Promise<void> {
-    memory.clear()
-    unpersisted.clear()
-    clearRefused = false
+    forgetMemory()
     let held: IDBValidKey[] | undefined
     const landed = await commit((s) => {
       const listing = s.getAllKeys()
