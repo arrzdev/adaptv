@@ -52,6 +52,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/icon",
+    title: "Icon",
+    summary: "decorative vs labelled svg · 1em · iOS Dynamic Type",
+    isNew: true,
+  },
+  {
     to: "/lab/button",
     title: "Button",
     summary: "press engine + haptics + slots, with real semantics",
