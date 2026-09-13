@@ -203,7 +203,9 @@ export function subscribeStore(
   set.add(listener)
   return () => {
     set.delete(listener)
-    if (set.size === 0) listeners.delete(key)
+    //only drop the set this subscription lives in: a repeated unsubscribe
+    //runs after the set was emptied and replaced by a later subscriber's
+    if (set.size === 0 && listeners.get(key) === set) listeners.delete(key)
   }
 }
 
