@@ -75,15 +75,17 @@ Running two worktrees at once? Move the port with the env vars in the table. Do 
 neighbour's session.
 
 The worker configs set `reuseExistingServer: false` unconditionally: **a server already up is a
-server built from unknown source**, and that suite exists to catch exactly that staleness. Their
-`webServer.command` is `build && vite preview` for the same reason — `vite preview` serves whatever is
-on disk, so without the build a green run can be measuring the previous commit's worker.
+server built from unknown source**, and that suite exists to catch exactly that staleness. The `ssr`
+and `prompt` configs' `webServer.command` is `build && vite preview` for the same reason — `vite
+preview` serves whatever is on disk, so without the build a green run can be measuring the previous
+commit's worker.
 
 The `spa` suite serves its build with `e2e-sw/static-host.mjs` instead of `vite preview`, because the
 preview renders every navigation on the server whatever `render` the build was: a first visit came
 back as a server render carrying the `$_TSR` bootstrap, and a router redirect as a server `307`, so
 the static shell's own boot never ran before a worker took over. The host answers a file that exists,
-then the `_redirects` rule the build emits, then `404.html`, reading the disk on every request.
+then the `_redirects` rule the build emits, then `404.html`, reading the disk on every request; its
+command empties `dist/client` before the build, so it can never serve a stale one.
 
 ### 3.3 The main suite runs plain `vite`, not the CLI
 
