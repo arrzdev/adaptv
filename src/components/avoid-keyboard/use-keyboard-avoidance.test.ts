@@ -364,6 +364,21 @@ describe("useKeyboardAvoidance — a second look when the smooth scroll ends", (
     expect(rig.tops()).toEqual([264])
   })
 
+  it("keeps the second look for scrollend once the scroll has started, however long it flies", () => {
+    //Chromium's smooth scroll runs 450ms and more. The quiet window counted from the aim
+    //is only for a scroll that never starts; left running past the first scroll event it
+    //settles 120ms in, mid-flight, and spends the one extra aim before the insertion
+    const rig = rigAvoidance()
+    rig.focusAndAim()
+    rig.scrollTo(80)
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    rig.insertAbove(100)
+    rig.scrollEnd()
+    expect(rig.tops()).toEqual([264, 364])
+  })
+
   it("re-aims on scrollend itself, without waiting out a quiet window", () => {
     const rig = rigAvoidance()
     flyWithInsertion(rig)
