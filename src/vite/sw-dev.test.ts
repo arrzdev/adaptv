@@ -384,6 +384,58 @@ describe("the dev worker route", () => {
     )
   }
 
+  it(
+    "follows `serviceWorkers` when adaptv.config.ts is edited under a running server",
+    async () => {
+      //The config watcher reloads `context.loaded` and full-reloads the page, and
+      //the page re-fetches /sw.js. A list read once at startup would keep serving
+      //the old modules, so a module added to the config never runs until the dev
+      //server is restarted. → docs/design/lifecycle.md §2.1
+      process.env[DEV_SW_ENV] = "1"
+      const appRoot = tempApp({
+        "src/sw/push.ts": "self.__push = 'push'",
+        "src/sw/sync.ts": "self.__sync = 'sync'",
+      })
+      const context = contextFor(appRoot, ["./src/sw/push.ts"])
+      const { get } = await serve(context)
+      expect(await (await get("/sw.js")).text()).not.toContain("__sync")
+
+      context.loaded = contextFor(appRoot, [
+        "./src/sw/push.ts",
+        "./src/sw/sync.ts",
+      ]).loaded
+      const added = await (await get("/sw.js")).text()
+      expect(added).toContain("__push")
+      expect(added).toContain("__sync")
+
+      context.loaded = contextFor(appRoot, ["./src/sw/sync.ts"]).loaded
+      const removed = await (await get("/sw.js")).text()
+      expect(removed).not.toContain("__push")
+    },
+    SERVE_TIMEOUT,
+  )
+
+  it(
+    "starts serving once modules are added to a config that began with none",
+    async () => {
+      process.env[DEV_SW_ENV] = "1"
+      const appRoot = tempApp({ "src/sw/push.ts": "self.__push = 'push'" })
+      const context = contextFor(appRoot, [])
+      const { get } = await serve(context)
+      expect((await get("/sw.js")).status).toBe(404)
+
+      context.loaded = contextFor(appRoot, ["./src/sw/push.ts"]).loaded
+      const response = await get("/sw.js")
+      expect(response.status).toBe(200)
+      expect(await response.text()).toContain("__push")
+
+      //and emptied again, it stops rather than serving a worker of nothing
+      context.loaded = contextFor(appRoot, []).loaded
+      expect((await get("/sw.js")).status).toBe(404)
+    },
+    SERVE_TIMEOUT,
+  )
+
   it("is a dev-server plugin only, never part of a build", () => {
     //the built worker is sw-build's; a build that also carried this would have
     //nothing to serve it from
