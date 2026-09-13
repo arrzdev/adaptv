@@ -710,6 +710,22 @@ loud, never by name.
 **R9 — Never print absolute paths.** Artifact and file paths are app-root-relative.
 > Violated by: `✓ android /Users/arrz/Documents/Github/project-zero/apps/front…`.
 > Want: `✓ android .adaptv/builds/app-debug.apk`.
+>
+> A tool's words are held to it too. The failure pick lifts the line that explains the failure,
+> and xcodebuild explains a failure by naming files:
+> ```
+> ✖ ios  Unable to load contents of file list: '/Users/arrz/…/chopchop/.adaptv/ios/App/Pods/…
+>     PhaseScriptExecution [CP]\ Embed\ Pods\ Frameworks /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzb…/Script-9592….sh (in target 'App' from project 'App')
+> ```
+> `withoutAbsolutePaths` in `explain.mjs` runs over every reason and detail line: a path under
+> the app root becomes relative (`.adaptv/ios/App/Pods/…`), and a path on disk outside it —
+> DerivedData, the home directory, Xcode — is cut to its file name, since those directories are
+> the machine's. "On disk" means it starts from a real top-level directory: a macOS root
+> (`/Users`, `/Library`, `/Applications`, …) always, and a Linux root (`/home`, `/var`, `/dev`,
+> …) only when its first two segments exist on the machine, since `/home/feed/3` is as likely a
+> route as a file. Slash-led text that is not a file is the dev's own and stays whole:
+> `Failed to load url /src/routes/cart.tsx`, `No route matched /products/featured/42`, an API
+> path, a regex. Cutting those to a last segment printed `No route matched 42`, a false sentence.
 
 **R10 — Never exceed the terminal width, never wrap.** `compose()` in `render.mjs` clips the dim
 right-hand detail; `clipAnsi()` clips a whole pre-coloured row (both preserve ANSI codes). A
