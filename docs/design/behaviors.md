@@ -88,7 +88,8 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **`AvoidKeyboard` looks twice.** Its aim picks a scrollTop on the focus frame, so content that lands
   above the field during the smooth scroll (suggestions, a validation message) left the field 76px under
   the box; when that scroll ends (`scrollend`, or the caret patch's 120ms quiet window where it is
-  missing) it aims once more from fresh geometry, unless the user touched or wheeled, or focus moved.
+  missing or the scroll never starts) it aims once more from fresh geometry, unless the user touched or
+  wheeled, or focus moved.
   **Test:** `/lab/avoid-keyboard` → *Content arriving mid-scroll* → Run: the clearance must read >= 0.
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
   infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so

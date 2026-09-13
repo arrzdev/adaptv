@@ -217,11 +217,16 @@ const USER_SCROLL_INTENT_EVENTS = [
  * Call `onSettle` once, when the programmatic scroll just started on `scroller` comes to rest —
  * or never, if the user touches, clicks or wheels before it does. Returns a cancel.
  *
- * The end is `scrollend` where the engine has it. Where it does not (older WebKit, which
- * includes adaptv's iOS 15 floor), it is the caret patch's quiet window: {@link CARET_SETTLE_MS}
- * with no `scroll` event, counted from the aim itself so a scroll that never starts still
- * settles. That fallback can mistake a stall for the end; a caller that re-aims from fresh
- * geometry then aims at the same destination the scroll was already heading for.
+ * Until the first `scroll` event, the end is the caret patch's quiet window,
+ * {@link CARET_SETTLE_MS}, counted from the aim itself, on every engine. A scroll that never
+ * starts fires neither `scroll` nor `scrollend` (an aim past the end of a scroller already
+ * clamped there, measured on both engines), and waiting for a `scrollend` that is not coming
+ * would leave this armed until some later, unrelated scroll ended and aimed again then.
+ *
+ * Once the scroll has started, the end is `scrollend` where the engine has it. Where it does
+ * not (older WebKit, which includes adaptv's iOS 15 floor), it is the same quiet window, pushed
+ * out by every `scroll`. That fallback can mistake a stall for the end; a caller that re-aims
+ * from fresh geometry then aims at the destination the scroll was already heading for.
  *
  * Nothing here is keyboard-specific: any surface that aims a smooth scroll and wants a second
  * look at where it landed can take it.
@@ -240,7 +245,7 @@ export function onProgrammaticScrollSettled(
     done = true
     if (timer !== null) clearTimeout(timer)
     scroller.removeEventListener("scrollend", settle)
-    scroller.removeEventListener("scroll", restartQuietWindow)
+    scroller.removeEventListener("scroll", handleScroll)
     for (const type of USER_SCROLL_INTENT_EVENTS) {
       window.removeEventListener(type, cancel, intent)
     }
@@ -257,17 +262,23 @@ export function onProgrammaticScrollSettled(
     timer = setTimeout(settle, CARET_SETTLE_MS)
   }
 
+  function handleScroll() {
+    if (!hasScrollEnd) {
+      restartQuietWindow()
+      return
+    }
+    //the scroll has started, so a `scrollend` is coming: it owns the settle from here
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+    scroller.removeEventListener("scroll", handleScroll)
+  }
+
   for (const type of USER_SCROLL_INTENT_EVENTS) {
     window.addEventListener(type, cancel, intent)
   }
-  if (hasScrollEnd) {
-    scroller.addEventListener("scrollend", settle)
-  } else {
-    scroller.addEventListener("scroll", restartQuietWindow, {
-      passive: true,
-    })
-    restartQuietWindow()
-  }
+  if (hasScrollEnd) scroller.addEventListener("scrollend", settle)
+  scroller.addEventListener("scroll", handleScroll, { passive: true })
+  restartQuietWindow()
   return cancel
 }
 
