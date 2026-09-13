@@ -347,6 +347,24 @@ describe("keys ota", () => {
     },
     PROCESS_TIMEOUT_MS,
   )
+
+  it(
+    "still prints the key pair under --quiet, because the pair IS the outcome",
+    async () => {
+      const cwd = scratch()
+      const r = await cli(["keys", "ota", "--quiet"], { cwd })
+      expect(r.code, r.stderr).toBe(0)
+      expect(r.stderr).toBe("")
+      const [pub, priv, ...extra] = pems(r.stdout)
+      expect(extra).toEqual([])
+      expect(() => createPublicKey(pub)).not.toThrow()
+      expect(() => createPrivateKey(priv)).not.toThrow()
+      //Quiet drops the narration around the keys, never the keys.
+      expect(plain(r.stdout)).not.toContain("commit this")
+      expect(readdirSync(cwd)).toEqual([])
+    },
+    PROCESS_TIMEOUT_MS,
+  )
 })
 
 describe("doctor", () => {
