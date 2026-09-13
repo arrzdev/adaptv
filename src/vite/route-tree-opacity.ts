@@ -10,6 +10,8 @@ import type { FSWatcher } from "node:fs"
 import {
   mkdirSync,
   readFileSync,
+  renameSync,
+  rmSync,
   statSync,
   utimesSync,
   watch,
@@ -251,8 +253,9 @@ export function routeTreeMentionsTanStack(source: string): boolean {
  *    a live dev server: after the repair the file holds a single (mtime, content)
  *    state across 40 samples over 12s, and seeding the generator's own text back
  *    onto disk three times converges every time, with no reload and no `rerun` in
- *    the log. Vite's dev server does not drive the generator from this file's
- *    events the way a build watcher would.
+ *    the log. That holds for ONE server. The generator does hear this file's
+ *    events (through Vite's `watchChange`), and a second server's write carries an
+ *    mtime no restore can match — which is `ignoreUnchangedRouteTree`'s job.
  *
  * The trade is that an mtime-based incremental tool (a warm `tsc --build`) can miss
  * the repair. Acceptable: the content difference is type-only.
@@ -276,11 +279,85 @@ export function rewriteRouteTreeOnDisk(
     modules,
   })
   if (rewritten === source) return
-  writeFileSync(routeTreePath, rewritten)
+  //Written beside the tree and renamed over it, never in place. Every dev server in
+  //the checkout reads this file the moment it changes, and an in-place write hands
+  //them a truncated tree: measured with two servers up, one stat caught it at 24567
+  //of 50031 bytes and the other server's SSR transform died on "Expected `}` but
+  //found `EOF`". A rename is atomic, so a reader sees the old tree or the new one.
+  const tmp = `${routeTreePath}.${process.pid}.tmp`
   try {
-    utimesSync(routeTreePath, stamp.atime, stamp.mtime)
-  } catch {
-    //worst case the generator re-runs once — the repair itself already landed
+    writeFileSync(tmp, rewritten)
+    try {
+      //stamped before the rename, so the tree never carries the wrong mtime at all
+      utimesSync(tmp, stamp.atime, stamp.mtime)
+    } catch {
+      //worst case the generator re-runs once — the repair itself still lands
+    }
+    renameSync(tmp, routeTreePath)
+  } catch (error) {
+    rmSync(tmp, { force: true })
+    throw error
+  }
+}
+
+/**
+ * Hide a rewrite of the tree that changes nothing from everything else in the dev
+ * server — Vite's HMR and the generator alike.
+ *
+ * ⚠︎ This is why a second dev server in the same checkout used to reload every page
+ * the first one was serving. The generator writes the tree on every boot, because
+ * what it generates never equals what is on disk: the disk copy is the repaired one
+ * (see `rewriteRouteTreeOnDisk`), and generating the repaired text directly is closed
+ * to a consumer. So each boot renames a byte-identical tree (once repaired) over the
+ * old one, and the running server sees a change event. Measured, two servers in one
+ * checkout, one boot of the second:
+ *
+ * - The running server's HMR found `routeTree.gen.ts` in the page's module graph,
+ *   reached no boundary, and sent `full-reload` — 19 of them for that single boot.
+ * - The running server's generator treats any mtime it did not write as an outside
+ *   edit of its output and force-rewrites it. Its rewrite is an outside edit to the
+ *   OTHER server's generator, which does the same. Two generators ping-ponged the file
+ *   for about 13 seconds: 139 renames and 246 repairs, from one boot.
+ *
+ * Suppressing the reload in `hotUpdate` would stop the first and leave the second,
+ * so the event is stopped where it enters the server instead: at the watcher's
+ * `emit`, before Vite dispatches it to `watchChange` (the generator) and to HMR. The
+ * comparison is on the REPAIRED text, so the generator's raw output and the repaired
+ * copy of the same tree both count as unchanged, and against the last version this
+ * server let through, so a real regeneration — a route added, removed, renamed —
+ * passes exactly once and then becomes the baseline.
+ *
+ * `unlink` always passes and clears the baseline, so a tree that is deleted and
+ * regenerated is announced even when it comes back identical.
+ */
+export function ignoreUnchangedRouteTree(
+  watcher: {
+    emit: (event: string | symbol, ...args: unknown[]) => boolean
+  },
+  routeTreePath: string,
+  normalize: (source: string) => string,
+): void {
+  const target = path.resolve(routeTreePath)
+  const read = (): string | undefined => {
+    try {
+      return normalize(readFileSync(target, "utf8"))
+    } catch {
+      return undefined
+    }
+  }
+  let known = read()
+  const emit = watcher.emit.bind(watcher)
+  watcher.emit = (event, ...args) => {
+    const file = args[0]
+    if (typeof file !== "string" || path.resolve(file) !== target)
+      return emit(event, ...args)
+    if (event === "unlink") known = undefined
+    if (event === "add" || event === "change") {
+      const next = read()
+      if (next !== undefined && next === known) return false
+      known = next
+    }
+    return emit(event, ...args)
   }
 }
 
@@ -444,6 +521,13 @@ export function adaptvOpacityCheckPlugin(
       net()
       repair()
       verify()
+      //after the repair, so the baseline is the tree this server is about to serve
+      ignoreUnchangedRouteTree(server.watcher, routeTree, (source) =>
+        rewriteRouteTree(source, routerPkg, {
+          routeTreePath: routeTree,
+          modules,
+        }),
+      )
       //dev regenerates on every route-file change. The repair is content-guarded,
       //so the event our own write raises is a no-op and this cannot ping-pong.
       const onWrite = (file: string) => {

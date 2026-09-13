@@ -471,6 +471,19 @@ Wiring (both adaptv-generated, so the consumer writes neither):
 > than exactly, and it is defence in depth — measured, a live dev server holds one (mtime, content)
 > state across 40 samples, and seeding the generator's own text back three times converges every time.
 
+> ### ✅ FIXED — booting a second dev server reloaded every page the first one served (2026-09-13)
+>
+> The "one server holds one state" measurement above does not survive a second server in the same
+> checkout. The generator writes the tree on every boot (its output never equals the repaired copy on
+> disk), and the running server's watcher sees that rename. Measured with a page open on one server
+> and one boot of another: 19 `full-reload` messages naming `routeTree.gen.ts`, and the two
+> generators — each reading the other's mtime as an outside edit of its output — renamed the file 139
+> times over 13 seconds, with the in-place repair caught half-written (a parse error in SSR). The
+> watcher's `emit` now drops a change whose REPAIRED text equals the last one the server let through,
+> before either HMR or the generator hears it, and the repair writes beside the tree and renames.
+> Six boots afterwards: zero reloads and 13 repairs in total, against 246 for the one boot before; a
+> genuinely different tree still reloads the page. → `ignoreUnchangedRouteTree` in `src/vite/route-tree-opacity.ts`
+
 > ### ✅ FIXED — the tree LOCATED adaptv instead of naming it, and typed routing was dead (2026-08-07)
 >
 > Raised as a question about one line: `routeTree.gen.ts` held
