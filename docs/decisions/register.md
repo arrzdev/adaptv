@@ -490,13 +490,13 @@ source patching entirely.
 
 | Finding | Impact |
 |---|---|
-| **Capacitor 8 ships a core `SystemBars` plugin** that already owns Android insets + IME, registered unconditionally. | **`@adaptv/shell` is redesigned: layer on it, don't replace it.** A second inset listener *is* the collision behind keyboard bugs #61/#68. The plugin gets smaller and less risky — but stops being "the wedge vs Ionic." → `docs/roadmap/native-shell-plugin.md §0.0` |
+| **Capacitor 8 ships a core `SystemBars` plugin** that already owns Android insets + IME, registered unconditionally. | **`@adaptv/shell` is redesigned: layer on it, don't replace it.** A second inset listener *is* the collision behind keyboard bugs #61/#68 (closed by capacitor#8535, released in 8.5.2, which also moves the SystemBars listener to the decor view; adaptv pins 8.4.3 → `docs/roadmap/platform-releases-2026-09.md §1.1`). The plugin gets smaller and less risky — but stops being "the wedge vs Ionic." → `docs/roadmap/native-shell-plugin.md §0.0` |
 | **`@capacitor/status-bar` is silently half-dead on API 35+**: `setBackgroundColor` and `setOverlaysWebView` both *resolve successfully and do nothing*. Maintainer: *"if you are using edge to edge, remove status bar plugin."* Google Play now warns about it. | Drop the dependency; tint via a web-layer scrim + `SystemBars.setStyle()`. |
 | **`Keyboard.resizeOnFullScreen` is dead code on Capacitor 8** — its only consumer early-returns whenever `SystemBars` is present, which is always. | Remove from any adaptv config surface. |
 | **Apple's OTA rule is not §3.3.2.** Review Guideline **2.5.2**; DPLA **§3.3.1(B)**, and the "WebKit/JavaScriptCore" phrasing was **deleted** — the rule is now purely behavioural and *more* permissive. | `docs/design/ota.md §5.1` corrected; `../decisions/prior-art.md §12.2` still needs the fix. |
 | **`createServerFileRoute` does not exist** in the pinned `@tanstack/react-start@1.167.13` — replaced by a `server` property on `createFileRoute`'s options. | A config-object property, so **no import-restriction technique can catch it**. Needs the GritQL rule. `docs/design/rendering.md §2` is stale. |
 | **TanStack Start SPA mode emits `_shell.html`, not `index.html`.** GitHub Pages' Jekyll **strips `_`-prefixed files**; Cloudflare Workers Assets looks for `/index.html`. | adaptv must emit `index.html` as a copy, plus `.nojekyll`. |
-| **Capacitor 9 is in alpha** with a `// TODO: In Cap 9, add "full"` beside `SystemBars.insetsHandling`. | The inset contract changes again — don't freeze `@adaptv/shell`'s API against Cap 8. |
+| **Capacitor 9 is in alpha** with a `// TODO: In Cap 9, add "full"` beside `SystemBars.insetsHandling`. *(2026-09-13: the TODO line is deleted in the 8.5.2 hunk that adds `insetsHandling: "native"`, which Capacitor 9 is set to make the default. adaptv sets `"css"` explicitly → `docs/roadmap/platform-releases-2026-09.md §1.1`.)* | The inset contract changes again — don't freeze `@adaptv/shell`'s API against Cap 8. |
 | **Ionic's CLI is frozen** (no release since 2025-03-18; its React starter pins Vite **5** vs current 8.1.5, React Router **5**, vitest 0.34) while `@ionic/react` ships nightly. The non-Ionic Capacitor+Vite+React niche has **nothing above 30 stars**. | The market gap adaptv targets is real and currently unfilled. |
 
 ---
@@ -1085,7 +1085,7 @@ Traced through Chromium's `build/config/android/config.gni` across release branc
 | Android 6.0 | 23 | **Chromium 108** | Nov 2022 |
 | **Android 7.0 / 7.1** | **24 / 25** | **Chromium 119** | Oct 2023 |
 | Android 8.0 – 9 | 26–28 | **Chromium 138** | Jun 2025 |
-| Android 10+ | 29+ | current (150/151) | — |
+| Android 10+ | 29+ | current (153 stable; 154 in early-stable rollout and beta, as of 2026-09-09) | — |
 
 Chromium confirms it: *"We no longer support devices running Android 5-9. Devices on these old OS
 versions can still update to the last supported WebView release but will not be able to install further
