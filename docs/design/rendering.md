@@ -883,7 +883,7 @@ What it asserts, and why each one earns its runtime:
 > spec: with preload enabled, `serveNavigation`'s fallback `io.fetch()` is **never reached** — the
 > preload always resolves first. Breaking that fetch outright changed nothing in Chromium *or* WebKit.
 > It is not dead code, though: **Firefox has no navigation preload at all**, and neither does Safari
-> before 17.4, so for those users it is the path *every* navigation takes. Preload being on is exactly
+> before 15.4, so for those users it is the path *every* navigation takes. Preload being on is exactly
 > what hides it. The spec therefore calls `navigationPreload.disable()` for one navigation to walk the
 > other branch — and with the bug present, that test alone goes red in both engines.
 
@@ -957,7 +957,7 @@ Measured on iPhone 16 Pro / iOS 18.0, SSR build (Nitro `node-server`), served ov
 | cold launch #2 | applied; `waiting: false` |
 
 Two things this settles that no automated run could. **Navigation preload is genuinely on in Safari**
-(17.4+), so the §3.3 pair is doing its job on the target where SW boot latency costs the most. And the
+(15.4+), so the §3.3 pair is doing its job on the target where SW boot latency costs the most. And the
 `auto` update policy behaves exactly as §3.4 describes *in a standalone home-screen app*, which is the
 only place "cold launch" is a real, frequent event.
 
