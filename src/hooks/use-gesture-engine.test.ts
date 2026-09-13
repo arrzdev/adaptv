@@ -513,6 +513,42 @@ describe("useGestureEngine", () => {
       vi.useRealTimers()
     })
 
+    it("clears a visual still inside its floor when a key press resets the engine", () => {
+      //a tap that painted, released inside the 150ms floor, then Enter on the same
+      //focused control: the key press resets the engine while the hide is pending,
+      //and must not strand the flag on the element (reproduced on chromium and webkit)
+      vi.useFakeTimers()
+      const { result } = renderHook(() =>
+        useGestureEngine({ onPressUp: vi.fn() }),
+      )
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS + 30)
+      })
+      act(() => result.current.onPointerUp(pointerAt(50, 50)))
+      expect(
+        target.hasAttribute("data-pressed"),
+        "released early — the visual must still be up",
+      ).toBe(true)
+      act(() => result.current.onKeyDown(keyEvent("Enter")))
+      act(() => result.current.onKeyUp(keyEvent("Enter")))
+      act(() => {
+        vi.advanceTimersByTime(MIN_PRESSED_MS + 100)
+      })
+
+      expect(
+        target.hasAttribute("data-pressed"),
+        "the key press must not strand the pointer press's visual",
+      ).toBe(false)
+      vi.useRealTimers()
+    })
+
     it("leaves no data-pressed flag after a clean tap", () => {
       const { result } = renderHook(() =>
         useGestureEngine({ onPressUp: vi.fn() }),
