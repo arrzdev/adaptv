@@ -95,11 +95,10 @@ import {
   resolveIconPlan,
 } from "./lib/native.mjs"
 import {
+  buildNewShell,
   canReuseInstall,
-  newShellId,
   openShellRegistry,
   SHELLS_ENV,
-  stampShellId,
 } from "./lib/native-shell.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
@@ -1018,11 +1017,14 @@ async function runLive(appRoot, platforms, opts) {
         const env = envFor(platform)
         const key = cacheKey(platform)
         const prev = runCache.run[key]
+        // Taken once, before anything below stamps or syncs: a failed build compares against it
+        // to decide whether the install still on the device may reconnect (`buildNewShell`).
+        const fp = nativeFingerprint(appRoot, platform)
         const cached =
           !force &&
           (await canReuseInstall(prev, {
             url,
-            fp: nativeFingerprint(appRoot, platform),
+            fp,
             installed: () =>
               isAppInstalled(appRoot, platform, target.id, env),
           }))
@@ -1050,39 +1052,42 @@ async function runLive(appRoot, platforms, opts) {
         }
 
         // A new build gets a new shell id, baked into the config this sync writes into the native
-        // project, and named to the dev server BEFORE the build starts: from here on the app
-        // already on the device is the old build, and it waits for this one instead of
-        // reconnecting.
-        const shell = newShellId(platform)
-        stampShellId(platform, shell)
-        shells.expect(platform, shell)
-
-        // No `generateAssets` here: every path that reaches this function has just been
-        // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
-        // patch for `b` reinstalling the launcher icons of the run it started in — and that
-        // is precisely the seam this pipeline removes: assets written in two places is how
-        // they came to be written in neither on the one path that mattered.
-        report("syncing")
-        await capSync(appRoot, platform, env, {
-          report,
-          plugins: config?.plugins,
-          privacy: config?.privacy,
-        })
-        // Was the app already up? If so, it survives the build (capRun no longer kills it)
-        // and only cap run's re-front touched it, so we relaunch the fresh install once.
-        const wasRunning = await isAppRunning(
-          appRoot,
+        // project and named to the dev server before the build starts — and handed back to the
+        // install still on the device if the build fails with nothing native changed.
+        let wasRunning = false
+        const shell = await buildNewShell(
+          shells,
           platform,
-          target.id,
-          env,
+          { prev, url, fp },
+          async () => {
+            // No `generateAssets` here: every path that reaches this function has just been
+            // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
+            // patch for `b` reinstalling the launcher icons of the run it started in — and that
+            // is precisely the seam this pipeline removes: assets written in two places is how
+            // they came to be written in neither on the one path that mattered.
+            report("syncing")
+            await capSync(appRoot, platform, env, {
+              report,
+              plugins: config?.plugins,
+              privacy: config?.privacy,
+            })
+            // Was the app already up? If so, it survives the build (capRun no longer kills it)
+            // and only cap run's re-front touched it, so we relaunch the fresh install once.
+            wasRunning = await isAppRunning(
+              appRoot,
+              platform,
+              target.id,
+              env,
+            )
+            // `cap run` BUILDS, then installs, then launches — the build is all but one second
+            // of it. Announcing `launching device` here said the last step first, so the row
+            // read `launching device` through twenty seconds of compiling. A row narrates
+            // whatever it is told (it has no fallback of its own any more), so announcing the
+            // right thing at the right moment is entirely this function's job. Say what STARTS.
+            report("building app")
+            await capRun(appRoot, platform, target.id, env, { report })
+          },
         )
-        // `cap run` BUILDS, then installs, then launches — the build is all but one second
-        // of it. Announcing `launching device` here said the last step first, so the row read
-        // `launching device` through twenty seconds of compiling. A row narrates whatever it
-        // is told (it has no fallback of its own any more), so announcing the right thing at
-        // the right moment is entirely this function's job. Say what STARTS.
-        report("building app")
-        await capRun(appRoot, platform, target.id, env, { report })
         // The build is done; from here it really is the device's turn. Every branch below
         // installs, relaunches or fronts the app, so the phase covers all of them.
         report("launching device")
