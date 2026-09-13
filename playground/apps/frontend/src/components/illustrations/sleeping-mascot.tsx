@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-/** Inline mascot artwork (from `public/creature/sleeping.svg`). */
+/** Inline mascot artwork. */
 export function SleepingMascot(props: SVGProps<SVGSVGElement>) {
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: decorative mascot (aria-hidden); a <title> here is never announced
