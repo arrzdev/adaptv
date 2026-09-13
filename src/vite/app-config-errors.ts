@@ -96,7 +96,7 @@ function deepLinkErrors(value: unknown): string[] {
     ]
   if (RESERVED_SCHEMES.has(scheme))
     return [
-      `'deepLinks.scheme' must be the app's own scheme, got ${show(scheme)}, which every app already uses`,
+      `'deepLinks.scheme' can't be ${show(scheme)}: that scheme is reserved`,
     ]
   return []
 }
