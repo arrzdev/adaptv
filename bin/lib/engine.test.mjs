@@ -114,8 +114,9 @@ describe("the render engine owns every byte the CLI prints", () => {
     //command and no test. It is also ONE enormous template literal, so ordinary prose can break
     //it: a backtick in a CSS comment closes the literal and turns the rest of the sheet into
     //JavaScript. That shipped a `SyntaxError` past a fully green run, and only the dev running
-    //the command ever saw it. `node --check` is the cheap floor under that — the same parser
-    //that will refuse the file at runtime, rather than a regex guessing at one.
+    //the command ever saw it. Compiling every module as an ES module is the cheap floor under
+    //that — the same parser that will refuse the file at runtime, rather than a regex guessing
+    //at one — and `node --check` names the line of whatever it refuses.
     expect(unparseable(cliModules().map((rel) => join(BIN, rel)))).toEqual(
       [],
     )
@@ -123,20 +124,21 @@ describe("the render engine owns every byte the CLI prints", () => {
 
   it("parses — and the sweep refuses the break it exists for", () => {
     //The sweep is only worth its place while it can fail. Plant the shipped bug — a backtick in
-    //a CSS comment closing the template literal — beside a module that must pass (a hashbang
-    //and top-level await, as `adaptv.mjs` has), and require exactly the first to be named.
+    //a CSS comment closing the template literal, below valid lines as it was in the real sheet —
+    //beside a module that must pass (a hashbang and top-level await, as `adaptv.mjs` has), and
+    //require exactly the first to be named, at its line.
     const dir = mkdtempSync(join(tmpdir(), "adaptv-parse-"))
     try {
       const broken = join(dir, "sheet.mjs")
       const fine = join(dir, "entry.mjs")
       writeFileSync(
         broken,
-        "export const css = `a { color: red } /* a `b` note */ b {}`\n",
+        "export const a = 1\nexport const b = 2\n\nexport const css = `a { color: red } /* a `b` note */ b {}`\n",
       )
       writeFileSync(fine, "#!/usr/bin/env node\nawait Promise.resolve()\n")
       const found = unparseable([fine, broken])
       expect(found).toHaveLength(1)
-      expect(found[0]).toMatch(/sheet\.mjs:1 {2}SyntaxError: /)
+      expect(found[0]).toMatch(/sheet\.mjs:4 {2}SyntaxError: /)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
