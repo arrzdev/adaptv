@@ -73,7 +73,7 @@ function registerRuntimeCacheSweep(buildTag: string) {
  * Preload is an optimisation; activation is not.
  *
  * Returns whether preload is on afterwards — `false` on a browser without it
- * (Safari only shipped it in 17.4).
+ * (Safari only shipped it in 15.4).
  */
 export async function applyNavigationPreload(
   enabled: boolean,

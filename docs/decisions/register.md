@@ -507,12 +507,12 @@ Filed here so they don't get lost in the design discussion.
 
 | # | Bug | Location | Severity |
 |---|---|---|---|
-| B1 | SW registration hardcodes `/sw.js` instead of `import.meta.env.BASE_URL` — breaks any subpath deploy (GitHub Pages). `unregister-foreign-service-workers.ts` gets this right, so the codebase is inconsistent. | `src/vite/virtuals.ts:52` | **high** for static hosts |
-| B2 | Runtime caches are namespaced `pages-<buildTag>`/`static-<buildTag>`, so every deploy mints new buckets — but only `cleanupOutdatedCaches()` runs, which purges *precaches* only. Prior builds' runtime caches are **never** deleted → unbounded growth. | `src/sw/sw.cache-name.ts` + lifecycle | **high** |
-| B3 | `onNeedRefresh` immediately calls `updateSW(true)` → `skipWaiting` + reload **mid-session**. Documented failure mode: the new worker's precache no longer lists the old build's chunks, so an open tab's next lazy route import misses cache *and* 404s. Data loss if a form is open. | `src/vite/virtuals.ts` | **high** |
-| B4 | No `vite:preloadError` handler anywhere in `src/` — nothing catches the stale-chunk failure B3 causes. | — | **high** |
-| B5 | `sw.warm-routes.ts` fetches HTML documents with `credentials: "same-origin"` into a shared cache, and strategies force `ignoreVary: true` — authenticated SSR HTML can be served to the wrong state. | `src/sw/sw.warm-routes.ts` | **privacy** |
-| B6 | Dead reference to vite-plugin-pwa's `dev-sw.js?dev-sw` filename — adaptv doesn't use vite-plugin-pwa. | `src/shell/unregister-foreign-service-workers.ts` | cosmetic |
+| B1 | ✅ **CLOSED** — the worker is registered at `import.meta.env.BASE_URL + "sw.js"` with `updateViaCache: "none"`, the same base `unregister-foreign-service-workers.ts` uses (`da4ced8`, #1). No test pins the base. | `src/vite/virtuals.ts` | **high** for static hosts |
+| B2 | ✅ **CLOSED** — `default-worker.ts` passes its build tag to `registerServiceWorkerLifecycle`, which sweeps every `static-`/`pages-`/`documents-` bucket from another build on activate and leaves foreign caches alone (`da4ced8`, #1); pinned by `sw.lifecycle.test.ts`, `sw.navigation-policy.test.ts` and `playground/e2e-sw/update.spec.ts`. | `src/sw/sw.lifecycle.ts` + `sw.navigation-policy.ts` | **high** |
+| B3 | ✅ **CLOSED** — nothing reloads mid-session: under `serviceWorkerUpdate: "auto"` (the default) a waiting worker is applied only at the next cold launch, and under `"prompt"` only when the app calls `applyServiceWorkerUpdate()` (`da4ced8`, #1 made `prompt` the default; `310f7ba`, #59 gave it this shape; → `docs/design/rendering.md §3.4`). Pinned by `virtuals.test.ts`, `playground/e2e-sw/update.spec.ts` and `update-prompt.spec.ts`. | `src/vite/virtuals.ts` | **high** |
+| B4 | ✅ **CLOSED** — `installPreloadErrorRecovery` listens for `vite:preloadError`, reloads once per session, and is armed by both `registerPwaServiceWorkerRuntime` and `shell-layout.tsx`, which renders the offline UI when the guard is spent (`da4ced8`, #1); pinned by `preload-error-recovery.test.ts`. | `src/shell/preload-error-recovery.ts` | **high** |
+| B5 | ✅ **CLOSED** — `sw.warm-routes.ts` is deleted, the worker has no write path for documents, and `ignoreVary` is on only for content-hashed assets (`da4ced8`, #1); pinned by `sw.strategies.test.ts` and `playground/e2e-sw/registration.spec.ts`. → B25 | `src/sw/sw.navigation.ts` + `sw.strategies.ts` | **privacy** |
+| B6 | ✅ **CLOSED** — the `dev-sw.js?dev-sw` special case is gone; the file matches only `sw.js` under `BASE_URL` (`da4ced8`, #1). | `src/shell/unregister-foreign-service-workers.ts` | cosmetic |
 | B7 | ✅ **CLOSED** — `src/components/screen.tsx` is gone and appears in neither barrel; `VISION.md §5` documents the removal and the reason (the frame is owned above the route). | — | consistency |
 | B8 | ✅ **CLOSED** — every primitive routes through `mergeStyles` with an explicit `locked`, asserted per-primitive in `style-precedence.test.tsx`. → §3.1 | `src/components/*` | **contract** |
 
@@ -614,16 +614,17 @@ styles, no notification patterns, no intensity — WebKit-only, and it needs Sys
 >
 > | Surface | File | Works on |
 > |---|---|---|
-> | **Imperative** `haptics.impact()/notify()/selection()` | `capabilities/haptics.ts` | native, Android/Chrome web. **No-op on iOS web — documented in the module header.** |
+> | **Imperative** `haptics.impact()/notify()/selection()` | `capabilities/haptics.ts` | native, Android/Chrome web, iOS web before 26.5. **Reports success and fires nothing on iOS 26.5+ web — documented in the module header.** |
 > | **Declarative** `attachHapticTick()` / `useHapticTick()` | `capabilities/haptic-tick.ts` | all six targets; inert (zero DOM cost) wherever a real engine exists |
 >
 > **The public API did not have to break.** `Button haptic="light"` was *already* declarative at the
 > consumer's level — a prop on an element — so it now routes through the transducer and keeps working
 > everywhere. Every future tap-triggered haptic must do the same.
 >
-> **Dead code removed:** the `<input switch>` + `.click()` branch in `utils/install-vibrate-polyfill.ts`
-> is gone. It kept running and kept *reporting success* while firing nothing — the worst failure shape
-> available. That file is now a `navigator.vibrate` cancel-then-vibrate wrapper and nothing else.
+> **The `<input switch>` + `.click()` branch was removed here, then restored in `2c134c9` (#39)** by
+> owner decision, so haptics stays one imperative hook. It is live in `utils/install-vibrate-polyfill.ts`:
+> it fires the tick before iOS 26.5, and on 26.5+ it still *reports success* while firing nothing, which
+> its header and `capabilities/haptics.ts` document.
 >
 > **Nesting caveat, accepted knowingly:** the transducer is an `<input>` inside the host, which is
 > invalid HTML when the host is a `<button>`. Done anyway — the node is DOM-appended (not parsed, so no
@@ -1033,6 +1034,16 @@ is not offline-only.
 > becomes per-rule (safe on hashed assets, dangerous on documents) rather than a global default.
 
 ### B26 — three more P0s in the SW, all verified against source
+
+> **Closed 2026-09-13:** all three P0s and every lower-severity item below are fixed in the current
+> source. `da4ced8` (#1) landed the `BASE_URL` registration with `updateViaCache: "none"`, the
+> `vite:preloadError` net, the activate-time sweep of previous builds' runtime caches, `CacheFirst`
+> for hashed assets, the defensive unregister on native (`destroyServiceWorkers()` behind
+> `isNativePlatform()` in `src/shell/service-worker-shell.ts`, → `docs/design/rendering.md §3.5`) and
+> the removal of the `dev-sw.js?dev-sw` case. It also stopped the mid-session reload; `310f7ba` (#59)
+> replaced that code with `serviceWorkerUpdate`, which applies a waiting worker only at a cold launch
+> (`auto`) or on the app's call (`prompt`). Each is closed in the §6 table (B1–B6). Nothing from this
+> entry is still open.
 
 | # | Bug | Verified |
 |---|---|---|

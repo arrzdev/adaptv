@@ -32,9 +32,9 @@ import {
  * That rewrite is why there is a THIRD test here. MEASURED: with preload on,
  * `fetch(url)` breaks nothing, because `io.fetch()` is never reached — the
  * preload has already resolved and `serveNavigation` returns it. The fallback
- * fetch is dead code in Chromium and in Safari 17.4+... and it is what
+ * fetch is dead code in Chromium and in Safari 15.4+... and it is what
  * **Firefox** runs on every single navigation, having no navigation preload at
- * all, along with every Safari before 17.4. So the one path where this bug is
+ * all, along with every Safari before 15.4. So the one path where this bug is
  * reachable is the one path a green two-engine suite says nothing about. The
  * third test turns preload off for one navigation to walk it.
  *
@@ -134,7 +134,7 @@ test.describe(`redirects (render: ${RENDER})`, () => {
       const result = await navigateInIsolation(page, REDIRECT)
       expect(
         result.ok ? "ok" : `navigation failed: ${result.reason}`,
-        "the navigation died on the no-preload path — this is what Firefox and Safari < 17.4 do on EVERY navigation",
+        "the navigation died on the no-preload path — this is what Firefox and Safari < 15.4 do on EVERY navigation",
       ).toBe("ok")
       if (!result.ok) return
 
