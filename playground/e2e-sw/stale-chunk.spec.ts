@@ -46,6 +46,18 @@ import { deploy, RENDER } from "./sw"
 //have fetched its chunk before the test decides it is gone.
 const LAZY_ROUTE = "/lab/share"
 const LAZY_CHUNK = /\/assets\/share\.page-[^/]+\.js$/
+//The second deploy's route: nothing on the share page links to it.
+const SECOND_LAZY_ROUTE = "/lab/device"
+const SECOND_LAZY_CHUNK = /\/assets\/device\.page-[^/]+\.js$/
+
+/**
+ * adaptv's recovery window and guard key (`src/shell/preload-error-recovery.ts`).
+ * Mirrored rather than imported: the spec runs in Node and the module is the
+ * app's. Lengthen the window there without updating it here and the two-deploy
+ * test fails on its second stale chunk, which is the signal to come back.
+ */
+const RECOVERY_WINDOW_MS = 30_000
+const RECOVERY_GUARD_KEY = "adaptv:preload-error-reload"
 
 test.use({ serviceWorkers: "block" })
 
@@ -80,7 +92,7 @@ test.describe(`stale chunk (render: ${RENDER})`, () => {
 
       await bootOnIndex(page, host)
       const buildA = await entryScripts(page)
-      await deployRenamingLazyChunk(host, testInfo)
+      await deployRenamingChunk(host, testInfo, LAZY_CHUNK)
 
       const since = probe.mark()
       await inPage(page, "navigate", LAZY_ROUTE)
@@ -154,6 +166,61 @@ test.describe(`stale chunk (render: ${RENDER})`, () => {
     })
   }
 
+  test("a tab that already recovered once recovers from the next deploy too", async ({
+    page,
+  }, testInfo) => {
+    //What every fresh-context test above cannot see: the SECOND recovery in one
+    //tab session. Two things used to be spent by the first one and never given
+    //back. adaptv's own guard read any later stale chunk as "the reload already
+    //failed" and drew the offline screen with no reload at all, though a reload
+    //would have fixed it. And the router's own reload net keys its loop guard on
+    //the error's message, which in WebKit carries no URL — one key for the
+    //whole session — so the second recovery reloaded under its error screen.
+    //
+    //404, not the rewrite host: that is the wording the router holds as a reload
+    //in progress. Behind the rewrite host WebKit draws its error screen over
+    //every reload, first or later (the test above), so there is nothing clean
+    //left for a second deploy to break.
+    test.setTimeout(480_000)
+    host.missing = "404"
+    const probe = await installProbe(page)
+
+    await bootOnIndex(page, host)
+    const served = new Set<string>()
+    await deployRenamingChunk(host, testInfo, LAZY_CHUNK, served)
+    const first = await recoverOnto(page, host, probe, testInfo, {
+      route: LAZY_ROUTE,
+      heading: "Share",
+    })
+
+    //the second route's chunk must still be unfetched in the document the first
+    //reload produced, or its import cannot fail
+    expect(
+      await page.evaluate(
+        (source) =>
+          performance
+            .getEntriesByType("resource")
+            .filter((entry) => new RegExp(source).test(entry.name)).length,
+        SECOND_LAZY_CHUNK.source,
+      ),
+      "the second route's chunk was already loaded — its import cannot fail",
+    ).toBe(0)
+    await deployRenamingChunk(host, testInfo, SECOND_LAZY_CHUNK, served)
+    //A stale chunk this soon after a recovery reload is read as the reload not
+    //having helped — that is adaptv's loop guard — so the second one arrives
+    //after the window, as a later deploy does.
+    await waitPastRecoveryWindow(page)
+
+    const second = await recoverOnto(page, host, probe, testInfo, {
+      route: SECOND_LAZY_ROUTE,
+      heading: "Device",
+    })
+    expect(
+      second.build,
+      "the second reload landed on the build the first one brought in",
+    ).not.toEqual(first.build)
+  })
+
   test("a chunk the reload did not bring back shows the offline screen, and reloads no further", async ({
     page,
   }, testInfo) => {
@@ -167,7 +234,8 @@ test.describe(`stale chunk (render: ${RENDER})`, () => {
     //makes — not a navigation. A navigation commits the URL first, so its reload
     //lands on the route and imports the chunk while that document is still
     //booting, before the shell has mounted the net (measured: ~70 ms in). That
-    //is a separate gap; this control needs the case the net is armed for.
+    //gap is pinned by the next test; this control needs the case the net is
+    //armed for.
     const probe = await installProbe(page)
     await page.route(LAZY_CHUNK, (route) => route.fulfill({ status: 404 }))
 
@@ -210,6 +278,54 @@ test.describe(`stale chunk (render: ${RENDER})`, () => {
       ),
       "the offline screen appeared in the document whose reload was still in flight",
     ).toEqual([])
+  })
+
+  test("a tapped link to a chunk that stays missing reloads once, then holds on the router's error screen", async ({
+    page,
+  }, testInfo) => {
+    //The gap the control above steps around, pinned so it cannot become a loop.
+    //Two nets act on a navigation's failure: adaptv's, and the router's own,
+    //whose one-shot key adaptv clears whenever it reloads. The reload lands on
+    //the route and imports the chunk while it boots, before the shell has armed
+    //adaptv's net, so only the router's key stands between that document and a
+    //second reload. It must still be set — by the router, in the document that
+    //reloaded, after adaptv cleared it.
+    const probe = await installProbe(page)
+    await page.route(LAZY_CHUNK, (route) => route.fulfill({ status: 404 }))
+
+    await bootOnIndex(page, host)
+
+    const since = probe.mark()
+    await inPage(page, "navigate", LAZY_ROUTE)
+    await probe.waitForDocuments(since, 1)
+    await page.waitForLoadState("load")
+    const errorVisible = await page
+      .getByText("Something went wrong")
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(
+        () => true,
+        () => false,
+      )
+    //several round trips, each of which a further reload would have committed in
+    await page.waitForTimeout(DOCUMENT_LATENCY_MS * 10)
+    const events = probe.report(testInfo.project.name, since, {
+      errorVisible,
+    })
+
+    expect(
+      events.filter((entry) => entry.kind === "document").length,
+      "reloaded more than once — a genuinely missing chunk became a loop",
+    ).toBe(1)
+    //MEASURED: the router's screen, never the offline one, because the failure
+    //beats the net. Should the offline screen show here instead, the gap closed:
+    //the §3.1.2 promise now holds for a navigation too.
+    expect(errorVisible, "the router's error screen never settled").toBe(
+      true,
+    )
+    expect(
+      await page.locator('[data-adaptv="offline"]').count(),
+      "the offline screen showed for a navigation — the boot-time gap closed, update rendering.md §3.4",
+    ).toBe(0)
   })
 })
 
@@ -414,35 +530,146 @@ function entryScripts(page: Page) {
 }
 
 /**
- * Deploy build B: the same sources, different bytes, so every hashed chunk name
- * changes and the build empties the output directory of A's. That is the deploy
- * the net exists for — a host that no longer serves the previous build.
- *
- * "Different bytes" is relative to whatever is on disk, and an earlier test in
- * this run may already have deployed the unminified shape — rebuilding it is
- * byte-identical, renames nothing, and leaves nothing stale to recover from. So
- * when the first shape changes nothing, ship the other one.
+ * The build shapes a deploy rotates through: the same sources, different bytes,
+ * so every hashed chunk name changes.
  */
-async function deployRenamingLazyChunk(
+const BUILD_SHAPES: readonly (readonly string[])[] = [
+  ["--minify", "false"],
+  ["--minify", "terser"],
+  [],
+]
+let lastShape = -1
+
+/**
+ * Deploy the next build. Every hashed chunk name changes and the build empties
+ * the output directory of the previous one's. That is the deploy the net exists
+ * for — a host that no longer serves the previous build.
+ *
+ * The route's chunk must come out under a name this test's host has NEVER
+ * served, not merely one different from what is on disk: a tab that already
+ * asked for a pruned name keeps the host's 404 for it, and a later build that
+ * happens to bring the same bytes back fails on that remembered answer —
+ * MEASURED in WebKit, where a third build back in the first build's shape could
+ * not load a shared chunk the first recovery had 404'd. A real deploy never
+ * resurrects a pruned hash, so this one must not either. `served` is every asset
+ * name the host has had on disk since the test started.
+ */
+async function deployRenamingChunk(
   host: StaticHost,
   testInfo: TestInfo,
+  chunk: RegExp,
+  served: Set<string> = new Set(),
 ) {
-  const before = await lazyChunkOnDisk(host.root)
+  for (const name of await readdir(join(host.root, "assets")))
+    served.add(name)
   const tag = `e2e-stale-chunk-${testInfo.project.name}-${Date.now()}`
-  deploy(tag, testInfo.config.rootDir, ["--minify", "false"])
-  if ((await lazyChunkOnDisk(host.root)) === before) {
-    deploy(tag, testInfo.config.rootDir)
+  for (let attempt = 0; attempt < BUILD_SHAPES.length; attempt += 1) {
+    lastShape = (lastShape + 1) % BUILD_SHAPES.length
+    deploy(tag, testInfo.config.rootDir, BUILD_SHAPES[lastShape])
+    const renamed = await chunkOnDisk(host.root, chunk)
+    if (renamed !== null && !served.has(renamed)) {
+      for (const name of await readdir(join(host.root, "assets"))) {
+        served.add(name)
+      }
+      return
+    }
   }
-  expect(
-    await lazyChunkOnDisk(host.root),
-    "neither build shape renamed the lazy chunk — nothing on the host is stale",
-  ).not.toBe(before)
+  throw new Error(
+    "no build shape renamed the lazy chunk to a name the host never served — nothing on the host is stale",
+  )
 }
 
-/** The lazy route's chunk as the host would serve it right now. */
-async function lazyChunkOnDisk(root: string) {
+/** A route's chunk as the host would serve it right now. */
+async function chunkOnDisk(root: string, chunk: RegExp) {
   const assets = await readdir(join(root, "assets"))
-  return assets.find((name) => LAZY_CHUNK.test(`/assets/${name}`)) ?? null
+  return assets.find((name) => chunk.test(`/assets/${name}`)) ?? null
+}
+
+/**
+ * Navigate to a route whose chunk the deploy pruned, and hold the recovery to
+ * the clean shape: a preload error, exactly one reload, nothing drawn over it,
+ * the offline screen never mounted, and the route rendered by the new build.
+ */
+async function recoverOnto(
+  page: Page,
+  host: StaticHost,
+  probe: Awaited<ReturnType<typeof installProbe>>,
+  testInfo: TestInfo,
+  { route, heading }: { route: string; heading: string },
+) {
+  const buildBefore = await entryScripts(page)
+  const since = probe.mark()
+  await inPage(page, "navigate", route)
+  //not thrown from here: a recovery that never reloads is the failure worth
+  //reading, so the report prints first and the assertions below name it
+  await probe.waitForDocuments(since, 1).catch(() => {})
+  await page.waitForLoadState("load")
+  const rendered = await page
+    .getByRole("heading", { name: heading, level: 1 })
+    .waitFor({ timeout: 15_000 })
+    .then(
+      () => true,
+      () => false,
+    )
+  const buildAfter = await entryScripts(page)
+  const events = probe.report(testInfo.project.name, since, {
+    route,
+    rendered,
+    buildChanged:
+      JSON.stringify(buildBefore) !== JSON.stringify(buildAfter),
+  })
+  const reload = events.find((entry) => entry.kind === "document")
+  const beforeReload = events.filter(
+    (entry) => reload === undefined || entry.at < reload.at,
+  )
+
+  expect(
+    beforeReload.filter((entry) => entry.kind === "preload-error").length,
+    `${route}: no \`vite:preloadError\` — the import did not fail, so the net was never exercised`,
+  ).toBeGreaterThan(0)
+  expect(
+    events.filter((entry) => entry.kind === "offline-shown"),
+    `${route}: the offline screen was shown for a stale chunk a reload could fix`,
+  ).toEqual([])
+  expect(
+    events.filter((entry) => entry.kind === "document").length,
+    `${route}: not exactly one reload`,
+  ).toBe(1)
+  expect(
+    beforeReload
+      .filter((entry) => entry.kind === "screen")
+      .map((entry) => entry.detail),
+    `${route}: the page changed under a reload that was already in flight`,
+  ).toEqual([])
+  expect(
+    buildAfter,
+    `${route}: the reload did not land on a new build`,
+  ).not.toEqual(buildBefore)
+  expect(
+    rendered,
+    `${route}: the route never rendered after the reload`,
+  ).toBe(true)
+  await expect(page).toHaveURL(`${host.origin}${route}`)
+  return { build: buildAfter }
+}
+
+/**
+ * Hold until adaptv's last recovery stamp is older than its window, read off
+ * the page's own clock. The deploy between the two recoveries is a production
+ * build, so most of the window has usually gone by already.
+ */
+async function waitPastRecoveryWindow(page: Page) {
+  const remaining = await page.evaluate(
+    ([key, windowMs]) => {
+      const stamp = Number(sessionStorage.getItem(key))
+      return stamp + windowMs - Date.now()
+    },
+    [RECOVERY_GUARD_KEY, RECOVERY_WINDOW_MS] as const,
+  )
+  console.log(
+    `[stale-chunk] ${Math.max(0, remaining)} ms left of the recovery window after the deploy`,
+  )
+  if (remaining > 0) await page.waitForTimeout(remaining + 1_000)
 }
 
 type StaticHost = {
