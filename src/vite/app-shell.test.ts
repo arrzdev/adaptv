@@ -75,6 +75,25 @@ describe("renderAppShell — user-agnostic by construction", () => {
     expect(html).not.toContain("<b>&")
   })
 
+  it("declares the entry's static imports as modulepreload links, in order", () => {
+    const html = renderAppShell({
+      ...opts,
+      modulepreloadHrefs: ["/assets/a-1.js", "/assets/b-2.js"],
+    })
+    const links = html.match(/<link rel="modulepreload" href="[^"]+">/g)
+    expect(links).toEqual([
+      '<link rel="modulepreload" href="/assets/a-1.js">',
+      '<link rel="modulepreload" href="/assets/b-2.js">',
+    ])
+    expect(html.indexOf('rel="modulepreload"')).toBeLessThan(
+      html.indexOf("</head>"),
+    )
+  })
+
+  it("emits no modulepreload link when the entry has no static imports", () => {
+    expect(renderAppShell(opts)).not.toContain("modulepreload")
+  })
+
   it("is stable across renders — a changing shell breaks precache revisions", () => {
     expect(renderAppShell(opts)).toBe(renderAppShell(opts))
   })
