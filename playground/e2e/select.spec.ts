@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+// biome-ignore lint/style/noRestrictedImports: e2e has no self-alias to import through
+import { awaitClientHandover, expect, test } from "./client-handover"
 
 /*
  * Select — a listbox on a combobox trigger, with a hidden native <select> for
@@ -33,33 +34,6 @@ const root = (page: Page, name: string): Locator =>
   page
     .locator('[data-adaptv="select"]')
     .filter({ has: trigger(page, name) })
-
-/**
- * Wait for the client to take over before opening anything.
- *
- * Every trigger on this page is server-rendered, so `waitFor()` is satisfied
- * by inert HTML: the click that follows lands on a button whose handler is
- * not attached yet, `open` never flips, and the menu this spec is entirely
- * about never mounts — the failure is `waitFor()` on the content timing out,
- * which reads as "the dropdown is broken" or, worse, as load flake. It is
- * neither: Playwright boots its own dev server and tears it down per run, so
- * the FIRST test to reach this route pays the cold transform cost and loses
- * the race while every test after it wins. That is also why the serial
- * describe only ever lost its first test. A dev session left running hides
- * it entirely, because `reuseExistingServer` then hands the suite a warm
- * server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — the case it exists for is a cold server, where the
- * route's first transform can take longer than the 5s default.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 async function open(page: Page, name: string) {
   const t = trigger(page, name)
