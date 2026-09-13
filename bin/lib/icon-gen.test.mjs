@@ -4,11 +4,12 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { readImageHeader, scanIcons } from "#adaptv/vite/icon-set"
 import { decodeIco, encodeIco } from "./ico.mjs"
 import {
@@ -23,6 +24,19 @@ import { artTarget } from "./icon-geometry.mjs"
 import { pickIcon } from "./icons.mjs"
 
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 }
+
+const roots = []
+afterEach(() => {
+  for (const dir of roots.splice(0))
+    rmSync(dir, { recursive: true, force: true })
+})
+
+/** A fresh temp directory, removed again after the test. */
+function tempDir(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix))
+  roots.push(dir)
+  return dir
+}
 
 // A rendered width is the end of a crop and two resizes, so it lands a pixel or two either
 // side of the arithmetic. The property under test is always "fitted to the ring", never an
@@ -49,7 +63,7 @@ async function markPng(sharp, size = 1024) {
 /** Generate the whole set from a temp source and return `{ dir, names, sharp }`. */
 async function generated({ padding = 0, svg = false } = {}) {
   const { default: sharp } = await import("sharp")
-  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-gen-"))
+  const dir = tempDir("adaptv-gen-")
   const source = path.join(dir, svg ? "src.svg" : "src.png")
   if (svg)
     writeFileSync(
@@ -269,7 +283,7 @@ describe("replacing what was there", () => {
     //favicon-generator set has twenty-seven, and the manifest then read the leftovers as part
     //of one set — a stale `apple-icon-57x57.png` doesn't just linger, it gets linked.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-replace-"))
+    const dir = tempDir("adaptv-replace-")
     const out = path.join(dir, "icons")
     mkdirSync(out, { recursive: true })
     for (const stale of [
@@ -297,7 +311,7 @@ describe("replacing what was there", () => {
 
   it("never deletes the source image, even when it lives in the target directory", async () => {
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-replace-src-"))
+    const dir = tempDir("adaptv-replace-src-")
     const source = path.join(dir, "logo.png")
     writeFileSync(source, await markPng(sharp))
 
@@ -305,8 +319,14 @@ describe("replacing what was there", () => {
     expect(existsSync(source)).toBe(true)
   })
 
+  it("counts nothing in a directory that does not exist yet, which is every first run", () => {
+    expect(
+      existingIcons(path.join(tempDir("adaptv-count-"), "icons")),
+    ).toEqual([])
+  })
+
   it("counts the .ico and .svg the prompt is about to remove, which scanIcons does not", () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-count-"))
+    const dir = tempDir("adaptv-count-")
     for (const n of [
       "icon.png",
       "favicon.ico",
@@ -328,7 +348,7 @@ describe("an opaque source is a finished tile, not a mark", () => {
     //square in a white circle. It also makes the warning a lie: `sourceWarnings` promises
     //"Android's mask crops the edges", and nothing was being cropped.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-opaque-"))
+    const dir = tempDir("adaptv-opaque-")
     const source = path.join(dir, "tile.png")
     await sharp({
       create: {
@@ -390,7 +410,7 @@ describe("iOS 18 appearance variants", () => {
     //The dev drew it for this exact tile — re-framing it is the thing they opted out of. It is
     //also what keeps a hand-inverted dark icon the same size as the light one.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-appearance-"))
+    const dir = tempDir("adaptv-appearance-")
     const source = path.join(dir, "src.png")
     writeFileSync(source, await markPng(sharp))
     const authored = path.join(dir, "mine.png")
@@ -415,6 +435,52 @@ describe("iOS 18 appearance variants", () => {
       .trim()
       .toBuffer({ resolveWithObject: true })
     expect(info.width).toBe(1024)
+  })
+
+  it("uses a hand-authored --tinted whole, but still greyscale on black", async () => {
+    //Authored art skips the fit, never the slot's contract: iOS maps the user's colour onto the
+    //tinted icon's luminance, so a colour picture there is tinted twice, and alpha is rejected.
+    const { default: sharp } = await import("sharp")
+    const dir = tempDir("adaptv-tinted-")
+    const source = path.join(dir, "src.png")
+    writeFileSync(source, await markPng(sharp))
+    const authored = path.join(dir, "mine.png")
+    await sharp(
+      Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><circle cx="512" cy="512" r="512" fill="#ff2020"/></svg>`,
+      ),
+    )
+      .png()
+      .toFile(authored)
+
+    const out = path.join(dir, "icons")
+    await generateIcons({
+      source,
+      dirAbs: out,
+      background: WHITE,
+      appearances: { "icon-tinted.png": authored },
+      sharp,
+    })
+    const tinted = sharp(path.join(out, "icon-tinted.png"))
+    expect((await tinted.metadata()).hasAlpha).toBe(false)
+    const { data, info } = await tinted
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const at = (x, y) => [
+      ...data.subarray(
+        (y * info.width + x) * 3,
+        (y * info.width + x) * 3 + 3,
+      ),
+    ]
+    //the corner is the backdrop: black, not the app's white
+    expect(at(2, 2)).toEqual([0, 0, 0])
+    //40px in from the edge is still disc: the authored art was not fitted inward
+    expect(at(40, 512)[0]).toBeGreaterThan(0)
+    //the centre is the dev's red disc, desaturated
+    const [r, g, b] = at(512, 512)
+    expect(r).toBe(g)
+    expect(g).toBe(b)
+    expect(r).toBeGreaterThan(0)
   })
 
   it("never lets an appearance variant win a normal platform pick", async () => {
@@ -487,7 +553,7 @@ describe("the background adaptv lifted off the mark", () => {
     //It used to lose to it, which made the flag a no-op in the only case anyone reaches for
     //it: a source that HAS a background whose colour they want changed.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-bg-"))
+    const dir = tempDir("adaptv-bg-")
     const source = path.join(dir, "src.png")
     await sharp(
       Buffer.from(
@@ -530,7 +596,7 @@ describe("the background adaptv lifted off the mark", () => {
     //its own near-black backdrop under it. A background colour, measured or named, must never
     //reach this slot.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-bgdark-"))
+    const dir = tempDir("adaptv-bgdark-")
     const source = path.join(dir, "src.png")
     await sharp(
       Buffer.from(
@@ -596,7 +662,7 @@ describe("Android's themed-icon layer", () => {
   it("uses a hand-authored --monochrome whole, without re-deriving its alpha", async () => {
     //Re-ramping it would put back the decision the flag exists to take away.
     const { default: sharp } = await import("sharp")
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-mono-"))
+    const dir = tempDir("adaptv-mono-")
     const source = path.join(dir, "src.png")
     writeFileSync(source, await markPng(sharp))
     const authored = path.join(dir, "mine.png")
