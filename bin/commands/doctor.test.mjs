@@ -190,12 +190,16 @@ async function runDoctor({ json = false } = {}) {
   const stdout = out.join("").replace(ANSI, "")
   const stderr = err.join("").replace(ANSI, "")
   //Held on every page, so no case can forget it: doctor never names the engines (R8, R71)
-  //outside '--verbose'.
+  //outside '--verbose', never draws a second glyph set (R26), and quotes with ' (R43).
   if (process.env.ADAPTV_VERBOSE !== "1")
     expect(
       stdout.split("\n").filter((l) => namesPlumbing(l)),
       "doctor named the engines",
     ).toEqual([])
+  expect(
+    stdout.split("\n").filter((l) => /[✔✗⚠`]/.test(l)),
+    "doctor spoke a second visual language",
+  ).toEqual([])
   return {
     lines: stdout.split("\n"),
     stdout,
@@ -546,6 +550,27 @@ describe("the project checks", () => {
     expect(expected.length).toBeGreaterThan(3)
     expect(checks(lines)).toEqual(expected.filter((l) => l.trim() !== ""))
     expect(row(lines, "no issues found")).toBeUndefined()
+  })
+
+  it("draws every diagnostic in the CLI's own glyphs and quotes", async () => {
+    //The report is the framework's text, rendered as doctor's dim lines, so neither
+    //engine.test.mjs's glyph scan nor cli-spec's quote rule ever read it: it lives in src/.
+    //Every rule fired at once, so nothing on the page can hide from the scan.
+    mkdirSync(path.join(app, ".adaptv/ios/App/App"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/ios/App/App/Info.plist"),
+      INFO_PLIST,
+    )
+    mkdirSync(path.join(app, ".adaptv/android"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/android/variables.gradle"),
+      "targetSdkVersion = 34\n",
+    )
+    const found = checks((await runDoctor()).lines)
+    const titles = found.filter((l) => !l.startsWith(" "))
+    expect(titles).toHaveLength(3)
+    //An error takes the failure glyph and a warning the notice glyph, as on every other row.
+    expect(titles.map((l) => l.slice(0, 2))).toEqual(["✖ ", "✖ ", "! "])
   })
 
   it("reads the target SDK from variables.gradle, never from app/build.gradle", async () => {
