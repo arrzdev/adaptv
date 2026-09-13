@@ -76,12 +76,12 @@ function LabDropdownPage() {
           "Open the right-edge menu. Its right side must stay on screen — it shifts left rather than spilling off the edge.",
           "Scroll the horizontal carousel so a trigger is half cut off by the strip, then open it. The menu must appear over the page (not clipped inside the strip) and inside the viewport.",
           "Open the long menu. It must not run off the screen — it caps its height and scrolls internally.",
-          "With any menu open: tap outside (closes), press the back gesture (closes the menu, does NOT navigate away), and press Escape on desktop (closes).",
+          "With any menu open: tap outside (closes), press the back gesture (Android back, or the left-edge swipe in an installed app): it closes the menu and does NOT navigate away, and press Escape on desktop (closes).",
         ]}
         expected={{
           web: {
             verdict: "works",
-            note: "Everything, with the mouse. This is the easiest target to watch the flip and the shift on — resize the window narrow and the right-edge case becomes obvious.",
+            note: "Everything, with the mouse. The browser's Back is browser history, not the back chain, so it is expected to leave the page under an open menu, as it does under a drawer (measured there, not for a menu). This is the easiest target to watch the flip and the shift on — resize the window narrow and the right-edge case becomes obvious.",
           },
           pwa: {
             verdict: "works",

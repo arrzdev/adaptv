@@ -7,7 +7,12 @@ import {
 export interface EdgeSwipeGesturesProps {
   /**
    * Fired on a swipe in from the **left** screen edge (a rightward drag) — the
-   * iOS "back" gesture. Wire to your back navigation.
+   * iOS "back" gesture. Wire it to `adaptvBack()` rather than to a navigation, so
+   * an open drawer or menu takes the swipe first, as it takes Android's back button;
+   * a `navigate` here leaves the page with the drawer still open on it. With no
+   * history left the chain's floor exits a native Android app, so a screen that must
+   * not exit on a swipe registers its own fallback above `BackPriority.RouterBack`
+   * for the length of the call.
    */
   left?: () => void
   /**
@@ -49,8 +54,9 @@ const DEFAULT_THRESHOLD_PX = 56
  *
  * @example
  * ```tsx
+ * import { adaptvBack } from "@arrzdev/adaptv/hooks"
  * import { isInstalledApp } from "@arrzdev/adaptv/utils"
- * <EdgeSwipeGestures enabled={isInstalledApp()} left={() => navigate({ to: "/" })} />
+ * <EdgeSwipeGestures enabled={isInstalledApp()} left={() => adaptvBack()} />
  * ```
  */
 export function EdgeSwipeGestures({
