@@ -1,6 +1,21 @@
-import { describe, expect, it } from "vitest"
+// @vitest-environment node
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import ts from "typescript"
+import { afterEach, describe, expect, it } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { renderRootRouteModule } from "#adaptv/vite/root-route-module"
+import { stampGeneratedFiles } from "#adaptv/vite/stamp.ts"
 
 /**
  * Build a screen thunk WITHOUT writing a literal `import()` in this file.
@@ -179,5 +194,217 @@ describe("renderRootRouteModule — the update-required screen", () => {
     expect(source).toContain(
       "updateRequiredComponent: UpdateRequiredComponent",
     )
+  })
+})
+
+/*
+ * The project wiring `stampGeneratedFiles` writes into files the CONSUMER owns.
+ * → `docs/design/architecture.md` §3 (".adaptv/ relocation", "stamp.ts now
+ * generates nothing at all")
+ *
+ * It runs on every config load, dev and build alike, so the contract has three
+ * halves: the entries land where the tools that read them look; a second run
+ * changes nothing, not even the mtime a watcher keys on; and a file it cannot
+ * edit is left alone rather than failing the build.
+ */
+describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () => {
+  const roots: string[] = []
+  afterEach(() => {
+    for (const dir of roots.splice(0))
+      rmSync(dir, { recursive: true, force: true })
+  })
+
+  const ROUTE_GLOBALS =
+    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts"
+  const GENERATED_TS = ".adaptv/**/*.ts"
+  const ROUTE_TREE_ALIAS = "#adaptv-route-tree"
+
+  function app(files: Record<string, string> = {}): string {
+    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-stamp-"))
+    roots.push(appRoot)
+    for (const [rel, contents] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(appRoot, rel)), { recursive: true })
+      writeFileSync(path.join(appRoot, rel), contents)
+    }
+    return appRoot
+  }
+
+  const loaded = (appRoot: string): AdaptvContext => ({
+    appRoot,
+    target: "web",
+    loaded: { config: {} as AdaptvAppConfig, watchFiles: [] },
+  })
+
+  const read = (appRoot: string, rel: string) =>
+    readFileSync(path.join(appRoot, rel), "utf8")
+
+  /** The tsconfig as TypeScript itself reads it: comments, trailing commas and all. */
+  function parseTsconfig(appRoot: string) {
+    const parsed = ts.parseConfigFileTextToJson(
+      "tsconfig.json",
+      read(appRoot, "tsconfig.json"),
+    )
+    expect(parsed.error).toBeUndefined()
+    return parsed.config as {
+      include: string[]
+      compilerOptions: { paths: Record<string, string[]> }
+    }
+  }
+
+  /** Backdate a file, so a rewrite with identical bytes still shows up. */
+  function backdate(appRoot: string, rel: string): number {
+    const file = path.join(appRoot, rel)
+    const past = new Date("2020-01-01T00:00:00Z")
+    utimesSync(file, past, past)
+    return statSync(file).mtimeMs
+  }
+
+  const VITE_TSCONFIG = `{
+  // the app's own comment, which JSON.parse would reject
+  "include": ["src", "vite.config.ts",],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+    },
+  },
+}
+`
+
+  it("touches nothing before the app config has loaded", () => {
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    stampGeneratedFiles({ appRoot, target: "web", loaded: null })
+    expect(() => read(appRoot, ".gitignore")).toThrow()
+    expect(read(appRoot, "tsconfig.json")).toBe(VITE_TSCONFIG)
+  })
+
+  it("ignores everything adaptv generates, in an app with no .gitignore yet", () => {
+    const appRoot = app()
+    stampGeneratedFiles(loaded(appRoot))
+    const lines = read(appRoot, ".gitignore").split("\n")
+    expect(lines).toContain(".adaptv/")
+    expect(lines).toContain("capacitor.config.json")
+  })
+
+  it("appends only what is missing, below the consumer's own lines", () => {
+    const own = "node_modules\n.adaptv/\ndist"
+    const appRoot = app({ ".gitignore": own })
+    stampGeneratedFiles(loaded(appRoot))
+    const next = read(appRoot, ".gitignore")
+    expect(next.startsWith(`${own}\n`)).toBe(true)
+    expect(next.match(/^\.adaptv\/$/gm)).toHaveLength(1)
+    expect(next.split("\n")).toContain("capacitor.config.json")
+  })
+
+  it("wires the tsconfig the way TypeScript reads it, keeping every byte it had", () => {
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    stampGeneratedFiles(loaded(appRoot))
+    const config = parseTsconfig(appRoot)
+    //a route file written before the generator adds its import must still
+    //know `createFileRoute`, and the generated tree must be in the program
+    expect(config.include).toEqual([
+      ROUTE_GLOBALS,
+      GENERATED_TS,
+      "src",
+      "vite.config.ts",
+    ])
+    //the route tree's TYPE must flow into `Register`; a bundler alias alone
+    //builds fine and collapses typed routing to `any`
+    expect(config.compilerOptions.paths).toEqual({
+      [ROUTE_TREE_ALIAS]: ["./.adaptv/routeTree.gen.ts"],
+      "@/*": ["./src/*"],
+    })
+    expect(read(appRoot, "tsconfig.json")).toContain(
+      "// the app's own comment, which JSON.parse would reject",
+    )
+  })
+
+  it("resolves the alias to the generated route tree from the app root", () => {
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    stampGeneratedFiles(loaded(appRoot))
+    const { options } = ts.parseJsonConfigFileContent(
+      parseTsconfig(appRoot),
+      ts.sys,
+      appRoot,
+    )
+    const [target] = options.paths?.[ROUTE_TREE_ALIAS] ?? []
+    expect(
+      path.resolve(options.pathsBasePath as string, target as string),
+    ).toBe(path.join(appRoot, ".adaptv", "routeTree.gen.ts"))
+  })
+
+  it("adds only the include entry that is missing, never a duplicate", () => {
+    const appRoot = app({
+      "tsconfig.json": `{\n  "include": ["${GENERATED_TS}", "src"],\n  "compilerOptions": { "paths": { "${ROUTE_TREE_ALIAS}": ["./.adaptv/routeTree.gen.ts"] } }\n}\n`,
+    })
+    stampGeneratedFiles(loaded(appRoot))
+    const config = parseTsconfig(appRoot)
+    expect(config.include).toEqual([ROUTE_GLOBALS, GENERATED_TS, "src"])
+    expect(Object.keys(config.compilerOptions.paths)).toEqual([
+      ROUTE_TREE_ALIAS,
+    ])
+  })
+
+  it("wires an empty include list and an empty paths object into a config TypeScript accepts", () => {
+    const appRoot = app({
+      "tsconfig.json": `{ "include": [], "compilerOptions": { "paths": {} } }`,
+    })
+    stampGeneratedFiles(loaded(appRoot))
+    const config = parseTsconfig(appRoot)
+    expect(config.include).toEqual([ROUTE_GLOBALS, GENERATED_TS])
+    expect(config.compilerOptions.paths[ROUTE_TREE_ALIAS]).toEqual([
+      "./.adaptv/routeTree.gen.ts",
+    ])
+  })
+
+  it("does not rewrite either file once it is wired, so watchers stay quiet", () => {
+    //This runs on every config load. A rewrite with identical bytes still bumps
+    //the mtime, and a tsconfig or .gitignore watcher cannot tell that from an edit.
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    stampGeneratedFiles(loaded(appRoot))
+    const tsconfig = read(appRoot, "tsconfig.json")
+    const gitignore = read(appRoot, ".gitignore")
+    const tsconfigMtime = backdate(appRoot, "tsconfig.json")
+    const gitignoreMtime = backdate(appRoot, ".gitignore")
+
+    stampGeneratedFiles(loaded(appRoot))
+
+    expect(read(appRoot, "tsconfig.json")).toBe(tsconfig)
+    expect(read(appRoot, ".gitignore")).toBe(gitignore)
+    expect(statSync(path.join(appRoot, "tsconfig.json")).mtimeMs).toBe(
+      tsconfigMtime,
+    )
+    expect(statSync(path.join(appRoot, ".gitignore")).mtimeMs).toBe(
+      gitignoreMtime,
+    )
+  })
+
+  it("never creates a tsconfig the app does not have", () => {
+    const appRoot = app()
+    stampGeneratedFiles(loaded(appRoot))
+    expect(() => read(appRoot, "tsconfig.json")).toThrow()
+  })
+
+  it("leaves a tsconfig with nowhere to put an entry exactly as it was", () => {
+    //Edited at string level so a file adaptv does not own is never reformatted;
+    //with no `include` list or `paths` object to extend there is no edit to make
+    const own = `{\n  "extends": "./tsconfig.base.json",\n  "compilerOptions": { "strict": true }\n}\n`
+    const appRoot = app({ "tsconfig.json": own })
+    stampGeneratedFiles(loaded(appRoot))
+    expect(read(appRoot, "tsconfig.json")).toBe(own)
+  })
+
+  it("does not fail the build over a wiring file it cannot read", () => {
+    //a read-only or odd working tree is not a reason to stop `vite build`; and
+    //one unreadable file does not cost the other its wiring
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    mkdirSync(path.join(appRoot, ".gitignore"))
+    expect(() => stampGeneratedFiles(loaded(appRoot))).not.toThrow()
+    expect(parseTsconfig(appRoot).include).toContain(GENERATED_TS)
+
+    const other = app({ ".gitignore": "dist\n" })
+    mkdirSync(path.join(other, "tsconfig.json"))
+    expect(() => stampGeneratedFiles(loaded(other))).not.toThrow()
+    expect(read(other, ".gitignore").split("\n")).toContain(".adaptv/")
   })
 })
