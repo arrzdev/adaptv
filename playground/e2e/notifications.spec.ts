@@ -108,10 +108,12 @@ test.describe("Notifications", () => {
     const outcome = (
       (await page.getByTestId("notify-last").textContent()) ?? ""
     ).trim()
-    expect(["shown", "denied", "unavailable"]).toContain(outcome)
+    expect(["shown", "prompt", "denied", "unavailable"]).toContain(outcome)
     if (outcome !== "shown") {
-      await expect(page.getByTestId("notify-permission")).not.toHaveText(
-        "granted",
+      //the refusal names the permission as it reads, so a browser that was
+      //never asked says `prompt` rather than `denied`
+      await expect(page.getByTestId("notify-permission")).toHaveText(
+        outcome,
       )
     }
   })
