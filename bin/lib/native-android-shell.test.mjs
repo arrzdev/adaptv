@@ -217,7 +217,10 @@ describe("the FileProvider roots", () => {
     )
     patchAndroidFileProvider(appRoot)
     const xml = readFileSync(path.join(res, "xml/file_paths.xml"), "utf8")
-    expect(xml).toContain('<files-path name="files" path="." />')
+    //the filesystem capability's namespace, and nothing beside it: filesDir also
+    //holds the live-update plugin's `_capacitor_live_update_bundles`
+    expect(xml).toContain('<files-path name="files" path="adaptv/" />')
+    expect(xml).not.toMatch(/<files-path[^>]*path="\."/)
     expect(xml).toContain('<cache-path name="cache" path="." />')
     expect(xml).toContain('<external-path name="external" path="." />')
   })
