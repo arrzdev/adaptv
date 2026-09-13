@@ -41,8 +41,10 @@ export default defineConfig({
   webServer: {
     //A static host, not `vite preview`: the preview renders every navigation on
     //the server whatever `render` says, so a first visit never booted the shell
-    //this build ships. A spa build lands in `dist/client`. → e2e-sw/static-host.mjs
-    command: `pnpm run build && node ../../e2e-sw/static-host.mjs dist/client ${port}`,
+    //this build ships. A spa build lands in `dist/client`, emptied first so a
+    //build that ever wrote elsewhere fails the host's start instead of serving
+    //a stale copy. `deploy()` rebuilds in place. → e2e-sw/static-host.mjs
+    command: `rm -rf dist/client && pnpm run build && node ../../e2e-sw/static-host.mjs dist/client ${port}`,
     //`cwd` is resolved against THIS config file, so the server can only ever be
     //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
     //matches by package NAME: any second workspace member under `apps/*` calling
