@@ -1,8 +1,9 @@
-import type { AppState } from "@arrzdev/adaptv/capabilities"
+import type { AppState, UrlOpened } from "@arrzdev/adaptv/capabilities"
 import {
   getAppState,
   onPause,
   onResume,
+  onUrlOpened,
   subscribeAppState,
 } from "@arrzdev/adaptv/capabilities"
 import {
@@ -10,7 +11,11 @@ import {
   useOnPause,
   useOnResume,
 } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import {
+  createFileRoute,
+  useLocation,
+  useRouter,
+} from "@arrzdev/adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -37,6 +42,14 @@ function LabAppStatePage() {
   const [pauses, setPauses] = useState(0)
   useOnResume(() => setResumes((count) => count + 1))
   useOnPause(() => setPauses((count) => count + 1))
+  //links that open the app — the same lifecycle layer, heard from the page
+  const router = useRouter()
+  const location = useLocation()
+  const [links, setLinks] = useState<UrlOpened[]>([])
+  useEffect(
+    () => onUrlOpened((opened) => setLinks((seen) => [opened, ...seen])),
+    [],
+  )
 
   useEffect(() => {
     setState(getAppState())
@@ -125,6 +138,30 @@ function LabAppStatePage() {
         />
         <LabRow label="useOnResume() calls" value={String(resumes)} />
         <LabRow label="useOnPause() calls" value={String(pauses)} />
+      </LabSection>
+
+      <LabSection
+        title="Links that open the app"
+        description={
+          <>
+            The playground declares the <code>adaptvlab</code> scheme. Open{" "}
+            <code>adaptvlab://lab/app-state?from=link</code> with the app
+            running: it must route here once and count one link. Open it
+            with the app killed: it lands here with one history entry and
+            counts none, because the link that launched the app was routed
+            before this page mounted.
+          </>
+        }
+      >
+        <LabRow label="onUrlOpened() calls" value={String(links.length)} />
+        <LabRow label="last url" value={links[0]?.url} />
+        <LabRow label="last path" value={links[0]?.path} />
+        <LabRow label="location" value={location.href} />
+        <LabRow
+          label="history entries"
+          value={String(router.history.length)}
+          hint="A cold link replaces the first entry (1); a warm one pushes (+1)."
+        />
       </LabSection>
 
       <LabSection title="Why this is not just a hook">

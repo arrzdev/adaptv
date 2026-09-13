@@ -408,6 +408,21 @@ export type AdaptvAppConfig = {
   appId?: string
   /** Native display name (home-screen label on device). Default: `name`. */
   appName?: string
+  /**
+   * Links that open the installed native app. `scheme` is declared in both native
+   * projects, so `myapp://settings/profile?tab=2` opens the app at
+   * `/settings/profile?tab=2` — the host is the first path segment. A link that launches
+   * the app replaces the screen it was about to show; one that arrives later is an
+   * ordinary navigation. Hear them with `onUrlOpened` from `@arrzdev/adaptv/capabilities`.
+   *
+   * Lowercase, starting with a letter; `http`/`https` are refused. Dev, preview and
+   * release builds declare the same scheme, so with two installed the OS picks one.
+   * Universal links and Android app links (`https://` links that open the app) are
+   * not built: they need a signing team and files hosted on your domain.
+   *
+   * @example deepLinks: { scheme: "myapp" }
+   */
+  deepLinks?: { scheme: string }
 
   /**
    * Boot splash overlay — your own React component. adaptv renders it while the app is

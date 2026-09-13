@@ -2,6 +2,9 @@ import { defineApp } from "@arrzdev/adaptv/config"
 
 export default defineApp({
   appId: "dev.arrz.projectzero",
+  //`adaptvlab://lab/app-state?from=link` opens the app on that lab page, which counts the
+  //links it hears — the manual check that a link routes once, cold or warm.
+  deepLinks: { scheme: "adaptvlab" },
   name: "ChopChop",
   //NOTE: no `plugins` field. It is for Capacitor plugins adaptv does NOT ship — the base set
   //(device, haptics, preferences, …) is already bundled and exposed through adaptv's own API,
