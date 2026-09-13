@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+// biome-ignore lint/style/noRestrictedImports: e2e has no self-alias to import through
+import { awaitClientHandover, expect, test } from "./client-handover"
 
 /*
  * Collapsible — a disclosure whose whole contract is its PHASES:
@@ -77,30 +78,6 @@ const snapshot = (sec: Locator): Promise<Snapshot> =>
     },
     { trigger: TRIGGER, panel: PANEL },
   )
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The triggers are server-rendered <button>s, so `waitFor()` is satisfied by
- * inert HTML: a click fired in that window lands on a button whose handler is
- * not attached yet, nothing opens, and the phase assertions read a panel that
- * never moved. It is not load flake — Playwright boots its own dev server and
- * tears it down per run, so the FIRST test to reach this route pays the cold
- * transform cost and loses the race while every test after it wins. A dev
- * session left running hides it entirely, because `reuseExistingServer` then
- * hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — the case it exists for is a cold server, where the
- * route's first transform can take longer than the 5s default.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** Poll until no transition is running on the section's panel. */
 async function awaitRest(sec: Locator) {
