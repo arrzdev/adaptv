@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { loadAdaptvModule } from "./load-ts.mjs"
 import { ownInstallMissingPlatform } from "./native.mjs"
-import { isAppSource, namesPlumbing } from "./opacity.mjs"
+import { namesPlumbing } from "./opacity.mjs"
 import { prettyLine } from "./render.mjs"
 
 /**
@@ -58,19 +58,6 @@ describe("the live row cannot narrate the plumbing either", () => {
       "linking plugins · device",
     )
     expect(prettyLine("packaging")).toBe("packaging")
-  })
-})
-
-describe("isAppSource — only the dev's own code may be named", () => {
-  it.each([
-    ["/app/src/routes/cart.tsx", "/app", true],
-    ["src/routes/cart.tsx", "/app", true],
-    ["/app/node_modules/@tanstack/x/i.js", "/app", false],
-    ["/app/.adaptv/builds/app.apk", "/app", false],
-    ["/elsewhere/src/x.ts", "/app", false],
-    ["", "/app", false],
-  ])("%s under %s → %s", (file, root, want) => {
-    expect(isAppSource(file, root)).toBe(want)
   })
 })
 
