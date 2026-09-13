@@ -25,6 +25,7 @@ import {
 } from "#adaptv/vite/app-config-loader.ts"
 import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
 import { adaptvBuildStampPlugin } from "#adaptv/vite/build-stamp.ts"
+import { adaptvClientTargetsPlugin } from "#adaptv/vite/client-targets.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
@@ -233,6 +234,9 @@ export async function adaptv(
     //nothing on Android WebView 113–118. → src/vite/ring-shadow-fallback.ts
     adaptvRingShadowPlugin(),
     adaptvConfigLoaderPlugin(context),
+    //Both lineages, no gate: the capacitor bundle is the same client build, and
+    //an iOS WebView is only ever as new as the OS it ships in. → src/vite/client-targets.ts
+    adaptvClientTargetsPlugin(),
     adaptvManifestPlugin(context),
     adaptvDefaultIconsPlugin(context),
     //The dev hatch only ever arms on the web target: a native build has no dev
