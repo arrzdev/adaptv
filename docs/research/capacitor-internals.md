@@ -310,8 +310,8 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
 
 > Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links were last verified
 > 2026-07.** Re-check this list before any Capacitor version bump or Android/iOS SDK bump —
-> that is the trigger it exists for. The Android-15/SDK-35 item is now tracked as live work
-> in [`../roadmap/android-api-36.md`](../roadmap/android-api-36.md).
+> that is the trigger it exists for. The Android-15/SDK-35 item shipped as target API 36 on
+> 2026-09-02 — the record is **B9** in [`../decisions/register.md`](../decisions/register.md).
 
 
 - **Android 15 / SDK 35 edge-to-edge + keyboard overlap (HIGH RISK).** Android 15 changed how insets +

@@ -349,6 +349,16 @@ projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. A
 at the app root is not adaptv's and is left alone: the one-time move into `.adaptv/` that used to run
 was a compatibility shim for a layout no published install ever had, and adaptv carries none.
 
+**What adaptv writes into the Android project it owns.** Beyond what `cap add` scaffolds, every
+Android prepare injects the plugin projects (`capacitor.settings.gradle`, `app/capacitor.build.gradle`,
+`app/src/main/assets/capacitor.plugins.json` — the consumer declares no `@capacitor/*`, so adaptv has
+to; **L20** in the register) and stamps the SDK levels into `variables.gradle`. `ANDROID_SDK_LEVELS` in
+`src/native/android-sdk.ts` is the single source for `compileSdkVersion` and `targetSdkVersion`; the
+stamp runs on a fresh project and an existing one alike, because `.adaptv/android` persists across both
+a Capacitor template bump and a Play requirement bump, and a level adaptv only inherited from the
+template would otherwise stay wherever the project was first scaffolded. `adaptv doctor` reads the same
+file back.
+
 **Device targeting.** adaptv owns the picker (rather than Capacitor's opaque one) so it can cache your
 choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and
 writes the pick to `.adaptv/state.json` (the one file the CLI remembers anything in, under `devices`).

@@ -105,7 +105,9 @@ async function runProjectChecks(appRoot) {
   const diagnostics = runDoctor({
     iosInfoPlist: readIf(path.join(ios, "App/App/Info.plist")),
     capacitorConfig: process.env.ADAPTV_CAPACITOR_CONFIG ?? undefined,
-    androidBuildGradle: readIf(path.join(android, "app/build.gradle")),
+    //`variables.gradle`, not `app/build.gradle`: the numbers live in the first, the second
+    //only references them, and the check was dead for as long as it read the reference
+    androidVariablesGradle: readIf(path.join(android, "variables.gradle")),
     hasPrivacyManifest,
   })
   if (diagnostics.length === 0) {

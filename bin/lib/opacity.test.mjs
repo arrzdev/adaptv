@@ -169,7 +169,7 @@ describe("doctor's diagnostics are a user-facing surface too", () => {
     const diagnostics = runDoctor({
       iosInfoPlist: "<key>WKAppBoundDomains</key><array/>",
       capacitorConfig: "{}",
-      androidBuildGradle: "targetSdk = 34",
+      androidVariablesGradle: "targetSdkVersion = 34",
       hasPrivacyManifest: false,
     })
     return { diagnostics, rendered: formatDiagnostics(diagnostics) }

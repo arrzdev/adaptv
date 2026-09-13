@@ -7,6 +7,11 @@
  * wrong, sometimes only on a user's device.
  */
 
+import {
+  ANDROID_SDK_LEVELS,
+  readAndroidTargetSdk,
+} from "#adaptv/native/android-sdk.ts"
+
 export type DiagnosticSeverity = "error" | "warning"
 
 export type Diagnostic = {
@@ -23,8 +28,12 @@ export type DoctorInput = {
   iosInfoPlist?: string
   /** Raw generated `capacitor.config.json`, if present. */
   capacitorConfig?: string
-  /** `.adaptv/android/app/build.gradle`, for the target SDK check. */
-  androidBuildGradle?: string
+  /**
+   * Raw `.adaptv/android/variables.gradle`, if present — the file that carries the
+   * numbers; `app/build.gradle` only references them (`rootProject.ext.targetSdkVersion`),
+   * which is why reading it made the target SDK check dead for the life of the project.
+   */
+  androidVariablesGradle?: string
   /** Whether `.adaptv/ios/App/App/PrivacyInfo.xcprivacy` exists. */
   hasPrivacyManifest?: boolean
 }
@@ -71,28 +80,44 @@ function checkAppBoundDomains(input: DoctorInput): Diagnostic | null {
 }
 
 /**
- * Android 16 / target API 36 — §6.0, deadline **2026-08-31**.
+ * Android 16 / target API 36 — §6.0. Google Play's deadline was **2026-08-31**
+ * (extensions ran to 2026-11-01); it is behind us.
  *
  * API 36 removes the edge-to-edge opt-out entirely, and
  * `setStatusBarColor`/`setNavigationBarColor` become no-ops rather than errors.
  * An app that relies on them keeps compiling and simply stops tinting.
+ *
+ * The level is a value adaptv OWNS: `ANDROID_SDK_LEVELS` in `android-sdk.ts` is the
+ * one place it lives, and every android prepare stamps it into the project
+ * (`stampAndroidSdkLevels`, from `bin/lib/native.mjs`). So this rule can only fire in
+ * the gap that stamp has not yet closed — a project scaffolded before adaptv carried
+ * the level, or a hand edit since the last run — and its fix is to run, not to edit.
+ *
+ * It reads `variables.gradle`, the file that carries the number. It used to be fed
+ * `app/build.gradle`, whose only mention is `targetSdkVersion
+ * rootProject.ext.targetSdkVersion` — a reference, no digits — so the regex never
+ * matched on a real project and the check was dead for as long as it existed.
  */
 function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
-  const gradle = input.androidBuildGradle
-  if (!gradle) return null
-  const match = gradle.match(/targetSdk(?:Version)?\s*=?\s*(\d+)/)
-  const target = match?.[1] ? Number.parseInt(match[1], 10) : null
-  if (target === null || target >= 36) return null
+  const variables = input.androidVariablesGradle
+  if (!variables) return null
+  const required = ANDROID_SDK_LEVELS.target
+  const target = readAndroidTargetSdk(variables)
+  if (target === null || target >= required) return null
 
   return {
     severity: "warning",
-    title: `Android targetSdk is ${target}; Google Play requires 36`,
+    title: `Android target SDK is ${target} in .adaptv/android/variables.gradle; Google Play requires ${required}`,
     detail:
-      "Deadline 2026-08-31 (extensions to 11-01). API 36 also removes the edge-to-edge " +
-      "opt-out, and setStatusBarColor / setNavigationBarColor become NO-OPS rather than " +
-      "errors, so an app relying on them keeps compiling and silently stops tinting.",
+      "Google Play's deadline was 2026-08-31 (extensions to 2026-11-01). API 36 also " +
+      "removes the edge-to-edge opt-out, and setStatusBarColor / setNavigationBarColor " +
+      "become NO-OPS rather than errors, so an app relying on them keeps compiling and " +
+      "silently stops tinting.",
     fix:
-      "Raise targetSdk to 36 and move status-bar tinting to CSS: viewport-fit=cover plus a " +
+      `Nothing to edit: adaptv raises it to ${required} on the next 'adaptv dev android', ` +
+      "'adaptv preview android' or 'adaptv build android'. A level lowered by hand in " +
+      ".adaptv/android/variables.gradle is raised the same way on the next run, so it " +
+      "cannot hold. Status-bar tinting belongs in CSS: viewport-fit=cover plus a " +
       "background painted under the inset is the only portable approach left.",
   }
 }
@@ -101,6 +126,11 @@ function checkAndroidTargetSdk(input: DoctorInput): Diagnostic | null {
 //exact string, but adaptv GENERATES the viewport meta in its app shell, so it
 //cannot be wrong. A doctor rule for a value the framework owns would only ever
 //fire on a bug in adaptv itself — and it would report it as the user's problem.
+//
+//The target SDK above is adaptv's value too, and the rule stays for a different
+//reason: the viewport meta is regenerated on every build, but the Android project
+//is written once and persists on disk, so the file can lag the framework until the
+//next android run stamps it. The rule reports that lag, and its fix says to run.
 //
 //The tag being right is not the same as Capacitor SEEING it right, though:
 //SystemBars reads it once, from a DOMContentLoaded listener, and losing that race

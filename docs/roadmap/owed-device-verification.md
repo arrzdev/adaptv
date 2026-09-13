@@ -1,6 +1,6 @@
 # adaptv — owed device verification
 
-> Six checks that **no unit test can close**, each cheap on its own and each blocked on hardware or
+> Seven checks that **no unit test can close**, each cheap on its own and each blocked on hardware or
 > an installed build. Assembled 2026-08-30 from `HANDOFF.md §4.1` (before that file was deleted),
 > `design/behaviors.md`, and `research/capability-surface.md`. Row 3 narrowed 2026-09-02: the
 > `keep-awake` WebView check closed on Android and shrank to a physical-iPhone need on iOS.
@@ -18,6 +18,7 @@
 | 4 | **Gesture-controller priority *numbers*** | The arbitration *logic* is proven (`src/capabilities/gesture-controller.ts` + tests). The ordering is a feel judgement on a real screen carrying a drawer, a swipeable row and a scroller **at once**. | Any device, but a real screen and a real finger |
 | 5 | **`theme-color` / status-bar tint on iOS 26** (register **B17**) | iOS 26 derives the tint from the **rendered page edge** rather than the meta tag, so it is only observable in rendered pixels. iOS 18 does the exact opposite, so both floors need checking. | iOS 26 **and** iOS 18 |
 | 6 | ~~**The two installed (PWA) targets for the drawer/keyboard work**~~ (run 2026-09-02 across iOS PWA, native iOS, native Android and — since PR #95 — the Android standalone PWA; see `design/behaviors.md` §keyboard) | `design/behaviors.md` recorded green on targets 2 and 3 only. The content-edge reversal the run found was **not** installed-only, which PR #111 established on both engines at a phone viewport, and the sample series it owed is carried now (PR #96 adds the box's raw per-frame geometry). What is left is narrower than the row: the Android standalone PWA was reached, but Chrome on that emulator paints at 3–20 fps, so its verdict measures the sampler rather than the sheet. | A real Android device, or an emulator whose Chrome has a GPU process |
+| 7 | **System-bar treatment on a physical API-36 device** (register **B9**) | The project's `targetSdkVersion` and the injected `--safe-area-inset-*` were read off an Android 17 emulator on 2026-09-02 (the numbers are in B9). What an emulator cannot show is the real panel: cutout, gesture-nav bar and status-bar icon contrast on glass, where edge-to-edge is enforced with no opt-out. | A physical phone on Android 16 or later |
 
 ---
 
@@ -38,7 +39,7 @@ All three have cost time before and will again.
   option only when there is NO tty, so this is not a CLI bug. A headless run passes the choice
   itself: `script -q /tmp/out.txt env TERM=xterm-256color pnpm exec adaptv preview ios --target <udid>`.
 
-## Also outstanding, same class
+## Closed on the emulator, not on glass
 
-**Android target API 36 on a real API-36 device** — see
-[`android-api-36.md`](android-api-36.md). Its definition-of-done depends on this list.
+**Android target API 36** shipped 2026-09-02 (register **B9**), and the emulator half of its
+verification ran with it. Row 7 is what an emulator cannot settle.
