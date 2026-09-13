@@ -309,6 +309,20 @@ describe("an invocation that cannot run exits 2, on stderr, before any banner", 
     },
     PROCESS_TIMEOUT_MS,
   )
+
+  it(
+    "an ip after --host, with a fix that is itself a command that runs",
+    async () => {
+      const r = await cli(["dev", "ios", "--host", "192.168.1.5"])
+      expectUsageFault(r)
+      const err = plain(r.stderr)
+      expect(err).toContain("'--host' takes no address")
+      //The fix keeps the surface they typed. `adaptv dev --host` would only be refused again,
+      //for the missing surface.
+      expect(err).toContain("drop the ip: 'adaptv dev ios --host'")
+    },
+    PROCESS_TIMEOUT_MS,
+  )
 })
 
 /** The two PEM blocks in a page, in the order printed. */

@@ -53,6 +53,7 @@ describe("what used to be accepted in silence", () => {
     const r = run(["dev", "ios", "--host", "192.168.1.5"])
     expect(r.fault).toBe("excess-args")
     expect(r.received).toEqual(["192.168.1.5"])
+    expect(r.accepted).toEqual(["ios"])
   })
 
   it("refuses a --background that is not a colour, which used to silently become white", () => {

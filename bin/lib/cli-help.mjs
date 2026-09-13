@@ -228,14 +228,26 @@ export function renderFault(fault) {
       const strayIp = fault.received.find((a) =>
         /^\d{1,3}(\.\d{1,3}){3}$/.test(a),
       )
-      if (strayIp)
+      if (strayIp) {
+        //The fix is a command they can paste, so it keeps the surface they typed. It used to
+        //drop it — `dev ios --host 192.168.1.5` answered `drop the ip: 'adaptv dev --host'`,
+        //which is refused next for the missing surface. A surface that is not one of the
+        //choices is shown as the choices, rather than repeated into a second refusal.
+        const arg = commandAt(fault.path)?.args[0]
+        const given = fault.accepted?.[0]
+        const surface = !arg
+          ? []
+          : arg.choices.includes(given)
+            ? [given]
+            : [`<${arg.choices.join("|")}>`]
         return usageFail(
           `'${cmd}' does not take ${orList(fault.received)}`,
           [
             "'--host' takes no address; adaptv uses this machine's LAN address",
-            `drop the ip: '${SPEC.name} ${cmd} --host'`,
+            `drop the ip: '${[SPEC.name, ...fault.path, ...surface, "--host"].join(" ")}'`,
           ],
         )
+      }
       return usageFail(
         `'${cmd}' does not take ${orList(fault.received)}`,
         synopsis(fault.path),
