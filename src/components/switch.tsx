@@ -100,7 +100,7 @@ export interface SwitchThumbProps {
 }
 
 //LOCKED: `relative` is the positioning context the thumb's `absolute` + computed
-//`left` are measured against — drop it and the thumb flies to the nearest
+//`left` inset are measured against — drop it and the thumb flies to the nearest
 //positioned ancestor, usually the page.
 const SWITCH_TRACK_LOCKED_LAYOUT_CLASS = "relative"
 const SWITCH_TRACK_BASE_LAYOUT_CLASS = "inline-flex shrink-0 items-center"
@@ -117,7 +117,8 @@ const SWITCH_TRACK_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 const SWITCH_INPUT_CHROMELESS_CLASS = "peer sr-only"
 //LOCKED: the thumb is decorative and sits over the track's hit area — taking
 //pointer events would swallow the tap the label's gesture engine needs. The
-//absolute placement + vertical centring are what the computed `left` assumes.
+//absolute placement + vertical centring are what the computed inset and travel
+//assume.
 const SWITCH_THUMB_LOCKED_LAYOUT_CLASS =
   "pointer-events-none absolute top-1/2 -translate-y-1/2 shrink-0"
 const SWITCH_THUMB_SURFACE_CLASS = "bg-gray-950"
@@ -167,17 +168,24 @@ function switchTrackStyle(size: number): CSSProperties {
   }
 }
 
+//The thumb rests at the OFF inset and TRAVELS on `transform`, never on `left`.
+//A `left` change is a layout shift — one entry per toggle (measured 3.1e-5 at
+//1280x720, 1.3e-4 at 390x844) — and a toggle with no input behind it (the
+//"Dark mode" row following the OS appearance, state that syncs in) has no
+//`hadRecentInput` to excuse it, so it counted toward CLS (VISION.md §2.1). A
+//transform is not a shift. It composes with the locked `-translate-y-1/2`,
+//which Tailwind emits as the separate `translate` property.
 function switchThumbStyle(
   isChecked: boolean,
   size: number,
 ): CSSProperties {
   const { trackWRem, thumbRem, thumbInsetRem } = switchLayout(size)
+  const travelRem = trackWRem - thumbRem - 2 * thumbInsetRem
   return {
     height: `${thumbRem}rem`,
     width: `${thumbRem}rem`,
-    left: isChecked
-      ? `${trackWRem - thumbRem - thumbInsetRem}rem`
-      : `${thumbInsetRem}rem`,
+    left: `${thumbInsetRem}rem`,
+    transform: `translateX(${isChecked ? travelRem : 0}rem)`,
   }
 }
 
@@ -229,10 +237,11 @@ function resolveSwitchThumbChild(children: ReactNode): ReactNode {
 function SwitchThumb({ className }: SwitchThumbProps) {
   const { isChecked, size } = useSwitch()
 
-  //`switchThumbStyle` is `lockedStyle`: its `left` is the ON/OFF POSITION, computed
-  //from the track width and the thumb size that the root's `size` prop derived. It
-  //is state, not look — a consumer pinning `left` inline would freeze the thumb on
-  //one side while the control kept toggling. Colour and shape stay `className`.
+  //`switchThumbStyle` is `lockedStyle`: its `transform` is the ON/OFF POSITION,
+  //computed from the track width and the thumb size that the root's `size` prop
+  //derived. It is state, not look — a consumer pinning `transform` inline would
+  //freeze the thumb on one side while the control kept toggling. Colour and shape
+  //stay `className`.
   const thumb = mergeStyles({
     base: SWITCH_THUMB_SURFACE_CLASS,
     className,
@@ -348,7 +357,7 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
         data-adaptv="switch"
         htmlFor={resolvedInputId}
         //`switchTrackStyle` moves from "consumer wins" to LOCKED: the thumb's
-        //`left` is computed from this exact track width, so an inline `width` from
+        //travel is computed from this exact track width, so an inline `width` from
         //the consumer resizes the track and leaves the thumb parked at the old
         //offset. `size={n}` is the supported way to change it, and it moves both.
         //The interaction class is locked for the press-core reason (WebKit 240917) —
