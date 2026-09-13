@@ -1012,6 +1012,36 @@ const stripLen = (s) => s.replace(ANSI, "").length
  * the row narrates it. See the note on `cap run` in `launchOne`.
  * -------------------------------------------------------------------------- */
 
+/** The live blocks on screen right now — see `eraseLive`. */
+const onScreen = new Set()
+
+/** Mount a live block (`bin/ui/live.mjs`) that `eraseLive` can find again. */
+async function mountLive(labels) {
+  const { liveRows } = await import("../ui/live.mjs")
+  const block = liveRows(labels)
+  onScreen.add(block)
+  return {
+    phase: block.phase,
+    stop: () => {
+      onScreen.delete(block)
+      block.stop()
+    },
+  }
+}
+
+/**
+ * Take down every live row still animating, for a run that is ending in the middle of a step.
+ *
+ * A `q` during `r` quits while the `⠸ ios  reloading device` row is still mounted, and the
+ * process exits from under it: Ink's exit hook unmounts, which leaves the last frame on screen
+ * by design (`eraseRegion`), so the session ended on a spinner that had stopped spinning and
+ * read as work still going. Synchronous, because it runs inside a signal handler. Call it
+ * before anything else is written, so the erase counts rows from where the block drew them.
+ */
+export function eraseLive() {
+  for (const block of [...onScreen]) block.stop()
+}
+
 /**
  * Run one step as a single spinner line. `fn(report)` does the work; `report(line)`
  * updates the live detail. Resolves to `fn`'s return; rejects (after marking the line
@@ -1113,8 +1143,7 @@ export async function runLine(
   //row and rewriting it with `\r\x1b[2K` — the frame counter, the width arithmetic, the rule
   //that the elapsed time is the last thing to be clipped, all by hand. Ink owns the frame and
   //the layout; this loop only decides WHAT the row should say.
-  const { liveRows } = await import("../ui/live.mjs")
-  const block = liveRows([label])
+  const block = await mountLive([label])
   repaint = () => {}
   const tickPhase = () => {
     const now = Date.now()
@@ -1279,8 +1308,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
   //counter to remember the height. R3 (never interleave platforms) used to be a property of
   //that loop being careful; it is now structural, because each lane is its own row in a
   //column and there is no shared cursor to get wrong.
-  const { liveRows } = await import("../ui/live.mjs")
-  const block = liveRows(state.map((s) => s.label))
+  const block = await mountLive(state.map((s) => s.label))
   const tickAll = () => {
     const now = Date.now()
     for (const s of state) {

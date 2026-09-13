@@ -1176,6 +1176,26 @@ just advertised and nothing happens.
 > all (`keysAvailable()` — raw mode needs a TTY). Hours were spent hunting a phantom
 > input-forwarding bug that was only ever this.
 
+**R73 — A key the block offers is read for the whole session, including while the block is
+down.** `r` and `b` take the watch block off the screen for as long as they run, and the block's
+own listener was the only one a native `dev` had: Ink hands the terminal back to cooked mode
+when it unmounts, so for the length of the relaunch nothing read a key, and the terminal echoed
+one instead. The keys row is a promise the step does not suspend.
+> Violated by `q` pressed 0.3s after `r` on `adaptv dev ios`: the terminal printed a literal
+> `q`, the reload settled, the keys row came back, and the session ran on until a manual SIGINT
+> ten minutes later.
+> ```
+>   ⠋ ios  reloading device
+> q
+>   ✓ ios  night-a-ios26 (simulator) · reloaded · 426ms
+>   r reload js   b rebuild app   ctrl-c stop
+> ```
+> The listener is `sessionKeys`, wired once by `dev` for either renderer; the block only DRAWS
+> the keys. A quit that lands mid-step ends the run the way an idle one does: the step's tools,
+> and the tools they started (the `xcodebuild` under `cap run`), get the SIGINT a cooked-terminal
+> ctrl-c used to send them (`stopChildren`, one process group per tool), and the step's live row
+> is erased (`eraseLive`) rather than left on screen as a spinner that has stopped spinning.
+
 **R18 — Say nothing at the end that the steps already said.** On success there is no closing
 summary: every step line already names its device or artifact. A FAILURE keeps its line — that
 is the command's verdict, and for `all` it is the only place that says more than one platform
@@ -1676,6 +1696,8 @@ Tests do not cover any of this. Run it and read it:
       Save a source file while it is showing: the bottom row animates, the notice holds
 - [ ] Ctrl-C while a notice is showing — the whole block is erased, and the settled platform
       lines above it are still there (the block is redrawn and erased as a whole, R41)
+- [ ] press **`r`** and then **`q`** before it settles, and again with **ctrl-c** and during a
+      **`b`** — the run ends at once, no `q` is echoed, and no frozen spinner row is left (R73)
 - [ ] press **`b`** — the app is rebuilt from the CURRENT config, launcher icons included, and
       it still live-reloads afterwards (the dev server URL survives the config re-stamp)
 - [ ] make the config invalid, then press **`b`** — every error prints, the process exits
