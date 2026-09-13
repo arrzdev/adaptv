@@ -734,7 +734,7 @@ export async function getFileUri(
   const parts = segments(path)
   if (!parts || parts.length === 0) return { status: "failed", uri: null }
   if (support.backend === "native")
-    return nativeUri(parts.join("/"), options)
+    return nativeUri(nativePath(parts, options), options)
   return { status: "unsupported", uri: null }
 }
 
