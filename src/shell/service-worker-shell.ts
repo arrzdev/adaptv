@@ -143,6 +143,7 @@ export function registerPwaServiceWorkerRuntime(): void {
   }
 
   void requestPersistentStorage()
+  //Never rejects, so the registration below always runs. → the sweep's own doc
   void unregisterForeignServiceWorkers().then(() => {
     //`offerUpdate` is only ever called under `serviceWorkerUpdate: "prompt"` —
     //the registration module bakes the policy and, under `"auto"`, applies the
