@@ -14,6 +14,7 @@ import {
   shellIdFromUserAgent as frameworkParser,
   NATIVE_SHELL_ENDPOINT,
   NATIVE_SHELL_TOKEN,
+  nativeShellVerdict,
 } from "#adaptv/shell/native-shell"
 import { buildCapacitorConfig } from "#adaptv/vite/capacitor-config"
 import {
@@ -26,6 +27,7 @@ import { patchServerUrl } from "./live-reload.mjs"
 import { ADAPTV_ROOT } from "./load-ts.mjs"
 import { capConfigFromEnv } from "./native.mjs"
 import {
+  buildNewShell,
   canReuseInstall,
   newShellId,
   openShellRegistry,
@@ -280,5 +282,88 @@ describe("what the dev server is told to expect", () => {
     ).toBe("match")
     shells.remove()
     expect(existsSync(shells.file)).toBe(false)
+  })
+})
+
+describe("a native build that fails", () => {
+  const verdict = (shells, id) =>
+    nativeShellVerdict(id, readExpectedShells(shells.file))
+  //signing, gradle or pods: the build never produced an install
+  const signing = () => Promise.reject(new Error("no signing identity"))
+
+  it("names the new build before it starts, and returns it once it lands", async () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios"])
+    let during = null
+    const shell = await buildNewShell(
+      shells,
+      "ios",
+      { url: DEV_URL, fp: nativeFingerprint(root, "ios") },
+      () => {
+        during = readExpectedShells(shells.file).ios
+        return Promise.resolve()
+      },
+    )
+    expect(during).toBe(shell)
+    expect(capConfigFromEnv().ios.appendUserAgent).toBe(
+      `${SHELL_TOKEN}/${shell}`,
+    )
+  })
+
+  it("with nothing native changed, lets the install still on the device reconnect", async () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios"])
+    const fp = nativeFingerprint(root, "ios")
+    const prev = { url: DEV_URL, fp, shell: "ios-0a0a0a0a" }
+    //reused at startup, then `b`
+    shells.expect("ios", prev.shell)
+    await expect(
+      buildNewShell(shells, "ios", { prev, url: DEV_URL, fp }, signing),
+    ).rejects.toThrow("no signing identity")
+    expect(verdict(shells, prev.shell)).toBe("match")
+  })
+
+  it("after a native change, keeps the install waiting: it really is out of date", async () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios"])
+    const prev = {
+      url: DEV_URL,
+      fp: "before-the-change",
+      shell: "ios-0a0a0a0a",
+    }
+    shells.expect("ios", prev.shell)
+    await expect(
+      buildNewShell(
+        shells,
+        "ios",
+        { prev, url: DEV_URL, fp: nativeFingerprint(root, "ios") },
+        signing,
+      ),
+    ).rejects.toThrow("no signing identity")
+    expect(verdict(shells, prev.shell)).toBe("stale")
+  })
+
+  it("in one lane of `dev all`, gives back only that platform's install", async () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios", "android"])
+    const fp = nativeFingerprint(root, "android")
+    const prev = { url: DEV_URL, fp, shell: "android-0b0b0b0b" }
+    shells.expect("android", prev.shell)
+    const ios = await buildNewShell(
+      shells,
+      "ios",
+      { url: DEV_URL, fp: nativeFingerprint(root, "ios") },
+      () => Promise.resolve(),
+    )
+    await expect(
+      buildNewShell(
+        shells,
+        "android",
+        { prev, url: DEV_URL, fp },
+        signing,
+      ),
+    ).rejects.toThrow("no signing identity")
+    expect(verdict(shells, prev.shell)).toBe("match")
+    expect(verdict(shells, ios)).toBe("match")
   })
 })

@@ -117,6 +117,52 @@ export async function canReuseInstall(prev, { url, fp, installed }) {
 }
 
 /**
+ * Build a new native app under a new shell id, and say which build may reconnect if it fails.
+ *
+ * The id is minted, baked into the config the sync writes, and named to the dev server BEFORE
+ * `build` starts: from then on the app already on the device is the old build, and it waits for
+ * this one instead of reconnecting.
+ *
+ * A build that throws produced no install, so the device still holds the build `prev` names.
+ * Whether that one may reconnect is the question `canReuseInstall` already answers, minus the
+ * device check: the same dev URL and the same native fingerprint as when it was built. Then it
+ * goes back to being the expected build — otherwise a `b` press that fails on signing, gradle
+ * or pods tells a perfectly current app "waiting for the new build" for the rest of the session.
+ * After a real native change it stays stale, because it is.
+ *
+ * `current.fp` has to be taken before this is called: the sync inside `build` writes the new
+ * mark into the native project, and a fingerprint taken after it never matches `prev.fp`.
+ *
+ * `build` covers the sync and the build that installs. What runs after an install landed (a
+ * relaunch, a route back to the host) stays outside, because by then the new build IS on the
+ * device.
+ *
+ * @param {ReturnType<typeof openShellRegistry>} shells
+ * @param {string} platform
+ * @param {{ prev?: { url?: string, fp?: string, shell?: string }, url: string, fp: string }} current
+ * @param {(shell: string) => Promise<unknown>} build
+ */
+export async function buildNewShell(shells, platform, current, build) {
+  const { prev, url, fp } = current
+  const shell = newShellId(platform)
+  stampShellId(platform, shell)
+  shells.expect(platform, shell)
+  try {
+    await build(shell)
+  } catch (err) {
+    if (
+      prev?.url === url &&
+      prev.fp === fp &&
+      typeof prev.shell === "string" &&
+      prev.shell
+    )
+      shells.expect(platform, prev.shell)
+    throw err
+  }
+  return shell
+}
+
+/**
  * Open this run's expected-shells file and return the path plus a setter and a remover.
  *
  * Every platform of the run starts as `null` — nothing decided — which is what makes an app that
