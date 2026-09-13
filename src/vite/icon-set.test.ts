@@ -291,13 +291,18 @@ describe("scanIcons", () => {
 
 describe("resolveIconSet — which set a build is going to use", () => {
   it("uses the app's own art when the directory has any", () => {
-    const dir = iconDir({ "icon.png": [1024] })
-    const appRoot = path.dirname(dir)
-    mkdirSync(path.join(appRoot, "public"), { recursive: true })
+    //An app root the test owns: the parent of a temp dir is the shared temp root, and a
+    //`public/` made there outlives the run and is anyone's to clobber.
+    const appRoot = tempDir("adaptv-app-art-")
+    const favicons = path.join(appRoot, "public/favicons")
+    mkdirSync(favicons, { recursive: true })
+    writeFileSync(path.join(favicons, "icon.png"), pngHeader(1024, 1024))
 
-    const set = resolveIconSet(dir, { icons: "." })
+    const set = resolveIconSet(appRoot, { icons: "./public/favicons" })
     expect(set.source).toBe("app")
     expect(set.icons).toHaveLength(1)
+    expect(set.urlBase).toBe("/favicons")
+    expect(set.error).toBeUndefined()
   })
 
   it("uses the default set for a directory with no usable art", () => {
