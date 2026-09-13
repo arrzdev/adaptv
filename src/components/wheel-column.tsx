@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
 import {
@@ -16,6 +17,9 @@ import { mergeStyles } from "#adaptv/utils/styles"
  * ============================================================================= */
 
 export { WHEEL_HEIGHT, WHEEL_ITEM_HEIGHT }
+
+//rows a PageUp/PageDown moves: one visible column's worth, as a native picker pages
+const WHEEL_PAGE_ROWS = WHEEL_HEIGHT / WHEEL_ITEM_HEIGHT
 
 // fade the rows above/below the centered selection
 const WHEEL_MASK =
@@ -109,6 +113,10 @@ export function WheelColumn({
   //after the finger lifts, where draggingRef is already false
   const scrollingRef = useRef(false)
   const commitTimer = useRef(0)
+  //the row the last key press aimed at, until the wheel settles — a second press
+  //lands while the first roll is still travelling, and counting from the centred row
+  //then would swallow it
+  const keyTargetRef = useRef<number | null>(null)
 
   const selectedIndex = Math.max(
     0,
@@ -192,6 +200,7 @@ export function WheelColumn({
   // this converges: once on the row the offset is sub-pixel and we're done.
   function commit() {
     scrollingRef.current = false
+    keyTargetRef.current = null
     const index = nearestIndex()
     setActiveIndex(index)
     const el = scrollRef.current
@@ -227,6 +236,7 @@ export function WheelColumn({
   // wrongly look like a release; touchend only fires on the real finger-lift
   function handleTouchStart() {
     draggingRef.current = true
+    keyTargetRef.current = null
     window.clearTimeout(commitTimer.current)
     //paint from the first frame of the drag, before any scroll event fires
     ensurePaintLoop()
@@ -248,6 +258,31 @@ export function WheelColumn({
     })
   }
 
+  //the keyboard path to the value: the column is the tab stop (its rows are not),
+  //and a key rolls it exactly like a tap, so the value still flows through the
+  //scroll pipeline. Handled here rather than left to the engine, whose own arrow
+  //scroll moves 40px and would settle onto a row the key did not ask for.
+  function handleKeyDown(event: KeyboardEvent<HTMLFieldSetElement>) {
+    //Alt/Cmd/Ctrl+Arrow belong to the browser and the OS (history, word and line
+    //jumps, screen-reader commands) — a picker that eats them breaks those
+    if (event.altKey || event.metaKey || event.ctrlKey) return
+    if (items.length === 0) return
+    const from = keyTargetRef.current ?? nearestIndex()
+    const last = items.length - 1
+    const to = {
+      ArrowDown: from + 1,
+      ArrowUp: from - 1,
+      PageDown: from + WHEEL_PAGE_ROWS,
+      PageUp: from - WHEEL_PAGE_ROWS,
+      Home: 0,
+      End: last,
+    }[event.key]
+    if (to === undefined) return
+    event.preventDefault()
+    keyTargetRef.current = Math.min(last, Math.max(0, to))
+    handleRowTap(keyTargetRef.current)
+  }
+
   return (
     <fieldset
       data-adaptv="wheel-column"
@@ -256,6 +291,13 @@ export function WheelColumn({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
+      onKeyDown={handleKeyDown}
+      //the column's only keyboard stop (its rows are tabIndex -1). It stays a named
+      //group rather than taking `spinbutton`, the ARIA pattern these keys come from:
+      //that role changes what VoiceOver does with the rows inside, which is a device
+      //check this change has not had
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard access to a group whose rows are out of the tab order, see above
+      tabIndex={0}
       aria-label={ariaLabel}
       //spinning past the top row would otherwise hand the gesture to the
       //sheet drag (free scroll hits scrollTop 0 mid-spin) — a wheel touch is
@@ -288,8 +330,8 @@ export function WheelColumn({
             <li key={item.value} style={{ height: WHEEL_ITEM_HEIGHT }}>
               <button
                 type="button"
-                //pointer-first control inside a scroll wheel — the fieldset
-                //itself is the keyboard/AT surface, so keep rows out of tab order
+                //pointer-first control inside a scroll wheel — the fieldset is
+                //the one tab stop and owns the keys, so keep rows out of tab order
                 tabIndex={-1}
                 data-active={isActive}
                 onClick={() => handleRowTap(index)}
