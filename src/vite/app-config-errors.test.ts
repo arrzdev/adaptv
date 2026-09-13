@@ -111,6 +111,20 @@ describe("appConfigErrors", () => {
     ])
   })
 
+  it("refuses a hex colour with whitespace around it", () => {
+    //the native colour writer reads the value as written: `" #fff"` became
+    //red 0.059, green 1.000, blue NaN in the iOS splash colorset
+    expect(
+      appConfigErrors({
+        ...ok,
+        themeColor: { light: " #fff", dark: "#1b1b1b " },
+      }),
+    ).toEqual([
+      "'themeColor.light' must be a hex colour like #1b1b1b, got \" #fff\"",
+      "'themeColor.dark' must be a hex colour like #1b1b1b, got \"#1b1b1b \"",
+    ])
+  })
+
   it("refuses a value outside a closed set instead of shipping it", () => {
     //`orientation: "sideways"` and `render: "static"` both built green on the
     //playground — the first into the manifest, the second treated as SSR
