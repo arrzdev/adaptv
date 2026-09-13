@@ -57,8 +57,10 @@ test.describe(`redirects (render: ${RENDER})`, () => {
     })
     //Read before the client router moves the URL, while it is still the document
     //this visit booted from.
-    const serverRedirected = response?.request().redirectedFrom() != null
-    const bootstrapped = /\$_TSR/.test((await response?.text()) ?? "")
+    expect(response, `no response for ${REDIRECT}`).not.toBeNull()
+    if (!response) return
+    const serverRedirected = response.request().redirectedFrom() != null
+    const bootstrapped = /\$_TSR/.test(await response.text())
     await expect
       .poll(() => new URL(page.url()).pathname, {
         message: `${REDIRECT} did not reach ${ROUTE} with NO service worker involved — the fixture is broken, not the worker`,

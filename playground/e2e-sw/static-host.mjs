@@ -1,10 +1,10 @@
-import { existsSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import path from "node:path"
 
 /*
  * A static host for the `spa` worker suite: the build directory, answered from
- * disk, the way Netlify and Cloudflare Pages serve the files adaptv emits.
+ * disk, in the shape of Netlify serving the files adaptv emits.
  *
  * Not `vite preview`. The preview mounts Start's server handler, and that
  * handler renders a navigation whatever `render` the build was: a first visit
@@ -17,23 +17,29 @@ import path from "node:path"
  * The order, per request: a file that exists is served (a directory by its
  * `index.html`); otherwise the first `_redirects` rule that matches decides,
  * where `200` rewrites to the target's bytes and a `3xx` redirects to it;
- * otherwise `404.html` with a real 404. A file always shadows a rule, as both
- * hosts document. adaptv writes `/* /index.html 200`, so in practice every
- * unknown path is the shell with a 200, and the fallback after it is only
- * reached by a build that stopped emitting the rule.
+ * otherwise `404.html` with a real 404. A file shadows a rule, which is
+ * Netlify's documented default. adaptv writes `/* /index.html 200`, so in
+ * practice every unknown path is the shell with a 200, and the fallback after
+ * it is only reached by a build that stopped emitting the rule.
  *
  * Everything is read from disk on every request, rules included, so
- * `update.spec`'s `deploy()` rebuild is served the moment it lands; while that
- * build has the directory emptied, a request is a 404 like any host mid-upload.
- * Nothing is compressed, and every response says `Cache-Control: no-cache` with
- * no validators, so the browser's HTTP cache never stands between a deploy and
- * the next fetch.
+ * `update.spec`'s `deploy()` rebuild is served the moment it lands. That
+ * rebuild is not atomic, unlike a real Netlify or Cloudflare deploy: while it
+ * has the directory emptied, a request is a 404, and a file that disappears
+ * mid-request is treated as absent rather than as an error. Nothing is
+ * compressed, and every response says `Cache-Control: no-cache` with no
+ * validators, so the browser's HTTP cache never stands between a deploy and the
+ * next fetch.
  *
  * What it does not do: the rest of the `_redirects` grammar (placeholders,
  * query or country conditions, a forced `200!`, a rule without a status), which
  * it refuses with a 500 rather than guess at; `_headers`; ETag, Last-Modified,
  * Range or conditional requests; pretty-URL lookups of `<name>.html`; and every
- * method other than HEAD is answered like a GET.
+ * method other than HEAD is answered like a GET. Nor is it Cloudflare Pages,
+ * which reads the same `_redirects` differently: it follows a matching rule even
+ * when a file exists at the path, it redirects `/x/index.html` to `/x/` and
+ * `/x.html` to `/x`, and with no top-level `404.html` it serves the root
+ * `index.html` for every miss by itself.
  *
  * Usage, from the app directory: node ../../e2e-sw/static-host.mjs <dir> <port>
  */
@@ -70,24 +76,35 @@ const CONTENT_TYPES = {
   ".pdf": "application/pdf",
 }
 
-/** The file a URL path names inside the build, or null. Never outside it. */
+/*
+ * One read, no existence check first: `deploy()` can delete a file between a
+ * check and the read, and that must read as "no file" (the rule or 404 path),
+ * not as a 500. `EISDIR` is the directory case, answered by its `index.html`.
+ */
+function read(file) {
+  try {
+    return { file, body: readFileSync(file) }
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return null
+    if (error.code === "EISDIR") return read(path.join(file, "index.html"))
+    throw error
+  }
+}
+
+/** The file a URL path names inside the build, read, or null. Never outside it. */
 function fileAt(pathname) {
   const candidate = path.join(root, pathname)
   if (candidate !== root && !candidate.startsWith(root + path.sep))
     return null
-  if (!existsSync(candidate)) return null
-  if (statSync(candidate).isDirectory()) {
-    const index = path.join(candidate, "index.html")
-    return existsSync(index) ? index : null
-  }
-  return candidate
+  return read(candidate)
 }
 
 /** `_redirects`, read fresh: `[from, to, status]` per rule, in file order. */
 function redirectRules() {
-  const file = path.join(root, "_redirects")
-  if (!existsSync(file)) return []
-  return readFileSync(file, "utf8")
+  const rules = read(path.join(root, "_redirects"))
+  if (!rules) return []
+  return rules.body
+    .toString("utf8")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"))
@@ -109,8 +126,7 @@ function matches(from, pathname) {
     : pathname === from
 }
 
-function send(request, response, status, file) {
-  const body = readFileSync(file)
+function send(request, response, status, { file, body }) {
   response.writeHead(status, {
     "content-type":
       CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream",
@@ -120,10 +136,23 @@ function send(request, response, status, file) {
   response.end(request.method === "HEAD" ? undefined : body)
 }
 
+function plain(response, status, text) {
+  response.writeHead(status, {
+    "content-type": "text/plain; charset=utf-8",
+  })
+  response.end(text)
+}
+
 createServer((request, response) => {
   try {
     const { pathname: raw } = new URL(request.url ?? "/", "http://host")
-    const pathname = decodeURIComponent(raw)
+    let pathname
+    try {
+      pathname = decodeURIComponent(raw)
+    } catch {
+      //a malformed escape is the client's error, not the host's
+      return plain(response, 400, "bad request")
+    }
 
     const file = fileAt(pathname)
     if (file) return send(request, response, 200, file)
@@ -144,16 +173,10 @@ createServer((request, response) => {
 
     const notFound = fileAt("/404.html")
     if (notFound) return send(request, response, 404, notFound)
-    response.writeHead(404, {
-      "content-type": "text/plain; charset=utf-8",
-    })
-    response.end("not found")
+    plain(response, 404, "not found")
   } catch (error) {
     console.error(error)
-    response.writeHead(500, {
-      "content-type": "text/plain; charset=utf-8",
-    })
-    response.end(String(error))
+    plain(response, 500, String(error))
   }
 })
   .on("error", (error) => {
