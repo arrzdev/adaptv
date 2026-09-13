@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import sharp from "sharp"
+import type { Sharp } from "sharp"
 import { afterEach, describe, expect, it } from "vitest"
 import type { IconFile, IconSet } from "#adaptv/vite/icon-set"
 import {
@@ -124,33 +124,43 @@ describe("readImageHeader — measured pixels, not parsed filenames", () => {
     expect(readImageHeader(Buffer.from("not an image at all"))).toBeNull()
   })
 
-  /** A 300x200 image as sharp encodes it — non-square, so a swapped axis cannot pass. */
-  const encoded = (alpha: boolean) =>
-    sharp({
-      create: {
-        width: 300,
-        height: 200,
-        channels: alpha ? 4 : 3,
-        background: { r: 10, g: 20, b: 30, alpha: alpha ? 0.5 : 1 },
-      },
-    })
+  /**
+   * A 300x200 image as sharp encodes it — non-square, so a swapped axis cannot pass. Imported
+   * here, not at the top: on a machine with no prebuilt binary only these cases should fail.
+   */
+  const encoded = async (
+    alpha: boolean,
+    encode: (image: Sharp) => Sharp,
+  ) => {
+    const { default: sharp } = await import("sharp")
+    return encode(
+      sharp({
+        create: {
+          width: 300,
+          height: 200,
+          channels: alpha ? 4 : 3,
+          background: { r: 10, g: 20, b: 30, alpha: alpha ? 0.5 : 1 },
+        },
+      }),
+    ).toBuffer()
+  }
 
   it("reads all three WebP headers an encoder writes, alpha included", async () => {
     //An `icon.webp` is rankable art (it is in ICON_EXTS); measured wrong it lies in `sizes`,
     //and not measured at all it silently drops out of the manifest.
     const cases = [
-      [await encoded(false).webp().toBuffer(), "VP8 ", false],
+      [await encoded(false, (image) => image.webp()), "VP8 ", false],
       [
-        await encoded(false).webp({ lossless: true }).toBuffer(),
+        await encoded(false, (image) => image.webp({ lossless: true })),
         "VP8L",
         false,
       ],
       [
-        await encoded(true).webp({ lossless: true }).toBuffer(),
+        await encoded(true, (image) => image.webp({ lossless: true })),
         "VP8L",
         true,
       ],
-      [await encoded(true).webp().toBuffer(), "VP8X", true],
+      [await encoded(true, (image) => image.webp()), "VP8X", true],
     ] as const
     for (const [bytes, chunk, alpha] of cases) {
       //the case really is the header it claims to exercise
@@ -173,7 +183,9 @@ describe("readImageHeader — measured pixels, not parsed filenames", () => {
 
   it("reads a JPEG's size from its frame header, baseline or progressive", async () => {
     for (const progressive of [false, true]) {
-      const bytes = await encoded(false).jpeg({ progressive }).toBuffer()
+      const bytes = await encoded(false, (image) =>
+        image.jpeg({ progressive }),
+      )
       expect(
         readImageHeader(bytes),
         `progressive: ${progressive}`,
