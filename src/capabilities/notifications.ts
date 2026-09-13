@@ -44,11 +44,23 @@ export type NotifyPermission =
   | "prompt"
   | "unavailable"
 
-/** `"shown"` — handed to the OS or the worker. */
-export type NotifyOutcome = "shown" | "denied" | "unavailable"
+/**
+ * `"shown"` — handed to the OS or the worker. `"prompt"` and `"denied"` are the
+ * permission's own words, kept apart: `"prompt"` was never asked, so the next
+ * step is `requestNotifyPermission()`; `"denied"` was refused, so asking again
+ * cannot help and only the app's settings can.
+ */
+export type NotifyOutcome = "shown" | "prompt" | "denied" | "unavailable"
 
-/** `"unsupported"` — the target cannot schedule at all; the web, today, cannot. */
-export type ScheduleOutcome = "scheduled" | "denied" | "unsupported"
+/**
+ * `"unsupported"` — the target cannot schedule at all; the web, today, cannot.
+ * `"prompt"` and `"denied"` mean what they mean on {@link NotifyOutcome}.
+ */
+export type ScheduleOutcome =
+  | "scheduled"
+  | "prompt"
+  | "denied"
+  | "unsupported"
 
 export interface NotifyOptions {
   title: string
@@ -219,7 +231,7 @@ export function getNotifyCaveat(): string | null {
   }
   if (isNativePlatform())
     return "This binary was built before the notifications plugin; a rebuild carries it."
-  return "A browser shows the notification through the page's own service worker, and no browser can schedule one for later, so the app must be open at the moment it fires. On iOS a browser tab cannot show one at all: the page has to be installed to the home screen first."
+  return "A browser shows a notification only when the open app asks for one, through the page's own service worker. No browser can schedule one for later, so scheduling here resolves unsupported rather than waiting on a timer. On iOS a browser tab cannot show one at all: the page has to be installed to the home screen first."
 }
 
 /** Show one now. Resolves the outcome; never rejects. */
@@ -230,7 +242,8 @@ export async function notify({
 }: NotifyOptions): Promise<NotifyOutcome> {
   const permission = await checkNotifyPermission()
   if (permission === "unavailable") return "unavailable"
-  if (permission !== "granted") return "denied"
+  //`prompt` or `denied`, as read: a caller has to tell "ask" from "refused"
+  if (permission !== "granted") return permission
   if (nativePlugin()) {
     try {
       await LocalNotifications.schedule({
@@ -265,7 +278,7 @@ export async function scheduleNotification({
   if (!nativePlugin()) return "unsupported"
   const permission = await checkNotifyPermission()
   if (permission === "unavailable") return "unsupported"
-  if (permission !== "granted") return "denied"
+  if (permission !== "granted") return permission
   try {
     await LocalNotifications.schedule({
       notifications: [
