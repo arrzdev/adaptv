@@ -174,11 +174,154 @@ describe("screen reader — native", () => {
     expect(ScreenReader.isEnabled).not.toHaveBeenCalled()
   })
 
+  it("removes a listener whose handle arrives after the last unsubscribe", async () => {
+    //the bridge answers asynchronously, so a subscriber can leave first —
+    //useSyncExternalStore under StrictMode always does in dev. The handle that
+    //arrives afterwards belongs to nobody and must remove itself.
+    native()
+    let resolveHandle: (h: { remove: () => Promise<void> }) => void =
+      () => {}
+    vi.mocked(ScreenReader.addListener).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveHandle = resolve
+        }),
+    )
+    subscribeScreenReader(() => {})()
+    const late = vi.fn(async () => {})
+    resolveHandle({ remove: late })
+    await flush()
+    expect(late).toHaveBeenCalledTimes(1)
+  })
+
+  it("binds again for the next subscriber, and a stale handle never stands in for the live one", async () => {
+    native()
+    const handles: Array<(h: { remove: () => Promise<void> }) => void> = []
+    const pending = () =>
+      new Promise<{ remove: () => Promise<void> }>((resolve) =>
+        handles.push(resolve),
+      )
+    vi.mocked(ScreenReader.addListener)
+      .mockImplementationOnce(pending)
+      .mockImplementationOnce(pending)
+    subscribeScreenReader(() => {})()
+    const off = subscribeScreenReader(() => {})
+    expect(ScreenReader.addListener).toHaveBeenCalledTimes(2)
+
+    //the live handle lands first, the stale one after it
+    const live = vi.fn(async () => {})
+    const stale = vi.fn(async () => {})
+    handles[1]?.({ remove: live })
+    handles[0]?.({ remove: stale })
+    await flush()
+    expect(stale).toHaveBeenCalledTimes(1)
+    expect(live).not.toHaveBeenCalled()
+
+    off()
+    expect(live).toHaveBeenCalledTimes(1)
+    expect(unResume).toHaveBeenCalledTimes(2)
+  })
+
+  it("a subscriber that throws surfaces its error and does not turn the OS's answer into unknown", async () => {
+    native()
+    const offQuiet = subscribeScreenReader(() => {})
+    await flush()
+    const boom = new Error("subscriber")
+    const offLoud = subscribeScreenReader(() => {
+      throw boom
+    })
+    try {
+      vi.mocked(ScreenReader.isEnabled).mockResolvedValue({ value: true })
+      await expect(readScreenReader()).rejects.toBe(boom)
+      expect(getScreenReaderState().status).toBe("on")
+    } finally {
+      offLoud()
+      offQuiet()
+    }
+  })
+
   it("a plugin that rejects on read is unknown, not off", async () => {
     native()
     vi.mocked(ScreenReader.isEnabled).mockRejectedValue(
       new Error("bridge"),
     )
     expect(await readScreenReader()).toEqual({ status: "unknown" })
+  })
+})
+
+/**
+ * A fresh accessor over a stand-in plugin. The native binding is a process
+ * singleton, so each test gets its own module; the stand-in is built of plain
+ * functions, not `vi.fn`, because a spy attaches its own handler to every promise
+ * it returns and so hides exactly the rejection these tests look for.
+ */
+async function nativeScreenReader(plugin: Record<string, unknown>) {
+  vi.resetModules()
+  vi.doMock("@capacitor/screen-reader", () => ({ ScreenReader: plugin }))
+  vi.doMock("#adaptv/utils/platform", () => ({
+    isNativePlatform: () => true,
+  }))
+  vi.doMock("#adaptv/utils/native-plugins", () => ({
+    hasNativePlugin: () => true,
+  }))
+  vi.doMock("#adaptv/capabilities/app-state", () => ({
+    onResume: () => () => {},
+  }))
+  return import("#adaptv/capabilities/screen-reader")
+}
+
+/** Every rejection nobody handled while `run` executed, read after the turn ends. */
+async function unhandledDuring(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on("unhandledRejection", listener)
+  try {
+    run()
+    //Node decides a rejection went unhandled only once the microtask queue has
+    //drained, so leave the turn (twice: a rejection can be chained) before reading
+    await flush()
+    await flush()
+  } finally {
+    process.off("unhandledRejection", listener)
+  }
+  return seen
+}
+
+const rejectWith = (message: string) => () =>
+  Promise.reject(new Error(message))
+
+describe("screen reader — native, over a bridge that fails", () => {
+  afterEach(() => {
+    for (const id of [
+      "@capacitor/screen-reader",
+      "#adaptv/utils/platform",
+      "#adaptv/utils/native-plugins",
+      "#adaptv/capabilities/app-state",
+    ])
+      vi.doUnmock(id)
+    vi.resetModules()
+  })
+
+  it("lets no rejected read, addListener or handle removal escape", async () => {
+    const reject = rejectWith("ScreenReader plugin is not implemented")
+    const { subscribeScreenReader, getScreenReaderState } =
+      await nativeScreenReader({ isEnabled: reject, addListener: reject })
+    let off = () => {}
+    expect(
+      await unhandledDuring(() => {
+        off = subscribeScreenReader(() => {})
+      }),
+    ).toEqual([])
+    expect(getScreenReaderState().status).toBe("unknown")
+    expect(await unhandledDuring(() => off())).toEqual([])
+
+    const removing = await nativeScreenReader({
+      isEnabled: () => Promise.resolve({ value: false }),
+      addListener: () =>
+        Promise.resolve({ remove: rejectWith("bridge: remove failed") }),
+    })
+    const offLate = removing.subscribeScreenReader(() => {})
+    await flush()
+    expect(await unhandledDuring(offLate)).toEqual([])
   })
 })

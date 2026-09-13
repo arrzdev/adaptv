@@ -51,8 +51,29 @@ const OFF: ScreenReaderState = { status: "off" }
 const listeners = new Set<() => void>()
 let snapshot: ScreenReaderState = UNKNOWN
 let bound = false
-let handle: PluginListenerHandle | null = null
-let unResume: (() => void) | null = null
+
+/**
+ * The live native binding, or `null` when none is held. `disposed` is per binding
+ * because the bridge answers asynchronously: the last subscriber can leave before
+ * `addListener` resolves (useSyncExternalStore under StrictMode always does in
+ * dev), and the handle that arrives afterwards must remove itself rather than
+ * keep a listener nobody will ever release — or, once a new subscriber has bound
+ * again, stand in for that binding's own handle.
+ */
+type NativeBinding = {
+  disposed: boolean
+  handle: PluginListenerHandle | null
+  unResume: () => void
+}
+let nativeBinding: NativeBinding | null = null
+
+//A bridge call that rejects (plugin missing from this binary, an OS error) is
+//fire-and-forget in the subscription, so nothing would handle it: it would reach
+//the window's `unhandledrejection` event, and with it the console and any error
+//reporter the app installed. The last known status is the degraded answer.
+//Passed as `.then`'s second argument, not `.catch`, so an exception thrown in the
+//fulfilment callback still surfaces.
+const ignoreBridgeRejection = () => {}
 
 function nativePlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("ScreenReader")
@@ -71,15 +92,21 @@ export function getScreenReaderState(): ScreenReaderState {
   return snapshot
 }
 
-/** Ask the OS once. Resolves the new state; never rejects. */
+/**
+ * Ask the OS once. Resolves the new state; a bridge failure reads `unknown` and
+ * never rejects. Only the bridge call is guarded: a subscriber that throws while
+ * the answer is committed rejects with its own error, rather than being caught
+ * here and turning the OS's answer into `unknown`.
+ */
 export async function readScreenReader(): Promise<ScreenReaderState> {
   if (!nativePlugin()) return commit(UNKNOWN)
+  let enabled: boolean
   try {
-    const { value } = await ScreenReader.isEnabled()
-    return commit(value ? ON : OFF)
+    enabled = (await ScreenReader.isEnabled()).value
   } catch {
     return commit(UNKNOWN)
   }
+  return commit(enabled ? ON : OFF)
 }
 
 /**
@@ -91,30 +118,41 @@ export function subscribeScreenReader(cb: () => void): () => void {
   listeners.add(cb)
   if (!bound) {
     bound = true
-    if (nativePlugin()) {
-      void readScreenReader()
-      void ScreenReader.addListener("stateChange", (state) => {
-        commit(state.value ? ON : OFF)
-      })
-        .then((h) => {
-          handle = h
-        })
-        .catch(() => {})
-      unResume = onResume(() => {
-        void readScreenReader()
-      })
-    }
+    if (nativePlugin()) bindNative()
   }
   return () => {
     listeners.delete(cb)
     if (listeners.size === 0 && bound) {
       bound = false
-      void handle?.remove().catch(() => {})
-      handle = null
-      unResume?.()
-      unResume = null
+      unbindNative()
     }
   }
+}
+
+function bindNative(): void {
+  const binding: NativeBinding = {
+    disposed: false,
+    handle: null,
+    unResume: onResume(() => {
+      void readScreenReader()
+    }),
+  }
+  nativeBinding = binding
+  void readScreenReader()
+  void ScreenReader.addListener("stateChange", (state) => {
+    commit(state.value ? ON : OFF)
+  }).then((handle) => {
+    if (binding.disposed) void handle.remove().catch(ignoreBridgeRejection)
+    else binding.handle = handle
+  }, ignoreBridgeRejection)
+}
+
+function unbindNative(): void {
+  if (!nativeBinding) return
+  nativeBinding.disposed = true
+  void nativeBinding.handle?.remove().catch(ignoreBridgeRejection)
+  nativeBinding.unResume()
+  nativeBinding = null
 }
 
 let region: HTMLElement | null = null
