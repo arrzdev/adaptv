@@ -59,7 +59,7 @@ enforcement, `import hero from "./x.jpg?adaptv-image"` resolves to a bare URL st
 
 That is the upstream-documented Nitro order. Moving it is not a stylistic choice.
 
-### 2.3 Shell → SW → static-host, in that order, in `buildApp` at `order: "post"`
+### 2.3 Shell → SW → static-host, in that order, once the client output is complete
 
 - **Shell before SW**: the shell must be on disk *before* the worker globs its precache manifest.
   Reversed, the worker binds its navigation fallback to a shell that did not exist when the manifest
@@ -68,8 +68,15 @@ That is the upstream-documented Nitro order. Moving it is not a stylistic choice
 - **`buildApp`, not `closeBundle`, and that was MEASURED.** `closeBundle` fires *per environment*,
   before the deploy plugin has finished assembling the output directory: the precache glob ran
   against a half-populated dir and shipped a worker with **21 files silently missing** — every
-  favicon, the offline illustrations, `robots.txt`. `buildApp` at `post` runs after the environments
-  *and* after the deploy plugin's own `post` hook.
+  favicon, the offline illustrations, `robots.txt`.
+- **…and not only `buildApp` at `post` either, which was MEASURED too.** That runs after the deploy
+  plugin's whole `post` hook, and Nitro ends that hook by bundling the server with a public asset table
+  baked from disk: `node .output/server/index.mjs` answered 404 for `/sw.js` and the shell. So the shell
+  and the worker write through `emitIntoClientOutput` (`deploy-server.ts`) — at the start of Nitro's
+  server environment, after `public/` is copied in, and in `buildApp` `post` only when no server is
+  built. Static-host writes only under `spa` (it returns early otherwise), where no server exists, and stays in
+  `buildApp` post. Nitro must stay ahead of the emitters in the plugin array, or `buildApp` post writes
+  before `public/` is copied in.
 
 ### 2.4 Static-host is gated on `target`, never on `render`
 
