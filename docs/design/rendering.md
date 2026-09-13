@@ -608,14 +608,19 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   style, font or image, plus anything under `/assets/*`. Not `StaleWhileRevalidate`: content-hashed
   filenames are immutable, so revalidating them is pure waste. → `sw.static-assets.ts`
 
-  **Unhashed files (icons, `manifest.json`, fonts) are on that same route, and that is not an
-  oversight.** CacheFirst normally means "never updated", which would be wrong for a URL that is not
-  versioned — except the bucket itself is: `static-<buildTag>` rotates on every deploy and the previous
-  one is swept at activate, so the entry is refetched exactly when the build changes. A per-asset
-  revalidation would buy nothing the tag rotation does not already give. (They are precached by the
-  glob too; this route is the net for anything the manifest missed.) `createStaleWhileRevalidateStrategy`
-  exists in `sw.strategies.ts` for apps wiring their own route through `sw.cache-route.ts` — adaptv's
-  own worker never uses it.
+  **Unhashed files mostly never reach that route: the precache answers them.** `manifest.json`, the
+  `.png`/`.svg`/`.ico` icons and `.woff2` fonts all match the glob
+  (`**/*.{js,css,ico,png,svg,woff2,json,txt}`, `sw-helpers.ts`), whose route is registered first, and
+  each entry carries a content-hash revision, so a changed file is refetched on the next install.
+  `manifest.json` could not ride the runtime route anyway — a manifest fetch's destination is
+  `manifest`, and the file is not under `/assets/`. What does land there is an unhashed image or font
+  the glob does not name (a `.webp` or `.jpg` icon, a `.woff` or `.ttf` font) or a file over the 5 MB
+  cap, **and CacheFirst for those is not an oversight.** CacheFirst normally means "never updated",
+  which would be wrong for a URL that is not versioned — except the bucket itself is:
+  `static-<buildTag>` rotates on every deploy and the previous one is swept at activate, so the entry is
+  refetched exactly when the build changes. A per-asset revalidation would buy nothing the tag rotation
+  does not already give. `createStaleWhileRevalidateStrategy` exists in `sw.strategies.ts` for apps
+  wiring their own route through `sw.cache-route.ts` — adaptv's own worker never uses it.
 - **API responses are never cached by the SW.** That's the data layer's job, on purpose.
 - **Navigation denylist**: prefixes `/api/`, `/assets/`, `/_serverFn/`, plus Angular ngsw's heuristic —
   *a last path segment containing a dot is a file, not a navigation* (`/\/[^/?]+\.[^/]+$/`). Workbox's
