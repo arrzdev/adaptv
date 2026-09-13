@@ -53,11 +53,12 @@ export type LiveReloadHot = Pick<NonNullable<ImportMeta["hot"]>, "on">
 export const OFFLINE_PAGE = "adaptv-offline.html"
 
 /**
- * The window property this module sets once the bundle runs in a native dev WebView. It is the
- * handoff from the document's inline watchdog (`native-dev-boot-watchdog.ts`), which covers a
- * dev server that dies before the bundle ran, to the recovery below, which covers it after.
+ * The window property the recovery below sets once it can see the dev server go: it is subscribed
+ * to the disconnect event and the server has answered it since. It is the handoff from the
+ * document's inline watchdog (`native-dev-boot-watchdog.ts`), which covers a dev server that
+ * stops before then, to the recovery, which covers it after.
  */
-export const DEV_BUNDLE_RAN_KEY = "__adaptvDevBundleRan"
+export const DEV_RECOVERY_ARMED_KEY = "__adaptvDevRecoveryArmed"
 
 /**
  * Consecutive failed reachability polls before we hand off to the offline screen.
@@ -87,8 +88,6 @@ export function installNativeLiveReloadRecovery(
   if (!hot) return
   if (!isNativePlatform()) return
   if (typeof window === "undefined") return
-  //the bundle ran: the document's boot watchdog stands down and this module takes over
-  Object.assign(window, { [DEV_BUNDLE_RAN_KEY]: true })
 
   let reloading = false
   let recovering = false
@@ -181,8 +180,13 @@ export function installNativeLiveReloadRecovery(
       ).text()
       token = src.match(/wsToken\s*=\s*["'`]([^"'`]+)["'`]/)?.[1] ?? null
     } catch {
+      // Not armed: the server may have stopped before the disconnect subscription below, and its
+      // event went to nobody. The document's watchdog is still polling and takes this case.
       return false
     }
+    // The server answered after the disconnect subscription, so a server that stops from here on
+    // is this module's to see: the document's boot watchdog stands down.
+    Object.assign(window, { [DEV_RECOVERY_ARMED_KEY]: true })
     if (!token) return false
 
     const url = `${proto}://${location.host}/?token=${token}`
