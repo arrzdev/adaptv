@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * hover: and focus — two corrections that only show when they are missing. The
@@ -20,6 +21,7 @@ test.describe("hover: and focus", () => {
       "desktop :focus-visible / (hover: hover) heuristics — touch is a sim walk",
     )
     await page.goto("/lab/hover-focus")
+    await awaitClientHandover(page)
   })
 
   test("a keyboard focus draws the WCAG ring", async ({ page }) => {
