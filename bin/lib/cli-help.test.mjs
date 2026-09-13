@@ -106,11 +106,27 @@ describe("a failure names the offender and the fix", () => {
       renderFault({
         kind: "excess-args",
         received: ["192.168.1.5"],
+        accepted: ["ios"],
         path: ["dev"],
       }),
     )
     expect(out).toContain("'--host' takes no address")
-    expect(out).toContain("adaptv dev --host")
+    //The surface stays in the fix: `adaptv dev --host` is refused for the missing surface.
+    expect(out).toContain("drop the ip: 'adaptv dev ios --host'")
+  })
+
+  it("shows the choices in the '--host' fix when the surface typed was not one", () => {
+    const out = captured(() =>
+      renderFault({
+        kind: "excess-args",
+        received: ["192.168.1.5"],
+        accepted: ["iso"],
+        path: ["dev"],
+      }),
+    )
+    expect(out).toContain(
+      "drop the ip: 'adaptv dev <web|ios|android|all> --host'",
+    )
   })
 })
 

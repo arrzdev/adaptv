@@ -102,6 +102,9 @@ function intercept(program, path) {
     const declared = commandAt(path)?.args.length ?? 0
     throw new CliFault("excess-args", {
       received: received.slice(declared),
+      //The operands the command DID take, so a fix line can repeat them: without the surface,
+      //`adaptv dev --host` is not a command that runs, it is the next refusal.
+      accepted: received.slice(0, declared),
       path,
     })
   }
@@ -234,6 +237,7 @@ export function parse(argv) {
     throw new CliFault("excess-args", {
       path,
       received: positionals.slice(arg ? 1 : 0),
+      accepted: positionals.slice(0, arg ? 1 : 0),
     })
 
   for (const c of cmd.conflicts ?? []) {
