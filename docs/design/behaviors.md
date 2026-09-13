@@ -134,22 +134,34 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     `playground/e2e/scroll-anchoring.spec.ts`, on both engines, and it matters because Safari 27
     turns anchoring on (WebKit 171840378) and the spec makes the focused editable a priority
     anchor, which is exactly the element adaptv scrolls. **Verdict (2026-09-13, Playwright WebKit
-    26.5 line and Chromium 149, headless): no double adjustment.** Playwright's WebKit already
-    anchors (`CSS.supports("overflow-anchor", "auto")`, and a 100px insertion above a scrolled row
-    moves `scrollTop` by +100). With the keyboard raised through the seam and 100px inserted above
-    the focused field while adaptv's smooth scroll is travelling, the landing is the same with
-    anchoring and with `overflow-anchor: none` forced on the scroller, on both engines: the drawer
-    lands its field 12px clear (`scrollTop` 971), AvoidKeyboard lands on `scrollTop` 528. Neither
-    engine anchors against an in-flight smooth scroll, and every scroll write adaptv makes is
-    absolute, so there is no second adjustment to add. At rest the same insertion IS anchored on
-    both engines, and the focused row keeps its place to the pixel where the control moves it
-    100px — so `overflow-anchor: none` on a scroller adaptv drives is not a fix, it is a
-    regression, and the spec fails on it. What stays on a device: iOS momentum (WebKit stops a
-    fling on an anchoring adjustment) and a real keyboard's `visualViewport`.
-  - Found on the way, and not an anchoring effect: AvoidKeyboard aims ONCE, from the geometry at
-    the moment it scrolls, so content inserted above the field mid-scroll leaves the field
-    `clearance -76` (below the scroller's visible bottom) on both engines, anchoring on or off. The
-    drawer does not have this gap because it re-aims once its box has settled.
+    625.1.21 on the Safari 27.0 line and Chromium 149, headless): no double adjustment.** Both
+    engines anchor, including while adaptv's smooth scroll is travelling: 100px inserted above the
+    focused field mid-scroll reads back synchronously as `scrollTop` +100 with the field unmoved.
+    The smooth scroll's next frame then goes back to adaptv's ABSOLUTE target and overwrites that
+    adjustment (chromium, drawer: `scrollTop` 5 → 10 and the field +95 on that frame). Every scroll
+    write adaptv makes is absolute, so nothing adds a second adjustment, and the landing is the
+    same with anchoring and with `overflow-anchor: none` forced on the scroller: the drawer at
+    `scrollTop` 971 with its field 12px clear, AvoidKeyboard (keyboard raised 250ms after the
+    focus) at 628 with 24px. At rest the insertion is anchored and stays anchored, and the focused
+    row keeps its place to the pixel where the control moves it 100px. So `overflow-anchor: none`
+    left set on a scroller adaptv drives is a regression, and the spec fails on it in every run;
+    setting it only while adaptv scrolls and clearing it afterwards is NOT caught (0 of 4 runs),
+    because the spec's at-rest insertion then runs with anchoring back on. What stays on a device:
+    iOS momentum scrolling and a real keyboard's `visualViewport`. The WebKit fixes that matter
+    here, "Anchoring adjustments stop momentum scrolls" (7bf2f19, 2026-02-11) and "Scroll anchoring
+    in overflow scroll double-adjusts" (08e8584, 2026-02-13), landed before anchoring was flipped
+    back on (3727113, 2026-03-27), per the platform-release research in #157; a fling is still
+    worth one look on iOS 27, because desktop WebKit has no momentum to show it.
+  - Found on the way, and not an anchoring effect: both surfaces aim from the geometry at the
+    moment they scroll, and correct a change above the field only if they aim again afterwards.
+    The drawer re-aims 420ms after the raise and AvoidKeyboard when the keyboard raise lands, which
+    is why the spec's mid-scroll insertion lands clear. A change after the last aim is not
+    corrected. Inserted at 450ms, just after the drawer's re-aim, it leaves the field `clearance
+    -88` (`scrollTop` 871) on chromium with anchoring on or off, because its slower smooth scroll is
+    still travelling and overwrites the adjustment; on webkit the scroll has already stopped, so
+    anchoring keeps the field 12px clear (971), and only the control lands at -88. AvoidKeyboard
+    with the keyboard already up (a field switch, which fires no keyboard event) lands
+    `clearance -76` on both engines, anchoring on or off.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.

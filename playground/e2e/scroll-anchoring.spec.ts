@@ -10,41 +10,47 @@ import { awaitClientHandover } from "./support/hydrated"
  * adaptv scrolls into view when the keyboard moves (`scrollDrawerInputIntoView` in
  * the drawer, `scrollFocusedInputIntoView` in AvoidKeyboard). The fear is a double
  * adjustment: content changes above the focused row, the browser compensates, adaptv
- * compensates too, and the row jumps by the delta twice. Playwright's WebKit already
- * anchors (`CSS.supports("overflow-anchor", "auto")` and the behaviour both measured),
- * so this runs on both engines.
+ * compensates too, and the row jumps by the delta twice. Playwright's WebKit (625.1.21,
+ * the Safari 27.0 line) already anchors, so this runs on both engines.
  *
  * Measured on both engines, with anchoring left alone and with `overflow-anchor: none`
  * forced on the scroller as the control:
  *
- *   - While adaptv's smooth scroll is in flight, a 100px insertion above the field is
- *     NOT anchored on either engine: the landing is identical with and without
- *     anchoring (drawer scrollTop 971 with the field 12px clear, AvoidKeyboard 528).
- *     adaptv's writes are absolute, so there is nothing for a second adjustment to add.
- *   - At rest, the same insertion IS anchored on both engines: scrollTop +100 and the
- *     field does not move, where the control moves it 100px.
+ *   - An insertion above the field while adaptv's smooth scroll is travelling IS
+ *     anchored on both engines (read synchronously: scrollTop +100, field unmoved), and
+ *     the smooth scroll's next frame goes back to adaptv's ABSOLUTE target and
+ *     overwrites the adjustment (chromium drawer: scrollTop 5 -> 10 and the field +95 on
+ *     that frame). So the landing is the same with and without anchoring: the drawer at
+ *     scrollTop 971 with its field 12px clear, AvoidKeyboard at 628 with 24px. Nothing
+ *     adds a second adjustment, because nothing in adaptv writes a relative one.
+ *   - At rest, the same insertion is anchored and stays anchored: scrollTop +100 and
+ *     the field does not move, where the control moves it 100px.
  *
- * So each test pins both halves. The row keeps its place at rest: forcing
- * `overflow-anchor: none` on the scroller fails all four runs with "at rest the field
- * moved 382.3 -> 482.3" (the "fix" someone might reach for is a regression). And the
- * landing does not depend on anchoring, with the drawer's field clear of the keyboard,
- * because the drawer re-aims once its box has settled: doubling the drawer's scroll
- * delta in `scrollDrawerInputIntoView` failed webkit on the clearance in both runs
- * (-141px), but chromium only in one of two (scrollTop 958 with anchoring vs 964
- * without): its slower smooth scroll lets the re-aim land a doubled delta near the
- * target, so that half is a webkit catch, not a chromium one. AvoidKeyboard aims once, and after
- * an insertion mid-scroll it lands short (clearance -76px) on both engines with or
- * without anchoring; that is its own gap, not an anchoring effect, and not asserted.
+ * Each test pins both halves, and asserts that the control really did turn anchoring
+ * off (its at-rest scrollTop must not move), so a control that silently fails to apply
+ * cannot make the comparison vacuous. The row keeps its place at rest: forcing
+ * `overflow-anchor: none` on the scroller for good fails all four runs with "at rest
+ * the field moved 382.3 -> 482.3". Setting it only while adaptv scrolls and clearing it
+ * after is NOT caught (0 of 4), because the at-rest insertion then runs with anchoring
+ * back on. The landing must not depend on anchoring and must clear the keyboard;
+ * doubling the drawer's delta in `scrollDrawerInputIntoView` failed webkit on the
+ * clearance in every run (-141px) but chromium only in one of two, because chromium's
+ * slower smooth scroll lets the drawer's re-aim land a doubled delta near the target.
+ *
+ * Both surfaces aim again after the change, which is why they land clear: the drawer
+ * re-aims 420ms after the raise, and AvoidKeyboard re-aims when the keyboard raise
+ * lands 250ms after the focus. Neither re-aims after that, so a change above the field
+ * later on is not corrected — see docs/design/behaviors.md for the numbers; that is
+ * adaptv aiming once, not anchoring, and not asserted here.
  *
  * Rows are added below the field too, so the aimed landing is not the end of the
  * scroller: there the browser's clamp absorbed a doubled scroll and the check passed.
- *
- * The content change is foreign rows inserted into the real scroller, standing in
- * for a list that grows above the field. A desktop engine has no on-screen keyboard,
- * so the raise goes through the keyboard seam (`window.__adaptvKeyboardMock` + the
- * `adaptv:keyboard-mock` event), installed before the hooks mount. What this cannot
- * see: iOS momentum (WebKit stops a fling on an anchoring adjustment) and a real
- * keyboard's visualViewport — those stay on an iOS 27 device.
+ * The content change is foreign rows inserted into the real scroller, standing in for a
+ * list that grows above the field. A desktop engine has no on-screen keyboard, so the
+ * raise goes through the keyboard seam (`window.__adaptvKeyboardMock` + the
+ * `adaptv:keyboard-mock` event), installed before the hooks mount; it does not move
+ * `visualViewport`. What this cannot see: iOS momentum scrolling and a real keyboard,
+ * which stay on an iOS 27 device.
  */
 
 test.use({ viewport: { width: 390, height: 844 } })
@@ -58,17 +64,21 @@ type Surface = {
   field: string
   fillerRows: number
   fillerHeight: number
-  /** the drawer's field is already focused and the keyboard raise starts its scroll;
-   *  AvoidKeyboard's scroll starts on the focus itself */
-  trigger: { raise: number } | "focus"
+  /** "raise": the field is already focused and the keyboard raise starts adaptv's
+   *  scroll (the drawer). "focus": the focus starts it and the keyboard lands 250ms
+   *  later, as a real one does after a tap (AvoidKeyboard). */
+  trigger: "raise" | "focus"
 }
+
+const KEYBOARD_PX = Math.round(844 * 0.4)
+const RAISE_AFTER_FOCUS_MS = 250
 
 const DRAWER: Surface = {
   route: "/lab/drawer",
   field: "Drawer field",
   fillerRows: 20,
   fillerHeight: 56,
-  trigger: { raise: Math.round(844 * 0.4) },
+  trigger: "raise",
 }
 const AVOID: Surface = {
   route: "/lab/avoid-keyboard",
@@ -151,7 +161,12 @@ async function openSurface(page: Page, surface: Surface, anchor: Anchor) {
  *  the insertion lands on a known frame. */
 function measure(page: Page, surface: Surface) {
   return page.evaluate(
-    async ({ trigger, insertPx }): Promise<Run> => {
+    async ({
+      trigger,
+      insertPx,
+      keyboardPx,
+      raiseAfterMs,
+    }): Promise<Run> => {
       const frame = () =>
         new Promise<number>((resolve) => requestAnimationFrame(resolve))
       const field = document.querySelector<HTMLElement>(
@@ -195,10 +210,12 @@ function measure(page: Page, surface: Surface) {
       }
 
       field.focus({ preventScroll: true })
-      if (trigger !== "focus") {
+      if (trigger === "raise") {
         await settle()
-        mock(trigger.raise)
+        mock(keyboardPx)
       }
+      const focusedAt = performance.now()
+      let raised = trigger === "raise"
 
       const start = scroller.scrollTop
       const steps: number[] = []
@@ -212,6 +229,10 @@ function measure(page: Page, surface: Surface) {
       //the drawer re-aims 420ms after the raise; 1.5s covers it and the smooth scroll after
       while (performance.now() - began < 1500) {
         await frame()
+        if (!raised && performance.now() - focusedAt >= raiseAfterMs) {
+          raised = true
+          mock(keyboardPx)
+        }
         const now = top()
         steps.push(Math.round((now - previous) * 10) / 10)
         previous = now
@@ -252,7 +273,12 @@ function measure(page: Page, surface: Surface) {
         },
       }
     },
-    { trigger: surface.trigger, insertPx: INSERT_PX },
+    {
+      trigger: surface.trigger,
+      insertPx: INSERT_PX,
+      keyboardPx: KEYBOARD_PX,
+      raiseAfterMs: RAISE_AFTER_FOCUS_MS,
+    },
   )
 }
 
@@ -283,10 +309,13 @@ for (const [name, surface] of [
         hasTouch,
         viewport: { width: 390, height: 844 },
       })
-      const page = await context.newPage()
-      await openSurface(page, surface, anchor)
-      runs[anchor] = await measure(page, surface)
-      await context.close()
+      try {
+        const page = await context.newPage()
+        await openSurface(page, surface, anchor)
+        runs[anchor] = await measure(page, surface)
+      } finally {
+        await context.close()
+      }
     }
     const { shipped, none } = runs
     await testInfo.attach("runs", {
@@ -310,6 +339,17 @@ for (const [name, surface] of [
       ).toBeGreaterThan(INSERT_PX)
     }
 
+    //the control is real: with overflow-anchor forced off, the at-rest insertion is not
+    //anchored. Without this, a control that never applied would equal the shipped run and
+    //make the landing comparison below vacuous.
+    expect(
+      none.rest.scrollDelta,
+      "the control did not turn anchoring off",
+    ).toBe(0)
+    expect(Math.round(none.rest.fieldAfter - none.rest.fieldBefore)).toBe(
+      INSERT_PX,
+    )
+
     //no second adjustment: the landing does not depend on the browser anchoring
     expect(
       Math.abs(shipped.landing.scrollTop - none.landing.scrollTop),
@@ -319,14 +359,14 @@ for (const [name, surface] of [
       Math.abs(shipped.landing.fieldTop - none.landing.fieldTop),
     ).toBeLessThanOrEqual(2)
 
-    if (surface === DRAWER) {
-      //the drawer re-aims after its box settles, so the field ends clear, by its 12px margin
-      expect(
-        shipped.landing.clearance,
-        `drawer field clearance ${shipped.landing.clearance}px`,
-      ).toBeGreaterThanOrEqual(0)
-      expect(shipped.landing.clearance).toBeLessThanOrEqual(40)
-    }
+    //both surfaces aim again after the insertion (the drawer's re-aim, AvoidKeyboard's
+    //keyboard raise), so the field ends clear: the drawer's 12px margin, AvoidKeyboard's
+    //buffer
+    expect(
+      shipped.landing.clearance,
+      `field clearance ${shipped.landing.clearance}px`,
+    ).toBeGreaterThanOrEqual(0)
+    expect(shipped.landing.clearance).toBeLessThanOrEqual(40)
 
     //at rest the row keeps its place — anchoring on the scroller adaptv drives is intact
     expect(
