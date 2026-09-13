@@ -505,6 +505,20 @@ describe("useKeyboard — native", () => {
     )
   }
 
+  /** `renderNative`, plus every height the hook ever rendered — a bounce is a value in between. */
+  function renderNativeRecording() {
+    const heights: number[] = []
+    const hook = renderHook(() => {
+      const state = useKeyboard({
+        isEnabled: true,
+        predictFromCache: true,
+      })
+      if (heights.at(-1) !== state.height) heights.push(state.height)
+      return state
+    })
+    return { ...hook, heights }
+  }
+
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
     nativeBridge.enabled = true
@@ -606,6 +620,186 @@ describe("useKeyboard — native", () => {
     //held for a beat in case it is the bar flickering, then committed: never stuck too tall
     advance(SHRINK_HOLD_MS + 20)
     expect(result.current).toEqual({ isOpen: true, height: 301 })
+  })
+
+  //The hold is a delay, not a snapshot. The push-only bridge never re-reports a height that has
+  //stopped changing, so whatever the hold commits is the last word: committing the FIRST report it
+  //absorbed leaves the sheet lifted for a 290px keyboard while a 340px one is on screen, 50px of
+  //content behind the keyboard until the field blurs.
+  it("commits the LAST of two small shrinks a hold absorbed, not the first", () => {
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 290 }) //small shrink: held, the window opens here
+    advance(100)
+    emit({ isOpen: true, height: 340 }) //a second small shrink, inside the same window
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+
+    //the window keeps its original deadline: a second report replaces the value, not the clock
+    advance(SHRINK_HOLD_MS - 101)
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    advance(1)
+    expect(result.current).toEqual({ isOpen: true, height: 340 })
+  })
+
+  //The reverse order: the first shrink is the dip and the settled height follows late in the window.
+  //A taller replacement is the keyboard settling, so it lands on the ORIGINAL deadline.
+  it("lands a taller second shrink on the first shrink's deadline", () => {
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 290 }) //held, the window opens here
+    advance(300)
+    emit({ isOpen: true, height: 330 }) //taller than the held value: replaces it, clock untouched
+    advance(SHRINK_HOLD_MS - 301)
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    advance(1)
+    expect(result.current).toEqual({ isOpen: true, height: 330 })
+  })
+
+  //A genuine small shrink opens the window, then the AutoFill bar dips late in it. Committing the
+  //dip on the first deadline would drop the sheet 40px and lift it again when the bar returns ~260ms
+  //later. A SHORTER replacement gets one fresh window of its own, so the bar's return lands first.
+  it("gives a late shorter dip its own window, so the bar's return lands without a bounce", () => {
+    const { result, heights } = renderNativeRecording()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 330 }) //a genuine small shrink: held, window opens at 0
+    advance(300)
+    emit({ isOpen: true, height: 290 }) //the bar dips at 300: re-arms the window to 650
+    advance(260)
+    emit({ isOpen: true, height: 330 }) //the bar returns at 560: taller, the clock stays at 650
+    expect(heights).toEqual([0, 346]) //nothing has landed yet, least of all the 290
+
+    advance(SHRINK_HOLD_MS - 261) //649
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    advance(1) //650
+    expect(result.current).toEqual({ isOpen: true, height: 330 })
+    expect(heights).toEqual([0, 346, 330])
+  })
+
+  //The re-arm is granted ONCE per hold, so a keyboard that keeps dipping cannot hold the sheet too
+  //tall for longer than two windows.
+  it("re-arms a hold at most once, so dips cannot stretch it past two windows", () => {
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 330 }) //window opens at 0
+    advance(300)
+    emit({ isOpen: true, height: 290 }) //shorter: the one re-arm, deadline 650
+    advance(100)
+    emit({ isOpen: true, height: 330 }) //400: taller, no re-arm
+    advance(100)
+    emit({ isOpen: true, height: 295 }) //500: shorter again, but the re-arm is spent
+
+    advance(SHRINK_HOLD_MS - 201) //649
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    advance(1) //650: the latest value, on the re-armed deadline, not at 500 + 350
+    expect(result.current).toEqual({ isOpen: true, height: 295 })
+  })
+
+  //The re-arm is spent per HOLD, not per session: once a grow cancels a hold that used it, the next
+  //hold has its own, so a late dip in it is absorbed just like the first.
+  it("gives a new hold its own re-arm after a grow cancelled one that spent it", () => {
+    const { result, heights } = renderNativeRecording()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 330 }) //hold 1 opens at 0
+    advance(300)
+    emit({ isOpen: true, height: 290 }) //300: hold 1 spends its re-arm
+    advance(100)
+    emit({ isOpen: true, height: 346 }) //400: a grow cancels hold 1
+    advance(100)
+    emit({ isOpen: true, height: 330 }) //500: hold 2 opens, deadline 850
+    advance(300)
+    emit({ isOpen: true, height: 290 }) //800: hold 2's own re-arm, deadline 1150
+    advance(260)
+    emit({ isOpen: true, height: 330 }) //1060: the bar returns
+
+    advance(89) //1149
+    expect(heights).toEqual([0, 346]) //no 290 at 850
+    advance(1) //1150
+    expect(result.current).toEqual({ isOpen: true, height: 330 })
+    expect(heights).toEqual([0, 346, 330])
+  })
+
+  //A hold still pending when the observer unmounts must die with it: firing later would record a
+  //height nobody committed, and the next focus of this field would predict it.
+  it("teaches the cache nothing from a hold pending at unmount", () => {
+    const { unmount } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 }) //the raise: committed and learned
+    emit({ isOpen: true, height: 301 }) //held
+    unmount()
+    advance(SHRINK_HOLD_MS * 3)
+
+    const second = renderNative()
+    focusField()
+    expect(second.result.current).toEqual({ isOpen: true, height: 346 })
+  })
+
+  //The same race on the path a login form really takes once the cache has drifted: the bar or the
+  //keyboard changed since the height was learned (a language, a keyboard app, predictive text
+  //turned off), so the guess is a few px tall. The bare keyboard is held against it and the settled
+  //height is ANOTHER small shrink — the one that must land, and the one the cache must learn.
+  it("lands a settled height that corrects a stale prediction inside the hold", () => {
+    recordKeyboardHeight(field, 346)
+    const { result, unmount } = renderNative()
+
+    focusField()
+    expect(result.current).toEqual({ isOpen: true, height: 346 }) //the stale guess
+    emit({ isOpen: true, height: 295 }) //bare keyboard: held
+    advance(250)
+    emit({ isOpen: true, height: 340 }) //the AutoFill step, 6px shorter than last time
+    advance(SHRINK_HOLD_MS)
+    expect(result.current).toEqual({ isOpen: true, height: 340 })
+
+    emit({ isOpen: false, height: 0 })
+    unmount()
+    const second = renderNative()
+    focusField()
+    expect(second.result.current).toEqual({ isOpen: true, height: 340 })
+  })
+
+  //A grow inside the hold commits and cancels it; the next small shrink opens a NEW window with its
+  //own value and its own deadline. Nothing of the cancelled hold survives into it.
+  it("opens a fresh hold after a grow cancelled the last one", () => {
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 301 }) //held
+    advance(100)
+    emit({ isOpen: true, height: 346 }) //the bar came back: the flicker, absorbed
+    advance(100)
+    emit({ isOpen: true, height: 320 }) //a new small shrink: a new window
+
+    //past where the cancelled window would have fired — nothing lands, least of all its 301
+    advance(SHRINK_HOLD_MS - 1)
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    advance(1)
+    expect(result.current).toEqual({ isOpen: true, height: 320 })
+  })
+
+  it("drops a held shrink when the keyboard hides inside the window", () => {
+    const { result } = renderNative()
+
+    focusField()
+    emit({ isOpen: true, height: 346 })
+    emit({ isOpen: true, height: 301 }) //held
+    emit({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({ isOpen: false, height: 0 })
+
+    //the next raise is a raise, not a shrink: it commits, and the dropped 301 never lands after it
+    emit({ isOpen: true, height: 346 })
+    advance(SHRINK_HOLD_MS * 2)
+    expect(result.current).toEqual({ isOpen: true, height: 346 })
   })
 
   it("commits a dismiss straight through", () => {
