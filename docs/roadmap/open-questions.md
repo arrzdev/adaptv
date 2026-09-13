@@ -199,6 +199,49 @@ into the item rather than discovered during it.
 look on native is worth more than one look across targets; it is a positioning call rather than a
 measurement, and it did not win.
 
+### O25 — What is adaptv's iOS floor?
+
+**Which iOS version must the shipped app work on: 15.0, 15.4, 16.4 or 18?**
+
+The repo has four answers, and each one is load-bearing somewhere:
+- **iOS 18.** `../research/component-surface.md:738` ("adaptv's floor is iOS 18") uses it to reject
+  a CSS-only edge fade, and `src/styles/scroll-fade.css:25` says the same in code, citing a
+  `DECISIONS.md` that no longer exists. `../decisions/register.md:270` (O10) calls `@starting-style`
+  usable "(iOS 18 floor)". `register.md:1234` (B16) scopes a Popover mitigation to "an iOS 18 floor".
+- **iOS 16.4.** `src/vite/capacitor-config.ts:68` sets the Android WebView floor to "Tailwind v4's
+  own stated minimum (Chrome 111 / Safari 16.4 / Firefox 128)", and `../decisions/register.md:1548`
+  locks that reasoning. Applied to iOS it gives 16.4, which is also Vite's default Safari target and
+  so what main's client build is compiled for today. #121 rewrites that comment to name only the
+  Chromium half.
+- **iOS 15.4.** Open PR #121 compiles the client for `safari15.4`/`ios15.4`, because Tailwind v4
+  wraps the stylesheet in `@layer`, and no build target can lower that. Its own Feedback wanted
+  notes that the native deployment target is still 15.0, below that CSS floor.
+- **iOS 15.0.** This is the native project adaptv generates. Capacitor 8.4.3's `ios-pods-template`
+  sets `platform :ios, '15.0'` (`App/Podfile:3`) and `IPHONEOS_DEPLOYMENT_TARGET = 15.0`, and nothing
+  in `bin/lib/native.mjs` raises it. `../design/image.md:39` ("while adaptv supports iOS 15–16") and
+  `:181` ("when adaptv's iOS floor reaches 17") reason from a 15/16 floor, and
+  `src/components/image.tsx:188` repeats it in code ("while adaptv supports iOS 15").
+
+The answers disagree in ways that change code:
+- At 18, #121's lowering is unneeded, the native target should be 18, and `image.md`'s iOS 15–16
+  hedges go.
+- At 16.4, #121's lowering is unneeded too, because Vite's default already targets it. The native
+  target moves to 16.4, the iOS 18 statements still need fallbacks, and Tailwind's own fallbacks for
+  `@property` and `color-mix()` stop mattering.
+- At 15.4, the iOS 18 statements become feature floors that each need a fallback or a stated
+  degradation, and the native target moves up to 15.4.
+- At 15.0, `@layer` itself is unsupported, so Tailwind v4's output does not work there at all.
+
+One related measurement, from the iOS 16.2 simulator on 2026-09-13: Safari against the dev server
+drops Tailwind's `rtl:` variants and some callout text. The dev stylesheet keeps native CSS nesting
+(`&:where(...)`), which WebKit parses only from 16.5, while the production build flattens it. So
+below 16.5 a device can verify only the production build, whatever floor is chosen.
+
+Decided by: whether the floor is the oldest OS the shipped bundle runs on, which the native
+deployment target has to match, or the oldest OS the design may lean on without a fallback. It
+cannot be both 15.x/16.4 and 18. Either answer turns every statement above into one number with one
+owner.
+
 
 ---
 
