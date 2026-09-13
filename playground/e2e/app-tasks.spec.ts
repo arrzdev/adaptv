@@ -10,6 +10,7 @@ import {
   drawer,
   expectDrawerGone,
   nextYearLabel,
+  pressControlAndCarry,
   swipeOpen,
   TUTORIAL_DECK,
   taskCounts,
@@ -270,10 +271,26 @@ test.describe("the tasks app", () => {
       })
       .toEqual(["First", "Second", "Third"])
 
+    //a press on a card's checkbox carried onto another card is a press on the
+    //checkbox, not a grab of the card: the order must not change. The real drag
+    //below is the proof: from [First, Second, Third] it gives [Third, First,
+    //Second], but had this press already lifted Third to the top, carrying it
+    //onto First would end in [First, Third, Second]
+    await pressControlAndCarry(
+      page,
+      card(page, "Third").getByRole("checkbox"),
+      card(page, "First"),
+    )
+    await expect(
+      card(page, "Third").getByRole("checkbox"),
+      "a press carried off the checkbox does not toggle it",
+    ).not.toBeChecked()
+
     await dragCardOnto(page, "Third", "First")
     await expect
       .poll(() => cardTitles(page), {
-        message: "the drop reorders the list",
+        message:
+          "the drop reorders the list, once: the checkbox press before it must not have",
       })
       .toEqual(["Third", "First", "Second"])
 
@@ -338,5 +355,23 @@ test.describe("the tasks app", () => {
       }),
       "a row that cannot be dragged must not expose its checkbox as disabled",
     ).toBeEnabled()
+    //nor may it still offer itself as a sortable item: a keyboard user would tab
+    //to a row that Space cannot pick up, and a screen reader would read it the
+    //drag instructions. The pending row next to it is the control
+    const row = (title: string) =>
+      page.getByRole("listitem").filter({ has: card(page, title) })
+    await expect(row("Second")).toHaveAttribute(
+      "aria-roledescription",
+      "sortable",
+    )
+    await expect(row("Second")).toHaveAttribute("tabindex", "0")
+    await expect(
+      row("Third"),
+      "a row that cannot be dragged is not announced as sortable",
+    ).not.toHaveAttribute("aria-roledescription")
+    await expect(
+      row("Third"),
+      "a row that cannot be dragged is not a tab stop",
+    ).not.toHaveAttribute("tabindex")
   })
 })
