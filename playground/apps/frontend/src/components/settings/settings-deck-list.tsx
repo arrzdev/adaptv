@@ -245,11 +245,16 @@ function SettingsDeckRow({
             {deck.name}
           </Text>
         </View>
-        {/* stop pointer-down here so pressing a button never arms the drag */}
+        {/* a press on a button is not a grab of the row. dnd-kit's Mouse and
+            Touch sensors arm on the row's mousedown and touchstart, not on
+            pointerdown, so all three stop here: stopping pointerdown alone let a
+            press on Edit, carried off the button, reorder the decks */}
         <View
           row
           className="flex shrink-0 items-center gap-x-1"
           onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <IconButton
             onClick={() => onEdit(deck)}
