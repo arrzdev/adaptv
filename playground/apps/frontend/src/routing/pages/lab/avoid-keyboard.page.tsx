@@ -3,6 +3,7 @@ import { useKeyboard } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import type { RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
+import { flushSync } from "react-dom"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
   LabActions,
@@ -122,6 +123,8 @@ function LabAvoidKeyboardPage() {
         <ReservedProbe behavior={behavior} nodeRef={avoidRef} />
       </LabSection>
 
+      <ArrivalProbe />
+
       <LabSection title="Where NOT to use it">
         <LabCaveat>
           Not inside a <code>Drawer</code> — the drawer does its own
@@ -139,6 +142,183 @@ function LabAvoidKeyboardPage() {
 /* =============================================================================
  * PROBES
  * ============================================================================= */
+
+//the moving frame of the aim's smooth scroll the notice lands on, and how tall it is
+const ARRIVAL_FRAME = 3
+const ARRIVAL_PX = 100
+//a scroll is over after this many frames with nothing moving past half a pixel —
+//longer than the 120ms quiet window the no-`scrollend` fallback waits before re-aiming
+const ARRIVAL_STILL_FRAMES = 30
+
+type ArrivalResult = {
+  /** scrollTop when the notice was inserted, and where the aim's scroll started */
+  insertedAt: number | null
+  start: number
+  landed: number
+  /** px between the field's bottom and the keyboard line (or the box's bottom) */
+  clearance: number
+}
+
+/**
+ * Content arriving above a focused field WHILE the aim's smooth scroll is flying —
+ * suggestions loading, a validation message, an image without dimensions. The aim
+ * picked its destination before the content existed, so it lands short unless it
+ * takes a second look when the scroll ends.
+ */
+function ArrivalProbe() {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [notice, setNotice] = useState(false)
+  const [value, setValue] = useState("")
+  const [result, setResult] = useState<ArrivalResult | "running" | null>(
+    null,
+  )
+
+  function run() {
+    const scroller = scrollerRef.current
+    const field = scroller?.querySelector<HTMLInputElement>(
+      '[aria-label="Arrival field"]',
+    )
+    if (!scroller || !field) return
+    field.blur()
+    flushSync(() => {
+      setNotice(false)
+      setResult("running")
+    })
+    scroller.scrollTop = 0
+    const start = scroller.scrollTop
+    //focus inside the tap, so iOS raises the keyboard; preventScroll so the browser's
+    //own scroll-into-view does not travel before AvoidKeyboard's aim does
+    field.focus({ preventScroll: true })
+
+    let moving = 0
+    let insertedAt: number | null = null
+    let still = 0
+    let frames = 0
+    let last = [field.getBoundingClientRect().top, scroller.scrollTop]
+    const tick = () => {
+      frames += 1
+      const now = [field.getBoundingClientRect().top, scroller.scrollTop]
+      if (insertedAt === null && Math.abs(now[1] - start) >= 1) {
+        moving += 1
+        if (moving === ARRIVAL_FRAME) {
+          insertedAt = scroller.scrollTop
+          flushSync(() => setNotice(true))
+          now[0] = field.getBoundingClientRect().top
+        }
+      }
+      const moved =
+        Math.abs(now[0] - last[0]) >= 0.5 ||
+        Math.abs(now[1] - last[1]) >= 0.5
+      still = moved ? 0 : still + 1
+      last = now
+      if (still < ARRIVAL_STILL_FRAMES && frames < 600) {
+        requestAnimationFrame(tick)
+        return
+      }
+      const vv = window.visualViewport
+      const keyboardLine = Math.min(
+        scroller.getBoundingClientRect().bottom,
+        vv ? vv.offsetTop + vv.height : window.innerHeight,
+      )
+      setResult({
+        insertedAt,
+        start,
+        landed: Math.round(scroller.scrollTop),
+        clearance: Math.round(
+          keyboardLine - field.getBoundingClientRect().bottom,
+        ),
+      })
+    }
+    requestAnimationFrame(tick)
+  }
+
+  const settled = result !== null && result !== "running" ? result : null
+
+  return (
+    <LabSection
+      title="Content arriving mid-scroll"
+      description={`Run focuses the field below and, on frame ${ARRIVAL_FRAME} of the scroll that lifts it, inserts a ${ARRIVAL_PX}px notice above it. The aim chose its destination before the notice existed, so the field must still end up clear: AvoidKeyboard looks again when that scroll ends.`}
+    >
+      <LabActions>
+        <LabButton onClick={run}>Run: focus, insert mid-scroll</LabButton>
+      </LabActions>
+      <AvoidKeyboard
+        ref={scrollerRef}
+        data-lab-arrival-scroller=""
+        className="h-72 overflow-x-hidden overflow-y-auto overscroll-y-contain touch-pan-x touch-pan-y touch-pinch-zoom rounded-md bg-secondary p-3"
+      >
+        <div className="flex flex-col gap-y-3">
+          {/* the slot is always there, so the gap above the first row is already paid
+              and the notice moves the field by exactly ARRIVAL_PX */}
+          <div className="shrink-0">
+            {notice ? (
+              <div
+                data-lab-arrival-notice=""
+                style={{ height: ARRIVAL_PX }}
+                className="flex shrink-0 items-center rounded-md bg-surface px-3 text-sm text-subtle"
+              >
+                Suggestions loaded above the field
+              </div>
+            ) : null}
+          </div>
+          {FILLER.flatMap((slot) => [`${slot} a`, `${slot} b`]).map(
+            (slot) => (
+              <div
+                key={slot}
+                className="h-12 shrink-0 rounded-md bg-surface/60 px-3 py-3 text-sm text-subtle"
+              >
+                row {slot}
+              </div>
+            ),
+          )}
+          <TextInput
+            value={value}
+            onChange={setValue}
+            placeholder="arrival field"
+            aria-label="Arrival field"
+            className="shrink-0"
+          />
+          {FILLER.map((slot) => (
+            <div
+              key={slot}
+              className="h-12 shrink-0 rounded-md bg-surface/60 px-3 py-3 text-sm text-subtle"
+            >
+              row {slot}
+            </div>
+          ))}
+        </div>
+      </AvoidKeyboard>
+      <LabRow
+        label="settled clearance"
+        value={
+          result === null ? (
+            <LabBadge tone="muted">not run yet</LabBadge>
+          ) : result === "running" ? (
+            <LabBadge tone="muted">running…</LabBadge>
+          ) : (
+            <span data-lab-arrival-clearance={result.clearance}>
+              <LabBadge tone={result.clearance >= 0 ? "ok" : "bad"}>
+                {`${result.clearance}px`}
+              </LabBadge>
+            </span>
+          )
+        }
+        hint="The gap between the field's bottom and the keyboard line (the box's bottom when that is higher). At or above 0 once the scroll has stopped; negative means the field was left underneath."
+      />
+      <LabRow
+        label="scroll"
+        value={
+          settled ? (
+            <span data-lab-arrival-scroll="">
+              {`inserted at ${settled.insertedAt ?? "never"} · landed ${settled.landed}`}
+            </span>
+          ) : null
+        }
+        hint="Where the notice went in, and where the scroll came to rest. An insertion that says never did not happen during the scroll, and the run proves nothing."
+      />
+    </LabSection>
+  )
+}
 
 function KeyboardStamps() {
   const [state, setState] = useState<{

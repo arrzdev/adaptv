@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest"
+import { act, renderHook } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   computeScrollIntoViewTop,
   resolveAvoidanceSpace,
   resolveReservedSpace,
+  useKeyboardAvoidance,
 } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 
 describe("resolveAvoidanceSpace", () => {
@@ -206,5 +208,299 @@ describe("resolveReservedSpace", () => {
         overlap: 0,
       }),
     ).toBe(0)
+  })
+})
+
+/* =============================================================================
+ * THE AIM AND ITS ONE SECOND LOOK
+ *
+ * happy-dom lays nothing out, so the rig states the geometry it means: a 300px
+ * scroller at the top of the viewport and a 40px field whose top sits `fieldOffset`
+ * px down its content. Nothing scrolls by itself either — `scrollTo` only records the
+ * aim, and a test moves `scrollTop` and fires `scroll`/`scrollend` where a real smooth
+ * scroll would. With the 24px buffer the keyboard line is 276, so a field at 500 is
+ * aimed at 264, and 100px inserted above it mid-flight needs 364.
+ * ============================================================================= */
+
+type Aim = { top: number; behavior: ScrollBehavior | undefined }
+
+function rigAvoidance() {
+  const container = document.createElement("div")
+  const field = document.createElement("input")
+  field.type = "text"
+  container.append(field)
+  const elsewhere = document.createElement("input")
+  elsewhere.type = "text"
+  document.body.append(container, elsewhere)
+
+  const state = { scrollTop: 0, fieldOffset: 500 }
+  const aims: Aim[] = []
+  Object.defineProperty(container, "scrollTop", {
+    configurable: true,
+    get: () => state.scrollTop,
+    set: (value: number) => {
+      state.scrollTop = value
+    },
+  })
+  const rect = (top: number, height: number) =>
+    ({
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 390,
+      width: 390,
+      height,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect
+  container.getBoundingClientRect = () => rect(0, 300)
+  field.getBoundingClientRect = () =>
+    rect(state.fieldOffset - state.scrollTop, 40)
+  container.scrollTo = ((options: ScrollToOptions) => {
+    aims.push({ top: options.top ?? 0, behavior: options.behavior })
+  }) as typeof container.scrollTo
+
+  const hook = renderHook(() =>
+    useKeyboardAvoidance({ containerRef: { current: container } }),
+  )
+
+  return {
+    container,
+    field,
+    elsewhere,
+    state,
+    aims,
+    tops: () => aims.map((aim) => aim.top),
+    unmount: () => hook.unmount(),
+    /** focus the field and let the hook's two frames run its first aim */
+    focusAndAim() {
+      act(() => field.focus())
+      act(() => {
+        vi.advanceTimersByTime(40)
+      })
+    },
+    /** the smooth scroll moving: scrollTop changes and a `scroll` event fires */
+    scrollTo(top: number) {
+      state.scrollTop = top
+      container.dispatchEvent(new Event("scroll"))
+    },
+    /** content lands above the field: it moves down, the destination does not */
+    insertAbove(px: number) {
+      state.fieldOffset += px
+    },
+    scrollEnd() {
+      act(() => {
+        container.dispatchEvent(new Event("scrollend"))
+      })
+    },
+  }
+}
+
+/** the whole failing window: aim, fly partway, insert 100px, land where aimed, end */
+function flyWithInsertion(rig: ReturnType<typeof rigAvoidance>) {
+  rig.focusAndAim()
+  rig.scrollTo(80)
+  rig.insertAbove(100)
+  rig.scrollTo(264)
+}
+
+describe("useKeyboardAvoidance — a second look when the smooth scroll ends", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    //rAF on the fake clock, so a test says when the hook's two frames have passed
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(performance.now()), 16),
+    )
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id))
+    //the keyboard line from innerHeight (768), well below the 300px scroller
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: undefined,
+    })
+    //the keyboard seam: no keyboard, and no visualViewport heuristics running
+    ;(
+      window as unknown as { __adaptvKeyboardMock?: unknown }
+    ).__adaptvKeyboardMock = { isOpen: false, height: 0 }
+    //Chromium and current WebKit have `scrollend`; the fallback suite deletes it
+    ;(window as unknown as { onscrollend: unknown }).onscrollend = null
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { onscrollend?: unknown }).onscrollend
+    delete (window as unknown as { __adaptvKeyboardMock?: unknown })
+      .__adaptvKeyboardMock
+    delete (window as unknown as { visualViewport?: unknown })
+      .visualViewport
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+    document.body.replaceChildren()
+  })
+
+  it("re-aims once from fresh geometry when content lands above the field mid-scroll", () => {
+    const rig = rigAvoidance()
+    flyWithInsertion(rig)
+    expect(rig.tops(), "the first aim, from the focus frame").toEqual([
+      264,
+    ])
+
+    rig.scrollEnd()
+
+    expect(rig.tops()).toEqual([264, 364])
+    expect(rig.aims[1].behavior).toBe("smooth")
+  })
+
+  it("does not aim again when the scroll landed the field clear", () => {
+    const rig = rigAvoidance()
+    rig.focusAndAim()
+    rig.scrollTo(264)
+    rig.scrollEnd()
+    expect(rig.tops()).toEqual([264])
+  })
+
+  it("re-aims on scrollend itself, without waiting out a quiet window", () => {
+    const rig = rigAvoidance()
+    flyWithInsertion(rig)
+    rig.scrollEnd()
+    //no timer advanced since the scroll's last frame: only the event can have done this
+    expect(rig.tops()).toEqual([264, 364])
+  })
+
+  it("hands the scroller to the user: a touch, a click or a wheel mid-scroll cancels the re-aim", () => {
+    //control first, so this cannot pass on a hook that never re-aims at all
+    const control = rigAvoidance()
+    flyWithInsertion(control)
+    control.scrollEnd()
+    expect(control.tops(), "control: no user input").toEqual([264, 364])
+    control.unmount()
+    document.body.replaceChildren()
+
+    for (const type of ["touchstart", "pointerdown", "wheel"]) {
+      const rig = rigAvoidance()
+      rig.focusAndAim()
+      rig.scrollTo(80)
+      rig.container.dispatchEvent(new Event(type, { bubbles: true }))
+      rig.insertAbove(100)
+      rig.scrollTo(264)
+      rig.scrollEnd()
+      expect(rig.tops(), `after ${type}`).toEqual([264])
+      rig.unmount()
+      document.body.replaceChildren()
+    }
+  })
+
+  it("does not re-aim once focus has left the field", () => {
+    const control = rigAvoidance()
+    flyWithInsertion(control)
+    control.scrollEnd()
+    expect(control.tops(), "control: focus stayed").toEqual([264, 364])
+    control.unmount()
+    document.body.replaceChildren()
+
+    const moved = rigAvoidance()
+    flyWithInsertion(moved)
+    act(() => moved.elsewhere.focus())
+    moved.scrollEnd()
+    expect(moved.tops(), "focus moved outside").toEqual([264])
+    moved.unmount()
+    document.body.replaceChildren()
+
+    const blurred = rigAvoidance()
+    flyWithInsertion(blurred)
+    act(() => blurred.field.blur())
+    blurred.scrollEnd()
+    expect(blurred.tops(), "blurred to the body").toEqual([264])
+  })
+
+  it("aims at most once more per aim, however many scrolls end after it", () => {
+    const rig = rigAvoidance()
+    flyWithInsertion(rig)
+    rig.scrollEnd()
+    expect(rig.tops()).toEqual([264, 364])
+
+    //the re-aim's own flight gets overtaken too; it is not chased
+    rig.insertAbove(100)
+    rig.scrollTo(364)
+    rig.scrollEnd()
+    rig.scrollTo(300)
+    rig.scrollEnd()
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(rig.tops()).toEqual([264, 364])
+  })
+
+  it("cancels a pending re-aim on unmount", () => {
+    const rig = rigAvoidance()
+    flyWithInsertion(rig)
+    rig.unmount()
+    rig.container.dispatchEvent(new Event("scrollend"))
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(rig.tops()).toEqual([264])
+  })
+
+  it("aims instantly under reduced motion and arms no second look", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    const rig = rigAvoidance()
+    rig.focusAndAim()
+    expect(rig.aims).toEqual([{ top: 264, behavior: "auto" }])
+    rig.insertAbove(100)
+    rig.scrollTo(264)
+    rig.scrollEnd()
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(rig.tops()).toEqual([264])
+  })
+
+  describe("without scrollend (older WebKit)", () => {
+    beforeEach(() => {
+      delete (window as unknown as { onscrollend?: unknown }).onscrollend
+    })
+
+    it("re-aims once the scroll has been quiet for the caret's settle window", () => {
+      const rig = rigAvoidance()
+      rig.focusAndAim()
+      //a flight whose frames keep arriving inside the window never settles early
+      for (const top of [40, 120, 200]) {
+        act(() => {
+          vi.advanceTimersByTime(100)
+        })
+        rig.scrollTo(top)
+      }
+      rig.insertAbove(100)
+      act(() => {
+        vi.advanceTimersByTime(100)
+      })
+      rig.scrollTo(264)
+      expect(rig.tops(), "still flying").toEqual([264])
+
+      act(() => {
+        vi.advanceTimersByTime(119)
+      })
+      expect(rig.tops(), "one ms short of the window").toEqual([264])
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(rig.tops()).toEqual([264, 364])
+    })
+
+    it("still re-aims when the scroll never started", () => {
+      const rig = rigAvoidance()
+      rig.focusAndAim()
+      rig.insertAbove(100)
+      act(() => {
+        vi.advanceTimersByTime(120)
+      })
+      //nothing moved, so from fresh geometry the destination is the whole 364
+      expect(rig.tops()).toEqual([264, 364])
+    })
   })
 })
