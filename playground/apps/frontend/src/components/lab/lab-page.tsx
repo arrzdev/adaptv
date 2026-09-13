@@ -1,4 +1,5 @@
 import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
+import { adaptvBack } from "@arrzdev/adaptv/hooks"
 import { useRouter } from "@arrzdev/adaptv/router"
 import {
   getOS,
@@ -40,6 +41,16 @@ export function LabPage({
   //only way out. Off in a browser tab, where the browser's edge swipe already is
   //back and a second recogniser would pop twice. See useIsInstalledApp.
   const isInstalled = useIsInstalledApp()
+
+  //The e2e seam for a back press. The real inputs are a hardware button and an OS
+  //gesture, neither of which a headless browser has, and an on-page button cannot
+  //stand in while a menu or a modal drawer is open: pressing it is an outside press
+  //that dismisses the menu, and the drawer's overlay covers it. `adaptvBack()` is
+  //the exact call the Android listener makes, so a spec presses back through it.
+  useEffect(() => {
+    ;(window as unknown as { __adaptvBack?: () => boolean }).__adaptvBack =
+      adaptvBack
+  }, [])
 
   //the IconButton fires its own light tap haptic on press
   function handleBack() {
