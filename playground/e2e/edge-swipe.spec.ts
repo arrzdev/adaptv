@@ -1,5 +1,6 @@
 import type { CDPSession } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * EdgeSwipeGestures — a back/forward gesture for the shells that took the OS one
@@ -61,33 +62,16 @@ async function swipe(
   await touch(cdp, "touchEnd")
 }
 
-/**
- * Wait for the client to actually take over. Every control on these pages is
- * server-rendered, so `toBeVisible()` passes on inert HTML and anything fired
- * at that moment is lost: a swipe hits a document with no listeners on it yet
- * (the gesture is attached by an effect), and a click hits a button whose
- * handler is not attached yet. The splash is SSR-rendered too and self-unmounts
- * only once the client has hydrated and the local store has seeded, so its
- * disappearance is the one honest "React is driving now" signal on the page.
- *
- * Both describes need it. The probe one looked immune because it *asserts* the
- * arm click took ("arm the probe" → "disarm the probe"), but that only turns a
- * lost click into a failing `beforeEach` — which is precisely how it presented:
- * the first test of a cold run failing on a button label, with its four serial
- * siblings never running. Playwright boots its own dev server and tears it down
- * per run, so that first test pays the route's cold transform cost and loses
- * the race while every test after it wins; a dev session left running hides it
- * entirely, because `reuseExistingServer` then hands the suite a warm server.
- *
- * Given a generous timeout on purpose — the case it exists for is a cold
- * server, where the route's first transform can take longer than the 5s
- * default.
+/*
+ * Both describes need the hydration gate (`awaitClientHandover`,
+ * e2e/support/hydrated.ts): a swipe fired early hits a document with no gesture
+ * listener on it yet (it is attached by an effect), and a click hits a button whose
+ * handler is not attached yet. The probe describe looked immune because it *asserts*
+ * the arm click took ("arm the probe" → "disarm the probe"), but that only turns a
+ * lost click into a failing `beforeEach` — which is precisely how it presented: the
+ * first test of a cold run failing on a button label, with its four serial siblings
+ * never running.
  */
-async function awaitClientHandover(page: import("@playwright/test").Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("EdgeSwipeGestures under real touch", () => {
   let cdp: CDPSession

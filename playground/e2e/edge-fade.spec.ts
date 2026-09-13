@@ -1,5 +1,6 @@
 import type { Locator } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Edge fades, measured in a real engine.
@@ -56,6 +57,7 @@ async function scrollTo(el: Locator, offset: number) {
 test.describe("ScrollView fade", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     await page.locator(DEEP_FADE).first().waitFor()
   })
 

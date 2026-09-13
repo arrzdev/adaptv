@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Capabilities smoke — every capability page renders and throws no UNCAUGHT error on
@@ -77,6 +78,7 @@ test.describe("Capabilities smoke", () => {
       })
 
       await page.goto(route)
+      await awaitClientHandover(page)
       await expect(
         page.getByRole("heading", { level: 1, name: title }),
       ).toBeVisible()

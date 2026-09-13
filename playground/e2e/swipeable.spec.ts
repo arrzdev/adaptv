@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Swipeable rows, measured with real touch.
@@ -156,6 +157,7 @@ test.describe("Swipeable rows under real touch", () => {
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/swipeable")
+    await awaitClientHandover(page)
     await page.locator(ROOT).first().waitFor()
     await page.locator(CONTENT).nth(PHOTO_ROW).waitFor()
 

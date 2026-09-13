@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The drawer-vs-keyboard conformance run, as a test that bites.
@@ -52,7 +53,7 @@ test("the conformance run passes every geometry check", async ({
   await page.goto("/lab/drawer-keyboard?autorun")
   //the SSR splash self-unmounts on hydration, and `?autorun` opens the sheet from a client
   //effect, so nothing below is meaningful before it is gone
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+  await awaitClientHandover(page)
   //a SYNC predicate: an async one returns a Promise, which is truthy, and the wait is a no-op
   await page.waitForFunction(
     () =>
