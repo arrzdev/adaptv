@@ -93,10 +93,12 @@ function observeOffscreen(el: Element): () => void {
  * Announcement — once per loading episode, not per instance, not per render
  * ============================================================================= */
 
-/** Labelled spinners mounted right now, per label. */
-const mountedLabels = new Map<string, number>()
-/** Labels whose episode began and that are waiting for the announce delay. */
-const pendingLabels = new Set<string>()
+/**
+ * Labelled spinners mounted right now, per label, and the episode they belong to. An
+ * episode starts when a label's count goes from 0 to 1 and ends when it returns to 0;
+ * its object identity is what a pending announcement checks it still belongs to.
+ */
+const mountedLabels = new Map<string, { count: number; episode: object }>()
 let announcer: HTMLElement | null = null
 
 function ensureAnnouncer(): HTMLElement {
@@ -113,41 +115,44 @@ function ensureAnnouncer(): HTMLElement {
   return region
 }
 
-function flushAnnouncements() {
-  //one timer per episode start; the first to fire says everything pending and the
-  //rest find nothing left, so labels starting together still share one pass
-  if (pendingLabels.size === 0) return
-  const region = ensureAnnouncer()
-  for (const label of pendingLabels) {
-    //an episode that ended inside the delay was a flash — nothing to say
-    if (!mountedLabels.has(label)) continue
-    const line = document.createElement("div")
-    line.textContent = label
-    region.appendChild(line)
-    setTimeout(() => line.remove(), SPINNER_ANNOUNCE_CLEAR_MS)
-  }
-  pendingLabels.clear()
+/**
+ * Say `label` if the episode that scheduled this is still the one mounted. Each
+ * episode has its own timer and flushes only itself: a label that started later waits
+ * its own delay, and one that ended inside it — even if the same label has since
+ * started again — was a flash with nothing to say.
+ */
+function announceEpisode(label: string, episode: object) {
+  if (mountedLabels.get(label)?.episode !== episode) return
+  const line = document.createElement("div")
+  line.textContent = label
+  ensureAnnouncer().appendChild(line)
+  setTimeout(() => line.remove(), SPINNER_ANNOUNCE_CLEAR_MS)
 }
 
 /**
  * Register a mounted labelled spinner. The label is announced when its count goes from
- * 0 to 1 — a list of twenty "Loading" spinners, a re-render, or StrictMode's second
- * effect pass is one announcement; a later episode, after every spinner with that label
- * unmounted, is a new one.
+ * 0 to 1 and stays up for the delay — a list of twenty "Loading" spinners, a re-render,
+ * or StrictMode's second effect pass is one announcement; a later episode, after every
+ * spinner with that label unmounted, is a new one.
  */
 function holdLabel(label: string): () => void {
-  const count = mountedLabels.get(label) ?? 0
-  mountedLabels.set(label, count + 1)
-  if (count === 0) {
-    pendingLabels.add(label)
+  const held = mountedLabels.get(label)
+  if (held) held.count += 1
+  else {
+    const episode = {}
+    mountedLabels.set(label, { count: 1, episode })
     //created now, written later: the region must exist before its text changes
     ensureAnnouncer()
-    setTimeout(flushAnnouncements, SPINNER_ANNOUNCE_DELAY_MS)
+    setTimeout(
+      () => announceEpisode(label, episode),
+      SPINNER_ANNOUNCE_DELAY_MS,
+    )
   }
   return () => {
-    const left = (mountedLabels.get(label) ?? 1) - 1
-    if (left > 0) mountedLabels.set(label, left)
-    else mountedLabels.delete(label)
+    const current = mountedLabels.get(label)
+    if (!current) return
+    current.count -= 1
+    if (current.count === 0) mountedLabels.delete(label)
   }
 }
 
