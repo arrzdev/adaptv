@@ -18,10 +18,11 @@ import { awaitClientHandover } from "./support/hydrated"
  * race: if the colour is there, it was put there by the head script.
  *
  * ⚠︎ As in `chrome-tint.spec.ts`: the toolbar a user looks at is painted by the browser PROCESS
- * and is not in the page. What Playwright can read is the two things adaptv writes — the meta tag
- * (Android/Chrome, iOS <= 18) and the html background (iOS 26+, where the tag is inert). Both are
- * asserted everywhere below, because a change that keeps one and drops the other is invisible
- * from either side alone.
+ * and is not in the page. What Playwright can read is what adaptv writes — the meta tag
+ * (Android/Chrome, iOS <= 18) and the html and body backgrounds (iOS 26+, where the tag is inert
+ * and the bars take the painted edge, which the body covers wherever it has a box). All three are
+ * asserted below, because a change that keeps one and drops another is invisible from either side
+ * alone.
  */
 
 test.use({ viewport: { width: 390, height: 844 } })
@@ -64,7 +65,24 @@ const APP_THEME = (() => {
   return { light: match[1].toLowerCase(), dark: match[2].toLowerCase() }
 })()
 
-/** The two surfaces, read together. */
+/** `#rrggbb` as the `rgb()` string `getComputedStyle` reports. */
+function rgb(hex: string): string {
+  const n = Number.parseInt(hex.slice(1), 16)
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`
+}
+
+/*
+ * The head script's pre-paint tint stamp on <html> (`PREPAINT_TINT_ATTR` in
+ * `src/shell/theme-init-script.ts`), repeated rather than imported for the same reason the theme
+ * colours are read as text above.
+ */
+const PREPAINT_TINT_ATTR = "data-adaptv-prepaint-tint"
+
+/*
+ * The surfaces, read together. `body` is its own reading, not a duplicate of `html`: iOS 26 takes
+ * the bars from the painted edge, the body covers `html` wherever it has a box, and the critical
+ * CSS paints the body in the THEME colour — so an html-only tint is invisible on that engine.
+ */
 async function chrome(page: Page) {
   return page.evaluate(() => ({
     meta:
@@ -72,6 +90,9 @@ async function chrome(page: Page) {
         .querySelector<HTMLMetaElement>('meta[name="theme-color"]')
         ?.content?.toLowerCase() ?? null,
     html: getComputedStyle(document.documentElement).backgroundColor,
+    body: document.body
+      ? getComputedStyle(document.body).backgroundColor
+      : null,
   }))
 }
 
@@ -92,9 +113,12 @@ test("the colour is on screen before the app can have booted", async ({
 
   await page.goto("/lab/route-tint", { waitUntil: "commit" })
   await expect.poll(async () => (await chrome(page)).meta).toBe(ROUTE_TINT)
+  //the body is parsed after the head script ran; wait for it to exist, not for a colour
+  await expect.poll(async () => (await chrome(page)).body).not.toBeNull()
 
   const painted = await chrome(page)
   expect(painted.html).toBe(ROUTE_TINT_RGB)
+  expect(painted.body).toBe(ROUTE_TINT_RGB)
   //and prove the app really had not run — otherwise this test would pass for the
   //wrong reason and quietly stop guarding the thing it exists for
   expect(await page.evaluate(() => Boolean(window.__TSR_ROUTER__))).toBe(
@@ -102,6 +126,29 @@ test("the colour is on screen before the app can have booted", async ({
   )
 
   for (const release of held) release()
+})
+
+test("hydrates the tinted document without a mismatch", async ({
+  page,
+}) => {
+  //the pre-paint tint is a stamp on <html>, not a node in <head>, because an
+  //injected <style> sat among the server-rendered head nodes and React's document
+  //hydration reported a mismatch on it; this is what keeps that from coming back
+  const mismatches: string[] = []
+  page.on("console", (message) => {
+    if (message.type() !== "error") return
+    if (/hydrat|did not match|#418/i.test(message.text())) {
+      mismatches.push(message.text())
+    }
+  })
+  page.on("pageerror", (error) => {
+    if (/hydrat|did not match|#418/i.test(String(error))) {
+      mismatches.push(String(error))
+    }
+  })
+  await page.goto("/lab/route-tint")
+  await awaitClientHandover(page)
+  expect(mismatches).toEqual([])
 })
 
 test.describe("once the app is running", () => {
@@ -114,7 +161,16 @@ test.describe("once the app is running", () => {
     expect(await chrome(page)).toEqual({
       meta: ROUTE_TINT,
       html: ROUTE_TINT_RGB,
+      body: ROUTE_TINT_RGB,
     })
+    //the pre-paint stamp holds the cold-launch route's colour; once the app paints,
+    //it must be gone, or it would outlive the route that declared it
+    expect(
+      await page.evaluate(
+        (attr) => document.documentElement.hasAttribute(attr),
+        PREPAINT_TINT_ATTR,
+      ),
+    ).toBe(false)
   })
 
   test("does not follow a theme flip — one colour, both themes", async ({
@@ -150,6 +206,9 @@ test.describe("once the app is running", () => {
       document.documentElement.classList.contains("dark"),
     )
     expect(themed.meta).toBe(configured ? APP_THEME.dark : APP_THEME.light)
+    expect(themed.body).toBe(
+      rgb(configured ? APP_THEME.dark : APP_THEME.light),
+    )
   })
 
   test("takes the colour back on the way in", async ({ page }) => {
