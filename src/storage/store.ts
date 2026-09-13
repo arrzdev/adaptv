@@ -167,8 +167,21 @@ function commit(run: (store: IDBObjectStore) => void): Promise<Outcome> {
 
 const listeners = new Map<string, Set<() => void>>()
 
+/**
+ * Wake one key's listeners. Each runs in isolation: a consumer's listener that
+ * throws must not stop the others, and must not turn a write that never
+ * rejects into one that does. Its error is reported the way a throwing DOM
+ * event listener's is — to `reportError`, where there is one.
+ */
 function emit(key: string): void {
-  for (const listener of listeners.get(key) ?? []) listener()
+  for (const listener of [...(listeners.get(key) ?? [])]) {
+    try {
+      listener()
+    } catch (error) {
+      if (typeof reportError === "function") reportError(error)
+      else console.error(error)
+    }
+  }
 }
 
 /**
@@ -202,8 +215,11 @@ async function write(
 ): Promise<void> {
   const entry: Entry = { value }
   memory.set(key, entry)
+  //the transaction is queued before any listener runs, so nothing a listener
+  //does can keep it from being created
+  const committing = commit(run)
   emit(key)
-  const outcome = await commit(run)
+  const outcome = await committing
   //a later write to the same key may have replaced the entry mid-flight — only
   //the write that put it there may take it out
   if (memory.get(key) !== entry) return

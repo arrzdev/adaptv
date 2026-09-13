@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { store } from "#adaptv/storage/store"
+import { store, subscribeStore } from "#adaptv/storage/store"
 
 beforeEach(async () => {
   await store.clear()
@@ -355,6 +355,35 @@ describe("store — a wipe from outside", () => {
     })
     expect(outcome).toBe("deleted")
     expect(await store.get("token-ish")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(true)
+  })
+})
+
+describe("store — subscribers", () => {
+  it("a listener that throws cannot break the write that woke it", async () => {
+    //set() never rejects, and a consumer's buggy listener is no exception: the
+    //write still commits, the other listeners still run, and the error is
+    //reported the way a throwing DOM event listener's is
+    const reportError = vi.fn()
+    vi.stubGlobal("reportError", reportError)
+    const boom = new Error("listener bug")
+    const offBroken = subscribeStore("k", () => {
+      throw boom
+    })
+    const other = vi.fn()
+    const offOther = subscribeStore("k", other)
+    try {
+      await expect(store.set("k", 1)).resolves.toBeUndefined()
+      await expect(store.clear()).resolves.toBeUndefined()
+      await expect(store.set("k", 2)).resolves.toBeUndefined()
+    } finally {
+      offBroken()
+      offOther()
+    }
+    expect(other).toHaveBeenCalledTimes(3)
+    expect(reportError).toHaveBeenCalledWith(boom)
+    //the commit really happened: a module with no memory of it reads it back
+    expect(await (await freshStore()).get("k")).toBe(2)
     expect(await store.isPersistent()).toBe(true)
   })
 })
