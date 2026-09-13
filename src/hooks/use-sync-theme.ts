@@ -1,6 +1,10 @@
 import { setThemeColorBase } from "#adaptv/capabilities/theme-color"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
-import { THEME_COLOR_META_ID } from "#adaptv/shell/theme-init-script"
+import {
+  PREPAINT_TINT_ATTR,
+  PREPAINT_TINT_VAR,
+  THEME_COLOR_META_ID,
+} from "#adaptv/shell/theme-init-script"
 
 export type UseSyncThemeOptions = {
   themeColorLight: string
@@ -75,6 +79,11 @@ export function useSyncTheme({
     function syncTheme() {
       const isDark = root.classList.contains("dark")
       const isLight = root.classList.contains("light")
+      //the head script's pre-paint tint for a cold-launched tinted route: every
+      //path below either paints html/body inline or clears them, and in both
+      //cases the stamp could only pin the colour of the route the app LAUNCHED on
+      root.removeAttribute(PREPAINT_TINT_ATTR)
+      root.style.removeProperty(PREPAINT_TINT_VAR)
 
       if (!enabled || (!isDark && !isLight)) {
         setThemeColorBase(null)

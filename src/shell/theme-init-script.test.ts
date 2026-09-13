@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { getCriticalShellCss } from "#adaptv/shell/critical-css"
 import type { RouteTint } from "#adaptv/shell/route-tints"
 import {
   getUiThemeInitScript,
   PREFERENCE_ATTR,
+  PREPAINT_TINT_ATTR,
+  PREPAINT_TINT_VAR,
   THEME_COLOR_META_ID,
 } from "#adaptv/shell/theme-init-script"
 
@@ -133,5 +136,66 @@ describe("getUiThemeInitScript — a route that pins the chrome", () => {
 
   it("is the plain theme script when no route declares a tint", () => {
     expect(runAt("/settings", []).meta).toBe("#0a0a0c")
+  })
+})
+
+/**
+ * The BODY, before anything but the head script and the critical CSS has run.
+ *
+ * iOS 26 takes both bars from the page's painted edge, and the body is that edge: it
+ * covers `html` wherever it has a box. The critical CSS paints `html.dark body` with the
+ * THEME colour, so an `html`-only tint was hidden under it until `useSyncTheme` painted
+ * the body after hydration — measured on an iOS 26.1 simulator as ~557 ms of theme
+ * colour in both bars on a cold launch of a tinted route.
+ */
+function bodyAt(pathname: string, routeTints: RouteTint[]): string {
+  document.documentElement.removeAttribute(PREPAINT_TINT_ATTR)
+  runAt(pathname, routeTints)
+  //the shell emits the critical CSS ahead of the script; order does not decide the
+  //outcome here (importance does), but the document should look like the real one
+  const critical = document.createElement("style")
+  critical.textContent = getCriticalShellCss("#eeeeec", "#0a0a0c", false)
+  document.head.prepend(critical)
+  return getComputedStyle(document.body).backgroundColor
+}
+
+describe("getUiThemeInitScript — the body is painted before the app runs", () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute(PREPAINT_TINT_ATTR)
+    document.documentElement.removeAttribute("style")
+    document.head.innerHTML = ""
+  })
+
+  it("paints a tinted route's colour on the body, over the critical CSS", () => {
+    expect(bodyAt("/settings", TINTS)).toBe("#0b6e4f")
+    //through <html>, not a node in <head>: a head node the script adds lands among
+    //the server-rendered ones and React's hydration of the document trips on it
+    expect(
+      document.documentElement.style.getPropertyValue(PREPAINT_TINT_VAR),
+    ).toBe("#0b6e4f")
+  })
+
+  it("does not stamp a tint the engine rejects, so the theme still paints", () => {
+    //the build-time scan only checks for a string literal; an invalid colour
+    //through var() computes to transparent in a browser and would beat the theme
+    //rules. happy-dom does not compute that, so the body colour cannot prove it
+    //here: the absent stamp is the guard, since without it no rule reads the var
+    runAt("/settings", [
+      { id: "/_p/settings", path: "/settings", tint: "brand-green" },
+    ])
+    expect(document.documentElement.hasAttribute(PREPAINT_TINT_ATTR)).toBe(
+      false,
+    )
+    expect(
+      document.documentElement.style.getPropertyValue(PREPAINT_TINT_VAR),
+    ).toBe("")
+  })
+
+  it("leaves the body to the critical CSS on a route that declares nothing", () => {
+    expect(bodyAt("/lab", TINTS)).toBe("#0a0a0c")
+    //and adds nothing that could pin a colour across a theme switch before hydration
+    expect(document.documentElement.hasAttribute(PREPAINT_TINT_ATTR)).toBe(
+      false,
+    )
   })
 })
