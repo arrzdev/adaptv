@@ -2,7 +2,6 @@ import {
   createMemoryHistory,
   createRootRoute,
   createRoute,
-  createRouter,
   RouterProvider,
 } from "@tanstack/react-router"
 import { render, waitFor } from "@testing-library/react"
@@ -72,6 +71,8 @@ function fakeRouter({ settled = false } = {}) {
   const navigations: Navigation[] = []
   const router = {
     state: { resolvedLocation: settled ? { href: "/" } : undefined },
+    //a mounted provider: the history has its subscriber, so links go through navigate
+    history: { subscribers: new Set([() => {}]), replace: () => {} },
     navigate: (options: Navigation) => {
       navigations.push(options)
       return Promise.resolve()
@@ -297,12 +298,20 @@ describe("onUrlOpened", () => {
 
 /*
  * The fake router above records what the capability asks for. These pin that the ask
- * means what the capability thinks it means, on the real router: `navigate({ href,
- * replace })` takes a path with its query and fragment, `replace` takes the entry, and
- * `state.resolvedLocation` is unset until the first screen has rendered.
+ * means what the capability thinks it means, on the real router built by adaptv's own
+ * factory — so a factory that stops installing the listener fails here too: `href`
+ * takes a path with its query and fragment, `replace` takes the entry,
+ * `state.resolvedLocation` is unset until the first screen has rendered, and a link
+ * routed before the provider mounts loads its route once, not twice.
  */
-describe("installUrlOpen — on a real router", () => {
-  function realRouter() {
+describe("the router factory — links on a real router", () => {
+  async function appRouter(native: ReturnType<typeof capacitorApp>) {
+    await urlOpen(native.app)
+    //imported after the stand-in, so the factory installs into the same module
+    const { createAdaptvRouter } = await import(
+      "#adaptv/shell/create-adaptv-router"
+    )
+    const runs = { beforeLoad: 0, loader: 0 }
     const rootRoute = createRootRoute()
     const page = (path: string) =>
       createRoute({
@@ -310,22 +319,34 @@ describe("installUrlOpen — on a real router", () => {
         path,
         component: () => createElement("p", null, `page ${path}`),
       })
-    return createRouter({
+    const settings = createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/settings/x",
+      beforeLoad: () => {
+        runs.beforeLoad += 1
+      },
+      loader: () => {
+        runs.loader += 1
+      },
+      component: () => createElement("p", null, "page /settings/x"),
+    })
+    const router = createAdaptvRouter({
       routeTree: rootRoute.addChildren([
         page("/"),
-        page("/settings/x"),
+        settings,
         page("/lab"),
       ]),
-      history: createMemoryHistory({ initialEntries: ["/"] }),
+      options: {
+        history: createMemoryHistory({ initialEntries: ["/"] }),
+      },
     })
+    return { router, runs }
   }
 
   it("a cold link takes the first entry, a warm one stacks on it", async () => {
     const native = capacitorApp({ launchUrl: "myapp://settings/x?y=1#z" })
-    const { installUrlOpen } = await urlOpen(native.app)
-    const router = realRouter()
+    const { router } = await appRouter(native)
 
-    installUrlOpen(router)
     expect(router.state.resolvedLocation).toBeUndefined()
     await settle()
     expect(router.history.length).toBe(1)
@@ -342,6 +363,24 @@ describe("installUrlOpen — on a real router", () => {
     await view.findByText("page /lab")
     expect(router.history.length).toBe(2)
     expect(native.calls.getLaunchUrl).toBe(0)
+    view.unmount()
+  })
+
+  it("runs the linked route's beforeLoad and loader once for a link replayed before mount", async () => {
+    //with no provider mounted the history has no subscriber, and a router navigation
+    //then loads the route itself — before the provider's mount loads it again
+    const native = capacitorApp({ launchUrl: "myapp://settings/x" })
+    const { router, runs } = await appRouter(native)
+    await settle()
+
+    const view = render(createElement(RouterProvider, { router }))
+    await view.findByText("page /settings/x")
+    await waitFor(() =>
+      expect(router.state.resolvedLocation).toBeDefined(),
+    )
+    await settle()
+    expect(runs).toEqual({ beforeLoad: 1, loader: 1 })
+    expect(router.history.length).toBe(1)
     view.unmount()
   })
 })
