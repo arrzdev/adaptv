@@ -1,6 +1,10 @@
+import { createBrowserHistory } from "@tanstack/react-router"
 import { renderHook } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
-import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  STATUS_BAR_RESAMPLE_HASH,
+  useSyncTheme,
+} from "#adaptv/hooks/use-sync-theme"
 import {
   PREPAINT_TINT_ATTR,
   PREPAINT_TINT_VAR,
@@ -170,5 +174,177 @@ describe("useSyncTheme — the pre-paint tint is handed over, not kept", () => {
     prepaintStamp(PREPAINT_ROUTE)
     mount(false)
     expect(stamped()).toBe(false)
+  })
+})
+
+/**
+ * The OS appearance change in an installed web app, and the URL nudge that makes iOS
+ * 26 re-derive the status-bar strip (the WebKit bug is described on
+ * `resampleStatusBarFill` in the hook).
+ */
+describe("useSyncTheme — an installed iOS app's status bar after an OS appearance switch", () => {
+  const PAGE = "https://app.test/tasks?filter=open"
+  const IPHONE =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1"
+  const ANDROID =
+    "Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0 Mobile Safari/537.36"
+
+  type Shell = "web" | "standalone" | "native"
+
+  /**
+   * Put the test in a shell on an OS, through the same signals `utils/platform.ts`
+   * reads (`navigator.standalone`, `window.Capacitor`, the user agent), and hand back
+   * a `prefers-color-scheme` query whose `change` the test fires.
+   */
+  function on(shell: Shell, ua: string) {
+    ;(
+      window as unknown as { happyDOM: { setURL: (url: string) => void } }
+    ).happyDOM.setURL(PAGE)
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua)
+    Object.defineProperty(navigator, "standalone", {
+      value: shell === "standalone",
+      configurable: true,
+    })
+    if (shell === "native") {
+      ;(globalThis as { Capacitor?: object }).Capacitor = {
+        isNativePlatform: () => true,
+        getPlatform: () => (ua === ANDROID ? "android" : "ios"),
+      }
+    }
+    const scheme = Object.assign(new EventTarget(), {
+      matches: false,
+      media: "(prefers-color-scheme: dark)",
+    })
+    vi.spyOn(window, "matchMedia").mockImplementation(
+      (query) =>
+        (query === scheme.media
+          ? scheme
+          : { matches: false, media: query }) as unknown as MediaQueryList,
+    )
+    return {
+      switchTo(dark: boolean) {
+        scheme.matches = dark
+        scheme.dispatchEvent(new Event("change"))
+      },
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    Reflect.deleteProperty(navigator, "standalone")
+    Reflect.deleteProperty(globalThis, "Capacitor")
+    document.head.querySelector("base")?.remove()
+    //TanStack's destroy() puts the originals back as OWN properties on the
+    //instance; left there, they would change what the next test exercises
+    Reflect.deleteProperty(window.history, "replaceState")
+    Reflect.deleteProperty(window.history, "pushState")
+  })
+
+  it("moves the URL away and back through History.prototype, keeping state", () => {
+    const os = on("standalone", IPHONE)
+    const state = { __TSR_key: "k1", __TSR_index: 3 }
+    History.prototype.replaceState.call(window.history, state, "", PAGE)
+    const native = vi.spyOn(History.prototype, "replaceState")
+    mount()
+
+    os.switchTo(true)
+
+    expect(native).toHaveBeenCalledTimes(2)
+    expect(native.mock.calls[0]?.[2]).toBe(
+      `${PAGE}${STATUS_BAR_RESAMPLE_HASH}`,
+    )
+    expect(native.mock.calls[1]?.[2]).toBe(PAGE)
+    expect(window.location.href).toBe(PAGE)
+    expect(window.history.state).toEqual(state)
+  })
+
+  it("is invisible to TanStack's browser history, which wraps the instance method", () => {
+    //the real wrapper, not a stand-in: an upgrade that changes how the router
+    //hears about replaceState must turn this red, not leave a stub green
+    const os = on("standalone", IPHONE)
+    const router = createBrowserHistory()
+    try {
+      const before = {
+        href: router.location.href,
+        key: window.history.state?.__TSR_key,
+      }
+      const heard = vi.fn()
+      const unsubscribe = router.subscribe(heard)
+      mount()
+
+      os.switchTo(true)
+
+      expect(window.history.replaceState).not.toBe(
+        History.prototype.replaceState,
+      )
+      expect(heard).not.toHaveBeenCalled()
+      expect(router.location.href).toBe(before.href)
+      expect(window.history.state?.__TSR_key).toBe(before.key)
+      unsubscribe()
+    } finally {
+      router.destroy()
+    }
+  })
+
+  it("builds both URLs from the page's href, so a <base> cannot move the path", () => {
+    const os = on("standalone", IPHONE)
+    const base = document.createElement("base")
+    base.href = "https://app.test/elsewhere/"
+    document.head.append(base)
+    const native = vi.spyOn(History.prototype, "replaceState")
+    mount()
+
+    os.switchTo(true)
+
+    expect(native.mock.calls[0]?.[2]).toBe(
+      `${PAGE}${STATUS_BAR_RESAMPLE_HASH}`,
+    )
+    expect(window.location.href).toBe(PAGE)
+  })
+
+  it("still moves the URL when it already carries the detour hash", () => {
+    const os = on("standalone", IPHONE)
+    const here = `${PAGE}${STATUS_BAR_RESAMPLE_HASH}`
+    ;(
+      window as unknown as { happyDOM: { setURL: (url: string) => void } }
+    ).happyDOM.setURL(here)
+    const native = vi.spyOn(History.prototype, "replaceState")
+    mount()
+
+    os.switchTo(true)
+
+    expect(native).toHaveBeenCalledTimes(2)
+    expect(native.mock.calls[0]?.[2]).not.toBe(here)
+    expect(window.location.href).toBe(here)
+  })
+
+  it("does nothing in a browser tab, a native build or an Android install", () => {
+    const cases: Array<[Shell, string]> = [
+      ["web", IPHONE],
+      ["native", IPHONE],
+      ["standalone", ANDROID],
+    ]
+    for (const [shell, ua] of cases) {
+      const os = on(shell, ua)
+      const native = vi.spyOn(History.prototype, "replaceState")
+      const { unmount } = mount()
+      os.switchTo(true)
+      expect(
+        native,
+        `${shell} on ${ua.slice(13, 20)}`,
+      ).not.toHaveBeenCalled()
+      unmount()
+      vi.restoreAllMocks()
+      Reflect.deleteProperty(globalThis, "Capacitor")
+    }
+  })
+
+  it("stops listening on unmount", () => {
+    const os = on("standalone", IPHONE)
+    const { unmount } = mount()
+    unmount()
+    const native = vi.spyOn(History.prototype, "replaceState")
+    os.switchTo(true)
+    expect(native).not.toHaveBeenCalled()
   })
 })
