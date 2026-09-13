@@ -40,6 +40,14 @@
         "noRestrictedImports": {
           "level": "error",
           "options": {
+            "paths": {
+              "motion/react": {
+                "importNames": ["motion"],
+                "message": "Use `m` under a `LazyMotion` provider, not the full `motion` component (docs/decisions/animation.md A7)."
+              },
+              "motion/react-client": "Use `m` under a `LazyMotion` provider from motion/react, not the full `motion` component (docs/decisions/animation.md A7).",
+              "framer-motion": "Import from motion/react, and use `m` under a `LazyMotion` provider (docs/decisions/animation.md A7)."
+            },
             "patterns": [
               {
                 "group": ["./*", "../*"],

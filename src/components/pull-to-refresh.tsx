@@ -1,4 +1,4 @@
-import { motion } from "motion/react"
+import { domMin, LazyMotion, m } from "motion/react"
 import type {
   MutableRefObject,
   PointerEvent,
@@ -724,48 +724,54 @@ export const PullToRefresh = forwardRef<
         >
           {liveStatus}
         </div>
-        {showSpinner && (
-          <motion.div
-            className={PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS}
-            initial={false}
-            animate={{
-              top: spinnerTop,
-              opacity: spinnerOpacity,
-              scale: spinnerScale,
-            }}
-            transition={spinnerTrackTransition}
-          >
-            <motion.div
-              className={PULL_TO_REFRESH_INDICATOR_ROTATOR_LAYOUT_CLASS}
+        {/* `m` under its own `domMin` provider, never `motion.div`: the
+            close resolves through `onAnimationComplete`, so an `m` that
+            found no provider would park the content lifted in `closing`
+            until the next touch. → docs/decisions/animation.md §3.1 */}
+        <LazyMotion features={domMin}>
+          {showSpinner && (
+            <m.div
+              className={PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS}
               initial={false}
-              animate={{ rotate: spinnerRotate }}
-              transition={spinnerRotateTransition}
+              animate={{
+                top: spinnerTop,
+                opacity: spinnerOpacity,
+                scale: spinnerScale,
+              }}
+              transition={spinnerTrackTransition}
             >
-              <PullIndicatorArc
-                arcProgress={isDragging ? pulling.arcProgress : 1}
-                spinning={isRefreshing}
-                reducedMotion={reducedMotion}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-        {liftContent ? (
-          <motion.div
-            className={PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS}
-            initial={false}
-            animate={{ y: contentY }}
-            transition={contentTransition}
-            onAnimationComplete={
-              isClosing ? onCloseAnimationComplete : undefined
-            }
-          >
-            {children}
-          </motion.div>
-        ) : (
-          <div className={PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS}>
-            {children}
-          </div>
-        )}
+              <m.div
+                className={PULL_TO_REFRESH_INDICATOR_ROTATOR_LAYOUT_CLASS}
+                initial={false}
+                animate={{ rotate: spinnerRotate }}
+                transition={spinnerRotateTransition}
+              >
+                <PullIndicatorArc
+                  arcProgress={isDragging ? pulling.arcProgress : 1}
+                  spinning={isRefreshing}
+                  reducedMotion={reducedMotion}
+                />
+              </m.div>
+            </m.div>
+          )}
+          {liftContent ? (
+            <m.div
+              className={PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS}
+              initial={false}
+              animate={{ y: contentY }}
+              transition={contentTransition}
+              onAnimationComplete={
+                isClosing ? onCloseAnimationComplete : undefined
+              }
+            >
+              {children}
+            </m.div>
+          ) : (
+            <div className={PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS}>
+              {children}
+            </div>
+          )}
+        </LazyMotion>
       </div>
     </PullToRefreshContext.Provider>
   )
