@@ -45,7 +45,10 @@ export function appShellFile(render: "ssr" | "spa"): string {
 
 /**
  * Everything precached besides the shell: every route chunk, the stylesheet, the
- * icons, the fonts.
+ * fonts, and the icons a web surface links. The rest of the icon directory — the
+ * native launcher sources `resolveIconSet` measures but neither the head nor the
+ * manifest points at — is taken back out by `sw-build.ts`, so this glob is not
+ * the whole answer. → `docs/design/rendering.md §3.2`
  *
  * **`html` is deliberately absent.** Route documents are per-request under SSR
  * and Cache Storage is keyed by URL and scoped per-ORIGIN, not per-user — so a

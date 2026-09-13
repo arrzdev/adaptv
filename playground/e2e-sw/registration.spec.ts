@@ -41,6 +41,50 @@ test.describe("registration", () => {
     ).not.toHaveLength(0)
   })
 
+  test("precaches exactly the icons the page and the manifest link", async ({
+    page,
+  }) => {
+    await bootControlled(page)
+    const state = await workerState(page)
+
+    //What the web surfaces point at, read off the served app rather than from a
+    //list: the head's icon links and the shipped manifest's `icons`.
+    const linked = await page.evaluate(async () => {
+      const head = [
+        ...document.querySelectorAll<HTMLLinkElement>(
+          'link[rel~="icon"], link[rel="apple-touch-icon"]',
+        ),
+      ].map((link) => new URL(link.href).pathname)
+      const manifest = (await (await fetch("/manifest.json")).json()) as {
+        icons: Array<{ src: string }>
+      }
+      const icons = manifest.icons.map(
+        (icon) => new URL(icon.src, location.href).pathname,
+      )
+      return [...new Set([...head, ...icons])].sort()
+    })
+    expect(linked, "the page links no icons at all").not.toHaveLength(0)
+
+    //Every precached file in the directories those links live in. The icon
+    //directory sits inside `public/`, so the glob reaches all of it — including
+    //the native launcher sources (the 1024px master, the iOS 18 dark and tinted
+    //appearances, Android's monochrome layer) that no browser ever requests.
+    //Exact equality both ways: a linked icon missing is a broken offline icon,
+    //an extra one is install bytes for nothing. → docs/design/rendering.md §3.2
+    const iconDirs = new Set(
+      linked.map((pathname) =>
+        pathname.slice(0, pathname.lastIndexOf("/")),
+      ),
+    )
+    const precachedIcons = state.precached
+      .map((url) => new URL(url).pathname)
+      .filter((pathname) =>
+        iconDirs.has(pathname.slice(0, pathname.lastIndexOf("/"))),
+      )
+      .sort()
+    expect(precachedIcons).toEqual(linked)
+  })
+
   test("precaches no route DOCUMENT — that would be a cross-user leak", async ({
     page,
   }) => {
