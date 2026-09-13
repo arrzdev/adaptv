@@ -78,12 +78,12 @@ function LabRouteTintPage() {
             note: "Chrome on Android tints its toolbar from the meta tag. Desktop browsers mostly ignore theme-color, so judge this on a phone.",
           },
           pwa: {
-            verdict: "works",
-            note: "No toolbar, but the bands above and below the app are the html/body paint — which this drives too.",
+            verdict: "partial",
+            note: "No toolbar, and only one band takes the tint: measured on the iOS simulator, iOS 18.0 shows it at the bottom only and iOS 26.1 at the top only (B33).",
           },
           ios: {
-            verdict: "works",
-            note: "Two different mechanisms reach the same place: Safari 15–18.7 reads the meta tag, iOS 26+ ignores it and takes the rendered html/body background near the viewport edge instead (B17). adaptv writes both, so the version does not matter here.",
+            verdict: "partial",
+            note: "Safari 15–18.7 reads the meta tag and iOS 26+ Safari the rendered html/body edge (B17), but this build follows neither: measured on iOS 18.0 and 26.1, the status bar keeps the page's own pixels and the tint shows only as a gradient at the bottom edge (B33).",
           },
           android: {
             verdict: "partial",
