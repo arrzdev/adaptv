@@ -96,6 +96,29 @@ describe("unregisterForeignServiceWorkers", () => {
     expect(rootScript.unregister).toHaveBeenCalledOnce()
   })
 
+  it("keeps the app's worker when BASE_URL was written without its slash", async () => {
+    //`--base /app` reaches the bundle as BASE_URL `"/app"` (Vite adds the slash
+    //to `config.base` only), and the worker is still served at `/app/sw.js`.
+    //Concatenated, the expected script was `/appsw.js`, so the app's own worker
+    //looked foreign and was unregistered on every launch.
+    vi.stubEnv("BASE_URL", "/app")
+    const own = registration({
+      scope: `${origin()}/app/`,
+      active: `${origin()}/app/sw.js`,
+    })
+    const lookalike = registration({
+      scope: `${origin()}/application/`,
+      active: `${origin()}/application/sw.js`,
+    })
+    stubRegistrations(async () => [own, lookalike])
+
+    await unregisterForeignServiceWorkers()
+
+    expect(own.unregister).not.toHaveBeenCalled()
+    //and the scope still ends at the slash, so `/app` never claims `/application/`
+    expect(lookalike.unregister).not.toHaveBeenCalled()
+  })
+
   it("leaves every registration outside the app's base alone", async () => {
     //Two project sites share one `<user>.github.io` origin, and
     //`getRegistrations()` lists both. The app at `/app/` owns `/app/`; the worker
