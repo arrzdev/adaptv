@@ -52,12 +52,43 @@ test.describe(`redirects (render: ${RENDER})`, () => {
     //The control. Without it, a green test below is equally consistent with a
     //fixture that never redirected in the first place — and with `spa` in the
     //mix, "the server 307s" is not even true on every run of this file.
-    await page.goto(REDIRECT, { waitUntil: "domcontentloaded" })
+    const response = await page.goto(REDIRECT, {
+      waitUntil: "domcontentloaded",
+    })
+    //Read before the client router moves the URL, while it is still the document
+    //this visit booted from.
+    const serverRedirected = response?.request().redirectedFrom() != null
+    const bootstrapped = /\$_TSR/.test((await response?.text()) ?? "")
     await expect
       .poll(() => new URL(page.url()).pathname, {
         message: `${REDIRECT} did not reach ${ROUTE} with NO service worker involved — the fixture is broken, not the worker`,
       })
       .toBe(ROUTE)
+
+    //WHICH mechanism got it there, because a server that renders spa navigations
+    //satisfies the poll above just as well. That is the host the spa suite used
+    //to run on: every first visit was a server render, so the static shell's own
+    //boot, and the client redirect this file claims for spa, never ran before a
+    //worker took over. Soft, so a host that does both reports both.
+    if (RENDER === "spa") {
+      expect
+        .soft(
+          serverRedirected,
+          "the origin answered with a 3xx — a static spa host has no router, so the client never redirected",
+        )
+        .toBe(false)
+      expect
+        .soft(
+          bootstrapped,
+          "the first document carries the server bootstrap ($_TSR) — it was rendered by a server, not the static shell",
+        )
+        .toBe(false)
+    } else {
+      expect(
+        serverRedirected,
+        "no 3xx from the server — ssr redirects in the response, before any client code",
+      ).toBe(true)
+    }
   })
 
   test("...and still lands there with the worker serving navigations", async ({

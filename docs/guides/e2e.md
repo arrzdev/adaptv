@@ -18,7 +18,7 @@ pnpm --dir playground test:e2e:sw:all     # all three worker suites, built outpu
 |---|---|---|---|---|
 | **Main** | `playwright.config.ts` | `e2e/` — 35 | `vite` (dev) | `41730` (`E2E_PORT`) |
 | **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → `vite preview`** | `41750` (`E2E_SW_PORT`) |
-| **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → preview**, `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
+| **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → static host** (`e2e-sw/static-host.mjs`), `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
 | **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |
 
 Every suite runs two projects: **chromium** (Desktop Chrome) and **webkit** (`iPhone 13` device
@@ -78,6 +78,12 @@ The worker configs set `reuseExistingServer: false` unconditionally: **a server 
 server built from unknown source**, and that suite exists to catch exactly that staleness. Their
 `webServer.command` is `build && vite preview` for the same reason — `vite preview` serves whatever is
 on disk, so without the build a green run can be measuring the previous commit's worker.
+
+The `spa` suite serves its build with `e2e-sw/static-host.mjs` instead of `vite preview`, because the
+preview renders every navigation on the server whatever `render` the build was: a first visit came
+back as a server render carrying the `$_TSR` bootstrap, and a router redirect as a server `307`, so
+the static shell's own boot never ran before a worker took over. The host answers a file that exists,
+then the `_redirects` rule the build emits, then `404.html`, reading the disk on every request.
 
 ### 3.3 The main suite runs plain `vite`, not the CLI
 
