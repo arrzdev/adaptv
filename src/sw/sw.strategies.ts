@@ -97,13 +97,12 @@ export function createHashedAssetStrategy(
 
 export function createStaticAssetStrategy(
   buildTag: string,
-  options: Omit<StrategyFactoryOptions, "cacheName"> & {
-    cacheBucket?: string
-  } = {},
+  options: Omit<StrategyFactoryOptions, "cacheName"> = {},
 ): Strategy {
-  const cacheBucket = options.cacheBucket ?? "static"
+  //always the `static` bucket: the activate-time sweep deletes a previous build's
+  //cache only under a bucket it knows (`ADAPTV_RUNTIME_BUCKETS`)
   return createHashedAssetStrategy({
     ...options,
-    cacheName: createCacheName(buildTag, cacheBucket),
+    cacheName: createCacheName(buildTag, "static"),
   })
 }
