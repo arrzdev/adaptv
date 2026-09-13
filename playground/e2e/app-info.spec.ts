@@ -52,6 +52,11 @@ test.describe("App info", () => {
   test("the rows resolve without a reload, and none of them is an empty string", async ({
     page,
   }) => {
+    //"reading" is the in-flight word; a row read before the record lands says
+    //nothing about what the target answered
+    await expect(page.getByTestId("app-info-name")).not.toHaveText(
+      "reading",
+    )
     for (const id of [
       "app-info-name",
       "app-info-id",
