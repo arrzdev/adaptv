@@ -448,6 +448,52 @@ describe("a labelled spinner is announced once", () => {
     second.unmount()
   })
 
+  it("each label waits its own delay: a second label that starts later is not flushed by the first", () => {
+    const a = render(<Spinner label="Syncing A" />)
+    act(() => {
+      vi.advanceTimersByTime(140)
+    })
+    const b = render(<Spinner label="Syncing B" />)
+    act(() => {
+      vi.advanceTimersByTime(12)
+    })
+    //t=152: A is past its delay, B is 12 ms old
+    expect(announcerLines()).toEqual(["Syncing A"])
+    act(() => {
+      vi.advanceTimersByTime(8)
+    })
+    //t=160: B ended inside ITS delay — a flash, never said
+    b.unmount()
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(announcerLines()).toEqual(["Syncing A"])
+    a.unmount()
+  })
+
+  it("a remount inside the delay of an ended episode waits its own delay", () => {
+    const first = render(<Spinner label="Syncing C" />)
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    first.unmount()
+    act(() => {
+      vi.advanceTimersByTime(40)
+    })
+    const second = render(<Spinner label="Syncing C" />)
+    act(() => {
+      vi.advanceTimersByTime(20)
+    })
+    //t=160: the first episode's timer has fired, but the second is 20 ms old
+    expect(announcerLines()).toEqual([])
+    act(() => {
+      vi.advanceTimersByTime(130)
+    })
+    //t=290: the second episode is 150 ms old
+    expect(announcerLines()).toEqual(["Syncing C"])
+    second.unmount()
+  })
+
   it("an announced line leaves the region once the reader has had it", () => {
     const { unmount } = render(<Spinner label="Loading" />)
     act(() => {
