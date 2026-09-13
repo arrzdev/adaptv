@@ -18,6 +18,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -194,7 +195,12 @@ const staged = {
     "THIRD_PARTY_LICENSES",
   ],
 }
-const dir = mkdtempSync(path.join(tmpdir(), "adaptv-publish-"))
+//One throwaway directory holds the staged package and attw's report, and it goes on
+//every way out — a pass, a failure, or a throw — so a check run on every build does not
+//leave a copy of the package behind in the OS temp dir each time.
+const work = mkdtempSync(path.join(tmpdir(), "adaptv-publish-"))
+process.on("exit", () => rmSync(work, { recursive: true, force: true }))
+const dir = path.join(work, "package")
 for (const f of staged.files)
   cpSync(path.join(repo, f), path.join(dir, f), { recursive: true })
 writeFileSync(
@@ -268,7 +274,7 @@ function attwInternalResolutionOk() {
   //`maxBuffer` says. The report is ~280 KiB, so it arrived as invalid JSON and the
   //audit "failed" for a reason that had nothing to do with the package. Writing
   //straight to a file descriptor sidesteps the buffer entirely.
-  const reportPath = path.join(tmpdir(), "adaptv-attw-report.json")
+  const reportPath = path.join(work, "attw-report.json")
   const fd = openSync(reportPath, "w")
   try {
     execFileSync(bin("attw"), [...attwArgs(), "-f", "json"], {
