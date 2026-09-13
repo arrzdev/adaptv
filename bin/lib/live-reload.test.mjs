@@ -364,6 +364,38 @@ describe.runIf(onMac)("the dev plist patches", () => {
       expect(a.bytes()).toBe(APP_LOCAL_NETWORK)
     })
 
+    it("is healed after a killed session, like the ATS exception it rides with", () => {
+      //An external run killed without teardown left dev's sentence in the plist, and nothing
+      //took it out: the next build shipped it, and the next session's patch saw the key already
+      //there, registered no revert, and adopted it for good.
+      const a = app()
+      patchIosAts(a.root)
+      patchIosLocalNetwork(a.root)
+      expect(healDevAtsLeftover(a.root)).toEqual({ healed: true })
+      expect(a.parsed()).toEqual(original())
+      expect(typeof patchIosLocalNetwork(a.root)).toBe("function")
+    })
+
+    it("heals dev's reason on its own, and leaves the app's alone", () => {
+      const killed = app()
+      patchIosLocalNetwork(killed.root)
+      expect(healDevAtsLeftover(killed.root)).toEqual({ healed: true })
+      expect(killed.parsed()).toEqual(original())
+
+      const own = app(APP_LOCAL_NETWORK)
+      expect(healDevAtsLeftover(own.root)).toEqual({})
+      expect(own.bytes()).toBe(APP_LOCAL_NETWORK)
+    })
+
+    it("still warns about an app's own ATS block when it heals the reason beside it", () => {
+      //the caller is silent on `healed` and only reads `warn` when nothing was healed
+      const a = app(APP_ATS)
+      patchIosLocalNetwork(a.root)
+      expect(healDevAtsLeftover(a.root)).toEqual({ warn: true })
+      expect(a.bytes()).not.toContain("NSLocalNetworkUsageDescription")
+      expect(a.bytes()).toContain("legacy.example.com")
+    })
+
     it("unwinds with the ATS exception in either session shape", () => {
       //an external run registers both, and teardown pops them last-in first-out
       const a = app()
