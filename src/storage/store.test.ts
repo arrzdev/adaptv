@@ -1,10 +1,81 @@
 import "fake-indexeddb/auto"
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { store } from "#adaptv/storage/store"
 
 beforeEach(async () => {
   await store.clear()
 })
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+/**
+ * A module instance of its own. The connection is opened once and cached per
+ * module, so a test that breaks the open has to start from a module that has
+ * not opened yet.
+ */
+async function freshStore() {
+  vi.resetModules()
+  return (await import("#adaptv/storage/store")).store
+}
+
+/** An `indexedDB` whose open request fails the way `event` says, and nothing else. */
+function openThatFires(event: "error" | "blocked") {
+  return {
+    open() {
+      const request: Record<string, unknown> = {}
+      queueMicrotask(() =>
+        (request[`on${event}`] as (() => void) | undefined)?.(),
+      )
+      return request
+    },
+  }
+}
+
+/**
+ * Make every `put` fail. `"request"` fails the request itself (its `error`
+ * event fires); `"commit"` lets the request succeed and then aborts the
+ * transaction, which is how a quota overrun surfaces: the put is accepted, and
+ * the commit is not.
+ */
+function failPuts(how: "request" | "commit") {
+  const put = IDBObjectStore.prototype.put
+  vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(function (
+    this: IDBObjectStore,
+    ...args: Parameters<IDBObjectStore["put"]>
+  ) {
+    const request = put.apply(this, args)
+    if (how === "request") this.transaction.abort()
+    else {
+      //the put's own success event still fires — only the commit is refused
+      request.addEventListener("success", () => this.transaction.abort())
+    }
+    return request
+  })
+}
+
+/**
+ * Refuse the commit of only the `n`th call to `method` (1-based), counting from
+ * now — so one write in a queue fails while its neighbours land.
+ */
+function failNth(method: "put" | "delete" | "clear", n: number) {
+  const original = IDBObjectStore.prototype[method] as (
+    ...args: unknown[]
+  ) => IDBRequest
+  let calls = 0
+  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(function (
+    this: IDBObjectStore,
+    ...args: unknown[]
+  ) {
+    const request = original.apply(this, args)
+    if (++calls === n) {
+      request.addEventListener("success", () => this.transaction.abort())
+    }
+    return request
+  } as never)
+}
 
 describe("store — async large-value KV", () => {
   it("round-trips a value", async () => {
@@ -79,5 +150,211 @@ describe("store — availability", () => {
     await expect(store.get("anything")).resolves.not.toThrow()
     await expect(store.set("k", 1)).resolves.toBeUndefined()
     await expect(store.remove("k")).resolves.toBeUndefined()
+  })
+
+  it("degrades to memory when there is no IndexedDB at all", async () => {
+    vi.stubGlobal("indexedDB", undefined)
+    const fresh = await freshStore()
+    await fresh.set("k", { v: 1 })
+    expect(await fresh.get("k")).toEqual({ v: 1 })
+    expect(await fresh.keys()).toEqual(["k"])
+    await fresh.remove("k")
+    expect(await fresh.get("k")).toBeUndefined()
+    expect(await fresh.isPersistent()).toBe(false)
+  })
+
+  it("keeps no trace of a removed key when there is no IndexedDB", async () => {
+    //with nothing underneath, a removed marker guards against nothing — left
+    //in place, every set+remove leaks one entry for the life of an SSR process
+    vi.stubGlobal("indexedDB", undefined)
+    const fresh = await freshStore()
+    //the memory map is private; find it as the Map these writes go into
+    const maps = new Set<Map<unknown, unknown>>()
+    const set = Map.prototype.set
+    vi.spyOn(Map.prototype, "set").mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key: unknown,
+      value: unknown,
+    ) {
+      if (typeof key === "string" && key.startsWith("leak-"))
+        maps.add(this)
+      return set.call(this, key, value)
+    })
+    for (let i = 0; i < 100; i++) {
+      await fresh.set(`leak-${i}`, i)
+      await fresh.remove(`leak-${i}`)
+    }
+    vi.restoreAllMocks()
+    expect(maps.size).toBeGreaterThan(0)
+    for (const map of maps) expect(map.size).toBe(0)
+    expect(await fresh.keys()).toEqual([])
+  })
+
+  it.each(["error", "blocked"] as const)(
+    "degrades to memory when the open fires %s",
+    async (event) => {
+      //Firefox private mode used to fail the open, and an open held up by another
+      //connection fires blocked — either way the session still needs a store
+      vi.stubGlobal("indexedDB", openThatFires(event))
+      const fresh = await freshStore()
+      await fresh.set("k", "v")
+      expect(await fresh.get("k")).toBe("v")
+      expect(await fresh.isPersistent()).toBe(false)
+    },
+  )
+
+  it("degrades to memory when the open throws", async () => {
+    vi.stubGlobal("indexedDB", {
+      open() {
+        throw new DOMException("denied", "SecurityError")
+      },
+    })
+    const fresh = await freshStore()
+    await expect(fresh.set("k", "v")).resolves.toBeUndefined()
+    expect(await fresh.get("k")).toBe("v")
+  })
+})
+
+describe("store — a write IndexedDB refuses", () => {
+  it.each(["request", "commit"] as const)(
+    "keeps the value readable when the put fails at the %s",
+    async (how) => {
+      //set() resolves either way — it never rejects — so a value that is then not
+      //readable is lost without anything having reported it
+      await store.set("k", "old")
+      failPuts(how)
+      await store.set("k", "new")
+      expect(await store.get("k")).toBe("new")
+    },
+  )
+
+  it("reports the store as not persistent while a value lives only in memory", async () => {
+    //isPersistent() is the tier's one signal that writes are not landing; a
+    //refused write is exactly that, even with IndexedDB present
+    failPuts("commit")
+    await store.set("k", "v")
+    expect(await store.isPersistent()).toBe(false)
+    expect(await store.keys()).toEqual(["k"])
+
+    vi.restoreAllMocks()
+    await store.set("k", "v")
+    expect(await store.isPersistent()).toBe(true)
+    expect(await store.get("k")).toBe("v")
+  })
+
+  it("tells queued writes of the same value apart", async () => {
+    //ownership of the memory entry is per WRITE, not per value: with A, B, A
+    //queued, the first A landing must not take the third write's entry, or a
+    //refusal of that third write loses the value and reports nothing
+    await store.set("k", 0)
+    failNth("put", 3)
+    await Promise.all([
+      store.set("k", 1),
+      store.set("k", 2),
+      store.set("k", 1),
+    ])
+    expect(await store.get("k")).toBe(1)
+    expect(await store.isPersistent()).toBe(false)
+  })
+
+  it("tells queued removes apart, so a refused one cannot resurrect", async () => {
+    await store.set("k", 0)
+    failNth("delete", 2)
+    await Promise.all([
+      store.remove("k"),
+      store.set("k", 1),
+      store.remove("k"),
+    ])
+    expect(await store.get("k")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(false)
+  })
+
+  it("honours a clear IndexedDB refused for the rest of the session", async () => {
+    //clear() is the logout wipe: a refusal must not hand the old values back,
+    //and must say the wipe did not persist
+    await store.set("a", 1)
+    await store.set("b", 2)
+    failNth("clear", 1)
+    await store.clear()
+    expect(await store.get("a")).toBeUndefined()
+    expect(await store.keys()).toEqual([])
+    expect(await store.isPersistent()).toBe(false)
+
+    //a write after the refused clear is still an ordinary write
+    vi.restoreAllMocks()
+    await store.set("a", 3)
+    expect(await store.get("a")).toBe(3)
+
+    await store.clear()
+    expect(await store.keys()).toEqual([])
+    expect(await store.isPersistent()).toBe(true)
+  })
+
+  it("reports a refused clear as not persistent even when its keys cannot be listed", async () => {
+    await store.set("a", 1)
+    vi.spyOn(IDBObjectStore.prototype, "getAllKeys").mockImplementation(
+      function (this: IDBObjectStore) {
+        this.transaction.abort()
+        throw new DOMException("aborted", "TransactionInactiveError")
+      },
+    )
+    await store.clear()
+    expect(await store.isPersistent()).toBe(false)
+  })
+
+  it("does not resurrect a value whose remove IndexedDB refused", async () => {
+    await store.set("k", "secret-ish")
+    const remove = IDBObjectStore.prototype.delete
+    vi.spyOn(IDBObjectStore.prototype, "delete").mockImplementation(
+      function (this: IDBObjectStore, query: IDBValidKey | IDBKeyRange) {
+        const request = remove.call(this, query)
+        this.transaction.abort()
+        return request
+      },
+    )
+    await store.remove("k")
+    expect(await store.get("k")).toBeUndefined()
+    expect(await store.keys()).toEqual([])
+  })
+})
+
+describe("store — sharing the database", () => {
+  it("steps aside for a delete or an upgrade elsewhere, then reopens", async () => {
+    //an open connection that ignores versionchange blocks every deleteDatabase
+    //(a consumer's wipe on logout) and every version bump from another tab until
+    //this page closes. The store has to close on request and reopen on its next
+    //call, still persistent.
+    await store.set("k", 1)
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    expect(outcome).toBe("deleted")
+
+    expect(await store.get("k")).toBeUndefined()
+    await store.set("k", 2)
+    expect(await store.get("k")).toBe(2)
+    expect(await store.isPersistent()).toBe(true)
+  })
+})
+
+describe("store — a wipe from outside", () => {
+  it("forgets values held in memory when the database is deleted", async () => {
+    //a refused write lives only in memory; a deleteDatabase is the logout wipe,
+    //and it has to take that copy with it rather than outlive it for the session
+    failPuts("commit")
+    await store.set("token-ish", "v")
+    expect(await store.isPersistent()).toBe(false)
+    vi.restoreAllMocks()
+
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    expect(outcome).toBe("deleted")
+    expect(await store.get("token-ish")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(true)
   })
 })
