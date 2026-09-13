@@ -88,4 +88,34 @@ test.describe("Print", () => {
     await expect(page.getByTestId("print-printing")).toHaveText("false")
     await expect(page.getByTestId("print-open")).toBeEnabled()
   })
+
+  test("a second press reaches the engine again", async ({
+    page,
+    browserName,
+  }) => {
+    const outcome = expectedOutcome(browserName)
+    //Count the calls that reach the engine: the page logs every press whether
+    //or not the accessor hands back an earlier outcome instead of calling.
+    await page.evaluate(() => {
+      const w = window as Window & { __printCalls?: number }
+      const engine = window.print.bind(window)
+      w.__printCalls = 0
+      window.print = () => {
+        w.__printCalls = (w.__printCalls ?? 0) + 1
+        engine()
+      }
+    })
+
+    await page.getByTestId("print-open").click()
+    await expect(page.getByTestId("print-last")).toHaveText(outcome)
+    await expect(page.getByTestId("print-open")).toBeEnabled()
+    await page.getByTestId("print-open").click()
+    await expect(page.locator("[data-lab-log] li")).toHaveCount(4)
+
+    expect(
+      await page.evaluate(
+        () => (window as Window & { __printCalls?: number }).__printCalls,
+      ),
+    ).toBe(2)
+  })
 })

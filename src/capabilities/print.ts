@@ -21,6 +21,17 @@
 //came back, `silent` when the call returned and nothing followed within the
 //bounded wait. A native WebView reads `unsupported` up front, because a print
 //button that does nothing is the failure this capability exists to name.
+//
+//## A dialog that never says it closed
+//
+//Once `beforeprint` fires the dialog is up and the silent wait no longer
+//applies, but nothing guarantees `afterprint` follows. An in-flight call that
+//never settles keeps `printing` true and hands every later `print()` the same
+//stuck promise, so the button is dead for the session. The dialog did open, so
+//the call still resolves `opened`, just without waiting for `afterprint`: on
+//the user's first sign of being back on the page (`pointerdown`, `keydown`,
+//window `focus`, or the document turning visible), which no modal dialog lets
+//through while it is up, or at {@link PRINT_DIALOG_MAX_MS} if none comes.
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 /**
@@ -30,8 +41,9 @@ import { isNativePlatform } from "#adaptv/utils/platform"
 export type PrintStatus = "available" | "unsupported"
 
 /**
- * `"opened"` — the dialog opened and closed (`afterprint` fired); printed or
- * dismissed, the web cannot say which.
+ * `"opened"` — the dialog opened (`beforeprint` fired) and closed: `afterprint`
+ * fired, or the user was back on the page, or the upper bound passed; printed
+ * or dismissed, the web cannot say which.
  * `"silent"` — the call returned and no print event followed within the wait.
  * `"unsupported"` — nothing was called; see {@link PrintStatus}.
  * `"failed"` — `window.print()` threw.
@@ -45,6 +57,13 @@ export interface PrintOptions {
 
 /** The bounded wait for a print event; headless engines answer within 2 ms. */
 export const PRINT_SILENT_AFTER_MS = 1500
+
+/**
+ * How long an opened dialog may go without `afterprint` or the user coming back
+ * before the call settles anyway. Generous: any input on the page settles it
+ * sooner, so this only bounds a dialog nobody touches.
+ */
+export const PRINT_DIALOG_MAX_MS = 300_000
 
 let printing = false
 const listeners = new Set<() => void>()
@@ -86,37 +105,55 @@ export function print(options: PrintOptions = {}): Promise<PrintOutcome> {
     return Promise.resolve("unsupported")
   if (inFlight) return inFlight
   const wait = options.silentAfterMs ?? PRINT_SILENT_AFTER_MS
-  inFlight = new Promise<PrintOutcome>((resolve) => {
-    let settled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const done = (outcome: PrintOutcome) => {
-      if (settled) return
-      settled = true
-      if (timer !== undefined) clearTimeout(timer)
-      window.removeEventListener("beforeprint", onBefore)
-      window.removeEventListener("afterprint", onAfter)
-      inFlight = null
-      notify(false)
-      resolve(outcome)
-    }
-    //A dialog is up: the wait no longer applies, `afterprint` will close it.
-    const onBefore = () => {
-      if (timer !== undefined) clearTimeout(timer)
-      timer = undefined
-    }
-    const onAfter = () => done("opened")
-    window.addEventListener("beforeprint", onBefore)
-    window.addEventListener("afterprint", onAfter)
-    notify(true)
-    timer = setTimeout(() => done("silent"), wait)
-    try {
-      window.print()
-    } catch {
-      done("failed")
-    }
+  let resolve!: (outcome: PrintOutcome) => void
+  const call = new Promise<PrintOutcome>((r) => {
+    resolve = r
   })
-  return inFlight
+  let settled = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const done = (outcome: PrintOutcome) => {
+    if (settled) return
+    settled = true
+    if (timer !== undefined) clearTimeout(timer)
+    window.removeEventListener("beforeprint", onBefore)
+    window.removeEventListener("afterprint", onAfter)
+    for (const type of RETURN_EVENTS)
+      window.removeEventListener(type, onReturn)
+    document.removeEventListener("visibilitychange", onVisible)
+    if (inFlight === call) inFlight = null
+    notify(false)
+    resolve(outcome)
+  }
+  const onAfter = () => done("opened")
+  const onReturn = () => done("opened")
+  const onVisible = () => {
+    if (document.visibilityState === "visible") done("opened")
+  }
+  //A dialog is up: the silent wait no longer applies. `afterprint` closes it,
+  //and so does the user being back on the page or the upper bound.
+  const onBefore = () => {
+    if (timer !== undefined) clearTimeout(timer)
+    timer = setTimeout(onAfter, PRINT_DIALOG_MAX_MS)
+    for (const type of RETURN_EVENTS)
+      window.addEventListener(type, onReturn)
+    document.addEventListener("visibilitychange", onVisible)
+  }
+  window.addEventListener("beforeprint", onBefore)
+  window.addEventListener("afterprint", onAfter)
+  //Set before the call: an engine whose dialog blocks `window.print()` settles
+  //inside it, and that settle must be the one that clears the slot.
+  inFlight = call
+  notify(true)
+  timer = setTimeout(() => done("silent"), wait)
+  try {
+    window.print()
+  } catch {
+    done("failed")
+  }
+  return call
 }
+
+const RETURN_EVENTS = ["pointerdown", "keydown", "focus"] as const
 
 let inFlight: Promise<PrintOutcome> | null = null
 
