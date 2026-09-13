@@ -1546,7 +1546,7 @@ Three traps found while building it, all now guarded by tests and comments in th
    the guaranteed-invalid value poisoned the whole `box-shadow` — ring right, page wrong. Every carrier
    reference now carries an explicit `, 0 0 #0000`.
 
-### The same fallback kills six more compositions 🔧 **PATCHED**, device after-reading pending (found 2026-09-13)
+### The same fallback kills six more compositions ✅ **FIXED**, certified on WebView 113 (found 2026-09-13)
 
 The ring was the idiom's loudest victim, not its only one. Read out of Tailwind 4.2.4's compiler rather
 than out of one app's CSS, `var(--tw-*,)` over a registered, uninitialised part also builds `transform`
@@ -1579,10 +1579,14 @@ unregistered carrier instead, **declared in every rule that reads it**:
 ```
 
 The empty fallbacks now sit only on unregistered properties, which the same WebView 113 substitutes
-correctly (`var(--unregistered,)` painted where `var(--registered,)` did not). Inheritance stays blocked
-twice over: Tailwind's `@property` rules are untouched, and a carrier whose `var()` is invalid computes to
-guaranteed-invalid rather than inheriting — measured on Chromium 149 and WebKit 26.5, a child under a
-parent whose carrier is `blur(3px)` computes `filter: none`. The ring keeps its own rewrite byte for byte.
+correctly (`var(--unregistered,)` painted where `var(--registered,)` did not). A carrier over an unset part
+computes guaranteed-invalid, so the composition takes the empty fallback; measured on WebView 113 with the
+rewritten sheet, an emptied part (`blur-none brightness-150`) computes `brightness(1.5)`. Inheritance stays
+blocked twice over: Tailwind's `@property` rules are untouched, and a carrier whose `var()` is invalid
+computes to guaranteed-invalid rather than inheriting — on WebView 113 an `invert` child under a `blur`
+parent computes `invert(1)` and a bare `filter` child there computes `none`; on Chromium 149 and WebKit
+26.5 a child under a parent whose carrier is `blur(3px)` computes `filter: none`. The ring keeps its own
+rewrite byte for byte.
 
 Two shapes rejected. **Identity fallbacks** (`var(--tw-blur, blur(0))`) turn `filter: none` into a live
 filter — a stacking context and a containing block — and `touch-action`, `font-variant-numeric` and
@@ -1597,14 +1601,25 @@ Production playground build against `origin/main`: the new stylesheet is exactly
 `.aria-busy:saturate-50`), 66,581 → 69,174 bytes (gzip 12,049 → 12,330); every other rule and every JS
 chunk is identical once content hashes are normalised.
 
-**Not yet measured on WebView 113 after the rewrite.** The numbers above are the device's "before"; the
-"after" is proven on Chromium 149 and WebKit 26.5 only, and the device reading belongs to QA.
+**After, on the device.** Independent QA read the same WebView 113.0.5672.136 on main (`9f11f0d`) and on
+the branch (`801a496`), with HeadlessChrome 149 on the branch as the control: 51 probes covering every
+composition alone, combined parts, emptied parts, inheritance, both backdrop spellings, `contain`, the
+in-app `tabular-nums` digits (84) and `touch-pan-*` elements (88), and the ring as a regression. All 51
+read the same on 113 as on 149, while main computed the property's initial value on every composition
+probe that sets a part. Chromium 114–118 and the iOS engines on a device were not read; WebKit 26.5 was,
+through Playwright.
 
 One trap specific to this file: adaptv's `@source` scans `src/**/*.{ts,tsx}`, tests and comments
 included. The first draft named utilities in its test and header and shipped 25 extra utilities, 13
-`@property` rules and a `--blur-sm` theme variable in the playground's CSS. The module and its test now
-spell parts as `--tw-*`, which the scanner does not read as classes, and the test compiles Tailwind's
-whole class list instead of naming candidates.
+`@property` rules and a `--blur-sm` theme variable in the playground's CSS. The second still leaked
+`blur`, `tabular-nums` and `touch-pan-y` from prose and an example selector in the module header and in
+`adaptv-plugin.ts`, and `collapse` from a test helper's name — masked in the playground build only
+because other `src` files already name the same utilities. Checked with Tailwind's own scanner
+(`@tailwindcss/oxide`'s `Scanner`) over every changed source on `origin/main` and on the branch, keeping
+only candidates that compile: 19 on each, none new. `filter` and `transform` are among the 19 on both
+sides, because every TypeScript `.filter()` and Vite `transform` hook spells them; they cannot be written
+out of `src`. The module and its test spell parts as `--tw-*`, write example selectors as `.x`, and the
+test compiles Tailwind's whole class list instead of naming candidates.
 
 **The floor stays, at 111** — Tailwind v4's own stated minimum, and still a large improvement on
 Capacitor's unreachable default of 60. It closes B21's open recommendation ("set `minWebViewVersion`

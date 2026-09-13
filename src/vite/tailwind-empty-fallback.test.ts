@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 import { compileEveryUtility } from "#adaptv/styles/compile.test-helper"
 import {
   RING_CARRIERS,
@@ -205,14 +205,20 @@ const EMPTY_FALLBACK_PARTS: Record<string, string[]> = {
 
 const ANY_EMPTY_FALLBACK = /var\(\s*--tw-[\w-]+\s*,\s*\)/
 
-let everyUtility: Promise<string> | undefined
-/** Tailwind's whole class list, compiled once for the file. */
-function every(): Promise<string> {
-  everyUtility ??= compileEveryUtility()
-  return everyUtility
-}
+/**
+ * Tailwind's whole class list, compiled once for the file in `beforeAll`.
+ *
+ * The compile is ~0.35–0.5 s on an idle machine. Inside a test it would spend that out of
+ * vitest's 5 s test timeout, and `pnpm gate` runs this file among 200+ others in parallel
+ * workers on a machine shared with other heavy jobs, where CPU-bound tests elsewhere in the
+ * suite have already timed out on load alone. So it is a hook with its own 30 s budget:
+ * 60 times the idle cost, local to this one compile rather than a raised global timeout,
+ * and still a fast, named failure if the compiler ever hangs.
+ */
+let every: string
+const EVERY_UTILITY_TIMEOUT_MS = 30_000
 
-const collapse = (css: string) => css.replace(/\s+/g, " ")
+const squeeze = (css: string) => css.replace(/\s+/g, " ")
 
 /** `var(--tw-a,) var(--tw-b,)` — a composition, spelled the way Tailwind spells it. */
 function read(group: string): string {
@@ -230,6 +236,10 @@ function carried(group: string): { carriers: string; value: string } {
 }
 
 describe("rewriteEmptyFallbacks", () => {
+  beforeAll(async () => {
+    every = await compileEveryUtility()
+  }, EVERY_UTILITY_TIMEOUT_MS)
+
   // If a Tailwind upgrade adds a composition, this names it — the rewrite is generic and
   // will already cover it, but the module header and the register entry list them.
   it("knows every empty fallback Tailwind's compiler can emit", () => {
@@ -245,8 +255,8 @@ describe("rewriteEmptyFallbacks", () => {
     )
   })
 
-  it("leaves no empty fallback in anything Tailwind can generate", async () => {
-    const css = await every()
+  it("leaves no empty fallback in anything Tailwind can generate", () => {
+    const css = every
     for (const part of Object.values(EMPTY_FALLBACK_PARTS).flat()) {
       expect(css).toContain(`var(${part},)`)
     }
@@ -258,8 +268,8 @@ describe("rewriteEmptyFallbacks", () => {
   // the same block, it is always re-derived from the element's own non-inheriting part —
   // and a `var()` of an unset part is invalid at computed-value time, which for a custom
   // property means guaranteed-invalid, not inherited.
-  it("declares every carrier once, in the block that reads it", async () => {
-    const out = rewriteEmptyFallbacks(await every()) as string
+  it("declares every carrier once, in the block that reads it", () => {
+    const out = rewriteEmptyFallbacks(every) as string
     let readers = 0
     for (const [, body] of out.matchAll(/\{([^{}]*)\}/g)) {
       for (const [, part] of body.matchAll(
@@ -277,8 +287,8 @@ describe("rewriteEmptyFallbacks", () => {
 
   // Tailwind registers the parts for `inherits: false`; the fix leans on that, so the
   // registrations stay exactly as compiled and no carrier is ever registered.
-  it("keeps Tailwind's @property rules and registers no carrier", async () => {
-    const css = await every()
+  it("keeps Tailwind's @property rules and registers no carrier", () => {
+    const css = every
     const out = rewriteEmptyFallbacks(css) as string
     const registrations = (s: string) =>
       s.match(/@property [^{]+\{[^}]*\}/g)
@@ -287,9 +297,9 @@ describe("rewriteEmptyFallbacks", () => {
   })
 
   // Written out in full once, so the shape is readable without the helper.
-  it("carries a composition through unregistered per-part carriers", async () => {
+  it("carries a composition through unregistered per-part carriers", () => {
     const body = `--tw-numeric-spacing: tabular-nums; font-variant-numeric: ${read("numeric")};`
-    expect(collapse(await every())).toContain(`{ ${body} }`)
+    expect(squeeze(every)).toContain(`{ ${body} }`)
     expect(rewriteEmptyFallbacks(`.a { ${body} }`)).toBe(
       ".a { --tw-numeric-spacing: tabular-nums; --adaptv-tw-ordinal:var(--tw-ordinal);--adaptv-tw-slashed-zero:var(--tw-slashed-zero);--adaptv-tw-numeric-figure:var(--tw-numeric-figure);--adaptv-tw-numeric-spacing:var(--tw-numeric-spacing);--adaptv-tw-numeric-fraction:var(--tw-numeric-fraction);font-variant-numeric: var(--adaptv-tw-ordinal,) var(--adaptv-tw-slashed-zero,) var(--adaptv-tw-numeric-figure,) var(--adaptv-tw-numeric-spacing,) var(--adaptv-tw-numeric-fraction,); }",
     )
@@ -303,25 +313,22 @@ describe("rewriteEmptyFallbacks", () => {
     ["transform", "", "transform", "translateZ(0) "],
     ["filter", "--tw-grayscale: grayscale(50%); ", "filter", ""],
     ["containment", "--tw-contain-paint: paint; ", "contain", ""],
-  ])(
-    "rewrites %s (%s%s: %s…)",
-    async (group, setter, property, prefix) => {
-      const body = `${setter}${property}: ${prefix}${read(group)};`
-      expect(collapse(await every())).toContain(`{ ${body} }`)
-      const { carriers, value } = carried(group)
-      expect(rewriteEmptyFallbacks(`.a { ${body} }`)).toBe(
-        `.a { ${setter}${carriers}${property}: ${prefix}${value}; }`,
-      )
-    },
-  )
+  ])("rewrites %s (%s%s: %s…)", (group, setter, property, prefix) => {
+    const body = `${setter}${property}: ${prefix}${read(group)};`
+    expect(squeeze(every)).toContain(`{ ${body} }`)
+    const { carriers, value } = carried(group)
+    expect(rewriteEmptyFallbacks(`.a { ${body} }`)).toBe(
+      `.a { ${setter}${carriers}${property}: ${prefix}${value}; }`,
+    )
+  })
 
   // The prefixed and unprefixed backdrop properties read the same nine parts in one rule.
-  it("declares a shared composition's carriers once per rule", async () => {
+  it("declares a shared composition's carriers once per rule", () => {
     const [prefixed, unprefixed] = ["-webkit-backdrop", "backdrop"].map(
       (p) => `${p}-${"filter"}`,
     )
     const body = `--tw-backdrop-grayscale: grayscale(50%); ${prefixed}: ${read("backdrop")}; ${unprefixed}: ${read("backdrop")};`
-    expect(collapse(await every())).toContain(`{ ${body} }`)
+    expect(squeeze(every)).toContain(`{ ${body} }`)
     const { carriers, value } = carried("backdrop")
     expect(rewriteEmptyFallbacks(`.a { ${body} }`)).toBe(
       `.a { --tw-backdrop-grayscale: grayscale(50%); ${carriers}${prefixed}: ${value}; ${unprefixed}: ${value}; }`,
@@ -329,7 +336,7 @@ describe("rewriteEmptyFallbacks", () => {
   })
 
   // The shape tailwindcss@4.2.4 compiles for the `!` modifier: every declaration marked.
-  // Tailwind's class list carries no `!` forms, so this one is not checked against `every()`.
+  // Tailwind's class list carries no `!` forms, so this one is not checked against `every`.
   it("keeps !important on the composition", () => {
     const body = `--tw-blur: blur(8px) !important; filter: ${read("filter")} !important;`
     expect(rewriteEmptyFallbacks(`.a { ${body} }`)).toContain(
@@ -339,8 +346,8 @@ describe("rewriteEmptyFallbacks", () => {
 
   // The utility that empties a part WRITES nothing into it rather than reading it: there is
   // no fallback in that declaration to fix, and it must survive as Tailwind wrote it.
-  it("leaves an empty setter alone", async () => {
-    expect(await every()).toContain(
+  it("leaves an empty setter alone", () => {
+    expect(every).toContain(
       `--tw-blur:  ;\n    filter: ${read("filter")};`,
     )
     const out = rewriteEmptyFallbacks(
@@ -374,9 +381,9 @@ describe("rewriteEmptyFallbacks", () => {
   })
 
   // The ring keeps its own, device-proven rewrite byte for byte.
-  it("routes the ring through rewriteRingShadow unchanged", async () => {
+  it("routes the ring through rewriteRingShadow unchanged", () => {
     expect(rewriteEmptyFallbacks(SHEET)).toBe(rewriteRingShadow(SHEET))
-    const out = rewriteEmptyFallbacks(await every()) as string
+    const out = rewriteEmptyFallbacks(every) as string
     expect(out).toContain("--tw-ring-shadow:var(--adaptv-tw-ring)")
     expect(out).not.toContain("--adaptv-tw-ring-inset")
   })
@@ -396,8 +403,8 @@ describe("rewriteEmptyFallbacks", () => {
     expect(out).not.toContain("--adaptv-tw-ring-inset")
   })
 
-  it("is idempotent and a no-op on CSS without the idiom", async () => {
-    const once = rewriteEmptyFallbacks(await every())
+  it("is idempotent and a no-op on CSS without the idiom", () => {
+    const once = rewriteEmptyFallbacks(every)
     expect(once).not.toBeNull()
     expect(rewriteEmptyFallbacks(once as string)).toBeNull()
     expect(rewriteEmptyFallbacks(".a { filter: blur(2px) }")).toBeNull()

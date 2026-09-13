@@ -236,9 +236,10 @@ export async function adaptv(
     //→ src/vite/css-layer-order.ts
     adaptvCssLayerOrderPlugin(),
     //The mirror image of the line above: NO `enforce`, because it rewrites what
-    //@tailwindcss/vite PRODUCED and `post` is already too late. Without it every `ring-*`,
-    //`blur`, `tabular-nums`, `touch-pan-*`, `rotate-x-*` and `contain-*` in the app
-    //silently computes nothing on Android WebView 113–118.
+    //@tailwindcss/vite PRODUCED and `post` is already too late. Without it every ring
+    //width and every utility that sets a `--tw-*` part (filters, numeric variants, touch
+    //panning, 3D rotation, containment) silently computes nothing on Android WebView
+    //113–118.
     //→ src/vite/tailwind-empty-fallback.ts
     adaptvTailwindEmptyFallbackPlugin(),
     adaptvConfigLoaderPlugin(context),
