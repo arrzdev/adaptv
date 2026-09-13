@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "@fontsource-variable/inter/wght.css";
 @import "tailwindcss";
 @import "@arrzdev/adaptv/styles.css";
 @import "./animations.css";
@@ -90,7 +90,7 @@ textarea:-webkit-autofill:active {
   --radius-xl: 28px;
   --radius-full: 9999px;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 }
 
 .dark {
