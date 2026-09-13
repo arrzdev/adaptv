@@ -44,6 +44,28 @@ vi.mock("./exec.mjs", async (importOriginal) => {
 })
 
 /*
+ * The interactive picker, for the runs where somebody IS at the keyboard. It answers with the
+ * row a test scripts, and keeps the rows it was shown so a test can read their order.
+ */
+const picker = vi.hoisted(() => ({
+  /** @type {(options: Array<{ value: string }>) => string | null} */
+  answer: (options) => options[0]?.value ?? null,
+  /** @type {Array<Array<{ value: string, label: string }>>} */
+  shown: [],
+}))
+
+vi.mock("../ui/live.mjs", async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    inkSelect: async (_message, options) => {
+      picker.shown.push(options)
+      return picker.answer(options)
+    },
+  }
+})
+
+/*
  * R60. The hint is the only thing separating two identically-named devices, so what it says
  * has to be the same KIND of fact on both platforms. Upstream it is not: `iOS 26.1` beside
  * `API 34` puts a version next to an SDK level.
@@ -161,6 +183,21 @@ const ANDROID_LISTING = [
   { name: "Pixel 10 (emulator)", api: "API 37.1", id: "Pixel_10" },
   { name: "Pixel 7 (emulator)", api: "API 34", id: "Pixel_7" },
 ]
+/*
+ * Physical devices, as the listing names them: no `(simulator)`/`(emulator)` suffix, and an id
+ * that is a hardware identifier rather than a simulator UUID, an AVD name or an emulator serial.
+ * The listing puts every physical device BEFORE every virtual one.
+ */
+const IOS_PHONE = {
+  name: "Owner's iPhone",
+  api: "iOS 26.0",
+  id: "00008130-001A2D3E0C38001E",
+}
+const ANDROID_PHONE = {
+  name: "Pixel 8",
+  api: "API 35",
+  id: "38141FDJH000YZ",
+}
 const json = (rows) => ({ stdout: `${JSON.stringify(rows)}\n` })
 
 let appRoot
@@ -168,6 +205,8 @@ let saved
 beforeEach(() => {
   fake.replies = []
   fake.calls = []
+  picker.answer = (options) => options[0]?.value ?? null
+  picker.shown = []
   appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-devices-"))
   saved = {
     stdout: Object.getOwnPropertyDescriptor(process.stdout, "isTTY"),
@@ -407,7 +446,10 @@ describe("--latest", () => {
 
   it("falls through to the picker when the remembered device is gone, and remembers the new pick", async () => {
     //`--latest` means "don't ask me again", not "fail if my last choice is gone"
-    const { resolveTarget } = await devicesUnder()
+    const { resolveTarget } = await devicesUnder({
+      stdout: true,
+      stdin: true,
+    })
     remember({
       ios: {
         id: "0DEAD000-0000-0000-0000-000000000000",
@@ -431,7 +473,10 @@ describe("--latest", () => {
   })
 
   it("asks when nothing is remembered, or the remembered state is unreadable", async () => {
-    const { resolveTarget } = await devicesUnder()
+    const { resolveTarget } = await devicesUnder({
+      stdout: true,
+      stdin: true,
+    })
     fake.replies = [json([IOS_SIM_26])]
     expect(
       (await promptly(resolveTarget(appRoot, "ios", {}, { latest: true })))
@@ -442,23 +487,25 @@ describe("--latest", () => {
       (await promptly(resolveTarget(appRoot, "ios", {}, { latest: true })))
         .source,
     ).toBe("picked")
+    expect(picker.shown).toHaveLength(2)
   })
 })
 
 /*
  * `docs/design/cli-contract.md` R34 and `select` in render.mjs: off a TTY nobody can press a key,
- * so a device picker takes the first row rather than waiting. The memory
+ * so a device picker answers for itself rather than waiting — "any simulator will do". The memory
  * `preview-ios-headless-needs-target` is what waiting costs — 11 minutes on `which ios device?`.
  */
 describe("with nobody at the keyboard", () => {
   const SEVERAL = [IOS_SIM_16, IOS_SIM_18, IOS_SIM_26]
-
-  for (const [why, terminal] of [
+  const UNANSWERED = [
     ["output piped", { stdout: false, stdin: true }],
     ["input from /dev/null", { stdout: true, stdin: false }],
     ["under CI", { stdout: true, stdin: true, ci: "1" }],
-  ]) {
-    it(`takes the first of several devices instead of prompting (${why})`, async () => {
+  ]
+
+  for (const [why, terminal] of UNANSWERED) {
+    it(`takes the first of several simulators instead of prompting (${why})`, async () => {
       const { resolveTarget } = await devicesUnder(terminal)
       fake.replies = [json(SEVERAL)]
       const got = await promptly(resolveTarget(appRoot, "ios", {}, {}))
@@ -467,9 +514,60 @@ describe("with nobody at the keyboard", () => {
         name: IOS_SIM_16.name,
         source: "picked",
       })
-      expect(state().devices.ios.id).toBe(IOS_SIM_16.id)
+      expect(picker.shown).toHaveLength(0)
+    })
+
+    it(`takes a simulator over the phone the listing puts first (${why})`, async () => {
+      //Installing on somebody's phone, in a run nobody is watching, is not "any simulator will
+      //do". The listing puts physical devices first, so the first row was the phone.
+      const { resolveTarget } = await devicesUnder(terminal)
+      fake.replies = [json([IOS_PHONE, ...SEVERAL])]
+      expect(
+        (await promptly(resolveTarget(appRoot, "ios", {}, {}))).id,
+      ).toBe(IOS_SIM_16.id)
     })
   }
+
+  it("takes an emulator over an Android phone, a running one before an AVD", async () => {
+    //A running emulator is listed as a serial with no `(emulator)` suffix, beside the phones —
+    //it is still an emulator, and the one already booted.
+    const { resolveTarget } = await devicesUnder()
+    fake.replies = [json([ANDROID_PHONE, ...ANDROID_LISTING])]
+    expect(
+      (await promptly(resolveTarget(appRoot, "android", {}, {}))).id,
+    ).toBe("emulator-5554")
+    fake.replies = [json([ANDROID_PHONE, ...ANDROID_LISTING.slice(1)])]
+    expect(
+      (await promptly(resolveTarget(appRoot, "android", {}, {}))).id,
+    ).toBe("Pixel_10")
+  })
+
+  it("still takes the phone when it is the only device there is", async () => {
+    const { resolveTarget } = await devicesUnder()
+    fake.replies = [json([IOS_PHONE])]
+    expect(
+      (await promptly(resolveTarget(appRoot, "ios", {}, {}))).id,
+    ).toBe(IOS_PHONE.id)
+    fake.replies = [json([ANDROID_PHONE])]
+    expect(
+      (await promptly(resolveTarget(appRoot, "android", {}, {}))).id,
+    ).toBe(ANDROID_PHONE.id)
+  })
+
+  it("remembers nothing, so the device the dev picked is still the one --latest reaches for", async () => {
+    //'--latest' is "the last device you picked". A run that answered for itself picked nothing.
+    const { resolveTarget } = await devicesUnder()
+    remember({ ios: { id: IOS_SIM_26.id, name: IOS_SIM_26.name } })
+    fake.replies = [json([IOS_PHONE, ...SEVERAL])]
+    expect(
+      (await promptly(resolveTarget(appRoot, "ios", {}, {}))).id,
+    ).toBe(IOS_SIM_16.id)
+    expect(state().devices.ios.id).toBe(IOS_SIM_26.id)
+    expect(
+      (await promptly(resolveTarget(appRoot, "ios", {}, { latest: true })))
+        .id,
+    ).toBe(IOS_SIM_26.id)
+  })
 
   it("refuses at once when there is no device at all", async () => {
     const { resolveTarget } = await devicesUnder()
@@ -510,5 +608,33 @@ describe("with nobody at the keyboard", () => {
         )
       ).id,
     ).toBe(IOS_SIM_26.id)
+  })
+})
+
+describe("with somebody at the keyboard", () => {
+  it("shows every device in the listing's own order, phones included, and remembers the pick", async () => {
+    //A person reads the list, so it is not reordered for them; only a run nobody can answer
+    //has to choose, and only that choice prefers a simulator.
+    const { resolveTarget } = await devicesUnder({
+      stdout: true,
+      stdin: true,
+    })
+    fake.replies = [json([IOS_PHONE, IOS_SIM_18, IOS_SIM_26])]
+    picker.answer = (options) => options[2].value
+    const got = await promptly(resolveTarget(appRoot, "ios", {}, {}))
+    expect(picker.shown[0].map((o) => o.value)).toEqual([
+      IOS_PHONE.id,
+      IOS_SIM_18.id,
+      IOS_SIM_26.id,
+    ])
+    expect(got).toEqual({
+      id: IOS_SIM_26.id,
+      name: IOS_SIM_26.name,
+      source: "picked",
+    })
+    expect(state().devices.ios).toEqual({
+      id: IOS_SIM_26.id,
+      name: IOS_SIM_26.name,
+    })
   })
 })
