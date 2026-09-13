@@ -17,6 +17,9 @@
 //  • iOS WebKit (13+) gates the event behind `DeviceMotionEvent.requestPermission`,
 //    which must be called from a user gesture and answers "granted" or "denied".
 //    Chromium and Android WebView have no such gate and are granted from the start.
+//  • Outside a gesture WebKit REJECTS the request instead of answering, and no
+//    dialog was shown. That is not the user saying no, so it is not remembered:
+//    the status stays `prompt` and the next request from a tap asks for real.
 /**
  * `prompt` means the engine will ask when {@link requestMotionPermission} runs
  * from a gesture; `granted` means events may arrive (they may still never, see
@@ -50,6 +53,11 @@ type RequestingMotionEvent = typeof DeviceMotionEvent & {
 }
 
 let answered: MotionStatus | null = null
+const listeners = new Set<() => void>()
+
+function emit(): void {
+  for (const cb of listeners) cb()
+}
 
 function motionApi(): RequestingMotionEvent | null {
   if (typeof window === "undefined") return null
@@ -104,9 +112,22 @@ export function getMotionStatus(): MotionStatus {
 }
 
 /**
+ * Subscribe to permission answers; returns an unsubscribe. Every hook shares
+ * the one answer, so a grant asked from one screen reaches all of them.
+ */
+export function subscribeMotionStatus(cb: () => void): () => void {
+  listeners.add(cb)
+  return () => {
+    listeners.delete(cb)
+  }
+}
+
+/**
  * Ask, where the engine asks. Call it from a user gesture: WebKit rejects the
- * request outside one and that rejection is reported as `denied`. On engines
- * that never ask this resolves at once with the current status.
+ * request outside one without showing anything, and that resolves `prompt`
+ * (nothing was answered, a tap can still ask). Only a resolved `denied` is a
+ * denial. On engines that never ask this resolves at once with the current
+ * status.
  */
 export async function requestMotionPermission(): Promise<MotionStatus> {
   const api = motionApi()
@@ -117,8 +138,9 @@ export async function requestMotionPermission(): Promise<MotionStatus> {
     const result = await api.requestPermission()
     answered = result === "granted" ? "granted" : "denied"
   } catch {
-    answered = "denied"
+    return getMotionStatus()
   }
+  emit()
   return answered
 }
 
