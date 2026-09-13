@@ -420,11 +420,11 @@ Nuxt's shape — but it is exactly why move **A** should land first. → [§0.1]
 '@tanstack/router-generator@1.167.21': node_modules/@arrzdev/adaptv/patches/@tanstack__router-generator@1.167.21.patch
 ```
 
-That string is generated from `patchInstructions()`, which hardcodes `patches/`. The four
+That string is generated from `patchInstructions()`, which hardcodes `patches/`. The five
 `patchedDependencies` keys in [`../../pnpm-workspace.yaml`](../../pnpm-workspace.yaml) point at the
 same path. **L21 🔒** locks the *filename* (`@scope__name@version.patch`) — `parsePatchFilename()`
 refuses an unversioned name — but the *directory* is a contract with anyone who has already copied
-that block. Moving it is a breaking change for zero navigational gain, since four patch files in one
+that block. Moving it is a breaking change for zero navigational gain, since five patch files in one
 flat directory are not hard to find.
 
 **Do this instead:** leave the files, and have `src/router/README`-level knowledge live where it

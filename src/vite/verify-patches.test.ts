@@ -145,7 +145,7 @@ describe("patch instructions — derived from what actually shipped", () => {
     const advertised = patchInstructions(readdirSync(patchesDir))
       .map((l) => l.trim().split("':")[0].slice(1))
       .sort()
-    expect(declared.length).toBe(4)
+    expect(declared.length).toBe(5)
     expect(advertised).toEqual(declared)
   })
 })

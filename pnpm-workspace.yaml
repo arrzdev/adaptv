@@ -19,3 +19,4 @@ patchedDependencies:
   '@capawesome/capacitor-live-update@8.3.0': patches/@capawesome__capacitor-live-update@8.3.0.patch
   '@tanstack/router-generator@1.167.21': patches/@tanstack__router-generator@1.167.21.patch
   '@tanstack/start-plugin-core@1.171.24': patches/@tanstack__start-plugin-core@1.171.24.patch
+  'native-run@2.0.3': patches/native-run@2.0.3.patch
