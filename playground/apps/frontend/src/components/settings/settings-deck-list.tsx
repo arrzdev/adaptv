@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Pencil, Plus, Trash2 } from "lucide-react"
-import { useRef } from "react"
+import { useCallback, useRef } from "react"
 import { SettingsAddRow } from "@/components/settings/settings-list-row"
 import { IconButton } from "@/components/ui"
 import { resolveDeckEmoji } from "@/data/collections/decks/constants"
@@ -159,12 +159,25 @@ function SettingsDeckRow({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
     isSorting,
     newIndex,
   } = useSortable({ id: deck.id, disabled })
+  //the row is its own keyboard activator. dnd-kit starts a keyboard drag on
+  //Space/Enter from ANY descendant unless an activator is set, so Space on a
+  //task's checkbox, or Enter on a deck's Edit button, also lifted the row into
+  //a drag. With the li as the activator, only a key pressed on the focused row
+  //itself picks it up
+  const setRowRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      setNodeRef(node)
+      setActivatorNodeRef(node)
+    },
+    [setNodeRef, setActivatorNodeRef],
+  )
 
   //drop dnd-kit's role="button": this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
@@ -201,7 +214,7 @@ function SettingsDeckRow({
 
   return (
     <li
-      ref={setNodeRef}
+      ref={setRowRef}
       style={style}
       className={cn(
         //the surface lives on the whole row so it covers the divider band edge-to-
