@@ -348,7 +348,7 @@ export function Offline({ onRetry, error }: OfflineProps) { … }
 
 | Renders it | When | `onRetry` |
 |---|---|---|
-| **adaptv** | the app can't boot far enough for a route to exist — route chunk fails to load (`vite:preloadError`), or the route tree itself can't resolve | `location.reload()` |
+| **adaptv** | the app can't boot far enough for a route to exist — a route chunk is still missing right after the recovery reload that should have brought it back (`vite:preloadError`, §3.4), or the route tree itself can't resolve | `location.reload()` |
 | **the consumer** | the route mounted fine but its *data* is unavailable (§3.1.1) | whatever refetches — `refetch`, a mutation, a router invalidate |
 
 Optional props are what let one component serve both: adaptv supplies a sensible default `onRetry`, the
@@ -358,8 +358,10 @@ that looks different from the app's own.
 #### Does it work everywhere? Almost — one hard floor, one constraint
 
 **✅ Works:** offline cold load with the shell precached · SSR with the origin down (better than a 502)
-· hard refresh while offline on a personalized route · route chunk missing after a deploy · **native,
-always** (no SW, bundle is on-device, so React always boots).
+· hard refresh while offline on a personalized route · route chunk missing after a deploy, **when the
+import comes from a preload** — a tapped link to that route fails while its reload is still booting, and
+gets the router's error screen instead (§3.4 lists the measured limits) · **native, always** (no SW,
+bundle is on-device, so React always boots).
 
 **⛔ The one case nothing can fix: the first-ever load, while offline, on web.** No document is cached,
 so no JS runs, so no React component can render — the user gets the browser's own error page. This is
@@ -783,12 +785,34 @@ cold-launched constantly.
 
 Three supporting requirements, all unconditional:
 
-1. **`vite:preloadError` handler**, with a `sessionStorage` loop guard — the net that makes even the
-   bad case recoverable. Without the guard, a genuinely-missing asset becomes an infinite reload loop.
-   **Exactly one** is armed, by the shell: two sharing one guard read each other's reload as "a reload
-   already failed" and drew the offline screen over every recovery that worked. The document that
-   reloads draws nothing more, and leaves the import's error for the router to hold; only a document
-   the reload produced, still missing the chunk, gets the offline screen (§3.1.2).
+1. **`vite:preloadError` handler**, with a time-boxed `sessionStorage` loop guard — the net that makes
+   even the bad case recoverable. Without the guard, a genuinely-missing asset becomes an infinite
+   reload loop. On a stale chunk the net stamps the time and reloads, and clears TanStack Router's own
+   one-shot reload keys (`tanstack_router_reload:<error message>`) in the same breath, so the router's
+   net holds the page still for this recovery too. A stale chunk **within 30 s** of the stamp is that
+   reload not having helped: the net takes the error over, shows the offline screen (§3.1.2), and does
+   not reload. **Outside the window** it is a later deploy and gets its own reload, so a tab that
+   recovered once recovers from the next deploy too. The window is the loop guard for both nets: at
+   most one reload per window, and the document a failed reload produces does not reload again. 30 s is
+   more than ten times the slowest measured reload-to-failure (2.6 s with Chromium's CPU slowed 20×);
+   the cost of a long window is only two deploys landing inside it, whose second stale chunk gets the
+   offline screen and its retry instead of a silent reload.
+   **Exactly one** net is armed, by the shell: two sharing one stamp read each other's reload as "a
+   reload already failed" and drew the offline screen over every recovery that worked. The document
+   that reloads draws nothing more, and leaves the import's error for the router to hold.
+   **Measured limits** (`playground/e2e-sw/stale-chunk.spec.ts`):
+   - **WebKit behind a host that rewrites a missing file to the index** — which is what adaptv's own
+     `spa` output does on hosts that honour its `_redirects` (`/* /index.html 200`), so it is what iOS
+     Safari and home-screen PWAs meet there. The pruned chunk comes back as HTML, the import fails with
+     a MIME-type error the router does not read as a missing module, and "Something went wrong" is drawn
+     over the reload for its round trip. The reload still recovers. Before the net was single this case
+     showed "You're offline" over the reload instead: the screen changed, the flash did not go away.
+   - **A tapped link to a route whose chunk is gone.** A navigation commits the URL before the import
+     fails, so the reload lands on that route and imports the chunk while it boots — before the shell's
+     effect has armed the net. When the deploy brought the chunk back, that is a clean recovery. When
+     it is still missing, the tab reloads once and the document that reload produces shows the router's
+     error screen, never the offline one: the offline screen for a chunk that stays missing is reached
+     only through a preload.
 2. **`register(swUrl, { updateViaCache: "none" })`** and `Cache-Control: no-cache` on `sw.js`.
    The first ships in adaptv's registration; the second is the host's to set, because the static build
    emits no `_headers` file. Browsers cap the SW script's effective max-age at 24h regardless;
