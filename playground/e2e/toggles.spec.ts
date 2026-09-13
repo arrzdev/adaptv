@@ -14,6 +14,15 @@ import { expect, test } from "@playwright/test"
  * so a "controlled tap" test here would be pinning an artefact, not the contract.
  *
  * chromium is enough — semantics, not engine-specific rendering.
+ *
+ * ⚠︎ One exception, and it is geometry: the Switch's accessible element. Its
+ * `<input role="switch">` is what VoiceOver, TalkBack and automation treat as
+ * the control, so its box must BE the track. It was an sr-only 1x1 box one pixel
+ * left of a 48x28 track, and a click at its centre hit nothing (the iOS sim QA
+ * finding). Layout is real only in a browser and differs by engine, so those
+ * tests measure on chromium AND webkit. With the input over the track, a plain
+ * click at its centre does drive the engine on both, so that tap is pinned here
+ * after all, and exactly once.
  */
 
 const LOG = "[data-lab-log] li"
@@ -110,6 +119,81 @@ test.describe("Checkbox & Switch semantics", () => {
     await expect(input(page, "switch", "Lab switch")).toHaveAttribute(
       "role",
       "switch",
+    )
+  })
+
+  test("the switch's accessible element IS the track, not a 1px box beside it", async ({
+    page,
+  }) => {
+    const sw = input(page, "switch", "Lab switch")
+    const track = page
+      .locator("[data-adaptv='switch']")
+      .filter({ has: sw })
+    await sw.scrollIntoViewIfNeeded()
+    const swBox = await sw.boundingBox()
+    const trackBox = await track.boundingBox()
+    if (!swBox || !trackBox) throw new Error("the switch has no box")
+    //what VoiceOver, TalkBack and every automation tool read as the control's
+    //frame, and where they aim a tap: it must be the area the finger toggles
+    expect(swBox.width, "as wide as the track").toBeGreaterThanOrEqual(
+      trackBox.width - 0.5,
+    )
+    expect(swBox.height, "as tall as the track").toBeGreaterThanOrEqual(
+      trackBox.height - 0.5,
+    )
+    expect(Math.abs(swBox.x - trackBox.x)).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(swBox.y - trackBox.y)).toBeLessThanOrEqual(0.5)
+    //and covering the track must not paint a native checkbox over it
+    await expect(sw).toHaveCSS("opacity", "0")
+    //the element under the frame's centre is the switch itself, so a tap aimed
+    //there reaches it rather than a neighbour
+    const hit = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y)
+        return el?.getAttribute("role") ?? el?.tagName ?? null
+      },
+      { x: swBox.x + swBox.width / 2, y: swBox.y + swBox.height / 2 },
+    )
+    expect(hit).toBe("switch")
+  })
+
+  test("a click at the switch's accessible centre toggles it exactly once", async ({
+    page,
+  }) => {
+    const sw = input(page, "switch", "Lab switch")
+    await expect(sw).not.toBeChecked()
+    //Playwright aims at the centre of the ROLE element and refuses if something
+    //else is hit there — the same aim an assistive tap takes
+    await sw.click({ timeout: 5_000 })
+    await expect(sw, "one click toggles once").toBeChecked()
+    await page.waitForTimeout(150)
+    const log = await logJoin(page)
+    expect(log.match(/switch → true/g) ?? []).toHaveLength(1)
+    expect(log, "never a second toggle back").not.toMatch(/switch → false/)
+  })
+
+  test("a programmatic click on the switch never toggles twice, and the DOM agrees with aria-checked", async ({
+    page,
+  }) => {
+    //what VoiceOver and TalkBack dispatch on activation: a click on the element
+    //with no press on the track before it. Whether that click toggles at all is
+    //the gesture engine's call; what the input covering the track must never do
+    //is add a second toggle, or leave `checked` and `aria-checked` apart
+    const sw = input(page, "switch", "Lab switch")
+    await expect(sw).not.toBeChecked()
+    await sw.evaluate((el) => (el as HTMLInputElement).click())
+    await page.waitForTimeout(150)
+    const log = await logJoin(page)
+    expect(
+      (log.match(/switch → /g) ?? []).length,
+      "at most one toggle",
+    ).toBeLessThanOrEqual(1)
+    const state = await sw.evaluate((el) => ({
+      checked: String((el as HTMLInputElement).checked),
+      aria: el.getAttribute("aria-checked"),
+    }))
+    expect(state.checked, "DOM checked matches aria-checked").toBe(
+      state.aria,
     )
   })
 
