@@ -20,8 +20,22 @@ export function devServiceWorkerEnabled(): boolean {
   return value !== undefined && value !== "" && value !== "0"
 }
 
-/** Where the dev worker is served. Same path as the built one, deliberately. */
-const DEV_SW_PATH = "/sw.js"
+/**
+ * Where the dev worker is served: `sw.js` under the app's base, deliberately
+ * where the built worker lives.
+ *
+ * Joined here rather than left to Vite, because Vite runs `configureServer`
+ * middlewares BEFORE the one that strips the base: under `base: "/app/"` this
+ * middleware sees `/app/sw.js`, and a bare `/sw.js` comparison never matched it.
+ * The bare `/sw.js` is not answered under a subpath base. A worker there would
+ * be scoped to the whole origin, outside the app, and nothing registers it.
+ *
+ * A plain concatenation, because `server.config.base` always ends in a slash:
+ * Vite normalises `"/app"` to `"/app/"` when it resolves the config.
+ */
+function devServiceWorkerPath(base: string): string {
+  return `${base}sw.js`
+}
 
 /**
  * The dev worker is the app's modules and **nothing else**. → `docs/design/rendering.md §3`
@@ -68,8 +82,9 @@ export function adaptvSwDevPlugin(context: AdaptvContext): Plugin {
         )
       }
 
+      const swPath = devServiceWorkerPath(server.config.base)
       server.middlewares.use((req, res, next) => {
-        if ((req.url ?? "").split("?")[0] !== DEV_SW_PATH) return next()
+        if ((req.url ?? "").split("?")[0] !== swPath) return next()
         const modules = serviceWorkers()
         if (modules.length === 0) return next()
         void (async () => {
