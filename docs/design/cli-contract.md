@@ -1038,6 +1038,15 @@ causes, either distinguish them or describe only what was observed.
 > — clipped from *"…isn't responding. Another process is likely using that port."* The port was
 > ours. `warmDevServer` now returns a verdict (`unreachable` | `error` + status | `thin`), and the
 > port advice is attached ONLY to the two verdicts it can be true for.
+>
+> The same holds for a verb. Patching the install identity read the plist and then wrote it, and
+> one message served both failures, so a file adaptv could not READ was reported as one it could
+> not write:
+> ```
+>   ✖ ios  could not write .adaptv/ios/App/App/Info.plist (EACCES) · 0ms
+> ```
+> The dev checks the write permission, finds it fine, and has been sent after the wrong bit. The
+> read failure now says `could not read`.
 
 **R57 — A stream nobody is reading is a stream that is lying to you.** When a subprocess's output
 has no sink yet, the CLI is blind for exactly as long as that lasts — and startup is when things
