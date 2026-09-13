@@ -289,6 +289,18 @@ export function rawOut(text) {
 }
 
 /**
+ * Bytes that ARE the command's result — the PEMs `keys ota` prints — written exactly as given,
+ * never wrapped or indented, because a re-flowed key no longer parses.
+ *
+ * Levelled as a RESULT, which is the whole difference from `rawOut`: `--quiet` drops narration,
+ * never the outcome (R46), and a key pair printed at step level made `keys ota --quiet` print
+ * nothing at all while the pair it had generated was gone for good.
+ */
+export function verbatim(text) {
+  out(text, "result")
+}
+
+/**
  * A group heading inside a report (`doctor`): breathing room, then the title.
  *
  * A heading CLOSES whatever group was open above it. It already prints its own blank line, so

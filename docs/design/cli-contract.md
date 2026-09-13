@@ -537,6 +537,17 @@ carries an `if`:
 > It also forced something overdue: `check()` printed `doctor`'s matrix and returned nothing, so
 > the one thing a script would ever want from that command existed nowhere but the terminal. A
 > command has to RETURN its results before a second renderer can exist.
+>
+> The settled-row mistake came back in a second shape. `keys ota` printed its PEMs through
+> `rawOut`, the `--verbose` escape hatch, which is levelled as a step, so:
+> ```
+> $ adaptv keys ota --quiet
+> $ echo $?
+> 0
+> ```
+> Nothing on either stream, a clean exit, and a key pair adaptv keeps no copy of, gone. Bytes
+> that ARE the outcome go through `verbatim()`, which prints unwrapped at result level;
+> `cli-process.test.mjs` spawns the command and parses both keys out of the quiet page.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
