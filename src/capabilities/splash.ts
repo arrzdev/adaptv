@@ -33,8 +33,10 @@ export const NATIVE_SPLASH_FADE_MS = 200
  */
 export function hideNativeSplash(): Promise<void> {
   if (!isNativePlatform()) return Promise.resolve()
-  //Plugin unavailable or the OS refused: the config `launchAutoHide` still clears
-  //the splash. A bridge failure arrives as a rejection, never a throw, and an
+  //A rejection strands nothing: `launchAutoHide` is off (capacitor-config.ts), but the
+  //plugin only rejects when it holds no splash — iOS rejects `hide` when it never
+  //created one, Android never rejects it, and a plugin missing from the binary held
+  //nothing to begin with. A bridge failure arrives as a rejection, never a throw, and an
   //unawaited one would reach the window's `unhandledrejection` event (the console,
   //any error reporter the app installed) on every launch.
   void SplashScreen.hide().catch(() => {})
