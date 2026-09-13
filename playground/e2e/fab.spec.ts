@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Fab — a Button pinned to the safe corner, whose whole contract is geometry:
@@ -36,29 +37,12 @@ async function setKeyboard(page: Page, isOpen: boolean, height: number) {
   )
 }
 
-/**
- * Wait for the client to take over before touching the page.
- *
- * Every lab page is server-rendered, so a `waitFor()` on the FAB is satisfied
- * by inert HTML, and a toggle clicked before its handler is attached is
- * dropped — the placement never changes and the box is measured where it
- * already was, which reads as the component ignoring its prop. It is not
- * load flake: Playwright boots its own dev server per run, so the FIRST test
- * to reach this route pays the cold transform cost and loses the race while
- * every test after it wins. A dev session left running hides it entirely,
- * because `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — a cold route's first transform can outrun the 5s
- * default.
+/*
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) a
+ * toggle clicked before its handler is attached is dropped — the placement never
+ * changes and the box is measured where it already was, which reads as the
+ * component ignoring its prop.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** The default gap, 4 spacing units, resolved to px off `--spacing` on <html>. */
 async function restingGapPx(page: Page) {
