@@ -118,6 +118,15 @@ whether the native matrix can run in CI at all is still an open question
 
 ---
 
+## Coverage
+
+`pnpm test:coverage` runs the unit suite with V8 coverage over `src/**` and `bin/**`, prints a
+summary, and writes `coverage/index.html` and `coverage/coverage-summary.json` (gitignored). It is a
+map, not a gate: there are **no thresholds**, and neither `pnpm gate` nor CI runs it. Code a test
+only reaches through a spawned child process is not counted.
+
+---
+
 ## What to check per target (the divergence checklist)
 
 | Concern | Where it breaks |
