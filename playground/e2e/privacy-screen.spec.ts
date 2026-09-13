@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Privacy screen — the app's content kept out of the switcher and, on Android,
@@ -9,12 +9,6 @@ import { expect, test } from "@playwright/test"
  * `unsupported` rather than throwing or pretending. The native behaviours are
  * measured on the simulator and the emulator, not here.
  */
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Privacy screen", () => {
   test.beforeEach(async ({ page }) => {
