@@ -39,14 +39,13 @@ function scaffold(iconsKey: string | undefined = "./public/favicons") {
   //default, and the test would pass against the wrong `urlBase`.
   writeFileSync(path.join(icons, "favicon-192.png"), PNG_1X1)
 
-  for (const dir of ["assets", "favicons", ".vite"])
+  for (const dir of ["assets", "favicons"])
     mkdirSync(path.join(clientDir, dir), { recursive: true })
   writeFileSync(path.join(clientDir, "index.html"), "<!doctype html>")
   writeFileSync(path.join(clientDir, "manifest.json"), "{}")
   writeFileSync(path.join(clientDir, "robots.txt"), "")
   writeFileSync(path.join(clientDir, "assets/app.js"), "")
   writeFileSync(path.join(clientDir, "favicons/favicon-192.png"), "png")
-  writeFileSync(path.join(clientDir, ".vite/manifest.json"), "{}")
 
   const context: AdaptvContext = {
     appRoot,
@@ -97,12 +96,11 @@ describe("adaptvNativeBundlePlugin", () => {
     expect(config.environments.ssr).toBeUndefined()
   })
 
-  it("drops the icon art and the build metadata, and nothing else", async () => {
+  it("drops the icon art, and nothing else", async () => {
     const { clientDir, context } = scaffold()
     await prune(context)
 
     expect(existsSync(path.join(clientDir, "favicons"))).toBe(false)
-    expect(existsSync(path.join(clientDir, ".vite"))).toBe(false)
 
     //Everything the WebView actually loads. `manifest.json` in particular STAYS —
     //`useManifestOrientation` fetches it on device so the iOS guard mirrors the

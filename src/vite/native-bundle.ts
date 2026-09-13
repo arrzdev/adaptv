@@ -55,9 +55,7 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
       captureClientOutDir(context, resolved)
     },
     //`buildApp`, `order: "post"`, and registered AFTER the three emitters — this
-    //deletes things they read. `shell-emit` in particular reads
-    //`.vite/manifest.json` out of the client dir, so pruning it any earlier would
-    //take the shell's asset tags with it.
+    //deletes things they may still read, and the build stamp records the result.
     buildApp: {
       order: "post",
       async handler() {
@@ -66,15 +64,6 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
     },
   }
 }
-
-/**
- * `.vite/manifest.json` — Vite's source-to-chunk map. It exists so a **server**
- * can resolve which chunks a route needs and emit preload tags for them; a static
- * SPA has those tags baked into the document it ships. Nothing fetches it on
- * device, and it describes the whole build graph, which is not something to
- * ship inside an app bundle either.
- */
-const BUILD_METADATA_DIR = ".vite"
 
 function pruneNativeBundle(context: AdaptvContext): void {
   const clientDir = requireClientOutDir(context)
@@ -103,7 +92,6 @@ function pruneNativeBundle(context: AdaptvContext): void {
     defaultIconFiles(),
   )
   if (icons.urlBase) dropped.push(icons.urlBase.replace(/^\//, ""))
-  dropped.push(BUILD_METADATA_DIR)
 
   const removed = dropped.filter((rel) => remove(clientDir, rel))
   if (removed.length > 0) {
