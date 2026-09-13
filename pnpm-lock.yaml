@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@capacitor/cli@8.4.2': d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe
+  '@capacitor/cli@8.4.3': d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe
   '@capawesome/capacitor-live-update@8.3.0': bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc
   '@tanstack/router-generator@1.167.21': f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454
   '@tanstack/start-plugin-core@1.171.24': 41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064
@@ -15,59 +15,59 @@ importers:
   .:
     dependencies:
       '@capacitor/android':
-        specifier: 8.4.2
-        version: 8.4.2(@capacitor/core@8.4.2)
+        specifier: 8.4.3
+        version: 8.4.3(@capacitor/core@8.4.3)
       '@capacitor/app':
         specifier: 8.1.0
-        version: 8.1.0(@capacitor/core@8.4.2)
+        version: 8.1.0(@capacitor/core@8.4.3)
       '@capacitor/browser':
         specifier: 8.0.0
-        version: 8.0.0(@capacitor/core@8.4.2)
+        version: 8.0.0(@capacitor/core@8.4.3)
       '@capacitor/cli':
-        specifier: 8.4.2
-        version: 8.4.2(patch_hash=d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe)
+        specifier: 8.4.3
+        version: 8.4.3(patch_hash=d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe)
       '@capacitor/clipboard':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.2)
+        version: 8.0.1(@capacitor/core@8.4.3)
       '@capacitor/core':
-        specifier: 8.4.2
-        version: 8.4.2
+        specifier: 8.4.3
+        version: 8.4.3
       '@capacitor/device':
         specifier: 8.0.3
-        version: 8.0.3(@capacitor/core@8.4.2)
+        version: 8.0.3(@capacitor/core@8.4.3)
       '@capacitor/geolocation':
         specifier: 8.0.0
-        version: 8.0.0(@capacitor/core@8.4.2)
+        version: 8.0.0(@capacitor/core@8.4.3)
       '@capacitor/haptics':
         specifier: 8.0.2
-        version: 8.0.2(@capacitor/core@8.4.2)
+        version: 8.0.2(@capacitor/core@8.4.3)
       '@capacitor/ios':
-        specifier: 8.4.2
-        version: 8.4.2(@capacitor/core@8.4.2)
+        specifier: 8.4.3
+        version: 8.4.3(@capacitor/core@8.4.3)
       '@capacitor/keyboard':
         specifier: 8.0.5
-        version: 8.0.5(@capacitor/core@8.4.2)
+        version: 8.0.5(@capacitor/core@8.4.3)
       '@capacitor/network':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.2)
+        version: 8.0.1(@capacitor/core@8.4.3)
       '@capacitor/preferences':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.2)
+        version: 8.0.1(@capacitor/core@8.4.3)
       '@capacitor/screen-orientation':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.2)
+        version: 8.0.1(@capacitor/core@8.4.3)
       '@capacitor/share':
         specifier: 8.0.1
-        version: 8.0.1(@capacitor/core@8.4.2)
+        version: 8.0.1(@capacitor/core@8.4.3)
       '@capacitor/splash-screen':
         specifier: 8.0.2
-        version: 8.0.2(@capacitor/core@8.4.2)
+        version: 8.0.2(@capacitor/core@8.4.3)
       '@capacitor/status-bar':
         specifier: 8.0.2
-        version: 8.0.2(@capacitor/core@8.4.2)
+        version: 8.0.2(@capacitor/core@8.4.3)
       '@capawesome/capacitor-live-update':
         specifier: 8.3.0
-        version: 8.3.0(patch_hash=bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc)(@capacitor/core@8.4.2)
+        version: 8.3.0(patch_hash=bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc)(@capacitor/core@8.4.3)
       '@tanstack/react-router':
         specifier: 1.170.18
         version: 1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -97,7 +97,7 @@ importers:
         version: 6.4.0(@types/react@19.2.7)(react@19.2.3)
       nitro:
         specifier: 3.0.260610-beta
-        version: 3.0.260610-beta(@capacitor/preferences@8.0.1(@capacitor/core@8.4.2))(chokidar@5.0.0)(jiti@2.7.0)(lru-cache@11.5.2)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))(xml2js@0.6.2)
+        version: 3.0.260610-beta(@capacitor/preferences@8.0.1(@capacitor/core@8.4.3))(chokidar@5.0.0)(jiti@2.7.0)(lru-cache@11.5.2)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))(xml2js@0.6.2)
       sharp:
         specifier: 0.35.3
         version: 0.35.3(@types/node@26.1.1)
@@ -779,8 +779,8 @@ packages:
   '@braidai/lang@1.1.2':
     resolution: {integrity: sha512-qBcknbBufNHlui137Hft8xauQMTZDKdophmLFv05r2eNmdIv/MlPuP4TdUknHG68UdWLgVZwgxVe735HzJNIwA==}
 
-  '@capacitor/android@8.4.2':
-    resolution: {integrity: sha512-bzf8XZ9C+ePgOQ+e+T0fnhHGH4aCNY494vvSQIF5w4AY07RwEmkFqZs1678DDSMH0hLSQpxEwXGFNUVcXO6bBA==}
+  '@capacitor/android@8.4.3':
+    resolution: {integrity: sha512-VICd1+E2u5uPvCb5hseoZr84u7/wi334BqayKyXvSLeqURn/iw7nCFEWK29RQNW2rxiW5l1vTVHQ2K6tAJkpTQ==}
     peerDependencies:
       '@capacitor/core': ^8.4.0
 
@@ -794,8 +794,8 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/cli@8.4.2':
-    resolution: {integrity: sha512-hE4HmpMdr5T8eQ++kGa1BKkdG2JLEvo1y1cj1kmFK78VB9dBp538oe1EZvzwupNGOl0ZueALotzL5wcXRD9w1Q==}
+  '@capacitor/cli@8.4.3':
+    resolution: {integrity: sha512-E3J7F6gdZSBMIwB0/WVnHZ5S+UXJPgvdnyqtwryccCGRRkIZ34b5sgYYMa2Ij4agimkUcMoScAk+K/grTtL1Xg==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -804,8 +804,8 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/core@8.4.2':
-    resolution: {integrity: sha512-fQPRb3JXRaU2pnufDUvqOjhsrYxDQeFRZyaj/sHydIUxD2NxOGHKMpmKUdI+U4OOmKuGZyvRpi7TSJU+7Bjbmg==}
+  '@capacitor/core@8.4.3':
+    resolution: {integrity: sha512-5S04bZa2I9RabRaqhmwynR54Xkj9x/cKW8R6nXT5ZYg/3JkuOzyIEijIrb18Jra5bMT+f6HX7KonCyvNob6+0g==}
 
   '@capacitor/device@8.0.3':
     resolution: {integrity: sha512-rliPCCZwxtjU6200jJNDAsQhioyozV3fGgiP+NgRqtDOI7i+Jdz+DYNwEup+3MGZZ4NEmkuFaBeWLM3T01vJRg==}
@@ -822,8 +822,8 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/ios@8.4.2':
-    resolution: {integrity: sha512-ClVzIjK++yRjsRPOpdEzhsZfbHfoEc0f4M6vD0v7sWh0qcoF6NkxNAeHpWTn4OPJpJfpGGoYsq+IfEHrYyBiWA==}
+  '@capacitor/ios@8.4.3':
+    resolution: {integrity: sha512-ziFt4WskFjUFgwCcudhxklcCFMCPNTUk1yVuwutw6xxCvUZzmiOJjVLjDrZ+3A1G02nV+oizUiGPff97htPRIg==}
     peerDependencies:
       '@capacitor/core': ^8.4.0
 
@@ -1959,6 +1959,7 @@ packages:
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@yuku-codegen/binding-darwin-arm64@0.8.0':
     resolution: {integrity: sha512-7cSJH6PaKLRBdCfiB4pM6EukvgOk5xV4tyuLOIOEqrHsbnV7brtyff7CjhZbeGozdIHoOnKOi5R7rrmCWN3QSw==}
@@ -5006,19 +5007,19 @@ snapshots:
 
   '@braidai/lang@1.1.2': {}
 
-  '@capacitor/android@8.4.2(@capacitor/core@8.4.2)':
+  '@capacitor/android@8.4.3(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/app@8.1.0(@capacitor/core@8.4.2)':
+  '@capacitor/app@8.1.0(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/browser@8.0.0(@capacitor/core@8.4.2)':
+  '@capacitor/browser@8.0.0(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/cli@8.4.2(patch_hash=d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe)':
+  '@capacitor/cli@8.4.3(patch_hash=d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe)':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8
       '@ionic/utils-subprocess': 3.0.1
@@ -5040,64 +5041,64 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@capacitor/clipboard@8.0.1(@capacitor/core@8.4.2)':
+  '@capacitor/clipboard@8.0.1(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/core@8.4.2':
+  '@capacitor/core@8.4.3':
     dependencies:
       tslib: 2.8.1
 
-  '@capacitor/device@8.0.3(@capacitor/core@8.4.2)':
+  '@capacitor/device@8.0.3(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/geolocation@8.0.0(@capacitor/core@8.4.2)':
+  '@capacitor/geolocation@8.0.0(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
       '@capacitor/synapse': 1.0.4
 
-  '@capacitor/haptics@8.0.2(@capacitor/core@8.4.2)':
+  '@capacitor/haptics@8.0.2(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/ios@8.4.2(@capacitor/core@8.4.2)':
+  '@capacitor/ios@8.4.3(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/keyboard@8.0.5(@capacitor/core@8.4.2)':
+  '@capacitor/keyboard@8.0.5(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/network@8.0.1(@capacitor/core@8.4.2)':
+  '@capacitor/network@8.0.1(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/preferences@8.0.1(@capacitor/core@8.4.2)':
+  '@capacitor/preferences@8.0.1(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/screen-orientation@8.0.1(@capacitor/core@8.4.2)':
+  '@capacitor/screen-orientation@8.0.1(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/share@8.0.1(@capacitor/core@8.4.2)':
+  '@capacitor/share@8.0.1(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/splash-screen@8.0.2(@capacitor/core@8.4.2)':
+  '@capacitor/splash-screen@8.0.2(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
-  '@capacitor/status-bar@8.0.2(@capacitor/core@8.4.2)':
+  '@capacitor/status-bar@8.0.2(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
   '@capacitor/synapse@1.0.4': {}
 
-  '@capawesome/capacitor-live-update@8.3.0(patch_hash=bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc)(@capacitor/core@8.4.2)':
+  '@capawesome/capacitor-live-update@8.3.0(patch_hash=bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc)(@capacitor/core@8.4.3)':
     dependencies:
-      '@capacitor/core': 8.4.2
+      '@capacitor/core': 8.4.3
 
   '@colors/colors@1.5.0':
     optional: true
@@ -7174,7 +7175,7 @@ snapshots:
 
   nf3@0.3.23: {}
 
-  nitro@3.0.260610-beta(@capacitor/preferences@8.0.1(@capacitor/core@8.4.2))(chokidar@5.0.0)(jiti@2.7.0)(lru-cache@11.5.2)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))(xml2js@0.6.2):
+  nitro@3.0.260610-beta(@capacitor/preferences@8.0.1(@capacitor/core@8.4.3))(chokidar@5.0.0)(jiti@2.7.0)(lru-cache@11.5.2)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))(xml2js@0.6.2):
     dependencies:
       consola: 3.4.2
       crossws: 0.4.10(srvx@0.11.22)
@@ -7189,7 +7190,7 @@ snapshots:
       rolldown: 1.2.0
       srvx: 0.11.22
       unenv: 2.0.0-rc.24
-      unstorage: 2.0.0-alpha.7(@capacitor/preferences@8.0.1(@capacitor/core@8.4.2))(chokidar@5.0.0)(db0@0.3.4)(lru-cache@11.5.2)(ofetch@2.0.0-alpha.3)
+      unstorage: 2.0.0-alpha.7(@capacitor/preferences@8.0.1(@capacitor/core@8.4.3))(chokidar@5.0.0)(db0@0.3.4)(lru-cache@11.5.2)(ofetch@2.0.0-alpha.3)
     optionalDependencies:
       jiti: 2.7.0
       rollup: 4.62.2
@@ -7983,9 +7984,9 @@ snapshots:
       rollup: 4.62.2
       vite: 8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0)
 
-  unstorage@2.0.0-alpha.7(@capacitor/preferences@8.0.1(@capacitor/core@8.4.2))(chokidar@5.0.0)(db0@0.3.4)(lru-cache@11.5.2)(ofetch@2.0.0-alpha.3):
+  unstorage@2.0.0-alpha.7(@capacitor/preferences@8.0.1(@capacitor/core@8.4.3))(chokidar@5.0.0)(db0@0.3.4)(lru-cache@11.5.2)(ofetch@2.0.0-alpha.3):
     optionalDependencies:
-      '@capacitor/preferences': 8.0.1(@capacitor/core@8.4.2)
+      '@capacitor/preferences': 8.0.1(@capacitor/core@8.4.3)
       chokidar: 5.0.0
       db0: 0.3.4
       lru-cache: 11.5.2
