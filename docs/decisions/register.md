@@ -721,6 +721,10 @@ Two consequences the citation alone did not give. First, it is **both** bands, n
 
 So the background paint is **load-bearing**, not merely anti-flash, and `useSyncTheme` writes both outputs deliberately — neither covers the whole matrix. Keep `theme-color` for Android/Chrome and iOS ≤ 18. **Firefox has never supported it at all.**
 
+**2026-09-13, measured — the iOS 18 half is Safari-only.** On an iOS 18.0 (`22A3351`) simulator a meta-only write of `#e60000`, with the page left at `#eeeeec`, reached Safari's top bar as `#e60000`. The same write moved nothing in the installed PWA or in the native app on that same iOS 18.0: both bands stayed `#eeeeec`. So "iOS 18 is the exact opposite" describes Safari's chrome, not iOS 18 as a whole; the meta tag is inert on every installed iOS surface measured, 18.0 included. iOS 26.1 (`23B86`) matched the table above on all three surfaces.
+
+**2026-09-13, measured — a stale top band after a live theme switch.** In the installed PWA on iOS 26.1, switching the OS appearance from light to dark while the app is open leaves the top band at `#010101` instead of the dark theme's `#0a0a0c`, still there 13 s later. In-app navigation clears it. The dark-to-light switch left no stale band.
+
 ### B32 — the chrome tint leads its curve by **half a frame**, and that number was measured
 
 `transitionChromeTint` (and so the drawer's dim) does not write the tint for *now*. It samples the
@@ -1599,5 +1603,7 @@ It drives **both** outputs — the meta tag and the `html`/`body` paint — for 
 | `/lab`, no tint | `#f5e6ff` | `#f3e4fc` (the app's light theme colour) |
 
 Both bands, and the fallback lands on the theme rather than on the layout above.
+
+**2026-09-13, measured — the first frame is not the route's colour on iOS 26.1 Safari.** A cold launch of `/lab/route-tint` in Safari on an iOS 26.1 (`23B86`) simulator, recorded and read frame by frame, paints its first frame with **both bands in the theme colour** while the page is still resolving. Both bands turn to `#0b6e4f` about **557 ms** later, on the dev server. The iOS 18.0 (`22A3351`) control is tinted on its first painted frame, because there the meta tag the head script writes is what the bar reads. The e2e test above reads the DOM, so it passes while this happens. **Probable cause, unproven:** the pre-paint head script tints only `<html>`, while the playground's CSS paints `body` with `bg-background`, and on iOS 26 the body is the painted edge until `useSyncTheme` writes it after hydration. A static probe on the same simulator supports this without proving it for the real page: `html` `#0b6e4f` under a `body` of `#eeeeec` gave `#eeeeec` on both bands, and the same page with a transparent `body` gave `#0b6e4f` on both. Once settled, the tint was correct in Safari in both themes on both OS versions. It was not correct on the installed surfaces, which disprove "both bands": the PWA on 18.0 shows the tint at the bottom only, the PWA on 26.1 at the top only, and the native app on both keeps the page's own pixels in the top band with the tint only as a gradient at the bottom edge (→ [`../roadmap/owed-device-verification.md`](../roadmap/owed-device-verification.md) row 5).
 
 **Not in scope, and deliberately.** The *animated* tint (`transitionChromeTint`, B32) still writes only the meta tag, so a drawer that dims the chrome does nothing on iOS 26+. Extending it to the shell background is a separate change with its own cost — a per-frame `style.backgroundColor` on `html` is a full-page repaint, which is a very different proposition from a meta write.
