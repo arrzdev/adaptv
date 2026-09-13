@@ -917,6 +917,21 @@ and a build they started so they could keep working is the worst moment to take 
 > value of type 'String' to specified type 'Int'` inline is 100+ columns of which the first 60 are
 > a path — clipped, the dev learns nothing. Split it: the message goes on the ✖ line, a short
 > `at AppDelegate.swift:54:32` goes on the dim line under it.
+>
+> A syscall is not the reason either. A `.adaptv/android` copied by something that drops file
+> modes leaves `gradlew` without its exec bit, nothing runs, so there is no tail to pick from,
+> and the row was Node's own message:
+> ```
+> ✖ android  spawn /Users/arrz/…/chopchop/.adaptv/android/gradlew EACCES · 3ms
+> ✖ android  spawn ./gradlew EACCES · 1.2s          ← the same file, through the native runner
+> ```
+> adaptv owns that file, so every prepare gives the bit back (`restoreGradleWrapperMode`) and
+> the failure mostly stops existing. When the restore cannot happen, `notExecutable` says what
+> is wrong with the file and the action that still works:
+> ```
+> ✖ android  .adaptv/android/gradlew is not executable · 3ms
+>     Delete .adaptv/android and run again. adaptv regenerates it.
+> ```
 
 **R14 — Detail appears once**, dim, grouped under that platform — or only under `--verbose`.
 Never a second glyph, never a raw dump in the calm path.

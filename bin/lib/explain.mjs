@@ -8,6 +8,7 @@
  */
 import { existsSync } from "node:fs"
 import path from "node:path"
+import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
 import { gradleCause, isDestinationEntry, portInUse } from "./tool-log.mjs"
@@ -101,6 +102,8 @@ export function explainFailure(label, appRoot = process.cwd()) {
     // dev never chose. Same sentence wherever it surfaces — a build, or the server itself.
     const busy = portInUse(text)
     if (busy) return settle({ reason: busy.msg, detail: busy.fix })
+    const locked = notExecutable(text)
+    if (locked) return settle({ reason: locked.msg, detail: locked.fix })
 
     const captured = String(err?.tail ?? "")
       .split("\n")
@@ -208,6 +211,43 @@ export function toolErrorParts(raw) {
     .replace(/^\s*\[adaptv\]\s*/, "")
     .trim()
   return { message: message || raw, where: "" }
+}
+
+/**
+ * A program that could not be started because it is not executable, in the dev's terms.
+ *
+ * Node says `spawn <file> EACCES`, and that is all it says: no tail, since nothing ran to write
+ * one. The gradle wrapper is where it happens — a project directory copied or unzipped by
+ * something that drops file modes leaves `gradlew` without its exec bit — and it reaches the
+ * page two ways, by its absolute path from `build android` and as `./gradlew` from the native
+ * runner, which spawns it from inside `.adaptv/android`. Either way the row read
+ * `spawn … EACCES`: a syscall, an errno, and no action.
+ *
+ * adaptv restores the wrapper's bit on every prepare (`restoreGradleWrapperMode`), so reaching
+ * this for a file adaptv generated means that restore could not happen, and regenerating the
+ * project is the action that still works. For anything else, the mode is the dev's to set.
+ *
+ * Returns `{ msg, fix }` like `portInUse`, or null when the text is not about this.
+ * @param {string} text
+ */
+export function notExecutable(text) {
+  //Lazy to the errno, not `\S+`: Node does not quote the path, and an app under
+  //`My Apps` or iCloud's `Mobile Documents` has a space in it.
+  const spawned = String(text).match(/\bspawn\s+(.+?)\s+EACCES\b/)
+  if (!spawned) return null
+  const file =
+    spawned[1] === "./gradlew"
+      ? `${ADAPTV_DIR}/android/gradlew`
+      : spawned[1]
+  const project = file.match(
+    new RegExp(`(?:^|/)(${ADAPTV_DIR.replace(".", "\\.")}/[^/]+)/`),
+  )?.[1]
+  return {
+    msg: `${file} is not executable`,
+    fix: project
+      ? [`Delete ${project} and run again. adaptv regenerates it.`]
+      : ["Make it executable ('chmod +x'), then run again."],
+  }
 }
 
 /**
