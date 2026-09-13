@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 // Screen-level guards for the shell's full-screen overlays. Unlike smoke.spec,
 // these assert on what the user can actually reach.
@@ -22,7 +22,9 @@ test("the splash unmounts on a 404 route too", async ({ page }) => {
   await expect(home).toBeVisible()
 
   // no splash left in the DOM at all — the check that fails on web too, where a
-  // leftover splash is display:none and therefore invisible but still covering
+  // leftover splash is display:none and therefore invisible but still covering.
+  // Deliberately NOT the hydration gate: the not-found page renders no splash at all,
+  // so the gate would resolve on the server's HTML and this is the claim itself.
   await expect.poll(() => page.locator(SPLASH_SELECTOR).count()).toBe(0)
 
   // and the 404 is genuinely reachable: this click fails if any overlay is
@@ -31,9 +33,10 @@ test("the splash unmounts on a 404 route too", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/)
 })
 
-// Guards the test above against going vacuous. Both assertions there pass for free
-// if `data-adaptv-splash` is ever renamed, so pin the name to the one place the
-// build also writes it: the pre-paint splash policy in the critical CSS.
+// Guards the test above against going vacuous — and with it the hydration gate every
+// spec waits on (e2e/support/hydrated.ts). All of them pass for free if
+// `data-adaptv-splash` is ever renamed, so pin the name to the one place the build
+// also writes it: the pre-paint splash policy in the critical CSS.
 test("the splash attribute the guards query is the one the shell ships", async ({
   page,
 }) => {
@@ -47,28 +50,12 @@ test("the splash attribute the guards query is the one the shell ships", async (
   expect(criticalCss).toContain("data-adaptv-splash")
 })
 
-/*
- * Wait for the app to be INTERACTIVE, not merely present.
- *
- * The shell is server-rendered, so the markup and the links exist before React has
- * attached anything — click in that window and nothing happens, the URL never changes,
- * and the assertion fails as though the 404 were broken. It only shows up under
- * parallel workers, which is the worst way to find out.
- *
- * The splash unmounting is the app's own ready signal, so it is the honest thing to
- * wait on rather than a sleep.
- */
-async function appReady(page: Page) {
-  await page.locator("[data-adaptv-screen]").waitFor()
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
-}
-
 test.describe("full-screen chrome", () => {
   test("a bad route renders the app's own 404, not the router's error page", async ({
     page,
   }) => {
     await page.goto("/lab/screens")
-    await appReady(page)
+    await awaitClientHandover(page)
     await page.getByRole("link", { name: /client navigation/i }).click()
 
     //the app's screen, identified by content it and only it renders
@@ -104,9 +91,12 @@ test.describe("full-screen chrome", () => {
     page,
   }) => {
     await page.goto("/lab/definitely-not-a-route")
-    //`appReady` works here now: #26 made the splash unmount on the not-found route
-    //too. Before that it never did, and waiting on it hung on the bug.
-    await appReady(page)
+    //No hydration gate, on purpose: it would be VACUOUS here. The not-found page
+    //renders no splash (no layout route mounts under the root boundary), so the gate
+    //resolves on the server's HTML — measured: no splash in any frame, and React
+    //attaching ~2s after `goto` returns. The click still proves the claim, because
+    //Back home is a real `<a href>`: before hydration it is a document navigation to
+    //`/`, after it a client one, and both must land on a working app.
     await page.getByRole("link", { name: /back home/i }).click()
 
     await expect(page.locator("[data-adaptv-screen] > *")).toBeVisible()
@@ -129,7 +119,7 @@ test.describe("full-screen chrome", () => {
     await page.goto("/lab/screens")
     await page.locator("[data-adaptv-screen]").waitFor()
 
-    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+    await awaitClientHandover(page)
 
     //the page's own live readout must agree — if it does not, one of the two is lying
     await expect(page.getByText("gone, as expected")).toBeVisible()
@@ -148,7 +138,8 @@ test.describe("full-screen chrome", () => {
      * mean the hook never hydrated, and no manual pass on a desktop would catch it.
      */
     await page.goto("/lab/screens")
-    await page.locator("[data-adaptv-screen]").waitFor()
+    //the readout is the hook's CLIENT value; before hydration it is the SSR placeholder
+    await awaitClientHandover(page)
 
     const orientation = await page.evaluate(
       () => (screen.orientation as ScreenOrientation | undefined)?.type,
