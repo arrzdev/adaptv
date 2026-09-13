@@ -126,29 +126,51 @@ export function patchIosLocalNetwork(appRoot) {
   if (original.includes("NSLocalNetworkUsageDescription")) return null
   spawnSync("/usr/libexec/PlistBuddy", [
     "-c",
-    'Add :NSLocalNetworkUsageDescription string "Development live-reload connects to the adaptv dev server on your local network."',
+    `Add :NSLocalNetworkUsageDescription string "${LOCAL_NETWORK_REASON}"`,
     plist,
   ])
   return () => writeFileSync(plist, original)
 }
 
 /**
- * Strip a dev ATS exception the CLI left behind, before a release build packages it.
+ * Dev's Local Network reason. The sentence is its own marker: no app writes it, so a plist
+ * carrying it under that key is carrying a killed session's leftover, and `healDevAtsLeftover`
+ * can remove it without a second marker key.
+ */
+const LOCAL_NETWORK_REASON =
+  "Development live-reload connects to the adaptv dev server on your local network."
+const DEV_LOCAL_NETWORK = new RegExp(
+  `<key>NSLocalNetworkUsageDescription</key>\\s*<string>${LOCAL_NETWORK_REASON.replace(/\./g, "\\.")}</string>`,
+)
+
+/**
+ * Strip what a killed dev session left in the plist, before a release build packages it: the
+ * ATS exception, and the Local Network reason an external run adds beside it. Both are
+ * patched in place, so both outlive a SIGKILL, and the patch that finds either already there
+ * adopts it and registers no revert.
  *
  * Returns one of:
- * - `{ healed: true }`  — our marker was there; the exception + marker were removed.
- * - `{ warn: true }`    — ATS is declared but NOT by us. Never auto-edit that: the app
- *                         may legitimately need it. Surface it and let the dev decide.
- * - `{}`                — nothing to do.
+ * - `{ warn: true }`   — ATS is declared but NOT by us. Never auto-edit that: the app
+ *                        may legitimately need it. Surface it and let the dev decide.
+ *                        (A leftover Local Network reason is still removed.)
+ * - `{ healed: true }` — a leftover of dev's own (marker or sentence) was removed.
+ * - `{}`               — nothing to do.
  */
 export function healDevAtsLeftover(appRoot) {
   const plist = iosPlistPath(appRoot)
   if (!existsSync(plist)) return {}
   const text = readFileSync(plist, "utf8")
-  if (!text.includes("NSAppTransportSecurity")) return {}
-  if (!text.includes(ATS_MARKER)) return { warn: true }
   const pb = (cmd) =>
     spawnSync("/usr/libexec/PlistBuddy", ["-c", cmd, plist])
+  const result = {}
+  if (DEV_LOCAL_NETWORK.test(text)) {
+    pb("Delete :NSLocalNetworkUsageDescription")
+    result.healed = true
+  }
+  if (!text.includes("NSAppTransportSecurity")) return result
+  //`warn` alone: the caller reads `healed` first and stays silent on it, and a healed
+  //sentence must not hide the one thing here the dev has to decide.
+  if (!text.includes(ATS_MARKER)) return { warn: true }
   pb("Delete :NSAppTransportSecurity")
   pb(`Delete :${ATS_MARKER}`)
   return { healed: true }
