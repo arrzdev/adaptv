@@ -88,8 +88,9 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
   infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
   a keyboard is not something to translate away from — it is a slice of the bottom that stops being
-  usable. Nothing else shrinks the viewport for us either: the OS webview resize is off
-  (`KeyboardResize.None`) and `useFreezeViewport` pins the layout viewport, deliberately. So on a
+  usable. Nothing else shrinks the viewport for us either: the OS webview resize is off on iOS
+  (`KeyboardResize.None`; Android's plugin has no resize mode, so it is not asked there) and
+  `useFreezeViewport` pins the layout viewport, deliberately. So on a
   keyboard the content box holds `room` = the keyboard's height BELOW its stack, and is allowed to
   grow into `max-h` by the same amount — the content that was visible stays visible, and where the
   cap refuses the growth the scroller absorbs it and the rest stays reachable by scrolling. Both
