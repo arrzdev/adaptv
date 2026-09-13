@@ -1,6 +1,6 @@
 //Filesystem accessor — files the app owns, on every target:
 //  • native   → @capacitor/filesystem, the app's own container (Data) or its
-//               evictable cache (Cache)
+//               evictable cache (Cache), under `adaptv/<scope>/` in either
 //  • web/PWA  → the origin-private file system (OPFS): `navigator.storage
 //               .getDirectory()` and `FileSystemFileHandle.createWritable()`
 //
@@ -36,13 +36,17 @@
 //the honest answer needs one attempt to open the root directory: the API can
 //be present and refuse (see above), and a sync check cannot see that. The
 //first successful open is memoised, so it costs one await per process. Paths are relative, `/`-separated,
-//and create their directories on write; `.` and `..` are refused.
+//and create their directories on write; `.` and `..` are refused and a leading
+//`/` is dropped, so every path resolves under `adaptv/<scope>/` on every tier.
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem"
 import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 /**
- * `"data"` — persists until the app or the site data is removed.
+ * `"data"` — on native, persists until the app is uninstalled or its data is
+ * cleared. On the web it is best-effort storage: it lasts until the site's data
+ * is cleared, and the browser may also evict it under storage pressure, because
+ * this module never asks for `navigator.storage.persist()`.
  * `"cache"` — the OS (native) may evict it under pressure; on the web it is a
  * second directory under the same quota, kept apart so a listing of one never
  * shows the other.
@@ -165,9 +169,11 @@ let opfsRootHandle: OpfsDirectoryHandle | null = null
 let opfsRootOwner: OpfsStorage | null = null
 
 /**
- * The origin's root directory, opened once per `navigator.storage`. A rejection
- * is NOT memoised — the error WebKit gives is worded as transient, so a later
- * call gets to try again.
+ * The origin's root directory, opened once per `navigator.storage`. Only a
+ * success is memoised: a rejection is not, so every later call opens the root
+ * again (the error WebKit gives is worded as transient). Where the browser
+ * refuses every attempt, as Playwright's WebKit does, each call therefore
+ * answers unsupported on its own retry — not from a remembered refusal.
  */
 async function openOpfsRoot(): Promise<
   { root: OpfsDirectoryHandle } | { error: unknown }
@@ -189,7 +195,7 @@ async function openOpfsRoot(): Promise<
 }
 
 const OPFS_CAVEAT =
-  "Files live in the browser's origin-private file system: invisible to the user and other apps, cleared with the site's data, and counted against the browser's storage quota."
+  "Files live in the browser's origin-private file system: invisible to the user and other apps, cleared with the site's data or evicted by the browser under storage pressure, and counted against the browser's storage quota."
 
 /**
  * The one answer to "can this target hold files?". Memoised after the first
@@ -255,6 +261,24 @@ function nativeDirectory(options: FileOptions | undefined): Directory {
 
 function scopeDirectoryName(options: FileOptions | undefined): string {
   return options?.scope ?? "data"
+}
+
+/**
+ * The one directory every file lives under, on every tier: `adaptv/<scope>/`.
+ * On the web it keeps a consumer's own OPFS entries apart from the scopes, the
+ * same isolation `storage.kv` gets from its key prefix. On native it matters
+ * more: Android's `Directory.Data` is the app's `filesDir`, which also holds
+ * the live-update plugin's `_capacitor_live_update_bundles`, so a path written
+ * straight into it could list, overwrite or delete an over-the-air bundle.
+ */
+const NAMESPACE = "adaptv"
+
+/** `adaptv/data/notes/today.txt` for `["notes", "today.txt"]`. */
+function nativePath(
+  parts: string[],
+  options: FileOptions | undefined,
+): string {
+  return [NAMESPACE, scopeDirectoryName(options), ...parts].join("/")
 }
 
 const encoder = new TextEncoder()
@@ -358,6 +382,7 @@ function nativeEntry(info: {
 async function nativeList(
   path: string,
   options: FileOptions | undefined,
+  isScopeRoot: boolean,
 ): Promise<FileListing> {
   try {
     const { files } = await Filesystem.readdir({
@@ -366,10 +391,11 @@ async function nativeList(
     })
     return { status: "ok", entries: files.map(nativeEntry) }
   } catch (error) {
-    return {
-      status: isMissingError(error) ? "missing" : "failed",
-      entries: null,
-    }
+    if (!isMissingError(error)) return { status: "failed", entries: null }
+    //the scope's directory exists only once something was written into it; the
+    //web creates it on open, so an untouched root is empty on both tiers
+    if (isScopeRoot) return { status: "ok", entries: [] }
+    return { status: "missing", entries: null }
   }
 }
 
@@ -417,9 +443,7 @@ async function opfsDirectory(
 ): Promise<OpfsDirectoryHandle | null> {
   const opened = await openOpfsRoot()
   if ("error" in opened) throw opened.error
-  //one `adaptv` directory so a consumer's own OPFS entries never collide with
-  //the scopes — the same isolation `storage.kv` gets from its key prefix
-  let dir = await opened.root.getDirectoryHandle("adaptv", {
+  let dir = await opened.root.getDirectoryHandle(NAMESPACE, {
     create: true,
   })
   dir = await dir.getDirectoryHandle(scopeDirectoryName(options), {
@@ -599,7 +623,7 @@ export async function writeFile(
   const parts = segments(path)
   if (!parts || parts.length === 0) return "failed"
   if (support.backend === "native")
-    return nativeWrite(parts.join("/"), data, options)
+    return nativeWrite(nativePath(parts, options), data, options)
   return opfsWrite(parts, data, options)
 }
 
@@ -614,7 +638,7 @@ export async function readFile(
   if (!parts || parts.length === 0)
     return { status: "failed", bytes: null }
   if (support.backend === "native")
-    return nativeRead(parts.join("/"), options)
+    return nativeRead(nativePath(parts, options), options)
   return opfsRead(parts, options)
 }
 
@@ -643,7 +667,11 @@ export async function listFiles(
   const parts = segments(path)
   if (!parts) return { status: "failed", entries: null }
   if (support.backend === "native")
-    return nativeList(parts.join("/"), options)
+    return nativeList(
+      nativePath(parts, options),
+      options,
+      parts.length === 0,
+    )
   return opfsList(parts, options)
 }
 
@@ -658,7 +686,7 @@ export async function statFile(
   if (!parts || parts.length === 0)
     return { status: "failed", entry: null }
   if (support.backend === "native")
-    return nativeStat(parts.join("/"), options)
+    return nativeStat(nativePath(parts, options), options)
   return opfsStat(parts, options)
 }
 
@@ -672,6 +700,6 @@ export async function deleteFile(
   const parts = segments(path)
   if (!parts || parts.length === 0) return "failed"
   if (support.backend === "native")
-    return nativeDelete(parts.join("/"), options)
+    return nativeDelete(nativePath(parts, options), options)
   return opfsDelete(parts, options)
 }

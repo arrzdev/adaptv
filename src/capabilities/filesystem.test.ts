@@ -34,8 +34,11 @@ vi.mock("@capacitor/filesystem", () => {
         directory?: string
         encoding?: string
       }) => {
-        const dir = o.path.split("/").slice(0, -1).join("/")
-        if (dir) nativeDirs.add(key(o.directory, dir))
+        //`recursive: true` creates every ancestor, as the real plugin does
+        const dirs = o.path.split("/").slice(0, -1)
+        for (let i = 1; i <= dirs.length; i++) {
+          nativeDirs.add(key(o.directory, dirs.slice(0, i).join("/")))
+        }
         nativeFiles.set(key(o.directory, o.path), {
           data:
             o.encoding === "utf8"
@@ -323,6 +326,26 @@ describe("getFilesystemSupport", () => {
     )
     expect(await writeFile("a.txt", "x")).toBe("unsupported")
   })
+
+  it("does not remember a refusal: the next call opens the root again", async () => {
+    installOpfs()
+    const storage = (
+      navigator as unknown as {
+        storage: { getDirectory: () => Promise<unknown> }
+      }
+    ).storage
+    const open = storage.getDirectory
+    let attempts = 0
+    storage.getDirectory = async () => {
+      attempts++
+      if (attempts === 1) throw domError("UnknownError", "transient")
+      return open()
+    }
+    expect((await getFilesystemSupport()).supported).toBe(false)
+    expect((await getFilesystemSupport()).supported).toBe(true)
+    expect(await writeFile("a.txt", "x")).toBe("written")
+    expect(attempts).toBe(2)
+  })
 })
 
 describe("unsupported target", () => {
@@ -445,6 +468,22 @@ for (const backend of ["native", "opfs"] as const) {
       expect(await writeFile("a/./b.txt", "x")).toBe("failed")
       expect(await writeFile("", "x")).toBe("failed")
       expect((await readFile("../up.txt")).status).toBe("failed")
+      expect(await writeFile("notes/../../up.txt", "x")).toBe("failed")
+      expect((await listFiles("..")).status).toBe("failed")
+      expect((await statFile("a/..")).status).toBe("failed")
+      expect(await deleteFile("../x.txt")).toBe("failed")
+    })
+
+    it("reads an absolute path as relative to the scope, never to the device root", async () => {
+      expect(await writeFile("/abs//x.txt", "rooted")).toBe("written")
+      expect(await readTextFile("abs/x.txt")).toEqual({
+        status: "ok",
+        text: "rooted",
+      })
+    })
+
+    it("lists a scope that was never written as an empty root, not as missing", async () => {
+      expect(await listFiles("")).toEqual({ status: "ok", entries: [] })
     })
   })
 }
@@ -456,7 +495,7 @@ describe("native specifics", () => {
     await writeFile("t/x.txt", "hi")
     expect(Filesystem.writeFile).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        path: "t/x.txt",
+        path: "adaptv/data/t/x.txt",
         encoding: "utf8",
         recursive: true,
         directory: "DATA",
@@ -465,7 +504,7 @@ describe("native specifics", () => {
     await writeFile("b.bin", new Uint8Array([0, 255]), { scope: "cache" })
     expect(Filesystem.writeFile).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        path: "b.bin",
+        path: "adaptv/cache/b.bin",
         data: btoa(String.fromCharCode(0, 255)),
         directory: "CACHE",
       }),
@@ -474,6 +513,42 @@ describe("native specifics", () => {
       (Filesystem.writeFile as ReturnType<typeof vi.fn>).mock
         .lastCall?.[0],
     ).not.toHaveProperty("encoding")
+  })
+
+  it("keeps everything under the same adaptv directory the web uses, so no path reaches what lives beside it", async () => {
+    //Android's Directory.Data is the app's filesDir, which also holds the
+    //live-update plugin's `_capacitor_live_update_bundles`
+    const bundle = key(
+      "DATA",
+      "_capacitor_live_update_bundles/b1/index.html",
+    )
+    nativeDirs.add(key("DATA", "_capacitor_live_update_bundles"))
+    nativeDirs.add(key("DATA", "_capacitor_live_update_bundles/b1"))
+    nativeFiles.set(bundle, { data: btoa("<html>"), mtime: 1 })
+
+    await writeFile("a.txt", "x")
+    await writeFile("c.txt", "y", { scope: "cache" })
+    expect([...nativeFiles.keys()].sort()).toEqual([
+      "CACHE/adaptv/cache/c.txt",
+      "DATA/_capacitor_live_update_bundles/b1/index.html",
+      "DATA/adaptv/data/a.txt",
+    ])
+    expect((await listFiles("")).entries?.map((e) => e.name)).toEqual([
+      "a.txt",
+    ])
+    expect(
+      (await listFiles("_capacitor_live_update_bundles")).status,
+    ).toBe("missing")
+    expect(
+      await writeFile(
+        "_capacitor_live_update_bundles/b1/index.html",
+        "gone",
+      ),
+    ).toBe("written")
+    expect(
+      await deleteFile("_capacitor_live_update_bundles/b1/index.html"),
+    ).toBe("deleted")
+    expect(nativeFiles.get(bundle)?.data).toBe(btoa("<html>"))
   })
 
   it("maps a full disk to quota and any other rejection to failed", async () => {
