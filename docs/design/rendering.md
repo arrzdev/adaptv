@@ -560,6 +560,21 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   installing a native app, and it is the whole reason navigation then feels native. It is **not**
   configurable, because an app that precaches only some routes is an app whose navigation is fast
   sometimes.
+
+  **The whole *web* app, though — not the native icon sources that happen to sit in `public/`.** The
+  `icons` directory has to be inside `public/` so the head and the manifest can link it, which put
+  all of it in the precache glob: the 1024px master, the iOS 18 dark and tinted appearances,
+  Android's monochrome layer, the maskable master, and a `favicon-512x512.png` the head and manifest
+  tie-break away in favour of the identical `android-chrome-512.png`. **MEASURED on the playground:
+  909 900 of 3 749 343 precached bytes (24%, 6 of 121 entries)**, fetched on every first install (and
+  again whenever the art changes) by a browser that never displays one of them. `sw-build.ts` now precaches an icon **if and
+  only if** `headIconLinks` or the built manifest (`manifestExtra` included) points at it — derived
+  from the same resolved set, so custom names and adaptv's default set follow the same rule — and
+  takes every other file `resolveIconSet` measured back out. After: 115 entries, 2 839 443 bytes,
+  identical for `ssr` and `spa`. The files are still **deployed and served**; only the install-time
+  download goes, and the runtime static route (§3.3) caches one the first time anything fetches it.
+  A file in the directory the scanner does not measure (a `safari-pinned-tab.svg`) is not art adaptv
+  knows the use of and stays in the glob.
 - **Storage is evictable unless you ask.** Cache Storage is "best-effort" by default, so a browser may
   drop the precache under disk pressure — the app silently stops working offline with nothing to
   observe. adaptv calls `navigator.storage.persist()` at boot (`requestPersistentStorage`), which WebKit
@@ -613,7 +628,8 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   versioned — except the bucket itself is: `static-<buildTag>` rotates on every deploy and the previous
   one is swept at activate, so the entry is refetched exactly when the build changes. A per-asset
   revalidation would buy nothing the tag rotation does not already give. (They are precached by the
-  glob too; this route is the net for anything the manifest missed.) `createStaleWhileRevalidateStrategy`
+  glob too, the icons only when a web surface links them — §3.2; this route is the net for anything
+  the manifest missed or left out.) `createStaleWhileRevalidateStrategy`
   exists in `sw.strategies.ts` for apps wiring their own route through `sw.cache-route.ts` — adaptv's
   own worker never uses it.
 - **API responses are never cached by the SW.** That's the data layer's job, on purpose.
@@ -865,16 +881,18 @@ that is why the third config matches one file rather than the directory.
 What it asserts, and why each one earns its runtime:
 
 - **registration** — the worker installs, activates, controls, precaches the whole app *including the
-  shell* (the navigation route binds to it), and precaches **no route document** (§3.2 — the cross-user
-  leak, asserted against the shipped manifest rather than trusted to the glob).
+  shell* (the navigation route binds to it), precaches **no route document** (§3.2 — the cross-user
+  leak, asserted against the shipped manifest rather than trusted to the glob), and precaches exactly
+  the icons the served head and `manifest.json` link — no native source art, no linked icon missing.
 - **navigation claiming** — `/settings` is served by the worker; neither `/sitemap.xml` nor
   `/sw-probe.pdf` is ever answered with the app shell; `/v1.2/docs` is still a navigation, so the ngsw
   heuristic's known cost stays bounded. The two file fixtures are real files in `public/` deliberately
   **outside** the precache glob — a route that merely 404s would not be the same test.
 - **preload** — enabled under `ssr`, actively disabled under `spa`, read from
   `navigationPreload.getState()` (§3.3).
-- **offline** — a **never-visited** route boots with `transferSize: 0`, with a control proving the
-  origin is genuinely unreachable, and a file link fails rather than falling back to the shell.
+- **offline** — a **never-visited** route boots with `transferSize: 0`, every icon the head links still
+  loads, with a control proving the origin is genuinely unreachable, and a file link fails rather than
+  falling back to the shell.
 - **update** — a real second `vite build` mid-test, then: the new worker is noticed, is **held** for
   the session that found it, and is applied at the next launch, sweeping a planted `static-<old-tag>`
   cache while leaving a foreign cache alone (§3.4, `docs/decisions/register.md` B2). `ADAPTV_BUILD_TAG` is what makes
