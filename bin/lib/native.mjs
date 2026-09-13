@@ -11,6 +11,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
@@ -601,10 +602,24 @@ function iosLaunchStoryboard(lightHex) {
 `
 }
 
-/** Patch the iOS colour asset + launch storyboard (+ AppDelegate for preference mode). */
+/**
+ * Patch the iOS colour asset + launch storyboard (+ AppDelegate for preference mode), and
+ * delete the template's `Splash.imageset`.
+ *
+ * The launch screen is a colour, so that imageset is never drawn by anything adaptv ships,
+ * but its PNGs are the vendor's logo and a native API can still find them by name: the
+ * privacy screen plugin's app-switcher cover tries `UIImage(named: "Splash")` BEFORE the
+ * launch storyboard, so while the imageset exists the end user sees a brand that is not the
+ * app's. Without it the cover falls through to the storyboard, i.e. the splash colour. The
+ * launch splash itself is built from the storyboard and never reads the image.
+ */
 export function patchIosTheme(appRoot, mask) {
   const iosApp = path.join(nativeDir(appRoot, "ios"), "App/App")
   if (!existsSync(iosApp)) return
+  rmSync(path.join(iosApp, "Assets.xcassets/Splash.imageset"), {
+    recursive: true,
+    force: true,
+  })
   const colorsetDir = path.join(
     iosApp,
     "Assets.xcassets/AdaptvSplash.colorset",
@@ -668,6 +683,9 @@ const ASSET_OUTPUTS = {
   ios: [
     "App/App/Assets.xcassets/AppIcon.appiconset",
     "App/App/Assets.xcassets/AdaptvSplash.colorset",
+    //Hashed so that it is noticed coming BACK: `patchIosTheme` deletes it, and a
+    //rescaffold restores it without moving any input.
+    "App/App/Assets.xcassets/Splash.imageset",
     "App/App/Base.lproj/LaunchScreen.storyboard",
     "App/App/AppDelegate.swift",
   ],
