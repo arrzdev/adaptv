@@ -242,7 +242,7 @@ respects the consumer-wired-data doctrine.
 
 > ### ✅ BUILT — and it deviates from the Dexie call above, deliberately
 >
-> `storage.store` ships on **raw IndexedDB, not Dexie**. 11 tests, run against a real IndexedDB
+> `storage.store` ships on **raw IndexedDB, not Dexie**. Its tests run against a real IndexedDB
 > implementation (`fake-indexeddb`) rather than a mock.
 >
 > **Why the deviation:** every reason to reach for Dexie — queries, indexes, schema migrations, live
