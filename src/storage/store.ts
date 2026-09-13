@@ -47,8 +47,14 @@ const DB_VERSION = 1
  * lands here first and leaves only once its transaction has committed; a read
  * consults this before the database. {@link REMOVED} marks a remove that has not
  * landed, so a refused delete cannot resurrect the old value.
+ *
+ * Each write holds its own {@link Entry}, and only the write whose entry is
+ * still in place may settle it. Comparing VALUES instead would let the first of
+ * two queued writes of the same value take the second's entry while it is still
+ * pending — and REMOVED is one shared symbol, so every remove would look alike.
  */
-const memory = new Map<string, unknown>()
+type Entry = { value: unknown }
+const memory = new Map<string, Entry>()
 const REMOVED = Symbol("removed")
 
 /** Keys whose latest write IndexedDB refused — what {@link store.isPersistent} reports. */
@@ -141,11 +147,12 @@ async function write(
   value: unknown,
   run: (store: IDBObjectStore) => void,
 ): Promise<void> {
-  memory.set(key, value)
+  const entry: Entry = { value }
+  memory.set(key, entry)
   const landed = await commit(run)
   //a later write to the same key may have replaced the entry mid-flight — only
   //the write that put it there may take it out
-  if (memory.get(key) !== value) return
+  if (memory.get(key) !== entry) return
   if (landed) {
     memory.delete(key)
     unpersisted.delete(key)
@@ -161,9 +168,9 @@ async function hasIndexedDb(): Promise<boolean> {
 export const store = {
   /** Read a value. Resolves to `undefined` when absent. */
   async get<T>(key: string): Promise<T | undefined> {
-    if (memory.has(key)) {
-      const value = memory.get(key)
-      return value === REMOVED ? undefined : (value as T)
+    const entry = memory.get(key)
+    if (entry) {
+      return entry.value === REMOVED ? undefined : (entry.value as T)
     }
     return (await read<T>((s) => s.get(key))) as T | undefined
   },
@@ -193,7 +200,7 @@ export const store = {
         String,
       ),
     )
-    for (const [key, value] of memory) {
+    for (const [key, { value }] of memory) {
       if (value === REMOVED) keys.delete(key)
       else keys.add(key)
     }

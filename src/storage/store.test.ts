@@ -56,6 +56,27 @@ function failPuts(how: "request" | "commit") {
   })
 }
 
+/**
+ * Refuse the commit of only the `n`th call to `method` (1-based), counting from
+ * now — so one write in a queue fails while its neighbours land.
+ */
+function failNth(method: "put" | "delete" | "clear", n: number) {
+  const original = IDBObjectStore.prototype[method] as (
+    ...args: unknown[]
+  ) => IDBRequest
+  let calls = 0
+  vi.spyOn(IDBObjectStore.prototype, method).mockImplementation(function (
+    this: IDBObjectStore,
+    ...args: unknown[]
+  ) {
+    const request = original.apply(this, args)
+    if (++calls === n) {
+      request.addEventListener("success", () => this.transaction.abort())
+    }
+    return request
+  } as never)
+}
+
 describe("store — async large-value KV", () => {
   it("round-trips a value", async () => {
     await store.set("a", { hello: "world" })
@@ -192,6 +213,33 @@ describe("store — a write IndexedDB refuses", () => {
     await store.set("k", "v")
     expect(await store.isPersistent()).toBe(true)
     expect(await store.get("k")).toBe("v")
+  })
+
+  it("tells queued writes of the same value apart", async () => {
+    //ownership of the memory entry is per WRITE, not per value: with A, B, A
+    //queued, the first A landing must not take the third write's entry, or a
+    //refusal of that third write loses the value and reports nothing
+    await store.set("k", 0)
+    failNth("put", 3)
+    await Promise.all([
+      store.set("k", 1),
+      store.set("k", 2),
+      store.set("k", 1),
+    ])
+    expect(await store.get("k")).toBe(1)
+    expect(await store.isPersistent()).toBe(false)
+  })
+
+  it("tells queued removes apart, so a refused one cannot resurrect", async () => {
+    await store.set("k", 0)
+    failNth("delete", 2)
+    await Promise.all([
+      store.remove("k"),
+      store.set("k", 1),
+      store.remove("k"),
+    ])
+    expect(await store.get("k")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(false)
   })
 
   it("does not resurrect a value whose remove IndexedDB refused", async () => {
