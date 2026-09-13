@@ -278,6 +278,11 @@ export function RoutingShell({
   //guard is already spent, so reloading cannot help and there is no route left to
   //render its own offline UI. Without this the user gets a blank screen.
   //docs/design/rendering.md §3.1.2
+  //
+  //This is the ONE stale-chunk net. It is armed here, unconditionally, because
+  //the failure is a deploy artifact and not a service-worker one — and only here,
+  //because a second installation sharing the same guard reads the first one's
+  //reload as "a reload already failed" and draws the offline screen over it.
   const OfflineComponent = offlineComponent ?? Offline
   const [bootFailed, setBootFailed] = useState(false)
   useEffect(
