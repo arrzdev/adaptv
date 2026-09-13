@@ -401,3 +401,64 @@ describe("the patch it reproduces, against the real CLI", () => {
     }
   })
 })
+
+/**
+ * What the dev reads when adaptv's install has no native CLI to run. The shim dies on its first
+ * line, a Node crash naming the engine's package, so the ✖ cannot say that; before this, it
+ * fell back to the spawn's own message instead, which is the node binary and the shim, both
+ * as absolute paths, and the word `cap`:
+ *
+ *     ✖ ios  · /opt/homebrew/…/bin/node /var/folders/…/bin/lib/cap.mjs sync ios exited with code 1
+ *
+ * A real process, on a copy of the shim placed where nothing can resolve the CLI: that is the
+ * shape of an install missing it, and nothing past the shim's resolve ever runs.
+ */
+describe("an install with no native CLI", () => {
+  const dirs = []
+  afterEach(async () => {
+    /** @type {typeof import("node:fs")} */
+    const { rmSync } = await vi.importActual("node:fs")
+    for (const d of dirs.splice(0))
+      rmSync(d, { recursive: true, force: true })
+  })
+
+  it("fails the step with adaptv's own sentence and the action, never the shim", async () => {
+    fake.mode = "real"
+    /** @type {typeof import("node:fs")} */
+    const fs = await vi.importActual("node:fs")
+    const { tmpdir } = await import("node:os")
+    const dir = fs.mkdtempSync(path.join(tmpdir(), "adaptv-cap-missing-"))
+    dirs.push(dir)
+    const shim = path.join(dir, "bin/lib/cap.mjs")
+    fs.mkdirSync(path.dirname(shim), { recursive: true })
+    fs.copyFileSync(path.join(ROOT, "bin/lib/cap.mjs"), shim)
+
+    const { exec } = await import("./exec.mjs")
+    const { explainFailure } = await import("./explain.mjs")
+    const { namesPlumbing } = await import("./opacity.mjs")
+    const err = await exec(process.execPath, [shim, "sync", "ios"], {
+      cwd: dir,
+      env: { PATH: process.env.PATH ?? "" },
+    }).then(
+      () => null,
+      (e) => e,
+    )
+    //The exit code reaches the caller: a shim that cannot run fails the step.
+    expect(err?.message).toMatch(/ exited with code 1$/)
+
+    const { reason, detail } = explainFailure("ios")(err)
+    //R71's own words for the same fact, so a run and 'doctor' say it the same way.
+    expect({ reason, detail }).toEqual({
+      reason: "adaptv's own install is incomplete",
+      detail: [
+        "Reinstall with 'pnpm install'.",
+        "Run 'adaptv doctor --verbose' to list what is missing.",
+      ],
+    })
+    for (const line of [reason, ...detail]) {
+      expect(namesPlumbing(line)).toBe(false)
+      expect(line).not.toContain(dir)
+      expect(line).not.toContain(process.execPath)
+    }
+  })
+})
