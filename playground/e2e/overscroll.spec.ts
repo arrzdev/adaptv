@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Overscroll containment: an inner scroller at its end must not drag the page.
@@ -59,6 +60,7 @@ test.describe("an inner scroller at its end", () => {
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     const box = page.locator(BOX)
     await box.waitFor()
     await box.scrollIntoViewIfNeeded()

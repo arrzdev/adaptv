@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * A page's root fills the screen without saying so.
@@ -19,6 +20,7 @@ test.describe("the screen frame", () => {
     page,
   }) => {
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     const frame = page.locator("[data-adaptv-screen]")
     await frame.waitFor()
 
@@ -59,6 +61,7 @@ test.describe("the screen frame", () => {
      * is the whole reason it was chosen — so it is worth a test of its own.
      */
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     const frame = page.locator("[data-adaptv-screen]")
     await frame.waitFor()
 
@@ -98,6 +101,7 @@ test.describe("the screen frame", () => {
      * would get, and it is the layer ORDER that is actually under test here.
      */
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     const frame = page.locator("[data-adaptv-screen]")
     await frame.waitFor()
 

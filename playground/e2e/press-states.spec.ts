@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * active: — adaptv redefines the built-in `active:` variant so one class string
@@ -20,6 +21,7 @@ const PLAIN = /a plain .*button.*, same class string/
 test.describe("active: variant", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/press-states")
+    await awaitClientHandover(page)
   })
 
   test("the engine Button carries the marker; the plain button does not", async ({

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The browser-chrome tint — `<meta name="theme-color">` driven along a curve, and the drawer
@@ -30,17 +31,10 @@ async function tint(page: Page) {
 }
 
 /*
- * The splash is SSR-rendered and self-unmounts only once the client has hydrated, so its
- * disappearance is the one honest "React is driving now" signal on the page — the same handover
- * `drawer-motion.spec.ts` waits on. Without it a click lands on a button whose handler is not
- * attached yet, the transition never starts, and the test reads a tag nothing ever wrote and
- * blames the tween.
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) a click
+ * lands on a button whose handler is not attached yet, the transition never starts,
+ * and the test reads a tag nothing ever wrote and blames the tween.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** The lab's curve and target controls are buttons; their labels also appear in rows. */
 function control(page: Page, name: string) {

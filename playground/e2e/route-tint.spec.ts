@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * `chromeTint` on a route — the colour the browser's chrome takes for one screen.
@@ -72,12 +73,6 @@ async function chrome(page: Page) {
         ?.content?.toLowerCase() ?? null,
     html: getComputedStyle(document.documentElement).backgroundColor,
   }))
-}
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
 }
 
 test("the colour is on screen before the app can have booted", async ({

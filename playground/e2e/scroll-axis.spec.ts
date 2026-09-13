@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Single-axis scrolling, measured with real touch input.
@@ -74,6 +75,7 @@ test.describe("a horizontal ScrollView inside a scrolling page", () => {
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/view-scroll")
+    await awaitClientHandover(page)
     await page.locator(STRIP).first().waitFor()
 
     const strip = page.locator(STRIP).first()

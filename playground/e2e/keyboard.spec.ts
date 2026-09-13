@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Keyboard — the primary keyboard-contract page. A headless browser has no on-screen
@@ -33,6 +34,7 @@ test.describe("Keyboard contract", () => {
       ).__adaptvKeyboardMock = { isOpen: false, height: 0 }
     })
     await page.goto("/lab/keyboard")
+    await awaitClientHandover(page)
     await page.getByLabel("Keyboard test field").waitFor()
   })
 

@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The press visual, measured against real touch.
@@ -76,20 +77,6 @@ test.describe("press visual vs. a scroll that starts on a control", () => {
     ({ browserName }) => browserName !== "chromium",
     "needs CDP touch injection — synthetic events do not drive native scrolling",
   )
-
-  /**
-   * Wait for the client to take over. The page is server-rendered, so
-   * `waitFor()` is satisfied by inert HTML and the gesture engine — attached by
-   * an effect — is not listening yet. The splash self-unmounts only once the
-   * client has hydrated, so its disappearance is the one honest "React is
-   * driving now" signal. Generous timeout: a cold route's first transform can
-   * outrun the 5s default.
-   */
-  async function awaitClientHandover(page: Page) {
-    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-      timeout: 20_000,
-    })
-  }
 
   async function setup(page: Page) {
     const cdp = await page.context().newCDPSession(page)

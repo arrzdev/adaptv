@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Network — the reachability capability. On the web it is `navigator.onLine`, which
@@ -10,31 +10,14 @@ import { expect, test } from "@playwright/test"
  * the sim; here the page even reports "coarse" honestly.
  */
 
-/**
- * Wait for the client to take over before driving the network.
- *
- * The reachability row is server-rendered as its initial value, and
- * `useIsOnline` / `subscribeOnline` only start listening once their effects
- * run. Flip the context offline before that and the events fire into a page
- * with no subscribers: the row keeps showing the server's value and the
- * subscription log stays empty, which reads as the capability not being
- * reactive at all. It is not load flake: Playwright boots its own dev server
- * and tears it down per run, so the FIRST test to reach this route pays the
- * cold transform cost and loses the race while every test after it wins. A
- * dev session left running hides it, because `reuseExistingServer` then hands
- * the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — a cold route's first transform can outrun the 5s
- * default, and a tight timeout here would re-create the flake it removes.
+/*
+ * The reachability row is server-rendered as its initial value, and `useIsOnline` /
+ * `subscribeOnline` only start listening once their effects run. Flip the context
+ * offline before the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts)
+ * and the events fire into a page with no subscribers: the row keeps showing the
+ * server's value and the subscription log stays empty, which reads as the capability
+ * not being reactive at all.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Network reachability", () => {
   test.beforeEach(async ({ page, browserName }) => {

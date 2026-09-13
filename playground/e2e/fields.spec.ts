@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Input & TextArea — the parts that are decidable without a real keyboard.
@@ -26,30 +27,12 @@ test.use({ hasTouch: false, isMobile: false })
 const LOG = "[data-lab-log] li"
 const logTexts = (page: Page) => page.locator(LOG).allInnerTexts()
 
-/**
- * Wait for the client to take over before typing anything.
- *
- * The fields are server-rendered, so the `waitFor()` below is satisfied by
- * inert HTML and a keypress fired in that window reaches an input React is
- * not listening to yet: `onSubmitKey` never runs and the log stays empty, so
- * the count reads 0 where 1 was expected — which looks like the handler being
- * broken, or worse like a double-fire guard eating the event. It is not load
- * flake: Playwright boots its own dev server and tears it down per run, so
- * the FIRST test to reach this route pays the cold transform cost and loses
- * the race while every test after it wins. A dev session left running hides
- * it, because `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — a cold route's first transform can outrun the 5s
- * default, and a tight timeout here would re-create the flake it removes.
+/*
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) a
+ * keypress reaches an input React is not listening to yet: `onSubmitKey` never runs
+ * and the log stays empty, so the count reads 0 where 1 was expected — which looks
+ * like the handler being broken, or like a double-fire guard eating the event.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Input & TextArea (no keyboard needed)", () => {
   test.beforeEach(async ({ page }) => {

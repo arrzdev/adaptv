@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * AvoidKeyboard — a desktop browser has no on-screen keyboard, so the ONLY way to
@@ -43,33 +44,15 @@ const rootKeyboardOpen = (page: Page) =>
     document.documentElement.hasAttribute("data-keyboard-open"),
   )
 
-/**
- * Wait for the client to take over before touching the page.
- *
- * The whole lab page is server-rendered, so the `waitFor()` below is
- * satisfied by inert HTML. That matters for exactly one control here: the
- * `behavior:` toggle. A click fired before its handler is attached leaves
- * the wrapper on `padding`, so the reservation lands where the test says it
- * must not and `marginBottom` reads 0 — which looks like the component
- * ignoring its own prop. (The other two tests survive without this because
- * `setKeyboard` only dispatches an event and they poll for the result, so a
- * late hydration still converges.) It is not load flake: Playwright boots
- * its own dev server and tears it down per run, so the FIRST test to reach
- * this route pays the cold transform cost and loses the race while every
- * test after it wins. A dev session left running hides it entirely, because
- * `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — the case it exists for is a cold server, where the
- * route's first transform can take longer than the 5s default.
+/*
+ * The hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) matters for
+ * exactly one control here: the `behavior:` toggle. A click fired before its handler
+ * is attached leaves the wrapper on `padding`, so the reservation lands where the
+ * test says it must not and `marginBottom` reads 0 — which looks like the component
+ * ignoring its own prop. (The other two tests survive without it because
+ * `setKeyboard` only dispatches an event and they poll for the result, so a late
+ * hydration still converges.)
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("AvoidKeyboard driven by the keyboard seam", () => {
   test.beforeEach(async ({ page }) => {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 // Smoke self-test: the app responds, mounts content, and throws no uncaught
 // errors. Minimal "is it alive" check to run headlessly against a local
@@ -11,6 +12,9 @@ test("app shell boots and mounts", async ({ page }) => {
   expect(response?.ok(), `navigation status: ${response?.status()}`).toBe(
     true,
   )
+  // and the client took over — an error thrown while hydrating lands after the
+  // document loads, so reading `pageErrors` any earlier could miss it
+  await awaitClientHandover(page)
 
   // The app rendered something into the document (not a blank / error shell).
   await expect

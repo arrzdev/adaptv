@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The cascade contract (`docs/decisions/styling.md` §2, §5, §6), asserted in a real engine.
@@ -133,6 +134,7 @@ test.describe("cascade layers", () => {
     // it is false, every one of those resets becomes unoverridable and adaptv has
     // recreated the exact specificity war Ionic consumers complain about.
     await page.goto("/")
+    await awaitClientHandover(page)
     const id = await probe(page, "div", {})
     await page.addStyleTag({
       content: `#${id} { user-select: text; scrollbar-width: thin; }`,
@@ -149,6 +151,7 @@ test.describe("cascade layers", () => {
     // what begins a native image drag, which steals the pointer from the gesture
     // engine — swipe a row containing a thumbnail and it stops tracking the finger.
     await page.goto("/")
+    await awaitClientHandover(page)
     const id = await probe(page, "img", {
       alt: "",
       src: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
@@ -174,6 +177,7 @@ test.describe("the active: patch", () => {
     page,
   }) => {
     await page.goto("/")
+    await awaitClientHandover(page)
     await expectCompiled(page, "active:scale-95")
     const id = await probe(page, "button", {
       type: "button",
@@ -201,6 +205,7 @@ test.describe("the active: patch", () => {
     // from JS and will not re-light on touch re-entry, which is why the variant
     // excludes any element carrying the engine marker.
     await page.goto("/")
+    await awaitClientHandover(page)
     await expectCompiled(page, "active:scale-95")
     const id = await probe(page, "button", {
       type: "button",
@@ -242,6 +247,7 @@ test.describe("focus", () => {
     // consumer's plain <button> with no visible focus indicator on any target,
     // keyboard included — a real accessibility regression, not a preference.
     await page.goto("/")
+    await awaitClientHandover(page)
     const id = await probe(page, "button", { type: "button" })
 
     const [x, y] = await centre(page, id)
@@ -293,6 +299,7 @@ test.describe("safe-area utilities", () => {
     // ALWAYS defined (0px at rest), so a fallback would never fire and the floor
     // would silently be 0 on exactly the devices that have no inset.
     await page.goto("/")
+    await awaitClientHandover(page)
     await expectCompiled(page, "pb-safe")
     await expectCompiled(page, "pb-safe-or-4")
 

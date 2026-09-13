@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Geolocation — the four-state permission exemplar every other gated capability
@@ -20,6 +21,7 @@ test.describe("Geolocation permission model", () => {
 
   test("reports `prompt` before access is granted", async ({ page }) => {
     await page.goto("/lab/geolocation")
+    await awaitClientHandover(page)
     await page.getByRole("button", { name: "Check (no prompt)" }).click()
     await expect(
       page.getByText("state", { exact: true }).locator(".."),
@@ -32,6 +34,7 @@ test.describe("Geolocation permission model", () => {
   }) => {
     await context.grantPermissions(["geolocation"])
     await page.goto("/lab/geolocation")
+    await awaitClientHandover(page)
 
     await page.getByRole("button", { name: "Check (no prompt)" }).click()
     await expect(

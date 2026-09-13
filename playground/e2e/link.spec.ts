@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Link & ExternalLink — what a headless browser can verify is the STRUCTURE both
@@ -24,6 +25,7 @@ import { expect, test } from "@playwright/test"
 test.describe("Link & ExternalLink", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/link")
+    await awaitClientHandover(page)
     await page.locator('a[data-adaptv="link"]').first().waitFor()
   })
 

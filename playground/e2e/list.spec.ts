@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * List — the windowing guarantee: 2 000 rows of data, a handful of rows in the
@@ -69,6 +70,7 @@ async function scrollList(page: Page, cdp: CDPSession, dy: number) {
 test.describe("List virtualisation", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/list")
+    await awaitClientHandover(page)
     await page.locator(ROW).first().waitFor()
     await page.locator(LIST).scrollIntoViewIfNeeded()
     await page.waitForTimeout(150)

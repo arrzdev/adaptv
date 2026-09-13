@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Checkbox & Switch — a hidden native input for semantics under a painted box,
@@ -25,32 +26,6 @@ const logJoin = (page: Page) =>
 
 const input = (page: Page, role: "checkbox" | "switch", name: string) =>
   page.getByRole(role, { name, exact: true })
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The inputs are server-rendered, so the `waitFor()` below is satisfied by
- * inert HTML. A Space press in that window still toggles the native input —
- * the UA does that on its own — but React is not listening yet, so
- * `onCheckedChange` never fires and the lab log stays empty: the test reads
- * "toggled zero times" while the checkbox visibly moved. That is the worst
- * shape of this bug, because the page looks like it worked. It is not load
- * flake: Playwright boots its own dev server and tears it down per run, so
- * the FIRST test to reach this route pays the cold transform cost and loses
- * the race while every test after it wins. A dev session left running hides
- * it, because `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — a cold route's first transform can outrun the 5s
- * default, and a tight timeout here would re-create the flake it removes.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Checkbox & Switch semantics", () => {
   test.beforeEach(async ({ page }) => {

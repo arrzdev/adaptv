@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The app's OWN drawers.
@@ -111,8 +112,8 @@ test.describe("the app's own drawers", () => {
     await page.goto("/lab/drawer")
     //the SSR splash self-unmounts on hydration, and it is the only honest "React is driving"
     //signal here — every trigger below is server-rendered, so waiting on one only proves the
-    //HTML arrived. See the note on `awaitClientHandover` in drawer-motion.spec.ts.
-    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+    //HTML arrived. See the note on `awaitClientHandover` in e2e/support/hydrated.ts.
+    await awaitClientHandover(page)
     await page
       .getByRole("button", { name: DRAWERS[0].button, exact: true })
       .first()
