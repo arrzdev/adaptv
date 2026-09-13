@@ -185,8 +185,9 @@ export function healDevAtsLeftover(appRoot) {
  * interval (only re-adding when it's actually missing, so it's cheap), and the Android
  * watchdog reconnects HMR once the route is back.
  *
- * ONE device, the target, resolved to its serial by `androidSerialForTarget` exactly as the
- * relaunch is. Every connected device is not the run's: another session's emulator on the same
+ * ONE device, the target, resolved to its serial by `androidSerialForTarget` with `exact`: the
+ * serial itself or the emulator whose AVD name it is, never merely the only device connected.
+ * Every connected device is not the run's: another session's emulator on the same
  * adb server has its own reverse table, and a mapping for this port there belongs to whatever
  * run put it there — which is what setting it everywhere and removing it everywhere on
  * teardown used to break.
@@ -211,7 +212,7 @@ export async function androidReverse(
       encoding: "utf8",
     })
   const map = (serial) => adb(serial, `tcp:${port}`, `tcp:${port}`)
-  let serial = await androidSerialForTarget(target, env)
+  let serial = await androidSerialForTarget(target, env, { exact: true })
   if (serial) map(serial)
   let stopped = false
   let resolving = false
@@ -223,7 +224,9 @@ export async function androidReverse(
     }
     if (resolving) return
     resolving = true
-    const found = await androidSerialForTarget(target, env)
+    const found = await androidSerialForTarget(target, env, {
+      exact: true,
+    })
     resolving = false
     if (!found || stopped) return
     serial = found
