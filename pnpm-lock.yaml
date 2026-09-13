@@ -9,6 +9,7 @@ patchedDependencies:
   '@capawesome/capacitor-live-update@8.3.0': bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc
   '@tanstack/router-generator@1.167.21': f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454
   '@tanstack/start-plugin-core@1.171.24': 41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064
+  native-run@2.0.3: c0d01fa3a61b609fad6e58cee0ceb2fd4b5c2f00ebd8782c1018bc946c54af9b
 
 importers:
 
@@ -5075,7 +5076,7 @@ snapshots:
       env-paths: 2.2.1
       fs-extra: 11.3.6
       kleur: 4.1.5
-      native-run: 2.0.3
+      native-run: 2.0.3(patch_hash=c0d01fa3a61b609fad6e58cee0ceb2fd4b5c2f00ebd8782c1018bc946c54af9b)
       open: 8.4.2
       plist: 3.1.1
       prompts: 2.4.2
@@ -7250,7 +7251,7 @@ snapshots:
 
   nanoid@3.3.16: {}
 
-  native-run@2.0.3:
+  native-run@2.0.3(patch_hash=c0d01fa3a61b609fad6e58cee0ceb2fd4b5c2f00ebd8782c1018bc946c54af9b):
     dependencies:
       '@ionic/utils-fs': 3.1.7
       '@ionic/utils-terminal': 2.3.5
