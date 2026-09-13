@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Local notifications on the web. A headless browser is not granted the
@@ -10,12 +10,6 @@ import { expect, test } from "@playwright/test"
  * list stays empty because nothing on the web can hold one. The banner itself
  * is a device surface and is exercised on the simulator and the emulator.
  */
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 const FOUR_STATES = ["granted", "denied", "prompt", "unavailable"]
 
