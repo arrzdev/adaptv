@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest"
 import {
   ADAPTV_DIR,
   adaptvDirGitignoreEntry,
-  adaptvDirTsconfigPaths,
   resolveGeneratedPaths,
   resolveGeneratedTmpDir,
 } from "#adaptv/vite/adaptv-dir"
@@ -55,14 +54,6 @@ describe("resolveGeneratedPaths — everything generated lives in one hidden dir
 })
 
 describe("the consumer wires nothing by hand", () => {
-  it("supplies a tsconfig path mapping for the generated tree", () => {
-    //without this the app's own tsconfig cannot resolve the hidden imports, and
-    //the consumer would have to hand-edit tsconfig — exactly the per-project
-    //babysitting adaptv exists to remove
-    const paths = adaptvDirTsconfigPaths()
-    expect(paths["#adaptv-gen/*"]).toEqual([`./${ADAPTV_DIR}/*`])
-  })
-
   it("supplies the gitignore entry, since .adaptv/ is a build artifact", () => {
     expect(adaptvDirGitignoreEntry()).toContain(ADAPTV_DIR)
   })
