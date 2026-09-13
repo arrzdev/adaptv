@@ -7,6 +7,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import type { Plugin } from "vite"
 import { afterEach, describe, expect, it } from "vitest"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
@@ -116,6 +117,22 @@ describe("adaptvNativeBundlePlugin", () => {
       expect(existsSync(path.join(clientDir, kept))).toBe(true)
   })
 
+  it("drops the router's prerendered `_shell.html`, which the WebView never loads", async () => {
+    //The native shell is adaptv's generated `index.html` (register B31); the router's
+    //SPA prerender leaves its own 66 KB document beside it. Nothing reads it, and it
+    //embeds the render's timestamp, so two builds of the same source produced two
+    //different OTA build tags — measured, `docs/decisions/register.md` B31.
+    const { clientDir, context } = scaffold()
+    writeFileSync(
+      path.join(clientDir, "_shell.html"),
+      "<!DOCTYPE html><!--prerendered at 1789315547507-->",
+    )
+    await prune(context)
+
+    expect(existsSync(path.join(clientDir, "_shell.html"))).toBe(false)
+    expect(existsSync(path.join(clientDir, "index.html"))).toBe(true)
+  })
+
   it("leaves the SOURCE icons alone — launcher icons are generated from them", async () => {
     //The prune targets the client OUTPUT copy. The CLI brands the native launcher
     //icons from the app's own directory, so deleting that would replace every
@@ -144,4 +161,62 @@ describe("adaptvNativeBundlePlugin", () => {
     rmSync(clientDir, { recursive: true, force: true })
     await expect(prune(context)).resolves.toBeUndefined()
   })
+})
+
+/**
+ * The prune has to run after the router's post-build, in a real Vite app build.
+ *
+ * Calling the hook by hand (above) proves WHAT is dropped and nothing about WHEN.
+ * The router writes `_shell.html` from its own `buildApp` hook, declared
+ * `enforce: "post"` with `order: "post"` (`tanstack-start-core:post-build` in
+ * `@tanstack/start-plugin-core`, `dist/esm/vite/plugins.js`). Vite runs every
+ * same-order hook of a plain plugin before any hook of an `enforce: "post"` one, so a
+ * plain adaptv plugin pruned first and the file was written afterwards — the build log
+ * printed `native bundle: dropped` a line above `Prerendering pages`, and every
+ * `.adaptv/web` still held the file. The stand-in below has the router plugin's exact
+ * shape and sits where `tanstackStart()` sits in adaptv's array: before this plugin.
+ */
+describe("adaptvNativeBundlePlugin — in a real app build", () => {
+  it("runs after the router's post-build prerender", async () => {
+    const { appRoot, context } = scaffold()
+    writeFileSync(path.join(appRoot, "entry.js"), "export const app = 1\n")
+    const { createBuilder } = await import("vite")
+
+    const routerPostBuild: Plugin = {
+      name: "router-post-build-stand-in",
+      enforce: "post",
+      buildApp: {
+        order: "post",
+        async handler() {
+          writeFileSync(
+            path.join(appRoot, ".adaptv/web/_shell.html"),
+            "<!DOCTYPE html><!--prerendered-->",
+          )
+        },
+      },
+    }
+
+    const builder = await createBuilder({
+      root: appRoot,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [routerPostBuild, adaptvNativeBundlePlugin(context)],
+      build: {
+        rollupOptions: { input: path.join(appRoot, "entry.js") },
+      },
+      builder: {
+        async buildApp(b) {
+          await b.build(b.environments.client)
+        },
+      },
+    })
+    await builder.buildApp()
+
+    const clientDir = path.join(appRoot, ".adaptv/web")
+    //the build really wrote there — otherwise an absent file proves nothing
+    expect(existsSync(path.join(clientDir, "assets"))).toBe(true)
+    expect(existsSync(path.join(clientDir, "_shell.html"))).toBe(false)
+    //A real Vite build: ~85 ms alone, but it imports and runs Vite, which the gate's
+    //parallel load stretches past the 5 s default (as it does two known tests).
+  }, 15_000)
 })

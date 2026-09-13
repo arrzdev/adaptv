@@ -847,11 +847,12 @@ export async function buildWeb(appRoot, { report, config } = {}) {
   // capturing whatever the build emitted, and the generated copy is the only one
   // carrying the prerendered boot fallback (`docs/decisions/register.md` B31). TanStack Start's
   // prerender also drops a `_shell.html` beside it — written ~1s LATER, measured —
-  // and this step used to copy that over `index.html`. The two are byte-identical
-  // today, so nothing broke; but "identical" is Start's coincidence to break, and
-  // when it does the swap is silent and lands precisely here: the native target,
-  // where a corrupt OTA bundle is the failure the fallback exists to catch.
-  // So don't prefer it. Ours is the shell.
+  // and this step used to copy that over `index.html`. The two were byte-identical
+  // then, so nothing broke; they are not any more (66 KB against 10 KB, measured
+  // 2026-09-13), which is exactly the silent swap that "identical" was hiding, and
+  // it would have landed precisely here: the native target, where a corrupt OTA
+  // bundle is the failure the fallback exists to catch. So don't prefer it. Ours is
+  // the shell, and the native prune now deletes theirs (`src/vite/native-bundle.ts`).
   const index = path.join(appRoot, CAP_WEB_DIR, "index.html")
   if (!existsSync(index)) {
     throw new Error(`the SPA build produced no ${CAP_WEB_DIR}/index.html`)

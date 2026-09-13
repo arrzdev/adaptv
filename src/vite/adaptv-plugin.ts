@@ -299,7 +299,8 @@ export async function adaptv(
     ...(await adaptvDeployServerPlugins(web.render)),
     viteReact(),
     //ORDER IS LOAD-BEARING. All three run in `buildApp` at `order: "post"`, and
-    //Vite calls same-order hooks in plugin-array order — so the shell is emitted
+    //Vite calls same-order hooks in plugin-array order among plugins of the same
+    //`enforce` (these three are plain) — so the shell is emitted
     //BEFORE the SW build globs the precache manifest, and the static-host copy
     //happens last. Reversed, the worker binds its navigation fallback to a shell
     //that was not on disk when the manifest was built, and every offline
@@ -323,11 +324,14 @@ export async function adaptv(
     //there is then no hook to reason about in the ordering above.
     ...(target === "web" ? [adaptvStaticHostPlugin(context)] : []),
     //The mirror image, for the native lineage: drop what only a browser tab
-    //could ever read. → src/vite/native-bundle.ts
+    //could ever read. `enforce: "post"`, so it runs after the router's own post-build
+    //prerender, which writes the `_shell.html` this prunes. → src/vite/native-bundle.ts
     ...(target === "capacitor" ? [adaptvNativeBundlePlugin(context)] : []),
     //LAST of the emitters, on purpose: it writes down where this build wrote and what
     //it was built from, and both answers have to describe the FINAL directory — after
-    //the shell, after the worker, after whichever of the two pruners above ran. The CLI
+    //the shell, after the worker, after whichever of the two pruners above ran. Also
+    //`enforce: "post"`, and after the native prune in this array, which is what keeps
+    //it last now that the prune is an enforced plugin too. The CLI
     //reads it to name the output it produced and to know whether the bundle a native
     //sync is about to copy still belongs to the config on disk. → src/vite/build-stamp.ts
     adaptvBuildStampPlugin(context),
