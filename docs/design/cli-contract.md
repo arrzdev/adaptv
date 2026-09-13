@@ -73,6 +73,17 @@ and then print `✖ ios failed — …` underneath.
 >     [UNRESOLVED_IMPORT] Error: Could not resolve './definitely-missing-module' in vite.config.ts
 > ```
 > A settled row takes `explain`, and its catch asks `wasReported` before it says anything.
+>
+> And by a reason that brought its own mark. The native runner behind `dev ios` narrates its
+> steps with a glyph of its own, writes the verdict on the failed one BEFORE the tool's output,
+> and the verdict says `failed` — so the tail kept it and the pick took it first:
+> ```
+> ✖ ios  ✖ Running xcodebuild - failed! · 41.2s
+> ```
+> A runner's verdict (`✖ … - failed!`, and `✔ … in 3.21ms` for the step that passed before it)
+> restates the row's own outcome, like `** BUILD FAILED **`, so `explain.mjs` drops it from the
+> candidates. When nothing else in the tail says a word, the step it names is still the reason
+> (`✖ ios  xcodebuild failed`), and its mark is not.
 
 **R3 — Never interleave platforms.** In an `all` run, a platform's failure detail must sit with
 its own line, never after another platform's. Collect and group; don't emit as you go.
