@@ -1,9 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   applyNavigationPreload,
   registerNavigationPreload,
+  registerServiceWorkerLifecycle,
   sweepStaleRuntimeCaches,
 } from "#adaptv/sw/sw.lifecycle"
+import type { TestServiceWorkerScope } from "#adaptv/sw/sw.test-helper"
+import {
+  installServiceWorkerScope,
+  TestExtendableEvent,
+  TestExtendableMessageEvent,
+} from "#adaptv/sw/sw.test-helper"
 
 const TAG = "myapp-2f9c1a"
 
@@ -153,5 +160,129 @@ describe("registerNavigationPreload", () => {
     expect(waited).toHaveLength(1)
     await waited[0]
     expect(preload.enable).toHaveBeenCalledOnce()
+  })
+})
+
+describe("registerServiceWorkerLifecycle — what adaptv's worker wires", () => {
+  let sw: TestServiceWorkerScope
+
+  beforeEach(() => {
+    sw = installServiceWorkerScope()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function activate() {
+    const event = sw.dispatch(new TestExtendableEvent("activate"))
+    await event.settled()
+    return event
+  }
+
+  it("applies a waiting worker when the shell posts SKIP_WAITING", () => {
+    //the cold-launch apply path: boot → SKIP_WAITING → controllerchange →
+    //reload. Without this listener the worker waits forever. → rendering §3.4
+    registerServiceWorkerLifecycle()
+    sw.dispatch(new TestExtendableMessageEvent({ type: "SKIP_WAITING" }))
+    expect(sw.scope.skipWaiting).toHaveBeenCalledOnce()
+  })
+
+  it("does not apply on any other message", () => {
+    //a worker that skips waiting mid-session prunes the open tab's module
+    //graph; only the shell's cold-launch message may do it
+    registerServiceWorkerLifecycle()
+    for (const data of [
+      null,
+      undefined,
+      "SKIP_WAITING",
+      { type: "skip_waiting" },
+      { type: "GET_VERSION" },
+      { kind: "SKIP_WAITING" },
+    ]) {
+      sw.dispatch(new TestExtendableMessageEvent(data))
+    }
+    expect(sw.scope.skipWaiting).not.toHaveBeenCalled()
+  })
+
+  it("claims clients on activate, inside waitUntil", async () => {
+    registerServiceWorkerLifecycle()
+    const event = await activate()
+    expect(sw.scope.clients.claim).toHaveBeenCalledOnce()
+    //not waitUntil'd, the activate can finish before the claim lands and the
+    //first page load stays uncontrolled
+    expect(event.pending).toHaveLength(1)
+  })
+
+  it("sweeps previous builds' buckets on activate — B2, and only those", async () => {
+    const current = "myapp-2f9c1a"
+    const ok = () => new Response("x")
+    for (const name of [
+      `static-${current}`,
+      "static-myapp-0000aa",
+      "pages-myapp-0000aa",
+      "documents-myapp-0000aa",
+      "workbox-precache-v2-https://app.example/",
+      "app-api-cache",
+      "some-other-app-cache",
+    ]) {
+      sw.caches.seed(name, "/x", ok())
+    }
+
+    registerServiceWorkerLifecycle({ buildTag: current })
+    await activate()
+
+    expect((await sw.caches.keys()).sort()).toEqual([
+      "app-api-cache",
+      "some-other-app-cache",
+      `static-${current}`,
+      "workbox-precache-v2-https://app.example/",
+    ])
+  })
+
+  it("holds activate open until the sweep has finished", async () => {
+    //the sweep is async; outside waitUntil the browser may stop the worker
+    //with half the stale buckets still on disk
+    sw.caches.seed("static-old", "/x", new Response("x"))
+    registerServiceWorkerLifecycle({ buildTag: "new" })
+    const event = sw.dispatch(new TestExtendableEvent("activate"))
+    expect(event.pending).toHaveLength(2)
+    await event.settled()
+    expect(await sw.caches.has("static-old")).toBe(false)
+  })
+
+  it("does not sweep at all without a build tag", async () => {
+    //nothing to compare against: sweeping would delete everything or nothing
+    const keys = vi.spyOn(sw.caches, "keys")
+    sw.caches.seed("static-old", "/x", new Response("x"))
+    registerServiceWorkerLifecycle({})
+    await activate()
+    expect(keys).not.toHaveBeenCalled()
+    expect(await sw.caches.has("static-old")).toBe(true)
+  })
+
+  it("honours turning claim and skip-waiting off", async () => {
+    registerServiceWorkerLifecycle({
+      claimClients: false,
+      skipWaitingOnMessage: false,
+    })
+    expect(sw.listenerCount("activate")).toBe(0)
+    expect(sw.listenerCount("message")).toBe(0)
+    sw.dispatch(new TestExtendableMessageEvent({ type: "SKIP_WAITING" }))
+    await activate()
+    expect(sw.scope.skipWaiting).not.toHaveBeenCalled()
+    expect(sw.scope.clients.claim).not.toHaveBeenCalled()
+  })
+
+  it("wires exactly what default-worker.ts asks for", () => {
+    //`{ claimClients: true, skipWaitingOnMessage: true, buildTag }`: one
+    //message listener, two activate listeners (claim + sweep)
+    registerServiceWorkerLifecycle({
+      claimClients: true,
+      skipWaitingOnMessage: true,
+      buildTag: "myapp-2f9c1a",
+    })
+    expect(sw.listenerCount("message")).toBe(1)
+    expect(sw.listenerCount("activate")).toBe(2)
   })
 })
