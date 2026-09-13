@@ -94,6 +94,13 @@ import {
   relaunchAndroidApp,
   resolveIconPlan,
 } from "./lib/native.mjs"
+import {
+  canReuseInstall,
+  newShellId,
+  openShellRegistry,
+  SHELLS_ENV,
+  stampShellId,
+} from "./lib/native-shell.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import { namesPlumbing } from "./lib/opacity.mjs"
@@ -785,6 +792,14 @@ async function runLive(appRoot, platforms, opts) {
     const forcedHost = opts.host // true | undefined — '--host' takes no value
     const externalPossible = !!forcedHost || !webOnly
 
+    // Which native build each platform's app must be before it may reconnect. Opened BEFORE the
+    // dev server, with every platform undecided: an app still on the device from the last run
+    // polls the server from its offline screen, and it must wait while this run works out
+    // whether that install is reused or rebuilt — not reconnect the moment Vite answers.
+    // → src/shell/native-shell.ts
+    const shells = webOnly ? null : openShellRegistry(appRoot, platforms)
+    if (shells) cleanups.push(() => shells.remove())
+
     // Start the Vite dev server FIRST — an app/config problem shows up here, before any
     // native project is scaffolded and before the dev has to pick a device.
     await runLine(
@@ -799,7 +814,9 @@ async function runLive(appRoot, platforms, opts) {
           // the app inside the WebView and blocks hot reload). adaptv's plugin reads
           // this and forces render:spa + sw:false for the dev server. `dev web` (no
           // native surface) keeps the app's normal web config.
-          env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
+          env: shells
+            ? { ADAPTV_DEV_NATIVE: "1", [SHELLS_ENV]: shells.file }
+            : {},
           host: externalPossible,
           onLine: recordDevLine,
         })
@@ -1003,11 +1020,17 @@ async function runLive(appRoot, platforms, opts) {
         const prev = runCache.run[key]
         const cached =
           !force &&
-          prev?.url === url &&
-          prev?.fp === nativeFingerprint(appRoot, platform) &&
-          (await isAppInstalled(appRoot, platform, target.id, env))
+          (await canReuseInstall(prev, {
+            url,
+            fp: nativeFingerprint(appRoot, platform),
+            installed: () =>
+              isAppInstalled(appRoot, platform, target.id, env),
+          }))
 
         if (cached) {
+          // The install is current, so ITS build is the one that may reconnect — named before
+          // the launch, or the app would come up to a server still saying "undecided".
+          shells.expect(platform, prev.shell)
           // Android emulator first needs the localhost route back to the host — no `cap
           // run` will set it. In external mode a physical device reaches the LAN IP
           // directly, so there's no `adb reverse` to (re-)assert.
@@ -1025,6 +1048,14 @@ async function runLive(appRoot, platforms, opts) {
           }
           // couldn't launch it after all — fall through and rebuild.
         }
+
+        // A new build gets a new shell id, baked into the config this sync writes into the native
+        // project, and named to the dev server BEFORE the build starts: from here on the app
+        // already on the device is the old build, and it waits for this one instead of
+        // reconnecting.
+        const shell = newShellId(platform)
+        stampShellId(platform, shell)
+        shells.expect(platform, shell)
 
         // No `generateAssets` here: every path that reaches this function has just been
         // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
@@ -1077,6 +1108,7 @@ async function runLive(appRoot, platforms, opts) {
         runCache.run[key] = {
           url,
           fp: nativeFingerprint(appRoot, platform),
+          shell,
         }
         writeBuildState(appRoot, runCache)
         launched.add(platform)
