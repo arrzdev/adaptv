@@ -120,12 +120,9 @@ test.describe("the drawer consuming it", () => {
     await control(page, "Open basic drawer").click()
     await expect(page.locator(OVERLAY)).toBeVisible()
 
-    await page.waitForTimeout(700)
-    const dimmed = await tint(page)
-    expect(dimmed).not.toBe(base)
-
     //the end colour is the composite the browser would paint, not an approximation:
-    //the scrim's own colour and alpha laid over the base
+    //the scrim's own colour and alpha laid over the base. It is the backdrop's static
+    //colour, not its opacity, so it can be read before the fade has started.
     const expected = await page.evaluate(
       ([overlaySelector, baseColor]) => {
         const overlay = document.querySelector(
@@ -148,18 +145,30 @@ test.describe("the drawer consuming it", () => {
       },
       [OVERLAY, base],
     )
+    expect(expected).toBeTruthy()
 
-    if (expected) {
-      const rgb = (hex: string) =>
-        [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16))
-      const a = rgb(dimmed ?? "#000000")
-      const b = rgb(expected)
-      //within a rounding step per channel — `oklch()` scrims round-trip through
-      //two different code paths to get here
-      for (let i = 0; i < 3; i += 1) {
-        expect(Math.abs(a[i] - b[i])).toBeLessThanOrEqual(2)
-      }
+    /*
+     * Wait on the tag, never on a clock. A fresh open arms the scrim AND the tint together two
+     * rendering updates after the click (the double rAF in the drawer engine), and a rendering
+     * update is only as fast as the machine can composite. On a Linux WebKit CI runner the open
+     * had not been armed 940ms after the click — the trace shows the backdrop still at its
+     * `transition: none; opacity: 0` start state and the panel still at its closed offset — so
+     * a fixed 700ms sleep read the untouched base colour and blamed the tint for a sheet that had
+     * not begun to move. First that the tag leaves the base at all, then that it lands on the
+     * composite.
+     */
+    await expect.poll(() => tint(page)).not.toBe(base)
+
+    const rgb = (hex: string) =>
+      [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16))
+    //within a rounding step per channel — `oklch()` scrims round-trip through two different
+    //code paths to get here
+    const distance = async () => {
+      const a = rgb((await tint(page)) ?? "#000000")
+      const b = rgb(expected ?? "#000000")
+      return Math.max(...a.map((v, i) => Math.abs(v - b[i])))
     }
+    await expect.poll(distance).toBeLessThanOrEqual(2)
   })
 
   /*
