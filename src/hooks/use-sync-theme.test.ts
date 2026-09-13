@@ -1,6 +1,10 @@
 import { renderHook } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
+import {
+  PREPAINT_TINT_ATTR,
+  PREPAINT_TINT_VAR,
+} from "#adaptv/shell/theme-init-script"
 
 const LIGHT = "#eeeeec"
 const DARK = "#0a0a0c"
@@ -128,5 +132,43 @@ describe("useSyncTheme — a route's own chromeTint", () => {
     view.rerender({ chromeTint: null })
     expect(themeColorMeta()?.content).toBe(DARK)
     expect(document.documentElement.style.backgroundColor).toBe(DARK)
+  })
+})
+
+describe("useSyncTheme — the pre-paint tint is handed over, not kept", () => {
+  //The head script stamps a tinted route's colour on <html> for the critical CSS to
+  //paint the body with, because the body does not exist when it runs.
+  //Once this hook owns the paint that rule has nothing left to do, and anything it
+  //still did would be wrong: it holds the COLD-LAUNCH route's colour, so after an
+  //in-app navigation, or with the hook disabled, it would pin a tint nobody declares.
+  const PREPAINT_ROUTE = "#0b6e4f"
+
+  function prepaintStamp(color: string) {
+    document.documentElement.setAttribute(PREPAINT_TINT_ATTR, "")
+    document.documentElement.style.setProperty(PREPAINT_TINT_VAR, color)
+  }
+
+  function stamped() {
+    return (
+      document.documentElement.hasAttribute(PREPAINT_TINT_ATTR) ||
+      document.documentElement.style.getPropertyValue(
+        PREPAINT_TINT_VAR,
+      ) !== ""
+    )
+  }
+
+  it("removes the stamp once it has painted html and body itself", () => {
+    document.documentElement.classList.add("light")
+    prepaintStamp(PREPAINT_ROUTE)
+    mount(true, PREPAINT_ROUTE)
+    expect(stamped()).toBe(false)
+    expect(document.body.style.backgroundColor).toBe(PREPAINT_ROUTE)
+  })
+
+  it("removes it when disabled too, so no tint outlives the hook", () => {
+    document.documentElement.classList.add("light")
+    prepaintStamp(PREPAINT_ROUTE)
+    mount(false)
+    expect(stamped()).toBe(false)
   })
 })
