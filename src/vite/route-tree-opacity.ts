@@ -6,9 +6,12 @@
  * decides *when* it runs) can be tested directly — the bug it exists to prevent is
  * invisible in a build and only shows up in dev and preview.
  */
-import type { FSWatcher } from "node:fs"
+import type { BigIntStats, FSWatcher } from "node:fs"
 import {
+  closeSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -247,8 +250,12 @@ export function routeTreeMentionsTanStack(source: string): boolean {
  *
  * Two honest limits, neither of which is load-bearing:
  *
- * 1. `utimesSync` restores to filesystem precision, not exactly (sub-millisecond
- *    digits are lost), so this NARROWS the window rather than closing it.
+ * 1. The restore is close, not exact. `utimesSync` takes seconds as a double, which
+ *    at today's epoch resolves about a quarter of a microsecond, and the generator
+ *    compares `mtimeMs` for exact equality — measured, a restore matches it about
+ *    two times in three. So this NARROWS the window rather than closing it. What it
+ *    must not do is stamp through a `Date`: that drops everything below the
+ *    millisecond and never matched once in 500 restores.
  * 2. It is defence in depth, not the reason the loop is absent. **Measured** with
  *    a live dev server: after the repair the file holds a single (mtime, content)
  *    state across 40 samples over 12s, and seeding the generator's own text back
@@ -259,18 +266,41 @@ export function routeTreeMentionsTanStack(source: string): boolean {
  *
  * The trade is that an mtime-based incremental tool (a warm `tsc --build`) can miss
  * the repair. Acceptable: the content difference is type-only.
+ *
+ * ## ⚠︎ A stale repair stands down
+ *
+ * Every Vite process in an app root repairs the tree — its own generations and,
+ * through its watcher, every other process's — so a repair can read generation N
+ * and, before its rename lands, the generator renames N+1 into place: in dev, the
+ * tree with the route that was just added. Renaming N's rewrite over it would drop
+ * that route, and put N's mtime on top so the generator believes its cache, until
+ * the next route change. So the tree is stat'ed again just before the rename, and
+ * the repair stands down if it is no longer the file it read (inode, size, mtime).
+ * Nothing is lost: N+1's rename is itself an event for every watcher that repairs
+ * (`watchRouteTree`, the dev server's `add`/`change`), and the repair it runs reads
+ * N+1. The stat that is compared comes from the SAME descriptor as the read, so it
+ * describes the bytes that were rewritten, not a file renamed in between. What is
+ * left is the gap between the second stat and the rename — microseconds, not the
+ * whole rewrite, and not worth a lock file.
  */
 export function rewriteRouteTreeOnDisk(
   routeTreePath: string,
   routerPkg: string,
   modules: readonly RouteTreeModule[] = [],
+  //Seam for the test that pins the stale-repair guard: runs once the rewrite is in
+  //the temp file and before the rename, which is where a newer generation can land.
+  beforeRename: () => void = () => {},
 ): void {
   let source: string
-  let stamp: { atime: Date; mtime: Date }
+  let read: BigIntStats
   try {
-    source = readFileSync(routeTreePath, "utf8")
-    const stat = statSync(routeTreePath)
-    stamp = { atime: stat.atime, mtime: stat.mtime }
+    const fd = openSync(routeTreePath, "r")
+    try {
+      read = fstatSync(fd, { bigint: true })
+      source = readFileSync(fd, "utf8")
+    } finally {
+      closeSync(fd)
+    }
   } catch {
     return //not generated on this pass — nothing to rewrite
   }
@@ -288,16 +318,33 @@ export function rewriteRouteTreeOnDisk(
   try {
     writeFileSync(tmp, rewritten)
     try {
-      //stamped before the rename, so the tree never carries the wrong mtime at all
-      utimesSync(tmp, stamp.atime, stamp.mtime)
+      //stamped before the rename, so the tree never carries the wrong mtime at all;
+      //in seconds from the nanosecond stat, never through a millisecond `Date`
+      utimesSync(
+        tmp,
+        Number(read.atimeNs) / 1e9,
+        Number(read.mtimeNs) / 1e9,
+      )
     } catch {
       //worst case the generator re-runs once — the repair itself still lands
+    }
+    beforeRename()
+    if (!isSameFile(read, statSync(routeTreePath, { bigint: true }))) {
+      //a newer generation landed since the read, and its own event repairs it
+      rmSync(tmp, { force: true })
+      return
     }
     renameSync(tmp, routeTreePath)
   } catch (error) {
     rmSync(tmp, { force: true })
     throw error
   }
+}
+
+/** Is the tree on disk still the one that was read? A rename changes the inode; an
+ * in-place write changes the size or the mtime. */
+function isSameFile(a: BigIntStats, b: BigIntStats): boolean {
+  return a.ino === b.ino && a.size === b.size && a.mtimeNs === b.mtimeNs
 }
 
 /**
