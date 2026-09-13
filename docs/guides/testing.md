@@ -49,10 +49,10 @@ pnpm adaptv doctor      # ad-hoc passthrough to the CLI inside the playground ap
 - **`preview`** — the real build, delivered the way a user gets it. No live reload.
 - **`build`** — the artifact: a deployable site, an unsigned `.ipa`, a debug `.apk`.
 
-The playground serves on **its own port block** — app `41730`, inspector `41740`
+The playground serves on **its own port block** — app `41730`, with `41740` reserved beside it
 (`playground/apps/frontend/ports.ts`). It is `--strictPort`, so a busy port fails loudly rather than
-silently drifting. Worktrees collide here by design; move the block with `VITE_APP_PORT` /
-`VITE_SUPERVISOR_PORT` rather than killing a neighbour's session.
+silently drifting. Worktrees collide here by design; move the app with `VITE_APP_PORT` — the one
+override `vite.config.ts` reads — rather than killing a neighbour's session.
 
 **Targets 2–5 from a simulator/emulator.** The iOS sim shares the host's loopback, so
 `http://localhost:41730` works directly. The Android emulator's `localhost` is the *device*: either
@@ -100,21 +100,23 @@ Version pins and native gotchas live in
 
 | Suite | Command | What it covers |
 |---|---|---|
-| **Unit** (vitest, happy-dom) | `pnpm test` | 2542 tests / 164 files |
+| **Unit** (vitest, happy-dom) | `pnpm test` | `src/**` and the CLI's `bin/lib/*.test.mjs` |
 | **Typecheck** | `pnpm typecheck` | |
 | **Lint** | `pnpm biome:check` · `pnpm biome:check:playground` | the playground is its own pnpm project, so the root check never reaches it — both are required |
-| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | ~34 specs in `playground/e2e/` |
+| **Colour** | `node scripts/check-colour.mjs` | the CLI's live layer under a pty |
+| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 35 specs in `playground/e2e/` |
 | **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across three configs (default, spa, prompt) |
-| **Everything** | `pnpm gate` | all of the above plus `scripts/check-colour.mjs` |
+| **The gate** | `pnpm gate` | lint, typecheck, unit and colour — **not** the Playwright suites, which take minutes where the gate takes seconds |
 
 → [`e2e.md`](e2e.md) for what the Playwright estate covers and how it is wired.
 
-**CI runs four of these** — typecheck, biome, biome:playground, vitest — on every PR and on pushes to
-`main` (`.github/workflows/ci.yml`). Each step runs even if a prior one failed, so the summary reports
-all failures at once. Note that **`scripts/check-colour.mjs` is in `pnpm gate` but not in CI**, so it
-binds only whoever runs the gate locally (roadmap **L3**), and the e2e suites are local-only —
-whether the native matrix can run in CI at all is still an open question
-([`../roadmap/open-questions.md`](../roadmap/open-questions.md), **O11**).
+**CI runs the gate and the main browser suite** on every PR and on pushes to `main`
+(`.github/workflows/ci.yml`): typecheck, biome, biome:playground, vitest, the colour check, and
+`test:e2e` on the **chromium** project only. Each step runs even if a prior one failed, so the summary
+reports all failures at once. The main suite's **webkit** project and all three service-worker configs
+run only where someone runs them — why chromium alone is recorded as answered
+([`../roadmap/open-questions.md`](../roadmap/open-questions.md), **O11a**). Whether the native matrix
+can run in CI at all is still open (**O11b**).
 
 ---
 
