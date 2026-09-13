@@ -93,8 +93,9 @@ export type AdaptvOptions = {
  * The adaptv framework plugin — one call in an app's `vite.config.ts`. Reads
  * `adaptv.config.ts` (single source of truth) and wires the whole PWA:
  *
- * - stamps the generated root route + router (unless the app ejects by writing
- *   `layouts/_root.tsx` / `router.tsx`)
+ * - stamps the app's `.gitignore` and tsconfig wiring; the root route and router
+ *   entry are package modules, ejected by passing a file to `rootRoute()` or by
+ *   writing `src/router.tsx`
  * - drives TanStack Start — route tree + entries; the client entry is Start's
  *   default (StrictMode), ejectable by writing `src/client.tsx`
  * - generates the web manifest and the service-worker precache + build tag
@@ -120,13 +121,12 @@ export async function adaptv(
   const routerEjected = existsSync(path.resolve(appRoot, "src/router.tsx"))
   const clientEjected = existsSync(path.resolve(appRoot, "src/client.tsx"))
 
-  //load the config up front — Start is configured from it, and the generated
-  //root/router files must exist before Start resolves `router.entry`.
+  //load the config first: Start and every plugin below are configured from it.
   context.loaded = await loadAppConfig(appRoot)
 
   //capacitor target: one source of truth still, but the native bundle is a static
-  //SPA with no service worker. Mutate the loaded config before stamping so the
-  //generated root/router, manifest, and SW-build plugin all follow suit.
+  //SPA with no service worker. Mutate the loaded config before anything reads
+  //it so the router wiring, manifest, and SW-build plugin all follow suit.
   const target =
     options.target ??
     (process.env.ADAPTV_TARGET === "capacitor" ? "capacitor" : "web")
@@ -201,11 +201,6 @@ export async function adaptv(
     context.loaded.config.router.routesDirectory,
   )
 
-  //Tell the virtual-route DSL where the generated root lives. It sits in
-  //`.adaptv/`, but the generator resolves virtual route files against
-  //`routesDirectory`, so the DSL needs a path relative to THAT — which only this
-  //layer knows. Without it the consumer's routes tree would have to host a
-  //framework artifact.
   //Where the route DSL finds adaptv's root route.
   //
   //`routesDirectory` is resolved against `src/`, not the app root — same base as

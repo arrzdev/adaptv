@@ -7,13 +7,14 @@ import {
 } from "@tanstack/virtual-file-routes"
 
 /**
- * Where the generated root route lives, **relative to `routesDirectory`**. adaptv
- * stamps that file (gitignored, like `routeTree.gen.ts`); consumers never write it.
+ * Where adaptv's root route lives, **relative to `routesDirectory`**. It is a
+ * module in the installed package (`root-route.tsx`), not a file written into
+ * the app; consumers never write it.
  *
  * The generator resolves virtual route files against `routesDirectory`, so this
- * escapes upward into `.adaptv/`. That keeps the consumer's routes tree free of
- * framework artifacts: they write route files, adaptv writes the root, and the
- * two never sit in the same folder.
+ * escapes upward out of the app's routes folder and into the package. That
+ * keeps the consumer's routes tree free of framework files: they write route
+ * files, adaptv ships the root, and the two never sit in the same folder.
  *
  * Set by adaptv's Vite plugin, which is the only place that knows both
  * `routesDirectory` and the app root. Reading it unguarded is deliberate: if it
@@ -35,7 +36,7 @@ type VirtualRootRoute = ReturnType<typeof upstreamRootRoute>
 
 /**
  * Declare the app's route tree. adaptv owns the root — pass only the children and
- * the generated `__root.gen.tsx` is wired in for you:
+ * its root route is wired in for you:
  *
  * ```ts
  * export const routes = rootRoute([

@@ -22,34 +22,17 @@ import { ADAPTV_DIR, nextGitignore } from "#adaptv/vite/adaptv-dir.ts"
  * `sw.gen.ts`, `tmp/router/`, the native `web/` bundle — see `adaptv-dir.ts`.)
  */
 
-//An app can eject either surface by writing the real file; adaptv then defers.
-//The eject paths stay in the app's OWN src tree — ejecting means "this is my
-//file now", so it belongs with their code.
-const ROOT_EJECT_REL = "routing/layouts/_root.tsx"
-const ROUTER_EJECT_REL = "router.tsx"
-
 const ROUTE_TREE_ALIAS = "#adaptv-route-tree"
 
-export type EjectState = {
-  root: boolean
-  router: boolean
-}
-
-/** Ensure the app's ignore + tsconfig wiring is present. Returns eject state. */
-export function stampGeneratedFiles(context: AdaptvContext): EjectState {
-  if (!context.loaded) return { root: false, router: false }
-  const srcDir = path.resolve(context.appRoot, "src")
-
-  const rootEjected = existsSync(path.resolve(srcDir, ROOT_EJECT_REL))
-  const routerEjected = existsSync(path.resolve(srcDir, ROUTER_EJECT_REL))
+/** Ensure the app's ignore + tsconfig wiring is present. */
+export function stampGeneratedFiles(context: AdaptvContext): void {
+  if (!context.loaded) return
 
   //the consumer must not wire the hidden dir up by hand — a path mapping or
   //ignore entry that has to stay in sync with a framework internal is exactly
   //the per-project babysitting adaptv exists to remove
   ensureGitignored(context.appRoot)
   ensureTsconfigWiring(context.appRoot)
-
-  return { root: rootEjected, router: routerEjected }
 }
 
 /**
