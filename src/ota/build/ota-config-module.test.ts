@@ -119,20 +119,26 @@ describe("resolveOtaBuildConfig", () => {
     //that ships alongside a native change, rather than freezing until the store
     //catches up. Resolved HERE so the shipped bundle carries a literal answer
     //and no runtime has to reproduce the default.
-    const { mkdtempSync, writeFileSync } = await import("node:fs")
+    const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs")
     const { tmpdir } = await import("node:os")
     const { join } = await import("node:path")
     const root = mkdtempSync(join(tmpdir(), "adaptv-ota-"))
-    writeFileSync(join(root, "package.json"), "{}")
+    try {
+      writeFileSync(join(root, "package.json"), "{}")
 
-    const config = { ...BASE, origin: "https://chop.app" }
-    expect(resolveOtaBuildConfig(root, config)?.nativeSkew).toBe("install")
-    expect(
-      resolveOtaBuildConfig(root, {
-        ...config,
-        otaOnNativeSkew: "refuse",
-      })?.nativeSkew,
-    ).toBe("refuse")
+      const config = { ...BASE, origin: "https://chop.app" }
+      expect(resolveOtaBuildConfig(root, config)?.nativeSkew).toBe(
+        "install",
+      )
+      expect(
+        resolveOtaBuildConfig(root, {
+          ...config,
+          otaOnNativeSkew: "refuse",
+        })?.nativeSkew,
+      ).toBe("refuse")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

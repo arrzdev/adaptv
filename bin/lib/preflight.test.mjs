@@ -19,15 +19,22 @@ const ok = {
   themeColor: { light: "#ffffff", dark: "#101010" },
 }
 
-let dir = null
+//a case may make more than one app root, so every one is kept for the cleanup
+const dirs = []
 afterEach(() => {
-  if (dir) rmSync(dir, { recursive: true, force: true })
-  dir = null
+  for (const d of dirs.splice(0))
+    rmSync(d, { recursive: true, force: true })
 })
+
+const tempApp = () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-preflight-"))
+  dirs.push(dir)
+  return dir
+}
 
 /** An app root with `public/favicons/<name>` written from `bytes`. */
 function appWithIcon(name, bytes) {
-  dir = mkdtempSync(path.join(tmpdir(), "adaptv-preflight-"))
+  const dir = tempApp()
   const icons = path.join(dir, "public/favicons")
   mkdirSync(icons, { recursive: true })
   if (name) writeFileSync(path.join(icons, name), bytes)
@@ -239,7 +246,7 @@ describe("inspect — a broken config is the whole answer", () => {
  */
 describe("missingPluginErrors — a plugin listed and never installed", () => {
   const root = () => {
-    dir = mkdtempSync(path.join(tmpdir(), "adaptv-preflight-"))
+    const dir = tempApp()
     writeFileSync(
       path.join(dir, "package.json"),
       JSON.stringify({ name: "scratch-app", dependencies: {} }),
