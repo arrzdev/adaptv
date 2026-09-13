@@ -328,6 +328,57 @@ describe("adaptvManifestPlugin — the manifest a browser actually fetches", () 
     )
   })
 
+  /** An app with no art of its own: no `icons` key, or a configured directory left empty. */
+  function noArt(): AdaptvContext[] {
+    const { icons: _, ...unconfigured } = BASE
+    return [
+      {
+        appRoot: appWithIcons({}),
+        target: "web",
+        loaded: { config: unconfigured, watchFiles: [] },
+      },
+      {
+        appRoot: appWithIcons({}),
+        target: "web",
+        loaded: {
+          config: { ...BASE, icons: "./public/favicons" },
+          watchFiles: [],
+        },
+      },
+    ]
+  }
+
+  it("lists adaptv's own icons in dev for an app with no art of its own", () => {
+    //An empty `icons` array is an app no browser will offer to install, so an app that has not
+    //drawn its icon yet ships adaptv's mark until it does.
+    for (const ctx of noArt()) {
+      const icons = JSON.parse(
+        devServer(adaptvManifestPlugin(ctx))("/manifest.json").body ?? "",
+      ).icons as Array<{ src: string }>
+      const label = ctx.loaded?.config.icons ?? "no icons key"
+      expect(icons.length, label).toBeGreaterThan(0)
+      for (const icon of icons)
+        expect(icon.src, label).toMatch(/^\/adaptv-icons\//)
+    }
+  })
+
+  it("ships the same fallback icons in the built manifest, not an empty list", () => {
+    //manifest.ts records this exact bug: the build hook was written without the default set and
+    //every production manifest said `"icons": []` while dev looked right.
+    for (const ctx of noArt()) {
+      const [file] = emit(adaptvManifestPlugin(ctx), "client")
+      const built = JSON.parse(file.source).icons as Array<{ src: string }>
+      const served = JSON.parse(
+        devServer(adaptvManifestPlugin(ctx))("/manifest.json").body ?? "",
+      ).icons
+      const label = ctx.loaded?.config.icons ?? "no icons key"
+      expect(built.length, label).toBeGreaterThan(0)
+      for (const icon of built)
+        expect(icon.src, label).toMatch(/^\/adaptv-icons\//)
+      expect(built, label).toEqual(served)
+    }
+  })
+
   it("emits nothing from the server environment", () => {
     expect(emit(adaptvManifestPlugin(context()), "ssr")).toEqual([])
   })
