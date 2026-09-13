@@ -49,9 +49,10 @@ const SCROLL_LINES = [
  * The two app-feel resets a consumer gets to decide.
  *
  * The page is worth opening on more than one target for the same reason the
- * options exist: with the default `"app"`, the rows below read *stamped* in an
- * installed app and *absent* in a browser tab — and the text under them is
- * selectable in exactly the second case.
+ * options exist: `noSelect` and `touchCallout` default to `"app"`, so their rows
+ * read *stamped* in an installed app and *absent* in a browser tab — and the text
+ * under them is selectable in exactly the second case. `hideScrollbars` defaults
+ * to `"all"` (see `UI_SCOPE_DEFAULTS`), so its row reads stamped everywhere.
  */
 function LabAppFeelPage() {
   const [stamps, setStamps] = useState<Record<string, boolean> | null>(
@@ -77,7 +78,7 @@ function LabAppFeelPage() {
       <LabBrief
         what="The three resets that are the app's call rather than doctrine — text selection, scrollbars and the iOS long-press callout — and the one that is doctrine and has no knob."
         steps={[
-          "Read the three stamp rows. With the default “app” scope they must be STAMPED in an installed app or a native build, and ABSENT in a browser tab.",
+          "Read the three stamp rows. data-adaptv-no-select and data-adaptv-no-touch-callout default to the “app” scope: STAMPED in an installed app or a native build, ABSENT in a browser tab. data-adaptv-hide-scrollbars defaults to “all”: stamped on every target.",
           "Try to select the first paragraph: long-press on touch, drag on desktop. It must be selectable exactly when data-adaptv-no-select is absent.",
           "Try to select the second paragraph, which carries the `selectable` utility. It must select on EVERY target — that is a utility beating the reset on cascade layer order alone.",
           "Scroll the small box and watch the gutter: a visible scrollbar means hideScrollbars is not stamped here.",
@@ -87,7 +88,7 @@ function LabAppFeelPage() {
         expected={{
           web: {
             verdict: "partial",
-            note: "All three absent by default, so text selects, scrollbars show, and the iOS callout works. That is deliberate: a browser user has to be able to select an error message and long-press a link.",
+            note: "noSelect and touchCallout absent by default, so text selects and the iOS callout works. That is deliberate: a browser user has to be able to select an error message and long-press a link. hideScrollbars is stamped, because its default is “all” — a scroller that wants an indicator asks for one.",
           },
           pwa: {
             verdict: "works",
