@@ -52,6 +52,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/spinner",
+    title: "Spinner",
+    summary: "pauses off screen · turns through a busy main thread",
+    isNew: true,
+  },
+  {
     to: "/lab/button",
     title: "Button",
     summary: "press engine + haptics + slots, with real semantics",

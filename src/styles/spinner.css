@@ -1,0 +1,68 @@
+/*
+ * Spinner — the motion, its off-screen pause and its reduced-motion form
+ * (components/spinner.tsx).
+ *
+ * ## Why the rotation is `transform` on the HTML box, in a @keyframes rule
+ *
+ * Chromium composites an animation on an SVG element only in narrow cases (no SMIL, not
+ * inside a resource container, no viewBox transform, `transform` rather than the
+ * individual `rotate`/`scale`/`translate`), and never `stroke-dasharray`. A spinner that
+ * falls outside that list is animated on the main thread and freezes exactly while the
+ * app is busy. `transform` on the `<span>` is on every engine's composited list
+ * (docs/decisions/animation.md A3), and a `@keyframes` rule is the authoring the drawer
+ * measured clean on device (drawer.css). Do NOT move the animation onto the `<svg>` or
+ * spell it with `rotate:` — spinner.test.tsx pins both.
+ *
+ * ## Why these are rules on the identity attribute and not classes
+ *
+ * The reduced-motion answer must be right on the first paint and on the server; a hook
+ * is `false` during SSR and hydration. The off-screen pause is an attribute the shared
+ * IntersectionObserver writes without React. Keying both on `[data-adaptv="spinner"]` is
+ * docs/decisions/styling.md §2's escape hatch — no class for tailwind-merge to drop.
+ *
+ * Layered in `adaptv.components` so an unlayered consumer rule, or `animate-none` in
+ * `className` (`utilities` is a later layer), wins. No `!important` (§6.0.1).
+ * `@keyframes` stay outside the layer for drawer.css's reason: keyframe names resolve
+ * from one flat namespace where the last definition wins regardless of layer.
+ */
+
+@keyframes adaptv-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+ * Reduced motion: the box stays put and breathes. Opacity is composited too, and an
+ * indicator that simply stopped would read as "done".
+ */
+@keyframes adaptv-spinner-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@layer adaptv.components {
+  [data-adaptv="spinner"] {
+    animation: adaptv-spinner-spin 1s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="spinner"] {
+      animation: adaptv-spinner-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  /*
+   * Off screen, nothing ticks. Two attributes outrank one, so this also beats the
+   * reduced-motion shorthand above, which resets the play state to `running`.
+   */
+  [data-adaptv="spinner"][data-spinner-offscreen] {
+    animation-play-state: paused;
+  }
+}
