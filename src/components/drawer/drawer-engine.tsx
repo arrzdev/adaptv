@@ -113,8 +113,11 @@ const DRAWER_PANEL_Z = "z-[51]"
  */
 export const DRAWER_CONTENT_MAX_HEIGHT_VAR = "--pwa-drawer-max-height"
 
-// Cap the visible content. Installed PWA: full viewport minus the top safe area so the
-// panel never grows under the notch. Browser tab: 97dvh — leaves a sliver up top and
+// Cap the visible content. Native: full viewport minus the top safe area so the panel never
+// grows under the notch. Installed PWA: the same, and never more than the dynamic viewport,
+// because an iOS 26 installed app starts its page 62pt down, below the status bar, while 100vh
+// stays the whole screen: 100vh there made a tall sheet slide its handle under the status bar
+// (the shell has the same rule, styles/screen.css). Browser tab: 97dvh — leaves a sliver up top and
 // dodges browser chrome (the top inset is 0 in a tab anyway). (Viewport math is Tier-1's
 // job — not a cosmetic.) `--adaptv-inset-top` is the contract var (styles/safe-area.css).
 //
@@ -133,7 +136,8 @@ export const DRAWER_CONTENT_MAX_HEIGHT_VAR = "--pwa-drawer-max-height"
 // `min()`/`calc()` values, which fails soft. Not in any barrel.)
 export const DRAWER_CONTENT_LAYOUT_CLASS = cn(
   "flex min-h-0 shrink-0 flex-col",
-  "app:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)))]",
+  "[:where(html[data-adaptv-platform=native])_&]:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)))]",
+  "[:where(html[data-adaptv-platform=standalone])_&]:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)),100dvh)]",
   "web:max-h-[min(var(--pwa-drawer-max-height,100vh),97dvh)]",
 )
 
