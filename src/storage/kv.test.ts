@@ -206,6 +206,154 @@ describe("kv — reactivity", () => {
   })
 })
 
+/**
+ * Native kv against a stand-in `@capacitor/preferences`. The real plugin is a
+ * bridge proxy that only exists in a WebView, so the seam is the module itself —
+ * the same one `native-theme.test.ts` uses.
+ */
+async function nativeKv(preferences: Record<string, unknown>) {
+  vi.resetModules()
+  vi.doMock("@capacitor/preferences", () => ({ Preferences: preferences }))
+  restores.push(() => {
+    vi.doUnmock("@capacitor/preferences")
+    vi.resetModules()
+  })
+  vi.stubGlobal("Capacitor", { isNativePlatform: () => true })
+  return import("#adaptv/storage/kv")
+}
+
+/**
+ * Collect every rejection nobody handled while `run` executes. A fire-and-forget
+ * bridge call that rejects lands here, and in a WebView that is a console error
+ * or an error-reporter event for a write the caller was told had succeeded.
+ */
+async function unhandledDuring(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on("unhandledRejection", listener)
+  try {
+    run()
+    //unhandled rejections are reported after the microtask queue drains, so
+    //leave the turn before reading
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  } finally {
+    process.off("unhandledRejection", listener)
+  }
+  return seen
+}
+
+describe("kv — native, over Preferences", () => {
+  it("persists a write under the namespaced key, JSON-encoded", async () => {
+    const set = vi.fn(async () => {})
+    const { kv, KV_PREFIX } = await nativeKv({ set })
+    kv.set("flag", { on: true })
+    expect(set).toHaveBeenCalledWith({
+      key: `${KV_PREFIX}flag`,
+      value: '{"on":true}',
+    })
+    //native never write-throughs to localStorage: the WebView's copy is
+    //evictable, which is the reason Preferences backs this tier at all
+    expect(localStorage.getItem(`${KV_PREFIX}flag`)).toBeNull()
+  })
+
+  it("removes through Preferences, for remove and for clear", async () => {
+    const remove = vi.fn(async () => {})
+    const { kv, KV_PREFIX } = await nativeKv({
+      set: async () => {},
+      remove,
+    })
+    kv.set("a", 1)
+    kv.set("b", 2)
+    kv.remove("a")
+    kv.clear()
+    expect(remove.mock.calls).toEqual([
+      [{ key: `${KV_PREFIX}a` }],
+      [{ key: `${KV_PREFIX}b` }],
+    ])
+  })
+
+  it("handles a rejected Preferences.set and keeps the value for the session", async () => {
+    //the write is fire-and-forget, so a bridge rejection has nowhere to go
+    //unless kv catches it — the try/catch around the call never sees an async
+    //failure. It must degrade exactly like a full localStorage on web: the
+    //value stays readable in-process, and nothing escapes as an unhandled error.
+    const { kv } = await nativeKv({
+      set: () => Promise.reject(new Error("bridge: set failed")),
+    })
+    const unhandled = await unhandledDuring(() => kv.set("k", "v"))
+    expect(unhandled).toEqual([])
+    expect(kv.get("k")).toBe("v")
+  })
+
+  it("handles a rejected Preferences.remove", async () => {
+    const { kv } = await nativeKv({
+      set: async () => {},
+      remove: () => Promise.reject(new Error("bridge: remove failed")),
+    })
+    kv.set("k", "v")
+    const unhandled = await unhandledDuring(() => kv.remove("k"))
+    expect(unhandled).toEqual([])
+    expect(kv.get("k")).toBeUndefined()
+  })
+
+  it("does not throw when the plugin is missing from the binary", async () => {
+    //an OTA bundle can run on a binary built before the plugin was added, where
+    //the proxy's method throws synchronously instead of rejecting
+    const { kv } = await nativeKv({
+      set() {
+        throw new Error("Preferences plugin is not implemented on ios")
+      },
+    })
+    expect(() => kv.set("k", 1)).not.toThrow()
+    expect(kv.get("k")).toBe(1)
+  })
+})
+
+describe("kv — native boot hydration", () => {
+  it("hydrates its own keys from Preferences and wakes their subscribers", async () => {
+    const values: Record<string, string> = {
+      "adaptv:kv:seen": "true",
+      "adaptv:kv:broken": "{not json",
+      "app-owned": '"not ours"',
+    }
+    const { kv, initKv, subscribeKv } = await nativeKv({
+      keys: async () => ({ keys: Object.keys(values) }),
+      get: async ({ key }: { key: string }) => ({ value: values[key] }),
+    })
+    const listener = vi.fn()
+    subscribeKv("seen", listener)
+
+    expect(kv.get("seen")).toBeUndefined()
+    await initKv()
+
+    expect(kv.get("seen")).toBe(true)
+    //a corrupt entry must not brick boot, and a foreign key is not ours to read
+    expect(kv.get("broken")).toBeUndefined()
+    expect(kv.get("app-owned")).toBeUndefined()
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it("never rejects when Preferences cannot be read, so boot is never blocked", async () => {
+    const { kv, initKv } = await nativeKv({
+      keys: () => Promise.reject(new Error("bridge: keys failed")),
+    })
+    await expect(initKv()).resolves.toBeUndefined()
+    kv.set("still", "works")
+    expect(kv.get("still")).toBe("works")
+  })
+
+  it("is a no-op on web, where hydration already happened at import", async () => {
+    const keys = vi.fn()
+    vi.resetModules()
+    vi.doMock("@capacitor/preferences", () => ({ Preferences: { keys } }))
+    restores.push(() => vi.doUnmock("@capacitor/preferences"))
+    vi.stubGlobal("Capacitor", undefined)
+    const { initKv } = await import("#adaptv/storage/kv")
+    await initKv()
+    expect(keys).not.toHaveBeenCalled()
+  })
+})
+
 describe("kv — SSR safety", () => {
   it("never throws when storage is unavailable", async () => {
     //Safari private mode throws on localStorage access, and this module runs at

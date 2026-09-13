@@ -20,7 +20,9 @@
  *   the shell behind the splash (see {@link initKv}). A write updates the map,
  *   emits, and persists fire-and-forget — so a **~1-tick durability lag exists
  *   only on native**, and a hard crash in that window loses the last write.
- *   Anything that cannot tolerate that belongs in `store` or `secure`.
+ *   A write the bridge rejects is kept in memory for the session, exactly as a
+ *   full `localStorage` is on web. Anything that cannot tolerate that belongs in
+ *   `store` or `secure`.
  *
  * ⚠︎ `@capacitor/preferences` is **plaintext** — `UserDefaults` on iOS,
  * `SharedPreferences` on Android, verified in source. Fine for flags and
@@ -93,26 +95,36 @@ if (typeof window !== "undefined" && !isNativePlatform()) {
   bindCrossTab()
 }
 
+/** A native write that did not land: the map already holds the truth for this session. */
+function memoryOnly(): void {}
+
 function persist(key: string, value: unknown): void {
   const raw = JSON.stringify(value)
   try {
     if (isNativePlatform()) {
       //fire-and-forget: the map is already updated, so reads are correct now.
-      //This is the ~1-tick native durability lag documented above.
-      void Preferences.set({ key: KV_PREFIX + key, value: raw })
+      //This is the ~1-tick native durability lag documented above. The catch is
+      //not optional: the try below only sees a SYNC throw, so a bridge rejection
+      //would escape as an unhandled error for a write the caller was told had
+      //succeeded. A failed write degrades to memory-only, same as a full
+      //localStorage on web.
+      Preferences.set({ key: KV_PREFIX + key, value: raw }).catch(
+        memoryOnly,
+      )
       return
     }
     localStorage.setItem(KV_PREFIX + key, raw)
   } catch {
-    //quota exceeded, private mode, or the plugin missing — stay memory-only
-    //rather than throwing out of a setter the caller treats as infallible
+    //quota exceeded, private mode, or the plugin missing from the binary (its
+    //proxy throws synchronously) — stay memory-only rather than throwing out of
+    //a setter the caller treats as infallible
   }
 }
 
 function unpersist(key: string): void {
   try {
     if (isNativePlatform()) {
-      void Preferences.remove({ key: KV_PREFIX + key })
+      Preferences.remove({ key: KV_PREFIX + key }).catch(memoryOnly)
       return
     }
     localStorage.removeItem(KV_PREFIX + key)
