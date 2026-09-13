@@ -19,6 +19,7 @@ import {
 import { buildCapacitorConfig } from "#adaptv/vite/capacitor-config"
 import {
   NATIVE_SHELLS_ENV,
+  NATIVE_SHELLS_SEEN_FILE,
   nativeShellMiddleware,
   readExpectedShells,
 } from "#adaptv/vite/native-shell-plugin"
@@ -34,6 +35,7 @@ import {
   SHELL_ENDPOINT,
   SHELL_TOKEN,
   SHELLS_ENV,
+  SHELLS_SEEN_FILE,
   shellIdFromUserAgent,
   stampShellId,
   withoutShellMark,
@@ -81,10 +83,11 @@ const tempApp = () => {
 }
 
 describe("one contract, two sides", () => {
-  it("the CLI and the framework name the same token, endpoint and env var", () => {
+  it("the CLI and the framework name the same token, endpoint, env var and files", () => {
     expect(SHELL_TOKEN).toBe(NATIVE_SHELL_TOKEN)
     expect(SHELL_ENDPOINT).toBe(NATIVE_SHELL_ENDPOINT)
     expect(SHELLS_ENV).toBe(NATIVE_SHELLS_ENV)
+    expect(SHELLS_SEEN_FILE).toBe(NATIVE_SHELLS_SEEN_FILE)
   })
 
   it("both parsers read the same id off the same user agents", () => {
@@ -282,6 +285,75 @@ describe("what the dev server is told to expect", () => {
     ).toBe("match")
     shells.remove()
     expect(existsSync(shells.file)).toBe(false)
+  })
+})
+
+describe("a reused install that is not the build the run cache named", () => {
+  //Worktree B installs its own build over worktree A's under the same bundle id; back in A every
+  //check the cache makes passes, so A reuses the install and expects the build it recorded.
+  const ask = (shells, id) => {
+    let body = ""
+    nativeShellMiddleware(shells.file)(
+      { url: `${SHELL_ENDPOINT}?id=${id}` },
+      {
+        setHeader() {},
+        end(chunk) {
+          body = chunk
+        },
+      },
+      () => {},
+    )
+    return JSON.parse(body).verdict
+  }
+
+  it("is reported once, as soon as the device asks with its real id", () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios"])
+    shells.expect("ios", "ios-0a0a0a0a", { cached: true })
+    expect(shells.staleInstalls()).toEqual([])
+    expect(ask(shells, "ios-0b0b0b0b")).toBe("stale")
+    expect(shells.staleInstalls()).toEqual(["ios"])
+    //the notice fires once; the next poll has nothing new to say
+    expect(ask(shells, "ios-0b0b0b0b")).toBe("stale")
+    expect(shells.staleInstalls()).toEqual([])
+  })
+
+  it("is not confused with the old app waiting through a rebuild this run started", () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios"])
+    shells.expect("ios", newShellId("ios"))
+    expect(ask(shells, "ios-0b0b0b0b")).toBe("stale")
+    expect(shells.staleInstalls()).toEqual([])
+  })
+
+  it("counts only a stale answer given against the build that was reused", () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios", "android"])
+    //seen stale while another build was expected, before this one was reused
+    shells.expect("ios", "ios-0c0c0c0c")
+    ask(shells, "ios-0b0b0b0b")
+    shells.expect("ios", "ios-0a0a0a0a", { cached: true })
+    expect(shells.staleInstalls()).toEqual([])
+    //and the reused install on the other platform is the one it claims to be
+    shells.expect("android", "android-0d0d0d0d", { cached: true })
+    expect(ask(shells, "android-0d0d0d0d")).toBe("match")
+    expect(shells.staleInstalls()).toEqual([])
+  })
+
+  it("leaves nothing of an earlier run behind to be reported", () => {
+    const root = tempApp()
+    const first = openShellRegistry(root, ["ios"])
+    first.expect("ios", "ios-0a0a0a0a", { cached: true })
+    ask(first, "ios-0b0b0b0b")
+    //killed without its teardown: the next run opens over what it left
+    const next = openShellRegistry(root, ["ios"])
+    next.expect("ios", "ios-0a0a0a0a", { cached: true })
+    expect(next.staleInstalls()).toEqual([])
+    ask(next, "ios-0b0b0b0b")
+    next.remove()
+    expect(existsSync(path.join(root, ".adaptv", SHELLS_SEEN_FILE))).toBe(
+      false,
+    )
   })
 })
 
