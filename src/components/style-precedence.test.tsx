@@ -364,7 +364,7 @@ describe("Switch", () => {
     expect(el.className).not.toContain("bg-gray-50")
     expect(el.className).toContain("relative")
     expect(el.className).not.toContain("static")
-    //the thumb's `left` is computed from this width — a consumer inline width
+    //the thumb's travel is computed from this width — a consumer inline width
     //would move the track and leave the thumb behind
     expect(el.style.width).toBe("3rem")
   })
@@ -391,6 +391,21 @@ describe("Switch", () => {
     expect(thumb.className).not.toContain("bg-gray-950")
     expect(thumb.className).toContain("absolute")
     expect(thumb.className).not.toContain("relative")
+  })
+
+  it("Thumb: a toggle moves it on transform, never on its layout inset", () => {
+    //a `left` that changes is a layout shift on every toggle, counted toward CLS
+    //whenever no input is behind it (playground/e2e/theme-shift.spec.ts)
+    //`container`, not `query`'s `baseElement`: both renders share one body
+    const thumbOf = (checked: boolean) =>
+      render(
+        <Switch checked={checked} size={7} />,
+      ).container.querySelector("span[aria-hidden]") as HTMLElement
+    const off = thumbOf(false)
+    const on = thumbOf(true)
+    expect(on.style.left).toBe(off.style.left)
+    expect(off.style.transform).toBe("translateX(0rem)")
+    expect(on.style.transform).toBe("translateX(1.25rem)")
   })
 })
 
