@@ -1,8 +1,11 @@
+import { EventEmitter } from "node:events"
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
@@ -13,6 +16,7 @@ import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir"
 import {
   adaptvOpacityCheckPlugin,
   findUnportableImports,
+  ignoreUnchangedRouteTree,
   rewriteRouteTree,
   rewriteRouteTreeOnDisk,
   routeTreeMentionsTanStack,
@@ -229,6 +233,17 @@ describe("rewriteRouteTreeOnDisk", () => {
     expect(readFileSync(tree, "utf8")).toContain(PKG) //and it really did write
   })
 
+  it("replaces the tree by rename, so no reader ever sees half of it", () => {
+    //Every dev server in the checkout reads this file as soon as it changes. An
+    //in-place write truncates first: with two servers up, one caught the tree at
+    //24567 of 50031 bytes and its SSR transform died on a parse error. A new inode
+    //is the observable proof the old file was swapped whole, not rewritten.
+    const before = statSync(tree).ino
+    rewriteRouteTreeOnDisk(tree, PKG)
+    expect(statSync(tree).ino).not.toBe(before)
+    expect(readdirSync(path.dirname(tree))).toEqual([path.basename(tree)])
+  })
+
   it("does not write at all when the tree is already opaque", () => {
     rewriteRouteTreeOnDisk(tree, PKG)
     const settled = readFileSync(tree, "utf8")
@@ -278,7 +293,7 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
   it("repairs on dev-server start", () => {
     //same gap as preview: a dev session never reaches `closeBundle`, and dev is
     //exactly when someone opens the generated file to read it
-    plugin.configureServer({ watcher: { on() {} } })
+    plugin.configureServer({ watcher: { on() {}, emit: () => false } })
     expect(opaque()).toBe(true)
   })
 
@@ -290,6 +305,7 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
         on(_event: string, fn: (file: string) => void) {
           handlers.push(fn)
         },
+        emit: () => false,
       },
     })
     writeFileSync(tree, GENERATED) //the generator regenerating mid-session
@@ -305,12 +321,26 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
         on(_e: string, fn: (file: string) => void) {
           handlers.push(fn)
         },
+        emit: () => false,
       },
     })
     writeFileSync(tree, GENERATED)
     for (const fn of handlers)
       fn(path.join(dir, "src/routing/pages/a.page.tsx"))
     expect(opaque()).toBe(false) //untouched — only the tree's own events repair it
+  })
+
+  it("does not hand an identical regeneration to the rest of the dev server", () => {
+    //the plugin path, end to end over a real emitter: another server boots in this
+    //checkout and its generator renames the same tree over this one. The baseline
+    //must be the REPAIRED tree, or that raw rewrite would read as a change.
+    const vite = new EventEmitter()
+    const heard: string[] = []
+    vite.on("change", (file: string) => heard.push(file))
+    plugin.configureServer({ watcher: vite })
+    writeFileSync(tree, GENERATED)
+    vite.emit("change", tree)
+    expect(heard).toEqual([])
   })
 
   it("repairs at buildStart, so a build that dies early still leaves it clean", () => {
@@ -355,6 +385,82 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
   })
 })
 
+describe("ignoreUnchangedRouteTree — a rewrite that changes nothing is not an event", () => {
+  //The bug: every dev-server boot makes the generator rename its tree over the
+  //repaired one. Once repaired it is byte-identical, but any OTHER dev server in
+  //the checkout saw a change — its HMR sent `full-reload` to every page it served,
+  //and its generator force-rewrote the file, which the booting server's generator
+  //then did too. The watcher here is a real EventEmitter, standing in for Vite's
+  //chokidar: its listeners are what HMR and the generator's `watchChange` hang off.
+  let dir: string
+  let tree: string
+  let watcher: EventEmitter
+  let heard: string[]
+
+  //a real regeneration: a route the previous tree did not have
+  const WITH_ROUTE = `${GENERATED}import { Route as AboutRoute } from "../src/routing/pages/about.page"\n`
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    tree = resolveGeneratedPaths(dir).routeTree
+    mkdirSync(path.dirname(tree), { recursive: true })
+    writeFileSync(tree, OPAQUE) //what a dev server leaves on disk after its repair
+    watcher = new EventEmitter()
+    heard = []
+    for (const event of ["add", "change", "unlink"])
+      watcher.on(event, (file: string) => heard.push(`${event} ${file}`))
+    ignoreUnchangedRouteTree(watcher, tree, (source) =>
+      rewriteRouteTree(source, PKG),
+    )
+  })
+
+  it("swallows the generator's raw rewrite of the tree already on disk", () => {
+    //THE boot of a second server: TanStack-shaped text, identical once repaired
+    writeFileSync(tree, GENERATED)
+    watcher.emit("change", tree)
+    expect(heard).toEqual([])
+  })
+
+  it("swallows the repaired copy renamed back over it", () => {
+    writeFileSync(tree, OPAQUE)
+    watcher.emit("change", tree)
+    watcher.emit("add", tree)
+    expect(heard).toEqual([])
+  })
+
+  it("lets a real regeneration through, exactly once", () => {
+    writeFileSync(tree, WITH_ROUTE)
+    watcher.emit("change", tree)
+    //the repair of that same regeneration is not a second change
+    writeFileSync(tree, rewriteRouteTree(WITH_ROUTE, PKG))
+    watcher.emit("change", tree)
+    expect(heard).toEqual([`change ${tree}`])
+  })
+
+  it("lets a change BACK through — the baseline moves with what passed", () => {
+    writeFileSync(tree, WITH_ROUTE)
+    watcher.emit("change", tree)
+    writeFileSync(tree, GENERATED) //the route removed again
+    watcher.emit("change", tree)
+    expect(heard).toEqual([`change ${tree}`, `change ${tree}`])
+  })
+
+  it("announces a tree that is deleted and regenerated, even identical", () => {
+    rmSync(tree)
+    watcher.emit("unlink", tree)
+    writeFileSync(tree, OPAQUE)
+    watcher.emit("add", tree)
+    expect(heard).toEqual([`unlink ${tree}`, `add ${tree}`])
+  })
+
+  it("never touches another file's events", () => {
+    const page = path.join(dir, "src/routing/pages/a.page.tsx")
+    watcher.emit("change", page)
+    watcher.emit("change", page)
+    expect(heard).toEqual([`change ${page}`, `change ${page}`])
+  })
+})
+
 describe("the safety net is armed in every mode, exactly once", () => {
   //The net is what makes "always fixed" not depend on someone having enumerated
   //Vite's lifecycle correctly — so *that it is armed* is the property to pin, and
@@ -386,7 +492,8 @@ describe("the safety net is armed in every mode, exactly once", () => {
     ["buildStart", (p) => p.buildStart()],
     [
       "configureServer",
-      (p) => p.configureServer({ watcher: { on() {} } }),
+      (p) =>
+        p.configureServer({ watcher: { on() {}, emit: () => false } }),
     ],
     ["configurePreviewServer", (p) => p.configurePreviewServer()],
   ]
@@ -403,7 +510,7 @@ describe("the safety net is armed in every mode, exactly once", () => {
     const { plugin, calls } = armed()
     plugin.configResolved()
     plugin.buildStart()
-    plugin.configureServer({ watcher: { on() {} } })
+    plugin.configureServer({ watcher: { on() {}, emit: () => false } })
     plugin.configurePreviewServer()
     expect(calls).toHaveLength(1)
   })
