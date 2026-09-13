@@ -39,18 +39,16 @@ describe("Link", () => {
     expect(a.getAttribute("target")).toBeNull()
   })
 
-  it("hands an external URL to the system browser", () => {
+  it("hands an external URL to ExternalLink's own new-tab anchor", () => {
     const open = vi.spyOn(window, "open").mockReturnValue(null)
     const { getByRole } = render(<Link to="https://x.com">Docs</Link>)
     const a = getByRole("link")
     expect(a.getAttribute("data-internal")).toBeNull() // not the router path
     expect(a.getAttribute("target")).toBe("_blank")
+    expect(a.getAttribute("rel")).toBe("noopener noreferrer")
 
-    fireEvent.click(a, { button: 0 })
-    expect(open).toHaveBeenCalledWith(
-      "https://x.com",
-      "_blank",
-      "noopener,noreferrer",
-    )
+    //on web the anchor opens the tab itself — nothing intercepts the click
+    expect(fireEvent.click(a, { button: 0 })).toBe(true)
+    expect(open).not.toHaveBeenCalled()
   })
 })
