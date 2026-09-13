@@ -506,7 +506,7 @@ ecosystem only.
 | ScrollView | ✅ | ✅ | ✅ | ✅ | ✅ | | `ScrollView` |
 | Bottom sheet / Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `Drawer` |
 | Pull-to-refresh | ✅ | ✅ | ✅ (`List.onRefresh`) | ✅ (modifier) | ✅ | | `PullToRefresh` |
-| Icon | (ionicons) | | ✅ | ✅ | ✅ | ✅ | **—** |
+| Icon | (ionicons) | | ✅ (native only — web `index.tsx` returns `null`) | ✅ | ✅ | ✅ | `Icon` ✅ (no bundled set) |
 | **Collapsible / Accordion** | ✅ | | ✅ | ✅ | | | **—** |
 | **Grouped form / settings list** | ✅ (`ion-list inset`) | | ✅ (`FieldGroup`) | ✅ (`Form`/`Section`) | | | **—** |
 | **Alert dialog** | ✅ | ✅ (`Alert`) | | ✅ | ✅ | | **—** |
