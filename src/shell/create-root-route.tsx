@@ -190,8 +190,9 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           base: import.meta.env.BASE_URL,
         }) +
         (splashScreenComponent ? getLaunchViewportInitScript() : "") +
-        //native dev only: a dev server that dies before the bundle ran takes the app to the
-        //offline screen instead of leaving it on the splash. Folds away in a production build.
+        //native dev only: a dev server that stops before the bundle can see it go takes the
+        //app to the offline screen instead of leaving it on the splash. Folds away in a
+        //production build.
         (import.meta.env.DEV ? getNativeDevBootWatchdogScript() : ""),
     })
 
