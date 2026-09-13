@@ -521,6 +521,36 @@ describe("the emulator's route to the dev server", () => {
     ])
   })
 
+  //A single connected device is not the target by being alone. The target that has not resolved
+  //can also drop off adb, and the one device left can be another session's emulator.
+  it("never takes the only connected device for the target unless it is the target", async () => {
+    adb.avd = { "emulator-5554": "Pixel_7" }
+    const revert = await keepRoute("Pixel_10")
+
+    //Pixel_10 goes away, and another session's emulator is all adb lists
+    adb.devices = "List of devices attached\nemulator-5554\tdevice\n"
+    await vi.advanceTimersByTimeAsync(12_000)
+    revert()
+    expect(reverseCalls()).toEqual([])
+
+    //and a run that starts with only another session's emulator attached maps nothing either
+    adb.calls = []
+    const other = await keepRoute("Pixel_10")
+    await vi.advanceTimersByTimeAsync(12_000)
+    other()
+    expect(reverseCalls()).toEqual([])
+  })
+
+  it("maps the only connected device when it is the target", async () => {
+    adb.devices = "List of devices attached\nemulator-5556\tdevice\n"
+    const revert = await keepRoute("Pixel_10")
+    revert()
+    expect(writes()).toEqual([
+      ["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"],
+      ["-s", "emulator-5556", "reverse", "--remove", "tcp:43880"],
+    ])
+  })
+
   it("removes nothing on teardown when the target never resolved", async () => {
     adb.avd = {}
     const revert = await keepRoute("Pixel_10")
