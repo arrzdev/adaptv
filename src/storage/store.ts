@@ -39,8 +39,20 @@ const DB_VERSION = 1
  * Safari private mode historically, and inside some embedded webviews. Throwing
  * there would make the tier unusable for the framework's own offline needs, so it
  * degrades to memory — correct for the session, just not durable.
+ *
+ * The same holds per key when IndexedDB is present but refuses a write — a quota
+ * overrun at commit, a transaction the browser aborts. `set()` never rejects, so
+ * a value that is not readable afterwards is lost with nothing reporting it, and
+ * the read falls through to whatever the database held BEFORE. So every write
+ * lands here first and leaves only once its transaction has committed; a read
+ * consults this before the database. {@link REMOVED} marks a remove that has not
+ * landed, so a refused delete cannot resurrect the old value.
  */
 const memory = new Map<string, unknown>()
+const REMOVED = Symbol("removed")
+
+/** Keys whose latest write IndexedDB refused — what {@link store.isPersistent} reports. */
+const unpersisted = new Set<string>()
 
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
@@ -70,8 +82,7 @@ function database(): Promise<IDBDatabase | null> {
   return dbPromise
 }
 
-function transact<T>(
-  mode: IDBTransactionMode,
+function read<T>(
   run: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T | undefined> {
   return database().then(
@@ -79,8 +90,9 @@ function transact<T>(
       new Promise<T | undefined>((resolve) => {
         if (!db) return resolve(undefined)
         try {
-          const tx = db.transaction(STORE_NAME, mode)
-          const request = run(tx.objectStore(STORE_NAME))
+          const request = run(
+            db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME),
+          )
           request.onsuccess = () => resolve(request.result)
           request.onerror = () => resolve(undefined)
         } catch {
@@ -90,6 +102,48 @@ function transact<T>(
   )
 }
 
+/**
+ * Run a write and resolve `true` only once its transaction has **committed**.
+ * A request's `success` is not durability: a quota overrun is accepted by the
+ * put and refused by the commit, which aborts the transaction afterwards.
+ */
+function commit(run: (store: IDBObjectStore) => void): Promise<boolean> {
+  return database().then(
+    (db) =>
+      new Promise<boolean>((resolve) => {
+        if (!db) return resolve(false)
+        try {
+          const tx = db.transaction(STORE_NAME, "readwrite")
+          tx.oncomplete = () => resolve(true)
+          tx.onabort = () => resolve(false)
+          tx.onerror = () => resolve(false)
+          run(tx.objectStore(STORE_NAME))
+        } catch {
+          resolve(false)
+        }
+      }),
+  )
+}
+
+/** Hold `value` (or {@link REMOVED}) in memory until the database has taken it. */
+async function write(
+  key: string,
+  value: unknown,
+  run: (store: IDBObjectStore) => void,
+): Promise<void> {
+  memory.set(key, value)
+  const landed = await commit(run)
+  //a later write to the same key may have replaced the entry mid-flight — only
+  //the write that put it there may take it out
+  if (memory.get(key) !== value) return
+  if (landed) {
+    memory.delete(key)
+    unpersisted.delete(key)
+  } else {
+    unpersisted.add(key)
+  }
+}
+
 async function hasIndexedDb(): Promise<boolean> {
   return (await database()) !== null
 }
@@ -97,10 +151,11 @@ async function hasIndexedDb(): Promise<boolean> {
 export const store = {
   /** Read a value. Resolves to `undefined` when absent. */
   async get<T>(key: string): Promise<T | undefined> {
-    if (!(await hasIndexedDb())) return memory.get(key) as T | undefined
-    return (await transact<T>("readonly", (s) => s.get(key))) as
-      | T
-      | undefined
+    if (memory.has(key)) {
+      const value = memory.get(key)
+      return value === REMOVED ? undefined : (value as T)
+    }
+    return (await read<T>((s) => s.get(key))) as T | undefined
   },
 
   /**
@@ -108,37 +163,39 @@ export const store = {
    * survive — unlike `storage.kv`, which JSON-encodes.
    */
   async set<T>(key: string, value: T): Promise<void> {
-    memory.set(key, value)
-    if (!(await hasIndexedDb())) return
-    await transact("readwrite", (s) => s.put(value as unknown, key))
+    await write(key, value, (s) => s.put(value as unknown, key))
   },
 
   async remove(key: string): Promise<void> {
-    memory.delete(key)
-    if (!(await hasIndexedDb())) return
-    await transact("readwrite", (s) => s.delete(key))
+    await write(key, REMOVED, (s) => s.delete(key))
   },
 
   /** Drop every key in adaptv's store. Never touches other databases. */
   async clear(): Promise<void> {
     memory.clear()
-    if (!(await hasIndexedDb())) return
-    await transact("readwrite", (s) => s.clear())
+    unpersisted.clear()
+    await commit((s) => s.clear())
   },
 
   async keys(): Promise<string[]> {
-    if (!(await hasIndexedDb())) return [...memory.keys()]
-    const keys = await transact<IDBValidKey[]>("readonly", (s) =>
-      s.getAllKeys(),
+    const keys = new Set(
+      ((await read<IDBValidKey[]>((s) => s.getAllKeys())) ?? []).map(
+        String,
+      ),
     )
-    return (keys ?? []).map(String)
+    for (const [key, value] of memory) {
+      if (value === REMOVED) keys.delete(key)
+      else keys.add(key)
+    }
+    return [...keys]
   },
 
   /**
    * Whether writes actually persist. `false` means the memory fallback is in
-   * play — useful for deciding whether to warn, not for deciding whether to call.
+   * play — no IndexedDB at all, or a value whose last write it refused — useful
+   * for deciding whether to warn, not for deciding whether to call.
    */
   async isPersistent(): Promise<boolean> {
-    return hasIndexedDb()
+    return (await hasIndexedDb()) && unpersisted.size === 0
   },
 }

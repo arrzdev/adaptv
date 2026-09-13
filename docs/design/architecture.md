@@ -259,7 +259,10 @@ respects the consumer-wired-data doctrine.
 >
 > **Degrades to memory** when IndexedDB is absent — SSR, Safari private mode, some embedded webviews.
 > The framework's own offline path depends on this tier, so throwing there would turn missing storage
-> into a boot failure. `isPersistent()` reports which mode is in play.
+> into a boot failure. The same holds per key when IndexedDB is present but refuses a write (a quota
+> overrun at commit): the value stays readable for the session instead of the read falling back to
+> what the database held before. A write counts only once its transaction commits. `isPersistent()`
+> reports which mode is in play, and turns `false` while any value lives only in memory.
 >
 > `useStore` has a loading state and `useKv` does not; that asymmetry is inherent, not an oversight —
 > the backing store is genuinely asynchronous.

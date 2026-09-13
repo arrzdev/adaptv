@@ -1,10 +1,60 @@
 import "fake-indexeddb/auto"
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { store } from "#adaptv/storage/store"
 
 beforeEach(async () => {
   await store.clear()
 })
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+/**
+ * A module instance of its own. The connection is opened once and cached per
+ * module, so a test that breaks the open has to start from a module that has
+ * not opened yet.
+ */
+async function freshStore() {
+  vi.resetModules()
+  return (await import("#adaptv/storage/store")).store
+}
+
+/** An `indexedDB` whose open request fails the way `event` says, and nothing else. */
+function openThatFires(event: "error" | "blocked") {
+  return {
+    open() {
+      const request: Record<string, unknown> = {}
+      queueMicrotask(() =>
+        (request[`on${event}`] as (() => void) | undefined)?.(),
+      )
+      return request
+    },
+  }
+}
+
+/**
+ * Make every `put` fail. `"request"` fails the request itself (its `error`
+ * event fires); `"commit"` lets the request succeed and then aborts the
+ * transaction, which is how a quota overrun surfaces: the put is accepted, and
+ * the commit is not.
+ */
+function failPuts(how: "request" | "commit") {
+  const put = IDBObjectStore.prototype.put
+  vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(function (
+    this: IDBObjectStore,
+    ...args: Parameters<IDBObjectStore["put"]>
+  ) {
+    const request = put.apply(this, args)
+    if (how === "request") this.transaction.abort()
+    else {
+      //the put's own success event still fires — only the commit is refused
+      request.addEventListener("success", () => this.transaction.abort())
+    }
+    return request
+  })
+}
 
 describe("store — async large-value KV", () => {
   it("round-trips a value", async () => {
@@ -79,5 +129,83 @@ describe("store — availability", () => {
     await expect(store.get("anything")).resolves.not.toThrow()
     await expect(store.set("k", 1)).resolves.toBeUndefined()
     await expect(store.remove("k")).resolves.toBeUndefined()
+  })
+
+  it("degrades to memory when there is no IndexedDB at all", async () => {
+    vi.stubGlobal("indexedDB", undefined)
+    const fresh = await freshStore()
+    await fresh.set("k", { v: 1 })
+    expect(await fresh.get("k")).toEqual({ v: 1 })
+    expect(await fresh.keys()).toEqual(["k"])
+    await fresh.remove("k")
+    expect(await fresh.get("k")).toBeUndefined()
+    expect(await fresh.isPersistent()).toBe(false)
+  })
+
+  it.each(["error", "blocked"] as const)(
+    "degrades to memory when the open fires %s",
+    async (event) => {
+      //Firefox private mode used to fail the open, and an open held up by another
+      //connection fires blocked — either way the session still needs a store
+      vi.stubGlobal("indexedDB", openThatFires(event))
+      const fresh = await freshStore()
+      await fresh.set("k", "v")
+      expect(await fresh.get("k")).toBe("v")
+      expect(await fresh.isPersistent()).toBe(false)
+    },
+  )
+
+  it("degrades to memory when the open throws", async () => {
+    vi.stubGlobal("indexedDB", {
+      open() {
+        throw new DOMException("denied", "SecurityError")
+      },
+    })
+    const fresh = await freshStore()
+    await expect(fresh.set("k", "v")).resolves.toBeUndefined()
+    expect(await fresh.get("k")).toBe("v")
+  })
+})
+
+describe("store — a write IndexedDB refuses", () => {
+  it.each(["request", "commit"] as const)(
+    "keeps the value readable when the put fails at the %s",
+    async (how) => {
+      //set() resolves either way — it never rejects — so a value that is then not
+      //readable is lost without anything having reported it
+      await store.set("k", "old")
+      failPuts(how)
+      await store.set("k", "new")
+      expect(await store.get("k")).toBe("new")
+    },
+  )
+
+  it("reports the store as not persistent while a value lives only in memory", async () => {
+    //isPersistent() is the tier's one signal that writes are not landing; a
+    //refused write is exactly that, even with IndexedDB present
+    failPuts("commit")
+    await store.set("k", "v")
+    expect(await store.isPersistent()).toBe(false)
+    expect(await store.keys()).toEqual(["k"])
+
+    vi.restoreAllMocks()
+    await store.set("k", "v")
+    expect(await store.isPersistent()).toBe(true)
+    expect(await store.get("k")).toBe("v")
+  })
+
+  it("does not resurrect a value whose remove IndexedDB refused", async () => {
+    await store.set("k", "secret-ish")
+    const remove = IDBObjectStore.prototype.delete
+    vi.spyOn(IDBObjectStore.prototype, "delete").mockImplementation(
+      function (this: IDBObjectStore, query: IDBValidKey | IDBKeyRange) {
+        const request = remove.call(this, query)
+        this.transaction.abort()
+        return request
+      },
+    )
+    await store.remove("k")
+    expect(await store.get("k")).toBeUndefined()
+    expect(await store.keys()).toEqual([])
   })
 })
