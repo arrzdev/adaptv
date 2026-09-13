@@ -186,8 +186,8 @@ describe("RoutingShell — splash vs the not-found boundary", () => {
 
 // A deploy prunes the hashed chunks an open tab still points at, so its next lazy
 // route import 404s and Vite dispatches `vite:preloadError`. The shell answers with
-// ONE reload, guarded in sessionStorage, and only renders the offline screen when
-// that reload already happened and did not help.
+// ONE reload, stamped in sessionStorage, and only renders the offline screen when
+// that reload happened moments ago and did not help.
 //
 // It used to arm the net twice — once from the service-worker runtime, once from
 // the shell — and the two shared a single guard. The first handler reloaded and
@@ -283,8 +283,8 @@ describe("RoutingShell — the stale-chunk net", () => {
   })
 
   it("stays quiet for every further failure in the document that is reloading", async () => {
-    //Vite dispatches once per failed dependency and again for the module itself,
-    //so one stale route is routinely several events. Only the first is news.
+    //Several lazy imports in flight when the deploy lands each fail, and each
+    //dispatches its own event. Only the first is news.
     const { container } = await mountShell()
 
     dispatchStaleChunk()
@@ -298,9 +298,9 @@ describe("RoutingShell — the stale-chunk net", () => {
     })
   })
 
-  it("shows the offline screen, and does not reload again, when a reload already failed to help", async () => {
-    //the previous document spent the guard on its reload; this one booted and hit
-    //the same missing chunk, so it is genuinely gone and reloading would loop
+  it("shows the offline screen, and does not reload again, when a reload moments ago failed to help", async () => {
+    //the previous document stamped its reload a second ago; this one booted and
+    //hit the same missing chunk, so it is genuinely gone and reloading would loop
     sessionStorage.setItem(GUARD_KEY, String(Date.now() - 1_000))
     const { container } = await mountShell()
 
@@ -310,5 +310,20 @@ describe("RoutingShell — the stale-chunk net", () => {
     expect(reloads).toBe(0)
     //the shell owns this failure now, so Vite must not also rethrow it
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it("reloads, and shows no offline screen, in a tab whose last recovery was long ago", async () => {
+    //a tab that recovered from one deploy and stayed open meets the next one: that
+    //is a new stale chunk, not the last reload failing
+    sessionStorage.setItem(GUARD_KEY, String(Date.now() - 10 * 60_000))
+    const { container } = await mountShell()
+
+    const event = dispatchStaleChunk()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect({ reloads, offline: !!offlineScreen(container) }).toEqual({
+      reloads: 1,
+      offline: false,
+    })
   })
 })
