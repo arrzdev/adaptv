@@ -85,6 +85,11 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `hw.keyboard=no`): open a drawer whose input is `autoFocus` — the whole sheet lifts above the keyboard
   immediately, no double-shift, dismisses on scroll. Retest the web `visualViewport` path (2/4) after any
   keyboard change.
+- **`AvoidKeyboard` looks twice.** Its aim picks a scrollTop on the focus frame, so content that lands
+  above the field during the smooth scroll (suggestions, a validation message) left the field 76px under
+  the box; when that scroll ends (`scrollend`, or the caret patch's 120ms quiet window where it is
+  missing) it aims once more from fresh geometry, unless the user touched or wheeled, or focus moved.
+  **Test:** `/lab/avoid-keyboard` → *Content arriving mid-scroll* → Run: the clearance must read >= 0.
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
   infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
   a keyboard is not something to translate away from — it is a slice of the bottom that stops being
