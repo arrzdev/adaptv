@@ -62,13 +62,13 @@ function LabAppStatePage() {
       subtitle="Background this app and come back. On native that is a Capacitor resume; on web it is visibilitychange, plus a bfcache pageshow on mobile Safari."
     >
       <LabBrief
-        what="That backgrounding and returning to the app produces exactly one pause and one resume, on every shell — including the bfcache restore that has no pause in front of it."
+        what="That backgrounding and returning to the app produces exactly one pause and one resume, on every shell — including a bfcache restore, which must resume exactly once whether or not its pause was observed."
         steps={[
           "Note the two counters, then background the app (home button / swipe up / switch tabs) and come back.",
           "Both counters must have gone up by exactly one. Not two, not zero.",
           "Do it three more times in a row. The counters must track exactly.",
           "Background it and leave it for a minute before returning — a long background must still produce one resume, not a burst.",
-          "On mobile Safari: navigate away with the browser's back gesture and then forward again. That is a bfcache restore, and it must still produce a resume even though no pause was observed.",
+          "On mobile Safari: navigate away with the browser's back gesture and then forward again. That is a bfcache restore: it must produce exactly one resume, even when no pause was observed, and never a second one on top of the visibility change that already reported it.",
           "Check that getAppState() and useAppState() never disagree — they are one signal in two shapes.",
         ]}
         expected={{
@@ -78,7 +78,7 @@ function LabAppStatePage() {
           },
           pwa: {
             verdict: "works",
-            note: "Same signal, plus the bfcache pageshow path on mobile Safari — which is the case with no matching pause and is forced through deliberately.",
+            note: "Same signal, plus the bfcache pageshow path on mobile Safari — which is forced through deliberately when visibility has not already reported the return, and only then.",
           },
           ios: {
             verdict: "works",
@@ -105,7 +105,7 @@ function LabAppStatePage() {
 
       <LabSection
         title="Events"
-        description="Edge-triggered: a resume fires once, not on every notification while already foregrounded. A bfcache restore is forced through, because the pause that preceded it was never observed."
+        description="Edge-triggered: a resume fires once, not on every notification while already foregrounded. A bfcache restore is forced through only when visibility has not already delivered its resume — its pause may never have been observed, but a return is still one resume, not two."
       >
         <LabLog entries={log} />
       </LabSection>
