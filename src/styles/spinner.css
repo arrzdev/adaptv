@@ -4,14 +4,14 @@
  *
  * ## Why the rotation is `transform` on the HTML box, in a @keyframes rule
  *
- * Chromium composites an animation on an SVG element only in narrow cases (no SMIL, not
- * inside a resource container, no viewBox transform, `transform` rather than the
- * individual `rotate`/`scale`/`translate`), and never `stroke-dasharray`. A spinner that
- * falls outside that list is animated on the main thread and freezes exactly while the
- * app is busy. `transform` on the `<span>` is on every engine's composited list
- * (docs/decisions/animation.md A3), and a `@keyframes` rule is the authoring the drawer
- * measured clean on device (drawer.css). Do NOT move the animation onto the `<svg>` or
- * spell it with `rotate:` — spinner.test.tsx pins both.
+ * Chromium runs some SVG animations on the main thread, where they freeze exactly while
+ * the app is busy: SMIL, a shape inside the drawing, the individual
+ * `rotate`/`scale`/`translate` properties, and `stroke-dasharray`. A `transform`
+ * keyframe on the outer `<svg>` is composited (traced: compositeFailed 0), so this is a
+ * guard against those forms, not a rescue of `animate-spin`. `transform` on the `<span>`
+ * is on every engine's composited list (docs/decisions/animation.md A3), and a
+ * `@keyframes` rule is the authoring the drawer measured clean on device (drawer.css).
+ * Keep the turn on the box and spelled `transform`; spinner.test.tsx pins both.
  *
  * ## Why these are rules on the identity attribute and not classes
  *
