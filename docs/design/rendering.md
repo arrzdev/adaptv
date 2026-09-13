@@ -616,7 +616,9 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   glob too; this route is the net for anything the manifest missed.) `createStaleWhileRevalidateStrategy`
   exists in `sw.strategies.ts` for apps wiring their own route through `sw.cache-route.ts` — adaptv's
   own worker never uses it.
-- **API responses are never cached by the SW.** That's the data layer's job, on purpose.
+- **API responses are never cached by the SW.** That's the data layer's job, on purpose. Under a
+  subpath base both `/api/` and `<base>api/` are declined, because a page under the base can still
+  fetch from the origin's root API through its worker.
 - **Navigation denylist**: prefixes `/api/`, `/assets/`, `/_serverFn/`, plus Angular ngsw's heuristic —
   *a last path segment containing a dot is a file, not a navigation* (`/\/[^/?]+\.[^/]+$/`). Workbox's
   `NavigationRoute` has no such default, and `mode:navigate` is exactly what a browser sends for a plain
@@ -639,9 +641,10 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   there. The heuristic's known cost, accepted with ngsw: a route whose last segment contains a dot
   (`/blog/hello.world`) is read as a file. Earlier segments are unaffected — `/v1.2/docs` is a
   navigation, verified.
-- **Activate-time cache sweep.** Runtime buckets are named `<bucket>-<buildTag>`; on `activate`, every
-  cache whose name starts with a bucket adaptv **owns** and whose tag is not the current one is
-  deleted. `cleanupOutdatedCaches()` does **not** do this — it only removes precaches written by *older
+- **Activate-time cache sweep.** Runtime buckets are named `<bucket>-<buildTag>`, with the base in
+  front under a subpath (`/app/static-<tag>`, because Cache Storage is per origin, not per scope); on
+  `activate`, every cache whose name starts with a bucket adaptv **owns** under this app's base and
+  whose tag is not the current one is deleted. `cleanupOutdatedCaches()` does **not** do this — it only removes precaches written by *older
   Workbox versions* — so without the sweep every deploy mints buckets that are never freed, ending in a
   quota error on a frequently-deployed app. → `docs/decisions/register.md` B2
 
@@ -662,8 +665,23 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
 > Nothing in the SW path sniffs the environment. Registration is gated on `import.meta.env.DEV`, a Vite
 > constant substituted at **build** time — there is no hostname check, no `NODE_ENV` read at runtime, no
 > domain allowlist. Vercel, Cloudflare Pages, Netlify, a VPS, a static bucket: all serve `vite build`
-> output, so all register identically. The only host-dependent value is `BASE_URL`, already handled for
-> subpath deploys. Two things still vary, and both fail *quietly*:
+> output, so all register identically. The only host-dependent value is `BASE_URL`, and every URL adaptv
+> writes for the browser follows it — the shell's links, the manifest, the worker's shell binding and
+> scope, `_redirects` — so a `render: "spa"` build deploys under a subpath (VERIFIED on a Pages-style host,
+> `e2e-sw/subpath.spec.ts`). An `ssr` build's own node server does not yet serve its files under one
+> (MEASURED: `/app/assets/*` and `/app/manifest.json` 404, the same files 200 at the origin root).
+>
+> A subpath app shares its origin, and so its worker registrations and Cache Storage, with whatever else
+> is deployed there, such as another project site on the same `<user>.github.io`. The foreign-worker
+> cleanup only touches registrations inside the app's own scope (VERIFIED with a second site's worker,
+> `e2e-sw/subpath.spec.ts`), and runtime buckets under a subpath are named `<base><bucket>-<buildTag>`
+> (`/app/static-<tag>`), so the activate sweep (§3.4) never takes another base's; at `/` the names are
+> unchanged. Three limits are known and not covered. `_redirects` is read only from the publish root
+> on Netlify and Cloudflare Pages, so it applies only when the build is hoisted there. Dev under a
+> non-root base is untested: `vite/sw-dev.ts` serves its kill-switch worker at a fixed `/sw.js`. A
+> relative (`./`) or full-URL `base` is unsupported, as TanStack Start's own basepath is.
+>
+> Two things still vary, and both fail *quietly*:
 >
 > **1. A non-secure origin gets no worker at all.** Service workers require a secure context. `localhost`
 > is exempt and every `https://` origin qualifies — a self-hosted deploy over plain `http://` does not,

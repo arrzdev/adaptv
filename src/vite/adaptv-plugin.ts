@@ -223,7 +223,7 @@ export async function adaptv(
     .split(path.sep)
     .join("/")
 
-  buildManifest(context.loaded.config, appRoot) //fail fast on a bad manifest
+  buildManifest(context.loaded.config, appRoot, "/") //fail fast on a bad manifest
   stampGeneratedFiles(context)
 
   return [

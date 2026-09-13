@@ -8,6 +8,7 @@ import type {
   NavigationPolicy,
 } from "#adaptv/sw/sw.navigation-policy"
 import { resolveNavigationPolicy } from "#adaptv/sw/sw.navigation-policy"
+import { publicPath } from "#adaptv/utils/public-path"
 
 export type NavigationRouteOptions = {
   /** the app config`s `render` for a web build, or `"capacitor"` for native. */
@@ -20,11 +21,17 @@ export type NavigationRouteOptions = {
    */
   appShellUrl: string
   /**
+   * The deploy base the worker is scoped to (`/` at the origin root, `/app/` for
+   * a GitHub Pages project site). The default denylist lives under it.
+   */
+  base: string
+  /**
    * Path prefixes the SW must not claim — API routes, auth callbacks, asset dirs.
-   * **Replaces** {@link DEFAULT_DENY_PREFIXES}, it does not extend them: pass
+   * **Replaces** the {@link defaultDenyPrefixes}, it does not extend them: pass
    * `["/auth/"]` and `/api/`, `/assets/` and `/_serverFn/` stop being denied, so
-   * restate the ones you still need. The file heuristic below applies either way;
-   * it is not a prefix and cannot be switched off.
+   * restate the ones you still need. Full pathnames, base included. The file
+   * heuristic below applies either way; it is not a prefix and cannot be
+   * switched off.
    */
   denyPathPrefixes?: readonly string[]
   /**
@@ -34,14 +41,21 @@ export type NavigationRouteOptions = {
   networkTimeoutSeconds?: number
 }
 
-const DEFAULT_DENY_PREFIXES = [
-  "/api/",
-  "/assets/",
-  //The server-function endpoint the data layer posts to. Not a navigation today
-  //(those requests are `mode: "cors"`), so this is not load-bearing — it is here
-  //so that a future request shape cannot quietly turn into a hijacked document.
-  "/_serverFn/",
-] as const
+/**
+ * The paths the SW never claims, under the deploy base. Under `base: "/app/"` the
+ * app's API is `/app/api/`, and a root-absolute `/api/` would deny a path the
+ * worker's scope does not even cover while claiming the one it does.
+ */
+export function defaultDenyPrefixes(base: string): string[] {
+  return [
+    "api/",
+    "assets/",
+    //The server-function endpoint the data layer posts to. Not a navigation today
+    //(those requests are `mode: "cors"`), so this is not load-bearing — it is here
+    //so that a future request shape cannot quietly turn into a hijacked document.
+    "_serverFn/",
+  ].map((prefix) => publicPath(base, prefix))
+}
 
 /**
  * A last path segment containing a dot is a **file**, not a navigation.
@@ -62,7 +76,7 @@ const FILE_LIKE_PATHNAME = /\/[^/?]+\.[^/]+$/
 /** Paths the SW must not claim at all — API routes, asset dirs, server fns. */
 export function isDeniedPath(
   pathname: string,
-  denyPathPrefixes: readonly string[] = DEFAULT_DENY_PREFIXES,
+  denyPathPrefixes: readonly string[],
 ): boolean {
   return denyPathPrefixes.some((prefix) => pathname.startsWith(prefix))
 }
@@ -88,7 +102,7 @@ export function isFileLikePath(pathname: string): boolean {
  */
 export function mayServeAppShell(
   pathname: string,
-  denyPathPrefixes: readonly string[] = DEFAULT_DENY_PREFIXES,
+  denyPathPrefixes: readonly string[],
 ): boolean {
   return (
     !isDeniedPath(pathname, denyPathPrefixes) && !isFileLikePath(pathname)
@@ -220,6 +234,8 @@ export function registerNavigationRoute(
 ): NavigationPolicy {
   const policy = resolveNavigationPolicy(options.mode)
   if (policy.kind === "none") return policy
+  const denyPathPrefixes =
+    options.denyPathPrefixes ?? defaultDenyPrefixes(options.base)
 
   if (policy.kind === "app-shell") {
     //SPA: no per-request render to preserve, so serving the shell for every
@@ -231,7 +247,7 @@ export function registerNavigationRoute(
     registerRoute(
       ({ request, url }) =>
         request.mode === "navigate" &&
-        mayServeAppShell(url.pathname, options.denyPathPrefixes),
+        mayServeAppShell(url.pathname, denyPathPrefixes),
       createHandlerBoundToURL(options.appShellUrl),
     )
     //...and precisely because navigations never reach the network here, a
@@ -259,7 +275,7 @@ export function registerNavigationRoute(
     //*fallback* instead, below.
     ({ request, url }) =>
       request.mode === "navigate" &&
-      !isDeniedPath(url.pathname, options.denyPathPrefixes),
+      !isDeniedPath(url.pathname, denyPathPrefixes),
     ({ request, url, event }) => {
       //the route only matches `mode: "navigate"`, so this is always a FetchEvent
       const fetchEvent = event as FetchEvent
