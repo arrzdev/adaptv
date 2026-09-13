@@ -33,6 +33,7 @@ import {
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
+import { adaptvNativeShellPlugins } from "#adaptv/vite/native-shell-plugin.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import {
@@ -299,6 +300,9 @@ export async function adaptv(
     adaptvSwBuildPlugin(context),
     //`apply: "serve"`, and a no-op unless ADAPTV_DEV_SW is set.
     adaptvSwDevPlugin(context),
+    //Native `adaptv dev` only: answers whether the installed app is the build this session
+    //serves, so a stale shell waits instead of reconnecting. → src/shell/native-shell.ts
+    ...adaptvNativeShellPlugins(target),
     //Web lineage only. A Capacitor bundle is `render: "spa"` as well, so gating
     //this on `render` alone put `_redirects`, `404.html` and `.nojekyll` inside
     //every `.ipa`/`.apk` — files that answer to an HTTP host the WebView does

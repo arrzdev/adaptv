@@ -3,7 +3,10 @@ import { StartClient } from "@tanstack/react-start/client"
 import { StrictMode, startTransition } from "react"
 import { createRoot, hydrateRoot } from "react-dom/client"
 import { getRouter } from "#adaptv/routes/router-entry"
-import { installNativeLiveReloadRecovery } from "#adaptv/shell/native-live-reload-client"
+import {
+  bootWhenNativeShellMatches,
+  installNativeLiveReloadRecovery,
+} from "#adaptv/shell/native-live-reload-client"
 
 /**
  * The client entry. **Framework code, wired as Start's `client.entry` for BOTH
@@ -69,19 +72,23 @@ const serverRendered =
 //would construct a new router on every pass and throw the match state away.
 const clientRouter = serverRendered ? null : getRouter()
 
-startTransition(() => {
-  if (clientRouter) {
-    createRoot(document).render(
-      <StrictMode>
-        <RouterProvider router={clientRouter} />
-      </StrictMode>,
-    )
-  } else {
-    hydrateRoot(
-      document,
-      <StrictMode>
-        <StartClient />
-      </StrictMode>,
-    )
-  }
+//native dev only: a WebView inside a stale native build never renders the app; it waits on
+//the offline screen for the rebuilt one. Everywhere else this is a plain call to `boot`.
+bootWhenNativeShellMatches(() => {
+  startTransition(() => {
+    if (clientRouter) {
+      createRoot(document).render(
+        <StrictMode>
+          <RouterProvider router={clientRouter} />
+        </StrictMode>,
+      )
+    } else {
+      hydrateRoot(
+        document,
+        <StrictMode>
+          <StartClient />
+        </StrictMode>,
+      )
+    }
+  })
 })

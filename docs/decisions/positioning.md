@@ -158,7 +158,13 @@ adaptv heals both directions with no user action:
   screen instead of a black WebView.
 - The server coming back → the offline screen polls it (native `CapacitorHttp` on iOS, a
   plain `fetch` on Android — see `bin/lib/offline-page.mjs`) and navigates back the instant
-  it answers 2xx/3xx. No relaunch, no rebuild.
+  it answers 2xx/3xx. No relaunch, no rebuild — **when the app on the device is the build the
+  run serves.** Every dev build carries a per-build id in its WebView user agent, the CLI tells
+  the dev server which id each platform expects (none until it has decided whether to reuse or
+  rebuild), and only a match reconnects. An app from before a native change waits on the
+  offline screen for the rebuilt one instead of coming up inside the old binary; the entry
+  holds the first render on the same check, so no reconnect path can skip it
+  (`src/shell/native-shell.ts`).
 - Even the WKWebView "clean-close deaf socket" case (Vite's client gives up on a `wasClean`
   close) is caught by our own reconnect proxy — a failure mode Vite itself doesn't handle.
 

@@ -18,6 +18,7 @@ import { rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { loadAdaptvModule } from "./load-ts.mjs"
 import { CAP_WEB_DIR } from "./native.mjs"
+import { SHELL_ENDPOINT, shellIdFromUserAgent } from "./native-shell.mjs"
 
 /** The errorPath filename, relative to the web dir root. Shared with `patchServerUrl`. */
 export const OFFLINE_PAGE = "adaptv-offline.html"
@@ -68,6 +69,38 @@ export function reconnectDecision(status, notReadyTries, limit) {
     }
   }
   return { verdict: "never", tries: notReadyTries }
+}
+
+/**
+ * The page's reading of the dev server's native-shell answer (`src/shell/native-shell.ts`).
+ *
+ * `match` is the only answer that lets the page go back to the dev server; `pending` and `stale`
+ * each keep it waiting with their own copy; `none` — nothing answered, a non-2xx, a body that is
+ * not the verdict — is the plain "couldn't reach" state. The body arrives parsed on iOS (the
+ * native request decodes JSON) and as text on Android (a WebView `fetch`), so both are taken.
+ *
+ * Embedded in the page as source like {@link reconnectDecision}: no free variables.
+ *
+ * @param {number} status
+ * @param {any} body
+ * @returns {"match" | "pending" | "stale" | "none"}
+ */
+export function shellAnswer(status, body) {
+  if (!(status >= 200 && status < 300)) return "none"
+  let data = body
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data)
+    } catch (_) {
+      return "none"
+    }
+  }
+  const verdict = data && typeof data === "object" ? data.verdict : null
+  return verdict === "match" ||
+    verdict === "pending" ||
+    verdict === "stale"
+    ? verdict
+    : "none"
 }
 
 /**
@@ -429,7 +462,7 @@ async function renderOfflineHtml(devUrl, config) {
       <p id="detail">This is a development build</p>
     </div>
     <div class="cmd" id="cmd"><span class="sigil">$</span><span><span class="run">adaptv dev</span> <span id="platform">ios</span></span></div>
-    <div class="status" id="status"><span class="spin"></span><span>Reconnecting automatically…</span></div>
+    <div class="status" id="status"><span class="spin"></span><span id="status-text">Reconnecting automatically…</span></div>
   </div>
 <script>
   (function () {
@@ -485,6 +518,34 @@ async function renderOfflineHtml(devUrl, config) {
     // The decision itself, verbatim from the CLI module so the test and the page agree.
     ${String(reconnectDecision)}
 
+    // ---- is this app the build the dev session serves? ----------------------------------
+    // A dev build carries its native build's id in the user agent. The dev server answers
+    // whether that id is the one this run installed or reused; only then does the page go back.
+    // Anything else waits here — an app from before a native change must not come up inside
+    // the old binary while the new one is still being built. → src/shell/native-shell.ts
+    ${String(shellIdFromUserAgent)}
+    ${String(shellAnswer)}
+    var SHELL_URL = DEV_URL.replace(/\\/$/, "") + ${JSON.stringify(SHELL_ENDPOINT)} +
+      "?id=" + encodeURIComponent(shellIdFromUserAgent(navigator.userAgent) || "");
+
+    // One screen, three states. "none" is the page as it has always been: the server is not
+    // answering. The two waiting states drop the command, which the dev is already running.
+    var STATES = {
+      none: ["Couldn't reach dev server", "This is a development build", "Reconnecting automatically\u2026"],
+      pending: ["Checking this build", "The dev server is up. The app opens once this install is confirmed current.", "Waiting for adaptv\u2026"],
+      stale: ["Waiting for the new build", "This install is out of date. The rebuilt app opens on its own.", "Waiting for the rebuild\u2026"]
+    };
+    var painted = "none";
+    function paint(state) {
+      var copy = STATES[state] || STATES.none;
+      if (painted === state) return;
+      painted = state;
+      document.getElementById("title").textContent = copy[0];
+      document.getElementById("detail").textContent = copy[1];
+      document.getElementById("status-text").textContent = copy[2];
+      document.getElementById("cmd").style.display = state === "none" ? "" : "none";
+    }
+
     // Platform for the command hint. Prefer the bridge; fall back to the local origin's
     // scheme, which is set even before the bridge is injected (iOS = capacitor:, Android
     // serves this page from https://localhost).
@@ -524,13 +585,15 @@ async function renderOfflineHtml(devUrl, config) {
     }
 
     // Reachability probe. Navigate ONLY on a real answer, so the screen never flickers
-    // while the server is down. Two routes, because neither works everywhere:
+    // while the server is down — and only once the dev server says this app is the build it
+    // serves (\`shellAnswer\` above). Two routes, because neither works everywhere:
     //  1. \`CapacitorHttp\` — runs in native code, exempt from the WebView's mixed-content
     //     block. Available on iOS (bridge injected on every page).
     //  2. a plain \`fetch\` — only usable when THIS page's origin is already cleartext, so
     //     the request isn't mixed content. That's the Android case: the CLI sets
     //     \`server.androidScheme:"http"\` for the dev session precisely so this works
-    //     (Android never gets the bridge here, so route 1 is unavailable).
+    //     (Android never gets the bridge here, so route 1 is unavailable). The dev server
+    //     answers the shell check with an open CORS header, so the page can read it.
     // Neither available -> do nothing; the next \`adaptv dev\` relaunches the app.
     function probe() {
       hideSplash();
@@ -539,24 +602,37 @@ async function renderOfflineHtml(devUrl, config) {
       var http = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp;
       if (http && http.request) {
         http
-          .request({ url: DEV_URL, method: "HEAD", connectTimeout: 2500, readTimeout: 2500 })
-          .then(function (res) {
-            var s = res && typeof res.status === "number" ? res.status : 0;
-            // 2xx/3xx = the app is actually serving → reconnect. A 5xx/4xx means the
-            // server answered but isn't ready (Vite still booting): wait it out, but
-            // reconnect anyway once it persists, so a real app error isn't a dead end.
-            var d = reconnectDecision(s, notReadyTries, NOT_READY_LIMIT);
-            notReadyTries = d.tries;
-            if (d.verdict === "go") go();
+          .request({ url: SHELL_URL, method: "GET", connectTimeout: 2500, readTimeout: 2500 })
+          .then(function (shell) {
+            var answer = shellAnswer(shell && typeof shell.status === "number" ? shell.status : 0, shell && shell.data);
+            paint(answer === "match" ? "none" : answer);
+            if (answer !== "match") return;
+            return http
+              .request({ url: DEV_URL, method: "HEAD", connectTimeout: 2500, readTimeout: 2500 })
+              .then(function (res) {
+                var s = res && typeof res.status === "number" ? res.status : 0;
+                // 2xx/3xx = the app is actually serving → reconnect. A 5xx/4xx means the
+                // server answered but isn't ready (Vite still booting): wait it out, but
+                // reconnect anyway once it persists, so a real app error isn't a dead end.
+                var d = reconnectDecision(s, notReadyTries, NOT_READY_LIMIT);
+                notReadyTries = d.tries;
+                if (d.verdict === "go") go();
+              });
           })
-          .catch(function () {});
+          .catch(function () { paint("none"); });
         return;
       }
       if (location.protocol === "http:") {
-        // same-scheme, so not mixed content; opaque response = reachable.
-        fetch(DEV_URL, { method: "HEAD", mode: "no-cors", cache: "no-store" })
-          .then(function () { go(); })
-          .catch(function () {});
+        // same-scheme, so not mixed content
+        fetch(SHELL_URL, { cache: "no-store" })
+          .then(function (res) {
+            return res.text().then(function (text) { return shellAnswer(res.status, text); });
+          })
+          .then(function (answer) {
+            paint(answer === "match" ? "none" : answer);
+            if (answer === "match") go();
+          })
+          .catch(function () { paint("none"); });
       }
     }
 

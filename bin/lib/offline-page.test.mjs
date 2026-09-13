@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import vm from "node:vm"
 import { afterEach, describe, expect, it } from "vitest"
 import {
   CAPACITOR_WEB_DIR,
@@ -14,6 +15,7 @@ import {
   NOT_READY_LIMIT,
   offlinePalette,
   reconnectDecision,
+  shellAnswer,
 } from "./offline-page.mjs"
 
 // One page, two unrelated failures — Capacitor routes a failed main-frame load AND a
@@ -316,4 +318,150 @@ describe("the reconnect decision", () => {
     ])
     expect(feed(302, 1, embedded).verdicts).toEqual(["go"])
   })
+})
+
+/**
+ * Run the page's own script against a fake WebView and a fake dev server, then report where it
+ * navigated and what it painted. `route` picks the platform's probe: `android` is the plain
+ * `fetch` from the cleartext local origin, `ios` the native request through the bridge.
+ */
+async function runPage(html, { route, userAgent, shell, polls = 3 }) {
+  const script = html.slice(
+    html.indexOf("<script>") + "<script>".length,
+    html.indexOf("</script>"),
+  )
+  const elements = {}
+  const el = (id) => {
+    elements[id] ??= {
+      textContent: "",
+      style: { display: "" },
+      remove() {},
+    }
+    return elements[id]
+  }
+  const navigations = []
+  const intervals = []
+  const timeouts = []
+  const asked = []
+  const answer = async (url, method) => {
+    asked.push(`${method} ${url}`)
+    if (url.includes("/__adaptv/native-shell"))
+      return { status: 200, body: JSON.stringify({ verdict: shell }) }
+    return { status: 200, body: "<!doctype html>" }
+  }
+  const window = {}
+  if (route === "ios") {
+    window.Capacitor = {
+      getPlatform: () => "ios",
+      Plugins: {
+        CapacitorHttp: {
+          request: async ({ url, method }) => {
+            const r = await answer(url, method)
+            //the native request hands JSON back already decoded
+            let data = r.body
+            try {
+              data = JSON.parse(r.body)
+            } catch {}
+            return { status: r.status, data }
+          },
+        },
+      },
+    }
+  }
+  const context = vm.createContext({
+    window,
+    navigator: { userAgent },
+    document: { title: "", getElementById: el },
+    location: {
+      protocol: route === "ios" ? "capacitor:" : "http:",
+      hostname: "localhost",
+      replace: (url) => navigations.push(url),
+    },
+    fetch: async (url, init = {}) => {
+      const r = await answer(url, init.method ?? "GET")
+      return { status: r.status, text: async () => r.body }
+    },
+    setInterval: (fn) => intervals.push(fn),
+    setTimeout: (fn) => timeouts.push(fn),
+    encodeURIComponent,
+    JSON,
+  })
+  vm.runInContext(script, context)
+  //the page's first probe, then its interval, `polls` times over
+  for (const fn of timeouts.splice(0)) fn()
+  for (let i = 0; i < polls; i++) {
+    //let the probe's promise chain settle before the next poll
+    for (let t = 0; t < 20; t++) await Promise.resolve()
+    for (const fn of intervals) fn()
+  }
+  for (let t = 0; t < 20; t++) await Promise.resolve()
+  return { navigations, asked, title: el("title").textContent, elements }
+}
+
+// The owner's report: the dev server comes up, the app still on the device sees it and
+// reconnects at once — inside the old native build, while the new one is still compiling.
+describe("the offline screen only goes back to a dev server that serves this build", () => {
+  const DEV = "http://localhost:41730"
+  const UA = (id) =>
+    `Mozilla/5.0 (Linux; Android 16; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/137.0.0.0 Mobile Safari/537.36 adaptv-shell/${id}`
+
+  it("reads the dev server's answer the way both platforms hand it over", () => {
+    expect(shellAnswer(200, { verdict: "match" })).toBe("match")
+    expect(shellAnswer(200, '{"verdict":"stale"}')).toBe("stale")
+    expect(shellAnswer(200, '{"verdict":"pending"}')).toBe("pending")
+    //nothing answered, an error page, or a body that is not the verdict
+    expect(shellAnswer(0, null)).toBe("none")
+    expect(shellAnswer(500, '{"verdict":"match"}')).toBe("none")
+    expect(shellAnswer(200, "<!doctype html>")).toBe("none")
+    expect(shellAnswer(200, { verdict: "go" })).toBe("none")
+  })
+
+  it("embeds the functions it runs, and they stand alone there", async () => {
+    const html = await render({ url: DEV })
+    expect(html).toContain(String(shellAnswer))
+    expect(html).toContain('"/__adaptv/native-shell"')
+    const embedded = new Function(`return (${String(shellAnswer)})`)()
+    expect(embedded(200, '{"verdict":"stale"}')).toBe("stale")
+  })
+
+  for (const route of ["android", "ios"]) {
+    it(`${route}: a stale build stays on the screen, says it is waiting for the new build, and keeps asking`, async () => {
+      const html = await render({ url: DEV })
+      const page = await runPage(html, {
+        route,
+        userAgent: UA(`${route}-0a0a0a0a`),
+        shell: "stale",
+      })
+      expect(page.navigations).toEqual([])
+      expect(page.title).toBe("Waiting for the new build")
+      expect(page.elements.cmd.style.display).toBe("none")
+      expect(page.asked[0]).toBe(
+        `GET ${DEV}/__adaptv/native-shell?id=${route}-0a0a0a0a`,
+      )
+      //every poll asks again, and none of them ever reaches for the app itself
+      expect(page.asked).toHaveLength(4)
+      expect(new Set(page.asked)).toEqual(new Set([page.asked[0]]))
+    })
+
+    it(`${route}: an app from before the run decided waits too`, async () => {
+      const html = await render({ url: DEV })
+      const page = await runPage(html, {
+        route,
+        userAgent: UA(`${route}-0a0a0a0a`),
+        shell: "pending",
+      })
+      expect(page.navigations).toEqual([])
+      expect(page.title).toBe("Checking this build")
+    })
+
+    it(`${route}: the build the run installed goes straight back`, async () => {
+      const html = await render({ url: DEV })
+      const page = await runPage(html, {
+        route,
+        userAgent: UA(`${route}-0a0a0a0a`),
+        shell: "match",
+      })
+      expect(page.navigations).toEqual([DEV])
+    })
+  }
 })

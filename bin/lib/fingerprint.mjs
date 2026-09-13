@@ -12,6 +12,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
+import { withoutShellMark } from "./native-shell.mjs"
 
 // Directories that never affect the built bundle (deps, outputs, VCS, caches, the
 // native projects themselves). Skipped wholesale while walking.
@@ -174,9 +175,10 @@ const NATIVE_SKIP_FILES = new Set([".DS_Store", "local.properties"])
 export function nativeFingerprint(appRoot, platform) {
   const h = createHash("sha1")
   // The config carries appId, plugin settings, and the dev server URL/port. It lives in the
-  // env now (no file) — fold the raw JSON straight in.
+  // env now (no file) — fold the JSON straight in, minus the dev build's shell id: that is a
+  // nonce naming WHICH build this is, recorded beside the fingerprint, not something it contains.
   h.update(
-    `capacitor:${process.env.ADAPTV_CAPACITOR_CONFIG ?? "absent"}\n`,
+    `capacitor:${withoutShellMark(process.env.ADAPTV_CAPACITOR_CONFIG) ?? "absent"}\n`,
   )
   // Declared deps = the native plugin set. Content, not mtime: an install can rewrite
   // package.json without changing what it declares.
