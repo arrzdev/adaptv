@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { NavigationRequestIO } from "#adaptv/sw/sw.navigation"
 import {
+  defaultDenyPrefixes,
   isDeniedPath,
   isFileLikePath,
   mayServeAppShell,
@@ -76,11 +77,29 @@ describe("isFileLikePath — a dotted last segment is a file", () => {
 })
 
 describe("isDeniedPath — what the SW must not touch at all", () => {
+  const atRoot = defaultDenyPrefixes("/")
+
   it("keeps the API, asset and server-function prefixes out", () => {
-    expect(isDeniedPath("/api/session")).toBe(true)
-    expect(isDeniedPath("/assets/chunk")).toBe(true)
-    expect(isDeniedPath("/_serverFn/todos")).toBe(true)
-    expect(isDeniedPath("/settings")).toBe(false)
+    expect(isDeniedPath("/api/session", atRoot)).toBe(true)
+    expect(isDeniedPath("/assets/chunk", atRoot)).toBe(true)
+    expect(isDeniedPath("/_serverFn/todos", atRoot)).toBe(true)
+    expect(isDeniedPath("/settings", atRoot)).toBe(false)
+  })
+
+  it("resolves the defaults under a subpath base", () => {
+    //a GitHub Pages project site: the worker's scope is `/app/`, so its API
+    //and assets are too, and a root-absolute prefix would deny nothing there
+    const underApp = defaultDenyPrefixes("/app/")
+    expect(underApp).toEqual([
+      "/app/api/",
+      "/app/assets/",
+      "/app/_serverFn/",
+    ])
+    expect(isDeniedPath("/app/api/session", underApp)).toBe(true)
+    expect(isDeniedPath("/app/assets/chunk", underApp)).toBe(true)
+    expect(isDeniedPath("/app/settings", underApp)).toBe(false)
+    //Vite keeps `base` as written, so the slashless form must land the same
+    expect(defaultDenyPrefixes("/app")).toEqual(underApp)
   })
 
   it("lets an app replace the prefixes entirely", () => {
@@ -90,21 +109,23 @@ describe("isDeniedPath — what the SW must not touch at all", () => {
 })
 
 describe("mayServeAppShell — the rule the two modes apply differently", () => {
+  const atRoot = defaultDenyPrefixes("/")
+
   it("allows ordinary routes", () => {
     for (const path of ["/", "/settings", "/todos/42", "/v1.2/docs"]) {
-      expect(mayServeAppShell(path)).toBe(true)
+      expect(mayServeAppShell(path, atRoot)).toBe(true)
     }
   })
 
   it("refuses to answer a file link with the shell", () => {
     //in `spa` this is the whole route decision; in `ssr` it only removes the
     //fallback, because the network is tried first either way
-    expect(mayServeAppShell("/whitepaper.pdf")).toBe(false)
-    expect(mayServeAppShell("/sitemap.xml")).toBe(false)
+    expect(mayServeAppShell("/whitepaper.pdf", atRoot)).toBe(false)
+    expect(mayServeAppShell("/sitemap.xml", atRoot)).toBe(false)
   })
 
   it("refuses denied prefixes too", () => {
-    expect(mayServeAppShell("/api/session")).toBe(false)
+    expect(mayServeAppShell("/api/session", atRoot)).toBe(false)
   })
 
   it("keeps the file rule even when an app replaces the prefixes", () => {

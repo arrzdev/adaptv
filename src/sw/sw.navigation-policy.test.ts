@@ -47,28 +47,55 @@ describe("isStaleRuntimeCache — B2, unbounded cache growth", () => {
   const TAG = "myapp-2f9c1a"
 
   it("marks a previous build's runtime cache as stale", () => {
-    expect(isStaleRuntimeCache("static-myapp-0000aa", TAG)).toBe(true)
-    expect(isStaleRuntimeCache("pages-myapp-0000aa", TAG)).toBe(true)
+    expect(isStaleRuntimeCache("static-myapp-0000aa", TAG, "/")).toBe(true)
+    expect(isStaleRuntimeCache("pages-myapp-0000aa", TAG, "/")).toBe(true)
   })
 
   it("keeps the current build's caches", () => {
-    expect(isStaleRuntimeCache(`static-${TAG}`, TAG)).toBe(false)
-    expect(isStaleRuntimeCache(`documents-${TAG}`, TAG)).toBe(false)
+    expect(isStaleRuntimeCache(`static-${TAG}`, TAG, "/")).toBe(false)
+    expect(isStaleRuntimeCache(`documents-${TAG}`, TAG, "/")).toBe(false)
   })
 
   it("never touches a cache it does not own", () => {
     //deleting a foreign cache would break whatever created it — another app on
     //the same origin, a third-party SW, or Workbox's own precache bookkeeping
     expect(
-      isStaleRuntimeCache("workbox-precache-v2-https://x/", TAG),
+      isStaleRuntimeCache("workbox-precache-v2-https://x/", TAG, "/"),
     ).toBe(false)
-    expect(isStaleRuntimeCache("some-other-app-cache", TAG)).toBe(false)
-    expect(isStaleRuntimeCache("google-fonts", TAG)).toBe(false)
+    expect(isStaleRuntimeCache("some-other-app-cache", TAG, "/")).toBe(
+      false,
+    )
+    expect(isStaleRuntimeCache("google-fonts", TAG, "/")).toBe(false)
   })
 
   it("requires the bucket separator, not a bare prefix match", () => {
     //`staticky-<tag>` is not a `static` bucket
-    expect(isStaleRuntimeCache("staticky-myapp-0000aa", TAG)).toBe(false)
+    expect(isStaleRuntimeCache("staticky-myapp-0000aa", TAG, "/")).toBe(
+      false,
+    )
+  })
+
+  it("under a subpath base, only reads names under that base", () => {
+    //another app on the same origin (a second GitHub Pages project site) keeps
+    //its buckets in the same Cache Storage
+    expect(
+      isStaleRuntimeCache("/app/static-myapp-0000aa", TAG, "/app/"),
+    ).toBe(true)
+    expect(isStaleRuntimeCache(`/app/static-${TAG}`, TAG, "/app/")).toBe(
+      false,
+    )
+    expect(isStaleRuntimeCache("static-myapp-0000aa", TAG, "/app/")).toBe(
+      false,
+    )
+    expect(
+      isStaleRuntimeCache("/other/static-x-0000aa", TAG, "/app/"),
+    ).toBe(false)
+    expect(
+      isStaleRuntimeCache("/app/nested/static-x-0000aa", TAG, "/app/"),
+    ).toBe(false)
+    expect(isStaleRuntimeCache("/app/static-myapp-0000aa", TAG, "/")).toBe(
+      false,
+    )
   })
 })
 
@@ -85,7 +112,7 @@ describe("selectStaleCaches", () => {
       "workbox-precache-v2-https://example.com/",
       "unrelated-third-party",
     ]
-    expect(selectStaleCaches(names, TAG).sort()).toEqual([
+    expect(selectStaleCaches(names, TAG, "/").sort()).toEqual([
       "documents-myapp-old111",
       "pages-myapp-ancient",
       "static-myapp-old111",
@@ -93,6 +120,6 @@ describe("selectStaleCaches", () => {
   })
 
   it("selects nothing on a first deploy", () => {
-    expect(selectStaleCaches([`static-${TAG}`], TAG)).toEqual([])
+    expect(selectStaleCaches([`static-${TAG}`], TAG, "/")).toEqual([])
   })
 })

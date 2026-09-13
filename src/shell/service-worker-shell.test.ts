@@ -26,6 +26,7 @@ async function loadShell(): Promise<ShellModule> {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 type FakeRegistration = {
+  scope: string
   active: ServiceWorker | null
   waiting: null
   installing: null
@@ -37,6 +38,8 @@ function registration(
   unregister: () => Promise<boolean> = () => Promise.resolve(true),
 ): FakeRegistration {
   return {
+    //the sweep only reads registrations inside the app's base, the root here
+    scope: `${window.location.origin}/`,
     active: { scriptURL } as ServiceWorker,
     waiting: null,
     installing: null,

@@ -61,7 +61,8 @@ export type PwaHeadConfig = {
   title: string
   description?: string
   themeColorLight: string
-  manifestPath?: string
+  /** Where the manifest is served, deploy base included. */
+  manifestPath: string
   /**
    * Allow pinch-to-zoom. Default `false` — a native-feeling app has a fixed
    * scale (this also suppresses Safari's focus-zoom on sub-16px inputs). Set
@@ -79,7 +80,7 @@ export function pwaHead(config: PwaHeadConfig) {
     title,
     description,
     themeColorLight,
-    manifestPath = "/manifest.json",
+    manifestPath,
     allowZoom = false,
     openGraph,
     twitter,

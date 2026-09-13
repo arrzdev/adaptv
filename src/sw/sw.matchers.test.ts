@@ -14,7 +14,7 @@ import {
 function matches(
   path: string,
   init: Parameters<typeof browserRequest>[1] = {},
-  options?: Parameters<typeof createStaticAssetMatcher>[0],
+  options: Parameters<typeof createStaticAssetMatcher>[0] = { base: "/" },
 ): boolean {
   const request = browserRequest(path, init)
   return createStaticAssetMatcher(options)(new URL(request.url), request)
@@ -99,7 +99,7 @@ describe("createStaticAssetMatcher — what it declines", () => {
   it("lets an app ADD excluded prefixes without losing /api/", () => {
     //unlike the navigation route's `denyPathPrefixes`, which replaces its
     //defaults, the asset matcher extends them
-    const options = { excludePathPrefixes: ["/uploads/"] }
+    const options = { base: "/", excludePathPrefixes: ["/uploads/"] }
     expect(
       matches("/uploads/me.png", { destination: "image" }, options),
     ).toBe(false)
@@ -109,5 +109,38 @@ describe("createStaticAssetMatcher — what it declines", () => {
     expect(matches("/icon.png", { destination: "image" }, options)).toBe(
       true,
     )
+  })
+})
+
+describe("createStaticAssetMatcher — under a subpath base", () => {
+  //a GitHub Pages project site: the build's hashed files are `/app/assets/*`
+  //and its API, if it has one, is `/app/api/`
+  const underApp = { base: "/app/" }
+
+  it("claims anything under the base's assets/, whatever its destination", () => {
+    expect(matches("/app/assets/data-4f2a.json", {}, underApp)).toBe(true)
+  })
+
+  it("declines the base's api/, and no longer treats a root /assets/ as its own", () => {
+    expect(
+      matches("/app/api/avatar.png", { destination: "image" }, underApp),
+    ).toBe(false)
+    expect(matches("/assets/data-4f2a.json", {}, underApp)).toBe(false)
+  })
+
+  it("still declines the origin's /api/, which a page under the base can fetch", () => {
+    //no navigation outside `/app/` reaches this worker, but a subresource does:
+    //an `<img src="/api/avatar.png">` on an `/app/` page comes through it
+    expect(
+      matches("/api/avatar.png", { destination: "image" }, underApp),
+    ).toBe(false)
+    //and an app's own extra prefix still adds to both
+    expect(
+      matches(
+        "/app/private/logo.png",
+        { destination: "image" },
+        { ...underApp, excludePathPrefixes: ["/app/private/"] },
+      ),
+    ).toBe(false)
   })
 })

@@ -69,7 +69,10 @@ function png(body: string) {
 
 describe("registerStaticAssetsRoute — bound to this build's bucket", () => {
   it("caches into static-<buildTag>, cache-first, ignoring Vary", () => {
-    const { strategy } = registerStaticAssetsRoute({ buildTag: TAG })
+    const { strategy } = registerStaticAssetsRoute({
+      buildTag: TAG,
+      base: "/",
+    })
     expect(strategy.cacheName).toBe(`static-${TAG}`)
     expect(strategy.constructor.name).toBe("CacheFirst")
     //safe only because the filename or the bucket is the version (B25)
@@ -78,7 +81,7 @@ describe("registerStaticAssetsRoute — bound to this build's bucket", () => {
 
   it("serves a hit from this build's bucket without the network", async () => {
     sw.caches.seed(`static-${TAG}`, ICON, png("this build"))
-    registerStaticAssetsRoute({ buildTag: TAG })
+    registerStaticAssetsRoute({ buildTag: TAG, base: "/" })
     await expect((await request("/icon-192.png"))?.text()).resolves.toBe(
       "this build",
     )
@@ -90,7 +93,7 @@ describe("registerStaticAssetsRoute — bound to this build's bucket", () => {
     //build's copy sits in a bucket this worker never reads
     sw.caches.seed(`static-${PREVIOUS}`, ICON, png("last build"))
     sw.fetch.mockResolvedValue(png("this build"))
-    registerStaticAssetsRoute({ buildTag: TAG })
+    registerStaticAssetsRoute({ buildTag: TAG, base: "/" })
 
     await expect((await request("/icon-192.png"))?.text()).resolves.toBe(
       "this build",
@@ -100,7 +103,7 @@ describe("registerStaticAssetsRoute — bound to this build's bucket", () => {
 
   it("rejects a miss when the network is down — no cross-build fallback", async () => {
     sw.caches.seed(`static-${PREVIOUS}`, ICON, png("last build"))
-    registerStaticAssetsRoute({ buildTag: TAG })
+    registerStaticAssetsRoute({ buildTag: TAG, base: "/" })
     await expect(request("/icon-192.png")).rejects.toThrow()
   })
 
@@ -108,6 +111,7 @@ describe("registerStaticAssetsRoute — bound to this build's bucket", () => {
     sw.fetch.mockResolvedValue(png("net"))
     registerStaticAssetsRoute({
       buildTag: TAG,
+      base: "/",
       excludePathPrefixes: ["/uploads/"],
     })
     expect(await request("/uploads/me.png")).toBeUndefined()
@@ -142,8 +146,8 @@ describe("the asset bucket across a deploy — register B2 end to end", () => {
     sw.caches.seed("app-avatars", ICON, png("the app's own"))
     sw.fetch.mockResolvedValue(png("this build"))
 
-    registerStaticAssetsRoute({ buildTag: TAG })
-    registerServiceWorkerLifecycle({ buildTag: TAG })
+    registerStaticAssetsRoute({ buildTag: TAG, base: "/" })
+    registerServiceWorkerLifecycle({ buildTag: TAG, base: "/" })
 
     await request("/icon-192.png")
     const activate = sw.dispatch(new TestExtendableEvent("activate"))

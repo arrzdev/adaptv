@@ -91,7 +91,7 @@ describe("staticHostFiles — what a static host actually needs", () => {
   //designed even though it was documented. They now ride on `render: "spa"`
   //rather than on a nominated host (`docs/decisions/rendering-and-delivery.md §2`) — each is read by one platform and
   //ignored by the rest, so all four are correct wherever the bucket lands.
-  const files = staticHostFiles("<!doctype html><html></html>")
+  const files = staticHostFiles("<!doctype html><html></html>", "/")
 
   it("emits index.html, because Start only writes _shell.html", () => {
     //and Jekyll STRIPS `_`-prefixed files on GitHub Pages, while Cloudflare
@@ -112,7 +112,13 @@ describe("staticHostFiles — what a static host actually needs", () => {
   })
 
   it("emits a SPA redirect rule for Netlify-style hosts", () => {
-    expect(files._redirects).toContain("/*")
-    expect(files._redirects).toContain("200")
+    expect(files._redirects).toBe("/*    /index.html   200\n")
+  })
+
+  it("scopes the redirect rule to a subpath base", () => {
+    //the app owns `/app/*` and its shell is `/app/index.html`; a root rule would
+    //rewrite the whole origin to a file that is not there
+    const underApp = staticHostFiles("<!doctype html>", "/app/")
+    expect(underApp._redirects).toBe("/app/*    /app/index.html   200\n")
   })
 })
