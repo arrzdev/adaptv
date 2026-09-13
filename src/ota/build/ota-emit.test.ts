@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -25,8 +26,16 @@ import {
 } from "#adaptv/ota/manifest-signing.ts"
 import type { UpdateManifest } from "#adaptv/ota/policy.ts"
 
+const dirs: string[] = []
+
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix))
+  dirs.push(dir)
+  return dir
+}
+
 function clientDir(files: Record<string, string>): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-ota-"))
+  const dir = tempDir("adaptv-ota-")
   for (const [rel, body] of Object.entries(files)) {
     const abs = path.join(dir, rel)
     mkdirSync(path.dirname(abs), { recursive: true })
@@ -51,6 +60,8 @@ const manifest = (over: Partial<UpdateManifest> = {}): UpdateManifest => ({
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  for (const dir of dirs.splice(0))
+    rmSync(dir, { recursive: true, force: true })
 })
 
 describe("the bundle's identity", () => {
@@ -332,10 +343,7 @@ describe("finding the key to sign with", () => {
 
   it("reads it from a file, for a laptop that keeps it out of the repo", () => {
     const { privateKey } = generateOtaKeyPair()
-    const file = path.join(
-      mkdtempSync(path.join(tmpdir(), "adaptv-key-")),
-      "ota.pem",
-    )
+    const file = path.join(tempDir("adaptv-key-"), "ota.pem")
     writeFileSync(file, privateKey)
     process.env.ADAPTV_OTA_PRIVATE_KEY_FILE = file
     expect(resolveSigningKey()).toBe(privateKey)
