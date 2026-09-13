@@ -774,6 +774,13 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
 }
 
 /**
+ * Is somebody there to answer a prompt? Output on a terminal, outside CI, AND input from one —
+ * `< /dev/null` leaves stdout a TTY and nobody able to press a key. The one answer `select` and
+ * `confirm` both ask, exported so a caller can tell a choice the dev made from one made for them.
+ */
+export const canPrompt = () => isTTY && Boolean(process.stdin.isTTY)
+
+/**
  * A single-select arrow-key picker, drawn in the SAME visual language as the rest of the
  * CLI (2-space indent, a `›` cursor, dim hints) instead of a third-party prompt frame with
  * its own gutter and bullets. Two things matter here:
@@ -785,18 +792,23 @@ export function onKeys({ onReload, onRebuild, onQuit }) {
  * `options` is `[{ value, label, hint? }]`. A list longer than the window scrolls inside it,
  * six rows at a time, with a dim count of what is hidden above and below (R63) — 36
  * simulators drawn in full pushed the question off the top of the terminal. Non-TTY (CI,
- * piped): can't prompt, so take the first option — callers pass `--target`/`--latest` for a
- * deterministic non-interactive choice. Ctrl-C / q / Esc cancels (exit 130), same as before.
+ * piped): can't prompt, so it answers `unattended` — the first option unless the caller names
+ * a better one; callers pass `--target`/`--latest` for a choice of their own. Ctrl-C / q / Esc
+ * cancels (exit 130), same as before.
  */
-export async function select(message, options) {
+export async function select(
+  message,
+  options,
+  { unattended = options[0]?.value } = {},
+) {
   //A prompt has no machine answer — see the note on `--json` in `setOutputMode`.
   if (jsonMode)
     throw new Error(
       "'--json' can't answer a prompt. Pass the flag that decides it (for a device, '--target <id>' or '--latest'; to replace an icon set, '--yes')",
     )
-  //Off a TTY there is nobody to press anything, so the first option stands as the default —
-  //the same answer the hand-rolled picker gave, and what makes a piped run deterministic.
-  if (!isTTY || !process.stdin.isTTY) return options[0]?.value
+  //Off a TTY there is nobody to press anything, so the caller's unattended answer stands —
+  //the first option unless it said otherwise — which is what makes a piped run deterministic.
+  if (!canPrompt()) return unattended
 
   //A picker is a GROUP — question, rows, key hint — so it is separated from whatever is
   //above it, not just from a group that happened to be open (R64). Reported glued under the
@@ -822,8 +834,8 @@ export async function select(message, options) {
  * or **`null` when nothing could be asked** (no TTY: CI, a pipe, an editor task runner).
  *
  * Built on `select` rather than beside it, so the two share one look and one erase (R26). The
- * `null` is the part that isn't `select`'s behaviour and is the point: `select` takes the first
- * option when it can't prompt, which is right for a device picker (any simulator will do) and
+ * `null` is the part that isn't `select`'s behaviour and is the point: `select` answers for the
+ * dev when it can't prompt, which is right for a device picker (any simulator will do) and
  * catastrophic for "may I overwrite these files?" — it would answer yes on the dev's behalf,
  * silently, in the one situation where nobody is watching. The caller turns `null` into a terse
  * error naming the flag that decides it non-interactively (R7).
@@ -837,7 +849,7 @@ export async function confirm(message, { yes, no } = {}) {
     throw new Error(
       "'--json' can't answer a prompt. Pass '--yes' to say so up front",
     )
-  if (!isTTY || !process.stdin.isTTY) return null
+  if (!canPrompt()) return null
   return await select(message, [
     { value: true, label: yes ?? "yes" },
     { value: false, label: no ?? "cancel" },
