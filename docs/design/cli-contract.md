@@ -194,10 +194,12 @@ prompts; when there is nothing there it asks nothing (R4); and when there is no 
 >   ✖ nowhere to write — set 'icons' in adaptv.config.ts, or pass --output <dir>
 > ```
 >
-> The non-TTY branch is the rule's real content. `select` returns **option 0** when it can't
-> prompt, which is right for a device picker (any simulator will do) and catastrophic here — it
-> would answer *yes* on the dev's behalf, silently, in the one situation where nobody is
-> watching. `confirm` returns `null` there instead, and the caller turns it into the `✖` above.
+> The non-TTY branch is the rule's real content. `select` answers for the dev when it can't
+> prompt, which is right for a device picker (any simulator will do — so it takes the first
+> simulator or emulator, a physical device only when nothing else is listed, and remembers
+> nothing for `--latest`) and catastrophic here — it would answer *yes* on the dev's behalf,
+> silently, in the one situation where nobody is watching. `confirm` returns `null` there
+> instead, and the caller turns it into the `✖` above.
 >
 > **The gate is about the dev's FILES, never their taste.** `icons` first shipped refusing
 > to generate from a source under 1024px, on the theory that a generator run is deliberate and
