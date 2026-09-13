@@ -480,7 +480,9 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
       const before = await recalcs(cdp)
       await page.waitForTimeout(WINDOW_MS)
       const after = await recalcs(cdp)
-      const trace = JSON.parse((await browser.stopTracing()).toString()) as {
+      const trace = JSON.parse(
+        (await browser.stopTracing()).toString(),
+      ) as {
         traceEvents: Array<{ name: string }>
       }
       frames.push(
