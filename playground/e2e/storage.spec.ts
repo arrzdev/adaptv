@@ -33,6 +33,37 @@ async function reload(page: Page) {
   await awaitClientHandover(page)
 }
 
+/**
+ * Fill the origin's localStorage until nothing more fits. The quota counts keys
+ * as well as values, so the fillers use the shortest keys there are and the
+ * premise is probed with a 25-character key: whatever room is left is smaller
+ * than that, and so smaller than the page's own prefixed keys (29 and 32).
+ */
+async function fillLocalStorage(page: Page) {
+  const full = await page.evaluate(() => {
+    let chunk = 1 << 20
+    let index = 0
+    while (chunk >= 1) {
+      try {
+        localStorage.setItem(index.toString(36), "x".repeat(chunk))
+        index += 1
+      } catch {
+        chunk = Math.floor(chunk / 2)
+      }
+    }
+    try {
+      localStorage.setItem("lab-storage-quota-probe-1", "1")
+      return false
+    } catch {
+      return true
+    }
+  })
+  expect(
+    full,
+    "premise: this engine's localStorage refuses a write once full",
+  ).toBe(true)
+}
+
 const readout = (page: Page, id: string) => page.getByTestId(id)
 
 const section = (page: Page, title: string) =>
@@ -143,6 +174,74 @@ test.describe("kv and useKv", () => {
     await expect(readout(other, "kv-a")).toHaveText("0")
   })
 
+  test("another tab clearing the whole of localStorage drops every kv value here too", async ({
+    page,
+    context,
+  }) => {
+    const other = await context.newPage()
+    await open(page)
+    await open(other)
+
+    await page.getByRole("button", { name: "Increment from A" }).click()
+    await expect(readout(other, "kv-a")).toHaveText("1")
+    const notified = Number(
+      await readout(other, "kv-notifications").textContent(),
+    )
+
+    //the logout wipe an app does with the platform API, not through kv — the
+    //storage event it raises carries no key at all
+    await page.evaluate(() => localStorage.clear())
+
+    await expect(readout(other, "kv-a")).toHaveText("0")
+    await expect(readout(other, "kv-b")).toHaveText("0")
+    await expect(readout(other, "kv-notifications")).toHaveText(
+      String(notified + 1),
+    )
+    await expect(readout(other, "kv-raw")).toHaveText("nothing")
+  })
+
+  test("a frame's sessionStorage.clear() leaves a value kv holds only in memory", async ({
+    page,
+  }) => {
+    await open(page)
+    await fillLocalStorage(page)
+    await page.getByRole("button", { name: "Increment from A" }).click()
+    await expect(readout(page, "kv-a")).toHaveText("1")
+    await expect(readout(page, "kv-raw")).toHaveText("nothing")
+
+    //sessionStorage raises the same keyless event a localStorage.clear() does,
+    //and a frame of this very tab is enough to raise it here
+    const seen = await page.evaluate(
+      () =>
+        new Promise<string>((resolve) => {
+          window.addEventListener("storage", (event) => {
+            if (event.key !== null) return
+            resolve(
+              event.storageArea === sessionStorage ? "session" : "other",
+            )
+          })
+          const frame = document.createElement("iframe")
+          frame.srcdoc = "<p>frame</p>"
+          frame.onload = () => {
+            const storage = frame.contentWindow?.sessionStorage
+            //clear() on an empty area broadcasts nothing
+            storage?.setItem("frame", "1")
+            storage?.clear()
+          }
+          document.body.append(frame)
+        }),
+    )
+    expect(seen, "premise: the keyless event reached this window").toBe(
+      "session",
+    )
+
+    //kv's listener ran before the page's own, so a dropped value has already
+    //re-rendered as 0 — and an increment from there would read 1, not 2
+    await page.getByRole("button", { name: "Increment from A" }).click()
+    await expect(readout(page, "kv-a")).toHaveText("2")
+    await expect(readout(page, "kv-b")).toHaveText("2")
+  })
+
   test("a full localStorage keeps a kv write in memory for the session, and makes a secure write throw", async ({
     page,
   }) => {
@@ -151,34 +250,7 @@ test.describe("kv and useKv", () => {
     await open(page)
     await expect(readout(page, "secure-raw")).toHaveText("nothing")
 
-    /*
-     * Fill the origin's localStorage until nothing more fits. The quota counts keys
-     * as well as values, so the fillers use the shortest keys there are and the
-     * premise is probed with a 25-character key: whatever room is left is smaller
-     * than that, and so smaller than the page's own prefixed keys (29 and 32).
-     */
-    const full = await page.evaluate(() => {
-      let chunk = 1 << 20
-      let index = 0
-      while (chunk >= 1) {
-        try {
-          localStorage.setItem(index.toString(36), "x".repeat(chunk))
-          index += 1
-        } catch {
-          chunk = Math.floor(chunk / 2)
-        }
-      }
-      try {
-        localStorage.setItem("lab-storage-quota-probe-1", "1")
-        return false
-      } catch {
-        return true
-      }
-    })
-    expect(
-      full,
-      "premise: this engine's localStorage refuses a write once full",
-    ).toBe(true)
+    await fillLocalStorage(page)
 
     await page.getByRole("button", { name: "Increment from A" }).click()
     //the readers take the value — the setter never throws out at the caller…

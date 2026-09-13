@@ -12,6 +12,27 @@ async function freshKv(native = false) {
   return import("#adaptv/storage/kv")
 }
 
+/**
+ * A `storage` event as the browser raises it in a tab that did not write.
+ * `storageArea` is part of it: sessionStorage raises the same event, from a
+ * frame of this very tab.
+ */
+function dispatchStorage(init: {
+  key: string | null
+  newValue?: string | null
+  area?: Storage
+}) {
+  const event = new Event("storage") as StorageEvent
+  Object.defineProperty(event, "key", { value: init.key })
+  Object.defineProperty(event, "newValue", {
+    value: init.newValue ?? null,
+  })
+  Object.defineProperty(event, "storageArea", {
+    value: init.area ?? localStorage,
+  })
+  window.dispatchEvent(event)
+}
+
 beforeEach(() => {
   localStorage.clear()
 })
@@ -186,21 +207,70 @@ describe("kv — reactivity", () => {
     const { kv, KV_PREFIX } = await freshKv()
     const listener = vi.fn()
 
-    const event = new Event("storage") as StorageEvent
-    Object.defineProperty(event, "key", { value: `${KV_PREFIX}shared` })
-    Object.defineProperty(event, "newValue", { value: '"from-other-tab"' })
-    window.dispatchEvent(event)
+    dispatchStorage({
+      key: `${KV_PREFIX}shared`,
+      newValue: '"from-other-tab"',
+    })
 
     expect(kv.get("shared")).toBe("from-other-tab")
     expect(listener).not.toHaveBeenCalled()
   })
 
+  it("drops every value another tab's localStorage.clear() took, and wakes each key", async () => {
+    localStorage.setItem("adaptv:kv:a", "1")
+    localStorage.setItem("adaptv:kv:b", "2")
+    const { kv, subscribeKv } = await freshKv()
+    const a = vi.fn()
+    const b = vi.fn()
+    subscribeKv("a", a)
+    subscribeKv("b", b)
+
+    //a clear raises one storage event with a null key, in every OTHER tab
+    localStorage.clear()
+    dispatchStorage({ key: null })
+
+    expect(kv.get("a")).toBeUndefined()
+    expect(kv.get("b")).toBeUndefined()
+    expect(a).toHaveBeenCalledTimes(1)
+    expect(b).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a value localStorage refused through a frame's sessionStorage.clear()", async () => {
+    const { kv, subscribeKv } = await freshKv()
+    const listener = vi.fn()
+    subscribeKv("a", listener)
+    //localStorage is full: the write lands in memory only, as documented
+    const setItem = vi
+      .spyOn(localStorage, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("full", "QuotaExceededError")
+      })
+    restores.push(() => setItem.mockRestore())
+    kv.set("a", 1)
+    expect(localStorage.getItem("adaptv:kv:a")).toBeNull()
+    listener.mockClear()
+
+    //a frame of this tab clears ITS sessionStorage: keyless, and not kv's
+    dispatchStorage({ key: null, area: sessionStorage })
+
+    expect(kv.get("a")).toBe(1)
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it("ignores a sessionStorage write under a kv key", async () => {
+    const { kv, KV_PREFIX } = await freshKv()
+    dispatchStorage({
+      key: `${KV_PREFIX}shared`,
+      newValue: '"from-session"',
+      area: sessionStorage,
+    })
+
+    expect(kv.get("shared")).toBeUndefined()
+  })
+
   it("ignores storage events for keys it does not own", async () => {
     const { kv } = await freshKv()
-    const event = new Event("storage") as StorageEvent
-    Object.defineProperty(event, "key", { value: "app-owned" })
-    Object.defineProperty(event, "newValue", { value: '"nope"' })
-    window.dispatchEvent(event)
+    dispatchStorage({ key: "app-owned", newValue: '"nope"' })
 
     expect(kv.get("app-owned")).toBeUndefined()
   })
