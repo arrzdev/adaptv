@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Print — one call, `window.print()`, and an outcome that says what the engine did
@@ -19,20 +19,6 @@ import { expect, test } from "@playwright/test"
  * is the point: availability says the call can be made, the outcome says what it
  * did.
  */
-
-/**
- * Wait for the client to take over before pressing anything. The button is
- * server-rendered, so an actionability check alone is satisfied by inert HTML
- * whose handler is not attached yet. The splash self-unmounts only once the
- * client has hydrated, so its disappearance is the honest handover signal.
- * Generous on purpose: a cold dev server can take longer than 5 s on the
- * route's first transform.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** What each headless engine measurably does with `window.print()`. */
 const MEASURED_OUTCOME: Record<"chromium" | "webkit", string> = {
