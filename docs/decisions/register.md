@@ -1614,3 +1614,96 @@ It drives **both** outputs — the meta tag and the `html`/`body` paint — for 
 Both bands, and the fallback lands on the theme rather than on the layout above.
 
 **Not in scope, and deliberately.** The *animated* tint (`transitionChromeTint`, B32) still writes only the meta tag, so a drawer that dims the chrome does nothing on iOS 26+. Extending it to the shell background is a separate change with its own cost — a per-frame `style.backgroundColor` on `html` is a full-page repaint, which is a very different proposition from a meta write.
+
+---
+
+## 🚨 In dev, every Tailwind variant and breakpoint was dead on the floor browsers ✅ **FIXED** (found 2026-09-13)
+
+Reported from an iOS 16.2 simulator running a native dev build: the page content sat under the status
+bar. The page's `app:py-safe-offset-2` was in the stylesheet and did nothing. It is not one utility.
+Tailwind 4.2.4 compiles every variant into a **nested** rule, and every breakpoint into a **range**
+media query:
+
+```css
+.x { @media (display-mode: standalone) { … } &:where(html[data-adaptv-platform="native"] *) { … } }
+.y { @media (width >= 40rem) { … } }
+```
+
+- An engine without CSS nesting (below Safari 16.5 or Chromium 112) keeps the outer rule and drops
+  everything nested in it. The playground's dev stylesheet had 151 such rules: every `app:` and `web:`
+  utility, and every `hover:`, `dark:`, breakpoint, `data-*` and pseudo-element variant beside them.
+- An engine without range syntax (below Safari 16.4 or Chromium 104) cannot parse `(width >= 40rem)`, so
+  the query matches nothing. With the nesting gone, every `sm:`/`md:`/`lg:` rule was still dead: 31
+  queries in the playground. `max-sm:` (`width < 40rem`) and `not-sm:` are worse: lightningcss lowers
+  them to `not (min-width: 40rem)`, a Media Queries 4 form the same engines drop.
+
+iOS 15 and 16.0–16.4 are inside the floor; so is Android WebView 111, the `minWebViewVersion` above.
+Nothing errors in any case.
+
+**Production never had it.** `@tailwindcss/vite`'s build plugin passes its output through `optimize`
+from `@tailwindcss/node`: lightningcss with `include: Nesting | MediaQueries`, the `customMedia` draft
+and browser targets, then a text rewrite of `@media not (` to `@media not all and (`. Every other sheet
+goes through Vite's minifier at `build.cssTarget`. The serve plugin does neither, and Vite does not lower
+CSS in dev with the default PostCSS transformer.
+
+### 🔒 The fix is the build's own lowering, sheet by sheet, NOT the whole production pass and NOT a transformer switch
+
+`vite/dev-css-lowering.ts` is an `apply: "serve"` plugin running lightningcss unminified and with no
+`targets`, in one of two modes:
+
+- **A sheet Tailwind compiled** (it carries the `/*! tailwindcss v…` banner, which Tailwind writes
+  into exactly the output its build plugin optimizes) gets the part of `optimize` that decides whether
+  a rule exists: `Features.Nesting | Features.MediaQueries`, `drafts.customMedia`, the same
+  non-standard `>>>` parsing and warning filter, and the same `not all and` rewrite.
+- **Any other sheet** (a CSS module, a side-effect import, a dependency's CSS) gets `Features.Nesting`
+  only. That is what Vite 8's minifier does to it at the default `build.cssTarget` (Chrome 111,
+  Safari 16.4): it flattens nesting and leaves range syntax as written.
+
+Rejected:
+
+- **`css.transformer: "lightningcss"` from adaptv's config hook.** It would lower in dev, but it
+  replaces PostCSS for the consumer's own CSS in dev AND build, so a consumer's PostCSS config would
+  silently stop running.
+- **Tailwind's whole `optimize` in dev (targets included).** That would also add vendor prefixes and
+  lower colours and logical properties for the targets. Those change how a rule renders; nesting and
+  range syntax decide whether a rule exists at all.
+- **Nesting only, everywhere.** It was the first cut, and it left every breakpoint dead below Safari
+  16.4 — the same failure, one construct over.
+- **Tailwind's pass on every sheet, or no pass on the others.** The first lowers range syntax a build
+  leaves alone; the second leaves nesting a build flattens. Either way a sheet changes shape between dev
+  and build.
+- **Two lightningcss passes, as `optimize` runs.** The second pass merges the rules the first flattened
+  out of nesting into selector lists (`.bg-error, .bg-error\/10`) and adjacent `@media` blocks.
+  Production merges with targets, which tell lightningcss which selectors an old engine lacks; without
+  targets it would merge those too, and one selector an engine cannot parse drops the whole list there.
+  Skipping it keeps every Tailwind variant unmerged, which the cascade does not tell apart.
+- **A gate or a UA sniff.** Flat CSS with `min-width` queries means the same thing to an engine that
+  supports both features, so there is nothing to detect — the same reason the ring rewrite above is
+  unconditional.
+
+Known gaps, both dev-only and neither reachable from Tailwind's own utilities:
+
+- **The one pass still merges adjacent top-level rules with identical declarations**, and without
+  targets it can merge a pair a build keeps apart (`.a:hover` next to `.b::details-content` becomes one
+  list an iOS 15/16 engine drops). Tailwind nests its variants, so its output is not exposed; an
+  authored sheet with such a pair is. Passing Vite's default `build.cssTarget` with every other feature
+  excluded would close it.
+- **A dependency's prebuilt Tailwind CSS carries the banner**, so dev gives it Tailwind's pass while a
+  build, where Tailwind never compiles that file, leaves its range syntax to Vite's minifier.
+
+`lightningcss` is a direct dependency at 1.32.0, exactly the version `@tailwindcss/node` 4.2.4 pins for
+`optimize` (and the one Vite 8 resolves), so one native binary serves both. The `not all and` rewrite
+is not re-mapped: lightningcss maps an at-rule by its `@` alone, and the insertion comes after it on the
+same line, so no mapped column moves (a test holds that).
+
+lightningcss re-prints what it parses — `0.5` → `.5`, `150ms` → `.15s`, `transparent` → `#0000`, a
+`color-mix()` over literal colours resolved to the colour it computes, `var(--x,)` → `var(--x, )` — and
+each of those is what the production build already emits for the same rule. Over the playground's real
+dev sheet, the lowered declarations and `optimize`'s output differ only by vendor prefixes and by
+production merging identical rules; every `@media` prelude production writes, dev writes with the same
+text, and production has fewer `@media` blocks only because it merges adjacent ones. On Tailwind's
+`max-sm:`, `not-sm:`, `sm:max-md:` and `@custom-media` shapes, dev's output equals `optimize`'s
+(unminified, whitespace aside). Pinned by `dev-css-lowering.test.ts` (the real serve-path sheet as its
+fixture, checked against the installed Tailwind version) and `playground/e2e/dev-css-flat.spec.ts` (the
+CSSOM a browser parsed from the dev server). Placement against the empty-fallback rewrite is in
+[`../design/vite-plugin-map.md`](../design/vite-plugin-map.md) §2.5.

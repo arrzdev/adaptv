@@ -28,6 +28,7 @@ import { adaptvBuildStampPlugin } from "#adaptv/vite/build-stamp.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
+import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
 import {
   adaptvManifestPlugin,
   buildManifest,
@@ -235,9 +236,19 @@ export async function adaptv(
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts
     adaptvCssLayerOrderPlugin(),
-    //The mirror image of the line above: `enforce: "post"`, because it rewrites what
-    //@tailwindcss/vite PRODUCED. Without it every `ring-*` in the app silently renders
-    //nothing on Android WebView 113–118. → src/vite/ring-shadow-fallback.ts
+    //Dev only, no `enforce`, and BEFORE the rewrite below: @tailwindcss/vite nests every
+    //variant and writes breakpoints in range syntax, and lowers both only in a build, so in
+    //dev every `app:`/`web:`/`hover:` utility was dead below Safari 16.5 and Chromium 112, and
+    //every breakpoint below Safari 16.4. This applies the build's own pass, sheet by sheet.
+    //It goes first so the rewrite gets lightningcss-printed CSS in dev too, as it always has
+    //in a build, and the carriers the rewrite writes reach the browser as written.
+    //→ src/vite/dev-css-lowering.ts
+    adaptvDevCssLoweringPlugin(),
+    //The mirror image of the layer-order plugin: NO `enforce`, because it rewrites what
+    //@tailwindcss/vite PRODUCED — `pre` sees no utilities yet and `post` is already past
+    //Vite's CSS stage (see the ring-shadow-fallback.ts header). Without it every `ring-*` in
+    //the app silently renders nothing on Android WebView 113–118.
+    //→ src/vite/ring-shadow-fallback.ts
     adaptvRingShadowPlugin(),
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
