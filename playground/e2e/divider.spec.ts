@@ -1,5 +1,6 @@
 import type { Browser, Locator, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Divider — a hairline rule that is one DEVICE pixel, a border rather than a
@@ -29,25 +30,12 @@ import { expect, test } from "@playwright/test"
  * playground's deps) and printed, not asserted.
  */
 
-/**
- * Wait for the client to take over before measuring anything.
- *
- * The rules are server-rendered, but the readouts are written from a
- * `useEffect` after mount — read before hydration they are empty, and the
- * hairline number is exactly what the density tests exist to check. Playwright
- * boots its own dev server per run, so the FIRST test to reach this route pays
- * the cold transform and would lose that race; a warm dev session hides it.
- *
- * The splash is server-rendered too and self-unmounts only once the client has
- * hydrated and the local store has seeded, so its disappearance is the one
- * honest "React is driving now" signal on the page. Given a generous timeout on
- * purpose — the case it exists for is a cold server.
+/*
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) the
+ * readouts are read empty: the rules are server-rendered, but the readouts are
+ * written from a `useEffect` after mount, and the hairline number is exactly what
+ * the density tests exist to check.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 async function openDivider(page: Page) {
   await page.goto("/lab/divider")
