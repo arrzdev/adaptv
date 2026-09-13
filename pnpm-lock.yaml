@@ -145,7 +145,7 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       fake-indexeddb:
-        specifier: ^6.2.5
+        specifier: 6.2.5
         version: 6.2.5
       happy-dom:
         specifier: 20.11.2
