@@ -11,7 +11,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import type { Transition } from "motion/react"
 import { motion } from "motion/react"
-import { useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { TodoCard } from "@/components/todos/todo-card"
 import { AppSwipeable } from "@/components/ui"
 import type { Todo } from "@/data/collections/todos/schema"
@@ -218,11 +218,29 @@ function TodoSortableRow({
   //an open swipe action blocks this row's drag: the card is dismissed, not lifted
   //(dragging an open card snaps it shut under the overlay — see onSwipeOpenChange)
   const [swipeOpen, setSwipeOpen] = useState(false)
-  const { attributes, listeners, setNodeRef, transform, transition } =
-    useSortable({
-      id: todo.id,
-      disabled: dragDisabled || swipeOpen,
-    })
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: todo.id,
+    disabled: dragDisabled || swipeOpen,
+  })
+  //the row is its own keyboard activator. dnd-kit starts a keyboard drag on
+  //Space/Enter from ANY descendant unless an activator is set, so Space on a
+  //task's checkbox, or Enter on a deck's Edit button, also lifted the row into
+  //a drag. With the li as the activator, only a key pressed on the focused row
+  //itself picks it up
+  const setRowRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      setNodeRef(node)
+      setActivatorNodeRef(node)
+    },
+    [setNodeRef, setActivatorNodeRef],
+  )
   //drop dnd-kit's role="button": this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
   //drop its aria-disabled too — without the role it no longer describes the
@@ -237,7 +255,7 @@ function TodoSortableRow({
 
   return (
     <motion.li
-      ref={setNodeRef}
+      ref={setRowRef}
       //framer FLIPs the row to its new slot when the list reorders (a check),
       //the same way the grouped sorts animate. OFF during a drag: dnd-kit then
       //owns the transforms and its collision rects, and the two must not fight.
