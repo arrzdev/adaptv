@@ -14,7 +14,6 @@ export function registerStaticAssetsRoute(
   options: StaticAssetsRouteOptions,
 ) {
   const strategy = createStaticAssetStrategy(options.buildTag, {
-    cacheBucket: options.cacheBucket,
     expiration: options.expiration,
     matchOptions: options.matchOptions,
   })
