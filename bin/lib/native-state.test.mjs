@@ -45,13 +45,19 @@ describe("configIsStale — is the installed app the one this command means?", (
     ).toBe(false)
   })
 
-  it("treats a different dev URL as fine but a MISSING server as stale (presence is what changes behaviour)", () => {
+  it("catches a dev shell baked for another dev server (the app sat on the offline screen polling a port nothing served)", () => {
+    expect(
+      configIsStale(DEV, {
+        ...DEV,
+        server: { url: "http://localhost:41720", cleartext: true },
+      }),
+    ).toBe(true)
     expect(
       configIsStale(DEV, {
         ...DEV,
         server: { url: "http://192.168.1.18:41710" },
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(configIsStale(DEV, { ...DEV, server: undefined })).toBe(true)
   })
 

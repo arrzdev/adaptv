@@ -133,7 +133,10 @@ re-stamp on every setup); neither guard exists now, because neither problem does
 
 - **`.adaptv/` is per-worktree** now, so the run cache and the remembered device are too. The first
   native run in a new worktree regenerates the native project and asks which device — that's one
-  slow run, then it's cached like anywhere else.
+  slow run, then it's cached like anywhere else. The device is NOT per-worktree: every worktree
+  installs under the same bundle id, so a native run only relaunches the installed app when the
+  device confirms it loads this run's dev server. Hopping worktrees (or ports) costs one rebuild,
+  never an app polling the other worktree's port.
 - **Framework edits don't invalidate the app's build cache.** `fingerprint()` walks the app tree and
   skips `node_modules`; `nativeFingerprint()` hashes the capacitor config, declared deps and the
   generated native project. Neither includes framework source, so a `preview`/`build` right after a
