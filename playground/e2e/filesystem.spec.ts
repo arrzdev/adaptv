@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Filesystem — the web tier is OPFS. Chromium round-trips a file; Playwright's
@@ -12,12 +12,6 @@ import { expect, test } from "@playwright/test"
  * answers unsupported rather than failing one by one. The real WebKit on the
  * iOS simulator is a device row, not this spec.
  */
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Filesystem where WebKit refuses its root", () => {
   test.beforeEach(async ({ page, browserName }) => {
