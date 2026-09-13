@@ -84,6 +84,11 @@ initial URL (web) → resolve to a route. Cold-start deep-link (the app wasn't r
 (it was backgrounded) are the two cases; both route through this layer so auth guards (`beforeLoad`) and
 the resume refresh run in the right order.
 
+> ⟨amended 2026-09-13⟩ Built as `src/capabilities/url-open.ts`, installed by the router factory rather
+> than at shell mount, because the plugin replays the launching link to the first listener only and
+> the shell mounts after the router exists. Cold = before the router's first screen has settled, and
+> it replaces the entry; warm pushes. The web branch is nothing: the initial URL already is the route.
+
 ---
 
 ## 2. Back — a priority handler chain
