@@ -4,7 +4,7 @@
 // `.adaptv/state.json` (git-ignored with the rest of `.adaptv/`). → plan Part 3.
 import { capture } from "./exec.mjs"
 import { capCmd } from "./native.mjs"
-import { runLine, select } from "./render.mjs"
+import { canPrompt, runLine, select } from "./render.mjs"
 import { readSection, writeSection } from "./state.mjs"
 
 /**
@@ -185,7 +185,41 @@ export function versionHint(target) {
   return version ? `Android ${version}` : api
 }
 
-/** Present the branded picker for a fresh list; caches + returns `{ id, name }`. */
+/**
+ * Is this row a simulator or an emulator rather than a device in somebody's hand?
+ *
+ * Read from the listing alone, because it already says: a virtual row is named with a
+ * `(simulator)` or `(emulator)` suffix, which the listing appends from its own virtual flag and
+ * nothing else. The one exception is an emulator that is already RUNNING — the listing collects
+ * it with the attached devices, by its `emulator-NNNN` serial and with no suffix, and it is still
+ * an emulator. `isPhysicalTarget` in native.mjs answers the same question for one id, with a
+ * device call; this one has the whole row and needs none.
+ */
+function isVirtual(target) {
+  return (
+    / \((simulator|emulator)\)$/.test(target.name ?? "") ||
+    /^emulator-\d+$/.test(target.id)
+  )
+}
+
+/**
+ * The device a run nobody can answer lands on: the first simulator or emulator, and a physical
+ * device only when there is nothing else.
+ *
+ * The listing puts every attached device BEFORE every virtual one, so "the first row" — which is
+ * what R34 records a picker taking off a TTY, on the grounds that any simulator will do — was
+ * the phone whenever one was plugged in. A `preview ios` in CI or with stdin from /dev/null then
+ * installed on the owner's iPhone. Order among the virtual rows is the listing's own, so a
+ * running emulator still comes before an AVD that would have to boot.
+ */
+function unattendedTarget(targets) {
+  return targets.find(isVirtual) ?? targets[0]
+}
+
+/**
+ * Present the branded picker for a fresh list and return `{ id, name, source }`, remembering
+ * the device only when a person chose it.
+ */
 async function pickAndCache(appRoot, platform, env, listed) {
   let targets = listed
     ? await listed()
@@ -201,19 +235,28 @@ async function pickAndCache(appRoot, platform, env, listed) {
       `no ${platform} devices or simulators found. Boot a simulator/emulator (or connect a device) and try again.`,
     )
   }
+  //Asked BEFORE the picker, because the picker is what would answer it: off a TTY `select`
+  //returns without anybody having chosen.
+  const asked = canPrompt()
   const id = await select(
     //Lowercase, and a question — the voice `confirm()` already asks in ('replace 11 icons in
     //public/icons?'). `Choose a ios device` was also the one line of adaptv's output with an
     //article it could not get right (R65).
     `which ${platform} device?`,
+    //The rows keep the listing's order, phones first: a person reads them and chooses. Only
+    //the answer given on nobody's behalf prefers a simulator.
     targets.map((t) => ({
       value: t.id,
       label: t.name,
       hint: versionHint(t),
     })),
+    { unattended: unattendedTarget(targets).id },
   )
   const device = { id, name: targets.find((t) => t.id === id)?.name ?? id }
-  rememberDevice(appRoot, platform, device)
+  //`--latest` is "the last device you picked". A run that answered for itself picked nothing,
+  //and remembering its answer would quietly replace the device the dev did pick — the next
+  //`dev ios --latest` at their own terminal would land on whatever a CI run chose.
+  if (asked) rememberDevice(appRoot, platform, device)
   return { ...device, source: "picked" }
 }
 
@@ -221,14 +264,16 @@ async function pickAndCache(appRoot, platform, env, listed) {
  * Resolve the target device for a run, honouring precedence:
  *   1. `--target <id>` → use it (and remember it)
  *   2. `--latest`      → the cached device; falls back to the picker if none
- *   3. otherwise       → the interactive picker
+ *   3. otherwise       → the interactive picker; off a TTY, the first simulator or emulator
+ *                        (a physical device only when nothing else is listed), not remembered
  * Returns `{ id, name, source }` where source is "target" | "latest" | "picked".
+ * `command` is the one the dev ran (`dev`, `preview`), so an error suggests rerunning THAT.
  */
 export async function resolveTarget(
   appRoot,
   platform,
   env,
-  { target, latest, prefetch = null },
+  { command, target, latest, prefetch = null },
 ) {
   /**
    * The device list, from a listing started earlier if one was.
@@ -263,7 +308,7 @@ export async function resolveTarget(
     // later `--latest` fails against a device that was never real.
     if (!known) {
       throw new Error(
-        `unknown ${platform} device "${target}". Run 'adaptv dev ${platform}' to pick from the current list.`,
+        `unknown ${platform} device "${target}". Run 'adaptv ${command} ${platform}' to pick from the current list.`,
       )
     }
     const device = { id: target, name: known.name ?? target }
