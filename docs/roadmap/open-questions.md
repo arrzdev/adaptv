@@ -13,19 +13,24 @@
 
 ### O11a — Browser suite in CI
 
-**Answered.** `.github/workflows/ci.yml` step `Test (playwright, chromium)` runs the playground's
-main Playwright config — chromium project, `CI=1`, the config's own server on `E2E_PORT` — on every
-PR and push to `main`, and uploads the HTML report with traces when it fails. Chromium only, because
-that is where every network, permission and touch test lives (WebKit runs 67 fewer); the three SW
-configs each `vite build` first and are a follow-up. `pnpm gate` still does not run it — minutes
-against seconds — so CI is the gate for this one.
+**Answered: all four suites, both engines.** `.github/workflows/ci.yml` job `e2e` is a matrix of
+eight parallel jobs — the main config and the three service-worker configs (`sw`, `sw-spa`,
+`sw-prompt`), each × `chromium` and `webkit` — on every PR and push to `main`. Each job installs only
+its own engine, runs its config with `CI=1` so the config boots and never reuses its own server, and
+uploads that job's HTML report with traces as `playwright-report-<suite>-<engine>` when it fails;
+`fail-fast` is off, so one red cell never hides the rest. This was first chromium-and-main-only, with
+the SW configs recorded as the follow-up; they are now in, and webkit with them, because webkit is
+the nearest thing CI has to the installed PWA's real engine. Still `retries: 0`, and the known
+`update.spec.ts` chromium intermittent (it reaches the `sw` and `sw-spa` chromium cells) is **not**
+`continue-on-error`: it goes red when it fires, and a re-run is a visible human act. `pnpm gate` still
+does not run any of this — minutes against seconds — so CI is the gate for it.
 
 ### O11b — Native matrix
 
 **Can the native matrix run in CI, or does it stay local?**
 
 Real today: CI runs the web-only gates (typecheck, biome, biome:playground, vitest,
-`scripts/check-colour.mjs`, and now the browser suite above); the native matrix is local.
+`scripts/check-colour.mjs`, and every browser suite above on both engines); the native matrix is local.
 
 This is the question that gates
 [`owed-device-verification.md`](owed-device-verification.md): six of those checks are owed precisely
