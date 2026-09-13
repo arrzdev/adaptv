@@ -55,10 +55,13 @@ builds of the same app directory — concurrent projects would clobber each othe
 > That is how a **hydration race** which failed the first test of every cold run stayed filed as
 > "load flake" for as long as it did. A retried test still reports green, so the signal was gone.
 
-The worker suite has a **known intermittent** — `update.spec.ts` on Chromium, roughly **1 run in
-3–5**, not root-caused, where the waiting worker never applies and a later reload hangs. A single CI
-retry is precisely what would turn that into a green run and delete the only evidence it is still
-there. → [`../roadmap/README.md`](../roadmap/README.md)
+The worker suite once had an intermittent — `update.spec.ts` on Chromium, roughly 1 full-suite run in
+3–5 when #59 recorded it in August 2026, where the waiting worker never applied and a later reload
+hung. It has **not reproduced** since (on 2026-09-13, 0 in 15 full-suite Chromium runs and 0 in 61
+Chromium update cycles) but was never root-caused, and a single CI retry is precisely what would turn
+a recurrence into a green run and delete the only evidence of it.
+→ [`../design/rendering.md`](../design/rendering.md) §3.7, which also names the two timeouts that
+look like it and are not.
 
 Paired with that: `trace: "retain-on-failure"`, **not** `"on-first-retry"` — with no retries there is
 never a first retry to trace on, so every failure would land with no trace at all.
@@ -94,7 +97,13 @@ the real one.
 ### 3.4 The worker suites are serial
 
 `fullyParallel: false`, `workers: 1`. Registrations are per-context so tests do not share worker
-state — but they **do** share one preview server, and several of them take it offline.
+state — but they **do** share one preview server, and several of them take it offline. So does
+`update.spec`'s `deploy()`, which rebuilds `.output/public` underneath it: in the one deploy MEASURED,
+`/sw.js` answered 500 for about 3 s, and for the first ~1.3 s the directory held 0 files and every
+probed URL answered 500. With `--workers=2`, 5 full runs of `playwright.sw.config.ts` failed 8 times,
+all Chromium `registration.spec.ts` tests hitting the 30 s test timeout inside `bootControlled`'s wait
+for a controller; by test start order each ran alongside a deploy (inferred, not measured). The worker
+configs pin `workers: 1` for this, so do not pass `--workers` to them.
 
 > ⚠︎ **Do not `pkill` a running worker suite.** `deploy()` builds *inside* the test, so killing it
 > mid-run leaves a build rewriting `.output` underneath the next run.
@@ -118,8 +127,8 @@ state — but they **do** share one preview server, and several of them take it 
 
 **CI runs one of the four suites, on one engine**: the main config's **chromium** project, on every
 PR and push to `main`, with the HTML report and traces uploaded when it fails. Its **webkit** project
-and all three worker suites run only where someone runs them, which is why the Chromium worker wedge
-in §3.1 is still caught only by hand. Why chromium alone is recorded as **O11a**, and whether the
+and all three worker suites run only where someone runs them, so a return of the Chromium worker wedge
+in §3.1 would be caught only by hand. Why chromium alone is recorded as **O11a**, and whether the
 native matrix can run in CI at all is still open as **O11b**
 ([`../roadmap/open-questions.md`](../roadmap/open-questions.md)).
 
