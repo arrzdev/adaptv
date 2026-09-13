@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   getPrintStatus,
   isPrinting,
+  PRINT_DIALOG_MAX_MS,
   print,
   resetPrint,
   subscribePrint,
@@ -90,6 +91,20 @@ describe("print — outcomes", () => {
     expect(isPrinting()).toBe(false)
   })
 
+  it("calls window.print again after a call that settled inside window.print itself", async () => {
+    //Headless Chromium, and every engine whose dialog blocks the call, fire
+    //`afterprint` before `window.print()` returns.
+    const spy = vi.fn(() => {
+      window.dispatchEvent(new Event("beforeprint"))
+      window.dispatchEvent(new Event("afterprint"))
+    })
+    vi.stubGlobal("print", spy)
+    expect(await print()).toBe("opened")
+    expect(await print()).toBe("opened")
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(isPrinting()).toBe(false)
+  })
+
   it("reads a throw as failed", async () => {
     installPrint("throws")
     expect(await print()).toBe("failed")
@@ -102,6 +117,58 @@ describe("print — outcomes", () => {
     vi.mocked(isNativePlatform).mockReturnValue(true)
     expect(await print()).toBe("unsupported")
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["pointerdown", () => window.dispatchEvent(new Event("pointerdown"))],
+    ["keydown", () => window.dispatchEvent(new Event("keydown"))],
+    ["focus", () => window.dispatchEvent(new Event("focus"))],
+    [
+      "visibilitychange",
+      () => document.dispatchEvent(new Event("visibilitychange")),
+    ],
+  ])(
+    "settles a dialog whose afterprint never comes on the user's return (%s)",
+    async (_, back) => {
+      vi.stubGlobal("print", () => {
+        window.dispatchEvent(new Event("beforeprint"))
+      })
+      const p = print()
+      //the silent wait is over and the dialog counts as up
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(isPrinting()).toBe(true)
+      back()
+      expect(await p).toBe("opened")
+      expect(isPrinting()).toBe(false)
+    },
+  )
+
+  it("settles a dialog whose afterprint never comes at the upper bound, and the next call opens again", async () => {
+    const spy = vi.fn(() => {
+      window.dispatchEvent(new Event("beforeprint"))
+    })
+    vi.stubGlobal("print", spy)
+    const p = print()
+    await vi.advanceTimersByTimeAsync(PRINT_DIALOG_MAX_MS - 1)
+    expect(isPrinting()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await p).toBe("opened")
+    expect(isPrinting()).toBe(false)
+    const again = print()
+    expect(again).not.toBe(p)
+    expect(spy).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(PRINT_DIALOG_MAX_MS)
+    expect(await again).toBe("opened")
+  })
+
+  it("does not count the user's input before any dialog opened as a return", async () => {
+    installPrint("silent")
+    const p = print({ silentAfterMs: 200 })
+    window.dispatchEvent(new Event("pointerdown"))
+    await vi.advanceTimersByTimeAsync(199)
+    expect(isPrinting()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await p).toBe("silent")
   })
 
   it("shares one in-flight call between two callers", async () => {
