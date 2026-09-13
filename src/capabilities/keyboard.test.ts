@@ -130,6 +130,34 @@ describe("initNativeKeyboard", () => {
     },
   )
 
+  // A binary without the plugin, or an OS error: both listener registrations reject,
+  // and at boot nothing else would handle them. The accessor stays usable, silent.
+  it.each(["android", "ios"] as const)(
+    "lets no rejected listener registration escape at boot (%s)",
+    async (platform) => {
+      const { initNativeKeyboard, subscribeNativeKeyboard, Keyboard } =
+        await load()
+      forceNative(true, platform)
+      // plain functions for the reason given above
+      const spies = {
+        addListener: Keyboard.addListener,
+        setResizeMode: Keyboard.setResizeMode,
+      }
+      Keyboard.addListener = () =>
+        Promise.reject(new Error('"Keyboard" plugin is not implemented'))
+      Keyboard.setResizeMode = () => Promise.resolve()
+      try {
+        const escaped = await unhandledRejectionsDuring(() => {
+          initNativeKeyboard()
+          subscribeNativeKeyboard(() => {})()
+        })
+        expect(escaped).toEqual([])
+      } finally {
+        Object.assign(Keyboard, spies)
+      }
+    },
+  )
+
   it("is a no-op off native", async () => {
     const { initNativeKeyboard, Keyboard } = await load()
     forceNative(false)
@@ -180,6 +208,29 @@ describe("subscribeNativeKeyboard", () => {
     subscribeNativeKeyboard(vi.fn())
     // exactly the two app-lifetime listeners, not two-per-subscriber
     expect(vi.mocked(Keyboard.addListener).mock.calls).toHaveLength(2)
+  })
+
+  // The OS listeners are app-lifetime on purpose (a lazy re-bind per consumer loses
+  // the autofocus race), so the last subscriber leaving before the handles resolve —
+  // StrictMode's dev double-mount — must neither remove them nor force a re-bind.
+  it("keeps the OS listeners when the last subscriber leaves before they resolve", async () => {
+    const { subscribeNativeKeyboard, Keyboard, listenerFor } = await load()
+    forceNative(true)
+    const removes: Array<() => Promise<void>> = []
+    vi.mocked(Keyboard.addListener).mockImplementation(() => {
+      const remove = vi.fn(() => Promise.resolve())
+      removes.push(remove)
+      return Promise.resolve({ remove })
+    })
+    subscribeNativeKeyboard(vi.fn())()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    for (const remove of removes) expect(remove).not.toHaveBeenCalled()
+
+    const later = vi.fn()
+    subscribeNativeKeyboard(later)
+    expect(vi.mocked(Keyboard.addListener).mock.calls).toHaveLength(2)
+    listenerFor("keyboardWillShow")?.({ keyboardHeight: 310 })
+    expect(later).toHaveBeenCalledWith({ isOpen: true, height: 310 })
   })
 
   it("unsubscribing stops delivery to that consumer only", async () => {
