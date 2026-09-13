@@ -140,9 +140,14 @@ is the transport, and the only document that travels over it is a static page ad
 
 ## Known-unfixed (pre-existing, not from this work)
 
-- **Hydration mismatch on every boot.** The prerendered shell contains the splash
-  div; the client renders a Suspense fallback. React recovers, but it discards and
-  re-renders the tree on *every* launch. Real cost, never investigated.
+- **Hydration mismatch on every boot.** The generated shell has no app markup, so
+  the client render never matches it and React discards the shell and renders
+  again on *every* launch (React #418). MEASURED 2026-09-02: that recovery is one
+  long task of 57 ms median on the Android WebView and no long task on desktop
+  chromium; the cost worth fixing was the shell's module waterfall, which now
+  carries `modulepreload` links for the entry's static imports. Numbers in
+  `docs/design/rendering.md` §3.1. Staying: the error itself, and the route chunk
+  the shell cannot preload because it serves every route.
 - **`pipeline("run", …)` is dead code** — a complete static build→install→launch
   path that nothing dispatches to. It's most of the `preview` command already.
 - **`nativ.mjs` biome warning** (`noUnusedVariables`) predates all of this.

@@ -41,6 +41,12 @@ export type AppShellOptions = {
   headInitScript: string
   stylesHref: string
   entryHref: string
+  /**
+   * The entry chunk's static import graph, as public hrefs. Declared up front
+   * so the browser fetches them alongside the entry instead of discovering them
+   * one level at a time when the entry has finished downloading. → `shell-emit.ts`
+   */
+  modulepreloadHrefs?: readonly string[]
   /** Extra head markup (manifest link, icons, meta) inserted verbatim. */
   headExtra?: string
   /**
@@ -90,6 +96,9 @@ export function renderAppShell(options: AppShellOptions): string {
     `<style>${options.criticalCss}${fallback ? getBootFallbackCss() : ""}</style>`,
     options.headExtra ?? "",
     `<link rel="stylesheet" href="${options.stylesHref}">`,
+    ...(options.modulepreloadHrefs ?? []).map(
+      (href) => `<link rel="modulepreload" href="${href}">`,
+    ),
     "</head>",
     "<body>",
     //empty by design — this is the boot scaffolding, not a page
