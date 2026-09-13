@@ -51,8 +51,10 @@ export function resolveDrawerKeyboardRoom(
  * so over a plain-http `ip:port` origin (a LAN dev build) there is no freeze on Chromium: the
  * keyboard shrinks the visual viewport itself. Reserving room ON TOP of that shrink double-counts —
  * the sheet grows by the keyboard's height a second time and its top climbs off-screen behind the
- * URL bar. iOS still freezes (scroll-lock needs no API) and native reports an exact height without
- * shrinking, so both stay on the room path; only VK-less non-iOS Chromium falls here.
+ * URL bar. iOS still freezes (scroll-lock needs no API) and a native binary carrying the Keyboard
+ * plugin reports an exact height without shrinking, so both stay on the room path; only VK-less
+ * non-iOS Chromium falls here, and that includes a native Android binary WITHOUT the plugin, whose
+ * WebView resizes itself like any other.
  */
 export function viewportShrinksUnderKeyboard({
   isIOS,
