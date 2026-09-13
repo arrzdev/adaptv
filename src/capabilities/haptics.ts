@@ -32,6 +32,15 @@ function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("Haptics")
 }
 
+//Every native pulse is fire-and-forget, so a bridge rejection (an OS error, a
+//method this platform does not implement) would otherwise reach the window's
+//`unhandledrejection` event and any error reporter the app installed, once per
+//tap. A missing pulse is the degraded answer. It is never a synchronous throw —
+//the Capacitor proxy rejects even for a plugin absent from the binary — which is
+//why this is a `.catch` and not a `try`, and why the web fallback is chosen up
+//front by `viaPlugin()` rather than after a failure.
+const ignoreBridgeRejection = () => {}
+
 const COOLDOWN_MS = 200
 let lastPulseAt = 0
 
@@ -80,36 +89,28 @@ export const haptics = {
   /** A physical tap. `weight` maps to the native impact style; approximated on web. */
   impact(weight: ImpactWeight = "light"): void {
     if (viaPlugin()) {
-      try {
-        void Haptics.impact({ style: IMPACT_STYLE[weight] })
-        return
-      } catch {
-        //plugin unavailable — fall through to the web pulse
-      }
+      void Haptics.impact({ style: IMPACT_STYLE[weight] }).catch(
+        ignoreBridgeRejection,
+      )
+      return
     }
     webPulse(WEB_IMPACT[weight])
   },
   /** Notification feedback — success / warning / error. */
   notify(type: NotifyType): void {
     if (viaPlugin()) {
-      try {
-        void Haptics.notification({ type: NOTIFY_TYPE[type] })
-        return
-      } catch {
-        //plugin unavailable — fall through
-      }
+      void Haptics.notification({ type: NOTIFY_TYPE[type] }).catch(
+        ignoreBridgeRejection,
+      )
+      return
     }
     webPulse(WEB_NOTIFY[type])
   },
   /** A light selection tick (list/segmented changes). */
   selection(): void {
     if (viaPlugin()) {
-      try {
-        void Haptics.selectionChanged()
-        return
-      } catch {
-        //plugin unavailable — fall through
-      }
+      void Haptics.selectionChanged().catch(ignoreBridgeRejection)
+      return
     }
     webPulse(WEB_SELECTION)
   },

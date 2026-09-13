@@ -23,7 +23,23 @@ const listeners = new Set<(state: AppState) => void>()
 let nativeState: AppState = "active"
 let lastNotified: AppState = "active"
 let bound = false
-let nativeHandles: PluginListenerHandle[] = []
+
+/**
+ * The live native binding, or `null` when none is held. `disposed` is per binding
+ * because the bridge answers asynchronously: the last subscriber can leave before
+ * either `addListener` resolves (StrictMode's dev double-mount always does), and a
+ * handle that arrives afterwards must remove itself rather than keep a listener
+ * nobody will ever release.
+ */
+type NativeBinding = { disposed: boolean; handles: PluginListenerHandle[] }
+let nativeBinding: NativeBinding | null = null
+
+//A bridge call that rejects (plugin missing from this binary, an OS error) is
+//fire-and-forget here, so nothing would handle it: it would reach the window's
+//`unhandledrejection` event, and with it the console and any error reporter the
+//app installed — at boot, because the OTA updater subscribes there. Without the
+//listeners the app simply reads as `active`, which is the degraded answer.
+const ignoreBridgeRejection = () => {}
 
 /** Current foreground state. Assumes `active` during SSR — never render a paused app. */
 export function getAppState(): AppState {
@@ -60,15 +76,22 @@ function bindWeb(): void {
 }
 
 function bindNative(): void {
+  const binding: NativeBinding = { disposed: false, handles: [] }
+  nativeBinding = binding
+  const keep = (handle: PluginListenerHandle) => {
+    if (binding.disposed) void handle.remove().catch(ignoreBridgeRejection)
+    else binding.handles.push(handle)
+  }
+
   void App.addListener("resume", () => {
     nativeState = "active"
     emit()
-  }).then((handle) => nativeHandles.push(handle))
+  }).then(keep, ignoreBridgeRejection)
 
   void App.addListener("pause", () => {
     nativeState = "background"
     emit()
-  }).then((handle) => nativeHandles.push(handle))
+  }).then(keep, ignoreBridgeRejection)
 }
 
 function bind(): void {
@@ -91,9 +114,12 @@ export function subscribeAppState(
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
-    if (listeners.size === 0 && nativeHandles.length > 0) {
-      for (const handle of nativeHandles) void handle.remove()
-      nativeHandles = []
+    if (listeners.size === 0 && nativeBinding) {
+      nativeBinding.disposed = true
+      for (const handle of nativeBinding.handles) {
+        void handle.remove().catch(ignoreBridgeRejection)
+      }
+      nativeBinding = null
       bound = false
     }
   }

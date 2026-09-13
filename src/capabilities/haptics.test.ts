@@ -7,9 +7,9 @@ import { installVibratePolyfill } from "#adaptv/utils/install-vibrate-polyfill"
 // the module with fakes and mirror the real string-enum values.
 vi.mock("@capacitor/haptics", () => ({
   Haptics: {
-    impact: vi.fn(),
-    notification: vi.fn(),
-    selectionChanged: vi.fn(),
+    impact: vi.fn(() => Promise.resolve()),
+    notification: vi.fn(() => Promise.resolve()),
+    selectionChanged: vi.fn(() => Promise.resolve()),
   },
   ImpactStyle: { Light: "LIGHT", Medium: "MEDIUM", Heavy: "HEAVY" },
   NotificationType: {
@@ -161,5 +161,46 @@ describe("haptics — a binary that predates the plugin", () => {
       if (prev) Object.defineProperty(navigator, "vibrate", prev)
     })
     expect(haptics.isSupported()).toBe(false)
+  })
+})
+
+describe("haptics — native, over a bridge that rejects", () => {
+  //Every pulse is fire-and-forget, so a rejection (an OS error, a call the
+  //platform does not implement) has no handler but the window's. A try around the
+  //call only sees a synchronous throw, which the bridge never produces. The
+  //stand-ins are plain functions, not `vi.fn`: a spy handles every promise it
+  //returns, which hides exactly the rejection looked for here.
+  const original = {
+    impact: Haptics.impact,
+    notification: Haptics.notification,
+    selectionChanged: Haptics.selectionChanged,
+  }
+  afterEach(() => {
+    Object.assign(Haptics, original)
+  })
+
+  it.each([
+    ["impact", () => haptics.impact("medium")],
+    ["notification", () => haptics.notify("warning")],
+    ["selectionChanged", () => haptics.selection()],
+  ] as const)("lets no rejected %s escape", async (method, fire) => {
+    forceNative(true)
+    Object.assign(Haptics, {
+      [method]: () =>
+        Promise.reject(
+          new Error(`Haptics.${method}() is not implemented`),
+        ),
+    })
+    const seen: unknown[] = []
+    const listener = (reason: unknown) => seen.push(reason)
+    process.on("unhandledRejection", listener)
+    try {
+      expect(fire).not.toThrow()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    } finally {
+      process.off("unhandledRejection", listener)
+    }
+    expect(seen).toEqual([])
   })
 })

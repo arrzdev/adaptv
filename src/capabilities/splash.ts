@@ -33,11 +33,11 @@ export const NATIVE_SPLASH_FADE_MS = 200
  */
 export function hideNativeSplash(): Promise<void> {
   if (!isNativePlatform()) return Promise.resolve()
-  try {
-    void SplashScreen.hide()
-  } catch {
-    //plugin unavailable — the config `launchAutoHide` still clears it
-  }
+  //Plugin unavailable or the OS refused: the config `launchAutoHide` still clears
+  //the splash. A bridge failure arrives as a rejection, never a throw, and an
+  //unawaited one would reach the window's `unhandledrejection` event (the console,
+  //any error reporter the app installed) on every launch.
+  void SplashScreen.hide().catch(() => {})
   return new Promise((resolve) =>
     setTimeout(resolve, NATIVE_SPLASH_FADE_MS),
   )

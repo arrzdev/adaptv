@@ -72,4 +72,27 @@ describe("hideNativeSplash", () => {
       vi.useRealTimers()
     }
   })
+
+  //the call is never awaited, so a rejection (a binary without the plugin, an OS
+  //error) has no handler but the window's `unhandledrejection` event.
+  //A plain function, not a `vi.fn`: a spy handles every promise it returns.
+  it("lets no rejected hide() escape, and still resolves on the fade", async () => {
+    forceNative(true)
+    const original = SplashScreen.hide
+    Object.assign(SplashScreen, {
+      hide: () =>
+        Promise.reject(new Error("SplashScreen is not implemented")),
+    })
+    const seen: unknown[] = []
+    const listener = (reason: unknown) => seen.push(reason)
+    process.on("unhandledRejection", listener)
+    try {
+      await expect(hideNativeSplash()).resolves.toBeUndefined()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(seen).toEqual([])
+    } finally {
+      process.off("unhandledRejection", listener)
+      Object.assign(SplashScreen, { hide: original })
+    }
+  })
 })
