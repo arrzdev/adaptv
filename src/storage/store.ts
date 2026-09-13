@@ -165,6 +165,35 @@ function commit(run: (store: IDBObjectStore) => void): Promise<Outcome> {
   )
 }
 
+const listeners = new Map<string, Set<() => void>>()
+
+function emit(key: string): void {
+  for (const listener of listeners.get(key) ?? []) listener()
+}
+
+/**
+ * Subscribe to writes, removes and clears of one key. Returns an unsubscribe.
+ *
+ * The listener carries no value: the store is async, so it re-reads. What it
+ * reads is already the new value, because a write is readable from memory
+ * before its transaction commits.
+ */
+export function subscribeStore(
+  key: string,
+  listener: () => void,
+): () => void {
+  let set = listeners.get(key)
+  if (!set) {
+    set = new Set()
+    listeners.set(key, set)
+  }
+  set.add(listener)
+  return () => {
+    set.delete(listener)
+    if (set.size === 0) listeners.delete(key)
+  }
+}
+
 /** Hold `value` (or {@link REMOVED}) in memory until the database has taken it. */
 async function write(
   key: string,
@@ -173,6 +202,7 @@ async function write(
 ): Promise<void> {
   const entry: Entry = { value }
   memory.set(key, entry)
+  emit(key)
   const outcome = await commit(run)
   //a later write to the same key may have replaced the entry mid-flight — only
   //the write that put it there may take it out
@@ -229,13 +259,16 @@ export const store = {
   async clear(): Promise<void> {
     forgetMemory()
     let held: IDBValidKey[] | undefined
-    const outcome = await commit((s) => {
+    //started before the listeners re-read, so their reads queue behind it
+    const cleared = commit((s) => {
       const listing = s.getAllKeys()
       listing.onsuccess = () => {
         held = listing.result
       }
       s.clear()
     })
+    for (const key of [...listeners.keys()]) emit(key)
+    const outcome = await cleared
     if (outcome !== "refused") return
     if (!held) {
       clearRefused = true
