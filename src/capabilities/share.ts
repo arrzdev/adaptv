@@ -252,8 +252,13 @@ function isNativeDismissal(cause: unknown): boolean {
  * has to render UI for, so they are values, not exceptions.
  *
  * It DOES reject for a genuine caller error, and there is one that matters:
- * `navigator.share` throws `NotAllowedError` when it is not called from a real
- * user gesture (an `await` before the call is enough to lose the activation).
+ * `navigator.share` throws `NotAllowedError` when it is not called while a real
+ * user gesture's transient activation is still live. An `await` before the call
+ * does not lose it by itself: the activation outlasts the gesture's own task for
+ * a short, engine-defined window, and `share()` awaits the stored files' bytes
+ * inside it — the installed web app on the iOS 26.1 simulator still opened the
+ * system sheet after that read (measured 2026-09-02). What loses it is a call
+ * that starts outside a gesture, or an await that outlasts the window.
  * Swallowing that would turn a fixable bug into a share button that mysteriously
  * does nothing on web.
  */
@@ -282,9 +287,9 @@ export async function share(target: ShareTarget): Promise<ShareOutcome> {
     }
   }
 
-  //reading the stored bytes is an await before `navigator.share`; every engine
-  //here keeps the activation for a few seconds (transient activation), and the
-  //PWA row of the PR that added this measured it on WebKit
+  //reading the stored bytes is an await before `navigator.share`; the transient
+  //activation outlasts it (see the doc above), measured on WebKit's installed
+  //web app
   const stored = target.storedFiles?.length
     ? await readStoredFiles(target)
     : []

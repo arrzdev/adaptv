@@ -561,7 +561,11 @@ describe("native specifics", () => {
       await getFileUri("export/backup.json", { scope: "cache" }),
     ).toEqual({
       status: "ok",
-      uri: "file:///container/CACHE/export/backup.json",
+      uri: "file:///container/CACHE/adaptv/cache/export/backup.json",
+    })
+    expect(Filesystem.getUri).toHaveBeenCalledWith({
+      path: "adaptv/cache/export/backup.json",
+      directory: "CACHE",
     })
     expect(
       await getFileUri("export/nope.json", { scope: "cache" }),
