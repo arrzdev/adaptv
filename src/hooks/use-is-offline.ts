@@ -10,8 +10,8 @@ import { getOnline, subscribeOnline } from "#adaptv/capabilities/network"
  * adaptv deliberately does not assume. → `docs/design/rendering.md §3.1.1`
  *
  * Backed by the accessor pair, so it is accurate on every target:
- * `@capacitor/network` on native, `navigator.onLine` + `online`/`offline` events
- * on web. Optimistically `false` (online) during SSR and before hydration.
+ * `@capacitor/network` on native when the binary carries it, `navigator.onLine` +
+ * `online`/`offline` events on web and on a binary without it. Optimistically `false` (online) during SSR and before hydration.
  *
  * ## ⚠︎ `isOffline` alone is a poor test, in both directions
  *
