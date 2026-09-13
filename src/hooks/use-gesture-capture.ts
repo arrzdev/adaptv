@@ -51,8 +51,11 @@ export function useGestureCapture(
     gestureController.setEnabled(id, enabled)
     //releases any held capture on unmount — a component that disappears
     //mid-drag must not leave the pointer permanently held, which would silently
-    //deaden every gesture on the screen
-    return () => gestureController.setEnabled(id, false)
+    //deaden every gesture on the screen. Unregister, not disable: a disabled id
+    //is remembered forever and `useId` never hands it out again. The same
+    //cleanup runs before an `enabled` change, which is still correct — it frees
+    //the pointer, and the setup above re-applies whichever state comes next
+    return () => gestureController.unregister(id)
   }, [id, enabled])
 
   const request = useCallback(

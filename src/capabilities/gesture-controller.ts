@@ -141,6 +141,24 @@ export function createGestureController() {
       disabled.add(id)
       if (holder?.id === id) releaseHolder(true)
     },
+
+    /**
+     * Forget a gesture that no longer exists.
+     *
+     * Releases the capture exactly as disabling does — `onLost` included, since
+     * a component that disappears mid-drag must not leave the pointer held — and
+     * then drops every trace of `id`.
+     *
+     * This is not `setEnabled(id, false)` because disabling has to *remember*:
+     * a disabled gesture is refused until it is enabled again. A gone one never
+     * asks again, and its React binding mints a fresh `useId` per mount, so an
+     * unmount that disabled instead of unregistering grew this controller by one
+     * id for good — 9 per `/` ↔ `/settings` round trip in the playground.
+     */
+    unregister(id: string): void {
+      disabled.delete(id)
+      if (holder?.id === id) releaseHolder(true)
+    },
   }
 }
 

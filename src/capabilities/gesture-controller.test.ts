@@ -131,3 +131,41 @@ describe("disable", () => {
     expect(controller.requestCapture("drawer", 10)).toBe(true)
   })
 })
+
+describe("unregister — a gesture that is gone leaves nothing behind", () => {
+  //the React binding mints a fresh `useId` per mount and never reuses one, so a
+  //controller that remembers an unmounted id only ever grows. Measured in the
+  //playground before this existed: 9 ids per `/` ↔ `/settings` round trip
+  it("forgets a disabled id", () => {
+    //the disabled set's only reader is requestCapture, so a granted request is
+    //the observable form of "the id is no longer held"
+    controller.setEnabled("row", false)
+    controller.unregister("row")
+    expect(controller.requestCapture("row", 10)).toBe(true)
+  })
+
+  it("releases the holder and tells it, exactly as disabling does", () => {
+    //a drawer unmounting mid-drag must not leave the pointer permanently held
+    const onLost = vi.fn()
+    controller.requestCapture("drawer", 10, onLost, { blocksScroll: true })
+    controller.unregister("drawer")
+    expect(controller.getCaptured()).toBeNull()
+    expect(controller.isScrollBlocked()).toBe(false)
+    expect(onLost).toHaveBeenCalledOnce()
+  })
+
+  it("leaves another gesture's capture alone", () => {
+    const onLost = vi.fn()
+    controller.requestCapture("edge-swipe", 10, onLost)
+    controller.unregister("row")
+    expect(controller.getCaptured()).toBe("edge-swipe")
+    expect(onLost).not.toHaveBeenCalled()
+  })
+
+  it("does not touch another id's disabled state", () => {
+    controller.setEnabled("a", false)
+    controller.setEnabled("b", false)
+    controller.unregister("a")
+    expect(controller.requestCapture("b", 10)).toBe(false)
+  })
+})

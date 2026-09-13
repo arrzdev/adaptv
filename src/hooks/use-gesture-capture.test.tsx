@@ -79,6 +79,84 @@ describe("useGestureCapture", () => {
     expect(gestureController.getCaptured()).toBeNull()
   })
 
+  it("still tells a gesture held at unmount that it lost the pointer", () => {
+    const onLost = vi.fn()
+    const { capture, unmount } = mount({
+      priority: GesturePriority.DrawerDrag,
+      onLost,
+    })
+    capture().request()
+    unmount()
+    expect(onLost).toHaveBeenCalledOnce()
+  })
+
+  it("leaves nothing behind in the controller when it unmounts", () => {
+    //every Drawer, Swipeable and EdgeSwipeGestures unmount used to park its id
+    //in the controller's disabled set for good: measured at 9 ids per `/` ↔
+    //`/settings` round trip in the playground, 5400 after 600, with no cap.
+    //`useId` never reuses an id, so the only honest reading of "holds nothing"
+    //is behavioural — the disabled set's one reader is `requestCapture`, which
+    //refuses an id that is still in it
+    const ids: string[] = []
+    for (let i = 0; i < 20; i++) {
+      const { capture, rerender, unmount } = mount({
+        priority: GesturePriority.SwipeableRow,
+      })
+      capture().request()
+      ids.push(gestureController.getCaptured() ?? "")
+      //half of them go away while disabled, which is the other way an id is
+      //sitting in the disabled set at the moment it unmounts
+      if (i % 2 === 1) {
+        rerender(
+          <Probe
+            priority={GesturePriority.SwipeableRow}
+            enabled={false}
+            expose={() => {}}
+          />,
+        )
+      }
+      unmount()
+    }
+
+    expect(new Set(ids).size).toBe(20)
+    const refused = ids.filter((id) => {
+      const granted = gestureController.requestCapture(id, 0)
+      gestureController.release(id)
+      return !granted
+    })
+    expect(refused).toEqual([])
+  })
+
+  it("stops refusing once re-enabled, and refuses again when disabled", () => {
+    const onLost = vi.fn()
+    const view = mount({
+      priority: GesturePriority.DrawerDrag,
+      enabled: true,
+      onLost,
+    })
+    view.capture().request()
+
+    const rerender = (enabled: boolean) =>
+      view.rerender(
+        <Probe
+          priority={GesturePriority.DrawerDrag}
+          enabled={enabled}
+          onLost={onLost}
+          expose={() => {}}
+        />,
+      )
+
+    rerender(false)
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(onLost).toHaveBeenCalledOnce()
+    expect(view.capture().request()).toBe(false)
+
+    rerender(true)
+    expect(view.capture().request()).toBe(true)
+    view.capture().release()
+    view.unmount()
+  })
+
   it("refuses capture while disabled", () => {
     const { capture } = mount({
       priority: GesturePriority.DrawerDrag,
