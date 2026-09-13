@@ -1,4 +1,4 @@
-import type { CDPSession, Page } from "@playwright/test"
+import type { Browser, CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 import { awaitClientHandover } from "./support/hydrated"
 
@@ -411,17 +411,23 @@ test.describe("Spinner", () => {
 
 /*
  * The idle measurement (memory prove-the-page-idles): three phases on ONE page, each
- * with its premise asserted and three 2-second windows. RecalcStyleCount rather than
- * a duration, because a count does not move with machine load.
+ * with its premise asserted and three 2-second windows. The verdict is the count of
+ * compositor frames Chromium begins in a window (BeginFrame in a trace): a page with
+ * nothing running asks for none, and a running animation asks for every vsync. A
+ * count, not a duration, because a count does not move with machine load.
+ * RecalcStyleCount / LayoutCount are logged beside it; style is a weak margin (1-2
+ * against 12-17) and is not asserted.
  *
  *   gated     — the field mounted and paused, nothing on screen running
  *   always-on — the SAME page with the pause overridden: the control that proves the
  *               field costs something when it is not paused
  *   no field  — the field unmounted: what an idle page reads
  *
- * Measured while writing this (chromium, 3 windows each): gated 1-2, always-on 13-17,
- * and 241 for `rotate:` on the svg with no pause (that form runs on the main thread). The page is never scrolled and nothing is
- * clicked through Playwright (which scrolls); the unmount is a DOM click.
+ * Measured while writing this (chromium, 3 windows each): frames gated 0, always-on
+ * about 240; style recalcs gated 1-2, always-on 13-17,
+ * and 241 for `rotate:` on the svg with no pause (that form runs on the main thread).
+ * The page is never scrolled and nothing is clicked through Playwright (which
+ * scrolls); the unmount is a DOM click.
  */
 test.describe("Spinner idle cost (chromium, CDP)", () => {
   let errors: string[] = []
@@ -429,7 +435,7 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
   test.beforeEach(async ({ page, browserName }) => {
     test.skip(
       browserName !== "chromium",
-      "Performance.getMetrics is CDP; WebKit's pause is asserted by play state above",
+      "tracing and Performance.getMetrics are CDP; WebKit's pause is asserted by play state above",
     )
     errors = collectErrors(page)
     await openSpinner(page)
@@ -453,24 +459,49 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
     }
   }
 
-  /** Median RecalcStyleCount / LayoutCount delta over {@link WINDOWS} windows. */
-  async function measure(page: Page, cdp: CDPSession, phase: string) {
+  /**
+   * Over {@link WINDOWS} windows: the BeginFrame events traced in each, and the
+   * RecalcStyleCount / LayoutCount deltas. Returns the medians and the frame extremes.
+   */
+  async function measure(
+    page: Page,
+    browser: Browser,
+    cdp: CDPSession,
+    phase: string,
+  ) {
+    const frames: number[] = []
     const style: number[] = []
     const layout: number[] = []
     const styleMs: number[] = []
     for (let i = 0; i < WINDOWS; i++) {
+      await browser.startTracing(page, {
+        categories: ["disabled-by-default-devtools.timeline.frame"],
+      })
       const before = await recalcs(cdp)
       await page.waitForTimeout(WINDOW_MS)
       const after = await recalcs(cdp)
+      const trace = JSON.parse((await browser.stopTracing()).toString()) as {
+        traceEvents: Array<{ name: string }>
+      }
+      frames.push(
+        trace.traceEvents.filter((e) => e.name === "BeginFrame").length,
+      )
       style.push(after.style - before.style)
       layout.push(after.layout - before.layout)
       styleMs.push(+(after.styleMs - before.styleMs).toFixed(2))
     }
-    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[1]
+    const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b)
+    const median = (xs: number[]) => sorted(xs)[1]
     console.log(
-      `[spinner-idle chromium] ${phase}: style ${JSON.stringify(style)} layout ${JSON.stringify(layout)} styleMs ${JSON.stringify(styleMs)}`,
+      `[spinner-idle chromium] ${phase}: frames ${JSON.stringify(frames)} style ${JSON.stringify(style)} layout ${JSON.stringify(layout)} styleMs ${JSON.stringify(styleMs)}`,
     )
-    return { style: median(style), layout: median(layout) }
+    return {
+      frames: median(frames),
+      framesMin: sorted(frames)[0],
+      framesMax: sorted(frames)[WINDOWS - 1],
+      style: median(style),
+      layout: median(layout),
+    }
   }
 
   /**
@@ -496,6 +527,7 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
 
   test("100 paused off-screen spinners cost what no spinners cost", async ({
     page,
+    browser,
   }) => {
     test.setTimeout(90_000)
     const cdp = await page.context().newCDPSession(page)
@@ -508,7 +540,7 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
       none: 0,
     })
     const gatedRunning = await settle(() => runningAnimations(page), 0)
-    const gated = await measure(page, cdp, "gated")
+    const gated = await measure(page, browser, cdp, "gated")
 
     //always-on control: the pause overridden, nothing else changed
     const override = await page.addStyleTag({
@@ -520,7 +552,7 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
       paused: 0,
       none: 0,
     })
-    const alwaysOn = await measure(page, cdp, "always-on control")
+    const alwaysOn = await measure(page, browser, cdp, "always-on control")
     await override.evaluate((node) => node.remove())
 
     //no field
@@ -532,7 +564,7 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
     })
     await expect(page.getByTestId("spinner-field")).toHaveCount(0)
     const noFieldRunning = await settle(() => runningAnimations(page), 0)
-    const noField = await measure(page, cdp, "no field")
+    const noField = await measure(page, browser, cdp, "no field")
     console.log(
       `[spinner-idle chromium] premises: gated field ${JSON.stringify(gatedField)} running ${gatedRunning} · always-on field ${JSON.stringify(alwaysOnField)} · no field running ${noFieldRunning}`,
     )
@@ -542,11 +574,13 @@ test.describe("Spinner idle cost (chromium, CDP)", () => {
     expect(gatedRunning).toBe(0)
     expect(alwaysOnField).toEqual({ running: 100, paused: 0, none: 0 })
     expect(noFieldRunning).toBe(0)
-    //the control costs something, so the gated phase's quiet is a comparison
-    expect(alwaysOn.style).toBeGreaterThanOrEqual(8)
-    //paused reads like no field at all (measured 1 against 13-17)
-    expect(gated.style).toBeLessThanOrEqual(noField.style + 3)
-    expect(gated.style * 4).toBeLessThan(alwaysOn.style)
+    //the control draws frames in EVERY window (at least 30 per second), so the gated
+    //phase's quiet is a comparison, not an instrument that counts nothing
+    expect(alwaysOn.framesMin).toBeGreaterThanOrEqual(60)
+    //paused reads like no field at all (measured 0 against about 240) — a few frames
+    //of slack in the worst window for anything incidental the browser draws
+    expect(gated.framesMax).toBeLessThanOrEqual(noField.framesMax + 5)
+    expect(gated.framesMax * 10).toBeLessThan(alwaysOn.framesMin)
     expect(gated.layout).toBe(0)
   })
 })
