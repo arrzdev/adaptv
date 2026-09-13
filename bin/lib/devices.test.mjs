@@ -398,6 +398,7 @@ describe("--target", () => {
       "ios",
       {},
       {
+        command: "dev",
         target: "iPhone-typo",
         prefetch: Promise.resolve([IOS_SIM_18, IOS_SIM_26]),
       },
@@ -411,6 +412,32 @@ describe("--target", () => {
     expect(fake.calls).toHaveLength(1)
     //a typo must never become the device every later --latest reaches for
     expect(state().devices.ios.id).toBe(IOS_SIM_18.id)
+  })
+
+  it("names the command the dev ran, so the rerun it suggests is the one they wanted", async () => {
+    //`preview ios --target typo` was told to run 'adaptv dev ios' — a live-reload session, not
+    //the build they asked for.
+    const { resolveTarget } = await devicesUnder()
+    fake.replies = [json([IOS_SIM_18])]
+    const ios = await resolveTarget(
+      appRoot,
+      "ios",
+      {},
+      { command: "preview", target: "iPhone-typo" },
+    ).catch((e) => e)
+    expect(ios.message).toBe(
+      `unknown ios device "iPhone-typo". Run 'adaptv preview ios' to pick from the current list.`,
+    )
+    fake.replies = [json(ANDROID_LISTING)]
+    const android = await resolveTarget(
+      appRoot,
+      "android",
+      {},
+      { command: "preview", target: "Pixel_9" },
+    ).catch((e) => e)
+    expect(android.message).toBe(
+      `unknown android device "Pixel_9". Run 'adaptv preview android' to pick from the current list.`,
+    )
   })
 })
 

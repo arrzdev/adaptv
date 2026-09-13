@@ -897,6 +897,7 @@ async function runLive(appRoot, platforms, opts) {
     const targets = {}
     for (const p of ready) {
       targets[p] = await resolveTarget(appRoot, p, envFor(p), {
+        command: "dev",
         target: opts.target,
         latest: opts.latest,
         prefetch: deviceLists[p],
@@ -1559,6 +1560,7 @@ async function pipeline(kind, appRoot, platforms, opts) {
   if (kind === "preview") {
     for (const p of ready) {
       ctx.targets[p] = await resolveTarget(appRoot, p, envFor(p), {
+        command: kind,
         target: opts.target,
         latest: opts.latest,
       })
