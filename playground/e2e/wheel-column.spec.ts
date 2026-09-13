@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * WheelColumn — the iOS picker drum, measured as the native scroller it is.
@@ -60,32 +61,15 @@ const expectedLabel = (top: number) =>
 // the retries are gone and a red run means a real one.
 test.describe.configure({ mode: "serial" })
 
-/**
- * Wait for the client to actually take over before driving the drum.
- *
- * The whole wheel is server-rendered, down to `data-active="true"` on the
- * start row — so the waits in `setup()` are all satisfied by inert HTML, and
- * even its `activeHour === START` assertion passes on a page React has never
- * touched. Everything this spec measures is client-only: `scrollTop` is
- * seeded to the start row by an effect, the value tracks the drum through
- * `onScroll`, and a row tap rolls the wheel from `onClick`. Fired before
- * hydration, every one of those is silently dropped. It is not load flake —
- * Playwright boots its own dev server and tears it down per run, so the FIRST
- * test to reach this route pays the cold transform cost and loses the race
- * while every test after it wins. A dev session left running hides it
- * entirely, because `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — the case it exists for is a cold server, where the
- * route's first transform can take longer than the 5s default.
+/*
+ * The whole wheel is server-rendered, down to `data-active="true"` on the start row —
+ * so without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) the
+ * waits in `setup()` are all satisfied by inert HTML, and even its
+ * `activeHour === START` assertion passes on a page React has never touched.
+ * Everything this spec measures is client-only: `scrollTop` is seeded to the start row
+ * by an effect, the value tracks the drum through `onScroll`, and a row tap rolls the
+ * wheel from `onClick`. Fired before hydration, every one of those is silently dropped.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /** Wait for the drum to truly SETTLE. `%ITEM_H≈0` alone is not enough —
  *  scrollTop sweeps THROUGH whole-row multiples during the glide, so a bare
