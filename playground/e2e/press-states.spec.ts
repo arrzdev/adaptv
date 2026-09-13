@@ -55,4 +55,55 @@ test.describe("active: variant", () => {
     await button.evaluate((el) => el.removeAttribute("data-pressed"))
     await expect.poll(bg).toBe(atRest)
   })
+
+  test("a key press inside the pressed floor never strands the visual", async ({
+    page,
+  }) => {
+    // a pointer press that painted and was released early leaves its hide
+    // pending for the 150ms floor; Enter on the same control resets the engine
+    // inside that window, and the flag must still leave. Mouse, not touch: the
+    // engine treats them alike, and both projects can drive it.
+    const button = page.getByRole("button", { name: ENGINE })
+    await button.scrollIntoViewIfNeeded()
+    const box = await button.boundingBox()
+    if (!box) throw new Error("the engine button has no box")
+    // the premise, read the instant the key arrives: painted and focused
+    await button.evaluate((el) => {
+      const w = window as unknown as { __atKey?: unknown }
+      window.addEventListener(
+        "keydown",
+        () => {
+          w.__atKey = {
+            pressed: el.hasAttribute("data-pressed"),
+            focused: document.activeElement === el,
+          }
+        },
+        { capture: true, once: true },
+      )
+    })
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await button.evaluate(
+      (el) =>
+        new Promise<void>((resolve) => {
+          const tick = () =>
+            el.hasAttribute("data-pressed")
+              ? resolve()
+              : requestAnimationFrame(tick)
+          tick()
+        }),
+    )
+    await page.mouse.up()
+    // WebKit blurs even a focused button on mousedown: focus after the release
+    await button.focus()
+    await page.keyboard.press("Enter")
+    const atKey = await page.evaluate(
+      () => (window as unknown as { __atKey?: unknown }).__atKey,
+    )
+    expect(
+      atKey,
+      "Enter must land inside the floor, on the focused button",
+    ).toEqual({ pressed: true, focused: true })
+    await expect(button).not.toHaveAttribute("data-pressed")
+  })
 })
