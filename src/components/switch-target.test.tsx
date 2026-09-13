@@ -114,6 +114,18 @@ describe("Switch — the accessible element is the hit area", () => {
     expect(thumb?.className.split(/\s+/)).toContain("pointer-events-none")
   })
 
+  it("renders its controlled input without React's read-only-field warning", () => {
+    //`readOnly` is what tells React the missing `onChange` is deliberate; it
+    //changes nothing a checkbox does
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      render(<Switch aria-label="Dark mode" checked={false} />)
+      expect(error).not.toHaveBeenCalled()
+    } finally {
+      error.mockRestore()
+    }
+  })
+
   for (const { mode, mount } of MODES) {
     it(`toggles exactly once on a tap that lands on the input (${mode})`, () => {
       const spy = vi.fn()
