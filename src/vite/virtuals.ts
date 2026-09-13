@@ -1,5 +1,6 @@
 import type { Plugin } from "vite"
 import type { ServiceWorkerUpdatePolicy } from "#adaptv/config/app-config.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 
 const REGISTER_ID = "virtual:adaptv/pwa-register"
 const RESOLVED_REGISTER_ID = `\0${REGISTER_ID}`
@@ -27,8 +28,16 @@ export function adaptvPwaRegisterPlugin(
   devSwEnabled = false,
   updatePolicy: ServiceWorkerUpdatePolicy = "auto",
 ): Plugin {
+  let base = "/"
   return {
     name: "adaptv:pwa-register",
+    configResolved(resolved) {
+      //Vite's resolved base, joined by `publicPath` like every other URL adaptv
+      //writes. Never `import.meta.env.BASE_URL` concatenated in the browser: under
+      //`--base /app` that is `"/app"`, and `+ "sw.js"` registered `/appsw.js`, a
+      //404, while the worker is served at `/app/sw.js`.
+      base = resolved.base
+    },
     resolveId(id) {
       if (id === REGISTER_ID) return RESOLVED_REGISTER_ID
       return null
@@ -45,6 +54,8 @@ export function adaptvPwaRegisterPlugin(
         REGISTER_SW_SOURCE.replace(
           "__ADAPTV_SW_PROMPT__",
           String(updatePolicy === "prompt"),
+        ).replace("__ADAPTV_SW_URL__", () =>
+          JSON.stringify(publicPath(base, "sw.js")),
         )
       )
     },
@@ -62,7 +73,8 @@ export function registerSW() {}
 //
 //`__ADAPTV_SW_PROMPT__` is substituted per build from `serviceWorkerUpdate`. A
 //baked constant, not a runtime argument: the policy is a property of the app, and
-//the shell that calls this has never read the app config.
+//the shell that calls this has never read the app config. `__ADAPTV_SW_URL__` is
+//the worker's URL under the deploy base, baked the same way.
 const REGISTER_SW_SOURCE = `
 export function registerSW(onWaiting) {
   if (typeof navigator === "undefined") return
@@ -99,14 +111,15 @@ export function registerSW(onWaiting) {
 
   async function register() {
     try {
-      //BASE_URL, never a hardcoded "/sw.js" — a subpath deploy (GitHub Pages, or
-      //any non-root base) registers the wrong URL and silently gets no SW at all.
+      //Under the deploy base, never a hardcoded "/sw.js" — a subpath deploy (GitHub
+      //Pages, or any non-root base) registers the wrong URL and silently gets no SW
+      //at all. Baked by the plugin from Vite's resolved base.
       //docs/decisions/register.md B1 / B26.
       //
       //updateViaCache:"none" is required, not tuning: browsers otherwise serve the
       //SW SCRIPT ITSELF from HTTP cache (capped at 24h), so a deploy can go
       //unnoticed for a day. docs/design/rendering.md §3.3.
-      const swUrl = (import.meta.env.BASE_URL || "/") + "sw.js"
+      const swUrl = __ADAPTV_SW_URL__
       const registration = await navigator.serviceWorker.register(swUrl, {
         updateViaCache: "none",
       })
