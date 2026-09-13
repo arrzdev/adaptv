@@ -1,10 +1,13 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import type { ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import type { Connect, Plugin, ViteDevServer } from "vite"
+import { afterEach, describe, expect, it } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import { resolveThemeColors } from "#adaptv/config/app-config"
-import { buildManifest } from "#adaptv/vite/manifest"
+import type { AdaptvContext } from "#adaptv/vite/adaptv-context"
+import { adaptvManifestPlugin, buildManifest } from "#adaptv/vite/manifest"
 
 const BASE: AdaptvAppConfig = {
   name: "ChopChop",
@@ -22,9 +25,16 @@ const BASE: AdaptvAppConfig = {
   },
 }
 
+const roots: string[] = []
+afterEach(() => {
+  for (const dir of roots.splice(0))
+    rmSync(dir, { recursive: true, force: true })
+})
+
 /** An app root with `public/favicons/<name>` written as real PNG headers. */
 function appWithIcons(files: Record<string, number>) {
   const root = mkdtempSync(path.join(tmpdir(), "adaptv-manifest-"))
+  roots.push(root)
   const dir = path.join(root, "public/favicons")
   mkdirSync(dir, { recursive: true })
   for (const [name, px] of Object.entries(files)) {
@@ -193,5 +203,144 @@ describe("resolveThemeColors", () => {
       light: "#0a0a0c",
       dark: "#0a0a0c",
     })
+  })
+})
+
+describe("adaptvManifestPlugin — the manifest a browser actually fetches", () => {
+  /** A context the way `adaptv()` hands it over, around an app with one 512px icon. */
+  function context(target: "web" | "capacitor" = "web"): AdaptvContext {
+    return {
+      appRoot: appWithIcons({ "icon-512.png": 512 }),
+      target,
+      loaded: {
+        config: { ...BASE, icons: "./public/favicons" },
+        watchFiles: [],
+      },
+    }
+  }
+
+  /** The middleware the plugin registers ONCE, driven per request the way connect drives it. */
+  function devServer(plugin: Plugin) {
+    let middleware: Connect.NextHandleFunction | undefined
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+    ;(plugin.configureServer as any)({
+      middlewares: {
+        use: (fn: Connect.NextHandleFunction) => {
+          middleware = fn
+        },
+      },
+    } as unknown as ViteDevServer)
+    return (url: string) => {
+      const served = {
+        passed: false,
+        headers: {} as Record<string, string>,
+        body: undefined as string | undefined,
+      }
+      middleware?.(
+        { url } as Connect.IncomingMessage,
+        {
+          setHeader: (key: string, value: string) => {
+            served.headers[key] = value
+          },
+          end: (body: string) => {
+            served.body = body
+          },
+        } as unknown as ServerResponse,
+        () => {
+          served.passed = true
+        },
+      )
+      return served
+    }
+  }
+
+  /** Run `generateBundle` in one named environment and return what it emitted. */
+  function emit(plugin: Plugin, environment: string) {
+    const emitted: Array<{
+      type: string
+      fileName: string
+      source: string
+    }> = []
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+    ;(plugin.generateBundle as any).call({
+      environment: { name: environment },
+      emitFile: (file: (typeof emitted)[number]) => {
+        emitted.push(file)
+        return file.fileName
+      },
+    })
+    return emitted
+  }
+
+  it("serves /manifest.json in dev, typed as a manifest, with the app's icons in it", () => {
+    const ctx = context()
+    const served = devServer(adaptvManifestPlugin(ctx))("/manifest.json")
+    expect(served.passed).toBe(false)
+    expect(served.headers["Content-Type"]).toBe(
+      "application/manifest+json",
+    )
+    const manifest = JSON.parse(served.body ?? "")
+    expect(manifest.name).toBe("ChopChop")
+    expect(manifest.icons).toEqual([
+      {
+        src: "/favicons/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ])
+  })
+
+  it("leaves every other URL to the rest of the dev server", () => {
+    const served = devServer(adaptvManifestPlugin(context()))(
+      "/manifest.webmanifest",
+    )
+    expect(served.passed).toBe(true)
+    expect(served.body).toBeUndefined()
+  })
+
+  it("reads the config per request, so an edited adaptv.config.ts is what gets served", () => {
+    //The config watcher swaps `context.loaded` on a change; a manifest built once at startup
+    //would keep serving the old name until the dev restarted.
+    const ctx = context()
+    const get = devServer(adaptvManifestPlugin(ctx))
+    expect(JSON.parse(get("/manifest.json").body ?? "").name).toBe(
+      "ChopChop",
+    )
+    ctx.loaded = {
+      config: { ...BASE, name: "Renamed", icons: "./public/favicons" },
+      watchFiles: [],
+    }
+    expect(JSON.parse(get("/manifest.json").body ?? "").name).toBe(
+      "Renamed",
+    )
+  })
+
+  it("emits manifest.json into the client build, identical to the one dev serves", () => {
+    const ctx = context()
+    const emitted = emit(adaptvManifestPlugin(ctx), "client")
+    expect(emitted.map((file) => [file.type, file.fileName])).toEqual([
+      ["asset", "manifest.json"],
+    ])
+    expect(JSON.parse(emitted[0].source)).toEqual(
+      JSON.parse(
+        devServer(adaptvManifestPlugin(ctx))("/manifest.json").body ?? "",
+      ),
+    )
+  })
+
+  it("emits nothing from the server environment", () => {
+    expect(emit(adaptvManifestPlugin(context()), "ssr")).toEqual([])
+  })
+
+  it("ships a native bundle's manifest with no icons, but keeps its orientation", () => {
+    //The WebView fetches it for `orientation`; its icon art is deleted from the native bundle,
+    //so listing it would be nothing but dangling hrefs inside the app.
+    const [file] = emit(
+      adaptvManifestPlugin(context("capacitor")),
+      "client",
+    )
+    const manifest = JSON.parse(file.source)
+    expect(manifest.icons).toEqual([])
+    expect(manifest.orientation).toBe("portrait")
   })
 })
