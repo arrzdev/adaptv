@@ -117,6 +117,10 @@ describe("notifications — the web", () => {
   it("default reads prompt, and cannot schedule for later at all", async () => {
     web("default")
     expect(await checkNotifyPermission()).toBe("prompt")
+    //never asked is not refused: the caller's next step is to ask, not to send
+    //the user to settings
+    expect(await notify({ title: "Done", body: "x" })).toBe("prompt")
+    expect(showNotification).not.toHaveBeenCalled()
     expect(
       await scheduleNotification({
         title: "Later",
@@ -125,7 +129,12 @@ describe("notifications — the web", () => {
       }),
     ).toBe("unsupported")
     expect(await listScheduledNotifications()).toEqual([])
-    expect(getNotifyCaveat()).toContain("service worker")
+    const caveat = getNotifyCaveat()
+    expect(caveat).toContain("service worker")
+    //scheduling is unsupported here, so the caveat may not describe a
+    //notification that "fires" later while the app happens to be open
+    expect(caveat).toContain("unsupported")
+    expect(caveat).not.toMatch(/fires/)
   })
 
   it("cancel closes the open banner with that tag", async () => {
@@ -282,6 +291,23 @@ describe("notifications — native", () => {
         at: new Date(),
       }),
     ).toBe("denied")
+    expect(LocalNotifications.schedule).not.toHaveBeenCalled()
+  })
+
+  it("a permission never asked for is prompt, not denied, on both paths", async () => {
+    native()
+    vi.mocked(LocalNotifications.checkPermissions).mockResolvedValue({
+      display: "prompt",
+    } as never)
+    expect(await checkNotifyPermission()).toBe("prompt")
+    expect(await notify({ title: "x", body: "y" })).toBe("prompt")
+    expect(
+      await scheduleNotification({
+        title: "x",
+        body: "y",
+        at: new Date(),
+      }),
+    ).toBe("prompt")
     expect(LocalNotifications.schedule).not.toHaveBeenCalled()
   })
 
