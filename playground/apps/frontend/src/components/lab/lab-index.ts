@@ -290,6 +290,12 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/storage",
+    title: "Storage",
+    summary: "kv · store · secure — reloads, other tabs, refused writes",
+    isNew: true,
+  },
+  {
     to: "/lab/ota",
     title: "OTA & the store gap",
     summary: "has the channel moved past this binary",
