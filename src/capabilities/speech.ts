@@ -109,7 +109,14 @@ const listeners = new Set<() => void>()
 //Every unsettled utterance's "you were cancelled" — {@link stopSpeech} settles
 //them itself, because the engines disagree on which event a cancel produces
 //(Chromium an `error` of `canceled`/`interrupted`, WebKit an `end`, or nothing).
-const open = new Set<() => void>()
+//In the order they were handed to the engine, which plays them one at a time:
+//the first is the one speaking or about to, and only it can be silent.
+type OpenUtterance = { cancel: () => void; arm: () => void }
+const open = new Set<OpenUtterance>()
+
+function head(): OpenUtterance | undefined {
+  return open.values().next().value
+}
 
 function notify() {
   for (const cb of listeners) cb()
@@ -214,7 +221,10 @@ export function isSpeaking(): boolean {
 
 /**
  * Speak `text`. The handle's `done` names the outcome; `cancel` stops this
- * utterance and everything queued behind it (the engine has one queue).
+ * utterance and every other one, spoken or queued — the engine has one queue
+ * and its cancel empties it — so every open handle resolves `"cancelled"`.
+ * A call made while another utterance is speaking waits its turn, and its
+ * `silentAfterMs` window starts only when that turn comes.
  */
 export function speak(
   text: string,
@@ -247,22 +257,34 @@ export function speak(
   const done = new Promise<SpeechOutcome>((resolve) => {
     resolveDone = resolve
   })
+  let silence: ReturnType<typeof setTimeout> | undefined
   const settle = (outcome: SpeechOutcome) => {
     if (settled) return
     settled = true
     clearTimeout(silence)
-    open.delete(cancelled)
+    const wasHead = head() === entry
+    open.delete(entry)
     setSpeaking(false)
     resolveDone(outcome)
+    //the next one in the engine's queue gets its turn, and only now its window
+    if (wasHead) head()?.arm()
   }
-  const cancelled = () => settle("cancelled")
-  open.add(cancelled)
-  const silence = setTimeout(() => {
-    if (started || settled) return
-    //Drop it from the queue too, or the next `speak` waits behind a ghost.
-    ss.cancel()
-    settle("silent")
-  }, options.silentAfterMs ?? SPEECH_SILENT_AFTER_MS)
+  const entry: OpenUtterance = {
+    cancel: () => settle("cancelled"),
+    //The silence window runs from the utterance's turn, not from the call: one
+    //queued behind a long sentence cannot start until that sentence ends, and a
+    //window counted from the call would cancel the sentence mid-word.
+    arm: () => {
+      silence = setTimeout(() => {
+        if (started || settled) return
+        settle("silent")
+        //Drop the queue too, or the next `speak` waits behind a ghost.
+        stopSpeech()
+      }, options.silentAfterMs ?? SPEECH_SILENT_AFTER_MS)
+    },
+  }
+  open.add(entry)
+  if (head() === entry) entry.arm()
 
   u.onstart = () => {
     if (settled) return
@@ -286,10 +308,10 @@ export function speak(
     reason: () => reason,
     cancel: () => {
       if (settled) return
-      //Settle first: the outcome must not wait on an event the engine may
-      //never send for an utterance that had not started.
-      settle("cancelled")
-      ss.cancel()
+      //The engine's cancel is global — it empties the whole queue — so every
+      //open handle is settled here, first: the outcomes must not wait on events
+      //the engine may never send.
+      stopSpeech()
     },
   }
 }
@@ -298,7 +320,7 @@ export function speak(
 export function stopSpeech(): void {
   const ss = engine()
   if (!ss) return
-  for (const cancel of [...open]) cancel()
+  for (const utterance of [...open]) utterance.cancel()
   ss.cancel()
   setSpeaking(false)
 }
