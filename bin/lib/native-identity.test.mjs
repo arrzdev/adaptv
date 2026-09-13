@@ -10,9 +10,11 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
+import { explainFailure } from "./explain.mjs"
 import { patchNativeIdentity } from "./native.mjs"
+import { runLine } from "./render.mjs"
 
 /**
  * `patchNativeIdentity` rewrites the bundle id and display name into the native project
@@ -34,6 +36,34 @@ function appRoot() {
   dirs.push(dir)
   return dir
 }
+
+/**
+ * The ✖ row a failed prepare settles on: the step run through `runLine` with the platform's
+ * explainer, the way `preparePlatforms` runs it, colour stripped, from both streams.
+ */
+async function renderedFailure(root, step) {
+  const lines = []
+  const take = (s) => {
+    lines.push(...String(s).replace(SGR, "").split("\n"))
+    return true
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
+  try {
+    await runLine("ios", async () => step(), {
+      explain: explainFailure("ios", root),
+    }).catch(() => {})
+  } finally {
+    for (const s of spies) s.mockRestore()
+  }
+  return { row: lines.find((l) => l.includes("✖")) ?? "" }
+}
+
+//Built rather than written as a literal: a raw ESC inside a regex trips
+//lint/suspicious/noControlCharactersInRegex.
+const SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 
 const CONFIG = { appId: "dev.example.app", appName: "Example" }
 const PLIST = "App/App/Info.plist"
@@ -58,7 +88,31 @@ describe("patchNativeIdentity — what a failure to patch means", () => {
     mkdirSync(plist(root), { recursive: true })
     expect(() =>
       patchNativeIdentity(root, CONFIG, "ios", { dev: true }),
-    ).toThrow(`could not write ${ADAPTV_DIR}/ios/${PLIST} (EISDIR)`)
+    ).toThrow(`could not read ${ADAPTV_DIR}/ios/${PLIST} (EISDIR)`)
+  })
+
+  it("a project file adaptv may not read says READ, on the row the dev sees", async () => {
+    //root reads through a cleared mode, so under it this proves nothing
+    if (process.getuid?.() === 0) return
+    const root = appRoot()
+    mkdirSync(path.dirname(plist(root)), { recursive: true })
+    writeFileSync(
+      plist(root),
+      "<key>CFBundleDisplayName</key>\n<string>Old</string>\n",
+    )
+    chmodSync(plist(root), 0o000)
+    try {
+      const { row } = await renderedFailure(root, () =>
+        patchNativeIdentity(root, CONFIG, "ios", { dev: true }),
+      )
+      expect(row).toMatch(
+        new RegExp(
+          `✖ ios {2}could not read ${ADAPTV_DIR}/ios/${PLIST} \\(EACCES\\) · \\d+ms$`,
+        ),
+      )
+    } finally {
+      chmodSync(plist(root), 0o644)
+    }
   })
 
   it("a project file that cannot be written is a failure too", () => {

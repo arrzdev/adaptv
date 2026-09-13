@@ -2005,23 +2005,26 @@ function readAppId(_appRoot) {
  * to say the project was never patched.
  */
 function subInFile(appRoot, file, re, replacement) {
-  const fault = (err) =>
+  //The verb is the operation that failed. One `could not write` for both used to call an
+  //unreadable file unwritable, and a dev who checks the write permission of a file whose
+  //READ bit is the problem finds nothing wrong with it.
+  const fault = (verb, err) =>
     new Error(
-      `could not write ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
+      `could not ${verb} ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
     )
   let before
   try {
     before = readFileSync(file, "utf8")
   } catch (err) {
     if (err?.code === "ENOENT") return
-    throw fault(err)
+    throw fault("read", err)
   }
   const after = before.replace(re, replacement)
   if (after === before) return
   try {
     writeFileSync(file, after)
   } catch (err) {
-    throw fault(err)
+    throw fault("write", err)
   }
 }
 
