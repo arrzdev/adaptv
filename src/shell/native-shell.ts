@@ -32,7 +32,7 @@ export const NATIVE_SHELL_TOKEN = "adaptv-shell"
 /** Where the dev server answers `{ verdict }` for `?id=<shell id>`. */
 export const NATIVE_SHELL_ENDPOINT = "/__adaptv/native-shell"
 
-export type NativeShellVerdict = "match" | "pending" | "stale"
+export type NativeShellVerdict = "match" | "pending" | "stale" | "unserved"
 
 /**
  * The shell id a user agent carries, or `null`.
@@ -52,26 +52,32 @@ export function shellIdFromUserAgent(
 /**
  * The dev server's decision for one shell.
  *
- * `expected` maps a platform to the id the CLI decided on, `null` while it is still deciding.
+ * `expected` maps each platform of the run to the id the CLI decided on, `null` while it is still
+ * deciding, and `false` once the run has dropped it (its native project could not be prepared).
+ * A platform with no entry is not part of the run at all. `expected` itself is `null` when
+ * nothing could be read from the CLI.
  *
- * - `match`   — the id is the build this session installed or reused: reconnect.
- * - `pending` — the CLI has not decided for that platform yet (still preparing, or the platform
- *               is not part of this run). Wait.
- * - `stale`   — the CLI decided on a different build. Wait for that one to be launched.
+ * - `match`    — the id is the build this session installed or reused: reconnect.
+ * - `pending`  — the CLI has not decided for that platform yet (still preparing). Wait.
+ * - `stale`    — the CLI decided on a different build. Wait for that one to be launched.
+ * - `unserved` — this run is not serving that platform: `dev ios` while an Android app from an
+ *                earlier run polls the same port, or a `dev all` that dropped a platform. Wait,
+ *                but no build is coming, and the app must not be told one is.
  *
  * A shell with NO id is `stale`, not `pending`: nothing unmarked can prove it is current, and
  * the CLI never reuses an install it holds no id for, so a rebuild is what is coming.
  */
 export function nativeShellVerdict(
   id: string | null | undefined,
-  expected: Record<string, string | null | undefined>,
+  expected: Record<string, string | false | null | undefined> | null,
 ): NativeShellVerdict {
   const dash = id ? id.indexOf("-") : -1
   if (!id || dash < 1) return "stale"
+  if (!expected) return "pending"
   const platform = id.slice(0, dash)
-  const want = Object.hasOwn(expected, platform)
-    ? expected[platform]
-    : null
+  if (!Object.hasOwn(expected, platform)) return "unserved"
+  const want = expected[platform]
+  if (want === false) return "unserved"
   if (want == null) return "pending"
   return want === id ? "match" : "stale"
 }

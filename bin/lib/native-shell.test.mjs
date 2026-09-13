@@ -285,6 +285,28 @@ describe("what the dev server is told to expect", () => {
   })
 })
 
+describe("a platform this run is not serving", () => {
+  const verdict = (shells, id) =>
+    nativeShellVerdict(id, readExpectedShells(shells.file))
+
+  it("is named as such to an app from an earlier run polling the same port", () => {
+    const root = tempApp()
+    //`dev ios`, with last run's Android app still on its offline screen
+    const shells = openShellRegistry(root, ["ios"])
+    expect(verdict(shells, "android-0b0b0b0b")).toBe("unserved")
+    expect(verdict(shells, "ios-0a0a0a0a")).toBe("pending")
+  })
+
+  it("includes one the run dropped when its native project could not be prepared", () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios", "android"])
+    //iOS failed to prepare; Android goes on to the device
+    shells.serveOnly(["android"])
+    expect(verdict(shells, "ios-0a0a0a0a")).toBe("unserved")
+    expect(verdict(shells, "android-0b0b0b0b")).toBe("pending")
+  })
+})
+
 describe("a native build that fails", () => {
   const verdict = (shells, id) =>
     nativeShellVerdict(id, readExpectedShells(shells.file))

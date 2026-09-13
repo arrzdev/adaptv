@@ -884,6 +884,9 @@ async function runLive(appRoot, platforms, opts) {
       })
       ready = prep.ready
       prepareMs = prep.prepareMs
+      //A platform that could not be prepared is out of this run: its app from an earlier run
+      //is told so, not left on a screen promising it opens once its build is confirmed.
+      shells.serveOnly(ready)
       //R33 draws the line at what was already sitting in a file the dev wrote: preflight said
       //all of that under the banner. This is the other half — an ATS block in a plist that has
       //to EXIST first — and it belongs to the step that finds it, which is this one.

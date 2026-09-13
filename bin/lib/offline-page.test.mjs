@@ -17,6 +17,7 @@ import {
   reconnectDecision,
   shellAnswer,
 } from "./offline-page.mjs"
+import { namesPlumbing } from "./opacity.mjs"
 
 // One page, two unrelated failures — Capacitor routes a failed main-frame load AND a
 // too-old WebView through the SAME `server.errorPath`. Telling a dev on WebView 113 that
@@ -409,6 +410,7 @@ describe("the offline screen only goes back to a dev server that serves this bui
     expect(shellAnswer(200, { verdict: "match" })).toBe("match")
     expect(shellAnswer(200, '{"verdict":"stale"}')).toBe("stale")
     expect(shellAnswer(200, '{"verdict":"pending"}')).toBe("pending")
+    expect(shellAnswer(200, { verdict: "unserved" })).toBe("unserved")
     //nothing answered, an error page, or a body that is not the verdict
     expect(shellAnswer(0, null)).toBe("none")
     expect(shellAnswer(500, '{"verdict":"match"}')).toBe("none")
@@ -452,6 +454,28 @@ describe("the offline screen only goes back to a dev server that serves this bui
       })
       expect(page.navigations).toEqual([])
       expect(page.title).toBe("Checking this build")
+    })
+
+    it(`${route}: an app whose platform this run is not serving says so, and promises nothing`, async () => {
+      const html = await render({ url: DEV })
+      const page = await runPage(html, {
+        route,
+        userAgent: UA(`${route}-0a0a0a0a`),
+        shell: "unserved",
+      })
+      expect(page.navigations).toEqual([])
+      expect(page.title).toBe("Not part of this run")
+      const copy = [
+        page.title,
+        page.elements.detail.textContent,
+        page.elements["status-text"].textContent,
+      ]
+      expect(copy.join(" ")).not.toMatch(/open|rebuil/i)
+      for (const line of copy) expect(namesPlumbing(line)).toBe(false)
+      //the command that would serve it is exactly what the dev needs to see
+      expect(page.elements.cmd.style.display).toBe("")
+      //and it keeps asking, so a run that does serve it picks the app up
+      expect(page.asked).toHaveLength(4)
     })
 
     it(`${route}: the build the run installed goes straight back`, async () => {
