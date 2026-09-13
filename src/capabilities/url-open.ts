@@ -83,7 +83,15 @@ function routeUrl(raw: unknown): void {
   //was about to show is not somewhere the user has been, so back must not return to
   //it. Once a screen has settled, a link is a navigation like any other.
   const replace = router.state.resolvedLocation === undefined
-  void router.navigate({ href: path, replace })
+  //Before the provider mounts, nothing subscribes to the history yet, and a router
+  //navigation then loads the route itself — which the mount's own load repeats, so the
+  //linked route's beforeLoad and loader would run twice. Moving the history alone
+  //leaves the one load to the mount, which reads the entry it finds.
+  if (replace && router.history.subscribers.size === 0) {
+    router.history.replace(path)
+  } else {
+    void router.navigate({ href: path, replace })
+  }
   for (const handler of handlers) handler({ url: raw, path })
 }
 
