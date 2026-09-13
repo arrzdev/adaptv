@@ -13,8 +13,15 @@ function Value({
   value,
 }: {
   testId: string
-  value: string | null
+  /** `undefined` while the read is in flight, `null` once the target said none. */
+  value: string | null | undefined
 }) {
+  if (value === undefined)
+    return (
+      <LabBadge tone="muted">
+        <span data-testid={testId}>reading</span>
+      </LabBadge>
+    )
   if (value)
     return (
       <span data-testid={testId} className="font-mono text-xs">
@@ -72,12 +79,20 @@ function LabAppInfoPage() {
         <LabRow
           label="name"
           value={
-            <Value testId="app-info-name" value={info?.name ?? null} />
+            <Value
+              testId="app-info-name"
+              value={info ? info.name : undefined}
+            />
           }
         />
         <LabRow
           label="id"
-          value={<Value testId="app-info-id" value={info?.id ?? null} />}
+          value={
+            <Value
+              testId="app-info-id"
+              value={info ? info.id : undefined}
+            />
+          }
         />
       </LabSection>
 
@@ -90,14 +105,17 @@ function LabAppInfoPage() {
           value={
             <Value
               testId="app-info-version"
-              value={info?.version ?? null}
+              value={info ? info.version : undefined}
             />
           }
         />
         <LabRow
           label="build"
           value={
-            <Value testId="app-info-build" value={info?.build ?? null} />
+            <Value
+              testId="app-info-build"
+              value={info ? info.build : undefined}
+            />
           }
         />
         <LabRow
