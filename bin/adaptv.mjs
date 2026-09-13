@@ -121,6 +121,7 @@ import {
   setOutputMode,
   since,
   spacer,
+  verbatim,
   wasReported,
 } from "./lib/render.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
@@ -2306,14 +2307,16 @@ async function genOtaKeys() {
 
   section("public: commit this")
   detail("adaptv.config.ts ▸ otaPublicKey")
-  //`rawOut` because a key is bytes, not prose: anything that wraps, indents or
+  //`verbatim` because a key is bytes, not prose: anything that wraps, indents or
   //re-flows it produces a PEM that no longer parses, and the dev finds out on a
-  //device. Same reason `--verbose` is allowed to bypass the renderer.
-  rawOut(`\n${publicKey.trim()}\n`)
+  //device. And it is the OUTCOME, not narration: printed as `rawOut` it was a
+  //step, so `keys ota --quiet` printed nothing, exited 0, and threw away a pair
+  //adaptv keeps no copy of (R46).
+  verbatim(`\n${publicKey.trim()}\n`)
 
   section("private: never commit this")
   detail("ADAPTV_OTA_PRIVATE_KEY, in the secret store your deploy reads")
-  rawOut(`\n${privateKey.trim()}\n`)
+  verbatim(`\n${privateKey.trim()}\n`)
 
   spacer()
   log.warn(
