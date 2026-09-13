@@ -19,6 +19,7 @@ import {
 } from "#adaptv/vite/adaptv-context.ts"
 import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir.ts"
 import { computeBuildTag, slugifyName } from "#adaptv/vite/build-tag.ts"
+import { emitIntoClientOutput } from "#adaptv/vite/deploy-server.ts"
 
 /**
  * adaptv's own worker — a real module in the package, never generated.
@@ -34,10 +35,9 @@ function adaptvWorkerPath(): string {
 /**
  * Build the service worker. → `docs/design/rendering.md §3`
  *
- * Runs in `buildApp` at `order: "post"` — after every environment AND after the
- * deploy plugin has finished assembling the output — and **after** the shell-emit
- * plugin. See the ordering note in `adaptv-plugin.ts`; both halves are
- * load-bearing.
+ * Runs once the client output is complete and before a server build bakes it
+ * (`emitIntoClientOutput`) — and **after** the shell-emit plugin. See the
+ * ordering note in `adaptv-plugin.ts`; both halves are load-bearing.
  *
  * adaptv's worker is always the entry. An app never replaces it and never turns
  * it off; the modules an app names in `serviceWorkers` are appended after it. An
@@ -51,18 +51,13 @@ export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
     },
-    //`buildApp`, `order: "post"` — MEASURED, and the reason is the precache
-    //manifest. On `closeBundle` the deploy plugin has not finished assembling the
-    //output yet: the glob ran against a directory still missing everything from
-    //`public/`, and the worker shipped with **21 files silently absent** —
-    //favicons, the offline illustrations, robots.txt. No error, no warning; it
-    //only shows up as a broken offline render. → `adaptv-plugin.ts`
-    buildApp: {
-      order: "post",
-      async handler() {
-        await buildServiceWorker(context)
-      },
-    },
+    //MEASURED twice, in both directions. On `closeBundle` the deploy plugin has
+    //not finished assembling the output yet: the glob ran against a directory
+    //still missing everything from `public/`, and the worker shipped with **21
+    //files silently absent** — favicons, the offline illustrations, robots.txt.
+    //Only in `buildApp` post it was too late instead: the node server had already
+    //baked its asset table and answered 404 at `/sw.js`. → `deploy-server.ts`
+    ...emitIntoClientOutput(() => buildServiceWorker(context)),
   }
 }
 
