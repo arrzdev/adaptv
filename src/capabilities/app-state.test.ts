@@ -168,3 +168,108 @@ describe("onResume / onPause", () => {
     expect(paused).toHaveBeenCalledOnce()
   })
 })
+
+/**
+ * A fresh accessor over a stand-in `@capacitor/app`, built of plain functions
+ * rather than `vi.fn`: a spy attaches its own handler to every promise it returns,
+ * which hides exactly the rejection these tests look for.
+ */
+async function nativeAppState(app: Record<string, unknown>) {
+  vi.resetModules()
+  vi.doMock("@capacitor/app", () => ({ App: app }))
+  restores.push(() => {
+    vi.doUnmock("@capacitor/app")
+    vi.resetModules()
+  })
+  vi.stubGlobal("Capacitor", { isNativePlatform: () => true })
+  return import("#adaptv/capabilities/app-state")
+}
+
+/** Every rejection nobody handled while `run` executed, read after the turn ends. */
+async function unhandledDuring(run: () => void): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on("unhandledRejection", listener)
+  try {
+    run()
+    //Node decides a rejection went unhandled only once the microtask queue has
+    //drained, so leave the turn (twice: a rejection can be chained) before reading
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  } finally {
+    process.off("unhandledRejection", listener)
+  }
+  return seen
+}
+
+const rejectWith = (message: string) => () =>
+  Promise.reject(new Error(message))
+
+type Handle = { remove: () => Promise<void> }
+
+describe("subscribeAppState — native, over a bridge that fails", () => {
+  it("lets no rejected addListener escape, and stays active", async () => {
+    //the OTA updater subscribes at boot, so a rejection here would reach the
+    //app's error reporter on every cold launch of a binary without the plugin
+    const { getAppState, subscribeAppState } = await nativeAppState({
+      addListener: rejectWith(
+        '"App" plugin is not implemented on android',
+      ),
+    })
+    let unsub = () => {}
+    const unhandled = await unhandledDuring(() => {
+      unsub = subscribeAppState(() => {})
+    })
+    expect(unhandled).toEqual([])
+    expect(getAppState()).toBe("active")
+    unsub()
+  })
+
+  it("lets no rejected handle removal escape", async () => {
+    const { subscribeAppState } = await nativeAppState({
+      addListener: () =>
+        Promise.resolve({ remove: rejectWith("bridge: remove failed") }),
+    })
+    const unsub = subscribeAppState(() => {})
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const unhandled = await unhandledDuring(unsub)
+    expect(unhandled).toEqual([])
+  })
+
+  it("removes both listeners when their handles arrive after the last unsubscribe", async () => {
+    //the bridge answers asynchronously, so a subscriber can leave first —
+    //StrictMode's dev double-mount always does
+    const pending: Array<(handle: Handle) => void> = []
+    const { subscribeAppState } = await nativeAppState({
+      addListener: () => new Promise((resolve) => pending.push(resolve)),
+    })
+    subscribeAppState(() => {})()
+
+    const removes = pending.map(() => vi.fn(() => Promise.resolve()))
+    pending.forEach((resolve, i) => {
+      resolve({ remove: removes[i] as () => Promise<void> })
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(removes).toHaveLength(2)
+    for (const remove of removes) expect(remove).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not orphan a handle that arrives after a teardown the other one saw", async () => {
+    //resume's handle lands, the subscriber leaves (tearing down what it holds),
+    //and only then does pause's handle arrive
+    const pending: Array<(handle: Handle) => void> = []
+    const { subscribeAppState } = await nativeAppState({
+      addListener: () => new Promise((resolve) => pending.push(resolve)),
+    })
+    const unsub = subscribeAppState(() => {})
+    const resume = vi.fn(() => Promise.resolve())
+    const pause = vi.fn(() => Promise.resolve())
+    pending[0]?.({ remove: resume })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    unsub()
+    pending[1]?.({ remove: pause })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(resume).toHaveBeenCalledTimes(1)
+    expect(pause).toHaveBeenCalledTimes(1)
+  })
+})
