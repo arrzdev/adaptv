@@ -1,12 +1,12 @@
 # The Playwright estate
 
-**Four configs, two spec directories, 41 specs. This page says which suite proves what, and the
+**Four configs, two spec directories, 42 specs. This page says which suite proves what, and the
 handful of rules that keep the estate honest.**
 
 Everything lives in `playground/` — its own pnpm project — and runs from the repo root:
 
 ```bash
-pnpm --dir playground test:e2e            # the main suite: 35 specs, dev server
+pnpm --dir playground test:e2e            # the main suite: 36 specs, dev server
 pnpm --dir playground test:e2e:sw:all     # all three worker suites, built output
 ```
 
@@ -16,7 +16,7 @@ pnpm --dir playground test:e2e:sw:all     # all three worker suites, built outpu
 
 | Suite | Config | Specs | Serves | Port |
 |---|---|---|---|---|
-| **Main** | `playwright.config.ts` | `e2e/` — 35 | `vite` (dev) | `41730` (`E2E_PORT`) |
+| **Main** | `playwright.config.ts` | `e2e/` — 36 | `vite` (dev) | `41730` (`E2E_PORT`) |
 | **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → `vite preview`** | `41750` (`E2E_SW_PORT`) |
 | **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → preview**, `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
 | **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |

@@ -248,7 +248,7 @@ Full designs exist; the next step is TDD, not more design.
 | D8 | `useAppState` accessor + hook | `../design/coordination.md §1` | ✅ **shipped** — `src/capabilities/app-state.ts`, `src/hooks/use-app-state.ts` |
 | D9 | Back-button priority handler chain | `../design/coordination.md §2` | ✅ **shipped** — `src/capabilities/back-chain.ts`, `src/hooks/use-back-handler.ts` |
 | D10 | Global gesture controller (single-capture arbitration) | `../design/coordination.md §3` | ✅ **shipped** — `src/capabilities/gesture-controller.ts` + three consumers (`Drawer`, `Swipeable`, edge-swipe) |
-| D11 | Route lifecycle (enter/leave, no DOM retention) | `../design/coordination.md §4` | ✅ **shipped** — `src/hooks/use-screen-lifecycle.ts`. ⚠︎ **but it is missing from `src/interface/hooks.index.ts`**, so a consumer cannot reach it — see the open item in [`../roadmap/README.md`](../roadmap/README.md). |
+| D11 | Route lifecycle (enter/leave, no DOM retention) | `../design/coordination.md §4` | ✅ **shipped** — `src/hooks/use-screen-lifecycle.ts`, exported from `src/interface/hooks.index.ts` (the barrel omission is closed as L1 in [`../roadmap/README.md`](../roadmap/README.md)). |
 | D12 | Published `dist` build + `.d.ts` | [`dist-build.md`](dist-build.md) | ✅ **built and verified** (`tsdown.config.ts`, `pnpm build:check`, `scripts/verify-dist.mjs`). Only the **cutover** is outstanding → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md). |
 
 ---
