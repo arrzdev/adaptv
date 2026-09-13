@@ -50,7 +50,14 @@ export type LiveReloadHot = Pick<NonNullable<ImportMeta["hot"]>, "on">
  * and points Capacitor's `server.errorPath` at it. Enforced by
  * `offline-page-name.test.ts` so the two can't drift.
  */
-const OFFLINE_PAGE = "adaptv-offline.html"
+export const OFFLINE_PAGE = "adaptv-offline.html"
+
+/**
+ * The window property this module sets once the bundle runs in a native dev WebView. It is the
+ * handoff from the document's inline watchdog (`native-dev-boot-watchdog.ts`), which covers a
+ * dev server that dies before the bundle ran, to the recovery below, which covers it after.
+ */
+export const DEV_BUNDLE_RAN_KEY = "__adaptvDevBundleRan"
 
 /**
  * Consecutive failed reachability polls before we hand off to the offline screen.
@@ -63,7 +70,7 @@ const OFFLINE_PAGE = "adaptv-offline.html"
  * inside ~0.6s — comfortably ahead of a human. A server that's merely restarting costs a
  * brief offline screen that reconnects itself, which is the right trade against a dead end.
  */
-const OFFLINE_AFTER_FAILURES = 2
+export const OFFLINE_AFTER_FAILURES = 2
 /** Poll fast while deciding the server is gone, then back off to a reconnect cadence. */
 const DECIDING_POLL_MS = 300
 const RECONNECT_POLL_MS = 1500
@@ -80,6 +87,8 @@ export function installNativeLiveReloadRecovery(
   if (!hot) return
   if (!isNativePlatform()) return
   if (typeof window === "undefined") return
+  //the bundle ran: the document's boot watchdog stands down and this module takes over
+  Object.assign(window, { [DEV_BUNDLE_RAN_KEY]: true })
 
   let reloading = false
   let recovering = false
