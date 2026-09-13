@@ -64,6 +64,19 @@ function query(
   return parts.join("&")
 }
 
+//One recipient in the URL's path. Everything is percent-encoded except the
+//delimiters RFC 6068 lets an address carry bare (`$ + ; : @`, plus the ones
+//encodeURIComponent already leaves): a space or a quote would make Swift's
+//URL(string:) return nil before iOS 17 and the native open reject, and a `,`
+//`?` `#` `&` inside one address would split it or end the path. The commas
+//BETWEEN recipients are joined after, bare, because they are the separator.
+function recipient(address: string): string {
+  return encodeURIComponent(address).replace(
+    /%(24|2B|3B|3A|40)/g,
+    (escaped) => decodeURIComponent(escaped),
+  )
+}
+
 /** The `mailto:` URL for a draft, recipients comma-joined, values encoded. */
 export function mailUrl(draft: MailDraft): string {
   const q = query([
@@ -72,14 +85,22 @@ export function mailUrl(draft: MailDraft): string {
     ["subject", draft.subject],
     ["body", draft.body],
   ])
-  return `mailto:${draft.to?.join(",") ?? ""}${q ? `?${q}` : ""}`
+  const to = draft.to?.map(recipient).join(",") ?? ""
+  return `mailto:${to}${q ? `?${q}` : ""}`
 }
 
-/** The `sms:` URL for a draft; the body separator is `&` on iOS, `?` elsewhere. */
+/**
+ * The `sms:` URL for a draft; the body separator is `&` on iOS, `?` elsewhere.
+ * A recipient is an RFC 3966 number (RFC 5724), whose only visual separators
+ * are `- . ( )`: the spaces a number is written with are dropped, not encoded,
+ * so the composer receives the number itself.
+ */
 export function smsUrl(draft: SmsDraft): string {
   const body = draft.body ? `body=${encodeURIComponent(draft.body)}` : ""
   const sep = isIOS() ? "&" : "?"
-  return `sms:${draft.to?.join(",") ?? ""}${body ? `${sep}${body}` : ""}`
+  const to =
+    draft.to?.map((r) => recipient(r.replace(/\s+/g, ""))).join(",") ?? ""
+  return `sms:${to}${body ? `${sep}${body}` : ""}`
 }
 
 //A representative URL per kind: the OS answers `canOpenURL` for a full URL,
