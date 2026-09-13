@@ -25,6 +25,7 @@ import {
   LabRow,
   LabSection,
   labLogEntry,
+  useClientValue,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 
@@ -46,6 +47,17 @@ function LabAppStatePage() {
   const router = useRouter()
   const location = useLocation()
   const [links, setLinks] = useState<UrlOpened[]>([])
+  //Both read after hydration, not during it (see useClientValue): the server's
+  //memory history always has one entry and its URL never has a fragment, so the
+  //tab's own length or `#hash` would be a text mismatch on the first render.
+  const historyEntries = useClientValue<number | undefined>(
+    () => router.history.length,
+    undefined,
+  )
+  const href = useClientValue<string | undefined>(
+    () => location.href,
+    undefined,
+  )
   useEffect(
     () => onUrlOpened((opened) => setLinks((seen) => [opened, ...seen])),
     [],
@@ -156,10 +168,10 @@ function LabAppStatePage() {
         <LabRow label="onUrlOpened() calls" value={String(links.length)} />
         <LabRow label="last url" value={links[0]?.url} />
         <LabRow label="last path" value={links[0]?.path} />
-        <LabRow label="location" value={location.href} />
+        <LabRow label="location" value={href} />
         <LabRow
           label="history entries"
-          value={String(router.history.length)}
+          value={historyEntries?.toString()}
           hint="A cold link replaces the first entry (1); a warm one pushes (+1)."
         />
       </LabSection>
