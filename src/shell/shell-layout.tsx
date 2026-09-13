@@ -274,15 +274,17 @@ export function RoutingShell({
   const splashRetired = useRef(false)
   if (notFound) splashRetired.current = true
 
-  //Adaptv's own offline call site: a route chunk 404'd and the one-shot reload
-  //guard is already spent, so reloading cannot help and there is no route left to
-  //render its own offline UI. Without this the user gets a blank screen.
+  //Adaptv's own offline call site: a route chunk 404'd moments after a recovery
+  //reload already tried, so reloading again cannot help and there is no route
+  //left to render its own offline UI. Without this the user gets a blank screen.
   //docs/design/rendering.md §3.1.2
   //
   //This is the ONE stale-chunk net. It is armed here, unconditionally, because
   //the failure is a deploy artifact and not a service-worker one — and only here,
-  //because a second installation sharing the same guard reads the first one's
+  //because a second installation sharing the same stamp reads the first one's
   //reload as "a reload already failed" and draws the offline screen over it.
+  //Armed in an effect, so a document that imports a missing chunk while it boots
+  //fails before it is listening: that one gets the router's error screen.
   const OfflineComponent = offlineComponent ?? Offline
   const [bootFailed, setBootFailed] = useState(false)
   useEffect(
