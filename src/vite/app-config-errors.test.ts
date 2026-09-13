@@ -193,16 +193,18 @@ describe("appConfigErrors", () => {
     ])
   })
 
-  it("refuses a scheme every app already uses", () => {
+  it("refuses a reserved scheme", () => {
+    const reserved = ["http", "https", "file", "javascript", "capacitor"]
     expect(
-      ["http", "https", "file"].flatMap((scheme) =>
+      reserved.flatMap((scheme) =>
         appConfigErrors({ ...ok, deepLinks: { scheme } }),
       ),
-    ).toEqual([
-      "'deepLinks.scheme' must be the app's own scheme, got \"http\", which every app already uses",
-      "'deepLinks.scheme' must be the app's own scheme, got \"https\", which every app already uses",
-      "'deepLinks.scheme' must be the app's own scheme, got \"file\", which every app already uses",
-    ])
+    ).toEqual(
+      reserved.map(
+        (scheme) =>
+          `'deepLinks.scheme' can't be "${scheme}": that scheme is reserved`,
+      ),
+    )
   })
 
   it("reports every problem at once, not the first", () => {
