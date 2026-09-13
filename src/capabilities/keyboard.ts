@@ -50,13 +50,16 @@ export function initNativeKeyboard(): void {
       () => {},
     )
   }
-  //never removed — keyboard visibility is an app-global concern
+  //never removed — keyboard visibility is an app-global concern, so the handles are
+  //not kept and a subscriber leaving early has nothing to orphan. A registration
+  //that rejects (plugin missing from the binary, an OS error) is dropped the same
+  //way: consumers then simply never hear a keyboard event.
   void Keyboard.addListener("keyboardWillShow", (info) =>
     emit({ isOpen: true, height: info.keyboardHeight }),
-  )
+  ).catch(() => {})
   void Keyboard.addListener("keyboardWillHide", () =>
     emit({ isOpen: false, height: 0 }),
-  )
+  ).catch(() => {})
 }
 
 /** Whether native keyboard events (exact height + will-show/hide) are available. */
