@@ -4,6 +4,7 @@ import {
   requestMotionPermission,
   resetMotion,
   subscribeMotion,
+  subscribeMotionStatus,
   toMotionSample,
 } from "#adaptv/capabilities/motion"
 
@@ -85,13 +86,34 @@ describe("motion status", () => {
     expect(getMotionStatus()).toBe("granted")
   })
 
-  it("reports denied for a denial and for a request thrown outside a gesture", async () => {
-    installApi(async () => "denied")
+  it("reports denied for a denial the engine resolved, and keeps it", async () => {
+    const ask = vi.fn(async () => "denied" as const)
+    installApi(ask)
     expect(await requestMotionPermission()).toBe("denied")
-    resetMotion()
-    installApi(() => Promise.reject(new Error("NotAllowedError")))
     expect(await requestMotionPermission()).toBe("denied")
+    expect(ask).toHaveBeenCalledTimes(1)
     expect(getMotionStatus()).toBe("denied")
+  })
+
+  it("stays prompt when the request is thrown outside a gesture, so a later tap can still ask", async () => {
+    const ask = vi
+      .fn<() => Promise<"granted" | "denied">>()
+      .mockRejectedValueOnce(new Error("NotAllowedError"))
+      .mockResolvedValueOnce("granted")
+    installApi(ask)
+    expect(await requestMotionPermission()).toBe("prompt")
+    expect(getMotionStatus()).toBe("prompt")
+    expect(await requestMotionPermission()).toBe("granted")
+    expect(ask).toHaveBeenCalledTimes(2)
+  })
+
+  it("tells status subscribers when an answer arrives", async () => {
+    installApi(async () => "granted")
+    const cb = vi.fn()
+    const off = subscribeMotionStatus(cb)
+    await requestMotionPermission()
+    expect(cb).toHaveBeenCalledTimes(1)
+    off()
   })
 })
 

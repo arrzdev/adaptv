@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import type {
   MotionSample,
   MotionStatus,
@@ -7,6 +12,7 @@ import {
   getMotionStatus,
   requestMotionPermission,
   subscribeMotion,
+  subscribeMotionStatus,
 } from "#adaptv/capabilities/motion"
 
 export type UseMotionOptions = {
@@ -26,17 +32,22 @@ export type UseMotionResult = {
    * Granted, subscribed, and nothing readable has arrived within
    * `silentAfterMs`. A desktop, the iOS simulator, a device with the sensor
    * off. Decided on usable samples, not events: Chromium fires one all-null
-   * event where there is no sensor.
+   * event where there is no sensor. The window re-arms after every sample
+   * (plus `throttleMs`, the gap the throttle itself withholds), so samples
+   * that stop arriving read as silent again.
    */
   silent: boolean
-  /** Ask, from a gesture; resolves the new status and updates the hook. */
+  /** Ask, from a gesture; resolves the new status and updates every hook. */
   request: () => Promise<MotionStatus>
 }
 
+const UNSUPPORTED_ON_SERVER = (): MotionStatus => "unsupported"
+
 /**
  * Accelerometer and gyroscope samples, with the permission step and the
- * no-sensor case named. `status` is `unsupported` on the server and stays so
- * until the client reads the real engine after hydration.
+ * no-sensor case named. `status` is `unsupported` on the server; the client
+ * reads the engine from its first render, and every instance shares the one
+ * permission answer.
  */
 export function useMotion(
   options: UseMotionOptions = {},
@@ -46,45 +57,39 @@ export function useMotion(
     throttleMs = 100,
     silentAfterMs = 1500,
   } = options
-  const [status, setStatus] = useState<MotionStatus>("unsupported")
+  const status = useSyncExternalStore(
+    subscribeMotionStatus,
+    getMotionStatus,
+    UNSUPPORTED_ON_SERVER,
+  )
   const [sample, setSample] = useState<MotionSample | null>(null)
   const [silent, setSilent] = useState(false)
-
-  useEffect(() => {
-    setStatus(getMotionStatus())
-  }, [])
 
   useEffect(() => {
     if (!enabled || status !== "granted") {
       setSilent(false)
       return
     }
-    let timer: ReturnType<typeof setTimeout> | null = setTimeout(
-      () => setSilent(true),
-      silentAfterMs,
-    )
+    let timer = setTimeout(() => setSilent(true), silentAfterMs)
     const off = subscribeMotion(
       (next) => {
-        if (timer) {
-          clearTimeout(timer)
-          timer = null
-        }
+        clearTimeout(timer)
+        timer = setTimeout(
+          () => setSilent(true),
+          throttleMs + silentAfterMs,
+        )
         setSilent(false)
         setSample(next)
       },
       { throttleMs },
     )
     return () => {
-      if (timer) clearTimeout(timer)
+      clearTimeout(timer)
       off()
     }
   }, [enabled, status, throttleMs, silentAfterMs])
 
-  const request = useCallback(async () => {
-    const next = await requestMotionPermission()
-    setStatus(next)
-    return next
-  }, [])
+  const request = useCallback(() => requestMotionPermission(), [])
 
   return { status, sample, silent, request }
 }
