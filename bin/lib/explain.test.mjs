@@ -1,5 +1,15 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vitest"
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { exec } from "./exec.mjs"
 import {
   explainFailure,
   toolErrorParts,
@@ -496,5 +506,84 @@ describe("a tool's paths reach the page app-root-relative or not at all (R9)", (
         APP_ROOT,
       ),
     ).toBe("at run (src/vite/plugin.ts:23:15)")
+  })
+})
+
+/** Same capture as {@link CAP_RUN_XCODEBUILD_FAILED}: the runner spawning a `./gradlew` with no exec bit. */
+const CAP_RUN_GRADLEW_EACCES = [
+  "✖ Running Gradle build - failed!",
+  "[error] Command error. Error: spawn ./gradlew EACCES",
+].join("\n")
+
+describe("a gradle wrapper that cannot be started says so, and what to do", () => {
+  const roots = []
+  afterEach(() => {
+    for (const dir of roots.splice(0))
+      rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** A real `.adaptv/android/gradlew` without its exec bit, spawned the way `build android` does. */
+  async function spawnLockedWrapper(parent = tmpdir()) {
+    const appRoot = mkdtempSync(path.join(parent, "adaptv-gradlew-"))
+    roots.push(appRoot)
+    const android = path.join(appRoot, ".adaptv", "android")
+    mkdirSync(android, { recursive: true })
+    writeFileSync(path.join(android, "gradlew"), "#!/bin/sh\nexit 0\n")
+    chmodSync(path.join(android, "gradlew"), 0o644)
+    const err = await exec(
+      path.join(android, "gradlew"),
+      ["assembleDebug"],
+      {
+        cwd: android,
+      },
+    ).catch((e) => e)
+    return { appRoot, err }
+  }
+
+  it("names the file, relative to the app, as not executable", async () => {
+    const { appRoot, err } = await spawnLockedWrapper()
+    const { row } = await renderedFailure("android", err, appRoot)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+  })
+
+  it("carries the action that still works when adaptv could not restore it", async () => {
+    const { appRoot, err } = await spawnLockedWrapper()
+    const { detail } = await renderedFailure("android", err, appRoot)
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
+  })
+
+  it("names it the same when the app lives under a directory with a space", async () => {
+    //Node does not quote the path in `spawn <file> EACCES`, and `My Apps` or iCloud's
+    //`Mobile Documents` is an ordinary place for an app to be.
+    const parent = mkdtempSync(path.join(tmpdir(), "adaptv-My Apps-"))
+    roots.push(parent)
+    const { appRoot, err } = await spawnLockedWrapper(parent)
+    expect(appRoot).toContain(" ")
+    const { row, detail } = await renderedFailure("android", err, appRoot)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
+  })
+
+  it("reads the same through the native runner, which spawns it as ./gradlew", async () => {
+    const err = new Error(
+      "node cap.mjs run android --no-sync exited with code 1",
+    )
+    err.tail = CAP_RUN_GRADLEW_EACCES
+    const { row, detail } = await renderedFailure("android", err, APP_ROOT)
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
   })
 })
