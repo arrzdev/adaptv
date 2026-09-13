@@ -1,5 +1,6 @@
 import { Share } from "@capacitor/share"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { readFile } from "#adaptv/capabilities/filesystem"
 import {
   canShareTarget,
   isShareSupported,
@@ -261,6 +262,25 @@ describe("share — a stored file", () => {
       ["backup.json", "application/json", 2],
     ])
     expect(sent.title).toBe("backup")
+  })
+
+  it("on the web, resolves unsupported rather than rejecting when the browser has no file store to read from", async () => {
+    forceNative(false)
+    const { File: NodeFile } = await import("node:buffer")
+    vi.stubGlobal("File", NodeFile)
+    const shareSpy = vi.fn(() => Promise.resolve())
+    stubNavigatorProp("canShare", () => true)
+    stubNavigatorProp("share", shareSpy)
+    //the synchronous probe cannot open the store, so it passes; the read is
+    //where a browser without a usable origin-private file system shows itself
+    vi.mocked(readFile).mockResolvedValueOnce({
+      status: "unsupported",
+      bytes: null,
+    })
+
+    expect(canShareTarget(stored)).toBe(true)
+    expect(await share(stored)).toBe("unsupported")
+    expect(shareSpy).not.toHaveBeenCalled()
   })
 
   it("types a stored file from its extension, or from the type given, or as octet-stream", () => {
