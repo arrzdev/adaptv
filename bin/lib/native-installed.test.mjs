@@ -1,8 +1,15 @@
 // @vitest-environment node
 import { EventEmitter } from "node:events"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
+import { crc32, deflateRawSync } from "node:zlib"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // The run cache's "skip the build, relaunch what is installed" is only as good as its idea of
@@ -65,6 +72,52 @@ afterEach(() => {
   else process.env.ADAPTV_CAPACITOR_CONFIG = savedConfig
   rmSync(dir, { recursive: true, force: true })
 })
+
+/**
+ * A minimal zip (deflated entries, central directory, end record), the shape an APK has. Written
+ * here rather than borrowed so the reader under test is checked against the format, not against
+ * a second copy of its own assumptions.
+ * @param {Record<string, string>} files
+ */
+function zipOf(files) {
+  const locals = []
+  const centrals = []
+  let offset = 0
+  for (const [name, text] of Object.entries(files)) {
+    const data = Buffer.from(text)
+    const body = deflateRawSync(data)
+    const nameBuf = Buffer.from(name)
+    const local = Buffer.alloc(30)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(8, 8)
+    local.writeUInt32LE(crc32(data), 14)
+    local.writeUInt32LE(body.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(nameBuf.length, 26)
+    const central = Buffer.alloc(46)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(8, 10)
+    central.writeUInt32LE(crc32(data), 16)
+    central.writeUInt32LE(body.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(nameBuf.length, 28)
+    central.writeUInt32LE(offset, 42)
+    locals.push(local, nameBuf, body)
+    centrals.push(central, nameBuf)
+    offset += local.length + nameBuf.length + body.length
+  }
+  const dir = Buffer.concat(centrals)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(Object.keys(files).length, 8)
+  end.writeUInt16LE(Object.keys(files).length, 10)
+  end.writeUInt32LE(dir.length, 12)
+  end.writeUInt32LE(offset, 16)
+  return Buffer.concat([...locals, dir, end])
+}
 
 /** A simulator holding an `App.app` whose baked config is `baked`. */
 function simulatorWith(baked) {
@@ -153,7 +206,46 @@ describe("readInstalledConfig — reading what is baked into the installed app",
     ])
   })
 
-  it("answers null when the device cannot extract the file, so the caller rebuilds", async () => {
+  // Android 7 and 8 (API 24–27, inside minSdk) ship no `unzip` at all: it came with ziptool in
+  // Android 9. Without a second way to read the file those devices would never take the cached
+  // path again, when before they always could.
+  it("pulls the APK to this machine and reads the entry there when the device has no unzip (API 24–27)", async () => {
+    process.env.ADAPTV_CAPACITOR_CONFIG = JSON.stringify(devConfig(43100))
+    const apk = zipOf({
+      "AndroidManifest.xml": "<binary manifest>",
+      "assets/capacitor.config.json": JSON.stringify(devConfig(43110)),
+    })
+    const pulledTo = []
+    fake.answer = (command, args) => {
+      if (command !== "adb") return { status: 1 }
+      if (args[0] === "devices")
+        return {
+          stdout: "List of devices attached\nemulator-5554\tdevice\n",
+        }
+      if (args.includes("path"))
+        return { stdout: `package:/data/app/${APP_ID}-1/base.apk\n` }
+      if (
+        args[2] === "pull" &&
+        args[3] === `/data/app/${APP_ID}-1/base.apk`
+      ) {
+        writeFileSync(args[4], apk)
+        pulledTo.push(args[4])
+        return {}
+      }
+      return {
+        status: 127,
+        stdout: "/system/bin/sh: unzip: not found",
+      }
+    }
+    expect(
+      await readInstalledConfig("/app", "android", "emulator-5554", {}),
+    ).toEqual(devConfig(43110))
+    expect(pulledTo).toHaveLength(1)
+    //the copy is this function's own scratch, gone once it has been read
+    expect(existsSync(pulledTo[0])).toBe(false)
+  })
+
+  it("answers null when neither the device nor a pulled copy yields the file, so the caller rebuilds", async () => {
     process.env.ADAPTV_CAPACITOR_CONFIG = JSON.stringify(devConfig(43100))
     fake.answer = (_command, args) => {
       if (args[0] === "devices")
@@ -162,6 +254,10 @@ describe("readInstalledConfig — reading what is baked into the installed app",
         }
       if (args.includes("path"))
         return { stdout: `package:/data/app/${APP_ID}-1/base.apk\n` }
+      if (args[2] === "pull") {
+        writeFileSync(args[4], zipOf({ "classes.dex": "dex" }))
+        return {}
+      }
       return {
         status: 127,
         stdout: "/system/bin/sh: unzip: inaccessible or not found",
