@@ -1,0 +1,338 @@
+import type { Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
+
+/*
+ * Scroll anchoring against adaptv's OWN keyboard scrolls.
+ *
+ * Chromium has anchored for years; Safari 27 turns it on (WebKit 171840378), and the
+ * spec picks the focused editable as a priority anchor, which is exactly the element
+ * adaptv scrolls into view when the keyboard moves (`scrollDrawerInputIntoView` in
+ * the drawer, `scrollFocusedInputIntoView` in AvoidKeyboard). The fear is a double
+ * adjustment: content changes above the focused row, the browser compensates, adaptv
+ * compensates too, and the row jumps by the delta twice. Playwright's WebKit already
+ * anchors (`CSS.supports("overflow-anchor", "auto")` and the behaviour both measured),
+ * so this runs on both engines.
+ *
+ * Measured on both engines, with anchoring left alone and with `overflow-anchor: none`
+ * forced on the scroller as the control:
+ *
+ *   - While adaptv's smooth scroll is in flight, a 100px insertion above the field is
+ *     NOT anchored on either engine: the landing is identical with and without
+ *     anchoring (drawer scrollTop 971 with the field 12px clear, AvoidKeyboard 528).
+ *     adaptv's writes are absolute, so there is nothing for a second adjustment to add.
+ *   - At rest, the same insertion IS anchored on both engines: scrollTop +100 and the
+ *     field does not move, where the control moves it 100px.
+ *
+ * So each test pins both halves. The row keeps its place at rest: forcing
+ * `overflow-anchor: none` on the scroller fails all four runs with "at rest the field
+ * moved 382.3 -> 482.3" (the "fix" someone might reach for is a regression). And the
+ * landing does not depend on anchoring, with the drawer's field clear of the keyboard,
+ * because the drawer re-aims once its box has settled: doubling the drawer's scroll
+ * delta in `scrollDrawerInputIntoView` failed webkit on the clearance in both runs
+ * (-141px), but chromium only in one of two (scrollTop 958 with anchoring vs 964
+ * without): its slower smooth scroll lets the re-aim land a doubled delta near the
+ * target, so that half is a webkit catch, not a chromium one. AvoidKeyboard aims once, and after
+ * an insertion mid-scroll it lands short (clearance -76px) on both engines with or
+ * without anchoring; that is its own gap, not an anchoring effect, and not asserted.
+ *
+ * Rows are added below the field too, so the aimed landing is not the end of the
+ * scroller: there the browser's clamp absorbed a doubled scroll and the check passed.
+ *
+ * The content change is foreign rows inserted into the real scroller, standing in
+ * for a list that grows above the field. A desktop engine has no on-screen keyboard,
+ * so the raise goes through the keyboard seam (`window.__adaptvKeyboardMock` + the
+ * `adaptv:keyboard-mock` event), installed before the hooks mount. What this cannot
+ * see: iOS momentum (WebKit stops a fling on an anchoring adjustment) and a real
+ * keyboard's visualViewport — those stay on an iOS 27 device.
+ */
+
+test.use({ viewport: { width: 390, height: 844 } })
+test.setTimeout(60_000)
+
+const INSERT_PX = 100
+
+type Anchor = "shipped" | "none"
+type Surface = {
+  route: string
+  field: string
+  fillerRows: number
+  fillerHeight: number
+  /** the drawer's field is already focused and the keyboard raise starts its scroll;
+   *  AvoidKeyboard's scroll starts on the focus itself */
+  trigger: { raise: number } | "focus"
+}
+
+const DRAWER: Surface = {
+  route: "/lab/drawer",
+  field: "Drawer field",
+  fillerRows: 20,
+  fillerHeight: 56,
+  trigger: { raise: Math.round(844 * 0.4) },
+}
+const AVOID: Surface = {
+  route: "/lab/avoid-keyboard",
+  field: "Field six",
+  fillerRows: 8,
+  fillerHeight: 60,
+  trigger: "focus",
+}
+
+type Run = {
+  moved: boolean
+  scrollAtInsert: number
+  landing: { scrollTop: number; fieldTop: number; clearance: number }
+  steps: number[]
+  rest: { fieldBefore: number; fieldAfter: number; scrollDelta: number }
+}
+
+async function openSurface(page: Page, surface: Surface, anchor: Anchor) {
+  await page.addInitScript(() => {
+    ;(
+      window as unknown as { __adaptvKeyboardMock?: unknown }
+    ).__adaptvKeyboardMock = { isOpen: false, height: 0 }
+  })
+  await page.goto(surface.route)
+  await awaitClientHandover(page)
+  if (surface === DRAWER) {
+    await page
+      .getByRole("button", { name: "Open keyboard drawer" })
+      .click()
+    await page.locator("[data-pwa-drawer]").waitFor({ state: "attached" })
+  } else {
+    await page
+      .locator("div.h-72")
+      .filter({ has: page.getByLabel("Field one") })
+      .scrollIntoViewIfNeeded()
+  }
+  await page.getByLabel(surface.field).waitFor()
+  //foreign rows above the field, so the field starts out of view and the scroll is long,
+  await page.evaluate(
+    ({ label, rows, height, anchor }) => {
+      const field = document.querySelector<HTMLElement>(
+        `[aria-label="${label}"]`,
+      )
+      let scroller = field?.parentElement ?? null
+      while (scroller && getComputedStyle(scroller).overflowY !== "auto") {
+        scroller = scroller.parentElement
+      }
+      if (!field || !scroller)
+        throw new Error("no scroller around the field")
+      field.dataset.anchorField = ""
+      scroller.dataset.anchorScroller = ""
+      if (anchor === "none") scroller.style.overflowAnchor = "none"
+      const host = document.createElement("div")
+      host.dataset.anchorRows = ""
+      host.style.flexShrink = "0"
+      for (let i = 0; i < rows; i += 1) {
+        const row = document.createElement("div")
+        row.style.height = `${height}px`
+        host.append(row)
+      }
+      scroller.prepend(host)
+      //and rows below it, so the aimed landing is not also the end of the scroller, where
+      //the browser's clamp would hide an overshoot
+      const tail = host.cloneNode(true) as HTMLElement
+      delete tail.dataset.anchorRows
+      scroller.append(tail)
+      scroller.scrollTop = 0
+    },
+    {
+      label: surface.field,
+      rows: surface.fillerRows,
+      height: surface.fillerHeight,
+      anchor,
+    },
+  )
+}
+
+/** Raise or focus, insert above the field while adaptv's scroll is moving, record every
+ *  frame until everything has settled, then insert again at rest. All in one page task so
+ *  the insertion lands on a known frame. */
+function measure(page: Page, surface: Surface) {
+  return page.evaluate(
+    async ({ trigger, insertPx }): Promise<Run> => {
+      const frame = () =>
+        new Promise<number>((resolve) => requestAnimationFrame(resolve))
+      const field = document.querySelector<HTMLElement>(
+        "[data-anchor-field]",
+      )
+      const scroller = document.querySelector<HTMLElement>(
+        "[data-anchor-scroller]",
+      )
+      const rows = document.querySelector<HTMLElement>(
+        "[data-anchor-rows]",
+      )
+      if (!field || !scroller || !rows)
+        throw new Error("probe not installed")
+      const top = () => field.getBoundingClientRect().top
+      const insert = () => {
+        const block = document.createElement("div")
+        block.style.height = `${insertPx}px`
+        rows.prepend(block)
+      }
+      //settled = field and scrollTop unchanged for 12 consecutive frames
+      const settle = async () => {
+        let still = 0
+        let last = [top(), scroller.scrollTop]
+        for (let i = 0; i < 240 && still < 12; i += 1) {
+          await frame()
+          const now = [top(), scroller.scrollTop]
+          still =
+            Math.abs(now[0] - last[0]) < 0.5 &&
+            Math.abs(now[1] - last[1]) < 0.5
+              ? still + 1
+              : 0
+          last = now
+        }
+      }
+
+      const mock = (height: number) => {
+        ;(
+          window as unknown as { __adaptvKeyboardMock?: unknown }
+        ).__adaptvKeyboardMock = { isOpen: height > 0, height }
+        window.dispatchEvent(new Event("adaptv:keyboard-mock"))
+      }
+
+      field.focus({ preventScroll: true })
+      if (trigger !== "focus") {
+        await settle()
+        mock(trigger.raise)
+      }
+
+      const start = scroller.scrollTop
+      const steps: number[] = []
+      //one frame in before the first reading: WebKit's iPhone context reports the field
+      //at a stale -15px on the frame of the focus() call, then its real ~1029px
+      await frame()
+      let previous = top()
+      let movingFrames = 0
+      let scrollAtInsert = -1
+      const began = performance.now()
+      //the drawer re-aims 420ms after the raise; 1.5s covers it and the smooth scroll after
+      while (performance.now() - began < 1500) {
+        await frame()
+        const now = top()
+        steps.push(Math.round((now - previous) * 10) / 10)
+        previous = now
+        if (
+          scrollAtInsert < 0 &&
+          Math.abs(scroller.scrollTop - start) >= 1
+        ) {
+          movingFrames += 1
+          if (movingFrames === 3) {
+            scrollAtInsert = scroller.scrollTop
+            insert()
+          }
+        }
+      }
+      await settle()
+      const fieldRect = field.getBoundingClientRect()
+      const scrollerRect = scroller.getBoundingClientRect()
+      const landing = {
+        scrollTop: Math.round(scroller.scrollTop),
+        fieldTop: Math.round(fieldRect.top - scrollerRect.top),
+        clearance: Math.round(scrollerRect.bottom - fieldRect.bottom),
+      }
+
+      //at rest: nothing of adaptv's is scrolling and nothing else changes
+      const fieldBefore = top()
+      const scrollBefore = scroller.scrollTop
+      insert()
+      await settle()
+      return {
+        moved: scrollAtInsert >= 0,
+        scrollAtInsert: Math.round(scrollAtInsert),
+        landing,
+        steps,
+        rest: {
+          fieldBefore: Math.round(fieldBefore * 10) / 10,
+          fieldAfter: Math.round(top() * 10) / 10,
+          scrollDelta: Math.round(scroller.scrollTop - scrollBefore),
+        },
+      }
+    },
+    { trigger: surface.trigger, insertPx: INSERT_PX },
+  )
+}
+
+function distribution(steps: number[]) {
+  const sorted = [...steps].sort((a, b) => a - b)
+  const at = (p: number) =>
+    sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))]
+  return `frames ${steps.length} · field px/frame min ${sorted[0]} p10 ${at(0.1)} median ${at(0.5)} p90 ${at(0.9)} max ${sorted.at(-1)}`
+}
+
+for (const [name, surface] of [
+  ["drawer", DRAWER],
+  ["AvoidKeyboard", AVOID],
+] as const) {
+  test(`${name}: anchoring adds no second adjustment to adaptv's scroll, and keeps the row at rest`, async ({
+    browser,
+  }, testInfo) => {
+    const runs: Record<Anchor, Run> = {} as Record<Anchor, Run>
+    for (const anchor of ["none", "shipped"] as const) {
+      //a fresh context per run, carrying the project's device (iPhone 13 on webkit)
+      const { baseURL, userAgent, deviceScaleFactor, isMobile, hasTouch } =
+        testInfo.project.use
+      const context = await browser.newContext({
+        baseURL,
+        userAgent,
+        deviceScaleFactor,
+        isMobile,
+        hasTouch,
+        viewport: { width: 390, height: 844 },
+      })
+      const page = await context.newPage()
+      await openSurface(page, surface, anchor)
+      runs[anchor] = await measure(page, surface)
+      await context.close()
+    }
+    const { shipped, none } = runs
+    await testInfo.attach("runs", {
+      body: JSON.stringify(
+        {
+          shipped: { ...shipped, steps: distribution(shipped.steps) },
+          none: { ...none, steps: distribution(none.steps) },
+        },
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    })
+
+    //the premise: the insertion landed while adaptv's scroll was still travelling
+    for (const run of [shipped, none]) {
+      expect(run.moved, "adaptv's scroll never started").toBe(true)
+      expect(
+        run.landing.scrollTop - run.scrollAtInsert,
+        "the insertion landed after the scroll had finished",
+      ).toBeGreaterThan(INSERT_PX)
+    }
+
+    //no second adjustment: the landing does not depend on the browser anchoring
+    expect(
+      Math.abs(shipped.landing.scrollTop - none.landing.scrollTop),
+      `landing with anchoring ${JSON.stringify(shipped.landing)} vs without ${JSON.stringify(none.landing)}`,
+    ).toBeLessThanOrEqual(2)
+    expect(
+      Math.abs(shipped.landing.fieldTop - none.landing.fieldTop),
+    ).toBeLessThanOrEqual(2)
+
+    if (surface === DRAWER) {
+      //the drawer re-aims after its box settles, so the field ends clear, by its 12px margin
+      expect(
+        shipped.landing.clearance,
+        `drawer field clearance ${shipped.landing.clearance}px`,
+      ).toBeGreaterThanOrEqual(0)
+      expect(shipped.landing.clearance).toBeLessThanOrEqual(40)
+    }
+
+    //at rest the row keeps its place — anchoring on the scroller adaptv drives is intact
+    expect(
+      Math.abs(shipped.rest.fieldAfter - shipped.rest.fieldBefore),
+      `at rest the field moved ${shipped.rest.fieldBefore} -> ${shipped.rest.fieldAfter}`,
+    ).toBeLessThanOrEqual(1)
+    expect(shipped.rest.scrollDelta).toBe(INSERT_PX)
+  })
+}
