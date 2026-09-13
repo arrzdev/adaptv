@@ -78,6 +78,13 @@ test.describe(`stale chunk (render: ${RENDER})`, () => {
 
   test.afterAll(async () => {
     await host?.close()
+    //Put back the build the config's preview server started with. That server
+    //indexes the output directory once, at startup, so every chunk these deploys
+    //renamed is a 404 to it: the worker's precache fails to install, and every
+    //later spec waiting on a controller times out. An empty tag derives it from
+    //the bundle, as the server's own build did, so the bytes come back identical.
+    test.setTimeout(300_000)
+    deploy("", test.info().config.rootDir)
   })
 
   for (const missing of ["404", "index"] as const) {
