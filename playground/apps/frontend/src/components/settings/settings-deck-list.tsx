@@ -166,10 +166,17 @@ function SettingsDeckRow({
     newIndex,
   } = useSortable({ id: deck.id, disabled })
 
-  //drop dnd-kit's role="button"/tabIndex: this li wraps real <button>s, and a
+  //drop dnd-kit's role="button": this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
-  //the drag listeners are untouched, so drag still works
-  const { role, ...dragAttributes } = attributes
+  //drop its aria-disabled too — without the role it no longer describes the
+  //drag handle, and every control inside inherits it, so a row that merely
+  //can't be dragged read its checkbox and buttons as disabled to a screen
+  //reader. the drag listeners are untouched, so drag still works
+  const {
+    role,
+    "aria-disabled": _dragDisabled,
+    ...dragAttributes
+  } = attributes
 
   //the lifted row morphs its top corners once it will land in the top slot — the
   //one real card edge (the New deck button is the group's bottom)
