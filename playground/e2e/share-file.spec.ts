@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * A stored file through the share sheet. Headless chromium has no sheet, so
@@ -20,12 +20,6 @@ declare global {
   interface Window {
     __shared?: Captured
   }
-}
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
 }
 
 test.describe("Share a stored file", () => {
