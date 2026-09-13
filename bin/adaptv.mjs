@@ -630,6 +630,7 @@ async function runLive(appRoot, platforms, opts) {
   }
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
+  let forgetInstall = null // drops one platform's run-cache entry (a reused install caught out)
   let nativeFp = null // last-known native fingerprint per platform
   let configFp = null // last-known adaptv.config.ts + icon-art fingerprint
   // adaptv's OWN bin/ source, captured NOW — the modules this process loaded at startup. Unlike
@@ -1010,6 +1011,14 @@ async function runLive(appRoot, platforms, opts) {
       // Platforms that actually got onto a device — so a run where every native launch
       // failed (e.g. iOS signing) exits instead of pretending to "watch" nothing.
       const launched = new Set()
+      // The cache's word that an install is current is only as good as what installed it last:
+      // another checkout of the same app can install its own build under the same bundle id.
+      // When the dev server sees the device ask with a different id, the poll below drops the
+      // entry, so neither `b` nor the next run trusts it again.
+      forgetInstall = (platform) => {
+        delete runCache.run[cacheKey(platform)]
+        writeBuildState(appRoot, runCache)
+      }
 
       const launchOne = async (
         platform,
@@ -1035,7 +1044,7 @@ async function runLive(appRoot, platforms, opts) {
         if (cached) {
           // The install is current, so ITS build is the one that may reconnect — named before
           // the launch, or the app would come up to a server still saying "undecided".
-          shells.expect(platform, prev.shell)
+          shells.expect(platform, prev.shell, { cached: true })
           // Android emulator first needs the localhost route back to the host — no `cap
           // run` will set it. In external mode a physical device reaches the LAN IP
           // directly, so there's no `adb reverse` to (re-)assert.
@@ -1379,7 +1388,15 @@ async function runLive(appRoot, platforms, opts) {
       const poll = setInterval(() => {
         if (rebuilding || reloading) return
         const nowNative = snapshotNativeFp(appRoot, ready)
-        const changed = ready.filter((p) => nowNative[p] !== nativeFp?.[p])
+        // A reused install the device proved to be a different build is a native change in
+        // everything that matters to the dev: the binary on the device is not the one this run
+        // expects, and `b` is the fix. It never rebuilds on its own, for the reason below.
+        const staleInstalls = shells.staleInstalls()
+        for (const p of staleInstalls) forgetInstall?.(p)
+        const changed = ready.filter(
+          (p) =>
+            nowNative[p] !== nativeFp?.[p] || staleInstalls.includes(p),
+        )
         const nowConfig = appConfigFingerprint(appRoot, config)
         const configChanged = nowConfig !== configFp
         // adaptv's OWN source (bin/): only ever moves with a `link:`ed adaptv (framework dev), and
