@@ -276,6 +276,15 @@ describe("useFreezeViewport — what the iOS pin does to a touch", () => {
     unmount()
   })
 
+  it("leaves a drag born on the scroller's own box — its padding, a gap — to scroll too", () => {
+    //the finger lands on the scroller itself, not on a child: a ScrollView's padding,
+    //or the gap between two of its rows. That is still the scroller under the finger
+    const { box } = scroller(900)
+    const { unmount } = renderHook(() => useFreezeViewport())
+    expect(drag(box, 200, 300).defaultPrevented).toBe(false)
+    unmount()
+  })
+
   it("treats an overflow box whose content fits as content that cannot scroll", () => {
     //nothing to scroll means the gesture would chain to the page — pin it
     const { row } = scroller(300)
