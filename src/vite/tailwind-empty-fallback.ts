@@ -8,15 +8,16 @@
  * it is read with an EMPTY fallback, so a part nobody set contributes nothing:
  *
  * ```css
- * .blur { --tw-blur: blur(8px); filter: var(--tw-blur,) var(--tw-brightness,) … var(--tw-drop-shadow,) }
+ * .x { --tw-blur: blur(8px); filter: var(--tw-blur,) var(--tw-brightness,) … var(--tw-drop-shadow,) }
  * ```
  *
  * Chromium 113–118 throw the whole declaration away instead (bisected across every
  * Chrome-for-Testing milestone: broken 113–118, fixed in 119). Nothing errors; the property
  * computes to its initial value. Measured on an Android 14 emulator's WebView
- * 113.0.5672.136, against HeadlessChrome 149 as the control: `tabular-nums` computes
- * `normal` (149: `tabular-nums`), `touch-pan-y` computes `auto` (149: `pan-y`), `blur`
- * computes `none` (149: `blur(8px)`), and every `ring-*` computes `box-shadow: none`.
+ * 113.0.5672.136, against HeadlessChrome 149 as the control: with `--tw-numeric-spacing`
+ * set, `font-variant-numeric` computes `normal`; with `--tw-pan-y` set, `touch-action`
+ * computes `auto` (149: `pan-y`); with `--tw-blur` set, `filter` computes `none` (149:
+ * `blur(8px)`); and every ring width computes `box-shadow: none`.
  *
  * Every empty fallback tailwindcss@4.2.4 can emit, by the property that reads it — the test
  * re-reads Tailwind's compiler, so an upgrade that adds one fails there by name:
@@ -39,25 +40,30 @@
  * stylesheet declares `@source "../**\/*.{ts,tsx}"`, so Tailwind scans these sources —
  * comments and test strings included — and every utility NAME written here is compiled into
  * every consumer's CSS. A first draft of this rewrite added 25 utilities and 13 `@property`
- * rules to the playground that way. Tailwind's scanner does not read `--tw-*` as a class.
+ * rules to the playground that way, and a second still leaked four through prose, an
+ * example selector and a test helper's name. Tailwind's scanner does not read `--tw-*` as a class, so write
+ * parts, write example selectors as `.x`, and check an edit by running
+ * `@tailwindcss/oxide`'s `Scanner` over the file before and after: no candidate that
+ * compiles may be new.
  *
  * ## Compositions: one unregistered carrier per part, declared where it is read
  *
  * ```css
- * .blur { --tw-blur: blur(8px);
- *         --adaptv-tw-blur: var(--tw-blur); … --adaptv-tw-drop-shadow: var(--tw-drop-shadow);
- *         filter: var(--adaptv-tw-blur,) … var(--adaptv-tw-drop-shadow,) }
+ * .x { --tw-blur: blur(8px);
+ *      --adaptv-tw-blur: var(--tw-blur); … --adaptv-tw-drop-shadow: var(--tw-drop-shadow);
+ *      filter: var(--adaptv-tw-blur,) … var(--adaptv-tw-drop-shadow,) }
  * ```
  *
  * **Why it is valid on 113.** No `var()` with an empty fallback over a REGISTERED property
  * is left. The empty fallbacks now sit on unregistered carriers, which the same WebView 113
  * substitutes correctly (measured: `var(--unregistered,)` painted where `var(--registered,)`
- * did not). A carrier reads its part with no fallback at all — the plain `var()` that
- * Tailwind's own `box-shadow` stack already relies on there. An unset part makes its
- * carrier invalid at computed-value time, i.e. guaranteed-invalid, so the composition takes
- * the carrier's empty fallback. The utility that empties a part writes `--tw-blur:  ;`, and
- * lands on nothing either way: an empty carrier, or a guaranteed-invalid one if 113 also
- * refuses an empty registered value (its `--x: ;` probe suggests it might).
+ * did not). A carrier reads its part with no fallback at all, so an unset part makes its
+ * carrier invalid at computed-value time, i.e. guaranteed-invalid, and the composition takes
+ * the carrier's empty fallback. That was measured on the same WebView 113.0.5672.136 with
+ * the rewritten sheet, not inferred: a part nobody set contributes nothing (`--tw-blur` and
+ * `--tw-invert` together compute `blur(8px) invert(1)`), a part emptied by `--tw-blur:  ;`
+ * next to `--tw-brightness` computes `brightness(1.5)`, and 51 of 51 probes matched
+ * Chromium 149. It holds on Chromium 149 and WebKit 26.5 too.
  *
  * **Why it is identical on 119+.** Substitution is textual: each carrier holds exactly the
  * tokens its part holds, or nothing, so the composed value is the same token list Tailwind
@@ -69,9 +75,11 @@
  * 1. Tailwind's `@property` rules are left exactly as compiled, so the parts never inherit.
  * 2. **Every rule that reads a carrier declares it in the same block**, from the element's
  *    own part. A custom property whose `var()` is invalid computes to guaranteed-invalid —
- *    it does NOT inherit. Measured on Chromium 149 and WebKit 26.5: a child carrying the
- *    rewritten composition, under a parent whose carrier is `blur(3px)`, computes
- *    `filter: none`. ⚠︎ A rule that read a carrier WITHOUT declaring it would inherit its
+ *    it does NOT inherit. Measured on WebView 113.0.5672.136: a child whose own part is
+ *    `--tw-invert`, under a parent whose part is `--tw-blur`, computes `invert(1)`, and a
+ *    bare reader under that parent computes `filter: none`. Measured on Chromium 149 and
+ *    WebKit 26.5: a child carrying the rewritten composition, under a parent whose carrier
+ *    is `blur(3px)`, computes `filter: none`. ⚠︎ A rule that read a carrier WITHOUT declaring it would inherit its
  *    parent's part — the test holds every block Tailwind can generate to the invariant.
  *
  * `playground/e2e/tailwind-empty-fallback.spec.ts` renders every composition both ways and
