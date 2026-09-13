@@ -79,6 +79,110 @@ const snapshot = (sec: Locator): Promise<Snapshot> =>
     { trigger: TRIGGER, panel: PANEL },
   )
 
+/** One observation of the panel, taken in the page at the moment `kind` happened. */
+type TimelineEntry = {
+  t: number
+  kind:
+    | "mutation"
+    | "transitionrun"
+    | "transitionend"
+    | "transitioncancel"
+    | "frame"
+  /** The mutated attribute or the transitioned property; "" for a frame. */
+  name: string
+  hidden: string | null
+  closing: boolean
+  open: boolean
+  expanded: string | null
+  inlineHeight: string
+  height: number
+}
+
+type RecorderWindow = Window & {
+  __collapsibleClose?: { entries: TimelineEntry[]; stop: () => void }
+}
+
+/**
+ * Arms the close recorder on a section's panel. Runs in the page, so it cannot
+ * close over anything in this file: the selectors come in as the argument.
+ */
+function armCloseRecorder(
+  root: Element,
+  selectors: { trigger: string; panel: string },
+) {
+  const trigger = root.querySelector(selectors.trigger) as HTMLElement
+  const panel = root.querySelector(selectors.panel) as HTMLElement
+  const entries: TimelineEntry[] = []
+  const t0 = performance.now()
+  const record = (kind: TimelineEntry["kind"], name: string) => {
+    entries.push({
+      t: Math.round(performance.now() - t0),
+      kind,
+      name,
+      hidden: panel.getAttribute("hidden"),
+      closing: panel.getAttribute("data-collapsible-closing") !== null,
+      open: panel.getAttribute("data-collapsible-open") !== null,
+      expanded: trigger.getAttribute("aria-expanded"),
+      inlineHeight: panel.style.height,
+      height: panel.getBoundingClientRect().height,
+    })
+  }
+  const observer = new MutationObserver((records) => {
+    for (const r of records) record("mutation", r.attributeName ?? "")
+  })
+  observer.observe(panel, { attributes: true })
+  const onTransition = (event: TransitionEvent) => {
+    if (event.target !== panel) return
+    record(event.type as TimelineEntry["kind"], event.propertyName)
+  }
+  for (const type of [
+    "transitionrun",
+    "transitionend",
+    "transitioncancel",
+  ]) {
+    panel.addEventListener(type, onTransition as EventListener)
+  }
+  let frame = requestAnimationFrame(function sample() {
+    record("frame", "")
+    frame = requestAnimationFrame(sample)
+  })
+  ;(window as RecorderWindow).__collapsibleClose = {
+    entries,
+    stop: () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+      for (const type of [
+        "transitionrun",
+        "transitionend",
+        "transitioncancel",
+      ]) {
+        panel.removeEventListener(type, onTransition as EventListener)
+      }
+    },
+  }
+}
+
+/** Whether the recorder has seen `hidden` yet. Synchronous, so the poll really waits. */
+function closeRecorderSawHidden(): boolean {
+  const rec = (window as RecorderWindow).__collapsibleClose
+  return rec?.entries.some((e) => e.hidden !== null) ?? false
+}
+
+function readCloseRecorder(): TimelineEntry[] {
+  const rec = (window as RecorderWindow).__collapsibleClose
+  if (!rec) throw new Error("the close recorder was never armed")
+  rec.stop()
+  return rec.entries
+}
+
+const formatTimeline = (entries: TimelineEntry[]): string =>
+  entries
+    .map(
+      (e) =>
+        `  ${String(e.t).padStart(4)}ms ${`${e.kind}${e.name ? `(${e.name})` : ""}`.padEnd(40)} height=${e.height.toFixed(1)} inline=${JSON.stringify(e.inlineHeight)} hidden=${JSON.stringify(e.hidden)} closing=${e.closing} expanded=${e.expanded}`,
+    )
+    .join("\n")
+
 /** Poll until no transition is running on the section's panel. */
 async function awaitRest(sec: Locator) {
   await expect
@@ -182,27 +286,73 @@ test.describe("Collapsible", () => {
     await trigger.click()
     await awaitRest(sec)
 
+    // The ordering is recorded INSIDE the page, not raced from here: a read in a
+    // second Playwright call can land after the whole 200ms slide on a loaded
+    // machine and see only the end state. The recorder is armed before the click
+    // and logs, each with the panel's measured height at that instant: every
+    // attribute mutation (MutationObserver, which runs in the same task as the
+    // commit that caused it), every height transition event (listened for before
+    // the component's own listener, so it runs first on the same event), and one
+    // sample per animation frame. The frame samples are evidence for a failure's
+    // printout, not a bound: a loaded engine can skip frames, so no assertion
+    // below needs any particular frame to have been painted.
+    await sec.evaluate(armCloseRecorder, {
+      trigger: TRIGGER,
+      panel: PANEL,
+    })
     await trigger.click()
-    // closed for the accessibility tree at once, but still in the document while
-    // the slide runs — `hidden` now would make it jump shut
-    const closing = await snapshot(sec)
-    expect(closing.expanded).toBe("false")
-    expect(closing.open).toBe(false)
-    expect(closing.hidden).toBeNull()
-
-    // the first frame `hidden` appears on is the settled one: no inline height left
-    let settled: Snapshot | null = null
     await expect
-      .poll(
-        async () => {
-          settled = await snapshot(sec)
-          return settled.hidden
-        },
-        { message: "the panel never became hidden after closing" },
-      )
-      .not.toBeNull()
-    expect((settled as unknown as Snapshot).inlineHeight).toBe("")
-    expect((settled as unknown as Snapshot).phase).toBeNull()
+      .poll(() => sec.evaluate(closeRecorderSawHidden), {
+        message: "the panel never became hidden after closing",
+      })
+      .toBe(true)
+    const timeline = await sec.evaluate(readCloseRecorder)
+    // every failure below prints the whole recorded timeline
+    const why = `\n${formatTimeline(timeline)}`
+
+    // closed for the accessibility tree at once, but still in the document while
+    // the slide runs: the first thing observed after the press (the mutation
+    // records of the commit that closed it) carries the closing phase, no
+    // `hidden`, and a panel still at its open height. That record is taken in the
+    // click's own task, before any frame can pass, so load cannot skip it.
+    const started = timeline.find((e) => e.expanded === "false")
+    expect(started, `the press never closed the panel${why}`).toBeDefined()
+    const start = started as TimelineEntry
+    expect(start.kind, why).toBe("mutation")
+    expect(start.hidden, `hidden landed with the close${why}`).toBeNull()
+    expect(start.open, why).toBe(false)
+    expect(start.closing, `no closing phase${why}`).toBe(true)
+    expect(
+      start.height,
+      `the close began at no height${why}`,
+    ).toBeGreaterThan(0)
+
+    // the height reaches 0 while the panel is still displayed: the transition
+    // ends with the panel unhidden at height 0
+    const hiddenAt = timeline.findIndex((e) => e.hidden !== null)
+    const endedAt = timeline.findIndex(
+      (e) => e.kind === "transitionend" && e.name === "height",
+    )
+    expect(
+      endedAt,
+      `the close transition never ended${why}`,
+    ).toBeGreaterThanOrEqual(0)
+    const ended = timeline[endedAt] as TimelineEntry
+    expect(
+      ended.hidden,
+      `hidden was set before the height transition ended${why}`,
+    ).toBeNull()
+    expect(ended.height, `the transition ended above 0${why}`).toBe(0)
+
+    // and only after that does `hidden` appear, on a panel with no inline height
+    // and no phase left: nothing before the transition's end ever carried it
+    expect(
+      hiddenAt,
+      `hidden appeared before the height transition ended${why}`,
+    ).toBeGreaterThan(endedAt)
+    const hid = timeline[hiddenAt] as TimelineEntry
+    expect(hid.inlineHeight, why).toBe("")
+    expect(hid.closing, why).toBe(false)
   })
 
   test("reduced motion flips in one commit", async ({ page }) => {
