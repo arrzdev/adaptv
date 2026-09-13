@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Skeleton — a placeholder the size of the thing that has not arrived. What a
@@ -33,29 +34,11 @@ import { expect, test } from "@playwright/test"
 
 const PLACEHOLDER = '[data-adaptv="skeleton"]'
 
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The region and its toggle are server-rendered, so a `waitFor()` on the rows
- * is satisfied by inert HTML: a click fired in that window lands on a button
- * whose handler is not attached yet, `loading` never flips, and the assertion
- * reads the page's initial state. It is not load flake — Playwright boots its
- * own dev server and tears it down per run, so the FIRST test to reach this
- * route pays the cold transform cost and loses the race while every test
- * after it wins. A dev session left running hides it, because
- * `reuseExistingServer` then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — a cold route's first transform can outrun the 5s
- * default.
+/*
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) a
+ * click on the region's toggle lands on a button whose handler is not attached
+ * yet, `loading` never flips, and the assertion reads the page's initial state.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 async function openLab(page: Page) {
   await page.goto("/lab/skeleton")
