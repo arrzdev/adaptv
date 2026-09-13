@@ -1,4 +1,5 @@
 import { act, render } from "@testing-library/react"
+import { useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   BackPriority,
@@ -105,6 +106,64 @@ describe("Drawer and the back chain", () => {
 
     expect(inner).toHaveBeenCalledWith(false)
     expect(outer).not.toHaveBeenCalledWith(false)
+    expect(floor).not.toHaveBeenCalled()
+  })
+
+  it("closes the drawer opened last first, whatever order the tree mounts them in", () => {
+    //Two sibling drawers, the SECOND in the tree opened first and the first
+    //opened on top of it. Registering at mount ordered them by tree position,
+    //so back closed the sheet underneath and left the top one standing.
+    const floor = installRouterFloor()
+    const closedTop = vi.fn()
+    const closedUnder = vi.fn()
+    let openTop = () => {}
+    let openUnder = () => {}
+    function Page() {
+      const [top, setTop] = useState(false)
+      const [under, setUnder] = useState(false)
+      openTop = () => setTop(true)
+      openUnder = () => setUnder(true)
+      return (
+        <>
+          <Drawer
+            open={top}
+            onOpenChange={(next) => {
+              if (!next) closedTop()
+              setTop(next)
+            }}
+          >
+            <Drawer.Portal>
+              <Drawer.Content>top</Drawer.Content>
+            </Drawer.Portal>
+          </Drawer>
+          <Drawer
+            open={under}
+            onOpenChange={(next) => {
+              if (!next) closedUnder()
+              setUnder(next)
+            }}
+          >
+            <Drawer.Portal>
+              <Drawer.Content>under</Drawer.Content>
+            </Drawer.Portal>
+          </Drawer>
+        </>
+      )
+    }
+    render(<Page />)
+    act(() => openUnder())
+    act(() => openTop())
+
+    act(() => {
+      runBackChain()
+    })
+    expect(closedTop).toHaveBeenCalledTimes(1)
+    expect(closedUnder).not.toHaveBeenCalled()
+
+    act(() => {
+      runBackChain()
+    })
+    expect(closedUnder).toHaveBeenCalledTimes(1)
     expect(floor).not.toHaveBeenCalled()
   })
 })
