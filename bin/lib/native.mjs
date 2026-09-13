@@ -9,8 +9,10 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs"
@@ -37,6 +39,7 @@ import {
   resolvePluginPackages,
 } from "./native-state.mjs"
 import { readSection, writeSection } from "./state.mjs"
+import { readZipEntry } from "./zip-entry.mjs"
 
 // The framework package root (bin/lib/native.mjs → up two). adaptv OWNS Capacitor:
 // the `cap` CLI, both native platforms, and every plugin are adaptv's OWN deps, so
@@ -1828,15 +1831,15 @@ export async function androidSerialForTarget(target, env) {
  * deleted the app from the launcher, and it cannot see an install it did not make. Every
  * checkout of an app keeps its own `.adaptv/state.json`, but they all install under the same
  * bundle id, so another checkout's `dev` (or an earlier run on another port) replaces the
- * binary while this checkout's cache still vouches for the old one. That install's
- * `server.url` is someone else's dev server, and relaunching it leaves the app polling a
- * port nothing serves.
+ * binary while this checkout's cache still vouches for the old one. When that install's
+ * `server.url` is another port, relaunching it leaves the app polling a port nothing serves.
  *
  * So this asks the device what is really there, which is cheap: on the simulator the bundle
  * is a directory on this machine, and on Android the file is read out of the installed APK.
  * The caller compares it with what the command intends (`configIsStale`). Any doubt answers
- * `null` — not installed, a physical iPhone whose bundle this machine can't read, a device
- * that can't extract the file — so the caller falls back to a full build; a wasted rebuild
+ * `null` — not installed, a physical iPhone whose bundle this machine can't read, an APK that
+ * yields no config either on the device or pulled to this machine — so the caller falls back to
+ * a full build; a wasted rebuild
  * is free, a skipped one that should have happened is a debugging nightmare.
  */
 export async function readInstalledConfig(appRoot, platform, target, env) {
@@ -1886,20 +1889,36 @@ export async function readInstalledConfig(appRoot, platform, target, env) {
       )
       ?.slice("package:".length)
     if (where.status !== 0 || !apk) return null
+    const entry = "assets/capacitor.config.json"
+    //On the device first: one small read, no copy. `unzip` ships with ziptool from Android 9.
     const r = await probe(
       "adb",
-      [
-        "-s",
-        serial,
-        "shell",
-        "unzip",
-        "-p",
-        apk,
-        "assets/capacitor.config.json",
-      ],
+      ["-s", serial, "shell", "unzip", "-p", apk, entry],
       { env },
     )
-    return r.status === 0 ? parse(r.stdout ?? "") : null
+    const onDevice = r.status === 0 ? parse(r.stdout ?? "") : null
+    if (onDevice) return onDevice
+    //Android 7 and 8 (inside minSdk 24) have no `unzip`, and "can't read it" would mean those
+    //devices never take the cached path at all. So copy the APK to this machine and read the
+    //entry here — a few MB over adb, paid only where the device can't answer, and deleted after.
+    const scratch = mkdtempSync(path.join(tmpdir(), "adaptv-apk-"))
+    try {
+      const copy = path.join(scratch, "base.apk")
+      const pulled = await probe(
+        "adb",
+        ["-s", serial, "pull", apk, copy],
+        {
+          env,
+        },
+      )
+      if (pulled.status !== 0) return null
+      const bytes = readZipEntry(readFileSync(copy), entry)
+      return bytes ? parse(bytes.toString("utf8")) : null
+    } catch {
+      return null
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
   }
   return null
 }
@@ -1910,6 +1929,10 @@ export async function readInstalledConfig(appRoot, platform, target, env) {
  * The question behind every "skip the build and relaunch" fast path: installed, under the
  * install id this command uses, loading the dev server this run serves (or none, for a static
  * build). Read off the device, never the run cache — see `readInstalledConfig`.
+ *
+ * Only those two facts. It cannot tell this checkout's build from another checkout's that
+ * shares the id and the URL (same port, or two static preview builds): which BUILD is
+ * installed is a separate question the config does not answer.
  */
 export async function isInstallCurrent(appRoot, platform, target, env) {
   return !configIsStale(

@@ -135,8 +135,9 @@ re-stamp on every setup); neither guard exists now, because neither problem does
   native run in a new worktree regenerates the native project and asks which device — that's one
   slow run, then it's cached like anywhere else. The device is NOT per-worktree: every worktree
   installs under the same bundle id, so a native run only relaunches the installed app when the
-  device confirms it loads this run's dev server. Hopping worktrees (or ports) costs one rebuild,
-  never an app polling the other worktree's port.
+  device confirms it loads this run's dev server. Hopping to a worktree on a different port costs
+  one rebuild instead of an app polling the old port. Two worktrees on the SAME port pass that
+  check, so the second one can relaunch the first one's install — `b` rebuilds it.
 - **Framework edits don't invalidate the app's build cache.** `fingerprint()` walks the app tree and
   skips `node_modules`; `nativeFingerprint()` hashes the capacitor config, declared deps and the
   generated native project. Neither includes framework source, so a `preview`/`build` right after a
