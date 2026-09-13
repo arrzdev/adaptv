@@ -66,7 +66,17 @@ function openDatabase(): Promise<IDBDatabase | null> {
           request.result.createObjectStore(STORE_NAME)
         }
       }
-      request.onsuccess = () => resolve(request.result)
+      request.onsuccess = () => {
+        const db = request.result
+        //a connection that ignores versionchange blocks every deleteDatabase
+        //(a consumer's wipe on logout) and every upgrade from another tab for
+        //as long as this page lives. Step aside, and reopen on the next call.
+        db.onversionchange = () => {
+          db.close()
+          dbPromise = null
+        }
+        resolve(db)
+      }
       //resolve(null) rather than reject: every caller then takes the memory
       //path, which is exactly what should happen when storage is unavailable
       request.onerror = () => resolve(null)
