@@ -484,11 +484,14 @@ ${ANDROID_EDGE_TO_EDGE_JAVA}}
  * configured root that contains /data/data/<id>/files/lab/share.txt`, rejected the call,
  * and still opened a chooser carrying only the text (measured 2026-09-02, Pixel 10
  * emulator). adaptv's filesystem capability writes to both directories, so both are
- * roots here; external storage stays for anything a plugin puts there.
+ * roots here; external storage stays for anything a plugin puts there. The files root is
+ * the capability's own `adaptv/` namespace rather than the whole directory, because
+ * filesDir also holds the live-update plugin's `_capacitor_live_update_bundles`, and
+ * nothing there is the app's to hand out.
  */
 const ANDROID_FILE_PROVIDER_PATHS = `<?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <files-path name="files" path="." />
+    <files-path name="files" path="adaptv/" />
     <cache-path name="cache" path="." />
     <external-path name="external" path="." />
 </paths>
