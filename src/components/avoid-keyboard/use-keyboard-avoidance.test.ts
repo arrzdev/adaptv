@@ -350,6 +350,12 @@ describe("useKeyboardAvoidance — a second look when the smooth scroll ends", (
     expect(rig.aims[1].behavior).toBe("smooth")
   })
 
+  it("makes the first aim a smooth scroll, the flight the second look exists for", () => {
+    const rig = rigAvoidance()
+    rig.focusAndAim()
+    expect(rig.aims).toEqual([{ top: 264, behavior: "smooth" }])
+  })
+
   it("does not aim again when the scroll landed the field clear", () => {
     const rig = rigAvoidance()
     rig.focusAndAim()
@@ -410,6 +416,47 @@ describe("useKeyboardAvoidance — a second look when the smooth scroll ends", (
     act(() => blurred.field.blur())
     blurred.scrollEnd()
     expect(blurred.tops(), "blurred to the body").toEqual([264])
+  })
+
+  it("does not re-aim at a field removed mid-scroll, even when no focusout fires", () => {
+    //WebKit removes a focused field without a blur or focusout (Chromium fires both), so
+    //the focus check at the end of the scroll is the only thing that sees it gone
+    const rig = rigAvoidance()
+    flyWithInsertion(rig)
+    let focusouts = 0
+    rig.field.addEventListener("focusout", () => {
+      focusouts += 1
+    })
+    const swallow = (event: Event) => event.stopPropagation()
+    document.addEventListener("focusout", swallow, { capture: true })
+    act(() => rig.field.remove())
+    document.removeEventListener("focusout", swallow, { capture: true })
+
+    expect(focusouts, "the premise: the field saw no focusout").toBe(0)
+    expect(rig.field.isConnected).toBe(false)
+    rig.scrollEnd()
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(rig.tops(), "nothing aimed at the detached field").toEqual([
+      264,
+    ])
+  })
+
+  it("settles a scroll that never starts on the quiet window, so a later scrollend aims nothing", () => {
+    //an aim past the end of a scroller already clamped there fires neither scroll nor
+    //scrollend. The rig stands in for it: the aim lands the field clear without a single
+    //scroll event, and the next scrollend is an unrelated one, 2s later, after content
+    //has pushed the field back under the line
+    const rig = rigAvoidance()
+    rig.focusAndAim()
+    rig.state.scrollTop = 264
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    rig.insertAbove(100)
+    rig.scrollEnd()
+    expect(rig.tops()).toEqual([264])
   })
 
   it("aims at most once more per aim, however many scrolls end after it", () => {
