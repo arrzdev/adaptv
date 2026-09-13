@@ -30,17 +30,16 @@ against shipped code are not roadmap items either — those live as `B` entries 
 
 | # | Item | Where | Size | Note |
 |---|---|---|---|---|
-| 1 | **Android target API 36** | [`android-api-36.md`](android-api-36.md) | medium | ⏰ **Google Play deadline 2026-08-31 — that is tomorrow.** `adaptv doctor` already *detects* it; nothing *fixes* it. |
-| 2 | **First-party `@adaptv/shell` plugin** | [`native-shell-plugin.md`](native-shell-plugin.md) | large | ⚠︎ **Needs a redesign before an implementation.** Capacitor 8's core `SystemBars` took over the ground it was designed to claim. |
-| 3 | **`dist` cutover** | [`dist-cutover.md`](dist-cutover.md) | small | The build is done and verified; only the `exports` flip and the playground shims remain. |
-| 4 | **`create-adaptv` scaffolder** | [`create-adaptv.md`](create-adaptv.md) | medium | Unblocked, low risk. |
-| 5 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, filesystem, biometrics) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
-| 6 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text` is **done**. |
-| 7 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Four named items. Five of the original nine are discharged and were removed. |
-| 8 | **Owed device verification** | [`owed-device-verification.md`](owed-device-verification.md) | small each | Six checks no unit test can close. Cheap individually; they need hardware. |
-| 9 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |
-| 10 | **Open questions** | [`open-questions.md`](open-questions.md) | — | Nine undecided questions plus one the register never carried; O22 (overlays) was answered 2026-09-09. Not work — decisions owed. |
-| 11 | **`src/` reorganisation** | [`src-reorg.md`](src-reorg.md) | medium | **§0 answers "what would be ideal"** against the source trees of nine peer frameworks: all nine divide by **where the code executes**, adaptv divides by layer only, and the fix is a rename plus a gate rather than a restructure. **§1–§7** evaluate the owner's three proposals (group by domain · tests in their own folder · domain-first filenames) — **one, narrowly**, and against the other two. No locked decision conflicts. Sequenced **after** the `dist` cutover, except the one step that moves no files. |
+| 1 | **First-party `@adaptv/shell` plugin** | [`native-shell-plugin.md`](native-shell-plugin.md) | large | ⚠︎ **Needs a redesign before an implementation.** Capacitor 8's core `SystemBars` took over the ground it was designed to claim. |
+| 2 | **`dist` cutover** | [`dist-cutover.md`](dist-cutover.md) | small | The build is done and verified; only the `exports` flip and the playground shims remain. |
+| 3 | **`create-adaptv` scaffolder** | [`create-adaptv.md`](create-adaptv.md) | medium | Unblocked, low risk. |
+| 4 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, filesystem, biometrics) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
+| 5 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text` is **done**. |
+| 6 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Four named items. Five of the original nine are discharged and were removed. |
+| 7 | **Owed device verification** | [`owed-device-verification.md`](owed-device-verification.md) | small each | Seven checks no unit test can close. Cheap individually; they need hardware. |
+| 8 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |
+| 9 | **Open questions** | [`open-questions.md`](open-questions.md) | — | Nine undecided questions plus one the register never carried; O22 (overlays) was answered 2026-09-09. Not work — decisions owed. |
+| 10 | **`src/` reorganisation** | [`src-reorg.md`](src-reorg.md) | medium | **§0 answers "what would be ideal"** against the source trees of nine peer frameworks: all nine divide by **where the code executes**, adaptv divides by layer only, and the fix is a rename plus a gate rather than a restructure. **§1–§7** evaluate the owner's three proposals (group by domain · tests in their own folder · domain-first filenames) — **one, narrowly**, and against the other two. No locked decision conflicts. Sequenced **after** the `dist` cutover, except the one step that moves no files. |
 
 ---
 
@@ -78,3 +77,4 @@ being surprising.
 | Dev-loop §C "add the instance lock" | `bin/lib/lock.mjs` |
 | Dev-loop §F `OFFLINE_PAGE` "keep in sync" | mechanised by `src/shell/offline-page-name.test.ts` |
 | Lint delivery (Biome vs oxlint) | Biome 2.3.2, verified end-to-end (**O7** in the register) |
+| **Android target API 36** | `src/native/android-sdk.ts` (`ANDROID_SDK_LEVELS`, stamped into `variables.gradle` on every Android prepare by `bin/lib/native.mjs`); `adaptv doctor` reads `variables.gradle`. The record is **B9** in [`../decisions/register.md`](../decisions/register.md) |

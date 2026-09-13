@@ -520,9 +520,50 @@ Filed here so they don't get lost in the design discussion.
 
 ## 6.0 ⏰ Time-sensitive — act on these first
 
-### B9 — **Google Play requires target API 36 by 2026-08-31.** That is ~6 weeks out.
+### B9 — Google Play requires target API 36 by 2026-08-31 ✅ **FIXED**
 
-Extensions available to 2026-11-01. Consequences, all verified against `developer.android.com`:
+**Shipped 2026-09-02.** The Android project adaptv generates targets API 36, and adaptv owns that
+number rather than inheriting it. It had in fact been there all along: the pinned `@capacitor/cli`
+template (**L21** pins it exact) already writes `compileSdkVersion = 36` and `targetSdkVersion = 36`
+into `.adaptv/android/variables.gradle`, so every project adaptv scaffolded met the deadline by
+inheritance — and nothing in adaptv knew it. Now `src/native/android-sdk.ts` holds
+`ANDROID_SDK_LEVELS = { compile: 36, target: 36 }` as the single source, and `stampAndroidSdkLevels()`
+writes both into `variables.gradle` on **every** Android prepare — the freshly scaffolded project and
+the one that already existed alike (both branches of `capAddIfMissing` in `bin/lib/native.mjs`,
+through `writeIfChanged`, so an unchanged file is not rewritten). That is the difference between
+inheriting and owning: a project scaffolded by an older template, or a later requirement bump in
+adaptv, reaches an existing `.adaptv/android` instead of waiting for the dev to delete it. A test
+extracts the real template from the pinned tarball and asserts that its pin is at or above adaptv's
+requirement and that the stamp is a no-op on it — so a template bump that lowers the level, or a
+requirement bump the template has not caught up to, fails in the suite rather than on Play.
+
+**The doctor check was dead on adaptv's own project.** `checkAndroidTargetSdk` in
+`src/native/doctor.ts` warned on a `targetSdk` below 36 — but doctor fed it
+`.adaptv/android/app/build.gradle`, which says only `targetSdkVersion rootProject.ext.targetSdkVersion`.
+No digits, so the regex never matched, `null` came back, and the warning could not fire on any project
+adaptv generated; its tests only ever saw synthetic strings. Doctor now reads `variables.gradle`
+(`readAndroidTargetSdk()`; the input is `androidVariablesGradle`, the old one deleted), and the test
+that would have caught this feeds it the real `app/build.gradle` text and asserts `null`. The check
+stays as a guard for the window between a level lowered by hand and the next Android prepare, which
+raises it again; it is no longer the only thing standing between the app and the deadline.
+
+**Device result.** Measured on an Android 17 emulator (API 37.1, edge-to-edge enforced, Pixel 10
+image), reading the installed APK's `targetSdkVersion` and the injected `--safe-area-inset-*` over CDP:
+
+`adaptv build android` on a probe copy of the playground (Android 17 emulator, API 37, WebView 149,
+1080×2424 at 420 dpi): `aapt dump badging` on the `.apk` reads `targetSdkVersion:'36'`,
+`compileSdkVersion='36'`, `sdkVersion:'24'`; `dumpsys package` on the installed app agrees
+(`targetSdk=36`). Over CDP, with the running `assets/index-*.js` matched against the APK's own copy
+first, `--safe-area-inset-top` is `54px` and `--safe-area-inset-bottom` is `24px`, `innerHeight` is
+`923` on a 923-pt panel — the WebView spans the whole screen, both bars are transparent over the
+app's own `rgb(10, 10, 12)`, and the status-bar icons are light on dark. A `variables.gradle`
+lowered to 35 by hand is raised back to 36 on the next `build android` and the APK targets 36
+again; `doctor` names it in between.
+
+A **physical** API-36 panel is still owed — the system-bar treatment on real glass →
+[`../roadmap/owed-device-verification.md`](../roadmap/owed-device-verification.md) row 7.
+
+Consequences, all verified against `developer.android.com` and still true platform facts:
 
 - **Android 16 (API 36) removes the edge-to-edge opt-out entirely.** `R.attr#windowOptOutEdgeToEdgeEnforcement`
   is *"deprecated and disabled."* Every adaptv app shipping after that date is unconditionally edge-to-edge.

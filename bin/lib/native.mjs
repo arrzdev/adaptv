@@ -905,7 +905,10 @@ export async function capAddIfMissing(
     if (platform === "ios") {
       await injectIosPluginPods(appRoot, env, { report, plugins })
       await stampIosPrivacyManifest(appRoot, { plugins, privacy })
-    } else injectAndroidPluginProjects(appRoot, { report, plugins })
+    } else {
+      injectAndroidPluginProjects(appRoot, { report, plugins })
+      await stampAndroidSdkLevels(appRoot)
+    }
     return
   }
 
@@ -949,7 +952,37 @@ export async function capAddIfMissing(
   if (platform === "ios") {
     await injectIosPluginPods(appRoot, env, { report, plugins })
     await stampIosPrivacyManifest(appRoot, { plugins, privacy })
-  } else injectAndroidPluginProjects(appRoot, { report, plugins })
+  } else {
+    injectAndroidPluginProjects(appRoot, { report, plugins })
+    await stampAndroidSdkLevels(appRoot)
+  }
+}
+
+/**
+ * The Android SDK levels adaptv ships, written into the project it owns.
+ *
+ * On EVERY android prepare, not only the scaffold: the project is written once and then
+ * persists, so a template bump or a requirement bump in adaptv would otherwise reach a new
+ * project and never an existing one — and the level Google Play gates on (36 since
+ * 2026-08-31) was nobody's, inherited from the template by whichever version scaffolded
+ * the project. The numbers live in `src/native/android-sdk.ts`, reached the way
+ * `themeColors` reaches the config resolver; `doctor` reads the same file with the same
+ * module, so the two can never disagree about what the level is.
+ *
+ * Silent, in both outcomes (R18): an unchanged file is not rewritten (`writeIfChanged` —
+ * this file feeds the native build's own up-to-date checks), and a raised one is adaptv
+ * handling adaptv's value, which is not the dev's concern and has no phrase in the
+ * closed vocabulary. A project without the file is a shape this does not know and is
+ * left alone.
+ * @param {string} appRoot
+ */
+async function stampAndroidSdkLevels(appRoot) {
+  const file = path.join(nativeDir(appRoot, "android"), "variables.gradle")
+  if (!existsSync(file)) return
+  const { stampAndroidSdkLevels: stamp } = await loadAdaptvModule(
+    "native/android-sdk.ts",
+  )
+  writeIfChanged(file, stamp(readFileSync(file, "utf8")))
 }
 
 /** The packages adaptv ships that carry NATIVE code for `platform` — every plugin, plus
