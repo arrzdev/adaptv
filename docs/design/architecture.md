@@ -265,7 +265,9 @@ respects the consumer-wired-data doctrine.
 > reports which mode is in play, and turns `false` while any value lives only in memory.
 >
 > `useStore` has a loading state and `useKv` does not; that asymmetry is inherent, not an oversight —
-> the backing store is genuinely asynchronous.
+> the backing store is genuinely asynchronous. Its reactivity is the same as `useKv`'s within a page:
+> `subscribeStore` wakes every hook on the key after any `set`, `remove` or `clear`, and the hook
+> re-reads. Other tabs are not observed (IndexedDB has no `storage` event).
 
 ### 2.3 `storage.secure` — secrets, **async**
 
