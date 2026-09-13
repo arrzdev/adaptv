@@ -158,7 +158,7 @@ function checkPrivacyManifest(input: DoctorInput): Diagnostic | null {
     detail:
       "The plugins adaptv compiles in touch Apple required-reason APIs. The manifest is not " +
       "checked at build time, so App Store Connect rejects the upload with a generic message, days later.",
-    fix: "Run `adaptv build ios` (or `adaptv preview ios`), which regenerates it from the installed plugin set.",
+    fix: "Run 'adaptv build ios' (or 'adaptv preview ios'), which regenerates it from the installed plugin set.",
   }
 }
 
@@ -183,7 +183,13 @@ export function runDoctor(input: DoctorInput): Diagnostic[] {
     )
 }
 
-/** Format diagnostics for the terminal. */
+/**
+ * Format diagnostics for the terminal. `doctor` prints these lines as its own, so they speak
+ * the CLI's language: `✖` for an error and `!` for a warning, the glyphs every other row uses
+ * (R26), and commands quoted with `'` (R43). A second glyph set here is invisible to the scan
+ * in `bin/lib/engine.test.mjs`, which reads `bin/` only; `bin/commands/doctor.test.mjs` reads
+ * the rendered page instead.
+ */
 export function formatDiagnostics(
   diagnostics: readonly Diagnostic[],
 ): string {
@@ -193,7 +199,7 @@ export function formatDiagnostics(
   return diagnostics
     .map((d) =>
       [
-        `${d.severity === "error" ? "✗" : "!"} ${d.title}`,
+        `${d.severity === "error" ? "✖" : "!"} ${d.title}`,
         `  ${d.detail}`,
         `  fix: ${d.fix}`,
       ].join("\n"),
