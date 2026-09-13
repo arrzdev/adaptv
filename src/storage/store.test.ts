@@ -209,3 +209,24 @@ describe("store — a write IndexedDB refuses", () => {
     expect(await store.keys()).toEqual([])
   })
 })
+
+describe("store — sharing the database", () => {
+  it("steps aside for a delete or an upgrade elsewhere, then reopens", async () => {
+    //an open connection that ignores versionchange blocks every deleteDatabase
+    //(a consumer's wipe on logout) and every version bump from another tab until
+    //this page closes. The store has to close on request and reopen on its next
+    //call, still persistent.
+    await store.set("k", 1)
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    expect(outcome).toBe("deleted")
+
+    expect(await store.get("k")).toBeUndefined()
+    await store.set("k", 2)
+    expect(await store.get("k")).toBe(2)
+    expect(await store.isPersistent()).toBe(true)
+  })
+})
