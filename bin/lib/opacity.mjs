@@ -45,19 +45,3 @@ export const namesPlumbing = (line) => PLUMBING.test(String(line ?? ""))
  */
 export const withoutPlumbing = (lines) =>
   (lines ?? []).filter((l) => !namesPlumbing(l))
-
-/**
- * Is this file the DEV'S code? Only their own source may be named in a locator, and the test is
- * ownership rather than spelling: anything under `node_modules` belongs to the toolchain, and
- * so does anything adaptv generates into `.adaptv/`. Everything else under the app root is
- * theirs and is exactly what they need to see.
- *
- * `file` may be absolute or already relative; `appRoot` is compared as a plain prefix because
- * both come from the same process and neither is user input.
- */
-export function isAppSource(file, appRoot) {
-  const f = String(file ?? "")
-  if (!f || f.includes("node_modules") || f.includes(".adaptv/"))
-    return false
-  return !f.startsWith("/") || (!!appRoot && f.startsWith(`${appRoot}/`))
-}
