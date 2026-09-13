@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The drawer's keyboard room is `keyboard - shrink`: the part of the keyboard the layout
@@ -53,7 +54,7 @@ test.describe("the drawer's keyboard room against a shrinking layout viewport", 
       ).__adaptvKeyboardMock = { isOpen: false, height: 0 }
     })
     await page.goto("/lab/drawer")
-    await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
+    await awaitClientHandover(page)
     await page
       .getByRole("button", { name: "Open keyboard drawer", exact: true })
       .first()
