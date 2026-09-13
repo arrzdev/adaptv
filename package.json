@@ -44,6 +44,7 @@
     "preview:web": "node scripts/playground.mjs preview:web",
     "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.bin.json"
   },
   "imports": {
@@ -126,6 +127,7 @@
     "@testing-library/react": "16.3.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "@vitest/coverage-v8": "4.1.2",
     "clsx": "2.1.1",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "20.11.2",

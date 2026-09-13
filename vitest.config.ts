@@ -107,5 +107,32 @@ export default defineConfig({
       "playground/**",
       ".claude/**",
     ],
+    //Only read when a run asks for it (`pnpm test:coverage`); a plain `pnpm test`
+    //never loads the provider. There are deliberately no thresholds: a floor
+    //would fail a PR for landing a file before its tests, and turn the percentage
+    //into a number to defend. It is a map to read.
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}", "bin/**/*.mjs"],
+      exclude: [
+        "**/*.test.{ts,tsx,mjs}",
+        "**/*.test-helper.ts",
+        "src/test-utils/**",
+        "**/*.d.ts",
+        "**/*.gen.*",
+        //Aliased per app: `#adaptv-route-tree` is `<app>/.adaptv/routeTree.gen.ts`,
+        //which only a consumer build maps (bundler alias + tsconfig paths). No test
+        //imports this module, so coverage transforms it cold to report it as
+        //uncovered, Vite reads the specifier as one of this package's own `imports`
+        //entries, throws `Missing "#adaptv-route-tree" specifier`, and the whole run
+        //exits 1 with no report. It has no logic to measure: it forwards the app's
+        //route tree and router options to `createAdaptvRouter`, which is measured.
+        "src/routes/router-entry.tsx",
+      ],
+      reporter: ["text-summary", "html", "json-summary"],
+      reportsDirectory: "./coverage",
+      //a red test must not also cost the map: the summary is still worth reading
+      reportOnFailure: true,
+    },
   },
 })
