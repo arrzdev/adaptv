@@ -374,9 +374,16 @@ test.describe("Spinner", () => {
     const read = () =>
       page.getByTestId("spinner-busy").evaluate((el) => {
         const path = el.querySelector("path")
+        //the system text colour, read off a plain element outside the spinner
+        const probe = document.createElement("span")
+        probe.style.color = "CanvasText"
+        document.body.appendChild(probe)
+        const canvasText = getComputedStyle(probe).color
+        probe.remove()
         return {
           color: getComputedStyle(el).color,
           stroke: path ? getComputedStyle(path).stroke : null,
+          canvasText,
         }
       })
     const normal = await read()
@@ -385,8 +392,13 @@ test.describe("Spinner", () => {
     console.log(
       `[spinner-forced chromium] ${JSON.stringify({ normal, forced })}`,
     )
-    expect(forced.stroke).toBe(forced.color)
     expect(normal.stroke).toBe(normal.color)
+    //premise: forcing colours changed this page's text colour at all
+    expect(forced.canvasText).not.toBe(normal.color)
+    //the arc took the forced colour — not merely "stroke equals color", which also
+    //holds when the spinner opts out with forced-color-adjust: none
+    expect(forced.stroke).toBe(forced.canvasText)
+    expect(forced.stroke).not.toBe(normal.stroke)
   })
 })
 
