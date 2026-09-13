@@ -136,11 +136,22 @@ function probeFiles(target: ShareTarget): File[] | null {
   )
 }
 
-/** The stored files read back as `File`s. Rejects on a path that is not there: a caller error. */
-async function readStoredFiles(target: ShareTarget): Promise<File[]> {
+/**
+ * The stored files read back as `File`s, or `null` when this target has no file
+ * store to read them from. Rejects on a path that is not there: a caller error.
+ *
+ * `canShareTarget` is synchronous and cannot open the store, so a browser with
+ * `canShare` and no usable origin-private file system (no `createWritable()`, or
+ * a root the engine refuses to open) passes the probe; that is a target that
+ * cannot share this payload, which `share` reports as `"unsupported"`.
+ */
+async function readStoredFiles(
+  target: ShareTarget,
+): Promise<File[] | null> {
   const out: File[] = []
   for (const file of target.storedFiles ?? []) {
     const read = await readFile(file.path, { scope: file.scope })
+    if (read.status === "unsupported") return null
     if (read.status !== "ok" || !read.bytes) {
       throw new Error(`stored file is ${read.status}: ${file.path}`)
     }
@@ -277,6 +288,7 @@ export async function share(target: ShareTarget): Promise<ShareOutcome> {
   const stored = target.storedFiles?.length
     ? await readStoredFiles(target)
     : []
+  if (!stored) return "unsupported"
   try {
     await navigator.share(toWebPayload(target, stored))
     return "shared"
