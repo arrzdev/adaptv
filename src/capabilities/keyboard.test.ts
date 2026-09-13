@@ -58,6 +58,19 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+// A native shell whose binary lists exactly these plugins, the way the native layer
+// injects `Capacitor.PluginHeaders` before any app JS runs.
+function forceNativeBinary(
+  plugins: string[],
+  platform: "ios" | "android" = "android",
+): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    getPlatform: () => platform,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
 describe("hasNativeKeyboard", () => {
   it("tracks the platform", async () => {
     const { hasNativeKeyboard } = await load()
@@ -66,6 +79,26 @@ describe("hasNativeKeyboard", () => {
     forceNative(false)
     expect(hasNativeKeyboard()).toBe(false)
   })
+
+  it("is true on a binary that carries the plugin", async () => {
+    const { hasNativeKeyboard } = await load()
+    forceNativeBinary(["Keyboard", "Haptics"])
+    expect(hasNativeKeyboard()).toBe(true)
+  })
+
+  // The Android binaries that shipped without adaptv's plugins (register.md, "Root
+  // cause — and it is much wider than the status bar") reject every Keyboard call.
+  // Answering `true` there sends use-keyboard down the native branch, whose events
+  // never arrive, and the drawer never lifts over the keyboard: the web path is the
+  // one that still works.
+  it.each(["android", "ios"] as const)(
+    "is false on a binary without the plugin (%s)",
+    async (platform) => {
+      const { hasNativeKeyboard } = await load()
+      forceNativeBinary(["Haptics", "Device"], platform)
+      expect(hasNativeKeyboard()).toBe(false)
+    },
+  )
 })
 
 describe("initNativeKeyboard", () => {
@@ -157,6 +190,16 @@ describe("initNativeKeyboard", () => {
       }
     },
   )
+
+  it("asks nothing of a binary without the plugin", async () => {
+    const { initNativeKeyboard, subscribeNativeKeyboard, Keyboard } =
+      await load()
+    forceNativeBinary(["Haptics"], "ios")
+    initNativeKeyboard()
+    subscribeNativeKeyboard(() => {})()
+    expect(Keyboard.addListener).not.toHaveBeenCalled()
+    expect(Keyboard.setResizeMode).not.toHaveBeenCalled()
+  })
 
   it("is a no-op off native", async () => {
     const { initNativeKeyboard, Keyboard } = await load()
