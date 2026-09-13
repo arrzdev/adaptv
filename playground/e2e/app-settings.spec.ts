@@ -8,6 +8,7 @@ import {
   expectDrawerGone,
   holdToConfirm,
   pressChip,
+  pressControlAndCarry,
   TUTORIAL_DECK,
   taskCounts,
 } from "./support/tasks-app"
@@ -75,10 +76,29 @@ test.describe("settings and decks", () => {
     await expect
       .poll(() => settingsDeckNames(page))
       .toEqual(["🪜 Tutorial"])
+    //the only deck cannot be reordered, so its row is not a sortable item: no
+    //tab stop that Space cannot pick up, no drag instructions read to a screen
+    //reader. A second deck makes both rows sortable, which is the control
+    const tutorialRow = page
+      .getByRole("listitem")
+      .filter({ hasText: "Tutorial" })
+    await expect(
+      tutorialRow,
+      "a row that cannot be dragged is not announced as sortable",
+    ).not.toHaveAttribute("aria-roledescription")
+    await expect(
+      tutorialRow,
+      "a row that cannot be dragged is not a tab stop",
+    ).not.toHaveAttribute("tabindex")
     await createDeck(page, "Groceries", "🛒")
     await expect
       .poll(() => settingsDeckNames(page))
       .toEqual(["🪜 Tutorial", "🛒 Groceries"])
+    await expect(tutorialRow).toHaveAttribute(
+      "aria-roledescription",
+      "sortable",
+    )
+    await expect(tutorialRow).toHaveAttribute("tabindex", "0")
 
     //Enter on a row's button opens that deck. It must not ALSO pick the row up
     //for a keyboard drag — which dims the list behind the sheet, announces a
@@ -138,8 +158,24 @@ test.describe("settings and decks", () => {
       .poll(() => settingsDeckNames(page))
       .toEqual(["🪜 Tutorial", "🛒 Errands"])
 
-    //press the deck's name (the buttons stop the drag from arming), move past
-    //the 8px activation distance, carry it over the first row and drop
+    //a press that lands on a row's Edit button and is carried onto the other row
+    //is a press on the button, not a grab of the row: the order must not change.
+    //The real drag below is the proof: from [Tutorial, Errands] it gives
+    //[Errands, Tutorial], but had this press already reordered, it would carry
+    //Errands back down and end in [Tutorial, Errands]
+    await pressControlAndCarry(
+      page,
+      page.getByRole("button", { name: "Edit Errands" }),
+      page.getByRole("listitem").filter({ hasText: "Tutorial" }),
+    )
+    await expect(
+      drawer(page),
+      "a press carried off the Edit button does not open the deck",
+    ).toHaveCount(0)
+
+    //grab the row by the deck's name, the part of the row that is not a
+    //control, move past the 8px activation distance, carry it over the first
+    //row and drop
     const from = await page
       .getByRole("listitem")
       .filter({ hasText: "Errands" })
@@ -158,7 +194,8 @@ test.describe("settings and decks", () => {
     await page.mouse.up()
     await expect
       .poll(() => settingsDeckNames(page), {
-        message: "the drop reorders",
+        message:
+          "the drop reorders, once: the Edit press before it must not have",
       })
       .toEqual(["🛒 Errands", "🪜 Tutorial"])
 
@@ -240,6 +277,9 @@ test.describe("settings and decks", () => {
   test("deleting a deck takes its tasks with it, and the last deck cannot be deleted", async ({
     page,
   }) => {
+    //the confirm is a real 5 s hold on top of a cold load and the setup, and the
+    //test measured 16-21 s against the default 30 s budget, so it gets triple
+    test.slow()
     await openApp(page, "/settings")
     await expect(
       page.getByRole("button", { name: "Delete Tutorial" }),
@@ -282,6 +322,9 @@ test.describe("settings and decks", () => {
   test("delete data wipes every deck and task, reseeds, and keeps the preferences", async ({
     page,
   }) => {
+    //the confirm is a real 10 s hold on top of a cold load and the setup, and
+    //the test measured 16-21 s against the default 30 s budget, so it gets triple
+    test.slow()
     await openApp(page)
     await createTask(page, { title: "Something to lose" })
     await goToSettings(page)

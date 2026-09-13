@@ -182,8 +182,9 @@ export async function chooseSort(page: Page, title: string) {
 
 /*
  * Reorder with the mouse: press a card, move past dnd-kit's 8px activation
- * distance, carry it over the target card and drop. The press lands left of
- * centre, on the card's own body, which is where a user grabs it.
+ * distance, carry it over the target card and drop. The press lands on the
+ * card's title, its body, which is where a user grabs it. It must not land on
+ * the checkbox: a press there belongs to the checkbox and never lifts the card.
  */
 export async function dragCardOnto(
   page: Page,
@@ -191,9 +192,14 @@ export async function dragCardOnto(
   onto: string,
 ) {
   const from = await card(page, title).boundingBox()
+  const grip = await card(page, title)
+    .getByText(title, { exact: true })
+    .boundingBox()
   const to = await card(page, onto).boundingBox()
-  if (!from || !to) throw new Error("a card to reorder has no layout box")
-  const x = from.x + 40
+  if (!from || !grip || !to) {
+    throw new Error("a card to reorder has no layout box")
+  }
+  const x = grip.x + Math.min(20, grip.width / 2)
   const y = from.y + from.height / 2
   await page.mouse.move(x, y)
   await page.mouse.down()
@@ -201,6 +207,31 @@ export async function dragCardOnto(
   await page.mouse.move(x, to.y + (to.y < from.y ? 5 : to.height - 5), {
     steps: 15,
   })
+  await page.mouse.up()
+}
+
+/*
+ * Press the centre of a control inside a sortable row and carry the mouse, still
+ * held, onto another row, as a user does who grabs a row by its checkbox or its
+ * Edit button. Pressing a control is not grabbing the row, so this must NOT
+ * reorder. "Nothing happened" has no event to wait on, so the callers follow it
+ * with a real drag whose result differs if this one had reordered.
+ */
+export async function pressControlAndCarry(
+  page: Page,
+  control: Locator,
+  onto: Locator,
+) {
+  const from = await control.boundingBox()
+  const to = await onto.boundingBox()
+  if (!from || !to) throw new Error("a control to press has no layout box")
+  const x = from.x + from.width / 2
+  const y = from.y + from.height / 2
+  const toY = to.y + to.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x, y + (toY < y ? -10 : 10), { steps: 3 })
+  await page.mouse.move(x, toY, { steps: 15 })
   await page.mouse.up()
 }
 
