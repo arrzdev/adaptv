@@ -65,6 +65,54 @@ describe("useMotion", () => {
     expect(result.current.sample?.gravity?.z).toBe(9.7)
   })
 
+  it("renders the real status on the first client render, not unsupported", () => {
+    vi.stubGlobal("DeviceMotionEvent", function DeviceMotionEvent() {})
+    const seen: string[] = []
+    renderHook(() => {
+      const result = useMotion()
+      seen.push(result.status)
+      return result
+    })
+    expect(seen[0]).toBe("granted")
+  })
+
+  it("shares one status: a grant asked through one hook reaches every other", async () => {
+    vi.useFakeTimers()
+    const ctor = function DeviceMotionEvent() {} as unknown as {
+      requestPermission: () => Promise<"granted">
+    }
+    ctor.requestPermission = async () => "granted"
+    vi.stubGlobal("DeviceMotionEvent", ctor)
+    const asker = renderHook(() => useMotion({ throttleMs: 0 }))
+    const other = renderHook(() => useMotion({ throttleMs: 0 }))
+    expect(other.result.current.status).toBe("prompt")
+    await act(async () => {
+      await asker.result.current.request()
+    })
+    expect(other.result.current.status).toBe("granted")
+    act(() => {
+      window.dispatchEvent(motionEvent(9.6))
+    })
+    expect(other.result.current.sample?.gravity?.z).toBe(9.6)
+  })
+
+  it("goes silent again when samples stop after they had been arriving", () => {
+    vi.useFakeTimers()
+    vi.stubGlobal("DeviceMotionEvent", function DeviceMotionEvent() {})
+    const { result } = renderHook(() =>
+      useMotion({ throttleMs: 100, silentAfterMs: 500 }),
+    )
+    act(() => {
+      window.dispatchEvent(motionEvent(9.8))
+      vi.advanceTimersByTime(550)
+    })
+    expect(result.current.silent).toBe(false)
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(result.current.silent).toBe(true)
+  })
+
   it("keeps the listener off while disabled", () => {
     vi.useFakeTimers()
     vi.stubGlobal("DeviceMotionEvent", function DeviceMotionEvent() {})
