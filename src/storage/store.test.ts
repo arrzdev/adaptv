@@ -311,3 +311,23 @@ describe("store — sharing the database", () => {
     expect(await store.isPersistent()).toBe(true)
   })
 })
+
+describe("store — a wipe from outside", () => {
+  it("forgets values held in memory when the database is deleted", async () => {
+    //a refused write lives only in memory; a deleteDatabase is the logout wipe,
+    //and it has to take that copy with it rather than outlive it for the session
+    failPuts("commit")
+    await store.set("token-ish", "v")
+    expect(await store.isPersistent()).toBe(false)
+    vi.restoreAllMocks()
+
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    expect(outcome).toBe("deleted")
+    expect(await store.get("token-ish")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(true)
+  })
+})
