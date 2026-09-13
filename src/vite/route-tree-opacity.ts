@@ -320,11 +320,7 @@ export function rewriteRouteTreeOnDisk(
     try {
       //stamped before the rename, so the tree never carries the wrong mtime at all;
       //in seconds from the nanosecond stat, never through a millisecond `Date`
-      utimesSync(
-        tmp,
-        Number(read.atimeNs) / 1e9,
-        Number(read.mtimeNs) / 1e9,
-      )
+      utimesSync(tmp, toSeconds(read.atimeNs), toSeconds(read.mtimeNs))
     } catch {
       //worst case the generator re-runs once — the repair itself still lands
     }
@@ -339,6 +335,14 @@ export function rewriteRouteTreeOnDisk(
     rmSync(tmp, { force: true })
     throw error
   }
+}
+
+/** A nanosecond timestamp as the seconds `utimesSync` takes. Whole seconds and the
+ * fraction convert apart, because `Number()` of the whole nanosecond count already
+ * rounds by a quarter of a microsecond at today's epoch, before the division adds
+ * its own. */
+function toSeconds(ns: bigint): number {
+  return Number(ns / 1_000_000_000n) + Number(ns % 1_000_000_000n) / 1e9
 }
 
 /** Is the tree on disk still the one that was read? A rename changes the inode; an
