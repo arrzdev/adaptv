@@ -5,21 +5,24 @@ import { getOS, isNativePlatform } from "#adaptv/utils/platform"
  *
  * ## The problem this fixes
  *
- * `adaptv dev ios|android` serves the SPA into a native WebView and relies on Vite's
- * HMR WebSocket for hot reload. That socket is fragile inside a WebView:
+ * `adaptv dev ios|android` serves the SPA into a native WebView and relies on the dev
+ * server's HMR WebSocket for hot reload. That socket is fragile inside a WebView:
  *
- * - **iOS WKWebView** closes the HMR socket with a **CLEAN** close code when it
- *   suspends a backgrounded — or merely idle, even while foreground — WebView. Vite's
- *   own client treats a clean close as intentional (`if (wasClean) return`) and never
- *   reconnects, so the app silently goes deaf: it renders fine but ignores every edit,
+ * - **iOS WKWebView** has been seen to close the HMR socket when it suspends a
+ *   backgrounded — or merely idle, even while foreground — WebView, and to leave it
+ *   dead without ever firing `close`. The app renders fine but ignores every edit,
  *   with `0` live connections to the dev server. (Chromium/Android reconnect on their
- *   own; iOS does not.)
- * - While suspended, JS timers are frozen, so Vite's own reconnect/ping loop can't run.
+ *   own.) The state was not reproducible on the iOS 26.1 simulator in a 60 s
+ *   background, a 120 s lock or a 6 min foreground idle; it is a device behaviour.
+ * - While suspended, JS timers are frozen, so nothing that polls can run.
+ * - The dev server's own client (Vite 8) reloads after a close it SEES, but polls
+ *   forever when the server is gone: nothing takes the app to the offline screen
+ *   before the next tap commits a browser error page and kills every script.
  *
  * ## The approach
  *
- * Vite's client won't tell us when its socket dies, so we run a **health-proxy socket**
- * that mirrors it exactly. Vite 5+/8 guards the HMR WebSocket with a per-session token
+ * A socket that dies without a `close` event tells nobody, so we run a **health-proxy
+ * socket** that mirrors the real one exactly. Vite 5+/8 guards the HMR WebSocket with a per-session token
  * (`ws://host/?token=…`, subprotocol `vite-hmr`); we read that token straight out of
  * the served `@vite/client` and open a second socket with the identical URL. It lives
  * and dies under the same conditions as Vite's real one — so when it closes after
@@ -28,17 +31,18 @@ import { getOS, isNativePlatform } from "#adaptv/utils/platform"
  * slate. A reload always fixes a deaf WebView and costs a splash; a deaf WebView costs
  * the entire dev loop.
  *
- * If the token can't be read (Vite internals changed), we fall back to a coarser
- * signal: a background longer than a threshold almost always means the OS dropped the
- * socket, so we recover on the next foreground.
+ * The dev server's own client (Vite 8) emits `vite:ws:disconnect` from its socket's
+ * close listener whatever the close code, then pings and reloads on its own; that event
+ * is subscribed as well, as the exact signal for a dropped channel that needs no token.
+ * The proxy stays for the case the event cannot cover: a socket that dies without ever
+ * firing close. → `docs/roadmap/dev-loop-debt.md §A` for what was measured.
  *
  * Native + dev only: gated on `import.meta.hot` (dev) and `isNativePlatform()` (a real
  * Capacitor WebView), so a browser tab keeps Vite's normal reconnect behavior.
  */
 
-//A background longer than this almost certainly means the OS suspended us and dropped
-//the socket with a silent clean close. Used only as the no-token fallback.
-const SUSPEND_DROP_MS = 3000
+/** The dev server's own HMR hook, as the entry module sees it (`import.meta.hot`). */
+export type LiveReloadHot = Pick<NonNullable<ImportMeta["hot"]>, "on">
 
 /**
  * The generated offline screen, served from the LOCAL origin.
@@ -64,8 +68,16 @@ const OFFLINE_AFTER_FAILURES = 2
 const DECIDING_POLL_MS = 300
 const RECONNECT_POLL_MS = 1500
 
-export function installNativeLiveReloadRecovery(): void {
+export function installNativeLiveReloadRecovery(
+  hot: LiveReloadHot | null | undefined = import.meta.hot,
+): void {
+  // Test on the build-time constant FIRST, not on the parameter: a production build
+  // replaces `import.meta.hot` with `undefined`, this line folds to a bare `return`,
+  // and everything below is dropped from the bundle. Guarding on `hot` alone kept all
+  // of it — the token regex, the offline page, the event name — in the shipped assets
+  // (measured, 2026-09-02). The parameter exists so a test can hand in a fake hook.
   if (!import.meta.hot) return
+  if (!hot) return
   if (!isNativePlatform()) return
   if (typeof window === "undefined") return
 
@@ -212,17 +224,16 @@ export function installNativeLiveReloadRecovery(): void {
     return true
   }
 
-  void startProxy().then((ok) => {
-    if (ok) return
-    // Fallback (no token): treat a long background as a probable silent drop.
-    let hiddenAt = 0
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") {
-        hiddenAt = Date.now()
-        return
-      }
-      if (hiddenAt !== 0 && Date.now() - hiddenAt > SUSPEND_DROP_MS)
-        void recover()
-    })
+  // The dev server's client emits this from its own socket's close listener, clean
+  // close or not, and then polls and reloads on its own. It is the exact signal for a
+  // dropped channel and needs no token, so it is always subscribed: with the proxy up
+  // it is a second trigger for the same idempotent recovery; without one (the token
+  // could not be read) it is the recovery's only trigger. What it cannot give is the
+  // zombie case — a socket that dies without ever firing close — which is why the
+  // proxy and its readyState poll stay.
+  hot.on("vite:ws:disconnect", () => {
+    void recover()
   })
+
+  void startProxy()
 }
