@@ -786,7 +786,9 @@ Three supporting requirements, all unconditional:
 1. **`vite:preloadError` handler**, with a `sessionStorage` loop guard — the net that makes even the
    bad case recoverable. Without the guard, a genuinely-missing asset becomes an infinite reload loop.
 2. **`register(swUrl, { updateViaCache: "none" })`** and `Cache-Control: no-cache` on `sw.js`.
-   Browsers cap the SW script's effective max-age at 24h regardless; `updateViaCache:"none"` is the fix.
+   The first ships in adaptv's registration; the second is the host's to set, because the static build
+   emits no `_headers` file. Browsers cap the SW script's effective max-age at 24h regardless;
+   `updateViaCache:"none"` is the fix.
 3. **Deploy without `--delete`.** Content-hashed filenames mean build N-1 and N coexist harmlessly.
    `aws s3 sync --delete` and equivalents destroy the previous build's chunks and turn a survivable
    deploy into a broken session. **This is a hosting requirement, not an optimisation** — it is the
