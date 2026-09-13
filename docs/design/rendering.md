@@ -267,6 +267,19 @@ exactly the same way. One mechanism, six targets.
 > intent, and the shell holds nothing worth preserving. `suppressHydrationWarning` does not cover it — it
 > handles text and attribute drift, not a structural mismatch. Removing the error would mean the root
 > route no longer renders `<html>`, which is a much larger change than the error is worth.
+>
+> **MEASURED (2026-09-02, built playground, ten boots per row, observers installed before the
+> document):** the recovery itself is cheap. On the Android WebView (Pixel 10 emulator, API 37, the
+> app's own local server) the whole boot is one long task of **57 ms median, 64 ms p90**, and chromium on
+> the desktop records no long task at all, desktop or mobile emulation. What the shell path was paying
+> for was the network: the server document lists every chunk the page needs as a `modulepreload`, the
+> shell named only its entry, so each level of static imports waited for the previous one to download.
+> Against the preview server on chromium that put the first client render at **1283 ms** and the splash
+> hand-off at 2290 ms, where the server document reached them at 204 ms and 1618 ms on the same machine.
+> The shell now declares the entry's static import graph (`shell-emit.ts`): the same boot reaches
+> **1139 ms** and 2147 ms, and the Android first render moves from 277 ms to **215 ms**. WebKit never
+> showed the gap: 112 ms to the first client render before, 109 ms after. What is left is the route chunk,
+> a dynamic import the shell cannot name because it serves every route.
 
 ### 3.1.1 🔒 The framework contract (library-neutral)
 
