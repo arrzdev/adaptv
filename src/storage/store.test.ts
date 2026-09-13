@@ -360,6 +360,21 @@ describe("store — a wipe from outside", () => {
 })
 
 describe("store — subscribers", () => {
+  it("an unsubscribe called twice does not drop a newer subscriber", async () => {
+    //an unsubscribe is expected to be idempotent; a stale second call must not
+    //delete the set a later subscriber now lives in
+    const first = vi.fn()
+    const offFirst = subscribeStore("k", first)
+    offFirst()
+    const second = vi.fn()
+    const offSecond = subscribeStore("k", second)
+    offFirst()
+    await store.set("k", 1)
+    offSecond()
+    expect(second).toHaveBeenCalledOnce()
+    expect(first).not.toHaveBeenCalled()
+  })
+
   it("a listener that throws cannot break the write that woke it", async () => {
     //set() never rejects, and a consumer's buggy listener is no exception: the
     //write still commits, the other listeners still run, and the error is
