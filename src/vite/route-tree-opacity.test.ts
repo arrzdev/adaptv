@@ -25,6 +25,19 @@ import {
 
 const PKG = "@arrzdev/adaptv/router"
 
+//every app below is a real directory on disk; each case removes the ones it made,
+//after any watcher on them has been closed by its own describe's afterEach
+const dirs: string[] = []
+const tempDir = () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+  dirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  for (const dir of dirs.splice(0))
+    rmSync(dir, { recursive: true, force: true })
+})
+
 //The app whose tree is being generated. `/app/.adaptv/routeTree.gen.ts` is where the
 //generator writes, so every relative specifier below resolves from `/app/.adaptv`.
 const APP = "/app"
@@ -207,7 +220,7 @@ describe("rewriteRouteTreeOnDisk", () => {
   let tree: string
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    dir = tempDir()
     tree = resolveGeneratedPaths(dir).routeTree
     mkdirSync(path.dirname(tree), { recursive: true })
     writeFileSync(tree, GENERATED)
@@ -290,7 +303,7 @@ describe("adaptvOpacityCheckPlugin — every mode that can generate, repairs", (
   let plugin: any
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    dir = tempDir()
     tree = resolveGeneratedPaths(dir).routeTree
     mkdirSync(path.dirname(tree), { recursive: true })
     writeFileSync(tree, GENERATED)
@@ -426,7 +439,7 @@ describe("ignoreUnchangedRouteTree — a rewrite that changes nothing is not an 
   const WITH_ROUTE = `${GENERATED}import { Route as AboutRoute } from "../src/routing/pages/about.page"\n`
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    dir = tempDir()
     tree = resolveGeneratedPaths(dir).routeTree
     mkdirSync(path.dirname(tree), { recursive: true })
     writeFileSync(tree, OPAQUE) //what a dev server leaves on disk after its repair
@@ -492,7 +505,7 @@ describe("the safety net is armed in every mode, exactly once", () => {
   //it is pinned deterministically (an injected arming function) rather than
   //through real filesystem events, which race under a loaded suite.
   const armed = () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    const dir = tempDir()
     const tree = resolveGeneratedPaths(dir).routeTree
     mkdirSync(path.dirname(tree), { recursive: true })
     writeFileSync(tree, GENERATED)
@@ -566,7 +579,7 @@ describe("watchRouteTree", () => {
     //only observable proof that the OS is delivering — which the barrier below
     //needs. (That the plugin arms the net at all is pinned separately, by
     //injection.)
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-opacity-"))
+    const dir = tempDir()
     const tree = resolveGeneratedPaths(dir).routeTree
     mkdirSync(path.dirname(tree), { recursive: true })
     //seeded already-opaque, so the readiness probe has nothing to repair
