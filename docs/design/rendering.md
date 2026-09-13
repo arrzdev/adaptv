@@ -785,6 +785,10 @@ Three supporting requirements, all unconditional:
 
 1. **`vite:preloadError` handler**, with a `sessionStorage` loop guard — the net that makes even the
    bad case recoverable. Without the guard, a genuinely-missing asset becomes an infinite reload loop.
+   **Exactly one** is armed, by the shell: two sharing one guard read each other's reload as "a reload
+   already failed" and drew the offline screen over every recovery that worked. The document that
+   reloads draws nothing more, and leaves the import's error for the router to hold; only a document
+   the reload produced, still missing the chunk, gets the offline screen (§3.1.2).
 2. **`register(swUrl, { updateViaCache: "none" })`** and `Cache-Control: no-cache` on `sw.js`.
    The first ships in adaptv's registration; the second is the host's to set, because the static build
    emits no `_headers` file. Browsers cap the SW script's effective max-age at 24h regardless;
