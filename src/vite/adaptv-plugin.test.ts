@@ -18,7 +18,7 @@ import type {
   ResolvedConfig,
   ViteDevServer,
 } from "vite"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { adaptv } from "#adaptv/vite/adaptv-plugin.ts"
 
 /*
@@ -59,6 +59,12 @@ const ENV_KEYS = [
   "ADAPTV_DEV_NATIVE",
 ]
 const savedEnv = ENV_KEYS.map((key) => [key, process.env[key]] as const)
+
+//Each test starts from none of them set: a shell that exports ADAPTV_DEV_NATIVE or
+//ADAPTV_TARGET would otherwise decide what the factory builds before the test does.
+beforeEach(() => {
+  for (const key of ENV_KEYS) delete process.env[key]
+})
 
 const roots: string[] = []
 afterEach(() => {
