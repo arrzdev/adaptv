@@ -136,23 +136,30 @@ function read<T>(
 }
 
 /**
- * Run a write and resolve `true` only once its transaction has **committed**.
- * A request's `success` is not durability: a quota overrun is accepted by the
- * put and refused by the commit, which aborts the transaction afterwards.
+ * `"absent"` when there is no database to write to at all — distinct from
+ * `"refused"`, because a marker that guards a value underneath has nothing to
+ * guard when there is nothing underneath.
  */
-function commit(run: (store: IDBObjectStore) => void): Promise<boolean> {
+type Outcome = "landed" | "refused" | "absent"
+
+/**
+ * Run a write and report `"landed"` only once its transaction has
+ * **committed**. A request's `success` is not durability: a quota overrun is
+ * accepted by the put and refused by the commit, which aborts afterwards.
+ */
+function commit(run: (store: IDBObjectStore) => void): Promise<Outcome> {
   return database().then(
     (db) =>
-      new Promise<boolean>((resolve) => {
-        if (!db) return resolve(false)
+      new Promise<Outcome>((resolve) => {
+        if (!db) return resolve("absent")
         try {
           const tx = db.transaction(STORE_NAME, "readwrite")
-          tx.oncomplete = () => resolve(true)
-          tx.onabort = () => resolve(false)
-          tx.onerror = () => resolve(false)
+          tx.oncomplete = () => resolve("landed")
+          tx.onabort = () => resolve("refused")
+          tx.onerror = () => resolve("refused")
           run(tx.objectStore(STORE_NAME))
         } catch {
-          resolve(false)
+          resolve("refused")
         }
       }),
   )
@@ -166,11 +173,16 @@ async function write(
 ): Promise<void> {
   const entry: Entry = { value }
   memory.set(key, entry)
-  const landed = await commit(run)
+  const outcome = await commit(run)
   //a later write to the same key may have replaced the entry mid-flight — only
   //the write that put it there may take it out
   if (memory.get(key) !== entry) return
-  if (landed) {
+  //with no database, memory IS the store: a remove is done once the entry is
+  //gone, and a marker left behind would leak one entry per removed key
+  if (
+    outcome === "landed" ||
+    (outcome === "absent" && value === REMOVED)
+  ) {
     memory.delete(key)
     unpersisted.delete(key)
   } else {
@@ -217,14 +229,14 @@ export const store = {
   async clear(): Promise<void> {
     forgetMemory()
     let held: IDBValidKey[] | undefined
-    const landed = await commit((s) => {
+    const outcome = await commit((s) => {
       const listing = s.getAllKeys()
       listing.onsuccess = () => {
         held = listing.result
       }
       s.clear()
     })
-    if (landed || !(await hasIndexedDb())) return
+    if (outcome !== "refused") return
     if (!held) {
       clearRefused = true
       return

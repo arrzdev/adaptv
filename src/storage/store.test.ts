@@ -163,6 +163,33 @@ describe("store — availability", () => {
     expect(await fresh.isPersistent()).toBe(false)
   })
 
+  it("keeps no trace of a removed key when there is no IndexedDB", async () => {
+    //with nothing underneath, a removed marker guards against nothing — left
+    //in place, every set+remove leaks one entry for the life of an SSR process
+    vi.stubGlobal("indexedDB", undefined)
+    const fresh = await freshStore()
+    //the memory map is private; find it as the Map these writes go into
+    const maps = new Set<Map<unknown, unknown>>()
+    const set = Map.prototype.set
+    vi.spyOn(Map.prototype, "set").mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key: unknown,
+      value: unknown,
+    ) {
+      if (typeof key === "string" && key.startsWith("leak-"))
+        maps.add(this)
+      return set.call(this, key, value)
+    })
+    for (let i = 0; i < 100; i++) {
+      await fresh.set(`leak-${i}`, i)
+      await fresh.remove(`leak-${i}`)
+    }
+    vi.restoreAllMocks()
+    expect(maps.size).toBeGreaterThan(0)
+    for (const map of maps) expect(map.size).toBe(0)
+    expect(await fresh.keys()).toEqual([])
+  })
+
   it.each(["error", "blocked"] as const)(
     "degrades to memory when the open fires %s",
     async (event) => {
