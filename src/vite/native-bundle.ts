@@ -32,6 +32,13 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
   return {
     name: "adaptv:native-bundle",
     apply: "build",
+    //`enforce: "post"`, because the router writes `_shell.html` from a `buildApp` hook
+    //that is itself `enforce: "post"` + `order: "post"`, and Vite runs every plain
+    //plugin's post hook before any enforced one. As a plain plugin this pruned first and
+    //the file landed a second later — MEASURED, the log printed the prune above
+    //`Prerendering pages`. Among enforced plugins array order holds, and `tanstackStart()`
+    //is registered ahead of this one. → the ordering test in `native-bundle.test.ts`
+    enforce: "post",
     //Send this lineage somewhere of its own. Set on the CLIENT ENVIRONMENT, not
     //as a plugin-level `build.outDir` — that one is overridden by the framework
     //plugin, which is what the note on `CAPACITOR_WEB_DIR` used to record as a
@@ -76,6 +83,17 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
  */
 const BUILD_METADATA_DIR = ".vite"
 
+/**
+ * `_shell.html` — the router's own SPA shell, prerendered from `/`. The document the
+ * WebView boots is adaptv's generated `index.html` (`shell-emit.ts`, register B31), and
+ * nothing on device or in the CLI reads this one (`bin/lib/native-web-shell.test.mjs`).
+ * It is not small (66 KB on the playground, against a 10 KB `index.html`) and it is not
+ * stable: the prerender stamps the render's time into it, and the OTA build tag is a
+ * hash of every file in this directory — so two builds of the same source announced
+ * two different bundles, and every device downloaded the identical one again.
+ */
+const ROUTER_SHELL_FILE = "_shell.html"
+
 function pruneNativeBundle(context: AdaptvContext): void {
   const clientDir = requireClientOutDir(context)
   if (!existsSync(clientDir)) return
@@ -103,12 +121,12 @@ function pruneNativeBundle(context: AdaptvContext): void {
     defaultIconFiles(),
   )
   if (icons.urlBase) dropped.push(icons.urlBase.replace(/^\//, ""))
-  dropped.push(BUILD_METADATA_DIR)
+  dropped.push(BUILD_METADATA_DIR, ROUTER_SHELL_FILE)
 
   const removed = dropped.filter((rel) => remove(clientDir, rel))
   if (removed.length > 0) {
     console.log(
-      `[adaptv] native bundle: dropped ${removed.join(", ")} (browser-only)`,
+      `[adaptv] native bundle: dropped ${removed.join(", ")} (unused on device)`,
     )
   }
 }

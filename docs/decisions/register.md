@@ -920,6 +920,15 @@ exists to catch (`docs/design/ota.md §5.4e`).
 vestigial as well as hazardous; `buildWeb` now requires `index.html` and never prefers `_shell.html`.
 The rule it encodes: *adaptv generates its shell, so it never adopts someone else's.*
 
+✅ **And the file itself no longer ships (2026-09-13).** "Byte-identical" did not last: on the playground
+at Start 1.171 `_shell.html` is 66 394 bytes against a 10 414-byte `index.html`, and it carries the
+prerender's timestamp (`u:1789315547507`), so two capacitor builds of one source differ in that file and
+nowhere else. The OTA build tag hashes every file in `.adaptv/web` (`ota-emit.ts` `computeBuildTag`), so
+those two builds were two releases — `c23f1520470ea4fe` and `7b27a79a2d6f2597`, and `40aa2dd56e8abe6e` for
+both with the file removed — and a re-deploy of unchanged source made every device download it again. The
+native prune now deletes it, and runs as an `enforce: "post"` plugin, because Start writes the file from
+an enforced post-build hook that a plain plugin always runs ahead of. → `src/vite/native-bundle.ts`
+
 > Consequently the older blanket claim — "TanStack Start emits no HTML in this configuration" — is
 > **stale** where it appears in `shell-emit.ts`'s docstring. It still holds for the Cloudflare-adapter
 > measurement in `static-host.ts` (a different configuration), which is why adaptv generating its own
