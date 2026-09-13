@@ -298,20 +298,27 @@ export async function adaptv(
     //transform. Empty for `render: "spa"`. → src/vite/deploy-server.ts
     ...(await adaptvDeployServerPlugins(web.render)),
     viteReact(),
-    //ORDER IS LOAD-BEARING. All three run in `buildApp` at `order: "post"`, and
-    //Vite calls same-order hooks in plugin-array order — so the shell is emitted
-    //BEFORE the SW build globs the precache manifest, and the static-host copy
-    //happens last. Reversed, the worker binds its navigation fallback to a shell
-    //that was not on disk when the manifest was built, and every offline
-    //navigation dies: SSR falls through to the browser error page, and SPA throws
-    //`non-precached-url` at worker evaluation so no SW installs at all.
+    //ORDER IS LOAD-BEARING. Hooks of the same kind run in plugin-array order, so
+    //the shell is emitted BEFORE the SW build globs the precache manifest, and
+    //the static-host copy happens last. Reversed, the worker binds its navigation
+    //fallback to a shell that was not on disk when the manifest was built, and
+    //every offline navigation dies: SSR falls through to the browser error page,
+    //and SPA throws `non-precached-url` at worker evaluation so no SW installs.
     //
-    //`buildApp` rather than `closeBundle`, and that distinction was MEASURED.
-    //`closeBundle` fires per environment, which is before the deploy plugin has
-    //finished assembling the output directory: the precache glob ran against a
-    //half-populated dir and shipped a worker with 21 files silently missing —
-    //every favicon, the offline illustrations, robots.txt. `buildApp` at `post`
-    //runs after the environments AND after the deploy plugin's own `post` hook.
+    //WHEN they run was MEASURED at both ends. `closeBundle` fires per
+    //environment, before the deploy plugin has copied `public/` in: the precache
+    //glob ran against a half-populated dir and shipped a worker with 21 files
+    //silently missing — every favicon, the offline illustrations, robots.txt.
+    //`buildApp` at `post` runs after the deploy plugin's whole `post` hook, which
+    //is too late for the shell and the worker: the node server had already baked
+    //its public asset table, and answered 404 for both. So those two write in
+    //`emitIntoClientOutput` — at the start of the server environment when there
+    //is one, `buildApp` post when there is not. Nitro has to stay BEFORE them in
+    //this array: its `buildApp` post hook is what copies `public/` in and builds
+    //the server environment, so an emitter ahead of it would write first and
+    //glob a half-populated dir. Static-host writes only under spa (it returns
+    //early otherwise), where no server reads the output, so it stays in
+    //`buildApp` post.
     adaptvShellEmitPlugin(context),
     adaptvSwBuildPlugin(context),
     //`apply: "serve"`, and a no-op unless ADAPTV_DEV_SW is set.

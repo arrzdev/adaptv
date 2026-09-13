@@ -30,9 +30,10 @@ export function adaptvStaticHostPlugin(context: AdaptvContext): Plugin {
       captureClientOutDir(context, resolved)
     },
     //`buildApp`, `order: "post"` — the app-level hook, after every environment
-    //and after any deploy plugin has finished assembling the output. Mirrors how
-    //the shell emitter and the service-worker build gate themselves; the ordering
-    //between the three is load-bearing. → `adaptv-plugin.ts`
+    //and after the shell emitter, whose `index.html` it copies. Only a spa build
+    //writes here, and a spa build has no server bundle to bake the output into,
+    //so it does not need the earlier moment the shell and the worker use
+    //(`emitIntoClientOutput`). → `adaptv-plugin.ts`
     buildApp: {
       order: "post",
       async handler() {

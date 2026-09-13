@@ -261,11 +261,13 @@ imports only `adaptv`. That's a build-plumbing change layered on top of this sam
 - **SSR:** emits `.output/server/index.mjs` + `.output/public/` + `.output/public/sw.js`.
 - **SPA/static:** emits `dist/client/` (+ `sw.js`) only, no server.
 
-The SW build runs in `buildApp` at `order: "post"` — after every environment **and** after the deploy
-plugin has finished assembling the output. It bundles the app's `serviceWorkers: []` modules, injects the
+The SW build runs once the client output is complete — after every client environment **and** after the
+deploy plugin has copied `public/` in, but before Nitro bundles the server, whose node-server preset bakes
+a table of the files it serves (`emitIntoClientOutput`, `src/vite/deploy-server.ts`). It bundles the app's `serviceWorkers: []` modules, injects the
 Workbox precache manifest and a content-hashed `__ADAPTV_BUILD_TAG__` so the cache namespace tracks the
 deployed assets. The hook matters: on `closeBundle` the glob caught a half-assembled directory and
-shipped a worker missing 21 files, silently. → `docs/decisions/rendering-and-delivery.md §2`
+shipped a worker missing 21 files, silently; in `buildApp` post, after Nitro's server bundle, the node
+server answered 404 at `/sw.js`. → `docs/decisions/rendering-and-delivery.md §2`
 
 ### 4.2 Deploy
 
