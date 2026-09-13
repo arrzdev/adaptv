@@ -14,7 +14,7 @@
       "!!**/.DS_Store",
       "!!**/.project-zero",
       "!!**/playground",
-      "!!**/.claude"
+      "!!.claude"
     ],
     "ignoreUnknown": true
   },
