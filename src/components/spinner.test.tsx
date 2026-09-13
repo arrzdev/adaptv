@@ -207,8 +207,8 @@ describe("the motion is a transform keyframe on the HTML box", () => {
     const spin = keyframesBody(css, "adaptv-spinner-spin")
     expect(spin).not.toBeNull()
     expect(spin).toMatch(/transform: rotate\(360deg\)/)
-    //`rotate:` as its own property is off Chromium's composited list for SVG, and one
-    //more thing to keep in step for HTML — the keyframe must spell `transform`
+    //`rotate:` as its own property falls back to the main thread on an svg (traced
+    //524288), and is one more thing to keep in step for HTML — spell `transform`
     expect(spin).not.toMatch(/(^|[;{\s])rotate\s*:/)
   })
 
