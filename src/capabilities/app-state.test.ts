@@ -23,6 +23,15 @@ function setVisibility(state: DocumentVisibilityState): void {
   })
 }
 
+function pageTransition(
+  type: "pagehide" | "pageshow",
+  persisted: boolean,
+): PageTransitionEvent {
+  const event = new Event(type) as PageTransitionEvent
+  Object.defineProperty(event, "persisted", { value: persisted })
+  return event
+}
+
 /** Fresh module per test — the accessor memoises its platform listeners. */
 async function freshAppState(native: boolean) {
   vi.resetModules()
@@ -90,6 +99,83 @@ describe("subscribeAppState — web", () => {
     window.dispatchEvent(restore)
 
     expect(seen).toEqual(["active"])
+  })
+
+  it("reports a bfcache round trip as ONE resume when visibility already did", async () => {
+    //The order Chromium dispatches, measured in `playground/e2e/app-state.spec.ts`:
+    //leaving is pagehide(persisted) then visibilitychange → hidden, and the restore
+    //is visibilitychange → visible then pageshow(persisted). The visible edge has
+    //already delivered the resume, so forcing pageshow through as well doubled every
+    //resume consumer — a token refresh, a refetch, an analytics ping — per return.
+    const { subscribeAppState } = await freshAppState(false)
+    const seen: string[] = []
+    subscribeAppState((s) => seen.push(s))
+
+    window.dispatchEvent(pageTransition("pagehide", true))
+    setVisibility("hidden")
+    document.dispatchEvent(new Event("visibilitychange"))
+    setVisibility("visible")
+    document.dispatchEvent(new Event("visibilitychange"))
+    window.dispatchEvent(pageTransition("pageshow", true))
+
+    expect(seen).toEqual(["background", "active"])
+  })
+
+  it("still forces the restore through when the departure's pause was missed", async () => {
+    //the case the force exists for: the page left for the cache, but no visibility
+    //edge reached the accessor on either side of it
+    const { subscribeAppState } = await freshAppState(false)
+    const seen: string[] = []
+    subscribeAppState((s) => seen.push(s))
+
+    window.dispatchEvent(pageTransition("pagehide", true))
+    window.dispatchEvent(pageTransition("pageshow", true))
+
+    expect(seen).toEqual(["active"])
+  })
+
+  it("forces each restore of a page that goes back and forth more than once", async () => {
+    const { subscribeAppState } = await freshAppState(false)
+    const seen: string[] = []
+    subscribeAppState((s) => seen.push(s))
+
+    for (let trip = 0; trip < 2; trip++) {
+      window.dispatchEvent(pageTransition("pagehide", true))
+      window.dispatchEvent(pageTransition("pageshow", true))
+    }
+
+    expect(seen).toEqual(["active", "active"])
+  })
+
+  it("forces a restore whose departure said not persisted, after an earlier resume", async () => {
+    //an ordinary visibility round trip delivers a resume outside any bfcache trip;
+    //it must not count as the resume of a later restore whose `pagehide` did not
+    //open a trip, or that restore is dropped entirely
+    const { subscribeAppState } = await freshAppState(false)
+    const seen: string[] = []
+    subscribeAppState((s) => seen.push(s))
+
+    setVisibility("hidden")
+    document.dispatchEvent(new Event("visibilitychange"))
+    setVisibility("visible")
+    document.dispatchEvent(new Event("visibilitychange"))
+    window.dispatchEvent(pageTransition("pagehide", false))
+    window.dispatchEvent(pageTransition("pageshow", true))
+
+    expect(seen).toEqual(["background", "active", "active"])
+  })
+
+  it("closes each trip at its restore, so the next restore is not taken as already resumed", async () => {
+    const { subscribeAppState } = await freshAppState(false)
+    const seen: string[] = []
+    subscribeAppState((s) => seen.push(s))
+
+    window.dispatchEvent(pageTransition("pagehide", true))
+    window.dispatchEvent(pageTransition("pageshow", true))
+    window.dispatchEvent(pageTransition("pagehide", false))
+    window.dispatchEvent(pageTransition("pageshow", true))
+
+    expect(seen).toEqual(["active", "active"])
   })
 
   it("does NOT report an ordinary first load as a resume", async () => {
