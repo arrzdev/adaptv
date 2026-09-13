@@ -47,8 +47,6 @@ export default defineConfig({
   ],
   // Reuse a dev server if one is already up; otherwise boot the frontend.
   webServer: {
-    //the inspector port has to move with the app port or the boot dies on an
-    //EADDRINUSE for a port nobody asked about — see vite.config.ts
     command: `pnpm exec vite --port ${port} --strictPort`,
     //`cwd` is resolved against THIS config file, so the server can only ever be
     //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
@@ -59,7 +57,6 @@ export default defineConfig({
     cwd: "apps/frontend",
     env: {
       VITE_APP_PORT: String(port),
-      VITE_SUPERVISOR_PORT: String(port + 10),
     },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
