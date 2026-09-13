@@ -212,18 +212,37 @@ describe("the motion is a transform keyframe on the HTML box", () => {
     expect(spin).not.toMatch(/(^|[;{\s])rotate\s*:/)
   })
 
-  it("animates the identity element itself, not the svg or anything inside it", async () => {
+  it("turns the identity element itself; its svg child only ever pulses or pauses", async () => {
     const css = await compileAdaptvStyles([])
-    //every rule that names the spinner scope, and what it selects
-    const selectors = [
-      ...css.matchAll(/([^{}]*\[data-adaptv="spinner"\][^{}]*)\{/g),
-    ].map((m) => m[1].trim())
-    expect(selectors.length).toBeGreaterThan(0)
-    for (const selector of selectors) {
-      //a descendant or child combinator would move the motion onto the drawing
-      expect(selector).toMatch(/^\[data-adaptv="spinner"\](\[[a-z-]+\])?$/)
+    //every rule that names the spinner scope: its selectors and its declarations
+    const rules = [
+      ...css.matchAll(
+        /([^{}]*\[data-adaptv="spinner"\][^{}]*)\{([^{}]*)\}/g,
+      ),
+    ].map((m) => ({
+      selectors: m[1].split(",").map((part) => part.trim()),
+      body: m[2].trim(),
+    }))
+    expect(rules.length).toBeGreaterThan(0)
+    for (const { selectors, body } of rules) {
+      for (const selector of selectors) {
+        //the box, the box with one attribute, or its DIRECT svg child — never a
+        //descendant, never anything drawn inside the svg
+        expect(selector).toMatch(
+          /^\[data-adaptv="spinner"\](\[[a-z-]+\])?( > svg)?$/,
+        )
+        if (selector.endsWith("> svg"))
+          expect(body).toMatch(
+            /^(animation: adaptv-spinner-pulse [^;]*;?|animation-play-state: paused;?)$/,
+          )
+      }
     }
-    expect(source).not.toMatch(/\bsvg\b/)
+    //the turn itself names no svg
+    const spin = rules.filter((rule) =>
+      rule.body.includes("adaptv-spinner-spin"),
+    )
+    expect(spin).toHaveLength(1)
+    expect(spin[0].selectors).toEqual(['[data-adaptv="spinner"]'])
   })
 
   it("draws a static arc: no SMIL, no dash, no transform on the drawing", () => {
@@ -286,8 +305,9 @@ describe("Spinner pauses off screen", () => {
 
   it("the stylesheet turns the stamp into a paused animation", async () => {
     const css = await compileAdaptvStyles([])
+    //the box's turn, and the drawing's pulse under reduced motion
     expect(css).toMatch(
-      /\[data-adaptv="spinner"\]\[data-spinner-offscreen\]\s*\{\s*animation-play-state: paused;?\s*\}/,
+      /\[data-adaptv="spinner"\]\[data-spinner-offscreen\],\s*\[data-adaptv="spinner"\]\[data-spinner-offscreen\] > svg\s*\{\s*animation-play-state: paused;?\s*\}/,
     )
   })
 
@@ -300,7 +320,7 @@ describe("Spinner pauses off screen", () => {
     const before = css.slice(0, pause)
     const selector = before.slice(before.lastIndexOf("}") + 1).trim()
     expect(selector).toBe(
-      '[data-adaptv="spinner"][data-spinner-offscreen] {',
+      '[data-adaptv="spinner"][data-spinner-offscreen], [data-adaptv="spinner"][data-spinner-offscreen] > svg {',
     )
   })
 })
@@ -310,18 +330,31 @@ describe("Spinner pauses off screen", () => {
  * ============================================================================= */
 
 describe("reduced motion", () => {
-  it("swaps the rotation for an opacity pulse in CSS, not for `animation: none`", async () => {
+  it("swaps the rotation for an opacity pulse in CSS, not for a stop", async () => {
     const css = await compileAdaptvStyles([])
     const blocks = mediaBlocks(css, "(prefers-reduced-motion: reduce)")
     const ours = blocks.filter((block) =>
       block.includes('[data-adaptv="spinner"]'),
     )
     expect(ours).toHaveLength(1)
+    //the box stops turning…
     expect(ours[0]).toMatch(
-      /\[data-adaptv="spinner"\]\s*\{\s*animation: adaptv-spinner-pulse [^;]*infinite;?\s*\}/,
+      /\[data-adaptv="spinner"\]\s*\{\s*animation: none;?\s*\}/,
     )
-    //an indeterminate indicator that stops says "done"
-    expect(ours[0]).not.toMatch(/animation: none/)
+    //…and its drawing pulses: an indeterminate indicator that stops says "done"
+    expect(ours[0]).toMatch(
+      /\[data-adaptv="spinner"\] > svg\s*\{\s*animation: adaptv-spinner-pulse [^;]*infinite;?\s*\}/,
+    )
+  })
+
+  it("pulses the svg child, so a consumer's opacity on the box still applies", async () => {
+    //an animation outranks every normal declaration: keyed on the box, the pulse
+    //would override `opacity-50` in className for as long as it ran
+    const css = await compileAdaptvStyles([])
+    const pulses = [
+      ...css.matchAll(/([^{}]*)\{\s*animation: adaptv-spinner-pulse/g),
+    ].map((m) => m[1].trim())
+    expect(pulses).toEqual(['[data-adaptv="spinner"] > svg'])
   })
 
   it("pulses opacity only — nothing moves across the screen", async () => {

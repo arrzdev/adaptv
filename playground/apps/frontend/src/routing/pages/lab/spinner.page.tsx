@@ -41,12 +41,15 @@ type PlayStates = {
   none: number
 }
 
-/** The play state of every spinner under `root`, as the engine reports it. */
+/**
+ * The play state of every spinner under `root`, as the engine reports it — its turn,
+ * or under reduced motion the pulse on its drawing (hence `subtree`).
+ */
 function playStatesUnder(root: Element | null): PlayStates {
   const states: PlayStates = { running: 0, paused: 0, none: 0 }
   if (!root) return states
   for (const el of root.querySelectorAll('[data-adaptv="spinner"]')) {
-    const animation = el.getAnimations()[0]
+    const animation = el.getAnimations({ subtree: true })[0]
     if (!animation) states.none += 1
     else if (animation.playState === "paused") states.paused += 1
     else if (animation.playState === "running") states.running += 1
@@ -129,7 +132,7 @@ function OnScreenProbe() {
     const el = root.current?.querySelector(
       '[data-testid="spinner-onscreen"]',
     )
-    const animation = el?.getAnimations()[0]
+    const animation = el?.getAnimations({ subtree: true })[0]
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches

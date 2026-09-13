@@ -16,8 +16,9 @@ import { awaitClientHandover } from "./support/hydrated"
  *   - Q2: the running animation is a CSS animation on the HTML <span>, keyframing
  *     `transform` — never on the <svg> — on both engines; and on chromium the
  *     engine's own trace says it started on the compositor (compositeFailed 0);
- *   - reduced motion swaps the turn for the opacity pulse, and an off-screen spinner
- *     stays paused under it;
+ *   - reduced motion swaps the turn for an opacity pulse on the svg child — so a
+ *     consumer's opacity on the box still applies — and an off-screen spinner stays
+ *     paused under it;
  *   - a labelled spinner is a progressbar with its name, three of them mounting
  *     together are announced once, and the one inside a busy button is hidden;
  *   - under forced colors (chromium) the arc paints in the forced text colour.
@@ -49,12 +50,15 @@ async function openSpinner(page: Page) {
 
 type States = { running: number; paused: number; none: number }
 
-/** Play states of every spinner matching `selector`, as the engine reports them. */
+/**
+ * Play states of every spinner matching `selector`, as the engine reports them: the
+ * turn on the box, or under reduced motion the pulse on its svg (hence `subtree`).
+ */
 function playStates(page: Page, selector: string): Promise<States> {
   return page.evaluate((sel) => {
     const states = { running: 0, paused: 0, none: 0 }
     for (const el of document.querySelectorAll(sel)) {
-      const animation = el.getAnimations()[0]
+      const animation = el.getAnimations({ subtree: true })[0]
       if (!animation) states.none += 1
       else if (animation.playState === "paused") states.paused += 1
       else if (animation.playState === "running") states.running += 1
@@ -561,7 +565,7 @@ test.describe("Spinner under prefers-reduced-motion", () => {
     expect(errors).toEqual([])
   })
 
-  test("pulses instead of turning — never stops — and still pauses off screen", async ({
+  test("pulses its drawing instead of turning — never stops — and still pauses off screen", async ({
     page,
   }) => {
     const spinner = page.getByTestId("spinner-busy")
@@ -574,13 +578,23 @@ test.describe("Spinner under prefers-reduced-motion", () => {
       .poll(() => playStates(page, '[data-testid="spinner-busy"]'))
       .toEqual({ running: 1, paused: 0, none: 0 })
     const shape = await spinner.evaluate((el) => {
-      const animation = el.getAnimations()[0] as CSSAnimation | undefined
-      const keyframes =
-        (
-          animation?.effect as KeyframeEffect | undefined
-        )?.getKeyframes() ?? []
+      const animations = el.getAnimations({ subtree: true })
+      const animation = animations[0] as CSSAnimation | undefined
+      const effect = animation?.effect as KeyframeEffect | undefined
+      const keyframes = effect?.getKeyframes() ?? []
+      //a consumer's opacity on the box, set while the pulse runs: an animation on the
+      //box itself would override it, one on the child multiplies with it
+      el.style.opacity = "0.5"
+      const boxOpacity = getComputedStyle(el).opacity
+      el.style.opacity = ""
       return {
         reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        count: animations.length,
+        boxAnimations: el.getAnimations().length,
+        targetIsSvgChild:
+          effect?.target instanceof SVGSVGElement &&
+          effect.target.parentElement === el,
+        boxOpacity,
         name: animation?.animationName ?? null,
         properties: [
           ...new Set(
@@ -604,6 +618,10 @@ test.describe("Spinner under prefers-reduced-motion", () => {
     )
     expect(shape).toEqual({
       reduced: true,
+      count: 1,
+      boxAnimations: 0,
+      targetIsSvgChild: true,
+      boxOpacity: "0.5",
       name: "adaptv-spinner-pulse",
       properties: ["opacity"],
     })
