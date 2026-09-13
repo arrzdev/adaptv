@@ -42,10 +42,10 @@
     "typescript": "5.9.3"
   },
   "optionalDependencies": {
-    "@biomejs/cli-linux-x64": "^2.3.11",
-    "@rollup/rollup-linux-x64-gnu": "^4.28.1",
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0",
-    "lightningcss-linux-x64-gnu": "^1.28.2"
+    "@biomejs/cli-linux-x64": "2.3.11",
+    "@rollup/rollup-linux-x64-gnu": "4.60.3",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.2.4",
+    "lightningcss-linux-x64-gnu": "1.32.0"
   },
   "engines": {
     "node": ">=22"
