@@ -65,11 +65,16 @@ export const CAPACITOR_WEB_DIR = ".adaptv/web"
  * `vite/ring-shadow-fallback.ts`. Gating those devices out would now mean refusing to boot
  * on hardware adaptv renders correctly, so the floor sits below them.
  *
- * 111 is **Tailwind v4's own stated minimum** (Chrome 111 / Safari 16.4 / Firefox 128).
- * Below it the app's stylesheet is outside what its CSS toolchain claims to compile for, so
- * adaptv cannot honestly promise anything — which is exactly what a floor is for. It costs
- * nothing real: every device Capacitor 8 supports (`minSdk` 24 = Android 7) reaches at least
- * Chromium 119 (docs/decisions/register.md B21), well above it.
+ * 111 is **Tailwind v4's own Chromium minimum**. Below it the app's stylesheet is outside
+ * what its CSS toolchain claims to compile for, so adaptv cannot honestly promise anything —
+ * which is exactly what a floor is for. It costs nothing real: every device Capacitor 8
+ * supports (`minSdk` 24 = Android 7) reaches at least Chromium 119
+ * (docs/decisions/register.md B21), well above it.
+ *
+ * The gate is Android-only; Capacitor has no equivalent on iOS, where the WebView is the
+ * OS's own. The client bundle is compiled for this same number — the `chrome` entry of
+ * `CLIENT_BUILD_TARGETS` in `client-targets.ts`, tested to stay equal — and for Safari/iOS
+ * 15.4 on the other side, the first WebKit that parses Tailwind's `@layer`.
  *
  * What it replaces is Capacitor's default of **60** — Chromium 60 shipped in 2017, so the
  * built-in gate can never fire on any device that runs Capacitor 8 (B21). The alternative to
