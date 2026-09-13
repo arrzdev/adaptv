@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+// biome-ignore lint/style/noRestrictedImports: e2e has no self-alias to import through
+import { awaitClientHandover, expect, test } from "./client-handover"
 
 /*
  * FieldGroup — the grouped settings form. adaptv ships the STRUCTURE (which
@@ -43,22 +44,6 @@ function driver(page: Page) {
   const sw = (label: string) =>
     page.getByRole("switch", { name: label, exact: true })
   return { root, section, rows, row, title, sw }
-}
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The page is server-rendered, so a `waitFor()` on any row is satisfied by
- * inert HTML; a click in that window reaches the browser's label activation,
- * which toggles the native checkbox, but React is not listening yet and the
- * readout never moves. The splash is server-rendered too and self-unmounts
- * only once the client has hydrated and the local store has seeded, so its
- * disappearance is the one honest "React is driving now" signal on the page.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
 }
 
 const radii = (locator: Locator) =>
