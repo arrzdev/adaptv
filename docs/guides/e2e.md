@@ -1,12 +1,12 @@
 # The Playwright estate
 
-**Four configs, two spec directories, 41 specs. This page says which suite proves what, and the
+**Four configs, two spec directories, 43 specs. This page says which suite proves what, and the
 handful of rules that keep the estate honest.**
 
 Everything lives in `playground/` — its own pnpm project — and runs from the repo root:
 
 ```bash
-pnpm --dir playground test:e2e            # the main suite: 35 specs, dev server
+pnpm --dir playground test:e2e            # the main suite: 37 specs, dev server
 pnpm --dir playground test:e2e:sw:all     # all three worker suites, built output
 ```
 
@@ -16,7 +16,7 @@ pnpm --dir playground test:e2e:sw:all     # all three worker suites, built outpu
 
 | Suite | Config | Specs | Serves | Port |
 |---|---|---|---|---|
-| **Main** | `playwright.config.ts` | `e2e/` — 35 | `vite` (dev) | `41730` (`E2E_PORT`) |
+| **Main** | `playwright.config.ts` | `e2e/` — 37 | `vite` (dev) | `41730` (`E2E_PORT`) |
 | **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → `vite preview`** | `41750` (`E2E_SW_PORT`) |
 | **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → preview**, `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
 | **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |
@@ -109,6 +109,12 @@ state — but they **do** share one preview server, and several of them take it 
 - **Do not add a warm-up tap.** A setup that taps to warm up leaves Chromium unable to claim the next
   swipe as a scroll, and the test then blames the press engine.
 - **A dead-looking component is usually CORS or touch emulation**, not the component.
+- **A bfcache restore needs three things Playwright's defaults take away.** It launches Chromium with
+  `--disable-back-forward-cache`, its headless shell cannot restore at all
+  (`BackForwardCacheDisabledForDelegate`), and the dev server's HMR socket blocks the cache
+  (`notRestoredReasons: websocket`). `app-state.spec.ts` drops the flag, runs the full `chromium`
+  channel and stubs that one socket — and asserts the same document came back, because every one of
+  the three turns a restore into a reload that passes. Playwright's WebKit never restores.
 - **WebKit starts CSS animations a frame early** — `currentTime` ≈ 17 ms on the first observable
   frame where Chromium reports 0.0. Scope the assertion to the engine; do not loosen it for both.
 - **Assert on a quartile, not the worst frame.** A per-frame motion assertion is usually measuring a
