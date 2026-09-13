@@ -7,8 +7,15 @@ import {
 } from "#adaptv/capabilities/locale"
 
 //the server has no user to ask, so it renders the bare fallback — one object,
-//built once, so a hydrating tree compares against the same reference every time
-const SERVER_LOCALE = resolveLocale("en")
+//built once, so a hydrating tree compares against the same reference every time.
+//The zone is pinned rather than read: this module is evaluated once on the server
+//and again in the browser, and `resolveLocale` reads each runtime's own zone, so
+//a server in UTC and a user in Lisbon would hydrate two different strings from
+//the "same" snapshot and React would throw the server's tree away
+const SERVER_LOCALE: LocaleInfo = {
+  ...resolveLocale("en"),
+  timeZone: "UTC",
+}
 const getServerLocale = () => SERVER_LOCALE
 
 /**
