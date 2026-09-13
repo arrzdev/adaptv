@@ -33,8 +33,10 @@
 }
 
 /*
- * Reduced motion: the box stays put and breathes. Opacity is composited too, and an
- * indicator that simply stopped would read as "done".
+ * Reduced motion: nothing turns, and the drawing breathes. The pulse is on the `<svg>`
+ * CHILD, not the box: an animation outranks every normal declaration, so `opacity` keyed
+ * on the box itself would override a consumer's `opacity-50` for as long as it ran. On
+ * the child the two multiply. An indicator that simply stopped would read as "done".
  */
 @keyframes adaptv-spinner-pulse {
   0%,
@@ -54,15 +56,21 @@
 
   @media (prefers-reduced-motion: reduce) {
     [data-adaptv="spinner"] {
+      animation: none;
+    }
+
+    [data-adaptv="spinner"] > svg {
       animation: adaptv-spinner-pulse 2s ease-in-out infinite;
     }
   }
 
   /*
-   * Off screen, nothing ticks. Two attributes outrank one, so this also beats the
-   * reduced-motion shorthand above, which resets the play state to `running`.
+   * Off screen, nothing ticks — the turn on the box or the pulse on its drawing. Two
+   * attributes outrank one, so this also beats the shorthands above, which reset the
+   * play state to `running`.
    */
-  [data-adaptv="spinner"][data-spinner-offscreen] {
+  [data-adaptv="spinner"][data-spinner-offscreen],
+  [data-adaptv="spinner"][data-spinner-offscreen] > svg {
     animation-play-state: paused;
   }
 }

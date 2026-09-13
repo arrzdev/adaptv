@@ -199,10 +199,12 @@ function holdLabel(label: string): () => void {
  * speak, would speak once per instance. Unlabelled, it is `aria-hidden`.
  *
  * **Reduced motion does not stop it.** An indicator that stops says "done", which is
- * the wrong thing to tell anyone. Under `prefers-reduced-motion: reduce` the rotation
- * becomes a slow opacity pulse: nothing moves across the screen, and it still reads as
- * busy. Answered by the stylesheet, so the first paint is already right (a hook is
- * `false` during SSR and hydration).
+ * the wrong thing to tell anyone. Under `prefers-reduced-motion: reduce` the box stops
+ * turning and its `<svg>` pulses its opacity: nothing moves across the screen, and it
+ * still reads as busy. The pulse is on the child because an animation outranks every
+ * normal declaration — on the box it would override an `opacity-50` in `className`;
+ * on the child the two multiply. Answered by the stylesheet, so the first paint is
+ * already right (a hook is `false` during SSR and hydration).
  *
  * **Forced colors:** the arc is `stroke="currentColor"`, and forced colors rewrite
  * `color`, so it paints in the system text colour of whatever it sits in.
@@ -214,8 +216,13 @@ function holdLabel(label: string): () => void {
  * | locked | — | the motion is CSS on the identity attribute, not a class |
  *
  * ⚠︎ `inline` (or `contents`) in `className` stops the rotation: a transform does not
- * apply to an inline box. `animate-none` stops it on purpose — `utilities` is a later
- * layer than adaptv's.
+ * apply to an inline box.
+ *
+ * ⚠︎ ANY `animate-*` in `className` replaces the turn, not only `animate-none`:
+ * `utilities` is a later layer than adaptv's, and its `animation` shorthand also resets
+ * the play state, so the off-screen pause no longer holds for that spinner. Under
+ * reduced motion the pulse is on the svg, so `animate-none` on the box does not stop
+ * it — `[&>svg]:animate-none` does.
  *
  * | Attribute | When |
  * |-----------|------|
