@@ -92,7 +92,7 @@ the call rejects.
 
 Version pins and native gotchas live in
 [`../research/capacitor-internals.md`](../research/capacitor-internals.md) — currently
-`@capacitor/core` **8.4.2**, `@capacitor/geolocation` **8.0.0**, CocoaPods rather than SPM on iOS.
+`@capacitor/core` **8.4.3**, `@capacitor/geolocation` **8.0.0**, CocoaPods rather than SPM on iOS.
 
 ---
 

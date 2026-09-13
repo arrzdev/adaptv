@@ -83,16 +83,16 @@
     "vite": "8.0.11"
   },
   "dependencies": {
-    "@capacitor/android": "8.4.2",
+    "@capacitor/android": "8.4.3",
     "@capacitor/app": "8.1.0",
     "@capacitor/browser": "8.0.0",
-    "@capacitor/cli": "8.4.2",
+    "@capacitor/cli": "8.4.3",
     "@capacitor/clipboard": "8.0.1",
-    "@capacitor/core": "8.4.2",
+    "@capacitor/core": "8.4.3",
     "@capacitor/device": "8.0.3",
     "@capacitor/geolocation": "8.0.0",
     "@capacitor/haptics": "8.0.2",
-    "@capacitor/ios": "8.4.2",
+    "@capacitor/ios": "8.4.3",
     "@capacitor/keyboard": "8.0.5",
     "@capacitor/network": "8.0.1",
     "@capacitor/preferences": "8.0.1",
@@ -146,7 +146,7 @@
       "@biomejs/biome"
     ],
     "overrides": {
-      "@capacitor/core": "8.4.2"
+      "@capacitor/core": "8.4.3"
     }
   },
   "files": [

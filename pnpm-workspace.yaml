@@ -15,7 +15,7 @@ allowBuilds:
 # the guardrail that keeps a rented+patched core from breaking a new install. Bumping the
 # upstream version is then a deliberate act: re-verify the patch, update the key.
 patchedDependencies:
-  '@capacitor/cli@8.4.2': patches/@capacitor__cli@8.4.2.patch
+  '@capacitor/cli@8.4.3': patches/@capacitor__cli@8.4.3.patch
   '@capawesome/capacitor-live-update@8.3.0': patches/@capawesome__capacitor-live-update@8.3.0.patch
   '@tanstack/router-generator@1.167.21': patches/@tanstack__router-generator@1.167.21.patch
   '@tanstack/start-plugin-core@1.171.24': patches/@tanstack__start-plugin-core@1.171.24.patch
