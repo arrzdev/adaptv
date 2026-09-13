@@ -412,8 +412,9 @@ Three caveats that would bite anyone who reached for the "modern" answers:
 - ⚠︎ **`navigator.deviceMemory`'s buckets changed.** BCD: *"From Chrome 147, reported values are 2, 4, 8,
   16, and 32. Before Chrome 147, reported values were 0.25, 0.5, 1, 2, 4, and 8."* Any threshold written
   against it is version-dependent.
-- ⚠︎ **`contain: style` is recorded as removed in Safari 27.** Reported by BCD, not chased to a WebKit
-  changelog — treat as unverified upstream, but do not build on style containment.
+- ~~**`contain: style` is recorded as removed in Safari 27.**~~ Corrected 2026-09-13: Safari 27 *added*
+  style containment for quote counters (84758186). BCD's 15.4–27 entry is partial support that ends at 27,
+  not a removal → [`../roadmap/platform-releases-2026-09.md §3.2`](../roadmap/platform-releases-2026-09.md).
 
 **How to detect any of this at runtime, if adaptv ever needs to:**
 `PerformanceObserver.supportedEntryTypes`, which exists precisely because *"the list of supported entries
