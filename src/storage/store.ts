@@ -60,6 +60,12 @@ const REMOVED = Symbol("removed")
 /** Keys whose latest write IndexedDB refused — what {@link store.isPersistent} reports. */
 const unpersisted = new Set<string>()
 
+/**
+ * A clear IndexedDB refused whose keys could not even be listed, so no marker
+ * could be left for them. Nothing to honour, but still not persistent.
+ */
+let clearRefused = false
+
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
 function openDatabase(): Promise<IDBDatabase | null> {
@@ -187,11 +193,39 @@ export const store = {
     await write(key, REMOVED, (s) => s.delete(key))
   },
 
-  /** Drop every key in adaptv's store. Never touches other databases. */
+  /**
+   * Drop every key in adaptv's store. Never touches other databases.
+   *
+   * A clear IndexedDB refuses is honoured for the session the way a refused
+   * remove is: every key the database still holds gets a {@link REMOVED}
+   * marker, so nothing comes back, and `isPersistent()` turns false because the
+   * values will be there again on the next launch. The key list is read in the
+   * clear's own transaction, before the clear, so it is exactly what the clear
+   * was meant to drop.
+   */
   async clear(): Promise<void> {
     memory.clear()
     unpersisted.clear()
-    await commit((s) => s.clear())
+    clearRefused = false
+    let held: IDBValidKey[] | undefined
+    const landed = await commit((s) => {
+      const listing = s.getAllKeys()
+      listing.onsuccess = () => {
+        held = listing.result
+      }
+      s.clear()
+    })
+    if (landed || !(await hasIndexedDb())) return
+    if (!held) {
+      clearRefused = true
+      return
+    }
+    for (const key of held.map(String)) {
+      //an entry here belongs to a write issued after the clear: it wins
+      if (memory.has(key)) continue
+      memory.set(key, { value: REMOVED })
+      unpersisted.add(key)
+    }
   },
 
   async keys(): Promise<string[]> {
@@ -213,6 +247,8 @@ export const store = {
    * for deciding whether to warn, not for deciding whether to call.
    */
   async isPersistent(): Promise<boolean> {
-    return (await hasIndexedDb()) && unpersisted.size === 0
+    return (
+      (await hasIndexedDb()) && unpersisted.size === 0 && !clearRefused
+    )
   },
 }
