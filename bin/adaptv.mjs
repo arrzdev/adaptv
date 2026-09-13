@@ -986,9 +986,11 @@ async function runLive(appRoot, platforms, opts) {
       // ~1s launch, and drops Android from two relaunches to one (no `cap run` to reset
       // `adb reverse`). Every uncertainty falls through to the full path.
       //
-      // The device has the last word, not this checkout's cache. Another checkout of the same
-      // app installs under the same bundle id, and relaunching ITS shell printed `cached` and
-      // left the app polling that checkout's port — see `isInstallCurrent`.
+      // The device has the last word on WHICH server the install loads, not this checkout's
+      // cache. Another checkout of the same app, or an earlier run on another port, installs
+      // under the same bundle id, and relaunching that shell printed `cached` and left the app
+      // polling a port nothing served — see `isInstallCurrent`. It proves the app id and the
+      // dev URL, nothing else: another checkout's install on the SAME port still passes.
       const runCache = readBuildState(appRoot)
       runCache.run ??= {}
       const cacheKey = (platform) =>
@@ -1623,8 +1625,10 @@ async function pipeline(kind, appRoot, platforms, opts) {
     // THAT, and the user gets the "dev server isn't running" screen instead of their app.
     // The config baked into the INSTALLED app is the tell (dev bakes `server.url`), so never
     // reuse an install when it disagrees with what this command intends — rebuild and
-    // reinstall instead. It is read off the device rather than this project's copy: the dev
-    // shell may be another checkout's, which left this project's config clean.
+    // reinstall instead. It is read off the device rather than this project's copy: a dev
+    // shell another checkout installed left this project's config clean. What the check
+    // cannot see is another checkout's static preview build — same id, no URL — so that one
+    // is still relaunched.
     const cached =
       !opts.force &&
       buildCache.run[key]?.id === runIdOf(platform) &&
