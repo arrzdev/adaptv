@@ -1014,7 +1014,7 @@ async function runLive(appRoot, platforms, opts) {
           // directly, so there's no `adb reverse` to (re-)assert.
           if (platform === "android" && !external) {
             report("linking server")
-            cleanups.push(await androidReverse(port, env))
+            cleanups.push(await androidReverse(port, target.id, env))
           }
           report("launching device")
           if (
@@ -1063,7 +1063,7 @@ async function runLive(appRoot, platforms, opts) {
           // app so its WebView loads with a working route. External mode reaches the LAN IP
           // directly (no reverse), so none of this applies.
           report("linking server")
-          cleanups.push(await androidReverse(port, env))
+          cleanups.push(await androidReverse(port, target.id, env))
           await relaunchAndroidApp(appRoot, env, target.id)
         } else if (platform === "ios" && wasRunning) {
           // The old process kept running through the build; load the fresh install now
