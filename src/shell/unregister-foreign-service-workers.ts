@@ -43,22 +43,32 @@ function registrationBelongsToCurrentApp(
 /**
  * Unregisters leftover service worker registrations that are not part of the
  * current app's SW lineage — different script URL, or inactive with no workers.
+ *
+ * Best-effort, and it never rejects. The shell registers the app's own worker
+ * only once this settles, so a rejection here — one stranger's `unregister()`, or
+ * a `getRegistrations()` the browser refuses — would cost the app its worker for
+ * the whole launch, with nothing logged. Removing someone else's worker is
+ * cleanup; registering ours is the product.
  */
 export async function unregisterForeignServiceWorkers(): Promise<void> {
   if (!("serviceWorker" in navigator)) return
 
-  const expectedScriptUrl = getExpectedServiceWorkerScriptUrl()
-  const registrations = await navigator.serviceWorker.getRegistrations()
+  try {
+    const expectedScriptUrl = getExpectedServiceWorkerScriptUrl()
+    const registrations = await navigator.serviceWorker.getRegistrations()
 
-  await Promise.all(
-    registrations.map(async (registration) => {
-      if (
-        registrationBelongsToCurrentApp(registration, expectedScriptUrl)
-      ) {
-        return
-      }
-
-      await registration.unregister()
-    }),
-  )
+    await Promise.allSettled(
+      registrations
+        .filter(
+          (registration) =>
+            !registrationBelongsToCurrentApp(
+              registration,
+              expectedScriptUrl,
+            ),
+        )
+        .map(async (registration) => registration.unregister()),
+    )
+  } catch {
+    //nothing to clean up that we can reach — registration still proceeds
+  }
 }
