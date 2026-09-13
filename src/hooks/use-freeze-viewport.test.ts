@@ -254,15 +254,25 @@ describe("useFreezeViewport — what the iOS pin does to a touch", () => {
 
   it("cancels a drag over content that cannot scroll, so the page never shifts", () => {
     const content = document.body.appendChild(document.createElement("p"))
+    const icon = content.appendChild(
+      document.createElementNS("http://www.w3.org/2000/svg", "svg"),
+    )
     const { unmount } = renderHook(() => useFreezeViewport())
     expect(drag(content, 200, 300).defaultPrevented).toBe(true)
+    //an SVG icon is never a scroller of its own, so a drag from it is pinned too
+    expect(drag(icon, 200, 300).defaultPrevented).toBe(true)
     unmount()
   })
 
   it("leaves a drag inside a real inner scroller to scroll natively", () => {
     const { row } = scroller(900)
+    //an icon in a row is SVG, not an HTMLElement: the walk has to climb through it
+    const icon = row.appendChild(
+      document.createElementNS("http://www.w3.org/2000/svg", "svg"),
+    )
     const { unmount } = renderHook(() => useFreezeViewport())
     expect(drag(row, 200, 300).defaultPrevented).toBe(false)
+    expect(drag(icon, 200, 300).defaultPrevented).toBe(false)
     unmount()
   })
 
