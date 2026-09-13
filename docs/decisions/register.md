@@ -94,7 +94,7 @@ Then the `ui` block — three rules that are the CONSUMER'S call rather than doc
 pre-paint in `utils/platform.ts` (`UI_STAMPS`) into a boolean-presence attribute on `<html>`, so the
 stylesheet stays one static artifact with no build matrix and no flash:
 
-| Rule | Config flag (`"app" \| "all" \| "off"`, default `"app"`) | Stamp |
+| Rule | Config flag (`"app" \| "all" \| "off"`; default `"app"`, except `hideScrollbars`: `"all"`) | Stamp |
 |---|---|---|
 | Global `user-select: none` (with `input`/`textarea`/`[contenteditable]` always exempt, and a `selectable` utility to opt back in per element) | `ui.noSelect` | `html[data-adaptv-no-select]` |
 | `scrollbar-width: none` + `::-webkit-scrollbar { display: none }` | `ui.hideScrollbars` | `html[data-adaptv-hide-scrollbars]` |
