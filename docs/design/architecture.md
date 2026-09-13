@@ -213,7 +213,9 @@ const [seen, setSeen] = useKv("onboarded", false)   // reactive
   browser `storage` event is cross-tab only, so an emitter is required on web too).
 - **Web:** the Map hydrates **synchronously** from `localStorage` at module load (no boot gate). A write
   updates the Map, emits, and write-throughs to `localStorage` synchronously → **durable immediately, no
-  lag on web.** A `storage` listener folds cross-tab writes back into the Map.
+  lag on web.** A `storage` listener folds cross-tab writes back into the Map, and a whole-storage
+  `localStorage.clear()` in another tab (a logout wipe) drops every key it took. sessionStorage raises the
+  same event and is ignored, so a frame clearing its own never touches kv.
 - **Native:** the Map hydrates from `@capacitor/preferences` (async) **at boot**, gated by the shell
   before first render (behind the splash — the shell already does eager init: keyboard listeners, theme;
   KV hydration joins it via an `initKv()`). A write updates the Map, emits, and fire-and-forget-persists
