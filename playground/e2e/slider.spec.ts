@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test"
-import { expect, test } from "@playwright/test"
+// biome-ignore lint/style/noRestrictedImports: e2e has no self-alias to import through
+import { awaitClientHandover, expect, test } from "./client-handover"
 
 /*
  * Slider — a painted track over a hidden native range input, driven by a
@@ -47,29 +48,6 @@ const readNumber = (page: Page, id: string) =>
   readout(page, id)
     .innerText()
     .then((t) => Number.parseFloat(t))
-
-/**
- * Wait for the client to take over before pressing anything.
- *
- * The slider is server-rendered, so a `waitFor()` on it is satisfied by inert
- * HTML. A press fired in that window lands on a root whose pointer handler is
- * not attached yet, the value never moves, and the test reads the default (40)
- * instead of the 75 it just asked for. It is not load flake: Playwright boots
- * its own dev server and tears it down per run, so the FIRST test to reach this
- * route pays the cold transform cost and loses the race while every test after
- * it wins. A dev session left running hides it, because `reuseExistingServer`
- * then hands the suite a warm server.
- *
- * The splash is server-rendered too and self-unmounts only once the client has
- * hydrated and the local store has seeded, so its disappearance is the one
- * honest "React is driving now" signal on the page. Given a generous timeout on
- * purpose — a cold route's first transform can outrun the 5s default.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 /**
  * A settled, on-screen box for a root. `boundingBox()` is viewport-relative and
