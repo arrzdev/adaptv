@@ -1,5 +1,6 @@
 import type { CDPSession, Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * The sheet's MOTION contract.
@@ -116,24 +117,6 @@ async function sheetBox(page: Page, SHEET: string) {
   const box = await readSheet(page, SHEET)
   if (!box) throw new Error("the sheet is not on screen")
   return box
-}
-
-/**
- * Wait for the client to actually take over before touching anything.
- *
- * Every control on this page is server-rendered, so `waitFor()` is satisfied by inert HTML and a
- * click fired at that moment lands on a button whose handler is not attached yet — the open is a
- * no-op and the panel never appears. It is not a flake that shows up under load: Playwright boots
- * its own dev server and tears it down per run, so the FIRST test of a run always pays the cold
- * transform cost and always lost this race, while every test after it was fast enough to win.
- * Reusing an already-warm server (a dev session left running) hid it completely.
- *
- * The splash is SSR-rendered too and self-unmounts only once the client has hydrated, so its
- * disappearance is the one honest "React is driving now" signal on the page — the same handover
- * `edge-swipe.spec.ts` waits on.
- */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0)
 }
 
 async function openSheet(page: Page, button: string, PANEL: string) {

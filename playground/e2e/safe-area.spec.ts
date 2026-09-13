@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Safe area — one contract (four --adaptv-inset-* variables) and ~90 utilities
@@ -27,6 +28,7 @@ async function probeRow(page: Page, label: string) {
 test.describe("Safe area", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/lab/safe-area")
+    await awaitClientHandover(page)
   })
 
   test("useInsets agrees with the measured CSS on every side", async ({

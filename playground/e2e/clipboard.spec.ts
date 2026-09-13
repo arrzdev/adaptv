@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Clipboard — read and write are two capabilities, not one. Copy is ungated on a
@@ -10,35 +11,14 @@ import { expect, test } from "@playwright/test"
  * and readText are reliable there.
  */
 
-/**
- * Wait for the client to take over before pressing anything.
- *
- * Both copy buttons are server-rendered, so Playwright's own actionability
- * check — and any `waitFor()`/`toBeVisible()` — is satisfied by inert HTML:
- * a click fired in that window lands on a button whose handler is not
- * attached yet, `copy()` never runs, and the outcome row still reads "not
- * attempted yet" when the assertion looks. It presents as the component
- * being broken, and it is not load flake: Playwright boots its own dev
- * server and tears it down per run, so the FIRST test to reach this route
- * pays the cold transform cost and loses the race while every test after it
- * wins. A dev session left running hides it entirely, because
- * `reuseExistingServer` then hands the suite a warm server.
- *
- * (Which is why only the empty-string test ever flaked: the other one waits
- * on "Copy available", and `canWrite` starts false and is set in an effect,
- * so that wait was an accidental hydration barrier.)
- *
- * The splash is server-rendered too and self-unmounts only once the client
- * has hydrated and the local store has seeded, so its disappearance is the
- * one honest "React is driving now" signal on the page. Given a generous
- * timeout on purpose — the case it exists for is a cold server, where the
- * route's first transform can take longer than the 5s default.
+/*
+ * Without the hydration gate (`awaitClientHandover`, e2e/support/hydrated.ts) a click
+ * lands on a copy button whose handler is not attached yet, `copy()` never runs, and
+ * the outcome row still reads "not attempted yet" when the assertion looks. Only the
+ * empty-string test ever flaked: the other one waits on "Copy available", and
+ * `canWrite` starts false and is set in an effect, so that wait was an accidental
+ * hydration barrier.
  */
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Clipboard copy", () => {
   test.beforeEach(async ({ context, browserName, page }) => {

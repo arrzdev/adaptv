@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Can you scroll the page with your finger on a DISABLED control?
@@ -32,6 +33,7 @@ test.describe("a disabled control", () => {
   test("does not become a dead zone for scrolling", async ({ page }) => {
     const cdp = await page.context().newCDPSession(page)
     await page.goto("/lab/button")
+    await awaitClientHandover(page)
 
     const disabled = page.getByRole("button", { name: /^disabled$/i })
     await disabled.waitFor()
