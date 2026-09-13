@@ -225,14 +225,16 @@ describe("rewriteRouteTreeOnDisk", () => {
     //drops a watch event whose mtime matches its cache, and `safeFileWrite` throws
     //`rerun` when the file's mtime is not the one it last wrote. A repair that
     //bumps the mtime to "now" invites a force-rewrite of the generator's version.
-    //Within a microsecond, not equal: `utimesSync` takes seconds as a double, a
-    //quarter of a microsecond at today's epoch. A stamp through `Date` drops the
-    //sub-millisecond digits, misses by hundreds of microseconds, and so never equals
-    //the `mtimeMs` the generator compares — see the note on rewriteRouteTreeOnDisk.
+    //Within 10 microseconds, not equal: `utimesSync` takes seconds as a double, and
+    //the round trip lands a few hundred nanoseconds off on APFS and past a
+    //microsecond on Linux CI (1039 and 1141 ns measured). A stamp through `Date`
+    //floors away the sub-millisecond digits, up to a whole millisecond off, so this
+    //bound still catches that regression 99 runs in 100 — see the note on
+    //rewriteRouteTreeOnDisk.
     const before = statSync(tree, { bigint: true }).mtimeNs
     rewriteRouteTreeOnDisk(tree, PKG)
     const drift = statSync(tree, { bigint: true }).mtimeNs - before
-    expect(drift < 0n ? -drift : drift).toBeLessThan(1000n)
+    expect(drift < 0n ? -drift : drift).toBeLessThan(10_000n)
     expect(readFileSync(tree, "utf8")).toContain(PKG) //and it really did write
   })
 
