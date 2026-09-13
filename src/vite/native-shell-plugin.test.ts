@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -8,6 +14,7 @@ import {
   adaptvNativeShellPlugin,
   adaptvNativeShellPlugins,
   NATIVE_SHELLS_ENV,
+  NATIVE_SHELLS_SEEN_FILE,
   nativeShellMiddleware,
 } from "#adaptv/vite/native-shell-plugin"
 
@@ -162,6 +169,21 @@ describe("the dev server's native-shell answer", () => {
     //…while the first was forgotten long ago
     ask(handler, url(0))
     expect(log).toHaveBeenCalledTimes(5001)
+  })
+
+  it("records the build a stale app is really running beside the CLI's file, and nothing else", () => {
+    const file = shellsFile({ ios: "ios-aaaa1111", android: null })
+    const seen = path.join(path.dirname(file), NATIVE_SHELLS_SEEN_FILE)
+    const handler = nativeShellMiddleware(file)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=ios-aaaa1111`)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=android-cccc3333`)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=`)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=ios-zz%0A`)
+    expect(existsSync(seen)).toBe(false)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=ios-bbbb2222`)
+    expect(JSON.parse(readFileSync(seen, "utf8"))).toEqual({
+      ios: { id: "ios-bbbb2222", expected: "ios-aaaa1111" },
+    })
   })
 
   it("exists on the dev server only", () => {
