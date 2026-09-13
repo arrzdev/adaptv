@@ -23,11 +23,13 @@ import {
  * user-agnostic because it was generated that way.
  */
 export function adaptvStaticHostPlugin(context: AdaptvContext): Plugin {
+  let base = "/"
   return {
     name: "adaptv:static-host",
     apply: "build",
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
+      base = resolved.base
     },
     //`buildApp`, `order: "post"` — the app-level hook, after every environment
     //and after any deploy plugin has finished assembling the output. Mirrors how
@@ -36,13 +38,13 @@ export function adaptvStaticHostPlugin(context: AdaptvContext): Plugin {
     buildApp: {
       order: "post",
       async handler() {
-        emitStaticHostFiles(context)
+        emitStaticHostFiles(context, base)
       },
     },
   }
 }
 
-function emitStaticHostFiles(context: AdaptvContext): void {
+function emitStaticHostFiles(context: AdaptvContext, base: string): void {
   //SSR is excluded deliberately, and not just because it needs no fallback:
   //`_redirects` would answer every navigation from a static file and take it
   //away from the server that was built to render it.
@@ -64,7 +66,9 @@ function emitStaticHostFiles(context: AdaptvContext): void {
   }
   const shell = readFileSync(shellPath, "utf8")
 
-  for (const [name, contents] of Object.entries(staticHostFiles(shell))) {
+  for (const [name, contents] of Object.entries(
+    staticHostFiles(shell, base),
+  )) {
     writeFileSync(path.join(clientDir, name), contents)
   }
   console.log(

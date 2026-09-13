@@ -4,6 +4,7 @@ import {
   ROUTER_BUILD_KEYS,
   resolveThemeColors,
 } from "#adaptv/config/app-config.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
 import {
@@ -47,8 +48,12 @@ export function adaptvRootRoutePlugin(
   context: AdaptvContext,
   routerSpecifier?: string,
 ): Plugin {
+  let base = "/"
   return {
     name: "adaptv:root-route",
+    configResolved(resolved) {
+      base = resolved.base
+    },
     resolveId(id) {
       if (id === ROOT_ROUTE_VIRTUAL_ID) return RESOLVED_ROOT_ROUTE_ID
       if (id === ROUTER_CONFIG_VIRTUAL_ID) return RESOLVED_ROUTER_CONFIG_ID
@@ -75,7 +80,10 @@ export function adaptvRootRoutePlugin(
           ? []
           : headIconLinks(
               resolveIconSet(context.appRoot, config, defaultIconFiles()),
-            ),
+            ).map((link) => ({
+              ...link,
+              href: publicPath(base, link.href),
+            })),
       )
     },
   }

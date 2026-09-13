@@ -10,6 +10,7 @@
  * said twice. → `docs/decisions/rendering-and-delivery.md §2`
  */
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 
 export type ResolvedWebConfig = {
   render: "ssr" | "spa"
@@ -76,10 +77,13 @@ export function resolveWebConfig(
  * - **`.nojekyll`** — turns Jekyll off entirely, which is the only reliable way
  *   to stop it eating `_`-prefixed build output.
  * - **`_redirects`** — the Netlify/Cloudflare Pages SPA rule. `200` rather than
- *   `301`: the URL must be preserved so the client router can resolve it.
+ *   `301`: the URL must be preserved so the client router can resolve it. Both
+ *   sides sit under `base`: under `base: "/app/"` the app owns `/app/*`, not the
+ *   whole origin, and `/index.html` is not where its shell lives.
  */
 export function staticHostFiles(
   shellHtml: string,
+  base: string,
 ): Record<string, string> {
   return {
     "index.html": shellHtml,
@@ -87,6 +91,6 @@ export function staticHostFiles(
     //render a different app for anyone who deep-linked
     "404.html": shellHtml,
     ".nojekyll": "",
-    _redirects: "/*    /index.html   200\n",
+    _redirects: `${publicPath(base, "*")}    ${publicPath(base, "index.html")}   200\n`,
   }
 }
