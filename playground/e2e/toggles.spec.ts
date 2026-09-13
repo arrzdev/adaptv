@@ -122,79 +122,141 @@ test.describe("Checkbox & Switch semantics", () => {
     )
   })
 
-  test("the switch's accessible element IS the track, not a 1px box beside it", async ({
-    page,
-  }) => {
-    const sw = input(page, "switch", "Lab switch")
-    const track = page
-      .locator("[data-adaptv='switch']")
-      .filter({ has: sw })
-    await sw.scrollIntoViewIfNeeded()
-    const swBox = await sw.boundingBox()
-    const trackBox = await track.boundingBox()
-    if (!swBox || !trackBox) throw new Error("the switch has no box")
-    //what VoiceOver, TalkBack and every automation tool read as the control's
-    //frame, and where they aim a tap: it must be the area the finger toggles
-    expect(swBox.width, "as wide as the track").toBeGreaterThanOrEqual(
-      trackBox.width - 0.5,
-    )
-    expect(swBox.height, "as tall as the track").toBeGreaterThanOrEqual(
-      trackBox.height - 0.5,
-    )
-    expect(Math.abs(swBox.x - trackBox.x)).toBeLessThanOrEqual(0.5)
-    expect(Math.abs(swBox.y - trackBox.y)).toBeLessThanOrEqual(0.5)
-    //and covering the track must not paint a native checkbox over it
-    await expect(sw).toHaveCSS("opacity", "0")
-    //the element under the frame's centre is the switch itself, so a tap aimed
-    //there reaches it rather than a neighbour
-    const hit = await page.evaluate(
-      ({ x, y }) => {
-        const el = document.elementFromPoint(x, y)
-        return el?.getAttribute("role") ?? el?.tagName ?? null
-      },
-      { x: swBox.x + swBox.width / 2, y: swBox.y + swBox.height / 2 },
-    )
-    expect(hit).toBe("switch")
-  })
+  //A toggle's `<input>` is what VoiceOver, TalkBack and automation treat as the
+  //control, so its box must BE the element the finger toggles. Both were an
+  //sr-only 1x1 box: the switch's sat one pixel left of its track, so a click at
+  //its centre hit nothing (the iOS sim QA finding), and the checkbox's sat in
+  //the middle of its label, under the painted box. Layout is real only in a browser and differs by
+  //engine, so these run on chromium AND webkit.
+  for (const control of [
+    {
+      role: "switch",
+      name: "Lab switch",
+      host: "switch",
+      part: "track",
+      toggled: /switch → /g,
+    },
+    {
+      role: "checkbox",
+      name: "Controlled checkbox",
+      host: "checkbox",
+      part: "label",
+      toggled: /onCheckedChange\(/g,
+    },
+  ] as const) {
+    test(`the ${control.role}'s accessible element IS its ${control.part}, not a 1px speck`, async ({
+      page,
+    }) => {
+      const el = input(page, control.role, control.name)
+      const host = page
+        .locator(`[data-adaptv='${control.host}']`)
+        .filter({ has: el })
+      await el.scrollIntoViewIfNeeded()
+      const box = await el.boundingBox()
+      const hostBox = await host.boundingBox()
+      if (!box || !hostBox)
+        throw new Error(`the ${control.role} has no box`)
+      //what VoiceOver, TalkBack and every automation tool read as the
+      //control's frame, and where they aim a tap: the area the finger toggles
+      expect(
+        box.width,
+        `as wide as the ${control.part}`,
+      ).toBeGreaterThanOrEqual(hostBox.width - 0.5)
+      expect(
+        box.height,
+        `as tall as the ${control.part}`,
+      ).toBeGreaterThanOrEqual(hostBox.height - 0.5)
+      expect(Math.abs(box.x - hostBox.x)).toBeLessThanOrEqual(0.5)
+      expect(Math.abs(box.y - hostBox.y)).toBeLessThanOrEqual(0.5)
+      //covering it must not paint a native control over the painted one
+      await expect(el).toHaveCSS("opacity", "0")
+      //the element under the frame's centre is the control itself, so a tap
+      //aimed there reaches it rather than the painted part or a neighbour
+      const hit = await page.evaluate(
+        ({ x, y }) => {
+          const target = document.elementFromPoint(x, y)
+          return (
+            target?.getAttribute("role") ??
+            target?.getAttribute("type") ??
+            target?.tagName ??
+            null
+          )
+        },
+        { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+      )
+      expect(hit).toBe(control.role)
+    })
 
-  test("a click at the switch's accessible centre toggles it exactly once", async ({
-    page,
-  }) => {
-    const sw = input(page, "switch", "Lab switch")
-    await expect(sw).not.toBeChecked()
-    //Playwright aims at the centre of the ROLE element and refuses if something
-    //else is hit there — the same aim an assistive tap takes
-    await sw.click({ timeout: 5_000 })
-    await expect(sw, "one click toggles once").toBeChecked()
-    await page.waitForTimeout(150)
-    const log = await logJoin(page)
-    expect(log.match(/switch → true/g) ?? []).toHaveLength(1)
-    expect(log, "never a second toggle back").not.toMatch(/switch → false/)
-  })
+    test(`a click at the ${control.role}'s accessible centre toggles it exactly once`, async ({
+      page,
+    }) => {
+      const el = input(page, control.role, control.name)
+      await expect(el).not.toBeChecked()
+      //Playwright aims at the centre of the ROLE element and refuses if
+      //something else is hit there, the same aim an assistive tap takes
+      await el.click({ timeout: 5_000 })
+      await expect(el, "one click toggles once").toBeChecked()
+      await page.waitForTimeout(150)
+      const log = await logJoin(page)
+      expect(
+        log.match(control.toggled) ?? [],
+        "exactly one toggle",
+      ).toHaveLength(1)
+    })
 
-  test("a programmatic click on the switch never toggles twice, and the DOM agrees with aria-checked", async ({
+    test(`a programmatic click on the ${control.role} never toggles twice, and the DOM agrees with the state`, async ({
+      page,
+    }) => {
+      //what VoiceOver and TalkBack dispatch on activation: a click on the
+      //element with no press before it. Whether that click toggles at all is
+      //the gesture engine's call; what the input covering the control must
+      //never do is add a second toggle, or leave the DOM and the state apart
+      const el = input(page, control.role, control.name)
+      await expect(el).not.toBeChecked()
+      await el.evaluate((node) => (node as HTMLInputElement).click())
+      await page.waitForTimeout(150)
+      const toggles = ((await logJoin(page)).match(control.toggled) ?? [])
+        .length
+      expect(toggles, "at most one toggle").toBeLessThanOrEqual(1)
+      const state = await el.evaluate((node) => ({
+        checked: (node as HTMLInputElement).checked,
+        aria: node.getAttribute("aria-checked"),
+      }))
+      expect(state.checked, "DOM checked matches the state").toBe(
+        toggles === 1,
+      )
+      if (control.role === "switch") {
+        expect(state.aria).toBe(String(toggles === 1))
+      }
+    })
+  }
+
+  test("neither toggle is exposed as read-only in the accessibility tree", async ({
     page,
+    browserName,
   }) => {
-    //what VoiceOver and TalkBack dispatch on activation: a click on the element
-    //with no press on the track before it. Whether that click toggles at all is
-    //the gesture engine's call; what the input covering the track must never do
-    //is add a second toggle, or leave `checked` and `aria-checked` apart
-    const sw = input(page, "switch", "Lab switch")
-    await expect(sw).not.toBeChecked()
-    await sw.evaluate((el) => (el as HTMLInputElement).click())
-    await page.waitForTimeout(150)
-    const log = await logJoin(page)
-    expect(
-      (log.match(/switch → /g) ?? []).length,
-      "at most one toggle",
-    ).toBeLessThanOrEqual(1)
-    const state = await sw.evaluate((el) => ({
-      checked: String((el as HTMLInputElement).checked),
-      aria: el.getAttribute("aria-checked"),
-    }))
-    expect(state.checked, "DOM checked matches aria-checked").toBe(
-      state.aria,
-    )
+    //both inputs carry `readOnly` to tell React a controlled `checked` has no
+    //`onChange` on purpose. It must not reach assistive tech as "read-only".
+    //Only Chromium hands its accessibility tree to a test (CDP); WebKit's is
+    //read on the simulator with VoiceOver
+    test.skip(browserName !== "chromium", "CDP accessibility tree")
+    const cdp = await page.context().newCDPSession(page)
+    const { nodes } = await cdp.send("Accessibility.getFullAXTree")
+    const seen: string[] = []
+    for (const node of nodes) {
+      const name = node.name?.value
+      if (name !== "Lab switch" && name !== "Controlled checkbox") continue
+      seen.push(`${node.role?.value}:${name}`)
+      const props = Object.fromEntries(
+        (node.properties ?? []).map((p) => [p.name, p.value.value]),
+      )
+      expect(props.readonly, `${name} is not read-only`).toBeUndefined()
+      expect(props.focusable, `${name} is focusable`).toBe(true)
+    }
+    expect(seen.sort()).toEqual([
+      "checkbox:Controlled checkbox",
+      "switch:Lab switch",
+    ])
   })
 
   test("disabled controls are inert — cannot be activated, and never fire", async ({
