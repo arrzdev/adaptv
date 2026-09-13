@@ -536,7 +536,7 @@ async function renderOfflineHtml(devUrl, config) {
     var STATES = {
       none: ["Couldn't reach dev server", "This is a development build", "Reconnecting automatically\u2026"],
       pending: ["Checking this build", "The dev server is up. The app opens once this install is confirmed current.", "Waiting for adaptv\u2026"],
-      stale: ["Waiting for the new build", "This install is out of date. The rebuilt app opens on its own.", "Waiting for the rebuild\u2026"],
+      stale: ["Waiting for the new build", "This install is out of date. Once it is rebuilt, the new app opens on its own.", "Waiting for the rebuild\u2026"],
       unserved: ["Not part of this run", "The dev server is up, but this run isn't serving this platform.", "Waiting for a run that includes it\u2026"]
     };
     var painted = "none";
