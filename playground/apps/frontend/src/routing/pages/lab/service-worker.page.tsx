@@ -32,7 +32,7 @@ type WorkerReport = {
   registered: boolean
   controlled: boolean
   state: string | null
-  /** `null` where the browser has no navigationPreload at all (Safari < 17.4). */
+  /** `null` where the browser has no navigationPreload at all (Safari < 15.4). */
   preloadEnabled: boolean | null
   waiting: boolean
   cacheNames: string[]
