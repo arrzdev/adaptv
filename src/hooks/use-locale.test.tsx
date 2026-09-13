@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { resetLocale, resolveLocale } from "#adaptv/capabilities/locale"
 import { useLocale } from "#adaptv/hooks/use-locale"
 
@@ -87,5 +87,30 @@ describe("useLocale", () => {
       `${en.languageTag}|none|${en.hourCycle}`,
     )
     expect(renderToString(<LocaleLine />)).not.toContain("pt-PT")
+  })
+
+  it("serves a server snapshot whose zone does not depend on the runtime's", async () => {
+    //the module is evaluated once on the server and once in the browser; a zone
+    //read from either runtime makes the two snapshots disagree, and hydration
+    //throws the server tree away (measured: a server in Europe/Lisbon and a
+    //browser in Pacific/Kiritimati, React's text-mismatch error on /lab/locale)
+    const original = Intl.DateTimeFormat.prototype.resolvedOptions
+    Intl.DateTimeFormat.prototype.resolvedOptions = function (
+      this: Intl.DateTimeFormat,
+    ) {
+      return { ...original.call(this), timeZone: "Pacific/Kiritimati" }
+    }
+    restores.push(() => {
+      Intl.DateTimeFormat.prototype.resolvedOptions = original
+    })
+    vi.resetModules()
+    //the hook module and the renderer re-imported together, so both share the
+    //fresh React the reset hands out
+    const fresh = await import("#adaptv/hooks/use-locale")
+    const server = await import("react-dom/server")
+    function ZoneLine() {
+      return <p>{fresh.useLocale().timeZone}</p>
+    }
+    expect(server.renderToString(<ZoneLine />)).toContain("UTC")
   })
 })
