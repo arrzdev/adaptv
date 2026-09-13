@@ -18,7 +18,7 @@ The filename **is** the pnpm key: `@scope__name@version.patch` decodes to `'@sco
 | `@tanstack__router-generator@1.167.21` | `generator`, `template`, `transform` (esm + cjs) | The route generator reads the `ADAPTV_ROUTER_PKG` env override instead of hardcoding `@tanstack/react-router`, so generated route files import from adaptv. |
 | `@tanstack__start-plugin-core@1.171.24` | `constants`, `route-tree-footer` | The generated route tree's `declare module` reads `ADAPTV_START_PKG` instead of hardcoding `@tanstack/*-start`. |
 | `@capawesome__capacitor-live-update@8.3.0` | `LiveUpdate.swift`, `LiveUpdate.java` | OTA rollback targets the newest bundle **this device is known to boot**, rather than whatever the store shipped. |
-| `@capacitor__cli@8.4.2` | `dist/config.js` | The native config is supplied **in memory** through `ADAPTV_CAPACITOR_CONFIG`, so no `capacitor.config.*` file exists at the project root — `adaptv.config.ts` stays the single source. Absent env var ⇒ upstream file-based behaviour, unchanged. |
+| `@capacitor__cli@8.4.3` | `dist/config.js` | The native config is supplied **in memory** through `ADAPTV_CAPACITOR_CONFIG`, so no `capacitor.config.*` file exists at the project root — `adaptv.config.ts` stays the single source. Absent env var ⇒ upstream file-based behaviour, unchanged. |
 
 The first two serve **opacity** (L20). The third serves **OTA rollback**. The fourth serves the
 single-config-file rule — it is the reason a consumer's repo has no stray native config to drift.
