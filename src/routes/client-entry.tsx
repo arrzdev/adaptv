@@ -1,7 +1,7 @@
 import { RouterProvider } from "@tanstack/react-router"
 import { StartClient } from "@tanstack/react-start/client"
 import { StrictMode, startTransition } from "react"
-import { hydrateRoot } from "react-dom/client"
+import { createRoot, hydrateRoot } from "react-dom/client"
 import { getRouter } from "#adaptv/routes/router-entry"
 import { installNativeLiveReloadRecovery } from "#adaptv/shell/native-live-reload-client"
 
@@ -32,25 +32,30 @@ import { installNativeLiveReloadRecovery } from "#adaptv/shell/native-live-reloa
  * browser — not on `render`, which cannot know whether the response came from
  * the origin or from the cache.
  *
- * ## Why `hydrateRoot` on both sides
+ * ## Both mount at the `document`, and only one of them hydrates
  *
  * adaptv's root route renders the whole `<html>` document (`shell-layout.tsx`), so
  * React must mount at the document, not inside a `div` — the same shape Start
- * hydrates. `createRoot` is not an alternative: it takes an `Element`, and the
- * only element that could host an `<html>` render is `documentElement` itself.
+ * hydrates. That holds for `createRoot` as much as for `hydrateRoot`: React 19
+ * accepts a `Document` as a root container, and its `<html>`/`<head>`/`<body>`
+ * are singletons it adopts rather than creates.
  *
- * In the no-bootstrap case there is nothing SSR-rendered to hydrate *from*, so
- * this is the canonical TanStack **Router** (not Start) boot: build the router,
- * mount it against the shell.
+ * In the no-bootstrap case there is nothing server-rendered to hydrate *from*, so
+ * it gets a **client root**. The generated shell is a static document whose body
+ * is an empty mount point, and the first client render can never match it: the
+ * router's own `<Suspense>` meets the shell's first text node. Hydrating it
+ * anyway logged React #418 on every launch of the native app, every spa
+ * document and every offline ssr boot, and React then did what a client root
+ * does from the start — clear the document sparingly (the head's inline scripts,
+ * styles and stylesheets survive, everything else goes) and render. So the
+ * failed pass bought nothing but the error, which lands on `window` as an
+ * `error` event in front of the boot watchdog and any app telemetry.
+ * `suppressHydrationWarning` could not have hidden it: it covers text and
+ * attribute drift, not a structural mismatch.
+ * → `client-entry.test.tsx`, `docs/design/rendering.md §3.1`
  *
- * MEASURED, and worth knowing before it is reported as a regression: that second
- * path logs one **React #418** ("hydration failed") at boot. It is inherent, not a
- * bug to chase — the shell is a static document with no app markup, so the first
- * client render can never match it, whatever `suppressHydrationWarning` is set on
- * `<html>`/`<body>` (that attribute covers text and attribute drift, not a
- * structural mismatch). React recovers by discarding the shell and client
- * rendering, which is precisely the intent here, and the shell holds nothing worth
- * preserving. The SSR-with-bootstrap path above hydrates cleanly, 0 errors.
+ * Both are scheduled inside the same `startTransition`, as the hydration always
+ * was, so the boot keeps its priority.
  */
 
 //native dev only: recover the live-reload socket when the WebView's OS drops it.
@@ -65,14 +70,18 @@ const serverRendered =
 const clientRouter = serverRendered ? null : getRouter()
 
 startTransition(() => {
-  hydrateRoot(
-    document,
-    <StrictMode>
-      {clientRouter ? (
+  if (clientRouter) {
+    createRoot(document).render(
+      <StrictMode>
         <RouterProvider router={clientRouter} />
-      ) : (
+      </StrictMode>,
+    )
+  } else {
+    hydrateRoot(
+      document,
+      <StrictMode>
         <StartClient />
-      )}
-    </StrictMode>,
-  )
+      </StrictMode>,
+    )
+  }
 })

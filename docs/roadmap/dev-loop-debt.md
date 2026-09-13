@@ -162,14 +162,6 @@ is the transport, and the only document that travels over it is a static page ad
 
 ## Known-unfixed (pre-existing, not from this work)
 
-- **Hydration mismatch on every boot.** The generated shell has no app markup, so
-  the client render never matches it and React discards the shell and renders
-  again on *every* launch (React #418). MEASURED 2026-09-02: that recovery is one
-  long task of 57 ms median on the Android WebView and no long task on desktop
-  chromium; the cost worth fixing was the shell's module waterfall, which now
-  carries `modulepreload` links for the entry's static imports. Numbers in
-  `docs/design/rendering.md` §3.1. Staying: the error itself, and the route chunk
-  the shell cannot preload because it serves every route.
 - **`pipeline("run", …)` is dead code** — a complete static build→install→launch
   path that nothing dispatches to. It's most of the `preview` command already.
 - **`nativ.mjs` biome warning** (`noUnusedVariables`) predates all of this.
@@ -190,8 +182,7 @@ is the transport, and the only document that travels over it is a static page ad
    `docs/DEVELOPMENT.md` calls out**: a framework-only change reports `✓ web build · cached`, which
    that doc names "a real bug". Two fingerprints with two hashing strategies is the cause.
 3. **E** — only if already in the file. **G** is discharged: its claim is a test now.
-4. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet;
-   the hydration mismatch is the one with a cost paid on every launch.
+4. The **Known-unfixed** list — none of it is from this work, and none of it has an owner yet.
 
 **A** is now the one item that changes how much code exists (**C**, its partner, has shipped as
 `bin/lib/lock.mjs`, and **D**, **H** and **I** were already in the code — what they lacked was a

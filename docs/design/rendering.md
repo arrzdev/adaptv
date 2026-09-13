@@ -262,14 +262,25 @@ exactly the same way. One mechanism, six targets.
 > rendered. Online, `/settings` is genuinely server-rendered (76 741 bytes, `$_TSR` present) and hydrates
 > with **0 console errors**.
 >
-> **Known and inherent:** the shell path logs one **React #418** at boot. A static shell has no app
-> markup, so the first client render can never match it; React recovers by client rendering, which is the
-> intent, and the shell holds nothing worth preserving. `suppressHydrationWarning` does not cover it — it
-> handles text and attribute drift, not a structural mismatch. Removing the error would mean the root
-> route no longer renders `<html>`, which is a much larger change than the error is worth.
+> **Amended 2026-09-13 — the shell path no longer hydrates.** It used to, and logged one **React
+> #418** on every boot of it: every native launch, every service-worker-served spa document, every
+> offline ssr boot. A static shell has no app markup, so the first client render can never match it
+> (the router's `<Suspense>` meets the body's first text node). This note used to file that as
+> inherent, on the grounds that removing it meant the root route could no longer render `<html>`.
+> That premise was wrong: React 19 takes a `Document` as a `createRoot` container and adopts
+> `<html>`/`<head>`/`<body>` as singletons, and the recovery after a failed hydration is literally a
+> client root's first commit — the same sparing clear of the document. So the no-bootstrap branch
+> of `client-entry.tsx` mounts `createRoot(document)`, still inside `startTransition`; only a
+> document carrying `$_TSR` is hydrated. **MEASURED on the built playground**, chromium and WebKit:
+> the capacitor bundle (with and without a native `Capacitor` stub), a spa build from a static host
+> and from its worker, and an offline ssr boot all went from one #418 per boot to zero, the
+> finished `<html>`/`<body>` attributes, head and body children are identical before and after, and
+> the React development build logs nothing either. The error mattered beyond the console: it
+> reaches `window` as an `error` event, which is exactly what the boot watchdog and any app
+> telemetry listen to. → `src/routes/client-entry.test.tsx`
 >
 > **MEASURED (2026-09-02, built playground, ten boots per row, observers installed before the
-> document):** the recovery itself is cheap. On the Android WebView (Pixel 10 emulator, API 37, the
+> document):** the recovery itself was cheap. On the Android WebView (Pixel 10 emulator, API 37, the
 > app's own local server) the whole boot is one long task of **57 ms median, 64 ms p90**, and chromium on
 > the desktop records no long task at all, desktop or mobile emulation. What the shell path was paying
 > for was the network: the server document lists every chunk the page needs as a `modulepreload`, the
