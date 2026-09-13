@@ -130,8 +130,9 @@ const CHECKBOX_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 //(measured on chromium and webkit), so screen readers framed a speck and anything
 //aiming at that frame hit the painted box instead of the control. Covering the
 //label exactly, invisibly, makes the accessible frame and the hit area one
-//rectangle, and a consumer who widens the label into a full row widens both. Pointer events land on the input and bubble
-//to the label, where the gesture engine still owns the press. There is no
+//rectangle, and a consumer who widens the label into a full row widens both.
+//Pointer events land on the input and bubble to the label, where the gesture
+//engine still owns the press. There is no
 //`peer`: the input is rendered AFTER the box so it paints over it without a
 //z-index (the box is positioned, and a z-index would lift an invisible input over
 //unrelated overlays), and a `peer-*` variant only reaches later siblings.
