@@ -77,6 +77,32 @@ describe("compose — the URLs", () => {
     )
     expect(smsUrl({})).toBe("sms:")
   })
+
+  //Swift's URL(string:) returns nil for a space before iOS 17, and the native
+  //open rejects before any composer is asked.
+  it("encodes a mailto recipient per RFC 6068, keeping the separating commas and the plus", () => {
+    expect(mailUrl({ to: ['"a b"@c.d', "e+tag@f.g"] })).toBe(
+      "mailto:%22a%20b%22@c.d,e+tag@f.g",
+    )
+    expect(mailUrl({ to: ["x?y#z&w=v%@c.d"], subject: "s" })).toBe(
+      "mailto:x%3Fy%23z%26w%3Dv%25@c.d?subject=s",
+    )
+    //a comma inside one address is not a separator
+    expect(mailUrl({ to: ['"last, first"@c.d', "g@h.i"] })).toBe(
+      "mailto:%22last%2C%20first%22@c.d,g@h.i",
+    )
+  })
+
+  it("writes an sms recipient per RFC 5724, dropping the spaces a phone number is formatted with", () => {
+    expect(
+      smsUrl({ to: ["+1 555 0001", "+44 (20) 7946-0000"], body: "hi" }),
+    ).toBe("sms:+15550001,+44(20)7946-0000?body=hi")
+    vi.mocked(isIOS).mockReturnValue(true)
+    expect(smsUrl({ to: ["+1 555 0001", "a&b"], body: "hi" })).toBe(
+      "sms:+15550001,a%26b&body=hi",
+    )
+    expect(smsUrl({ to: ["1,2#3"] })).toBe("sms:1%2C2%233")
+  })
 })
 
 describe("compose — support", () => {
