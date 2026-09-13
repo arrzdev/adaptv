@@ -129,6 +129,27 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     open but not on screen reports `document.hidden`, which freezes rAF *and* the animation
     timeline: the run reports `document hidden` when that happens, because the numbers are then
     meaningless.
+  - The lab's anchoring scenario sets `scrollTop` by hand with nothing focused, so it says nothing
+    about the BROWSER's scroll anchoring meeting adaptv's own keyboard scroll. That meeting is
+    `playground/e2e/scroll-anchoring.spec.ts`, on both engines, and it matters because Safari 27
+    turns anchoring on (WebKit 171840378) and the spec makes the focused editable a priority
+    anchor, which is exactly the element adaptv scrolls. **Verdict (2026-09-13, Playwright WebKit
+    26.5 line and Chromium 149, headless): no double adjustment.** Playwright's WebKit already
+    anchors (`CSS.supports("overflow-anchor", "auto")`, and a 100px insertion above a scrolled row
+    moves `scrollTop` by +100). With the keyboard raised through the seam and 100px inserted above
+    the focused field while adaptv's smooth scroll is travelling, the landing is the same with
+    anchoring and with `overflow-anchor: none` forced on the scroller, on both engines: the drawer
+    lands its field 12px clear (`scrollTop` 971), AvoidKeyboard lands on `scrollTop` 528. Neither
+    engine anchors against an in-flight smooth scroll, and every scroll write adaptv makes is
+    absolute, so there is no second adjustment to add. At rest the same insertion IS anchored on
+    both engines, and the focused row keeps its place to the pixel where the control moves it
+    100px — so `overflow-anchor: none` on a scroller adaptv drives is not a fix, it is a
+    regression, and the spec fails on it. What stays on a device: iOS momentum (WebKit stops a
+    fling on an anchoring adjustment) and a real keyboard's `visualViewport`.
+  - Found on the way, and not an anchoring effect: AvoidKeyboard aims ONCE, from the geometry at
+    the moment it scrolls, so content inserted above the field mid-scroll leaves the field
+    `clearance -76` (below the scroller's visible bottom) on both engines, anchoring on or off. The
+    drawer does not have this gap because it re-aims once its box has settled.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.
