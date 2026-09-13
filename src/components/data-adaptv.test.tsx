@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
 import { ExternalLink } from "#adaptv/components/external-link"
+import { Icon } from "#adaptv/components/icon"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -81,6 +82,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["view", <View key="view" />],
   ["scroll-view", <ScrollView key="scroll-view" />],
   ["text", <Text key="text">t</Text>],
+  ["icon", <Icon key="icon" render={<svg />} />],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
   [
