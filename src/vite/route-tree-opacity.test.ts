@@ -225,11 +225,14 @@ describe("rewriteRouteTreeOnDisk", () => {
     //drops a watch event whose mtime matches its cache, and `safeFileWrite` throws
     //`rerun` when the file's mtime is not the one it last wrote. A repair that
     //bumps the mtime to "now" invites a force-rewrite of the generator's version.
-    //Tolerance, not equality: `utimesSync` restores to filesystem precision and
-    //drops the sub-millisecond digits — see the note on rewriteRouteTreeOnDisk.
-    const before = statSync(tree).mtimeMs
+    //Within a microsecond, not equal: `utimesSync` takes seconds as a double, a
+    //quarter of a microsecond at today's epoch. A stamp through `Date` drops the
+    //sub-millisecond digits, misses by hundreds of microseconds, and so never equals
+    //the `mtimeMs` the generator compares — see the note on rewriteRouteTreeOnDisk.
+    const before = statSync(tree, { bigint: true }).mtimeNs
     rewriteRouteTreeOnDisk(tree, PKG)
-    expect(statSync(tree).mtimeMs).toBeCloseTo(before, 0)
+    const drift = statSync(tree, { bigint: true }).mtimeNs - before
+    expect(drift < 0n ? -drift : drift).toBeLessThan(1000n)
     expect(readFileSync(tree, "utf8")).toContain(PKG) //and it really did write
   })
 
@@ -241,6 +244,26 @@ describe("rewriteRouteTreeOnDisk", () => {
     const before = statSync(tree).ino
     rewriteRouteTreeOnDisk(tree, PKG)
     expect(statSync(tree).ino).not.toBe(before)
+    expect(readdirSync(path.dirname(tree))).toEqual([path.basename(tree)])
+  })
+
+  it("never renames a stale repair over a newer generation", () => {
+    //A repair reads generation N, and before its rename lands the generator renames
+    //N+1 into place — in dev, the tree with a route that was just added. Renaming
+    //N's rewrite over it, with N's mtime put back on it, would drop that route until
+    //the next route change. The repair must stand down: N+1's own rename is a new
+    //watcher event, and the repair that event runs reads N+1.
+    const newer = GENERATED.replace(
+      "/* eslint-disable */",
+      "/* eslint-disable */\n// a route added since the repair read the tree",
+    )
+    expect(newer).not.toBe(GENERATED)
+    rewriteRouteTreeOnDisk(tree, PKG, [], () => {
+      const incoming = path.join(dir, "incoming.tmp")
+      writeFileSync(incoming, newer)
+      renameSync(incoming, tree)
+    })
+    expect(readFileSync(tree, "utf8")).toBe(newer)
     expect(readdirSync(path.dirname(tree))).toEqual([path.basename(tree)])
   })
 
