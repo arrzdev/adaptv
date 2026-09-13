@@ -74,8 +74,8 @@ export function reconnectDecision(status, notReadyTries, limit) {
 /**
  * The page's reading of the dev server's native-shell answer (`src/shell/native-shell.ts`).
  *
- * `match` is the only answer that lets the page go back to the dev server; `pending` and `stale`
- * each keep it waiting with their own copy; `none` — nothing answered, a non-2xx, a body that is
+ * `match` is the only answer that lets the page go back to the dev server; `pending`, `stale` and
+ * `unserved` each keep it waiting with their own copy; `none` — nothing answered, a non-2xx, a body that is
  * not the verdict — is the plain "couldn't reach" state. The body arrives parsed on iOS (the
  * native request decodes JSON) and as text on Android (a WebView `fetch`), so both are taken.
  *
@@ -83,7 +83,7 @@ export function reconnectDecision(status, notReadyTries, limit) {
  *
  * @param {number} status
  * @param {any} body
- * @returns {"match" | "pending" | "stale" | "none"}
+ * @returns {"match" | "pending" | "stale" | "unserved" | "none"}
  */
 export function shellAnswer(status, body) {
   if (!(status >= 200 && status < 300)) return "none"
@@ -98,7 +98,8 @@ export function shellAnswer(status, body) {
   const verdict = data && typeof data === "object" ? data.verdict : null
   return verdict === "match" ||
     verdict === "pending" ||
-    verdict === "stale"
+    verdict === "stale" ||
+    verdict === "unserved"
     ? verdict
     : "none"
 }
@@ -528,12 +529,15 @@ async function renderOfflineHtml(devUrl, config) {
     var SHELL_URL = DEV_URL.replace(/\\/$/, "") + ${JSON.stringify(SHELL_ENDPOINT)} +
       "?id=" + encodeURIComponent(shellIdFromUserAgent(navigator.userAgent) || "");
 
-    // One screen, three states. "none" is the page as it has always been: the server is not
-    // answering. The two waiting states drop the command, which the dev is already running.
+    // One screen, four states. "none" is the page as it has always been: the server is not
+    // answering. "pending" and "stale" drop the command, which the dev is already running.
+    // "unserved" keeps it: the run that is up leaves this platform out, so no build is coming,
+    // and the command that would serve it is the one thing worth showing.
     var STATES = {
       none: ["Couldn't reach dev server", "This is a development build", "Reconnecting automatically\u2026"],
       pending: ["Checking this build", "The dev server is up. The app opens once this install is confirmed current.", "Waiting for adaptv\u2026"],
-      stale: ["Waiting for the new build", "This install is out of date. The rebuilt app opens on its own.", "Waiting for the rebuild\u2026"]
+      stale: ["Waiting for the new build", "This install is out of date. The rebuilt app opens on its own.", "Waiting for the rebuild\u2026"],
+      unserved: ["Not part of this run", "The dev server is up, but this run isn't serving this platform.", "Waiting for a run that includes it\u2026"]
     };
     var painted = "none";
     function paint(state) {
@@ -543,7 +547,7 @@ async function renderOfflineHtml(devUrl, config) {
       document.getElementById("title").textContent = copy[0];
       document.getElementById("detail").textContent = copy[1];
       document.getElementById("status-text").textContent = copy[2];
-      document.getElementById("cmd").style.display = state === "none" ? "" : "none";
+      document.getElementById("cmd").style.display = state === "none" || state === "unserved" ? "" : "none";
     }
 
     // Platform for the command hint. Prefer the bridge; fall back to the local origin's

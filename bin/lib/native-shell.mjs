@@ -167,8 +167,10 @@ export async function buildNewShell(shells, platform, current, build) {
  *
  * Every platform of the run starts as `null` — nothing decided — which is what makes an app that
  * was already on the device wait while the native projects are prepared, instead of reconnecting
- * the moment the dev server answers. Written through a rename so the dev server, reading on every
- * request, never sees half a file.
+ * the moment the dev server answers. A platform the run leaves out has no entry, and one it drops
+ * becomes `false`: the dev server tells both apps this run is not serving them, rather than
+ * leaving them on a screen that promises they will open. Written through a rename so the dev
+ * server, reading on every request, never sees half a file.
  *
  * @param {string} appRoot
  * @param {string[]} platforms
@@ -188,6 +190,15 @@ export function openShellRegistry(appRoot, platforms) {
     /** @param {string} platform @param {string} id */
     expect(platform, id) {
       expected[platform] = id
+      write()
+    },
+    /**
+     * Mark every platform outside `ready` as dropped from this run.
+     * @param {string[]} ready
+     */
+    serveOnly(ready) {
+      for (const p of Object.keys(expected))
+        if (!ready.includes(p)) expected[p] = false
       write()
     },
     remove() {

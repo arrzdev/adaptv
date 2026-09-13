@@ -17,16 +17,16 @@ export const NATIVE_SHELLS_ENV = "ADAPTV_DEV_SHELLS"
  * The shells the CLI expects, keyed by platform. A file, because the CLI decides it AFTER the
  * dev server is already running (the server comes up first, then the native projects are
  * prepared, then each platform is reused or rebuilt) and the dev server is a separate process.
- * Anything unreadable is "nothing decided yet", which only ever makes a client wait.
+ * Anything unreadable is `null` — "nothing decided yet" — which only ever makes a client wait.
  */
 export function readExpectedShells(
   file: string,
-): Record<string, string | null> {
+): Record<string, string | false | null> | null {
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8"))
-    return parsed && typeof parsed === "object" ? parsed : {}
+    return parsed && typeof parsed === "object" ? parsed : null
   } catch {
-    return {}
+    return null
   }
 }
 
