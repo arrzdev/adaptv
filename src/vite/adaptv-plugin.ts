@@ -33,7 +33,6 @@ import {
   buildManifest,
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
-import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvRouteConfigWatchPlugin } from "#adaptv/vite/route-config-watch.ts"
 import {
@@ -54,6 +53,7 @@ import {
   adaptvSwDevPlugin,
   devServiceWorkerEnabled,
 } from "#adaptv/vite/sw-dev.ts"
+import { adaptvTailwindEmptyFallbackPlugin } from "#adaptv/vite/tailwind-empty-fallback.ts"
 import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 
 /**
@@ -235,10 +235,12 @@ export async function adaptv(
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts
     adaptvCssLayerOrderPlugin(),
-    //The mirror image of the line above: `enforce: "post"`, because it rewrites what
-    //@tailwindcss/vite PRODUCED. Without it every `ring-*` in the app silently renders
-    //nothing on Android WebView 113–118. → src/vite/ring-shadow-fallback.ts
-    adaptvRingShadowPlugin(),
+    //The mirror image of the line above: NO `enforce`, because it rewrites what
+    //@tailwindcss/vite PRODUCED and `post` is already too late. Without it every `ring-*`,
+    //`blur`, `tabular-nums`, `touch-pan-*`, `rotate-x-*` and `contain-*` in the app
+    //silently computes nothing on Android WebView 113–118.
+    //→ src/vite/tailwind-empty-fallback.ts
+    adaptvTailwindEmptyFallbackPlugin(),
     adaptvConfigLoaderPlugin(context),
     adaptvManifestPlugin(context),
     adaptvDefaultIconsPlugin(context),
