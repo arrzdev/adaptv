@@ -7,7 +7,9 @@
 //## What each OS can actually do
 //
 //Android sets `FLAG_SECURE` on the window: screenshots and screen recordings of
-//the app come back black, and the recents card is blank. iOS has no such flag —
+//the app come back black, and the recents card does not show the app's content
+//(what it shows instead is the launcher's call — measured on the emulator it is
+//the launch screen / window background, not a blank card). iOS has no such flag —
 //a screenshot taken while the app is in front captures it, and nothing in the
 //SDK prevents that — so the plugin does the one thing iOS allows: it presents a
 //cover (a blur, or the launch screen) the moment the app resigns active, which is
@@ -41,8 +43,11 @@ export type PrivacyScreenOutcome = "applied" | "unsupported" | "failed"
 
 /**
  * What the switcher shows while the app is covered. `"splash"` is the launch
- * screen (the OS's own idea of "the app, not its content"); `"obscure"` blurs
- * the app on iOS, following the colour scheme, and dims it on Android.
+ * screen, the OS's own idea of "the app, not its content": on iOS that is
+ * adaptv's launch storyboard, a flat fill of the app's splash colour with no
+ * image (the CLI deletes the native template's splash art, which the plugin
+ * would otherwise show by name). `"obscure"` blurs the app on iOS, following the
+ * colour scheme, and dims it on Android.
  */
 export type PrivacyScreenCover = "splash" | "obscure"
 
@@ -73,7 +78,7 @@ export function getPrivacyScreenCaveat(): string {
   }
   return isIOS()
     ? "iOS covers the app in the switcher and under the system's own overlays, and exposes no way to block a screenshot: one taken while the app is in front captures it."
-    : "Android sets FLAG_SECURE: screenshots and screen recordings of the app come back black, and the recents card is blank."
+    : "Android sets FLAG_SECURE: screenshots and screen recordings of the app come back black, and the recents card does not show the app's content."
 }
 
 function darkScheme(): boolean {

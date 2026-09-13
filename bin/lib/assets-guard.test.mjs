@@ -152,6 +152,26 @@ describe("generateAssets only writes what is not already there", () => {
     expect(remembered(root).outputs).toBe(before)
   })
 
+  it("removes the template iOS splash art again when a rescaffold brings it back", async () => {
+    //`patchIosTheme` deletes `Splash.imageset` (the vendor's logo, which the privacy
+    //screen's app-switcher cover looks up by name). A rescaffold restores it without
+    //touching any input, so only the outputs half can see it return.
+    const root = app()
+    const iosApp = path.join(root, ".adaptv/ios/App/App")
+    mkdirSync(path.join(iosApp, "Base.lproj"), { recursive: true })
+    const imageset = path.join(iosApp, "Assets.xcassets/Splash.imageset")
+    const rescaffold = () => {
+      mkdirSync(imageset, { recursive: true })
+      writeFileSync(path.join(imageset, "Contents.json"), "{}")
+    }
+    rescaffold()
+    await generateAssets(root, CONFIG, ["ios"], {})
+    expect(existsSync(imageset)).toBe(false)
+    rescaffold()
+    await generateAssets(root, CONFIG, ["ios"], {})
+    expect(existsSync(imageset)).toBe(false)
+  })
+
   it("regenerates when the ART changes", async () => {
     const root = app()
     await gen(root)

@@ -129,5 +129,12 @@ describe("privacy screen — on a binary that carries it", () => {
     native(false)
     expect(getPrivacyScreenCaveat()).toMatch(/FLAG_SECURE/)
     expect(getPrivacyScreenCaveat()).toMatch(/black/)
+    //What the flag guarantees about the recents card is that the content is not in it.
+    //What the card DOES show varies by launcher — measured on the emulator it is the
+    //launch screen / window background, not blank — so the caveat must not promise one.
+    expect(getPrivacyScreenCaveat()).toMatch(
+      /recents card does not show the app's content/,
+    )
+    expect(getPrivacyScreenCaveat()).not.toMatch(/blank/)
   })
 })

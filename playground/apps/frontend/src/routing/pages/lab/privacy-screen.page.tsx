@@ -100,14 +100,14 @@ function LabPrivacyScreenPage() {
           },
           ios: {
             verdict: "partial",
-            note: "The switcher card is covered the moment the app resigns active. iOS has no API to block a screenshot of the foreground app, and the caveat says so.",
+            note: "The switcher card is covered the moment the app resigns active; with the splash cover it is a flat fill of the app's splash colour, no logo. iOS has no API to block a screenshot of the foreground app, and the caveat says so.",
           },
           android: {
             verdict: "works",
-            note: "FLAG_SECURE: a screenshot or a recording of the app comes back black, and the recents card is blank.",
+            note: "FLAG_SECURE: a screenshot or a recording of the app comes back black, and the recents card does not show the page (the launcher decides what it shows instead).",
           },
         }}
-        wrong="Support says available on a browser. Or the state row reads on after a call that resolved failed — the row must be the OS's answer, re-read, not the button's intent. Or an Android screenshot with the screen enabled shows the page: the flag was never set on the window that is actually in front."
+        wrong="Support says available on a browser. Or the state row reads on after a call that resolved failed — the row must be the OS's answer, re-read, not the button's intent. Or an Android screenshot with the screen enabled shows the page: the flag was never set on the window that is actually in front. Or the iOS switcher card shows a logo that is not the app's: the native template's splash art survived into the build."
       />
 
       <LabSection
