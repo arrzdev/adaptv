@@ -1,5 +1,5 @@
-import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { awaitClientHandover } from "./support/hydrated"
 
 /*
  * Screen reader — the status is the OS's answer on native and `unknown` on the
@@ -10,12 +10,6 @@ import { expect, test } from "@playwright/test"
  * that a repeated announcement is a fresh mutation, because a live region
  * announces changes and the same text set twice is not one.
  */
-
-async function awaitClientHandover(page: Page) {
-  await expect(page.locator("[data-adaptv-splash]")).toHaveCount(0, {
-    timeout: 20_000,
-  })
-}
 
 test.describe("Screen reader", () => {
   test.beforeEach(async ({ page }) => {
