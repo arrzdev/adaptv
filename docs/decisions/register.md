@@ -1511,7 +1511,8 @@ The first cut of this entry gated at `minWebViewVersion: 119`. That was wrong, a
 keeping: **a floor is what you ship when you cannot fix something.** Here it can be fixed, so gating
 would have refused to boot on hardware adaptv renders correctly — for a bug adaptv is able to patch.
 
-`vite/ring-shadow-fallback.ts` rewrites Tailwind's compiled output, unconditionally:
+`vite/tailwind-empty-fallback.ts` (born `ring-shadow-fallback.ts`) rewrites Tailwind's compiled output,
+unconditionally:
 
 ```css
 /* was: --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + …) var(--tw-ring-color, currentcolor) */
@@ -1544,6 +1545,66 @@ Three traps found while building it, all now guarded by tests and comments in th
    carrier unset; `--tw-ring-shadow` computed correctly, `--tw-ring-offset-shadow` computed to `""`, and
    the guaranteed-invalid value poisoned the whole `box-shadow` — ring right, page wrong. Every carrier
    reference now carries an explicit `, 0 0 #0000`.
+
+### The same fallback kills six more compositions 🔧 **PATCHED**, device after-reading pending (found 2026-09-13)
+
+The ring was the idiom's loudest victim, not its only one. Read out of Tailwind 4.2.4's compiler rather
+than out of one app's CSS, `var(--tw-*,)` over a registered, uninitialised part also builds `transform`
+(`rotate-x/y/z`, `skew-x/y`), `touch-action` (`pan-x`, `pan-y`, `pinch-zoom`), `font-variant-numeric`
+(five parts), `filter` (nine), `backdrop-filter` and its `-webkit-` twin (nine) and `contain` (four).
+On an Android 14 (API 34) emulator, WebView `Chrome/113.0.5672.136`, playground dev build read over CDP,
+with HeadlessChrome 149 as the control:
+
+```
+                                          WebView 113   Chromium 149
+tabular-nums                              normal        tabular-nums
+touch-pan-y                               auto          pan-y
+touch-pan-x touch-pan-y touch-pinch-zoom  auto          manipulation
+blur / invert / blur invert               none          blur(8px) / invert(1) / blur(8px) invert(1)
+skew-x-12, rotate-x-45 (injected)         none          matrix(…) / matrix3d(…)
+```
+
+In the app: all 84 `tabular-nums` digits on `/lab/wheel-column` computed `normal`, and every
+`touch-pan-*` element there handed its gestures back to the browser. The playground compiles no
+`contain-*` or `backdrop-*`; they are the same idiom and get the same fix.
+
+The ring's shape does not transfer. A composition's parts are independent (`tabular-nums slashed-zero`,
+`blur brightness-50`) and `inherits: false`, so there is no single body to move. Each part gets an
+unregistered carrier instead, **declared in every rule that reads it**:
+
+```css
+.blur { --tw-blur: blur(8px);
+        --adaptv-tw-blur: var(--tw-blur); … --adaptv-tw-drop-shadow: var(--tw-drop-shadow);
+        filter: var(--adaptv-tw-blur,) … var(--adaptv-tw-drop-shadow,) }
+```
+
+The empty fallbacks now sit only on unregistered properties, which the same WebView 113 substitutes
+correctly (`var(--unregistered,)` painted where `var(--registered,)` did not). Inheritance stays blocked
+twice over: Tailwind's `@property` rules are untouched, and a carrier whose `var()` is invalid computes to
+guaranteed-invalid rather than inheriting — measured on Chromium 149 and WebKit 26.5, a child under a
+parent whose carrier is `blur(3px)` computes `filter: none`. The ring keeps its own rewrite byte for byte.
+
+Two shapes rejected. **Identity fallbacks** (`var(--tw-blur, blur(0))`) turn `filter: none` into a live
+filter — a stacking context and a containing block — and `touch-action`, `font-variant-numeric` and
+`contain` have no no-op keyword that combines. **Unregistering the parts** leans `inherits: false` on a
+universal reset that misses `::placeholder` and `::marker`; run as a mutant through
+`e2e/tailwind-empty-fallback.spec.ts`, it broke 8 of that spec's inheritance probes. The spec renders
+every composition under both sheets and requires identical computed values in Chromium and WebKit.
+
+Production playground build against `origin/main`: the new stylesheet is exactly
+`rewriteEmptyFallbacks(main's stylesheet)`. Nine rules change (`.transform`, `.touch-pan-x`,
+`.touch-pan-y`, `.touch-pinch-zoom`, `.tabular-nums`, `.blur`, `.invert`, `.filter`,
+`.aria-busy:saturate-50`), 66,581 → 69,174 bytes (gzip 12,049 → 12,330); every other rule and every JS
+chunk is identical once content hashes are normalised.
+
+**Not yet measured on WebView 113 after the rewrite.** The numbers above are the device's "before"; the
+"after" is proven on Chromium 149 and WebKit 26.5 only, and the device reading belongs to QA.
+
+One trap specific to this file: adaptv's `@source` scans `src/**/*.{ts,tsx}`, tests and comments
+included. The first draft named utilities in its test and header and shipped 25 extra utilities, 13
+`@property` rules and a `--blur-sm` theme variable in the playground's CSS. The module and its test now
+spell parts as `--tw-*`, which the scanner does not read as classes, and the test compiles Tailwind's
+whole class list instead of naming candidates.
 
 **The floor stays, at 111** — Tailwind v4's own stated minimum, and still a large improvement on
 Capacitor's unreachable default of 60. It closes B21's open recommendation ("set `minWebViewVersion`

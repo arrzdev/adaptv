@@ -64,7 +64,7 @@ describe("buildCapacitorConfig", () => {
 
   // Replaces Capacitor's default of 60, which is unreachable and so can never fire (B21).
   // Deliberately BELOW the 113–118 ring bug: that is patched in the CSS
-  // (vite/ring-shadow-fallback.ts), so gating those devices out would refuse hardware
+  // (vite/tailwind-empty-fallback.ts), so gating those devices out would refuse hardware
   // adaptv renders correctly. 111 is Tailwind v4's own stated minimum.
   it("floors the Android WebView at Tailwind v4's minimum, not at the ring bug", () => {
     const android = buildCapacitorConfig(BASE).android
