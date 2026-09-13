@@ -35,6 +35,7 @@ import {
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
 import { adaptvRingShadowPlugin } from "#adaptv/vite/ring-shadow-fallback.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
+import { adaptvRouteConfigWatchPlugin } from "#adaptv/vite/route-config-watch.ts"
 import {
   adaptvRouteTintsPlugin,
   resolveRoutesDir,
@@ -54,6 +55,12 @@ import {
   devServiceWorkerEnabled,
 } from "#adaptv/vite/sw-dev.ts"
 import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
+
+/**
+ * Where the route config lives when `router.routerConfig` is unset. Relative to the
+ * app root, which is what the generator joins it against.
+ */
+const DEFAULT_ROUTER_CONFIG = "./src/routing/config.ts"
 
 /** Default specifier for every generated import. Overridable for aliased installs. */
 const DEFAULT_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
@@ -255,6 +262,16 @@ export async function adaptv(
     }),
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
+    //Dev only, and ahead of `tanstackStart()`: a running server otherwise never
+    //regenerates after an edit to the route config, because the config is read
+    //through a module cache that outlives the edit. → src/vite/route-config-watch.ts
+    adaptvRouteConfigWatchPlugin({
+      routerConfig: path.resolve(
+        appRoot,
+        context.loaded.config.router.routerConfig ?? DEFAULT_ROUTER_CONFIG,
+      ),
+      routesDir,
+    }),
     adaptvFsAllowPlugin(),
     //Race guard: supplies the route-factory binding from adaptv's specifier for
     //the beat before the generator writes it. The generator itself keeps route
@@ -387,7 +404,7 @@ function deriveStartOptions(
       //files end up importing `createFileRoute` from `@arrzdev/adaptv/router` — zero
       //`@tanstack/*` in the consumer's source. → src/vite/router-autoimport.ts,
       //patches/@tanstack__router-generator@*.patch
-      virtualRouteConfig: router.routerConfig ?? "./src/routing/config.ts",
+      virtualRouteConfig: router.routerConfig ?? DEFAULT_ROUTER_CONFIG,
       //adaptv's OWN entry module — a real file in the package, not one written
       //into the consumer's tree. It reaches the app's route tree through the
       //`#adaptv-route-tree` alias. Ejectable by writing `src/router.tsx`.
