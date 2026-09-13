@@ -651,4 +651,29 @@ describe("Image — the consumer's ref", () => {
     })
     expect(log).toEqual(["attach"])
   })
+
+  //The merge also feeds Image's own imgRef, and the only thing that reads it is the
+  //layout effect that promotes an image the browser already had: a cached image fires
+  //no load event, so if the merge stopped reaching imgRef it would sit in loading.
+  it("still promotes a cached image on mount, through the merged ref", () => {
+    vi.spyOn(
+      HTMLImageElement.prototype,
+      "complete",
+      "get",
+    ).mockReturnValue(true)
+    vi.spyOn(
+      HTMLImageElement.prototype,
+      "naturalWidth",
+      "get",
+    ).mockReturnValue(640)
+    const ref = { current: null as HTMLImageElement | null }
+    const { container, unmount } = render(
+      <Image src="/a.png" alt="a" width={640} height={400} ref={ref} />,
+    )
+    const el = container.firstElementChild as HTMLElement
+    expect(el.hasAttribute("data-image-loaded")).toBe(true)
+    expect(ref.current).toBe(container.querySelector("img"))
+    unmount()
+    expect(ref.current).toBe(null)
+  })
 })
