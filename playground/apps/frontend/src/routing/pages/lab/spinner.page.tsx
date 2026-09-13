@@ -68,7 +68,7 @@ function LabSpinnerPage() {
       subtitle="An indeterminate activity indicator that pauses off screen, keeps turning while the main thread is busy, and is announced once."
     >
       <LabBrief
-        what="the three things Spinner owns: it pauses while off screen (one shared IntersectionObserver → animation-play-state), it rotates an HTML box with a transform keyframe so the compositor keeps it turning through a busy main thread, and a labelled spinner is a progressbar announced once through one shared live region. Plus its reduced-motion form: a slow pulse, never a stop."
+        what="the three things Spinner owns: it pauses while off screen (one shared IntersectionObserver → animation-play-state), its turn is one transform keyframe on an HTML box, a form the compositor runs, so it keeps turning through a busy main thread, and a labelled spinner is a progressbar announced once through one shared live region. Plus its reduced-motion form: a slow pulse, never a stop."
         steps={[
           "Watch the spinners in the first card: they turn smoothly, at the size of the text they sit in.",
           "Tap “Busy main thread 1 s”. The page is frozen for a second (the counter under the button does not move) but every spinner on screen KEEPS TURNING through it.",
@@ -80,7 +80,7 @@ function LabSpinnerPage() {
         expected={{
           web: {
             verdict: "works",
-            note: "Everything. The off-screen pause, the turn through a busy main thread (composited in Chromium and WebKit) and the single announcement all work in a browser tab.",
+            note: "Everything. The off-screen pause, the turn through a busy main thread and the single announcement all work in a browser tab. Chromium's trace shows the turn composited; WebKit's is not traced.",
           },
           pwa: {
             verdict: "works",
