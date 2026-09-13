@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test"
-// biome-ignore lint/style/noRestrictedImports: e2e has no self-alias to import through
-import { awaitClientHandover, expect, test } from "./client-handover"
+import { awaitClientHandover } from "./support/hydrated"
+import { expect, test } from "./support/reload-guard"
 
 /*
  * Slider — a painted track over a hidden native range input, driven by a
