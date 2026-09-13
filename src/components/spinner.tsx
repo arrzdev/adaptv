@@ -157,8 +157,9 @@ function holdLabel(label: string): () => void {
 }
 
 /**
- * An indeterminate activity indicator that sits in a line of text, and the three
- * things a hand-rolled `<svg className="animate-spin">` gets wrong.
+ * An indeterminate activity indicator that sits in a line of text: it idles off
+ * screen, it is found and announced once by a screen reader, and its motion stays in
+ * the form a compositor runs.
  *
  * ```tsx
  * <Text>Syncing <Spinner /></Text>                       // decorative, 1em
@@ -179,16 +180,17 @@ function holdLabel(label: string): () => void {
  * under a `display: none` ancestor has no animation at all — the engine cancels CSS
  * animations without a box.
  *
- * **2. Only some spinner animations survive a busy main thread, and SVG is where they
- * don't.** Chromium composites an animation on an SVG element only in narrow cases: not
- * with SMIL, not inside a resource container, not on an `<svg>` with a `viewBox`
- * transform, not for the individual `rotate`/`scale`/`translate` properties — and never
- * `stroke-dasharray`, which is what the Material arc in Ionic and Quasar animates. Those
- * spinners freeze exactly while the app is busy, which is when a spinner is on screen.
- * This one rotates an HTML `<span>` with a `@keyframes` rule on `transform` — the
- * shape react-native-web's ActivityIndicator and Tailwind's `animate-spin` share — and
- * the drawn arc inside it is static. It also sidesteps the spec rule that SVG children
- * turn around `0 0`: an HTML box turns around its centre.
+ * **2. Some spinner motions stall on a busy main thread.** Chromium keeps a narrow list
+ * of SVG animations off the compositor (`compositor_animations.cc`): SMIL, animating a
+ * shape INSIDE the drawing, the individual `rotate`/`scale`/`translate` properties, and
+ * `stroke-dasharray` — the Material arc Ionic and Quasar animate. Those freeze exactly
+ * while the app is busy. A `transform` keyframe on the outer `<svg>` is NOT on that
+ * list: on the lab page, that shape (Tailwind's `animate-spin` on an icon) traced
+ * compositeFailed 0, the same as this span, while `rotate:` on the same svg traced
+ * 524288. So the wrapper does not rescue `animate-spin`; it guards against the forms
+ * that do fall back. The motion is one `transform` keyframe on the HTML `<span>` and
+ * the drawn arc is static, so restyling the drawing cannot introduce them, and the box
+ * turns around its centre (a shape inside an svg turns around `0 0`).
  *
  * **3. Screen readers hear it once.** A labelled spinner is `role="progressbar"` with
  * no value (indeterminate, per ARIA) and its label, so it is found in the reading
@@ -272,8 +274,8 @@ export function Spinner({
       aria-label={name}
       aria-hidden={name ? undefined : "true"}
     >
-      {/* Static: the span turns, the drawing never animates. No viewBox transform
-          is ever asked to composite, and there is no SMIL and no dash animation. */}
+      {/* Static: the span turns, and the drawing only pulses under reduced motion.
+          No shape inside it animates, and there is no SMIL and no dash animation. */}
       <svg
         viewBox="0 0 24 24"
         fill="none"

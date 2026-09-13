@@ -15,7 +15,9 @@ import { awaitClientHandover } from "./support/hydrated"
  *     as with no field, and far below the always-on control (the pause overridden);
  *   - Q2: the running animation is a CSS animation on the HTML <span>, keyframing
  *     `transform` — never on the <svg> — on both engines; and on chromium the
- *     engine's own trace says it started on the compositor (compositeFailed 0);
+ *     engine's own trace says it started on the compositor (compositeFailed 0). A
+ *     `transform` keyframe on the outer <svg> traces 0 too; what reads 524288 is
+ *     `rotate:` on it, so this pins the structure against those fallbacks;
  *   - reduced motion swaps the turn for an opacity pulse on the svg child — so a
  *     consumer's opacity on the box still applies — and an off-screen spinner stays
  *     paused under it;
@@ -280,7 +282,8 @@ test.describe("Spinner", () => {
       expect(e.args?.data?.nodeName).toMatch(/^SPAN\b/)
     expect(verdicts.length).toBeGreaterThan(0)
     //0 = no failure reason: it runs on the compositor, so a busy main thread cannot
-    //stall it (an <svg> rotated with `rotate:` reads 524288 here)
+    //stall it. `rotate:` on the <svg> reads 524288 here; `transform` on the outer
+    //<svg> would read 0 as well, which is why the node assertion above is separate
     expect(verdicts.every((v) => v === 0)).toBe(true)
   })
 
@@ -417,7 +420,7 @@ test.describe("Spinner", () => {
  *   no field  — the field unmounted: what an idle page reads
  *
  * Measured while writing this (chromium, 3 windows each): gated 1-2, always-on 13-17,
- * the SVG `rotate:` shape with no pause 241. The page is never scrolled and nothing is
+ * and 241 for `rotate:` on the svg with no pause (that form runs on the main thread). The page is never scrolled and nothing is
  * clicked through Playwright (which scrolls); the unmount is a DOM click.
  */
 test.describe("Spinner idle cost (chromium, CDP)", () => {
