@@ -35,6 +35,7 @@ import {
   podsNeedInstall,
   resolvePluginPackages,
 } from "./native-state.mjs"
+import { withoutPlumbing } from "./opacity.mjs"
 import { readSection, writeSection } from "./state.mjs"
 
 // The framework package root (bin/lib/native.mjs → up two). adaptv OWNS Capacitor:
@@ -1937,24 +1938,112 @@ export async function launchInstalledApp(
           env,
         },
       )
-    const r = await probe(
-      "adb",
-      [
-        "-s",
-        serial,
-        "shell",
-        "monkey",
-        "-p",
-        appId,
-        "-c",
-        "android.intent.category.LAUNCHER",
-        "1",
-      ],
-      { env },
-    )
-    return r.status === 0
+    return (await openAndroidApp(serial, appId, env)).ok
   }
   return false
+}
+
+const LAUNCHER = "android.intent.category.LAUNCHER"
+
+/**
+ * Open the app on ONE Android device the way its launcher icon does, and say whether it opened.
+ *
+ * Two calls, and both halves are measured rather than assumed:
+ *
+ *   · `monkey -p <id> -c LAUNCHER 1` is what this used to be. On an AVD created by
+ *     `avdmanager create avd` — whose default is `hw.keyboard=no` — monkey refuses to run at
+ *     all (`** SYS_KEYS has no physical keys but with factor 2.0%.`, exit 251). Nothing read the
+ *     exit code, so the relaunch force-stopped the app, failed to open it, and the dev loop
+ *     settled `✓ android` over a closed app. It is a UI fuzzer; launching was a side effect.
+ *   · `am start -p <id>` (an implicit MAIN/LAUNCHER intent) does not work either: activity
+ *     starts from an implicit intent only match filters that carry `category.DEFAULT`, and the
+ *     app's launcher filter has only MAIN + LAUNCHER. Measured: `unable to resolve Intent`.
+ *
+ * So the launcher activity is RESOLVED first (`cmd package resolve-activity`, which exists and
+ * prints this same `--brief` shape from API 24, adaptv's floor), then started EXPLICITLY with
+ * the intent a launcher tap sends: MAIN + LAUNCHER, `NEW_TASK | RESET_TASK_IF_NEEDED`. An app
+ * that is already running is brought to the front, not restarted (`LaunchState: HOT`, same
+ * pid) — the rule `launchInstalledApp` depends on. `-W` makes it wait for the launch, so the
+ * answer is about the activity, not about an intent having been posted.
+ *
+ * The verdict reads the OUTPUT as well as the exit code: on API 24-25 `am` exits 0 when it
+ * could not start anything, and with `-W` it says why on stdout as an `Error…` line.
+ *
+ * @returns {Promise<{ ok: boolean, said?: string }>} `said`, when it did not open, is what the
+ *   device answered, for the failure's detail line.
+ */
+export async function openAndroidApp(serial, appId, env) {
+  const resolved = await probe(
+    "adb",
+    [
+      "-s",
+      serial,
+      "shell",
+      "cmd",
+      "package",
+      "resolve-activity",
+      "--brief",
+      "-c",
+      LAUNCHER,
+      appId,
+    ],
+    { env },
+  )
+  const component =
+    (resolved.stdout ?? "").trim().split("\n").at(-1)?.trim() ?? ""
+  //`No activity found` for an app with no launcher activity (or none installed), and the
+  //system chooser — a component outside the app — for one with several: neither opens it.
+  if (resolved.status !== 0 || !component.startsWith(`${appId}/`))
+    return {
+      ok: false,
+      said: `the device found no launcher activity for ${appId}`,
+    }
+  const started = await probe(
+    "adb",
+    [
+      "-s",
+      serial,
+      "shell",
+      "am",
+      "start",
+      "-W",
+      "-a",
+      "android.intent.action.MAIN",
+      "-c",
+      LAUNCHER,
+      "-f",
+      "0x10200000",
+      "-n",
+      component,
+    ],
+    { env },
+  )
+  const error = (started.stdout ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => /^Error\b/.test(l) && !/^Error type \d+$/.test(l))
+  if (started.status !== 0 || error)
+    return {
+      ok: false,
+      //`Error:` only restates the ✖ it will sit under.
+      said:
+        error?.replace(/^Error:\s*/, "") ??
+        `the device did not start ${component}`,
+    }
+  return { ok: true }
+}
+
+/**
+ * The failure for an app that was installed and then did not open. Its own sentence, because
+ * the build and the install worked and the dev should not go looking there; the device's own
+ * answer goes underneath, past the opacity boundary like any tool's words (R8b).
+ * @param {string} [said]
+ */
+export function appDidNotOpen(said) {
+  /** @type {Error & { fix?: string[] }} */
+  const err = new Error("installed, but the app did not open")
+  err.fix = withoutPlumbing(said ? [said] : [])
+  return err
 }
 
 /** The effective app id (may be the `.dev` variant) from the env-carried config, or null. */
@@ -2086,6 +2175,9 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
  * the app it just launched has no route to the dev server and shows a black WebView
  * with no JS to recover. After re-asserting the reverse, adaptv relaunches the app so it
  * loads with a working route. (iOS shares the host loopback — nothing to do there.)
+ *
+ * Throws `appDidNotOpen` when the app could not be opened again: it was force-stopped first,
+ * so the caller's row must fail rather than settle on an app that is no longer running.
  */
 export async function relaunchAndroidApp(appRoot, env, target) {
   const appId = readAppId(appRoot)
@@ -2095,26 +2187,22 @@ export async function relaunchAndroidApp(appRoot, env, target) {
   // the target can't be resolved (ambiguous), matching the prior best-effort behaviour.
   const serial = await androidSerialForTarget(target, env)
   const serials = serial ? [serial] : await androidDevices(env)
+  /** @type {string | undefined} */
+  let said
+  let opened = false
   for (const s of serials) {
     await probe("adb", ["-s", s, "shell", "am", "force-stop", appId], {
       env,
     })
-    await probe(
-      "adb",
-      [
-        "-s",
-        s,
-        "shell",
-        "monkey",
-        "-p",
-        appId,
-        "-c",
-        "android.intent.category.LAUNCHER",
-        "1",
-      ],
-      { env },
-    )
+    const verdict = await openAndroidApp(s, appId, env)
+    if (verdict.ok) opened = true
+    else said ??= verdict.said
   }
+  // The force-stop above already closed the app, so a launch that failed leaves it CLOSED —
+  // this must not return as if it relaunched. The sweep is judged as a whole: it exists
+  // because the run could not tell which device got the install, so an idle emulator that
+  // never had the app failing to open it says nothing about the one that did.
+  if (serials.length > 0 && !opened) throw appDidNotOpen(said)
 }
 
 function firstExisting(paths) {
