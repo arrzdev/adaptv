@@ -7,6 +7,7 @@ import { Checkbox } from "#adaptv/components/checkbox"
 import { Drawer } from "#adaptv/components/drawer"
 import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import { ExternalLink } from "#adaptv/components/external-link"
+import { Icon } from "#adaptv/components/icon"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -637,6 +638,34 @@ describe("AvoidKeyboard", () => {
     expect(el.style.getPropertyValue("--adaptv-keyboard-height")).not.toBe(
       "",
     )
+  })
+})
+
+describe("Icon", () => {
+  //the size is the consumer's and exposure is attributes, not classes, so there is
+  //nothing to lock — `locked` is passed as `undefined` on purpose. The pair that
+  //matters is the default 1em box losing to a consumer size on BOTH axes.
+  it("className beats the 1em base, and nothing is locked", () => {
+    const c = classOf(<Icon render={<svg />} className="size-6 shrink" />)
+    expect(hasClass(c, "size-6")).toBe(true)
+    expect(hasClass(c, "w-[1em]")).toBe(false)
+    expect(hasClass(c, "h-[1em]")).toBe(false)
+    expect(hasClass(c, "shrink")).toBe(true)
+    expect(hasClass(c, "shrink-0")).toBe(false)
+  })
+
+  it("the rendered element's className is the consumer tier too", () => {
+    const c = classOf(<Icon render={<svg className="w-4" />} />)
+    expect(hasClass(c, "w-4")).toBe(true)
+    expect(hasClass(c, "w-[1em]")).toBe(false)
+    expect(hasClass(c, "h-[1em]")).toBe(true)
+  })
+
+  it("forwards the consumer style, and declares no locked inline tier", () => {
+    const el = firstEl(
+      <Icon render={<svg />} style={{ color: "rgb(1, 2, 3)" }} />,
+    )
+    expect(el.style.color).toBe("rgb(1, 2, 3)")
   })
 })
 
