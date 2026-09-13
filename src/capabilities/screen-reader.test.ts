@@ -142,6 +142,31 @@ describe("screen reader — native", () => {
     expect(document.querySelector("[data-adaptv-announcer]")).toBeNull()
   })
 
+  it("with nothing subscribed, announce asks the OS rather than trusting a stale read", async () => {
+    native()
+    vi.mocked(ScreenReader.isEnabled).mockResolvedValue({ value: false })
+    expect(await announce("Saved")).toBe("silent")
+    expect(getScreenReaderState().status).toBe("off")
+    //the reader is switched on with no subscriber to hear the stateChange
+    vi.mocked(ScreenReader.isEnabled).mockResolvedValue({ value: true })
+    expect(await announce("Saved")).toBe("announced")
+    expect(ScreenReader.speak).toHaveBeenCalledWith({
+      value: "Saved",
+      language: undefined,
+    })
+  })
+
+  it("while subscribed, announce trusts the live snapshot", async () => {
+    native()
+    vi.mocked(ScreenReader.isEnabled).mockResolvedValue({ value: true })
+    const off = subscribeScreenReader(() => {})
+    await flush()
+    vi.mocked(ScreenReader.isEnabled).mockClear()
+    expect(await announce("Saved")).toBe("announced")
+    expect(ScreenReader.isEnabled).not.toHaveBeenCalled()
+    off()
+  })
+
   it("a binary built before the plugin reads unknown and cannot announce", async () => {
     native(false)
     expect(await readScreenReader()).toEqual({ status: "unknown" })
