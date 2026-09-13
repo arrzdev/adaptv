@@ -26,6 +26,7 @@ import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import { loadAdaptvModule } from "./load-ts.mjs"
 import {
   classListChanged,
+  configIsStale,
   gradleProjectName,
   mergeCapacitorBuildGradle,
   mergeClassList,
@@ -1821,39 +1822,100 @@ export async function androidSerialForTarget(target, env) {
 }
 
 /**
- * Is the app ALREADY installed on the target device?
+ * The config baked into the app ALREADY installed on the target device, or `null`.
  *
  * The run cache can't be trusted on its own — it has no idea you wiped the simulator or
- * deleted the app from the launcher. This asks the device directly, which is cheap, and
- * is what makes "skip the build" safe rather than merely fast. Any doubt answers `false`
- * so the caller falls back to a full build; a wasted rebuild is free, a skipped one that
- * should have happened is a debugging nightmare.
+ * deleted the app from the launcher, and it cannot see an install it did not make. Every
+ * checkout of an app keeps its own `.adaptv/state.json`, but they all install under the same
+ * bundle id, so another checkout's `dev` (or an earlier run on another port) replaces the
+ * binary while this checkout's cache still vouches for the old one. That install's
+ * `server.url` is someone else's dev server, and relaunching it leaves the app polling a
+ * port nothing serves.
+ *
+ * So this asks the device what is really there, which is cheap: on the simulator the bundle
+ * is a directory on this machine, and on Android the file is read out of the installed APK.
+ * The caller compares it with what the command intends (`configIsStale`). Any doubt answers
+ * `null` — not installed, a physical iPhone whose bundle this machine can't read, a device
+ * that can't extract the file — so the caller falls back to a full build; a wasted rebuild
+ * is free, a skipped one that should have happened is a debugging nightmare.
  */
-export async function isAppInstalled(appRoot, platform, target, env) {
+export async function readInstalledConfig(appRoot, platform, target, env) {
   const appId = readAppId(appRoot)
-  if (!appId) return false
+  if (!appId || !target) return null
+  const parse = (text) => {
+    try {
+      const config = JSON.parse(text)
+      return config && typeof config === "object" ? config : null
+    } catch {
+      return null
+    }
+  }
   if (platform === "ios") {
-    if (!target) return false
     const r = await probe("xcrun", [
       "simctl",
       "get_app_container",
       target,
       appId,
     ])
-    return r.status === 0
+    const bundle = (r.stdout ?? "").trim()
+    if (r.status !== 0 || !bundle) return null
+    try {
+      return parse(
+        readFileSync(path.join(bundle, "capacitor.config.json"), "utf8"),
+      )
+    } catch {
+      return null
+    }
   }
   if (platform === "android") {
     // Ask ONLY the device this run targets — see `androidSerialForTarget`.
     const serial = await androidSerialForTarget(target, env)
-    if (!serial) return false
-    const r = await probe(
+    if (!serial) return null
+    const where = await probe(
       "adb",
-      ["-s", serial, "shell", "pm", "list", "packages", appId],
+      ["-s", serial, "shell", "pm", "path", appId],
       { env },
     )
-    return r.status === 0 && (r.stdout ?? "").includes(`package:${appId}`)
+    //`pm path` lists the base APK and any splits; the assets are in the base one.
+    const apk = (where.stdout ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(
+        (line) =>
+          line.startsWith("package:") && line.endsWith("/base.apk"),
+      )
+      ?.slice("package:".length)
+    if (where.status !== 0 || !apk) return null
+    const r = await probe(
+      "adb",
+      [
+        "-s",
+        serial,
+        "shell",
+        "unzip",
+        "-p",
+        apk,
+        "assets/capacitor.config.json",
+      ],
+      { env },
+    )
+    return r.status === 0 ? parse(r.stdout ?? "") : null
   }
-  return false
+  return null
+}
+
+/**
+ * Is the app installed on the target device the one this command would install?
+ *
+ * The question behind every "skip the build and relaunch" fast path: installed, under the
+ * install id this command uses, loading the dev server this run serves (or none, for a static
+ * build). Read off the device, never the run cache — see `readInstalledConfig`.
+ */
+export async function isInstallCurrent(appRoot, platform, target, env) {
+  return !configIsStale(
+    await readInstalledConfig(appRoot, platform, target, env),
+    capConfigFromEnv(),
+  )
 }
 
 /** Is the app currently RUNNING on the target device (not merely installed)? */
