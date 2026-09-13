@@ -249,9 +249,10 @@ Each of these has a decision recorded elsewhere and wants a worked example befor
   (the host is the first path segment, and `myapp:///settings` means the same as `myapp://settings`).
   A link that launches the app **replaces** the screen it was about to show, so back does not land
   on a first screen the user never saw; a link that arrives while the app runs is an ordinary push.
-  Each link routes exactly once: adaptv reads the plugin's replayed open event and never
-  `getLaunchUrl()`, which answers the same launch link a second time (and, after a WebView reload,
-  an old one). `onUrlOpened(({ url, path }) => …)` from `@arrzdev/adaptv/capabilities` hears links
+  A link that launches the app reaches it by two routes at once, and adaptv reads only one of them,
+  so each link routes exactly once and runs its route's `beforeLoad` and loader once. Android is
+  unverified: recreating the app's activity (reopening it from Recents after it finished, or after
+  the system killed it) replays its launch link. `onUrlOpened(({ url, path }) => …)` from `@arrzdev/adaptv/capabilities` hears links
   after they are routed — for analytics or finishing a sign-in callback, not for navigating — and
   only while subscribed, so read the launching link from the route it landed on. Nothing happens on
   the web, where a link is simply the page's URL. **Not built:** universal links and Android app

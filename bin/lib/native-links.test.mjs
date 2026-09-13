@@ -140,6 +140,32 @@ describe("patchNativeLinks — iOS", () => {
     expect(read(root, PLIST)).toBe(TEMPLATE_PLIST)
   })
 
+  it("declares the scheme in the root dict when a nested dict closes first", () => {
+    //a plist `dev` has already patched: the system plist tool sorted its ATS exception, a
+    //nested dict, into the middle, so the first `</dict>` in the file is not the root's
+    const dev = readFileSync(
+      path.join(FIXTURES, "Info-dev-ats.plist"),
+      "utf8",
+    )
+    const root = project()
+    const file = path.join(root, ADAPTV_DIR, PLIST)
+    writeFileSync(file, dev)
+    patch(root, LINKS)
+    const plist = read(root, PLIST)
+
+    expect(plist).toMatch(
+      /\t<key>CFBundleURLSchemes<\/key>\n\t\t\t<array>\n\t\t\t\t<string>myapp<\/string>\n\t\t\t<\/array>\n\t\t<\/dict>\n\t<\/array>\n<\/dict>\n<\/plist>\n$/,
+    )
+    expect(
+      plist.replace(
+        /\t<key>CFBundleURLTypes<\/key>\n[\s\S]*?\n\t<\/array>\n/,
+        "",
+      ),
+    ).toBe(dev)
+    patch(root, NO_LINKS)
+    expect(read(root, PLIST)).toBe(dev)
+  })
+
   it("leaves a right declaration where a re-sorted plist put it", () => {
     //the same re-sort, but the declaration it moved is already the right one: rewriting
     //the file to move it back would be a write that changes nothing the OS reads
@@ -278,7 +304,9 @@ describe("patchNativeLinks — a scheme the projects cannot use never reaches th
         ["ios", "android"],
       )
       expect(errors, scheme).toHaveLength(1)
-      expect(errors[0], scheme).toMatch(/^'deepLinks\.scheme' must be /)
+      expect(errors[0], scheme).toMatch(
+        /^'deepLinks\.scheme' (must be|can't be) /,
+      )
     }
     const { errors } = await inspect(root, base, ["ios", "android"])
     expect(errors).toEqual([])

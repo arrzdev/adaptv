@@ -474,9 +474,13 @@ Verified by grepping the whole Capacitor repo: **zero** occurrences of `NSAppTra
   > `bin/lib/native.mjs`). The normalising went the other way from "both": the router factory
   > attaches ONE `appUrlOpen` listener as the router is built and never calls `getLaunchUrl()`,
   > because the plugin already replays the launching event to the first listener — reading both
-  > navigated twice, and on Android re-reading the frozen launch URI after a WebView reload would
-  > return the app to an old link. A link before the first screen settles replaces the entry; a
-  > later one pushes. `onUrlOpened` is the public hook (`src/capabilities/url-open.ts`).
+  > navigated twice, and `getLaunchUrl()` on Android keeps answering the launch URI for the whole
+  > process. That does not make Android safe from an old link: `BridgeActivity.load()` calls
+  > `onNewIntent(getIntent())` every time the activity is created (`BridgeActivity.java:51`), so
+  > reopening from Recents after `finish()`, or recreating after process death, replays the launch
+  > link. Android: unverified; recreating the activity replays its launch link. A link before the
+  > first screen settles replaces the entry, moving the history alone when the router has not
+  > mounted so the route loads once; a later one pushes. `onUrlOpened` is the public hook (`src/capabilities/url-open.ts`).
   > **Still unhandled:** universal links / Android app links (associated-domains entitlement,
   > signing team, hosted `apple-app-site-association` / `assetlinks.json`), and the dev and
   > release installs sharing one scheme.
