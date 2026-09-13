@@ -26,11 +26,13 @@
 //
 //**There is deliberately NO cross-product** — no `isAndroidNative()`,
 //`isIOSStandalone()`, `isBrowserTab()`. 3 shells × 3 OSes is 9 predicates, and
-//the whole codebase writes a shell×OS condition in exactly ONE load-bearing place
-//(`use-android-back-button.ts`, where the hardware back key only exists on
-//android+native). One call site does not earn a name — and every extra predicate
-//is one more way to reach for the almost-right one, which is precisely how a gate
-//ends up silently off on the target it was written for. Write the `&&`.
+//the whole codebase writes a shell×OS condition in only a few places, each a
+//different pair (`use-android-back-button.ts`: the back key exists on android+native;
+//`keyboard.ts`: resize mode exists on ios+native; `status-bar.ts`: the webview
+//overlay is asked of native-but-not-android). A pair used once does not earn a name
+//— and every extra predicate is one more way to reach for the almost-right one,
+//which is precisely how a gate ends up silently off on the target it was written
+//for. Write the `&&`.
 //
 //The browser-tab branch has no predicate for the same reason: in JS it is asked
 //once (`standalone-history.ts`), while in CSS any rule can reach it through the

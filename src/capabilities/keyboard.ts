@@ -1,7 +1,7 @@
 //Native keyboard accessor. On a Capacitor build the OS reports the keyboard with
 //EXACT height + will-show/will-hide events — none of the web visualViewport
 //heuristics (dismiss/height confirms, field-switch transient filtering) are needed.
-//Resize mode is set to `None` so the OS doesn't push the webview; adaptv lifts
+//On iOS resize mode is set to `None` so the OS doesn't push the webview; adaptv lifts
 //content itself from the reported height (matching the web path — see the
 //suppress-native-then-reimplement rule).
 //
@@ -13,7 +13,7 @@
 //sheet never lifts. A single app-lifetime subscription set up at startup is always
 //live by the time any drawer opens, so autofocus and tap-to-focus behave the same.
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard"
-import { isNativePlatform } from "#adaptv/utils/platform"
+import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 export type KeyboardInfo = {
   isOpen: boolean
@@ -40,11 +40,15 @@ function emit(next: KeyboardInfo): void {
 export function initNativeKeyboard(): void {
   if (attached || !isNativePlatform()) return
   attached = true
-  try {
-    //don't let the OS resize/push the webview — we lift content ourselves
-    void Keyboard.setResizeMode({ mode: KeyboardResize.None })
-  } catch {
-    //older plugin / unsupported — height reporting below still works
+  //don't let the OS resize/push the webview — we lift content ourselves. Resize mode
+  //only exists on iOS: the Android plugin answers `setResizeMode` with
+  //`call.unimplemented()`, and Android's keyboard is the WebView's own window resize.
+  //The call is a promise, so a failure arrives as a rejection (never a throw) and is
+  //dropped here — height reporting below works without it.
+  if (getOS() === "ios") {
+    void Keyboard.setResizeMode({ mode: KeyboardResize.None }).catch(
+      () => {},
+    )
   }
   //never removed — keyboard visibility is an app-global concern
   void Keyboard.addListener("keyboardWillShow", (info) =>
