@@ -1,10 +1,15 @@
 name: CI
 
-# Simple test-only CI: no envs, no deploys — typecheck + biome + vitest + the live
-# layer's colour check + the playground's browser suite on every PR and on pushes to
-# main, with a rendered job summary. These are `pnpm gate` minus nothing, plus the one
-# check the gate does not run (the browser suite is minutes, the gate is seconds): a
-# check that only runs locally binds only the person who remembered to run it.
+# Simple test-only CI: no envs, no deploys. Two kinds of job on every PR and on pushes
+# to main, each with a rendered summary:
+#
+#   · `test` is `pnpm gate` minus nothing — typecheck, both biome checks, vitest and the
+#     live layer's colour check. Seconds of work, one job.
+#   · `e2e` is every Playwright suite the playground has, on both engines: the main
+#     suite and the three service-worker suites, each × chromium and webkit, eight jobs
+#     in parallel. The gate does not run these (minutes against seconds), so this is
+#     the only place they bind anyone: a check that only runs locally binds only the
+#     person who remembered to run it.
 
 on:
   pull_request:
@@ -78,46 +83,12 @@ jobs:
         if: always()
         run: node scripts/check-colour.mjs
 
-      # The playground's Playwright suite ran on a developer's machine and nowhere else
-      # — not here, not in `pnpm gate` — so a runtime error the suite would catch reached
-      # main unless someone happened to run it. Chromium only: that is where every
-      # network, permission and touch test lives (WebKit runs 67 fewer). The main config
-      # only: the three SW configs each `vite build` first and are a follow-up. The
-      # config boots its own server on E2E_PORT from `apps/frontend`, so exactly one app
-      # is under test; CI=1 is what engages its forbidOnly / line reporter / no-reuse
-      # paths. The playground install is provisioned by the biome step above.
-      - name: Browser (playwright, install chromium)
-        id: e2e_install
-        if: always()
-        run: pnpm --dir playground exec playwright install --with-deps chromium
-
-      - name: Test (playwright, chromium)
-        id: e2e
-        if: always()
-        env:
-          CI: 1
-          E2E_PORT: 41730
-        run: |
-          set -o pipefail
-          pnpm --dir playground test:e2e --project=chromium 2>&1 | tee playwright-output.txt
-
-      # The line reporter says WHICH test failed; the HTML report the config adds under
-      # CI carries the trace of each failure, which says why.
-      - name: Playwright report
-        if: always() && steps.e2e.outcome == 'failure'
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: playground/playwright-report/
-          retention-days: 14
-
       - name: Job summary
         if: always()
         run: |
           icon() { [ "$1" = "success" ] && echo "✅ pass" || echo "❌ fail"; }
           tally=$(grep -oE 'Tests[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
           files=$(grep -oE 'Test Files[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
-          e2e=$(grep -oE '^[[:space:]]*[0-9]+ (passed|failed|flaky|skipped|did not run)' playwright-output.txt | sed 's/^ *//' | paste -sd ',' - | sed 's/,/, /g' || true)
           {
             echo "## adaptv CI"
             echo ""
@@ -128,10 +99,115 @@ jobs:
             echo "| Biome (playground) | $(icon '${{ steps.biome_playground.outcome }}') |"
             echo "| Tests (\`vitest\`) | $(icon '${{ steps.test.outcome }}') |"
             echo "| Colour (live layer) | $(icon '${{ steps.colour.outcome }}') |"
-            echo "| Browser (\`playwright\`, chromium) | $(icon '${{ steps.e2e.outcome }}') |"
             echo ""
             [ -n "$files" ] && echo "**${files}** · **${tally}**"
-            [ -n "$e2e" ] && echo "**Playwright** · ${e2e}"
+            echo ""
+            echo "_Commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Every browser suite × both engines, one job each so they run side by side and a red
+  # cell names its suite and engine in the checks list without opening a log.
+  #
+  # Both engines, because they cover different things: chromium carries the network,
+  # permission and touch tests (WebKit skips 67 of the main suite's), and webkit is the
+  # closest thing CI has to Mobile Safari — the actual target of an installed PWA. The
+  # service-worker suites are separate configs, not projects, because each is a separate
+  # `vite build` of the same app directory (docs/guides/e2e.md §2); a job gets a fresh
+  # checkout, so running them in separate jobs cannot clobber a sibling's build output.
+  #
+  # No retries, in the configs or here (docs/guides/e2e.md §3.1). The worker suites carry
+  # a KNOWN intermittent — `update.spec.ts` on chromium, roughly 1 run in 3–5, not
+  # root-caused — which reaches both the `sw` and `sw-spa` chromium cells. Those cells
+  # are NOT `continue-on-error`: that would paint the run green over a failed update
+  # flow, which is exactly the lost signal the no-retries rule exists to keep. When it
+  # fires, the cell goes red, the spec prints the worker's full state, and a re-run is a
+  # human decision recorded as attempt #2 on the run.
+  e2e:
+    name: e2e (${{ matrix.suite }}, ${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    # A backstop, not a budget: every spec is capped by its own test timeout (the update
+    # flows set 5 min), so only a wedged runner or webServer boot ever reaches this.
+    timeout-minutes: 45
+    strategy:
+      # One red cell must not cancel the other seven: the point is to see every failure.
+      fail-fast: false
+      matrix:
+        suite: [main, sw, sw-spa, sw-prompt]
+        engine: [chromium, webkit]
+        include:
+          - suite: main
+            script: test:e2e
+          - suite: sw
+            script: test:e2e:sw
+          - suite: sw-spa
+            script: test:e2e:sw:spa
+          - suite: sw-prompt
+            script: test:e2e:sw:prompt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          # The playground is its own pnpm project with its own lockfile; both feed the
+          # one store, so both belong in the cache key.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            playground/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install (playground)
+        run: pnpm playground:setup
+
+      # Only the engine this job drives. Browser binaries are not cached: restoring them
+      # takes about as long as downloading them, and `--with-deps` still has to apt-get
+      # the system libraries on every fresh runner either way.
+      - name: Browser (playwright, install ${{ matrix.engine }})
+        run: pnpm --dir playground exec playwright install --with-deps ${{ matrix.engine }}
+
+      # Each config boots its own server from `apps/frontend` on its own port and never
+      # reuses one under CI=1, which is also what engages forbidOnly and the line + HTML
+      # reporters. The ports are the configs' defaults, spelled out so a reader of this
+      # file does not have to open four configs to know nothing collides.
+      - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
+        id: e2e
+        env:
+          CI: 1
+          E2E_PORT: 41730
+          E2E_SW_PORT: 41750
+          E2E_SW_SPA_PORT: 41760
+          E2E_SW_PROMPT_PORT: 41770
+        run: |
+          set -o pipefail
+          pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} 2>&1 | tee playwright-output.txt
+
+      # The line reporter says WHICH test failed; the HTML report each config adds under
+      # CI carries the trace of each failure, which says why.
+      - name: Playwright report
+        if: always() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.suite }}-${{ matrix.engine }}
+          path: playground/playwright-report/
+          retention-days: 14
+
+      - name: Job summary
+        if: always()
+        run: |
+          icon() { [ "$1" = "success" ] && echo "✅ pass" || echo "❌ fail"; }
+          tally=$(grep -oE '^[[:space:]]*[0-9]+ (passed|failed|flaky|skipped|did not run)' playwright-output.txt 2>/dev/null | sed 's/^ *//' | paste -sd ',' - | sed 's/,/, /g' || true)
+          {
+            echo "## Playwright · ${{ matrix.suite }} · ${{ matrix.engine }} — $(icon '${{ steps.e2e.outcome }}')"
+            echo ""
+            [ -n "$tally" ] && echo "${tally}"
             echo ""
             echo "_Commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`._"
           } >> "$GITHUB_STEP_SUMMARY"
