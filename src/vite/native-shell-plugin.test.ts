@@ -133,6 +133,37 @@ describe("the dev server's native-shell answer", () => {
     ])
   })
 
+  it("logs an id it cannot read as (invalid), so a request cannot write a line of its own", () => {
+    //The server listens on the LAN, and the watcher flashes any line shaped like an HMR update.
+    const log = vi.fn()
+    const handler = nativeShellMiddleware(shellsFile({ ios: null }), log)
+    const forged = encodeURIComponent(
+      "ios-aaaa1111\n[vite] (client) hmr update /src/evil.tsx",
+    )
+    const answer = ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=${forged}`)
+    ask(handler, `${NATIVE_SHELL_ENDPOINT}?id=IOS-AAAA1111`)
+    expect(log.mock.calls.map((c) => c[0])).toEqual([
+      "[adaptv] native shell (invalid): stale",
+    ])
+    //and an id nothing minted is treated as no id at all
+    expect(answer.json).toEqual({ verdict: "stale" })
+  })
+
+  it("remembers a bounded number of ids, so a flood of them cannot grow the server", () => {
+    const log = vi.fn()
+    const handler = nativeShellMiddleware(shellsFile({ ios: null }), log)
+    const url = (n: number) =>
+      `${NATIVE_SHELL_ENDPOINT}?id=ios-${n.toString(16).padStart(8, "0")}`
+    for (let n = 0; n < 5000; n++) ask(handler, url(n))
+    expect(log).toHaveBeenCalledTimes(5000)
+    //the newest is still remembered, and still logs nothing on a repeat poll…
+    ask(handler, url(4999))
+    expect(log).toHaveBeenCalledTimes(5000)
+    //…while the first was forgotten long ago
+    ask(handler, url(0))
+    expect(log).toHaveBeenCalledTimes(5001)
+  })
+
   it("exists on the dev server only", () => {
     expect(adaptvNativeShellPlugin("/nowhere").apply).toBe("serve")
   })
