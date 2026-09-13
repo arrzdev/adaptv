@@ -74,8 +74,27 @@ function webOrientation(): LockableScreenOrientation | undefined {
 const listeners = new Set<() => void>()
 let nativeOrientation: ScreenOrientationType = DEFAULT_ORIENTATION
 let webBound = false
-let nativeBound = false
-let nativeHandle: { remove: () => Promise<void> } | null = null
+
+/**
+ * The live native binding, or `null` when none is held. `disposed` is per binding
+ * because the bridge answers asynchronously: the last subscriber can leave before
+ * `addListener` resolves (useSyncExternalStore under StrictMode always does in
+ * dev), and the handle that arrives afterwards must remove itself rather than
+ * keep a listener nobody will ever release.
+ */
+type NativeBinding = {
+  disposed: boolean
+  handle: { remove: () => Promise<void> } | null
+}
+let nativeBinding: NativeBinding | null = null
+
+//A bridge call that rejects (plugin missing from this binary, an OS error) is
+//fire-and-forget in the subscription, so nothing would handle it: it would reach
+//the window's `unhandledrejection` event, and with it the console and any error
+//reporter the app installed. The last known orientation is the degraded answer.
+//Passed as `.then`'s second argument, not `.catch`, so an exception thrown by a
+//subscriber still surfaces.
+const ignoreBridgeRejection = () => {}
 
 function emit(): void {
   for (const cb of listeners) cb()
@@ -121,12 +140,14 @@ function bindWeb(): void {
 }
 
 function bindNative(): void {
-  if (nativeBound) return
-  nativeBound = true
+  if (nativeBinding) return
+  const binding: NativeBinding = { disposed: false, handle: null }
+  nativeBinding = binding
   void ScreenOrientation.orientation().then((result) => {
+    if (binding.disposed) return
     nativeOrientation = normalize(result.type)
     emit()
-  })
+  }, ignoreBridgeRejection)
   void ScreenOrientation.addListener(
     "screenOrientationChange",
     (result) => {
@@ -134,8 +155,16 @@ function bindNative(): void {
       emit()
     },
   ).then((handle) => {
-    nativeHandle = handle
-  })
+    if (binding.disposed) void handle.remove().catch(ignoreBridgeRejection)
+    else binding.handle = handle
+  }, ignoreBridgeRejection)
+}
+
+function unbindNative(): void {
+  if (!nativeBinding) return
+  nativeBinding.disposed = true
+  void nativeBinding.handle?.remove().catch(ignoreBridgeRejection)
+  nativeBinding = null
 }
 
 /**
@@ -150,11 +179,7 @@ export function subscribeScreenOrientation(cb: () => void): () => void {
   else bindWeb()
   return () => {
     listeners.delete(cb)
-    if (listeners.size === 0 && nativeHandle) {
-      void nativeHandle.remove()
-      nativeHandle = null
-      nativeBound = false
-    }
+    if (listeners.size === 0) unbindNative()
   }
 }
 
