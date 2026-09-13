@@ -25,6 +25,21 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 // so a crash inside the web build lost the ✖ line to the trailer above it
 // (`error during build:`) — a line that says nothing.
 const NAMED_ERROR = /^(?:\[\w+\]\s*)?\w*Error(?:\s*\[\w+\])?\s*:/
+// A task runner's verdict on one of its own steps, the way the native CLI adaptv drives writes
+// it: `✖ Running xcodebuild - failed!`, or `✔ Copying web assets in 3.21ms` for a step that
+// passed before the one that did not (`×`/`√` on Windows). It carries `failed`, so the tail
+// keeps it, and it arrives BEFORE the tool's own output, so it was the first line the generic
+// pick below reached — and the row rendered as `✖ ios  ✖ Running xcodebuild - failed!`, two
+// failure marks and nothing a dev can act on (R2). It is a restatement of the ✖, like
+// `** BUILD FAILED **`. Char codes rather than the marks themselves: the glyph set is the
+// engine's alone (R26, `engine.test.mjs`), and these belong to the tool.
+const RUNNER_MARKS = String.fromCharCode(0x2714, 0x2716, 0x221a, 0xd7)
+const TASK_VERDICT = new RegExp(
+  `^[${RUNNER_MARKS}]\\s+(.+?)\\s+(?:-\\s+failed!|in\\s+[\\d.]+\\s*(?:s|ms|\u03bcs))$`,
+  "u",
+)
+// A tool log's level tag, `[error] Command error. …`. On the ✖ line adaptv is the one speaking.
+const LOG_TAG = /^\[(?:error|warn|info|debug|success)\]\s*/i
 
 /**
  * Describe a failure the way the renderer wants it: a concise `reason` shown INLINE on
@@ -79,10 +94,17 @@ export function explainFailure(label) {
     const busy = portInUse(text)
     if (busy) return settle({ reason: busy.msg, detail: busy.fix })
 
-    const lines = String(err?.tail ?? "")
+    const captured = String(err?.tail ?? "")
       .split("\n")
-      .map((l) => l.replace(ANSI, "").trim())
+      .map((l) => l.replace(ANSI, "").trim().replace(LOG_TAG, ""))
       .filter(Boolean)
+    // The step the runner says failed, kept for the one case where nothing else in the tail
+    // says anything: then `xcodebuild failed` is still more than the spawn's own message.
+    const failedTask = captured
+      .map((l) => l.match(TASK_VERDICT))
+      .find((m) => m?.[0].endsWith("failed!"))?.[1]
+    const lines = captured
+      .filter((l) => !TASK_VERDICT.test(l))
       // `** BUILD FAILED **` & friends only restate the ✖ that's already printing.
       .filter((l) => !/^\*{2}.*\*{2}$/.test(l))
       // xcodebuild answers an unresolvable destination with its whole inventory of
@@ -115,7 +137,9 @@ export function explainFailure(label) {
     const picked = errors.length ? errors : lines
     if (picked.length === 0)
       return settle({
-        reason: String(err?.message ?? err).split("\n")[0],
+        reason: failedTask
+          ? taskFailed(failedTask)
+          : String(err?.message ?? err).split("\n")[0],
         detail: [],
       })
     const { message, where } = toolErrorParts(picked[0])
@@ -177,6 +201,16 @@ export function toolErrorParts(raw) {
     .replace(/^\s*\[adaptv\]\s*/, "")
     .trim()
   return { message: message || raw, where: "" }
+}
+
+/**
+ * A runner's step title as the phrase a ✖ carries: `Running xcodebuild` → `xcodebuild failed`,
+ * `Updating iOS plugins` → `updating iOS plugins failed`. `Running` goes because the row
+ * already says a step ran; the rest is lowercased at its head only, so `iOS` keeps its case.
+ */
+const taskFailed = (task) => {
+  const what = task.replace(/^Running\s+/i, "")
+  return `${what.charAt(0).toLowerCase()}${what.slice(1)} failed`
 }
 
 /** Same idea for a detail line: keep the filename, drop the directories. */

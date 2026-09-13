@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { explainFailure, toolErrorParts } from "./explain.mjs"
 import { namesPlumbing } from "./opacity.mjs"
+import { runLine } from "./render.mjs"
 import { errorTail } from "./tool-log.mjs"
 
 /**
@@ -277,5 +278,117 @@ describe("an iOS build with no platform to build against (R61)", () => {
     const { reason, detail } = explainFailure("ios")(err)
     expect(reason).toBe("something no recogniser here has met yet")
     for (const line of detail) expect(line).not.toContain("{ platform:")
+  })
+})
+
+//Built rather than written as a literal: a raw ESC inside a regex trips
+//lint/suspicious/noControlCharactersInRegex.
+const ESC_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+
+/**
+ * The row a failed lane actually settles on, from both streams, colour stripped — the step
+ * run through `runLine` with this explainer, the way every native lane is. The assertions
+ * below are about what the dev READS, and a `{ reason }` object is not that.
+ */
+async function renderedFailure(label, err, appRoot) {
+  const lines = []
+  const take = (s) => {
+    lines.push(...String(s).replace(ESC_SGR, "").split("\n"))
+    return true
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
+  try {
+    await runLine(
+      label,
+      async () => {
+        throw err
+      },
+      { explain: explainFailure(label, appRoot) },
+    ).catch(() => {})
+  } finally {
+    for (const s of spies) s.mockRestore()
+  }
+  const at = lines.findIndex((l) => l.includes("✖"))
+  return {
+    row: lines[at] ?? "",
+    detail: lines.slice(at + 1).filter(Boolean),
+  }
+}
+
+const glyphs = (row) => row.split("✖").length - 1
+
+/**
+ * Captured from the native CLI's own task chain and logger — its `runTask`, `runCommand`,
+ * `fatal` and `logger.error`, the path `run ios` takes — spawned through adaptv's `exec` and
+ * narrowed by `errorTail`, 2026-09-13. The runner's framing is its real bytes; the xcodebuild
+ * body inside it is xcodebuild-SHAPED (a run-script phase failure), since no native build ran.
+ */
+const CAP_RUN_XCODEBUILD_FAILED = [
+  "✖ Running xcodebuild - failed!",
+  "        Command PhaseScriptExecution failed with a nonzero exit code",
+  "        ** BUILD FAILED **",
+  "        The following build commands failed:",
+  "        PhaseScriptExecution [CP]\\ Embed\\ Pods\\ Frameworks /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzbvkdqcbzjtcfdzgtmbnaaaqyb/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Script-9592DBEFFC6D2A0C8D5DEB22.sh (in target 'App' from project 'App')",
+  "        (1 failure)",
+].join("\n")
+
+const capRunFailed = (tail) => {
+  const err = new Error(
+    "node cap.mjs run ios --no-sync exited with code 1",
+  )
+  err.tail = tail
+  return err
+}
+
+describe("a native runner's own verdict is not the reason (R2)", () => {
+  it("settles a failed iOS run on ONE failure mark and the tool's sentence", async () => {
+    const { row } = await renderedFailure(
+      "ios",
+      capRunFailed(CAP_RUN_XCODEBUILD_FAILED),
+    )
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(
+      /✖ ios {2}Command PhaseScriptExecution failed with a nonzero exit code · \d+ms$/,
+    )
+  })
+
+  it("never puts the runner's verdict in the detail either", async () => {
+    const { detail } = await renderedFailure(
+      "ios",
+      capRunFailed(CAP_RUN_XCODEBUILD_FAILED),
+    )
+    for (const line of detail) {
+      expect(line).not.toContain("- failed!")
+      expect(glyphs(line)).toBe(0)
+    }
+  })
+
+  it("says which step failed when the verdict is all the tail holds", async () => {
+    const { row } = await renderedFailure(
+      "ios",
+      capRunFailed("✖ Running xcodebuild - failed!"),
+    )
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(/✖ ios {2}xcodebuild failed · \d+ms$/)
+  })
+
+  it("does not settle a failure on a step that passed, nor on a log tag", async () => {
+    //No line here says `error:`, so the pick falls back to the raw tail — which is where a
+    //passing step's verdict, and the logger's `[error]` tag, would have been lifted from.
+    const { row } = await renderedFailure(
+      "android",
+      capRunFailed(
+        [
+          "✔ Copying web assets from web to android/app/src/main/assets/public in 12.34ms",
+          "[error] The web assets directory must contain an index.html file.",
+        ].join("\n"),
+      ),
+    )
+    expect(row).toMatch(
+      /✖ android {2}The web assets directory must contain an index\.html file\. · \d+ms$/,
+    )
   })
 })
