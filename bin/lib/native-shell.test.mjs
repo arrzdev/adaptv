@@ -1,0 +1,284 @@
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { createRequire } from "node:module"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  shellIdFromUserAgent as frameworkParser,
+  NATIVE_SHELL_ENDPOINT,
+  NATIVE_SHELL_TOKEN,
+} from "#adaptv/shell/native-shell"
+import { buildCapacitorConfig } from "#adaptv/vite/capacitor-config"
+import {
+  NATIVE_SHELLS_ENV,
+  nativeShellMiddleware,
+  readExpectedShells,
+} from "#adaptv/vite/native-shell-plugin"
+import { nativeFingerprint } from "./fingerprint.mjs"
+import { patchServerUrl } from "./live-reload.mjs"
+import { ADAPTV_ROOT } from "./load-ts.mjs"
+import { capConfigFromEnv } from "./native.mjs"
+import {
+  canReuseInstall,
+  newShellId,
+  openShellRegistry,
+  SHELL_ENDPOINT,
+  SHELL_TOKEN,
+  SHELLS_ENV,
+  shellIdFromUserAgent,
+  stampShellId,
+  withoutShellMark,
+} from "./native-shell.mjs"
+
+/*
+ * `adaptv dev` used to let the app already installed on a device reconnect the moment the dev
+ * server answered, even when this run was about to rebuild that app because its native project
+ * had changed. These pin the CLI's half of the fix: the id a dev build carries, where it is
+ * baked, how the run cache uses it, and what the dev server is told to expect.
+ */
+
+const APP = {
+  appId: "dev.arrz.projectzero",
+  name: "ChopChop",
+  themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
+}
+const DEV_URL = "http://localhost:41730"
+
+const dirs = []
+let savedConfig
+beforeEach(() => {
+  savedConfig = process.env.ADAPTV_CAPACITOR_CONFIG
+  //what `setCapacitorConfigEnv` + `patchServerUrl` leave in the env for a native dev run
+  process.env.ADAPTV_CAPACITOR_CONFIG = JSON.stringify(
+    buildCapacitorConfig(APP),
+  )
+  patchServerUrl("/tmp/app", DEV_URL)
+})
+afterEach(() => {
+  if (savedConfig === undefined) delete process.env.ADAPTV_CAPACITOR_CONFIG
+  else process.env.ADAPTV_CAPACITOR_CONFIG = savedConfig
+  for (const d of dirs.splice(0))
+    rmSync(d, { recursive: true, force: true })
+})
+
+const tempApp = () => {
+  const root = mkdtempSync(path.join(tmpdir(), "adaptv-shell-"))
+  dirs.push(root)
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({ dependencies: { react: "19.2.3" } }),
+  )
+  return root
+}
+
+describe("one contract, two sides", () => {
+  it("the CLI and the framework name the same token, endpoint and env var", () => {
+    expect(SHELL_TOKEN).toBe(NATIVE_SHELL_TOKEN)
+    expect(SHELL_ENDPOINT).toBe(NATIVE_SHELL_ENDPOINT)
+    expect(SHELLS_ENV).toBe(NATIVE_SHELLS_ENV)
+  })
+
+  it("both parsers read the same id off the same user agents", () => {
+    const id = newShellId("android")
+    const agents = [
+      `Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 adaptv-shell/${newShellId("ios")}`,
+      `Mozilla/5.0 (Linux; Android 16; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/137.0.0.0 Mobile Safari/537.36 adaptv-shell/${id}`,
+      "Mozilla/5.0 (iPhone) Mobile/15E148",
+      `Foo xadaptv-shell/${id}`,
+      "",
+      undefined,
+    ]
+    for (const ua of agents)
+      expect(shellIdFromUserAgent(ua)).toBe(frameworkParser(ua))
+    expect(shellIdFromUserAgent(agents[1])).toBe(id)
+  })
+
+  it("mints ids the parser reads back, one per build", () => {
+    const a = newShellId("ios")
+    const b = newShellId("ios")
+    expect(a).toMatch(/^ios-[0-9a-f]{8}$/)
+    expect(a).not.toBe(b)
+    expect(shellIdFromUserAgent(`Mobile/15E148 ${SHELL_TOKEN}/${a}`)).toBe(
+      a,
+    )
+  })
+})
+
+describe("the id is baked into the generated native config", () => {
+  it("as the platform's own appended user agent, next to what the platform already had", () => {
+    stampShellId("ios", "ios-3f9a1c2b")
+    const config = capConfigFromEnv()
+    expect(config.ios.appendUserAgent).toBe("adaptv-shell/ios-3f9a1c2b")
+    expect(config.ios.path).toBe(".adaptv/ios")
+    //one platform's build never marks the other's: `dev all` may reuse Android while it
+    //rebuilds iOS, and each runtime reads its own key before the shared one
+    expect(config.android.appendUserAgent).toBeUndefined()
+    expect(config.appendUserAgent).toBeUndefined()
+    //the live-reload block the id travels with is untouched
+    expect(config.server.url).toBe(DEV_URL)
+  })
+
+  it("lands where each native runtime reads it, and the sync copies the config whole", () => {
+    //What makes the value ship: the sync writes the env config into the native project as
+    //it is, and both runtimes append their own key to the WebView's user agent. Read off the
+    //installed sources, so an upgrade that renames a key fails here and not on a device.
+    const require = createRequire(path.join(ADAPTV_ROOT, "package.json"))
+    const pkg = (name) =>
+      path.dirname(require.resolve(`${name}/package.json`))
+    const copy = readFileSync(
+      path.join(pkg("@capacitor/cli"), "dist/tasks/copy.js"),
+      "utf8",
+    )
+    expect(copy).toContain(
+      "writeJSON)(nativeConfigFilePath, config.app.extConfig",
+    )
+    const ios = path.join(pkg("@capacitor/ios"), "Capacitor/Capacitor")
+    expect(
+      readFileSync(path.join(ios, "CAPInstanceDescriptor.swift"), "utf8"),
+    ).toContain('config[keyPath: "ios.appendUserAgent"]')
+    expect(
+      readFileSync(
+        path.join(ios, "CAPBridgeViewController.swift"),
+        "utf8",
+      ),
+    ).toContain("applicationNameForUserAgent")
+    const android = path.join(
+      pkg("@capacitor/android"),
+      "capacitor/src/main/java/com/getcapacitor",
+    )
+    expect(
+      readFileSync(path.join(android, "CapConfig.java"), "utf8"),
+    ).toContain('"android.appendUserAgent"')
+    expect(
+      readFileSync(path.join(android, "Bridge.java"), "utf8"),
+    ).toContain(
+      'settings.setUserAgentString(defaultUserAgent + " " + appendUserAgent)',
+    )
+  })
+
+  it("never reaches a built app", () => {
+    expect(JSON.stringify(buildCapacitorConfig(APP))).not.toContain(
+      "appendUserAgent",
+    )
+  })
+})
+
+describe("the native fingerprint ignores which build it is", () => {
+  it("hashes the same with and without a mark, on either platform", () => {
+    const root = tempApp()
+    const before = nativeFingerprint(root, "ios")
+    stampShellId("ios", "ios-3f9a1c2b")
+    expect(nativeFingerprint(root, "ios")).toBe(before)
+    //another lane stamping its own platform mid-decision
+    stampShellId("android", "android-00ff00ff")
+    expect(nativeFingerprint(root, "ios")).toBe(before)
+    stampShellId("ios", "ios-deadbeef")
+    expect(nativeFingerprint(root, "ios")).toBe(before)
+  })
+
+  it("still moves for everything a build contains", () => {
+    const root = tempApp()
+    stampShellId("ios", "ios-3f9a1c2b")
+    const before = nativeFingerprint(root, "ios")
+    patchServerUrl("/tmp/app", "http://localhost:41731")
+    stampShellId("ios", "ios-3f9a1c2b")
+    expect(nativeFingerprint(root, "ios")).not.toBe(before)
+  })
+
+  it("leaves an unmarked config byte for byte as it was", () => {
+    const json = process.env.ADAPTV_CAPACITOR_CONFIG
+    expect(withoutShellMark(json)).toBe(json)
+    expect(withoutShellMark(undefined)).toBeUndefined()
+    expect(withoutShellMark("not json")).toBe("not json")
+  })
+})
+
+describe("the run cache reuses an install only when it knows its build", () => {
+  const prev = { url: DEV_URL, fp: "abc", shell: "ios-3f9a1c2b" }
+  const now = (installed = true) => ({
+    url: DEV_URL,
+    fp: "abc",
+    installed: vi.fn(async () => installed),
+  })
+
+  it("reuses an unchanged, installed build it holds the id for", async () => {
+    expect(await canReuseInstall(prev, now())).toBe(true)
+  })
+
+  it("rebuilds an install it holds no id for, without asking the device", async () => {
+    const n = now()
+    expect(await canReuseInstall({ url: DEV_URL, fp: "abc" }, n)).toBe(
+      false,
+    )
+    expect(n.installed).not.toHaveBeenCalled()
+  })
+
+  it("rebuilds on a native change, a new dev URL, a missing install, or no entry", async () => {
+    expect(await canReuseInstall({ ...prev, fp: "xyz" }, now())).toBe(
+      false,
+    )
+    expect(
+      await canReuseInstall({ ...prev, url: "http://localhost:1" }, now()),
+    ).toBe(false)
+    expect(await canReuseInstall(prev, now(false))).toBe(false)
+    expect(await canReuseInstall(undefined, now())).toBe(false)
+  })
+})
+
+describe("what the dev server is told to expect", () => {
+  it("starts every platform of the run undecided, so an app already on the device waits", () => {
+    const root = tempApp()
+    const shells = openShellRegistry(root, ["ios", "android"])
+    expect(shells.file).toBe(path.join(root, ".adaptv", "dev-shells.json"))
+    expect(readExpectedShells(shells.file)).toEqual({
+      ios: null,
+      android: null,
+    })
+  })
+
+  it("walks one old app through the whole run: pending, stale during the rebuild, then only the new build matches", () => {
+    const root = tempApp()
+    mkdirSync(path.join(root, ".adaptv"), { recursive: true })
+    const shells = openShellRegistry(root, ["ios"])
+    const server = nativeShellMiddleware(shells.file)
+    const verdict = (id) => {
+      let body = ""
+      server(
+        { url: `${SHELL_ENDPOINT}?id=${id}` },
+        {
+          setHeader() {},
+          end(chunk) {
+            body = chunk
+          },
+        },
+        () => {},
+      )
+      return JSON.parse(body).verdict
+    }
+    const old = "ios-0a0a0a0a"
+    //the dev server is up, the native project is still being prepared
+    expect(verdict(old)).toBe("pending")
+    //the run decided to rebuild: a new id before the sync starts
+    const fresh = newShellId("ios")
+    stampShellId("ios", fresh)
+    shells.expect("ios", fresh)
+    expect(verdict(old)).toBe("stale")
+    //the rebuilt app launches with the id baked into its config
+    expect(
+      verdict(
+        shellIdFromUserAgent(
+          `Mobile/15E148 ${capConfigFromEnv().ios.appendUserAgent}`,
+        ),
+      ),
+    ).toBe("match")
+    shells.remove()
+    expect(existsSync(shells.file)).toBe(false)
+  })
+})
