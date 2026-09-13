@@ -267,12 +267,13 @@ async function pickAndCache(appRoot, platform, env, listed) {
  *   3. otherwise       → the interactive picker; off a TTY, the first simulator or emulator
  *                        (a physical device only when nothing else is listed), not remembered
  * Returns `{ id, name, source }` where source is "target" | "latest" | "picked".
+ * `command` is the one the dev ran (`dev`, `preview`), so an error suggests rerunning THAT.
  */
 export async function resolveTarget(
   appRoot,
   platform,
   env,
-  { target, latest, prefetch = null },
+  { command, target, latest, prefetch = null },
 ) {
   /**
    * The device list, from a listing started earlier if one was.
@@ -307,7 +308,7 @@ export async function resolveTarget(
     // later `--latest` fails against a device that was never real.
     if (!known) {
       throw new Error(
-        `unknown ${platform} device "${target}". Run 'adaptv dev ${platform}' to pick from the current list.`,
+        `unknown ${platform} device "${target}". Run 'adaptv ${command} ${platform}' to pick from the current list.`,
       )
     }
     const device = { id: target, name: known.name ?? target }
