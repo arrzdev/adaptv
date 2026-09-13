@@ -106,6 +106,11 @@ test.describe("Skeleton", () => {
     await expect(region.locator(PLACEHOLDER).first()).toBeVisible()
     await expect(page.getByTestId("skeleton-content")).toHaveCount(0)
     await expect(readout).toContainText("loading: true")
+    // the lab tells a tester nothing may move on the swap, so the region's
+    // own box is the number: the placeholders must reserve the loaded height
+    const heightWhileLoading = await region.evaluate(
+      (el) => el.getBoundingClientRect().height,
+    )
 
     await page.getByTestId("skeleton-toggle").click()
 
@@ -127,6 +132,9 @@ test.describe("Skeleton", () => {
       region.getByText("3 tasks · synced just now"),
     ).toBeVisible()
     await expect(readout).toContainText("loading: false")
+    expect(
+      await region.evaluate((el) => el.getBoundingClientRect().height),
+    ).toBeCloseTo(heightWhileLoading, 1)
   })
 
   test("the shimmer runs by default", async ({ page }) => {
