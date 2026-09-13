@@ -113,14 +113,30 @@ export interface CheckboxIconProps {
 }
 
 const CHECKBOX_ROOT_LAYOUT_CLASS =
-  "relative inline-flex shrink-0 items-center justify-center"
+  "inline-flex shrink-0 items-center justify-center"
+//LOCKED: the input is laid over the whole label, so the label is its containing
+//block; a consumer `static` here would send the input to the nearest positioned
+//ancestor and make the checkbox's accessible frame some other element's box
+const CHECKBOX_ROOT_LOCKED_LAYOUT_CLASS = "relative"
 //LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
 const CHECKBOX_ROOT_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
 const CHECKBOX_ROOT_CURSOR_CLASS = "cursor-pointer"
 const CHECKBOX_ROOT_NON_INTERACTION_CLASS =
   PRESS_TARGET_DISABLED_LOCKED_CLASS
 const CHECKBOX_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-const CHECKBOX_INPUT_CHROMELESS_CLASS = "peer sr-only"
+//LOCKED: the input is the ONLY element assistive tech and automation see, so its
+//box is the control's frame to VoiceOver, TalkBack and every tap aimed at it. It
+//used to be `sr-only`, a clipped 1px box in the middle of a 32x32 label
+//(measured on chromium and webkit), so screen readers framed a speck and anything
+//aiming at that frame hit the painted box instead of the control. Covering the
+//label exactly, invisibly, makes the accessible frame and the hit area one
+//rectangle, and a consumer who widens the label into a full row widens both. Pointer events land on the input and bubble
+//to the label, where the gesture engine still owns the press. There is no
+//`peer`: the input is rendered AFTER the box so it paints over it without a
+//z-index (the box is positioned, and a z-index would lift an invisible input over
+//unrelated overlays), and a `peer-*` variant only reaches later siblings.
+const CHECKBOX_INPUT_LOCKED_CLASS =
+  "absolute inset-0 m-0 size-full cursor-[inherit] appearance-none opacity-0"
 //LOCKED: the box is the positioning context for the absolutely-centred mark and
 //the clip for a custom one; `shrink-0` keeps the square square inside a flex label.
 const CHECKBOX_BOX_LOCKED_LAYOUT_CLASS =
@@ -453,14 +469,14 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
         <label
           data-adaptv="checkbox"
           htmlFor={resolvedInputId}
-          //ONLY the interaction utility is locked, for the reason press-core gives:
-          //{@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action` longhand that
-          //keeps `pointercancel` alive on iOS (WebKit 240917), and no `className` may
-          //defeat it. The layout is deliberately
-          //BASE — nothing inside the label is positioned against it (the mark is a
-          //flex child of the box, not absolute), so `inline-flex` / `shrink-0` are a
-          //default, and a consumer turning this into a full-width `flex` row hit
-          //target is a legitimate restyle, not a break.
+          //Two things are locked. The interaction utility, for the reason press-core
+          //gives: {@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action`
+          //longhand that keeps `pointercancel` alive on iOS (WebKit 240917), and no
+          //`className` may defeat it. And `relative`, because the input is laid
+          //over the label and measured against it. The rest of the layout is
+          //deliberately BASE, so `inline-flex` / `shrink-0` are a default, and a
+          //consumer turning this into a full-width `flex` row hit target is a
+          //legitimate restyle, not a break: the accessible frame grows with it.
           {...mergeStyles({
             base: [
               CHECKBOX_ROOT_LAYOUT_CLASS,
@@ -469,9 +485,12 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
                 : CHECKBOX_ROOT_CURSOR_CLASS,
             ],
             className,
-            locked: isDisabled
-              ? CHECKBOX_ROOT_NON_INTERACTION_CLASS
-              : CHECKBOX_ROOT_INTERACTION_CLASS,
+            locked: [
+              CHECKBOX_ROOT_LOCKED_LAYOUT_CLASS,
+              isDisabled
+                ? CHECKBOX_ROOT_NON_INTERACTION_CLASS
+                : CHECKBOX_ROOT_INTERACTION_CLASS,
+            ],
             style,
             //nothing about the root is structural in INLINE style: the geometry
             //lives on the box, and the press state is a class + an attribute
@@ -491,6 +510,7 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
             gestureEngineHandlers.onPointerUp(e)
           }}
         >
+          {boxChild}
           <input
             {...inputProps}
             ref={inputRef}
@@ -498,10 +518,13 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
             type="checkbox"
             checked={isChecked}
             disabled={disabled}
+            //not a behaviour: `readonly` does not apply to a checkbox, so the
+            //browser still flips it and the engine still owns the toggle. It is
+            //what tells React this controlled `checked` has no `onChange` on
+            //purpose, and Chromium's accessibility tree does not expose it
             readOnly
-            className={CHECKBOX_INPUT_CHROMELESS_CLASS}
+            className={CHECKBOX_INPUT_LOCKED_CLASS}
           />
-          {boxChild}
         </label>
       </CheckboxContext.Provider>
     )
