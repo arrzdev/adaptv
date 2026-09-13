@@ -990,9 +990,9 @@ export function DrawerEngine({
     if (!content) return
 
     // ── Unfrozen web keyboard path ──────────────────────────────────────────────────────────
-    // Non-secure Chromium (no VirtualKeyboard API, not iOS, not native): `useFreezeViewport` could
-    // NOT stop the keyboard resizing the VISUAL viewport, so it shrinks by the keyboard's own
-    // height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
+    // Non-secure Chromium (no VirtualKeyboard API, not iOS, no native Keyboard plugin):
+    // `useFreezeViewport` could NOT stop the keyboard resizing the VISUAL viewport, so it shrinks
+    // by the keyboard's own height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
     // shrink double-counts, growing the box by the keyboard's height a second time until its top
     // climbs off-screen behind the URL bar (the plain-http `ip:port` over-grow). Hold no room; cap
     // the box at the visible viewport (taller content scrolls inside). The frozen paths — iOS
