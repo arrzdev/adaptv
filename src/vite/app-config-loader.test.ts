@@ -80,6 +80,27 @@ describe("loadAppConfig", () => {
     expect(watchFiles).toContain(path.join(dir, "adaptv.config.ts"))
   })
 
+  it("watches an imported module at its real path when the cwd is not the app", async () => {
+    //the tests run from the repo root, which is exactly the case: an `appRoot`
+    //passed to `adaptv()` that is not where the process started
+    expect(process.cwd()).not.toBe(dir)
+    await writeFile(
+      path.join(dir, "theme.ts"),
+      `export const light = "#eee"\n`,
+    )
+    await writeFile(
+      path.join(dir, "adaptv.config.ts"),
+      `import { light } from "./theme"\nexport default { light }\n`,
+    )
+    const { watchFiles } = await readAppConfig(dir)
+    expect(watchFiles.sort()).toEqual(
+      [
+        path.join(dir, "adaptv.config.ts"),
+        path.join(dir, "theme.ts"),
+      ].sort(),
+    )
+  })
+
   it("still refuses a file with no default export", async () => {
     await writeFile(
       path.join(dir, "adaptv.config.ts"),
