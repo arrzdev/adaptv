@@ -72,7 +72,7 @@ adaptv's web tier is free and only the native tier needs a plugin.
 | Network state | `expo-network` | — | ✅ `network` | `navigator.onLine` + NetInfo API | ✅ `network`, `useIsOffline` |
 | Geolocation | `expo-location` | — | ✅ `geolocation` | `navigator.geolocation` | ✅ `geolocation`, `useGeolocation` |
 | App lifecycle | — (`AppState`) | `AppState` | ✅ `app` | `visibilitychange` | ✅ `app-state` |
-| Hardware back | — | `BackHandler` | ✅ `app` (`backButton`) | `popstate` | ✅ `back-chain`, `useAndroidBackButton` |
+| Hardware back | — | `BackHandler` | ✅ `app` (`backButton`) | `popstate` | ✅ `back-chain`, `useAndroidBackButton` (native back button and `adaptvBack()`; nothing listens to `popstate`, see O15 in `../roadmap/open-questions.md`) |
 | Keyboard | — | `Keyboard` | ✅ `keyboard` | `visualViewport` | ✅ `keyboard`, `useKeyboard` |
 | Status bar | `expo-status-bar` | `StatusBar` | ✅ `status-bar` | `theme-color` meta | ✅ `status-bar`, `useStatusBar` |
 | Theme / dark mode | — | `Appearance` | — | `prefers-color-scheme` | ✅ `native-theme`, `useTheme` |
