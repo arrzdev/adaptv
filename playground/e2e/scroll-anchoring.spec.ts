@@ -39,9 +39,10 @@ import { awaitClientHandover } from "./support/hydrated"
  *
  * Both surfaces aim again after the change, which is why they land clear: the drawer
  * re-aims 420ms after the raise, and AvoidKeyboard re-aims when the keyboard raise
- * lands 250ms after the focus. Neither re-aims after that, so a change above the field
- * later on is not corrected — see docs/design/behaviors.md for the numbers; that is
- * adaptv aiming once, not anchoring, and not asserted here.
+ * lands 250ms after the focus. AvoidKeyboard also takes one more look when each of
+ * its smooth scrolls ends; the drawer does not re-aim after its 420ms, so a change
+ * above its field later on is not corrected — see docs/design/behaviors.md for the
+ * numbers; that is the drawer aiming once, not anchoring, and not asserted here.
  *
  * Rows are added below the field too, so the aimed landing is not the end of the
  * scroller: there the browser's clamp absorbed a doubled scroll and the check passed.
@@ -360,7 +361,7 @@ for (const [name, surface] of [
     ).toBeLessThanOrEqual(2)
 
     //both surfaces aim again after the insertion (the drawer's re-aim, AvoidKeyboard's
-    //keyboard raise), so the field ends clear: the drawer's 12px margin, AvoidKeyboard's
+    //keyboard raise and its look when the scroll ends), so the field ends clear: the drawer's 12px margin, AvoidKeyboard's
     //buffer
     expect(
       shipped.landing.clearance,

@@ -20,6 +20,8 @@ import { awaitClientHandover } from "./support/hydrated"
  */
 
 const KEYBOARD_EVENT = "adaptv:keyboard-mock"
+//the lab's notice height (ARRIVAL_PX in avoid-keyboard.page.tsx)
+const ARRIVAL_PX = 100
 
 async function setKeyboard(page: Page, isOpen: boolean, height: number) {
   await page.evaluate(
@@ -135,7 +137,7 @@ test.describe("AvoidKeyboard driven by the keyboard seam", () => {
  * The aim picks an absolute scrollTop on the focus frame; a notice inserted during
  * the 200-450ms flight moves the field down and leaves the destination where it
  * was, so the field lands 100px short, under the box's bottom edge. Measured on
- * origin/main on both engines: landed 528, clearance -76 (24 with no insertion).
+ * origin/main on both engines: landed 520, clearance -76 (24 with no insertion).
  * The fix looks once more when that scroll ends.
  *
  * The lab's Run button drives it, so a device run is the same code path: it
@@ -203,7 +205,11 @@ test.describe("AvoidKeyboard re-aims when content lands above the field mid-scro
         `ARRIVAL ${testInfo.project.name} ${mode} clearance=${clearance} ${scroll}`,
       )
 
-      //the premise: the notice went in while the scroll was flying, not before or after
+      //the premise: the notice went in while the FIRST aim's scroll was still short of its
+      //destination. That destination is where the field would have landed with no notice,
+      //which is the landing minus the notice. Comparing against the landing itself is
+      //vacuous: an instant first aim reads "inserted at 520", and the re-aim still moves
+      //the landing on to 620.
       const match = /inserted at (\d+(?:\.\d+)?) · landed (\d+)/.exec(
         scroll ?? "",
       )
@@ -211,8 +217,13 @@ test.describe("AvoidKeyboard re-aims when content lands above the field mid-scro
         match,
         `the insertion happened mid-scroll: ${scroll}`,
       ).not.toBeNull()
-      expect(Number(match?.[1])).toBeGreaterThan(0)
-      expect(Number(match?.[1])).toBeLessThan(Number(match?.[2]))
+      const insertedAt = Number(match?.[1])
+      const firstDestination = Number(match?.[2]) - ARRIVAL_PX
+      expect(insertedAt).toBeGreaterThan(0)
+      expect(
+        insertedAt,
+        "the notice went in before the first scroll reached its destination",
+      ).toBeLessThan(firstDestination - 1)
       await expect(page.locator("[data-lab-arrival-notice]")).toHaveCount(
         1,
       )
