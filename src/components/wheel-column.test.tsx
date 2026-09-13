@@ -418,6 +418,21 @@ describe("WheelColumn — the keyboard", () => {
     expect(smoothRolls()).toEqual([23 * H, 23 * H, 18 * H, 0, 0, 5 * H])
   })
 
+  it("leaves the keys to the page when the list is empty", () => {
+    render(
+      <WheelColumn
+        items={[]}
+        value={0}
+        onChange={() => {}}
+        ariaLabel="Hour"
+      />,
+    )
+    //no row to step to: the key is not taken, and it rolls nothing
+    expect(fireEvent.keyDown(wheel(), { key: "ArrowDown" })).toBe(true)
+    expect(fireEvent.keyDown(wheel(), { key: "End" })).toBe(true)
+    expect(smoothRolls()).toEqual([])
+  })
+
   it("leaves every other key to the page", () => {
     render(<Controlled initial={9} onChange={() => {}} />)
     expect(fireEvent.keyDown(wheel(), { key: "Tab" })).toBe(true)
