@@ -18,6 +18,7 @@ import {
   routePathToPattern,
   sortRouteTints,
 } from "#adaptv/shell/route-tints.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 
 export const UI_THEME_STORAGE_KEY = "ui-theme-preference" as const
 export const PREFERENCE_ATTR = "data-ui-theme"
@@ -54,6 +55,10 @@ export function getUiThemeInitScript({
   const attr = PREFERENCE_ATTR
   const overrideId = THEME_COLOR_META_ID
   const fallbackPreference = defaultThemePreference
+  //with its slash, however BASE_URL was written: the script strips `bs` and keeps
+  //the slash before the route, so a slashless `/app` turned `/app/settings` into
+  //`p/settings` and every tint missed
+  const deployBase = publicPath(base, "")
   //`[pattern, colour]` pairs, already ordered and already compiled to regex
   //SOURCE — the script does no path arithmetic of its own, it just tries them in
   //order and takes the first hit. Everything that could be got wrong about
@@ -71,5 +76,5 @@ export function getUiThemeInitScript({
   //tag (Android/Chrome, iOS <= 18) and the html/body paint (iOS 26+, where the
   //tag is inert and WebKit reads the rendered edge pixels instead). Neither
   //covers the whole matrix; see `use-sync-theme.ts`.
-  return `(function(){var k=${JSON.stringify(key)},a=${JSON.stringify(attr)},i=${JSON.stringify(overrideId)},l=${JSON.stringify(themeColorLight)},d=${JSON.stringify(themeColorDark)},df=${JSON.stringify(fallbackPreference)},tt=${JSON.stringify(tints)},bs=${JSON.stringify(base)},r=document.documentElement,p=null;try{p=localStorage.getItem(k)}catch(e){}if(p!=="light"&&p!=="dark"&&p!=="system"){p=r.getAttribute(a)}if(p!=="light"&&p!=="dark"&&p!=="system"){p=df}var v=p==="light"?"light":p==="dark"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var shellBg=v==="dark"?d:l;var pn=location.pathname;if(bs&&bs!=="/"&&pn.indexOf(bs)===0){pn=pn.slice(bs.length-1)}var tn=shellBg;for(var j=0;j<tt.length;j++){if(new RegExp(tt[j][0]).test(pn)){tn=tt[j][1];break}}r.classList.remove("light","dark");r.classList.add(v);r.style.colorScheme=v;r.style.backgroundColor=tn;r.setAttribute(a,p);var m=document.getElementById(i);if(!m){m=document.createElement("meta");m.id=i;m.name="theme-color";document.head.appendChild(m)}m.content=tn;m.removeAttribute("media");var cs=document.querySelector('meta[name="color-scheme"]');if(!cs){cs=document.createElement("meta");cs.setAttribute("name","color-scheme");document.head.appendChild(cs)}cs.content=p==="system"?"light dark":v})();`
+  return `(function(){var k=${JSON.stringify(key)},a=${JSON.stringify(attr)},i=${JSON.stringify(overrideId)},l=${JSON.stringify(themeColorLight)},d=${JSON.stringify(themeColorDark)},df=${JSON.stringify(fallbackPreference)},tt=${JSON.stringify(tints)},bs=${JSON.stringify(deployBase)},r=document.documentElement,p=null;try{p=localStorage.getItem(k)}catch(e){}if(p!=="light"&&p!=="dark"&&p!=="system"){p=r.getAttribute(a)}if(p!=="light"&&p!=="dark"&&p!=="system"){p=df}var v=p==="light"?"light":p==="dark"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");var shellBg=v==="dark"?d:l;var pn=location.pathname;if(bs&&bs!=="/"&&pn.indexOf(bs)===0){pn=pn.slice(bs.length-1)}var tn=shellBg;for(var j=0;j<tt.length;j++){if(new RegExp(tt[j][0]).test(pn)){tn=tt[j][1];break}}r.classList.remove("light","dark");r.classList.add(v);r.style.colorScheme=v;r.style.backgroundColor=tn;r.setAttribute(a,p);var m=document.getElementById(i);if(!m){m=document.createElement("meta");m.id=i;m.name="theme-color";document.head.appendChild(m)}m.content=tn;m.removeAttribute("media");var cs=document.querySelector('meta[name="color-scheme"]');if(!cs){cs=document.createElement("meta");cs.setAttribute("name","color-scheme");document.head.appendChild(cs)}cs.content=p==="system"?"light dark":v})();`
 }
