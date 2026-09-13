@@ -6,6 +6,7 @@
  * `adaptv.mjs` runs the CLI on import, so nothing could hold this to a rule. Here it can be,
  * and `explain.test.mjs` holds it to the opacity boundary using real captured tool output.
  */
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
@@ -55,9 +56,13 @@ const LOG_TAG = /^\[(?:error|warn|info|debug|success)\]\s*/i
  *
  * Whatever it settles on then passes the opacity boundary (`opacity.mjs`): a tool's own words
  * are not automatically fit to print, because the tools ARE the thing the consumer must not
- * be told about.
+ * be told about. And every path in it is made relative to `appRoot` — the directory the CLI
+ * runs in, which is the app root by definition (`bin/adaptv.mjs`) — or cut to its file name
+ * when it lies outside, because a tool's words are no more exempt from R9 than adaptv's.
+ * @param {string} label
+ * @param {string} [appRoot]
  */
-export function explainFailure(label) {
+export function explainFailure(label, appRoot = process.cwd()) {
   return (err) => {
     // Fix steps the THROWER authored, when it knew something the text can't show — the dev
     // server's warm probe knows an HTTP status, and no amount of reading its output reveals
@@ -76,12 +81,15 @@ export function explainFailure(label) {
       const safe = namesPlumbing(reason)
         ? String(err?.message ?? err).split("\n")[0]
         : reason
+      //Relative AFTER the plumbing test, never before: a store path names the engine in its
+      //directories, and cutting it to a file name first would hide that from the test.
+      const rel = (line) => withoutAbsolutePaths(line, appRoot)
       return {
-        reason: safe,
+        reason: rel(safe),
         //Deduped: the tail of a server that answered the warm's probes carries the SAME stack
         //once per request, and three identical 200-column lines under one ✖ is not detail.
         detail: [
-          ...new Set([...withoutPlumbing(detail), ...authored]),
+          ...new Set([...withoutPlumbing(detail), ...authored].map(rel)),
         ].slice(0, DETAIL_LINES),
       }
     }
@@ -155,8 +163,7 @@ export function explainFailure(label) {
         ...picked
           .slice(1)
           .filter((l) => toolErrorParts(l).message !== message)
-          .slice(0, DETAIL_LINES)
-          .map(shortenLocator),
+          .slice(0, DETAIL_LINES),
       ].filter(Boolean),
     })
   }
@@ -213,5 +220,71 @@ const taskFailed = (task) => {
   return `${what.charAt(0).toLowerCase()}${what.slice(1)} failed`
 }
 
-/** Same idea for a detail line: keep the filename, drop the directories. */
-export const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
+/**
+ * One character of a path as tools print it: anything but whitespace and the punctuation that
+ * ends a path in a sentence — quotes, brackets, a `:` before a line number — with xcodebuild's
+ * escaped space (`Target\\ Support\\ Files`) kept inside it.
+ */
+const PATH_CHAR = String.raw`(?:\\ |[^\s"'\`()[\]{}<>,:;\\])`
+// The directories an absolute path on disk starts from. A slash-led token that does not start
+// with one is not a file on this machine: a dev server's module id (`/src/routes/cart.tsx`), a
+// route (`/products/featured/42`), an API path, a regex literal. Those are the dev's words about
+// their own app, and cutting them to a last segment turned `No route matched /products/featured/42`
+// into `No route matched 42`, which is false (R56).
+// macOS's own roots name nothing else a dev would write, so a path under one is cut on any
+// machine, which keeps a Mac tool's output reading the same when a test runs on Linux CI.
+const MAC_ROOTS = "Users|Library|Applications|System|Volumes|private"
+// Linux's roots are ordinary words (`/home/feed/3`, `GET /dev/tools/1`), so a path under one is
+// cut only when its first two segments are a directory on this machine: `/home/runner` is, a
+// route's `/home/feed` is not.
+const LINUX_ROOTS =
+  "var|tmp|opt|usr|home|etc|dev|bin|sbin|root|mnt|nix|snap"
+// An absolute path on disk, where a path can start: the head of the line, after whitespace, a
+// quote, `=` or an opening bracket, or a `file://` URL. `//` inside any other URL is preceded
+// by `:`, which is none of those, so `http://localhost:41730/` survives.
+const ABSOLUTE_PATH = new RegExp(
+  String.raw`(^|[\s"'\`=([]|file:\/\/)(\/(?:(${MAC_ROOTS})|${LINUX_ROOTS})\/${PATH_CHAR}+)`,
+  "g",
+)
+/** Whether `/<root>/<name>` exists, asked once per prefix. @type {Map<string, boolean>} */
+const onDisk = new Map()
+/** @param {string} p a path under one of LINUX_ROOTS */
+function startsOnDisk(p) {
+  const prefix = p.split("/").slice(0, 3).join("/").replaceAll("\\ ", " ")
+  if (prefix.endsWith("/")) return false
+  if (!onDisk.has(prefix)) onDisk.set(prefix, existsSync(prefix))
+  return onDisk.get(prefix)
+}
+
+/**
+ * R9 for text adaptv did not write. xcodebuild names the file it could not read and the script
+ * phase that failed by their absolute paths, and those lines are exactly the ones a failure is
+ * explained with:
+ *
+ *     Unable to load contents of file list: '/Users/arrz/app/.adaptv/ios/App/Pods/…' …
+ *     PhaseScriptExecution … /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzb…/Script-95.sh
+ *
+ * A path under the app root becomes app-root-relative (`.adaptv/ios/App/Pods/…`), which is how
+ * every artifact row names a file; a path on disk outside it — DerivedData, the home directory,
+ * Xcode itself — is cut to its file name, because the directories are the machine's, not the
+ * app's. Only a path that starts from a real top-level directory counts as one, and under a
+ * Linux root only when its first two segments exist here: slash-led text that is not on disk
+ * (a module id, a route, a regex) is the dev's and is left whole. Text only ever loses
+ * directories here: a URL, a `file:line:col` locator and every word around a path are left as
+ * they were.
+ * @param {string} line
+ * @param {string} [appRoot]
+ */
+export function withoutAbsolutePaths(line, appRoot) {
+  let s = String(line ?? "")
+  const root = String(appRoot ?? "").replace(/\/+$/, "")
+  //Textual, not tokenised: a path under the app root keeps its tail even when that tail has
+  //an unescaped space in it (`Target Support Files`), which no token rule could span.
+  if (root)
+    s = s.split(`file://${root}/`).join("").split(`${root}/`).join("")
+  return s.replace(ABSOLUTE_PATH, (whole, lead, p, macRoot) =>
+    macRoot || startsOnDisk(p)
+      ? `${lead === "file://" ? "" : lead}${path.basename(p)}`
+      : whole,
+  )
+}
