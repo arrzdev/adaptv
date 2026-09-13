@@ -49,10 +49,19 @@ describe("the dev server's verdict", () => {
     expect(nativeShellVerdict("ios-aaaa1111", { ios: null })).toBe(
       "pending",
     )
-    //a platform this run does not serve at all
+    //nothing readable from the CLI yet
+    expect(nativeShellVerdict("ios-aaaa1111", null)).toBe("pending")
+  })
+
+  it("tells an app this run is not serving its platform, instead of promising it will open", () => {
+    //`dev ios` while an Android app from an earlier run polls the same port
     expect(nativeShellVerdict("android-cccc3333", { ios: "ios-1" })).toBe(
-      "pending",
+      "unserved",
     )
+    //`dev all` whose iOS project could not be prepared
+    expect(
+      nativeShellVerdict("ios-aaaa1111", { ios: false, android: null }),
+    ).toBe("unserved")
   })
 
   it("never matches a shell with no id: nothing unmarked can prove it is current", () => {
@@ -63,6 +72,6 @@ describe("the dev server's verdict", () => {
   })
 
   it("does not read a platform off the object's prototype", () => {
-    expect(nativeShellVerdict("constructor-00", decided)).toBe("pending")
+    expect(nativeShellVerdict("constructor-00", decided)).toBe("unserved")
   })
 })

@@ -162,7 +162,8 @@ adaptv heals both directions with no user action:
   run serves.** Every dev build carries a per-build id in its WebView user agent, the CLI tells
   the dev server which id each platform expects (none until it has decided whether to reuse or
   rebuild), and only a match reconnects. An app from before a native change waits on the
-  offline screen for the rebuilt one instead of coming up inside the old binary; the entry
+  offline screen for the rebuilt one instead of coming up inside the old binary, and an app
+  whose platform the run is not serving is told that rather than promised a build; the entry
   holds the first render on the same check, so no reconnect path can skip it
   (`src/shell/native-shell.ts`).
 - Even the WKWebView "clean-close deaf socket" case (Vite's client gives up on a `wasClean`
