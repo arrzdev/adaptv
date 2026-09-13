@@ -237,3 +237,62 @@ describe("speech — an utterance", () => {
     expect(fake.engine.cancel).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("speech — the engine's one queue", () => {
+  it("a queued utterance is not silent while the one ahead of it is still speaking", async () => {
+    //the engine plays one utterance at a time, so a second `speak` cannot start
+    //until the first ends; its silence window must not run until its turn, or
+    //the window's `cancel` would cut the first sentence off mid-word
+    const fake = installEngine([voice("Samantha")])
+    const a = speak("a long first sentence")
+    const b = speak("next")
+    const [ua, ub] = fake.spoken
+    ua?.onstart?.()
+    vi.advanceTimersByTime(SPEECH_SILENT_AFTER_MS * 3)
+    expect(fake.engine.cancel).not.toHaveBeenCalled()
+    expect(isSpeaking()).toBe(true)
+
+    ua?.onend?.()
+    expect(await a.done).toBe("spoke")
+    ub?.onstart?.()
+    ub?.onend?.()
+    expect(await b.done).toBe("spoke")
+    expect(fake.engine.cancel).not.toHaveBeenCalled()
+  })
+
+  it("the silence window starts when the utterance reaches the head of the queue", async () => {
+    const fake = installEngine([voice("Samantha")])
+    const a = speak("one")
+    const b = speak("two")
+    fake.spoken[0]?.onstart?.()
+    vi.advanceTimersByTime(SPEECH_SILENT_AFTER_MS * 2)
+    fake.spoken[0]?.onend?.()
+    expect(await a.done).toBe("spoke")
+    vi.advanceTimersByTime(SPEECH_SILENT_AFTER_MS - 1)
+    let settled = false
+    void b.done.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    vi.advanceTimersByTime(1)
+    expect(await b.done).toBe("silent")
+  })
+
+  it("one handle's cancel settles every open handle, because the engine's cancel is global", async () => {
+    //Chromium answers the others with an `interrupted` error, WebKit with `end`
+    //or nothing — so the handles cannot wait on the engine to hear about it
+    const fake = installEngine([voice("Samantha")])
+    const a = speak("one")
+    const b = speak("two")
+    fake.spoken[0]?.onstart?.()
+    b.cancel()
+    expect(await a.done).toBe("cancelled")
+    expect(await b.done).toBe("cancelled")
+    //WebKit's `end` for the interrupted one must not turn it into spoke
+    fake.spoken[0]?.onend?.()
+    expect(await a.done).toBe("cancelled")
+    expect(isSpeaking()).toBe(false)
+    expect(fake.engine.cancel).toHaveBeenCalledTimes(1)
+  })
+})
