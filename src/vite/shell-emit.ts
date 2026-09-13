@@ -1,9 +1,4 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs"
+import { existsSync, readdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { Plugin } from "vite"
 import { resolveThemeColors } from "#adaptv/config/app-config.ts"
@@ -23,6 +18,9 @@ import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender.ts"
 import { collectRouteTints } from "#adaptv/vite/route-tints.ts"
 import { resolveRoutesDir } from "#adaptv/vite/route-tints-module.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
+
+/** Where Vite puts the manifest when `build.manifest` is `true`. */
+const VITE_MANIFEST_FILE = ".vite/manifest.json"
 
 type ViteManifest = Record<
   string,
@@ -113,13 +111,19 @@ function resolveStylesHref(
  */
 export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
   let base = "/"
+  let appAskedForManifest = false
+  let clientManifest: ViteManifest | undefined
   return {
     name: "adaptv:shell-emit",
     apply: "build",
-    config() {
-      //the emitted shell has to reference hashed filenames, and the manifest is
-      //the only reliable way to learn them
-      return { build: { manifest: true } }
+    config(userConfig) {
+      appAskedForManifest =
+        !!userConfig.build?.manifest ||
+        !!userConfig.environments?.client?.build?.manifest
+      //The emitted shell has to reference hashed filenames, and the manifest is
+      //the only reliable way to learn them. The CLIENT environment only: nothing
+      //reads a server build's manifest.
+      return { environments: { client: { build: { manifest: true } } } }
     },
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
@@ -132,10 +136,33 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
     //`buildApp`, not `closeBundle`, and `order: "post"` — see the note in
     //`adaptv-plugin.ts`. `closeBundle` fires per ENVIRONMENT, which is too early:
     //a deploy plugin can still be assembling the output directory afterwards.
+    //The manifest is read here, out of the bundle, and never written. It is an
+    //input to the shell and nothing else: TanStack Start builds its route preloads
+    //from the bundle itself, and no server or host reads the file. Written, it was
+    //deployed next to the app: 41 KB of source paths in `.output/public` and
+    //`dist/client`, listed in the server's public asset table, so every SSR app
+    //answered `GET /.vite/manifest.json` with its whole module graph. `order:
+    //"post"` puts this after Vite's own manifest hook, which emits the asset in
+    //the same phase.
+    generateBundle: {
+      order: "post",
+      handler(_options, bundle) {
+        if (this.environment.name !== "client") return
+        const asset = bundle[VITE_MANIFEST_FILE]
+        if (asset?.type !== "asset") return
+        clientManifest = JSON.parse(
+          typeof asset.source === "string"
+            ? asset.source
+            : new TextDecoder().decode(asset.source),
+        ) as ViteManifest
+        //an app that turned the manifest on itself still gets its file
+        if (!appAskedForManifest) delete bundle[VITE_MANIFEST_FILE]
+      },
+    },
     buildApp: {
       order: "post",
       async handler() {
-        await emitShell(context, base)
+        if (clientManifest) await emitShell(context, base, clientManifest)
       },
     },
   }
@@ -144,15 +171,10 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
 async function emitShell(
   context: AdaptvContext,
   base: string,
+  manifest: ViteManifest,
 ): Promise<void> {
   const config = requireAppConfig(context)
   const clientDir = requireClientOutDir(context)
-  const manifestPath = path.join(clientDir, ".vite", "manifest.json")
-  if (!existsSync(manifestPath)) return
-
-  const manifest = JSON.parse(
-    readFileSync(manifestPath, "utf8"),
-  ) as ViteManifest
   const entry = Object.values(manifest).find((chunk) => chunk.isEntry)
   if (!entry?.file) return
 
