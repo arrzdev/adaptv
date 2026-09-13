@@ -35,6 +35,16 @@ export const NATIVE_SHELL_ENDPOINT = "/__adaptv/native-shell"
 export type NativeShellVerdict = "match" | "pending" | "stale" | "unserved"
 
 /**
+ * Whether `value` has the shape of a shell id the CLI mints: `<platform>-<hex>`, and nothing else.
+ *
+ * The dev server listens on the LAN, so the id a request names is untrusted input: this is what
+ * keeps it out of a log line and out of anything the server remembers.
+ */
+export function isNativeShellId(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z]+-[0-9a-f]+$/.test(value)
+}
+
+/**
  * The shell id a user agent carries, or `null`.
  *
  * Matched as a whole product token: WebKit puts it after `Mobile/<build>`, Chromium after

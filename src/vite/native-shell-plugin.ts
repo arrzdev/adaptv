@@ -3,9 +3,13 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import type { Plugin } from "vite"
 import type { NativeShellVerdict } from "#adaptv/shell/native-shell.ts"
 import {
+  isNativeShellId,
   NATIVE_SHELL_ENDPOINT,
   nativeShellVerdict,
 } from "#adaptv/shell/native-shell.ts"
+
+/** How many ids the endpoint remembers the last verdict of, for its log. */
+const REMEMBERED_IDS = 32
 
 /**
  * The env var the CLI names its expected-shells file in. Set only by `adaptv dev ios|android|all`,
@@ -40,14 +44,23 @@ export function nativeShellMiddleware(
 ) {
   //One line per id per verdict change: a waiting app polls every two seconds, and the dev
   //server's output is only ever read under `--verbose`, where a line per poll would drown it.
+  //Bounded, oldest first out: the server is on the LAN, and every distinct id is a new entry.
   const last = new Map<string, NativeShellVerdict>()
   return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://dev.invalid")
     if (url.pathname !== NATIVE_SHELL_ENDPOINT) return next()
-    const id = url.searchParams.get("id") || null
+    const raw = url.searchParams.get("id") || null
+    //An id nothing minted is no id: it cannot match, and it never reaches the log as written —
+    //a `%0A` in it would otherwise print a line of the requester's choosing, which the watcher
+    //reads as dev-server output.
+    const id = isNativeShellId(raw) ? raw : null
     const verdict = nativeShellVerdict(id, readExpectedShells(file))
-    const key = id ?? "(none)"
+    const key = id ?? (raw ? "(invalid)" : "(none)")
     if (last.get(key) !== verdict) {
+      last.delete(key)
+      const oldest = last.keys().next().value
+      if (last.size >= REMEMBERED_IDS && oldest !== undefined)
+        last.delete(oldest)
       last.set(key, verdict)
       log(`[adaptv] native shell ${key}: ${verdict}`)
     }
