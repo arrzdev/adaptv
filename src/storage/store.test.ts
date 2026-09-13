@@ -242,6 +242,39 @@ describe("store — a write IndexedDB refuses", () => {
     expect(await store.isPersistent()).toBe(false)
   })
 
+  it("honours a clear IndexedDB refused for the rest of the session", async () => {
+    //clear() is the logout wipe: a refusal must not hand the old values back,
+    //and must say the wipe did not persist
+    await store.set("a", 1)
+    await store.set("b", 2)
+    failNth("clear", 1)
+    await store.clear()
+    expect(await store.get("a")).toBeUndefined()
+    expect(await store.keys()).toEqual([])
+    expect(await store.isPersistent()).toBe(false)
+
+    //a write after the refused clear is still an ordinary write
+    vi.restoreAllMocks()
+    await store.set("a", 3)
+    expect(await store.get("a")).toBe(3)
+
+    await store.clear()
+    expect(await store.keys()).toEqual([])
+    expect(await store.isPersistent()).toBe(true)
+  })
+
+  it("reports a refused clear as not persistent even when its keys cannot be listed", async () => {
+    await store.set("a", 1)
+    vi.spyOn(IDBObjectStore.prototype, "getAllKeys").mockImplementation(
+      function (this: IDBObjectStore) {
+        this.transaction.abort()
+        throw new DOMException("aborted", "TransactionInactiveError")
+      },
+    )
+    await store.clear()
+    expect(await store.isPersistent()).toBe(false)
+  })
+
   it("does not resurrect a value whose remove IndexedDB refused", async () => {
     await store.set("k", "secret-ish")
     const remove = IDBObjectStore.prototype.delete
