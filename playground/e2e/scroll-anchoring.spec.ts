@@ -361,8 +361,8 @@ for (const [name, surface] of [
     ).toBeLessThanOrEqual(2)
 
     //both surfaces aim again after the insertion (the drawer's re-aim, AvoidKeyboard's
-    //keyboard raise and its look when the scroll ends), so the field ends clear: the drawer's 12px margin, AvoidKeyboard's
-    //buffer
+    //keyboard raise and its look when the scroll ends), so the field ends clear: the
+    //drawer's 12px margin, AvoidKeyboard's buffer
     expect(
       shipped.landing.clearance,
       `field clearance ${shipped.landing.clearance}px`,
