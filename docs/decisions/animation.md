@@ -177,6 +177,33 @@ and visual jumps."* That is roughly the whole argument for renting rather than b
 The `m`/`LazyMotion` path is alive in v12 (`motion/react-m` is a live export). For a framework that
 ships to a WebView on low-end Android, the ~45kb difference is worth the ergonomic cost.
 
+**What shipped.** `Button` and `PullToRefresh` render `m` elements under a `LazyMotion` they own,
+loaded synchronously with **`domMin`** (the renderer plus `animate`/`exit`, no gestures, no drag, no
+layout). Both only ever set `animate`/`initial`/`transition`/`onAnimationComplete`, so `domAnimation`
+would add gesture code nothing uses. Measured on the playground (vite builds, byte-deterministic,
+sourcemap attribution), the shell's initial JS on every target went from 735.4 / 242.6 / 212.3 KB
+(raw / gzip / brotli) to **686.4 / 228.7 / 200.1 KB**, and motion's share of it from 118.1 to
+68.7 KB raw: layout projection and drag are gone from it.
+
+**Rejected: one shell-level `LazyMotion` with `features={() => import(…)}`** — the "~4.6kb initial"
+row above. It measured 656.0 / 219.3 / 191.7 KB initial, but the deferred features chunk (32.8 /
+13.1 / 11.9 KB) is fetched on every boot anyway, because `Button` is in the shell — more bytes in
+total than the synchronous path, one more request, and two correctness costs: an `m` rendered outside
+the shell never animates, and `PullToRefresh` resolves its close through `onAnimationComplete`, so a
+features chunk that fails or arrives late parks the content lifted. `strict` is not set either: an
+app's own `motion` components (the playground's `layout` lists) must keep working.
+
+**Not the barrel's fault: the drawer.** `drawer-engine.tsx` (`useMotionValue`) and `drawer-motion.ts`
+(`animate`) import from `motion/react` too, and that is fine. The package is `sideEffects: false`
+and those are hooks and functions with no feature bundle behind them; the checklist below means the
+full `motion` *component*, whose module statically loads every feature. `animate` costs 6.5 KB raw
+of sequence support in the drawer's own chunk, which is not in the shell's initial set.
+
+The guard is two-part: biome's `noRestrictedImports` refuses `motion` from `motion/react` (and
+`motion/react-client`, `framer-motion`) in `src/`, and `src/components/lazy-motion.test.ts` bundles
+the package's browser entries and fails if the full component, projection or drag survives
+tree-shaking.
+
 ---
 
 ## 4. 🔒 CSS for enter/exit — with a hard iOS limit
@@ -271,7 +298,7 @@ The Navigation API is now Baseline (**Safari 26.2**, 2025-12-12; **Firefox 147**
 - [ ] `Drawer`/`Sheet`/`Modal` use no `<dialog>`, no Popover top layer, no `overlay`.
 - [ ] Exit animations verified on **iOS 18** (the `display`-transition floor) and in Firefox (where
       they must degrade to an instant hide, not a broken state).
-- [ ] `LazyMotion` + `m` in the shipped bundle; the full `motion/react` barrel is not imported.
+- [x] `LazyMotion` + `m` in the shipped bundle; the full `motion` component is not imported (§3.1, guarded by `src/components/lazy-motion.test.ts`).
 - [ ] Edge-swipe remains pointer-driven; no dependency on the Navigation API or View Transitions.
 
 ---
