@@ -145,8 +145,13 @@ export async function announce(
   { language }: AnnounceOptions = {},
 ): Promise<AnnounceOutcome> {
   if (nativePlugin()) {
+    //The snapshot is only live while something subscribes; without a
+    //subscriber it is whatever the last read said, and a reader switched on
+    //since then would be skipped as `silent`. So ask the OS unless it is live.
     const state =
-      snapshot.status === "unknown" ? await readScreenReader() : snapshot
+      bound && snapshot.status !== "unknown"
+        ? snapshot
+        : await readScreenReader()
     if (state.status !== "on") return "silent"
     try {
       await ScreenReader.speak({ value: text, language })
