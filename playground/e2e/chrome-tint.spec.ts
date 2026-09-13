@@ -375,3 +375,34 @@ test.describe("the drawer consuming it", () => {
     await expect.poll(() => tint(page), { timeout: 2000 }).toBe(base)
   })
 })
+
+/*
+ * The one exit that is not a close: the page goes away with the sheet still open on it. A
+ * browser's Back, or Safari's own edge swipe, is browser history rather than the back chain, so
+ * the drawer is unmounted open and no close runs. The tag used to keep the drawer's dim on the
+ * next page — on an iOS 18.0 simulator the toolbar strip stayed that grey, still there 45 s later.
+ * The page is reached by an in-app tap so that Back has somewhere to go.
+ */
+test.describe("a drawer the page leaves while it is open", () => {
+  test("gives the tag back when a browser Back takes the page away under the sheet", async ({
+    page,
+  }) => {
+    await page.goto("/lab")
+    await awaitClientHandover(page)
+    const base = await tint(page)
+    await page
+      .getByRole("link", { name: /^Drawer\b/ })
+      .first()
+      .click()
+    await control(page, "Open basic drawer").click()
+    await expect(page.locator(OVERLAY)).toBeVisible()
+    await expect.poll(() => tint(page), { timeout: 2000 }).not.toBe(base)
+
+    await page.goBack()
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Testing" }),
+    ).toBeVisible()
+
+    await expect.poll(() => tint(page), { timeout: 2000 }).toBe(base)
+  })
+})
