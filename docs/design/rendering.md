@@ -201,7 +201,8 @@ rather than merely skipping registration.
 
 That left a real gap: an app's own `serviceWorkers: []` module could only be exercised by running a
 full production build plus `vite preview`. `ADAPTV_DEV_SW=1` closes it — the dev server then serves
-**the app's modules and nothing else** at `/sw.js`.
+**the app's modules and nothing else** at `sw.js` under the app's base (`/app/sw.js` under
+`base: "/app/"`), which is where the built worker lives and the URL the page registers.
 
 **adaptv's own worker is deliberately still absent, and cannot be turned on here.** It *is* precache
 + navigation + static-asset delivery, and none of the three can exist against a dev server: the
