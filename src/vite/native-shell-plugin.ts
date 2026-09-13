@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import type { IncomingMessage, ServerResponse } from "node:http"
+import path from "node:path"
 import type { Plugin } from "vite"
 import type { NativeShellVerdict } from "#adaptv/shell/native-shell.ts"
 import {
@@ -16,6 +17,20 @@ const REMEMBERED_IDS = 32
  * on the dev server it spawns; mirrored as `SHELLS_ENV` in `bin/lib/native-shell.mjs`.
  */
 export const NATIVE_SHELLS_ENV = "ADAPTV_DEV_SHELLS"
+
+/**
+ * Written by the dev server next to the CLI's file: the build a stale app was really running,
+ * and the build expected when it asked, per platform. Mirrored as `SHELLS_SEEN_FILE` in
+ * `bin/lib/native-shell.mjs`.
+ *
+ * It exists for the one case the CLI cannot see on its own. The run cache says an install is
+ * current when the dev URL, the native fingerprint and the bundle id all still match — and
+ * another checkout of the same app, on the same port, can install its own build under that
+ * bundle id. The CLI then reuses the install, expects the build it recorded, and the device
+ * runs a different one. Only the device's own request knows, so the server writes it down and
+ * the CLI's poll tells the dev to rebuild.
+ */
+export const NATIVE_SHELLS_SEEN_FILE = "dev-shells-seen.json"
 
 /**
  * The shells the CLI expects, keyed by platform. A file, because the CLI decides it AFTER the
@@ -46,6 +61,20 @@ export function nativeShellMiddleware(
   //server's output is only ever read under `--verbose`, where a line per poll would drown it.
   //Bounded, oldest first out: the server is on the LAN, and every distinct id is a new entry.
   const last = new Map<string, NativeShellVerdict>()
+  //What this server last wrote to the seen file, so a polling app does not rewrite it each time.
+  const seen: Record<string, { id: string; expected: string }> = {}
+  const seenFile = path.join(path.dirname(file), NATIVE_SHELLS_SEEN_FILE)
+  const recordStale = (id: string, expected: string): void => {
+    const platform = id.slice(0, id.indexOf("-"))
+    if (seen[platform]?.id === id && seen[platform]?.expected === expected)
+      return
+    seen[platform] = { id, expected }
+    try {
+      const tmp = `${seenFile}.${process.pid}.tmp`
+      writeFileSync(tmp, JSON.stringify(seen))
+      renameSync(tmp, seenFile)
+    } catch {}
+  }
   return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? "/", "http://dev.invalid")
     if (url.pathname !== NATIVE_SHELL_ENDPOINT) return next()
@@ -54,7 +83,13 @@ export function nativeShellMiddleware(
     //a `%0A` in it would otherwise print a line of the requester's choosing, which the watcher
     //reads as dev-server output.
     const id = isNativeShellId(raw) ? raw : null
-    const verdict = nativeShellVerdict(id, readExpectedShells(file))
+    const expected = readExpectedShells(file)
+    const verdict = nativeShellVerdict(id, expected)
+    //`stale` means the platform has a decided id and this is not it — both are well-formed here.
+    if (verdict === "stale" && id) {
+      const want = expected?.[id.slice(0, id.indexOf("-"))]
+      if (typeof want === "string") recordStale(id, want)
+    }
     const key = id ?? (raw ? "(invalid)" : "(none)")
     if (last.get(key) !== verdict) {
       last.delete(key)
