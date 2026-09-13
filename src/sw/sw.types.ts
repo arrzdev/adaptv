@@ -36,7 +36,6 @@ export type NetworkFirstStrategyOptions = StrategyFactoryOptions & {
 
 export type StaticAssetsRouteOptions = {
   buildTag: string
-  cacheBucket?: string
   expiration?: CacheExpirationOptions
   excludePathPrefixes?: string[]
   matchOptions?: CacheMatchOptions
