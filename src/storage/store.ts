@@ -96,7 +96,11 @@ function openDatabase(): Promise<IDBDatabase | null> {
           //a null newVersion is a deleteDatabase — the logout wipe. What only
           //memory held goes with it, or a refused value would outlive the wipe
           //for the session. An upgrade elsewhere wipes nothing, so it keeps them.
-          if (event.newVersion === null) forgetMemory()
+          if (event.newVersion === null) {
+            forgetMemory()
+            //their re-reads reopen, and the open queues behind the delete
+            for (const key of [...listeners.keys()]) emit(key)
+          }
         }
         resolve(db)
       }
@@ -165,6 +169,50 @@ function commit(run: (store: IDBObjectStore) => void): Promise<Outcome> {
   )
 }
 
+const listeners = new Map<string, Set<() => void>>()
+
+/**
+ * Wake one key's listeners. Each runs in isolation: a consumer's listener that
+ * throws must not stop the others, and must not turn a write that never
+ * rejects into one that does. Its error is reported the way a throwing DOM
+ * event listener's is — to `reportError`, where there is one.
+ */
+function emit(key: string): void {
+  for (const listener of [...(listeners.get(key) ?? [])]) {
+    try {
+      listener()
+    } catch (error) {
+      if (typeof reportError === "function") reportError(error)
+      else console.error(error)
+    }
+  }
+}
+
+/**
+ * Subscribe to writes, removes and clears of one key. Returns an unsubscribe.
+ *
+ * The listener carries no value: the store is async, so it re-reads. What it
+ * reads is already the new value, because a write is readable from memory
+ * before its transaction commits.
+ */
+export function subscribeStore(
+  key: string,
+  listener: () => void,
+): () => void {
+  let set = listeners.get(key)
+  if (!set) {
+    set = new Set()
+    listeners.set(key, set)
+  }
+  set.add(listener)
+  return () => {
+    set.delete(listener)
+    //only drop the set this subscription lives in: a repeated unsubscribe
+    //runs after the set was emptied and replaced by a later subscriber's
+    if (set.size === 0 && listeners.get(key) === set) listeners.delete(key)
+  }
+}
+
 /** Hold `value` (or {@link REMOVED}) in memory until the database has taken it. */
 async function write(
   key: string,
@@ -173,7 +221,11 @@ async function write(
 ): Promise<void> {
   const entry: Entry = { value }
   memory.set(key, entry)
-  const outcome = await commit(run)
+  //the transaction is queued before any listener runs, so nothing a listener
+  //does can keep it from being created
+  const committing = commit(run)
+  emit(key)
+  const outcome = await committing
   //a later write to the same key may have replaced the entry mid-flight — only
   //the write that put it there may take it out
   if (memory.get(key) !== entry) return
@@ -229,13 +281,16 @@ export const store = {
   async clear(): Promise<void> {
     forgetMemory()
     let held: IDBValidKey[] | undefined
-    const outcome = await commit((s) => {
+    //started before the listeners re-read, so their reads queue behind it
+    const cleared = commit((s) => {
       const listing = s.getAllKeys()
       listing.onsuccess = () => {
         held = listing.result
       }
       s.clear()
     })
+    for (const key of [...listeners.keys()]) emit(key)
+    const outcome = await cleared
     if (outcome !== "refused") return
     if (!held) {
       clearRefused = true
@@ -246,6 +301,9 @@ export const store = {
       if (memory.has(key)) continue
       memory.set(key, { value: REMOVED })
       unpersisted.add(key)
+      //the re-read the clear triggered queued behind a clear that did not
+      //land, so it saw the old value: wake the key again now the marker is in
+      emit(key)
     }
   },
 

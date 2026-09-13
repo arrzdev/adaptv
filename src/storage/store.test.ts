@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { store } from "#adaptv/storage/store"
+import { store, subscribeStore } from "#adaptv/storage/store"
 
 beforeEach(async () => {
   await store.clear()
@@ -355,6 +355,89 @@ describe("store — a wipe from outside", () => {
     })
     expect(outcome).toBe("deleted")
     expect(await store.get("token-ish")).toBeUndefined()
+    expect(await store.isPersistent()).toBe(true)
+  })
+})
+
+describe("store — subscribers", () => {
+  /** Subscribe `key` and keep every read a wake-up triggers, in order. */
+  function watchReads(key: string) {
+    const reads: Promise<unknown>[] = []
+    const off = subscribeStore(key, () => {
+      reads.push(store.get(key))
+    })
+    return {
+      off,
+      wakes: () => reads.length,
+      last: async () => (await Promise.all(reads)).at(-1),
+    }
+  }
+
+  it("wakes a key's subscribers when the database is deleted from outside", async () => {
+    await store.set("k", 1)
+    const watch = watchReads("k")
+    const outcome = await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase("adaptv-store")
+      request.onsuccess = () => resolve("deleted")
+      request.onblocked = () => resolve("blocked")
+    })
+    watch.off()
+    expect(outcome).toBe("deleted")
+    expect(watch.wakes()).toBeGreaterThan(0)
+    expect(await watch.last()).toBeUndefined()
+  })
+
+  it("leaves a refused clear's subscribers on the cleared answer", async () => {
+    //their first re-read queues behind a clear that then does not land, so it
+    //sees the old value — the marker has to wake them again
+    await store.set("a", 1)
+    const watch = watchReads("a")
+    failNth("clear", 1)
+    await store.clear()
+    watch.off()
+    expect(await store.get("a")).toBeUndefined()
+    expect(await watch.last()).toBeUndefined()
+  })
+
+  it("an unsubscribe called twice does not drop a newer subscriber", async () => {
+    //an unsubscribe is expected to be idempotent; a stale second call must not
+    //delete the set a later subscriber now lives in
+    const first = vi.fn()
+    const offFirst = subscribeStore("k", first)
+    offFirst()
+    const second = vi.fn()
+    const offSecond = subscribeStore("k", second)
+    offFirst()
+    await store.set("k", 1)
+    offSecond()
+    expect(second).toHaveBeenCalledOnce()
+    expect(first).not.toHaveBeenCalled()
+  })
+
+  it("a listener that throws cannot break the write that woke it", async () => {
+    //set() never rejects, and a consumer's buggy listener is no exception: the
+    //write still commits, the other listeners still run, and the error is
+    //reported the way a throwing DOM event listener's is
+    const reportError = vi.fn()
+    vi.stubGlobal("reportError", reportError)
+    const boom = new Error("listener bug")
+    const offBroken = subscribeStore("k", () => {
+      throw boom
+    })
+    const other = vi.fn()
+    const offOther = subscribeStore("k", other)
+    try {
+      await expect(store.set("k", 1)).resolves.toBeUndefined()
+      await expect(store.clear()).resolves.toBeUndefined()
+      await expect(store.set("k", 2)).resolves.toBeUndefined()
+    } finally {
+      offBroken()
+      offOther()
+    }
+    expect(other).toHaveBeenCalledTimes(3)
+    expect(reportError).toHaveBeenCalledWith(boom)
+    //the commit really happened: a module with no memory of it reads it back
+    expect(await (await freshStore()).get("k")).toBe(2)
     expect(await store.isPersistent()).toBe(true)
   })
 })
