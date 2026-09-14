@@ -20,6 +20,10 @@ const h = vi.hoisted(() => ({
   resume: [] as Array<() => void>,
   /** Set to hang the manifest request, for the tests that need a slow network. */
   gate: null as Promise<void> | null,
+  /** Set to make loading the plugin itself fail. */
+  pluginFails: false,
+  /** How many times the manifest was requested. */
+  fetches: 0,
 }))
 
 vi.mock("#adaptv/utils/platform", () => ({
@@ -29,6 +33,7 @@ vi.mock("#adaptv/utils/platform", () => ({
 vi.mock("@capacitor/core", () => ({
   CapacitorHttp: {
     get: async () => {
+      h.fetches += 1
       if (h.gate) await h.gate
       return { status: h.status, data: h.manifest }
     },
@@ -38,12 +43,17 @@ vi.mock("@capacitor/core", () => ({
 vi.mock("#adaptv/capabilities/app-state", () => ({
   onResume: (fn: () => void) => {
     h.resume.push(fn)
-    return () => {}
+    return () => {
+      h.resume = h.resume.filter((f) => f !== fn)
+    }
   },
 }))
 
 vi.mock("@capawesome/capacitor-live-update", () => ({
   get LiveUpdate() {
+    //Stands in for a plugin chunk that fails to load: the updater reads this
+    //inside the promise that loads it, so the throw rejects that promise.
+    if (h.pluginFails) throw new Error("plugin failed to load")
     return h.plugin
   },
 }))
@@ -124,6 +134,8 @@ beforeEach(() => {
   h.status = 200
   h.resume = []
   h.gate = null
+  h.pluginFails = false
+  h.fetches = 0
 })
 
 /** Options for `startOtaUpdates` with verification turned off. */
@@ -224,6 +236,185 @@ describe("settling a launch", () => {
     const { settleLaunch } = await load()
     await settleLaunch({ nativeFingerprint: "fp-1" })
     expect(h.plugin?.setNextBundle).not.toHaveBeenCalled()
+  })
+
+  it("re-points after a rollback the plugin could not attribute", async () => {
+    //No `previousBundleId` means there is nothing to mark failed, not nothing to
+    //do: the device is still on the embedded bundle, and still has a newer one
+    //it knows can start.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "v1",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+        { buildTag: "v2", createdAt: 2, state: "pending" },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: null,
+        rollback: true,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+      bundleId: "v1",
+    })
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger.map((b: { state: string }) => b.state)).toEqual([
+      "known-good",
+      "pending",
+    ])
+  })
+
+  it("still re-points when the blocked list cannot be read", async () => {
+    //An unreadable list is an empty one. Giving up instead would leave the device
+    //on the embedded bundle, which may be a year old, over a failed bridge call.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "v1",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getBlockedBundles: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+      ready: vi.fn(async () => ({
+        previousBundleId: "v2",
+        currentBundleId: null,
+        rollback: true,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+      bundleId: "v1",
+    })
+  })
+
+  it("does not re-point at the bundle a rollback already landed on", async () => {
+    //The patched plugin rolls back to the last known-good itself (§5.5), so the
+    //target is usually what is running. Staging it again would be a pointer write
+    //for nothing, and a "next" bundle that prune then has to step around.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "v1",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+        { buildTag: "v2", createdAt: 2, state: "pending" },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      ready: vi.fn(async () => ({
+        previousBundleId: "v2",
+        currentBundleId: "v1",
+        rollback: true,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.ready).toHaveBeenCalledOnce()
+    expect(h.plugin?.setNextBundle).not.toHaveBeenCalled()
+  })
+
+  it("still prunes when the re-point is refused", async () => {
+    //The failed bundle is dead weight whether or not the pointer moved.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "v1",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+        { buildTag: "v2", createdAt: 2, state: "pending" },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      setNextBundle: vi.fn(async () => {
+        throw new Error("refused")
+      }),
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["v1", "v2"],
+      })),
+      ready: vi.fn(async () => ({
+        previousBundleId: "v2",
+        currentBundleId: null,
+        rollback: true,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.setNextBundle).toHaveBeenCalled()
+    expect(h.plugin?.deleteBundle).toHaveBeenCalledWith({ bundleId: "v2" })
+    //and the one it would have fallen back to is kept, which is the whole rule
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalledWith({
+      bundleId: "v1",
+    })
+  })
+
+  it("keeps pruning past a bundle that will not delete", async () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        { buildTag: "a", createdAt: 1, state: "pending" },
+        { buildTag: "b", createdAt: 2, state: "pending" },
+        {
+          buildTag: "good",
+          createdAt: 3,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["a", "b", "good", "cur"],
+      })),
+      deleteBundle: vi.fn(async ({ bundleId }: { bundleId: string }) => {
+        if (bundleId === "a") throw new Error("busy")
+      }),
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: "cur",
+        rollback: false,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.deleteBundle).toHaveBeenCalledWith({ bundleId: "a" })
+    expect(h.plugin?.deleteBundle).toHaveBeenCalledWith({ bundleId: "b" })
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalledWith({
+      bundleId: "good",
+    })
+  })
+
+  it("settles without complaint when the update plugin will not load", async () => {
+    h.pluginFails = true
+    const { settleLaunch } = await load()
+    await expect(
+      settleLaunch({ nativeFingerprint: "fp-1" }),
+    ).resolves.toBeUndefined()
+    expect(binaryRecord()).toBeNull()
   })
 
   it("never deletes the bundle staged for the next launch", async () => {
@@ -367,6 +558,22 @@ describe("a store release underneath a cached bundle", () => {
   it("treats a first launch as no change, and records the binary", async () => {
     h.plugin = fakePlugin({
       getCurrentBundle: vi.fn(async () => ({ bundleId: "some-ota" })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.reset).not.toHaveBeenCalled()
+    expect(binaryRecord().identity).toBe(APP)
+  })
+
+  it("does not reset when only the version code cannot be read", async () => {
+    //Half an identity is not an identity, and a guess resets a healthy device.
+    knownBinary(APP)
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: "old-ota" })),
+      getVersionName: vi.fn(async () => ({ versionName: "1.1.0" })),
+      getVersionCode: vi.fn(async () => {
+        throw new Error("no")
+      }),
     })
     const { settleLaunch } = await load()
     await settleLaunch({ nativeFingerprint: "fp-1" })
@@ -651,6 +858,65 @@ describe("checking for an update", () => {
     expect(h.resume).toHaveLength(0)
   })
 
+  it("reads a manifest the host served as text", async () => {
+    //A static host that does not call `.json` JSON hands the native request a
+    //string. The update is in it all the same.
+    h.manifest = JSON.stringify(manifest())
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+  })
+
+  it("requires a signature when the app did not say either way", async () => {
+    //The default is the safe half. An update channel is a remote-code-execution
+    //channel into every installed app. → §5.4d
+    const { startOtaUpdates } = await load()
+    startOtaUpdates({
+      manifestUrl: "https://app.example/m.json",
+      nativeFingerprint: "fp-1",
+    })
+    await settled()
+    expect(h.plugin?.getBlockedBundles).not.toHaveBeenCalled()
+    expect(h.plugin?.downloadBundle).not.toHaveBeenCalled()
+  })
+
+  it("takes an unreadable current bundle for the embedded one, and still installs", async () => {
+    const { startOtaUpdates } = await load()
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+    })
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+  })
+
+  it("downloads when it cannot tell what is already on disk", async () => {
+    //The download is the half that verifies. Skipping it on a failed listing
+    //would stage a pointer at bytes nobody checked are there.
+    h.plugin = fakePlugin({
+      getDownloadedBundles: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+    })
+    const { startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    await vi.waitFor(() =>
+      expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+        bundleId: "newbuild00000000",
+      }),
+    )
+    expect(h.plugin?.downloadBundle).toHaveBeenCalledOnce()
+  })
+
   it("stays quiet when the channel cannot be reached", async () => {
     h.status = 503
     const { startOtaUpdates } = await load()
@@ -705,6 +971,41 @@ describe("holding the launch screen on a first launch", () => {
     const { firstLaunchHold, startOtaUpdates } = await load()
     startOtaUpdates(unsigned)
     await expect(firstLaunchHold()).resolves.toBeUndefined()
+  })
+
+  it("releases the screen when applying the update in place fails", async () => {
+    //The bundle is staged either way, so the next cold start still gets it; this
+    //launch just has to stop waiting.
+    h.plugin = fakePlugin({
+      reload: vi.fn(async () => {
+        throw new Error("reload refused")
+      }),
+    })
+    const { firstLaunchHold, startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    let revealed = false
+    void firstLaunchHold().then(() => {
+      revealed = true
+    })
+    await vi.waitFor(() => expect(h.plugin?.reload).toHaveBeenCalledOnce())
+    await settled()
+    //now, not when the five-second ceiling would have released it anyway
+    expect(revealed).toBe(true)
+    expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+      bundleId: "newbuild00000000",
+    })
+  })
+
+  it("releases the screen when the update plugin will not load", async () => {
+    h.pluginFails = true
+    const { firstLaunchHold, startOtaUpdates } = await load()
+    startOtaUpdates(unsigned)
+    let revealed = false
+    void firstLaunchHold().then(() => {
+      revealed = true
+    })
+    await settled()
+    expect(revealed).toBe(true)
   })
 
   it("releases the screen when the app is torn down mid-check", async () => {
@@ -819,6 +1120,53 @@ describe("the foreground poll", () => {
       expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(2)
       await vi.advanceTimersByTimeAsync(10_000)
       expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not check on a resume that arrives after teardown", async () => {
+    //A listener the platform fires late, or one captured before teardown, must
+    //not start a check for an app that has gone.
+    const { startOtaUpdates } = await load()
+    const stop = startOtaUpdates(unsigned)
+    await settled()
+    expect(h.fetches).toBe(1)
+
+    const late = [...h.resume]
+    stop()
+    for (const fn of late) fn()
+    await settled()
+    expect(h.fetches).toBe(1)
+  })
+
+  it("leaves no timer and no resume listener behind once torn down", async () => {
+    //A check that already ran has armed the interval, and teardown has to take it
+    //down itself: nothing else will, and a live interval keeps waking the app.
+    vi.useFakeTimers()
+    try {
+      knownBinary(APP)
+      localStorage.setItem(
+        KEY,
+        JSON.stringify([
+          {
+            buildTag: "cached",
+            createdAt: 1,
+            state: "known-good",
+            provenOn: APP,
+          },
+        ]),
+      )
+      const { startOtaUpdates } = await load()
+      const stop = startOtaUpdates({ ...unsigned, pollIntervalMs: 60_000 })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.plugin?.getBlockedBundles).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(1)
+      expect(h.resume).toHaveLength(1)
+
+      stop()
+      expect(vi.getTimerCount()).toBe(0)
+      expect(h.resume).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }
