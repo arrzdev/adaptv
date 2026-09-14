@@ -62,7 +62,7 @@ adaptv hosts OTA on the **same origin the web app already deploys to** — no Ap
 ```
 https://app.acme.com/.well-known/adaptv/ota/
    manifest.json           → { buildTag, nativeFingerprint, url, sha256, createdAt, signature }
-   bundle-<buildTag>.zip    → the deterministic dist/client for the Capacitor target
+   bundle-<buildTag>.zip    → the deterministic .adaptv/web build for the Capacitor target
 ```
 
 **No `<channel>` segment, and no `adaptv ota` command.** Both were in earlier drafts; both are gone,
@@ -123,16 +123,20 @@ worth having: deploying the web app would silently publish a missing or frozen c
 forgot to run the native build first.
 
 *Implemented 2026-08-14 as `adaptv build web` (`bin/adaptv.mjs`), not as a Vite plugin.* The two
-lineages are chosen **per process** (`ADAPTV_TARGET`) and both write `dist/client`, so no plugin inside
-a single `vite build` can produce both. Publishing is therefore a command that sequences them:
+lineages are chosen **per process** (`ADAPTV_TARGET`), so no plugin inside a single `vite build` can
+produce both. Publishing is therefore a command that sequences them:
 
-1. build the `capacitor` client → hash it (`buildTag`) → archive it into `.adaptv/ota/`
+1. build the `capacitor` client into `.adaptv/web` → hash it (`buildTag`) → archive it into `.adaptv/ota/`
 2. build the site
-3. write the archive + `manifest.json` into `dist/client/.well-known/adaptv/ota/`
+3. write the archive + `manifest.json` under `.well-known/adaptv/ota/` in the directory the site build
+   wrote: `.output/public` for `render: "ssr"`, `dist/client` for `"spa"`
 
-**Step 1 precedes step 2 because step 2 overwrites the directory step 1 reads.** Reorder them and the
-command still succeeds while publishing the *site* as the native bundle — an update every device
-downloads and none can boot. `bin/lib/ota-publish.test.mjs` pins the order.
+**Step 1 precedes step 2, and `bin/lib/ota-publish.test.mjs` pins the order.** The reason given here
+was that step 2 overwrites the directory step 1 reads: reordered, the command would still succeed while
+publishing the *site* as the native bundle — an update every device downloads and none can boot. The
+client outputs no longer overlap: the native build writes `.adaptv/web` (`src/vite/capacitor-config.ts`)
+and the site build's client output is `.output/public` or `dist/client` (`src/vite/build-stamp.ts`). The
+server build's `dist/server` scratch is still shared by both (`src/vite/native-bundle.ts`).
 
 This replaced the CLI's deliberate refusal of `build web` ("a web build is `adaptv preview web`"), which
 stopped being true the moment there was something only a web *build* could produce. `preview web` still
@@ -166,7 +170,7 @@ deploy) and an unreachable origin both mean "emit", which is the safe direction.
 So the split is: **correctness is adaptv's** (content hash vs the deployed manifest), **speed is also
 adaptv's** (the existing local fingerprint cache skips the extra Capacitor pass when nothing changed —
 an accelerator only, never the thing that decides whether the channel is right), and **CI/CD's job is
-nothing** beyond deploying `dist/client` as it already does.
+nothing** beyond deploying the site build's output as it already does.
 
 > The bundle cache does **not** key on `fingerprint(appRoot)` alone, the way `dev` and `preview` do.
 > That walk skips `node_modules`, which is right for them and wrong here: upgrading adaptv would report
