@@ -77,6 +77,7 @@ function LabRadioGroupPage() {
           "With a keyboard: Tab into the controlled group (focus lands on the selected option), press the arrow keys (the selection moves with focus), then Tab once: focus leaves the group.",
           "In “A disabled option”, arrow through the group: Beta is skipped, and tapping it does nothing.",
           "Submit the form without choosing: the browser refuses (required). Choose Yearly and submit: the output reads plan=yearly. Press Reset: no option is painted as chosen any more, and a tap on Yearly chooses it again.",
+          "In “Controlled form”, choose Express, then press Start over: Express stays chosen and painted, the change count stays at 1, and Place order sends delivery=express.",
           "Press an option and drag your finger off it before letting go: nothing is chosen. Then choose that option another way (VoiceOver double-tap, or a keyboard): it is chosen on the first try.",
           "In the RTL group the circle sits on the right of each label. In Chrome ArrowLeft moves to the next option (the one drawn to its left); Safari keeps ArrowRight as next in either direction.",
           "With VoiceOver on (iOS): swipe to an option. The frame is the whole row, it reads radio button, its name, and “1 of 3”; double-tap selects it.",
@@ -106,6 +107,7 @@ function LabRadioGroupPage() {
       <ControlledProbe note={note} />
       <DisabledProbe note={note} />
       <FormProbe />
+      <ControlledFormProbe />
       <RtlProbe note={note} />
 
       <LabSection title="Attributes">
@@ -305,6 +307,82 @@ function FormProbe() {
         label="FormData"
         value={
           <output data-testid="form-output" className="font-mono text-xs">
+            {submitted ?? "not submitted"}
+          </output>
+        }
+      />
+    </LabSection>
+  )
+}
+
+function ControlledFormProbe() {
+  const [value, setValue] = useState<string | null>(null)
+  const [changes, setChanges] = useState(0)
+  const [submitted, setSubmitted] = useState<string | null>(null)
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const entries = [...new FormData(event.currentTarget).entries()]
+    setSubmitted(
+      entries.map(([key, entry]) => `${key}=${String(entry)}`).join("&"),
+    )
+  }
+  return (
+    <LabSection
+      title="Controlled form"
+      description="A controlled group with no `defaultValue` inside a form. Reset has no default to report, so onValueChange stays silent and the radios go back on the owner's value: what is painted, what is checked and what submits stay the same."
+    >
+      <form onSubmit={onSubmit} className="flex flex-col gap-y-3">
+        <RadioGroup
+          aria-label="Delivery"
+          name="delivery"
+          value={value}
+          onValueChange={(next) => {
+            setChanges((n) => n + 1)
+            setValue(next)
+          }}
+        >
+          <Item value="pickup">Pickup</Item>
+          <Item value="express">Express</Item>
+        </RadioGroup>
+        <div className="flex gap-x-2">
+          <button
+            type="submit"
+            className="rounded-md bg-secondary px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border-subtle"
+          >
+            Place order
+          </button>
+          <button
+            type="reset"
+            className="rounded-md px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border-subtle"
+          >
+            Start over
+          </button>
+        </div>
+      </form>
+      <LabRow
+        label="value"
+        value={
+          <LabBadge tone={value ? "ok" : "muted"}>
+            <span data-testid="controlled-form-value">
+              {String(value)}
+            </span>
+          </LabBadge>
+        }
+      />
+      <LabRow
+        label="onValueChange calls"
+        value={
+          <span data-testid="controlled-form-changes">{changes}</span>
+        }
+        hint="One per choice; a reset adds none."
+      />
+      <LabRow
+        label="FormData"
+        value={
+          <output
+            data-testid="controlled-form-output"
+            className="font-mono text-xs"
+          >
             {submitted ?? "not submitted"}
           </output>
         }
