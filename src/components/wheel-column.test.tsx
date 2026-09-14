@@ -193,6 +193,48 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     advance(120)
     expect(onChange.mock.calls).toEqual([[10], [10], [10]])
   })
+
+  it("reports a row the consumer stored only once, when the last scroll event is the one that crossed it", () => {
+    //the settle's timer is armed by the scroll that reported the row, BEFORE the
+    //consumer's re-render hands the row back as `value`
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+
+    //a rest exactly on the row: the settle has nothing to roll and nothing to say
+    scrollWheel(10 * H)
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[10]])
+
+    //a rest past the halfway mark: the settle rolls onto the row it already reported
+    scrollWheel(10 * H + 14) // still row 10
+    scrollWheel(10 * H + 16) // crosses into 11, and nothing scrolls after it
+    advance(120)
+    expect(smoothRolls().at(-1)).toBe(11 * H)
+    expect(onChange.mock.calls).toEqual([[10], [11]])
+  })
+
+  it("reports a row the consumer stored only once when a finger lifts on the scroll that crossed it", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+
+    //the lift after the consumer's re-render has landed
+    fireEvent.touchStart(wheel())
+    scrollWheel(10 * H + 16) // crosses into 11 under the finger
+    fireEvent.touchEnd(wheel())
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[11]])
+
+    //the lift in the same frame as that scroll, before the re-render: a touchend
+    //the engine delivers ahead of React's continuous-priority render
+    fireEvent.touchStart(wheel())
+    act(() => {
+      wheel().scrollTop = 12 * H + 16 // crosses into 13
+      fireEvent.scroll(wheel())
+      fireEvent.touchEnd(wheel())
+    })
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[11], [13]])
+  })
 })
 
 describe("WheelColumn — the settle snap", () => {
