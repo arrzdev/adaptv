@@ -1,5 +1,5 @@
 import { act, render } from "@testing-library/react"
-import { useRef } from "react"
+import { Activity, useRef } from "react"
 import { describe, expect, it, vi } from "vitest"
 import type {
   AnimatedStyleTargets,
@@ -184,6 +184,99 @@ describe("useAnimatedStyle", () => {
     await wait(50)
     expect(el.style.width).toBe("50px")
     expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it("finishes, and completes, an animation an `<Activity>` hid midway once it is shown again", async () => {
+    //hiding disconnects the effects of a component that stays mounted; the
+    //element and the hook's state survive, so a stopped animation must not
+    //count as landed
+    const onComplete = vi.fn()
+    const at = (mode: "visible" | "hidden", y: number) => (
+      <Activity mode={mode}>
+        <Harness targets={{ y }} onComplete={onComplete} />
+      </Activity>
+    )
+    const { container, rerender } = render(at("visible", 100))
+    const el = layer(container)
+    rerender(at("visible", 0))
+    await wait(40)
+    const midway = translateY(el) ?? -1
+    //the premise: hidden while the tween is under way
+    expect(midway).toBeGreaterThan(0)
+    expect(midway).toBeLessThan(100)
+    rerender(at("hidden", 0))
+    await wait(60)
+    expect(onComplete).not.toHaveBeenCalled()
+    rerender(at("visible", 0))
+    await wait(400)
+    expect(el.style.transform).toBe("none")
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the other transforms when one transform key goes away", () => {
+    const { container, rerender } = render(
+      <Harness targets={{ y: 30, scale: 0.5 }} />,
+    )
+    const el = layer(container)
+    expect(el.style.transform).toBe("translateY(30px) scale(0.5)")
+    rerender(<Harness targets={{ y: 30 }} />)
+    expect(el.style.transform).toBe("translateY(30px)")
+  })
+
+  it("completes a batch whose last animation in flight went away", async () => {
+    const onComplete = vi.fn()
+    const slowWidth: AnimatedStyleTransitions = {
+      y: { duration: 0.05 },
+      width: { duration: 2 },
+    }
+    const { rerender } = render(
+      <Harness
+        targets={{ y: 100, width: 10 }}
+        transitions={slowWidth}
+        onComplete={onComplete}
+      />,
+    )
+    rerender(
+      <Harness
+        targets={{ y: 0, width: 50 }}
+        transitions={slowWidth}
+        onComplete={onComplete}
+      />,
+    )
+    await wait(200)
+    //the premise: y has landed, width is still on its way
+    expect(onComplete).not.toHaveBeenCalled()
+    rerender(
+      <Harness
+        targets={{ y: 0 }}
+        transitions={slowWidth}
+        onComplete={onComplete}
+      />,
+    )
+    expect(onComplete).toHaveBeenCalledTimes(1)
+    await wait(50)
+    expect(onComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads an opacity spring's `duration` in seconds, like every other transition", async () => {
+    const { container, rerender } = render(
+      <Harness targets={{ opacity: 1 }} />,
+    )
+    const el = layer(container)
+    rerender(
+      <Harness
+        targets={{ opacity: 0 }}
+        transitions={{
+          opacity: { type: "spring", duration: 0.4, bounce: 0 },
+        }}
+      />,
+    )
+    await wait(100)
+    //a 0.4 s spring is still fading here; read as 0.4 ms it has long landed
+    expect(Number(el.style.opacity)).toBeGreaterThan(0.05)
+    expect(Number(el.style.opacity)).toBeLessThan(1)
+    await wait(700)
+    expect(Number(el.style.opacity)).toBeLessThan(0.01)
   })
 
   it("removes what it wrote when its targets go away", async () => {

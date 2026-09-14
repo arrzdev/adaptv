@@ -199,7 +199,10 @@ renders nothing. It copies the component rules the two call sites depended on: a
 (`initial={false}`); only a changed *target* starts an animation, with that render's transition; a
 zero duration lands on the next frame; the completion callback fires when a render's animations have
 all landed and never for an interrupted batch (`onAnimationComplete`, which is the only way
-`PullToRefresh` leaves `closing`); an interrupted animation is sampled at the moment it stops. One
+`PullToRefresh` leaves `closing`); an interrupted animation is sampled at the moment it stops. An
+animation cut short by an app's `<Activity>` hiding the component (React disconnects its effects and
+keeps it mounted) restarts from where it stopped when shown, and still completes, as a motion
+component re-animates; without that, a hidden close left `PullToRefresh` in `closing`. One
 compositor detail is copied on purpose: a spring on `opacity` is baked into an easing over a 0–100
 range the way motion's WAAPI path bakes it, because fed raw, the pull's px/s release velocity flings
 the fading spinner back up. `Button`'s width row, and `PullToRefresh`'s content layer and spinner,

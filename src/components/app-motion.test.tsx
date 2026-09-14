@@ -2,10 +2,19 @@ import { act, fireEvent, render } from "@testing-library/react"
 // biome-ignore lint/style/noRestrictedImports: the APP's motion tree is what these tests put inside adaptv's components
 import { domMax, LazyMotion, MotionContext, m, motion } from "motion/react"
 import type { ReactNode } from "react"
-import { forwardRef, useContext, useEffect, useState } from "react"
+import {
+  Activity,
+  forwardRef,
+  useContext,
+  useEffect,
+  useState,
+} from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
-import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
+import {
+  PullToRefresh,
+  usePullToRefresh,
+} from "#adaptv/components/pull-to-refresh"
 
 /*
  * Button and PullToRefresh wrap the app's content, and the app is free to
@@ -233,6 +242,125 @@ function pointer(x: number, y: number) {
   //`isPrimary` must be explicit: synthetic PointerEvents default it to FALSE
   return { clientX: x, clientY: y, pointerId: 1, isPrimary: true }
 }
+
+describe("adaptv's animated wrappers inside an app `<Activity>`", () => {
+  //React 19.2 disconnects a hidden subtree's effects and keeps it mounted, so an
+  //animation cut short by hiding must pick up again when the app shows it
+
+  const wait = (ms: number) =>
+    act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+
+  function activityHost(children: ReactNode) {
+    const handle = { setMode: (_mode: "visible" | "hidden") => {} }
+    function Host() {
+      const [mode, setMode] = useState<"visible" | "hidden">("visible")
+      handle.setMode = setMode
+      return <Activity mode={mode}>{children}</Activity>
+    }
+    return { Host, handle }
+  }
+
+  it("lets PullToRefresh finish closing when shown again mid-close", async () => {
+    stubReducedMotion(false)
+    const phase = { current: "" }
+    function Phase() {
+      const pull = usePullToRefresh()
+      phase.current = pull.isPulling
+        ? "pulling"
+        : pull.isRefreshing
+          ? "refreshing"
+          : pull.isClosing
+            ? "closing"
+            : "idle"
+      return <p>content</p>
+    }
+    const { Host, handle } = activityHost(
+      <PullToRefresh onRefresh={async () => {}} stuckMinMs={300}>
+        <Phase />
+      </PullToRefresh>,
+    )
+    const { container } = render(<Host />)
+    const root = container.querySelector('[data-adaptv="pull-to-refresh"]')
+    if (!(root instanceof HTMLElement)) throw new Error("no gesture root")
+    act(() => {
+      fireEvent.pointerDown(root, pointer(0, 0))
+    })
+    for (let y = 12; y <= 120; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(root, pointer(0, y))
+      })
+    }
+    act(() => {
+      fireEvent.pointerUp(root, pointer(0, 120))
+    })
+    for (let i = 0; i < 100 && phase.current !== "closing"; i++)
+      await wait(20)
+    await wait(40)
+    //the premise: hidden while the close is under way
+    expect(phase.current).toBe("closing")
+    const content = container.querySelector("p")?.parentElement
+    expect(content?.style.transform).toMatch(/translateY\(/)
+
+    act(() => handle.setMode("hidden"))
+    await wait(100)
+    act(() => handle.setMode("visible"))
+    for (let i = 0; i < 100 && phase.current !== "idle"; i++)
+      await wait(20)
+    expect(phase.current).toBe("idle")
+    //queried again: main swapped the lifted layer for a plain one here
+    expect(
+      container.querySelector("p")?.parentElement?.style.transform,
+    ).toBe("")
+  })
+
+  it("lets Button's width tween land when shown again mid-tween", async () => {
+    stubReducedMotion(false)
+    //happy-dom lays nothing out: give the label a width
+    const own = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollWidth",
+    )
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        return (this.textContent?.length ?? 0) * 10
+      },
+    })
+    try {
+      const label = { set: (_label: string) => {} }
+      function Labelled() {
+        const [text, setText] = useState("Save")
+        label.set = setText
+        return <Button>{text}</Button>
+      }
+      const { Host, handle } = activityHost(<Labelled />)
+      const { container } = render(<Host />)
+      await wait(100)
+      const shell = () =>
+        container.querySelector("button span span")
+          ?.parentElement as HTMLElement
+      expect(shell().style.width).toBe("40px")
+      act(() => label.set("Saving changes now"))
+      await wait(60)
+      const midway = Number.parseFloat(shell().style.width)
+      //the premise: hidden while the tween is under way
+      expect(midway).toBeGreaterThan(40)
+      expect(midway).toBeLessThan(180)
+
+      act(() => handle.setMode("hidden"))
+      await wait(50)
+      act(() => handle.setMode("visible"))
+      await wait(800)
+      expect(shell().style.width).toBe("180px")
+    } finally {
+      if (own)
+        Object.defineProperty(HTMLElement.prototype, "scrollWidth", own)
+      else
+        delete (HTMLElement.prototype as { scrollWidth?: number })
+          .scrollWidth
+    }
+  })
+})
 
 describe("PullToRefresh's content layer", () => {
   it("keeps the app's content mounted when a pull lifts it", () => {
