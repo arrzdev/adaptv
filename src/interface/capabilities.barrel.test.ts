@@ -8,7 +8,7 @@ import {
 } from "#adaptv/test-utils/barrel-guard"
 
 /*
- * The capability barrel is mostly `export *`, and four entries are named lists.
+ * The capability barrel is mostly `export *`, and six entries are named lists.
  *
  * A named list is the only way to keep one export out of a public surface, and it
  * is also the only way for that surface to fall behind the module without anything
@@ -45,6 +45,8 @@ const WITHHELD_PREDICATES = new Set([
  */
 const WITHHELD_INTERNAL: Record<string, string> = {
   setThemeColorBase: "src/hooks/use-sync-theme.ts",
+  measureKeyboardPayment: "src/hooks/use-keyboard.ts",
+  listenNativeKeyboard: "src/hooks/use-keyboard.ts",
 }
 
 const WITHHELD = new Set([
