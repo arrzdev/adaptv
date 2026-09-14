@@ -92,7 +92,8 @@ every time it opens on a device, so last time's height predicts this time's.
   rotation, so it encodes orientation for free — no separate orientation term. `inputmode`/`type`
   split the digit pad from the full keyboard; finer splitting just fragments the cache.
 - **Durable**: Preferences on native (survives WebView eviction), localStorage on web; hydrated once
-  at boot before any drawer opens; synchronous in-memory lookup on focus.
+  at boot before any drawer opens; synchronous in-memory lookup on focus. A height measured before
+  the hydration lands wins over the stored one, and the merged map is written back.
 - **Self-healing**: every confirmed, stable height is recorded, so a keyboard-app / language / IME
   switch is absorbed on the next measurement.
 - **Rejected**: a shipped device→height table — wrong too often (third-party keyboards, suggestion
