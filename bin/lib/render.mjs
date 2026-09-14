@@ -138,9 +138,10 @@ const currentTail = () => streams[sink].tail
  * them read fine back-to-back and stay that way (R64).
  */
 let openBlock = false
-/** A sub-line: printed, and it leaves its group open. */
-const sub = (s) => {
-  out(s)
+/** A sub-line: printed, and it leaves its group open. It takes its row's level, so a mode
+ *  that keeps the row keeps what hangs under it, and one that drops the row drops it too. */
+const sub = (s, level = "step") => {
+  out(s, level)
   openBlock = true
 }
 /**
@@ -397,9 +398,12 @@ export function fail(label, reason, detail = []) {
   record("steps", { label, ok: false, reason })
   recordError({ kind: "step-failed", label, message: reason })
   startRow()
+  //At error level, the row and its fix both. Written at the default step level, `--quiet`
+  //dropped them before they reached stderr, so `build web --quiet` on an app that could not
+  //sign its channel exited 1 with both streams empty (R46).
   toStderr(() => {
-    out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`)
-    detailBlock(detail)
+    out(`${compose(c.red(GLYPH.fail), label, `· ${reason}`)}\n`, "error")
+    detailBlock(detail, "error")
   })
   noteFailurePrinted()
 }
@@ -449,9 +453,16 @@ export function addresses({ local, network } = {}) {
     sub(`    ${c.dim(k.padEnd(pad))}  ${c.dim(url)}\n`)
 }
 
-/** The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail). */
-function detailBlock(detail) {
-  for (const d of detail ?? []) sub(`    ${c.dim(d)}\n`)
+/**
+ * The dim, indented lines that expand on a `✖` line (a fix hint or a captured tail).
+ *
+ * `level` is the level of the `✖` row above them, and every caller names it. The lines are the
+ * fix (R7), so a mode that keeps the row keeps them, and one that drops the row must not leave
+ * them hanging under nothing. With no level to pass, a failure's fix was always step level, and
+ * `--quiet` kept a lane's `✖` while dropping the sentence that said what to do about it.
+ */
+function detailBlock(detail, level) {
+  for (const d of detail ?? []) sub(`    ${c.dim(d)}\n`, level)
 }
 
 /* -----------------------------------------------------------------------------
@@ -564,14 +575,16 @@ export function usageFail(reason, fix = []) {
   const cols = Math.max(20, width())
   //The whole block on stderr — the glyph line, its wrapped tail, and the fix — with the blank
   //lines around it, so a redirected stdout still leaves a readable error on the terminal.
+  //At error level, like `fail()`: the parser refuses before `--quiet` is set today, and a refusal
+  //raised after it must not be the one failure the mode drops. The blank lines stay narration.
   toStderr(() => {
     spacer()
     const [first, ...more] = wrap(reason, { max: cols - 4 })
-    out(`  ${c.red(GLYPH.fail)} ${first}\n`)
-    for (const l of more) out(`    ${l}\n`)
+    out(`  ${c.red(GLYPH.fail)} ${first}\n`, "error")
+    for (const l of more) out(`    ${l}\n`, "error")
     for (const f of fix)
       for (const l of wrap(f, { max: cols - 6, hang: 2 }))
-        out(`    ${c.dim(l)}\n`)
+        out(`    ${c.dim(l)}\n`, "error")
     spacer()
   })
   noteFailurePrinted()
@@ -1119,10 +1132,14 @@ export async function runLine(
     } catch (err) {
       if (!transient) {
         const { reason, detail: why } = explained(explain, err)
+        //A settled row is the OUTCOME, and a failed one most of all (R46), so `--quiet` keeps
+        //it and the fix under it. Levelled as a step, `build web --quiet` on a bundle that did
+        //not build exited 1 with both streams empty. Every `--quiet` run takes this branch.
         out(
           `  ${c.red(GLYPH.fail)} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
+          "result",
         )
-        detailBlock(why)
+        detailBlock(why, "result")
         // This failure now OWNS a ✖ on screen. An outer catch that reports again would
         // print a second glyph for one failure — and, for a rethrow that reaches the
         // top level, a raw Node message beside the calm one we just wrote
@@ -1177,7 +1194,7 @@ export async function runLine(
         `${compose(c.red(GLYPH.fail), label, bad.right, bad.keep)}\n`,
         "error",
       )
-      detailBlock(why)
+      detailBlock(why, "error")
     })
     // This row IS the report (R2) — the same claim the non-TTY branch above makes, and it
     // has to be made on BOTH paths. Only the non-TTY one did, so on a real terminal a dev
@@ -1293,7 +1310,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
         `  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`,
         "result",
       )
-      if (s.status === "fail") detailBlock(s.why)
+      if (s.status === "fail") detailBlock(s.why, "result")
     }
     return results
   }
@@ -1332,7 +1349,7 @@ export async function runLanes(lanes, { verbose = false } = {}) {
           `${compose(c.red(GLYPH.fail), s.label, r.right, r.keep)}\n`,
           "error",
         )
-        detailBlock(s.why)
+        detailBlock(s.why, "error")
       })
     } else {
       out(
