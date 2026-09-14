@@ -3,8 +3,10 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   stat,
+  utimes,
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -398,8 +400,57 @@ describe("adaptvImagePlugin — dimensions first, placeholder second", () => {
     })
   })
 
+  //root reads a mode-000 file anyway, so the first load would not fail
+  it.skipIf(process.getuid?.() === 0)(
+    "forgets a failed load of bytes that did not change",
+    async () => {
+      //A read that fails for a reason outside the bytes, here a permission, keeps
+      //the size and mtime the dedupe is keyed on. The retry must read again
+      //rather than be handed the first rejection.
+      const file = path.join(dir, "unreadable.png")
+      await writePng(file, 120, 80)
+      const before = await stat(file)
+      const { run } = harness()
+      await chmod(file, 0o000)
+      try {
+        await expect(run(file)).rejects.toThrow(/could not be decoded/)
+      } finally {
+        await chmod(file, 0o644)
+      }
+      const after = await stat(file)
+      expect([after.size, after.mtimeMs]).toEqual([
+        before.size,
+        before.mtimeMs,
+      ])
+      expect(parseAsset(await run(file))).toMatchObject({
+        width: 120,
+        height: 80,
+      })
+    },
+  )
+
+  it("serves an edited file's new dimensions from the same dev server", async () => {
+    //`vite dev` keeps one plugin instance for its whole life, and the watcher
+    //re-runs `load` after an edit. The dedupe must not outlive the load it
+    //dedupes, or the old size is served until a restart.
+    vi.stubEnv("ADAPTV_VERBOSE", "1")
+    const file = path.join(dir, "edited.png")
+    await writePng(file, 120, 80)
+    const { run, buildEnd, infos } = harness()
+    const before = await run(file)
+    expect(parseAsset(before)).toMatchObject({ width: 120, height: 80 })
+
+    await writePng(file, 200, 100)
+    const after = await run(file)
+    expect(parseAsset(after)).toMatchObject({ width: 200, height: 100 })
+    expect(parseAsset(after).lqip).not.toBe(parseAsset(before).lqip)
+    buildEnd()
+    expect(infos).toEqual([expect.stringMatching(/ 2 encoded, 0 cached,/)])
+  })
+
   it("caches on stat, so a second load never re-encodes", async () => {
-    const { run } = harness()
+    vi.stubEnv("ADAPTV_VERBOSE", "1")
+    const { run, buildEnd, infos } = harness()
     const first = await run(files.photo)
     const cold = performance.now()
     const second = await run(files.photo)
@@ -409,6 +460,9 @@ describe("adaptvImagePlugin — dimensions first, placeholder second", () => {
     //DECODED buffer before its lookup, which is why its rebuilds are barely
     //faster than its cold builds (its discussion #816)
     expect(warm).toBeLessThan(50)
+    //the second answer is the on-disk entry, not a copy the plugin kept
+    buildEnd()
+    expect(infos).toEqual([expect.stringMatching(/ 1 encoded, 1 cached,/)])
   })
 
   it("wins the query against Vite's own asset plugin", async () => {
@@ -534,13 +588,19 @@ describe("adaptvImagePlugin — the on-disk cache is a hint, never trusted", () 
       await mkdir(root, { recursive: true })
       await chmod(root, 0o555)
       try {
-        const { run } = harness({ root })
+        vi.stubEnv("ADAPTV_VERBOSE", "1")
+        const { run, buildEnd, infos } = harness({ root })
         for (let load = 0; load < 2; load++) {
           expect(parseAsset(await run(files.photo))).toMatchObject({
             width: 400,
             height: 250,
           })
         }
+        //slow, not wrong: with nowhere to keep the result, every load encodes
+        buildEnd()
+        expect(infos).toEqual([
+          expect.stringMatching(/ 2 encoded, 0 cached,/),
+        ])
       } finally {
         await chmod(root, 0o755)
       }
@@ -629,6 +689,47 @@ describe("adaptvImagePlugin — a load held open mid-encode", () => {
     expect(held.reads).toHaveLength(1)
     buildEnd()
     expect(infos).toEqual([expect.stringMatching(/ 1 encoded, /)])
+  })
+
+  it("never hands a load started after an atomic save the size from before it", async () => {
+    //An editor's save lands while the old bytes are still being encoded, and
+    //the watcher's load for that save arrives before the encode is done. It
+    //must measure the new file rather than join the load that read the old one.
+    vi.stubEnv("ADAPTV_VERBOSE", "1")
+    const held = await withHeldEncode()
+    const file = path.join(dir, "saved.png")
+    await writePng(file, 120, 80)
+    const { run, buildEnd, infos } = harness({
+      createPlugin: held.createPlugin,
+    })
+    const before = run(file)
+    await held.readsReached(1, 5_000)
+
+    const temp = `${file}.tmp`
+    await writePng(temp, 200, 100)
+    const later = new Date(Date.now() + 10_000)
+    await utimes(temp, later, later)
+    await rename(temp, file)
+    const after = run(file)
+    //the second read is the new file being measured; the bound only sets how
+    //long a joined load waits before the assertion says so
+    await held.readsReached(2, 1_000)
+    held.release()
+
+    expect(parseAsset(await before)).toMatchObject({
+      width: 120,
+      height: 80,
+    })
+    expect(parseAsset(await after)).toMatchObject({
+      width: 200,
+      height: 100,
+    })
+    expect(held.reads).toEqual([
+      { width: 120, height: 80 },
+      { width: 200, height: 100 },
+    ])
+    buildEnd()
+    expect(infos).toEqual([expect.stringMatching(/ 2 encoded, 0 cached,/)])
   })
 })
 
