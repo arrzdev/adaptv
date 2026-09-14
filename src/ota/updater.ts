@@ -264,7 +264,9 @@ export async function settleLaunch(options: {
     //the running one cannot work that out about itself.
     if (await returnToEmbedded(plugin, options.nativeFingerprint)) return
 
-    //Written by the call above, so it is the binary this launch is running on.
+    //Written by the call above, so it is the binary this launch is running on —
+    //or, after a reset the plugin refused, still the one before it, so a bundle
+    //that could not be dropped proves nothing about the app that replaced it.
     //Everything below is scoped to it: what booted here, what may be kept, what
     //is safe to fall back to. A bundle proved itself on ONE app, not for ever.
     const identity = lastSeenBinary() ?? ""
@@ -331,8 +333,10 @@ export async function settleLaunch(options: {
  * costs one download and a reload, while a false negative costs the app.
  * → `docs/design/ota.md §5.3`
  *
- * The version is remembered **before** the reset, so a reload that races a second
- * launch cannot loop: the next pass sees a version it already knows.
+ * The version is remembered once the reset has landed and **before** the reload,
+ * so a reload that races a second launch cannot loop: the next pass sees a
+ * version it already knows. Not before the reset — a reset the plugin refused
+ * has to be asked for again, and a remembered version is what stops the asking.
  *
  * ## The other thing this launch is the only chance to learn
  *
@@ -366,20 +370,31 @@ async function returnToEmbedded(
 
   const identity = `${name}+${code}`
   const last = lastSeenBinary()
-  rememberBinary(
-    identity,
-    current === null ? runningFingerprint : undefined,
-  )
   //`null` is a first launch, not a change — and `current === null` means this is
   //already the embedded bundle, so there is nothing to drop back to.
-  if (last === null || last === identity || current === null) return false
+  if (last === null || last === identity || current === null) {
+    rememberBinary(
+      identity,
+      current === null ? runningFingerprint : undefined,
+    )
+    return false
+  }
 
   try {
     await plugin.reset()
+  } catch {
+    //🔴 Not remembered, so the next launch asks again. Remembering a reset that
+    //never took is the stranding above by another road: every later launch sees
+    //a version it already knows, and the old bundle keeps proving itself on a
+    //binary it was never meant to outlive.
+    return false
+  }
+  rememberBinary(identity)
+  try {
     await plugin.reload()
     return true
   } catch {
-    //The pointer may still have moved; the next cold start applies it either way.
+    //The pointer has moved; the next cold start applies it either way.
     return false
   }
 }
