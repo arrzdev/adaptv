@@ -50,6 +50,23 @@ test("the splash attribute the guards query is the one the shell ships", async (
   expect(criticalCss).toContain("data-adaptv-splash")
 })
 
+// The launch-height head script reads the top inset's CSS var before first paint, so the
+// stylesheet that defines it has to come first in the served document: the script is
+// emitted before the links, and only React's `precedence` hoisting puts them ahead. If
+// that order flips, an iOS 18 reload would freeze the splash 59pt short, and no unit
+// test can see it.
+test("the app stylesheet is in the document before the launch-height script", async ({
+  request,
+}) => {
+  const html = await (await request.get("/")).text()
+  const head = html.slice(0, html.indexOf("</head>"))
+  const stylesheet = head.search(/<link[^>]*rel="stylesheet"/)
+  const launchScript = head.indexOf("setProperty('--pwa-launch-height'")
+  expect(stylesheet).toBeGreaterThan(-1)
+  expect(launchScript).toBeGreaterThan(-1)
+  expect(stylesheet).toBeLessThan(launchScript)
+})
+
 test.describe("full-screen chrome", () => {
   test("a bad route renders the app's own 404, not the router's error page", async ({
     page,
