@@ -327,7 +327,8 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `applyUiThemePreference`: stamp, `localStorage`, native mirror (§3). The OS listener acts only in
   system mode; a resume restamps from storage. Hydration renders the server's `system`/`light`, and a
   layout effect re-renders onto the stamp before paint.
-- **Test:** `src/hooks/use-theme.test.ts` (unit, including a `hydrateRoot` over server HTML);
+- **Test:** `src/hooks/use-theme.test.ts` (unit, including a `hydrateRoot` over server HTML, and one
+  outside `act` that reads the DOM before the hydration's passive effects run);
   `playground/e2e/settings.spec.ts` on chromium + webkit: pick System under an emulated dark scheme,
   flip the emulation, pick Dark, flip again, reload — no hydration error. On device: pick System,
   change the OS appearance from Control Center / Quick Settings, and the app follows with no relaunch.

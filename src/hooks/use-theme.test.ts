@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react"
-import { createElement } from "react"
+import { createElement, useLayoutEffect, useRef } from "react"
 import { hydrateRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -91,10 +91,12 @@ afterEach(() => {
 
 describe("useTheme before layout", () => {
   it("renders the appearance the pre-paint script stamped, not a guess", () => {
-    //The first render is the one hydration compares against the server HTML, and
-    //it happens before any effect has read storage. In system mode the only
-    //honest answer is the class the blocking <head> script already put on
-    //<html>; guessing "light" would flash a dark-mode user's status bar.
+    //A client render that is not a hydration (a SPA or native boot, a screen
+    //mounted later) reads the store on its first render, before any effect
+    //has run. In system mode the honest answer is the class the blocking <head>
+    //script already put on <html>; guessing "light" would hand a dark-mode
+    //user's status bar the wrong colour. A hydration answers with the server's
+    //values instead — see "useTheme hydration".
     root.classList.add("dark")
     const { seen } = mountTheme()
     expect(seen[0]?.resolved).toBe("dark")
@@ -405,6 +407,21 @@ describe("useTheme preference", () => {
     expect(shell.result.current.resolved).toBe("light")
   })
 
+  it("reports the preference <html> shows, not one another tab only stored", () => {
+    //Storage is shared with every tab of the app and can change under this
+    //page at any time. Until this page restamps (a resume, or a useTheme that
+    //mounts), <html> is still painted with the old choice, and a hook that
+    //read storage first would hand the status bar "dark" over a light page.
+    localStorage.setItem(UI_THEME_STORAGE_KEY, "light")
+    const { result, rerender } = mountTheme()
+    localStorage.setItem(UI_THEME_STORAGE_KEY, "dark")
+
+    rerender()
+    expect(htmlClass()).toBe("light")
+    expect(result.current.preference).toBe("light")
+    expect(result.current.resolved).toBe("light")
+  })
+
   it("is still the chosen preference on the next load", () => {
     const first = mountTheme()
     act(() => first.result.current.setPreference("system"))
@@ -431,7 +448,66 @@ describe("useTheme and a stamp written outside it", () => {
   })
 })
 
+/**
+ * Server-render a theme probe, then stamp <html> and storage with "dark" the
+ * way the pre-paint script does before the client bundle runs.
+ */
+function serverHtmlWithDarkStored() {
+  const html = renderToString(createElement(ThemeText))
+  localStorage.setItem(UI_THEME_STORAGE_KEY, "dark")
+  root.classList.add("dark")
+  root.setAttribute(PREFERENCE_ATTR, "dark")
+  const container = document.createElement("div")
+  container.innerHTML = html
+  document.body.appendChild(container)
+  return { html, container }
+}
+
+function ThemeText({ onLayout }: { onLayout?: (text: string) => void }) {
+  const theme = useTheme()
+  const ref = useRef<HTMLOutputElement>(null)
+  useLayoutEffect(() => {
+    onLayout?.(ref.current?.textContent ?? "")
+  }, [onLayout])
+  return createElement(
+    "output",
+    { ref },
+    `${theme.preference}:${theme.resolved}`,
+  )
+}
+
 describe("useTheme hydration", () => {
+  it("is on the stamp before the hydration's passive effects run", async () => {
+    //React commits a hydration and runs its passive effects in a later task,
+    //after the browser has had the chance to paint. useSyncExternalStore on its
+    //own notices the stamp only there, so the server's "system" would be on
+    //screen for a frame. The layout effect's re-render lands inside the commit's
+    //own task: a microtask queued from the first layout effect runs before that
+    //later task, and must already read the stored value.
+    //Outside act on purpose — act would flush the passive effects synchronously.
+    const env = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const wasActEnvironment = env.IS_REACT_ACT_ENVIRONMENT
+    env.IS_REACT_ACT_ENVIRONMENT = false
+    const { container } = serverHtmlWithDarkStored()
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {})
+    const afterCommit: string[] = []
+    const onLayout = () =>
+      queueMicrotask(() => afterCommit.push(container.textContent ?? ""))
+    try {
+      const app = hydrateRoot(
+        container,
+        createElement(ThemeText, { onLayout }),
+      )
+      await vi.waitFor(() => expect(afterCommit.length).toBeGreaterThan(0))
+      expect(afterCommit[0]).toBe("dark:dark")
+      expect(errors).not.toHaveBeenCalled()
+      app.unmount()
+    } finally {
+      env.IS_REACT_ACT_ENVIRONMENT = wasActEnvironment
+      container.remove()
+    }
+  })
+
   it("hydrates on the server's answer, then shows the stored preference", async () => {
     //The server has no storage: it renders "system". The pre-paint script has
     //already stamped the stored "dark" on <html> by the time the client
