@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OWN_PHASES } from "../ui/theme.mjs"
+import { namesPlumbing } from "./opacity.mjs"
 import {
   addresses,
   check,
@@ -574,11 +575,19 @@ describe("--quiet keeps a failure: the row and the fix under it (R46)", () => {
       expect(run.stderr, JSON.stringify(mode)).toBe(page.stderr)
       const doc = JSON.parse(run.stdout)
       expect(doc.ok).toBe(false)
+      //The reason is on stderr and in `steps`; the error says only which step failed.
       expect(doc.error).toEqual({
         kind: "step-failed",
-        label: "channel",
-        message: "nothing to sign the update with",
+        labels: ["channel"],
+        message: "1 step failed: channel",
       })
+      expect(doc.steps).toEqual([
+        {
+          label: "channel",
+          ok: false,
+          reason: "nothing to sign the update with",
+        },
+      ])
     }
   })
 
@@ -674,7 +683,7 @@ describe("--quiet keeps a failure: the row and the fix under it (R46)", () => {
     )
     expect(quiet.stderr).toBe("")
     //Under `--json` the page is gone, so nothing of the row may leak onto stdout around the
-    //document. What stderr and the document say about this step is not settled here.
+    //document. What stderr and the document say about this step is held further down.
     const json = await inMode({ json: true }, step)
     expect(json.stdout).toBe("")
   })
@@ -732,5 +741,239 @@ describe("--quiet keeps a failure: the row and the fix under it (R46)", () => {
         JSON.stringify(mode),
       ).toBe(page.includes("✖ web"))
     }
+  })
+})
+
+/**
+ * A lane that settles `✖`, with the tool's own text as its reason, as `explainFailure` words it.
+ * `after` delays the failure, so a case can make lanes fail in an order other than the one they
+ * were given in.
+ */
+const failingLane = (label, { after = 0 } = {}) => ({
+  label,
+  run: () =>
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("boom")), after),
+    ),
+  explain: () => ({
+    reason: `Capacitor ${label} exited with code 65`,
+    detail: [`run 'adaptv doctor' for ${label}`],
+  }),
+})
+const passingLane = (label) => ({ label, run: async () => "" })
+
+/** The one document a `--json` run wrote on stdout, which must be ALL that is on stdout. */
+function documentOf(run) {
+  const lines = run.stdout.split("\n").filter(Boolean)
+  expect(lines, run.stdout).toHaveLength(1)
+  return JSON.parse(lines[0])
+}
+
+describe("a failed run says so in --json: one step-failed error for every failed row (R46)", () => {
+  const webStep = (r) =>
+    r
+      .runLine(
+        "web",
+        async () => {
+          throw new Error("boom")
+        },
+        {
+          explain: () => ({
+            reason: "Build failed with 1 error:",
+            detail: [
+              "[UNRESOLVED_ENTRY] Cannot resolve entry module index.html.",
+            ],
+          }),
+        },
+      )
+      .catch(() => {})
+
+  it("gives a failed runLine row ok:false and its label, and puts the row on stderr", async () => {
+    //`build web --json` on a bundle that did not build exited 1 with `"ok":true`, no `error`,
+    //and nothing on stderr: the row settled on stdout, which `--json` silences, and nothing
+    //recorded the failure for the document.
+    const page = await inMode({}, webStep)
+    for (const mode of [{ json: true }, { json: true, quiet: true }]) {
+      const run = await inMode(mode, (r) =>
+        webStep(r).then(() => r.emitJson({ command: "build web" })),
+      )
+      const doc = documentOf(run)
+      expect(doc.ok, JSON.stringify(mode)).toBe(false)
+      expect(doc.error).toEqual({
+        kind: "step-failed",
+        labels: ["web"],
+        message: "1 step failed: web",
+      })
+      //The page's block from the `✖` down, fix included, and nothing else: the `· web` start
+      //line is narration and stays gone.
+      const untimed = (s) => s.replace(/· \d+ms/g, "· <time>")
+      expect(untimed(run.stderr)).toBe(
+        untimed(page.stdout.split("\n").slice(1).join("\n")),
+      )
+      expect(run.stderr).toContain("✖ web")
+      expect(run.stderr).toContain(
+        "Cannot resolve entry module index.html.",
+      )
+    }
+  })
+
+  it("keeps a failed runLine row on stdout for the page and --quiet", async () => {
+    for (const mode of [{}, { quiet: true }]) {
+      const run = await inMode(mode, webStep)
+      expect(run.stdout, JSON.stringify(mode)).toContain("✖ web")
+      expect(run.stderr).toBe("")
+    }
+  })
+
+  it("names the failed lane when one of two lanes fails", async () => {
+    const lanes = (r) =>
+      r
+        .runLanes([passingLane("android"), failingLane("ios")])
+        .then(() => r.emitJson({ command: "build all" }))
+    const run = await inMode({ json: true }, lanes)
+    const doc = documentOf(run)
+    expect(doc.ok).toBe(false)
+    expect(doc.error).toEqual({
+      kind: "step-failed",
+      labels: ["ios"],
+      message: "1 step failed: ios",
+    })
+    expect(run.stderr).toContain("✖ ios")
+    expect(run.stderr).toContain("    run 'adaptv doctor' for ios\n")
+    //A lane that passed is narration under --json, not a failure.
+    expect(run.stderr).not.toContain("android")
+  })
+
+  it("gives two failed lanes ONE error naming both, in the order the lanes were given", async () => {
+    //`ios` fails last, so an error that followed the failures rather than the lanes would name
+    //`android` first, and a last-wins journal would name only `ios`.
+    const lanes = (r) =>
+      r
+        .runLanes([
+          failingLane("ios", { after: 30 }),
+          passingLane("web"),
+          failingLane("android"),
+        ])
+        .then(() => r.emitJson({ command: "build all" }))
+    const run = await inMode({ json: true }, lanes)
+    const doc = documentOf(run)
+    expect(doc.ok).toBe(false)
+    expect(doc.error).toEqual({
+      kind: "step-failed",
+      labels: ["ios", "android"],
+      message: "2 steps failed: ios, android",
+    })
+    expect(run.stderr).toContain("✖ ios")
+    expect(run.stderr).toContain("✖ android")
+  })
+
+  it("keeps a failed lane on stdout for the page and --quiet", async () => {
+    for (const mode of [{}, { quiet: true }]) {
+      const run = await inMode(mode, (r) =>
+        r.runLanes([passingLane("web"), failingLane("ios")]),
+      )
+      expect(run.stdout, JSON.stringify(mode)).toContain("✖ ios")
+      expect(run.stderr).toBe("")
+    }
+  })
+
+  it("never carries a tool's text in the message, only adaptv's own labels (R8)", async () => {
+    //The lane reasons name the engine on purpose. They are the row's text, and the row already
+    //runs through the tool-log filters; the document's message is not another way out.
+    const run = await inMode({ json: true }, (r) =>
+      r
+        .runLanes([failingLane("ios"), failingLane("android")])
+        .then(() => r.emitJson({ command: "build all" })),
+    )
+    const { message, labels } = documentOf(run).error
+    expect(namesPlumbing(message), message).toBe(false)
+    expect(message).not.toContain("exited")
+    expect(message).toBe(`2 steps failed: ${labels.join(", ")}`)
+  })
+
+  it("is not rewritten by a fail() for a label whose row already failed", async () => {
+    //The shape of a command's catch that did not check `wasReported`: the settled `✖` owns
+    //the failure (R2), so a second report neither counts it twice nor moves it behind a step
+    //that failed after it.
+    const run = await inMode({ json: true }, async (r) => {
+      await webStep(r)
+      await r.runLanes([failingLane("ios")])
+      r.fail("web", "the bundle did not build")
+      r.emitJson({ command: "build ios" })
+    })
+    expect(documentOf(run).error).toEqual({
+      kind: "step-failed",
+      labels: ["web", "ios"],
+      message: "2 steps failed: web, ios",
+    })
+  })
+
+  it("adds a lane that fails after a fail() to the same error, rather than replacing it", async () => {
+    //`build all` whose `ios` native project cannot be prepared: `fail()` reports it, and the
+    //`android` lane still runs and can fail too. Both are this run's failures.
+    const run = await inMode({ json: true }, async (r) => {
+      r.fail("ios", "native project: nothing to build")
+      await r.runLanes([failingLane("android")])
+      r.emitJson({ command: "build all" })
+    })
+    expect(documentOf(run).error).toEqual({
+      kind: "step-failed",
+      labels: ["ios", "android"],
+      message: "2 steps failed: ios, android",
+    })
+  })
+
+  it("leaves a transient row's failure to the fail() that reports it, without its reason", async () => {
+    //A transient row is erased and owns no `✖`; the caller's `fail()` does. Its reason comes
+    //from `explainFailure`, which is the bundler's sentence, so it stays out of the message.
+    const run = await inMode({ json: true }, async (r) => {
+      await r
+        .runLine(
+          "web",
+          async () => {
+            throw new Error("boom")
+          },
+          { transient: true },
+        )
+        .catch(() => r.fail("web", "Build failed with 1 error:"))
+      r.emitJson({ command: "build ios" })
+    })
+    const doc = documentOf(run)
+    expect(doc.error).toEqual({
+      kind: "step-failed",
+      labels: ["web"],
+      message: "1 step failed: web",
+    })
+    expect(doc.steps).toEqual([
+      { label: "web", ok: false, reason: "Build failed with 1 error:" },
+    ])
+    expect(run.stderr).toContain("✖ web  · Build failed with 1 error:")
+    //And a transient failure its caller absorbs without reporting is no failure of the run.
+    const absorbed = await inMode({ json: true }, async (r) => {
+      await r
+        .runLine(
+          "web",
+          async () => {
+            throw new Error("boom")
+          },
+          { transient: true },
+        )
+        .catch(() => {})
+      r.emitJson({ command: "build ios" })
+    })
+    expect(documentOf(absorbed)).toMatchObject({ ok: true, steps: [] })
+    expect(documentOf(absorbed)).not.toHaveProperty("error")
+  })
+
+  it("says ok:true, with no error, when every row passed", async () => {
+    const run = await inMode({ json: true }, async (r) => {
+      await r.runLine("web", async () => "dist/client")
+      await r.runLanes([passingLane("ios"), passingLane("android")])
+      r.emitJson({ command: "build all" })
+    })
+    const doc = documentOf(run)
+    expect(doc.ok).toBe(true)
+    expect(doc).not.toHaveProperty("error")
+    expect(run.stderr).toBe("")
   })
 })
