@@ -1,4 +1,4 @@
-import { useCallback, useReducer, useState } from "react"
+import { useCallback, useState } from "react"
 import type { UiThemePreference } from "#adaptv/capabilities/native-theme"
 import { persistNativeThemePreference } from "#adaptv/capabilities/native-theme"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
@@ -102,10 +102,22 @@ function reapplySystemThemeIfNeeded() {
   syncUiThemeAppearance("system")
 }
 
+/**
+ * The resolved appearance, plus a way to recompute it. The OS value lives outside
+ * React, so a re-read preference that is still `"system"` bails out of the render
+ * and leaves the last answer standing; the second value re-reads the OS into
+ * state, which renders only when the appearance actually moved.
+ */
 function useResolvedUiAppearance(
   preference: UiThemePreference,
-): "light" | "dark" {
-  const [, bumpOs] = useReducer((n: number) => n + 1, 0)
+): readonly ["light" | "dark", () => void] {
+  const [, setOsAppearance] = useState(() =>
+    getResolvedUiAppearance("system"),
+  )
+  const recheckOs = useCallback(
+    () => setOsAppearance(getResolvedUiAppearance("system")),
+    [],
+  )
   const [layoutDone, setLayoutDone] = useState(false)
 
   useIsomorphicLayoutEffect(() => {
@@ -114,19 +126,22 @@ function useResolvedUiAppearance(
 
   useIsomorphicLayoutEffect(() => {
     if (preference !== "system") return
+    //the listener was off while the preference was explicit, so catch up on any
+    //OS change it missed; an unchanged value bails out without a render
+    recheckOs()
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
-    const onOs = () => bumpOs()
+    const onOs = () => recheckOs()
     mq.addEventListener("change", onOs)
     return () => mq.removeEventListener("change", onOs)
-  }, [preference])
+  }, [preference, recheckOs])
 
   if (!layoutDone) {
-    if (preference === "light") return "light"
-    if (preference === "dark") return "dark"
-    return readResolvedFromDom() ?? "light"
+    if (preference === "light") return ["light", recheckOs] as const
+    if (preference === "dark") return ["dark", recheckOs] as const
+    return [readResolvedFromDom() ?? "light", recheckOs] as const
   }
 
-  return getResolvedUiAppearance(preference)
+  return [getResolvedUiAppearance(preference), recheckOs] as const
 }
 
 /**
@@ -136,7 +151,7 @@ function useResolvedUiAppearance(
 export function useTheme(): readonly ["light" | "dark", () => void] {
   const [preference, setPreferenceState] =
     useState<UiThemePreference>("system")
-  const resolved = useResolvedUiAppearance(preference)
+  const [resolved, recheckOs] = useResolvedUiAppearance(preference)
 
   const setPreference = useCallback((next: UiThemePreference) => {
     applyUiThemePreference(next)
@@ -173,6 +188,7 @@ export function useTheme(): readonly ["light" | "dark", () => void] {
     const onResume = () => {
       if (document.visibilityState !== "visible") return
       reapplySystemThemeIfNeeded()
+      recheckOs()
       setPreferenceState(readPreference())
     }
     document.addEventListener("visibilitychange", onResume)
