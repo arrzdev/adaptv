@@ -42,7 +42,9 @@ export type KeyboardAvoidanceState = {
  * px of the wrapper hidden behind the keyboard. With `virtualKeyboard.overlaysContent` held
  * (see {@link useFreezeViewport}) the layout height stays `== window.innerHeight`, so the
  * keyboard's top edge sits at `viewportHeight - keyboardHeight`. Coords are layout-viewport
- * relative.
+ * relative. Pass the keyboard's `unpaidHeight`, never its `height`: where the WebView shrinks for
+ * the keyboard (Android native) `viewportHeight` has already paid for it, and `height` would
+ * count it twice.
  */
 export function resolveAvoidanceSpace({
   containerBottom,
@@ -214,6 +216,18 @@ export function useKeyboardAvoidance({
 }: UseKeyboardAvoidanceOptions): KeyboardAvoidanceState {
   const keyboard = useKeyboard({ isEnabled })
   const reducedMotion = useReducedMotion()
+  //Where the layout viewport itself resizes for the keyboard, its top edge in layout coordinates
+  //is `innerHeight - unpaidHeight`, read at render (a resize re-renders through useKeyboard). The
+  //one value the scroll effect needs, so a resize that pays for the keyboard moves nothing. With
+  //the keyboard closed it is `Infinity`, which the scroll clamps to the live `innerHeight`: a
+  //constant, so a resize with no keyboard up (the one landing before the plugin's event included)
+  //cannot re-run the effect and cancel a focus scroll mid-flight. `null` everywhere else: the
+  //scroll keeps reading the visual viewport.
+  const layoutKeyboardTop = !keyboard.resizesLayoutViewport
+    ? null
+    : keyboard.isOpen
+      ? window.innerHeight - keyboard.unpaidHeight
+      : Number.POSITIVE_INFINITY
   const [space, setSpace] = useState(0)
   //the element's resting padding/margin (its design gap from className/style), so the
   //obstruction reservation stacks on top of it instead of replacing it
@@ -255,7 +269,7 @@ export function useKeyboardAvoidance({
         ? resolveAvoidanceSpace({
             containerBottom: rect.bottom,
             viewportHeight: window.innerHeight,
-            keyboardHeight: keyboard.height,
+            keyboardHeight: keyboard.unpaidHeight,
           })
         : 0
 
@@ -275,6 +289,7 @@ export function useKeyboardAvoidance({
     isEnabled,
     keyboard.height,
     keyboard.isOpen,
+    keyboard.unpaidHeight,
     safeInsetBottom,
   ])
 
@@ -295,13 +310,19 @@ export function useKeyboardAvoidance({
       //Two frames out, reading the keyboard line fresh from visualViewport. One frame is
       //too early on iOS — WebKit runs its own focus layout first and drops our scroll; and
       //the debounced keyboard.height can lag a field-switch (no open/close event to update
-      //it), so derive the line from live geometry instead of the React state.
+      //it), so derive the line from live geometry instead of the React state. Not where the
+      //layout viewport resizes for the keyboard: there the visual viewport is no keyboard
+      //measure (it passes through 250 mid-IME with `innerHeight` already 587), and the line
+      //is the unpaid keyboard's top edge.
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() => {
           const vv = window.visualViewport
-          const keyboardTop = vv
-            ? vv.offsetTop + vv.height
-            : window.innerHeight
+          const keyboardTop =
+            layoutKeyboardTop === null
+              ? vv
+                ? vv.offsetTop + vv.height
+                : window.innerHeight
+              : Math.min(window.innerHeight, layoutKeyboardTop)
           scrollFocusedInputIntoView(owner, target, {
             buffer: scrollBuffer,
             behavior: scrollBehavior,
@@ -345,6 +366,7 @@ export function useKeyboardAvoidance({
     isEnabled,
     keyboard.height,
     keyboard.isOpen,
+    layoutKeyboardTop,
     reducedMotion,
     scrollBuffer,
     scrollIntoView,

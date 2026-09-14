@@ -27,11 +27,12 @@ import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyb
  * The keyboard is driven three ways. Most tests use the harness seam
  * (`window.__adaptvKeyboardMock`), the same one the playground e2e uses, because
  * the avoidance hook is platform-agnostic by design (docs/design/architecture.md
- * §4): it sees `{ isOpen, height }` and nothing else. The "per keyboard source"
+ * §4): it sees `useKeyboard`'s values and nothing else. The "per keyboard source"
  * block then drives the three real observer branches — visualViewport (iOS
  * Safari, VK-less Chromium), the VirtualKeyboard API (secure Chromium) and the
  * native bridge (a Capacitor build) — to prove each one lands in the same
- * reservation.
+ * reservation. Android native, whose WebView pays for the keyboard itself, runs
+ * the real keyboard capability in avoid-keyboard.android.test.tsx.
  */
 
 const nativeBridge = vi.hoisted(() => {
@@ -47,14 +48,22 @@ const nativeBridge = vi.hoisted(() => {
   }
 })
 
+//a keyboard no layout viewport paid for, as on every target but Android native, whose layer 1 is
+//real in avoid-keyboard.android.test.tsx
 vi.mock("#adaptv/capabilities/keyboard", () => ({
+  measureKeyboardPayment: (height: number) => ({
+    unpaidHeight: height,
+    resizesLayoutViewport: false,
+  }),
   hasNativeKeyboard: () => nativeBridge.enabled,
   initNativeKeyboard: () => {},
-  subscribeNativeKeyboard: (
-    cb: (info: { isOpen: boolean; height: number }) => void,
-  ) => {
-    nativeBridge.listeners.add(cb)
-    return () => nativeBridge.listeners.delete(cb)
+  listenNativeKeyboard: ({
+    onReport,
+  }: {
+    onReport: (info: { isOpen: boolean; height: number }) => void
+  }) => {
+    nativeBridge.listeners.add(onReport)
+    return () => nativeBridge.listeners.delete(onReport)
   },
 }))
 

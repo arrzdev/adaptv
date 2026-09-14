@@ -605,10 +605,12 @@ platform-agnostic and identical on every target. The shipped `useKeyboard` → `
 ┌─ 1. Accessor / reader — the ONLY hybrid layer ─────────────────────────────┐
 │  A subscribe/get accessor + a thin hook. THE web/native branch lives here.  │
 │  Returns a reactive VALUE, not machinery.                                   │
-│  useKeyboard  → { isOpen, height }   (visualViewport/virtualKeyboard on web;│
-│                                       exact OS height from @capacitor/keyboard│
-│                                       on native — "returns something native" │
-│                                       = native-accurate data, same shape)   │
+│  useKeyboard → { isOpen, height, unpaidHeight, resizesLayoutViewport }      │
+│    visualViewport/virtualKeyboard on web; exact OS height from              │
+│    @capacitor/keyboard on native ("returns something native" =              │
+│    native-accurate data, same shape). unpaidHeight = the part of height     │
+│    the layout viewport has not already given up: height everywhere but      │
+│    Android native, whose WebView shrinks by the keyboard itself.            │
 │  siblings: useNetwork, useAppState (§COORDINATION), haptics, share, storage │
 ├─ 2. Headless driver hook — platform-AGNOSTIC ─────────────────────────────┤
 │  Takes a containerRef in; returns applyable state out (+ runs imperative    │
@@ -621,6 +623,15 @@ platform-agnostic and identical on every target. The shipped `useKeyboard` → `
 │  data-keyboard-open / data-keyboard-height                                  │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Layer 1 hands layer 2 the value it would otherwise branch for.** On Android native the WebView pays
+for the keyboard itself: Capacitor 8's `SystemBars` pads it by the IME inset, so `innerHeight` drops by
+the keyboard (PR #83, Pixel 10 emulator: 923 → 587 under a 336px keyboard) while the plugin still
+reports the whole height. Layout against `innerHeight - height` would count the keyboard twice. So the
+accessor (`capabilities/keyboard.ts`, through `useKeyboard`) also answers `unpaidHeight`, the part the
+layout viewport has not already given up, from one app-wide rest height it keeps from boot, and
+`resizesLayoutViewport`. `useKeyboardAvoidance` reads only those and never asks which platform it is on
+(`keyboard-signal.md` §3).
 
 ### 4.1 🔒 Permission-gated capabilities: four states, and the accessor never rejects
 
@@ -694,9 +705,9 @@ costs nothing, a wrong one is a permanent API.
 independently exported:
 
 ```
-useKeyboard()            → { isOpen, height }   ← the accessor. THE hybrid branch lives here.
-useKeyboardAvoidance()   → { space, behavior }  ← headless driver, platform-agnostic
-<AvoidKeyboard>                                 ← the ergonomic wrapper
+useKeyboard()            → { isOpen, height, unpaidHeight, … }  ← the accessor. THE hybrid branch lives here.
+useKeyboardAvoidance()   → { space, behavior }                  ← headless driver, platform-agnostic
+<AvoidKeyboard>                                                 ← the ergonomic wrapper
 ```
 
 The consumer picks their altitude. Someone building a bespoke chat composer takes `useKeyboard` and owns
