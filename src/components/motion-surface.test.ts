@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest"
 /*
  * `docs/decisions/animation.md` A7 (🔒 §3.1): adaptv ships no motion component
  * and no motion context. Its animations run imperatively: `JSAnimation` on an
- * element's style (`src/hooks/use-animated-style.ts`), `animate()` on a motion
- * value in the drawer.
+ * element's style (`src/hooks/use-animated-style.ts`), and a CSS `@keyframes`
+ * rule for the drawer's panel, which keeps a motion value only as the store its
+ * drag frames write to.
  *
  * Two routes back both look harmless in review. The full `motion` component
  * takes the same props as any element and renders the same one, but it is
@@ -51,8 +52,15 @@ function browserEntries(): Record<string, string> {
 const MOTION_PACKAGE =
   /^(?:motion|framer-motion|motion-dom|motion-utils)(?:\/|$)/
 
+let shipped: Promise<string[]> | undefined
+
 /** Motion's module ids that made it into the output with any bytes, trimmed. */
-async function shippedMotionModules(): Promise<string[]> {
+function shippedMotionModules(): Promise<string[]> {
+  shipped ??= bundleMotionModules()
+  return shipped
+}
+
+async function bundleMotionModules(): Promise<string[]> {
   const { build } = await import("vite")
   const output = await build({
     root: ROOT,
@@ -123,5 +131,35 @@ describe("the framework's motion surface", () => {
     expect(has("motion-dom/dist/es/animation/generators/spring.mjs")).toBe(
       true,
     )
+  }, 30_000)
+
+  /*
+   * `animate()` (and `useAnimate`, `animateValue`'s callers, `animateMotionValue`)
+   * reaches a value through motion's visual element, sequence and animation
+   * interface code: 62 KB of motion on every served route that preloads the
+   * drawer, which is where it last lived. It drove nothing there. Its one call
+   * sat behind a spring mode no drawer transition had, so the panel always moved
+   * by the `@keyframes` rule. Biome names these imports in `src/`; this catches
+   * the ones it cannot see, by what survives tree-shaking.
+   */
+  it("ships none of the code motion's animate() reaches a value through", async () => {
+    const shipped = await shippedMotionModules()
+    //the premise: the drawer's motion value is still bundled, so the absence
+    //below is measured on a bundle that has the drawer in it
+    expect(
+      shipped.some((id) =>
+        id.includes("motion-dom/dist/es/value/index.mjs"),
+      ),
+    ).toBe(true)
+    expect(
+      shipped.filter(
+        (id) =>
+          id.includes("VisualElement") ||
+          id.includes("/animation/animate/") ||
+          id.includes("/animation/sequence/") ||
+          id.includes("/animation/interfaces/") ||
+          id.includes("/animators/waapi/animate-"),
+      ),
+    ).toEqual([])
   }, 30_000)
 })

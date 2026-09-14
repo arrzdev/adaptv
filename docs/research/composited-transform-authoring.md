@@ -119,6 +119,7 @@ finding: the fix was one file, the audit is the return on it.
 | Site | Mechanism | Verdict |
 |---|---|---|
 | anywhere in `src/` | `element.animate()` | **none left.** The construct that fails ladder steps L and N does not appear in the framework at all |
+| `animateDrawerY`'s spring branch (`drawer-motion.ts`) | motion's `animate()` writing **transform** from a rAF loop | **gone.** It ran only for a `mode: "spring"` no drawer transition had, so the keyframe drove every motion; deleted with its `mode`/`velocity`/`bounce` plumbing on 2026-09-14 (`docs/decisions/animation.md` §3.1) |
 | `animateDrawerKeyboardOffset` (`drawer-motion.ts`) via `applyDrawerPanelTransition` | inline transition driving **transform** | **gone.** It had no caller — the keyboard lift moved to `drawer-keyboard.ts` in #47 and the settle to CSS in #52 — and was deleted with the rest of that path (f5a3788). Nothing in the framework drives a transform through an inline transition any more |
 | `transitionDrawerBackdropOpacity` (`drawer-motion.ts`) | inline transition driving **opacity** | **fine.** The symptom is a transform arrival; opacity has no arrival geometry to get wrong. Its own half of the demote-repaint is covered by the permanent hint above |
 | `writeDrawerKeyboardRoom` (`drawer-keyboard.ts`) | inline transition driving `padding-bottom` / `max-height` | **out of scope.** Layout properties are not composited at all — a different risk class, not a quieter version of this one |
