@@ -42,11 +42,19 @@
           "options": {
             "paths": {
               "motion/react": {
-                "importNames": ["motion"],
-                "message": "Use `m` under a `LazyMotion` provider, not the full `motion` component (docs/decisions/animation.md A7)."
+                "importNames": [
+                  "motion",
+                  "m",
+                  "LazyMotion",
+                  "MotionConfig",
+                  "AnimatePresence",
+                  "LayoutGroup"
+                ],
+                "message": "No motion components or providers in adaptv: they wrap app content in motion's context. Animate imperatively with #adaptv/hooks/use-animated-style or animate() on a motion value (docs/decisions/animation.md A7)."
               },
-              "motion/react-client": "Use `m` under a `LazyMotion` provider from motion/react, not the full `motion` component (docs/decisions/animation.md A7).",
-              "framer-motion": "Import from motion/react, and use `m` under a `LazyMotion` provider (docs/decisions/animation.md A7)."
+              "motion/react-client": "No motion components in adaptv; animate imperatively with #adaptv/hooks/use-animated-style (docs/decisions/animation.md A7).",
+              "motion/react-m": "No motion components in adaptv; animate imperatively with #adaptv/hooks/use-animated-style (docs/decisions/animation.md A7).",
+              "framer-motion": "Import motion's engine from motion/react, and animate imperatively (docs/decisions/animation.md A7)."
             },
             "patterns": [
               {
