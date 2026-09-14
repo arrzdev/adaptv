@@ -42,8 +42,8 @@ button / input / textarea / checkbox / switch and stops. `WheelColumn` is a part
 
 ## Tier 2 — the feedback layer
 
-`Alert` · `ActionSheet` · `Toast` · ~~`Spinner`~~ · `ProgressBar`. Every native toolkit has these,
-Ionic has them, and adaptv has only the inline `Spinner`.
+`Alert` · `ActionSheet` · `Toast` · ~~`Spinner`~~ · ~~`ProgressBar`~~. Every native toolkit has
+these, Ionic has them, and adaptv has only the inline `Spinner` and `ProgressBar`.
 
 **An inline `Spinner` shipped** (`src/components/spinner.tsx`, lab page `/lab/spinner`). It is a
 `1em`, `currentColor` `<span>` turning a static arc with one `transform` keyframe, and it owns
@@ -58,6 +58,19 @@ an opacity pulse on the drawing, never a stop. The motion's form is a guard, not
 forms Chromium runs on the main thread are `rotate:` on an svg (traced) and, per its
 `compositor_animations.cc`, SMIL, shapes inside the drawing and dash animation. A blocking **`Loading` overlay** (`ion-loading`) is still a gap; it belongs to the
 overlay engine below.
+
+**`ProgressBar` shipped in the same module** (`src/components/spinner.tsx`, lab page
+`/lab/progress-bar`), because a determinate bar alone owns no quirk and the indeterminate one owns
+the spinner's. `value` is `0..1`, clamped; omitted, or not a finite number, it is indeterminate. It
+reuses the spinner's machinery rather than a copy: the shared observer pauses an off-screen sweep
+(100 bars: 0–2 frames per 2 s against 241–242 with the pause forced off, Chromium, CDP trace), the
+label goes through the same announcer, and reduced motion is the same pulse. **Motion is `transform`
+only:** the fill is `scaleX` and the sweep `translateX`. Across a fill transition, the layout width
+stays constant on both engines, and Chromium traces 0 layouts and compositeFailed 0. A `width` fill,
+tried as a mutant, laid out 23 times. **It owns one quirk the spinner never had: forced colors
+repaint a CSS background.** Without its opt-out the fill reads `Canvas` and vanishes, so the
+indicator paints `CanvasText`. **RTL** flips the origin and the sweep. Ionic's `buffer` and
+`reversed` are not built.
 
 **Probably one overlay engine plus five thin presets, not five components.** Ionic's five overlays
 all share one interface, and adaptv's `Drawer` is *already* an overlay with a gesture engine behind

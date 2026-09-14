@@ -513,7 +513,7 @@ ecosystem only.
 | **Action sheet / confirmation** | ✅ | ✅ (`ActionSheetIOS`) | | ✅ | | | **—** |
 | **Toast / Snackbar** | ✅ | ✅ (`ToastAndroid`) | | | ✅ | | **—** |
 | Spinner / activity | ✅ | ✅ | | ✅ (`ProgressView`) | ✅ | | `Spinner` ✅ (inline; no overlay) |
-| **Progress bar** | ✅ | | | ✅ | ✅ | | **—** |
+| Progress bar | ✅ | | | ✅ | ✅ | | `ProgressBar` ✅ (in `Spinner`'s module) |
 | **Tab bar** | ✅ | | | ✅ (`TabView`) | ✅ (`NavigationBar`) | ✅ | **—** |
 | **Nav header / toolbar** | ✅ | | | | ✅ (`…FloatingToolbar`) | ✅ (`Stack` header) | **—** |
 | **Search bar** | ✅ | | | | ✅ | ✅ (`StackSearchBar`) | **—** |
