@@ -13,7 +13,7 @@ import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { ScrollView } from "#adaptv/components/scroll-view"
-import { Spinner } from "#adaptv/components/spinner"
+import { ProgressBar, Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { Text } from "#adaptv/components/text"
@@ -83,6 +83,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["scroll-view", <ScrollView key="scroll-view" />],
   ["text", <Text key="text">t</Text>],
   ["spinner", <Spinner key="spinner" />],
+  ["progress-bar", <ProgressBar key="progress-bar" />],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
   [
