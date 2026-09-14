@@ -264,6 +264,50 @@ describe("TextArea — slot wiring", () => {
   })
 })
 
+describe("TextArea — a consumer aria-describedby joins the slot wiring", () => {
+  //a consumer describing the field by an element of its own (a character counter,
+  //a policy note) must not silently unhook the Hint and Error from screen readers
+  it("keeps the consumer's ids first, then the hint, then the error", () => {
+    render(
+      <TextArea aria-describedby="counter policy">
+        <TextArea.Hint>help</TextArea.Hint>
+        <TextArea.Error>bad</TextArea.Error>
+      </TextArea>,
+    )
+    const [hint, error] = Array.from(document.querySelectorAll("p"))
+    expect(textarea().getAttribute("aria-describedby")).toBe(
+      `counter policy ${hint?.id} ${error?.id}`,
+    )
+  })
+
+  it("keeps the hint when only a hint is present", () => {
+    render(
+      <TextArea aria-describedby="counter">
+        <TextArea.Hint>help</TextArea.Hint>
+      </TextArea>,
+    )
+    const hint = document.querySelector("p") as HTMLElement
+    expect(textarea().getAttribute("aria-describedby")).toBe(
+      `counter ${hint.id}`,
+    )
+  })
+
+  it("drops repeated and blank ids", () => {
+    render(
+      <TextArea
+        aria-label="notes"
+        aria-describedby=" counter  counter "
+      />,
+    )
+    expect(textarea().getAttribute("aria-describedby")).toBe("counter")
+  })
+
+  it("omits the attribute when nothing is left", () => {
+    render(<TextArea aria-label="notes" aria-describedby="   " />)
+    expect(textarea().hasAttribute("aria-describedby")).toBe(false)
+  })
+})
+
 describe("TextArea — imperative handle", () => {
   it("reads the live value and disabled state from the DOM", () => {
     const ref = createRef<TextAreaHandle>()
