@@ -40,6 +40,37 @@ function stubNavigatorProp(key: string, value: unknown): void {
   })
 }
 
+/** Stub navigator.geolocation with a reader that either finds a fix or fails. */
+function webPositionReader(outcome: {
+  fix?: true
+  error?: { code: number; message: string }
+}) {
+  const read = vi.fn(
+    (
+      success: PositionCallback,
+      failure?: PositionErrorCallback | null,
+      _options?: PositionOptions,
+    ) => {
+      if (outcome.error) {
+        failure?.(outcome.error as GeolocationPositionError)
+        return
+      }
+      success({
+        coords: { latitude: 7, longitude: 8, accuracy: 9 },
+      } as GeolocationPosition)
+    },
+  )
+  stubNavigatorProp("geolocation", { getCurrentPosition: read })
+  return read
+}
+
+/** Stub the Permissions API with a spy that answers one state. */
+function permissionsAnswering(state: PermissionState) {
+  const query = vi.fn(() => Promise.resolve({ state }))
+  stubNavigatorProp("permissions", { query })
+  return query
+}
+
 afterEach(() => {
   for (const r of restores.splice(0)) r()
   vi.unstubAllGlobals()
@@ -64,6 +95,19 @@ describe("geolocation — native", () => {
 
   it("reads + normalises the position", async () => {
     forceNative(true)
+    //the plugin reports more than GeoCoords carries; only the three fields pass
+    vi.mocked(Geolocation.getCurrentPosition).mockResolvedValueOnce({
+      timestamp: 0,
+      coords: {
+        latitude: 1,
+        longitude: 2,
+        accuracy: 3,
+        altitude: 40,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: 0,
+      },
+    })
     expect(await getCurrentPosition()).toEqual({
       latitude: 1,
       longitude: 2,
@@ -71,10 +115,40 @@ describe("geolocation — native", () => {
     })
   })
 
+  it("hands highAccuracy and timeoutMs to the plugin, defaulting to low accuracy and 10 s", async () => {
+    forceNative(true)
+    await getCurrentPosition()
+    expect(Geolocation.getCurrentPosition).toHaveBeenLastCalledWith({
+      enableHighAccuracy: false,
+      timeout: 10_000,
+    })
+
+    await getCurrentPosition({ highAccuracy: true, timeoutMs: 2_500 })
+    expect(Geolocation.getCurrentPosition).toHaveBeenLastCalledWith({
+      enableHighAccuracy: true,
+      timeout: 2_500,
+    })
+  })
+
   it("requests permission via the native dialog", async () => {
     forceNative(true)
     expect(await requestGeoPermission()).toBe("granted")
     expect(Geolocation.requestPermissions).toHaveBeenCalled()
+  })
+
+  it("answers the dialog's outcome, normalised", async () => {
+    forceNative(true)
+    vi.mocked(Geolocation.requestPermissions).mockResolvedValueOnce({
+      location: "denied",
+      coarseLocation: "denied",
+    })
+    expect(await requestGeoPermission()).toBe("denied")
+
+    vi.mocked(Geolocation.requestPermissions).mockResolvedValueOnce({
+      location: "prompt-with-rationale",
+      coarseLocation: "prompt-with-rationale",
+    })
+    expect(await requestGeoPermission()).toBe("prompt")
   })
 })
 
@@ -120,11 +194,19 @@ describe("geolocation — device-level unavailability", () => {
 describe("geolocation — web", () => {
   it("reads position from navigator.geolocation", async () => {
     forceNative(false)
+    //a real GeolocationCoordinates carries altitude, heading and speed too;
+    //GeoCoords is a projection, so only the three fields pass
     stubNavigatorProp("geolocation", {
       getCurrentPosition: (success: PositionCallback) =>
         success({
-          coords: { latitude: 4, longitude: 5, accuracy: 6 },
-        } as GeolocationPosition),
+          coords: {
+            latitude: 4,
+            longitude: 5,
+            accuracy: 6,
+            altitude: 40,
+            speed: 0,
+          },
+        } as unknown as GeolocationPosition),
     })
     expect(await getCurrentPosition()).toEqual({
       latitude: 4,
@@ -149,5 +231,113 @@ describe("geolocation — web", () => {
     forceNative(false)
     stubNavigatorProp("geolocation", undefined)
     await expect(getCurrentPosition()).rejects.toThrow()
+  })
+
+  it("rejects with the browser's own position error", async () => {
+    forceNative(false)
+    const denied = { code: 1, message: "User denied Geolocation" }
+    stubNavigatorProp("geolocation", {
+      getCurrentPosition: (
+        _success: PositionCallback,
+        failure: PositionErrorCallback,
+      ) => failure(denied as GeolocationPositionError),
+    })
+    await expect(getCurrentPosition()).rejects.toBe(denied)
+  })
+
+  it("hands highAccuracy and timeoutMs to the browser, defaulting to low accuracy and 10 s", async () => {
+    forceNative(false)
+    const read = webPositionReader({ fix: true })
+    await getCurrentPosition()
+    expect(read.mock.lastCall?.[2]).toEqual({
+      enableHighAccuracy: false,
+      timeout: 10_000,
+    })
+
+    await getCurrentPosition({ highAccuracy: true, timeoutMs: 2_500 })
+    expect(read.mock.lastCall?.[2]).toEqual({
+      enableHighAccuracy: true,
+      timeout: 2_500,
+    })
+  })
+
+  it("falls back to 'prompt' when the Permissions API rejects the query", async () => {
+    //a browser rejects query() with a TypeError for a permission name it does
+    //not recognise; the request path still works there, so "you may ask"
+    forceNative(false)
+    stubNavigatorProp("geolocation", { getCurrentPosition: () => {} })
+    stubNavigatorProp("permissions", {
+      query: () => Promise.reject(new TypeError("unsupported name")),
+    })
+    await expect(checkGeoPermission()).resolves.toBe("prompt")
+  })
+})
+
+describe("geolocation — web permission request", () => {
+  //the web has no request API: a position read raises the browser prompt, so
+  //the read's outcome IS the answer, and only a failure needs the state re-read
+
+  it("grants when the position read succeeds, without re-reading the state", async () => {
+    forceNative(false)
+    const read = webPositionReader({ fix: true })
+    //a stale "prompt" in the Permissions API must not override the success
+    const query = permissionsAnswering("prompt")
+    await expect(requestGeoPermission()).resolves.toBe("granted")
+    expect(read).toHaveBeenCalledTimes(1)
+    //the prompt is raised with the defaults: low accuracy, 10 s
+    expect(read.mock.lastCall?.[2]).toEqual({
+      enableHighAccuracy: false,
+      timeout: 10_000,
+    })
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it("re-reads the settled state when the user denies the prompt", async () => {
+    forceNative(false)
+    webPositionReader({ error: { code: 1, message: "User denied" } })
+    const query = permissionsAnswering("denied")
+    await expect(requestGeoPermission()).resolves.toBe("denied")
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps 'prompt' when the prompt is dismissed without a choice", async () => {
+    //a dismissed prompt fails the read with the same PERMISSION_DENIED code as a
+    //refusal while the state stays "prompt", so the re-read wins over the code
+    forceNative(false)
+    webPositionReader({ error: { code: 1, message: "User denied" } })
+    const query = permissionsAnswering("prompt")
+    await expect(requestGeoPermission()).resolves.toBe("prompt")
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it("re-reads 'granted' when the read times out after the user allowed it", async () => {
+    //a timeout is not a refusal: the permission stands, only the fix failed
+    forceNative(false)
+    webPositionReader({ error: { code: 3, message: "Timeout expired" } })
+    const query = permissionsAnswering("granted")
+    await expect(requestGeoPermission()).resolves.toBe("granted")
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it("reports 'unavailable' when the geolocation API is absent", async () => {
+    forceNative(false)
+    stubNavigatorProp("geolocation", undefined)
+    const query = permissionsAnswering("granted")
+    await expect(requestGeoPermission()).resolves.toBe("unavailable")
+    expect(query).not.toHaveBeenCalled()
+  })
+})
+
+describe("geolocation — server render", () => {
+  //during SSR there is no navigator at all: every accessor answers
+  //"unavailable" or rejects, and none of them throws a TypeError
+  it("answers without a navigator", async () => {
+    forceNative(false)
+    vi.stubGlobal("navigator", undefined)
+    await expect(checkGeoPermission()).resolves.toBe("unavailable")
+    await expect(requestGeoPermission()).resolves.toBe("unavailable")
+    await expect(getCurrentPosition()).rejects.toThrow(
+      "Geolocation unavailable",
+    )
   })
 })
