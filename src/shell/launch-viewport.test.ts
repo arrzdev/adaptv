@@ -26,13 +26,19 @@ function probeHeight(style: string): number {
   throw new Error(`unmodelled probe: ${style}`)
 }
 
-function launch(at: Reading, standalone = true) {
+//"ios" is an app on the home screen (iOS sets navigator.standalone), "android" an installed app
+//that only matches the standalone display mode, "tab" a browser tab.
+function launch(at: Reading, where: "ios" | "android" | "tab" = "ios") {
   reading = at
   root.style.removeProperty("--pwa-launch-height")
   root.removeAttribute(SPLASH_REVEALED_ATTR)
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: standalone && query === "(display-mode: standalone)",
+    matches: where !== "tab" && query === "(display-mode: standalone)",
   }))
+  Object.defineProperty(window.navigator, "standalone", {
+    configurable: true,
+    value: where === "ios" ? true : undefined,
+  })
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
     get: () => reading.ih,
@@ -80,6 +86,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   if (innerHeight)
     Object.defineProperty(window, "innerHeight", innerHeight)
+  Reflect.deleteProperty(window.navigator, "standalone")
 })
 
 describe("the launch height the splash centres in", () => {
@@ -143,8 +150,18 @@ describe("the launch height the splash centres in", () => {
     expect(launchHeight()).toBe("874px")
   })
 
+  it("keeps an Android installed app's frozen height when its view reads short", () => {
+    //illustrative readings, not measured: an installed app on Android (standalone display mode,
+    //no navigator.standalone) reloading with the keyboard still up reads innerHeight short of the
+    //screen, at head and at the resize that follows. Nothing like iOS 26's shrink was measured there.
+    launch({ vh: 915, dvh: 600, ih: 600, insetTop: 0 }, "android")
+    expect(launchHeight()).toBe("915px")
+    resize({ vh: 915, dvh: 560, ih: 560, insetTop: 0 })
+    expect(launchHeight()).toBe("915px")
+  })
+
   it("leaves a browser tab unset", () => {
-    launch({ vh: 754, dvh: 714, ih: 714, insetTop: 0 }, false)
+    launch({ vh: 754, dvh: 714, ih: 714, insetTop: 0 }, "tab")
     resize({ vh: 754, dvh: 600, ih: 600, insetTop: 0 })
     expect(launchHeight()).toBe("")
   })
