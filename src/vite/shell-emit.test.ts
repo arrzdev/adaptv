@@ -113,10 +113,16 @@ async function emit(
   clientManifest: object,
 ): Promise<void> {
   const plugin = adaptvShellEmitPlugin(context)
-  // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
-  ;(plugin.config as any).call(
+  const configEnvironment = (plugin as Plugin).configEnvironment
+  if (typeof configEnvironment !== "object" || !configEnvironment.handler)
+    throw new Error(
+      "configEnvironment must be an object hook so `order` can be set",
+    )
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  ;(configEnvironment.handler as any).call(
     {},
-    {},
+    "client",
+    { build: {} },
     { command: "build", mode: "production" },
   )
   // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
@@ -131,15 +137,22 @@ async function emit(
       "generateBundle must be an object hook so `order` can be set",
     )
   const bundle = {
-    ".vite/manifest.json": {
+    ".vite/adaptv-shell-manifest.json": {
       type: "asset",
-      fileName: ".vite/manifest.json",
+      fileName: ".vite/adaptv-shell-manifest.json",
       source: JSON.stringify(clientManifest),
     },
   }
   // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
   await (generate.handler as any).call(
-    { environment: { name: "client" } },
+    {
+      environment: {
+        name: "client",
+        config: {
+          build: { manifest: ".vite/adaptv-shell-manifest.json" },
+        },
+      },
+    },
     {},
     bundle,
     false,

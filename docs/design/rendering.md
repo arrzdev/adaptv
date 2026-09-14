@@ -145,9 +145,11 @@ route chunks** (Workbox precache manifest — adaptv builds this). Combined with
 > The shell carries the pre-paint platform + theme stamps, inlined critical CSS, the hashed stylesheet
 > and entry, and an empty `#root`. Asset names come from Vite's manifest (the plugin turns
 > `build.manifest` on for the client), so they track content hashes. The manifest is read out of the
-> bundle and **never written**: on disk it was deployed with the app, and Nitro's server listed it
+> bundle and **not written**: on disk it was deployed with the app, and Nitro's server listed it
 > in its public assets, so an SSR app served its whole source-to-chunk map at `/.vite/manifest.json`
 > (41 KB on the playground). Nothing reads it at runtime; Start builds its preloads from the bundle.
+> An app (or a plugin) that turns `build.manifest` on itself keeps its file at the path it chose, in
+> the web output and in the native bundle alike, and the shell reads that one.
 >
 > **One structural fix this forced:** `getUiThemeInitScript` lived in `hooks/use-theme.ts`, which imports
 > React and transitively the Capacitor native-theme accessor. A Node-side Vite plugin cannot import
