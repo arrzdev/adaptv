@@ -1,5 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react"
-import { createRef, useState } from "react"
+import { createRef, Suspense, startTransition, use, useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 import type {
   RadioGroupHandle,
@@ -89,7 +89,7 @@ function Plans({
   name,
   defaultValue,
 }: {
-  onValueChange?: (value: string | null) => void
+  onValueChange?: (value: string) => void
   name?: string
   defaultValue?: string
 }) {
@@ -112,11 +112,13 @@ function ControlledPlans({
   frozen = false,
   initial = "monthly",
   defaultValue,
+  disabled,
 }: {
-  onValueChange: (value: string | null) => void
+  onValueChange: (value: string) => void
   frozen?: boolean
   initial?: string | null
   defaultValue?: string
+  disabled?: boolean
 }) {
   const [plan, setPlan] = useState<string | null>(initial)
   return (
@@ -125,6 +127,7 @@ function ControlledPlans({
         aria-label="Plan"
         value={plan}
         defaultValue={defaultValue}
+        disabled={disabled}
         onValueChange={(next) => {
           onValueChange(next)
           if (!frozen) setPlan(next)
@@ -912,7 +915,10 @@ describe("RadioGroup — forms", () => {
     }
   })
 
-  it("a form reset reports null to a controlled owner with no defaultValue", async () => {
+  it("a form reset reports nothing to a controlled owner with no defaultValue, and puts the DOM back on its value", async () => {
+    //With no defaultValue there is no reset value to report. The browser still
+    //clears every radio, so the render that follows writes the owner's value back:
+    //the DOM, the paint and the owner agree, as with a React controlled input.
     const spy = vi.fn()
     const { container } = render(
       <form>
@@ -920,19 +926,28 @@ describe("RadioGroup — forms", () => {
       </form>,
     )
     const form = container.querySelector("form") as HTMLFormElement
-    const all = radios(container)
-    tap(all[1])
+    const [monthly, yearly] = radios(container)
+    const [monthlyItem, yearlyItem] = itemsOf(container)
+    tap(yearly)
+    expect(spy).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenLastCalledWith("yearly")
+
     await act(async () => {
       form.reset()
     })
+    expect(yearly.checked, "the browser cleared every radio").toBe(false)
     await flushResetTask()
-    expect(spy).toHaveBeenCalledTimes(2)
-    expect(spy).toHaveBeenLastCalledWith(null)
-    expect(all.some((r) => r.checked)).toBe(false)
     expect(
-      itemsOf(container).some((item) => item.hasAttribute("data-checked")),
-    ).toBe(false)
+      spy,
+      "a reset with no default reports nothing",
+    ).toHaveBeenCalledTimes(1)
+    expect(yearly.checked, "the DOM is back on the owner's value").toBe(
+      true,
+    )
+    expect(monthly.checked).toBe(false)
+    expect(yearlyItem.hasAttribute("data-checked")).toBe(true)
+    expect(monthlyItem.hasAttribute("data-checked")).toBe(false)
+    expect(new FormData(form).getAll(yearly.name)).toEqual(["yearly"])
   })
 
   it("a reset to the value a controlled group already holds reports nothing", async () => {
@@ -949,6 +964,62 @@ describe("RadioGroup — forms", () => {
     await flushResetTask()
     expect(spy).not.toHaveBeenCalled()
     expect(radios(container)[0].checked).toBe(true)
+  })
+
+  it("a render React throws away is not what a later reset acts on", async () => {
+    //A transition renders the group on the default and then suspends, so React
+    //discards that render and the owner's committed value stays. The reset task
+    //must act on the committed render: the owner still holds yearly, so the
+    //default is a change to report.
+    const spy = vi.fn()
+    const never = new Promise<never>(() => {})
+    function Suspends({ on }: { on: boolean }) {
+      if (on) use(never)
+      return null
+    }
+    let moveInTransition = () => {}
+    function Owner() {
+      const [plan, setPlan] = useState("yearly")
+      const [pending, setPending] = useState(false)
+      moveInTransition = () =>
+        startTransition(() => {
+          setPlan("monthly")
+          setPending(true)
+        })
+      return (
+        <form>
+          <RadioGroup
+            aria-label="Plan"
+            value={plan}
+            defaultValue="monthly"
+            onValueChange={spy}
+          >
+            <RadioGroup.Item value="monthly">Monthly</RadioGroup.Item>
+            <RadioGroup.Item value="yearly">Yearly</RadioGroup.Item>
+          </RadioGroup>
+          <Suspense fallback={null}>
+            <Suspends on={pending} />
+          </Suspense>
+        </form>
+      )
+    }
+    const { container, unmount } = render(<Owner />)
+    const form = container.querySelector("form") as HTMLFormElement
+    const [monthly, yearly] = radios(container)
+    await act(async () => {
+      moveInTransition()
+    })
+    expect(yearly.checked, "the transition never committed").toBe(true)
+
+    await act(async () => {
+      form.reset()
+    })
+    await flushResetTask()
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenLastCalledWith("monthly")
+    expect(yearly.checked).toBe(true)
+    expect(monthly.checked).toBe(false)
+    unmount()
   })
 
   it("a reset a consumer's onReset prevents changes nothing, uncontrolled or controlled", async () => {
@@ -991,6 +1062,68 @@ describe("RadioGroup — forms", () => {
     expect(controlledYearly.checked).toBe(true)
     expect(items[3].hasAttribute("data-checked")).toBe(true)
     expect(controlled).toHaveBeenCalledTimes(1)
+  })
+
+  it("a disabled group still follows a form reset, uncontrolled or controlled", async () => {
+    //The browser resets disabled radios too: `disabled` stops the user choosing,
+    //not the form putting its controls back.
+    const ref = createRef<RadioGroupHandle>()
+    const controlled = vi.fn()
+    function Owner({ disabled }: { disabled: boolean }) {
+      return (
+        <>
+          <form>
+            <RadioGroup
+              ref={ref}
+              name="plan"
+              defaultValue="monthly"
+              disabled={disabled}
+            >
+              <RadioGroup.Item value="monthly">Monthly</RadioGroup.Item>
+              <RadioGroup.Item value="yearly">Yearly</RadioGroup.Item>
+            </RadioGroup>
+          </form>
+          <form>
+            <ControlledPlans
+              onValueChange={controlled}
+              initial="yearly"
+              defaultValue="monthly"
+              disabled
+            />
+          </form>
+        </>
+      )
+    }
+    const { container, rerender } = render(<Owner disabled={false} />)
+    const [first, second] = [...container.querySelectorAll("form")]
+    const [monthly, yearly, controlledMonthly, controlledYearly] =
+      radios(container)
+    const items = itemsOf(container)
+    tap(yearly)
+    expect(ref.current?.value).toBe("yearly")
+    rerender(<Owner disabled />)
+    for (const radio of radios(container))
+      expect(radio.disabled).toBe(true)
+
+    await act(async () => {
+      resetInSpecOrder(first)
+      resetInSpecOrder(second)
+    })
+    await flushResetTask()
+    expect(monthly.checked).toBe(true)
+    expect(yearly.checked).toBe(false)
+    expect(
+      items[0].hasAttribute("data-checked"),
+      "the paint follows",
+    ).toBe(true)
+    expect(items[1].hasAttribute("data-checked")).toBe(false)
+    expect(ref.current?.value).toBe("monthly")
+    expect(controlled).toHaveBeenCalledTimes(1)
+    expect(controlled).toHaveBeenLastCalledWith("monthly")
+    expect(controlledMonthly.checked).toBe(true)
+    expect(controlledYearly.checked).toBe(false)
+    expect(items[2].hasAttribute("data-checked")).toBe(true)
+    expect(items[3].hasAttribute("data-checked")).toBe(false)
   })
 
   it("forwards `form` to every radio", () => {

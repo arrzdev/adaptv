@@ -141,7 +141,7 @@ function SizeGroup({
   testId: string
   note: (text: string) => void
 }) {
-  const [value, setValue] = useState<string | null>("medium")
+  const [value, setValue] = useState("medium")
   return (
     <div data-testid={testId} className="flex flex-col gap-y-2">
       <RadioGroup

@@ -18,6 +18,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -102,16 +103,23 @@ export interface RadioGroupProps
   /** Controlled selected value; `null` selects nothing. */
   value?: string | null
   /**
-   * Initial selected value when uncontrolled. In both modes, what a reset of the
-   * owning form restores: omit it and a reset leaves no choice.
+   * Initial selected value when uncontrolled, and what a reset of the owning form
+   * restores. Uncontrolled, a reset selects it, or nothing when it is omitted.
+   * Controlled, a reset reports it through `onValueChange` when it differs from
+   * `value`; omitted, a reset reports nothing and puts the radios back on `value`.
    */
   defaultValue?: string | null
   /**
-   * Fired once per selection the user makes, with the item's value. A reset of the
-   * owning form that moves the group fires it too, with `defaultValue` or `null`;
-   * a controlled owner decides whether to take it, as with any other change.
+   * Fired once per selection the user makes, with the item's value.
+   *
+   * A reset of the owning form (disabled or not) fires it only in a controlled
+   * group whose `defaultValue` is a string that differs from `value`, once, with
+   * `defaultValue`, and the owner decides as with any other change: ignore it and
+   * the radios are put back on `value`. A controlled group with no `defaultValue`
+   * reports nothing and puts its radios back on `value`. An uncontrolled group
+   * never reports a reset: it takes `defaultValue`, or no selection, as its state.
    */
-  onValueChange?: (value: string | null) => void
+  onValueChange?: (value: string) => void
   /**
    * The radios' `name`, and the key their value is submitted under in a form.
    *
@@ -122,7 +130,10 @@ export interface RadioGroupProps
    * one is choosing that behaviour.
    */
   name?: string
-  /** Disables every item: none can be selected, focused, or submitted. */
+  /**
+   * Disables every item: none can be selected, focused, or submitted. A reset of
+   * the owning form still applies, as the browser resets disabled radios too.
+   */
   disabled?: boolean
   /** Constraint validation: the form will not submit until an item is selected. */
   required?: boolean
@@ -635,7 +646,10 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
       defaultValue,
       onValueChange,
     })
-    latest.current = { isControlled, value, defaultValue, onValueChange }
+    //assigned after commit, so a render React throws away never reaches it
+    useLayoutEffect(() => {
+      latest.current = { isControlled, value, defaultValue, onValueChange }
+    })
     //a render with no new value: React writes every radio's `checked` back from it
     const [, rewriteRadios] = useReducer((n: number) => n + 1, 0)
 
@@ -647,9 +661,10 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
     //`defaultValue`, or no choice, and it is never read back from the DOM: a
     //render in between writes the OLD selection back into `checked`.
     //Uncontrolled, the group takes the reset value as its state. Controlled, it
-    //reports the reset value like any other change and writes no state; if the
-    //owner ignores it, the forced render writes the owner's `value` back over
-    //what the browser reset.
+    //reports a string `defaultValue` that differs from `value` like any other
+    //change and writes no state; with no `defaultValue` it reports nothing. Either
+    //way the forced render writes the owner's `value` back over what the browser
+    //reset, if the owner did not move it. A disabled group resets all the same.
     useEffect(() => {
       const root = rootRef.current
       if (!root) return
@@ -668,9 +683,13 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
             setUncontrolledValue(now.defaultValue)
             return
           }
-          //as a click on the selected item: no change, no report
-          if (now.value === now.defaultValue) return
-          now.onValueChange?.(now.defaultValue)
+          //already on it: no change, no report, as a click on the selected item
+          if (
+            now.defaultValue !== null &&
+            now.defaultValue !== now.value
+          ) {
+            now.onValueChange?.(now.defaultValue)
+          }
           rewriteRadios()
         }, 0)
       }
