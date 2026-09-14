@@ -20,7 +20,8 @@ import { tintForRouteId } from "#adaptv/shell/route-tints"
  */
 export function useRouteTint(): string | null {
   return useRouterState({
-    select: (state) =>
-      tintForRouteId(ROUTE_TINTS, state.matches.at(-1)?.routeId),
+    select: ({ matches }) =>
+      //not `.at(-1)`: Array.prototype.at is iOS 15.4, and every app runs this
+      tintForRouteId(ROUTE_TINTS, matches[matches.length - 1]?.routeId),
   })
 }
