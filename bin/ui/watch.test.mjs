@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events"
 import { act } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { FRAMES } from "./theme.mjs"
 
 // The watch block is where a cursor-arithmetic bug actually shipped: the string renderer grows
 // it to two rows for a notice and shrinks it back, by hand, and getting that off by one walked
@@ -21,6 +22,26 @@ class FakeStdout extends EventEmitter {
   write(s) {
     this.frames.push(s)
     return true
+  }
+}
+
+/**
+ * A stdin for the keys row. `tty: true` is enough of a terminal for Ink's raw mode, so the block
+ * draws `r`/`b`/`ctrl-c`; `tty: false` is a piped run, which draws `keys unavailable`.
+ */
+class FakeStdin extends EventEmitter {
+  constructor(tty) {
+    super()
+    this.isTTY = tty
+    if (tty) this.setRawMode = () => {}
+  }
+  setEncoding() {}
+  resume() {}
+  pause() {}
+  ref() {}
+  unref() {}
+  read() {
+    return null
   }
 }
 
@@ -93,36 +114,53 @@ async function screen(drive, columns = 100) {
   return (await screenRaw(drive, columns)).filter((l) => l.trim() !== "")
 }
 
-/** The same, with every row the block drew — blanks included. */
-async function screenRaw(drive, columns = 100) {
-  const block = await mount(columns)
-  await settled(() => drive(block.w))
-  const rows = block.rows()
-  block.unmount()
-  return rows
+/**
+ * The same, with every row the block drew — blanks included.
+ *
+ * The unmount is in a `finally`: a drive or a paint that throws must still take the block down,
+ * or its Ink instance stays mounted into the fake stdout and the next test reads its frames.
+ */
+async function screenRaw(drive, columns = 100, stdin) {
+  const block = await mount(columns, stdin)
+  try {
+    await settled(() => drive(block.w))
+    return block.rows()
+  } finally {
+    block.unmount()
+  }
 }
 
 /**
  * Mount the block into a fake stdout, for a test that reads the screen more than once.
  * `rows()` is the last frame as trimmed lines, blanks included; `unmount()` stops the block and
  * gives the real stdout back.
+ *
+ * `stdin` mounts the KEYS row: `{ tty: true }` draws `r`/`b`/`ctrl-c`, `{ tty: false }` draws
+ * `keys unavailable`. Without it the block mounts with `keys: false` — no raw-mode stdin to set
+ * up — and draws `ctrl-c stop` alone.
  */
-async function mount(columns = 100) {
+async function mount(columns = 100, stdin) {
   const fake = new FakeStdout(columns)
   const real = Object.getOwnPropertyDescriptor(process, "stdout")
+  const realIn = Object.getOwnPropertyDescriptor(process, "stdin")
   Object.defineProperty(process, "stdout", {
     value: fake,
     configurable: true,
   })
+  if (stdin)
+    Object.defineProperty(process, "stdin", {
+      value: new FakeStdin(stdin.tty),
+      configurable: true,
+    })
   const restoreCi = withInteractiveInk()
   restore = () => {
     restoreCi()
     Object.defineProperty(process, "stdout", real)
+    Object.defineProperty(process, "stdin", realIn)
   }
   vi.resetModules()
   const { inkWatcher } = await import("./watch.mjs")
-  //`keys: false` — no raw-mode stdin to set up, and the keys row is asserted separately.
-  const w = inkWatcher({ keys: false })
+  const w = inkWatcher({ keys: Boolean(stdin) })
   const rows = () =>
     (fake.frames.at(-1) ?? "")
       .replace(ANSI, "")
@@ -260,13 +298,19 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     vi.resetModules()
     const { inkWatcher } = await import("./watch.mjs")
     const w = inkWatcher({ keys: false })
-    await settled(() => w.notice("config change"))
-    //the premise: the notice is ON screen, or the erase below proves nothing about height
-    expect(fake.frames.at(-1)).toContain("config change")
-    const before = fake.frames.length
-    w.stop()
-    restore()
-    restore = null
+    let before = 0
+    //`stop()` in a `finally`, because the premise is checked while the block is still up: a
+    //premise that fails must not leave the block mounted for the next test to read.
+    try {
+      await settled(() => w.notice("config change"))
+      //the premise: the notice is ON screen, or the erase below proves nothing about height
+      expect(fake.frames.at(-1)).toContain("config change")
+      before = fake.frames.length
+    } finally {
+      w.stop()
+      restore()
+      restore = null
+    }
     //Everything written from `stop()` onwards. Nothing may re-state the block.
     const after = fake.frames.slice(before).join("")
     expect(after).not.toContain("config change")
@@ -411,4 +455,112 @@ describe("the watch block's own breathing room (R64)", () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toContain("ctrl-c")
   })
+})
+
+/*
+ * A live row is ONE physical line at any width (R10, R44) — and on a narrow terminal it is the
+ * row's TAIL that yields, never its head. Every row here was a row `Box` of `Text`s, which Yoga
+ * shrinks item by item, so no line got wider than the terminal while each item wrapped inside its
+ * own sliver: the block grew rows and the glyph at the front of the row was the first to go. At
+ * 40 columns in a real pty the keys row lost its `r`, which left a label with no key to press:
+ *
+ *        reload js  b rebuild app  ctrl-c stop
+ *
+ * 40 is the narrowest the visual language asks a command to be looked at in
+ * (`docs/design/cli-visual.md` §6), 30 is narrower still, and 80 is a terminal's default. Every
+ * expected row is derived from the same block drawn at 200 columns, so these pin how the row
+ * DEGRADES and the copy stays in one place.
+ */
+describe("every row of the watch block holds ONE line on a narrow terminal (R10, R44)", () => {
+  const WIDTHS = [40, 30, 80]
+  //the spinner advances on its own clock, so two renders may catch different frames of it
+  const SPIN = new RegExp(`^( {2})[${FRAMES.join("")}]`)
+  const still = (row) => row.replace(SPIN, "$1*")
+  /** Ink's clip: the head of the row, marked with `…` in the last column. */
+  const clipped = (full, columns) =>
+    full.length > columns ? `${full.slice(0, columns - 1)}…` : full
+
+  it.each(WIDTHS)(
+    "the keys row drops whole keys from the right at %i columns, never half of one",
+    async (columns) => {
+      const rows = await screenRaw(() => {}, columns, { tty: true })
+      const [full] = await screenRaw(() => {}, 200, { tty: true })
+      //the offers, in order, as the dev sees them with room to spare
+      const offers = full.trim().split("   ")
+      expect(offers).toEqual([
+        "r reload js",
+        "b rebuild app",
+        "ctrl-c stop",
+      ])
+      //what fits: as many whole offers as the row has room for, from the left
+      let want = full
+      for (let n = offers.length; n > 0; n--) {
+        want = `  ${offers.slice(0, n).join("   ")}`
+        if (want.length <= columns) break
+      }
+      //the premise, at the narrow widths: the whole row does not fit, or nothing yielded here
+      if (columns < 80) expect(full.length).toBeGreaterThan(columns)
+      expect(rows).toHaveLength(1)
+      for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
+      expect(rows[0]).toBe(want)
+      //every offer on screen is WHOLE: its key and its label, never a label without its key
+      for (const shown of rows[0].trim().split("   "))
+        expect(offers).toContain(shown)
+    },
+  )
+
+  it.each(WIDTHS)(
+    "the keys row keeps the notice above it and still ONE row at %i columns",
+    async (columns) => {
+      const rows = await screenRaw(
+        (w) => w.notice("config change"),
+        columns,
+        { tty: true },
+      )
+      const full = await screenRaw((w) => w.notice("config change"), 200, {
+        tty: true,
+      })
+      //notice, blank, keys: a wrapped keys row makes this four
+      expect(rows).toHaveLength(3)
+      for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
+      expect(rows[0].startsWith("  ! config change")).toBe(true)
+      expect(rows[2].startsWith("  r reload js")).toBe(true)
+      expect(full[2].startsWith(rows[2])).toBe(true)
+    },
+  )
+
+  it.each(WIDTHS)(
+    "the keys-unavailable row clips at its end at %i columns",
+    async (columns) => {
+      const rows = await screenRaw(() => {}, columns, { tty: false })
+      const [full] = await screenRaw(() => {}, 200, { tty: false })
+      expect(
+        full.startsWith("  keys unavailable (stdin is not a TTY)"),
+      ).toBe(true)
+      if (columns < 80) expect(full.length).toBeGreaterThan(columns)
+      expect(rows).toHaveLength(1)
+      for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
+      expect(rows[0]).toBe(clipped(full, columns))
+    },
+  )
+
+  it.each(WIDTHS)(
+    "the HMR row keeps its spinner and clips the file list at %i columns",
+    async (columns) => {
+      //`dev` passes the changed files joined with `, `, and a burst can name several
+      const files =
+        "src/routes/index.tsx, src/styles/main.css, src/components/button.tsx"
+      const rows = await screenRaw((w) => w.hmr(files), columns)
+      const [full] = await screenRaw((w) => w.hmr(files), 200)
+      expect(full).toMatch(SPIN)
+      expect(still(full)).toBe(`  * watching  ↻ ${files}`)
+      //the premise: even 80 columns cannot hold this burst, so every width clips
+      expect(full.length).toBeGreaterThan(columns)
+      expect(rows).toHaveLength(1)
+      for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
+      //the spinner is the row's head, so it is the last thing a clip may take
+      expect(rows[0]).toMatch(SPIN)
+      expect(still(rows[0])).toBe(clipped(still(full), columns))
+    },
+  )
 })
