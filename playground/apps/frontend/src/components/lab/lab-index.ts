@@ -58,6 +58,13 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/progress-bar",
+    title: "ProgressBar",
+    summary:
+      "moves by transform · pauses off screen · RTL · forced colors",
+    isNew: true,
+  },
+  {
     to: "/lab/button",
     title: "Button",
     summary: "press engine + haptics + slots, with real semantics",
