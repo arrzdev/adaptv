@@ -151,6 +151,9 @@ Every piece of the custom-splash-over-masked-native-splash design is in the repo
   app usually shrinks its web view below the status bar ~120 ms after the head script (874 → 812 pt,
   `100vh` stays 874), so until the splash is revealed a `resize` that leaves less lowers the height to
   `innerHeight` + the top inset. That moves the splash up 31 pt once, after its first painted frame.
+  Only an iOS Home Screen app (`navigator.standalone`) lowers it: the shrink was measured nowhere
+  else, and an Android installed app with its keyboard up could read a short `innerHeight` (not
+  measured).
   A reload of an already-shrunk page gets no `resize` and keeps 874.
 
 > 🔒 **LOCKED — splash is done and is one of adaptv's strongest assets.** No migration work remains.
