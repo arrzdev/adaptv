@@ -380,7 +380,21 @@ export type SwipeableHandle = {
 
 type SwipeableRootProps = Partial<SwipeableConfig> & {
   children: ReactNode
+  /**
+   * The row opened to `side`, from closed or from its other side. Called as
+   * the open starts, not when it lands, so an open caught mid-spring and pulled
+   * shut still reports this and then `onClose`. A release that springs the row
+   * back to the side already reported calls nothing, except on a controlled
+   * row whose `open` prop does not say `side`: a close the parent asked for,
+   * caught and thrown back open, is reported so the parent can follow it.
+   */
   onOpen?: (side: Side) => void
+  /**
+   * The row closed after an `onOpen`, called once when the close lands. A drag
+   * that never opened the row, or a `close()` that finds nothing open, calls
+   * nothing, so an `onClose` always follows an `onOpen` with no other
+   * `onClose` between them.
+   */
   onClose?: () => void
   /**
    * Controlled open state. Omit for uncontrolled rows. After the first value
@@ -482,12 +496,19 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
     const velRef = useRef(0)
     const rafRef = useRef<number | null>(null)
     const openRef = useRef<OpenSide>(false)
+    /** The side `onOpen` last reported, until `onClose` reports it shut. The
+     *  callbacks answer to this, not to `openRef`: that flips when a close
+     *  starts and again when a grab throws the row back open, and a release
+     *  that springs the row to where it already was has changed nothing. */
+    const reportedRef = useRef<OpenSide>(false)
     const closingRef = useRef(false)
     /** Natural action widths, measured from layout. */
     const lwRef = useRef(0)
     const rwRef = useRef(0)
     const pendingOpenRef = useRef<OpenSide>(false)
     const hasControlledRef = useRef(false)
+    /** The last `open` prop, for a controlled row's `onOpen` gate. */
+    const controlledRef = useRef<OpenSide>(false)
 
     //---- gesture tracking ---------------------------------------------------
     const downRef = useRef<{ x: number; y: number; start: number } | null>(
@@ -592,6 +613,9 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       [syncTrays],
     )
 
+    //cleared on every spring's landing, just before onSettled runs:
+    //playground/e2e/swipeable.spec.ts reads the cleared will-change as "the
+    //spring landed", because the transform clears half a pixel before rest
     const setWillChange = useCallback((on: boolean) => {
       const value = on ? "transform" : ""
       for (const el of [
@@ -708,6 +732,9 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         setOpenSide(false)
         springTo(0, () => {
           closingRef.current = false
+          //a row that was only dragged, never opened, springs back unreported
+          if (reportedRef.current === false) return
+          reportedRef.current = false
           onCloseRef.current?.()
         })
       },
@@ -732,7 +759,20 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         openRef.current = side
         setOpenSide(side)
         springTo(side === "left" ? width : -width)
-        onOpenRef.current?.(side)
+        //a nudge that settles back open, or a close grabbed and thrown back,
+        //reopens the side already reported; a swap to the other side is news,
+        //and so is an open a controlled row's parent does not know about — a
+        //close it asked for that the finger threw back open. Unreported, the
+        //parent keeps saying closed and its next `false` changes nothing
+        if (
+          reportedRef.current !== side ||
+          (hasControlledRef.current && controlledRef.current !== side)
+        ) {
+          reportedRef.current = side
+          onOpenRef.current?.(side)
+        }
+        //every open, reported or not: a row the Group closed, grabbed mid-close
+        //and thrown back open, must close the sibling that closed it
         groupRef.current?.notifyOpen(selfClose)
       },
       [selfClose, springTo],
@@ -800,6 +840,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
 
     useLayoutEffect(() => {
       if (controlledOpen !== undefined) hasControlledRef.current = true
+      controlledRef.current = controlledOpen ?? false
       const target =
         controlledOpen ?? (hasControlledRef.current ? false : undefined)
       if (target === undefined) return
