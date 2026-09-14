@@ -69,21 +69,43 @@ afterEach(() => {
 })
 
 describe("orientation — reading works everywhere", () => {
-  it("reads screen.orientation.type on web", () => {
+  it.each([
+    "portrait-primary",
+    "portrait-secondary",
+    "landscape-primary",
+    "landscape-secondary",
+  ])("reads screen.orientation.type %s on web", (type) => {
     forceNative(false)
-    stubScreenOrientation({ type: "landscape-secondary" })
-    expect(getScreenOrientation()).toBe("landscape-secondary")
+    stubScreenOrientation({ type })
+    expect(getScreenOrientation()).toBe(type)
   })
 
-  it("falls back to a media query on pre-16.4 WebKit", () => {
-    //no screen.orientation at all — the axis is still knowable, just not the
-    //primary/secondary half, so we report the primary of the right axis
+  it.each([
+    ["portrait", "portrait-primary"],
+    ["landscape", "landscape-primary"],
+  ])(
+    "falls back to a media query on pre-16.4 WebKit held %s",
+    (axis, expected) => {
+      //no screen.orientation at all — the axis is still knowable, just not the
+      //primary/secondary half, so we report the primary of the right axis. The
+      //stub answers by the query it is asked, so asking the wrong axis shows.
+      forceNative(false)
+      stubScreenOrientation(undefined)
+      vi.spyOn(window, "matchMedia").mockImplementation(
+        (query) =>
+          ({
+            matches: query === `(orientation: ${axis})`,
+          }) as MediaQueryList,
+      )
+      expect(getScreenOrientation()).toBe(expected)
+    },
+  )
+
+  it("reports portrait when neither screen.orientation nor matchMedia exists", () => {
     forceNative(false)
     stubScreenOrientation(undefined)
-    vi.spyOn(window, "matchMedia").mockReturnValue({
-      matches: false,
-    } as MediaQueryList)
-    expect(getScreenOrientation()).toBe("landscape-primary")
+    vi.stubGlobal("matchMedia", undefined)
+    expect(getScreenOrientation()).toBe("portrait-primary")
   })
 
   it("normalises an orientation type it does not recognise", () => {
@@ -181,6 +203,26 @@ describe("orientation — subscription", () => {
     window.dispatchEvent(new Event("orientationchange"))
     expect(cb).toHaveBeenCalledTimes(1)
   })
+
+  it("fires on screen.orientation's own change event", async () => {
+    //the web binding is made once per module, so bind it on a fresh one
+    vi.resetModules()
+    restores.push(() => vi.resetModules())
+    forceNative(false)
+    const orientation = new EventTarget()
+    stubScreenOrientation(
+      Object.assign(orientation, { type: "portrait-primary" }),
+    )
+    const { subscribeScreenOrientation } = await import(
+      "#adaptv/capabilities/orientation"
+    )
+    const cb = vi.fn()
+    const unsub = subscribeScreenOrientation(cb)
+
+    orientation.dispatchEvent(new Event("change"))
+    expect(cb).toHaveBeenCalledTimes(1)
+    unsub()
+  })
 })
 
 describe("orientation — a binary that predates the plugin", () => {
@@ -194,6 +236,19 @@ describe("orientation — a binary that predates the plugin", () => {
     await expect(lockScreenOrientation("portrait")).resolves.toBe("ok")
     expect(ScreenOrientation.lock).not.toHaveBeenCalled()
     expect(lock).toHaveBeenCalledWith("portrait")
+  })
+
+  it("unlocks through the web API instead of the absent bridge", async () => {
+    forceNativeBinary([])
+    const unlock = vi.fn()
+    stubScreenOrientation({
+      type: "portrait-primary",
+      lock: () => Promise.resolve(),
+      unlock,
+    })
+    await expect(unlockScreenOrientation()).resolves.toBe("ok")
+    expect(ScreenOrientation.unlock).not.toHaveBeenCalled()
+    expect(unlock).toHaveBeenCalledTimes(1)
   })
 
   it("reports unsupported when the WebView cannot lock either", () => {
@@ -315,5 +370,162 @@ describe("orientation — native subscription over a bridge that fails", () => {
 
     unsub()
     expect(live).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("orientation — on the server", () => {
+  it("answers the defaults without touching a window that is not there", async () => {
+    forceNative(false)
+    vi.stubGlobal("window", undefined)
+    expect(getScreenOrientation()).toBe("portrait-primary")
+    expect(isOrientationLockSupported()).toBe(false)
+    await expect(lockScreenOrientation("landscape")).resolves.toBe(
+      "unsupported",
+    )
+    await expect(unlockScreenOrientation()).resolves.toBe("unsupported")
+    expect(() => subscribeScreenOrientation(() => {})()).not.toThrow()
+  })
+})
+
+/** Leave the turn so every settled bridge promise has run its handlers. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+describe("orientation — native subscription over a bridge that answers", () => {
+  it("pushes a rotation the plugin reports into the snapshot and every subscriber", async () => {
+    let onChange: (result: { type: string }) => void = () => {}
+    const { getScreenOrientation, subscribeScreenOrientation } =
+      await nativeOrientation({
+        orientation: () => Promise.resolve({ type: "portrait-primary" }),
+        addListener: (
+          _event: string,
+          listener: (result: { type: string }) => void,
+        ) => {
+          onChange = listener
+          return Promise.resolve({ remove: () => Promise.resolve() })
+        },
+      })
+    //each subscriber records the snapshot it reads when notified, the way
+    //useSyncExternalStore does, so a notification before the write reads stale
+    const first: string[] = []
+    const second: string[] = []
+    const unsubFirst = subscribeScreenOrientation(() =>
+      first.push(getScreenOrientation()),
+    )
+    const unsubSecond = subscribeScreenOrientation(() =>
+      second.push(getScreenOrientation()),
+    )
+    await settle()
+    first.length = 0
+    second.length = 0
+
+    onChange({ type: "landscape-secondary" })
+    expect(getScreenOrientation()).toBe("landscape-secondary")
+    expect(first).toEqual(["landscape-secondary"])
+    expect(second).toEqual(["landscape-secondary"])
+
+    //the plugin's type is a string from the OS, so it is normalised like the web one
+    onChange({ type: "face-up" })
+    expect(getScreenOrientation()).toBe("portrait-primary")
+    expect(first).toEqual(["landscape-secondary", "portrait-primary"])
+    expect(second).toEqual(["landscape-secondary", "portrait-primary"])
+    unsubFirst()
+    unsubSecond()
+  })
+
+  it("normalises the first read the plugin answers", async () => {
+    const { getScreenOrientation, subscribeScreenOrientation } =
+      await nativeOrientation({
+        orientation: () => Promise.resolve({ type: "face-down" }),
+        addListener: () =>
+          Promise.resolve({ remove: () => Promise.resolve() }),
+      })
+    const cb = vi.fn()
+    const unsub = subscribeScreenOrientation(cb)
+    await settle()
+    expect(cb).toHaveBeenCalledTimes(1)
+    expect(getScreenOrientation()).toBe("portrait-primary")
+    unsub()
+  })
+
+  it("shares one native listener between subscribers and releases it with the last", async () => {
+    let calls = 0
+    const remove = vi.fn(() => Promise.resolve())
+    const { subscribeScreenOrientation } = await nativeOrientation({
+      orientation: () => Promise.resolve({ type: "portrait-primary" }),
+      addListener: () => {
+        calls += 1
+        return Promise.resolve({ remove })
+      },
+    })
+    const first = subscribeScreenOrientation(() => {})
+    const second = subscribeScreenOrientation(() => {})
+    await settle()
+    expect(calls).toBe(1)
+
+    first()
+    expect(remove).not.toHaveBeenCalled()
+    second()
+    expect(remove).toHaveBeenCalledTimes(1)
+  })
+
+  it("ignores an orientation read that a released binding answers late", async () => {
+    //a read requested before the last unsubscribe must not overwrite the value
+    //the next binding already seeded, nor notify its subscriber
+    const reads: Array<(result: { type: string }) => void> = []
+    const { getScreenOrientation, subscribeScreenOrientation } =
+      await nativeOrientation({
+        orientation: () => new Promise((resolve) => reads.push(resolve)),
+        addListener: () =>
+          Promise.resolve({ remove: () => Promise.resolve() }),
+      })
+    subscribeScreenOrientation(() => {})()
+    const cb = vi.fn()
+    const unsub = subscribeScreenOrientation(cb)
+
+    reads[1]?.({ type: "landscape-primary" })
+    await settle()
+    expect(getScreenOrientation()).toBe("landscape-primary")
+    expect(cb).toHaveBeenCalledTimes(1)
+
+    reads[0]?.({ type: "portrait-secondary" })
+    await settle()
+    expect(getScreenOrientation()).toBe("landscape-primary")
+    expect(cb).toHaveBeenCalledTimes(1)
+    unsub()
+  })
+})
+
+describe("orientation — unlock outcomes", () => {
+  it("returns 'rejected' when the plugin refuses the unlock", async () => {
+    forceNative(true)
+    vi.mocked(ScreenOrientation.unlock).mockRejectedValueOnce(
+      new Error("not implemented"),
+    )
+    await expect(unlockScreenOrientation()).resolves.toBe("rejected")
+  })
+
+  it("unlocks through the web API where lock() exists", async () => {
+    forceNative(false)
+    const unlock = vi.fn()
+    stubScreenOrientation({
+      type: "portrait-primary",
+      lock: () => Promise.resolve(),
+      unlock,
+    })
+    await expect(unlockScreenOrientation()).resolves.toBe("ok")
+    expect(unlock).toHaveBeenCalledTimes(1)
+    expect(ScreenOrientation.unlock).not.toHaveBeenCalled()
+  })
+
+  it("returns 'rejected' when the web unlock throws", async () => {
+    forceNative(false)
+    stubScreenOrientation({
+      type: "portrait-primary",
+      lock: () => Promise.resolve(),
+      unlock: () => {
+        throw new Error("InvalidStateError")
+      },
+    })
+    await expect(unlockScreenOrientation()).resolves.toBe("rejected")
   })
 })
