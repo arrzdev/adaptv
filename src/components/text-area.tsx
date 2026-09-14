@@ -954,8 +954,8 @@ TextAreaError.displayName = "TextArea.Error"
 
 /**
  * Multiline field with optional auto-grow. Set `autoResize={false}` for a field that
- * fills the height its shell is given (a `className` height, or `h-full` of a sized
- * parent) and scrolls inside itself; `rows` and `maxRows` do not apply there.
+ * fills the height of a sized parent (its shell is locked to `h-full`, so a `className`
+ * height does not size it) and scrolls inside itself; `rows` and `maxRows` do not apply there.
  *
  * **With slots** — place `TextArea.Label`, `TextArea.Hint`, and/or `TextArea.Error`
  * as direct children. `className` styles the shell (`placeholder:` → inner field).
