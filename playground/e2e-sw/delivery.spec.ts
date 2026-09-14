@@ -21,8 +21,20 @@ test.describe(`delivery files (render: ${RENDER})`, () => {
     expect(response.headers()["content-type"]).toMatch(
       /^(text|application)\/javascript/,
     )
+    //A browser checks for a new worker against its HTTP cache, so a long-lived or
+    //immutable `/sw.js` stalls every update behind it. The node server bakes
+    //`immutable` for `/assets/`, and the worker must stay out of that rule.
+    const cacheControl = response.headers()["cache-control"] ?? ""
+    expect(cacheControl).not.toContain("immutable")
+    expect(Number(/max-age=(\d+)/.exec(cacheControl)?.[1] ?? 0)).toBe(0)
     //and it is this build's worker, bound to this build's shell
-    expect(await response.text()).toContain(`"url":"${SHELL.slice(1)}"`)
+    const worker = await response.text()
+    expect(worker).toContain(`"url":"${SHELL.slice(1)}"`)
+    //The worker is written after the build copied `public/`, and its precache
+    //has to see those files. `deploy-server.ts` leans on the server build
+    //copying them before its environment starts; if that order ever moved, the
+    //precache would drop them in silence while every page still loaded.
+    expect(worker).toContain('"url":"favicons/android-chrome-192.png"')
   })
 
   test(`${SHELL}, the shell the worker binds to, is served`, async ({
