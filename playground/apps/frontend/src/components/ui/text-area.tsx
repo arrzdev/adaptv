@@ -21,6 +21,11 @@ type TextAreaProps = {
   name?: string
   /** Minimum rows while auto-growing (base default: 4). */
   rows?: number
+  /**
+   * Grow with the content (base default: true). `false` fills the height of a
+   * sized parent and scrolls inside it, and `rows` no longer applies.
+   */
+  autoResize?: boolean
   "aria-label"?: string
 }
 
@@ -36,6 +41,7 @@ export const TextArea = forwardRef<TextAreaHandle, TextAreaProps>(
       className,
       name,
       rows,
+      autoResize,
       "aria-label": ariaLabel,
     },
     ref,
@@ -45,6 +51,7 @@ export const TextArea = forwardRef<TextAreaHandle, TextAreaProps>(
         ref={ref}
         name={name}
         rows={rows}
+        autoResize={autoResize}
         value={value}
         disabled={disabled}
         autoFocus={autoFocus}
