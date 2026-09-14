@@ -66,7 +66,8 @@ export interface WheelColumnProps {
   value: number
   /**
    * Fired whenever the centered value changes — live while the wheel is
-   * moving, plus a final commit once scrolling settles.
+   * moving, plus a final commit once scrolling settles on a row that is not
+   * the current `value`.
    */
   onChange: (value: number) => void
   /** Accessible name for the column (rendered as a `<fieldset>`). */
@@ -117,6 +118,13 @@ export function WheelColumn({
   //lands while the first roll is still travelling, and counting from the centred row
   //then would swallow it
   const keyTargetRef = useRef<number | null>(null)
+  //the value as of the latest commit, for the settle timer: that timer was armed by
+  //the scroll that reported a row, in the render BEFORE the consumer stored it, so
+  //its own `value` would call the stored row new and report it a second time
+  const valueRef = useRef(value)
+  useLayoutEffect(() => {
+    valueRef.current = value
+  })
 
   const selectedIndex = Math.max(
     0,
@@ -211,7 +219,7 @@ export function WheelColumn({
       }
     }
     const next = items[index]
-    if (next && next.value !== value) onChange(next.value)
+    if (next && next.value !== valueRef.current) onChange(next.value)
   }
 
   function handleScroll() {
