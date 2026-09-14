@@ -163,6 +163,22 @@ describe("composition does not leak", () => {
     expect(root.getAttribute("data-scroll-view")).toBe("y")
   })
 
+  it("RadioGroup's identity is on the group alone; its items are parts", () => {
+    //a selector for every radio group must not also match every option in it
+    const { container } = render(
+      <RadioGroup aria-label="r">
+        <RadioGroup.Item value="a">a</RadioGroup.Item>
+        <RadioGroup.Item value="b">b</RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const matches = container.querySelectorAll('[data-adaptv="radio-group"]')
+    expect(matches).toHaveLength(1)
+    expect(matches[0].getAttribute("data-part")).toBe("root")
+    const items = container.querySelectorAll('[data-part="item"]')
+    expect(items).toHaveLength(2)
+    for (const item of items) expect(item.hasAttribute("data-adaptv")).toBe(false)
+  })
+
   it("Link reports itself, not the ExternalLink it delegates to", () => {
     const { container } = render(<Link to="https://a.dev">l</Link>)
     const root = container.firstElementChild as HTMLElement
