@@ -25,22 +25,80 @@
 import type { Plugin } from "vite"
 
 /**
- * Modules banned from application source.
+ * Every Start package and its subpaths: `@tanstack/react-start` and every other
+ * `@tanstack/*-start` (`solid-start`, `vue-start`, `react-form-start`), the old
+ * `@tanstack/start`, and the `@tanstack/*-start-*` and `@tanstack/start-*` packages
+ * behind them.
  *
- * Whole subpaths rather than named symbols: everything on them needs a request or
- * a response, so there is no client-safe surface worth threading a per-symbol
- * allowance for. `@tanstack/react-router` is deliberately absent — routing is
+ * ## Why a package family, not a list of specifiers
+ *
+ * The Start compiler does not recognise a server function by the specifier it was
+ * imported from. It seeds its known roots per package — `@tanstack/start-client-core`
+ * and `@tanstack/start-fn-stubs` beside `@tanstack/react-start` (start-plugin-core
+ * `start-compiler/compiler.js`, `init()`, and `start-compiler/config.ts`) — and then
+ * follows `export *` chains and compares the resolved binding
+ * (`resolveKnownImportKind()`), so any module that reaches one of those exports is a
+ * server function to it. The ban used to hold two exact specifiers, which left
+ * `import { createServerFn } from "@tanstack/start-client-core"` building clean
+ * under any install that resolves the package (npm, yarn, bun, a hoisted pnpm, or
+ * an app that adds it), and every server subpath (`/client-rpc`, `/server-rpc`,
+ * `/ssr-rpc`, `/rsc`) open. A binding-level rule would need the compiler's own
+ * resolver; the family is the closest thing a `resolveId` hook can see, and it is
+ * deny-by-default, so a subpath an upstream release adds stays shut until someone
+ * reads what is behind it. The siblings are in it because the compiler names its
+ * root `@tanstack/${framework}-start` (`start-compiler/config.ts`): an app that adds
+ * one gets the same server functions under another name. `@tanstack/react-router`
+ * and the rest of the router packages are deliberately outside it — routing is
  * isomorphic, and `loader`/`beforeLoad` are Router features that adaptv endorses.
  * **Ban server-only calls, not loaders.**
+ *
+ * The name part is the regex form of `biome-shared.json`'s globs, `start`,
+ * `start-*`, `*-start` and `*-start-*`, with `*` as "anything but `/`", so the two
+ * layers give every package name the same verdict (a parity test holds them to
+ * it). Any number of words may come before `-start`: `@tanstack/react-form-start` is a
+ * framework package whose `getFormData` is a `createServerFn().handler()`, and
+ * start-plugin-core compiles it into the app (`vite/plugin.js`, the framework-package
+ * crawl), so a one-word prefix let it build clean.
+ *
+ * Matched as a bare specifier, or as a path segment after `node_modules/`, because a
+ * file path into the install reaches the same binding and the compiler treats it
+ * the same.
  */
-const BANNED_MODULES = new Set([
-  "@tanstack/react-start",
-  "@tanstack/react-start/server",
+const START_PACKAGE =
+  /(?:^|\/node_modules\/)@tanstack\/(?:[^/]*-)?start(?:-[^/]*)?(?:\/|$)/
+
+/**
+ * The Start specifiers application source may import. Deny by default means each is
+ * here because a real importer in the app's module graph needs it, and neither
+ * carries a server function:
+ *
+ * - `@tanstack/react-start/client` — imported by `src/routes/client-entry.tsx`
+ *   (`StartClient`, the hydration entry), and by an app that ejects
+ *   `src/client.tsx` with the same code.
+ * - `@tanstack/react-start/server-entry` — imported by
+ *   `src/interface/server-entry.ts`, the SSR server entry adaptv re-exports for
+ *   `router.serverEntry` and a Worker's `main`. It holds no server function.
+ *
+ * Both importers are adaptv's own modules, and under a linked install (the
+ * playground's `link:`) they are not under `node_modules`, so the ban governs them
+ * like app code. `@tanstack/react-start/plugin/vite` is NOT here: its one importer,
+ * `src/vite/adaptv-plugin.ts`, is loaded with the Vite config, before and outside
+ * the plugin chain this hook runs in.
+ *
+ * `biome-shared.json` re-allows exactly this set; `ban-server-apis.test.ts` holds the
+ * two in step.
+ */
+export const ALLOWED_START_SPECIFIERS: ReadonlySet<string> = new Set([
+  "@tanstack/react-start/client",
+  "@tanstack/react-start/server-entry",
 ])
 
 /** Whether an import specifier is a banned server-only module. */
 export function isBannedServerModule(source: string): boolean {
-  return BANNED_MODULES.has(source)
+  //Vite resolves `pkg?x` like `pkg`, so a query must not dodge the rule
+  const specifier = (source.split("?")[0] ?? source).replaceAll("\\", "/")
+  if (ALLOWED_START_SPECIFIERS.has(specifier)) return false
+  return START_PACKAGE.test(specifier)
 }
 
 /**
