@@ -450,11 +450,160 @@ describe("settling a launch", () => {
     expect(deleted).toBe(0)
   })
 
+  it("🔴 does not prune at all when the staged bundle cannot be read", async () => {
+    //`null` is also the plugin's answer for "nothing staged", so a failed read
+    //taken for it leaves the staged bundle unprotected: pending, not current and
+    //not retained, it is exactly what pruning deletes.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "old",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+        { buildTag: "staged", createdAt: 3, state: "pending" },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["old", "staged"],
+      })),
+      getNextBundle: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: "cur",
+        rollback: false,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalled()
+    //and nothing is forgotten either: the ledger still knows what is on disk
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger.map((b: { buildTag: string }) => b.buildTag)).toContain(
+      "staged",
+    )
+  })
+
   it("does nothing at all off native", async () => {
     h.native = false
     const { settleLaunch } = await load()
     await settleLaunch({ nativeFingerprint: "fp-1" })
     expect(h.plugin?.ready).not.toHaveBeenCalled()
+  })
+
+  it("🔴 still re-points, but prunes nothing, when a rollback meets an unreadable staged bundle", async () => {
+    //The skip is the whole of pruning, not only the staged bundle's protection:
+    //the rollback target just staged is not pending, so a prune that spared only
+    //pending bundles would delete the bundle the next launch is pointed at.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "v1",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+        {
+          buildTag: "v2",
+          createdAt: 2,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["v1", "v2"],
+      })),
+      getBlockedBundles: vi.fn(async () => ({ bundleIds: ["v2"] })),
+      getNextBundle: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: null,
+        rollback: true,
+      })),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.setNextBundle).toHaveBeenCalledWith({
+      bundleId: "v1",
+    })
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalled()
+  })
+
+  it("🔴 does not prune around the embedded bundle when the watchdog's answer cannot be read", async () => {
+    //Taken for "nothing booted but the embedded bundle", a failed ready() makes
+    //the bundle actually running just another stale entry, and it is deleted.
+    knownBinary(APP)
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        { buildTag: "a", createdAt: 1, state: "pending" },
+        {
+          buildTag: "cur",
+          createdAt: 2,
+          state: "known-good",
+          provenOn: APP,
+        },
+        {
+          buildTag: "b",
+          createdAt: 3,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: "cur" })),
+      getDownloadedBundles: vi.fn(async () => ({
+        bundleIds: ["a", "cur", "b"],
+      })),
+      ready: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalled()
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger.map((b: { buildTag: string }) => b.buildTag)).toEqual([
+      "a",
+      "cur",
+      "b",
+    ])
+  })
+
+  it("deletes and forgets nothing when it cannot tell what is on disk", async () => {
+    //A delete is only asked for a bundle the plugin says it has, so a listing
+    //that cannot be read deletes nothing, and the ledger keeps its record of
+    //what may still be on disk.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        { buildTag: "old", createdAt: 1, state: "pending" },
+      ]),
+    )
+    h.plugin = fakePlugin({
+      getDownloadedBundles: vi.fn(async () => {
+        throw new Error("bridge")
+      }),
+    })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+
+    expect(h.plugin?.deleteBundle).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem(KEY) ?? "[]")).toHaveLength(1)
   })
 
   it("never throws a launch away over a plugin that misbehaves", async () => {
@@ -581,6 +730,97 @@ describe("a store release underneath a cached bundle", () => {
     const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
     expect(ledger).toHaveLength(1)
     expect(ledger[0].provenOn).toBe(APP)
+  })
+
+  const unreadable = () =>
+    vi.fn(async () => {
+      throw new Error("bridge")
+    })
+
+  it("🔴 asks again on the next launch when the current bundle could not be read", async () => {
+    //`null` is the plugin's answer for "the embedded bundle is running", so a
+    //failed read must not be taken for it. Otherwise this launch remembers the
+    //new binary without a reset, and every later launch sees a version it
+    //already knows: the old bundle stays, and nothing asks again.
+    knownBinary(APP, "fp-1")
+    h.plugin = {
+      ...onNewBinary(async () => {}),
+      getCurrentBundle: unreadable(),
+    }
+    let { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    //not a blind reset either: the device may well be on the embedded bundle
+    expect(h.plugin?.reset).not.toHaveBeenCalled()
+    expect(h.plugin?.ready).toHaveBeenCalledOnce()
+
+    vi.resetModules()
+    h.plugin = onNewBinary(async () => {})
+    ;({ settleLaunch } = await load())
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.reset).toHaveBeenCalledOnce()
+    expect(h.plugin?.reload).toHaveBeenCalledOnce()
+  })
+
+  it("🔴 does not let an unreadable current bundle prove the old bundle on the new binary", async () => {
+    knownBinary(APP, "fp-1")
+    h.plugin = {
+      ...onNewBinary(async () => {}),
+      getCurrentBundle: unreadable(),
+    }
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0].provenOn).toBe(APP)
+    //nor record the new binary, with a fingerprint read off a bundle built for
+    //the one before it
+    expect(binaryRecord()).toEqual({ identity: APP, fingerprint: "fp-1" })
+  })
+
+  it("🔴 does not take the running bundle's fingerprint for the binary's when the current bundle cannot be read", async () => {
+    //The same binary, no store release: only the embedded bundle may teach the
+    //ledger a fingerprint, and a failed read is not evidence that it is running.
+    knownBinary(APP, "fp-app")
+    h.plugin = fakePlugin({ getCurrentBundle: unreadable() })
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-next" })
+    expect(binaryRecord()).toEqual({
+      identity: APP,
+      fingerprint: "fp-app",
+    })
+  })
+
+  it("🔴 keeps only the identity on a first launch whose current bundle cannot be read", async () => {
+    //No fingerprint, because a failed read is not the embedded bundle. But the
+    //identity: a first launch has no store release to miss, and without it the
+    //bundle that booted would be proven on an empty identity instead of this app.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([{ buildTag: "b1", createdAt: 1, state: "pending" }]),
+    )
+    h.plugin = fakePlugin({
+      getCurrentBundle: unreadable(),
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: "b1",
+        rollback: false,
+      })),
+    })
+    let { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-next" })
+    expect(binaryRecord()).toEqual({ identity: APP, fingerprint: null })
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger[0]).toMatchObject({ state: "known-good", provenOn: APP })
+
+    //and the next launch that can read it learns the real answer
+    vi.resetModules()
+    h.plugin = fakePlugin()
+    ;({ settleLaunch } = await load())
+    await settleLaunch({ nativeFingerprint: "fp-app" })
+    expect(binaryRecord()).toEqual({
+      identity: APP,
+      fingerprint: "fp-app",
+    })
   })
 
   it("does not ask again once the reset landed, even if the reload did not", async () => {
