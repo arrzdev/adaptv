@@ -500,6 +500,7 @@ ecosystem only.
 | TextInput / Input | ✅ | ✅ | ✅ | ✅ | ✅ | | `input` + `text-area` |
 | Switch / Toggle | ✅ | ✅ | ✅ | ✅ | ✅ | | `useSwitch` |
 | Checkbox | ✅ | (expo-checkbox) | ✅ | ✅ | ✅ | | `useCheckbox` |
+| Radio group | ✅ (`ion-radio-group`) | | | | ✅ (`RadioButton`) | | `RadioGroup` ✅ |
 | **Slider / Range** | ✅ | | ✅ | ✅ | ✅ | | **—** |
 | **Picker / Select** | ✅ | | ✅ | ✅ | ✅ | | `wheel-column` (partial) |
 | List + row | ✅ | ✅ | ✅ | ✅ | ✅ | | `List` (virtualized) |
