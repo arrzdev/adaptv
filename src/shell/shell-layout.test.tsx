@@ -183,3 +183,24 @@ describe("RoutingShell — splash vs the not-found boundary", () => {
     expect(splash(container)).toBeNull()
   })
 })
+
+//every app mounts this shell, so one API it reaches for that an old engine lacks
+//takes the whole app down on that engine, not just one screen
+describe("RoutingShell on an engine without Array.prototype.at (iOS 15.0–15.3)", () => {
+  let at: PropertyDescriptor | undefined
+
+  beforeEach(() => {
+    at = Object.getOwnPropertyDescriptor(Array.prototype, "at")
+    Reflect.deleteProperty(Array.prototype, "at")
+  })
+
+  afterEach(() => {
+    if (at) Object.defineProperty(Array.prototype, "at", at)
+  })
+
+  it("renders the route on screen", async () => {
+    expect(Array.prototype.at).toBeUndefined()
+    const { findByText } = renderAt("/")
+    expect(await findByText(HOME_TEXT)).toBeTruthy()
+  })
+})

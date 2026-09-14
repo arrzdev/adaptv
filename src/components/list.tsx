@@ -85,7 +85,8 @@ export function List<T>({
   })
 
   const virtualItems = virtualizer.getVirtualItems()
-  const lastIndex = virtualItems.at(-1)?.index ?? -1
+  //not `.at(-1)`: Array.prototype.at is iOS 15.4
+  const lastIndex = virtualItems[virtualItems.length - 1]?.index ?? -1
 
   //infinite scroll: fire when the last row is windowed (effect, not during render)
   useEffect(() => {
