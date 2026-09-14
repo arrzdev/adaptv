@@ -618,30 +618,34 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   own worker never uses it.
 
   **Not built: Service Worker static routing (`InstallEvent.addRoutes`) for these assets. MEASURED
-  2026-09-14**, and it missed the bar fixed before the numbers were read (≥ 50 ms off the cold-worker
-  load at p50, or ≥ 20% off the hashed assets' summed fetch time, in both an unthrottled and a 4x run).
-  Method: two builds identical except `sw.js` — as shipped, and the same worker plus an install-time
-  `{urlPattern: "/assets/*"} → {cacheName: <precache>}` rule — served side by side by Nitro's preview
-  on Chromium 149, `/lab/drawer` (27 hashed assets), 20 alternating A/B navigations per cell with the
-  worker stopped over CDP (cold) or running (warm), the whole comparison run twice, then again with
-  the page at 4x CPU. `workerFinalSourceType` read `cache` on all 27 assets in every B sample. Cold
-  load p50 went 23.3 → 19.0 ms and 23.3 → 18.8 ms unthrottled, 91.9 → 72.1 ms and 92.2 → 71.4 ms at
-  4x; the summed fetch time fell 33% and 31% unthrottled, but 18% and 32% at 4x, so the second
-  criterion failed one of its four runs. FCP did not move in any run, and warm matched cold because the
-  navigation starts the worker before any asset is requested, so the rule only ever saves the
-  per-request dispatch (0.2–0.7 ms per asset at p50). Two things any future build must handle. Workbox keys
-  every precache entry as `url?__WB_REVISION__=…`, so the same rule against the shipped manifest
-  matched and missed on all 27 assets and sent them to the network past the worker (one probe: up to 187 ms per asset)
-  until `dontCacheBustURLsMatching` keyed them by their plain URL. A miss also skips the fetch handler,
-  so `/assets/` files outside the precache glob lose this runtime route: `lab-photo-*.jpg` failed to
-  load offline under the rule and loaded under the shipped worker. Rules would have to come from the
-  manifest, not from a path pattern. Two limits of the method: CDP refuses CPU throttling on a worker
-  target ("Operation is only supported for pages, not workers"), so the 4x runs slow the page and not
-  the worker; and Playwright's WebKit 625.1.21 (the Safari 27 line) has `addRoutes` on
-  `InstallEvent.prototype` and applies the rule (no fetch event for 27 routed GETs, one for a
-  `HEAD` control), but was not timed. Reopen when a phone shows the per-asset dispatch costing a
-  navigation ≥ 50 ms, when a route loads several hundred hashed assets at once, or when Workbox gains
-  an API for router rules.
+  2026-09-14**, and it missed the bar fixed before the numbers were read (≥ 50 ms off the cold-worker load
+  at p50, or ≥ 20% off the hashed assets' summed fetch time, in both an unthrottled and a 4x run). Method:
+  two builds identical except `sw.js` — as shipped, and the same worker plus an install-time
+  `{urlPattern: "/assets/*"} → {cacheName: <precache>}` rule — served side by side by Nitro's preview on
+  Chromium 149, `/lab/drawer` (27 hashed assets), 20 alternating A/B navigations per cell with the worker
+  stopped over CDP (cold) or running (warm), the whole comparison run twice, then again with the page at
+  4x CPU. `workerFinalSourceType` read `cache` on all 27 assets in every B sample. Cold load p50 went
+  23.3 → 19.0 ms and 23.3 → 18.8 ms unthrottled, 91.9 → 72.1 ms and 92.2 → 71.4 ms at 4x. The summed fetch
+  time fell 33% and 31% unthrottled and 18% and 32% at 4x, so the second criterion failed one of its four
+  runs. That miss sits inside the metric's own spread (p10–p90 of 22.6 ms on a 29.1 ms p50), and pooled
+  over both 4x runs the saving is 25.2% cold and 28.6% warm, so the verdict also rests on how small the
+  absolute saving is and on the two correctness costs below. FCP did not move at p50 in any cold run, but
+  it is reported here in 4 ms steps and so could not show a 4 ms saving. Warm matched cold because the
+  cold worker started in about 2 ms on this desktop (`fetchStart` − `workerStart` on the navigation,
+  2.2 ms cold against 0.1 ms warm at p50), far from the ~50–250ms cold on mobile quoted above, so the rule
+  only saved the per-request dispatch (0.2–0.7 ms per asset at p50). A phone is where that could change.
+  The two correctness costs, which any future build must handle: Workbox keys every precache entry as
+  `url?__WB_REVISION__=…`, so the same rule against the shipped manifest matched and missed on all 27
+  assets and sent them to the network past the worker (one probe: up to 187 ms per asset) until
+  `dontCacheBustURLsMatching` keyed them by their plain URL; and a miss also skips the fetch handler, so
+  `/assets/` files outside the precache glob lose this runtime route (`lab-photo-*.jpg` failed to load
+  offline under the rule and loaded under the shipped worker). Rules would have to come from the manifest,
+  not from a path pattern. Two limits of the method: CDP refuses CPU throttling on a worker target
+  ("Operation is only supported for pages, not workers"), so the 4x runs slow the page and not the worker;
+  and WebKit 625.1.21 (Playwright's webkit, UA 26.5) has `addRoutes` on `InstallEvent.prototype` and
+  applies the rule (no fetch event for 27 routed GETs, one for a `HEAD` control), but was not timed.
+  Reopen when a phone shows worker start-up or the per-asset dispatch costing a navigation ≥ 50 ms, when a
+  route loads several hundred hashed assets at once, or when Workbox gains an API for router rules.
 - **API responses are never cached by the SW.** That's the data layer's job, on purpose.
 - **Navigation denylist**: prefixes `/api/`, `/assets/`, `/_serverFn/`, plus Angular ngsw's heuristic —
   *a last path segment containing a dot is a file, not a navigation* (`/\/[^/?]+\.[^/]+$/`). Workbox's
