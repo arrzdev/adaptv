@@ -23,7 +23,7 @@ One `adaptv.config.ts` + one React codebase fan out into **two build lineages** 
    WEB lineage  (vite build)                        NATIVE lineage  (adaptv CLI)
    target = "web"                                   target = "capacitor"
    render = ssr | spa   · SW on/off                 render = spa (forced) · SW off (forced)
-   → dist/  (server + client + sw.js)               → .adaptv/web  (static SPA shell)
+   → .output/ (ssr) · dist/client (spa)             → .adaptv/web  (static SPA shell)
           │                                                     │
    deploy to a host (CF/Vercel/Node) or static      cap sync → android/ · ios/  →  APK / IPA
           │                                                     │
@@ -33,7 +33,7 @@ One `adaptv.config.ts` + one React codebase fan out into **two build lineages** 
 The two lineages share **everything above the build** (routes, components, capabilities, the shell) and
 **nothing below it**. The native SPA (`.adaptv/web`) is produced **only** by the CLI and is **never**
 emitted by a plain `vite build` — so a web deploy can't accidentally build or ship the Capacitor bundle
-(this separation already holds: `capacitor.config.json` + `.adaptv/web` materialize only under
+(this separation already holds: `.adaptv/web` and the generated Capacitor config materialize only under
 `ADAPTV_TARGET=capacitor`).
 
 The five stages: **1. Configure · 2. Develop · 3. Build · 4. Deploy · 5. Update.**
@@ -110,8 +110,9 @@ export default defineApp({
 
   // Your OWN worker modules, run inside adaptv's, after its setup.
   serviceWorkers: ["./src/sw/push.ts"],
-  native: { appId: "com.acme.app" },   // omit the whole block → web-only (§6)
-  ota: { channel: "production" },       // ⚠︎ §5 — omit → no OTA
+  appId: "com.acme.app",                // omit → web-only (§6)
+  origin: "https://acme.app",           // where installs look for OTA updates (§5) — omit → no OTA
+  otaPublicKey: "…",                    // from `adaptv keys ota` — verifies the channel (ota.md §5.4d)
 })
 ```
 
@@ -137,7 +138,9 @@ export default defineApp({
   present; adaptv adds that plugin itself (`nitro/vite`, pinned), so the target is auto-detected on eight
   providers and comes from `NITRO_PRESET` everywhere else. An adaptv enum on top of that would be a
   narrower duplicate of a thing that already works. → `docs/decisions/rendering-and-delivery.md §2`
-- `native.appId` presence is the **native opt-in/opt-out** switch (§6). `ota` presence enables §5.
+- `appId` presence is the **native opt-in/opt-out** switch (§6). `origin` presence turns §5 on for an
+  app with an `appId`; `adaptv build web` then publishes only with `otaPublicKey` set and its private
+  half in the env (`ota.md §5.4d`).
 
 ---
 
@@ -307,14 +310,16 @@ a watchdog rollback. `adaptv build web` publishes the channel alongside the site
 
 ## 6. Opting out of native (Capacitor) — web-only apps
 
-**Omit `native.appId` and the app is web-only, full stop:**
-- No `capacitor.config.json` is stamped, no `android/` or `ios/` project, no `.adaptv/web`.
-- The `adaptv` CLI's native commands (`run`/`build`/`sync`/`assets`) refuse fast: *"needs an `appId`."*
-- `vite build` produces the normal web/PWA output (`dist/`) exactly as in §4 — SSR or static SPA per §3.
-- The Capacitor plugins are **optional peer deps**, so a web-only app never installs them.
+**Omit `appId` and the app is web-only, full stop:**
+- No Capacitor config is generated, no `android/` or `ios/` project, no `.adaptv/web`.
+- The `adaptv` CLI refuses fast when it loads the config: *"missing 'appId' in adaptv.config.ts"*.
+- `vite build` produces the normal web/PWA output (`.output/` for SSR, `dist/client/` for a static SPA)
+  exactly as in §4 — per §3.
+- Capacitor is adaptv's own dependency, not an optional peer (`docs/decisions/register.md` L20): a
+  web-only app installs it with adaptv, and nothing generates a native project from it.
 
 And the inverse guarantee the goal asks for: **a web build never produces or serves the Capacitor SPA.**
-`.adaptv/web` + `capacitor.config.json` materialize *only* under `ADAPTV_TARGET=capacitor`, which only
+`.adaptv/web` and the Capacitor config materialize *only* under `ADAPTV_TARGET=capacitor`, which only
 the CLI sets — so the two lineages stay physically separate (the one exception is opt-in OTA §5.2, where
 you *deliberately* emit the bundle into the web deploy's public path).
 
@@ -333,7 +338,7 @@ generator by hand. It reads the same `adaptv.config.ts`.
 | `adaptv doctor` | check toolchain (JDK, Android SDK, Xcode, pod) + that the app has the base Capacitor plugins installed (Cap only auto-discovers **direct** deps) |
 | `adaptv dev <web\|ios\|android\|all> [--target id] [--latest] [--host]` | one Vite dev server, every named surface attached to it and live-reloading. Reverts everything it changed on exit |
 | `adaptv preview <web\|ios\|android\|all> [--target id] [--latest]` | the real build, run the way a user gets it — served locally for `web`, installed and launched for a device. No live reload |
-| `adaptv build <web\|ios\|android\|all> [--output path]` | `web` → the deployable site **with the update channel inside it** (§5.2); `ios`/`android` → `gradlew assembleDebug` (**debug `.apk`**) / `scripts/build-ipa.sh` (**unsigned `.ipa`**), landing at `--output` or `.adaptv/builds/<app>.apk`\|`.ipa` |
+| `adaptv build <web\|ios\|android\|all> [--output path]` | `web` → the deployable site **with the update channel inside it** (§5.2); `ios`/`android` → `gradlew assembleDebug` (**debug `.apk`**) / `packageIpa` in `bin/adaptv.mjs` (**unsigned `.ipa`**), landing at `--output` or `.adaptv/builds/<app>.apk`\|`.ipa` |
 | `adaptv keys ota` | the RSA pair that signs the update channel and verifies it on device (§5.4d). Run once per app; adaptv keeps no copy of the private half |
 | `adaptv icons --input <image>` | the whole icon set, every platform variant, from one image |
 
@@ -343,8 +348,9 @@ parser, the help page and the suggestions are all derived from; this table is a 
 second copy to keep in step.
 
 **Native projects live in `.adaptv/`.** `cap add`/`sync`/`run` are pointed at `.adaptv/ios` and
-`.adaptv/android` via `android.path`/`ios.path` in the generated `capacitor.config.json` (relative to the
-app root, where `cap` reads it). So *everything* adaptv generates — the route tree and both native
+`.adaptv/android` via `android.path`/`ios.path` in the generated Capacitor config, which adaptv hands
+`cap` in the `ADAPTV_CAPACITOR_CONFIG` env var rather than a file (paths relative to the app root, where
+`cap` runs; `bin/lib/cap.mjs`). So *everything* adaptv generates — the route tree and both native
 projects — sits under one hidden, git-ignored dir, regenerated like `dist/`. An `ios/` or `android/`
 at the app root is not adaptv's and is left alone: the one-time move into `.adaptv/` that used to run
 was a compatibility shim for a layout no published install ever had, and adaptv carries none.
@@ -360,40 +366,40 @@ template would otherwise stay wherever the project was first scaffolded. `adaptv
 file back.
 
 **Device targeting.** adaptv owns the picker (rather than Capacitor's opaque one) so it can cache your
-choice: `run` lists targets via `cap run <platform> --list --json`, shows a branded arrow-key picker, and
-writes the pick to `.adaptv/state.json` (the one file the CLI remembers anything in, under `devices`).
+choice: `dev` and `preview` list targets via `cap run <platform> --list --json`, show a branded arrow-key
+picker, and write the pick to `.adaptv/state.json` (the one file the CLI remembers anything in, under
+`devices`).
 `--target <id>` selects directly (and caches); `--latest`
 reuses the cached device (falling back to the picker if none). *Listing requires the platform to exist,
-so `run` prepares the native project **before** resolving the target.*
+so they prepare the native project **before** resolving the target.*
 
 **Branded output.** Every long-running step (vite/cap/gradle/xcode/pod) is **captured**, not inherited —
-rendered as calm phased steps (a small custom spinner renderer; `@clack/prompts` only for the device
-picker) with a spinner + elapsed time. Inner
-logs are hidden unless a step fails (then a log tail is shown) or `--verbose` is passed (full raw
-passthrough). `run all` renders the two platforms as concurrent columns; a non-TTY / CI shell degrades to
-plain prefixed lines.
+rendered as calm phased steps (a small custom renderer, the device picker included) with a spinner +
+elapsed time. Inner logs are hidden unless a step fails (then a log tail is shown) or `--verbose` is
+passed (full raw passthrough). `dev`, `preview` and `build` run their platforms as concurrent lanes, one
+live line per platform; a non-TTY / CI shell degrades to plain prefixed lines.
 
 Every native build runs the same spine: **`buildWeb(capacitor)` → `generateAssets` → `capSync` → (launch
-/ package)**. Icons come from `@capacitor/assets`; the splash is colour-driven (Android launch theme +
-`colors.xml`/`colors-night.xml`; iOS colour asset + solid storyboard) and re-applied idempotently every
-sync (`docs/design/behaviors.md §3`).
+/ package)**. adaptv writes the launcher icons itself, with sharp (`bin/lib/icons.mjs`); the splash is
+colour-driven (Android launch theme + `values/colors.xml`/`values-night/colors.xml`; iOS colour asset +
+solid storyboard) and re-applied idempotently every sync (`docs/design/behaviors.md §3`).
 
-> **`adaptv run web`** is reserved for a future Vite dev/preview wrapper (adaptv is Vite-based). For now
-> use the app's `vite dev` / `vite preview`. Web *deploy* stays out of the CLI by design — it's the
-> host's own tool, and the target is named in `vite.config.ts` (§4.2).
+> **Web** runs through the same commands — `adaptv dev web`, `adaptv preview web` and `adaptv build web`
+> (the table above). Web *deploy* stays out of the CLI by design — it's the host's own tool, and the
+> target is named in `vite.config.ts` (§4.2).
 
 ### 7.2 Testing native builds
 
-The native test loop is `adaptv run <platform>` onto a simulator/emulator (both available locally),
-against the six-target discipline in `docs/guides/testing.md`. ⚠︎ *Future:* a `adaptv e2e` that drives the sim/emulator
-(Maestro/Appium or the simulator MCP) so the native matrix can run in CI — out of scope for this pass,
-flagged in `VISION.md §9`.
+The native test loop is `adaptv dev <platform>` or `adaptv preview <platform>` onto a simulator/emulator
+(both available locally), against the six-target discipline in `docs/guides/testing.md`. ⚠︎ *Future:* a
+`adaptv e2e` that drives the sim/emulator (Maestro/Appium or the simulator MCP) so the native matrix can
+run in CI — out of scope for this pass, flagged in `VISION.md §9`.
 
 ### 7.3 Signing & distribution
 
 - **Android:** debug `.apk` is fully automated. Release signing (keystore) is the user's — a `adaptv build
   android --release` that reads a keystore from config/env is a reasonable ⚠︎ future add.
-- **iOS:** only the **unsigned** `.ipa` is automatable (`adaptv build ios` → `scripts/build-ipa.sh`);
+- **iOS:** only the **unsigned** `.ipa` is automatable (`adaptv build ios` → `packageIpa`);
   signed TestFlight/App Store builds stay in Xcode ▸ Archive (signing identities/provisioning are
   Apple-account state adaptv shouldn't hold). adaptv stops at the artifact — it does not own fastlane
   (⚠︎ open question in `VISION.md §9`).
@@ -424,18 +430,18 @@ is derived from the build rather than answered by a human (§5.2).
 ## 9. Lifecycle at a glance
 
 ```
-CONFIGURE   adaptv.config.ts  ── web{render,host,sw} · native{appId} · ota{channel}
+CONFIGURE   adaptv.config.ts  ── render · serviceWorkers · appId · origin
                 │
-DEVELOP     adaptv dev [--host ios|android]        (HMR; live-reload on device)
+DEVELOP     adaptv dev <web|ios|android|all>       (HMR; live-reload on device)
                 │
-BUILD  ┌── web:      vite build ──────────────→ dist/         (SSR+SW | static SPA+SW)
-       └── native:   adaptv run|build|sync ─────→ .adaptv/web → cap → APK | IPA
+BUILD  ┌── web:      vite build ──────────────→ .output/ | dist/client   (SSR+SW | static SPA+SW)
+       └── native:   adaptv dev|preview|build ──→ .adaptv/web → cap → APK | IPA
                 │
 DEPLOY ┌── web:      host tool (wrangler/vercel/node/static bucket)
        └── native:   sideload IPA/APK · TestFlight/Store (Xcode signing)
                 │
 UPDATE ┌── web/PWA:  SW revalidate                (free)
-       └── native:   vite build emits manifest+bundle → rides the web deploy;
+       └── native:   adaptv build web emits manifest+bundle → rides the web deploy;
                      app checks on launch/resume → fingerprint-gated swap → apply next launch
 ```
 
