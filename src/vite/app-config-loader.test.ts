@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { defaultExportError } from "#adaptv/vite/app-config-errors"
 import {
   loadAppConfig,
   readAppConfig,
@@ -24,6 +25,14 @@ async function writeConfig(body: string): Promise<void> {
     `export default {\n${body}\n}\n`,
   )
 }
+
+/**
+ * What a file whose default export is not a config object is told, tagged as adaptv's. The
+ * CLI prints the same sentence without the tag (`bin/lib/load-config.mjs`), and strips the tag
+ * when this one reaches it through a build's log (`bin/lib/explain.mjs`).
+ */
+const NOT_A_CONFIG =
+  "[adaptv] adaptv.config.ts must 'export default defineApp({ ... })'"
 
 const usable = `
   name: "Probe",
@@ -85,8 +94,38 @@ describe("loadAppConfig", () => {
       path.join(dir, "adaptv.config.ts"),
       "export const config = {}\n",
     )
+    //quoted with an apostrophe, not a backtick: this reaches a terminal (R43)
     await expect(loadAppConfig(dir)).rejects.toThrow(
-      "must `export default defineApp({ ... })`",
+      new Error(NOT_A_CONFIG),
     )
+  })
+
+  it.each([
+    ["an empty array", "export default []\n"],
+    ["an array holding a usable config", `export default [{${usable}}]\n`],
+  ])(
+    "refuses a default export that is %s, before naming any key",
+    async (_, source) => {
+      //`typeof []` is "object", so an array passed the export guard and was answered by the
+      //key checks instead, as "adaptv.config.ts: the config must be an object"
+      await writeFile(path.join(dir, "adaptv.config.ts"), source)
+      await expect(loadAppConfig(dir)).rejects.toThrow(
+        new Error(NOT_A_CONFIG),
+      )
+    },
+  )
+
+  it("refuses with the same sentence as the guard the CLI asks, behind its tag", async () => {
+    //compares the words only, so an identical copy here would still pass; the one-copy
+    //check is the source walk in `bin/lib/load-config.test.mjs`
+    await writeFile(
+      path.join(dir, "adaptv.config.ts"),
+      "export default 42\n",
+    )
+    const message = await loadAppConfig(dir).then(
+      () => "",
+      (error: Error) => error.message,
+    )
+    expect(message).toBe(`[adaptv] ${defaultExportError(42)}`)
   })
 })
