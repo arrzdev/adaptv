@@ -119,11 +119,21 @@ describe("the launch height the splash centres in", () => {
   })
 
   it("keeps the whole screen of an iOS 18 app whose innerHeight reads short under the status bar", () => {
-    //the same static 18.0 page 3s in: innerHeight 793 under the 59pt inset, 100vh 852. A launch
-    //that froze the whole screen (as the adaptv page's 852 would) must not read that as a shrink.
+    //iOS 18.0 (22A3351): an in-page reload of the settled installed playground reads 100vh 852
+    //over innerHeight 793 at head, with the 59pt inset already resolved (the static page read the
+    //same 3s in). The page shows the whole screen, so 793 + 59 is not a shrink, at head or later.
     launch({ vh: 852, dvh: 793, ih: 793, insetTop: 59 })
+    expect(launchHeight()).toBe("852px")
     resize({ vh: 852, dvh: 793, ih: 793, insetTop: 59 })
     expect(launchHeight()).toBe("852px")
+  })
+
+  it("starts a reload of an already-shrunk iOS 26 app at the screen it shows", () => {
+    //iOS 26.1 (23B86), an in-page reload of a settled installed app (applying a service-worker
+    //update, the offline retry): the head already reads 100vh 874 over innerHeight 812, and no window
+    //resize follows, so a freeze at 874 kept the splash 31pt low for the whole launch.
+    launch({ vh: 874, dvh: 812, ih: 812, insetTop: 0 })
+    expect(launchHeight()).toBe("812px")
   })
 
   it("keeps a launch that already read the shown screen", () => {
