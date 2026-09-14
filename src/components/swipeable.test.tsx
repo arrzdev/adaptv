@@ -439,6 +439,54 @@ describe("Swipeable · what a release commits to", () => {
     expect(onOpen).toHaveBeenCalledExactlyOnceWith("right")
   })
 
+  //a finger that flicks and then stops has no velocity when it lifts. Held
+  //still, it delivers no further moves, so the samples still end on the flick;
+  //the release has to be measured against the moment of release, or a pause
+  //before lifting is invisible and the stale flick decides
+  it("a flick that stops before the finger lifts is not a flick: position decides", () => {
+    const onOpen = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} />)
+    const { content } = parts(container)
+    //16px at 1000px/s, then 200ms held still — under the 24px open line
+    mouseDrag(content, -16, { steps: 2, stepMs: 8, holdMs: 200 })
+    settle()
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(tx(content)).toBe(0)
+  })
+
+  it("an open row flicked back and then held keeps its position's verdict", () => {
+    const onClose = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} onClose={onClose} />)
+    const { content } = parts(container)
+    slowDrag(content, -40)
+    settle()
+    //-80 → -68 at 1500px/s, held: still past the -60 close line, so it stays
+    mouseDrag(content, 12, { steps: 2, stepMs: 4, holdMs: 200 })
+    settle()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(ref.current?.open).toBe("right")
+    expect(tx(content)).toBe(-W)
+  })
+
+  //the pause that expires a flick is the velocity window itself: a lift just
+  //inside it is still the flick, a lift just past it is not
+  it.each([
+    { holdMs: 55, opens: true },
+    { holdMs: 65, opens: false },
+  ])(
+    "a flick held $holdMs ms before the lift opens: $opens",
+    ({ holdMs, opens }) => {
+      const onOpen = vi.fn()
+      const { container } = render(<Row onOpen={onOpen} />)
+      const { content } = parts(container)
+      mouseDrag(content, -16, { steps: 2, stepMs: 8, holdMs })
+      settle()
+      expect(onOpen).toHaveBeenCalledTimes(opens ? 1 : 0)
+      expect(tx(content)).toBe(opens ? -W : 0)
+    },
+  )
+
   it("a flick opens from well under the position threshold", () => {
     const onOpen = vi.fn()
     const { container } = render(<Row onOpen={onOpen} />)
