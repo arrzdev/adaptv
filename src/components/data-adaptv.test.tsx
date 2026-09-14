@@ -171,12 +171,15 @@ describe("composition does not leak", () => {
         <RadioGroup.Item value="b">b</RadioGroup.Item>
       </RadioGroup>,
     )
-    const matches = container.querySelectorAll('[data-adaptv="radio-group"]')
+    const matches = container.querySelectorAll(
+      '[data-adaptv="radio-group"]',
+    )
     expect(matches).toHaveLength(1)
     expect(matches[0].getAttribute("data-part")).toBe("root")
     const items = container.querySelectorAll('[data-part="item"]')
     expect(items).toHaveLength(2)
-    for (const item of items) expect(item.hasAttribute("data-adaptv")).toBe(false)
+    for (const item of items)
+      expect(item.hasAttribute("data-adaptv")).toBe(false)
   })
 
   it("Link reports itself, not the ExternalLink it delegates to", () => {

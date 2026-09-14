@@ -632,8 +632,9 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
       const doc = root.ownerDocument
       let timer: ReturnType<typeof setTimeout> | undefined
       const onReset = (event: Event) => {
-        const owner =
-          root.querySelector<HTMLInputElement>('input[type="radio"]')?.form
+        const owner = root.querySelector<HTMLInputElement>(
+          'input[type="radio"]',
+        )?.form
         if (!owner || event.target !== owner) return
         clearTimeout(timer)
         timer = setTimeout(() => {
