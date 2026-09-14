@@ -829,6 +829,18 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           lockRef.current =
             angle < cfgRef.current.directionLockAngle ? "h" : "v"
           if (lockRef.current === "h") {
+            //Claim the SHARED arbiter here, at the lock and before the row
+            //moves — for the mouse and the touch path alike. Not at pointerdown:
+            //that is also how a tap starts, and claiming there would starve
+            //every other gesture on the screen for the duration of every touch.
+            //Refused means a gesture that outranks the row already owns this
+            //finger (an edge swipe claims at touchstart for exactly this), so
+            //the row gives the whole touch up, as a scroll would: it neither
+            //tracks the finger nor blocks the scroll it does not own.
+            if (!captureRef.current.request()) {
+              lockRef.current = "v"
+              return false
+            }
             stopSpring()
             setWillChange(true)
           }
@@ -926,10 +938,6 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           //preventDefault above, is what makes swipe-vs-tap reliable on touch.
           const id = pointerIdRef.current
           if (id !== null && !capturedRef.current) {
-            //Claim the SHARED arbiter first. Only at lock — a pointerdown is
-            //also how a tap starts, and claiming there would starve every other
-            //gesture on the screen for the duration of every touch.
-            if (!captureRef.current.request()) return
             node.setPointerCapture?.(id)
             capturedRef.current = true
           }
@@ -980,7 +988,6 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         pointerIdRef.current !== e.pointerId
       )
         return
-      if (!captureRef.current.request()) return
       e.currentTarget.setPointerCapture?.(e.pointerId)
       capturedRef.current = true
     }
