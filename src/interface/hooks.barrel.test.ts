@@ -10,12 +10,13 @@ import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
  * (`src/components/barrels.test.ts`), one directory over. `tsc` is happy either
  * way, and every hook's own suite imports the module directly.
  *
- * The other direction matters as much here: ten hooks on disk are NOT exported,
+ * The other direction matters as much here: eleven hooks on disk are NOT exported,
  * and each one is unexported for a reason. Five are the shell's own — mounted
  * once on every app with no consumer involvement, the "already invisible" layer
  * of `docs/research/component-surface.md` §8.2 — and a second mount would run a
  * second copy of something that owns document-wide state. The rest are component
- * plumbing: the pure half of a gesture, a ref merge, an SSR-safe layout effect.
+ * plumbing: the pure half of a gesture, a ref merge, an SSR-safe layout effect,
+ * a style animation.
  * Both lists are written out with their owners, and the last test checks that the
  * ownership is real rather than asserted — the standard the capabilities and OTA
  * guards hold their withheld sets to.
@@ -59,6 +60,13 @@ const WITHHELD_SHELL: Record<string, string[]> = {
  * repeating a React idiom. A consumer wanting one of these wants the component.
  */
 const WITHHELD_INTERNAL: Record<string, string[]> = {
+  //the imperative stand-in for a motion component, for components that wrap app
+  //content; an app animating its own content has motion itself
+  //(docs/decisions/animation.md §3.1)
+  "use-animated-style": [
+    "src/components/button.tsx",
+    "src/components/pull-to-refresh.tsx",
+  ],
   "use-gesture-capture": [
     "src/components/drawer/drawer-engine.tsx",
     "src/components/edge-swipe-gestures.tsx",
