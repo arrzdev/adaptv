@@ -200,7 +200,7 @@ export function RoutingShell({
     applyPlatformStamp(ui)
   }, [ui])
 
-  const [resolvedAppearance] = useTheme()
+  const { resolved: resolvedAppearance } = useTheme()
   //A route may pin the browser chrome to a colour of its own. The pre-paint
   //script already painted it for the launch URL; this keeps it right across
   //navigations — and falls back to the theme colours, never to a parent route's
