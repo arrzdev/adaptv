@@ -19,9 +19,11 @@ export type UseOrientationResult = {
   isPortrait: boolean
   /**
    * Whether a lock can even be attempted. **`false` on iOS WEB** — WebKit has
-   * never shipped `screen.orientation.lock()`. A native iOS build is `true`: it
-   * locks through the ScreenOrientation plugin. Render `OrientationGuard` (or
-   * your own rotate prompt) instead of a lock button when this is `false`.
+   * never shipped `screen.orientation.lock()`. A native iOS build is `true`
+   * when its binary carries the ScreenOrientation plugin, and `false` on an
+   * older binary without it, where only the WebView is left. Render
+   * `OrientationGuard` (or your own rotate prompt) instead of a lock button
+   * when this is `false`.
    */
   lockSupported: boolean
   /** Hold the screen in an orientation. Resolves to the outcome; never rejects. */

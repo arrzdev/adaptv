@@ -1,6 +1,7 @@
 //Screen-orientation accessor — read, subscribe, lock, unlock:
-//  • native   → @capacitor/screen-orientation
-//  • web/PWA  → screen.orientation (+ .lock(), where it exists)
+//  • native with the plugin → @capacitor/screen-orientation
+//  • web/PWA, or a binary without the plugin → screen.orientation (+ .lock(),
+//    where it exists)
 //
 //## Reading always works. Locking usually does not, and that is the point.
 //
