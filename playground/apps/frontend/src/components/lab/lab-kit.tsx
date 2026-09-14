@@ -32,7 +32,7 @@ export function LabBadge({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex max-w-full shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
         TONE_CLASS[tone],
       )}
     >
@@ -70,6 +70,15 @@ export function LabSection({
   )
 }
 
+const MISSING = "not reported here"
+
+/**
+ * The fewest characters a plain {@link LabRow} value is squeezed to beside its
+ * label before it moves to its own line instead. A shorter value's floor is its
+ * whole length, so "false" and "18px" are never elided.
+ */
+const PLAIN_VALUE_FLOOR_CH = 12
+
 /**
  * A labelled value. Pass `value={null}` for "the platform did not answer" —
  * that renders as its own visible state, which is the whole point of the lab:
@@ -85,27 +94,56 @@ export function LabRow({
   hint?: ReactNode
 }) {
   const missing = value === null || value === undefined || value === ""
+  const plain = typeof value === "string" || missing
+  const shown = missing ? MISSING : String(value)
   return (
     <div className="flex flex-col gap-y-0.5">
-      <div className="flex items-baseline justify-between gap-x-3">
-        <span className="shrink-0 text-sm text-subtle">{label}</span>
+      {/*
+       * The row WRAPS: when the label and the value do not fit side by side, the
+       * value drops to its own line, right-aligned by `ms-auto` (`justify-between`
+       * puts a line's only item at the start). It used to be a single line with a
+       * `shrink-0` label and a `shrink-0` badge, so at a phone's width the value
+       * span shrank to what was left and its badge overflowed it — towards the
+       * START, over the label. At 390px that painted four rows' values over their
+       * labels (`/lab/button`'s "styling hooks" among them), and on a fifth a label
+       * wider than the row pushed its value out of the row. `lab-row.spec.ts` pins them.
+       */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <span className="min-w-0 text-sm break-words text-subtle">
+          {label}
+        </span>
         {/*
          * `truncate` only for a plain string. It is `overflow: hidden` +
          * `text-overflow: ellipsis`, and the ellipsis is a TEXT affordance — give it
          * a rendered node (a badge with its own background and padding) and the box
          * is simply clipped mid-glyph with no ellipsis at all, which reads as a
          * broken component rather than as elided text. Rich values wrap instead.
+         *
+         * A plain string starts from a zero basis and grows into whatever the label
+         * leaves, so a long one keeps truncating BESIDE the label instead of wrapping
+         * below it — but its min-width is its own length in `ch`, capped at
+         * {@link PLAIN_VALUE_FLOOR_CH}, so a label that leaves less than that sends
+         * the value to its own line. Before, a long label squeezed "false" to a
+         * zero-width box and "18px" to "1…". A rich value keeps its natural width,
+         * capped at the row's (`max-w-full`), where its badges wrap.
          */}
         <span
           className={cn(
-            "min-w-0 text-end font-mono text-sm",
-            typeof value === "string" || missing
-              ? "truncate"
-              : "flex flex-wrap justify-end gap-1",
+            "ms-auto text-end font-mono text-sm",
+            plain
+              ? "grow basis-0 truncate"
+              : "flex max-w-full min-w-0 flex-wrap justify-end gap-1",
             missing ? "text-muted italic" : "text-foreground",
           )}
+          style={
+            plain
+              ? {
+                  minWidth: `min(100%, ${Math.min(shown.length, PLAIN_VALUE_FLOOR_CH)}ch)`,
+                }
+              : undefined
+          }
         >
-          {missing ? "not reported here" : value}
+          {missing ? MISSING : value}
         </span>
       </div>
       {hint && <p className="text-xs text-muted">{hint}</p>}
