@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events"
+import { act } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // The watch block is where a cursor-arithmetic bug actually shipped: the string renderer grows
@@ -34,27 +35,30 @@ afterEach(() => {
   restore = null
 })
 
-/*
- * Wait for Ink to STOP writing, rather than sleeping a guessed number of milliseconds.
+/**
+ * Make a change the block reacts to, and resolve once React has finished everything it caused,
+ * the frame Ink writes included.
  *
- * Ink renders asynchronously, so a fixed wait is a bet on how loaded the machine is. At
- * 120ms these passed on a laptop and failed on CI, where the last frame had not been
- * written yet — so `clearNotice()` looked like it had not cleared, which reads as a
- * cursor-arithmetic bug in the very code these tests exist to pin. Settling on "no new
- * frame for two ticks" asserts the same thing without the bet.
+ * Ink paints the block's FIRST frame inside `render()`. Every frame after it, the notice's
+ * included, is painted by a React scheduler task, a macrotask after the `notice()` that caused
+ * it. A fixed 120ms wait was a bet on that task and lost on CI. The clock that replaced it waited
+ * for "no new frame for two ticks", but the first frame already counted as seen, so about 60ms
+ * of quiet before the task ran was enough to return and read the keys row alone. Holding every
+ * scheduler slice back 100ms fails the notice test every time it runs alone.
+ *
+ * `act()` runs the queued work itself before it returns, and `REGION`'s `maxFps: 0` makes Ink
+ * write the frame in the same commit, so a test reads it without waiting on a clock.
  */
-async function settled(fake, deadlineMs = 3000) {
-  const stop = Date.now() + deadlineMs
-  let seen = -1
-  let quiet = 0
-  while (Date.now() < stop) {
-    await new Promise((r) => setTimeout(r, 20))
-    if (fake.frames.length === seen) {
-      if (++quiet >= 2 && seen > 0) return
-    } else {
-      seen = fake.frames.length
-      quiet = 0
-    }
+async function settled(change) {
+  const was = globalThis.IS_REACT_ACT_ENVIRONMENT
+  //without it React logs "not configured to support act(...)" on every change
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  try {
+    await act(async () => {
+      change()
+    })
+  } finally {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = was
   }
 }
 
@@ -91,6 +95,19 @@ async function screen(drive, columns = 100) {
 
 /** The same, with every row the block drew — blanks included. */
 async function screenRaw(drive, columns = 100) {
+  const block = await mount(columns)
+  await settled(() => drive(block.w))
+  const rows = block.rows()
+  block.unmount()
+  return rows
+}
+
+/**
+ * Mount the block into a fake stdout, for a test that reads the screen more than once.
+ * `rows()` is the last frame as trimmed lines, blanks included; `unmount()` stops the block and
+ * gives the real stdout back.
+ */
+async function mount(columns = 100) {
   const fake = new FakeStdout(columns)
   const real = Object.getOwnPropertyDescriptor(process, "stdout")
   Object.defineProperty(process, "stdout", {
@@ -106,20 +123,19 @@ async function screenRaw(drive, columns = 100) {
   const { inkWatcher } = await import("./watch.mjs")
   //`keys: false` — no raw-mode stdin to set up, and the keys row is asserted separately.
   const w = inkWatcher({ keys: false })
-  drive(w)
-  await settled(fake)
-  const last = fake.frames.at(-1) ?? ""
-  w.stop()
-  restore()
-  restore = null
-  return (
-    last
+  const rows = () =>
+    (fake.frames.at(-1) ?? "")
       .replace(ANSI, "")
       .split("\n")
       .map((l) => l.trimEnd())
       //a trailing "" is the frame's own closing newline, not a row the block drew
       .slice(0, -1)
-  )
+  const unmount = () => {
+    w.stop()
+    restore()
+    restore = null
+  }
+  return { fake, w, rows, unmount }
 }
 
 describe("the watch block — a notice is ADDED, never swapped in", () => {
@@ -151,22 +167,37 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
   })
 
   it("shrinks back to one row when the notice clears, leaving nothing behind", async () => {
-    const rows = await screen((w) => {
-      w.notice("config change")
-      w.clearNotice()
-    })
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toContain("ctrl-c")
-    expect(rows.join("\n")).not.toContain("config change")
+    //Two separate changes, each painted: made together they batch into ONE commit, the block
+    //never grows, and the shrink under test never happens.
+    const block = await mount()
+    const drawn = () => block.rows().filter((l) => l.trim() !== "")
+    try {
+      await settled(() => block.w.notice("config change"))
+      expect(drawn()).toHaveLength(2)
+      const grown = block.fake.frames.length
+      await settled(() => block.w.clearNotice())
+      //a NEW frame: the one-row screen must be the shrink, not the frame from before the notice
+      expect(block.fake.frames.length).toBeGreaterThan(grown)
+      const rows = drawn()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toContain("ctrl-c")
+      expect(rows.join("\n")).not.toContain("config change")
+    } finally {
+      block.unmount()
+    }
   })
 
   it("indents to the body grid rather than prefixing spaces per line", async () => {
     const rows = await screen((w) => w.notice("config change"))
+    //the keys row alone would pass the loop below without a notice ever drawn
+    expect(rows[0]).toContain("config change")
     for (const r of rows) expect(r.startsWith("  ")).toBe(true)
   })
 
   it("stays inside a narrow terminal", async () => {
     const rows = await screen((w) => w.notice("config change"), 40)
+    //the premise: a notice was drawn above the keys, or the bound below holds for one short row
+    expect(rows.length).toBeGreaterThan(1)
     for (const r of rows) expect(r.length).toBeLessThanOrEqual(40)
   })
 
@@ -196,8 +227,9 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     vi.resetModules()
     const { inkWatcher } = await import("./watch.mjs")
     const w = inkWatcher({ keys: false })
-    w.notice("config change")
-    await settled(fake)
+    await settled(() => w.notice("config change"))
+    //the premise: the notice is ON screen, or the erase below proves nothing about height
+    expect(fake.frames.at(-1)).toContain("config change")
     const before = fake.frames.length
     w.stop()
     restore()
