@@ -147,7 +147,11 @@ Every piece of the custom-splash-over-masked-native-splash design is in the repo
   unless `splashScreenInBrowser` — pre-paint, so no flash and no hydration mismatch.
 - **The subtle one:** `getLaunchViewportInitScript()` measures resolved `100vh` with a hidden probe
   and freezes `--pwa-launch-height`, defeating the **iOS standalone cold-start ICB expansion** that
-  re-centres a splash downward mid-launch.
+  re-centres a splash downward mid-launch. The freeze holds off growth only: an iOS 26.1 installed
+  app usually shrinks its web view below the status bar ~120 ms after the head script (874 → 812 pt,
+  `100vh` stays 874), so until the splash is revealed a `resize` that leaves less lowers the height to
+  `innerHeight` + the top inset. That moves the splash up 31 pt once, after its first painted frame.
+  A reload of an already-shrunk page gets no `resize` and keeps 874.
 
 > 🔒 **LOCKED — splash is done and is one of adaptv's strongest assets.** No migration work remains.
 > The only delta is that `@adaptv/shell` (§4.3) should eventually absorb the CLI's native-source
