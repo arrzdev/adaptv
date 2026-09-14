@@ -231,16 +231,22 @@ async function persist(): Promise<void> {
 export async function loadKeyboardHeightCache(): Promise<void> {
   const raw = await readStore()
   if (!raw) return
+  //The native read is an import plus a bridge round trip, so a keyboard can be measured before it
+  //lands. A key the map already holds when the read lands is newer than the store and is kept, and
+  //the record that put it there wrote the store without the stored entries, so the merged map is
+  //written back. A boot that finds the map empty writes nothing.
+  const heldBeforeMerge = cache.size > 0
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>
     for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && value > 0) {
+      if (typeof value === "number" && value > 0 && !cache.has(key)) {
         cache.set(key, Math.round(value))
       }
     }
   } catch {
     //corrupt entry — ignore and let the cache re-learn from live measurements
   }
+  if (heldBeforeMerge) void persist()
 }
 
 /** Clear the in-memory cache. Testing seam only — the durable store is left untouched. */
