@@ -14,11 +14,16 @@ export const RESTART_NOTICE = Object.freeze({
 })
 
 /**
+ * The fingerprints (`native`, `config`, `cli`) are what the last poll saw, and re-arm every
+ * poll so one edit notices once. What the row OWES is kept apart from them, because it outlives
+ * the poll that raised it: `restart` until the process restarts, and `pending` — the config and
+ * the native platforms edited since the last `b` — until a `b` applies them (R40, R41).
  * @typedef {{
  *   native: Record<string, string> | null,
  *   config: string | null,
  *   cli: string,
  *   restart: boolean,
+ *   pending: { config: boolean, native: readonly string[] },
  * }} Staleness
  * @typedef {{ text: string, restart: boolean }} Notice
  */
@@ -30,24 +35,63 @@ export const RESTART_NOTICE = Object.freeze({
  * @returns {Staleness}
  */
 export function initialStale(cli) {
-  return { native: null, config: null, cli, restart: false }
+  return {
+    native: null,
+    config: null,
+    cli,
+    restart: false,
+    pending: { config: false, native: [] },
+  }
 }
 
 /**
- * The installed app now matches what the dev wrote: a launch or a `b` rebuild re-applied the
- * native project and the config. Only those two re-arm — a rebuild runs with the modules this
- * process already loaded, so it applies nothing of adaptv's own source.
+ * A launch or a `b` rebuild finished its platform lanes. The fingerprints re-arm to what is on
+ * disk now, every one of them — the lanes' own prepare rewrote the native tree, and an edit
+ * already owed must not notice a second time. What clears is only what reached a device:
+ * `applied` is the platforms whose lane succeeded, so a failed lane keeps its native cause.
+ * The config reaches a device only THROUGH those lanes (the prepare re-derives its assets and
+ * the sync writes its plugins), never through the web bundle alone, so it clears only when
+ * every platform in `native` was applied.
+ *
+ * `before` is what a `b` read off the tree when it began, before its preflight re-stamped
+ * anything. It is folded in first, as a poll that raises no notice: an edit saved and
+ * followed by `b` inside the poll interval was never recorded, and the re-arm below would
+ * step past it, so a lane that failed would owe nothing for it. The fresh block the `b` opens
+ * draws whatever it leaves owed. A launch has no `before`: nothing was armed to compare with,
+ * and the lanes read the files as they are.
+ *
+ * A rebuild runs with the modules this process already loaded, so it applies nothing of
+ * adaptv's own source. `r`, and a `b` whose web bundle failed before any lane ran, apply
+ * nothing at all and never call this.
  * @param {Staleness} state
- * @param {{ native: Record<string, string>, config: string }} armed
+ * @param {{
+ *   before?: { native: Record<string, string>, config: string, cli: string },
+ *   native: Record<string, string>,
+ *   config: string,
+ *   applied: readonly string[],
+ * }} armed
  * @returns {Staleness}
  */
-export function armStale(state, { native, config }) {
-  return { ...state, native, config }
+export function armStale(state, { before, native, config, applied }) {
+  const seen = before
+    ? pollStale(state, before, Object.keys(native)).state
+    : state
+  const all = Object.keys(native).every((p) => applied.includes(p))
+  return {
+    ...seen,
+    native,
+    config,
+    pending: {
+      config: seen.pending.config && !all,
+      native: seen.pending.native.filter((p) => !applied.includes(p)),
+    },
+  }
 }
 
 /**
  * One poll. `notice` is the row to draw, or `null` when nothing moved since the last poll and
- * the row stays as it is. Each fingerprint re-arms, so one edit notices once.
+ * the row stays as it is. Each fingerprint re-arms, so one edit notices once; the row it
+ * draws names every cause still pending, not only the ones this poll saw.
  * @param {Staleness} state
  * @param {{ native: Record<string, string>, config: string, cli: string }} now
  * @param {string[]} platforms
@@ -68,34 +112,43 @@ export function pollStale(state, now, platforms) {
     //LATCHED. The source fingerprint re-arms so one edit notices once, but the restart it
     //raised is still owed: nothing short of a new process loads the edited modules.
     restart: state.restart || cliChanged,
-  }
-  // ONE row, one line (R31) — so config and native MERGE rather than one winning the slot
-  // (R40). adaptv's own source is the exception and WINS the row: a restart re-reads the
-  // config and re-syncs native too, so naming that superset action is the honest line.
-  if (next.restart) return { state: next, notice: RESTART_NOTICE }
-  return {
-    state: next,
-    notice: {
-      text:
-        configChanged && changed.length > 0
-          ? `config + native change · ${changed.join(", ")}`
-          : configChanged
-            ? "config change"
-            : `native change · ${changed.join(", ")}`,
-      restart: false,
+    //ACCUMULATED, for the same reason: the poll that saw a config edit re-armed its
+    //fingerprint, and a later poll that sees only a native edit must not forget it (R40).
+    //Platforms keep the order a single poll names them in.
+    pending: {
+      config: state.pending.config || configChanged,
+      native: platforms.filter(
+        (p) => state.pending.native.includes(p) || changed.includes(p),
+      ),
     },
   }
+  return { state: next, notice: standingNotice(next) }
 }
 
 /**
- * The row a FRESH watch block opens with — after a `b` rebuild, an `r` reload, or a rebuild
- * that failed. Every one of them mounts a new block, and a new block starts empty, so without
- * this the restart row came down with the first `b` and nothing raised it again. Only the
- * restart comes back. After `b` that is right, because `b` re-armed config and native; after `r`
- * or a failed rebuild a pending config or native row is still lost, as it was before (R41).
+ * The row the watch block owes, and so the row a FRESH block opens with — after a `b` rebuild,
+ * an `r` reload, or a rebuild that failed. Every one of them mounts a new block, and a new block
+ * starts empty, so without this the row came down with a key that applied none of it (R41).
+ * After a `b` whose lanes all succeeded only the restart is left; after one with a failed lane,
+ * that platform and the config it never received are left too.
+ *
+ * ONE row, one line (R31) — so config and native MERGE rather than one winning the slot (R40).
+ * adaptv's own source is the exception and WINS the row: a restart re-reads the config and
+ * re-syncs native too, so naming that superset action is the honest line.
  * @param {Staleness} state
  * @returns {Notice | null}
  */
 export function standingNotice(state) {
-  return state.restart ? RESTART_NOTICE : null
+  if (state.restart) return RESTART_NOTICE
+  const { config, native } = state.pending
+  if (!config && native.length === 0) return null
+  return {
+    text:
+      config && native.length > 0
+        ? `config + native change · ${native.join(", ")}`
+        : config
+          ? "config change"
+          : `native change · ${native.join(", ")}`,
+    restart: false,
+  }
 }
