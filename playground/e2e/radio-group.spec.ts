@@ -313,10 +313,10 @@ test.describe("RadioGroup", () => {
       })
     })
     await submit.click()
-    await expect(monthly, "the browser refused the empty group").toHaveAttribute(
-      "data-e2e-invalid",
-      "",
-    )
+    await expect(
+      monthly,
+      "the browser refused the empty group",
+    ).toHaveAttribute("data-e2e-invalid", "")
     await expect(output).toHaveText("not submitted")
     expect(
       await monthly.evaluate(
@@ -330,7 +330,9 @@ test.describe("RadioGroup", () => {
 
     //a reset puts the radios back on their default (none here), and the item's
     //state follows: no stale data-checked, no dot, and FormData agrees
-    const yearlyItem = group(page, "Plan").locator("[data-part='item']").nth(1)
+    const yearlyItem = group(page, "Plan")
+      .locator("[data-part='item']")
+      .nth(1)
     await expect(yearlyItem).toHaveAttribute("data-checked", "")
     await page.getByRole("button", { name: "Reset" }).click()
     await expect(yearly).not.toBeChecked()
