@@ -16,7 +16,8 @@ import { awaitClientHandover } from "./support/hydrated"
  *   - the arrow keys move the selection, skip a disabled option, and Tab leaves
  *     the group in one press — the browser's own radio behaviour, which the item's
  *     press handling must not break;
- *   - a required group blocks submission and a chosen value submits under its name;
+ *   - a required group blocks submission, a chosen value submits under its name,
+ *     and a form reset moves the painted state with the radios;
  *   - under dir=rtl the box sits at the inline start.
  *
  * Two engine differences were measured here and are pinned per engine rather than
@@ -122,17 +123,24 @@ test.describe("RadioGroup", () => {
         String(i + 1),
       )
     }
-    //a trailing click must not have added a report after the readout settled
-    await page.waitForTimeout(150)
-    expect(await changes(page), "exactly one change per click").toBe(3)
+    //a trailing duplicate of any click above would land before the next report:
+    //one more click must take the count from 3 to exactly 4
+    await radio(page, "Billing", "Yearly").click({ timeout: 5_000 })
+    await expect(radio(page, "Billing", "Yearly")).toBeChecked()
+    await expect(page.getByTestId("controlled-changes")).toHaveText("4")
+    expect(await changes(page), "exactly one change per click").toBe(4)
   })
 
   test("a click on the selected item reports nothing", async ({
     page,
   }) => {
     await radio(page, "Billing", "Monthly").click({ timeout: 5_000 })
-    await page.waitForTimeout(150)
-    expect(await changes(page)).toBe(0)
+    //no fixed wait for "nothing": a click that does report must count exactly one,
+    //which it cannot if the first click had reported too
+    await radio(page, "Billing", "Yearly").click({ timeout: 5_000 })
+    await expect(radio(page, "Billing", "Yearly")).toBeChecked()
+    await expect(page.getByTestId("controlled-changes")).toHaveText("1")
+    expect(await changes(page)).toBe(1)
   })
 
   test("a refused selection stays unchecked, and is still reported once", async ({
@@ -188,11 +196,11 @@ test.describe("RadioGroup", () => {
     //both projects) and reports nothing, because nothing changed
     await page.keyboard.press("ArrowDown")
     if (browserName === "webkit") {
-      await page.waitForTimeout(150)
       await expect(radio(page, "Billing", "Lifetime")).toBeChecked()
-      await expect(page.getByTestId("controlled-changes")).toHaveText("2")
+      //the stop reported nothing: the next arrow that moves counts exactly one
       await page.keyboard.press("ArrowUp")
       await expect(radio(page, "Billing", "Yearly")).toBeChecked()
+      await expect(page.getByTestId("controlled-changes")).toHaveText("3")
       await page.keyboard.press("ArrowDown")
     } else {
       await expect(radio(page, "Billing", "Monthly")).toBeChecked()
@@ -207,8 +215,11 @@ test.describe("RadioGroup", () => {
     await page.keyboard.press("Space")
     await expect(radio(page, "Billing", "Yearly")).toBeChecked()
     await expect(page.getByTestId("controlled-changes")).toHaveText("5")
-    await page.waitForTimeout(150)
-    expect(await changes(page), "one change per key").toBe(5)
+    //a duplicate report of the Space would land before this arrow's
+    await page.keyboard.press("ArrowUp")
+    await expect(radio(page, "Billing", "Monthly")).toBeChecked()
+    await expect(page.getByTestId("controlled-changes")).toHaveText("6")
+    expect(await changes(page), "one change per key").toBe(6)
   })
 
   test("Tab enters a group at its selected radio and leaves it in one press", async ({
@@ -264,8 +275,9 @@ test.describe("RadioGroup", () => {
     await page.keyboard.press("ArrowUp")
     await expect(radio(page, "Letters", "Alpha")).toBeChecked()
 
+    const log = page.locator("[data-lab-log] li")
+    await expect(log).toHaveCount(2)
     await beta.click({ force: true })
-    await page.waitForTimeout(150)
     await expect(beta).not.toBeChecked()
     await expect(radio(page, "Letters", "Alpha")).toBeChecked()
 
@@ -273,9 +285,14 @@ test.describe("RadioGroup", () => {
     const locked = group(page, "Locked")
     await expect(locked).toHaveAttribute("aria-disabled", "true")
     await radio(page, "Locked", "Off").click({ force: true })
-    await page.waitForTimeout(150)
     await expect(radio(page, "Locked", "On")).toBeChecked()
-    await expect(page.locator("[data-lab-log] li")).toHaveCount(2)
+
+    //no fixed wait for "nothing": one click that does report must add exactly one
+    //log line, which it cannot if either forced click above had logged too
+    await radio(page, "Letters", "Gamma").click({ timeout: 5_000 })
+    await expect(radio(page, "Letters", "Gamma")).toBeChecked()
+    await expect(log.first()).toContainText("letters → gamma")
+    await expect(log).toHaveCount(3)
     expect(await page.locator("[data-lab-log]").innerText()).not.toMatch(
       /THIS MUST NEVER APPEAR/,
     )
@@ -286,18 +303,51 @@ test.describe("RadioGroup", () => {
   }) => {
     const output = page.getByTestId("form-output")
     const submit = page.getByRole("button", { name: "Submit" })
+    const monthly = radio(page, "Plan", "Monthly")
+    const yearly = radio(page, "Plan", "Yearly")
+    //the output reads "not submitted" from the start, so it proves nothing on its
+    //own: wait for the browser's refusal itself, the `invalid` event on the radio
+    await monthly.evaluate((el) => {
+      el.addEventListener("invalid", () => {
+        el.setAttribute("data-e2e-invalid", "")
+      })
+    })
     await submit.click()
-    await page.waitForTimeout(150)
-    await expect(output, "the browser refused the empty group").toHaveText(
-      "not submitted",
+    await expect(monthly, "the browser refused the empty group").toHaveAttribute(
+      "data-e2e-invalid",
+      "",
     )
+    await expect(output).toHaveText("not submitted")
     expect(
-      await radio(page, "Plan", "Monthly").evaluate(
+      await monthly.evaluate(
         (el) => (el as HTMLInputElement).validity.valueMissing,
       ),
     ).toBe(true)
 
-    await radio(page, "Plan", "Yearly").click({ timeout: 5_000 })
+    await yearly.click({ timeout: 5_000 })
+    await submit.click()
+    await expect(output).toHaveText("plan=yearly&source=lab")
+
+    //a reset puts the radios back on their default (none here), and the item's
+    //state follows: no stale data-checked, no dot, and FormData agrees
+    const yearlyItem = group(page, "Plan").locator("[data-part='item']").nth(1)
+    await expect(yearlyItem).toHaveAttribute("data-checked", "")
+    await page.getByRole("button", { name: "Reset" }).click()
+    await expect(yearly).not.toBeChecked()
+    await expect(yearlyItem).not.toHaveAttribute("data-checked", "")
+    await expect(yearlyItem.locator("[data-part='indicator']")).toHaveCSS(
+      "opacity",
+      "0",
+    )
+    //the form's own reset handler clears the readout; the radios are empty again
+    await expect(output).toHaveText("not submitted")
+    expect(
+      await yearly.evaluate(
+        (el) => (el as HTMLInputElement).validity.valueMissing,
+      ),
+    ).toBe(true)
+    await yearly.click({ timeout: 5_000 })
+    await expect(yearlyItem).toHaveAttribute("data-checked", "")
     await submit.click()
     await expect(output).toHaveText("plan=yearly&source=lab")
   })
