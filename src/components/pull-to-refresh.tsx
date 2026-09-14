@@ -33,7 +33,6 @@ import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
-import tryCatch from "#adaptv/utils/try-catch"
 
 type RefreshPhase = "idle" | "pulling" | "refreshing" | "closing"
 
@@ -68,7 +67,13 @@ export type PullToRefreshContextValue = {
  * ```
  */
 export interface PullToRefreshProps {
-  /** Async work invoked when pull passes the release threshold. */
+  /**
+   * Async work invoked when pull passes the release threshold. The indicator
+   * holds until the promise settles (and for at least `stuckMinMs`), then
+   * closes. A rejection closes it too: the error goes to `reportError` (the
+   * console where there is none), the way a throwing event listener's does,
+   * and is not rethrown. Handle it inside `onRefresh` to show it in the app.
+   */
   onRefresh: () => Promise<unknown>
   children: ReactNode
   /** Tier 2 layout utilities on the gesture root (scroll container when omitted). */
@@ -98,6 +103,12 @@ const PULL_TO_REFRESH_INDICATOR_SPIN_CLASS = "animate-spin"
 const PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS =
   "relative z-0 motion-reduce:transition-none"
 const PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS = "relative z-0"
+
+/** A rejected `onRefresh`, reported the way a throwing event listener's error is. */
+function reportRefreshError(error: unknown) {
+  if (typeof reportError === "function") reportError(error)
+  else console.error(error)
+}
 
 const PullToRefreshContext =
   createContext<PullToRefreshContextValue | null>(null)
@@ -317,9 +328,10 @@ export const PullToRefresh = forwardRef<
   const phaseRef = useRef(phase)
   const pullOffsetRef = useRef(pullOffset)
   const refreshingStartedAtRef = useRef(0)
-  const minStuckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  )
+  //When a settled refresh may close: a time, not a timer, so a timer the app's
+  //`<Activity>` cleared by hiding the row is armed again, for the time left,
+  //when it shows the row again.
+  const [holdUntil, setHoldUntil] = useState<number | null>(null)
   const closeCauseRef = useRef<CloseCause>("release")
   const releaseVelocityYRef = useRef(0)
   const lastPointerSampleRef = useRef({ y: 0, t: 0 })
@@ -459,22 +471,38 @@ export const PullToRefresh = forwardRef<
   const runRefresh = useCallback(async () => {
     setPhase("refreshing")
     refreshingStartedAtRef.current = Date.now()
-    const [, refreshErr] = await tryCatch(() => onRefresh())
+    //The app's rejection is the app's error, and nobody awaits this call (a
+    //pointer release starts it), so rethrowing would only mint an unhandled
+    //rejection of our own. It goes where a throwing event listener's goes, and
+    //the row closes either way so the next pull can refresh. A `catch`, not a
+    //truthiness check on the reason: a bare `reject()` is a rejection too.
+    try {
+      await onRefresh()
+    } catch (error) {
+      reportRefreshError(error)
+    }
     const elapsed = Date.now() - refreshingStartedAtRef.current
     const wait = Math.max(0, stuckMinMs - elapsed)
     if (wait <= 0) {
       closeCauseRef.current = "refresh"
       setPhase("closing")
-      if (refreshErr) throw refreshErr
       return
     }
-    minStuckTimeoutRef.current = setTimeout(() => {
-      closeCauseRef.current = "refresh"
-      setPhase("closing")
-      minStuckTimeoutRef.current = null
-    }, wait)
-    if (refreshErr) throw refreshErr
+    setHoldUntil(Date.now() + wait)
   }, [onRefresh, stuckMinMs])
+
+  useEffect(() => {
+    if (holdUntil === null) return
+    const timeout = setTimeout(
+      () => {
+        setHoldUntil(null)
+        closeCauseRef.current = "refresh"
+        setPhase("closing")
+      },
+      Math.max(0, holdUntil - Date.now()),
+    )
+    return () => clearTimeout(timeout)
+  }, [holdUntil])
 
   const handlePullEnd = useCallback(() => {
     const offset = pullOffsetRef.current
@@ -518,15 +546,6 @@ export const PullToRefresh = forwardRef<
   applyPullRef.current = applyPull
   abortPullRef.current = abortPull
   processPullMoveRef.current = processPullMove
-
-  useEffect(() => {
-    return () => {
-      if (minStuckTimeoutRef.current) {
-        clearTimeout(minStuckTimeoutRef.current)
-        minStuckTimeoutRef.current = null
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (!enabled) return
