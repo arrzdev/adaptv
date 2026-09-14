@@ -82,6 +82,32 @@ export const record = (part, value) => {
 export function recordError(error) {
   journal.error = error
 }
+/**
+ * The label of every step that failed this run, in the order the failures were REPORTED: a
+ * `fail()` before the lanes comes first, and one `runLanes` call adds its failed lanes in the
+ * order the lanes were given.
+ *
+ * ONE error for however many steps failed, never the last one alone. `build all` with both
+ * lanes red is two failures and one run, and a script reading `error` has to see both labels.
+ * A label that already failed keeps its entry: the settled `✖` owns its failure (R2), so a
+ * command's catch calling `fail()` for the same label afterwards must not rewrite it.
+ *
+ * The message is built from the labels and nothing else, the way `doctor`'s `check-failed` is.
+ * A step's reason is very often the TOOL's text (`Build failed with 1 error:`), whether it
+ * settled a row or reached `fail()` through `explainFailure`, so it stays on stderr and in
+ * `steps[].reason` and never becomes the run's one sentence (R8).
+ */
+const failedLabels = []
+function recordStepFailure(label) {
+  if (failedLabels.includes(label)) return
+  failedLabels.push(label)
+  const n = failedLabels.length
+  recordError({
+    kind: "step-failed",
+    labels: [...failedLabels],
+    message: `${n} ${n === 1 ? "step" : "steps"} failed: ${failedLabels.join(", ")}`,
+  })
+}
 /** The one document, on stdout, bypassing the mode gate that silenced everything else. */
 export function emitJson(meta) {
   if (!jsonMode) return
@@ -360,8 +386,18 @@ export function check(ok, label, note = "", { optional = false } = {}) {
  */
 function failureLine(s, failure) {
   if (!failure) return out(s)
-  if (jsonMode) toStderr(() => out(s, "result"))
-  else out(s, "result")
+  failureBlock(() => out(s, "result"))
+}
+
+/**
+ * A failure drawn on the page's own stream: on stdout for the page and `--quiet`, and on stderr
+ * under `--json`, where the page is gone and stderr always speaks (R46). A failed `runLine` row
+ * off a TTY, and a failed lane there, were drawn straight onto stdout like the rows around them,
+ * so `build web --json` on a bundle that did not build exited 1 with nothing on stderr.
+ */
+function failureBlock(draw) {
+  if (jsonMode) toStderr(draw)
+  else draw()
 }
 
 /**
@@ -396,7 +432,7 @@ export function skip(label, note = "cached") {
  */
 export function fail(label, reason, detail = []) {
   record("steps", { label, ok: false, reason })
-  recordError({ kind: "step-failed", label, message: reason })
+  recordStepFailure(label)
   startRow()
   //At error level, the row and its fix both. Written at the default step level, `--quiet`
   //dropped them before they reached stderr, so `build web --quiet` on an app that could not
@@ -1132,14 +1168,19 @@ export async function runLine(
     } catch (err) {
       if (!transient) {
         const { reason, detail: why } = explained(explain, err)
+        //Only this branch records: the journal is serialised under `--json` alone, and a
+        //`--json` run never draws the live row below.
+        recordStepFailure(label)
         //A settled row is the OUTCOME, and a failed one most of all (R46), so `--quiet` keeps
         //it and the fix under it. Levelled as a step, `build web --quiet` on a bundle that did
         //not build exited 1 with both streams empty. Every `--quiet` run takes this branch.
-        out(
-          `  ${c.red(GLYPH.fail)} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
-          "result",
-        )
-        detailBlock(why, "result")
+        failureBlock(() => {
+          out(
+            `  ${c.red(GLYPH.fail)} ${label}  ${c.dim(flat(failRight(reason)))}\n`,
+            "result",
+          )
+          detailBlock(why, "result")
+        })
         // This failure now OWNS a ✖ on screen. An outer catch that reports again would
         // print a second glyph for one failure — and, for a rethrow that reaches the
         // top level, a raw Node message beside the calm one we just wrote
@@ -1300,17 +1341,29 @@ export async function runLanes(lanes, { verbose = false } = {}) {
   if (verbose || !live()) {
     for (const s of state) out(`  ${c.dim("·")} ${s.label}\n`, "step")
     await Promise.all(lanes.map(runOne))
+    //In the order the lanes were GIVEN, not the order they failed in: two lanes failing at once
+    //would otherwise name their labels in whichever order their tools happened to finish. Only
+    //this branch records, because a `--json` run, the one that emits the journal, never
+    //draws the live rows below.
+    for (const s of state)
+      if (s.status === "fail") recordStepFailure(s.label)
     for (const i of settledOrder()) {
       const s = state[i]
       const glyph =
         s.status === "ok" ? c.green(GLYPH.ok) : c.red(GLYPH.fail)
       const r = settledRight(s)
-      //A settled row is the OUTCOME, which is exactly what `--quiet` keeps.
-      out(
-        `  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`,
-        "result",
-      )
-      if (s.status === "fail") detailBlock(s.why, "result")
+      const row = () =>
+        //A settled row is the OUTCOME, which is exactly what `--quiet` keeps.
+        out(
+          `  ${glyph} ${s.label}  ${c.dim(`${r.right}${r.keep}`)}\n`,
+          "result",
+        )
+      if (s.status === "fail")
+        failureBlock(() => {
+          row()
+          detailBlock(s.why, "result")
+        })
+      else row()
     }
     return results
   }

@@ -566,6 +566,22 @@ carries an `if`:
 > it hangs under, so a mode keeps a row's fix exactly when it keeps the row. The CLI's own
 > top-level catch had the same split: its row was kept and the error's tail under it was step
 > level, so the tail is failure detail now too.
+>
+> And a fourth, in the machine mode. Off a TTY a failed `runLine` row and a failed lane settle
+> on stdout, which `--json` silences, and nothing but `fail()` told the journal a step had
+> failed, so a web build that did not build got:
+> ```
+> $ adaptv build web --json
+> {"ok":true,"command":"build web","version":"0.1.0","notices":[…],"steps":[],"result":{}}
+> $ echo $?
+> 1
+> ```
+> with nothing on stderr. Every failed row, and every `fail()`, now joins ONE `step-failed`
+> error. Its `labels` are in the order the failures were reported, so a `fail()` before the
+> lanes comes first, and its `message` is built from those labels alone (`2 steps failed: ios,
+> android`), because a step's own reason is so often the tool's text. A label that already
+> failed is never reported over. Under `--json` the row and its fix go to stderr; the page and
+> `--quiet` keep them where they were.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
