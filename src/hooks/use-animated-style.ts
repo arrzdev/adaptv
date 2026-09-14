@@ -35,7 +35,9 @@ import { useEffect, useLayoutEffect, useRef } from "react"
  *   not restart anything
  * - a zero duration lands on the next frame, not synchronously
  * - `onComplete` runs when every animation one render started has landed, and
- *   never for a batch that a newer target interrupted (`onAnimationComplete`)
+ *   never for a batch that a newer target interrupted (`onAnimationComplete`).
+ *   A key that goes away leaves its batch rather than interrupting it
+ * - an animation an `<Activity>` hid is restarted, from where it was, when shown
  * - an interrupted animation is sampled at the moment it is stopped, so the next
  *   one starts from where the element visibly is
  *
@@ -119,10 +121,12 @@ function writeStyle(
   else el.style.transform = buildTransform(channels)
 }
 
+function isTransformKey(key: AnimatedStyleKey) {
+  return key === "y" || key === "scale" || key === "rotate"
+}
+
 function clearStyle(el: HTMLElement, key: AnimatedStyleKey) {
-  el.style.removeProperty(
-    key === "y" || key === "scale" || key === "rotate" ? "transform" : key,
-  )
+  el.style.removeProperty(isTransformKey(key) ? "transform" : key)
 }
 
 function stopChannel(channel: Channel) {
@@ -174,7 +178,18 @@ export function useAnimatedStyle(
       if (targets[key] !== undefined) continue
       stopChannel(channel)
       s.channels.delete(key)
-      clearStyle(el, key)
+      //a transform key shares one property with the others that stay
+      if (
+        isTransformKey(key) &&
+        TRANSFORM_ORDER.some((k) => s.channels.has(k))
+      )
+        writeStyle(el, key, s.channels)
+      else clearStyle(el, key)
+      //a key that goes away leaves its batch; the rest of the batch still
+      //completes, and if the rest had already landed, it completes now
+      const { batch } = channel
+      channel.batch = null
+      if (batch?.delete(key) && batch.size === 0) onCompleteRef.current?.()
     }
     for (const key of Object.keys(targets) as AnimatedStyleKey[]) {
       const target = targets[key]
@@ -229,9 +244,18 @@ export function useAnimatedStyle(
       //baked into an easing over a 0–100 range first, so its `velocity` is
       //relative to that range. Fed raw to the 0–1 value, the pull's px/s release
       //velocity flings the fading spinner back up before it fades. Bake it the
-      //same way (in seconds, like every other transition here).
+      //same way. The spring generator counts milliseconds and the easing it
+      //returns counts seconds, like every other transition here.
       if (key === "opacity" && options.type === "spring") {
-        Object.assign(options, createGeneratorEasing(options, 100, spring))
+        const { duration } = options
+        Object.assign(
+          options,
+          createGeneratorEasing(
+            duration ? { ...options, duration: duration * 1000 } : options,
+            100,
+            spring,
+          ),
+        )
       }
       //motion's `transition` is in seconds; its engine counts milliseconds
       if (options.duration) options.duration *= 1000
@@ -254,10 +278,21 @@ export function useAnimatedStyle(
     }
   })
 
+  //Runs on unmount, and also when React disconnects the effects of a component
+  //that stays mounted: an `<Activity>` hiding it, or Fast Refresh. The element
+  //and the channels survive that, and the target effect runs again when they
+  //reconnect, so an animation cut short here must not count as landed. Its
+  //target is forgotten, and the next run restarts it from the sampled value and
+  //completes its batch, as a motion component re-animates when shown again.
   useEffect(() => {
     const s = state.current
     return () => {
-      for (const channel of s.channels.values()) stopChannel(channel)
+      for (const channel of s.channels.values()) {
+        const inFlight =
+          channel.animation !== null || channel.instant !== null
+        stopChannel(channel)
+        if (inFlight) channel.target = Number.NaN
+      }
     }
   }, [])
 }
