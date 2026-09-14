@@ -1003,6 +1003,7 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       onChange,
       onInput,
       id,
+      "aria-describedby": consumerDescribedBy,
       ...props
     },
     ref,
@@ -1034,12 +1035,16 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       [children],
     )
     const hasSlots = label !== null || hint !== null || error !== null
+    //the consumer's own ids first, then Hint, then Error: a consumer
+    //`aria-describedby` adds to the slot wiring, it does not replace it
     const describedBy = useMemo(() => {
-      const ids: string[] = []
-      if (hint) ids.push(hintId)
-      if (error) ids.push(errorId)
-      return ids.length > 0 ? ids.join(" ") : undefined
-    }, [error, hint, errorId, hintId])
+      const ids = new Set(
+        consumerDescribedBy?.split(/\s+/).filter(Boolean),
+      )
+      if (hint) ids.add(hintId)
+      if (error) ids.add(errorId)
+      return ids.size > 0 ? [...ids].join(" ") : undefined
+    }, [consumerDescribedBy, error, hint, errorId, hintId])
 
     useImperativeHandle(
       ref,
