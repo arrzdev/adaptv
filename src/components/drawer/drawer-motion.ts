@@ -1,5 +1,4 @@
-import type { MotionValue, Transition } from "motion/react"
-import { animate } from "motion/react"
+import type { MotionValue } from "motion/react"
 import { transitionDrawerChromeTint } from "#adaptv/components/drawer/drawer-chrome-tint"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
 import { DEFAULT_DRAWER_TRANSITION } from "#adaptv/components/drawer/drawer-constants"
@@ -145,25 +144,6 @@ export function tweenDrawerPanelTransform(
   )
 }
 
-function resolveTransition(config: DrawerTransition): Transition {
-  if (config.mode === "spring") {
-    //duration + bounce (not stiffness/damping): Motion derives a spring whose visual settle is
-    //`duration` with `bounce` overshoot — bounce 0 is critically damped, matching an iOS sheet.
-    return {
-      type: "spring",
-      duration: config.duration,
-      bounce: config.bounce,
-      velocity: config.velocity,
-    }
-  }
-
-  return {
-    type: "tween",
-    duration: config.duration,
-    ease: config.bezier,
-  }
-}
-
 export function applyDrawerPanelTransition(
   panel: HTMLElement | null,
   config: DrawerTransition,
@@ -171,7 +151,7 @@ export function applyDrawerPanelTransition(
 ) {
   if (!panel) return
 
-  if (!enabled || config.mode === "spring") {
+  if (!enabled) {
     panel.style.transition = "none"
     return
   }
@@ -181,7 +161,6 @@ export function applyDrawerPanelTransition(
 }
 
 type AnimateDrawerYOptions = {
-  dragVelocity?: number
   useTransition?: boolean
 }
 
@@ -197,23 +176,9 @@ export function animateDrawerY(
   //(the reactive tracker alone leaks ghost frames at motion start); released on settle
   const releaseCaretHold = beginCaretHold()
 
-  // Spring path is JS-driven (main thread) and only kept for opt-in velocity-aware motion.
-  if (config.mode === "spring") {
-    const resolved = resolveTransition(config)
-    const springTransition =
-      options.dragVelocity !== undefined && resolved.type === "spring"
-        ? { ...resolved, velocity: options.dragVelocity }
-        : resolved
-
-    applyDrawerPanelTransition(panel, config, false)
-    const controls = animate(y, target, springTransition)
-    controls.finished.then(releaseCaretHold, releaseCaretHold)
-    return controls
-  }
-
-  // Tween path — commit the target, then let a `@keyframes` rule carry the panel to it. Any drag
-  // velocity is dropped on the floor exactly as before: a CSS tween cannot carry one, and the
-  // visual still starts from the panel's current rendered position.
+  // Commit the target, then let a `@keyframes` rule carry the panel to it (see
+  // `tweenDrawerPanelTransform`). A release carries no drag velocity into the motion: a CSS
+  // keyframe cannot take one, and the visual starts from the panel's current rendered position.
   //
   // `useTransition: false` no longer means "no interpolation" — it means "land on the value now",
   // which is what a zero duration produces.
@@ -407,7 +372,7 @@ export function transitionDrawerBackdropOpacity(
     return Promise.resolve()
   }
 
-  if (config.mode === "spring" || duration <= 0) {
+  if (duration <= 0) {
     element.style.opacity = String(clampedTarget)
     return Promise.resolve()
   }
