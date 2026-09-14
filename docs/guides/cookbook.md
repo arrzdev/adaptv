@@ -70,20 +70,20 @@ If you do want your own, the shape is small:
 import { View, Button } from "@arrzdev/adaptv/components"
 
 export type OfflineProps = {
-  /** adaptv passes `location.reload`; you pass `refetch` / a router invalidate. */
+  /** Absent when adaptv renders this; you pass `refetch` / a router invalidate. */
   onRetry?: () => void
-  /** Present when adaptv rendered this after a chunk-load or route-resolution failure. */
+  /** Only ever set by your own call sites — adaptv renders this with no props. */
   error?: unknown
 }
 
 export function Offline({ onRetry, error }: OfflineProps) {
   return (
-    <View fill center safe className="gap-4 px-6">
+    <View fill center safe="all" className="gap-4 px-6">
       <h1 className="text-lg font-medium">You're offline</h1>
       <p className="text-center opacity-70">
         {error ? "Something didn't load." : "Check your connection and try again."}
       </p>
-      {onRetry && <Button onPress={onRetry}>Retry</Button>}
+      <Button onClick={onRetry ?? (() => location.reload())}>Retry</Button>
     </View>
   )
 }
@@ -139,10 +139,10 @@ use Query:
 
 ```ts
 import { onlineManager } from "@tanstack/react-query"
-import { subscribeNetwork } from "@arrzdev/adaptv/capabilities"
+import { getOnline, subscribeOnline } from "@arrzdev/adaptv/capabilities"
 
 onlineManager.setEventListener((setOnline) =>
-  subscribeNetwork(({ connected }) => setOnline(connected)),
+  subscribeOnline(() => setOnline(getOnline())),
 )
 ```
 
