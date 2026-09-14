@@ -235,6 +235,63 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     advance(120)
     expect(onChange.mock.calls).toEqual([[11], [13]])
   })
+
+  it("reports a row the consumer set from outside mid-glide only once, when the wheel rests on it", () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <WheelColumn
+        items={HOURS}
+        value={9}
+        onChange={onChange}
+        ariaLabel="Hour"
+      />,
+    )
+    scrollWheel(12 * H)
+    //the consumer lands on the same row by its own route before the settle
+    rerender(
+      <WheelColumn
+        items={HOURS}
+        value={12}
+        onChange={onChange}
+        ariaLabel="Hour"
+      />,
+    )
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[12]])
+  })
+
+  it("never reports a row that left the list while the wheel settled", () => {
+    //a day column over 31 while the month turns to February: the list shrinks to 28
+    //and the consumer clamps the day, all before the settle runs
+    const onChange = vi.fn()
+    let shrink = () => {}
+    function Days() {
+      const [value, setValue] = useState(15)
+      const [count, setCount] = useState(31)
+      shrink = () => {
+        setCount(28)
+        setValue((day) => Math.min(day, 28))
+      }
+      return (
+        <WheelColumn
+          items={range(1, count)}
+          value={value}
+          onChange={(next) => {
+            onChange(next)
+            setValue(next)
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<Days />)
+    scrollWheel(30 * H) // row 31
+    act(() => shrink())
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[31]])
+    //the settle rolls onto the last row that still exists
+    expect(smoothRolls().at(-1)).toBe(27 * H)
+  })
 })
 
 describe("WheelColumn — the settle snap", () => {
@@ -439,6 +496,16 @@ describe("WheelColumn — the keyboard", () => {
     fireEvent.keyDown(wheel(), { key: "ArrowUp" })
     fireEvent.keyDown(wheel(), { key: "ArrowUp" })
     expect(smoothRolls()).toEqual([10 * H, 9 * H, 8 * H])
+  })
+
+  it("reports the row a key rolls onto once, when the roll's last scroll event crosses into it", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    //the roll arrives in one scroll event, and nothing scrolls after it
+    scrollWheel(10 * H)
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[10]])
   })
 
   it("counts presses that land before the roll arrives", () => {
