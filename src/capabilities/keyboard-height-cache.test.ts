@@ -320,8 +320,13 @@ describe("durable persistence", () => {
     await Promise.resolve()
 
     const next = await load()
+    const { Preferences } = await import("@capacitor/preferences")
+    vi.mocked(Preferences.set).mockClear()
     await next.loadKeyboardHeightCache()
     expect(next.predictKeyboardHeight(inputEl({ type: "text" }))).toBe(336)
+    //a quiet boot reads the store and writes nothing back
+    await new Promise((r) => setTimeout(r, 0))
+    expect(Preferences.set).not.toHaveBeenCalled()
     //nothing leaked into web storage on the native path
     expect(
       localStorage.getItem(first.KEYBOARD_HEIGHT_CACHE_STORAGE_KEY),
@@ -402,5 +407,44 @@ describe("durable persistence", () => {
     recordKeyboardHeight(el, 336)
     await vi.waitFor(() => expect(Preferences.set).toHaveBeenCalled())
     expect(predictKeyboardHeight(el)).toBe(336)
+  })
+
+  //The native read is a dynamic import plus a bridge round trip, so the boot hydration is not
+  //instant. A keyboard measured while that read is in flight (an autofocused field raising the
+  //keyboard at launch) is newer than anything stored: the late load must not put last session's
+  //height back over it, and the store must end up holding the stored entries alongside it.
+  it("lets a height measured while the native store loads win over the stored one", async () => {
+    forceNative(true)
+    const mod = await load()
+    const { Preferences } = await import("@capacitor/preferences")
+    let landRead: (value: string) => void = () => {}
+    vi.mocked(Preferences.get).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          landRead = (value) => resolve({ value })
+        }),
+    )
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    })
+
+    const loading = mod.loadKeyboardHeightCache()
+    await vi.waitFor(() => expect(Preferences.get).toHaveBeenCalled())
+    mod.recordKeyboardHeight(inputEl({ type: "text" }), 300)
+    await vi.waitFor(() => expect(Preferences.set).toHaveBeenCalled())
+    landRead(JSON.stringify({ "390:text:-": 336, "390:numeric:-": 260 }))
+    await loading
+
+    expect(mod.predictKeyboardHeight(inputEl({ type: "text" }))).toBe(300)
+    expect(mod.predictKeyboardHeight(inputEl({ type: "tel" }))).toBe(260)
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(prefsStore.get("adaptv-kb-heights") ?? "{}"),
+      ).toEqual({
+        "390:text:-": 300,
+        "390:numeric:-": 260,
+      }),
+    )
   })
 })
