@@ -193,7 +193,7 @@ obvious, because the long tail is the actual work.
 - Auth: cookie-less bearer flow; OAuth redirect + **deep-link callback**; biometric unlock; token refresh on resume.
 
 ### Build, distribution & updates
-> Full model + the hard **isomorphism boundary** (`createServerFn` is forbidden cross-platform): see **`docs/design/rendering.md`**.
+> Full model + the hard **isomorphism boundary** (`createServerFn` cannot reach a native app): see **`docs/design/rendering.md`**. Owner's direction since 2026-09-14: server functions are a web feature, and the build of any artifact with no server (native, OTA, static) refuses with a report → `docs/roadmap/server-boundary.md`.
 - One app → **SSR web** (default) + **static SPA** (native), auto per target; service worker on/off per target; **build-time env (`VITE_*`) is baked into the bundle**, so anything an app points at — a backend, an OTA channel — is chosen when the artifact is built, not when it launches, and each target's bundle carries its own answer.
 - Code signing; unsigned `.ipa` for sideloading vs signed TestFlight/App Store; debug `.apk`.
 - **OTA / live updates** — the bundle is a snapshot; JS/web-only updates can ship over-the-air (Capgo / `@capacitor/live-updates`, Apple 3.3.2); native changes need a store submission.
