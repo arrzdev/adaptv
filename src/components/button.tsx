@@ -1,4 +1,3 @@
-import { domMin, LazyMotion, m } from "motion/react"
 import type { ComponentProps, ReactNode, RefObject } from "react"
 import {
   Children,
@@ -14,6 +13,7 @@ import {
 import type { ImpactWeight } from "#adaptv/capabilities/haptics"
 import { haptics } from "#adaptv/capabilities/haptics"
 import { usePressCore } from "#adaptv/components/press-core"
+import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import type {
   GestureEvent,
   OmitGestureEngineHandlers,
@@ -197,6 +197,7 @@ const BUTTON_MOTION_TRANSITION = {
   duration: 0.2,
   ease: [0, 0, 0.2, 1] as const,
 }
+const BUTTON_MOTION_INSTANT = { duration: 0 }
 
 /**
  * Leading icon or indicator slot. Place before {@link Button.Text} in JSX order.
@@ -341,6 +342,7 @@ function ButtonContentRow({
   reducedMotion,
 }: ButtonContentRowProps) {
   const measureRef = useRef<HTMLSpanElement>(null)
+  const shellRef = useRef<HTMLSpanElement>(null)
   const [contentWidth, setContentWidth] = useState(0)
   const [widthTransitionEnabled, setWidthTransitionEnabled] =
     useState(false)
@@ -379,6 +381,21 @@ function ButtonContentRow({
     return () => cancelAnimationFrame(frame)
   }, [contentWidth, hasFixedWidth])
 
+  //Imperative, not a motion component: the row wraps the app's label and slots,
+  //and a motion component there would re-render the app's own motion elements
+  //with every Button render and override the app's `LazyMotion`. A width it has
+  //not measured yet (0) is no inline width at all, which is `auto`.
+  //→ docs/decisions/animation.md §3.1
+  useAnimatedStyle(
+    shellRef,
+    contentWidth > 0 ? { width: contentWidth } : {},
+    {
+      width: widthTransitionEnabled
+        ? BUTTON_MOTION_TRANSITION
+        : BUTTON_MOTION_INSTANT,
+    },
+  )
+
   if (hasFixedWidth || reducedMotion) {
     return (
       <span className={BUTTON_CONTENT_MEASURE_ROW_CLASS} ref={measureRef}>
@@ -387,28 +404,12 @@ function ButtonContentRow({
     )
   }
 
-  //`m` + a component-owned `LazyMotion`, not `motion.span`: the full component
-  //statically carries drag and layout projection into every bundle that imports
-  //Button, which is the shell's. `domMin` (renderer + `animate`) is all this row
-  //uses, and owning the provider keeps the tween alive wherever Button renders.
-  //→ docs/decisions/animation.md §3.1
   return (
-    <LazyMotion features={domMin}>
-      <m.span
-        className={BUTTON_CONTENT_MOTION_SHELL_CLASS}
-        initial={false}
-        animate={{ width: contentWidth > 0 ? contentWidth : "auto" }}
-        transition={
-          widthTransitionEnabled
-            ? BUTTON_MOTION_TRANSITION
-            : { duration: 0 }
-        }
-      >
-        <span ref={measureRef} className={BUTTON_CONTENT_INNER_ROW_CLASS}>
-          {children}
-        </span>
-      </m.span>
-    </LazyMotion>
+    <span ref={shellRef} className={BUTTON_CONTENT_MOTION_SHELL_CLASS}>
+      <span ref={measureRef} className={BUTTON_CONTENT_INNER_ROW_CLASS}>
+        {children}
+      </span>
+    </span>
   )
 }
 

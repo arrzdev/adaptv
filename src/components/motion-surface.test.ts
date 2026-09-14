@@ -4,18 +4,23 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 /*
- * `docs/decisions/animation.md` A7 (🔒 §3.1): adaptv ships `LazyMotion` + `m`,
- * never the full `motion` component.
+ * `docs/decisions/animation.md` A7 (🔒 §3.1): adaptv ships no motion component
+ * and no motion context. Its animations run imperatively: `JSAnimation` on an
+ * element's style (`src/hooks/use-animated-style.ts`), `animate()` on a motion
+ * value in the drawer.
  *
- * The full component is one import away from coming back, and nothing about it
- * looks wrong in review: `motion.span` and `m.span` take the same props and
- * render the same element. What differs is the bundle. `motion` is created with
- * motion's whole feature set loaded at module scope, so a static import drags
- * drag gestures and layout projection into every chunk that reaches it. Button
- * is reached from the shell (through `Offline`), so on `main` that was 49 KB raw
- * of the ~735 KB initial JS on every target, for features nothing here uses.
+ * Two routes back both look harmless in review. The full `motion` component
+ * takes the same props as any element and renders the same one, but it is
+ * created with motion's whole feature set loaded at module scope, so a static
+ * import drags drag gestures and layout projection into every chunk that reaches
+ * it. Button is reached from the shell, so on `main` that was 49 KB raw of the
+ * ~735 KB initial JS on every target. `m` under a component-owned `LazyMotion`
+ * fixes the bytes and breaks the app instead: the provider hands the app's
+ * content a new context object on every render, so each app motion element
+ * inside re-renders with the wrapper, and it replaces the app's own
+ * `LazyMotion` (its async features, its `strict`) for everything inside.
  *
- * Biome's `noRestrictedImports` names the import, which catches the obvious
+ * Biome's `noRestrictedImports` names those imports, which catches the obvious
  * case but not a namespace import, nor the interface barrels where that rule is
  * switched off. This is the other half: it bundles the package's browser entries
  * with the bundler a consumer builds with and reads which motion modules
@@ -91,31 +96,32 @@ async function shippedMotionModules(): Promise<string[]> {
 }
 
 describe("the framework's motion surface", () => {
-  it("ships `m` + `LazyMotion` and none of the full component's features", async () => {
+  it("ships motion's animation engine and none of its components, contexts or their features", async () => {
     const shipped = await shippedMotionModules()
     const has = (fragment: string) =>
       shipped.some((id) => id.includes(fragment))
 
-    //the full component, and the two feature sets only it (or `domMax`) brings
+    //the components (`motion` and `m`), the provider and the context it hands
+    //down, and the feature sets only the full component (or `domMax`) brings
     expect(
       shipped.filter(
         (id) =>
-          id.includes("/render/components/motion/") ||
+          id.includes("/render/components/") ||
+          id.includes("/components/LazyMotion/") ||
+          id.includes("/context/LazyContext") ||
+          id.includes("/context/MotionContext/") ||
           id.includes("/projection/node/") ||
           id.includes("/gestures/drag/") ||
           id.includes("/gestures/pan/") ||
-          id.includes("/motion/features/layout"),
+          id.includes("/motion/features/"),
       ),
     ).toEqual([])
 
-    //the premise: motion IS bundled, through the lazy path. Without these the
-    //absence above would pass on a bundle that simply lost every animation.
-    expect(
-      has("framer-motion/dist/es/render/components/m/proxy.mjs"),
-    ).toBe(true)
-    expect(has("framer-motion/dist/es/components/LazyMotion/")).toBe(true)
-    expect(
-      has("framer-motion/dist/es/motion/features/animation/index.mjs"),
-    ).toBe(true)
+    //the premise: motion IS bundled, as its engine. Without these the absence
+    //above would pass on a bundle that simply lost every animation.
+    expect(has("motion-dom/dist/es/animation/JSAnimation.mjs")).toBe(true)
+    expect(has("motion-dom/dist/es/animation/generators/spring.mjs")).toBe(
+      true,
+    )
   }, 30_000)
 })
