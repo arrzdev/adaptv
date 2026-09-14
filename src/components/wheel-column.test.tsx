@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react"
-import { useState } from "react"
+import { Profiler, useState } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { WheelItem } from "#adaptv/components/wheel-column"
 import {
@@ -194,6 +194,57 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     expect(onChange.mock.calls).toEqual([[10], [10], [10]])
   })
 
+  it("keeps re-reporting a row the consumer did not store on every frame, not only the first two", () => {
+    //from the second frame on the wheel's own centred row no longer changes, so
+    //nothing else re-renders it between frames
+    const onChange = vi.fn()
+    render(
+      <WheelColumn
+        items={HOURS}
+        value={9}
+        onChange={onChange}
+        ariaLabel="Hour"
+      />,
+    )
+    for (const top of [10 * H, 10 * H + 3, 10 * H + 5, 10 * H + 7]) {
+      scrollWheel(top)
+    }
+    expect(onChange.mock.calls).toEqual([[10], [10], [10], [10]])
+  })
+
+  it("re-reports a row the consumer did not store to a scroll event that lands before the wheel's passive effects", () => {
+    //the next frame's scroll event fired from the commit itself, after the layout
+    //effects and before the passive ones: the earliest an engine can deliver it
+    const onChange = vi.fn()
+    let next: number | null = null
+    render(
+      <Profiler
+        id="wheel"
+        onRender={() => {
+          if (next === null) return
+          const top = next
+          next = null
+          wheel().scrollTop = top
+          fireEvent.scroll(wheel())
+        }}
+      >
+        <WheelColumn
+          items={HOURS}
+          value={9}
+          onChange={onChange}
+          ariaLabel="Hour"
+        />
+      </Profiler>,
+    )
+    act(() => {
+      next = 10 * H + 3
+      wheel().scrollTop = 10 * H
+      fireEvent.scroll(wheel())
+    })
+    expect(next).toBeNull()
+    expect(onChange.mock.calls).toEqual([[10], [10]])
+  })
+
   it("reports a row the consumer stored only once, when the last scroll event is the one that crossed it", () => {
     //the settle's timer is armed by the scroll that reported the row, BEFORE the
     //consumer's re-render hands the row back as `value`
@@ -234,6 +285,21 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     })
     advance(120)
     expect(onChange.mock.calls).toEqual([[11], [13]])
+  })
+
+  it("reports a row the consumer stores only once when two scroll events cross it before the consumer re-renders", () => {
+    //both events land ahead of React's continuous-priority render, so the second one
+    //still reads the `value` from before the consumer stored the first report
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+    act(() => {
+      wheel().scrollTop = 10 * H // crosses into 10
+      fireEvent.scroll(wheel())
+      wheel().scrollTop = 10 * H + 3 // still 10
+      fireEvent.scroll(wheel())
+    })
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[10]])
   })
 
   it("reports a row the consumer set from outside mid-glide only once, when the wheel rests on it", () => {
