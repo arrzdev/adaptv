@@ -52,11 +52,14 @@ function adaptvWorkerPath(): string {
  * own worker file — see {@link resolveWorkerEntry}.
  */
 export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
+  let base = "/"
   return {
     name: "adaptv:sw-build",
     apply: "build",
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
+      //the deploy base, which a URL the manifest writes resolves against
+      base = resolved.base
     },
     //`buildApp`, `order: "post"` — MEASURED, and the reason is the precache
     //manifest. On `closeBundle` the deploy plugin has not finished assembling the
@@ -67,13 +70,16 @@ export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
     buildApp: {
       order: "post",
       async handler() {
-        await buildServiceWorker(context)
+        await buildServiceWorker(context, base)
       },
     },
   }
 }
 
-async function buildServiceWorker(context: AdaptvContext): Promise<void> {
+async function buildServiceWorker(
+  context: AdaptvContext,
+  base: string,
+): Promise<void> {
   const config = requireAppConfig(context)
   //The ONLY case with no worker, and it comes from the target, not a key.
   if (context.web?.sw.enabled === false) return
@@ -142,7 +148,7 @@ async function buildServiceWorker(context: AdaptvContext): Promise<void> {
     swDest,
     clientDir,
     shellFile,
-    unlinkedIcons: unlinkedIconFiles(context.appRoot, config),
+    unlinkedIcons: unlinkedIconFiles(context.appRoot, config, base),
   })
 
   unlinkSync(swSrcBundle)
@@ -247,47 +253,100 @@ function injectPrecacheManifest(options: {
  * MEASURED on the playground: 909 900 of the precache's 3 749 343 bytes (24%),
  * downloaded by every first install for nothing.
  *
- * Derived from what the web surfaces actually link rather than from names: an
- * icon is precached if and only if `headIconLinks` or the built manifest points
- * at it, so a custom file name, adaptv's default set and a duplicate 512 are all
- * decided by the same rule the head and the manifest already apply. The manifest
- * is the built one (`buildManifest`), so an `icons` array an app supplies through
- * `manifestExtra` keeps its files too.
+ * Derived from what the web surfaces actually link rather than from names: a
+ * measured icon is precached if and only if `headIconLinks` or the built
+ * manifest points at it, so a custom file name, adaptv's default set and a
+ * duplicate 512 are all decided by the same rule the head and the manifest
+ * already apply. The manifest is the built one (`buildManifest`), so an `icons`
+ * array an app supplies through `manifestExtra` keeps its files too.
+ *
+ * The two halves are compared differently, because they are different kinds of
+ * string. A head link's href is a path under the public root by construction
+ * (`${urlBase}/${name}`) and never carries the deploy base, so it is compared
+ * from the root whatever the base is. A manifest `src` is a URL the browser
+ * resolves against the manifest, which lives at the deploy base, so
+ * `./favicons/x.png`, `favicons/x.png`, `<base>favicons/x.png` and an absolute
+ * URL on the app's `origin` all name the same output file, and one on any other
+ * origin names none.
  *
  * Only the members `resolveIconSet` measured are candidates. Anything else in the
  * directory (a `safari-pinned-tab.svg`, an `.ico` the head does not probe for) is
  * not art adaptv knows the use of, so it is left to the glob. Nothing is removed
- * from the OUTPUT: an unlinked file is still served, and the worker's runtime
- * static route still caches it the first time something fetches it (§3.3).
+ * from the OUTPUT: an unlinked file is still served. The worker's runtime static
+ * route (§3.3) caches it only if a page requests it as an image while online,
+ * and never on the install alone.
  */
 function unlinkedIconFiles(
   appRoot: string,
   config: AdaptvAppConfig,
+  base: string,
 ): ReadonlySet<string> {
   const set = resolveIconSet(appRoot, config, defaultIconFiles())
   //Outside `public/` nothing is served, so nothing of it was globbed either.
   if (!set.urlBase) return new Set()
 
+  const publicRoot = new URL(`${PLACEHOLDER_ORIGIN}/`)
+  const manifestRoot = deployRoot(base, config.origin)
+  const manifest = buildManifest(config, appRoot)
+  const manifestSrcs = Array.isArray(manifest.icons)
+    ? manifest.icons.map((icon) => icon?.src)
+    : []
   const linked = new Set(
     [
-      ...headIconLinks(set).map((link) => link.href),
-      ...buildManifest(config, appRoot).icons.map((icon) => icon.src),
-    ].map(precacheUrl),
+      ...headIconLinks(set).map((link) =>
+        outputUrl(link.href, publicRoot),
+      ),
+      ...manifestSrcs.map((src) =>
+        typeof src === "string" ? outputUrl(src, manifestRoot) : undefined,
+      ),
+    ].filter((url): url is string => url !== undefined),
   )
 
   return new Set(
     set.icons
-      .map((icon) => precacheUrl(`${set.urlBase}/${icon.name}`))
-      .filter((url) => !linked.has(url)),
+      .map((icon) => outputUrl(`${set.urlBase}/${icon.name}`, publicRoot))
+      .filter(
+        (url): url is string => url !== undefined && !linked.has(url),
+      ),
   )
 }
 
 /**
- * An href as Workbox writes a manifest URL: the path relative to the client
- * output, with no leading slash. Compared raw on both sides — the head and the
- * manifest write the file name into the href unencoded, and Workbox takes it
- * from the disk the same way.
+ * Stands in for the deploy origin when the app names none. It is never a real
+ * host, so an absolute URL can only match it by being on the app's own `origin`.
  */
-function precacheUrl(href: string): string {
-  return href.replace(/^\//, "")
+const PLACEHOLDER_ORIGIN = "https://adaptv.invalid"
+
+/**
+ * The URL the client output is served at: Vite's resolved `base` on the app's
+ * `origin`. Vite keeps a trailing slash only when one was written, so `/app` and
+ * `/app/` are the same root; a relative base (`./`) resolves to the origin root,
+ * the one place its relative URLs can be compared from; an absolute base (a CDN)
+ * carries its own origin.
+ */
+function deployRoot(base: string, origin: string | undefined): URL {
+  const prefix = base.endsWith("/") ? base : `${base}/`
+  try {
+    return new URL(prefix, `${origin ?? PLACEHOLDER_ORIGIN}/`)
+  } catch {
+    return new URL(prefix, `${PLACEHOLDER_ORIGIN}/`)
+  }
+}
+
+/**
+ * The output file an href names, the way Workbox writes a manifest URL: the path
+ * relative to the client output, no leading slash, not percent-encoded (Workbox
+ * takes it from the disk, and the head and manifest write file names unencoded).
+ * `undefined` when the href resolves to another origin or outside `root`, where
+ * nothing in the output can be at.
+ */
+function outputUrl(href: string, root: URL): string | undefined {
+  try {
+    const url = new URL(href, root)
+    if (url.origin !== root.origin) return undefined
+    if (!url.pathname.startsWith(root.pathname)) return undefined
+    return decodeURIComponent(url.pathname.slice(root.pathname.length))
+  } catch {
+    return undefined
+  }
 }
