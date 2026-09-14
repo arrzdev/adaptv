@@ -136,8 +136,13 @@ describe("RadioGroup — structure", () => {
     const [a, b, c] = itemsOf(container)
     for (const item of [a, b, c]) {
       expect(item.tagName).toBe("LABEL")
-      expect(item.getAttribute("data-adaptv")).toBe("radio-group")
+      //the identity is the group's alone: the item is a part of it
+      expect(item.hasAttribute("data-adaptv")).toBe(false)
     }
+    const identified = container.querySelectorAll("[data-adaptv='radio-group']")
+    expect(identified).toHaveLength(1)
+    expect(identified[0].getAttribute("role")).toBe("radiogroup")
+    expect(identified[0].getAttribute("data-part")).toBe("root")
     expect(a.hasAttribute("data-checked")).toBe(false)
     expect(b.getAttribute("data-checked")).toBe("")
     expect(c.getAttribute("data-disabled")).toBe("")
@@ -165,6 +170,28 @@ describe("RadioGroup — structure", () => {
     expect(
       b.querySelector("[data-part='box'] [data-part='indicator']"),
     ).not.toBeNull()
+  })
+
+  it("finds a Tier 2 box wrapper by its displayName, and draws no default box beside it", () => {
+    //the wrapper is a component of the consumer's, so its element type is never
+    //RadioGroup.Box: only the displayName convention Checkbox uses identifies it
+    function BrandBox() {
+      return <RadioGroup.Box className="ring-1" />
+    }
+    BrandBox.displayName = "RadioGroup.Box"
+    const { container } = render(
+      <RadioGroup>
+        <RadioGroup.Item value="a">
+          <BrandBox />
+          Alpha
+        </RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const [item] = itemsOf(container)
+    const boxes = item.querySelectorAll("[data-part='box']")
+    expect(boxes, "the wrapper's box, and no default one").toHaveLength(1)
+    expect(boxes[0].className).toContain("ring-1")
+    expect(item.firstElementChild).toBe(boxes[0])
   })
 
   it("renders its controlled inputs without a React warning", () => {
@@ -248,6 +275,13 @@ describe("RadioGroup — names", () => {
   })
 
   it("two mounted instances with no name do not uncheck each other", () => {
+    //A behavioural guard, not the literal-name catcher. In a browser a shared name
+    //does show here: on a commit React blanks a radio's name, sets `checked`, then
+    //restores the name, and restoring the name of a checked radio unchecks every
+    //other radio of that group (which is how the literal-name mutant fails "two
+    //instances" in the e2e spec on both engines). happy-dom unchecks the group only
+    //when `checked` is set, never when a name changes, so this test cannot catch
+    //that mutant; the `required` test below does.
     const first = vi.fn()
     const second = vi.fn()
     const { container } = render(
@@ -274,10 +308,10 @@ describe("RadioGroup — names", () => {
   })
 
   it("a selection in one unnamed group does not satisfy another group's `required`", () => {
-    //React re-checks a controlled radio the browser unchecked across a shared name,
-    //so a click alone hides a shared name. Validity does not: the browser decides
-    //`required` per name, so under one literal name a choice in the first group
-    //would let the second submit with nothing chosen.
+    //The unit catcher for a shared default name. happy-dom does not uncheck a group
+    //when React restores a radio's name (see the test above), but validity is keyed
+    //on the name in happy-dom as in the spec: under one literal name a choice in the
+    //first group would let the second submit with nothing chosen.
     const { container } = render(
       <form>
         <RadioGroup aria-label="Size" required>
@@ -483,6 +517,37 @@ describe("RadioGroup — one change per selection", () => {
   })
 })
 
+describe("RadioGroup — a press that fires no click", () => {
+  it("a press dragged off with no click does not swallow a later click it did not produce", () => {
+    //iOS fires no click after a touch dragged off the item, so the press's veto is
+    //left armed. A later activation that carries a click count but no pointerdown
+    //on the item (an assistive-tech activation, a forwarded label click) must select.
+    let now = 10_000
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now)
+    try {
+      const spy = vi.fn()
+      const { container } = render(<Plans onValueChange={spy} />)
+      const yearly = radios(container)[1]
+      const pointer = { pointerId: 1, button: 0, isPrimary: true }
+      fireEvent.pointerDown(yearly, { ...pointer, clientX: 0, clientY: 0 })
+      fireEvent.pointerMove(yearly, {
+        ...pointer,
+        clientX: 500,
+        clientY: 500,
+      })
+      fireEvent.pointerUp(yearly, { ...pointer, clientX: 500, clientY: 500 })
+      //no click follows the release
+      now += 2_000
+      fireEvent.click(yearly, { detail: 1 })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(spy).toHaveBeenLastCalledWith("yearly")
+      expect(yearly.checked).toBe(true)
+    } finally {
+      clock.mockRestore()
+    }
+  })
+})
+
 describe("RadioGroup — disabled", () => {
   it("a disabled item is disabled natively and never selects", () => {
     const spy = vi.fn()
@@ -575,6 +640,93 @@ describe("RadioGroup — forms", () => {
     const data = new FormData(form)
     expect(data.has("plan")).toBe(false)
     expect(data.has("off")).toBe(false)
+  })
+
+  it("a form reset puts an uncontrolled group back on its default, in the DOM and in state", async () => {
+    const spy = vi.fn()
+    const { container } = render(
+      <form>
+        <Plans name="plan" defaultValue="monthly" onValueChange={spy} />
+      </form>,
+    )
+    const form = container.querySelector("form") as HTMLFormElement
+    const [monthly, yearly] = radios(container)
+    const [monthlyItem, yearlyItem] = itemsOf(container)
+    tap(yearly)
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      form.reset()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(new FormData(form).getAll("plan")).toEqual(["monthly"])
+    expect(monthly.checked).toBe(true)
+    expect(yearly.checked).toBe(false)
+    expect(monthlyItem.hasAttribute("data-checked"), "the paint follows").toBe(
+      true,
+    )
+    expect(yearlyItem.hasAttribute("data-checked")).toBe(false)
+    //a reset is not a selection the user made
+    expect(spy).toHaveBeenCalledTimes(1)
+
+    //and the painted state is the real one: choosing yearly again is a change
+    tap(yearly)
+    expect(spy).toHaveBeenCalledTimes(2)
+    expect(new FormData(form).getAll("plan")).toEqual(["yearly"])
+    expect(yearlyItem.hasAttribute("data-checked")).toBe(true)
+  })
+
+  it("a reset of the form that `form` names follows it too, and restores a default set after mount", async () => {
+    function Detached({ defaultValue }: { defaultValue: string }) {
+      return (
+        <>
+          <form id="checkout" />
+          <RadioGroup form="checkout" name="plan" defaultValue={defaultValue}>
+            <RadioGroup.Item value="monthly">Monthly</RadioGroup.Item>
+            <RadioGroup.Item value="yearly">Yearly</RadioGroup.Item>
+            <RadioGroup.Item value="lifetime">Lifetime</RadioGroup.Item>
+          </RadioGroup>
+        </>
+      )
+    }
+    const { container, rerender } = render(<Detached defaultValue="monthly" />)
+    const form = container.querySelector("form") as HTMLFormElement
+    const [, yearly, lifetime] = radios(container)
+    expect(yearly.form, "owned through the form attribute").toBe(form)
+    expect(yearly.closest("form")).toBeNull()
+
+    rerender(<Detached defaultValue="lifetime" />)
+    tap(yearly)
+    await act(async () => {
+      form.reset()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(lifetime.checked).toBe(true)
+    expect(yearly.checked).toBe(false)
+    const items = itemsOf(container)
+    expect(items[2].hasAttribute("data-checked")).toBe(true)
+    expect(items[1].hasAttribute("data-checked")).toBe(false)
+  })
+
+  it("a form reset leaves a controlled group on the owner's value", async () => {
+    const spy = vi.fn()
+    const { container } = render(
+      <form>
+        <ControlledPlans onValueChange={spy} />
+      </form>,
+    )
+    const form = container.querySelector("form") as HTMLFormElement
+    const [monthly, yearly] = radios(container)
+    tap(yearly)
+    expect(yearly.checked).toBe(true)
+    await act(async () => {
+      form.reset()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(yearly.checked, "the DOM stays on the owner's value").toBe(true)
+    expect(monthly.checked).toBe(false)
+    expect(container.querySelector("output")?.textContent).toBe("yearly")
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it("forwards `form` to every radio", () => {

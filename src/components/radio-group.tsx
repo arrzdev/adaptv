@@ -15,6 +15,7 @@ import {
   isValidElement,
   useCallback,
   useContext,
+  useEffect,
   useId,
   useImperativeHandle,
   useRef,
@@ -227,9 +228,15 @@ const RADIO_BOX_SURFACE_CLASS =
 //land on the mark instead of the input laid over the item.
 const RADIO_INDICATOR_LOCKED_LAYOUT_CLASS = "pointer-events-none"
 
+//How long after a release its click may still arrive: iOS holds a tap's click for
+//its double-tap wait (~350 ms); everything else fires it with the release.
+const PRESS_CLICK_WINDOW_MS = 1000
+
 const RadioGroupContext = createContext<
   | (RadioGroupContextValue & {
       form: string | undefined
+      /** What a form reset restores: `defaultValue`, or the owner's `value`. */
+      resetValue: string | null
       select: (value: string) => void
     })
   | null
@@ -440,6 +447,22 @@ const RadioGroupItem = forwardRef<
   //covers a stale veto: a cancelled press arms the engine and no click follows,
   //so without it the NEXT arrow-key selection of this item would be swallowed.
   const pressOwnsClick = useRef(false)
+  //When this item's last press was released. A press dragged off the item and
+  //released fires NO click on iOS, so the flag above (and the engine's veto) stay
+  //armed with nothing to consume them; a later click that carries a click count
+  //but no pointerdown here (an assistive-tech activation, a forwarded label click)
+  //would be swallowed once. The click a release produces follows it at once (on
+  //iOS within the double-tap wait, ~350 ms), so a click past the window is not
+  //that press's click and is never vetoed.
+  const releasedAt = useRef(Number.NEGATIVE_INFINITY)
+
+  //A form reset restores each radio's `checked` ATTRIBUTE, which React writes only
+  //on mount. Keep it on the item the reset should restore, so the DOM after a reset
+  //is the group's reset value, never the mount-time selection.
+  const isResetTarget = group.resetValue === value
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.defaultChecked = isResetTarget
+  }, [isResetTarget])
 
   const itemContext: RadioGroupItemContextValue = {
     value,
@@ -460,7 +483,6 @@ const RadioGroupItem = forwardRef<
   return (
     <RadioGroupItemContext.Provider value={itemContext}>
       <label
-        data-adaptv="radio-group"
         data-part="item"
         data-checked={isChecked ? "" : undefined}
         data-disabled={isDisabled ? "" : undefined}
@@ -491,7 +513,10 @@ const RadioGroupItem = forwardRef<
           engine.onPointerDown(e)
         }}
         onPointerMove={engine.onPointerMove}
-        onPointerUp={engine.onPointerUp}
+        onPointerUp={(e: PointerEvent<HTMLLabelElement>) => {
+          releasedAt.current = performance.now()
+          engine.onPointerUp(e)
+        }}
         onPointerCancel={(e: PointerEvent<HTMLLabelElement>) => {
           //no click follows a cancel, so this press owns none
           pressOwnsClick.current = false
@@ -501,7 +526,10 @@ const RadioGroupItem = forwardRef<
         onKeyDown={engine.onKeyDown}
         onKeyUp={engine.onKeyUp}
         onClickCapture={(e: MouseEvent<HTMLLabelElement>) => {
-          const owned = pressOwnsClick.current && e.detail !== 0
+          const owned =
+            pressOwnsClick.current &&
+            e.detail !== 0 &&
+            performance.now() - releasedAt.current <= PRESS_CLICK_WINDOW_MS
           pressOwnsClick.current = false
           if (owned) engine.onClickCapture(e)
         }}
@@ -544,9 +572,10 @@ RadioGroupItem.displayName = "RadioGroup.Item"
  * items are the browser's own radio behaviour — nothing is re-implemented.
  *
  * **Tier 2 brand paint** — item `className` for the row; branch inside
- * `RadioGroup.Box` / `RadioGroup.Indicator` with {@link useRadioGroupItem}. Every
- * item carries `data-adaptv="radio-group" data-part="item"`, plus `data-checked`
- * and `data-disabled` while they hold.
+ * `RadioGroup.Box` / `RadioGroup.Indicator` with {@link useRadioGroupItem}. The
+ * group carries `data-adaptv="radio-group" data-part="root"`; every item carries
+ * `data-part="item"`, plus `data-checked` and `data-disabled` while they hold, so
+ * `[data-adaptv="radio-group"]` matches the group alone.
  *
  * @example
  * ```tsx
@@ -589,6 +618,40 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
     const isDisabled = Boolean(disabled)
     const isRequired = Boolean(required)
     const rootRef = useRef<HTMLDivElement>(null)
+
+    //A reset of the form that owns the radios (an ancestor, or the one `form`
+    //names) puts the DOM back on the reset value but fires no `change`, so an
+    //uncontrolled group would keep painting and reporting the last choice while
+    //FormData submits another. Follow the reset: once the browser has run it (the
+    //event is cancelable and fires before the controls reset, so read the DOM a
+    //task later), take the selection from the radios. A controlled group needs no
+    //listener: its reset value is its `value`, so the DOM does not move.
+    useEffect(() => {
+      const root = rootRef.current
+      if (isControlled || !root) return
+      const doc = root.ownerDocument
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const onReset = (event: Event) => {
+        const owner =
+          root.querySelector<HTMLInputElement>('input[type="radio"]')?.form
+        if (!owner || event.target !== owner) return
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+          if (event.defaultPrevented) return
+          const checked = root.querySelector<HTMLInputElement>(
+            'input[type="radio"]:checked',
+          )
+          setUncontrolledValue(checked ? checked.value : null)
+        }, 0)
+      }
+      //capture on the document: `reset` does not bubble in the spec, and the form
+      //may be anywhere in the document when `form` names it
+      doc.addEventListener("reset", onReset, true)
+      return () => {
+        clearTimeout(timer)
+        doc.removeEventListener("reset", onReset, true)
+      }
+    }, [isControlled])
 
     useImperativeHandle(
       ref,
@@ -633,6 +696,7 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
           isRequired,
           size,
           form,
+          resetValue: isControlled ? controlledValue : defaultValue,
           select,
         }}
       >
@@ -644,6 +708,7 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
           aria-required={isRequired || undefined}
           aria-disabled={isDisabled || undefined}
           data-adaptv="radio-group"
+          data-part="root"
           data-disabled={isDisabled ? "" : undefined}
           {...mergeStyles({
             base: [
