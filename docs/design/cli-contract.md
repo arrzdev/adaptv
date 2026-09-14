@@ -455,6 +455,17 @@ does nothing. So this cause wins the row with its own action:
 > ```
 > Both renderers now take the action with the text, and `bin/ui/watch.test.mjs` draws the same
 > notice through each and compares the rows.
+>
+> Also violated by the `dev` poll, which held "wins the row" for one poll where it holds until
+> the process restarts. It re-armed the source fingerprint with every change and remembered nothing else, so a later poll
+> that saw a config edit demoted the row, and a `b` mounted a fresh, empty block that nothing
+> raised it on again, both while the source edit still waited for a restart:
+> ```
+>   ! adaptv source change  · restart to apply
+>   ! config change  · press b to rebuild and see the changes     ← the next poll, same process
+> ```
+> The restart now latches for the life of the process (`bin/lib/watch-staleness.mjs`), and every
+> fresh block opens with it: `b` clears the config and native it re-applied, never the restart.
 
 **R41 — A notice is added to the live block, never swapped in for something still true.** The
 watch row used to be one row with one slot, so a pending notice REPLACED the keys — the moment
