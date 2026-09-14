@@ -511,3 +511,226 @@ describe("a step with lines under it is a GROUP (R64)", () => {
     expect(out.join("")).not.toContain("\n\n\n")
   })
 })
+
+/**
+ * The renderer in a mode, in a fresh copy of the module: the mode and the journal are per
+ * process, so a case must not inherit the last one's. The two streams are kept apart, because
+ * which one a failure lands on is part of what is being held.
+ */
+async function inMode(mode, fn) {
+  vi.resetModules()
+  const render = await import("./render.mjs")
+  render.setOutputMode(mode)
+  const out = []
+  const err = []
+  const take = (into) => (s) => {
+    into.push(String(s))
+    return true
+  }
+  vi.spyOn(process.stdout, "write").mockImplementation(take(out))
+  vi.spyOn(process.stderr, "write").mockImplementation(take(err))
+  try {
+    await fn(render)
+  } finally {
+    vi.restoreAllMocks()
+  }
+  return {
+    stdout: out.join("").replace(ANSI, ""),
+    stderr: err.join("").replace(ANSI, ""),
+  }
+}
+
+const refusal = (r) =>
+  r.fail("channel", "nothing to sign the update with", [
+    "set ADAPTV_OTA_PRIVATE_KEY to the private half",
+    "in CI that is a secret",
+  ])
+
+describe("--quiet keeps a failure: the row and the fix under it (R46)", () => {
+  it("keeps fail()'s row and its detail on stderr, the same bytes as the page", async () => {
+    //`build web --quiet` on an app that could not sign its channel exited 1 with both streams
+    //empty: `fail()` wrote at step level, and the mode dropped it before looking at the sink.
+    const page = await inMode({}, refusal)
+    const quiet = await inMode({ quiet: true }, refusal)
+    expect(page.stderr).toBe(
+      [
+        "  ✖ channel  · nothing to sign the update with",
+        "    set ADAPTV_OTA_PRIVATE_KEY to the private half",
+        "    in CI that is a secret",
+        "",
+      ].join("\n"),
+    )
+    expect(quiet.stdout).toBe("")
+    expect(quiet.stderr).toBe(page.stderr)
+  })
+
+  it("keeps it on stderr under --json, with the document on stdout, quiet or not", async () => {
+    const page = await inMode({}, refusal)
+    for (const mode of [{ json: true }, { json: true, quiet: true }]) {
+      const run = await inMode(mode, (r) => {
+        refusal(r)
+        r.emitJson({ command: "build web" })
+      })
+      expect(run.stderr, JSON.stringify(mode)).toBe(page.stderr)
+      const doc = JSON.parse(run.stdout)
+      expect(doc.ok).toBe(false)
+      expect(doc.error).toEqual({
+        kind: "step-failed",
+        label: "channel",
+        message: "nothing to sign the update with",
+      })
+    }
+  })
+
+  it("still drops the narration around a failure", async () => {
+    const quiet = await inMode({ quiet: true }, (r) => {
+      r.header("build web")
+      r.flushNotices(["no 'icons' in adaptv.config.ts"])
+      refusal(r)
+      r.spacer()
+    })
+    expect(quiet.stdout).toBe("")
+    expect(quiet.stderr).not.toContain("adaptv")
+    expect(quiet.stderr).not.toContain("icons")
+    expect(quiet.stderr).toContain("✖ channel")
+  })
+
+  it("keeps usageFail()'s refusal, its wrapped tail and its fix when the mode is already set", async () => {
+    //The parser refuses before `main()` sets the mode, so no command reaches this today. A
+    //refusal raised after it must not be the one failure `--quiet` drops.
+    const refuse = (r) =>
+      r.usageFail(
+        "'--target' is per-platform and 'preview all' spans both, so there is no one device it could name for every platform in the run",
+        ["pass it to one platform: 'adaptv preview ios --target <id>'"],
+      )
+    const page = await inMode({}, refuse)
+    const quiet = await inMode({ quiet: true }, refuse)
+    const rows = page.stderr.split("\n").filter(Boolean)
+    //Wrapped, so the continuation row is held too, not only the first.
+    expect(rows).toHaveLength(3)
+    expect(quiet.stdout).toBe("")
+    //The page's block without the blank lines around it, which are narration.
+    expect(quiet.stderr).toBe(`${rows.join("\n")}\n`)
+  })
+
+  it("keeps a failed lane's fix under its row, not only the row", async () => {
+    const lanes = (r) =>
+      r.runLanes([
+        { label: "web", run: async () => "" },
+        {
+          label: "ios",
+          run: async () => {
+            throw new Error("boom")
+          },
+          explain: () => ({
+            reason: "Xcode is missing the iOS platform",
+            detail: ["run 'xcodebuild -downloadPlatform iOS'"],
+          }),
+        },
+      ])
+    const quiet = await inMode({ quiet: true }, lanes)
+    const rows = quiet.stdout.split("\n")
+    const bad = rows.findIndex((l) => l.includes("✖ ios"))
+    expect(bad, quiet.stdout).toBeGreaterThan(-1)
+    expect(rows[bad + 1]).toBe(
+      "    run 'xcodebuild -downloadPlatform iOS'",
+    )
+    //The narration is still gone: no `· web` start lines.
+    expect(quiet.stdout).not.toMatch(/· (web|ios)\n/)
+  })
+
+  it("keeps a failed runLine row and its fix off a TTY, where every --quiet run draws it", async () => {
+    //R46's second bullet, again: `runLine` settled its `✖` at step level off a TTY, so
+    //`build web --quiet` on a bundle that did not build exited 1 with both streams empty.
+    const step = (r) =>
+      r
+        .runLine(
+          "web",
+          async () => {
+            throw new Error("boom")
+          },
+          {
+            explain: () => ({
+              reason: "the bundle did not build",
+              detail: [
+                "Could not resolve './missing'",
+                "check the import path in src/app.tsx",
+              ],
+            }),
+          },
+        )
+        .catch(() => {})
+    const page = await inMode({}, step)
+    const quiet = await inMode({ quiet: true }, step)
+    const untimed = (s) => s.replace(/· \d+ms/g, "· <time>")
+    //The page's rows from the `✖` down: quiet drops the `· web` start line, nothing else.
+    const rows = page.stdout.split("\n")
+    expect(rows[0]).toBe("  · web")
+    expect(untimed(quiet.stdout)).toBe(untimed(rows.slice(1).join("\n")))
+    expect(quiet.stdout).toContain("✖ web")
+    //Every fix line, not only the first.
+    expect(quiet.stdout).toContain(
+      "    Could not resolve './missing'\n    check the import path in src/app.tsx\n",
+    )
+    expect(quiet.stderr).toBe("")
+    //Under `--json` the page is gone, so nothing of the row may leak onto stdout around the
+    //document. What stderr and the document say about this step is not settled here.
+    const json = await inMode({ json: true }, step)
+    expect(json.stdout).toBe("")
+  })
+
+  it("keeps an uncaught error's tail with its row, in every mode", async () => {
+    //The shape of the CLI's top-level catch (`main().catch` in bin/adaptv.mjs): a `✖` from
+    //`log.error`, then the error's tail as failure detail. At step level `--quiet` kept the row
+    //and dropped the tail, and `--json` showed the row on stderr with nothing under it.
+    const uncaught = (r) => {
+      r.log.error("the dev server exited before it answered")
+      for (const line of [
+        "Error: listen EACCES 0.0.0.0:80",
+        "run it on a port above 1024",
+      ])
+        r.detail(line, { failure: true })
+    }
+    const tail =
+      "    Error: listen EACCES 0.0.0.0:80\n    run it on a port above 1024\n"
+    const row = "  ✖ the dev server exited before it answered\n"
+    const page = await inMode({}, uncaught)
+    expect(page).toEqual({ stdout: tail, stderr: row })
+    //`--quiet` is the page: both halves are the failure.
+    expect(await inMode({ quiet: true }, uncaught)).toEqual(page)
+    //`--json` leaves stdout to the document and puts the whole failure on stderr.
+    for (const mode of [{ json: true }, { json: true, quiet: true }])
+      expect(await inMode(mode, uncaught)).toEqual({
+        stdout: "",
+        stderr: `${row}${tail}`,
+      })
+  })
+
+  it("never prints a fix with no row above it", async () => {
+    //Every `✖` row passes its own level to the lines under it. A row a mode drops takes its
+    //fix with it, rather than leaving a dim sentence under nothing.
+    const step = (r) =>
+      r
+        .runLine(
+          "web",
+          async () => {
+            throw new Error("boom")
+          },
+          {
+            explain: () => ({
+              reason: "the bundle did not build",
+              detail: ["Could not resolve './missing'"],
+            }),
+          },
+        )
+        .catch(() => {})
+    for (const mode of [{}, { quiet: true }, { json: true }]) {
+      const run = await inMode(mode, step)
+      const page = `${run.stdout}${run.stderr}`
+      expect(
+        page.includes("Could not resolve"),
+        JSON.stringify(mode),
+      ).toBe(page.includes("✖ web"))
+    }
+  })
+})

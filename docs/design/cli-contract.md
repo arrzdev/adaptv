@@ -550,6 +550,22 @@ carries an `if`:
 > Nothing on either stream, a clean exit, and a key pair adaptv keeps no copy of, gone. Bytes
 > that ARE the outcome go through `verbatim()`, which prints unwrapped at result level;
 > `cli-process.test.mjs` spawns the command and parses both keys out of the quiet page.
+>
+> And a third time, in both shapes a failed step takes. `fail()` sent its row to stderr but
+> left it at the default step level, and `out()` drops a level before it looks at the sink.
+> `runLine` did the same off a TTY, which is every `--quiet` run, so a bundle that did not
+> build settled a `✖` nobody saw. Either way, an app that could not sign its channel, or whose
+> web build failed, got:
+> ```
+> $ adaptv build web --quiet
+> $ echo $?
+> 1
+> ```
+> A failed run with nothing to read on either stream. A failed row is now written at a level
+> `--quiet` keeps, on the stream it always used, and `detailBlock()` takes the level of the row
+> it hangs under, so a mode keeps a row's fix exactly when it keeps the row. The CLI's own
+> top-level catch had the same split: its row was kept and the error's tail under it was step
+> level, so the tail is failure detail now too.
 
 **R37 — A command that did nothing SAYS it did nothing.** A prompt erases itself on the way out
 — that is the point of it — but erasing the prompt must not also erase the fact that it was
