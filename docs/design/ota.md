@@ -289,7 +289,10 @@ fingerprint needs stamping into `Info.plist`/`strings.xml`.
 > The app **version** is the signal, because it is the one thing the OS changes on a store release and
 > the one thing JavaScript can still read (`getVersionName` + `getVersionCode`). Changed since last
 > launch, and not already on the embedded bundle → `reset()` + `reload()`. The new version is recorded
-> **before** the reset, so a reload racing a second launch cannot loop.
+> **between** the two: before the reload, so a reload racing a second launch cannot loop, and after a
+> reset that landed, because a remembered version is what stops the guard asking again. Recording it
+> ahead of a reset the plugin then refused stranded the device the same way by another road — every
+> later launch saw a version it already knew, and the old bundle was marked known-good on the new binary.
 >
 > **An earlier draft said the guard has to be native, because a JS guard runs inside the stale bundle.**
 > That is the right worry and it is already covered from the other side: if the stale bundle does not

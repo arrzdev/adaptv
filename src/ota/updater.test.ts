@@ -497,21 +497,112 @@ describe("a store release underneath a cached bundle", () => {
     expect(h.plugin?.ready).not.toHaveBeenCalled()
   })
 
-  it("remembers the new binary BEFORE acting, so the reload cannot loop", async () => {
+  it("remembers the new binary BEFORE the reload, so the reload cannot loop", async () => {
     knownBinary(APP, "fp-1")
+    let atReload: unknown
     h.plugin = fakePlugin({
       getCurrentBundle: vi.fn(async () => ({ bundleId: "old-ota" })),
       getVersionName: vi.fn(async () => ({ versionName: "1.1.0" })),
       getVersionCode: vi.fn(async () => ({ versionCode: "11" })),
+      reload: vi.fn(async () => {
+        //the document is replaced by this call, so nothing after it is sure to run
+        atReload = binaryRecord()?.identity
+      }),
     })
     const { settleLaunch } = await load()
     await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(atReload).toBe("1.1.0+11")
     //and the old binary's fingerprint goes with it: a bundle from before the
     //store release cannot describe the app that just replaced it
     expect(binaryRecord()).toEqual({
       identity: "1.1.0+11",
       fingerprint: null,
     })
+  })
+
+  /** The launch after a store release, with a pointer that survived it. */
+  function onNewBinary(reset: () => Promise<void>) {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          buildTag: "old-ota",
+          createdAt: 1,
+          state: "known-good",
+          provenOn: APP,
+        },
+      ]),
+    )
+    return fakePlugin({
+      getCurrentBundle: vi.fn(async () => ({ bundleId: "old-ota" })),
+      getVersionName: vi.fn(async () => ({ versionName: "1.1.0" })),
+      getVersionCode: vi.fn(async () => ({ versionCode: "11" })),
+      reset: vi.fn(reset),
+      ready: vi.fn(async () => ({
+        previousBundleId: null,
+        currentBundleId: "old-ota",
+        rollback: false,
+      })),
+    })
+  }
+
+  const refused = async () => {
+    throw new Error("reset refused")
+  }
+
+  it("🔴 asks again on the next launch when the reset itself was refused", async () => {
+    //Remembering the new binary is what stops the guard firing twice, so it must
+    //not happen for a reset that never took. Otherwise the next launch sees a
+    //version it already knows, and the device stays on the old bundle for good:
+    //the exact stranding this guard exists for, reached through one bad answer.
+    knownBinary(APP, "fp-1")
+    h.plugin = onNewBinary(refused)
+    let { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    //the launch still settles, because the app is already on screen
+    expect(h.plugin?.ready).toHaveBeenCalledOnce()
+
+    vi.resetModules()
+    h.plugin = onNewBinary(async () => {})
+    ;({ settleLaunch } = await load())
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.reset).toHaveBeenCalledOnce()
+    expect(h.plugin?.reload).toHaveBeenCalledOnce()
+  })
+
+  it("🔴 does not let a refused reset prove the old bundle on the new binary", async () => {
+    //A bundle proven on this binary is one `selectRollbackTarget` may send the
+    //device back to, and one `prune` keeps. The old bundle has only shown that it
+    //could not be dropped.
+    knownBinary(APP, "fp-1")
+    h.plugin = onNewBinary(refused)
+    const { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    const ledger = JSON.parse(localStorage.getItem(KEY) ?? "[]")
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0].provenOn).toBe(APP)
+  })
+
+  it("does not ask again once the reset landed, even if the reload did not", async () => {
+    //The pointer has moved, so the next cold start is the embedded bundle anyway.
+    //Asking again there would be a reset for a device that already took one.
+    knownBinary(APP, "fp-1")
+    h.plugin = {
+      ...onNewBinary(async () => {}),
+      reload: vi.fn(async () => {
+        throw new Error("reload refused")
+      }),
+    }
+    let { settleLaunch } = await load()
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.reset).toHaveBeenCalledOnce()
+    expect(binaryRecord().identity).toBe("1.1.0+11")
+
+    vi.resetModules()
+    h.plugin = onNewBinary(async () => {})
+    ;({ settleLaunch } = await load())
+    await settleLaunch({ nativeFingerprint: "fp-1" })
+    expect(h.plugin?.reset).not.toHaveBeenCalled()
   })
 
   it("leaves a device that is already on the embedded bundle alone", async () => {
