@@ -226,8 +226,10 @@ Frame by frame on chromium and webkit (`playground/e2e/button-width-tween.spec.t
 specs sampled per frame), the width tween and the pull's release spring, refresh snap and close trace
 the full component's curves: within 2 px per frame on the 62 px tween, 0.2 px on the release spring
 and 0.8 px on the refresh close. The refresh snap's first frame starts a frame late in some runs, on
-`main` as on this path. What is not copied: nothing runs on the compositor (the spinner's opacity
-did); a spring with no explicit `velocity` starts at rest instead of inheriting the interrupted
+`main` as on this path. What is not copied: a key removed from the targets leaves its batch, which
+still completes, where motion animates the value back to its base and interrupts the batch (Button
+drops its width only when its label measures zero); nothing runs on the compositor (the spinner's
+opacity did); a spring with no explicit `velocity` starts at rest instead of inheriting the interrupted
 value's; a positional value starts on the frame it is set instead of after motion measures it; and an
 app's `<MotionConfig>` does not reach adaptv's layers, which follow the OS reduced-motion preference.
 

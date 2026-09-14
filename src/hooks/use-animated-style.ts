@@ -35,16 +35,18 @@ import { useEffect, useLayoutEffect, useRef } from "react"
  *   not restart anything
  * - a zero duration lands on the next frame, not synchronously
  * - `onComplete` runs when every animation one render started has landed, and
- *   never for a batch that a newer target interrupted (`onAnimationComplete`).
- *   A key that goes away leaves its batch rather than interrupting it
+ *   never for a batch that a newer target interrupted (`onAnimationComplete`)
  * - an animation an `<Activity>` hid is restarted, from where it was, when shown
  * - an interrupted animation is sampled at the moment it is stopped, so the next
  *   one starts from where the element visibly is
  *
  * - opacity gets the compositor path's spring (see below), on every engine
  *
- * What it does not copy: a spring with no explicit `velocity` starts at rest
- * rather than inheriting the interrupted value's velocity; nothing runs on the
+ * What it does not copy: a key that goes away leaves its batch, which still
+ * completes, where motion animates the value back to its base and interrupts the
+ * batch (these components drop a key only to stop animating it); a spring with
+ * no explicit `velocity` starts at rest rather than inheriting the interrupted
+ * value's velocity; nothing runs on the
  * compositor; a positional value (`top`, `width`) starts on the frame it is set
  * rather than one or two frames later, after motion measures it; and an app's
  * `<MotionConfig>` does not reach it (the components follow the OS reduced
