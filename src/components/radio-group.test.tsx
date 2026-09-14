@@ -139,7 +139,9 @@ describe("RadioGroup — structure", () => {
       //the identity is the group's alone: the item is a part of it
       expect(item.hasAttribute("data-adaptv")).toBe(false)
     }
-    const identified = container.querySelectorAll("[data-adaptv='radio-group']")
+    const identified = container.querySelectorAll(
+      "[data-adaptv='radio-group']",
+    )
     expect(identified).toHaveLength(1)
     expect(identified[0].getAttribute("role")).toBe("radiogroup")
     expect(identified[0].getAttribute("data-part")).toBe("root")
@@ -523,7 +525,9 @@ describe("RadioGroup — a press that fires no click", () => {
     //left armed. A later activation that carries a click count but no pointerdown
     //on the item (an assistive-tech activation, a forwarded label click) must select.
     let now = 10_000
-    const clock = vi.spyOn(performance, "now").mockImplementation(() => now)
+    const clock = vi
+      .spyOn(performance, "now")
+      .mockImplementation(() => now)
     try {
       const spy = vi.fn()
       const { container } = render(<Plans onValueChange={spy} />)
@@ -535,7 +539,11 @@ describe("RadioGroup — a press that fires no click", () => {
         clientX: 500,
         clientY: 500,
       })
-      fireEvent.pointerUp(yearly, { ...pointer, clientX: 500, clientY: 500 })
+      fireEvent.pointerUp(yearly, {
+        ...pointer,
+        clientX: 500,
+        clientY: 500,
+      })
       //no click follows the release
       now += 2_000
       fireEvent.click(yearly, { detail: 1 })
@@ -662,9 +670,10 @@ describe("RadioGroup — forms", () => {
     expect(new FormData(form).getAll("plan")).toEqual(["monthly"])
     expect(monthly.checked).toBe(true)
     expect(yearly.checked).toBe(false)
-    expect(monthlyItem.hasAttribute("data-checked"), "the paint follows").toBe(
-      true,
-    )
+    expect(
+      monthlyItem.hasAttribute("data-checked"),
+      "the paint follows",
+    ).toBe(true)
     expect(yearlyItem.hasAttribute("data-checked")).toBe(false)
     //a reset is not a selection the user made
     expect(spy).toHaveBeenCalledTimes(1)
@@ -681,7 +690,11 @@ describe("RadioGroup — forms", () => {
       return (
         <>
           <form id="checkout" />
-          <RadioGroup form="checkout" name="plan" defaultValue={defaultValue}>
+          <RadioGroup
+            form="checkout"
+            name="plan"
+            defaultValue={defaultValue}
+          >
             <RadioGroup.Item value="monthly">Monthly</RadioGroup.Item>
             <RadioGroup.Item value="yearly">Yearly</RadioGroup.Item>
             <RadioGroup.Item value="lifetime">Lifetime</RadioGroup.Item>
@@ -689,7 +702,9 @@ describe("RadioGroup — forms", () => {
         </>
       )
     }
-    const { container, rerender } = render(<Detached defaultValue="monthly" />)
+    const { container, rerender } = render(
+      <Detached defaultValue="monthly" />,
+    )
     const form = container.querySelector("form") as HTMLFormElement
     const [, yearly, lifetime] = radios(container)
     expect(yearly.form, "owned through the form attribute").toBe(form)
@@ -725,7 +740,9 @@ describe("RadioGroup — forms", () => {
     })
     expect(yearly.checked, "the DOM stays on the owner's value").toBe(true)
     expect(monthly.checked).toBe(false)
-    expect(container.querySelector("output")?.textContent).toBe("yearly")
+    //(the fixture's <output> is itself a form control, which the reset blanks, so
+    //the paint is read from the item)
+    expect(itemsOf(container)[1].hasAttribute("data-checked")).toBe(true)
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
