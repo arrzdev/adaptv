@@ -567,14 +567,23 @@ Freshness belongs to the **data layer** (consumer-wired: TanStack Query + an IDB
   Android's monochrome layer, the maskable master, and a `favicon-512x512.png` the head and manifest
   tie-break away in favour of the identical `android-chrome-512.png`. **MEASURED on the playground:
   909 900 of 3 749 343 precached bytes (24%, 6 of 121 entries)**, fetched on every first install (and
-  again whenever the art changes) by a browser that never displays one of them. `sw-build.ts` now precaches an icon **if and
-  only if** `headIconLinks` or the built manifest (`manifestExtra` included) points at it — derived
-  from the same resolved set, so custom names and adaptv's default set follow the same rule — and
-  takes every other file `resolveIconSet` measured back out. After: 115 entries, 2 839 443 bytes,
-  identical for `ssr` and `spa`. The files are still **deployed and served**; only the install-time
-  download goes, and the runtime static route (§3.3) caches one the first time anything fetches it.
-  A file in the directory the scanner does not measure (a `safari-pinned-tab.svg`) is not art adaptv
-  knows the use of and stays in the glob.
+  again whenever the art changes) by a browser that never displays one of them. `sw-build.ts` now
+  takes every file `resolveIconSet` measured back out of the precache unless `headIconLinks` or the
+  built manifest (`manifestExtra` included) points at it — derived from the same resolved set, so
+  custom names and adaptv's default set follow the same rule. A manifest `src` is resolved the way a
+  browser resolves it, against the deploy `base` and the app's `origin`, so `./favicons/x.png`,
+  `<base>favicons/x.png` and `<origin><base>favicons/x.png` all keep the file, and a URL on another
+  origin keeps none. After: 115 entries, 2 839 443 bytes, identical for `ssr` and `spa`.
+
+  So the precache carries **exactly the linked icons for `.png`, `.ico` and `.svg` art**, the
+  extensions the glob names. A `.webp` or `.jpg`/`.jpeg` icon is measured, linked and served, but it
+  was never in the glob, so it is not precached whether it is linked or not. The files taken out are
+  still **deployed and served**; only the install-time download goes. They are not a precache the
+  runtime fills in either: the static route (§3.3) caches a file only when a page requests it as an
+  image, script, style or font while online, so an `offlineComponent` that shows `icon.png` — which
+  by definition never renders online — has no copy of it to show. Such art belongs in the bundle
+  (an `import`), not in the icon directory. A file in the directory the scanner does not measure (a
+  `safari-pinned-tab.svg`) is not art adaptv knows the use of and stays in the glob.
 - **Storage is evictable unless you ask.** Cache Storage is "best-effort" by default, so a browser may
   drop the precache under disk pressure — the app silently stops working offline with nothing to
   observe. adaptv calls `navigator.storage.persist()` at boot (`requestPersistentStorage`), which WebKit
