@@ -5,20 +5,24 @@ import { awaitClientHandover } from "./support/hydrated"
  * Button's width tween, sampled frame by frame.
  *
  * When a slot or the label changes, Button's content row animates to its newly
- * measured width instead of snapping. The row is a motion `m.span`, and `m` is
- * the half of motion that renders but does not animate on its own: it needs a
- * `LazyMotion` provider to hand it the animation feature
- * (`docs/decisions/animation.md` A7). An `m` that finds no provider renders the
- * same element with the same props and simply jumps to the new width. Nothing
- * throws, the label is right, and an assertion on the END width passes. So the
- * only honest check is the frames in between: the row must be seen at widths
- * strictly between where it started and where it lands.
+ * measured width instead of snapping. Nothing about a snap is visible to an
+ * assertion on the END state: the label is right and the width is right. So the
+ * only honest check is the frames in between: from the press on, the row must be
+ * seen at widths strictly between where it started and where it lands.
+ *
+ * `offsetWidth`, not the bounding box: the press itself scales the button
+ * (`active:scale-95`), and a scaled box reads as intermediate widths with no
+ * tween at all. (`docs/decisions/animation.md` §3.1)
  *
  * Runs on both engines; a mouse click activates Button on chromium and webkit
  * alike (the Offline spec relies on the same).
  */
 
 const SAMPLE_MS = 900
+
+type TweenWindow = {
+  __tween: { pressedAt: number | null; before: number[]; after: number[] }
+}
 
 test.describe("Button width tween", () => {
   test("the content row tweens to a new label's width instead of snapping", async ({
@@ -35,36 +39,46 @@ test.describe("Button width tween", () => {
     const button = page.locator("[data-e2e-tween]")
     await button.scrollIntoViewIfNeeded()
 
-    //sample the content row (the button's only child) on every frame, from just
-    //before the click until the label has had well over the 200ms tween to land
+    //sample the content row (the button's only child) on every frame, from
+    //before the press until the label has had well over the 200ms tween to land
     await button.evaluate((el, sampleMs) => {
       const row = el.firstElementChild as HTMLElement
-      const samples: number[] = []
-      const w = window as unknown as { __tweenSamples: number[] }
-      w.__tweenSamples = samples
-      let until = Number.POSITIVE_INFINITY
+      const w = window as unknown as TweenWindow
+      w.__tween = { pressedAt: null, before: [], after: [] }
+      const tween = w.__tween
+      el.addEventListener(
+        "pointerdown",
+        () => {
+          tween.pressedAt = performance.now()
+        },
+        { capture: true, once: true },
+      )
       const tick = () => {
-        samples.push(row.getBoundingClientRect().width)
-        if (samples.length === 2) until = performance.now() + sampleMs
-        if (performance.now() < until) requestAnimationFrame(tick)
+        const now = performance.now()
+        const { pressedAt } = tween
+        if (pressedAt === null) tween.before.push(row.offsetWidth)
+        else tween.after.push(row.offsetWidth)
+        if (pressedAt === null || now < pressedAt + sampleMs)
+          requestAnimationFrame(tick)
       }
       requestAnimationFrame(tick)
     }, SAMPLE_MS)
 
     await page.waitForFunction(
-      () =>
-        (window as unknown as { __tweenSamples: number[] }).__tweenSamples
-          .length >= 2,
+      () => (window as unknown as TweenWindow).__tween.before.length >= 2,
     )
     await button.click()
     await expect(button).toHaveText(/Working/)
-    await page.waitForTimeout(SAMPLE_MS + 100)
+    await page.waitForFunction((sampleMs) => {
+      const { pressedAt } = (window as unknown as TweenWindow).__tween
+      return pressedAt !== null && performance.now() > pressedAt + sampleMs
+    }, SAMPLE_MS)
 
-    const samples = await page.evaluate(
-      () =>
-        (window as unknown as { __tweenSamples: number[] }).__tweenSamples,
+    const { before, after } = await page.evaluate(
+      () => (window as unknown as TweenWindow).__tween,
     )
-    const from = samples[0]
+    const samples = after
+    const from = before[before.length - 1]
     const to = samples[samples.length - 1]
 
     //the premise: the label change really does move the row, by a lot
