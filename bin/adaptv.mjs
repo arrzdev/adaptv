@@ -717,13 +717,27 @@ async function runLive(appRoot, platforms, opts) {
     let prepareMs = {}
     // Re-arm BOTH staleness fingerprints together, always. They answer one question — does
     // what is installed still match what the dev wrote — so arming one without the other is
-    // how a notice comes to either never fire or never clear.
-    const armStaleness = () => {
+    // how a notice comes to either never fire or never clear. `applied` is the platforms whose
+    // lane just succeeded: only what reached a device stops being owed. `before` is a `b`'s
+    // `readStale()` from before it wrote anything, so an edit no poll saw is still owed.
+    /**
+     * @param {string[]} applied
+     * @param {ReturnType<typeof readStale>} [before]
+     */
+    const armStaleness = (applied, before) => {
       stale = armStale(stale, {
+        before,
         native: snapshotNativeFp(appRoot, ready),
         config: appConfigFingerprint(appRoot, config),
+        applied,
       })
     }
+    // What the tree says right now, as the poll reads it.
+    const readStale = () => ({
+      native: snapshotNativeFp(appRoot, ready),
+      config: appConfigFingerprint(appRoot, config),
+      cli: cliSourceFingerprint(),
+    })
 
     if (!webOnly) {
       // Fresh capacitor.config.json before anything reads or patches it, so a run
@@ -1101,6 +1115,8 @@ async function runLive(appRoot, platforms, opts) {
       // sitting blank for a second while sharp re-renders the launcher icons; doing it AT ALL
       // is what stops a rebuild from being a subset of a startup. `healAts: false` because the
       // ATS exception in the plist right now is this session's own and still in force.
+      //Resolves to the platforms whose lane succeeded. `runLanes` never rejects, so its results
+      //are the only place a failed lane shows, and a failed lane applied nothing.
       /** @param {{ force?: boolean, offsets?: Record<string, number>, prepare?: boolean }} opts */
       launchAll = async ({
         force,
@@ -1111,7 +1127,7 @@ async function runLive(appRoot, platforms, opts) {
         // platform through a different call than two is how the two shapes drift apart.
         // Each lane carries its own outcome (explain → the inline reason + hint), so a
         // failure needs nothing printed after the lanes settle.
-        await runLanes(
+        const results = await runLanes(
           ready.map((p) => ({
             label: p,
             run: async (r) => {
@@ -1135,9 +1151,11 @@ async function runLive(appRoot, platforms, opts) {
           })),
           { verbose },
         )
+        return ready.filter((_, i) => results[i]?.ok)
       }
-      await launchAll({ force: opts.force, offsets: prepareMs })
-      armStaleness()
+      armStaleness(
+        await launchAll({ force: opts.force, offsets: prepareMs }),
+      )
 
       // Nothing made it onto a device? Then there's nothing to hot-reload — don't pretend
       // to "watch". The dev server did come up, but `dev <platform>` is about the device,
@@ -1192,8 +1210,8 @@ async function runLive(appRoot, platforms, opts) {
           })
         : liveWatcher({ keys: !webOnly })
       //A fresh block starts empty, and `b`, `r` and a failed rebuild all mount one: it opens
-      //with the restart row when one is owed, or that restart vanishes (R54). A pending config
-      //or native row is not restored here.
+      //with the row still owed, or that row vanishes with nothing applied (R41, R54). Only a
+      //lane that succeeded clears what it owed, through `armStaleness`.
       const standing = standingNotice(stale)
       if (standing)
         block.notice(standing.text, { restart: standing.restart })
@@ -1213,6 +1231,10 @@ async function runLive(appRoot, platforms, opts) {
     const rebuild = async () => {
       if (rebuilding || reloading || webOnly || !launchAll) return
       rebuilding = true
+      //Read the tree FIRST, before the preflight below re-reads the config and the env re-stamp
+      //moves the native fingerprint: an edit saved inside the poll interval is recorded here,
+      //so a lane that fails still owes it (see `armStale`).
+      const before = readStale()
       // `b` is a FULL rebuild, and that has to include the CONFIG — it used to reuse the
       // object loaded before the run, so editing adaptv.config.ts and pressing `b` rebuilt
       // the app from the config the dev had already replaced.
@@ -1274,10 +1296,9 @@ async function runLive(appRoot, platforms, opts) {
       // `prepare: true` — the rebuild re-runs the SAME preparation a fresh run does, on each
       // platform's own line. That is the whole point of the pipeline: a rebuild cannot be a
       // subset of a startup, because both go through one definition of "ready to sync".
-      await launchAll({ force: true, prepare: true })
-      armStaleness()
+      armStaleness(await launchAll({ force: true, prepare: true }), before)
       spacer()
-      watcher = await openWatcher() // fresh block: clears a config/native notice, keeps a restart
+      watcher = await openWatcher() // fresh block: what a failed lane or a restart still owes
       rebuilding = false
     }
 
@@ -1354,15 +1375,7 @@ async function runLive(appRoot, platforms, opts) {
         if (rebuilding || reloading) return
         // adaptv's OWN source (bin/) only ever moves with a `link:`ed adaptv (framework dev), and
         // the notice is the only signal there is — a generator edit is invisible on screen.
-        const result = pollStale(
-          stale,
-          {
-            native: snapshotNativeFp(appRoot, ready),
-            config: appConfigFingerprint(appRoot, config),
-            cli: cliSourceFingerprint(),
-          },
-          ready,
-        )
+        const result = pollStale(stale, readStale(), ready)
         stale = result.state
         if (result.notice)
           watcher.notice(result.notice.text, {
