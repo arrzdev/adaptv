@@ -327,6 +327,9 @@ export function section(title) {
  * The note is this row's metadata and opens with the same `·` every other row uses (R31) —
  * `✓ node  · v26.0.0`, not `✓ node  v26.0.0`. It was the last shape still setting its
  * right-hand side one column left of the rest of the CLI.
+ *
+ * A red row that is not optional is a FAILURE, and it is drawn through `failureLine`. Every
+ * other row is the report's narration.
  */
 export function check(ok, label, note = "", { optional = false } = {}) {
   const glyph = ok
@@ -339,7 +342,25 @@ export function check(ok, label, note = "", { optional = false } = {}) {
   //would have had nothing to serialise.
   record("steps", { label, ok, note: note || undefined, optional })
   startRow()
-  out(`  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`)
+  failureLine(
+    `  ${glyph} ${label}${note ? c.dim(`  · ${note}`) : ""}\n`,
+    !ok && !optional,
+  )
+}
+
+/**
+ * A report line that may be the run's failure: a red `check` row, or a `detail` under one.
+ *
+ * Narration otherwise, printed like any step. A failure is never narration, so `--quiet`
+ * keeps it (R46: `--quiet` printing nothing at all "is not quiet, it is broken"). Under
+ * `--json` the page is gone and stderr always speaks (R46), so there it goes to stderr, the
+ * way `fail()`'s row does. `doctor --quiet` with a red row used to exit with both streams
+ * empty, and `doctor --json` had nothing on stderr to read.
+ */
+function failureLine(s, failure) {
+  if (!failure) return out(s)
+  if (jsonMode) toStderr(() => out(s, "result"))
+  else out(s, "result")
 }
 
 /**
@@ -395,9 +416,12 @@ export function spacer() {
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail
- * uses, so an extra address reads as part of that step rather than a new event. */
-export function detail(line) {
-  sub(`    ${c.dim(line)}\n`)
+ * uses, so an extra address reads as part of that step rather than a new event. A line that
+ * belongs to a failure (the fix under a red `check` row) says so, and survives the modes the
+ * failure does. */
+export function detail(line, { failure = false } = {}) {
+  failureLine(`    ${c.dim(line)}\n`, failure)
+  openBlock = true
 }
 
 /**
