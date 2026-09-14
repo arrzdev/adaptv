@@ -37,6 +37,23 @@ describe("renderAppShell — user-agnostic by construction", () => {
     )
   })
 
+  it("runs a script that reads the app's CSS variables AFTER the stylesheet, so it waits for it", () => {
+    //a classic script behind a pending stylesheet does not run until the sheet has
+    //loaded. Ahead of it, the launch-height script reads the top inset as 0
+    const html = renderAppShell({
+      ...opts,
+      styledInitScript: "window.__y=1",
+    })
+    const stylesheet = html.indexOf('<link rel="stylesheet"')
+    expect(html.indexOf("<script>window.__y=1</script>")).toBeGreaterThan(
+      stylesheet,
+    )
+    expect(html.indexOf("window.__y=1")).toBeLessThan(
+      html.indexOf("client-def456.js"),
+    )
+    expect(renderAppShell(opts)).not.toContain("window.__y")
+  })
+
   it("inlines the critical CSS rather than linking it", () => {
     //a linked stylesheet is a round trip before first paint; the whole point of
     //critical CSS is that it is already there
