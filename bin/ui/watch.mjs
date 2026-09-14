@@ -15,7 +15,7 @@
 // `src/`), so there is no build step to compile it. `h` is `createElement`.
 import { Box, render, Text, useApp, useInput } from "ink"
 import { createElement as h, useEffect, useState } from "react"
-import { eraseRegion, REGION } from "./live.mjs"
+import { eraseRegion, Offers, REGION } from "./live.mjs"
 import { FRAME_MS, FRAMES, GLYPH, HMR_FLASH_MS, ROLE } from "./theme.mjs"
 
 /** The braille spinner, on the theme's own clock. */
@@ -32,31 +32,35 @@ function useSpinner(active) {
 /**
  * The keys row. ALWAYS present — this is R41, and it is now structural rather than remembered:
  * a notice is a sibling above it, so there is no code path in which one replaces the other.
+ *
+ * ONE row at any width (R10, R44), and on a narrow terminal it gives up whole OFFERS from the
+ * right, never part of one. It was a row `Box` of `Text`s, which Yoga shrinks item by item: at 40
+ * columns the `r` shrank to nothing and the block grew a row, leaving a label with no key to press
+ * (`   reload js  b rebuild app  ctrl-c stop`). A key with half its label, or a label with no key,
+ * is a hint that promises the wrong thing (R17), so each offer is one unit that fits or goes.
+ *
+ * The row is `Offers` (live.mjs), which the picker's keys row draws too. Whatever yields is from
+ * the right: `ctrl-c stop` first, because Ctrl-C stops every terminal program and `r`/`b` exist
+ * nowhere but here — and `b` is the key a notice tells the dev to press. A block with no keys to
+ * offer draws the same row with `ctrl-c stop` alone. A terminal narrower than the first offer (13
+ * columns, with the indent) clips that offer; nothing that narrow is readable.
  */
 function Keys({ keys, available }) {
-  if (!keys)
-    return h(
-      Box,
-      null,
-      h(Text, { ...ROLE.key.text }, "ctrl-c"),
-      h(Text, { ...ROLE.quiet.text }, " stop"),
-    )
-  if (!available)
+  //Prose, not offers, so it clips at its end like every other live row: the fact comes first.
+  if (keys && !available)
     return h(
       Text,
-      { ...ROLE.quiet.text },
+      { ...ROLE.quiet.text, wrap: "truncate-end" },
       "keys unavailable (stdin is not a TTY). Run adaptv directly for r/b",
     )
-  return h(
-    Box,
-    null,
-    h(Text, { ...ROLE.key.text }, "r"),
-    h(Text, { ...ROLE.quiet.text }, " reload js   "),
-    h(Text, { ...ROLE.key.text }, "b"),
-    h(Text, { ...ROLE.quiet.text }, " rebuild app   "),
-    h(Text, { ...ROLE.key.text }, "ctrl-c"),
-    h(Text, { ...ROLE.quiet.text }, " stop"),
-  )
+  const offers = keys
+    ? [
+        ["r", "reload js"],
+        ["b", "rebuild app"],
+        ["ctrl-c", "stop"],
+      ]
+    : [["ctrl-c", "stop"]]
+  return h(Offers, { offers })
 }
 
 /**
@@ -106,9 +110,13 @@ function Notice({ text, restart }) {
 function Activity({ changed, keys, available }) {
   const frame = useSpinner(Boolean(changed))
   if (!changed) return h(Keys, { keys, available })
+  //ONE clipping `Text`, the same shape as the notice and for the same reason (R10): a burst of
+  //changed files is as long as the dev's paths make it, and in a row `Box` Yoga wrapped three
+  //files down three rows at 40 columns and shrank the spinner away at 30. The spinner is the
+  //head of the row, so it is the last thing a clip takes; the file list yields its tail.
   return h(
-    Box,
-    null,
+    Text,
+    { wrap: "truncate-end" },
     h(Text, { ...ROLE.busy.text }, frame),
     h(Text, null, " "),
     h(Text, { ...ROLE.strong.text }, "watching"),

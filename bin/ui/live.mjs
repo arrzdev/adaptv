@@ -20,7 +20,7 @@
 // NO JSX: `bin/` ships as raw source (`docs/decisions/dist-build.md` — `bin` is in `files`, and
 //         tsdown does not build it), so there is no build step. `h` is
 // `createElement`.
-import { Box, render, Text, useInput } from "ink"
+import { Box, render, Text, useInput, useStdout } from "ink"
 import { createElement as h, useEffect, useState } from "react"
 import { FRAME_MS, FRAMES, ROLE } from "./theme.mjs"
 
@@ -126,11 +126,21 @@ export function makeBus(initial) {
  */
 function Row({ label, phase }) {
   const frame = useSpinner()
+  //The spinner and the label sit in a `flexShrink: 0` BOX, so the phase is the only thing that
+  //yields on a narrow terminal (R10). Yoga shrinks every item it is allowed to, and it used to
+  //shrink these: at 40 columns `reading the published manifest` took the spinner off the front
+  //of the row, and at 30 the label wrapped inside its own sliver and the block grew rows. A Box
+  //and not the prop on the `Text`s, because Ink's `Text` hardcodes `flexShrink: 1` and drops a
+  //layout prop without a word (R49).
   return h(
     Box,
     null,
-    h(Text, { ...ROLE.busy.text }, frame),
-    h(Text, null, ` ${label}  `),
+    h(
+      Box,
+      { flexShrink: 0 },
+      h(Text, { ...ROLE.busy.text }, frame),
+      h(Text, null, ` ${label}  `),
+    ),
     h(
       Box,
       { flexShrink: 1, overflow: "hidden" },
@@ -176,6 +186,38 @@ export function liveRows(labels) {
       })),
     stop: () => eraseRegion(app),
   }
+}
+
+/**
+ * A row of key OFFERS — `r reload js   b rebuild app   ctrl-c stop`, `↑↓ move   ↵ select   esc
+ * cancel` — as `[key, label]` pairs, most needed first.
+ *
+ * ONE line at any width (R10, R44), and a narrow terminal takes whole offers from the RIGHT, never
+ * part of one. A row `Box` of `Text`s, which this was in the watch block, lets Yoga shrink item by
+ * item: at 40 columns the `r` shrank to nothing and the block grew a row, leaving a label with no
+ * key to press. A key with half its label, or a label with no key, is a hint that promises the
+ * wrong thing (R17), so each offer is one unit that fits or goes.
+ *
+ * The layout does the choosing, so a resize re-chooses without a line of arithmetic here: every
+ * offer is a `flexShrink: 0` box in a WRAPPING row one line tall, so an offer that does not fit
+ * wraps onto a second line the `overflow: "hidden"` never shows. The gap leads each offer after
+ * the first, so the last offer standing never pays for a separator it no longer has. The drop
+ * order is the caller's: it is the order of `offers`, read backwards.
+ */
+export function Offers({ offers }) {
+  return h(
+    Box,
+    { flexWrap: "wrap", height: 1, overflow: "hidden" },
+    ...offers.map(([key, label], i) =>
+      h(
+        Box,
+        { key, flexShrink: 0 },
+        i > 0 ? h(Text, { ...ROLE.quiet.text }, "   ") : null,
+        h(Text, { ...ROLE.key.text }, key),
+        h(Text, { ...ROLE.quiet.text }, ` ${label}`),
+      ),
+    ),
+  )
 }
 
 /**
@@ -233,6 +275,20 @@ export function hintColumn(options, columns) {
 
 function Picker({ bus, message, options, onDone }) {
   const { index, start } = useBus(bus)
+  //The hint column is chosen for the width the rows are DRAWN at, so a resize has to draw them
+  //again. Ink's own resize only re-lays out the rows it already has: narrowed from 60 columns to
+  //42 with no keypress, a label padded for 60 came out whole and marked cut (`iPad (A16)
+  //(simulator)   …  · iOS 18.0`), and widened again the rows stayed ragged until a key moved the
+  //cursor. Ink paints its re-layout first and this one straight after it.
+  const { stdout } = useStdout()
+  const [, refit] = useState(0)
+  useEffect(() => {
+    const onResize = () => refit((n) => n + 1)
+    stdout.on("resize", onResize)
+    return () => {
+      stdout.off("resize", onResize)
+    }
+  }, [stdout])
   const move = (delta) =>
     bus.set((s) => {
       const next = (s.index + delta + options.length) % options.length
@@ -259,36 +315,65 @@ function Picker({ bus, message, options, onDone }) {
   //dev scrolls past either end, and every row would jump a line under a cursor that had not
   //moved.
   const marker = (arrow, n) =>
-    h(Text, { ...ROLE.quiet.text }, n > 0 ? `  ${arrow} ${n} more` : " ")
-  const pad = hintColumn(options, process.stdout.columns || 80)
+    h(
+      Text,
+      { ...ROLE.quiet.text, wrap: "truncate-end" },
+      n > 0 ? `  ${arrow} ${n} more` : " ",
+    )
+  const pad = hintColumn(options, stdout.columns || 80)
+  //Every row holds ONE line at any width (R10, R44). A row that wraps costs the window a line,
+  //so the block is no longer the height `WINDOW` promises and the list jumps under the cursor:
+  //at 40 columns `› iPhone 16 Pro Max (simulator)  · iOS 26.1` took two rows. The question and
+  //the markers are prose and clip at their end.
   return h(
     Box,
     { flexDirection: "column", marginLeft: 2 },
     //Bold, like every other heading adaptv prints over a group (`section()`): it is the one
     //line on screen the dev has to read before they can answer.
-    h(Text, { ...ROLE.strong.text }, message),
+    h(Text, { ...ROLE.strong.text, wrap: "truncate-end" }, message),
     windowed ? marker("↑", above) : null,
     ...shown.map((o, i) => {
       const at = start + i
+      //What a narrow row gives up is the label's TAIL; the cursor and the hint stay whole. The
+      //hint is the ONLY thing separating two identically-named devices on different runtimes,
+      //and a machine with two runtimes installed lists every name twice. Clipping the whole row
+      //at its end drew eleven such pairs as 11 distinct rows of 22 at 30 columns and 16 at 40;
+      //yielding the label first draws 20 and 22. So the label is the truncating `Text` and its
+      //siblings sit in `flexShrink: 0` boxes (R10, R49), and the head of the name survives:
+      //`› iPhone 17 Pro…  · iOS 18.6`. The row holds down to 8 columns plus the hint's length
+      //(16 for `iOS 26.1`, 19 for `Android 12L`), where no label is left; narrower, it wraps or
+      //runs past the edge.
       return h(
-        Text,
+        Box,
         { key: String(o.value ?? at) },
         //The cursor sits in the GLYPH column, so the label starts exactly where a settled
         //`✓ web` label starts. The picker used to draw itself two columns to the right of
         //every other line on the page (R65).
-        at === index
-          ? h(Text, { ...ROLE.key.text }, "› ")
-          : h(Text, null, "  "),
+        h(
+          Box,
+          { flexShrink: 0 },
+          at === index
+            ? h(Text, { ...ROLE.key.text }, "› ")
+            : h(Text, null, "  "),
+        ),
         h(
           Text,
-          at === index ? { bold: true } : { ...ROLE.quiet.text },
+          {
+            ...(at === index ? { bold: true } : ROLE.quiet.text),
+            wrap: "truncate-end",
+          },
           o.label.padEnd(pad),
         ),
         //Dim, and after the label, because it is metadata about the row rather than part of
-        //its name (R25) — and it is the ONLY thing separating two identically-named devices
-        //on different runtimes, so it stays dim on the highlighted row too. TWO spaces before
-        //the `·`, which is how every other row in the CLI opens its metadata (R31).
-        o.hint ? h(Text, { ...ROLE.quiet.text }, `  · ${o.hint}`) : null,
+        //its name (R25), and it stays dim on the highlighted row too. TWO spaces before the
+        //`·`, which is how every other row in the CLI opens its metadata (R31).
+        o.hint
+          ? h(
+              Box,
+              { flexShrink: 0 },
+              h(Text, { ...ROLE.quiet.text }, `  · ${o.hint}`),
+            )
+          : null,
       )
     }),
     windowed ? marker("↓", below) : null,
@@ -296,16 +381,17 @@ function Picker({ bus, message, options, onDone }) {
     //three spaces separate one offer from the next. This was a single flat dim string, so the
     //picker was the one place in the CLI where a key you can press did not look like one —
     //and `theme.mjs` names `↑↓` and `↵` as examples of that very role (R65).
-    h(
-      Text,
-      null,
-      h(Text, { ...ROLE.key.text }, "↑↓"),
-      h(Text, { ...ROLE.quiet.text }, " move   "),
-      h(Text, { ...ROLE.key.text }, "↵"),
-      h(Text, { ...ROLE.quiet.text }, " select   "),
-      h(Text, { ...ROLE.key.text }, "esc"),
-      h(Text, { ...ROLE.quiet.text }, " cancel"),
-    ),
+    //
+    //`esc cancel` yields first: `q` and Ctrl-C cancel too, and both work in every terminal
+    //program, while nobody can answer without `↑↓` and `↵`. At 30 columns the row is
+    //`↑↓ move   ↵ select`.
+    h(Offers, {
+      offers: [
+        ["↑↓", "move"],
+        ["↵", "select"],
+        ["esc", "cancel"],
+      ],
+    }),
   )
 }
 
