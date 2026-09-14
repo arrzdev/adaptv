@@ -75,6 +75,33 @@ describe("loadConfig", () => {
     expect(namesPlumbing(message)).toBe(false)
   })
 
+  it.each([
+    [
+      "no default export",
+      `export const config = { appId: "com.example.app" }\n`,
+    ],
+    [
+      "a default export that is a string",
+      `export default "com.example.app"\n`,
+    ],
+    ["a default export that is a number", "export default 42\n"],
+    ["a default export of null", "export default null\n"],
+  ])(
+    "refuses a config with %s, naming the export rather than 'appId'",
+    async (_, source) => {
+      //The first case is the one that mattered: the file plainly holds an `appId`, so being told
+      //it is missing reads as a bug in adaptv and points at the one line that is right. The
+      //sentence is the build's own for the same file, quoted for a terminal (R43).
+      const message = await refusal(
+        appRoot({ "adaptv.config.ts": source }),
+      )
+      expect(message).toBe(
+        "adaptv.config.ts must 'export default defineApp({ ... })'",
+      )
+      expect(namesPlumbing(message)).toBe(false)
+    },
+  )
+
   it("returns the default export of a usable config, as data", async () => {
     //The object itself, not a copy of the keys it recognises: preflight judges every value,
     //so nothing may be dropped on the way. The component thunk points at a file that does not
