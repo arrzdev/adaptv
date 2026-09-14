@@ -274,9 +274,23 @@ export function adaptvImagePlugin(
   options: AdaptvImageOptions = {},
 ): Plugin {
   const placeholderEnabled = options.placeholder ?? true
-  //Concurrent transforms of the same file must be deduped or an HMR storm
-  //re-encodes it N times — the work is per-module and Vite will happily ask for
-  //the same module from several environments at once.
+  /**
+   * The loads still pending, by {@link imageCacheKey}. Concurrent transforms of
+   * the same file must be deduped or an HMR storm re-encodes it N times — the
+   * work is per-module and Vite will happily ask for the same module from
+   * several environments at once.
+   *
+   * An entry lives exactly as long as its load is pending, success or failure.
+   * `vite dev` keeps this plugin for its whole life and re-runs `load` after an
+   * edit, so a settled result kept here would serve the old size until a
+   * restart. Repeats of an unchanged file are the on-disk cache's job.
+   *
+   * Keyed on the file's size and mtime, not its path, because an edit can land
+   * while an encode of the old bytes is still running: a large photo takes a
+   * few hundred milliseconds, and an editor's atomic save swaps the file under
+   * it. The load the watcher starts for that save sees a new stat, so it gets
+   * its own entry instead of joining the one that read the old file.
+   */
   const inflight = new Map<string, Promise<ImageMeta>>()
   const stats: BuildStats = {
     processed: 0,
@@ -326,22 +340,36 @@ export function adaptvImagePlugin(
 
       this.addWatchFile(file)
 
-      let pending = inflight.get(file)
+      const source = await stat(file).catch(() => null)
+      if (!source) {
+        return this.error(
+          `[adaptv] cannot read ${file}. A "?adaptv-image" import that cannot be measured ` +
+            `has no width or height, so every <Image> fed from it would reserve nothing.`,
+        )
+      }
+      const key = imageCacheKey({
+        file,
+        size: source.size,
+        mtimeMs: source.mtimeMs,
+        placeholder: placeholderEnabled,
+      })
+
+      let pending = inflight.get(key)
       if (!pending) {
         pending = resolveImageMeta({
           file,
+          key,
           cacheDir,
           placeholder: placeholderEnabled,
           stats,
-        })
-        inflight.set(file, pending)
+        }).finally(() => inflight.delete(key))
+        inflight.set(key, pending)
       }
 
       let meta: ImageMeta
       try {
         meta = await pending
       } catch (cause) {
-        inflight.delete(file)
         return this.error(
           cause instanceof Error ? cause.message : String(cause),
         )
@@ -377,26 +405,14 @@ export function adaptvImagePlugin(
 
 async function resolveImageMeta(input: {
   file: string
+  /** {@link imageCacheKey} of the stat the load took. */
+  key: string
   cacheDir: string
   placeholder: boolean
   stats: BuildStats
 }): Promise<ImageMeta> {
   const started = performance.now()
-  const stats = await stat(input.file).catch(() => null)
-  if (!stats) {
-    throw new Error(
-      `[adaptv] cannot read ${input.file}. A "?adaptv-image" import that cannot be measured ` +
-        `has no width or height, so every <Image> fed from it would reserve nothing.`,
-    )
-  }
-
-  const key = imageCacheKey({
-    file: input.file,
-    size: stats.size,
-    mtimeMs: stats.mtimeMs,
-    placeholder: input.placeholder,
-  })
-  const cacheFile = path.join(input.cacheDir, `${key}.json`)
+  const cacheFile = path.join(input.cacheDir, `${input.key}.json`)
   const cached = await readCache(cacheFile)
   if (cached) {
     input.stats.cacheHits += 1
