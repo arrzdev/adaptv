@@ -8,7 +8,7 @@ import type { ReactNode } from "react"
 import { Activity, useEffect, useState } from "react"
 import { ChillingMascot } from "@/components/illustrations/chilling-mascot"
 import { SleepingMascot } from "@/components/illustrations/sleeping-mascot"
-import { StressedMascot } from "@/components/illustrations/stressed-mascot"
+import stressedMascotUrl from "@/components/illustrations/stressed-mascot.svg?url"
 import { ReservedSvgSpace } from "@/components/reserved-svg-space"
 import { TodoCard } from "@/components/todos/todo-card"
 import type { TodoFilter } from "@/components/todos/todo-filter"
@@ -48,6 +48,22 @@ const EMPTY_CREATURE_SPACE_CLASS = "w-[min(88vw,20rem,60dvh)]"
 //safe allowance for the header + deck tabs + safe-area padding above the list, so an
 //empty page never grows tall enough to scroll.
 const EMPTY_STATE_FILL_CLASS = "min-h-[calc(100dvh-20rem)]"
+
+//a file, as on the 404 (see not-found-screen): that screen is in every page's
+//initial JS, so the art cannot be inline there, and one copy serves both. It
+//stays eager — a hidden <Activity> still fetches it, so the stressed state paints
+//at once when it shows
+function StressedMascot() {
+  return (
+    <img
+      src={stressedMascotUrl}
+      alt=""
+      width={1024}
+      height={1024}
+      className="pointer-events-none"
+    />
+  )
+}
 
 function resolveEmptyState(
   filter: TodoFilter,
