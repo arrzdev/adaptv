@@ -5,30 +5,30 @@
 //
 // The file itself is read by the build's own reader (`src/vite/app-config-loader.ts`): one
 // bundler configuration, one way the component thunks stay inert, reached through
-// `loadAdaptvModule` like every other idea the CLI shares with the framework. What the CLI
-// says about a file it cannot read is its own — terse, naming the fix (R7).
+// `loadAdaptvModule` like every other idea the CLI shares with the framework, and so is the
+// guard for a default export that is not a config at all. What the CLI says about a missing
+// file or a missing 'appId' is its own, terse and naming the fix (R7).
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { loadAdaptvModule } from "./load-ts.mjs"
 
 export async function loadConfig(appRoot) {
+  // "here", never the folder: the app root is where the dev ran the command, and printed in
+  // full it is their home directory and everything under it (R9).
   if (!existsSync(path.join(appRoot, "adaptv.config.ts"))) {
-    throw new Error(
-      `no adaptv.config.ts in ${appRoot}. Run from an app root.`,
-    )
+    throw new Error("no adaptv.config.ts here. Run from an app root.")
   }
-  const { readAppConfig } = await loadAdaptvModule(
-    "vite/app-config-loader.ts",
-  )
+  const [{ readAppConfig }, { defaultExportError }] = await Promise.all([
+    loadAdaptvModule("vite/app-config-loader.ts"),
+    loadAdaptvModule("vite/app-config-errors.ts"),
+  ])
   const { loaded } = await readAppConfig(appRoot)
-  // A file with no default export reads as `undefined`, and every key of that is missing: it
-  // used to be told "missing 'appId'" while plainly holding one under a named export. The
-  // sentence is the build's own for the same file (`loadAppConfig`), quoted for a terminal.
-  if (!loaded || typeof loaded !== "object") {
-    throw new Error(
-      "adaptv.config.ts must 'export default defineApp({ ... })'",
-    )
-  }
+  // A file with no default export reads as `undefined`, and an array is an object to `typeof`:
+  // both used to be told "missing 'appId'", even while plainly holding one. The rule and its
+  // sentence are the build's own guard, asked rather than copied, so the two faces refuse the
+  // same file in the same words.
+  const notAConfig = defaultExportError(loaded)
+  if (notAConfig) throw new Error(notAConfig)
   // `appId` is optional to the build — a web app has none — and required by every command
   // here: the native project, the OTA channel and the doctor report are all keyed on it.
   if (!loaded?.appId) {

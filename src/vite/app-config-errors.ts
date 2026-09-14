@@ -78,11 +78,31 @@ const STRING_LISTS: ReadonlyArray<[string, string]> = [
 ]
 
 /**
+ * A default export that is not a config object. There are no keys to name, so
+ * the sentence is about the export: the file holds no config, or holds it under
+ * another name, or holds something else (an array is an object to `typeof`).
+ */
+const NOT_A_CONFIG =
+  "adaptv.config.ts must 'export default defineApp({ ... })'"
+
+/**
+ * The refusal for a default export that is not a config object, or `null` when
+ * it is one. Both faces ask this before anything else about the file: the build
+ * in `loadAppConfig`, the CLI in `bin/lib/load-config.mjs`, which would
+ * otherwise say "missing 'appId'" to a file that holds one. One rule and one
+ * sentence, so the two cannot drift, and quoted with `'` because it reaches a
+ * terminal (`docs/design/cli-contract.md` R43).
+ */
+export function defaultExportError(loaded: unknown): string | null {
+  return isObject(loaded) ? null : NOT_A_CONFIG
+}
+
+/**
  * Every problem in the config, as one sentence each. Empty when the config
  * can be built. Pure: reads the object, touches nothing else.
  */
 export function appConfigErrors(config: unknown): string[] {
-  if (!isObject(config)) return ["the config must be an object"]
+  if (!isObject(config)) return [NOT_A_CONFIG]
   const errors: string[] = []
 
   //the required keys the build reads unconditionally — each crashes or ships
