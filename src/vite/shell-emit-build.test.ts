@@ -10,7 +10,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import type { UserConfig } from "vite"
+import type { Plugin, UserConfig } from "vite"
 import { afterAll, describe, expect, it } from "vitest"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
@@ -37,7 +37,10 @@ afterAll(() => {
 //the boot fallback prerender bundles React on every emit
 const PRERENDER_TIMEOUT = 120_000
 
-async function buildApp(appConfig: UserConfig = {}): Promise<string> {
+async function buildApp(
+  appConfig: UserConfig = {},
+  laterPlugins: Plugin[] = [],
+): Promise<string> {
   const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-shell-build-"))
   roots.push(appRoot)
   //the prerender resolves React from the APP (register B31), linked the way pnpm would
@@ -76,7 +79,7 @@ async function buildApp(appConfig: UserConfig = {}): Promise<string> {
     root: appRoot,
     configFile: false,
     logLevel: "silent",
-    plugins: [adaptvShellEmitPlugin(context)],
+    plugins: [adaptvShellEmitPlugin(context), ...laterPlugins],
     environments: {
       client: {
         build: {
@@ -124,6 +127,50 @@ describe("adaptvShellEmitPlugin — in a real app build", () => {
         true,
       )
       expect(existsSync(path.join(clientDir, "index.html"))).toBe(true)
+    },
+    PRERENDER_TIMEOUT,
+  )
+
+  it(
+    "keeps the manifest a plugin after it turned on",
+    async () => {
+      //a `config` hook listed after this plugin runs after this plugin's `config`,
+      //so the check has to wait for every one of them
+      const clientDir = await buildApp({}, [
+        {
+          name: "later-asks-for-manifest",
+          config: () => ({ build: { manifest: true } }),
+        },
+      ])
+      expect(existsSync(path.join(clientDir, ".vite/manifest.json"))).toBe(
+        true,
+      )
+      expect(existsSync(path.join(clientDir, "index.html"))).toBe(true)
+    },
+    PRERENDER_TIMEOUT,
+  )
+
+  it(
+    "reads and keeps the manifest at the path the app chose",
+    async () => {
+      const clientDir = await buildApp({}, [
+        {
+          name: "app-manifest-path",
+          config: () => ({
+            environments: {
+              client: { build: { manifest: "build-manifest.json" } },
+            },
+          }),
+        },
+      ])
+      expect(existsSync(path.join(clientDir, "build-manifest.json"))).toBe(
+        true,
+      )
+      expect(existsSync(path.join(clientDir, ".vite"))).toBe(false)
+      const html = readFileSync(path.join(clientDir, "index.html"), "utf8")
+      expect(html).toMatch(
+        /<script type="module" src="\/assets\/[^"]+\.js">/,
+      )
     },
     PRERENDER_TIMEOUT,
   )
