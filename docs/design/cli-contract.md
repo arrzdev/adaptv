@@ -704,6 +704,17 @@ loud, never by name.
 right-hand detail; `clipAnsi()` clips a whole pre-coloured row (both preserve ANSI codes). A
 settled line's elapsed time is passed as `compose`'s `keep` argument so the *detail* yields width
 to it — a long artifact path or failure reason must never be what pushes `· 12.4s` off the row.
+> Violated by the Ink watch block's notice, drawn as a row `Box` of `Text`s. Yoga shrinks every
+> flex item, and each then wraps inside its own sliver, so no line exceeded the width and a
+> length-only test passed while the notice came out as columns of syllables with its `!` gone
+> (`config change` at 40 columns; `config + native change · ios, android` already at 80):
+> ```
+>    config     ·   b to rebuild and see
+>    change   press  the changes
+> ```
+> In Ink a live row is ONE `Text` with `wrap: "truncate-end"`, or a truncating `Text` whose
+> siblings are all `flexShrink: 0` (the phase row's spinner still shrinks away at 40 columns), and
+> a test pins the row COUNT, not only each row's length.
 
 **R11 — Parse tool output; don't echo it.** xcodebuild / gradle / CocoaPods lines are enormous and
 path-laden. Map them to calm phases (`compiling`, `linking`, `signing`, `gradle · assembleDebug`)
