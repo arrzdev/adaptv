@@ -787,6 +787,43 @@ describe("Swipeable · the shared gesture arbiter", () => {
     expect(onOpen).not.toHaveBeenCalled()
   })
 
+  //an edge swipe claims at touchstart inside its strip precisely so a row swipe
+  //under the same finger is suppressed (the claim-point table in
+  //docs/design/coordination.md). A row refused at its lock must give the finger
+  //up, the way the edge swipe and the drawer handle do when THEY are refused —
+  //not track it anyway and open on release on top of the gesture that won
+  it("refused at the lock by a gesture that already holds the finger, a touch swipe never moves the row or blocks the scroll", () => {
+    const onOpen = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} />)
+    const { content } = parts(container)
+    act(() => {
+      gestureController.requestCapture("test:higher", 400)
+    })
+
+    const { prevented, trace } = touchDrag(content, line(20, -60))
+    expect(trace.filter((x) => x !== 0)).toEqual([])
+    expect(prevented.filter(Boolean)).toEqual([])
+    settle()
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(tx(content)).toBe(0)
+    expect(gestureController.getCaptured()).toBe("test:higher")
+  })
+
+  it("refused at the lock, a mouse drag never moves the row either", () => {
+    const onOpen = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} />)
+    const { content } = parts(container)
+    act(() => {
+      gestureController.requestCapture("test:higher", 400)
+    })
+
+    const trace = slowDrag(content, -60)
+    expect(trace.filter((x) => x !== 0)).toEqual([])
+    settle()
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(content.hasPointerCapture(1)).toBe(false)
+  })
+
   it("enabled={false} makes the row inert to touch and mouse, and says so in context", () => {
     const onOpen = vi.fn()
     function Probe() {
