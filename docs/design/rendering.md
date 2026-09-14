@@ -3,7 +3,9 @@
 > The contract that lets **one codebase** run correctly as SSR web, standalone PWA, and a native
 > Capacitor app. Captures *why* the boundaries are where they are, and the **hard limitation** that
 > falls out of it: adaptv code must be **isomorphic** — no server-only logic (`createServerFn`, server
-> routes, request/cookie reads) if you want it to run on all targets.
+> routes, request/cookie reads) if you want it to run on all targets. Since 2026-09-14 the owner's
+> direction is that server-backed web may use them, and the build of any artifact with no server refuses
+> with a report (→ [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md), not built yet).
 >
 > Locked understanding as of 2026-07-14. Pairs with `VISION.md` §"Build, distribution & updates" and
 > §"Data, offline & storage". This is doctrine, not a changelog.
@@ -26,11 +28,11 @@ app it does little beyond the very first load.
 
 ### Per-target build matrix
 
-| Target | Build | Server render | Service worker | Delivery / update |
-|---|---|---|---|---|
-| Desktop web | SSR (default) or SPA | yes (SSR) | adaptv-owned | SW revalidate |
-| Standalone PWA | same as web | yes (SSR) | adaptv-owned | SW revalidate |
-| Native iOS/Android | **SPA (forced)** | **no** | **off** | live-update bundle swap |
+| Target | Build | Server render | Service worker | Delivery / update | Server functions (direction, 2026-09-14) |
+|---|---|---|---|---|---|
+| Desktop web | SSR (default) or SPA | yes (SSR) | adaptv-owned | SW revalidate | SSR: yes · static SPA: build refuses |
+| Standalone PWA | same as web | yes (SSR) | adaptv-owned | SW revalidate | same as web |
+| Native iOS/Android | **SPA (forced)** | **no** | **off** | live-update bundle swap | **build and dev refuse, with a report** |
 
 ---
 
@@ -66,6 +68,15 @@ What actually breaks cross-platform is **server-only logic**, not loaders:
 
 **The rule:** keep loaders **isomorphic** (absolute-URL fetch or local read) and the same code runs on
 the SSR server, the browser, and the Capacitor WebView. Ban *server-only calls*, not loaders.
+
+**How adaptv enforces it (owner's direction, 2026-09-14; not built).** It does not forbid the list
+above for every app. An app that ships only to the web and as a PWA can use server functions, imported
+from adaptv. The build of an artifact with no server refuses and reports each server function, server
+route and request read it reaches, with the routes that reach them: a native build, a native dev
+session, an OTA bundle, or a static SPA deploy. Native dev refuses too, because its dev server would
+answer the call and hide the failure until release. Until that ships, the import ban in
+[`../decisions/facade-and-opacity.md §2`](../decisions/facade-and-opacity.md) still runs →
+[`../roadmap/server-boundary.md`](../roadmap/server-boundary.md).
 
 ### Why this app leans client-side anyway
 Auth here is a **client-held bearer token** (cookies don't work in a native WebView). A server-side
@@ -998,7 +1009,8 @@ only place "cold launch" is a real, frequent event.
 - **Shell** (routes, components, logic): SSR for web first-paint, SPA for Capacitor — *same code*.
   Loaders/beforeLoad OK **as long as they're isomorphic**.
 - **Data** (consumer-wired): remote via absolute URL and/or offline-first via IndexedDB / TanStack
-  Query persister. **Never `createServerFn`** if you want Capacitor.
+  Query persister. **Never `createServerFn`** if you want Capacitor: the native build refuses it (a
+  web-only app may use it, → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
 - **Delivery/OTA:** web + standalone → adaptv-owned SW (precache + shell fallback + SWR). Capacitor →
   live-update bundle swap (a mechanism adaptv wraps).
 
@@ -1006,7 +1018,8 @@ only place "cold launch" is a real, frequent event.
 > server-only calls.**
 
 ### Consumer checklist
-- [ ] No `createServerFn`, no server routes, no server-only request/cookie reads.
+- [ ] Shipping native (or a static deploy)? No `createServerFn`, no server routes, no server-only
+  request/cookie reads — that build refuses them. Web-only on SSR may use them, from adaptv.
 - [ ] Loaders/beforeLoad fetch absolute URLs or read local storage — never assume a server.
 - [ ] Data + auth token live client-side; data layer (Query + persister) is consumer-owned.
 - [ ] Let adaptv own the service worker and (eventually) the Capacitor live-update path.
