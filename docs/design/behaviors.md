@@ -232,7 +232,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
     and THEN collapses the picker, so room is already held and `reaimKeyboardRoom` floors the
     collapse. The flicker in the wild is the reverse: the keyboard is DOWN and the picker EXPANDED,
     the user taps a text input, the picker collapses on the focus frame and the keyboard's height
-    only lands a frame or two later (on native there is no predictive seed to coalesce them). With
+    only lands a frame or two later (a cold height cache has no predictive seed to coalesce them). With
     no room held yet, `reaimKeyboardRoom` early-returns at room 0 — so the collapse shrinks the box
     raw and the sheet's top DROPS, then snaps back UP when the keyboard grows it. The fix pins the
     floor EARLIER, on `focusin` (`primeKeyboardFloor`, gated by `shouldPrimeKeyboardFloor`): the
