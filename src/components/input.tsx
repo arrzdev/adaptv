@@ -409,7 +409,18 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
 
 InputField.displayName = "InputField"
 
-function dispatchFieldValueEvents(field: HTMLInputElement) {
+/**
+ * Empties the field the way an edit does, so React's `onChange` sees it.
+ *
+ * React tracks a field's value through a `value` property it installs on the element
+ * itself; `field.value = ""` goes through that property, the tracker records "" as
+ * already known, and the `input` event below reaches no `onChange` — a controlled
+ * field is left showing "" over state that still holds the old text. The setter on
+ * the prototype moves the DOM without touching the tracker, which is what a keystroke
+ * does, so React sees a change and runs the handler.
+ */
+function clearFieldValue(field: HTMLInputElement) {
+  Reflect.set(HTMLInputElement.prototype, "value", "", field)
   field.dispatchEvent(new Event("input", { bubbles: true }))
   field.dispatchEvent(new Event("change", { bubbles: true }))
 }
@@ -503,8 +514,7 @@ const InputRoot = forwardRef<InputHandle, InputProps>(function Input(
       clear: () => {
         const field = fieldRef.current
         if (!field) return
-        field.value = ""
-        dispatchFieldValueEvents(field)
+        clearFieldValue(field)
       },
     }),
     [isGrouped],
