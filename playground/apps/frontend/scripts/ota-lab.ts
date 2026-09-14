@@ -117,6 +117,96 @@ const APP_ID = "dev.arrz.projectzero"
 const PLATFORM =
   process.env.ADAPTV_OTA_PLATFORM === "android" ? "android" : "ios"
 
+/** A running device of {@link PLATFORM}: an adb serial or a simulator UDID. */
+type Device = { id: string; name: string }
+
+/**
+ * What is running right now: adb's attached devices, or the booted simulators.
+ *
+ * Only RUNNING ones, because every step after `install` drives the device the
+ * app is already on, and a simulator that is shut down cannot be relaunched,
+ * suspended or uninstalled from. A cabled iPhone is never listed: `simctl` cannot
+ * drive it, so the bench is simulator-only on iOS.
+ */
+function runningDevices(): Device[] {
+  if (PLATFORM === "android") {
+    return execFileSync("adb", ["devices", "-l"], { encoding: "utf8" })
+      .split("\n")
+      .slice(1)
+      .map((line) => line.trim().split(/\s+/))
+      .filter(([, state]) => state === "device")
+      .map(([id = "", , ...rest]) => ({
+        id,
+        name:
+          rest.find((field) => field.startsWith("model:"))?.slice(6) ?? id,
+      }))
+  }
+  const { devices } = JSON.parse(
+    execFileSync("xcrun", ["simctl", "list", "devices", "--json"], {
+      encoding: "utf8",
+    }),
+  ) as {
+    devices: Record<
+      string,
+      { udid: string; name: string; state: string }[]
+    >
+  }
+  //iPhone and iPad runtimes only: a booted Watch or TV simulator is not somewhere the app
+  //can be installed, and counting it would refuse a run with one real candidate
+  return Object.entries(devices)
+    .filter(([runtime]) =>
+      runtime.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-"),
+    )
+    .flatMap(([, sims]) => sims)
+    .filter((sim) => sim.state === "Booted")
+    .map((sim) => ({ id: sim.udid, name: sim.name }))
+}
+
+/**
+ * The one device this run drives. `ADAPTV_OTA_TARGET=<adb serial | simulator UDID>`.
+ *
+ * ⚠︎ **Resolved once, and named in every call.** On a shared machine a second
+ * emulator, a second booted simulator or a cabled iPhone is the ordinary case, and
+ * each tool fails differently without a name: a bare `adb` refuses with "more than
+ * one device/emulator" (swallowed by {@link reachChannel}, so the port is never
+ * reversed and the app asks the channel for nothing),
+ * `simctl … booted` picks one of the simulators arbitrarily — so `relaunch` can
+ * restart an app on a device you are not looking at — and `adaptv preview` waits
+ * on its device picker for an answer a script never gives.
+ *
+ * With no target and exactly one running device, that one. With none or several,
+ * the step fails before touching anything and lists what is running. The id is
+ * the one `adaptv preview <platform> --target` takes for a running device.
+ */
+let targetCache: string | null = null
+function target(): string {
+  if (targetCache) return targetCache
+  const wanted = process.env.ADAPTV_OTA_TARGET?.trim()
+  const running = runningDevices()
+  const listed = running
+    .map((device) => `\n    ${device.id}  ${device.name}`)
+    .join("")
+  if (wanted) {
+    if (!running.some((device) => device.id === wanted)) {
+      throw new Error(
+        `ota-lab: ADAPTV_OTA_TARGET=${wanted} is not a running ${PLATFORM} device.` +
+          (running.length ? ` Running:${listed}` : " Nothing is running."),
+      )
+    }
+    targetCache = wanted
+    return wanted
+  }
+  if (running.length === 1 && running[0]) {
+    targetCache = running[0].id
+    return targetCache
+  }
+  throw new Error(
+    running.length === 0
+      ? `ota-lab: no ${PLATFORM} device is running — ${PLATFORM === "ios" ? "boot a simulator" : "boot an emulator or attach a device"}, and run this again`
+      : `ota-lab: ${running.length} ${PLATFORM} devices are running — name one with ADAPTV_OTA_TARGET=<id>:${listed}`,
+  )
+}
+
 /**
  * The id actually on the device, resolved rather than assumed.
  *
@@ -126,15 +216,17 @@ const PLATFORM =
  * and the bench then blamed the update for a colour that never had a reason to
  * change. Ask the device instead.
  */
-function bundleId(): string {
+function bundleId(device: string): string {
   const appId = APP_ID
   try {
     const installed =
       PLATFORM === "android"
-        ? execFileSync("adb", ["shell", "pm", "list", "packages", appId], {
-            encoding: "utf8",
-          })
-        : execFileSync("xcrun", ["simctl", "listapps", "booted"], {
+        ? execFileSync(
+            "adb",
+            ["-s", device, "shell", "pm", "list", "packages", appId],
+            { encoding: "utf8" },
+          )
+        : execFileSync("xcrun", ["simctl", "listapps", device], {
             encoding: "utf8",
           })
     return installed.includes(`${appId}.dev`) ? `${appId}.dev` : appId
@@ -397,6 +489,7 @@ async function buildCapacitor(): Promise<void> {
 
 /** Build the native app and put it on the simulator — the "from the store" install. */
 async function install(): Promise<void> {
+  const device = target()
   say("building and installing — this is the app as a user first gets it")
   const env = await otaEnv()
   //`--force` is not belt-and-braces. The build cache keys on the APP's inputs, and
@@ -406,13 +499,17 @@ async function install(): Promise<void> {
   //feature you just changed: it looks like the app ignores the channel, because the
   //app on the device genuinely predates the code that would have asked.
   const preview = () =>
-    run("npx", ["adaptv", "preview", PLATFORM, "--latest", "--force"], env)
+    run(
+      "npx",
+      ["adaptv", "preview", PLATFORM, "--target", device, "--force"],
+      env,
+    )
   preview()
   //Second pass, and only ever a second pass: the policy below is compiled INTO the
   //binary, and the native project it edits does not exist until the first build has
   //generated it.
   if (permitLocalCleartext()) preview()
-  reachChannel()
+  reachChannel(device)
   //The one fact that decides whether anything below can ever work: the binary now
   //on the device trusts THIS key, and only a reinstall can change that.
   say(
@@ -432,16 +529,22 @@ async function install(): Promise<void> {
  * Re-applied on every launch because the mapping does not survive a reboot of
  * the emulator, and re-applying costs a process.
  */
-function reachChannel(): void {
+function reachChannel(device: string): void {
   if (PLATFORM !== "android") return
   try {
     execFileSync(
       "adb",
-      ["reverse", `tcp:${CHANNEL_PORT}`, `tcp:${CHANNEL_PORT}`],
+      [
+        "-s",
+        device,
+        "reverse",
+        `tcp:${CHANNEL_PORT}`,
+        `tcp:${CHANNEL_PORT}`,
+      ],
       { stdio: "ignore" },
     )
   } catch {
-    //no device attached yet; `install` will fail with a message that says so
+    //the device went away since it was resolved; the launch that follows says so
   }
 }
 
@@ -856,7 +959,7 @@ function serve(): void {
     console.log(
       "  leave this running in its own shell — every request is logged below,\n" +
         "  so a launch that never asks for the manifest is visible immediately.\n" +
-        `  Android also needs:  adb reverse tcp:${CHANNEL_PORT} tcp:${CHANNEL_PORT}\n`,
+        `  Android also needs:  adb -s <serial> reverse tcp:${CHANNEL_PORT} tcp:${CHANNEL_PORT}\n`,
     )
   })
 }
@@ -882,34 +985,37 @@ function pause(seconds: number): void {
  * supposed to be "checks + downloads" did neither.
  */
 function relaunch(settleSeconds = 7): void {
-  const id = bundleId()
-  reachChannel()
-  suspend()
+  const device = target()
+  const id = bundleId(device)
+  reachChannel(device)
+  suspend(device)
   pause(2)
-  kill(id)
+  kill(device, id)
   //NOT silenced — a launch that fails here (wrong id, app not installed) must be
   //loud, because a silent one is indistinguishable from an update that did not
   //land
-  launch(id)
-  say(`relaunched ${id} on ${PLATFORM} — letting it check the channel`)
+  launch(device, id)
+  say(`relaunched ${id} on ${device} — letting it check the channel`)
   pause(settleSeconds)
   console.log("  ready for the next step\n")
 }
 
 /** Background the app, so pending preference writes are flushed before the kill. */
-function suspend(): void {
+function suspend(device: string): void {
   try {
     if (PLATFORM === "android") {
-      execFileSync("adb", ["shell", "input", "keyevent", "KEYCODE_HOME"], {
-        stdio: "ignore",
-      })
+      execFileSync(
+        "adb",
+        ["-s", device, "shell", "input", "keyevent", "KEYCODE_HOME"],
+        { stdio: "ignore" },
+      )
       return
     }
     //any other app will do — this is a "go to the home screen" simctl can do
     execFileSync("xcrun", [
       "simctl",
       "launch",
-      "booted",
+      device,
       "com.apple.Preferences",
     ])
   } catch {
@@ -917,13 +1023,13 @@ function suspend(): void {
   }
 }
 
-function kill(id: string): void {
+function kill(device: string, id: string): void {
   try {
     execFileSync(
       PLATFORM === "android" ? "adb" : "xcrun",
       PLATFORM === "android"
-        ? ["shell", "am", "force-stop", id]
-        : ["simctl", "terminate", "booted", id],
+        ? ["-s", device, "shell", "am", "force-stop", id]
+        : ["simctl", "terminate", device, id],
       { stdio: "ignore" },
     )
   } catch {
@@ -931,11 +1037,13 @@ function kill(id: string): void {
   }
 }
 
-function launch(id: string): void {
+function launch(device: string, id: string): void {
   if (PLATFORM === "android") {
     execFileSync(
       "adb",
       [
+        "-s",
+        device,
         "shell",
         "monkey",
         "-p",
@@ -948,7 +1056,7 @@ function launch(id: string): void {
     )
     return
   }
-  execFileSync("xcrun", ["simctl", "launch", "booted", id], {
+  execFileSync("xcrun", ["simctl", "launch", device, id], {
     stdio: "inherit",
   })
 }
@@ -1121,6 +1229,9 @@ function reset(): void {
  * pair without a new install is a channel the device refuses on every publish.
  */
 async function fresh(): Promise<void> {
+  //before anything is wiped: a run that cannot name its device must not have
+  //already rotated the key the installed app trusts
+  const device = target()
   reset()
   rmSync(KEY_DIR, { recursive: true, force: true })
   const { publicKey } = await newSigningPair()
@@ -1130,8 +1241,8 @@ async function fresh(): Promise<void> {
       execFileSync(
         PLATFORM === "android" ? "adb" : "xcrun",
         PLATFORM === "android"
-          ? ["uninstall", id]
-          : ["simctl", "uninstall", "booted", id],
+          ? ["-s", device, "uninstall", id]
+          : ["simctl", "uninstall", device, id],
         { stdio: "ignore" },
       )
     } catch {
