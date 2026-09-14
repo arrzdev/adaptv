@@ -18,6 +18,8 @@ import { awaitClientHandover } from "./support/hydrated"
  *     press handling must not break;
  *   - a required group blocks submission, a chosen value submits under its name,
  *     and a form reset moves the painted state with the radios;
+ *   - a reset of a controlled group with no default reports nothing and leaves
+ *     the radios, the paint and FormData on the owner's value;
  *   - under dir=rtl the box sits at the inline start.
  *
  * Two engine differences were measured here and are pinned per engine rather than
@@ -352,6 +354,66 @@ test.describe("RadioGroup", () => {
     await expect(yearlyItem).toHaveAttribute("data-checked", "")
     await submit.click()
     await expect(output).toHaveText("plan=yearly&source=lab")
+  })
+
+  test("a reset of a controlled group with no default reports nothing and stays on the owner's value", async ({
+    page,
+  }) => {
+    const form = page.locator("form", { has: group(page, "Delivery") })
+    const items = group(page, "Delivery").locator("[data-part='item']")
+    const pickup = radio(page, "Delivery", "Pickup")
+    const express = radio(page, "Delivery", "Express")
+    const changesOut = page.getByTestId("controlled-form-changes")
+    const valueOut = page.getByTestId("controlled-form-value")
+    const output = page.getByTestId("controlled-form-output")
+    //a native listener, so the proof that a reset ran renders nothing itself
+    await form.evaluate((el) => {
+      el.addEventListener("reset", () => {
+        const n = Number(el.getAttribute("data-e2e-resets") ?? "0")
+        el.setAttribute("data-e2e-resets", String(n + 1))
+      })
+    })
+
+    /** The owner's value is checked, painted and submitted, and nothing else is. */
+    async function onOwnersValue(chosen: 0 | 1, changes: string) {
+      const values = ["pickup", "express"]
+      const radios = [pickup, express]
+      //this waits out the reset's task: the browser cleared every radio, and the
+      //group puts the owner's value back a task later
+      await expect(radios[chosen]).toBeChecked()
+      await expect(radios[1 - chosen]).not.toBeChecked()
+      await expect(items.nth(chosen)).toHaveAttribute("data-checked", "")
+      await expect(items.nth(1 - chosen)).not.toHaveAttribute(
+        "data-checked",
+        "",
+      )
+      await expect(
+        items.nth(chosen).locator("[data-part='indicator']"),
+      ).toHaveCSS("opacity", "1")
+      await expect(
+        items.nth(1 - chosen).locator("[data-part='indicator']"),
+      ).toHaveCSS("opacity", "0")
+      await expect(valueOut).toHaveText(values[chosen])
+      await expect(changesOut, "a reset reports nothing").toHaveText(
+        changes,
+      )
+      await page.getByRole("button", { name: "Place order" }).click()
+      await expect(output).toHaveText(`delivery=${values[chosen]}`)
+    }
+
+    await express.click({ timeout: 5_000 })
+    await expect(changesOut).toHaveText("1")
+    await expect(valueOut).toHaveText("express")
+
+    await page.getByRole("button", { name: "Start over" }).click()
+    await expect(form).toHaveAttribute("data-e2e-resets", "1")
+    await onOwnersValue(1, "1")
+
+    await pickup.click({ timeout: 5_000 })
+    await expect(changesOut).toHaveText("2")
+    await form.evaluate((el) => (el as HTMLFormElement).reset())
+    await expect(form).toHaveAttribute("data-e2e-resets", "2")
+    await onOwnersValue(0, "2")
   })
 
   test("under dir=rtl the box sits at the inline start, and each engine keeps its own arrow direction", async ({
