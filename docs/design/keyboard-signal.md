@@ -12,13 +12,13 @@
 Two separable problems get conflated whenever someone proposes "just `translateY` the sheet with the
 keyboard":
 
-- **Geometry** — *how the sheet accommodates the keyboard.* This is [drawer-engine](../src/components/drawer/drawer-engine.tsx)
-  + [drawer-keyboard](../src/components/drawer/drawer-keyboard.ts), and **PR #32 already answers it**:
+- **Geometry** — *how the sheet accommodates the keyboard.* This is [drawer-engine](../../src/components/drawer/drawer-engine.tsx)
+  + [drawer-keyboard](../../src/components/drawer/drawer-keyboard.ts), and **PR #32 already answers it**:
   the sheet grows into its `max-h`, holds the keyboard as **room** under the content, the scroller
   absorbs the overflow, and a composited **FLIP transform** carries the visible motion in one step.
   Unchanged by this work.
 - **Signal** — *what the current keyboard offset is, and when we know it.* This is
-  [capabilities/keyboard](../src/capabilities/keyboard.ts) + [use-keyboard](../src/hooks/use-keyboard.ts).
+  [capabilities/keyboard](../../src/capabilities/keyboard.ts) + [use-keyboard](../../src/hooks/use-keyboard.ts).
   This is the only thing the keyboard-signal work touches.
 
 Keep them apart and the per-platform plan is simple: **every platform produces the same signal; the
@@ -65,8 +65,9 @@ the picker collapses under the floor, the sheet's top holds, and the keyboard-ro
 `heldFloor` path eases the floor to the final height once the height lands — one motion, no
 shrink-then-grow dip. Like the signal-side prediction it is **reversible**: a focus that raises no
 keyboard retracts the floor after a confirm window (`DRAWER_KEYBOARD_FLOOR_CONFIRM_MS`, mirroring §5).
-On web the predictive seed already starts the grow on the focus frame, so the two coalesce; on native
-(prediction off today) the floor alone is what removes the dip. See `docs/design/behaviors.md §4`.
+When the height cache knows the field's shape, the predictive seed starts the grow on the same focus
+frame, on web and on native alike, so the two coalesce; on a cold cache nothing is predicted and the
+floor alone is what removes the dip. See `docs/design/behaviors.md §4`.
 
 ## 3. The contract
 
@@ -80,17 +81,21 @@ platform it is on (`docs/roadmap/native-shell-plugin.md §2`).
   source* to continuous (Android `onProgress`) + curve-bearing (iOS `userInfo`) — the consumer shape
   does not change. If FOLLOW ever needs it, extend the event with a `phase`/`velocity` field; the
   drawer must keep consuming "current offset", never raw frames.
-- **Prediction** (PR #34) adds *seed-then-correct* to the web path: the height is known on the focus
-  frame and the real measurement corrects it through the existing grow/shrink paths.
+- **Prediction** adds *seed-then-correct* to the web path (PR #34) and the native path (PR #47): on a
+  warm cache the height is known on the focus frame and the real measurement corrects it through the
+  existing grow/shrink paths.
 
 ## 4. The height cache (built — PR #34)
 
-[keyboard-height-cache.ts](../src/capabilities/keyboard-height-cache.ts). A form is the same shape
+[keyboard-height-cache.ts](../../src/capabilities/keyboard-height-cache.ts). A form is the same shape
 every time it opens on a device, so last time's height predicts this time's.
 
-- **Key** `{ viewportWidth, numeric|text }`. Width identifies the device implicitly and moves on
-  rotation, so it encodes orientation for free — no separate orientation term. `inputmode`/`type`
-  split the digit pad from the full keyboard; finer splitting just fragments the cache.
+- **Key** `{ viewportWidth, numeric|text, autofill }`. Width identifies the device implicitly and
+  moves on rotation, so it encodes orientation for free — no separate orientation term.
+  `inputmode`/`type` split the digit pad from the full keyboard, and `autofill` (a password field, or
+  an `autocomplete` naming any of `username`, `email`, `current-password`, `new-password` or
+  `one-time-code`) splits a login field, whose keyboard carries iOS's AutoFill bar, from a plain one;
+  finer splitting just fragments the cache.
 - **Durable**: Preferences on native (survives WebView eviction), localStorage on web; hydrated once
   at boot before any drawer opens; synchronous in-memory lookup on focus.
 - **Self-healing**: every confirmed, stable height is recorded, so a keyboard-app / language / IME
@@ -158,6 +163,7 @@ pnpm dev:android    # the app on the Android emulator — real IME, WindowInsets
 
 - **Built (PR #34):** height cache + the predictive Web / Android<30 branch (seed-on-focus, confirm/
   retarget via the engine's re-aim, retract, learn).
+- **Built (PR #47):** the same seed on the native path, retracted if no native report confirms it.
 - **Designed here:** iOS REPLAY (curve from `userInfo`) and Android 30+ FOLLOW (`onProgress`), both
   feeding §3's contract; §7 is what to resolve on-device first.
 
