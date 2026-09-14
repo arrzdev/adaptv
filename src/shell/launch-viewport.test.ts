@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { SPLASH_REVEALED_ATTR } from "#adaptv/hooks/use-splash-handoff"
-import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport"
+import {
+  getLaunchViewportInitScript,
+  LAUNCH_HEIGHT_KEY,
+  restoreLaunchHeight,
+} from "#adaptv/shell/launch-viewport"
 
 //The script is a string that runs pre-paint, so it is run in the happy-dom document. happy-dom
 //lays nothing out, so each probe's style is read as the script wrote it and answered from a
@@ -31,6 +35,7 @@ function probeHeight(style: string): number {
 function launch(at: Reading, where: "ios" | "android" | "tab" = "ios") {
   reading = at
   root.style.removeProperty("--pwa-launch-height")
+  Reflect.deleteProperty(window, LAUNCH_HEIGHT_KEY)
   root.removeAttribute(SPLASH_REVEALED_ATTR)
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: where !== "tab" && query === "(display-mode: standalone)",
@@ -173,6 +178,24 @@ describe("the launch height the splash centres in", () => {
   it("leaves a browser tab unset", () => {
     launch({ vh: 754, dvh: 714, ih: 714, insetTop: 0 }, "tab")
     resize({ vh: 754, dvh: 600, ih: 600, insetTop: 0 })
+    expect(launchHeight()).toBe("")
+  })
+
+  it("restores the height it last froze once React has cleared <html>, without measuring again", () => {
+    //a fresh client root clears the inline style (`launch-height-boot.test.tsx`)
+    launch({ vh: 874, dvh: 874, ih: 874, insetTop: 0 })
+    resize({ vh: 874, dvh: 874, ih: 812, insetTop: 0 })
+    root.removeAttribute("style")
+    //by the time the client root commits, 100vh has moved: a new measure would miss
+    reading = { vh: 900, dvh: 900, ih: 900, insetTop: 0 }
+    restoreLaunchHeight()
+    expect(launchHeight()).toBe("812px")
+  })
+
+  it("restores nothing where the script froze nothing", () => {
+    launch({ vh: 754, dvh: 714, ih: 714, insetTop: 0 }, "tab")
+    root.removeAttribute("style")
+    restoreLaunchHeight()
     expect(launchHeight()).toBe("")
   })
 

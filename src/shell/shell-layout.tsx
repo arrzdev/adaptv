@@ -32,6 +32,7 @@ import { useSuppressTextMagnifier } from "#adaptv/hooks/use-suppress-text-magnif
 import { useSyncTheme } from "#adaptv/hooks/use-sync-theme"
 import { readPreference, useTheme } from "#adaptv/hooks/use-theme"
 import { useOtaUpdates } from "#adaptv/ota/use-ota-updates"
+import { restoreLaunchHeight } from "#adaptv/shell/launch-viewport"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import { useRouteTint } from "#adaptv/shell/use-route-tint"
 import { initKv } from "#adaptv/storage/kv"
@@ -199,6 +200,11 @@ export function RoutingShell({
   useIsomorphicLayoutEffect(() => {
     applyPlatformStamp(ui)
   }, [ui])
+  //…and the frozen launch height, which lives in the same `<html>` it clears. Once, on
+  //mount: that is the commit that takes `<html>` over and paints the splash.
+  useIsomorphicLayoutEffect(() => {
+    restoreLaunchHeight()
+  }, [])
 
   const [resolvedAppearance] = useTheme()
   //A route may pin the browser chrome to a colour of its own. The pre-paint
