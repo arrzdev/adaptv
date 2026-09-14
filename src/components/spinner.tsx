@@ -390,10 +390,15 @@ function progressOf(value: number | undefined): number | undefined {
  * repaint and paints `CanvasText`, the system text colour, and the box gets an outline
  * so the empty part of the track still reads.
  *
- * **4. RTL fills from the right.** `scaleX` grows from `transform-origin`, which has no
- * logical keyword, so under `[dir="rtl"]` the origin and the sweep flip.
- * ⚠︎ A `dir="ltr"` island inside an RTL page still reads the outer `dir` — the same
- * ancestor rule scroll-fade.css uses and Tailwind's `rtl:` variant falls back to.
+ * **4. RTL fills from the right.** `scaleX` grows from `transform-origin` and the sweep
+ * is `translateX`, and neither has a logical form, so the parts are placed physically
+ * and one selector decides direction for all of them: a `dir="rtl"` attribute on the
+ * bar or any ancestor. Under it the fill grows from the right and the sweep travels
+ * leftwards; the fill and the sweep always agree, and the sweep always enters and
+ * leaves off the track.
+ * ⚠︎ A `dir="ltr"` island inside an RTL page still draws RTL, and CSS `direction: rtl`
+ * with no `dir` attribute draws LTR — the ancestor rule scroll-fade.css uses.
+ * `:dir()` would follow the element's own direction, but it is above the iOS 15 floor.
  *
  * **Reduced motion, as Spinner:** an indeterminate bar never stops (a still bar reads
  * as stalled). The sweep ends, the indicator spans the track, and it pulses its opacity

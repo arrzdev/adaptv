@@ -66,7 +66,7 @@ function LabProgressBarPage() {
         steps={[
           "Tap the values in the first card: the bar eases to each one. −0.5 reads 0 %, 1.5 reads 100 %, and No value or NaN turn it into a sweep.",
           "Tap “Start loading”: a labelled sweep appears. Tap “Busy main thread 1 s”: the sweep keeps moving while the page is frozen.",
-          "In the RTL card the bar fills from the right, and the sweep travels right to left.",
+          'In the RTL card, tap “Show the RTL sweeps”: under dir="rtl" the bar fills from the right and the sweep travels right to left. In every row the sweep enters from the side the fill grows from, crosses the whole track and leaves by the other side.',
           "Tap “Read play states” at the top of the field card: 0 running · 100 paused. Scroll to the field and tap the button below it: running.",
           "Turn on Reduce Motion and reload: the sweep becomes a full-width pulse, and values jump instead of easing.",
         ]}
@@ -206,10 +206,10 @@ function RtlProbe() {
   return (
     <LabSection
       title="RTL"
-      description="Inside dir=rtl the fill grows from the right and the sweep travels leftwards."
+      description="Direction comes from a dir='rtl' attribute on the bar or an ancestor. Under one, the fill grows from the right and the sweep travels leftwards. A dir='ltr' island inside it still reads RTL, and CSS direction without the attribute reads LTR, but in every case the fill and the sweep agree and the sweep stays on the track."
     >
       <div dir="rtl" className="flex flex-col gap-y-3">
-        <Text className="text-sm text-foreground">٢٥٪</Text>
+        <Text className="text-sm text-foreground">٢٥٪ · dir="rtl"</Text>
         <ProgressBar
           data-testid="progress-rtl-determinate"
           value={0.25}
@@ -221,10 +221,42 @@ function RtlProbe() {
             className="h-2 text-primary"
           />
         )}
+        <div dir="ltr" className="flex flex-col gap-y-3">
+          <Text className="text-sm text-foreground">
+            25 % · a dir="ltr" island inside dir="rtl"
+          </Text>
+          <ProgressBar
+            data-testid="progress-island-determinate"
+            value={0.25}
+            className="h-2 text-primary"
+          />
+          {sweep && (
+            <ProgressBar
+              data-testid="progress-island-indeterminate"
+              className="h-2 text-primary"
+            />
+          )}
+        </div>
+      </div>
+      <div style={{ direction: "rtl" }} className="flex flex-col gap-y-3">
+        <Text className="text-sm text-foreground">
+          25 % · CSS direction: rtl, no attribute
+        </Text>
+        <ProgressBar
+          data-testid="progress-cssdir-determinate"
+          value={0.25}
+          className="h-2 text-primary"
+        />
+        {sweep && (
+          <ProgressBar
+            data-testid="progress-cssdir-indeterminate"
+            className="h-2 text-primary"
+          />
+        )}
       </div>
       <LabActions>
         <LabButton onClick={() => setSweep((on) => !on)}>
-          {sweep ? "Hide the RTL sweep" : "Show the RTL sweep"}
+          {sweep ? "Hide the RTL sweeps" : "Show the RTL sweeps"}
         </LabButton>
       </LabActions>
     </LabSection>

@@ -448,14 +448,17 @@ describe("the bar moves by transform only", () => {
     ).toBeNull()
   })
 
-  it("the parts are positioned from the inline start, and no !important is used", async () => {
+  it("the parts are placed physically, so only the dir selector decides direction, and no !important is used", async () => {
     const css = await compileAdaptvStyles([])
     const parts = barRules(css).find(
       (rule) =>
         rule.selector === '[data-adaptv="progress-bar"] > [data-part]',
     )
-    expect(parts?.body).toMatch(/inset-inline-start: 0/)
-    expect(parts?.body).not.toMatch(/(^|[;\s])left:/)
+    //`inset-inline-start` follows the ELEMENT's direction while the origin and the
+    //keyframes follow the [dir="rtl"] attribute; where the two disagree (an ltr
+    //island in an rtl page) the sweep started halfway across the track
+    expect(parts?.body).toMatch(/(^|[;\s])left: 0;/)
+    expect(parts?.body).not.toMatch(/inset-inline|inset:|right:/)
     for (const { body } of barRules(css))
       expect(body).not.toContain("!important")
   })
@@ -488,7 +491,7 @@ describe("RTL", () => {
       /from \{\s*transform: translateX\(-100%\);\s*\}\s*to \{\s*transform: translateX\(250%\);/,
     )
     expect(keyframesBody(css, "adaptv-progress-bar-sweep-rtl")).toMatch(
-      /from \{\s*transform: translateX\(100%\);\s*\}\s*to \{\s*transform: translateX\(-250%\);/,
+      /from \{\s*transform: translateX\(250%\);\s*\}\s*to \{\s*transform: translateX\(-100%\);/,
     )
   })
 })

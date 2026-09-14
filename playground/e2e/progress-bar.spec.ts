@@ -14,7 +14,10 @@ import { awaitClientHandover } from "./support/hydrated"
  *   - an off-screen indeterminate field reports `paused`, resumes on screen, pauses
  *     again (both engines), and on chromium the page idles against the always-on
  *     control (prove-the-page-idles);
- *   - RTL: the fill is anchored to the right edge, and the sweep travels leftwards;
+ *   - RTL: under a dir="rtl" attribute the fill is anchored right and the sweep
+ *     travels leftwards; in every direction case (an ltr island, CSS direction with
+ *     no attribute) the fill and the sweep agree and the sweep enters and leaves off
+ *     the track;
  *   - reduced motion: a full-width opacity pulse, never a stop, no fill transition,
  *     and the field still pauses;
  *   - forced colors (chromium): the fill keeps the forced text colour, where a plain
@@ -389,68 +392,122 @@ test.describe("ProgressBar", () => {
       .toEqual({ running: 0, paused: 100, none: 0 })
   })
 
-  test("RTL: the fill is anchored to the right edge, and the sweep travels leftwards", async ({
+  test("RTL: the fill and the sweep read the same direction, and the sweep enters and leaves off the track", async ({
     page,
   }) => {
-    await clickValue(page, "Show the RTL sweep")
+    await clickValue(page, "Show the RTL sweeps")
     await clickValue(page, "Start loading")
     await expect(
-      page.getByTestId("progress-rtl-indeterminate"),
+      page.getByTestId("progress-cssdir-indeterminate"),
     ).toBeAttached()
     await expect(page.getByTestId("progress-indeterminate")).toBeAttached()
 
-    const edges = (testId: string) =>
-      page.getByTestId(testId).evaluate((el) => {
-        const box = el.getBoundingClientRect()
-        const fill = (
-          el.querySelector('[data-part="indicator"]') as HTMLElement
-        ).getBoundingClientRect()
-        return {
-          dir: getComputedStyle(el).direction,
-          share: +(fill.width / box.width).toFixed(3),
-          left: +(fill.left - box.left).toFixed(1),
-          right: +(box.right - fill.right).toFixed(1),
-        }
-      })
-    const rtl = await edges("progress-rtl-determinate")
+    /**
+     * One case: which edge its determinate fill is anchored to, and where its sweep's
+     * indicator sits (px from the track's left) at the start, middle and end of a
+     * cycle, with the side it starts and ends on.
+     */
+    const measure = (determinate: string, indeterminate: string) =>
+      page.evaluate(
+        ({ d, i }) => {
+          const part = (el: Element) =>
+            el.querySelector('[data-part="indicator"]') as HTMLElement
+          const fillBar = document.querySelector(`[data-testid="${d}"]`)
+          const sweepBar = document.querySelector(`[data-testid="${i}"]`)
+          if (!fillBar || !sweepBar) return null
+          const fillBox = fillBar.getBoundingClientRect()
+          const fill = part(fillBar).getBoundingClientRect()
+          const left = fill.left - fillBox.left
+          const right = fillBox.right - fill.right
+          const anchor =
+            Math.abs(left) < 1 && right > 1
+              ? "left"
+              : Math.abs(right) < 1 && left > 1
+                ? "right"
+                : `neither (${left.toFixed(1)}, ${right.toFixed(1)})`
 
-    /** Where the sweep's indicator sits at 25% and at 50% of one cycle. */
-    const travel = (testId: string) =>
-      page.getByTestId(testId).evaluate((el) => {
-        const indicator = el.querySelector(
-          '[data-part="indicator"]',
-        ) as HTMLElement
-        const animation = indicator.getAnimations()[0] as CSSAnimation
-        const duration = Number(
-          animation.effect?.getComputedTiming().duration,
-        )
-        animation.pause()
-        const at = (fraction: number) => {
-          animation.currentTime = duration * fraction
-          return +indicator.getBoundingClientRect().left.toFixed(1)
-        }
-        const positions = [at(0.25), at(0.5), at(0.75)]
-        animation.play()
-        return { name: animation.animationName, positions }
-      })
-    const ltrSweep = await travel("progress-indeterminate")
-    const rtlSweep = await travel("progress-rtl-indeterminate")
+          const track = sweepBar.getBoundingClientRect()
+          const indicator = part(sweepBar)
+          const animation = indicator.getAnimations()[0] as CSSAnimation
+          const duration = Number(
+            animation.effect?.getComputedTiming().duration,
+          )
+          animation.pause()
+          const at = (fraction: number) => {
+            animation.currentTime = duration * fraction
+            const box = indicator.getBoundingClientRect()
+            return [
+              Math.round(box.left - track.left),
+              Math.round(box.right - track.left),
+            ]
+          }
+          const side = ([l, r]: number[]) =>
+            r <= 1 ? "left" : l >= track.width - 1 ? "right" : "on track"
+          const start = at(0)
+          const middle = at(0.5)
+          const end = at(0.999)
+          animation.play()
+          return {
+            dir: getComputedStyle(fillBar).direction,
+            anchor,
+            sweep: animation.animationName,
+            start,
+            middle,
+            end,
+            enters: side(start),
+            leaves: side(end),
+            middleOnTrack: middle[0] >= 0 && middle[1] <= track.width,
+          }
+        },
+        { d: determinate, i: indeterminate },
+      )
+
+    const cases = {
+      ltr: await measure("progress-determinate", "progress-indeterminate"),
+      rtl: await measure(
+        "progress-rtl-determinate",
+        "progress-rtl-indeterminate",
+      ),
+      //direction is the [dir="rtl"] attribute, so an ltr island still reads rtl
+      island: await measure(
+        "progress-island-determinate",
+        "progress-island-indeterminate",
+      ),
+      //…and CSS direction with no attribute reads ltr
+      cssDirection: await measure(
+        "progress-cssdir-determinate",
+        "progress-cssdir-indeterminate",
+      ),
+    }
     console.log(
-      `[progress-rtl ${test.info().project.name}] fill ${JSON.stringify(rtl)} ltr sweep ${JSON.stringify(ltrSweep)} rtl sweep ${JSON.stringify(rtlSweep)}`,
+      `[progress-rtl ${test.info().project.name}] ${JSON.stringify(cases)}`,
     )
-    expect(rtl.dir).toBe("rtl")
-    expect(rtl.share).toBeCloseTo(0.25, 2)
-    expect(Math.abs(rtl.right)).toBeLessThan(1)
-    expect(rtl.left).toBeGreaterThan(1)
-
-    const [l1, l2, l3] = ltrSweep.positions
-    expect(ltrSweep.name).toBe("adaptv-progress-bar-sweep")
-    expect(l2).toBeGreaterThan(l1)
-    expect(l3).toBeGreaterThan(l2)
-    const [r1, r2, r3] = rtlSweep.positions
-    expect(rtlSweep.name).toBe("adaptv-progress-bar-sweep-rtl")
-    expect(r2).toBeLessThan(r1)
-    expect(r3).toBeLessThan(r2)
+    const expected = {
+      ltr: "left",
+      rtl: "right",
+      island: "right",
+      cssDirection: "left",
+    } as const
+    for (const [name, anchor] of Object.entries(expected)) {
+      const got = cases[name as keyof typeof cases]
+      expect(got, `${name} was measured`).not.toBeNull()
+      //the fill grows from the edge the sweep enters from…
+      expect(
+        { name, anchor: got?.anchor, enters: got?.enters },
+        name,
+      ).toEqual({ name, anchor, enters: anchor })
+      //…crosses the whole track, and leaves by the other edge
+      expect(got?.leaves, name).toBe(anchor === "left" ? "right" : "left")
+      expect(got?.middleOnTrack, name).toBe(true)
+      expect(got?.sweep, name).toBe(
+        anchor === "left"
+          ? "adaptv-progress-bar-sweep"
+          : "adaptv-progress-bar-sweep-rtl",
+      )
+    }
+    expect(cases.rtl?.dir).toBe("rtl")
+    expect(cases.island?.dir).toBe("ltr")
+    expect(cases.cssDirection?.dir).toBe("rtl")
   })
 
   test("chromium's own accessibility tree agrees", async ({

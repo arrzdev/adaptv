@@ -88,7 +88,21 @@
  *
  * The sweep is 40% of the track, travelling from just outside the start edge to just
  * outside the end edge: translate percentages are of the indicator's own width, so
- * -100% hides it before the start and 250% (100 / 40) carries it past the end.
+ * -100% hides it past the left edge and 250% (100 / 40) past the right one.
+ *
+ * ## Direction is read in ONE place
+ *
+ * A transform has no logical form: `transform-origin` and `translateX` are physical.
+ * So the parts are placed physically too (`left: 0`), and the only thing that decides
+ * right-to-left is the `[dir="rtl"]` selector, which flips the origin and the sweep's
+ * keyframes together. Placing the parts with `inset-inline-start` read the ELEMENT's
+ * direction instead, and wherever that disagreed with the attribute (a `dir="ltr"`
+ * island inside an RTL page, or CSS `direction: rtl` with no attribute) the sweep
+ * started halfway across the track. `:dir(rtl)` would read the element's direction
+ * for all three, but it is Safari 16.4 and Chromium 120, above the iOS 15 floor, so
+ * it would make the answer depend on the OS version. What holds instead: a
+ * `[dir="rtl"]` attribute on the bar or any ancestor makes it RTL (an ltr island
+ * inside one included), anything else is LTR, and the fill and the sweep always agree.
  */
 
 @keyframes adaptv-progress-bar-sweep {
@@ -103,11 +117,11 @@
 
 @keyframes adaptv-progress-bar-sweep-rtl {
   from {
-    transform: translateX(100%);
+    transform: translateX(250%);
   }
 
   to {
-    transform: translateX(-250%);
+    transform: translateX(-100%);
   }
 }
 
@@ -116,7 +130,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    inset-inline-start: 0;
+    left: 0;
     width: 100%;
     background-color: currentColor;
   }
