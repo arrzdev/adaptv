@@ -76,7 +76,8 @@ function LabRadioGroupPage() {
           "Press “freeze”, then tap another option. The selection must stay where it was while the change count still goes up.",
           "With a keyboard: Tab into the controlled group (focus lands on the selected option), press the arrow keys (the selection moves with focus), then Tab once: focus leaves the group.",
           "In “A disabled option”, arrow through the group: Beta is skipped, and tapping it does nothing.",
-          "Submit the form without choosing: the browser refuses (required). Choose Yearly and submit: the output reads plan=yearly.",
+          "Submit the form without choosing: the browser refuses (required). Choose Yearly and submit: the output reads plan=yearly. Press Reset: no option is painted as chosen any more, and a tap on Yearly chooses it again.",
+          "Press an option and drag your finger off it before letting go: nothing is chosen. Then choose that option another way (VoiceOver double-tap, or a keyboard): it is chosen on the first try.",
           "In the RTL group the circle sits on the right of each label. In Chrome ArrowLeft moves to the next option (the one drawn to its left); Safari keeps ArrowRight as next in either direction.",
           "With VoiceOver on (iOS): swipe to an option. The frame is the whole row, it reads radio button, its name, and “1 of 3”; double-tap selects it.",
         ]}
@@ -98,7 +99,7 @@ function LabRadioGroupPage() {
             note: "Android WebView is Chromium: same as the browser tab. TalkBack frames the whole row.",
           },
         }}
-        wrong="Selecting on one side of “Two instances” clears the other side. A centre tap does nothing, or the VoiceOver frame is a speck at the row's edge. One tap counts two changes. An arrow key moves focus but not the selection, or lands on Beta. The form submits with no plan, or submits the wrong one."
+        wrong="Selecting on one side of “Two instances” clears the other side. A centre tap does nothing, or the VoiceOver frame is a speck at the row's edge. One tap counts two changes. After Reset an option still shows its dot. An arrow key moves focus but not the selection, or lands on Beta. The form submits with no plan, or submits the wrong one."
       />
 
       <TwoInstances note={note} />
@@ -109,9 +110,9 @@ function LabRadioGroupPage() {
 
       <LabSection title="Attributes">
         <LabRow
-          label="data-adaptv"
+          label="data-adaptv · data-part"
           value={<LabBadge tone="ok">radio-group</LabBadge>}
-          hint="On the group, and on every item with data-part='item'. Target every radio from global CSS with no imports."
+          hint="data-adaptv='radio-group' with data-part='root' on the group only; each item is data-part='item', its circle 'box' and its dot 'indicator'. Target every group from global CSS with no imports, and its options with [data-adaptv='radio-group'] [data-part='item']."
         />
         <LabRow
           label="data-checked · data-disabled"
@@ -273,20 +274,30 @@ function FormProbe() {
   return (
     <LabSection
       title="Form"
-      description="An explicit `name` and `required`. The browser refuses to submit with nothing chosen, and submits the chosen value under the name."
+      description="An explicit `name` and `required`. The browser refuses to submit with nothing chosen, and submits the chosen value under the name. Reset clears the radios and the painted dot with them."
     >
-      <form onSubmit={onSubmit} className="flex flex-col gap-y-3">
+      <form
+        onSubmit={onSubmit}
+        onReset={() => setSubmitted(null)}
+        className="flex flex-col gap-y-3"
+      >
         <RadioGroup aria-label="Plan" name="plan" required>
           <Item value="monthly">Monthly</Item>
           <Item value="yearly">Yearly</Item>
         </RadioGroup>
         <input type="hidden" name="source" value="lab" />
-        <div>
+        <div className="flex gap-x-2">
           <button
             type="submit"
             className="rounded-md bg-secondary px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border-subtle"
           >
             Submit
+          </button>
+          <button
+            type="reset"
+            className="rounded-md px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border-subtle"
+          >
+            Reset
           </button>
         </div>
       </form>
