@@ -292,6 +292,64 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     //the settle rolls onto the last row that still exists
     expect(smoothRolls().at(-1)).toBe(27 * H)
   })
+
+  it("settles through the consumer's latest onChange, so a day column never sets back a month that changed mid-glide", () => {
+    //a date picker whose day column writes the month from its own render, and which
+    //starts a new month on its 1st; the day wheel is still gliding when the month turns
+    const dates = vi.fn()
+    let turnMonth = (_month: number) => {}
+    function DatePicker() {
+      const [date, setDate] = useState({ month: 1, day: 9 })
+      turnMonth = (month) => setDate({ month, day: 1 })
+      const count = date.month === 2 ? 28 : 31
+      return (
+        <WheelColumn
+          items={range(1, count)}
+          value={date.day}
+          onChange={(day) => {
+            dates(`${date.month}/${day}`)
+            setDate({ month: date.month, day })
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<DatePicker />)
+    scrollWheel(11 * H) // day 12
+    act(() => turnMonth(2))
+    advance(120)
+    //the gesture wins over the reset to the 1st, and it lands in February
+    expect(dates.mock.calls).toEqual([["1/12"], ["2/12"]])
+  })
+
+  it("settles through the consumer's latest onChange even when neither the value nor the list changed", () => {
+    //a booking picker that refuses a day its month has blocked: the 12th is taken in
+    //January, not in March, and both months share one list
+    const dates = vi.fn()
+    let turnMonth = (_month: number) => {}
+    const days = range(1, 31)
+    function BookingPicker() {
+      const [month, setMonth] = useState(1)
+      const [day, setDay] = useState(9)
+      turnMonth = setMonth
+      return (
+        <WheelColumn
+          items={days}
+          value={day}
+          onChange={(next) => {
+            dates(`${month}/${next}`)
+            if (!(month === 1 && next === 12)) setDay(next)
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<BookingPicker />)
+    scrollWheel(11 * H) // the 12th, refused in January
+    act(() => turnMonth(3))
+    advance(120)
+    expect(dates.mock.calls).toEqual([["1/12"], ["3/12"]])
+  })
 })
 
 describe("WheelColumn — the settle snap", () => {

@@ -13,8 +13,9 @@ import { awaitClientHandover } from "./support/hydrated"
  *
  * Driven with `mouse.wheel` after three instruments were tried and rejected:
  *   - `el.scrollTop = …` is a jump, not a gesture: nothing coasts and nothing rolls
- *     row by row. Once React is attached it does fire ONE scroll event, which the
- *     settle test at the bottom records on both engines and relies on.
+ *     row by row. The write always fires ONE scroll event; hydration is only what
+ *     attaches React's `onScroll` to it. The settle test at the bottom records that
+ *     event on both engines and relies on it.
  *   - CDP `Input.dispatchTouchEvent` works from mid-list but is swallowed on the
  *     first gesture and will not engage a compositor scroll that BEGINS at
  *     scrollTop 0 (a CDP quirk — a real finger scrolls down from the top on the
@@ -33,7 +34,8 @@ import { awaitClientHandover } from "./support/hydrated"
  * just written down: the webkit project is a mobile device profile, where
  * `mouse.wheel` throws "Mouse wheel is not supported in mobile WebKit". Every webkit
  * run failed on it deterministically — retries only made it fail three times
- * instead of once. The KEYBOARD test at the bottom needs no wheel and runs on both.
+ * instead of once. The KEYBOARD and SETTLE tests at the bottom need no wheel and run
+ * on both.
  */
 
 test.use({ viewport: { width: 390, height: 844 } })
