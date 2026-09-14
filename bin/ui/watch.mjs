@@ -61,6 +61,7 @@ function Keys({ keys, available }) {
 
 /**
  * `! config change  · press b to rebuild and see the changes`
+ * `! adaptv source change  · restart to apply`
  *
  * ONE `Text` that clips at its end, never a `Box` of them. In a row `Box` every `Text` is a flex
  * item Yoga may shrink, and each one then wraps inside its own sliver of the row, so a notice
@@ -72,17 +73,32 @@ function Keys({ keys, available }) {
  * That was 40 columns for `config change`, and 80 for the real `config + native change · ios,
  * android`. A live row is one physical line (R10, R44), so the notice is one clipping `Text`:
  * the glyph and the cause come first and survive, the action yields its tail.
+ *
+ * `restart` is the notice whose fix `b` cannot apply: a change to adaptv's OWN source, which this
+ * process loaded at startup, so a rebuild reruns the old logic (R54). It offers no key at all.
+ * Same words as `liveWatcher` in `render.mjs`, which draws this block for `dev web`, and the
+ * same rule: each notice brings its own action, so a later one replaces both.
  */
-function Notice({ text }) {
+function Notice({ text, restart }) {
   return h(
     Text,
     { wrap: "truncate-end" },
     h(Text, { ...ROLE.notice.text }, GLYPH.notice),
     h(Text, null, " "),
     h(Text, { bold: true }, text),
-    h(Text, { ...ROLE.quiet.text }, "  · press "),
-    h(Text, { ...ROLE.key.text }, "b"),
-    h(Text, { ...ROLE.quiet.text }, " to rebuild and see the changes"),
+    restart
+      ? h(Text, { ...ROLE.quiet.text }, "  · restart to apply")
+      : h(
+          Text,
+          null,
+          h(Text, { ...ROLE.quiet.text }, "  · press "),
+          h(Text, { ...ROLE.key.text }, "b"),
+          h(
+            Text,
+            { ...ROLE.quiet.text },
+            " to rebuild and see the changes",
+          ),
+        ),
   )
 }
 
@@ -108,7 +124,11 @@ function Activity({ changed, keys, available }) {
  */
 function Watch({ bus, keys, available }) {
   const { exit } = useApp()
-  const [state, setState] = useState({ notice: null, changed: null })
+  const [state, setState] = useState({
+    notice: null,
+    restart: false,
+    changed: null,
+  })
 
   useEffect(() => bus.subscribe(setState), [bus])
 
@@ -145,7 +165,9 @@ function Watch({ bus, keys, available }) {
   return h(
     Box,
     { flexDirection: "column", marginLeft: 2 },
-    state.notice ? h(Notice, { text: state.notice }) : null,
+    state.notice
+      ? h(Notice, { text: state.notice, restart: state.restart })
+      : null,
     //A SPACE, not an empty string: Ink measures a `<Text></Text>` as no rows at all, so the
     //blank this block has always meant to draw never reached the terminal and the notice sat
     //flat against the keys row (R64).
@@ -167,7 +189,7 @@ export function inkWatcher({
   onQuit,
 } = {}) {
   let listener = null
-  let state = { notice: null, changed: null }
+  let state = { notice: null, restart: false, changed: null }
   const push = (next) => {
     state = { ...state, ...next }
     listener?.(state)
@@ -195,8 +217,11 @@ export function inkWatcher({
 
   return {
     hmr: (files) => push({ changed: files }),
-    notice: (text) => push({ notice: text }),
-    clearNotice: () => push({ notice: null }),
+    //The text and its action travel together, so a notice that omits `restart` is a rebuild
+    //notice again rather than inheriting the last one's action — `liveWatcher` does the same.
+    notice: (text, { restart = false } = {}) =>
+      push({ notice: text, restart }),
+    clearNotice: () => push({ notice: null, restart: false }),
     //Erase-then-unmount, and the order is the whole bug — see `eraseRegion`. This block is
     //ALSO what `rewindLines` counts back from: `r`/`b` walk the cursor up over the blank
     //separator and one row per platform so the settled platform lines animate again in place.
