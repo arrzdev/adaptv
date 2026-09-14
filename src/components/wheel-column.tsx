@@ -118,12 +118,13 @@ export function WheelColumn({
   //lands while the first roll is still travelling, and counting from the centred row
   //then would swallow it
   const keyTargetRef = useRef<number | null>(null)
-  //the value as of the latest commit, for the settle timer: that timer was armed by
-  //the scroll that reported a row, in the render BEFORE the consumer stored it, so
-  //its own `value` would call the stored row new and report it a second time
-  const valueRef = useRef(value)
+  //the settle as of the latest commit, for the timers to call: a timer is armed in the
+  //render BEFORE the consumer stores the row it reported (or clamps a day the month no
+  //longer has), and that render's own commit would read its stale value, items and
+  //onChange — reporting the stored row a second time, or a row that left the list
+  const commitRef = useRef(() => {})
   useLayoutEffect(() => {
-    valueRef.current = value
+    commitRef.current = commit
   })
 
   const selectedIndex = Math.max(
@@ -219,7 +220,7 @@ export function WheelColumn({
       }
     }
     const next = items[index]
-    if (next && next.value !== valueRef.current) onChange(next.value)
+    if (next && next.value !== value) onChange(next.value)
   }
 
   function handleScroll() {
@@ -237,7 +238,7 @@ export function WheelColumn({
     // while a finger is down, leave the wheel free; the timer also keeps
     // resetting through the snap glide, so we settle only once it idles
     if (draggingRef.current) return
-    commitTimer.current = window.setTimeout(commit, 120)
+    commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
   }
 
   // touch (not pointer) events: iOS fires pointercancel mid-scroll, which would
@@ -254,7 +255,7 @@ export function WheelColumn({
     if (!draggingRef.current) return
     draggingRef.current = false
     window.clearTimeout(commitTimer.current)
-    commitTimer.current = window.setTimeout(commit, 120)
+    commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
   }
 
   //iOS-native affordance: tapping a row rolls it into the center. The smooth
