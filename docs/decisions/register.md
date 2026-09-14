@@ -423,12 +423,22 @@ So `useFreezeViewport` is **not** replaceable by a declarative primitive yet on 
 
 ### 5.0.3 Platform findings that validate or correct existing code
 
-**✅ Validated — the `display-mode` decision was right, for a reason adaptv didn't know.** `utils.css`
-avoids `@media (display-mode: standalone)` as the sole signal because "a native WebView lies about it."
-It's worse than that: **in an installed iOS web app with `display: standalone`, `display-mode: standalone`
-is `false` and `display-mode: fullscreen` is `true`** — [WebKit 264218](https://bugs.webkit.org/show_bug.cgi?id=264218),
-NEW/unassigned since 2023. The pre-paint `data-adaptv-platform` stamp is the correct primary signal on
-*both* counts. Keep `window.navigator.standalone` as a fallback (non-standard, undocumented, still works).
+**✅ Validated — the `display-mode` decision was right.** `utils.css` avoids
+`@media (display-mode: standalone)` as the sole signal because a native WebView lies about it (it reports
+`display-mode: browser`), so the pre-paint `data-adaptv-platform` stamp stays the primary signal.
+
+**Corrected 2026-09-14: an installed iOS web app does match `display-mode: standalone`.** This entry used to
+add a second reason, that such an app matches `display-mode: fullscreen` instead
+([WebKit 264218](https://bugs.webkit.org/show_bug.cgi?id=264218), reported on iOS 17 in 2023, still NEW).
+Its `standalone` half did not hold on the builds measured. A static page with a manifest
+`display: standalone`, `apple-mobile-web-app-capable` and the `black-translucent` status-bar style adaptv
+ships was added to the Home Screen through Safari's Share sheet and opened from its
+icon. Its first script, at 15 ms on an iPhone 17 simulator on iOS 26.1 (`23B86`) and at 23 ms on an iPhone 16
+simulator on iOS 18.0 (`22A3351`), printed `matchMedia('(display-mode: standalone)').matches` **true** and
+`navigator.standalone` **true**, and both stayed true at the first `resize` and 3 s in. The same page in a
+Safari tab printed false for both. The installed playground read the same pair from a `<head>` script on one
+cold launch on iOS 26.1 on 2026-09-14. Not measured: `display-mode: fullscreen` itself, iOS 17, and iPadOS. Keep
+`window.navigator.standalone` as a fallback (non-standard and undocumented, but true on both builds).
 
 **⚠︎ iOS 26 changed installability entirely.** Every home-screen add now opens as a web app —
 `apple-mobile-web-app-capable` and a manifest `display` are no longer *required* for standalone. Ship
