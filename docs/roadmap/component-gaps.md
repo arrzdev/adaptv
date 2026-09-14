@@ -38,7 +38,20 @@ rather than assumed.
 grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
 
 **`Slider` and a real `Select` are the clearest holes in the form-control set** — adaptv has
-button / input / textarea / checkbox / switch and stops. `WheelColumn` is a partial `Picker`.
+button / input / textarea / checkbox / switch / radio group and stops. `WheelColumn` is a partial
+`Picker`.
+
+**`RadioGroup` shipped** (`src/components/radio-group.tsx`, lab page `/lab/radio-group`), on the two
+quirks it owns. **Radios are keyed on `name`** within one document or form, so each instance with no
+`name` takes an id-derived one and two mounted groups never clear each other; an explicit `name` is
+kept for form submission. **A clipped `sr-only` input is a speck-sized accessibility frame** on iOS
+Safari (PR #132 measured it on `Switch` and `Checkbox`), so each native radio lies invisibly over its
+whole item. Everything else is the browser's radio: arrow keys, Space, disabled options, `required`
+and `FormData`. Selection is the input's `change` event rather than the gesture engine's release,
+because a radio's activation is idempotent and every non-pointer path (arrow keys, assistive tech,
+an outer label) arrives as a click no press produced. Measured and left native, in
+`playground/e2e/radio-group.spec.ts`: past the last radio Chromium wraps and WebKit stops; under RTL
+Chromium flips ArrowLeft/ArrowRight and WebKit does not; WebKit's default Tab order skips radios.
 
 ## Tier 2 — the feedback layer
 

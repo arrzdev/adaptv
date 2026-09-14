@@ -77,6 +77,12 @@ const COMPONENTS = [
     isNew: false,
   },
   {
+    to: "/lab/radio-group",
+    title: "RadioGroup",
+    summary: "two groups never share a name · the radio covers its item",
+    isNew: true,
+  },
+  {
     to: "/lab/fields",
     title: "Input & TextArea",
     summary: "slots, submit key, autoResize · and the caret patch",

@@ -12,6 +12,7 @@ import { UiNotFound } from "#adaptv/components/not-found"
 import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
+import { RadioGroup } from "#adaptv/components/radio-group"
 import { ScrollView } from "#adaptv/components/scroll-view"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
@@ -91,6 +92,12 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["text-area", <TextArea key="text-area" />],
   ["checkbox", <Checkbox key="checkbox" />],
   ["switch", <Switch key="switch" />],
+  [
+    "radio-group",
+    <RadioGroup key="radio-group" aria-label="r">
+      <RadioGroup.Item value="a">a</RadioGroup.Item>
+    </RadioGroup>,
+  ],
   [
     "external-link",
     <ExternalLink key="external-link" href="https://a.dev" />,
