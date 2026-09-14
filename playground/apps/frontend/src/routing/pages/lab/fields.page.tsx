@@ -156,16 +156,22 @@ function LabFieldsPage() {
       </LabSection>
 
       <LabSection
-        title="TextArea — the app's wrapper, fixed rows"
-        description="No autoResize: a four-row box that scrolls. The comparison is the point — one of these must move as you type and the other must not."
+        title="TextArea — the app's wrapper, fixed height"
+        description="autoResize={false}: the field fills a parent sized to about four lines and the text scrolls inside it. The comparison is the point — the field above must move as you type and this one must not."
       >
-        <TextArea
-          value={long}
-          onChange={setLong}
-          rows={4}
-          placeholder="Same value, fixed height"
-          aria-label="Fixed text area"
-        />
+        {/*
+         * The height is on a parent, not the field's className: with autoResize off
+         * the shell's h-full is locked and out-merges a className height.
+         */}
+        <div className="h-30">
+          <TextArea
+            autoResize={false}
+            value={long}
+            onChange={setLong}
+            placeholder="Same value, fixed height. It must never grow."
+            aria-label="Fixed-height text area"
+          />
+        </div>
       </LabSection>
 
       <LabSection title="Disabled">
