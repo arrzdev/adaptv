@@ -235,7 +235,26 @@ The answers disagree in ways that change code:
 One related measurement, from the iOS 16.2 simulator on 2026-09-13: Safari against the dev server
 drops Tailwind's `rtl:` variants and some callout text. The dev stylesheet keeps native CSS nesting
 (`&:where(...)`), which WebKit parses only from 16.5, while the production build flattens it. So
-below 16.5 a device can verify only the production build, whatever floor is chosen.
+below 16.5 a device can verify only the production build, whatever floor is chosen (open PR #213
+flattens the dev stylesheet too).
+
+What staying below 16.4 costs in CSS, read off main's production build on 2026-09-14 (the web and
+capacitor stylesheets are byte-identical). None of it is verified on a device, because the lowest
+simulator here is iOS 16.2:
+- **Range media queries.** Vite's default CSS target (Safari 16.4) leaves 13 `(width >= …)` queries,
+  which match nothing below 16.4, so every `sm:`/`md:` breakpoint is dead on 15.x and 16.0–16.3.
+  #121 lowers them.
+- **Alpha colours over a variable token.** `bg-x/15` over an `@theme inline { --color-x: var(--x) }`
+  token has no computable fallback, so below 16.2 it paints at full opacity. The playground has 31,
+  and a lab badge's text disappears into its background. No build pass fixes it; literal colours or
+  dedicated subtle tokens do.
+- **`in oklab` gradients.** `bg-gradient-to-b` emits an unguarded interpolation that 15.x drops,
+  painting nothing (the playground's 404 numerals). Plain gradients fix it.
+- **The `lh` unit** needs 16.4.
+
+adaptv's own `src/` ships none of the four: its only alpha classes (`bg-black/40` in the drawer,
+`bg-slate-900/60` in its chrome tint) use literal colours, which Tailwind gives literal fallbacks. The
+cost lands on consumer styling written the Tailwind v4 and shadcn way.
 
 Decided by: whether the floor is the oldest OS the shipped bundle runs on, which the native
 deployment target has to match, or the oldest OS the design may lean on without a fallback. It
