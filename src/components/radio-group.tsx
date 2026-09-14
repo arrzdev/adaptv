@@ -18,6 +18,7 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useReducer,
   useRef,
   useState,
 } from "react"
@@ -100,10 +101,17 @@ export interface RadioGroupProps
   > {
   /** Controlled selected value; `null` selects nothing. */
   value?: string | null
-  /** Initial selected value when uncontrolled. */
+  /**
+   * Initial selected value when uncontrolled. In both modes, what a reset of the
+   * owning form restores: omit it and a reset leaves no choice.
+   */
   defaultValue?: string | null
-  /** Fired once per selection the user makes; receives the item's value. */
-  onValueChange?: (value: string) => void
+  /**
+   * Fired once per selection the user makes, with the item's value. A reset of the
+   * owning form that moves the group fires it too, with `defaultValue` or `null`;
+   * a controlled owner decides whether to take it, as with any other change.
+   */
+  onValueChange?: (value: string | null) => void
   /**
    * The radios' `name`, and the key their value is submitted under in a form.
    *
@@ -235,7 +243,7 @@ const PRESS_CLICK_WINDOW_MS = 1000
 const RadioGroupContext = createContext<
   | (RadioGroupContextValue & {
       form: string | undefined
-      /** What a form reset restores: `defaultValue`, or the owner's `value`. */
+      /** What a form reset restores: `defaultValue`, or no choice. */
       resetValue: string | null
       select: (value: string) => void
     })
@@ -619,16 +627,32 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
     const isRequired = Boolean(required)
     const rootRef = useRef<HTMLDivElement>(null)
 
+    //What the reset listener acts on, read a task after the event: the latest
+    //render's, so a render between the reset and that task cannot make it stale.
+    const latest = useRef({
+      isControlled,
+      value,
+      defaultValue,
+      onValueChange,
+    })
+    latest.current = { isControlled, value, defaultValue, onValueChange }
+    //a render with no new value: React writes every radio's `checked` back from it
+    const [, rewriteRadios] = useReducer((n: number) => n + 1, 0)
+
     //A reset of the form that owns the radios (an ancestor, or the one `form`
-    //names) puts the DOM back on the reset value but fires no `change`, so an
-    //uncontrolled group would keep painting and reporting the last choice while
-    //FormData submits another. Follow the reset: once the browser has run it (the
-    //event is cancelable and fires before the controls reset, so read the DOM a
-    //task later), take the selection from the radios. A controlled group needs no
-    //listener: its reset value is its `value`, so the DOM does not move.
+    //names) puts each radio back on its `defaultChecked`, which every item keeps
+    //on the group's `defaultValue`, and fires no `change`. The group follows it a
+    //task after the event: the event is cancelable and fires before the controls
+    //reset, and a consumer's `onReset` may still cancel it. The reset value is
+    //`defaultValue`, or no choice, and it is never read back from the DOM: a
+    //render in between writes the OLD selection back into `checked`.
+    //Uncontrolled, the group takes the reset value as its state. Controlled, it
+    //reports the reset value like any other change and writes no state; if the
+    //owner ignores it, the forced render writes the owner's `value` back over
+    //what the browser reset.
     useEffect(() => {
       const root = rootRef.current
-      if (isControlled || !root) return
+      if (!root) return
       const doc = root.ownerDocument
       let timer: ReturnType<typeof setTimeout> | undefined
       const onReset = (event: Event) => {
@@ -639,20 +663,28 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
         clearTimeout(timer)
         timer = setTimeout(() => {
           if (event.defaultPrevented) return
-          const checked = root.querySelector<HTMLInputElement>(
-            'input[type="radio"]:checked',
-          )
-          setUncontrolledValue(checked ? checked.value : null)
+          const now = latest.current
+          if (!now.isControlled) {
+            setUncontrolledValue(now.defaultValue)
+            return
+          }
+          //as a click on the selected item: no change, no report
+          if (now.value === now.defaultValue) return
+          now.onValueChange?.(now.defaultValue)
+          rewriteRadios()
         }, 0)
       }
-      //capture on the document: `reset` does not bubble in the spec, and the form
-      //may be anywhere in the document when `form` names it
+      //`reset` bubbles, but the listener is on the document for two other reasons:
+      //the form may be anywhere in the document when `form` names it, and in the
+      //capture phase it runs before a consumer's React `onReset`, which React 19
+      //dispatches from its bubble-phase listener on the root container (`reset` is
+      //a delegated event). That `preventDefault` is why the verdict waits a task.
       doc.addEventListener("reset", onReset, true)
       return () => {
         clearTimeout(timer)
         doc.removeEventListener("reset", onReset, true)
       }
-    }, [isControlled])
+    }, [])
 
     useImperativeHandle(
       ref,
@@ -697,7 +729,7 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
           isRequired,
           size,
           form,
-          resetValue: isControlled ? controlledValue : defaultValue,
+          resetValue: defaultValue,
           select,
         }}
       >
