@@ -45,7 +45,7 @@
 | 🧾 **One config file** | `adaptv.config.ts` generates the web manifest, native projects, launch screens, icons, theme and service worker. There is no second config. |
 | 🖼️ **A frame you inherit** | The shell owns the document, critical CSS, the pre-paint theme stamp, safe areas and the edge-to-edge frame. Your route root is just a `View`. |
 | 🧱 **Primitives that carry the divergences** | `View` · `List` · `Drawer` · `Swipeable` · `PullToRefresh` · `WheelColumn` · `Image` · `Input` · `ScrollView` — plus offline, not-found and boot-error screens. |
-| 🔌 **Capabilities, branch already taken** | 20 modules and 41 hooks: haptics, keyboard, network, clipboard, share, compose, geolocation, orientation, status bar, back. Web and native branches, chosen internally. |
+| 🔌 **Capabilities, branch already taken** | 20 modules and 41 hooks: haptics, keyboard, network, print, clipboard, share, geolocation, orientation, status bar, back. Web and native branches, chosen internally. |
 | 💾 **Storage in three tiers** | Sync key-value · async blob store · secure, on the platform keychain — and documented *best-effort, not secure*, on the web. |
 | 📡 **Offline and updates** | A framework-owned service worker, plus a self-hosted **signed** over-the-air update channel for installed apps. |
 | 🎨 **Icons from one image** | The whole set, including iOS's dark and tinted variants and Android's themed icon, sized against the mask each platform actually applies. |

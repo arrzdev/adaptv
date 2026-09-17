@@ -79,10 +79,13 @@ export function LabRow({
   label,
   value,
   hint,
+  testId,
 }: {
   label: string
   value: ReactNode
   hint?: ReactNode
+  /** Lands on the value span as `data-testid`, so a spec reads the value alone. */
+  testId?: string
 }) {
   const missing = value === null || value === undefined || value === ""
   return (
@@ -97,6 +100,7 @@ export function LabRow({
          * broken component rather than as elided text. Rich values wrap instead.
          */}
         <span
+          data-testid={testId}
           className={cn(
             "min-w-0 text-end font-mono text-sm",
             typeof value === "string" || missing
@@ -177,7 +181,6 @@ export function LabButton({
   onClick,
   disabled,
   tone = "default",
-  pressed,
   testId,
   children,
   "data-testid": testId,
@@ -185,12 +188,7 @@ export function LabButton({
   onClick: () => void
   disabled?: boolean
   tone?: "default" | "danger"
-  /**
-   * The selected member of a segmented row — `aria-pressed` plus a primary
-   * ring, so a row of options shows which one is live without a badge.
-   */
-  pressed?: boolean
-  /** A stable handle for an e2e, where the label is the thing under test. */
+  /** Lands on the button as `data-testid`. */
   testId?: string
   children: ReactNode
   /** A stable hook for e2e, for a page whose buttons share a visible label. */
