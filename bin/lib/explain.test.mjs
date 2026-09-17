@@ -1,7 +1,22 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest"
-import { explainFailure, toolErrorParts } from "./explain.mjs"
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { exec } from "./exec.mjs"
+import {
+  explainFailure,
+  toolErrorParts,
+  withoutAbsolutePaths,
+} from "./explain.mjs"
 import { namesPlumbing } from "./opacity.mjs"
+import { runLine } from "./render.mjs"
 import { errorTail } from "./tool-log.mjs"
 
 /**
@@ -277,5 +292,298 @@ describe("an iOS build with no platform to build against (R61)", () => {
     const { reason, detail } = explainFailure("ios")(err)
     expect(reason).toBe("something no recogniser here has met yet")
     for (const line of detail) expect(line).not.toContain("{ platform:")
+  })
+})
+
+//Built rather than written as a literal: a raw ESC inside a regex trips
+//lint/suspicious/noControlCharactersInRegex.
+const ESC_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
+
+/**
+ * The row a failed lane actually settles on, from both streams, colour stripped — the step
+ * run through `runLine` with this explainer, the way every native lane is. The assertions
+ * below are about what the dev READS, and a `{ reason }` object is not that.
+ */
+async function renderedFailure(label, err, appRoot) {
+  const lines = []
+  const take = (s) => {
+    lines.push(...String(s).replace(ESC_SGR, "").split("\n"))
+    return true
+  }
+  const spies = [
+    vi.spyOn(process.stdout, "write").mockImplementation(take),
+    vi.spyOn(process.stderr, "write").mockImplementation(take),
+  ]
+  try {
+    await runLine(
+      label,
+      async () => {
+        throw err
+      },
+      { explain: explainFailure(label, appRoot) },
+    ).catch(() => {})
+  } finally {
+    for (const s of spies) s.mockRestore()
+  }
+  const at = lines.findIndex((l) => l.includes("✖"))
+  return {
+    row: lines[at] ?? "",
+    detail: lines
+      .slice(at + 1)
+      .map((l) => l.trim())
+      .filter(Boolean),
+  }
+}
+
+const glyphs = (row) => row.split("✖").length - 1
+
+/**
+ * Captured from the native CLI's own task chain and logger — its `runTask`, `runCommand`,
+ * `fatal` and `logger.error`, the path `run ios` takes — spawned through adaptv's `exec` and
+ * narrowed by `errorTail`, 2026-09-13. The runner's framing is its real bytes; the xcodebuild
+ * body inside it is xcodebuild-SHAPED (a run-script phase failure), since no native build ran.
+ */
+const CAP_RUN_XCODEBUILD_FAILED = [
+  "✖ Running xcodebuild - failed!",
+  "        Command PhaseScriptExecution failed with a nonzero exit code",
+  "        ** BUILD FAILED **",
+  "        The following build commands failed:",
+  "        PhaseScriptExecution [CP]\\ Embed\\ Pods\\ Frameworks /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzbvkdqcbzjtcfdzgtmbnaaaqyb/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Script-9592DBEFFC6D2A0C8D5DEB22.sh (in target 'App' from project 'App')",
+  "        (1 failure)",
+].join("\n")
+
+const capRunFailed = (tail) => {
+  const err = new Error(
+    "node cap.mjs run ios --no-sync exited with code 1",
+  )
+  err.tail = tail
+  return err
+}
+
+describe("a native runner's own verdict is not the reason (R2)", () => {
+  it("settles a failed iOS run on ONE failure mark and the tool's sentence", async () => {
+    const { row } = await renderedFailure(
+      "ios",
+      capRunFailed(CAP_RUN_XCODEBUILD_FAILED),
+    )
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(
+      /✖ ios {2}Command PhaseScriptExecution failed with a nonzero exit code · \d+ms$/,
+    )
+  })
+
+  it("never puts the runner's verdict in the detail either", async () => {
+    const { detail } = await renderedFailure(
+      "ios",
+      capRunFailed(CAP_RUN_XCODEBUILD_FAILED),
+    )
+    for (const line of detail) {
+      expect(line).not.toContain("- failed!")
+      expect(glyphs(line)).toBe(0)
+    }
+  })
+
+  it("says which step failed when the verdict is all the tail holds", async () => {
+    const { row } = await renderedFailure(
+      "ios",
+      capRunFailed("✖ Running xcodebuild - failed!"),
+    )
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(/✖ ios {2}xcodebuild failed · \d+ms$/)
+  })
+
+  it("does not settle a failure on a step that passed, nor on a log tag", async () => {
+    //No line here says `error:`, so the pick falls back to the raw tail — which is where a
+    //passing step's verdict, and the logger's `[error]` tag, would have been lifted from.
+    const { row } = await renderedFailure(
+      "android",
+      capRunFailed(
+        [
+          "✔ Copying web assets from web to android/app/src/main/assets/public in 12.34ms",
+          "[error] The web assets directory must contain an index.html file.",
+        ].join("\n"),
+      ),
+    )
+    expect(row).toMatch(
+      /✖ android {2}The web assets directory must contain an index\.html file\. · \d+ms$/,
+    )
+  })
+})
+
+/**
+ * xcodebuild-SHAPED, from `build ios` (xcodebuild run directly on `.adaptv/ios`) with the pods
+ * never installed: the reason names the file list by its absolute path, spaces unescaped inside
+ * quotes. Laid out as `errorTail` leaves it; no native build ran to capture it.
+ */
+const APP_ROOT = "/Users/arrz/Documents/Github/chopchop"
+const XCODEBUILD_FILE_LIST = [
+  `error: Unable to load contents of file list: '${APP_ROOT}/.adaptv/ios/App/Pods/Target Support Files/Pods-App/Pods-App-frameworks-Release-input-files.xcfilelist' (in target 'App' from project 'App')`,
+].join("\n")
+
+describe("a tool's paths reach the page app-root-relative or not at all (R9)", () => {
+  it("names a file under the app the way an artifact row does", async () => {
+    const err = new Error("xcodebuild exited with code 65")
+    err.tail = XCODEBUILD_FILE_LIST
+    const { row } = await renderedFailure("ios", err, APP_ROOT)
+    expect(row).toContain(
+      "Unable to load contents of file list: '.adaptv/ios/App/Pods/Target Support Files/Pods-App/Pods-App-frameworks-Release-input-files.xcfilelist'",
+    )
+    expect(row).not.toContain("/Users/")
+  })
+
+  it("cuts a DerivedData path outside the app to its file name", async () => {
+    const { row, detail } = await renderedFailure(
+      "ios",
+      capRunFailed(CAP_RUN_XCODEBUILD_FAILED),
+      APP_ROOT,
+    )
+    for (const line of [row, ...detail])
+      expect(line).not.toMatch(/\/Users\//)
+    expect(detail).toContain(
+      "PhaseScriptExecution [CP]\\ Embed\\ Pods\\ Frameworks Script-9592DBEFFC6D2A0C8D5DEB22.sh (in target 'App' from project 'App')",
+    )
+  })
+
+  //A dev server's module id, a route, an API path and a regex all start with `/` and are the
+  //dev's own words about their app. Cutting them to a last segment made one of them false.
+  it.each([
+    [
+      "a dev server's module id",
+      "Error: Failed to load url /src/routes/cart.tsx (resolved id: /src/routes/cart.tsx)",
+      "Failed to load url /src/routes/cart.tsx (resolved id: /src/routes/cart.tsx)",
+    ],
+    [
+      "a route",
+      "Error: No route matched /products/featured/42",
+      "No route matched /products/featured/42",
+    ],
+    [
+      "an API path",
+      "Error: GET /api/orders/7 returned 500",
+      "GET /api/orders/7 returned 500",
+    ],
+    [
+      "a regex literal",
+      "Error: the 'include' pattern /^foo$/g matched no files",
+      "the 'include' pattern /^foo$/g matched no files",
+    ],
+    [
+      "a route under a Linux root's name",
+      "Error: No route matched /home/feed/3",
+      "No route matched /home/feed/3",
+    ],
+    [
+      "an API path under a Linux root's name",
+      "Error: GET /dev/tools/1 500",
+      "GET /dev/tools/1 500",
+    ],
+  ])(
+    "leaves %s whole, since it is not a file on disk",
+    async (_, tail, reason) => {
+      const err = new Error("vite build exited with code 1")
+      err.tail = tail
+      const { row } = await renderedFailure("web", err, APP_ROOT)
+      expect(row).toContain(`✖ web  ${reason} · `)
+    },
+  )
+
+  it("keeps a locator's line and column and a URL whole", () => {
+    expect(
+      withoutAbsolutePaths(
+        `${APP_ROOT}/ios/App/App/AppDelegate.swift:54:32: warning: x`,
+        APP_ROOT,
+      ),
+    ).toBe("ios/App/App/AppDelegate.swift:54:32: warning: x")
+    expect(
+      withoutAbsolutePaths(
+        "every request to http://localhost:41730/cart answered 500",
+        APP_ROOT,
+      ),
+    ).toBe("every request to http://localhost:41730/cart answered 500")
+    expect(
+      withoutAbsolutePaths(
+        `at run (file://${APP_ROOT}/src/vite/plugin.ts:23:15)`,
+        APP_ROOT,
+      ),
+    ).toBe("at run (src/vite/plugin.ts:23:15)")
+  })
+})
+
+/** Same capture as {@link CAP_RUN_XCODEBUILD_FAILED}: the runner spawning a `./gradlew` with no exec bit. */
+const CAP_RUN_GRADLEW_EACCES = [
+  "✖ Running Gradle build - failed!",
+  "[error] Command error. Error: spawn ./gradlew EACCES",
+].join("\n")
+
+describe("a gradle wrapper that cannot be started says so, and what to do", () => {
+  const roots = []
+  afterEach(() => {
+    for (const dir of roots.splice(0))
+      rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** A real `.adaptv/android/gradlew` without its exec bit, spawned the way `build android` does. */
+  async function spawnLockedWrapper(parent = tmpdir()) {
+    const appRoot = mkdtempSync(path.join(parent, "adaptv-gradlew-"))
+    roots.push(appRoot)
+    const android = path.join(appRoot, ".adaptv", "android")
+    mkdirSync(android, { recursive: true })
+    writeFileSync(path.join(android, "gradlew"), "#!/bin/sh\nexit 0\n")
+    chmodSync(path.join(android, "gradlew"), 0o644)
+    const err = await exec(
+      path.join(android, "gradlew"),
+      ["assembleDebug"],
+      {
+        cwd: android,
+      },
+    ).catch((e) => e)
+    return { appRoot, err }
+  }
+
+  it("names the file, relative to the app, as not executable", async () => {
+    const { appRoot, err } = await spawnLockedWrapper()
+    const { row } = await renderedFailure("android", err, appRoot)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+  })
+
+  it("carries the action that still works when adaptv could not restore it", async () => {
+    const { appRoot, err } = await spawnLockedWrapper()
+    const { detail } = await renderedFailure("android", err, appRoot)
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
+  })
+
+  it("names it the same when the app lives under a directory with a space", async () => {
+    //Node does not quote the path in `spawn <file> EACCES`, and `My Apps` or iCloud's
+    //`Mobile Documents` is an ordinary place for an app to be.
+    const parent = mkdtempSync(path.join(tmpdir(), "adaptv-My Apps-"))
+    roots.push(parent)
+    const { appRoot, err } = await spawnLockedWrapper(parent)
+    expect(appRoot).toContain(" ")
+    const { row, detail } = await renderedFailure("android", err, appRoot)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
+  })
+
+  it("reads the same through the native runner, which spawns it as ./gradlew", async () => {
+    const err = new Error(
+      "node cap.mjs run android --no-sync exited with code 1",
+    )
+    err.tail = CAP_RUN_GRADLEW_EACCES
+    const { row, detail } = await renderedFailure("android", err, APP_ROOT)
+    expect(glyphs(row)).toBe(1)
+    expect(row).toMatch(
+      /✖ android {2}\.adaptv\/android\/gradlew is not executable · \d+ms$/,
+    )
+    expect(detail).toEqual([
+      "Delete .adaptv/android and run again. adaptv regenerates it.",
+    ])
   })
 })
