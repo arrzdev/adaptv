@@ -989,9 +989,11 @@ What it asserts, and why each one earns its runtime:
   **outside** the precache glob — a route that merely 404s would not be the same test.
 - **preload** — enabled under `ssr`, actively disabled under `spa`, read from
   `navigationPreload.getState()` (§3.3).
-- **offline** — a **never-visited** route boots with `transferSize: 0`, every icon the head links still
-  loads, with a control proving the origin is genuinely unreachable, and a file link fails rather than
-  falling back to the shell.
+- **offline** — a **never-visited** route boots with `transferSize: 0`, with a control proving the
+  origin is genuinely unreachable, and a file link fails rather than falling back to the shell. An
+  `/assets/` file **outside** the precache glob (a `lab-photo-*.jpg` on `/lab/image`) that rendered
+  online renders offline, answered by the worker from the runtime static route's cache (§3.3), with
+  checks that it is not precached and that the route filed it before the network went.
 - **update** — a real second `vite build` mid-test, then: the new worker is noticed, is **held** for
   the session that found it, and is applied at the next launch, sweeping a planted `static-<old-tag>`
   cache while leaving a foreign cache alone (§3.4, `docs/decisions/register.md` B2). `ADAPTV_BUILD_TAG` is what makes
