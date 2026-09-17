@@ -255,10 +255,10 @@ describe("the serviceWorkerUpdate signal", () => {
 })
 
 describe("the stale-chunk net", () => {
-  it("is armed on every branch and reloads once, never twice", async () => {
-    //Armed before the native and dev early-returns, because a stale chunk is a
-    //deploy artifact, not a worker one. The second failure must not reload: a
-    //genuinely missing chunk would otherwise spin the browser. → register.md B4
+  it("is not the worker runtime's on any branch", async () => {
+    //A stale chunk is a deploy artifact, not a worker one, so the shell arms the one
+    //net on every target (shell-layout.test.tsx pins native, dev and web). A second
+    //listener here reloaded under the shell's offline screen. → register.md B4
     for (const setup of [
       () => {},
       () => {
@@ -274,15 +274,14 @@ describe("the stale-chunk net", () => {
       const { registerPwaServiceWorkerRuntime } = await loadShell()
       registerPwaServiceWorkerRuntime()
 
-      const first = new Event("vite:preloadError", { cancelable: true })
-      window.dispatchEvent(first)
-      window.dispatchEvent(
-        new Event("vite:preloadError", { cancelable: true }),
-      )
+      const stale = new Event("vite:preloadError", { cancelable: true })
+      window.dispatchEvent(stale)
 
-      //defaultPrevented stops Vite rethrowing it as an unhandled rejection
-      expect(first.defaultPrevented).toBe(true)
-      expect(reload).toHaveBeenCalledOnce()
+      expect(stale.defaultPrevented).toBe(false)
+      expect(reload).not.toHaveBeenCalled()
+      expect(listeners.map(([type]) => type)).not.toContain(
+        "vite:preloadError",
+      )
 
       for (const [type, listener] of listeners.splice(0))
         window.removeEventListener(type, listener)
