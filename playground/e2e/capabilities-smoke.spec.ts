@@ -50,7 +50,7 @@ const PAGES = [
   ["/lab/locale", "Locale"],
   ["/lab/orientation", "Orientation"],
   ["/lab/keep-awake", "Keep awake"],
-  ["/lab/filesystem", "Filesystem"],
+  ["/lab/speech", "Speech"],
   ["/lab/app-state", "App state"],
   ["/lab/back-chain", "Back chain"],
   ["/lab/browser", "Browser"],

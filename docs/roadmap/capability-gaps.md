@@ -86,7 +86,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-~~Sensors / motion~~ (shipped 2026-09-02: `src/capabilities/motion.ts` over `devicemotion` on every target, no plugin; `prompt`/`granted`/`denied`/`unsupported`, and `silent` on the hook for a document with the API and no sensor) · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
+Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · ~~speech~~ (shipped 2026-09-02: `src/capabilities/speech.ts` over `speechSynthesis` on web, PWA and iOS, no plugin; `loading`/`ready`/`no-voices`/`unsupported`, and `silent` as a named outcome when the engine takes the utterance and never starts it. **Android native reads `unsupported`**: the Android WebView has no `speechSynthesis` (measured, API 36); the system engine needs a plugin, which is a decision, not a default) ·
 store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 
