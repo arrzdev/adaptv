@@ -507,8 +507,8 @@ ecosystem only.
 | Bottom sheet / Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `Drawer` |
 | Pull-to-refresh | ✅ | ✅ | ✅ (`List.onRefresh`) | ✅ (modifier) | ✅ | | `PullToRefresh` |
 | Icon | (ionicons) | | ✅ | ✅ | ✅ | ✅ | **—** |
-| Collapsible / Accordion | ✅ | | ✅ | ✅ | | | `Collapsible` |
-| **Grouped form / settings list** | ✅ (`ion-list inset`) | | ✅ (`FieldGroup`) | ✅ (`Form`/`Section`) | | | **—** |
+| **Collapsible / Accordion** | ✅ | | ✅ | ✅ | | | **—** |
+| Grouped form / settings list | ✅ (`ion-list inset`) | | ✅ (`FieldGroup`) | ✅ (`Form`/`Section`) | | | `FieldGroup` |
 | **Alert dialog** | ✅ | ✅ (`Alert`) | | ✅ | ✅ | | **—** |
 | **Action sheet / confirmation** | ✅ | ✅ (`ActionSheetIOS`) | | ✅ | | | **—** |
 | **Toast / Snackbar** | ✅ | ✅ (`ToastAndroid`) | | | ✅ | | **—** |
@@ -541,12 +541,12 @@ ecosystem only.
 > reasoning; that file is the remainder, kept current as things ship.
 
 **Tier 1 — in the universal set *and* Ionic, and missing from adaptv:**
-`Slider` · `Collapsible` · grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Select`/`Picker` (menu appearance, not just the wheel) · `Collapsible` · `Icon`.
 
-These are the ones both teams paid the tri-platform tax for. `Select` shipped 2026-09-02
-(`src/components/select.tsx`, the menu appearance; `WheelColumn` stays the wheel), so adaptv's
-form-control set is now button/input/textarea/checkbox/switch/select and `Slider` is its clearest
-remaining hole.
+These are the ones both teams paid the tri-platform tax for. `Slider` and a real `Select` are the
+clearest holes in adaptv's form-control set — it has button/input/textarea/checkbox/switch and stops.
+The grouped-settings form shipped 2026-09-02 as `FieldGroup` (`src/components/field-group.tsx`);
+what it locks and what it refuses is in `../roadmap/component-gaps.md`.
 
 **Tier 2 — every native toolkit has it, Ionic has it, adaptv has none of it: the feedback layer.**
 `Alert` · `ActionSheet` · `Toast` · `Spinner` · `ProgressBar`. Note that Ionic's five overlays all
@@ -692,6 +692,9 @@ on, with the reasoning visible in the types.
     that a *function-shaped* API can be compiled away where an object literal can't.
 16. **Helper exports alongside components** — `getFieldItemPosition(index, total)` ships from
     `FieldGroup` so consumers can build their own rows with correct grouped-list corner radii.
+    adaptv exports the same helper, but only for rows that are not DOM siblings (a virtualised
+    list); sibling rows spell the corners with `first:` / `last:` / `only:`, because
+    `../decisions/styling.md §5.4.1` forbids a `data-position` for what Tailwind already says.
 
 ---
 

@@ -34,10 +34,15 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Slider` · `Collapsible` · grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` · `Icon`.
 
 The form-control set now runs button / input / textarea / checkbox / switch / select. **`Slider` is
 the remaining hole in it**, and the grouped-settings form (`FieldGroup`) is the next one after that.
+
+The grouped-settings form is off the list: **`FieldGroup` shipped 2026-09-02**
+(`src/components/field-group.tsx`, recorded below). `Slider`, `Select` and `Collapsible` each have
+an open PR cut from the same base (#74, #75, #73), so `Icon` is the last Tier 1 hole with nothing
+being built for it.
 
 ## Tier 2 — the feedback layer
 
@@ -96,17 +101,28 @@ where the `font` **shorthand** is required, `font-size` does not work
 line clamping, and per-instance selection semantics. **`Modal` and `Tabs` are the real remainder**
 (Tier 2 and Tier 3 above).
 
-**`Select` shipped 2026-09-02** (`src/components/select.tsx`) — the *menu* appearance; `WheelColumn`
-remains the wheel appearance. It passes the two-quirk test five times over: iOS renders `<select>` as
-a wheel and scrolls the page when it is focused, so `Select` paints its own trigger and an anchored
-listbox on every target and keeps a real `<select>` mounted, hidden and never focused, only so
-`name` / `required` / autofill and form submission still work; hardware and gesture back close the
-list instead of navigating (the Transient band, the rule `Dropdown` records); the list rides the
-`Dropdown` positioning engine (fixed layer, flip, height cap with an inner scroller, shift); the
-keyboard model — arrows that skip disabled options, Home/End, Enter/Space, Escape, typeahead — is
-adaptv's, not the browser's; and options carry the press-core `touch-action` longhand because
-`manipulation` kills `pointercancel` on iOS
-([`../decisions/register.md`](../decisions/register.md) B13).
+**`FieldGroup` shipped 2026-09-02** (`src/components/field-group.tsx`) — the grouped-settings form,
+Ionic's `ion-list inset` and the iOS Settings pattern. It is a compound: `<FieldGroup>`
+(`data-adaptv="field-group"`) holds `<FieldGroup.Section title footer>` (`data-part="section"`, with
+`aria-labelledby` pointing at its own `data-part="header"`), whose rows are the only children of
+`data-part="rows"`, and a `data-part="footer"`; `<FieldGroup.Header>` / `<FieldGroup.Footer>` slots
+beat the shorthand props, the ergonomics `../research/component-surface.md §9` item 12 records.
+`<FieldGroup.Row label description disabled render>` (`data-part="row"`, `data-disabled` and
+`aria-disabled` together) takes an element-only `render` like `Text`
+([`../decisions/styling.md §3.3`](../decisions/styling.md)): `render={<label />}` makes the row its
+control's label, `render={<Link />}` makes it a navigation row. `data-part="label"` / `"title"` /
+`"description"` are the row's parts, with `<FieldGroup.Label>` / `<FieldGroup.Description>` as the
+slots. `getFieldItemPosition(index, total)` ships beside it (item 16 of the same list).
+
+Two things it refuses, on the record so nobody adds them back. **No `data-position` on a row.** Rows
+are the only children of the rows container, so Tailwind's `first:` / `last:` / `only:` already
+spell the grouped corner radii, and [`styling.md §5.4.1`](../decisions/styling.md) forbids inventing
+a name for what Tailwind can already say; the helper stays for rows that are *not* DOM siblings, a
+virtualised list being the case. **The locked minimum on a row is structure only**: the row is
+`flex` and its label column is `flex flex-col`, because leading/trailing and title-over-description
+only exist while those are flex containers. Alignment (`items-center justify-between`) is a default
+the consumer can replace with `items-start`, and every colour, radius, padding and gap is the
+consumer's `className`, per [`styling.md §5.4`](../decisions/styling.md).
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline

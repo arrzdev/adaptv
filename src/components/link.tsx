@@ -1,5 +1,9 @@
 import { Link as RouterLink, useRouter } from "@tanstack/react-router"
-import type { MouseEvent, ReactNode } from "react"
+import type {
+  ComponentPropsWithoutRef,
+  MouseEvent,
+  ReactNode,
+} from "react"
 import { forwardRef, useEffect } from "react"
 import { isExternalUrl } from "#adaptv/capabilities/browser"
 import { ExternalLink } from "#adaptv/components/external-link"
@@ -13,12 +17,20 @@ import { mergeStyles } from "#adaptv/utils/styles"
 //a press held past this is read as a hold, not a tap, and does not navigate
 const HOLD_THRESHOLD_MS = 300
 
-export interface LinkProps {
+export interface LinkProps
+  extends Omit<
+    ComponentPropsWithoutRef<"a">,
+    "href" | "className" | "children" | "onClick"
+  > {
   to: string
   params?: Record<string, string>
   search?: Record<string, unknown>
   className?: string
-  children: ReactNode
+  /**
+   * Optional, because a `Link` is also what a row becomes: `FieldGroup.Row
+   * render={<Link to="…" />}` clones the row's own content in as the children.
+   */
+  children?: ReactNode
   disabled?: boolean
   /**
    * Treat this link as a "back" affordance: on a plain click, if going back in
@@ -99,6 +111,8 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     children,
     disabled = false,
     smartBack = false,
+    "aria-disabled": ariaDisabled,
+    ...rest
   },
   ref,
 ) {
@@ -149,13 +163,14 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   if (isExternalUrl(to)) {
     return (
       <ExternalLink
+        {...rest}
         //"link", not "external-link": the consumer wrote `<Link>`, and which of the
         //two anchors it resolves to is an implementation detail of this component
         data-adaptv="link"
         ref={ref}
         href={to}
         className={className}
-        aria-disabled={disabled || undefined}
+        aria-disabled={disabled || ariaDisabled}
       >
         {children}
       </ExternalLink>
@@ -164,6 +179,10 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
 
   return (
     <RouterLink
+      //the anchor's own attributes come first so a `data-part`, an `aria-*` or an
+      //`id` from a wrapper (a settings row rendering as this link) reaches the
+      //element, and nothing below can be overridden by them
+      {...rest}
       data-adaptv="link"
       ref={ref}
       to={to}
@@ -172,7 +191,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       draggable={false}
       {...gestureEngineHandlers}
       onClick={handleClick}
-      aria-disabled={disabled || undefined}
+      aria-disabled={disabled || ariaDisabled}
       tabIndex={disabled ? -1 : undefined}
       //LOCKED: the interaction utility, for the press-core reason —
       //{@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action` longhand that

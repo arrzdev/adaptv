@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
 import { ExternalLink } from "#adaptv/components/external-link"
+import { FieldGroup } from "#adaptv/components/field-group"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -97,6 +98,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
     "external-link",
     <ExternalLink key="external-link" href="https://a.dev" />,
   ],
+  ["field-group", <FieldGroup key="field-group" />],
   [
     "link",
     <Link key="link" to="/">

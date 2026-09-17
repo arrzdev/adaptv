@@ -95,6 +95,99 @@ afterEach(() => {
 })
 
 describe("useGestureEngine", () => {
+  it("hands a click no press produced to onUnownedClick, uncancelled", () => {
+    //an outer <label> forwarding its activation to the control inside: the
+    //engine saw no pointerdown, so the click is the element's to interpret
+    const onPressUp = vi.fn()
+    const onUnownedClick = vi.fn()
+    const { result } = renderHook(() =>
+      useGestureEngine({ onPressUp, onUnownedClick }),
+    )
+    const { event, preventDefault, stopPropagation } = mockClick()
+
+    act(() => result.current.onClick(event))
+
+    expect(onUnownedClick).toHaveBeenCalledTimes(1)
+    expect(onPressUp).not.toHaveBeenCalled()
+    //a cancelled checkbox click is reverted by the browser AFTER React commits,
+    //so the DOM would disagree with the state; the browser's toggle must stand
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(stopPropagation).not.toHaveBeenCalled()
+  })
+
+  it("still swallows an unowned click on an element that did not opt in", () => {
+    const { result } = renderHook(() =>
+      useGestureEngine({ onPressUp: vi.fn() }),
+    )
+    const { event, preventDefault } = mockClick()
+    act(() => result.current.onClick(event))
+    expect(preventDefault).toHaveBeenCalled()
+  })
+
+  it("swallows the click a tap leaves behind without calling onUnownedClick", () => {
+    //the browser fires a click after pointerup; the tap already activated on
+    //release, so that click must not activate a second time
+    const onPressUp = vi.fn()
+    const onUnownedClick = vi.fn()
+    const { result } = renderHook(() =>
+      useGestureEngine({ onPressUp, onUnownedClick }),
+    )
+
+    act(() => result.current.onPointerDown(pointerDown()))
+    act(() => result.current.onPointerUp(pointerAt(0, 0)))
+    act(() => result.current.onClick(mockClick().event))
+
+    expect(onPressUp).toHaveBeenCalledTimes(1)
+    expect(onUnownedClick).not.toHaveBeenCalled()
+  })
+
+  it("a press released outside does not leave the next unowned click owned", () => {
+    //no click follows a release outside the region, so the ownership set on
+    //pointerdown must be dropped there, or the label's next forwarded click
+    //would be swallowed as if it were this press's trailing click
+    const onUnownedClick = vi.fn()
+    const { result } = renderHook(() =>
+      useGestureEngine({ onPressUp: vi.fn(), onUnownedClick }),
+    )
+
+    act(() => result.current.onPointerDown(pointerDown()))
+    act(() => result.current.onPointerMove(pointerAt(500, 500)))
+    act(() => result.current.onPointerUp(pointerAt(500, 500)))
+    //the veto for this press's own trailing click runs in the capture phase and
+    //ends there; the click the label forwards later is nobody's trailing click
+    act(() => result.current.onClickCapture(mockClick().event))
+    act(() => result.current.onClick(mockClick().event))
+
+    expect(onUnownedClick).toHaveBeenCalledTimes(1)
+  })
+
+  it("a keyboard activation owns its click", () => {
+    //Space on a checkbox fires a click on keyup; Enter on a button fires one on
+    //keydown. either way the engine activated already
+    const onUnownedClick = vi.fn()
+    const { result } = renderHook(() =>
+      useGestureEngine({ onPressUp: vi.fn(), onUnownedClick }),
+    )
+
+    act(() => result.current.onKeyDown(keyEvent(" ")))
+    act(() => result.current.onClick(mockClick().event))
+
+    expect(onUnownedClick).not.toHaveBeenCalled()
+  })
+
+  it("does not hand an unowned click to a disabled element", () => {
+    const onUnownedClick = vi.fn()
+    const { result } = renderHook(() =>
+      useGestureEngine({
+        onPressUp: vi.fn(),
+        onUnownedClick,
+        disabled: true,
+      }),
+    )
+    act(() => result.current.onClick(mockClick().event))
+    expect(onUnownedClick).not.toHaveBeenCalled()
+  })
+
   it("fires onPressUp on a clean tap", () => {
     const onPressUp = vi.fn()
     const { result } = renderHook(() => useGestureEngine({ onPressUp }))
