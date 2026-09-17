@@ -1,6 +1,7 @@
 //Screen-orientation accessor — read, subscribe, lock, unlock:
-//  • native   → @capacitor/screen-orientation
-//  • web/PWA  → screen.orientation (+ .lock(), where it exists)
+//  • native with the plugin → @capacitor/screen-orientation
+//  • web/PWA, or a binary without the plugin → screen.orientation (+ .lock(),
+//    where it exists)
 //
 //## Reading always works. Locking usually does not, and that is the point.
 //
@@ -118,7 +119,7 @@ function normalize(type: string | undefined): ScreenOrientationType {
  * first subscribe), because the plugin's own read is async.
  */
 export function getScreenOrientation(): ScreenOrientationType {
-  if (isNativePlatform()) return nativeOrientation
+  if (viaPlugin()) return nativeOrientation
   if (typeof window === "undefined") return DEFAULT_ORIENTATION
   const type = webOrientation()?.type
   if (type) return normalize(type)
@@ -175,7 +176,7 @@ function unbindNative(): void {
 export function subscribeScreenOrientation(cb: () => void): () => void {
   if (typeof window === "undefined") return () => {}
   listeners.add(cb)
-  if (isNativePlatform()) bindNative()
+  if (viaPlugin()) bindNative()
   else bindWeb()
   return () => {
     listeners.delete(cb)
@@ -184,14 +185,16 @@ export function subscribeScreenOrientation(cb: () => void): () => void {
 }
 
 /**
- * Whether the lock goes through the native plugin. The lock branches ask THIS
- * rather than `isNativePlatform()`: an OTA bundle can be running on a binary
- * that predates the plugin, and the web `screen.orientation.lock` is a real
- * fallback inside an Android WebView. → `docs/design/ota.md §5.6`
+ * Whether the call goes through the native plugin. Every native branch asks
+ * THIS rather than `isNativePlatform()`: an OTA bundle can be running on a
+ * binary that predates the plugin. → `docs/design/ota.md §5.6`
  *
- * Only the LOCK asks. Reading and subscribing to the current orientation stay on
- * `isNativePlatform()`, because their native path is the plugin's *listener* and
- * their fallback is the same `screen.orientation` either way.
+ * The read and the subscription ask it too, not only the lock. On such a binary
+ * the plugin's read and listener reject into {@link ignoreBridgeRejection}, so a
+ * native branch would answer the default orientation forever and never notify,
+ * while the WebView's own `screen.orientation` and `orientationchange` work. The
+ * lock falls through the same way: `screen.orientation.lock` is a real fallback
+ * inside an Android WebView.
  */
 function viaPlugin(): boolean {
   return isNativePlatform() && hasNativePlugin("ScreenOrientation")

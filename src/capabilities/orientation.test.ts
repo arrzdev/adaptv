@@ -227,8 +227,8 @@ describe("orientation — subscription", () => {
 
 describe("orientation — a binary that predates the plugin", () => {
   it("locks through the web API instead of the absent bridge", async () => {
-    //→ docs/design/ota.md §5.6. The lock is the only branch that moves: reading the
-    //current orientation resolves the same way with or without the plugin.
+    //→ docs/design/ota.md §5.6. The read and the subscription move the same way,
+    //pinned in orientation-no-plugin.test.ts.
     forceNativeBinary([])
     const lock = vi.fn(() => Promise.resolve())
     stubScreenOrientation({ type: "portrait-primary", lock })
