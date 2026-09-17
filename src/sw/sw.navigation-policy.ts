@@ -45,6 +45,8 @@ export function resolveNavigationPolicy(
  * Cache sweep — B2
  * ========================================================================== */
 
+import { runtimeCacheScope } from "#adaptv/sw/sw.cache-name"
+
 /**
  * Runtime buckets adaptv owns. A cache is only ever deleted if it starts with one
  * of these *and* carries a build tag that is not the current one.
@@ -62,14 +64,19 @@ const ADAPTV_RUNTIME_BUCKETS = ["static", "pages", "documents"] as const
  *
  * Deliberately conservative: an unrecognised bucket is never touched. Deleting a
  * cache adaptv does not own would break whatever created it — another app on the
- * same origin, a third-party worker, or Workbox's own precache bookkeeping.
+ * same origin, a third-party worker, or Workbox's own precache bookkeeping. That
+ * includes another adaptv app on the same origin under a different base: Cache
+ * Storage is shared across scopes, so only names under this app's own
+ * {@link runtimeCacheScope} are candidates.
  */
 export function isStaleRuntimeCache(
   cacheName: string,
   currentBuildTag: string,
+  base: string,
 ): boolean {
+  const scope = runtimeCacheScope(base)
   for (const bucket of ADAPTV_RUNTIME_BUCKETS) {
-    const prefix = `${bucket}-`
+    const prefix = `${scope}${bucket}-`
     //require the separator so `staticky-…` is not read as the `static` bucket
     if (!cacheName.startsWith(prefix)) continue
     return cacheName.slice(prefix.length) !== currentBuildTag
@@ -81,8 +88,9 @@ export function isStaleRuntimeCache(
 export function selectStaleCaches(
   cacheNames: readonly string[],
   currentBuildTag: string,
+  base: string,
 ): string[] {
   return cacheNames.filter((name) =>
-    isStaleRuntimeCache(name, currentBuildTag),
+    isStaleRuntimeCache(name, currentBuildTag, base),
   )
 }

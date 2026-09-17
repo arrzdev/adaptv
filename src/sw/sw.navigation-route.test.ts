@@ -103,6 +103,7 @@ describe("capacitor — no navigation handling at all", () => {
     const policy = registerNavigationRoute({
       mode: "capacitor",
       appShellUrl: SPA_SHELL,
+      base: "/",
     })
     expect(policy.kind).toBe("none")
     expect(routes).toHaveLength(0)
@@ -112,7 +113,11 @@ describe("capacitor — no navigation handling at all", () => {
 
 describe("spa — every ordinary navigation gets the app shell", () => {
   beforeEach(() => {
-    registerNavigationRoute({ mode: "spa", appShellUrl: SPA_SHELL })
+    registerNavigationRoute({
+      mode: "spa",
+      appShellUrl: SPA_SHELL,
+      base: "/",
+    })
   })
 
   it("binds the route to the precached shell and answers with it", async () => {
@@ -158,6 +163,7 @@ describe("spa — an app's deny prefixes", () => {
     registerNavigationRoute({
       mode: "spa",
       appShellUrl: SPA_SHELL,
+      base: "/",
       denyPathPrefixes: ["/auth/"],
     })
     expect(await serve(navigate("/auth/callback"))).toBeUndefined()
@@ -169,9 +175,54 @@ describe("spa — an app's deny prefixes", () => {
   })
 })
 
+describe("under a subpath base — a GitHub Pages project site", () => {
+  //the worker is scoped to `/app/`, so the paths it must leave alone are the
+  //app's own `/app/api/`, `/app/assets/` and `/app/_serverFn/`; a root-absolute
+  //`/api/` would deny a path outside its scope and claim the one inside it
+  const denied = [
+    "/app/api/session",
+    "/app/assets/x",
+    "/app/_serverFn/todos",
+  ]
+
+  it("spa: answers the app's routes with its shell and leaves its denied prefixes alone", async () => {
+    registerNavigationRoute({
+      mode: "spa",
+      appShellUrl: "/app/index.html",
+      base: "/app/",
+    })
+    expect(precache.bound).toEqual(["/app/index.html"])
+    await expect(
+      (await serve(navigate("/app/todos/42")))?.text(),
+    ).resolves.toBe("shell:/app/index.html")
+    for (const path of denied) {
+      expect(await serve(navigate(path))).toBeUndefined()
+    }
+  })
+
+  it("ssr: boots from the shell under the base offline and leaves its denied prefixes alone", async () => {
+    registerNavigationRoute({
+      mode: "ssr",
+      appShellUrl: "/app/adaptv-shell.html",
+      base: "/app/",
+    })
+    await expect(
+      (await serve(navigate("/app/settings")))?.text(),
+    ).resolves.toBe("shell:/app/adaptv-shell.html")
+    for (const path of denied) {
+      expect(await serve(navigate(path))).toBeUndefined()
+    }
+    expect(sw.fetch).toHaveBeenCalledOnce()
+  })
+})
+
 describe("ssr — the network first, the shell only as a fallback", () => {
   beforeEach(() => {
-    registerNavigationRoute({ mode: "ssr", appShellUrl: SSR_SHELL })
+    registerNavigationRoute({
+      mode: "ssr",
+      appShellUrl: SSR_SHELL,
+      base: "/",
+    })
   })
 
   it("serves the preload the browser started, and fetches nothing", async () => {
@@ -286,7 +337,11 @@ describe("ssr — the deadline", () => {
 
   it("boots from the shell after 3 seconds by default", async () => {
     vi.useFakeTimers()
-    registerNavigationRoute({ mode: "ssr", appShellUrl: SSR_SHELL })
+    registerNavigationRoute({
+      mode: "ssr",
+      appShellUrl: SSR_SHELL,
+      base: "/",
+    })
     sw.fetch.mockImplementation(never)
 
     let settled = false
@@ -307,6 +362,7 @@ describe("ssr — the deadline", () => {
     registerNavigationRoute({
       mode: "ssr",
       appShellUrl: SSR_SHELL,
+      base: "/",
       networkTimeoutSeconds: 1,
     })
     const event = navigate("/settings", { preload: never() })

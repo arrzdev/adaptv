@@ -37,7 +37,7 @@ describe("sweepStaleRuntimeCaches — B2", () => {
       "static-myapp-old111",
       "pages-myapp-old111",
     ])
-    return sweepStaleRuntimeCaches(TAG).then(() => {
+    return sweepStaleRuntimeCaches(TAG, "/").then(() => {
       expect(deleted.sort()).toEqual([
         "pages-myapp-old111",
         "static-myapp-old111",
@@ -51,8 +51,19 @@ describe("sweepStaleRuntimeCaches — B2", () => {
       "workbox-precache-v2-https://example.com/",
       "some-other-app",
     ])
-    await sweepStaleRuntimeCaches(TAG)
+    await sweepStaleRuntimeCaches(TAG, "/")
     expect(deleted).toEqual([])
+  })
+
+  it("under a subpath base, leaves the root app's and other bases' buckets alone", async () => {
+    const deleted = stubCaches([
+      `/app/static-${TAG}`,
+      "/app/static-myapp-old111",
+      "static-myapp-old111",
+      "/other/static-other-old111",
+    ])
+    await sweepStaleRuntimeCaches(TAG, "/app/")
+    expect(deleted).toEqual(["/app/static-myapp-old111"])
   })
 
   it("never rejects — a failed sweep must not break activation", async () => {
@@ -63,7 +74,9 @@ describe("sweepStaleRuntimeCaches — B2", () => {
       keys: () => Promise.reject(new Error("storage unavailable")),
       delete: () => Promise.resolve(true),
     })
-    await expect(sweepStaleRuntimeCaches(TAG)).resolves.toBeUndefined()
+    await expect(
+      sweepStaleRuntimeCaches(TAG, "/"),
+    ).resolves.toBeUndefined()
   })
 
   it("survives an individual delete failing", async () => {
@@ -71,12 +84,16 @@ describe("sweepStaleRuntimeCaches — B2", () => {
       keys: () => Promise.resolve(["static-old", "pages-old"]),
       delete: () => Promise.reject(new Error("locked")),
     })
-    await expect(sweepStaleRuntimeCaches(TAG)).resolves.toBeUndefined()
+    await expect(
+      sweepStaleRuntimeCaches(TAG, "/"),
+    ).resolves.toBeUndefined()
   })
 
   it("is a no-op where CacheStorage is absent", async () => {
     vi.stubGlobal("caches", undefined)
-    await expect(sweepStaleRuntimeCaches(TAG)).resolves.toBeUndefined()
+    await expect(
+      sweepStaleRuntimeCaches(TAG, "/"),
+    ).resolves.toBeUndefined()
   })
 })
 
@@ -229,7 +246,7 @@ describe("registerServiceWorkerLifecycle — what adaptv's worker wires", () => 
       sw.caches.seed(name, "/x", ok())
     }
 
-    registerServiceWorkerLifecycle({ buildTag: current })
+    registerServiceWorkerLifecycle({ buildTag: current, base: "/" })
     await activate()
 
     expect((await sw.caches.keys()).sort()).toEqual([
@@ -244,7 +261,7 @@ describe("registerServiceWorkerLifecycle — what adaptv's worker wires", () => 
     //the sweep is async; outside waitUntil the browser may stop the worker
     //with half the stale buckets still on disk
     sw.caches.seed("static-old", "/x", new Response("x"))
-    registerServiceWorkerLifecycle({ buildTag: "new" })
+    registerServiceWorkerLifecycle({ buildTag: "new", base: "/" })
     const event = sw.dispatch(new TestExtendableEvent("activate"))
     expect(event.pending).toHaveLength(2)
     await event.settled()
@@ -275,12 +292,13 @@ describe("registerServiceWorkerLifecycle — what adaptv's worker wires", () => 
   })
 
   it("wires exactly what default-worker.ts asks for", () => {
-    //`{ claimClients: true, skipWaitingOnMessage: true, buildTag }`: one
+    //`{ claimClients: true, skipWaitingOnMessage: true, buildTag, base }`: one
     //message listener, two activate listeners (claim + sweep)
     registerServiceWorkerLifecycle({
       claimClients: true,
       skipWaitingOnMessage: true,
       buildTag: "myapp-2f9c1a",
+      base: "/",
     })
     expect(sw.listenerCount("message")).toBe(1)
     expect(sw.listenerCount("activate")).toBe(2)
