@@ -315,10 +315,15 @@ export function useGestureEngine({
       shownAt.current = 0
       return
     }
+    //a hide already pending belongs to the press that drew the visual, and it keeps
+    //its deadline. Rescheduling it from here would aim it at THIS call's element —
+    //which, when the engine is reset again inside the floor (a key press on the same
+    //focused control, a stray cancel), is the ref cleanup already nulled — and the
+    //flag would stay on the element for good.
+    if (hideTimer.current !== null) return
     //hold the element itself, not the ref: the press may be torn down before this
     //fires and the ref is nulled on cleanup
     const target = el
-    if (hideTimer.current !== null) clearTimeout(hideTimer.current)
     hideTimer.current = setTimeout(() => {
       hideTimer.current = null
       shownAt.current = 0
