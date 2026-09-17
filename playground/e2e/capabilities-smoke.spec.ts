@@ -9,8 +9,9 @@ import { awaitClientHandover } from "./support/hydrated"
  * every component's own suite; this is the gate that catches it.
  *
  * The behaviour a browser can actually drive gets its own dedicated spec (network,
- * keyboard, geolocation, clipboard); the device-only capabilities are walked on the
- * simulator, and here we only prove they mount and self-report their support state.
+ * keyboard, geolocation, clipboard, browser, share, device); the device-only
+ * capabilities are walked on the simulator, and here we only prove they mount and
+ * self-report their support state.
  *
  * The assertion is on `pageerror` — UNCAUGHT errors — AND on `console.error`. It
  * used to be `pageerror` alone, on the theory that an error the app handles and
