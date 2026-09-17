@@ -322,6 +322,12 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
   - capawesome keyboard/edge-to-edge bugs: <https://github.com/capawesome-team/capacitor-plugins/issues/490> · <https://github.com/capawesome-team/capacitor-plugins/issues/428>
   - The community fix plugin (study its approach, or depend on it): <https://capawesome.io/docs/plugins/android-edge-to-edge-support/>
   - Config lesson from the field: `Keyboard` with `resizeOnFullScreen: false`; don't trust `resize:"ionic"`.
+- **Capacitor 8.5 (checked 2026-09-13).** UIScene arrived in 8.5.0
+  ([#8536](https://github.com/ionic-team/capacitor/pull/8536)). Without it, an app built with the
+  iOS 27 SDK does not launch. The Android `SystemBars` rewrite arrived in 8.5.2
+  ([#8535](https://github.com/ionic-team/capacitor/pull/8535)). Bump to ≥ 8.5.2 (it also carries #8595).
+  Read from the diffs, the bump silently breaks three adaptv generators or workarounds →
+  [`../roadmap/platform-releases-2026-09.md §1`](../roadmap/platform-releases-2026-09.md).
 - **Version pinning.** Core vs official plugins vs Xcode/Swift toolchain — adaptv already pins a
   known-good set; keep it (see `docs/research/capacitor-internals.md`).
 
