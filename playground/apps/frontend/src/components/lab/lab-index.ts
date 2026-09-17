@@ -52,9 +52,10 @@ const COMPONENTS = [
     isNew: true,
   },
   {
-    to: "/lab/skeleton",
-    title: "Skeleton",
-    summary: "silent, still under Reduce Motion, visible in high contrast",
+    to: "/lab/divider",
+    title: "Divider",
+    summary:
+      "one device pixel at every density · a border, not a background",
     isNew: true,
   },
   {

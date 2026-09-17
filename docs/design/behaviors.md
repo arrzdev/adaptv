@@ -320,13 +320,13 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** install on Android (5): home-screen icon fills its shape (no white box), the launch chrome
   isn't a dark strip. *(Shipped to chopchop in PR #91.)*
 
-### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Fab`
+### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Divider`
 - **How:** `src/components/view.tsx` (row/center/fill/safe layout, identical everywhere),
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
-  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/fab.tsx` (a `Button`
-  fixed to a screen corner: above the safe edges through `--adaptv-inset-*`, lifted by the live
-  `--adaptv-keyboard-height` because the §4 frozen viewport leaves a fixed bottom control under
-  the keyboard otherwise, and a `hidden` slide that honours reduced motion).
+  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/divider.tsx` (a 1px
+  border scaled by `1 / floor(dpr)` to one device pixel at every density — a sub-pixel border width is
+  rounded up by Chromium and floored to nothing by WebKit at 3x — and never a background, so it
+  survives forced colours).
 - **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
   `Fab`: on native (6) it clears the home indicator, and focusing a field lifts it above the
   keyboard on the keyboard's own curve (`/lab/fab` on a device; `playground/e2e/fab.spec.ts` drives
