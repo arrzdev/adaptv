@@ -9,14 +9,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from "vitest"
+import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { withBackgroundSimulator } from "./native.mjs"
 
 // `cap run ios` reaches the Simulator through native-run, which runs, verbatim:
@@ -27,59 +20,52 @@ import { withBackgroundSimulator } from "./native.mjs"
 // makes or breaks: the shim has to actually run (exec bit), and it has to add `-g` to the
 // Simulator call and NOTHING else.
 
-const dirs = []
-afterEach(() => {
-  for (const d of dirs.splice(0))
-    rmSync(d, { recursive: true, force: true })
-})
-
-//The shim's home is a FIXED name under the OS temp dir, because a dev's every `cap run`
-//reuses it. A test that wrote it there would leave it behind for good, so the file gives
-//the module a temp dir of its own for the duration and removes it afterwards.
-let realTmp
-let home
-beforeAll(() => {
-  realTmp = process.env.TMPDIR
-  home = mkdtempSync(path.join(tmpdir(), "adaptv-shim-home-"))
-  process.env.TMPDIR = home
-})
-afterAll(() => {
-  if (realTmp === undefined) delete process.env.TMPDIR
-  else process.env.TMPDIR = realTmp
-  rmSync(home, { recursive: true, force: true })
-})
-
 /** The shim adaptv would hand `cap run ios`, as an absolute path. */
 function shim() {
   const { PATH } = withBackgroundSimulator({ PATH: "/usr/bin:/bin" })
   return path.join(PATH.split(path.delimiter)[0], "open")
 }
 
-/**
- * The shipped shim, with only the real binary swapped for one that echoes its argv — the
- * routing under test is the shipped text, and `/usr/bin/open` can't be observed from a test
- * without opening something.
- */
-function traced() {
-  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-shim-"))
-  dirs.push(dir)
-  const stub = path.join(dir, "stub")
-  writeFileSync(stub, '#!/bin/sh\necho "$@"\n')
-  chmodSync(stub, 0o755)
-  const file = path.join(dir, "open")
-  writeFileSync(
-    file,
-    readFileSync(shim(), "utf8").replaceAll("/usr/bin/open", stub),
-  )
-  chmodSync(file, 0o755)
-  return (...args) =>
-    spawnSync(file, args, { encoding: "utf8" }).stdout.trim()
-}
-
 //The shim re-execs /usr/bin/open, and iOS builds are macOS-only anyway.
 const onMac = process.platform === "darwin"
 
 describe.runIf(onMac)("the Simulator open shim", () => {
+  /**
+   * The shipped shim, with only the real binary swapped for one that echoes its argv — the
+   * routing under test is the shipped text, and `/usr/bin/open` can't be observed from a test
+   * without opening something.
+   *
+   * ONE copy for the whole file, written and run once before the first test. macOS scans an
+   * executable the first time it runs, and a fresh shim and stub per test paid that scan in
+   * every test that used one: 340–580 ms each under the load of the whole bin suite, against
+   * single-digit milliseconds once warm. Nothing here is about that scan.
+   */
+  let traceDir = null
+  let tracedShim = null
+
+  beforeAll(() => {
+    traceDir = mkdtempSync(path.join(tmpdir(), "adaptv-shim-"))
+    const stub = path.join(traceDir, "stub")
+    writeFileSync(stub, '#!/bin/sh\necho "$@"\n')
+    chmodSync(stub, 0o755)
+    tracedShim = path.join(traceDir, "open")
+    writeFileSync(
+      tracedShim,
+      readFileSync(shim(), "utf8").replaceAll("/usr/bin/open", stub),
+    )
+    chmodSync(tracedShim, 0o755)
+    //the first run of both files, and with it the scan, happens here
+    spawnSync(tracedShim, ["warm"], { timeout: 10_000 })
+  }, 30_000)
+
+  afterAll(() => {
+    rmSync(traceDir, { recursive: true, force: true })
+  })
+
+  function run(...args) {
+    return spawnSync(tracedShim, args, { encoding: "utf8" }).stdout.trim()
+  }
+
   it("goes first on PATH, so native-run's `open` resolves to it", () => {
     const env = withBackgroundSimulator({ PATH: "/usr/bin:/bin" })
     expect(env.PATH.endsWith(":/usr/bin:/bin")).toBe(true)
@@ -91,7 +77,6 @@ describe.runIf(onMac)("the Simulator open shim", () => {
   })
 
   it("backgrounds native-run's launch, argv otherwise intact", () => {
-    const run = traced()
     expect(
       run(
         "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app",
@@ -105,11 +90,10 @@ describe.runIf(onMac)("the Simulator open shim", () => {
   })
 
   it("backgrounds the `-a Simulator` form adaptv uses on the cached path", () => {
-    expect(traced()("-a", "Simulator")).toBe("-g -a Simulator")
+    expect(run("-a", "Simulator")).toBe("-g -a Simulator")
   })
 
   it("passes every other `open` through untouched", () => {
-    const run = traced()
     expect(run("-a", "Safari", "https://example.com")).toBe(
       "-a Safari https://example.com",
     )
