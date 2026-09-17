@@ -64,6 +64,7 @@ const PAGES = [
   ["/lab/native-theme", "Native theme"],
   ["/lab/motion", "Motion"],
   ["/lab/network", "Network"],
+  ["/lab/storage", "Storage"],
   ["/lab/splash", "Splash"],
   ["/lab/status-bar", "Status bar"],
   ["/lab/hooks", "Standalone hooks"],

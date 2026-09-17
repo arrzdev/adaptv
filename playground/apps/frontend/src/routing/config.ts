@@ -74,6 +74,7 @@ export const routes = rootRoute([
     route("/lab/native-theme", "pages/lab/native-theme.page.tsx"),
     route("/lab/motion", "pages/lab/motion.page.tsx"),
     route("/lab/network", "pages/lab/network.page.tsx"),
+    route("/lab/storage", "pages/lab/storage.page.tsx"),
     route("/lab/ota", "pages/lab/ota.page.tsx"),
     route("/lab/splash", "pages/lab/splash.page.tsx"),
     route("/lab/status-bar", "pages/lab/status-bar.page.tsx"),
