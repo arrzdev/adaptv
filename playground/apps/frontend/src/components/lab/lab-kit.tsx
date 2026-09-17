@@ -193,7 +193,7 @@ export function LabButton({
   /** A stable handle for an e2e, where the label is the thing under test. */
   testId?: string
   children: ReactNode
-  /** A stable hook for e2e, for a page whose buttons a spec has to press by id. */
+  /** A stable hook for e2e, for a page whose buttons share a visible label. */
   "data-testid"?: string
 }) {
   return (
@@ -202,7 +202,6 @@ export function LabButton({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={pressed}
       data-testid={testId}
       className={cn(
         "clickable rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition-colors",

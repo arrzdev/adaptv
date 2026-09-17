@@ -86,7 +86,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · ~~speech~~ (shipped 2026-09-02: `src/capabilities/speech.ts` over `speechSynthesis` on web, PWA and iOS, no plugin; `loading`/`ready`/`no-voices`/`unsupported`, and `silent` as a named outcome when the engine takes the utterance and never starts it. **Android native reads `unsupported`**: the Android WebView has no `speechSynthesis` (measured, API 36); the system engine needs a plugin, which is a decision, not a default) ·
+Sensors / motion · battery · brightness · contacts · calendar · ~~SMS + mail~~ (shipped 2026-09-02: `src/capabilities/compose.ts` builds `mailto:`/`sms:` drafts with the per-OS body separator, opens through `@capacitor/app-launcher` on native without asking first, because the Android handler probe lies unless the manifest declares the scheme, which the shell now does; the outcome names `no-handler` when the OS reports nothing took the draft) · print · speech ·
 store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 

@@ -10,7 +10,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import {
-  patchAndroidFileProvider,
+  patchAndroidQueries,
   patchAndroidSplash,
   patchNativeIdentity,
 } from "./native.mjs"
@@ -204,30 +204,55 @@ describe("the .dev flavour launches adaptv's MainActivity, not a stub", () => {
   })
 })
 
-describe("the FileProvider roots", () => {
-  it("cover the app's own files directory as well as the cache, so a stored file reaches the share sheet", () => {
+describe("the composer schemes in the manifest", () => {
+  const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="@string/app_name">
+    </application>
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
+`
+  function root() {
     const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
     dirs.push(appRoot)
-    const res = path.join(appRoot, ADAPTV_DIR, "android/app/src/main/res")
-    mkdirSync(path.join(res, "xml"), { recursive: true })
-    //what the scaffold ships: external storage and the cache, nothing under files/
-    writeFileSync(
-      path.join(res, "xml/file_paths.xml"),
-      `<paths><external-path name="my_images" path="." /><cache-path name="my_cache_images" path="." /></paths>`,
+    return appRoot
+  }
+
+  function manifestProject() {
+    const appRoot = root()
+    const main = path.join(appRoot, ADAPTV_DIR, "android/app/src/main")
+    mkdirSync(main, { recursive: true })
+    writeFileSync(path.join(main, "AndroidManifest.xml"), MANIFEST)
+    return { appRoot, file: path.join(main, "AndroidManifest.xml") }
+  }
+
+  it("declares ACTION_VIEW for mailto and sms, the probe the launcher makes", () => {
+    const { appRoot, file } = manifestProject()
+    patchAndroidQueries(appRoot)
+    const out = readFileSync(file, "utf8")
+    expect(out).toContain("<queries>")
+    expect(out).toContain(
+      '<action android:name="android.intent.action.VIEW" />',
     )
-    patchAndroidFileProvider(appRoot)
-    const xml = readFileSync(path.join(res, "xml/file_paths.xml"), "utf8")
-    //the filesystem capability's namespace, and nothing beside it: filesDir also
-    //holds the live-update plugin's `_capacitor_live_update_bundles`
-    expect(xml).toContain('<files-path name="files" path="adaptv/" />')
-    expect(xml).not.toMatch(/<files-path[^>]*path="\."/)
-    expect(xml).toContain('<cache-path name="cache" path="." />')
-    expect(xml).toContain('<external-path name="external" path="." />')
+    expect(out).toContain('<data android:scheme="mailto" />')
+    expect(out).toContain('<data android:scheme="sms" />')
+    expect(out.trimEnd().endsWith("</manifest>")).toBe(true)
+    expect(out).toContain(
+      '<uses-permission android:name="android.permission.INTERNET" />',
+    )
   })
 
-  it("does nothing when there is no Android project to patch", () => {
-    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
-    dirs.push(appRoot)
-    expect(() => patchAndroidFileProvider(appRoot)).not.toThrow()
+  it("is idempotent, and replaces its own block rather than stacking one", () => {
+    const { appRoot, file } = manifestProject()
+    patchAndroidQueries(appRoot)
+    const once = readFileSync(file, "utf8")
+    patchAndroidQueries(appRoot)
+    expect(readFileSync(file, "utf8")).toBe(once)
+    expect(once.match(/<queries>/g)).toHaveLength(1)
+  })
+
+  it("leaves a project without a manifest alone", () => {
+    const appRoot = root()
+    expect(() => patchAndroidQueries(appRoot)).not.toThrow()
   })
 })
