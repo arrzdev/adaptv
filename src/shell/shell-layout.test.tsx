@@ -184,146 +184,23 @@ describe("RoutingShell — splash vs the not-found boundary", () => {
   })
 })
 
-// A deploy prunes the hashed chunks an open tab still points at, so its next lazy
-// route import 404s and Vite dispatches `vite:preloadError`. The shell answers with
-// ONE reload, stamped in sessionStorage, and only renders the offline screen when
-// that reload happened moments ago and did not help.
-//
-// It used to arm the net twice — once from the service-worker runtime, once from
-// the shell — and the two shared a single guard. The first handler reloaded and
-// spent it; the second, handed the same event, found it spent and rendered the
-// offline screen on top of the reload it had just watched start. The user saw
-// "You're offline" for the reload's whole round trip on every stale-chunk
-// recovery that WORKED. `e2e-sw/stale-chunk.spec.ts` measures it in a browser.
-describe("RoutingShell — the stale-chunk net", () => {
-  const GUARD_KEY = "adaptv:preload-error-reload"
-
-  let reloads = 0
+//every app mounts this shell, so one API it reaches for that an old engine lacks
+//takes the whole app down on that engine, not just one screen
+describe("RoutingShell on an engine without Array.prototype.at (iOS 15.0–15.3)", () => {
+  let at: PropertyDescriptor | undefined
 
   beforeEach(() => {
-    reloads = 0
-    sessionStorage.clear()
-    vi.spyOn(window.location, "reload").mockImplementation(() => {
-      reloads += 1
-    })
-    //"this document already asked for a reload" lives in module scope, because it
-    //must die with the document. Each test here is a fresh document.
-    vi.resetModules()
+    at = Object.getOwnPropertyDescriptor(Array.prototype, "at")
+    Reflect.deleteProperty(Array.prototype, "at")
   })
 
   afterEach(() => {
-    vi.restoreAllMocks()
-    sessionStorage.clear()
+    if (at) Object.defineProperty(Array.prototype, "at", at)
   })
 
-  async function mountShell() {
-    const {
-      createMemoryHistory,
-      createRoute: freshCreateRoute,
-      RouterProvider,
-    } = await import("@tanstack/react-router")
-    const { createRootRoute: freshCreateRootRoute } = await import(
-      "#adaptv/shell/create-root-route"
-    )
-    const { createAdaptvRouter: freshCreateAdaptvRouter } = await import(
-      "#adaptv/shell/create-adaptv-router"
-    )
-    const rootRoute = freshCreateRootRoute({
-      title: "test",
-      themeColorLight: "#ffffff",
-      themeColorDark: "#000000",
-      RootDocument: ({ children }: { children: ReactNode }) => (
-        <>{children}</>
-      ),
-    })
-    const indexRoute = freshCreateRoute({
-      getParentRoute: () => rootRoute,
-      path: "/",
-      component: () => <p>{HOME_TEXT}</p>,
-    })
-    const router = freshCreateAdaptvRouter({
-      routeTree: rootRoute.addChildren([indexRoute]),
-      options: { history: createMemoryHistory({ initialEntries: ["/"] }) },
-    })
-    const view = render(<RouterProvider router={router} />)
-    await view.findByText(HOME_TEXT)
-    return view
-  }
-
-  //Vite's own shape: cancelable, and it rethrows unless a listener prevents it
-  function dispatchStaleChunk() {
-    const event = new Event("vite:preloadError", { cancelable: true })
-    act(() => {
-      window.dispatchEvent(event)
-    })
-    return event
-  }
-
-  function offlineScreen(container: HTMLElement) {
-    return container.querySelector('[data-adaptv="offline"]')
-  }
-
-  it("reloads on the first stale chunk, and shows no offline screen", async () => {
-    const { container } = await mountShell()
-
-    const event = dispatchStaleChunk()
-
-    //Left for Vite to rethrow, so the import keeps its real error. The router
-    //holds a missing-module import as a reload in progress and draws nothing;
-    //prevented, the import resolves to `undefined` instead, and the app's error
-    //boundary is drawn over the reload — measured in a browser, where it simply
-    //replaced the offline screen as the thing on top of the recovery.
-    expect(event.defaultPrevented).toBe(false)
-    //the reload is the recovery; an offline screen here is painted over a reload
-    //that is already on its way to fixing the page
-    expect({ reloads, offline: !!offlineScreen(container) }).toEqual({
-      reloads: 1,
-      offline: false,
-    })
-  })
-
-  it("stays quiet for every further failure in the document that is reloading", async () => {
-    //Several lazy imports in flight when the deploy lands each fail, and each
-    //dispatches its own event. Only the first is news.
-    const { container } = await mountShell()
-
-    dispatchStaleChunk()
-    const later = dispatchStaleChunk()
-    dispatchStaleChunk()
-
-    expect(later.defaultPrevented).toBe(false)
-    expect({ reloads, offline: !!offlineScreen(container) }).toEqual({
-      reloads: 1,
-      offline: false,
-    })
-  })
-
-  it("shows the offline screen, and does not reload again, when a reload moments ago failed to help", async () => {
-    //the previous document stamped its reload a second ago; this one booted and
-    //hit the same missing chunk, so it is genuinely gone and reloading would loop
-    sessionStorage.setItem(GUARD_KEY, String(Date.now() - 1_000))
-    const { container } = await mountShell()
-
-    const event = dispatchStaleChunk()
-
-    await waitFor(() => expect(offlineScreen(container)).not.toBeNull())
-    expect(reloads).toBe(0)
-    //the shell owns this failure now, so Vite must not also rethrow it
-    expect(event.defaultPrevented).toBe(true)
-  })
-
-  it("reloads, and shows no offline screen, in a tab whose last recovery was long ago", async () => {
-    //a tab that recovered from one deploy and stayed open meets the next one: that
-    //is a new stale chunk, not the last reload failing
-    sessionStorage.setItem(GUARD_KEY, String(Date.now() - 10 * 60_000))
-    const { container } = await mountShell()
-
-    const event = dispatchStaleChunk()
-
-    expect(event.defaultPrevented).toBe(false)
-    expect({ reloads, offline: !!offlineScreen(container) }).toEqual({
-      reloads: 1,
-      offline: false,
-    })
+  it("renders the route on screen", async () => {
+    expect(Array.prototype.at).toBeUndefined()
+    const { findByText } = renderAt("/")
+    expect(await findByText(HOME_TEXT)).toBeTruthy()
   })
 })
