@@ -116,48 +116,14 @@ adaptvBack()                         // platform-agnostic programmatic back for 
 - `adaptvBack()` unifies the Android hardware button, an in-app back button, and (when installed) the
   otherwise-inert OS gesture into one path.
 
-> ### ✅ BUILT — controller + React binding; one primitive migrated
->
-> `capabilities/gesture-controller.ts` (20 tests) is the pure arbiter; `hooks/use-gesture-capture.ts`
-> (9 tests) is the React binding, giving each mounted instance its own identity so two `Swipeable` rows
-> on one screen genuinely compete rather than aliasing into a single gesture.
->
-> **`Swipeable` is migrated** and is the pattern for the rest. The integration point matters more than
-> the wiring: capture is requested **at the moment the swipe locks**, not on `pointerdown`. A
-> pointerdown is also how a *tap* starts, so claiming there would starve every other gesture on the
-> screen for the duration of every touch. Both lock points — the mouse path and the imperative touch
-> path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs back instead of
-> being left mid-translate with no pointer to finish it.
->
-> `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > Slider 250 > SwipeableRow 200 > Scroll 100`.
->
-> **All three primitives are migrated.** Each claims the arbiter at the point where its gesture becomes
-> unambiguous, which differs per primitive and is the part worth getting right:
->
-> | Primitive | Claims at | Why not earlier |
-> |---|---|---|
-> | `Swipeable` | the horizontal **lock** | a pointerdown is also how a tap starts; claiming there starves every other gesture for the duration of every touch |
-> | `Drawer` (handle) | **pointerdown** | there is nothing else a handle press could mean, so it commits immediately |
-> | `Drawer` (whole sheet) | the scroll **takeover** | a touch on the sheet usually means scrolling its content |
-> | `EdgeSwipeGestures` | **touchstart inside the edge strip** | it only decides at touchend, but waiting would be too late to stop a row swipe running under the same finger. The strip is a few pixels wide, so holding the pointer there is narrow enough not to starve anything — and suppressing an in-content gesture under an edge touch is the intended outcome |
->
-> Every one wires `onLost` so a pre-empted gesture resets rather than being stranded mid-translate with
-> no pointer left to finish it — the drawer snaps back, the row springs back.
->
-> `Slider` is the second primitive on the arbiter to claim at the horizontal lock. It requests with
-> the `Slider` band (250), between `DrawerDrag` and `SwipeableRow`: direct manipulation of the control
-> under the finger outranks a row swipe, and a drawer requests only on a vertical lock, so the two
-> never contest. A touch that goes vertical first is abandoned without a request, so the `ScrollView`
-> keeps the pointer it never had to contest. A mouse or pen sets the value on pointerdown.
->
-> ⏳ **Still owed: device tuning.** The priority *numbers* are reasoned, not felt. The ordering wants
-> confirming on hardware with a drawer, a swipeable row and a scroller on one screen — exactly the kind
-> of judgement a unit test cannot make.
-
-### Delta
-`use-android-back-button.ts` currently hardcodes `router.back()`/`exitApp()` with no interception point.
-Refactor it into: (a) the shared chain + registry, (b) the default floor handler, (c) overlays registering
-high-priority handlers. Reference: Ionic `ionBackButton` priority model (`../decisions/prior-art.md §12.1`).
+### Delta — ✅ discharged
+The chain and registry are `src/capabilities/back-chain.ts`, and `use-android-back-button.ts` is the
+floor: it registers `canGoBack() ? back() : exitApp()` at `BackPriority.RouterBack` on every platform
+(exiting on native only) and installs the one Android `backButton` listener that walks the chain, which
+`adaptvBack()` also drives. What is **not** closed is the framework's own `Drawer`: it registers no
+back handler, so an app wires one itself, as the playground's `AppDrawer` does at `BackPriority.Overlay`
+(`playground/apps/frontend/src/components/ui/drawer.tsx`). Reference: Ionic `ionBackButton` priority
+model (`../decisions/prior-art.md §12.1`).
 
 ---
 
@@ -179,11 +145,10 @@ A singleton `GestureController` that grants a single captured gesture at a time,
 ```ts
 // as built — `src/capabilities/gesture-controller.ts`, `src/hooks/use-gesture-capture.ts`
 const capture = useGestureCapture({
-  id: "drawer-drag",
-  priority: GesturePriority.Drawer,   // higher wins a contested start
-  blocksScroll: true,                 // stop the scroller while this gesture owns the pointer
-  onLost: () => { … },                // a higher-priority gesture pre-empted us
-})
+  priority: GesturePriority.DrawerDrag, // higher wins a contested start
+  blocksScroll: true,                   // stop the scroller while this gesture owns the pointer
+  onLost: () => { … },                  // a higher-priority gesture pre-empted us
+})                                      // no id: each mounted instance gets its own from useId
 // non-React: `gestureController` (the singleton) or `createGestureController()` for a test instance
 ```
 
@@ -205,6 +170,38 @@ const capture = useGestureCapture({
   the playground, 5400 after 600, measured with heap snapshots.
 - `useGestureEngine` (the per-element press/long-press/reentrant engine) stays; the controller is the
   **layer above** it that decides *which* element's gesture starts when several could.
+
+> ### ✅ BUILT — controller + React binding; all three primitives migrated
+>
+> `capabilities/gesture-controller.ts` (20 tests) is the pure arbiter; `hooks/use-gesture-capture.ts`
+> (9 tests) is the React binding, giving each mounted instance its own identity so two `Swipeable` rows
+> on one screen genuinely compete rather than aliasing into a single gesture.
+>
+> **`Swipeable` was migrated first** and set the pattern for the other two. The integration point
+> matters more than the wiring: capture is requested **at the moment the swipe locks**, not on
+> `pointerdown`. A pointerdown is also how a *tap* starts, so claiming there would starve every other
+> gesture on the screen for the duration of every touch. Both lock points — the mouse path and the
+> imperative touch path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs
+> back instead of being left mid-translate with no pointer to finish it.
+>
+> `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > SwipeableRow 200 > Scroll 100`.
+>
+> **All three primitives are migrated.** Each claims the arbiter at the point where its gesture becomes
+> unambiguous, which differs per primitive and is the part worth getting right:
+>
+> | Primitive | Claims at | Why not earlier |
+> |---|---|---|
+> | `Swipeable` | the horizontal **lock** | a pointerdown is also how a tap starts; claiming there starves every other gesture for the duration of every touch |
+> | `Drawer` (handle) | **pointerdown** | there is nothing else a handle press could mean, so it commits immediately |
+> | `Drawer` (whole sheet) | the scroll **takeover** | a touch on the sheet usually means scrolling its content |
+> | `EdgeSwipeGestures` | **touchstart inside the edge strip** | it only decides at touchend, but waiting would be too late to stop a row swipe running under the same finger. The strip is a few pixels wide, so holding the pointer there is narrow enough not to starve anything — and suppressing an in-content gesture under an edge touch is the intended outcome |
+>
+> Every one wires `onLost` so a pre-empted gesture resets rather than being stranded mid-translate with
+> no pointer left to finish it — the drawer snaps back, the row springs back.
+>
+> ⏳ **Still owed: device tuning.** The priority *numbers* are reasoned, not felt. The ordering wants
+> confirming on hardware with a drawer, a swipeable row and a scroller on one screen — exactly the kind
+> of judgement a unit test cannot make.
 
 ### Delta — ✅ discharged
 The controller is built and all three consumers are wired: `src/components/drawer/drawer-engine.tsx`,
@@ -252,21 +249,15 @@ If a future screen genuinely needs to survive back (retain scroll/state), that's
 ## 5. How the four compose (the arbitration picture)
 
 ```
-BACK press ─────▶ back chain (§2): open Drawer's handler consumes → else router back → else exit
-                  (a LEFT-EDGE swipe is a back press too: `EdgeSwipeGestures` walks the chain
-                   before its `left` callback, since 2026-09-02 — an open menu or Select closes
-                   under it instead of being popped with the route. That only works because the
-                   panel's OUTSIDE PRESS defers touch to `touchstart`, after the recogniser has
-                   claimed the arbiter: a touch's `pointerdown` arrives first, and deciding there
-                   closed the panel before the gesture existed — `dropdown/outside-press.ts`)
+BACK press ─────▶ back chain (§2): the highest registered handler consumes → else router back → else exit
 DRAG at edge ───▶ gesture controller (§3): grants ONE of edge-swipe-back / scroll / swipeable
 RESUME ─────────▶ app state (§1): token refresh + Query refetch + OTA check (LIFECYCLE §5.4)
 NAVIGATE ───────▶ route lifecycle (§4): enter/leave via mount/unmount; memory history when installed
 ```
 
-These four are the shared substrate. Leaf primitives register into them (a `Drawer` adds a back handler
-*and* a gesture *and* mounts/unmounts a screen), and cross-cutting systems (auth, OTA) subscribe to app
-state. Nothing below coordinates itself ad-hoc.
+These four are the shared substrate. Leaf primitives register into them (a `Drawer` claims a gesture
+*and* mounts/unmounts a screen; its back handler is still the app's, §2), and cross-cutting systems
+(auth, OTA) subscribe to app state. Nothing below coordinates itself ad-hoc.
 
 ---
 
@@ -277,12 +268,12 @@ state. Nothing below coordinates itself ad-hoc.
 | 1 | **App state** | `src/capabilities/app-state.ts`, `src/hooks/use-app-state.ts` | ✅ both barrels |
 | 2 | **Back chain** | `src/capabilities/back-chain.ts` (`BackPriority`), `src/hooks/use-back-handler.ts` | ✅ both barrels |
 | 3 | **Gesture controller** | `src/capabilities/gesture-controller.ts` + `src/hooks/use-gesture-capture.ts` | ✅ capability barrel. The *hook* is framework-internal by design — the three primitives are its consumers. |
-| 4 | **Route lifecycle** | `src/hooks/use-screen-lifecycle.ts` | ❌ **missing from `src/interface/hooks.index.ts`** — see the note in §4 |
+| 4 | **Route lifecycle** | `src/hooks/use-screen-lifecycle.ts` | ✅ hooks barrel — see the note in §4 |
 
 The build order this section used to prescribe — `useAppState` → back chain → gesture controller →
 route lifecycle — is recorded as **L18** in
 [`../decisions/register.md §2`](../decisions/register.md), and it was followed. Nothing here is
-outstanding except the §4 barrel export.
+outstanding except the `Drawer` back handler §2 names.
 
 > **Why this section is now a status table and not a plan.** Until 2026-08-30 it opened with *"All four
 > are **unbuilt** except a partial `useAndroidBackButton`"* and then laid out four steps to build them.
