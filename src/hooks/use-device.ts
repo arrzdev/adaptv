@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react"
 import type { DeviceInfo } from "#adaptv/capabilities/device"
-import {
-  getDeviceId,
-  getDeviceInfo,
-  getLanguageTag,
-} from "#adaptv/capabilities/device"
+import { getDeviceId, getDeviceInfo } from "#adaptv/capabilities/device"
 
 export type UseDeviceResult = {
   /** The immutable device record, or `null` until the first read settles. */
   info: DeviceInfo | null
   /** Stable per-install id on native; `null` on web — see `getDeviceId`. */
   id: string | null
-  /** Current BCP-47 tag. Empty string until mount (the server has no locale). */
-  languageTag: string
   /** True until `info` is available. One tick on web, one bridge hop on native. */
   loading: boolean
 }
@@ -29,11 +23,9 @@ export type UseDeviceResult = {
 export function useDevice(): UseDeviceResult {
   const [info, setInfo] = useState<DeviceInfo | null>(null)
   const [id, setId] = useState<string | null>(null)
-  const [languageTag, setLanguageTag] = useState("")
 
   useEffect(() => {
     let isActive = true
-    setLanguageTag(getLanguageTag())
     void getDeviceInfo().then((next) => {
       if (isActive) setInfo(next)
     })
@@ -45,5 +37,5 @@ export function useDevice(): UseDeviceResult {
     }
   }, [])
 
-  return { info, id, languageTag, loading: info === null }
+  return { info, id, loading: info === null }
 }

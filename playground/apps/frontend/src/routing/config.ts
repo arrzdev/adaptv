@@ -51,6 +51,7 @@ export const routes = rootRoute([
     route("/lab/share", "pages/lab/share.page.tsx"),
     route("/lab/clipboard", "pages/lab/clipboard.page.tsx"),
     route("/lab/device", "pages/lab/device.page.tsx"),
+    route("/lab/locale", "pages/lab/locale.page.tsx"),
     route("/lab/orientation", "pages/lab/orientation.page.tsx"),
     route("/lab/keep-awake", "pages/lab/keep-awake.page.tsx"),
     route("/lab/app-state", "pages/lab/app-state.page.tsx"),
