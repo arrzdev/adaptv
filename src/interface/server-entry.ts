@@ -5,9 +5,9 @@
 //worker's `{ fetch }` handler `defaultStreamHandler` builds from the app's
 //generated router.
 //
-//This lives in framework source, so `ban-server-apis.ts` (which forbids
-//`@tanstack/react-start` in APPLICATION source) does not apply — `isApplicationSource`
-//is false for adaptv's own modules.
+//`ban-server-apis.ts` allows this one specifier by name (`ALLOWED_START_SPECIFIERS`):
+//under a linked install this file is not under `node_modules`, so the ban governs
+//it like application source.
 export {
   createServerEntry,
   default,
