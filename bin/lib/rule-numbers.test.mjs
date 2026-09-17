@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -163,16 +164,20 @@ const CITED = citations()
 describe("the CLI contract's rule numbers", () => {
   it("does not read Playwright's report output as citations", () => {
     const root = mkdtempSync(path.join(tmpdir(), "adaptv-rules-"))
-    mkdirSync(path.join(root, "playground", "playwright-report"), {
-      recursive: true,
-    })
-    writeFileSync(
-      path.join(root, "playground", "playwright-report", "x.js"),
-      "R0",
-    )
-    mkdirSync(path.join(root, "src"))
-    writeFileSync(path.join(root, "src", "ok.ts"), "// R1")
-    expect(textFiles(root)).toEqual([path.join(root, "src", "ok.ts")])
+    try {
+      mkdirSync(path.join(root, "playground", "playwright-report"), {
+        recursive: true,
+      })
+      writeFileSync(
+        path.join(root, "playground", "playwright-report", "x.js"),
+        "R0",
+      )
+      mkdirSync(path.join(root, "src"))
+      writeFileSync(path.join(root, "src", "ok.ts"), "// R1")
+      expect(textFiles(root)).toEqual([path.join(root, "src", "ok.ts")])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it("finds the rules at all (the scan itself can rot)", () => {
