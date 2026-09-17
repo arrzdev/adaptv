@@ -1724,6 +1724,95 @@ Both bands, and the fallback lands on the theme rather than on the layout above.
 
 **Not in scope, and deliberately.** The *animated* tint (`transitionChromeTint`, B32) still writes only the meta tag, so a drawer that dims the chrome does nothing on iOS 26+. Extending it to the shell background is a separate change with its own cost — a per-frame `style.backgroundColor` on `html` is a full-page repaint, which is a very different proposition from a meta write.
 
-**2026-09-13, measured — in Safari on iOS 26.1 the drawer's dim reaches the top bar, as a step, and extending the tint to the shell is declined.** The paragraph above is half right: the meta write is inert there, but the drawer does not do nothing. In Safari on an iOS 26.1 (`23B86`) simulator, with `/lab/drawer` recorded and read frame by frame over three runs, the top band does not stay at the undimmed theme colour, and it does not follow the backdrop's fade either. It jumps to the fully dimmed colour (`#777777`, against `#787878` on the page under the scrim) on the first frame the page starts dimming, or one frame (15 ms) later, **250–257 ms ahead of the page's 252–265 ms fade**. On close it holds the full dim for 242–250 ms, then cross-fades back in 82–85 ms and lands on the theme colour **150–152 ms after the page**. The page's close fade ends at 173–182 ms. The hold's end lines up with the backdrop's unmount: the close transition runs 0.22 s, then `handleExitComplete` unmounts the layer on the next task (`DRAWER_EXIT_UNMOUNT_DELAY_MS = 0`, `drawer-engine.tsx`). That is the best evidence for how Safari reads it: the bar reacts to the fixed `inset-0` layer being there and to its colour, not to its `opacity`. It is inferred from the timing, not proven. The bottom band does not take the dim at all. The basic sheet covers the bottom edge, and the band steps to the sheet's own colour (`#fbfbfb`, lighter than closed) and back with a 65–68 ms cross-fade. The iOS 18.0 (`22A3351`) control follows the scrim frame by frame through the meta tag: −8 to +8 ms, median difference 2/255. The installed PWA and the native app were not measured.
+---
 
-Declined for two reasons that do not rest on that inference. The backdrop is see-through (`bg-black/40` by default, 55% in the lab), and the bar already shows the page composited under it, so a shell dimmed underneath it would dim the band twice. And a colour painted from JavaScript every frame is a repaint of the whole page, held to 60 Hz on iOS (`animation.md` §1.1). Both reasons apply to a `body` paint as much as to `html`. The sketch above names `html`, and on its own that target misses the bars whenever the app paints its `body`, as the playground does: on the same simulator a static page with an `html` of `#0b6e4f` under a `#eeeeec` body left both bands `#eeeeec`, and the same page with a transparent `body` gave `#0b6e4f` on both. The obvious lever, a backdrop that animates its `background-color` alpha instead of `opacity` in case Safari reads the declared colour every frame, was measured and **does not work**. On a static probe page in the same Safari (a `fixed inset-0` layer, alpha 0 → 0.4 over 250 ms, `opacity` held at 1, three runs), the top band froze at the colour of the layer's first painted frame, 1–16% of the page's dim, for the whole 2.5 s the layer was open, while the page under it was fully dimmed: band minus page 71–87/255 median. On close it held that value until the layer was removed and only then cross-faded back. That is worse than the `opacity` step, which at least lands on the full dim. The `opacity` control on the same page reproduced the step, though not always on the first frame: 28–30 ms late in two runs and 252 ms late in one. It would also have collided with a locked rule: `animation.md` §1 says a design that needs `background-color` animated is a design change, and §1.1 is why. What might make Safari re-read the layer while it fades is untested.
+## 🚨 In dev, every Tailwind variant and breakpoint was dead on the floor browsers ✅ **FIXED** (found 2026-09-13)
+
+Reported from an iOS 16.2 simulator running a native dev build: the page content sat under the status
+bar. The page's `app:py-safe-offset-2` was in the stylesheet and did nothing. It is not one utility.
+Tailwind 4.2.4 compiles every variant into a **nested** rule, and every breakpoint into a **range**
+media query:
+
+```css
+.x { @media (display-mode: standalone) { … } &:where(html[data-adaptv-platform="native"] *) { … } }
+.y { @media (width >= 40rem) { … } }
+```
+
+- An engine without CSS nesting (below Safari 16.5 or Chromium 112) keeps the outer rule and drops
+  everything nested in it. The playground's dev stylesheet had 151 such rules: every `app:` and `web:`
+  utility, and every `hover:`, `dark:`, breakpoint, `data-*` and pseudo-element variant beside them.
+- An engine without range syntax (below Safari 16.4 or Chromium 104) cannot parse `(width >= 40rem)`, so
+  the query matches nothing. With the nesting gone, every `sm:`/`md:`/`lg:` rule was still dead: 31
+  queries in the playground. `max-sm:` (`width < 40rem`) and `not-sm:` are worse: lightningcss lowers
+  them to `not (min-width: 40rem)`, a Media Queries 4 form the same engines drop.
+
+iOS 15 and 16.0–16.4 are inside the floor; so is Android WebView 111, the `minWebViewVersion` above.
+Nothing errors in any case.
+
+**Production never had it.** `@tailwindcss/vite`'s build plugin passes its output through `optimize`
+from `@tailwindcss/node`: lightningcss with `include: Nesting | MediaQueries`, the `customMedia` draft
+and browser targets, then a text rewrite of `@media not (` to `@media not all and (`. Every other sheet
+goes through Vite's minifier at `build.cssTarget`. The serve plugin does neither, and Vite does not lower
+CSS in dev with the default PostCSS transformer.
+
+### 🔒 The fix is the build's own lowering, sheet by sheet, NOT the whole production pass and NOT a transformer switch
+
+`vite/dev-css-lowering.ts` is an `apply: "serve"` plugin running lightningcss unminified and with no
+`targets`, in one of two modes:
+
+- **A sheet Tailwind compiled** (it carries the `/*! tailwindcss v…` banner, which Tailwind writes
+  into exactly the output its build plugin optimizes) gets the part of `optimize` that decides whether
+  a rule exists: `Features.Nesting | Features.MediaQueries`, `drafts.customMedia`, the same
+  non-standard `>>>` parsing and warning filter, and the same `not all and` rewrite.
+- **Any other sheet** (a CSS module, a side-effect import, a dependency's CSS) gets `Features.Nesting`
+  only. That is what Vite 8's minifier does to it at the default `build.cssTarget` (Chrome 111,
+  Safari 16.4): it flattens nesting and leaves range syntax as written.
+
+Rejected:
+
+- **`css.transformer: "lightningcss"` from adaptv's config hook.** It would lower in dev, but it
+  replaces PostCSS for the consumer's own CSS in dev AND build, so a consumer's PostCSS config would
+  silently stop running.
+- **Tailwind's whole `optimize` in dev (targets included).** That would also add vendor prefixes and
+  lower colours and logical properties for the targets. Those change how a rule renders; nesting and
+  range syntax decide whether a rule exists at all.
+- **Nesting only, everywhere.** It was the first cut, and it left every breakpoint dead below Safari
+  16.4 — the same failure, one construct over.
+- **Tailwind's pass on every sheet, or no pass on the others.** The first lowers range syntax a build
+  leaves alone; the second leaves nesting a build flattens. Either way a sheet changes shape between dev
+  and build.
+- **Two lightningcss passes, as `optimize` runs.** The second pass merges the rules the first flattened
+  out of nesting into selector lists (`.bg-error, .bg-error\/10`) and adjacent `@media` blocks.
+  Production merges with targets, which tell lightningcss which selectors an old engine lacks; without
+  targets it would merge those too, and one selector an engine cannot parse drops the whole list there.
+  Skipping it keeps every Tailwind variant unmerged, which the cascade does not tell apart.
+- **A gate or a UA sniff.** Flat CSS with `min-width` queries means the same thing to an engine that
+  supports both features, so there is nothing to detect — the same reason the ring rewrite above is
+  unconditional.
+
+Known gaps, both dev-only and neither reachable from Tailwind's own utilities:
+
+- **The one pass still merges adjacent top-level rules with identical declarations**, and without
+  targets it can merge a pair a build keeps apart (`.a:hover` next to `.b::details-content` becomes one
+  list an iOS 15/16 engine drops). Tailwind nests its variants, so its output is not exposed; an
+  authored sheet with such a pair is. Passing Vite's default `build.cssTarget` with every other feature
+  excluded would close it.
+- **A dependency's prebuilt Tailwind CSS carries the banner**, so dev gives it Tailwind's pass while a
+  build, where Tailwind never compiles that file, leaves its range syntax to Vite's minifier.
+
+`lightningcss` is a direct dependency at 1.32.0, exactly the version `@tailwindcss/node` 4.2.4 pins for
+`optimize` (and the one Vite 8 resolves), so one native binary serves both. The `not all and` rewrite
+is not re-mapped: lightningcss maps an at-rule by its `@` alone, and the insertion comes after it on the
+same line, so no mapped column moves (a test holds that).
+
+lightningcss re-prints what it parses — `0.5` → `.5`, `150ms` → `.15s`, `transparent` → `#0000`, a
+`color-mix()` over literal colours resolved to the colour it computes, `var(--x,)` → `var(--x, )` — and
+each of those is what the production build already emits for the same rule. Over the playground's real
+dev sheet, the lowered declarations and `optimize`'s output differ only by vendor prefixes and by
+production merging identical rules; every `@media` prelude production writes, dev writes with the same
+text, and production has fewer `@media` blocks only because it merges adjacent ones. On Tailwind's
+`max-sm:`, `not-sm:`, `sm:max-md:` and `@custom-media` shapes, dev's output equals `optimize`'s
+(unminified, whitespace aside). Pinned by `dev-css-lowering.test.ts` (the real serve-path sheet as its
+fixture, checked against the installed Tailwind version) and `playground/e2e/dev-css-flat.spec.ts` (the
+CSSOM a browser parsed from the dev server). Placement against the empty-fallback rewrite is in
+[`../design/vite-plugin-map.md`](../design/vite-plugin-map.md) §2.5.

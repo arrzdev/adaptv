@@ -29,6 +29,7 @@ import { adaptvClientTargetsPlugin } from "#adaptv/vite/client-targets.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
+import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
 import {
   adaptvManifestPlugin,
   buildManifest,
@@ -231,13 +232,20 @@ export async function adaptv(
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts
     adaptvCssLayerOrderPlugin(),
-    //The mirror image of the line above: NO `enforce`, because it rewrites what
-    //@tailwindcss/vite PRODUCED and `post` is already too late. Without it every ring
-    //width and every utility that sets a `--tw-*` part (filters, numeric variants, touch
-    //panning, 3D rotation, containment) silently computes nothing on Android WebView
-    //113–118.
-    //→ src/vite/tailwind-empty-fallback.ts
-    adaptvTailwindEmptyFallbackPlugin(),
+    //Dev only, no `enforce`, and BEFORE the rewrite below: @tailwindcss/vite nests every
+    //variant and writes breakpoints in range syntax, and lowers both only in a build, so in
+    //dev every `app:`/`web:`/`hover:` utility was dead below Safari 16.5 and Chromium 112, and
+    //every breakpoint below Safari 16.4. This applies the build's own pass, sheet by sheet.
+    //It goes first so the rewrite gets lightningcss-printed CSS in dev too, as it always has
+    //in a build, and the carriers the rewrite writes reach the browser as written.
+    //→ src/vite/dev-css-lowering.ts
+    adaptvDevCssLoweringPlugin(),
+    //The mirror image of the layer-order plugin: NO `enforce`, because it rewrites what
+    //@tailwindcss/vite PRODUCED — `pre` sees no utilities yet and `post` is already past
+    //Vite's CSS stage (see the ring-shadow-fallback.ts header). Without it every `ring-*` in
+    //the app silently renders nothing on Android WebView 113–118.
+    //→ src/vite/ring-shadow-fallback.ts
+    adaptvRingShadowPlugin(),
     adaptvConfigLoaderPlugin(context),
     //Both lineages, no gate: the capacitor bundle is the same client build, and
     //an iOS WebView is only ever as new as the OS it ships in. → src/vite/client-targets.ts
