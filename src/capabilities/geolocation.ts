@@ -107,8 +107,10 @@ export function getCurrentPosition(
 
 /**
  * Ask for permission. Native shows the OS dialog directly; web has no explicit
- * request API, so a `getCurrentPosition` call raises the browser prompt, then we
- * re-read the resolved state.
+ * request API, so a `getCurrentPosition` call raises the browser prompt, and a
+ * failed read re-reads the resolved state. A refusal on a browser without the
+ * Permissions API answers `"denied"`, since a re-read there can only say
+ * `"prompt"`.
  */
 export async function requestGeoPermission(): Promise<GeoPermission> {
   if (isNativePlatform()) {
@@ -124,8 +126,17 @@ export async function requestGeoPermission(): Promise<GeoPermission> {
   try {
     await getCurrentPosition()
     return "granted"
-  } catch {
-    //denied, timed out, or position-unavailable — re-read the settled state
+  } catch (err) {
+    //the read rejects with the browser's GeolocationPositionError. Code 1 is
+    //PERMISSION_DENIED, but Chromium also uses it for a dismissed prompt, so
+    //only a browser that cannot query the state (Safari before 16) takes it as
+    //the answer; everywhere else, and for a timeout or no fix, re-read it
+    const refused =
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      err.code === 1
+    if (refused && !navigator.permissions) return "denied"
     return checkGeoPermission()
   }
 }
