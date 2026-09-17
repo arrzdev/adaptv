@@ -67,9 +67,12 @@ scar tissue:
 
 1. **The settle is authored in CSS, and the authoring site is load-bearing.** A `@keyframes` rule
    animates cleanly; an inline `transition` or an `element.animate()` call settles with a visible
-   tremor on WebKit. The shipped engine tweens through the `pwa-drawer-slide` keyframe for exactly
-   this reason. Feeding a *runtime* duration and curve into a *build-time* keyframe is the whole
-   design problem here, and it is not obvious. → [`../research/composited-transform-authoring.md`](../research/composited-transform-authoring.md)
+   tremor on WebKit. The open, close, drag snap and keyboard snap tween through the
+   `pwa-drawer-slide` keyframe for exactly this reason; the keyboard grow and shrink themselves (the
+   FLIP in `drawer-engine.tsx`) still ride an inline transition, so this change is also where they
+   move onto the keyframe. The keyframe already takes a runtime duration and cubic-bezier
+   (`tweenDrawerPanelTransform` in `drawer-motion.ts`); expressing the OS keyboard's own curve
+   through it is the design problem here, and it is not obvious. → [`../research/composited-transform-authoring.md`](../research/composited-transform-authoring.md)
 2. **Do not retune the existing curve while doing it.** The drawer's easing is settled over four
    device ladders. A change that "improves" it in passing will read as a regression to the owner
    and will be bisected to this PR.
@@ -92,7 +95,8 @@ The second is cheaper and closes most of the visible gap. It is probably the rig
 - Widen `KeyboardInfo` with `duration` and an easing descriptor. This is a **public type change** —
   additive, so no consumer breaks, but it is surface.
 - Plumb it from the native listener in `initNativeKeyboard`.
-- Consume it in the drawer's keyboard path without disturbing the authored keyframe.
+- Consume it in the drawer's keyboard path, moving the FLIP onto the authored keyframe rather than
+  retiming its inline transition.
 - **Web has no equivalent.** `visualViewport` reports geometry with no timing at all, so the web path
   keeps adaptv's constants and the two paths diverge here on purpose.
 
