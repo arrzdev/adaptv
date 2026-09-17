@@ -22,6 +22,7 @@ export const routes = rootRoute([
     route("/lab/text", "pages/lab/text.page.tsx"),
     route("/lab/image", "pages/lab/image.page.tsx"),
     route("/lab/spinner", "pages/lab/spinner.page.tsx"),
+    route("/lab/progress-bar", "pages/lab/progress-bar.page.tsx"),
     route("/lab/button", "pages/lab/button.page.tsx"),
     route("/lab/fab", "pages/lab/fab.page.tsx"),
     route("/lab/link", "pages/lab/link.page.tsx"),

@@ -19,7 +19,7 @@ import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
 import { RadioGroup } from "#adaptv/components/radio-group"
 import { ScrollView } from "#adaptv/components/scroll-view"
-import { Spinner } from "#adaptv/components/spinner"
+import { ProgressBar, Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { TextArea } from "#adaptv/components/text-area"
@@ -841,6 +841,46 @@ describe("Spinner", () => {
   it("forwards the consumer style, and declares no locked inline tier", () => {
     const el = firstEl(<Spinner style={{ color: "rgb(1, 2, 3)" }} />)
     expect(el.style.color).toBe("rgb(1, 2, 3)")
+  })
+})
+
+describe("ProgressBar", () => {
+  //the look is the consumer's (height, radius, colour); what is locked is what the
+  //absolutely positioned parts and the clipped sweep need
+  it("className beats the base look", () => {
+    const c = classOf(
+      <ProgressBar className="h-2 rounded-none inline-block w-24" />,
+    )
+    expect(hasClass(c, "h-2")).toBe(true)
+    expect(hasClass(c, "h-1")).toBe(false)
+    expect(hasClass(c, "rounded-none")).toBe(true)
+    expect(hasClass(c, "rounded-full")).toBe(false)
+    expect(hasClass(c, "inline-block")).toBe(true)
+    expect(hasClass(c, "block")).toBe(false)
+    expect(hasClass(c, "w-24")).toBe(true)
+    expect(hasClass(c, "w-full")).toBe(false)
+  })
+
+  it("locked beats className: the sweep stays clipped and the parts stay anchored", () => {
+    const c = classOf(<ProgressBar className="overflow-visible static" />)
+    expect(hasClass(c, "overflow-hidden")).toBe(true)
+    expect(hasClass(c, "overflow-visible")).toBe(false)
+    expect(hasClass(c, "relative")).toBe(true)
+    expect(hasClass(c, "static")).toBe(false)
+  })
+
+  it("forwards the consumer style, and the value's custom property is locked", () => {
+    const el = firstEl(
+      <ProgressBar
+        value={0.2}
+        style={{
+          color: "rgb(1, 2, 3)",
+          ["--progress-value" as string]: 0.8,
+        }}
+      />,
+    )
+    expect(el.style.color).toBe("rgb(1, 2, 3)")
+    expect(el.style.getPropertyValue("--progress-value")).toBe("0.2")
   })
 })
 
