@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
-import { compile } from "tailwindcss"
+import { __unstable__loadDesignSystem, compile } from "tailwindcss"
 
 /*
  * Compile adaptv's real stylesheet with the real Tailwind, so the style tests can assert
@@ -29,27 +29,47 @@ export async function compileCss(
   css: string,
   candidates: string[],
 ): Promise<string> {
-  const compiler = await compile(
-    `${CONSUMER_LAYER_ORDER}
+  const compiler = await compile(withTailwind(css), COMPILE_OPTIONS)
+  return compiler.build(candidates)
+}
+
+/**
+ * Every utility Tailwind can generate — its whole class list, ~22k candidates — compiled
+ * into one sheet (~5 MB, a few hundred ms).
+ *
+ * For claims about what Tailwind CAN emit rather than about one utility, and for tests that
+ * must not spell utility names: adaptv's `@source` scans `src/`, test files included, so a
+ * name written in a test ships in every consumer's stylesheet.
+ */
+export async function compileEveryUtility(): Promise<string> {
+  const source = withTailwind("")
+  const system = await __unstable__loadDesignSystem(
+    source,
+    COMPILE_OPTIONS,
+  )
+  const compiler = await compile(source, COMPILE_OPTIONS)
+  return compiler.build(system.getClassList().map(([name]) => name))
+}
+
+function withTailwind(css: string): string {
+  return `${CONSUMER_LAYER_ORDER}
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-${css}`,
-    {
-      base: STYLES_DIR,
-      loadStylesheet: async (id, base) => {
-        const path = id.startsWith("tailwindcss")
-          ? resolve(process.cwd(), "node_modules", id)
-          : resolve(base, id)
-        return {
-          path,
-          base: dirname(path),
-          content: readFileSync(path, "utf8"),
-        }
-      },
-    },
-  )
+${css}`
+}
 
-  return compiler.build(candidates)
+const COMPILE_OPTIONS = {
+  base: STYLES_DIR,
+  loadStylesheet: async (id: string, base: string) => {
+    const path = id.startsWith("tailwindcss")
+      ? resolve(process.cwd(), "node_modules", id)
+      : resolve(base, id)
+    return {
+      path,
+      base: dirname(path),
+      content: readFileSync(path, "utf8"),
+    }
+  },
 }
 
 /** Compile the whole shipped bundle (`src/styles/index.css`) for `candidates`. */
