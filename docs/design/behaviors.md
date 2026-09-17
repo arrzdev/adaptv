@@ -301,28 +301,16 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** install on Android (5): home-screen icon fills its shape (no white box), the launch chrome
   isn't a dark strip. *(Shipped to chopchop in PR #91.)*
 
-### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView`
+### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Skeleton`
 - **How:** `src/components/view.tsx` (row/center/fill/safe layout, identical everywhere),
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
-  `src/components/text.tsx`, `src/components/image.tsx`.
-- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
-- **`FieldGroup` (2026-09-02):** `src/components/field-group.tsx`, the grouped-settings form
-  (`ion-list inset`, the iOS Settings pattern). A `Section` labels itself (`aria-labelledby` to its
-  own `data-part="header"`) and keeps its rows as the only children of one `data-part="rows"`
-  container, with `Header` / `Footer` slots that beat the `title` / `footer` shorthand. A `Row`
-  carries `data-disabled` and `aria-disabled` together and takes an element-only `render` like
-  `Text` ([`../decisions/styling.md §3.3`](../decisions/styling.md)), so `render={<label />}` makes
-  the row its control's label and `render={<Link />}` makes it a navigation row. What it locks is
-  structure only — `flex` on the row, `flex flex-col` on its label column — while alignment
-  (`items-center justify-between`) is a default and every colour, radius, padding and gap is the
-  consumer's `className` (styling §5.4). What it refuses is a `data-position` attribute:
-  rows are siblings, so `first:` / `last:` / `only:` already spell the grouped corners (styling
-  §5.4.1), and `getFieldItemPosition(index, total)` is exported for rows that are not DOM siblings,
-  a virtualised list being the case.
+  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/skeleton.tsx` (the
+  placeholder box: reduced-motion and forced-colors answered in `src/styles/skeleton.css`,
+  assistive technology told once per `Skeleton.Region`).
+- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device;
+  `Skeleton` stops pulsing with Reduce Motion on, on 1–6, with no frame of motion first.
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
-  The public surface is 27 barrels (`FieldGroup` is the 27th; #73, #74 and #75 each add one of
-  their own from the same 26, so whichever merges last raises this line again) —
-  `src/interface/components.index.ts` is the list, and
+  The public surface is 27 barrels — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
   That test exists because **the drift which hid `Text` from consumers passed typecheck, lint, the
   unit suite and `build:check`**: a missing re-export is invisible to every gate that does not

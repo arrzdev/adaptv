@@ -14,7 +14,7 @@ import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { ScrollView } from "#adaptv/components/scroll-view"
-import { Select } from "#adaptv/components/select"
+import { Skeleton } from "#adaptv/components/skeleton"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { Text } from "#adaptv/components/text"
@@ -142,6 +142,10 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ],
   ["not-found", <UiNotFound key="nf" />],
   ["offline", <Offline key="offline" />],
+  ["skeleton", <Skeleton key="skeleton" />],
+  //the region is its own scope, not a `data-part` of the box: a consumer styling
+  //every placeholder must not also restyle the wrapper that announces them
+  ["skeleton-region", <Skeleton.Region key="skeleton-region" loading />],
 ]
 
 describe("data-adaptv is on every primitive, with the component's own name", () => {
