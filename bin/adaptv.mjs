@@ -82,8 +82,8 @@ import {
   capSync,
   ensureDeviceWindow,
   generateAssets,
-  isAppInstalled,
   isAppRunning,
+  isInstallCurrent,
   isPhysicalTarget,
   lanIp,
   launchInstalledApp,
@@ -1001,10 +1001,16 @@ async function runLive(appRoot, platforms, opts) {
       //
       // …unless nothing NATIVE changed. In live-reload the installed app is only a shell
       // pointing at the dev server, so when the native inputs and the dev URL are
-      // unchanged AND the device confirms it's still installed, there is nothing to
+      // unchanged AND the device confirms the app it holds is that shell, there is nothing to
       // rebuild: launch it and let it reconnect. That turns a ~15s build+install into a
       // ~1s launch, and drops Android from two relaunches to one (no `cap run` to reset
       // `adb reverse`). Every uncertainty falls through to the full path.
+      //
+      // The device has the last word on WHICH server the install loads, not this checkout's
+      // cache. Another checkout of the same app, or an earlier run on another port, installs
+      // under the same bundle id, and relaunching that shell printed `cached` and left the app
+      // polling a port nothing served — see `isInstallCurrent`. It proves the app id and the
+      // dev URL, nothing else: another checkout's install on the SAME port still passes.
       const runCache = readBuildState(appRoot)
       runCache.run ??= {}
       const cacheKey = (platform) =>
@@ -1035,12 +1041,9 @@ async function runLive(appRoot, platforms, opts) {
         const fp = nativeFingerprint(appRoot, platform)
         const cached =
           !force &&
-          (await canReuseInstall(prev, {
-            url,
-            fp,
-            installed: () =>
-              isAppInstalled(appRoot, platform, target.id, env),
-          }))
+          prev?.url === url &&
+          prev?.fp === nativeFingerprint(appRoot, platform) &&
+          (await isInstallCurrent(appRoot, platform, target.id, env))
 
         if (cached) {
           // The install is current, so ITS build is the one that may reconnect — named before
@@ -1657,14 +1660,6 @@ async function pipeline(kind, appRoot, platforms, opts) {
   }
   const syncNeeded = (p) =>
     opts.force || buildCache.sync[p] !== syncTag || bakedConfigStale(p)
-  // Snapshot staleness NOW — after prepare, before any sync. The sync repairs the project's
-  // config, but the app ALREADY INSTALLED on the device is whatever the last command put
-  // there; a dirty config at this point means that install is a `dev` shell, so the launch
-  // step must reinstall rather than relaunch it. Checking after the sync would always read
-  // "clean" and happily relaunch the stale binary.
-  const staleAtStart = Object.fromEntries(
-    platforms.map((p) => [p, bakedConfigStale(p)]),
-  )
   // `preview` run cache: when NOTHING that lands on the device changed since the last
   // preview on it — the web bundle+identity (`syncTag`) AND the native project
   // (`nativeFingerprint`: config/plugins/pbxproj; it skips the synced `public/`, which
@@ -1682,13 +1677,16 @@ async function pipeline(kind, appRoot, platforms, opts) {
     // installed" cannot tell them apart — after a `dev` run the installed binary is a
     // live-reload shell pointing at a dev server. Taking the fast path there relaunches
     // THAT, and the user gets the "dev server isn't running" screen instead of their app.
-    // The baked config is the tell (dev bakes `server.url`), so never reuse an install when
-    // it disagrees with what this command intends — rebuild and reinstall instead.
+    // The config baked into the INSTALLED app is the tell (dev bakes `server.url`), so never
+    // reuse an install when it disagrees with what this command intends — rebuild and
+    // reinstall instead. It is read off the device rather than this project's copy: a dev
+    // shell another checkout installed left this project's config clean. What the check
+    // cannot see is another checkout's static preview build — same id, no URL — so that one
+    // is still relaunched.
     const cached =
       !opts.force &&
-      !staleAtStart[platform] &&
       buildCache.run[key]?.id === runIdOf(platform) &&
-      (await isAppInstalled(appRoot, platform, target.id, env))
+      (await isInstallCurrent(appRoot, platform, target.id, env))
     if (cached) {
       // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
       // (e.g. a prior `dev` session's offline screen) must not linger on screen.
