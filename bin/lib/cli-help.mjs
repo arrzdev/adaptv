@@ -16,14 +16,12 @@ import {
   usageLines,
 } from "./cli-spec.mjs"
 import {
-  c,
   header,
   helpText,
   lineBlock,
   paragraph,
   section2,
   spacer,
-  table,
   usageFail,
 } from "./render.mjs"
 
@@ -258,6 +256,3 @@ export function renderFault(fault) {
       return usageFail(fault.message ?? String(fault))
   }
 }
-
-/** Exported for the tests, which assert the page never exceeds the terminal width. */
-export { commandPage, overview, table, c }

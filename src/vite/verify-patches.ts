@@ -30,43 +30,6 @@ export type PatchStatus = {
 }
 
 /**
- * Detect whether the patches took, by inspecting the *behaviour* they enable
- * rather than by reading pnpm's metadata.
- *
- * Checking the installed source is the honest test: it is true exactly when the
- * feature works, and it cannot be fooled by a stale lockfile, a partial install,
- * or a hoisting layout that resolved a different copy of the package than the
- * one that was patched.
- */
-export function checkPatches(sources: {
-  /** Contents of `start-plugin-core/dist/esm/start-router-plugin/route-tree-footer.js`. */
-  startFooter?: string
-  /** Contents of `router-generator/dist/esm/template.js`. */
-  generatorTemplate?: string
-}): PatchStatus {
-  const missing: string[] = []
-
-  //patched => the generated route tree's `declare module` reads adaptv's Start
-  //barrel via the env override, instead of hardcoding `@tanstack/*-start`
-  if (
-    sources.startFooter !== undefined &&
-    !sources.startFooter.includes("ADAPTV_START_PKG")
-  ) {
-    missing.push("@tanstack/start-plugin-core")
-  }
-
-  //patched => the target template reads adaptv's env override
-  if (
-    sources.generatorTemplate !== undefined &&
-    !sources.generatorTemplate.includes("ADAPTV_ROUTER_PKG")
-  ) {
-    missing.push("@tanstack/router-generator")
-  }
-
-  return { ok: missing.length === 0, missing }
-}
-
-/**
  * The `patchedDependencies` filename convention, decoded.
  *
  * The filename IS the pnpm key: `@scope__name@version.patch` means
@@ -249,8 +212,8 @@ export function checkNativePatch(
  * build, and nothing but this check would say so.
  *
  * Returns the message to print, or `null` when everything is in place. Reading the
- * files rather than pnpm's metadata, for the reason {@link checkPatches} gives:
- * a lockfile can claim a patch that a partial install never applied.
+ * files rather than pnpm's metadata, because a lockfile can claim a patch that a
+ * partial install never applied.
  */
 export function missingNativePatchMessage(
   adaptvRoot: string = defaultAdaptvRoot(),

@@ -88,6 +88,9 @@ describe("TUNING — the two ranges do different jobs", () => {
     //Below the default is worth a word; at or above it, up to the band's top, is not.
     expect(TUNING.margin.band[0]).toBe(DEFAULT_MARGIN)
     expect(TUNING.padding.band[0]).toBe(TUNING.padding.fallback)
+    //Padding's floor IS its minimum, so a padding below the band is already an error and
+    //`tighter()` only ever words a margin. Raise this floor and it needs a padding case.
+    expect(TUNING.padding.band[0]).toBe(TUNING.padding.min)
   })
 
   it("keeps the usable range wider than the recommended one", () => {
