@@ -3,8 +3,9 @@
 //e.g. feeding `getOnline`/`subscribeOnline` into TanStack Query's `onlineManager`.
 //
 //🔴 Four of these are named lists rather than `export *` for one shared reason —
-//clipboard, keep-awake, orientation and share (theme-color is the fifth named
-//list, and withholds something else; its own note is above it). The shared
+//clipboard, keep-awake, orientation and share (theme-color and url-open are the
+//fifth and sixth named lists, and each withholds something else; their own notes
+//sit beside them). The shared
 //reason: a standalone `isXSupported()` predicate is a second way to ask
 //a question the surface already answers, so it stays module-internal for the hook
 //to use and never reaches a consumer. Both existing answers are better than it —
@@ -79,3 +80,7 @@ export {
   subscribeChromeTintBase,
   transitionChromeTint,
 } from "../capabilities/theme-color"
+//NOT `export *`: `installUrlOpen` is withheld. The router factory attaches the one link listener
+//as the router is built, and a consumer calling it would point every link at a second router.
+//Hearing links is public (`onUrlOpened`), routing them is not.
+export { onUrlOpened, type UrlOpened } from "../capabilities/url-open"

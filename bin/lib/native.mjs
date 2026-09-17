@@ -2264,6 +2264,11 @@ function readAppId(_appRoot) {
  * to say the project was never patched.
  */
 function subInFile(appRoot, file, re, replacement) {
+  rewriteFile(appRoot, file, (before) => before.replace(re, replacement))
+}
+
+/** {@link subInFile} for a rewrite a single regex cannot express — same failure line. */
+function rewriteFile(appRoot, file, transform) {
   const fault = (err) =>
     new Error(
       `could not write ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
@@ -2275,7 +2280,7 @@ function subInFile(appRoot, file, re, replacement) {
     if (err?.code === "ENOENT") return
     throw fault(err)
   }
-  const after = before.replace(re, replacement)
+  const after = transform(before)
   if (after === before) return
   try {
     writeFileSync(file, after)
@@ -2369,6 +2374,147 @@ export function patchNativeIdentity(appRoot, config, platform, { dev }) {
       `$1${escDollar(name)}$2`,
     )
   }
+}
+
+/**
+ * Declare `deepLinks.scheme` in the native project, so a `<scheme>://…` link opens the app —
+ * and take the declaration back out when the key is gone. Runs on every prepare, beside
+ * {@link patchNativeIdentity} and for the same reason: replace-to-target, so whatever the files
+ * hold, they land on what the config says, and a second run writes nothing.
+ *
+ * adaptv owns both declarations outright. Nothing else writes a URL type into this `Info.plist`
+ * or a VIEW filter into this `MainActivity` (the native project is generated, never the dev's to
+ * edit, and a plugin's own filters arrive through the manifest merger at build time, not in this
+ * file), so the patch removes whichever is there and writes its own rather than trying to merge.
+ * That is also what makes removal total: delete the key, and both are gone.
+ *
+ * The scheme is not validated here. `preflight` refuses a scheme that is not one before any of
+ * this runs (`src/vite/app-config-errors.ts`), so both projects are only ever handed a lowercase
+ * RFC 3986 scheme — which carries nothing XML would need escaped.
+ */
+export function patchNativeLinks(appRoot, config, platform) {
+  const scheme = config?.deepLinks?.scheme
+  const nd = nativeDir(appRoot, platform)
+  if (platform === "ios") {
+    rewriteFile(appRoot, path.join(nd, "App/App/Info.plist"), (plist) =>
+      withIosUrlScheme(plist, scheme),
+    )
+  } else {
+    rewriteFile(
+      appRoot,
+      path.join(nd, "app/src/main/AndroidManifest.xml"),
+      (manifest) => withAndroidUrlScheme(manifest, scheme),
+    )
+  }
+}
+
+/**
+ * The plist with exactly one `CFBundleURLTypes` — declaring `scheme` — or none when `scheme` is
+ * absent. The name is `$(PRODUCT_BUNDLE_IDENTIFIER)`, expanded at build time, so the dev and
+ * release variants each name their own install without this file knowing which it is.
+ */
+function withIosUrlScheme(plist, scheme) {
+  const range = plistKeyRange(plist, "CFBundleURLTypes")
+  const without = range
+    ? plist.slice(0, range[0]) + plist.slice(range[1])
+    : plist
+  if (!scheme) return without
+  const block = [
+    "\t<key>CFBundleURLTypes</key>",
+    "\t<array>",
+    "\t\t<dict>",
+    "\t\t\t<key>CFBundleURLName</key>",
+    "\t\t\t<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>",
+    "\t\t\t<key>CFBundleURLSchemes</key>",
+    "\t\t\t<array>",
+    `\t\t\t\t<string>${scheme}</string>`,
+    "\t\t\t</array>",
+    "\t\t</dict>",
+    "\t</array>",
+    "",
+  ].join("\n")
+  //Already declared, wherever it sits: `dev`'s ATS exception goes in through the system plist
+  //tool, which re-sorts the keys, and moving the pair back to the end would rewrite a file
+  //that already says the right thing.
+  if (range && plist.slice(...range) === block) return plist
+  //the root dict is the last one to close
+  const close = without.lastIndexOf("</dict>")
+  if (close < 0) return without
+  const at = without.lastIndexOf("\n", close) + 1
+  return without.slice(0, at) + block + without.slice(at)
+}
+
+/**
+ * `[start, end)` of `<key>name</key>` and the array value after it, including the indentation
+ * before the key and the newline after the array — so slicing it out leaves the plist exactly as
+ * it was before the pair went in. The array nests (a dict of arrays), so its end is found by
+ * counting, not by the first `</array>`. `null` when the key is not there.
+ */
+function plistKeyRange(plist, name) {
+  const key = plist.indexOf(`<key>${name}</key>`)
+  if (key < 0) return null
+  let start = key
+  while (
+    start > 0 &&
+    (plist[start - 1] === "\t" || plist[start - 1] === " ")
+  )
+    start--
+  const tag = /<array\s*\/>|<array>|<\/array>/g
+  tag.lastIndex = key
+  let depth = 0
+  let end = -1
+  for (let match = tag.exec(plist); match; match = tag.exec(plist)) {
+    if (match[0] === "</array>") depth--
+    else if (match[0] === "<array>") depth++
+    if (depth <= 0) {
+      end = match.index + match[0].length
+      break
+    }
+  }
+  if (end < 0) return null
+  if (plist[end] === "\n") end++
+  return [start, end]
+}
+
+/**
+ * The manifest with exactly one VIEW / DEFAULT / BROWSABLE intent filter for `scheme` inside
+ * `.MainActivity` — the activity that is already `singleTask`, so a link reaches the running app
+ * instead of starting a second one — or none when `scheme` is absent. The MAIN/LAUNCHER filter
+ * beside it is never touched: only a filter whose action is VIEW is adaptv's.
+ */
+function withAndroidUrlScheme(manifest, scheme) {
+  const activity =
+    /<activity\b[^>]*android:name="\.MainActivity"[^>]*>[\s\S]*?<\/activity>/.exec(
+      manifest,
+    )
+  if (!activity) return manifest
+  const body = activity[0]
+    //the filter, its indentation, and the blank line the insert below puts after it
+    .replace(
+      /[ \t]*<intent-filter>(?:(?!<\/intent-filter>)[\s\S])*?android\.intent\.action\.VIEW[\s\S]*?<\/intent-filter>\n\n?/g,
+      "",
+    )
+  let next = body
+  if (scheme) {
+    const close = body.lastIndexOf("</activity>")
+    const at = body.lastIndexOf("\n", close) + 1
+    const filter = [
+      "            <intent-filter>",
+      '                <action android:name="android.intent.action.VIEW" />',
+      '                <category android:name="android.intent.category.DEFAULT" />',
+      '                <category android:name="android.intent.category.BROWSABLE" />',
+      `                <data android:scheme="${scheme}" />`,
+      "            </intent-filter>",
+      "",
+      "",
+    ].join("\n")
+    next = body.slice(0, at) + filter + body.slice(at)
+  }
+  return (
+    manifest.slice(0, activity.index) +
+    next +
+    manifest.slice(activity.index + activity[0].length)
+  )
 }
 
 /**

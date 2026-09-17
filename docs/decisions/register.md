@@ -470,6 +470,22 @@ Verified by grepping the whole Capacitor repo: **zero** occurrences of `NSAppTra
   `network_security_config.xml` — because if one exists, `server.cleartext` becomes a **silent no-op**.
 - `getLaunchUrl()` means **different things per platform** (iOS: last URL, and it double-resolves;
   Android: launch intent URI) and `appUrlOpen` payloads differ. adaptv must normalise both.
+  > ⟨amended 2026-09-13⟩ **Built for custom schemes.** `deepLinks.scheme` in `adaptv.config.ts`
+  > writes `CFBundleURLTypes` into `Info.plist` and a VIEW/DEFAULT/BROWSABLE filter into
+  > `.MainActivity` on every prepare, and removing the key removes both (`patchNativeLinks`,
+  > `bin/lib/native.mjs`). The normalising went the other way from "both": the router factory
+  > attaches ONE `appUrlOpen` listener as the router is built and never calls `getLaunchUrl()`,
+  > because the plugin already replays the launching event to the first listener — reading both
+  > navigated twice, and `getLaunchUrl()` on Android keeps answering the launch URI for the whole
+  > process. That does not make Android safe from an old link: `BridgeActivity.load()` calls
+  > `onNewIntent(getIntent())` every time the activity is created (`BridgeActivity.java:51`), so
+  > reopening from Recents after `finish()`, or recreating after process death, replays the launch
+  > link, as observed on an API 34 emulator (process death then launcher reopen, and Recents after back). A link before the
+  > first screen settles replaces the entry, moving the history alone when the router has not
+  > mounted so the route loads once; a later one pushes. `onUrlOpened` is the public hook (`src/capabilities/url-open.ts`).
+  > **Still unhandled:** universal links / Android app links (associated-domains entitlement,
+  > signing team, hosted `apple-app-site-association` / `assetlinks.json`), and the dev and
+  > release installs sharing one scheme.
 - **OAuth must go through `@capacitor/browser`** (SFSafariViewController / Custom Tabs), never the
   Capacitor WebView — Google returns `disallowed_useragent` for embedded user-agents per RFC 8252 §8.12.
   Document the SSO asymmetry: Android Custom Tabs share Chrome's cookie jar; iOS SFSafariViewController

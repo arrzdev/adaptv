@@ -1,5 +1,6 @@
 import type { AnyRoute } from "@tanstack/react-router"
 import { createRouter } from "@tanstack/react-router"
+import { installUrlOpen } from "#adaptv/capabilities/url-open"
 import { standaloneMemoryHistory } from "#adaptv/shell/standalone-history"
 
 export type AdaptvRouterOptions<TRouteTree extends AnyRoute = AnyRoute> = {
@@ -39,7 +40,7 @@ export function createAdaptvRouter<TRouteTree extends AnyRoute>({
   memoryHistoryInStandalone,
   options = {},
 }: AdaptvRouterOptions<TRouteTree>) {
-  return createRouter({
+  const router = createRouter({
     routeTree,
     //Memory history in standalone is opt-in: overriding router history is a real
     //behaviour change, so it must be asked for.
@@ -63,4 +64,11 @@ export function createAdaptvRouter<TRouteTree extends AnyRoute>({
   //nothing to infer `TRouteTree` from and fell back to `AnyRoute`, so `Register`
   //bound a router over `AnyRoute` and typed routing was silently off. Restating it
   //re-attaches the tree the caller actually passed.
+
+  //A link that opens the native app becomes a route. Here, as the router is built,
+  //because the link that LAUNCHED the app is replayed only to the first listener —
+  //anything attached later, from a component, would never see it. A no-op on the web
+  //and on the server. → src/capabilities/url-open.ts
+  installUrlOpen(router)
+  return router
 }

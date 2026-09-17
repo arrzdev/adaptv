@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
 import { awaitClientHandover } from "./support/hydrated"
 
@@ -71,31 +72,43 @@ const PAGES = [
   ["/lab/hooks", "Standalone hooks"],
 ] as const
 
+/** Visits `route` and fails on any uncaught or unexcused console error. */
+async function smoke(page: Page, route: string, title: string) {
+  const errors: string[] = []
+  page.on("pageerror", (e) => errors.push(`uncaught: ${String(e)}`))
+  page.on("console", (message) => {
+    if (message.type() !== "error") return
+    const text = message.text()
+    if (!isKnown(text)) errors.push(`console.error: ${text}`)
+  })
+
+  await page.goto(route)
+  await awaitClientHandover(page)
+  await expect(
+    page.getByRole("heading", { level: 1, name: title }),
+  ).toBeVisible()
+  // settled with content, not a blank error shell
+  expect(
+    await page.locator("body").evaluate((b) => b.childElementCount),
+  ).toBeGreaterThan(0)
+  expect(errors, `error on ${route}:\n${errors.join("\n")}`).toEqual([])
+}
+
 test.describe("Capabilities smoke", () => {
   for (const [route, title] of PAGES) {
     test(`${title} mounts and throws nothing uncaught`, async ({
       page,
     }) => {
-      const errors: string[] = []
-      page.on("pageerror", (e) => errors.push(`uncaught: ${String(e)}`))
-      page.on("console", (message) => {
-        if (message.type() !== "error") return
-        const text = message.text()
-        if (!isKnown(text)) errors.push(`console.error: ${text}`)
-      })
-
-      await page.goto(route)
-      await awaitClientHandover(page)
-      await expect(
-        page.getByRole("heading", { level: 1, name: title }),
-      ).toBeVisible()
-      // settled with content, not a blank error shell
-      expect(
-        await page.locator("body").evaluate((b) => b.childElementCount),
-      ).toBeGreaterThan(0)
-      expect(errors, `error on ${route}:\n${errors.join("\n")}`).toEqual(
-        [],
-      )
+      await smoke(page, route, title)
     })
   }
+
+  //The server renders a URL without its fragment, so a page that prints the tab's
+  //own location during render mismatches only when the address has a `#`, and
+  //no route above has one. /lab/app-state prints its location and history.
+  test("App state with a fragment in the URL throws nothing uncaught", async ({
+    page,
+  }) => {
+    await smoke(page, "/lab/app-state#from-a-link", "App state")
+  })
 })

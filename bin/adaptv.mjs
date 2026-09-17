@@ -91,6 +91,7 @@ import {
   localBin,
   nativeDir,
   patchNativeIdentity,
+  patchNativeLinks,
   platformEnv,
   relaunchAndroidApp,
   resolveIconPlan,
@@ -368,6 +369,9 @@ async function preparePlatform(
   // identity afterwards — as `dev` used to — meant teardown wrote back a plist from before
   // the `(dev)` display name existed, so every session ended by reverting its own rename.
   patchNativeIdentity(appRoot, config, platform, { dev })
+  // Same file, same reason to sit before the snapshot: the link scheme is declared in
+  // Info.plist too, and a teardown restoring a plist from before it would undeclare it.
+  patchNativeLinks(appRoot, config, platform)
   //Silent about the icon set: `preflight` already read the same art and said whatever there
   //was to say, above the run (R33). Repeating it here would be the same fact twice (R18),
   //the second time under a step that only wrote files from it.
