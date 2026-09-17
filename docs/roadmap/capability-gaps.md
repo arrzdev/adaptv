@@ -86,8 +86,8 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · ~~print~~ (shipped 2026-09-02: `src/capabilities/print.ts` calls `window.print()` and reads the outcome off `beforeprint`/`afterprint` — `opened` when the dialog opened and closed, `silent` when nothing followed within the wait; a native WebView reads `unsupported` up front, measured: the Android WebView (API 36) returns at once and fires nothing, the iOS WKWebView (iOS 26 simulator) does the same, no print sheet) · speech ·
-store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
+Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
+store review · ~~screen-capture blocking~~ (shipped 2026-09-02: `src/capabilities/privacy-screen.ts` over the official `@capacitor/privacy-screen`; Android sets FLAG_SECURE so captures come back black and the recents card does not show the app's content, iOS can only cover the switcher (the splash cover is the launch storyboard's colour, since the CLI deletes the template splash art the plugin would otherwise show) and the caveat string says so, web/PWA read `unsupported` because no browser exposes a way to refuse a capture) · localization (`Intl` makes the web tier free) ·
 barcode scanning · text zoom.
 
 ---

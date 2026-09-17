@@ -257,6 +257,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/privacy-screen",
+    title: "Privacy screen",
+    summary:
+      "content kept out of the switcher and, on Android, out of captures",
+    isNew: true,
+  },
+  {
     to: "/lab/keep-awake",
     title: "Keep awake",
     summary: "screen wake lock · the caveat the API can't report",
