@@ -78,4 +78,4 @@ being surprising.
 | Dev-loop §F `OFFLINE_PAGE` "keep in sync" | mechanised by `src/shell/offline-page-name.test.ts` |
 | Lint delivery (Biome vs oxlint) | Biome 2.3.2, verified end-to-end (**O7** in the register) |
 | **Android target API 36** | `src/native/android-sdk.ts` (`ANDROID_SDK_LEVELS`, stamped into `variables.gradle` on every Android prepare by `bin/lib/native.mjs`); `adaptv doctor` reads `variables.gradle`. The record is **B9** in [`../decisions/register.md`](../decisions/register.md) |
-| Grouped-settings form / `FieldGroup` (component-gaps Tier 1) | `src/components/field-group.tsx` (2026-09-02); the grouped corners are `first:` / `last:` / `only:` in the consumer's `className`, not a `data-position` |
+| Component gaps Tier 4 `FAB` | `src/components/fab.tsx`, exported from `@arrzdev/adaptv/components` → [`component-gaps.md`](component-gaps.md) |

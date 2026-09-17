@@ -301,14 +301,17 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** install on Android (5): home-screen icon fills its shape (no white box), the launch chrome
   isn't a dark strip. *(Shipped to chopchop in PR #91.)*
 
-### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Skeleton`
+### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Fab`
 - **How:** `src/components/view.tsx` (row/center/fill/safe layout, identical everywhere),
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
-  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/skeleton.tsx` (the
-  placeholder box: reduced-motion and forced-colors answered in `src/styles/skeleton.css`,
-  assistive technology told once per `Skeleton.Region`).
-- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device;
-  `Skeleton` stops pulsing with Reduce Motion on, on 1–6, with no frame of motion first.
+  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/fab.tsx` (a `Button`
+  fixed to a screen corner: above the safe edges through `--adaptv-inset-*`, lifted by the live
+  `--adaptv-keyboard-height` because the §4 frozen viewport leaves a fixed bottom control under
+  the keyboard otherwise, and a `hidden` slide that honours reduced motion).
+- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
+  `Fab`: on native (6) it clears the home indicator, and focusing a field lifts it above the
+  keyboard on the keyboard's own curve (`/lab/fab` on a device; `playground/e2e/fab.spec.ts` drives
+  the same path headless through the keyboard mock seam).
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
   The public surface is 27 barrels — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.

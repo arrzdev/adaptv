@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
 import { Checkbox } from "#adaptv/components/checkbox"
 import { ExternalLink } from "#adaptv/components/external-link"
-import { FieldGroup } from "#adaptv/components/field-group"
+import { Fab } from "#adaptv/components/fab"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -85,6 +85,12 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["text", <Text key="text">t</Text>],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
+  [
+    "fab",
+    <Fab key="fab" aria-label="f">
+      +
+    </Fab>,
+  ],
   [
     "image",
     <Image key="image" src="/a.png" alt="a" width={10} height={10} />,
@@ -177,5 +183,16 @@ describe("composition does not leak", () => {
     const { container } = render(<Link to="https://a.dev">l</Link>)
     const root = container.firstElementChild as HTMLElement
     expect(root.getAttribute("data-adaptv")).toBe("link")
+  })
+
+  it("Fab reports itself, not the Button it is built on", () => {
+    //if this ever reads "button", a consumer restyling every button restyles the
+    //floating one too, and the corner it floats in is the one thing they wanted to
+    //treat differently
+    const { container } = render(<Fab aria-label="f">+</Fab>)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.getAttribute("data-adaptv")).toBe("fab")
+    //…while the press engine marker is still there, because it still IS a button
+    expect(root.getAttribute("data-press-engine")).not.toBeNull()
   })
 })

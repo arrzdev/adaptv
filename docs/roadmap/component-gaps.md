@@ -78,17 +78,21 @@ and `Slot`/`Navigator` for headless composition.
 
 ## Tier 4 — display chrome
 
-`Badge` · `Divider` · `Card` · `Chip` · ~~`Skeleton`~~ · `FAB` · `Avatar`. Cheap, high-frequency,
+`Badge` · `Divider` · `Card` · `Chip` · `Skeleton` · ~~`FAB`~~ · `Avatar`. Cheap, high-frequency,
 low-risk, mostly CSS in a DOM framework.
 
-**`Skeleton` shipped** (`src/components/skeleton.tsx`, `src/styles/skeleton.css`) and passes the
-admission test on three quirks: `prefers-reduced-motion` stops the pulse **in CSS**, before the
-first paint and with no hydration mismatch (the `useReducedMotion` hook is `false` on the server, so
-it is exactly the wrong tool); a background-only box paints as nothing under `forced-colors: active`,
-so it carries `forced-color-adjust: none` and a `CanvasText` border there; and the placeholder is
-`aria-hidden` while `Skeleton.Region` announces the state once through a live region, rather than
-per row. Shape and size are the consumer's `className` — no `shape` prop
-([`../decisions/styling.md §5.4.1`](../decisions/styling.md)).
+✅ **`Fab` shipped 2026-09-02** (`src/components/fab.tsx`) — a `Button` fixed to a screen corner.
+It was the one item in this tier that is *not* mostly CSS, and it clears the admission test with
+three rules it owns on every target: the safe area (above the home indicator / navigation bar and
+inside the side inset, through `--adaptv-inset-*`), the keyboard (it lifts to the live
+`--adaptv-keyboard-height`, the larger of that and the bottom inset since the keyboard covers the
+home indicator, minus whatever the layout viewport already shrank — the Android WebView resizes for
+the keyboard, iOS does not — which matters because on native the OS webview resize is off and the
+layout viewport is frozen — [`../design/behaviors.md §4`](../design/behaviors.md) — so a fixed
+bottom control otherwise stays under the keyboard), and the hide/show motion under
+`prefers-reduced-motion`. Placement is `end` / `center` / `start` (inline-relative, so RTL is right
+by construction); the extended form is the same component with `Button.Text` children — no variant
+prop.
 
 ---
 
@@ -135,5 +139,6 @@ consumer's `className`, per [`styling.md §5.4`](../decisions/styling.md).
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline
-([`../design/image.md`](../design/image.md)), `Pressable`, `Offline`, `BootError`, `UpdateRequired`,
-`OrientationGuard`, `EdgeSwipeGestures`, `PwaSplashOverlay`, `UiNotFound`.
+([`../design/image.md`](../design/image.md)), `Fab` (Tier 4 above), `Pressable`, `Offline`,
+`BootError`, `UpdateRequired`, `OrientationGuard`, `EdgeSwipeGestures`, `PwaSplashOverlay`,
+`UiNotFound`.
