@@ -34,11 +34,11 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · grouped-settings form
-(`FieldGroup` / `ion-list inset`) · `Icon`.
+`Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` ·
+grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
 
-**`Slider` and a real `Select` are the clearest holes in the form-control set** — adaptv has
-button / input / textarea / checkbox / switch and stops. `WheelColumn` is a partial `Picker`.
+**A real `Select` is the clearest hole in the form-control set** — adaptv has button / input /
+textarea / checkbox / switch / slider and stops. `WheelColumn` is a partial `Picker`.
 
 ## Tier 2 — the feedback layer
 
@@ -97,17 +97,20 @@ where the `font` **shorthand** is required, `font-size` does not work
 line clamping, and per-instance selection semantics. **`Modal` and `Tabs` are the real remainder**
 (Tier 2 and Tier 3 above).
 
-**`Collapsible` shipped** (`src/components/collapsible.tsx`, 2026-09-02) and passes the two-quirk
-test with three. `height: auto` cannot animate anywhere adaptv ships — `interpolate-size` is
-Chrome 129+ only ([`../decisions/animation.md §2`](../decisions/animation.md)) — so the panel
-transitions a measured pixel height and rests at `auto`, and a toggle mid-transition retargets from
-the current height for free. React 19 serialises `hidden="until-found"` as plain `hidden`, so the
-value is written after mount and reconciled on every commit; a `beforematch` open skips the
-transition, because the browser has already stripped the attribute and is about to scroll. And
-reduced motion, a 0s `--collapsible-duration` or a `display: none` ancestor means no transition ever
-starts, so the settle is read from `getAnimations()` and completes synchronously — there is no timer
-fallback. WebKit on the iOS 18 floor has no `until-found`; the attribute degrades to plain `hidden`
-with no separate code path.
+**`Slider` shipped** (`src/components/slider.tsx`, 2026-09-02, exported from
+`@arrzdev/adaptv/components`) and passes the two-quirk test with room to spare. iOS WebKit ignores a
+touch that starts on a native range *track*: only the thumb drags, and a tap on the track does
+nothing. The painted `Slider.Track` handles the pointer on the whole control, so tap-to-set and
+drag-from-anywhere work on every target. A horizontal drag also competes with `Swipeable`, `Drawer`
+and `ScrollView` for the pointer, so the slider requests the gesture arbiter at the moment the
+gesture locks horizontal (`GesturePriority.Slider = 250`, with `blocksScroll` and `onLost` ending the
+drag) and a touch that goes vertical first abandons the gesture with the value unchanged, so
+scrolling across a slider never moves it. Two smaller ones ride along: `pointercancel` ends the drag,
+which on iOS only fires with sibling pointer listeners and the touch-action longhand
+([`../decisions/register.md` B13](../decisions/register.md)); and float steps are quantised to the
+step grid from `min` and rounded to the step's decimals, so 0.1 three times reads 0.3. A real
+`<input type="range">` stays in the tree, visually hidden and focusable, for keyboard, screen readers
+and forms. Lab `/lab/slider`; e2e `playground/e2e/slider.spec.ts` on chromium and webkit.
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline
