@@ -428,6 +428,9 @@ last good config, refused the rebuild, and said so on the watch row:
 >
 > `r` is untouched: it reloads the running app's JS and never reads the config, so it has no
 > opinion to be wrong about.
+>
+> The dev server's own config watcher is not `b`: it fires on every save of a half-typed file and
+> keeps the last config that loaded, with the errors on the page. → `lifecycle.md` §2.1
 
 **R40 — Competing notices MERGE rather than take turns.** `dev` has two things that can go
 stale: the native project, and `adaptv.config.ts` plus the icon art it points at. Letting the

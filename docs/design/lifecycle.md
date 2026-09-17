@@ -149,6 +149,13 @@ export default defineApp({
 re-loads `adaptv.config.ts` (and any module it imports) on change and full-reloads. Standalone-PWA and
 mobile-browser dev = the same dev server opened on a phone / simulator over the LAN.
 
+A save that does not load (a syntax error, or a value `appConfigErrors` refuses) does not end the dev
+server: every error goes to Vite's log (shown by `adaptv dev` under `--verbose`) and to Vite's error
+overlay on the page, and the server keeps the config that last loaded until a save loads. This is the
+watcher, which fires on every save of a half-typed file, the way Vite keeps its running server when an
+edited `vite.config.ts` fails. It is not the CLI's `b` rebuild, which still ends the run on an unusable
+config (`cli-contract.md` R39).
+
 ### 2.2 ⚠︎ Delta — `adaptv dev` as the unified entry, with device live-reload
 
 `adaptv dev <surface>` exists and is the documented entrypoint (`adaptv dev web|ios|android|all`). *(This line previously read "there is no `adaptv dev` command today" — corrected 2026-08-30 against `adaptv --help`.)*
