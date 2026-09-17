@@ -1801,6 +1801,20 @@ export function explainLaunchFailure(platform, text = "") {
       ],
     }
 
+  // adaptv's install has no native CLI, so the shim (`bin/lib/cap.mjs`) died resolving it and
+  // all the step captured is Node's crash, which names the engine's package. The ✖ cannot
+  // show that line, and the fallback it would take instead is the spawn's own message: the
+  // node binary and the shim as absolute paths. It is adaptv's install, so the sentence is
+  // `doctor`'s for the same fact (R71), and so is the action. Platform-agnostic.
+  if (/Cannot find module '@capacitor\/cli\/package\.json'/.test(t))
+    return {
+      msg: "adaptv's own install is incomplete",
+      fix: [
+        "Reinstall with 'pnpm install'.",
+        "Run 'adaptv doctor --verbose' to list what is missing.",
+      ],
+    }
+
   if (platform === "ios") {
     // Xcode refuses EVERY iOS destination — simulators included — when the iOS platform
     // this Xcode build wants has not been downloaded. It says so only inside its inventory
