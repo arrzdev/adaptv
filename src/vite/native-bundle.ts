@@ -62,9 +62,7 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
       captureClientOutDir(context, resolved)
     },
     //`buildApp`, `order: "post"`, and registered AFTER the three emitters — this
-    //deletes things they read. `shell-emit` in particular reads
-    //`.vite/manifest.json` out of the client dir, so pruning it any earlier would
-    //take the shell's asset tags with it.
+    //deletes things they may still read, and the build stamp records the result.
     buildApp: {
       order: "post",
       async handler() {
@@ -73,26 +71,6 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
     },
   }
 }
-
-/**
- * `.vite/manifest.json` — Vite's source-to-chunk map. It exists so a **server**
- * can resolve which chunks a route needs and emit preload tags for them; a static
- * SPA has those tags baked into the document it ships. Nothing fetches it on
- * device, and it describes the whole build graph, which is not something to
- * ship inside an app bundle either.
- */
-const BUILD_METADATA_DIR = ".vite"
-
-/**
- * `_shell.html` — the router's own SPA shell, prerendered from `/`. The document the
- * WebView boots is adaptv's generated `index.html` (`shell-emit.ts`, register B31), and
- * nothing on device or in the CLI reads this one (`bin/lib/native-web-shell.test.mjs`).
- * It is not small (66 KB on the playground, against a 10 KB `index.html`) and it is not
- * stable: the prerender stamps the render's time into it, and the OTA build tag is a
- * hash of every file in this directory — so two builds of the same source announced
- * two different bundles, and every device downloaded the identical one again.
- */
-const ROUTER_SHELL_FILE = "_shell.html"
 
 function pruneNativeBundle(context: AdaptvContext): void {
   const clientDir = requireClientOutDir(context)
@@ -121,7 +99,6 @@ function pruneNativeBundle(context: AdaptvContext): void {
     defaultIconFiles(),
   )
   if (icons.urlBase) dropped.push(icons.urlBase.replace(/^\//, ""))
-  dropped.push(BUILD_METADATA_DIR, ROUTER_SHELL_FILE)
 
   const removed = dropped.filter((rel) => remove(clientDir, rel))
   if (removed.length > 0) {
