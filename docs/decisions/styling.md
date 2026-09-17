@@ -376,7 +376,12 @@ the fallback:
 ```
 
 **Every one of these is always defined**, at rest as `0px`. An absent variable forces each call site
-to remember `var(--x, 0px)`, and the one that forgets breaks the whole `calc()`.
+to remember `var(--x, 0px)`, and the one that forgets breaks the whole `calc()`. `--pwa-launch-height`
+is an exception: its script returns early outside a standalone display, so a browser tab never gets
+it, and a reader needs its own fallback (the playground's splash reads
+`var(--pwa-launch-height,100lvh)`). Measured 2026-09-13 in a Safari tab on the iOS 18.0 (`22A3351`) and
+iOS 26.1 (`23B86`) simulators, origin/main `9f11f0d` on the dev server: on `/lab/safe-area` its computed
+value was empty on both, while `--adaptv-inset-bottom` read `0px`.
 
 ### 4.1 The third category — properties adaptv *reads* but never *defines*
 
