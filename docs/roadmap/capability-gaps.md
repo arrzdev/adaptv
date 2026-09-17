@@ -92,6 +92,30 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 `storage.secure`, which already exists and already documents its web/native honesty gap
 (register **B23** — `@capacitor/preferences` is plaintext and must never hold tokens).
 
+### 6. Inbound deep links
+
+A link that opens the app has to become a route, and nothing does that today: `src/` registers no
+`appUrlOpen` listener, `docs/guides/cookbook.md` lists the mapping as a stub, and the only record is
+[`../decisions/register.md §5.0.3`](../decisions/register.md) ("Deep links + ATS are 100% unhandled
+by Capacitor"). The research doc's link row is the outbound direction only, and
+[`../design/coordination.md`](../design/coordination.md#cold-start--deep-links-belong-here-too)
+already assigns the job to the lifecycle layer. Read against the pinned `@capacitor/app` 8.1.0 and
+Capacitor 8.4.3 on 2026-09-13, **both platforms deliver a launching link twice**. They replay it
+through `appUrlOpen`, retained for the first listener: iOS posts it with `retainUntilConsumed: true`
+(`AppPlugin.swift:55,63`), and Android's `BridgeActivity.load()` passes the launch intent to
+`onNewIntent` (`BridgeActivity.java:51`, `Bridge.java:1306`), which reaches
+`AppPlugin.handleOnNewIntent` and a retained `notifyListeners` (`AppPlugin.java:146,158`). They also
+answer `getLaunchUrl()`: Android with the intent's data (`Bridge.java:229`, `AppPlugin.java:95-96`),
+iOS with `ApplicationDelegateProxy.shared.lastURL` (`AppPlugin.swift:97-98`), which is the last URL
+opened rather than the launch one. So an app that reads both navigates twice, and the normaliser
+subscribes to `appUrlOpen` alone or de-duplicates. Whether iOS actually queues the cold-start event
+depends on `AppPlugin.load()` registering its observer before `application(_:open:)` posts, which is
+unmeasured. The payloads differ (iOS adds `iosSourceApplication` and `iosOpenInPlace`), and nothing
+declares the links — no URL types, associated domains or VIEW intent-filter — so the work is one
+runtime normaliser that seeds memory history once at boot, plus native-project generation from
+`adaptv.config.ts` (**L8**). The web tier is free: there the URL is the link. No new
+dependency; `@capacitor/app` is already adaptv's.
+
 ---
 
 ## Tier 3 — the long tail
