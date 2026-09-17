@@ -265,3 +265,158 @@ describe("a rejecting onRefresh", () => {
     }
   })
 })
+
+describe("a row whose app turns `enabled` off mid-gesture", () => {
+  //`enabled={false}` refuses new pulls. It must not strand the row: a refresh
+  //under way still settles, and whatever is showing still closes to idle.
+
+  function toggledRow(
+    onRefresh: () => Promise<unknown>,
+    stuckMinMs: number,
+  ) {
+    const { phase, Phase } = phaseProbe()
+    const handle = { setEnabled: (_enabled: boolean) => {} }
+    function Host() {
+      const [enabled, setEnabled] = useState(true)
+      handle.setEnabled = setEnabled
+      return (
+        <PullToRefresh
+          enabled={enabled}
+          onRefresh={onRefresh}
+          stuckMinMs={stuckMinMs}
+        >
+          <Phase />
+        </PullToRefresh>
+      )
+    }
+    const view = render(<Host />)
+    const root = view.container.querySelector(
+      '[data-adaptv="pull-to-refresh"]',
+    )
+    if (!(root instanceof HTMLElement)) throw new Error("no gesture root")
+    return { ...view, root, phase, handle }
+  }
+
+  function pullTo(root: HTMLElement, to: number, release: boolean) {
+    act(() => {
+      fireEvent.pointerDown(root, pointer(0, 0))
+    })
+    for (let y = 12; y <= to; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(root, pointer(0, y))
+      })
+    }
+    if (release)
+      act(() => {
+        fireEvent.pointerUp(root, pointer(0, to))
+      })
+  }
+
+  it("lets a refresh under way settle and close to idle", async () => {
+    stubMatchMedia()
+    let settle = () => {}
+    const onRefresh = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve
+        }),
+    )
+    const { root, phase, handle } = toggledRow(onRefresh, 100)
+    pullTo(root, 120, true)
+    expect(await until(phase, "refreshing")).toBe("refreshing")
+
+    act(() => handle.setEnabled(false))
+    //the refresh is the app's; turning pulls off does not cancel it
+    expect(phase.current).toBe("refreshing")
+    await act(async () => settle())
+    expect(await until(phase, "idle")).toBe("idle")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it("finishes a close that was already under way", async () => {
+    stubMatchMedia()
+    const { root, phase, handle } = toggledRow(async () => {}, 0)
+    //released below the threshold, with the spinner showing: a release close
+    pullTo(root, 50, true)
+    expect(phase.current).toBe("closing")
+
+    act(() => handle.setEnabled(false))
+    expect(await until(phase, "idle")).toBe("idle")
+  })
+
+  it("closes a pull the finger is still holding, without refreshing", async () => {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const { root, phase, handle } = toggledRow(onRefresh, 0)
+    pullTo(root, 120, false)
+    expect(phase.current).toBe("pulling")
+
+    act(() => handle.setEnabled(false))
+    //the finger lifts after the row let go of it
+    act(() => {
+      fireEvent.pointerUp(root, pointer(0, 120))
+    })
+    expect(await until(phase, "idle")).toBe("idle")
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("refuses a press on a row still closing after it was turned off", async () => {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const { root, phase, handle } = toggledRow(onRefresh, 0)
+    pullTo(root, 50, true)
+    expect(phase.current).toBe("closing")
+
+    act(() => handle.setEnabled(false))
+    //the row is still drawn, handlers and all, while it closes: a press there
+    //must neither cut the close short nor start a pull
+    pullTo(root, 120, true)
+    expect(phase.current).toBe("closing")
+    expect(await until(phase, "idle")).toBe("idle")
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("forgets a press that had not moved yet when turned off", async () => {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const { container, root, phase, handle } = toggledRow(onRefresh, 0)
+    act(() => {
+      fireEvent.pointerDown(root, pointer(0, 0))
+    })
+    act(() => handle.setEnabled(false))
+    act(() => handle.setEnabled(true))
+    //back on, a hover that was never pressed again must not pull or refresh
+    const again = container.querySelector(
+      '[data-adaptv="pull-to-refresh"]',
+    )
+    if (!(again instanceof HTMLElement)) throw new Error("no gesture root")
+    for (let y = 12; y <= 120; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(again, pointer(0, y))
+      })
+    }
+    act(() => {
+      fireEvent.pointerLeave(again, pointer(0, 120))
+    })
+    await wait(100)
+    expect(phase.current).toBe("idle")
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("refuses new pulls while off, and pulls again once back on", async () => {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const { container, root, phase, handle } = toggledRow(onRefresh, 0)
+    act(() => handle.setEnabled(false))
+    pullTo(root, 120, true)
+    await wait(100)
+    expect(phase.current).toBe("idle")
+    expect(onRefresh).not.toHaveBeenCalled()
+
+    act(() => handle.setEnabled(true))
+    pullPastThreshold(container)
+    expect(await until(phase, "refreshing")).toBe("refreshing")
+    expect(await until(phase, "idle")).toBe("idle")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+})
