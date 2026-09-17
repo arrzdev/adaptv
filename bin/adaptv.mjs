@@ -94,6 +94,12 @@ import {
   relaunchAndroidApp,
   resolveIconPlan,
 } from "./lib/native.mjs"
+import {
+  buildNewShell,
+  canReuseInstall,
+  openShellRegistry,
+  SHELLS_ENV,
+} from "./lib/native-shell.mjs"
 import { configIsStale } from "./lib/native-state.mjs"
 import { installOfflinePage } from "./lib/offline-page.mjs"
 import { namesPlumbing } from "./lib/opacity.mjs"
@@ -624,6 +630,7 @@ async function runLive(appRoot, platforms, opts) {
   }
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
+  let forgetInstall = null // drops one platform's run-cache entry (a reused install caught out)
   let nativeFp = null // last-known native fingerprint per platform
   let configFp = null // last-known adaptv.config.ts + icon-art fingerprint
   // adaptv's OWN bin/ source, captured NOW — the modules this process loaded at startup. Unlike
@@ -785,6 +792,14 @@ async function runLive(appRoot, platforms, opts) {
     const forcedHost = opts.host // true | undefined — '--host' takes no value
     const externalPossible = !!forcedHost || !webOnly
 
+    // Which native build each platform's app must be before it may reconnect. Opened BEFORE the
+    // dev server, with every platform undecided: an app still on the device from the last run
+    // polls the server from its offline screen, and it must wait while this run works out
+    // whether that install is reused or rebuilt — not reconnect the moment Vite answers.
+    // → src/shell/native-shell.ts
+    const shells = webOnly ? null : openShellRegistry(appRoot, platforms)
+    if (shells) cleanups.push(() => shells.remove())
+
     // Start the Vite dev server FIRST — an app/config problem shows up here, before any
     // native project is scaffolded and before the dev has to pick a device.
     await runLine(
@@ -799,7 +814,9 @@ async function runLive(appRoot, platforms, opts) {
           // the app inside the WebView and blocks hot reload). adaptv's plugin reads
           // this and forces render:spa + sw:false for the dev server. `dev web` (no
           // native surface) keeps the app's normal web config.
-          env: webOnly ? {} : { ADAPTV_DEV_NATIVE: "1" },
+          env: shells
+            ? { ADAPTV_DEV_NATIVE: "1", [SHELLS_ENV]: shells.file }
+            : {},
           host: externalPossible,
           onLine: recordDevLine,
         })
@@ -868,6 +885,9 @@ async function runLive(appRoot, platforms, opts) {
       })
       ready = prep.ready
       prepareMs = prep.prepareMs
+      //A platform that could not be prepared is out of this run: its app from an earlier run
+      //is told so, not left on a screen promising it opens once its build is confirmed.
+      shells.serveOnly(ready)
       //R33 draws the line at what was already sitting in a file the dev wrote: preflight said
       //all of that under the banner. This is the other half — an ATS block in a plist that has
       //to EXIST first — and it belongs to the step that finds it, which is this one.
@@ -992,6 +1012,14 @@ async function runLive(appRoot, platforms, opts) {
       // Platforms that actually got onto a device — so a run where every native launch
       // failed (e.g. iOS signing) exits instead of pretending to "watch" nothing.
       const launched = new Set()
+      // The cache's word that an install is current is only as good as what installed it last:
+      // another checkout of the same app can install its own build under the same bundle id.
+      // When the dev server sees the device ask with a different id, the poll below drops the
+      // entry, so neither `b` nor the next run trusts it again.
+      forgetInstall = (platform) => {
+        delete runCache.run[cacheKey(platform)]
+        writeBuildState(appRoot, runCache)
+      }
 
       const launchOne = async (
         platform,
@@ -1002,13 +1030,22 @@ async function runLive(appRoot, platforms, opts) {
         const env = envFor(platform)
         const key = cacheKey(platform)
         const prev = runCache.run[key]
+        // Taken once, before anything below stamps or syncs: a failed build compares against it
+        // to decide whether the install still on the device may reconnect (`buildNewShell`).
+        const fp = nativeFingerprint(appRoot, platform)
         const cached =
           !force &&
-          prev?.url === url &&
-          prev?.fp === nativeFingerprint(appRoot, platform) &&
-          (await isAppInstalled(appRoot, platform, target.id, env))
+          (await canReuseInstall(prev, {
+            url,
+            fp,
+            installed: () =>
+              isAppInstalled(appRoot, platform, target.id, env),
+          }))
 
         if (cached) {
+          // The install is current, so ITS build is the one that may reconnect — named before
+          // the launch, or the app would come up to a server still saying "undecided".
+          shells.expect(platform, prev.shell, { cached: true })
           // Android emulator first needs the localhost route back to the host — no `cap
           // run` will set it. In external mode a physical device reaches the LAN IP
           // directly, so there's no `adb reverse` to (re-)assert.
@@ -1027,32 +1064,43 @@ async function runLive(appRoot, platforms, opts) {
           // couldn't launch it after all — fall through and rebuild.
         }
 
-        // No `generateAssets` here: every path that reaches this function has just been
-        // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
-        // patch for `b` reinstalling the launcher icons of the run it started in — and that
-        // is precisely the seam this pipeline removes: assets written in two places is how
-        // they came to be written in neither on the one path that mattered.
-        report("syncing")
-        await capSync(appRoot, platform, env, {
-          report,
-          plugins: config?.plugins,
-          privacy: config?.privacy,
-        })
-        // Was the app already up? If so, it survives the build (capRun no longer kills it)
-        // and only cap run's re-front touched it, so we relaunch the fresh install once.
-        const wasRunning = await isAppRunning(
-          appRoot,
+        // A new build gets a new shell id, baked into the config this sync writes into the native
+        // project and named to the dev server before the build starts — and handed back to the
+        // install still on the device if the build fails with nothing native changed.
+        let wasRunning = false
+        const shell = await buildNewShell(
+          shells,
           platform,
-          target.id,
-          env,
+          { prev, url, fp },
+          async () => {
+            // No `generateAssets` here: every path that reaches this function has just been
+            // through `preparePlatforms`, which owns the assets. It briefly lived here too — the
+            // patch for `b` reinstalling the launcher icons of the run it started in — and that
+            // is precisely the seam this pipeline removes: assets written in two places is how
+            // they came to be written in neither on the one path that mattered.
+            report("syncing")
+            await capSync(appRoot, platform, env, {
+              report,
+              plugins: config?.plugins,
+              privacy: config?.privacy,
+            })
+            // Was the app already up? If so, it survives the build (capRun no longer kills it)
+            // and only cap run's re-front touched it, so we relaunch the fresh install once.
+            wasRunning = await isAppRunning(
+              appRoot,
+              platform,
+              target.id,
+              env,
+            )
+            // `cap run` BUILDS, then installs, then launches — the build is all but one second
+            // of it. Announcing `launching device` here said the last step first, so the row
+            // read `launching device` through twenty seconds of compiling. A row narrates
+            // whatever it is told (it has no fallback of its own any more), so announcing the
+            // right thing at the right moment is entirely this function's job. Say what STARTS.
+            report("building app")
+            await capRun(appRoot, platform, target.id, env, { report })
+          },
         )
-        // `cap run` BUILDS, then installs, then launches — the build is all but one second
-        // of it. Announcing `launching device` here said the last step first, so the row read
-        // `launching device` through twenty seconds of compiling. A row narrates whatever it
-        // is told (it has no fallback of its own any more), so announcing the right thing at
-        // the right moment is entirely this function's job. Say what STARTS.
-        report("building app")
-        await capRun(appRoot, platform, target.id, env, { report })
         // The build is done; from here it really is the device's turn. Every branch below
         // installs, relaunches or fronts the app, so the phase covers all of them.
         report("launching device")
@@ -1078,6 +1126,7 @@ async function runLive(appRoot, platforms, opts) {
         runCache.run[key] = {
           url,
           fp: nativeFingerprint(appRoot, platform),
+          shell,
         }
         writeBuildState(appRoot, runCache)
         launched.add(platform)
@@ -1340,7 +1389,15 @@ async function runLive(appRoot, platforms, opts) {
       const poll = setInterval(() => {
         if (rebuilding || reloading) return
         const nowNative = snapshotNativeFp(appRoot, ready)
-        const changed = ready.filter((p) => nowNative[p] !== nativeFp?.[p])
+        // A reused install the device proved to be a different build is a native change in
+        // everything that matters to the dev: the binary on the device is not the one this run
+        // expects, and `b` is the fix. It never rebuilds on its own, for the reason below.
+        const staleInstalls = shells.staleInstalls()
+        for (const p of staleInstalls) forgetInstall?.(p)
+        const changed = ready.filter(
+          (p) =>
+            nowNative[p] !== nativeFp?.[p] || staleInstalls.includes(p),
+        )
         const nowConfig = appConfigFingerprint(appRoot, config)
         const configChanged = nowConfig !== configFp
         // adaptv's OWN source (bin/): only ever moves with a `link:`ed adaptv (framework dev), and

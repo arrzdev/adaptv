@@ -1,3 +1,7 @@
+import {
+  NATIVE_SHELL_ENDPOINT,
+  shellIdFromUserAgent,
+} from "#adaptv/shell/native-shell"
 import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 /**
@@ -68,6 +72,40 @@ const OFFLINE_AFTER_FAILURES = 2
 const DECIDING_POLL_MS = 300
 const RECONNECT_POLL_MS = 1500
 
+/**
+ * The offline screen's URL on the WebView's LOCAL origin, or `null` off a known native OS.
+ *
+ * The recovery hands off here once the dev server is definitively gone. Capacitor's
+ * `server.errorPath` only fires for MAIN-FRAME load failures, so it cannot cover the common
+ * case: the server dies, you navigate in-app, and a lazy route chunk fails. That's a
+ * subresource — errorPath never runs, and Android drops you on Chrome's raw
+ * `net::ERR_CONNECTION_REFUSED` page (iOS keeps the current document, so it merely freezes).
+ * Since the watchdog is the thing that already knows the server is gone, it takes the app
+ * there deliberately instead of waiting to be rescued. The boot gate goes there too, for a
+ * shell that must not run the app at all.
+ *
+ * Finding the local origin is the fiddly part. `window.WEBVIEW_SERVER_URL` looks like the
+ * answer and IS correct on iOS — but Android overwrites its `localUrl` with `server.url`
+ * whenever live-reload is configured (`Bridge.java`), so there it reports the DEV SERVER and
+ * navigating to it just fails again. Hence: use the injected value only when it isn't the
+ * origin we're already on, and otherwise fall back to the scheme+host adaptv itself
+ * configures — which is exactly how Capacitor's own `getErrorUrl()` sidesteps the same trap.
+ */
+function offlineUrl(): string | null {
+  const injected = (window as { WEBVIEW_SERVER_URL?: string })
+    .WEBVIEW_SERVER_URL
+  let base: string | null = null
+  if (injected && !location.href.startsWith(injected)) base = injected
+  else {
+    // Defaults Capacitor uses for the local server, with the `androidScheme: "http"`
+    // that `patchServerUrl` sets for the dev session. Keep in sync with it.
+    const os = getOS()
+    if (os === "android") base = "http://localhost"
+    else if (os === "ios") base = "capacitor://localhost"
+  }
+  return base ? `${base.replace(/\/$/, "")}/${OFFLINE_PAGE}` : null
+}
+
 export function installNativeLiveReloadRecovery(
   hot: LiveReloadHot | null | undefined = import.meta.hot,
 ): void {
@@ -99,40 +137,9 @@ export function installNativeLiveReloadRecovery(
     return true
   }
 
-  /**
-   * Hand off to the offline screen once the dev server is definitively gone.
-   *
-   * Capacitor's `server.errorPath` only fires for MAIN-FRAME load failures, so it cannot
-   * cover the common case: the server dies, you navigate in-app, and a lazy route chunk
-   * fails. That's a subresource — errorPath never runs, and Android drops you on
-   * Chrome's raw `net::ERR_CONNECTION_REFUSED` page (iOS keeps the current document, so
-   * it merely freezes). Since this watchdog is the thing that already knows the server
-   * is gone, it takes the app there deliberately instead of waiting to be rescued.
-   *
-   * Finding the local origin is the fiddly part. `window.WEBVIEW_SERVER_URL` looks like
-   * the answer and IS correct on iOS — but Android overwrites its `localUrl` with
-   * `server.url` whenever live-reload is configured (`Bridge.java`), so there it reports
-   * the DEV SERVER and navigating to it just fails again. Hence: use the injected value
-   * only when it isn't the origin we're already on, and otherwise fall back to the
-   * scheme+host adaptv itself configures — which is exactly how Capacitor's own
-   * `getErrorUrl()` sidesteps the same trap.
-   */
-  const localOrigin = (): string | null => {
-    const injected = (window as { WEBVIEW_SERVER_URL?: string })
-      .WEBVIEW_SERVER_URL
-    if (injected && !location.href.startsWith(injected)) return injected
-    // Defaults Capacitor uses for the local server, with the `androidScheme: "http"`
-    // that `patchServerUrl` sets for the dev session. Keep in sync with it.
-    const os = getOS()
-    if (os === "android") return "http://localhost"
-    if (os === "ios") return "capacitor://localhost"
-    return null
-  }
-
   const goOffline = (): boolean => {
-    const base = localOrigin()
-    if (!base) return false
-    const target = `${base.replace(/\/$/, "")}/${OFFLINE_PAGE}`
+    const target = offlineUrl()
+    if (!target) return false
     if (location.href === target) return true
     reloading = true // stop every other timer from racing this navigation
     location.replace(target)
@@ -236,4 +243,52 @@ export function installNativeLiveReloadRecovery(
   })
 
   void startProxy()
+}
+
+/**
+ * Run `boot` — the app's first render — only once the dev server confirms this WebView's
+ * native build is the one the session serves. Otherwise send it to the offline screen, which
+ * waits for the rebuilt app. → `native-shell.ts` for the mechanism.
+ *
+ * This is the one gate every reconnect passes through. The dev server's own client reloads on
+ * its own once the server answers again, this module's recovery reloads, the offline screen
+ * navigates back, and the native side loads `server.url` on launch: each of them ends in a
+ * fresh document from the dev server, and each document boots through here. Gating the
+ * reconnects one by one would leave out whichever path was missed; gating the boot cannot.
+ *
+ * It holds the first render rather than undoing it, so a stale shell never shows the app. The
+ * cost on a match is one request to the dev server, which just served this document.
+ */
+export function bootWhenNativeShellMatches(
+  boot: () => void,
+  hot: LiveReloadHot | null | undefined = import.meta.hot,
+): void {
+  // The build-time constant first, for the same reason as the recovery above: a production
+  // build folds this line to `boot()` and drops the rest, endpoint and all.
+  if (!import.meta.hot) {
+    boot()
+    return
+  }
+  if (!hot || typeof window === "undefined" || !isNativePlatform()) {
+    boot()
+    return
+  }
+  const id = shellIdFromUserAgent(navigator.userAgent)
+  const leave = (): void => {
+    const target = offlineUrl()
+    if (target) location.replace(target)
+    // No local origin to wait on: running a possibly-stale shell beats a blank WebView.
+    else boot()
+  }
+  fetch(`${NATIVE_SHELL_ENDPOINT}?id=${encodeURIComponent(id ?? "")}`, {
+    cache: "no-store",
+  })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((body: { verdict?: string } | null) => {
+      if (body?.verdict === "match") boot()
+      else leave()
+    })
+    // The server that served this document stopped answering: that is the offline screen's
+    // job anyway, and it will not reconnect a shell that does not match.
+    .catch(leave)
 }
