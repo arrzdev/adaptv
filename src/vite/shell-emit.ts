@@ -16,6 +16,7 @@ import {
 } from "#adaptv/vite/adaptv-context.ts"
 import { renderAppShell } from "#adaptv/vite/app-shell.ts"
 import { prerenderBootFallback } from "#adaptv/vite/boot-fallback-prerender.ts"
+import { emitIntoClientOutput } from "#adaptv/vite/deploy-server.ts"
 import { collectRouteTints } from "#adaptv/vite/route-tints.ts"
 import { resolveRoutesDir } from "#adaptv/vite/route-tints-module.ts"
 import { extractThunkSpecifier } from "#adaptv/vite/thunk-specifiers.ts"
@@ -151,9 +152,6 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
       //its patterns are matched against `location.pathname`.
       base = resolved.base
     },
-    //`buildApp`, not `closeBundle`, and `order: "post"` — see the note in
-    //`adaptv-plugin.ts`. `closeBundle` fires per ENVIRONMENT, which is too early:
-    //a deploy plugin can still be assembling the output directory afterwards.
     //The manifest is read here, out of the bundle, and never written. It is an
     //input to the shell and nothing else: TanStack Start builds its route preloads
     //from the bundle itself, and no server or host reads the file. Written, it was
@@ -181,12 +179,13 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
         if (setting === SHELL_MANIFEST_FILE) delete bundle[asset.fileName]
       },
     },
-    buildApp: {
-      order: "post",
-      async handler() {
-        if (clientManifest) await emitShell(context, base, clientManifest)
-      },
-    },
+    //Not `closeBundle`, which fires per ENVIRONMENT and is too early: the deploy
+    //plugin is still assembling the output directory afterwards. And not only
+    //`buildApp` post either, which is too late for a server build that bakes the
+    //output into its asset table. → `deploy-server.ts`, `adaptv-plugin.ts`
+    ...emitIntoClientOutput(async () => {
+      if (clientManifest) await emitShell(context, base, clientManifest)
+    }),
   }
 }
 

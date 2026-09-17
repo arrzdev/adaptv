@@ -1,25 +1,26 @@
 # The Playwright estate
 
-**Four configs, two spec directories, 43 specs. This page says which suite proves what, and the
+**Five configs, two spec directories, 43 specs. This page says which suite proves what, and the
 handful of rules that keep the estate honest.**
 
 Everything lives in `playground/` — its own pnpm project — and runs from the repo root:
 
 ```bash
-pnpm --dir playground test:e2e            # the main suite: 37 specs, dev server
-pnpm --dir playground test:e2e:sw:all     # all three worker suites, built output
+pnpm --dir playground test:e2e            # the main suite: 36 specs, dev server
+pnpm --dir playground test:e2e:sw:all     # all four worker suites, built output
 ```
 
 ---
 
-## 1. The four suites
+## 1. The five suites
 
 | Suite | Config | Specs | Serves | Port |
 |---|---|---|---|---|
-| **Main** | `playwright.config.ts` | `e2e/` — 35 | `vite` (dev) | `41730` (`E2E_PORT`) |
+| **Main** | `playwright.config.ts` | `e2e/` — 36 | `vite` (dev) | `41730` (`E2E_PORT`) |
 | **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → `vite preview`** | `41750` (`E2E_SW_PORT`) |
 | **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → static host** (`e2e-sw/static-host.mjs`), `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
 | **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |
+| **Worker, node server** | `playwright.sw-node.config.ts` | `e2e-sw/`, minus both update specs | **build → `node .output/server/index.mjs`** | `41780` (`E2E_SW_NODE_PORT`) |
 
 Every suite runs two projects: **chromium** (Desktop Chrome) and **webkit** (`iPhone 13` device
 descriptor). WebKit here is the desktop engine, **not a real device** — escalate device-only quirks
@@ -49,7 +50,7 @@ builds of the same app directory — concurrent projects would clobber each othe
 
 ### 3.1 No retries. Anywhere.
 
-`retries: 0` in all four configs, and this is load-bearing.
+`retries: 0` in all five configs, and this is load-bearing.
 
 > CI used to get one retry, and every timing-sensitive `describe` carried `retries: 2` on top of it.
 > That is how a **hydration race** which failed the first test of every cold run stayed filed as
@@ -89,6 +90,13 @@ back as a server render carrying the `$_TSR` bootstrap, and a router redirect as
 the static shell's own boot never ran before a worker took over. The host answers a file that exists,
 then the `_redirects` rule the build emits, then `404.html`, reading the disk on every request; its
 command empties `dist/client` before the build, so it can never serve a stale one.
+
+The node-server config exists because preview is **not** the production server. Preview reads the output
+directory per request; the built node server answers static files from a table baked into its bundle,
+so a file written after that bundle 404s. That is how `/sw.js` and `/adaptv-shell.html` went missing
+from production SSR builds while the preview config stayed green. It skips both update specs: their
+`deploy()` rebuilds under a server that keeps running, and a node server that baked its table at start
+needs a restart for a deploy, as in production.
 
 ### 3.3 The main suite runs plain `vite`, not the CLI
 
@@ -139,10 +147,10 @@ configs pin `workers: 1` for this, so do not pass `--workers` to them.
 
 ## 5. What this estate does not cover
 
-**CI runs one of the four suites, on one engine**: the main config's **chromium** project, on every
+**CI runs one of the five suites, on one engine**: the main config's **chromium** project, on every
 PR and push to `main`, with the HTML report and traces uploaded when it fails. Its **webkit** project
-and all three worker suites run only where someone runs them, so a return of the Chromium worker wedge
-in §3.1 would be caught only by hand. Why chromium alone is recorded as **O11a**, and whether the
+and all four worker suites run only where someone runs them, which is why the Chromium worker wedge
+in §3.1 is still caught only by hand. Why chromium alone is recorded as **O11a**, and whether the
 native matrix can run in CI at all is still open as **O11b**
 ([`../roadmap/open-questions.md`](../roadmap/open-questions.md)).
 

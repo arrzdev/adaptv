@@ -942,8 +942,18 @@ Each mode is the only one that can catch one half. The prompt build is stranger 
 the **exact inverse** of the auto build's, so the two update specs would fail each other's build, and
 that is why the third config matches one file rather than the directory.
 
+A fourth config, `playwright.sw-node.config.ts`, is the `ssr`/`auto` build again under a different
+**server**: `node .output/server/index.mjs` instead of `vite preview`. Preview reads the output
+directory per request; the built node server answers static files from a table baked into its bundle.
+That difference shipped a production SSR build whose `/sw.js` and `/adaptv-shell.html` were 404 while
+the preview config stayed green (`docs/decisions/rendering-and-delivery.md §2`). It runs every spec but
+the two update specs, whose `deploy()` needs a server that keeps reading the directory.
+
 What it asserts, and why each one earns its runtime:
 
+- **delivery** — the server itself answers `/sw.js` with a JavaScript type, bound to this build's
+  shell, and answers the shell with HTML. Asked of the server rather than the browser, so a missing file
+  fails by name instead of timing out on a controller that never arrives.
 - **registration** — the worker installs, activates, controls, precaches the whole app *including the
   shell* (the navigation route binds to it), and precaches **no route document** (§3.2 — the cross-user
   leak, asserted against the shipped manifest rather than trusted to the glob).
@@ -994,7 +1004,9 @@ Stated because a suite's silence reads as coverage:
   a *second* deploy still installs and sweeps on top of it. **Real iOS Safari reports `activated`
   normally**, so this is a Playwright-WebKit artifact rather than an engine one. Either way the update
   spec asserts what the worker **did**, never its reported state.
-- **One host.** Everything is Nitro `node-server` under `vite preview`. Cloudflare and Vercel resolve
+- **One host.** Everything is Nitro `node-server`, under `vite preview` and, for every spec but the two
+  update specs, under its own `node .output/server/index.mjs` (`playwright.sw-node.config.ts`), which
+  serves static files from a baked table rather than the directory. Cloudflare and Vercel resolve
   static assets before the server (which is why the SSR shell is not named `index.html` — §3.3), and
   that ordering is verified by reading their config, not by a test. And that host answers static assets
   uncompressed, because `e2e-sw/preview-host.mjs` strips `Accept-Encoding`: the worker never sees a

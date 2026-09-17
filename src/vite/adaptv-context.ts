@@ -59,9 +59,9 @@ export function createAdaptvContext(appRoot: string): AdaptvContext {
 /**
  * Record where the client build actually writes, from Vite's own resolved config.
  *
- * Read off the **client environment** specifically: adaptv's emitters all run in
- * `buildApp` at `order: "post"` (that is the only point at which the client output
- * is complete — `closeBundle` fires per environment and is too early), so
+ * Read off the **client environment** specifically: adaptv's emitters run once
+ * the client output is complete — in `buildApp` at `order: "post"`, or at the
+ * start of the deploy server's environment (`emitIntoClientOutput`) — so
  * `this.environment` there is the wrong one to ask.
  *
  * Idempotent, and every emitter calls it — so no plugin depends on another having
