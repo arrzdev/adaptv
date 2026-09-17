@@ -819,7 +819,14 @@ to it — a long artifact path or failure reason must never be what pushes `· 1
 >    change   press  the changes
 > ```
 > In Ink a live row is ONE `Text` with `wrap: "truncate-end"`, or a truncating `Text` whose
-> siblings are all `flexShrink: 0` (the phase row's spinner still shrinks away at 40 columns), and
+> siblings all sit in a `flexShrink: 0` `Box`. A `Box`, because Ink's `Text` hardcodes
+> `flexShrink: 1` and drops that prop in silence (R49); the phase row lost its spinner at 40
+> columns until its spinner and label moved into one. A row of key offers yields WHOLE offers
+> from the right instead, so no key is ever shown without its label (`  r reload js   b rebuild
+> app` at 40, the picker's `  ↑↓ move   ↵ select` at 30). The picker's device rows were one
+> paragraph each and wrapped (`› iPhone 16 Pro Max (simulator)  · iOS` over `26.1` at 40), so
+> the window lost a line per row; a device row now gives up its label's TAIL and keeps the cursor
+> and the hint, because with two runtimes installed the hint is all that tells a pair apart. And
 > a test pins the row COUNT, not only each row's length.
 
 **R11 — Parse tool output; don't echo it.** xcodebuild / gradle / CocoaPods lines are enormous and
