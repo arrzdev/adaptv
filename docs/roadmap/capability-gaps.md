@@ -87,8 +87,8 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 ## Tier 3 — the long tail
 
 Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
-store review · ~~screen-capture blocking~~ (shipped 2026-09-02: `src/capabilities/privacy-screen.ts` over the official `@capacitor/privacy-screen`; Android sets FLAG_SECURE so captures come back black and the recents card does not show the app's content, iOS can only cover the switcher (the splash cover is the launch storyboard's colour, since the CLI deletes the template splash art the plugin would otherwise show) and the caveat string says so, web/PWA read `unsupported` because no browser exposes a way to refuse a capture) · localization (`Intl` makes the web tier free) ·
-barcode scanning · text zoom.
+store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
+barcode scanning · text zoom. Not on the original list but in the same tier and shipped 2026-09-02: **screen reader** (`src/capabilities/screen-reader.ts` over the official `@capacitor/screen-reader`: VoiceOver / TalkBack status with the plugin's `stateChange` and a resume re-read, `unknown` on the web because no browser can detect a reader, and `announce()` as a polite ARIA live region on the web and the OS announcement on native).
 
 ---
 

@@ -52,7 +52,7 @@ export {
   subscribeScreenOrientation,
   unlockScreenOrientation,
 } from "../capabilities/orientation"
-export * from "../capabilities/privacy-screen"
+export * from "../capabilities/screen-reader"
 export {
   canShareTarget,
   type ShareOutcome,

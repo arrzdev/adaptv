@@ -257,10 +257,10 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
-    to: "/lab/privacy-screen",
-    title: "Privacy screen",
+    to: "/lab/screen-reader",
+    title: "Screen reader",
     summary:
-      "content kept out of the switcher and, on Android, out of captures",
+      "VoiceOver / TalkBack status · announce to the reader, or to a live region",
     isNew: true,
   },
   {
