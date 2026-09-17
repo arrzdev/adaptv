@@ -572,14 +572,26 @@ describe("Android's themed-icon layer", () => {
     )
       .raw()
       .toBuffer({ resolveWithObject: true })
+    //One assertion over the frame, not one per pixel: ~294,000 inked pixels made ~294,000
+    //`expect` calls, 2–4s on their own and a 5s timeout under a loaded gate, where the same
+    //loop without them is milliseconds. The first few offenders are kept for the message.
     let inked = 0
+    let offWhite = 0
+    const first = []
     for (let i = 0; i < info.width * info.height; i++) {
       if (data[i * 4 + 3] < 250) continue
       inked++
-      expect([data[i * 4], data[i * 4 + 1], data[i * 4 + 2]]).toEqual([
-        255, 255, 255,
-      ])
+      const rgb = [data[i * 4], data[i * 4 + 1], data[i * 4 + 2]]
+      if (rgb[0] === 255 && rgb[1] === 255 && rgb[2] === 255) continue
+      offWhite++
+      if (first.length < 5)
+        first.push({
+          x: i % info.width,
+          y: Math.floor(i / info.width),
+          rgb,
+        })
     }
+    expect({ offWhite, first }).toEqual({ offWhite: 0, first: [] })
     expect(inked).toBeGreaterThan(0)
   })
 
