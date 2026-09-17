@@ -66,7 +66,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
     "src/components/swipeable.tsx",
   ],
   "use-isomorphic-layout-effect": [
-    "src/components/collapsible.tsx",
+    "src/components/icon.tsx",
     "src/components/text.tsx",
     "src/hooks/use-status-bar.ts",
     "src/hooks/use-sync-theme.ts",
@@ -76,7 +76,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
   "use-manifest-orientation": ["src/components/orientation-guard.tsx"],
   "use-merged-ref": [
     "src/components/avoid-keyboard/avoid-keyboard.tsx",
-    "src/components/image.tsx",
+    "src/components/icon.tsx",
     "src/components/text.tsx",
   ],
   "use-scroll-edge-fade": ["src/components/scroll-view.tsx"],

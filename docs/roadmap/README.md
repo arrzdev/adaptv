@@ -33,8 +33,8 @@ against shipped code are not roadmap items either — those live as `B` entries 
 | 1 | **First-party `@adaptv/shell` plugin** | [`native-shell-plugin.md`](native-shell-plugin.md) | large | ⚠︎ **Needs a redesign before an implementation.** Capacitor 8's core `SystemBars` took over the ground it was designed to claim. |
 | 2 | **`dist` cutover** | [`dist-cutover.md`](dist-cutover.md) | small | The build is done and verified; only the `exports` flip and the playground shims remain. |
 | 3 | **`create-adaptv` scaffolder** | [`create-adaptv.md`](create-adaptv.md) | medium | Unblocked, low risk. |
-| 4 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, filesystem, biometrics, deep links) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
-| 5 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text` is **done**. |
+| 4 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, filesystem, biometrics) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
+| 5 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text` and `Icon` are **done**. |
 | 6 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Four named items. Five of the original nine are discharged and were removed. |
 | 7 | **Owed device verification** | [`owed-device-verification.md`](owed-device-verification.md) | small each | Seven checks no unit test can close. Cheap individually; they need hardware. |
 | 8 | **Native keyboard curve** | [`native-keyboard-curve.md`](native-keyboard-curve.md) | small–medium | Agreed after PR #47, unbuilt. `src/capabilities/keyboard.ts` still emits height only; the OS duration/curve is thrown away. Additive, low risk. |

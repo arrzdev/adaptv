@@ -8,7 +8,7 @@ import { Divider } from "#adaptv/components/divider"
 import { Drawer } from "#adaptv/components/drawer"
 import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import { ExternalLink } from "#adaptv/components/external-link"
-import { Fab, fabPositionStyle } from "#adaptv/components/fab"
+import { Icon } from "#adaptv/components/icon"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -714,27 +714,31 @@ describe("AvoidKeyboard", () => {
   })
 })
 
-describe("Skeleton", () => {
-  it("className beats the base look, and nothing is locked", () => {
-    //the shape and the size ARE the className (§5.4.1: no shape prop), so the base
-    //radius and surface must both yield; the pulse and the forced-colors outline are
-    //CSS on `data-adaptv`, not classes, so there is nothing here for a consumer to
-    //lose against — `locked` is passed as `undefined` on purpose
-    const c = classOf(<Skeleton className="rounded-full bg-red-500" />)
-    expect(hasClass(c, "rounded-full")).toBe(true)
-    expect(hasClass(c, "rounded-md")).toBe(false)
-    expect(hasClass(c, "bg-red-500")).toBe(true)
-    expect(hasClass(c, "bg-gray-200")).toBe(false)
+describe("Icon", () => {
+  //the size is the consumer's and exposure is attributes, not classes, so there is
+  //nothing to lock — `locked` is passed as `undefined` on purpose. The pair that
+  //matters is the default 1em box losing to a consumer size on BOTH axes.
+  it("className beats the 1em base, and nothing is locked", () => {
+    const c = classOf(<Icon render={<svg />} className="size-6 shrink" />)
+    expect(hasClass(c, "size-6")).toBe(true)
+    expect(hasClass(c, "w-[1em]")).toBe(false)
+    expect(hasClass(c, "h-[1em]")).toBe(false)
+    expect(hasClass(c, "shrink")).toBe(true)
+    expect(hasClass(c, "shrink-0")).toBe(false)
+  })
+
+  it("the rendered element's className is the consumer tier too", () => {
+    const c = classOf(<Icon render={<svg className="w-4" />} />)
+    expect(hasClass(c, "w-4")).toBe(true)
+    expect(hasClass(c, "w-[1em]")).toBe(false)
+    expect(hasClass(c, "h-[1em]")).toBe(true)
   })
 
   it("forwards the consumer style, and declares no locked inline tier", () => {
-    const el = firstEl(<Skeleton style={{ width: "3px" }} />)
-    expect(el.style.width).toBe("3px")
-  })
-
-  it("Region: takes the consumer className unopposed", () => {
-    const c = classOf(<Skeleton.Region loading className="flex gap-2" />)
-    expect(c).toBe("flex gap-2")
+    const el = firstEl(
+      <Icon render={<svg />} style={{ color: "rgb(1, 2, 3)" }} />,
+    )
+    expect(el.style.color).toBe("rgb(1, 2, 3)")
   })
 })
 

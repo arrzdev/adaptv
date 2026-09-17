@@ -320,17 +320,15 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** install on Android (5): home-screen icon fills its shape (no white box), the launch chrome
   isn't a dark strip. *(Shipped to chopchop in PR #91.)*
 
-### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Divider`
+### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Icon`
 - **How:** `src/components/view.tsx` (row/center/fill/safe layout, identical everywhere),
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
-  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/divider.tsx` (a 1px
-  border scaled by `1 / floor(dpr)` to one device pixel at every density — a sub-pixel border width is
-  rounded up by Chromium and floored to nothing by WebKit at 3x — and never a background, so it
-  survives forced colours).
-- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device.
-  `Fab`: on native (6) it clears the home indicator, and focusing a field lifts it above the
-  keyboard on the keyboard's own curve (`/lab/fab` on a device; `playground/e2e/fab.spec.ts` drives
-  the same path headless through the keyboard mock seam).
+  `src/components/text.tsx`, `src/components/image.tsx`, `src/components/icon.tsx` (any icon
+  set's `<svg>`: `aria-hidden` when decorative, `role="img"` + `aria-label` when labelled, a `1em`
+  box, and the same Dynamic Type multiply as `Text` behind `scaleWithSystem`).
+- **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device;
+  on iOS (2, 4, 6) VoiceOver skips a decorative `Icon` and reads a labelled one as an image by name, and
+  a `scaleWithSystem` icon grows with Larger Text after a reload.
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
   The public surface is 27 barrels — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
