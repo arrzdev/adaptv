@@ -135,6 +135,12 @@ import {
 import { sessionKeys } from "./lib/session-keys.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, portInUse } from "./lib/tool-log.mjs"
+import {
+  armStale,
+  initialStale,
+  pollStale,
+  standingNotice,
+} from "./lib/watch-staleness.mjs"
 
 /** @typedef {import("./lib/exec.mjs").CliError} CliError */
 
@@ -636,13 +642,10 @@ async function runLive(appRoot, platforms, opts) {
   }
   let watcher = null // the live "watching / hot-reload" status line
   let launchAll = null // replays the launch lines (used by the `r` key)
-  let forgetInstall = null // drops one platform's run-cache entry (a reused install caught out)
-  let nativeFp = null // last-known native fingerprint per platform
-  let configFp = null // last-known adaptv.config.ts + icon-art fingerprint
-  // adaptv's OWN bin/ source, captured NOW — the modules this process loaded at startup. Unlike
-  // config/native (which a rebuild re-applies), a change here needs a fresh process, so it is
-  // never re-armed by `armStaleness`; only the poll re-arms it, to notice one edit once.
-  let cliFp = cliSourceFingerprint()
+  // What the watch row says about edits live reload cannot apply: the native project, the
+  // config + icon art, and adaptv's OWN bin/ source, captured NOW — the modules this process
+  // loaded at startup. See `bin/lib/watch-staleness.mjs`.
+  let stale = initialStale(cliSourceFingerprint())
   let tearing = false
 
   let tornDown = false
@@ -734,8 +737,10 @@ async function runLive(appRoot, platforms, opts) {
     // what is installed still match what the dev wrote — so arming one without the other is
     // how a notice comes to either never fire or never clear.
     const armStaleness = () => {
-      nativeFp = snapshotNativeFp(appRoot, ready)
-      configFp = appConfigFingerprint(appRoot, config)
+      stale = armStale(stale, {
+        native: snapshotNativeFp(appRoot, ready),
+        config: appConfigFingerprint(appRoot, config),
+      })
     }
 
     if (!webOnly) {
@@ -1245,9 +1250,21 @@ async function runLive(appRoot, platforms, opts) {
     //every invocation error — the paths where the <100ms responsiveness rule actually bites.
     //Only a run that puts a live block on screen pays for one.
     const openWatcher = async () => {
-      if (!useInk) return liveWatcher({ keys: !webOnly })
-      const { inkWatcher } = await import("./ui/watch.mjs")
-      return inkWatcher({ keys: !webOnly })
+      const block = useInk
+        ? (await import("./ui/watch.mjs")).inkWatcher({
+            keys: !webOnly,
+            onReload: () => void reload(),
+            onRebuild: () => void rebuild(),
+            onQuit: () => onSigint(),
+          })
+        : liveWatcher({ keys: !webOnly })
+      //A fresh block starts empty, and `b`, `r` and a failed rebuild all mount one: it opens
+      //with the restart row when one is owed, or that restart vanishes (R54). A pending config
+      //or native row is not restored here.
+      const standing = standingNotice(stale)
+      if (standing)
+        block.notice(standing.text, { restart: standing.restart })
+      return block
     }
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
@@ -1327,7 +1344,7 @@ async function runLive(appRoot, platforms, opts) {
       await launchAll({ force: true, prepare: true })
       armStaleness()
       spacer()
-      watcher = await openWatcher() // fresh block, which also clears any pending notice
+      watcher = await openWatcher() // fresh block: clears a config/native notice, keeps a restart
       rebuilding = false
     }
 
@@ -1401,44 +1418,22 @@ async function runLive(appRoot, platforms, opts) {
     if (!webOnly && ready.length > 0) {
       const poll = setInterval(() => {
         if (rebuilding || reloading) return
-        const nowNative = snapshotNativeFp(appRoot, ready)
-        // A reused install the device proved to be a different build is a native change in
-        // everything that matters to the dev: the binary on the device is not the one this run
-        // expects, and `b` is the fix. It never rebuilds on its own, for the reason below.
-        const staleInstalls = shells.staleInstalls()
-        for (const p of staleInstalls) forgetInstall?.(p)
-        const changed = ready.filter(
-          (p) =>
-            nowNative[p] !== nativeFp?.[p] || staleInstalls.includes(p),
-        )
-        const nowConfig = appConfigFingerprint(appRoot, config)
-        const configChanged = nowConfig !== configFp
-        // adaptv's OWN source (bin/): only ever moves with a `link:`ed adaptv (framework dev), and
+        // adaptv's OWN source (bin/) only ever moves with a `link:`ed adaptv (framework dev), and
         // the notice is the only signal there is — a generator edit is invisible on screen.
-        const nowCli = cliSourceFingerprint()
-        const cliChanged = nowCli !== cliFp
-        if (changed.length === 0 && !configChanged && !cliChanged) return
-        // re-arm all three, so one edit notices once
-        nativeFp = nowNative
-        configFp = nowConfig
-        cliFp = nowCli
-        // ONE row, one line (R31) — so the causes MERGE rather than one winning the slot. Config
-        // and native name the cause the dev acts on with `r`/`b`. adaptv's OWN source is the
-        // exception and WINS the row: the running process holds the old modules, so `r`/`b` can't
-        // apply the edit — only a restart can, and a restart re-reads config and re-syncs native
-        // too, so naming that superset action is the honest single line.
-        if (cliChanged)
-          // The restart variant: `b` would rebuild with the CLI modules THIS process already
-          // loaded, so it can't apply an edit to adaptv's own source — see liveWatcher's notice.
-          watcher.notice("adaptv source change", { restart: true })
-        else
-          watcher.notice(
-            configChanged && changed.length > 0
-              ? `config + native change · ${changed.join(", ")}`
-              : configChanged
-                ? "config change"
-                : `native change · ${changed.join(", ")}`,
-          )
+        const result = pollStale(
+          stale,
+          {
+            native: snapshotNativeFp(appRoot, ready),
+            config: appConfigFingerprint(appRoot, config),
+            cli: cliSourceFingerprint(),
+          },
+          ready,
+        )
+        stale = result.state
+        if (result.notice)
+          watcher.notice(result.notice.text, {
+            restart: result.notice.restart,
+          })
       }, 3000)
       poll.unref?.()
       cleanups.push(() => clearInterval(poll))
