@@ -89,9 +89,9 @@ const COMPONENTS = [
     isNew: false,
   },
   {
-    to: "/lab/slider",
-    title: "Slider",
-    summary: "tap the track · drag anywhere · yields to a vertical scroll",
+    to: "/lab/radio-group",
+    title: "RadioGroup",
+    summary: "two groups never share a name · the radio covers its item",
     isNew: true,
   },
   {

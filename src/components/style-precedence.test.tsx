@@ -17,6 +17,7 @@ import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
+import { RadioGroup } from "#adaptv/components/radio-group"
 import { ScrollView } from "#adaptv/components/scroll-view"
 import { Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
@@ -422,6 +423,101 @@ describe("Checkbox", () => {
     )
     expect(icon.getAttribute("class")).toContain("pointer-events-none")
     expect(icon.getAttribute("class")).not.toContain("pointer-events-auto")
+  })
+})
+
+describe("RadioGroup", () => {
+  //the group positions nothing, so its layout is all base and `locked` is passed
+  //as `undefined` on purpose; the item carries the two locked facts the input
+  //laid over it depends on: `relative` and the touch longhand
+  it("root: className beats the base layout, and nothing is locked", () => {
+    const c = classOf(<RadioGroup className="grid gap-4" />)
+    expect(hasClass(c, "grid")).toBe(true)
+    expect(hasClass(c, "flex")).toBe(false)
+    expect(hasClass(c, "gap-4")).toBe(true)
+    expect(hasClass(c, "gap-2")).toBe(false)
+  })
+
+  it("root: forwards the consumer style", () => {
+    const el = firstEl(<RadioGroup style={{ marginTop: "4px" }} />)
+    expect(el.style.marginTop).toBe("4px")
+  })
+
+  it("Item: className beats base layout; `relative` and the touch longhand still win", () => {
+    const item = query(
+      <RadioGroup>
+        <RadioGroup.Item value="a" className="flex static touch-none">
+          a
+        </RadioGroup.Item>
+      </RadioGroup>,
+      "label",
+    )
+    expect(hasClass(item, "flex")).toBe(true)
+    expect(hasClass(item, "inline-flex")).toBe(false)
+    expect(hasClass(item, "relative")).toBe(true)
+    expect(hasClass(item, "static")).toBe(false)
+    expect(hasClass(item, "touch-pan-x")).toBe(true)
+    expect(hasClass(item, "touch-none")).toBe(false)
+  })
+
+  it("Item: a disabled item stays scrollable-through", () => {
+    const item = query(
+      <RadioGroup>
+        <RadioGroup.Item value="a" disabled className="touch-auto">
+          a
+        </RadioGroup.Item>
+      </RadioGroup>,
+      "label",
+    )
+    expect(item.className).not.toContain("touch-none")
+    expect(item.className).not.toContain("touch-auto")
+  })
+
+  it("Item: the input's cover-the-item classes cannot be restyled away", () => {
+    //the input takes no className at all: its box IS the accessible frame
+    const input = query(
+      <RadioGroup>
+        <RadioGroup.Item value="a">a</RadioGroup.Item>
+      </RadioGroup>,
+      "input",
+    )
+    expect(hasClass(input, "absolute")).toBe(true)
+    expect(hasClass(input, "opacity-0")).toBe(true)
+  })
+
+  it("Box: className beats base, the size-derived geometry beats an inline style", () => {
+    const box = query(
+      <RadioGroup size={8}>
+        <RadioGroup.Item value="a">
+          <RadioGroup.Box
+            className="bg-red-500 static"
+            style={{ width: "99px" }}
+          />
+        </RadioGroup.Item>
+      </RadioGroup>,
+      "[data-part='box']",
+    )
+    expect(hasClass(box, "bg-red-500")).toBe(true)
+    expect(hasClass(box, "bg-gray-50")).toBe(false)
+    expect(hasClass(box, "relative")).toBe(true)
+    expect(hasClass(box, "static")).toBe(false)
+    expect(box.style.width).toBe("2rem")
+  })
+
+  it("Indicator: pointer-events-none and the checked opacity are locked", () => {
+    const mark = query(
+      <RadioGroup>
+        <RadioGroup.Item value="a">
+          <RadioGroup.Box>
+            <RadioGroup.Indicator className="pointer-events-auto" />
+          </RadioGroup.Box>
+        </RadioGroup.Item>
+      </RadioGroup>,
+      "svg",
+    )
+    expect(mark.getAttribute("class")).toContain("pointer-events-none")
+    expect(mark.getAttribute("class")).not.toContain("pointer-events-auto")
+    expect(mark.style.opacity).toBe("0")
   })
 })
 

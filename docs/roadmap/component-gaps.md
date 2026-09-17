@@ -37,85 +37,21 @@ rather than assumed.
 `Slider` · `Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` ·
 grouped-settings form (`FieldGroup` / `ion-list inset`) · ~~`Icon`~~.
 
-**`Icon` shipped** (`src/components/icon.tsx`), with no dependency and no bundled icon set: it takes
-any set's `<svg>` through `render` and owns two quirks. **Exposure:** a decorative icon is
-`aria-hidden`, never `role="none"`, because a named svg is announced through `role="presentation"`
-by every reader Manuel Matuzović tested in February 2026 except JAWS (VoiceOver on macOS 26.3 says
-"group"); a labelled one is `role="img"` + `aria-label`, the pattern announced as an image in every
-pairing Scott O'Hara tested. `lucide-react` 0.544.0 never sets the role, and `ion-icon` sets it even
-unlabelled. **Dynamic Type:** the box defaults to `1em`, so an icon inside `Text` follows it, and
-`scaleWithSystem` multiplies a fixed-size sibling icon by the same measured factor
-`Text scaleWithSystem` uses (Flutter's `Icon.applyTextScaling` is the same idea). The `@expo/ui`
-universal `Icon` is not prior art for the web half: its `index.tsx` returns `null`, and only the
-`.ios.tsx` / `.android.tsx` files render. Deliberately absent: a `mirror` prop (`rtl:-scale-x-100` is
-already Tailwind vocabulary) and a sprite `href`, which brings two more quirks of its own — a `data:`
-URL in `<use href>` renders nothing in WebKit or current Chromium while Vite inlines a sprite under
-4 KB as exactly that in the production build only, and a `display: none` sprite drops its gradients
-(Chromium 41337331, WebKit 243341). A **bundled, named icon set** — which is what would make
-automatic RTL flipping possible — is an owner call, not a gap.
+**`Slider` and a real `Select` are the clearest holes in the form-control set** — adaptv has
+button / input / textarea / checkbox / switch / radio group and stops. `WheelColumn` is a partial
+`Picker`.
 
-The form-control set now runs button / input / textarea / checkbox / switch / select. **`Slider` is
-the remaining hole in it**, and the grouped-settings form (`FieldGroup`) is the next one after that.
-
-The grouped-settings form is off the list: **`FieldGroup` shipped 2026-09-02**
-(`src/components/field-group.tsx`, recorded below). `Slider`, `Select` and `Collapsible` each have
-an open PR cut from the same base (#74, #75, #73), so `Icon` is the last Tier 1 hole with nothing
-being built for it.
-
-**`Icon` passes the admission test without a dependency** (evidence gathered 2026-09-13, not built).
-Two quirks hold whatever the consumer passes in. **Accessible exposure differs by engine**: a
-decorative svg must be `aria-hidden`, because `role="none"` does not remove one that carries a label
-or a `<title>` (VoiceOver macOS 26.3 reads "group", TalkBack on Android 16 and NVDA read it —
-[Matuzović, 2026](https://www.matuzo.at/blog/2026/role-presentation-no-alternative-for-aria-hidden)),
-and a meaningful one is labelled with `role="img"` beside `aria-label`. The playground's own set
-gets half of it: `lucide-react` adds `aria-hidden` when unlabelled and never adds the role when
-labelled, and `ion-icon` stamps `role="img"` whether labelled or not. Since WebCore's fix for
-[156774](https://bugs.webkit.org/show_bug.cgi?id=156774) (landed 2019-04-08) a labelled svg with no
-accessible descendants is exposed as an image rather than an empty group; what iOS 26 VoiceOver
-announces for a labelled svg without the role is unmeasured, and owed a simulator Accessibility
-Inspector read. **iOS Dynamic Type reaches an icon
-only by measurement**: `Text scaleWithSystem` grows the label and a `size-4` or `size={24}` icon
-beside it does not, so a `1em` default plus the same opt-in `measureDynamicTypeScale()` is the fix;
-Flutter's `Icon.applyTextScaling` is the same knob. Two more hold only if `Icon` takes a sprite
-`href`: a `data:` URL in `<use>` renders nothing (WebKit never supported it; Chromium
-[removed it](https://developer.chrome.com/blog/migrate-way-from-data-urls-in-svg-use), announced for
-120), and Vite produces exactly that in production for an `import sprite from "./icons.svg"` under
-4 KB, because its only guard is an import id that already contains `#` (`vite@8.0.11`,
-[vitejs/vite#15453](https://github.com/vitejs/vite/issues/15453)) — blank in the build, fine in
-dev, and still fine on the Chromium 119 WebView floor; and a `display: none` sprite drops gradients
-in Chromium ([41337331](https://issues.chromium.org/issues/41337331)), with the WebKit report
-([243341](https://bugs.webkit.org/show_bug.cgi?id=243341)) naming masks and clip paths as affected
-too, and its Safari 26 reproduction made on a beta (with Safari Technology Preview 221), not a
-release.
-
-What it does **not** own, so nobody builds it in: RTL mirroring is `rtl:-scale-x-100`, because
-Tailwind 4.2.4's `rtl:` is `:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)` and the attribute
-branches cover both engine gaps ionicons wrote CSS around (no `:dir()` below Chromium 120, and
-WebKit [257133](https://bugs.webkit.org/show_bug.cgi?id=257133)); *which* glyphs flip is only
-knowable from a named set (ionicons flips names containing `arrow` or `chevron`). `currentColor`
-under forced colors is Windows-desktop only and already what lucide ships. `1em` and baseline
-alignment are the same on every engine. The shape this points at is `render` (an element, on Text's
-pattern) or `href`, one `label` prop that decides `role="img"` versus `aria-hidden`, and
-`scaleWithSystem`; a bundled named set is an owner call, and the proposal is none.
-
-A correction to the signal behind this tier: `@expo/ui`'s universal `Icon` **renders nothing on
-web** — `packages/expo-ui/src/universal/Icon/index.tsx` is `return null`, `@platform android` and
-`ios` — so `Icon` ranks here on Ionic, SwiftUI, Compose and `expo-router`, not on a web
-implementation Expo paid for.
-
-**`RadioGroup` is missing from every tier, and passes.** `ion-radio-group` and Compose's
-`RadioButton` are inventoried in `../research/component-surface.md` §2.3 and §4.3, yet the §8 table
-has no row, and adaptv has checkbox and switch with no single-choice group beside them. Two quirks:
-a clipped `sr-only` input gives the control a speck-sized accessibility frame on iOS 18.0 and 26.1
-simulator Safari (open PR #132 measured the sibling controls: ~1×2 pt for `Switch`, whose centre tap
-then did nothing, while `Checkbox`'s speck sat mid-box so its tap still toggled — whether a tap lands
-depends on where the speck sits); and a radio group is keyed on `name` within one tree and one form
-owner ([HTML](https://html.spec.whatwg.org/multipage/input.html#radio-button-group)), so two mounted
-instances of one component with a literal name uncheck each other whether they share a form or sit
-outside any, which a `useId` name owns. The
-segmented control (a §8 row that is also in no tier) is best read as an appearance of it, on
-§9 item 4's `interface` idea — its sliding indicator is a composited `translate` and its RTL is
-`rtl:` vocabulary, so it brings no quirk of its own.
+**`RadioGroup` shipped** (`src/components/radio-group.tsx`, lab page `/lab/radio-group`), on the two
+quirks it owns. **Radios are keyed on `name`** within one document or form, so each instance with no
+`name` takes an id-derived one and two mounted groups never clear each other; an explicit `name` is
+kept for form submission. **A clipped `sr-only` input is a speck-sized accessibility frame** on iOS
+Safari (PR #132 measured it on `Switch` and `Checkbox`), so each native radio lies invisibly over its
+whole item. Everything else is the browser's radio: arrow keys, Space, disabled options, `required`
+and `FormData`. Selection is the input's `change` event rather than the gesture engine's release,
+because a radio's activation is idempotent and every non-pointer path (arrow keys, assistive tech,
+an outer label) arrives as a click no press produced. Measured and left native, in
+`playground/e2e/radio-group.spec.ts`: past the last radio Chromium wraps and WebKit stops; under RTL
+Chromium flips ArrowLeft/ArrowRight and WebKit does not; WebKit's default Tab order skips radios.
 
 ## Tier 2 — the feedback layer
 
