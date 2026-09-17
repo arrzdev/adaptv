@@ -1,3 +1,4 @@
+import type { OpenExternalOutcome } from "@arrzdev/adaptv/capabilities"
 import { isExternalUrl, openExternal } from "@arrzdev/adaptv/capabilities"
 import { ExternalLink } from "@arrzdev/adaptv/components"
 import { createFileRoute } from "@arrzdev/adaptv/router"
@@ -8,6 +9,7 @@ import {
   LabActions,
   LabBadge,
   LabButton,
+  LabOutcome,
   LabRow,
   LabSection,
 } from "@/components/lab/lab-kit"
@@ -31,6 +33,13 @@ const CANDIDATES = [
 function LabBrowserPage() {
   const [native, setNative] = useState(false)
   useEffect(() => setNative(isNativePlatform()), [])
+  const [outcome, setOutcome] = useState<OpenExternalOutcome | null>(null)
+
+  //no await before the call: on web `window.open` must run inside the click's
+  //user activation, and the accessor reaches it synchronously
+  function open(url: string) {
+    void openExternal(url).then(setOutcome)
+  }
 
   return (
     <LabPage
@@ -42,15 +51,16 @@ function LabBrowserPage() {
         steps={[
           "Read the classification rows. `/settings` and `settings` must be internal; everything with a scheme, and the protocol-relative `//example.com`, must be external.",
           "Check the target row — it says what pressing the buttons below will do on THIS target.",
-          "Press https://example.com. On native it must open the in-app system browser; on web, a new tab.",
+          "Press https://example.com. On native it must open the in-app system browser; on web, a new tab. Either way the last outcome must read `opened`.",
           "Press back / dismiss it. You must land back in this app with the page exactly as you left it.",
-          "Press mailto:. The mail app (or the browser's handler) must take over.",
+          "Press mailto:. The mail app (or the browser's handler) must take over, no tab may open, and this page must stay. The outcome reads `opened`, which here means handed to the system, not proven delivered.",
+          "Press https:// (unparseable). Nothing may open and the outcome must read `invalid` — the accessor never throws.",
           "On native, confirm the WebView itself never navigates — if this page is replaced by example.com there is no way back into the app.",
         ]}
         expected={{
           web: {
             verdict: "works",
-            note: "Opens a new tab. A popup blocker can eat it if the click lost its user activation, which is worth knowing about but is the browser's rule, not adaptv's.",
+            note: "Opens a new tab. A popup blocker can eat it if the click lost its user activation — the browser's rule, not adaptv's — and the last outcome then reads `blocked` instead of `opened`.",
           },
           pwa: {
             verdict: "partial",
@@ -96,22 +106,26 @@ function LabBrowserPage() {
           hint="A tab opened from a browser tab can be blocked by a popup blocker; the native branch cannot."
         />
         <LabActions>
-          <LabButton
-            onClick={() => void openExternal("https://example.com")}
-          >
+          <LabButton onClick={() => open("https://example.com")}>
             https://example.com
           </LabButton>
-          <LabButton
-            onClick={() => void openExternal("mailto:hello@example.com")}
-          >
+          <LabButton onClick={() => open("mailto:hello@example.com")}>
             mailto:
           </LabButton>
+          <LabButton onClick={() => open("https://")}>
+            https:// (unparseable)
+          </LabButton>
         </LabActions>
+        <LabRow
+          label="last outcome"
+          value={<LabOutcome outcome={outcome} okValues={["opened"]} />}
+          hint="`blocked`: the browser refused the new tab (a popup blocker, usually because the click lost its user activation). `invalid`: the URL does not parse, or is a scheme that would run or replace this page (javascript:, data:, blob:, about:, file:). Both are values, not exceptions."
+        />
       </LabSection>
 
       <LabSection
         title="The <ExternalLink /> component"
-        description="The declarative form — it routes through the same accessor, so it behaves identically on all six targets."
+        description="The declarative form. On native a click goes through the same accessor; on the web the anchor opens its own tab with rel=noopener noreferrer, so nothing is intercepted and no Referer is sent."
       >
         <ExternalLink
           href="https://example.com"
