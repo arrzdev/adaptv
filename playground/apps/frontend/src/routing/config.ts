@@ -71,6 +71,7 @@ export const routes = rootRoute([
     route("/lab/chrome-tint", "pages/lab/chrome-tint.page.tsx"),
     route("/lab/route-tint", "pages/lab/route-tint.page.tsx"),
     route("/lab/native-theme", "pages/lab/native-theme.page.tsx"),
+    route("/lab/battery", "pages/lab/battery.page.tsx"),
     route("/lab/network", "pages/lab/network.page.tsx"),
     route("/lab/ota", "pages/lab/ota.page.tsx"),
     route("/lab/splash", "pages/lab/splash.page.tsx"),
