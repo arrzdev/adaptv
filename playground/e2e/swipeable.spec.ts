@@ -240,6 +240,109 @@ test.describe("Swipeable rows under real touch", () => {
     await closeAll(page, cdp)
   })
 
+  test("the log hears an open and a close, never a drag that changed nothing", async ({
+    page,
+  }) => {
+    const { cdp } = await setup(page)
+    //the third row: setup's input probe drags the first, so the log holds
+    //nothing about this one until the test moves it
+    const THIRD = 2
+    const count = async (re: RegExp) =>
+      (await logTexts(page)).filter((t) => re.test(t)).length
+    const tray = await page.evaluate(
+      ([sel, i]) =>
+        document
+          .querySelectorAll(sel as string)
+          [i as number]?.querySelector<HTMLElement>(
+            '[data-swipeable-actions="right"]',
+          )?.offsetWidth ?? 0,
+      [ROOT, THIRD] as const,
+    )
+    //both drags below must clear Chromium's touch slop (it holds back every
+    //move inside ~15px, so a shorter drag reaches the row as a tap), and stay
+    //inside the open line (30% of the tray) and the close line (25%)
+    expect(tray * 0.25).toBeGreaterThan(18)
+
+    //one move a frame, so the release reads well under the 250px/s flick and
+    //position alone decides where the row settles
+    //`held` is where the row must sit under the finger before it lifts, so a
+    //drag the page swallowed cannot pass as one that sprang back
+    async function slowDragH(dx: number, held: number) {
+      const { point } = await aim(page, THIRD)
+      await touch(cdp, "touchStart", point)
+      const steps = 12
+      for (let s = 1; s <= steps; s += 1) {
+        await touch(cdp, "touchMove", {
+          x: Math.round(point.x + (dx * s) / steps),
+          y: point.y,
+        })
+        await page.waitForTimeout(16)
+      }
+      await page.waitForTimeout(140)
+      const x = await contentX(page, THIRD)
+      expect(
+        Math.abs(x - held),
+        `the row must follow the finger to ${held} — sat at ${x}`,
+      ).toBeLessThanOrEqual(2)
+      await touch(cdp, "touchEnd")
+    }
+    //onClose fires when the close spring lands, so a count read before then
+    //passes whether or not the close is reported. The offset is no signal: the
+    //engine clears the transform inside half a pixel of rest, springs still
+    //running. The spring's landing clears will-change, and then one frame and
+    //one task let the log's state update commit before anything is counted
+    async function landsAt(x: number, message: string) {
+      await expect
+        .poll(
+          async () => {
+            const willChange = await page.evaluate(
+              ([sel, i]) =>
+                document.querySelectorAll<HTMLElement>(sel as string)[
+                  i as number
+                ]?.style.willChange,
+              [CONTENT, THIRD] as const,
+            )
+            return `${await contentX(page, THIRD)}|${willChange}`
+          },
+          { message, timeout: 1500 },
+        )
+        .toBe(`${x}|`)
+      await page.evaluate(
+        () =>
+          new Promise<void>((done) =>
+            requestAnimationFrame(() => setTimeout(done, 0)),
+          ),
+      )
+    }
+
+    //closed, dragged 16px (under the open line), sprung back closed
+    await slowDragH(-16, -16)
+    await landsAt(0, "a drag under the open line springs back closed")
+    expect(
+      await count(/third (opened|closed)/),
+      "a drag that never opened the row reports nothing",
+    ).toBe(0)
+
+    await slowDragH(-50, -50)
+    await landsAt(-tray, "a drag past the open line opens the row")
+    expect(await count(/third opened \(right\)/)).toBe(1)
+
+    //open, nudged 18px back (inside the close line), sprung back open
+    await slowDragH(18, 18 - tray)
+    await landsAt(-tray, "a nudge inside the close line springs back open")
+    expect(await count(/third opened/), "the open is reported once").toBe(
+      1,
+    )
+    expect(await count(/third closed/), "the row never closed").toBe(0)
+
+    await closeAll(page, cdp)
+    await landsAt(0, "a tap outside closes the open row")
+    expect(await count(/third closed/), "the close is reported once").toBe(
+      1,
+    )
+    expect(await count(/third opened/)).toBe(1)
+  })
+
   test("a Group closes the previously-open row when another opens", async ({
     page,
   }) => {
@@ -250,6 +353,9 @@ test.describe("Swipeable rows under real touch", () => {
       await contentX(page, 0),
       "first row should be open",
     ).toBeLessThan(-60)
+    const firstClosed = async () =>
+      (await logTexts(page)).filter((t) => /first closed/.test(t)).length
+    const closedBefore = await firstClosed()
 
     await dragH(page, cdp, 1, -50)
     expect(
@@ -266,9 +372,17 @@ test.describe("Swipeable rows under real touch", () => {
       })
       .toBeLessThanOrEqual(TOLERANCE_PX)
 
-    const texts = (await logTexts(page)).join("\n")
-    expect(texts).toMatch(/first closed/)
-    expect(texts).toMatch(/second opened/)
+    //8px from rest is not landed, and onClose fires on landing: poll the log,
+    //and count this close rather than match any. A single match here used to
+    //pass on a "first closed" that setup's own input probe logged, for a drag
+    //that never opened the row
+    await expect
+      .poll(firstClosed, {
+        message: "the first row's close is reported once",
+        timeout: 1500,
+      })
+      .toBe(closedBefore + 1)
+    expect((await logTexts(page)).join("\n")).toMatch(/second opened/)
     await closeAll(page, cdp)
   })
 
