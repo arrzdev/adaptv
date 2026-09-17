@@ -47,22 +47,16 @@ export function resolveDrawerKeyboardRoom(
  * grows by the keyboard's height a second time, holds a keyboard-sized blank band above the
  * keyboard, and its footer lands below the visible viewport.
  *
- * Measured first, guessed second. `layoutShrink` is what the layout viewport actually gave up
- * (`useLayoutViewportShrink`); when it covers the keyboard the answer is yes on any platform. That
- * is the Android WebView under Capacitor 8: `SystemBars` pads the WebView by the IME inset, so
- * `innerHeight` drops by the keyboard's exact height (923 → 587 for a 336px keyboard) while
- * `virtualKeyboard.overlaysContent` reads true and the native plugin reports 336 — the two signals
- * describe the same slice, and the old "native reports an exact height without shrinking" rule
- * counted it twice. iOS never shrinks (the OS resize is off; scroll-lock holds the page) and stays on
- * the room path by the same measurement.
- *
- * The guess covers the frame before a resize can be measured: VK-less non-iOS Chromium (a plain-http
- * `ip:port` origin, where `virtualKeyboard` does not exist and nothing can hold the viewport) is known
- * to shrink, so it takes this path from the first keyboard event rather than one resize later.
- *
- * `capHeld` makes the answer sticky: once the cap path has written the box, the keyboard's close
- * (height 0, shrink 0) must come back through the same path to release it with its own settle,
- * not fall into the room path with nothing to hand back.
+ * `useFreezeViewport` normally keeps the layout height whole while a drawer is up (iOS scroll-lock,
+ * or Chromium's `virtualKeyboard.overlaysContent`), so the sheet answers the keyboard by holding
+ * `room` below its content and growing into it. But `virtualKeyboard` is a secure-context-only API,
+ * so over a plain-http `ip:port` origin (a LAN dev build) there is no freeze on Chromium: the
+ * keyboard shrinks the visual viewport itself. Reserving room ON TOP of that shrink double-counts —
+ * the sheet grows by the keyboard's height a second time and its top climbs off-screen behind the
+ * URL bar. iOS still freezes (scroll-lock needs no API) and a native binary carrying the Keyboard
+ * plugin reports an exact height without shrinking, so both stay on the room path; only VK-less
+ * non-iOS Chromium falls here, and that includes a native Android binary WITHOUT the plugin, whose
+ * WebView resizes itself like any other.
  */
 export function viewportShrinksUnderKeyboard({
   isIOS,

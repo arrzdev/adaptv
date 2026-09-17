@@ -997,18 +997,15 @@ export function DrawerEngine({
 
     if (!content) return
 
-    // ── Shrunk viewport path ────────────────────────────────────────────────────────────────
-    // The viewport has already paid for the keyboard, so the sheet only has to FIT what is left;
-    // reserving `room` on top of the shrink double-counts, growing the box by the keyboard's height
-    // a second time. Two ways in: measured — the layout viewport shrank by the keyboard's height,
-    // which is every Android WebView under Capacitor 8 (`SystemBars` pads it by the IME inset,
-    // `innerHeight` 923 → 587 for a 336px keyboard, `overlaysContent` true all along); and guessed
-    // — VK-less non-iOS Chromium (a plain-http `ip:port` origin), where `useFreezeViewport` has no
-    // API to hold the viewport and the shrink is known before it can be measured. Hold no room; cap
-    // the box at the visible viewport (taller content scrolls inside). iOS — scroll-lock, the OS
-    // resize off, shrink 0 — falls through to the room mechanism below, untouched.
-    const keyboardHeight =
-      keyboard.isOpen && keyboard.height > 0 ? keyboard.height : 0
+    // ── Unfrozen web keyboard path ──────────────────────────────────────────────────────────
+    // Non-secure Chromium (no VirtualKeyboard API, not iOS, no native Keyboard plugin):
+    // `useFreezeViewport` could NOT stop the keyboard resizing the VISUAL viewport, so it shrinks
+    // by the keyboard's own height. The sheet then only has to FIT that shrunk viewport — reserving `room` ON TOP of the
+    // shrink double-counts, growing the box by the keyboard's height a second time until its top
+    // climbs off-screen behind the URL bar (the plain-http `ip:port` over-grow). Hold no room; cap
+    // the box at the visible viewport (taller content scrolls inside). The frozen paths — iOS
+    // scroll-lock, secure-Chromium `overlaysContent`, native `KeyboardResize.None` — keep the
+    // viewport whole and fall through to the room mechanism below, untouched.
     if (
       viewportShrinksUnderKeyboard({
         isIOS: isIOS(),
