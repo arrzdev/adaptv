@@ -500,8 +500,8 @@ ecosystem only.
 | TextInput / Input | ✅ | ✅ | ✅ | ✅ | ✅ | | `input` + `text-area` |
 | Switch / Toggle | ✅ | ✅ | ✅ | ✅ | ✅ | | `useSwitch` |
 | Checkbox | ✅ | (expo-checkbox) | ✅ | ✅ | ✅ | | `useCheckbox` |
-| Slider / Range | ✅ | | ✅ | ✅ | ✅ | | `Slider` |
-| **Picker / Select** | ✅ | | ✅ | ✅ | ✅ | | `wheel-column` (partial) |
+| **Slider / Range** | ✅ | | ✅ | ✅ | ✅ | | **—** |
+| Picker / Select | ✅ | | ✅ | ✅ | ✅ | | `select` (menu) + `wheel-column` (wheel) ✅ |
 | List + row | ✅ | ✅ | ✅ | ✅ | ✅ | | `List` (virtualized) |
 | ScrollView | ✅ | ✅ | ✅ | ✅ | ✅ | | `ScrollView` |
 | Bottom sheet / Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `Drawer` |
@@ -541,11 +541,12 @@ ecosystem only.
 > reasoning; that file is the remainder, kept current as things ship.
 
 **Tier 1 — in the universal set *and* Ionic, and missing from adaptv:**
-`Slider` · `Select`/`Picker` (menu appearance, not just the wheel) · `Collapsible` ·
-grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Collapsible` · grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
 
-These are the ones both teams paid the tri-platform tax for. `Slider` and a real `Select` are the
-clearest holes in adaptv's form-control set — it has button/input/textarea/checkbox/switch and stops.
+These are the ones both teams paid the tri-platform tax for. `Select` shipped 2026-09-02
+(`src/components/select.tsx`, the menu appearance; `WheelColumn` stays the wheel), so adaptv's
+form-control set is now button/input/textarea/checkbox/switch/select and `Slider` is its clearest
+remaining hole.
 
 **Tier 2 — every native toolkit has it, Ionic has it, adaptv has none of it: the feedback layer.**
 `Alert` · `ActionSheet` · `Toast` · `Spinner` · `ProgressBar`. Note that Ionic's five overlays all

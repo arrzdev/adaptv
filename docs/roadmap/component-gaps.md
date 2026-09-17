@@ -34,11 +34,10 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Select`/`Picker` (the *menu* appearance, not just the wheel) · `Collapsible` ·
-grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
+`Slider` · `Collapsible` · grouped-settings form (`FieldGroup` / `ion-list inset`) · `Icon`.
 
-**A real `Select` is the clearest hole in the form-control set** — adaptv has button / input /
-textarea / checkbox / switch / slider and stops. `WheelColumn` is a partial `Picker`.
+The form-control set now runs button / input / textarea / checkbox / switch / select. **`Slider` is
+the remaining hole in it**, and the grouped-settings form (`FieldGroup`) is the next one after that.
 
 ## Tier 2 — the feedback layer
 
@@ -97,20 +96,17 @@ where the `font` **shorthand** is required, `font-size` does not work
 line clamping, and per-instance selection semantics. **`Modal` and `Tabs` are the real remainder**
 (Tier 2 and Tier 3 above).
 
-**`Slider` shipped** (`src/components/slider.tsx`, 2026-09-02, exported from
-`@arrzdev/adaptv/components`) and passes the two-quirk test with room to spare. iOS WebKit ignores a
-touch that starts on a native range *track*: only the thumb drags, and a tap on the track does
-nothing. The painted `Slider.Track` handles the pointer on the whole control, so tap-to-set and
-drag-from-anywhere work on every target. A horizontal drag also competes with `Swipeable`, `Drawer`
-and `ScrollView` for the pointer, so the slider requests the gesture arbiter at the moment the
-gesture locks horizontal (`GesturePriority.Slider = 250`, with `blocksScroll` and `onLost` ending the
-drag) and a touch that goes vertical first abandons the gesture with the value unchanged, so
-scrolling across a slider never moves it. Two smaller ones ride along: `pointercancel` ends the drag,
-which on iOS only fires with sibling pointer listeners and the touch-action longhand
-([`../decisions/register.md` B13](../decisions/register.md)); and float steps are quantised to the
-step grid from `min` and rounded to the step's decimals, so 0.1 three times reads 0.3. A real
-`<input type="range">` stays in the tree, visually hidden and focusable, for keyboard, screen readers
-and forms. Lab `/lab/slider`; e2e `playground/e2e/slider.spec.ts` on chromium and webkit.
+**`Select` shipped 2026-09-02** (`src/components/select.tsx`) — the *menu* appearance; `WheelColumn`
+remains the wheel appearance. It passes the two-quirk test five times over: iOS renders `<select>` as
+a wheel and scrolls the page when it is focused, so `Select` paints its own trigger and an anchored
+listbox on every target and keeps a real `<select>` mounted, hidden and never focused, only so
+`name` / `required` / autofill and form submission still work; hardware and gesture back close the
+list instead of navigating (the Transient band, the rule `Dropdown` records); the list rides the
+`Dropdown` positioning engine (fixed layer, flip, height cap with an inner scroller, shift); the
+keyboard model — arrows that skip disabled options, Home/End, Enter/Space, Escape, typeahead — is
+adaptv's, not the browser's; and options carry the press-core `touch-action` longhand because
+`manipulation` kills `pointercancel` on iOS
+([`../decisions/register.md`](../decisions/register.md) B13).
 
 Also already shipped and easy to mis-list as gaps: `Dropdown` (the menu/popover row), `Image` as a
 full compound component with a build-time placeholder pipeline
