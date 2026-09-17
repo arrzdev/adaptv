@@ -76,7 +76,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
   "use-manifest-orientation": ["src/components/orientation-guard.tsx"],
   "use-merged-ref": [
     "src/components/avoid-keyboard/avoid-keyboard.tsx",
-    "src/components/icon.tsx",
+    "src/components/spinner.tsx",
     "src/components/text.tsx",
   ],
   "use-scroll-edge-fade": ["src/components/scroll-view.tsx"],
