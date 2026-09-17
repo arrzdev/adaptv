@@ -7,9 +7,12 @@
  * while the app is served at `/`. A GitHub Pages project site lives at
  * `/<repo>/`, and there every such URL is a 404. → `docs/decisions/register.md` B1
  *
- * `base` is Vite's resolved `base` (or `import.meta.env.BASE_URL`, the same
- * value in the bundle). Vite keeps a trailing slash only when one was written,
- * so `"/app"` and `"/app/"` both arrive here and must both join to `/app/<file>`.
+ * `base` is either Vite's resolved `config.base` or `import.meta.env.BASE_URL`,
+ * and the two are NOT the same string. Vite gives `config.base` a trailing slash
+ * always, but `BASE_URL` keeps the base as written, so `--base /app` reaches the
+ * plugins as `"/app/"` and the bundle as `"/app"`. Both must join to
+ * `/app/<file>`, which is why nothing in adaptv concatenates onto either one: a
+ * base-relative URL is built here or it is built wrong.
  */
 export function publicPath(base: string, file: string): string {
   const prefix = base.endsWith("/") ? base : `${base}/`
