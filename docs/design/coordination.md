@@ -163,6 +163,10 @@ const capture = useGestureCapture({
   captured gesture blocks others until it releases. `blocksScroll`/`disableScroll` stop the scroll
   container while a drag owns the pointer (the reliable cross-platform way, since `touch-action` can't
   change mid-touch on iOS).
+- **Every claim has a release where its own gesture ends**, ahead of that gesture's outcome: the
+  `Drawer` handle releases on mouse pointerup and pointercancel, the sheet on touchend and touchcancel.
+  A claim with no release leaves its primitive the holder after the drag is over, closed sheet
+  included, so the next edge swipe pre-empts a gesture that already ended and a row swipe is refused.
 - **Disabling is not unregistering.** `setEnabled(id, false)` remembers the id so it stays refused;
   `unregister(id)` releases the same way (with `onLost`) and then forgets it. The React binding
   unregisters on unmount, because `useId` never reissues an id: disabling there kept one id per

@@ -1525,10 +1525,17 @@ export function DrawerEngine({
     requestClose()
   }, [requestClose])
 
+  //The end of the handle's mouse drag, from pointerup (before its close-or-snap decision, the
+  //order endTouchDrag keeps) and from pointercancel. It gives the arbiter back as the touch drag's
+  //end does: the handle claimed it at pointerdown, and a drawer left holding it made the next edge
+  //swipe or row swipe fight a finished drag.
+  //The cancel is wired for every pointer type, so a touch cancel on the handle must not free a
+  //whole-sheet touch drag that is still live under the same finger.
   const resetHandlePointerDrag = useCallback(() => {
     isPointerDraggingRef.current = false
     syncBackdropGestureAttributes()
     dragStartTimeRef.current = null
+    if (!isTouchDragCommittedRef.current) captureRef.current.release()
   }, [syncBackdropGestureAttributes])
 
   const handleHandlePointerDown = useCallback(
