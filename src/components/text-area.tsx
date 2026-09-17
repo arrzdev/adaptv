@@ -107,7 +107,7 @@ export type TextAreaProps = Omit<
   children?: ReactNode
   /** Grow height with content until `maxRows`, then scroll (default: true). */
   autoResize?: boolean
-  /** Minimum row count for auto-grow (default: 4). */
+  /** Minimum row count for auto-grow (default: 4). Not read when `autoResize={false}`. */
   rows?: number
   /** Maximum rows before scrolling (default: 100). */
   maxRows?: number
@@ -953,8 +953,9 @@ function TextAreaError({ children, className }: TextAreaErrorProps) {
 TextAreaError.displayName = "TextArea.Error"
 
 /**
- * Multiline field with optional auto-grow. Set `autoResize={false}` for a fixed-height
- * field that scrolls inside itself (height from `rows` and/or `className`).
+ * Multiline field with optional auto-grow. Set `autoResize={false}` for a field that
+ * fills the height of a sized parent (its shell is locked to `h-full`, so a `className`
+ * height does not size it) and scrolls inside itself; `rows` and `maxRows` do not apply there.
  *
  * **With slots** — place `TextArea.Label`, `TextArea.Hint`, and/or `TextArea.Error`
  * as direct children. `className` styles the shell (`placeholder:` → inner field).
@@ -1097,7 +1098,9 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
               TEXT_AREA_INNER_AT_MAX_ROWS_OVERFLOW_CLASS,
           ],
         })}
-        rows={isFillMode ? 1 : autoResize ? 1 : rows}
+        //one row in both modes: grow mode measures the content against it and sets
+        //the height itself, and fill mode's height is the shell's flex column
+        rows={1}
         {...(value !== undefined ? { value } : {})}
         defaultValue={defaultValue}
         onChange={onChange}
