@@ -45,7 +45,8 @@ const WITHHELD_PREDICATES = new Set([
  */
 const WITHHELD_INTERNAL: Record<string, string> = {
   setThemeColorBase: "src/hooks/use-sync-theme.ts",
-  installUrlOpen: "src/shell/create-adaptv-router.ts",
+  measureKeyboardPayment: "src/hooks/use-keyboard.ts",
+  listenNativeKeyboard: "src/hooks/use-keyboard.ts",
 }
 
 const WITHHELD = new Set([

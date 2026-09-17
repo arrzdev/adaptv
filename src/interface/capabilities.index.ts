@@ -3,10 +3,9 @@
 //e.g. feeding `getOnline`/`subscribeOnline` into TanStack Query's `onlineManager`.
 //
 //🔴 Four of these are named lists rather than `export *` for one shared reason —
-//clipboard, keep-awake, orientation and share (theme-color and url-open are the
-//fifth and sixth named lists, and each withholds something else; their own notes
-//sit beside them). The shared
-//reason: a standalone `isXSupported()` predicate is a second way to ask
+//clipboard, keep-awake, orientation and share (keyboard and theme-color are named
+//lists too, and each withholds something else; its own note is above it). The
+//shared reason: a standalone `isXSupported()` predicate is a second way to ask
 //a question the surface already answers, so it stays module-internal for the hook
 //to use and never reaches a consumer. Both existing answers are better than it —
 //`useShare().supported` before you render, `share()` returning `"unsupported"`
@@ -41,8 +40,17 @@ export {
   requestKeepAwake,
   subscribeKeepAwake,
 } from "../capabilities/keep-awake"
-export * from "../capabilities/keyboard"
-export * from "../capabilities/motion"
+//NOT `export *`: `measureKeyboardPayment` and `listenNativeKeyboard` are withheld. They complete
+//the keyboard signal with the unpaid part a predicted or held height leaves and keep OS reports
+//apart from resizes, and `useKeyboard` is their one owner — the public answers are `unpaidHeight`
+//on `KeyboardInfo` and on `useKeyboard()`, and `subscribeNativeKeyboard`. See
+//`capabilities.barrel.test.ts`.
+export {
+  hasNativeKeyboard,
+  initNativeKeyboard,
+  type KeyboardInfo,
+  subscribeNativeKeyboard,
+} from "../capabilities/keyboard"
 export * from "../capabilities/native-theme"
 export * from "../capabilities/network"
 export * from "../capabilities/notifications"

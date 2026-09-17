@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 import {
   hasNativeKeyboard,
-  subscribeNativeKeyboard,
+  listenNativeKeyboard,
+  measureKeyboardPayment,
 } from "#adaptv/capabilities/keyboard"
 import {
   predictKeyboardHeight,
@@ -104,9 +105,9 @@ function readKeyboardHeight(visualViewportThreshold: number): number {
 export const KEYBOARD_MOCK_EVENT = "adaptv:keyboard-mock"
 const KEYBOARD_MOCK_KEY = "__adaptvKeyboardMock"
 
-type KeyboardMockHost = { [KEYBOARD_MOCK_KEY]?: Partial<KeyboardState> }
+type KeyboardMockHost = { [KEYBOARD_MOCK_KEY]?: Partial<KeyboardReport> }
 
-function readKeyboardMock(): KeyboardState | null {
+function readKeyboardMock(): KeyboardReport | null {
   if (typeof window === "undefined") return null
   const mock = (window as unknown as KeyboardMockHost)[KEYBOARD_MOCK_KEY]
   if (!mock || typeof mock.height !== "number") return null
@@ -146,7 +147,7 @@ const KEYBOARD_OPEN_ATTR = "data-keyboard-open"
 
 let keyboardPublisherCount = 0
 
-function publishKeyboardState({ isOpen, height }: KeyboardState) {
+function publishKeyboardState({ isOpen, height }: KeyboardReport) {
   if (typeof document === "undefined") return
   const root = document.documentElement
   root.style.setProperty(KEYBOARD_HEIGHT_VAR, `${height}px`)
@@ -164,11 +165,28 @@ function clearPublishedKeyboardState() {
   root.removeAttribute(KEYBOARD_OPEN_ATTR)
 }
 
-export type KeyboardState = {
+/** What the observer commits: open or not, and how tall. */
+type KeyboardReport = {
   /** `true` while a text field is focused and the on-screen keyboard is up. */
   isOpen: boolean
   /** Live keyboard height in px (0 when closed). */
   height: number
+}
+
+export type KeyboardState = KeyboardReport & {
+  /**
+   * px of `height` the layout viewport has NOT already given up for the keyboard. Equals `height`
+   * everywhere but Android native, whose WebView shrinks by the keyboard itself
+   * (`capabilities/keyboard.ts`); there it is 0 once that resize lands. Lay out against this, not
+   * `height`, or the keyboard is counted twice.
+   */
+  unpaidHeight: number
+  /**
+   * `true` where the layout viewport itself resizes for the keyboard (Android native): the
+   * keyboard's top edge is then `innerHeight - unpaidHeight`, and the visual viewport says
+   * nothing about it.
+   */
+  resizesLayoutViewport: boolean
 }
 
 export type UseKeyboardOptions = {
@@ -240,7 +258,7 @@ const NATIVE_KEYBOARD_SHRINK_HOLD_MS = 350
 export function isSuppressibleKeyboardShrink(
   wasOpen: boolean,
   committedHeight: number,
-  next: KeyboardState,
+  next: KeyboardReport,
   thresholdPx: number,
 ): boolean {
   return (
@@ -266,10 +284,12 @@ export function useKeyboard({
   debounceDelay = 50,
   predictFromCache = false,
 }: UseKeyboardOptions = {}): KeyboardState {
-  const [state, setState] = useState<KeyboardState>({
+  const [state, setState] = useState<KeyboardReport>({
     isOpen: false,
     height: 0,
   })
+  //a resize that changes only what the layout viewport has paid re-renders through this
+  const [, rereadPayment] = useReducer((count: number) => count + 1, 0)
 
   const focusedElementRef = useRef<HTMLElement | null>(null)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -415,7 +435,7 @@ export function useKeyboard({
       }, KEYBOARD_PREDICT_CONFIRM_MS)
     }
 
-    function setKeyboardState(nextState: KeyboardState) {
+    function setKeyboardState(nextState: KeyboardReport) {
       setState((prev) => {
         if (
           prev.isOpen === nextState.isOpen &&
@@ -589,17 +609,17 @@ export function useKeyboard({
         }, NATIVE_KEYBOARD_SHRINK_HOLD_MS)
       }
 
-      function commitNative(next: KeyboardState) {
+      function commitNative(next: KeyboardReport) {
         committedOpen = next.isOpen
         committedHeight = next.isOpen ? next.height : 0
-        setState(next)
+        setState({ isOpen: next.isOpen, height: next.height })
       }
 
       //A height the OS actually reported — commit it AND teach the cache, so the next open of a
       //same-shape field can be predicted. Only reached from the native subscription, so every value
       //here is a real measurement; `recordKeyboardHeight` ignores a 0 (a dismiss teaches nothing)
       //and a repeat of the same height, and the last value to survive a session is the settled one.
-      function commitMeasuredNative(next: KeyboardState) {
+      function commitMeasuredNative(next: KeyboardReport) {
         commitNative(next)
         const active = getActiveInputElement() ?? focusedElementRef.current
         if (active) recordKeyboardHeight(active, next.height)
@@ -655,7 +675,9 @@ export function useKeyboard({
 
       document.addEventListener("focusin", handleNativeFocusIn)
 
-      const unsubscribe = subscribeNativeKeyboard((info) => {
+      //every report the OS makes, a repeat of the last one included (a field switch under the same
+      //keyboard teaches the cache the new field; a hide must close a pending prediction)
+      function handleNativeReport(info: KeyboardReport) {
         // A real report is the confirmation a prediction was waiting for — retire the retract timer
         // here, BEFORE deciding what to do with the value. Doing it inside the commit would miss the
         // held-shrink branch below (which commits nothing yet), and the retract would then fire mid
@@ -706,7 +728,14 @@ export function useKeyboard({
           cancelShrinkHold()
           armShrinkHold()
         }
-        heldHeight = info.height
+      }
+
+      const unsubscribe = listenNativeKeyboard({
+        onReport: handleNativeReport,
+        //Where the WebView pays for the keyboard, a resize moves the unpaid part while the OS says
+        //nothing. No keyboard event: re-render to read the payment, and leave the prediction, the
+        //hold and the cache exactly as they were.
+        onPaymentChange: rereadPayment,
       })
 
       return () => {
@@ -771,5 +800,15 @@ export function useKeyboard({
     publishKeyboardState(state)
   }, [isEnabled, state])
 
-  return state
+  //Read at render from the committed height — a prediction or a held shrink included — so the
+  //unpaid part is right in the same commit whichever of the resize and the report came first. The
+  //seam reports a keyboard no viewport paid for.
+  const { unpaidHeight, resizesLayoutViewport } = readKeyboardMock()
+    ? { unpaidHeight: state.height, resizesLayoutViewport: false }
+    : measureKeyboardPayment(state.height)
+
+  return useMemo(
+    () => ({ ...state, unpaidHeight, resizesLayoutViewport }),
+    [state, unpaidHeight, resizesLayoutViewport],
+  )
 }
