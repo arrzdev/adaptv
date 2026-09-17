@@ -257,10 +257,10 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
-    to: "/lab/screen-reader",
-    title: "Screen reader",
+    to: "/lab/notifications",
+    title: "Notifications",
     summary:
-      "VoiceOver / TalkBack status · announce to the reader, or to a live region",
+      "ask · show one now · schedule one for later, where the OS allows it",
     isNew: true,
   },
   {
