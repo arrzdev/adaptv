@@ -193,6 +193,163 @@ describe("WheelColumn — what onChange receives for a scroll", () => {
     advance(120)
     expect(onChange.mock.calls).toEqual([[10], [10], [10]])
   })
+
+  it("reports a row the consumer stored only once, when the last scroll event is the one that crossed it", () => {
+    //the settle's timer is armed by the scroll that reported the row, BEFORE the
+    //consumer's re-render hands the row back as `value`
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+
+    //a rest exactly on the row: the settle has nothing to roll and nothing to say
+    scrollWheel(10 * H)
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[10]])
+
+    //a rest past the halfway mark: the settle rolls onto the row it already reported
+    scrollWheel(10 * H + 14) // still row 10
+    scrollWheel(10 * H + 16) // crosses into 11, and nothing scrolls after it
+    advance(120)
+    expect(smoothRolls().at(-1)).toBe(11 * H)
+    expect(onChange.mock.calls).toEqual([[10], [11]])
+  })
+
+  it("reports a row the consumer stored only once when a finger lifts on the scroll that crossed it", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+
+    //the lift after the consumer's re-render has landed
+    fireEvent.touchStart(wheel())
+    scrollWheel(10 * H + 16) // crosses into 11 under the finger
+    fireEvent.touchEnd(wheel())
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[11]])
+
+    //the lift in the same frame as that scroll, before the re-render: a touchend
+    //the engine delivers ahead of React's continuous-priority render
+    fireEvent.touchStart(wheel())
+    act(() => {
+      wheel().scrollTop = 12 * H + 16 // crosses into 13
+      fireEvent.scroll(wheel())
+      fireEvent.touchEnd(wheel())
+    })
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[11], [13]])
+  })
+
+  it("reports a row the consumer set from outside mid-glide only once, when the wheel rests on it", () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <WheelColumn
+        items={HOURS}
+        value={9}
+        onChange={onChange}
+        ariaLabel="Hour"
+      />,
+    )
+    scrollWheel(12 * H)
+    //the consumer lands on the same row by its own route before the settle
+    rerender(
+      <WheelColumn
+        items={HOURS}
+        value={12}
+        onChange={onChange}
+        ariaLabel="Hour"
+      />,
+    )
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[12]])
+  })
+
+  it("never reports a row that left the list while the wheel settled", () => {
+    //a day column over 31 while the month turns to February: the list shrinks to 28
+    //and the consumer clamps the day, all before the settle runs
+    const onChange = vi.fn()
+    let shrink = () => {}
+    function Days() {
+      const [value, setValue] = useState(15)
+      const [count, setCount] = useState(31)
+      shrink = () => {
+        setCount(28)
+        setValue((day) => Math.min(day, 28))
+      }
+      return (
+        <WheelColumn
+          items={range(1, count)}
+          value={value}
+          onChange={(next) => {
+            onChange(next)
+            setValue(next)
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<Days />)
+    scrollWheel(30 * H) // row 31
+    act(() => shrink())
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[31]])
+    //the settle rolls onto the last row that still exists
+    expect(smoothRolls().at(-1)).toBe(27 * H)
+  })
+
+  it("settles through the consumer's latest onChange, so a day column never sets back a month that changed mid-glide", () => {
+    //a date picker whose day column writes the month from its own render, and which
+    //starts a new month on its 1st; the day wheel is still gliding when the month turns
+    const dates = vi.fn()
+    let turnMonth = (_month: number) => {}
+    function DatePicker() {
+      const [date, setDate] = useState({ month: 1, day: 9 })
+      turnMonth = (month) => setDate({ month, day: 1 })
+      const count = date.month === 2 ? 28 : 31
+      return (
+        <WheelColumn
+          items={range(1, count)}
+          value={date.day}
+          onChange={(day) => {
+            dates(`${date.month}/${day}`)
+            setDate({ month: date.month, day })
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<DatePicker />)
+    scrollWheel(11 * H) // day 12
+    act(() => turnMonth(2))
+    advance(120)
+    //the gesture wins over the reset to the 1st, and it lands in February
+    expect(dates.mock.calls).toEqual([["1/12"], ["2/12"]])
+  })
+
+  it("settles through the consumer's latest onChange even when neither the value nor the list changed", () => {
+    //a booking picker that refuses a day its month has blocked: the 12th is taken in
+    //January, not in March, and both months share one list
+    const dates = vi.fn()
+    let turnMonth = (_month: number) => {}
+    const days = range(1, 31)
+    function BookingPicker() {
+      const [month, setMonth] = useState(1)
+      const [day, setDay] = useState(9)
+      turnMonth = setMonth
+      return (
+        <WheelColumn
+          items={days}
+          value={day}
+          onChange={(next) => {
+            dates(`${month}/${next}`)
+            if (!(month === 1 && next === 12)) setDay(next)
+          }}
+          ariaLabel="Hour"
+        />
+      )
+    }
+    render(<BookingPicker />)
+    scrollWheel(11 * H) // the 12th, refused in January
+    act(() => turnMonth(3))
+    advance(120)
+    expect(dates.mock.calls).toEqual([["1/12"], ["3/12"]])
+  })
 })
 
 describe("WheelColumn — the settle snap", () => {
@@ -397,6 +554,16 @@ describe("WheelColumn — the keyboard", () => {
     fireEvent.keyDown(wheel(), { key: "ArrowUp" })
     fireEvent.keyDown(wheel(), { key: "ArrowUp" })
     expect(smoothRolls()).toEqual([10 * H, 9 * H, 8 * H])
+  })
+
+  it("reports the row a key rolls onto once, when the roll's last scroll event crosses into it", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    //the roll arrives in one scroll event, and nothing scrolls after it
+    scrollWheel(10 * H)
+    advance(120)
+    expect(onChange.mock.calls).toEqual([[10]])
   })
 
   it("counts presses that land before the roll arrives", () => {
