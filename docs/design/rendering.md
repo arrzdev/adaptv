@@ -226,8 +226,11 @@ silently converts an SSR app into a stale SPA for every returning visitor. Netwo
 fallback gives SSR-on-every-navigation **and** a fully functional offline app.
 
 **The fallback is the _app shell_, not an offline page.** It contains no offline-specific markup — it
-is the same document that boots React on a normal cold start. Offline then becomes a *render* outcome,
-not a *serving* outcome and not a *navigation* outcome:
+boots the same app a normal cold start boots. It is not the same document, though: an SSR cold start
+gets the server-rendered page and hydrates it, while the shell is generated at build time ("Generated,
+never captured", §3) and boots a fresh client root. Its pre-paint head scripts are the ones the shell
+emitter writes, not the ones the root route adds to the server document. Offline then becomes a
+*render* outcome, not a *serving* outcome and not a *navigation* outcome:
 
 ```
 offline cold load → SW serves app shell → React boots → router resolves /product/xxx
@@ -1106,6 +1109,15 @@ Two things this settles that no automated run could. **Navigation preload is gen
 (15.4+), so the §3.3 pair is doing its job on the target where SW boot latency costs the most. And the
 `auto` update policy behaves exactly as §3.4 describes *in a standalone home-screen app*, which is the
 only place "cold launch" is a real, frequent event.
+
+**The installed-app offline row re-walked on iOS 26.1 — 2026-09-14.** iPhone 17 / iOS 26.1 (`23B86`),
+a production SSR build of the playground served by `vite preview` over `http://localhost`, installed
+to the Home Screen. Online, the worker controlled the app, and a second cold launch loaded every asset
+with a `transferSize` of 0. With the server stopped, a cold launch from the icon booted onto
+`/lab/splash`, and `/lab` and `/lab/text`, neither visited that session, then rendered in full from
+the precache. No offline screen appeared, so nothing exercised a retry. That build's shell carried no
+launch-height script, and its offline cold launch drew the splash mascot at 368 pt where the online
+launches drew it at 337 pt. The Safari-tab and deploy rows were not re-walked on 26.1.
 
 > One harness trap, recorded so it is not re-diagnosed as a bug: `xcrun simctl openurl` with the server
 > down lands on Safari's "can't connect" page. An in-tab reload of the same URL, at the same moment,
