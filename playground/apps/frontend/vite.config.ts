@@ -13,7 +13,7 @@ import { PORTS } from "./ports"
  * only the app port still died on `EADDRINUSE` from a second plugin's inspector.
  * That plugin is gone from this config — adaptv wires the server build now — so the
  * frontend holds one port again. `supervisorPort` stays reserved so `runDev` frees
- * the whole block and the e2e harness has a second port to move.
+ * the whole block.
  */
 const appPort = Number(process.env.VITE_APP_PORT ?? PORTS.appPort)
 
