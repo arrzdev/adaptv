@@ -363,7 +363,7 @@ CSS cannot compute for itself:
 | `--adaptv-inset-{top,right,bottom,left}` | `safe-area.css`, resolving the contract | the value space is continuous, and it must compose inside `calc()` |
 | `--safe-area-inset-*` | Capacitor `SystemBars` on Android | the **input** to the contract above, injected with no event — `env()` reads 0/wrong in Android WebView (`crbug/40699457`) |
 | `--adaptv-keyboard-height` | `useKeyboard` | the real OS keyboard height, not a `visualViewport` guess |
-| `--pwa-launch-height` | `getLaunchViewportInitScript()` | freezes resolved `100vh` against the iOS standalone cold-start ICB expansion; lowered, never raised, to `innerHeight` + the top inset if that reads less at head or at a `resize` before the splash is revealed (iOS 26) |
+| `--pwa-launch-height` | `getLaunchViewportInitScript()`, put back by `restoreLaunchHeight()` after a client root clears `<html>` | freezes resolved `100vh` against the iOS standalone cold-start ICB expansion; lowered, never raised, to `innerHeight` + the top inset if that reads less at head or at a `resize` before the splash is revealed (iOS 26) |
 | `--viewport-cover-bleed` | critical CSS | launch-overscan bleed |
 
 Use Ionic's fallback-chain idiom so a consumer override cascades without recomputation. The
