@@ -1891,7 +1891,7 @@ export function explainLaunchFailure(platform, text = "") {
       return {
         msg: "iOS code signing isn't set up for a device build",
         fix: [
-          "open .adaptv/ios/App/App.xcworkspace → App target → Signing & Capabilities → pick your Team",
+          "'open .adaptv/ios/App/App.xcworkspace' → App target → Signing & Capabilities → pick your Team",
           "(add your Apple ID in Xcode → Settings → Accounts; a free one works)",
         ],
       }
@@ -1902,7 +1902,33 @@ export function explainLaunchFailure(platform, text = "") {
           "On the iPhone: Settings → Privacy & Security → Developer Mode → On, then restart.",
         ],
       }
-    if (/device is locked|please unlock|is locked/i.test(t))
+    // xcodebuild keeps a build database in the build folder and locks it for the length of a
+    // build, so a second build into the same folder fails on it. Its line says `database is
+    // locked`, which the device-lock pattern below used to catch with a bare `is locked`: a
+    // simulator build that met another build was told to unlock a device with no lock screen.
+    // The folder is per app and per device for a run and per app for `build ios`, and a `dev`
+    // run refuses a second `dev` and blocks `preview` and `build` while it holds the lock
+    // (`lock.mjs`). What is left to collide is a `preview` or `build` of the same app.
+    if (/unable to attach DB|build database .*database is locked/i.test(t))
+      return {
+        msg: "another build is using this app's iOS build folder",
+        fix: [
+          "An 'adaptv preview' or 'adaptv build' of this app is still building.",
+          "Wait for it to finish or stop it, then run again.",
+        ],
+      }
+    // Every form names the device or asks for its unlock, so no other lock reads as this one
+    // (a build database, or codesign's keychain). The runner says `Please unlock your device`,
+    // `Device still locked after 1 minute` and `Device is currently locked`. Xcode (26.1.1)
+    // says `<name> is locked. To use <name> with Xcode, unlock it.`, inside a destination
+    // record under a headline that names no lock, and `<name> is locked, waiting for unlock`.
+    // The `\.` keeps out `unlock it and choose to trust this Mac`, a phone that does not
+    // trust this Mac, whose fix is more than unlocking.
+    if (
+      /\bdevice (?:is |was )?(?:still |currently )?locked\b|please unlock|with Xcode, unlock it\.|\bis locked, waiting for unlock/i.test(
+        t,
+      )
+    )
       return {
         msg: "the device is locked",
         fix: ["Unlock it and keep it unlocked while installing."],
