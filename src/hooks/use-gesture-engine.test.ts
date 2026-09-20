@@ -606,6 +606,71 @@ describe("useGestureEngine", () => {
       vi.useRealTimers()
     })
 
+    it("shows a tap released before the show-delay, and holds it for the floor", () => {
+      //a real tap is often shorter than the 100ms defer (finger contact measures
+      //50–120ms). The defer exists so a SCROLL never paints; a clean in-region
+      //release is the opposite verdict, and Ionic's pair force-adds the visual on
+      //that release so a fast tap still gets its feedback (prior-art.md §6). An
+      //engine that drops the pending show on release gives the most common tap
+      //in the app no feedback at all.
+      vi.useFakeTimers()
+      const onPressUp = vi.fn()
+      const { result } = renderHook(() => useGestureEngine({ onPressUp }))
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS - 40)
+      })
+      act(() => result.current.onPointerUp(pointerAt(50, 50)))
+      expect(onPressUp).toHaveBeenCalledTimes(1)
+      expect(
+        target.hasAttribute("data-pressed"),
+        "a clean tap shorter than the defer must still be seen",
+      ).toBe(true)
+
+      act(() => {
+        vi.advanceTimersByTime(MIN_PRESSED_MS - 1)
+      })
+      expect(target.hasAttribute("data-pressed")).toBe(true)
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(target.hasAttribute("data-pressed")).toBe(false)
+      vi.useRealTimers()
+    })
+
+    it("a release outside before the show-delay paints nothing", () => {
+      //the force-show is for a tap that COMMITS; a finger that slid off and let
+      //go inside the window activated nothing and must leave no flash behind
+      vi.useFakeTimers()
+      const onPressUp = vi.fn()
+      const { result } = renderHook(() => useGestureEngine({ onPressUp }))
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS - 40)
+      })
+      act(() => result.current.onPointerMove(pointerAt(300, 300)))
+      act(() => result.current.onPointerUp(pointerAt(300, 300)))
+      expect(onPressUp).not.toHaveBeenCalled()
+      expect(target.hasAttribute("data-pressed")).toBe(false)
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+      expect(target.hasAttribute("data-pressed")).toBe(false)
+      vi.useRealTimers()
+    })
+
     it("clears a visual still inside its floor when a key press resets the engine", () => {
       //a tap that painted, released inside the 150ms floor, then Enter on the same
       //focused control: the key press resets the engine while the hide is pending,
@@ -643,6 +708,9 @@ describe("useGestureEngine", () => {
     })
 
     it("leaves no data-pressed flag after a clean tap", () => {
+      //an instant tap is painted on its release and held for the floor (the test
+      //above), so "after" means once the floor has elapsed — not the same tick
+      vi.useFakeTimers()
       const { result } = renderHook(() =>
         useGestureEngine({ onPressUp: vi.fn() }),
       )
@@ -654,8 +722,41 @@ describe("useGestureEngine", () => {
         ),
       )
       act(() => result.current.onPointerUp(pointerAt(50, 50)))
+      act(() => {
+        vi.advanceTimersByTime(MIN_PRESSED_MS)
+      })
 
       expect(target.hasAttribute("data-pressed")).toBe(false)
+      vi.useRealTimers()
+    })
+
+    it("an unmount mid-press fires no timer against the detached node", () => {
+      //the press is torn down with the component: the deferred show and the
+      //long-press timer must both die, or a node React has already dropped gets
+      //written to (and a consumer's onLongPressDown fires for a control that is gone)
+      vi.useFakeTimers()
+      const onLongPressDown = vi.fn()
+      const { result, unmount } = renderHook(() =>
+        useGestureEngine({ onPressUp: vi.fn(), onLongPressDown }),
+      )
+      const target = makeTarget()
+
+      act(() =>
+        result.current.onPointerDown(
+          pointerDown({ clientX: 50, clientY: 50 }, target),
+        ),
+      )
+      act(() => {
+        vi.advanceTimersByTime(SHOW_PRESSED_AFTER_MS - 20)
+      })
+      unmount()
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+
+      expect(target.hasAttribute("data-pressed")).toBe(false)
+      expect(onLongPressDown).not.toHaveBeenCalled()
+      vi.useRealTimers()
     })
 
     it("never sets data-pressed for keyboard activation", () => {
