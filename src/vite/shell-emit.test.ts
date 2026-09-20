@@ -78,12 +78,7 @@ function scaffold(
       "dir",
     )
   const clientDir = path.join(appRoot, "dist/client")
-  mkdirSync(path.join(clientDir, ".vite"), { recursive: true })
   mkdirSync(path.join(clientDir, "assets"), { recursive: true })
-  writeFileSync(
-    path.join(clientDir, ".vite/manifest.json"),
-    JSON.stringify(clientManifest),
-  )
   writeFileSync(path.join(clientDir, "assets/app-unlinked9.css"), "html{}")
   //a route file with content in it: a captured render would carry this text
   mkdirSync(path.join(appRoot, "src/routing"), { recursive: true })
@@ -108,20 +103,60 @@ function scaffold(
       },
     },
   }
-  return { appRoot, clientDir, context }
+  return { appRoot, clientDir, context, clientManifest }
 }
 
+/** Vite's hooks, in build order, with the manifest asset Vite emits for the client. */
 async function emit(
   context: AdaptvContext,
   appRoot: string,
+  clientManifest: object,
 ): Promise<void> {
   const plugin = adaptvShellEmitPlugin(context)
+  const configEnvironment = (plugin as Plugin).configEnvironment
+  if (typeof configEnvironment !== "object" || !configEnvironment.handler)
+    throw new Error(
+      "configEnvironment must be an object hook so `order` can be set",
+    )
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  ;(configEnvironment.handler as any).call(
+    {},
+    "client",
+    { build: {} },
+    { command: "build", mode: "production" },
+  )
   // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
   ;(plugin.configResolved as any).call({}, {
     root: appRoot,
     base: "/",
     environments: { client: { build: { outDir: "dist/client" } } },
   } as unknown as ResolvedConfig)
+  const generate = (plugin as Plugin).generateBundle
+  if (typeof generate !== "object" || !generate.handler)
+    throw new Error(
+      "generateBundle must be an object hook so `order` can be set",
+    )
+  const bundle = {
+    ".vite/adaptv-shell-manifest.json": {
+      type: "asset",
+      fileName: ".vite/adaptv-shell-manifest.json",
+      source: JSON.stringify(clientManifest),
+    },
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  await (generate.handler as any).call(
+    {
+      environment: {
+        name: "client",
+        config: {
+          build: { manifest: ".vite/adaptv-shell-manifest.json" },
+        },
+      },
+    },
+    {},
+    bundle,
+    false,
+  )
   const hook = (plugin as Plugin).buildApp
   if (typeof hook !== "object" || !hook.handler)
     throw new Error(
@@ -146,8 +181,11 @@ beforeAll(async () => {
     render: "ssr" | "spa",
     target: "web" | "capacitor",
   ) => {
-    const { appRoot, clientDir, context } = scaffold(render, target)
-    await emit(context, appRoot)
+    const { appRoot, clientDir, context, clientManifest } = scaffold(
+      render,
+      target,
+    )
+    await emit(context, appRoot, clientManifest)
     const name = render === "spa" ? "index.html" : "adaptv-shell.html"
     return {
       clientDir,
@@ -235,11 +273,15 @@ describe("adaptvShellEmitPlugin — the stylesheet href", () => {
       //`href="/"`, which loads the HTML document as a stylesheet: a fully
       //unstyled app, with no error anywhere.
       const { css: _css, ...entry } = manifest["src/client-entry.tsx"]
-      const { appRoot, clientDir, context } = scaffold("spa", "web", {
-        ...manifest,
-        "src/client-entry.tsx": entry,
-      })
-      await emit(context, appRoot)
+      const { appRoot, clientDir, context, clientManifest } = scaffold(
+        "spa",
+        "web",
+        {
+          ...manifest,
+          "src/client-entry.tsx": entry,
+        },
+      )
+      await emit(context, appRoot, clientManifest)
       const html = readFileSync(path.join(clientDir, "index.html"), "utf8")
       expect(html).toContain(
         '<link rel="stylesheet" href="/assets/app-unlinked9.css">',
