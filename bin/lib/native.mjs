@@ -1019,6 +1019,7 @@ export async function capAddIfMissing(
     } else {
       injectAndroidPluginProjects(appRoot, { report, plugins })
       await stampAndroidSdkLevels(appRoot)
+      restoreGradleWrapperMode(appRoot)
     }
     return
   }
@@ -1066,6 +1067,7 @@ export async function capAddIfMissing(
   } else {
     injectAndroidPluginProjects(appRoot, { report, plugins })
     await stampAndroidSdkLevels(appRoot)
+    restoreGradleWrapperMode(appRoot)
   }
 }
 
@@ -1094,6 +1096,36 @@ async function stampAndroidSdkLevels(appRoot) {
     "native/android-sdk.ts",
   )
   writeIfChanged(file, stamp(readFileSync(file, "utf8")))
+}
+
+/**
+ * Give the gradle wrapper of the project adaptv owns back its exec bit, when it has lost it.
+ *
+ * `cap add` writes `gradlew` executable, and nothing adaptv does takes that away — but a
+ * project directory that is copied or unzipped by something that drops file modes keeps
+ * every file and loses the bit, and both ways an Android build starts (`build android` spawns
+ * it directly; the native runner spawns `./gradlew`) then die on `spawn … EACCES` before
+ * gradle prints a word. The file is adaptv's, generated into `.adaptv/android`, so its mode is
+ * adaptv's to keep: on every prepare, next to the SDK levels, and silent (R18) — a restored
+ * bit is adaptv handling its own file.
+ *
+ * A restore that cannot happen (a file owned by another user) is not raised here. The spawn
+ * fails a moment later, and `notExecutable` in `explain.mjs` words that failure with the
+ * action that still works.
+ * @param {string} appRoot
+ */
+export function restoreGradleWrapperMode(appRoot) {
+  const file = path.join(nativeDir(appRoot, "android"), "gradlew")
+  let mode
+  try {
+    mode = statSync(file).mode
+  } catch {
+    return
+  }
+  if (mode & 0o100) return
+  try {
+    chmodSync(file, mode | 0o111)
+  } catch {}
 }
 
 /** The packages adaptv ships that carry NATIVE code for `platform` — every plugin, plus
@@ -2285,23 +2317,26 @@ function subInFile(appRoot, file, re, replacement) {
 
 /** {@link subInFile} for a rewrite a single regex cannot express — same failure line. */
 function rewriteFile(appRoot, file, transform) {
-  const fault = (err) =>
+  //The verb is the operation that failed. One `could not write` for both used to call an
+  //unreadable file unwritable, and a dev who checks the write permission of a file whose
+  //READ bit is the problem finds nothing wrong with it.
+  const fault = (verb, err) =>
     new Error(
-      `could not write ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
+      `could not ${verb} ${path.relative(appRoot, file)} (${err?.code ?? err?.message ?? err})`,
     )
   let before
   try {
     before = readFileSync(file, "utf8")
   } catch (err) {
     if (err?.code === "ENOENT") return
-    throw fault(err)
+    throw fault("read", err)
   }
   const after = transform(before)
   if (after === before) return
   try {
     writeFileSync(file, after)
   } catch (err) {
-    throw fault(err)
+    throw fault("write", err)
   }
 }
 
