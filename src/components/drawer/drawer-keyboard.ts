@@ -58,7 +58,9 @@ export function resolveDrawerKeyboardRoom(
  *
  * The guess covers the frame before a resize can be measured: VK-less non-iOS Chromium (a plain-http
  * `ip:port` origin, where `virtualKeyboard` does not exist and nothing can hold the viewport) is known
- * to shrink, so it takes this path from the first keyboard event rather than one resize later.
+ * to shrink, so it takes this path from the first keyboard event rather than one resize later. A
+ * native Android binary WITHOUT the Keyboard plugin is the same case: `hasNativeKeyboard` is false
+ * there and its WebView resizes itself like any other.
  *
  * `capHeld` makes the answer sticky: once the cap path has written the box, the keyboard's close
  * (height 0, shrink 0) must come back through the same path to release it with its own settle,
