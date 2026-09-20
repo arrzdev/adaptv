@@ -1,0 +1,54 @@
+/*
+ * Collapsible panel motion — structure only. The component (collapsible.tsx)
+ * writes the inline `height` (0 to the measured px on open, the measured px to 0
+ * on close); this file supplies the transition that carries it and the clip that
+ * makes the measurement meaningful.
+ *
+ * The transition is keyed on `data-collapsible-opening` / `data-collapsible-closing`,
+ * one of which is present ONLY while that phase is running, and neither on the
+ * panel at rest, for two reasons:
+ *
+ * 1. At rest the panel is `height: auto` and `overflow: visible`, so a focus ring
+ *    on a control inside it is not clipped, and content that grows after the open
+ *    (an image that loads, a list that fetches) pushes the panel taller instead of
+ *    being cut at the height it opened to.
+ * 2. `height: auto` cannot animate (interpolate-size is Chrome 129+ only; WebKit
+ *    bug 295132), so the panel rests at `auto` after animating a px value. An
+ *    always-on `transition: height` would see that px-to-auto jump at the end of
+ *    every open and, on some engines, animate it as a visible pop. With the rule
+ *    gone before the inline height is cleared, there is nothing to transition.
+ *
+ * The phase is two PRESENCE attributes rather than one attribute carrying an
+ * `open|close` value, per docs/decisions/styling.md §3.1: adaptv spells state as
+ * valueless attributes namespaced per component. A shared value attribute is what
+ * one composed trigger silently overwrites on another, and a bare attribute is
+ * what Tailwind v4 matches natively (`data-collapsible-opening:` needs no
+ * brackets). `data-collapsible-open` — on the panel, the trigger and the root
+ * while open — is the resting state, and deliberately NOT what the transition
+ * keys on.
+ *
+ * Duration and easing are the panel-local custom properties `--collapsible-duration`
+ * and `--collapsible-easing` (unprefixed because they are scoped to one component,
+ * docs/decisions/styling.md §3.2); a consumer sets them on the panel or any
+ * ancestor. The reduced-motion rule is belt and braces: the component already skips
+ * the phases under `prefers-reduced-motion`, and this keeps the CSS honest on its
+ * own for a consumer who reuses the attributes.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) so a consumer can
+ * override any of it with an ordinary unlayered rule, at any specificity and with
+ * no `!important`.
+ */
+
+@layer adaptv.components {
+  [data-adaptv="collapsible-panel"]:is([data-collapsible-opening], [data-collapsible-closing]) {
+    overflow: hidden;
+    transition: height var(--collapsible-duration, 200ms)
+      var(--collapsible-easing, cubic-bezier(0.2, 0, 0, 1));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="collapsible-panel"]:is([data-collapsible-opening], [data-collapsible-closing]) {
+      transition: none;
+    }
+  }
+}
