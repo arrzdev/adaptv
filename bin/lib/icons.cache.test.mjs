@@ -21,16 +21,18 @@ const REAL_PNG = path.join(DEFAULT_ICONS_DIR, "android-chrome-512.png")
 // several times. The ONLY thing that can go wrong with them is an answer outliving the file it
 // describes — so that is what these test.
 
-let dir = null
+//a case may make more than one app root, so every one is kept for the cleanup
+const dirs = []
 afterEach(() => {
-  if (dir) rmSync(dir, { recursive: true, force: true })
-  dir = null
+  for (const d of dirs.splice(0))
+    rmSync(d, { recursive: true, force: true })
   clearIconCaches()
 })
 
 /** An app root with `public/favicons/` containing `names`. */
 function app(names = []) {
-  dir = mkdtempSync(path.join(tmpdir(), "adaptv-iconcache-"))
+  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-iconcache-"))
+  dirs.push(dir)
   const icons = path.join(dir, "public/favicons")
   mkdirSync(icons, { recursive: true })
   for (const n of names) writeFileSync(path.join(icons, n), "x")

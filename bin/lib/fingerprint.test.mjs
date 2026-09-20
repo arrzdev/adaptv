@@ -1,7 +1,13 @@
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import {
   appConfigFingerprint,
   cliSourceFingerprint,
@@ -12,8 +18,20 @@ import {
 // an edit a dev makes mid-session that leaves the INSTALLED app wrong — the symptom being a
 // terminal that says nothing at all, which is how commenting `icons` out got reported.
 
+const dirs = []
+afterEach(() => {
+  for (const d of dirs.splice(0))
+    rmSync(d, { recursive: true, force: true })
+})
+
+const tempDir = (prefix) => {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix))
+  dirs.push(dir)
+  return dir
+}
+
 const app = (config = 'export default { icons: "./icons" }') => {
-  const root = mkdtempSync(path.join(tmpdir(), "adaptv-fp-"))
+  const root = tempDir("adaptv-fp-")
   writeFileSync(path.join(root, "adaptv.config.ts"), config)
   mkdirSync(path.join(root, "icons"))
   return root
@@ -87,7 +105,7 @@ describe("appConfigFingerprint — did the dev change something the running app 
   })
 
   it("survives a missing config file and a missing icon dir rather than throwing into the poll", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "adaptv-fp-"))
+    const root = tempDir("adaptv-fp-")
     expect(() =>
       appConfigFingerprint(root, { icons: "./nope" }),
     ).not.toThrow()
@@ -97,7 +115,7 @@ describe("appConfigFingerprint — did the dev change something the running app 
 describe("cliSourceFingerprint — did adaptv's OWN source change under a running dev?", () => {
   // A fake `bin/` tree, since the real one is the module under test's own directory.
   const bin = (files) => {
-    const root = mkdtempSync(path.join(tmpdir(), "adaptv-cli-"))
+    const root = tempDir("adaptv-cli-")
     mkdirSync(path.join(root, "lib"))
     for (const [name, body] of Object.entries(files))
       writeFileSync(path.join(root, name), body)
@@ -143,7 +161,7 @@ describe("cliSourceFingerprint — did adaptv's OWN source change under a runnin
 
 describe("fingerprint — did anything the web bundle is built FROM change?", () => {
   const tree = () => {
-    const root = mkdtempSync(path.join(tmpdir(), "adaptv-web-"))
+    const root = tempDir("adaptv-web-")
     mkdirSync(path.join(root, "src"))
     mkdirSync(path.join(root, ".output", "server"), { recursive: true })
     writeFileSync(path.join(root, "src", "app.tsx"), "export const a = 1")
