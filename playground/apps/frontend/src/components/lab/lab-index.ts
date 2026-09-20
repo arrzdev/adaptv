@@ -55,13 +55,22 @@ const COMPONENTS = [
     to: "/lab/skeleton",
     title: "Skeleton",
     summary: "silent, still under Reduce Motion, visible in high contrast",
+    isNew: false,
+  },
+  {
     to: "/lab/divider",
     title: "Divider",
     summary:
       "one device pixel at every density · a border, not a background",
+    isNew: false,
+  },
+  {
     to: "/lab/icon",
     title: "Icon",
     summary: "decorative vs labelled svg · 1em · iOS Dynamic Type",
+    isNew: false,
+  },
+  {
     to: "/lab/spinner",
     title: "Spinner",
     summary: "pauses off screen · turns through a busy main thread",
@@ -109,6 +118,9 @@ const COMPONENTS = [
     to: "/lab/slider",
     title: "Slider",
     summary: "tap the track · drag anywhere · yields to a vertical scroll",
+    isNew: false,
+  },
+  {
     to: "/lab/radio-group",
     title: "RadioGroup",
     summary: "two groups never share a name · the radio covers its item",
@@ -150,6 +162,9 @@ const COMPONENTS = [
     to: "/lab/collapsible",
     title: "Collapsible",
     summary: "measured height · until-found · reduced motion",
+    isNew: false,
+  },
+  {
     to: "/lab/select",
     title: "Select",
     summary:
@@ -250,6 +265,9 @@ const CAPABILITIES = [
     to: "/lab/compose",
     title: "Compose",
     summary: "mail and SMS drafts · handed to the OS composer",
+    isNew: false,
+  },
+  {
     to: "/lab/print",
     title: "Print",
     summary:
@@ -293,10 +311,16 @@ const CAPABILITIES = [
     title: "Privacy screen",
     summary:
       "content kept out of the switcher and, on Android, out of captures",
+    isNew: false,
+  },
+  {
     to: "/lab/screen-reader",
     title: "Screen reader",
     summary:
       "VoiceOver / TalkBack status · announce to the reader, or to a live region",
+    isNew: false,
+  },
+  {
     to: "/lab/notifications",
     title: "Notifications",
     summary:
@@ -313,6 +337,9 @@ const CAPABILITIES = [
     to: "/lab/filesystem",
     title: "Filesystem",
     summary: "the app's own files · plugin on native, OPFS on the web",
+    isNew: false,
+  },
+  {
     to: "/lab/speech",
     title: "Speech",
     summary: "text to speech · spoke, cancelled, silent, failed",
@@ -391,6 +418,9 @@ const CAPABILITIES = [
     title: "Battery",
     summary:
       "level and charging · a real number, an honest unknown, or unsupported",
+    isNew: false,
+  },
+  {
     to: "/lab/motion",
     title: "Motion",
     summary:
