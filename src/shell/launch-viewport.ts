@@ -16,16 +16,45 @@
 //and settles to 812 later, with no further resize. The same check runs once at head, for a
 //reload of an already-shrunk page (applying a service-worker update, the stale-chunk
 //recovery, the offline or boot-error retry): it reads 100vh 874 over innerHeight 812
-//before first paint and never gets that resize. The top inset's var is resolved by then:
-//this script is emitted before the stylesheet link, but every route stylesheet carries
-//`precedence`, so React hoists the links ahead of it and the pending stylesheet blocks the
-//script (pinned by the playground's screens e2e spec). On iOS 18 the page runs under the
+//before first paint and never gets that resize. The top inset's var is resolved by then.
+//The server-rendered document emits this script before the stylesheet link, but every route
+//stylesheet carries `precedence`, so React hoists the links ahead of it and the pending
+//stylesheet blocks the script (pinned by the playground's screens e2e spec). The generated
+//shell emits it after the stylesheet link, for the same wait (`app-shell.ts`). On iOS 18 the page runs under the
 //status bar and the inset makes the sum the whole screen, so growth there changes nothing.
 //Only an iOS Home Screen app lowers it (`navigator.standalone`, which it sets and Android
 //does not): the shrink was measured nowhere else, and an Android installed app with its
 //keyboard still up could read a short innerHeight (not measured), so there the freeze stays.
 //Not covered: a rotation before the reveal lowers the height without raising it back.
 //The attribute is the one useSplashHandoff writes (pinned by the test).
+//
+//Every write also lands on `window` under LAUNCH_HEIGHT_KEY, for restoreLaunchHeight below.
 export function getLaunchViewportInitScript(): string {
-  return `(function(){try{if(!((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true))return;var r=document.documentElement;function measure(height){var p=document.createElement('div');p.style.cssText='position:fixed;top:0;left:0;height:'+height+';width:0;visibility:hidden;pointer-events:none';r.appendChild(p);var h=Math.round(p.getBoundingClientRect().height);p.remove();return h}var h=measure('100vh');if(!(h>0))return;var ios=window.navigator.standalone===true;function lower(){var shown=Math.round(window.innerHeight)+measure('var(--adaptv-inset-top, 0px)');if(window.innerHeight>0&&shown<h)h=shown}if(ios)lower();r.style.setProperty('--pwa-launch-height',h+'px');if(!ios)return;var shrink=function(){if(r.hasAttribute('data-adaptv-splash-revealed')){window.removeEventListener('resize',shrink);return}var was=h;lower();if(h!==was)r.style.setProperty('--pwa-launch-height',h+'px')};window.addEventListener('resize',shrink)}catch(e){}})();`
+  return `(function(){try{if(!((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true))return;var r=document.documentElement;function measure(height){var p=document.createElement('div');p.style.cssText='position:fixed;top:0;left:0;height:'+height+';width:0;visibility:hidden;pointer-events:none';r.appendChild(p);var h=Math.round(p.getBoundingClientRect().height);p.remove();return h}var h=measure('100vh');if(!(h>0))return;var ios=window.navigator.standalone===true;function lower(){var shown=Math.round(window.innerHeight)+measure('var(--adaptv-inset-top, 0px)');if(window.innerHeight>0&&shown<h)h=shown}function freeze(){r.style.setProperty('--pwa-launch-height',h+'px');window.${LAUNCH_HEIGHT_KEY}=h}if(ios)lower();freeze();if(!ios)return;var shrink=function(){if(r.hasAttribute('data-adaptv-splash-revealed')){window.removeEventListener('resize',shrink);return}var was=h;lower();if(h!==was)freeze()};window.addEventListener('resize',shrink)}catch(e){}})();`
+}
+
+/** Where the pre-paint script keeps the height it froze, for {@link restoreLaunchHeight}. */
+export const LAUNCH_HEIGHT_KEY = "__adaptvLaunchHeight"
+
+/**
+ * Put the frozen height back on `<html>`, from the value the script kept on `window`.
+ * Never measures: by now the viewport has moved, and holding off that move is the point.
+ *
+ * A boot with no server render (an `ssr` app's precached shell offline, every launch of
+ * a `render: "spa"` deploy) is a fresh client root over the document, and React clears
+ * every attribute of `<html>` when it takes the element over, the inline style included.
+ * The splash paints in that same commit, so this has to run in a layout effect of it
+ * (`shell-layout.tsx`, next to the platform stamp, which React clears the same way).
+ * Nothing to restore when the script did not freeze a height (a browser tab, no splash).
+ */
+export function restoreLaunchHeight(): void {
+  if (typeof window === "undefined") return
+  const height = (window as unknown as Record<string, unknown>)[
+    LAUNCH_HEIGHT_KEY
+  ]
+  if (typeof height !== "number" || !(height > 0)) return
+  document.documentElement.style.setProperty(
+    "--pwa-launch-height",
+    `${height}px`,
+  )
 }
