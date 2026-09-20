@@ -1,7 +1,11 @@
 //Connectivity accessor — one signal across platforms:
-//  • native  → @capacitor/network (accurate, event-driven)
+//  • native  → @capacitor/network (accurate, event-driven), when the binary carries it
 //  • web/PWA → navigator.onLine + online/offline events (coarse: only guarantees a
-//              network interface, not real reachability)
+//              network interface, not real reachability). Also a native binary
+//              without the plugin, whose bridge rejects. On iOS WKWebView's own
+//              signal still moves there. On Android it only does with the
+//              ACCESS_NETWORK_STATE permission, which the plugin's manifest is
+//              what declares, so that binary reads online either way.
 //
 //Exposed as a plain subscribe/get pair (not just a hook) so it can also feed a data
 //layer — e.g. TanStack Query's `onlineManager` — so query pause/resume is accurate
@@ -13,6 +17,7 @@
 //`true` only means an interface exists, not that anything is reachable).
 import type { PluginListenerHandle } from "@capacitor/core"
 import { Network } from "@capacitor/network"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isNativePlatform } from "#adaptv/utils/platform"
 
 const listeners = new Set<() => void>()
@@ -32,13 +37,24 @@ type NativeBinding = {
 }
 let nativeBinding: NativeBinding | null = null
 
-//A bridge call that rejects (plugin missing from this binary, an OS error) is
-//fire-and-forget here, so nothing would handle it: it would reach the window's
-//`unhandledrejection` event, and with it the console and any error reporter the
-//app installed. The default state (`nativeConnected = true`) is the degraded
-//answer. Passed as `.then`'s second argument, not `.catch`, so an exception
-//thrown by a subscriber still surfaces.
+//A bridge call that rejects anyway (an OS error, or a runtime that injected no
+//plugin list to ask) is fire-and-forget here, so nothing would handle it: it
+//would reach the window's `unhandledrejection` event, and with it the console and
+//any error reporter the app installed. The default state (`nativeConnected =
+//true`) is the degraded answer. Passed as `.then`'s second argument, not
+//`.catch`, so an exception thrown by a subscriber still surfaces.
 const ignoreBridgeRejection = () => {}
+
+/**
+ * Whether connectivity comes from the plugin. Asked of the **binary**, not the
+ * bundle: an OTA bundle can land on a binary built before the plugin. There
+ * `getStatus` rejects, so the native cache would read online for the whole launch,
+ * while the WebView's own `navigator.onLine` is live on iOS (see the header for
+ * why Android's is not).
+ */
+function viaPlugin(): boolean {
+  return isNativePlatform() && hasNativePlugin("Network")
+}
 
 function emit(): void {
   for (const cb of listeners) cb()
@@ -76,9 +92,9 @@ function unbindNative(): void {
   nativeBinding = null
 }
 
-/** Current online state — native cache when on device, else `navigator.onLine`. */
+/** Current online state — the plugin's cache when the binary has it, else `navigator.onLine`. */
 export function getOnline(): boolean {
-  if (isNativePlatform()) return nativeConnected
+  if (viaPlugin()) return nativeConnected
   if (typeof navigator === "undefined") return true
   return navigator.onLine
 }
@@ -91,7 +107,7 @@ export function getOnline(): boolean {
 export function subscribeOnline(cb: () => void): () => void {
   if (typeof window === "undefined") return () => {}
   listeners.add(cb)
-  if (isNativePlatform()) bindNative()
+  if (viaPlugin()) bindNative()
   else bindWeb()
   return () => {
     listeners.delete(cb)

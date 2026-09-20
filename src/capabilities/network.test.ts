@@ -78,6 +78,53 @@ describe("subscribeOnline — web", () => {
   })
 })
 
+// A native shell whose binary lists exactly these plugins, the way the native layer
+// injects `Capacitor.PluginHeaders` before any app JS runs.
+function forceNativeBinary(plugins: string[]): void {
+  vi.stubGlobal("Capacitor", {
+    isNativePlatform: () => true,
+    PluginHeaders: plugins.map((name) => ({ name })),
+  })
+}
+
+// A binary built before the plugin (an OTA bundle on an older store release) rejects
+// `Network.getStatus`, so the native cache never leaves its optimistic default: a
+// device in airplane mode reads online for the whole launch. WKWebView's own signal
+// still moves there; an Android WebView's needs ACCESS_NETWORK_STATE, which that
+// binary lacks, so on Android this is the same answer by another route.
+describe("getOnline / subscribeOnline — native binary without the plugin", () => {
+  it("reads navigator.onLine", () => {
+    forceNativeBinary(["Haptics", "Device"])
+    setNavigatorOnline(false)
+    expect(getOnline()).toBe(false)
+    setNavigatorOnline(true)
+    expect(getOnline()).toBe(true)
+  })
+
+  it("follows the WebView's online/offline events and asks the bridge nothing", () => {
+    forceNativeBinary(["Haptics", "Device"])
+    const cb = vi.fn()
+    const unsub = subscribeOnline(cb)
+    try {
+      window.dispatchEvent(new Event("offline"))
+      expect(cb).toHaveBeenCalledTimes(1)
+      expect(Network.getStatus).not.toHaveBeenCalled()
+      expect(Network.addListener).not.toHaveBeenCalled()
+    } finally {
+      //a failed assertion must not leave a binding behind for the next test
+      unsub()
+    }
+  })
+})
+
+describe("getOnline — native binary with the plugin", () => {
+  it("does not read navigator.onLine", () => {
+    forceNativeBinary(["Network"])
+    setNavigatorOnline(false)
+    expect(getOnline()).toBe(true)
+  })
+})
+
 describe("subscribeOnline — native", () => {
   it("wires the Capacitor Network listener", () => {
     forceNative(true)
