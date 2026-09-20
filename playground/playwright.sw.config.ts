@@ -38,9 +38,10 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   //No retries, here least of all (#57 settled this for the main suite). This
-  //suite has a KNOWN intermittent — `update.spec.ts` on Chromium, ~1 run in 3-5,
-  //not root-caused — and a single CI retry is precisely what would turn it into a
-  //green run and delete the only evidence that it is still there.
+  //suite once had an intermittent — `update.spec.ts` on Chromium, ~1 run in 3-5
+  //in August 2026, not reproduced since and never root-caused — and a single CI
+  //retry is precisely what would turn a recurrence into a green run and delete
+  //the only evidence of it. → docs/design/rendering.md §3.7
   retries: 0,
   //Same shape as the main config: under CI the line reporter names the failing
   //test and the HTML report — the job's artifact on failure — carries its trace.
