@@ -137,6 +137,20 @@ have surfaced as a broken offline render months later. `buildApp` at `post` runs
 *and* after the deploy plugin's own `post` hook. VERIFIED: 111/111, and the six previously-missing assets
 all resolve from Cache Storage with the server killed.
 
+**Amended 2026-09-13: `buildApp` post was right for the precache and too late for the node server.**
+Nitro's own `post` hook does not just assemble the directory; it ends by bundling the server, and the
+`node-server` preset bakes a public asset table into that bundle from whatever `.output/public` holds at
+that moment (the inline presets bake the bytes as well). The shell and the worker were written after it.
+MEASURED: `node .output/server/index.mjs` answered **404 for `/sw.js` and `/adaptv-shell.html`** with
+both files on disk, while `/manifest.json` and `/favicons/favicon.ico` answered 200 — so a production SSR app never
+installed its worker and had no offline path. Every suite missed it because they serve with `vite
+preview`, which reads the directory. The two emitters now run at the start of Nitro's server
+environment (`emitIntoClientOutput` in `src/vite/deploy-server.ts`): after the client build and after
+Nitro has copied `public/` in, so the precache still sees all 121 entries, and before the table exists.
+Without a server build (`spa`, the native lineage) the moment is still `buildApp` post.
+`playwright.sw-node.config.ts` runs the worker suite against the node server so the two cannot drift
+again.
+
 **Also found, and it is a harness bug rather than an adaptv one.** Removing `@cloudflare/vite-plugin`
 from the playground broke Start's SPA prerender with `Cannot read properties of null (reading
 'useEffect')` — two React instances. `playground/` is its own pnpm project, so it had its own `react`

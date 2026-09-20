@@ -30,7 +30,7 @@ So: date the file, say what you verified against, and prefer naming the source (
 | File | What it gets you |
 |---|---|
 | [`testing.md`](testing.md) | The six-target discipline: what to run, on which target, and what counts as done. **Start here.** |
-| [`e2e.md`](e2e.md) | The Playwright estate — four configs, what each proves, and the rules that keep it honest. |
+| [`e2e.md`](e2e.md) | The Playwright estate — five configs, what each proves, and the rules that keep it honest. |
 | [`cookbook.md`](cookbook.md) | Consumer-facing recipes. **Opacity applies**: never name the machinery underneath. |
 | [`autonomous-ui-testing.md`](autonomous-ui-testing.md) | Building a layout-reactive component with nobody watching the screen. |
 
