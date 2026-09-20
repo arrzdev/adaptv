@@ -111,7 +111,7 @@ describe("cacheRoute — which strategy, which bucket", () => {
         return register({ cacheName }).strategy.cacheName
       },
     )
-    expect(selectStaleCaches(names, "myapp-2f9c1a")).toEqual([])
+    expect(selectStaleCaches(names, "myapp-2f9c1a", "/")).toEqual([])
   })
 
   it("passes the network timeout to network-first", () => {

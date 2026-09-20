@@ -30,9 +30,11 @@ declare const self: ServiceWorkerGlobalScope & {
 //Injected by the adaptv Vite plugin via esbuild `define`.
 declare const __ADAPTV_BUILD_TAG__: string
 declare const __ADAPTV_RENDER_MODE__: NavigationMode
-//`/index.html` in a SPA build, `/adaptv-shell.html` in an SSR one — the emitting
+//`<base>index.html` in a SPA build, `<base>adaptv-shell.html` in an SSR one — the emitting
 //plugin owns the name, so this is never a literal here. → `sw-helpers.ts`
 declare const __ADAPTV_APP_SHELL_URL__: string
+//`/` at the origin root, `/app/` for a subpath deploy — always with its slash
+declare const __ADAPTV_BASE__: string
 
 //Every route CHUNK is precached — that is what makes navigation instant offline,
 //and it is deliberately not the same act as caching documents: chunks are
@@ -44,10 +46,14 @@ setupPrecache(self.__WB_MANIFEST)
 registerNavigationRoute({
   mode: __ADAPTV_RENDER_MODE__,
   appShellUrl: __ADAPTV_APP_SHELL_URL__,
+  base: __ADAPTV_BASE__,
 })
 
 //Cache-first — see `createHashedAssetStrategy` in sw.strategies.ts.
-registerStaticAssetsRoute({ buildTag: __ADAPTV_BUILD_TAG__ })
+registerStaticAssetsRoute({
+  buildTag: __ADAPTV_BUILD_TAG__,
+  base: __ADAPTV_BASE__,
+})
 
 //A tapped notification has to reach the page, and the page is not what the tap
 //arrives at. → sw.notifications.ts
@@ -59,4 +65,6 @@ registerServiceWorkerLifecycle({
   //sweeps previous builds' runtime caches on activate — without this every
   //deploy left a full set behind, forever
   buildTag: __ADAPTV_BUILD_TAG__,
+  //and only this app's: another app on the origin shares the cache list
+  base: __ADAPTV_BASE__,
 })

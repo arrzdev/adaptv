@@ -33,12 +33,15 @@ import {
   RoutingShell,
 } from "#adaptv/shell/shell-layout"
 import { getPlatformInitScript } from "#adaptv/utils/platform"
+import { publicPath } from "#adaptv/utils/public-path"
 export type RootHeadScript = {
   id: string
   children: string
 }
 
-export type CreateRootRouteConfig = PwaHeadConfig & {
+export type CreateRootRouteConfig = Omit<PwaHeadConfig, "manifestPath"> & {
+  /** Where the manifest is served. Defaults to `manifest.json` under the deploy base. */
+  manifestPath?: string
   themeColorLight: string
   themeColorDark: string
   lang?: string
@@ -157,12 +160,16 @@ export function createRootRoute(config: CreateRootRouteConfig) {
     headScripts = [],
     patches,
     ui,
+    manifestPath: manifestPathOverride,
     ...headConfig
   } = config
 
   // Single source of truth for the orientation lock — same path linked in the
-  // head and read at runtime by the rotate guard.
-  const manifestPath = config.manifestPath ?? "/manifest.json"
+  // head and read at runtime by the rotate guard. Under the deploy base, where
+  // the build emits it.
+  const manifestPath =
+    manifestPathOverride ??
+    publicPath(import.meta.env.BASE_URL, "manifest.json")
 
   const RootDocument =
     RootDocumentOverride ??
@@ -243,7 +250,7 @@ export function createRootRoute(config: CreateRootRouteConfig) {
       buildRootRouteHead({
         themeColorLight,
         headScripts,
-        headConfig,
+        headConfig: { ...headConfig, manifestPath },
         headLinks,
       }),
     notFoundComponent: NotFound,
