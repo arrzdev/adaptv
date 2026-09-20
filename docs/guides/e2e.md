@@ -1,12 +1,12 @@
 # The Playwright estate
 
-**Six configs, two spec directories, 43 specs. This page says which suite proves what, and the
+**Six configs, two spec directories, 95 specs. This page says which suite proves what, and the
 handful of rules that keep the estate honest.**
 
 Everything lives in `playground/` — its own pnpm project — and runs from the repo root:
 
 ```bash
-pnpm --dir playground test:e2e            # the main suite: 37 specs, dev server
+pnpm --dir playground test:e2e            # the main suite: 83 specs, dev server
 pnpm --dir playground test:e2e:sw:all     # all five worker suites, built output
 ```
 
