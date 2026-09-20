@@ -108,8 +108,8 @@ passes `--strictPort` and fails loudly on a busy port on purpose
 ([bin/lib/dev-server.mjs](../bin/lib/dev-server.mjs)). A framework dev hopping worktrees wants the
 old server gone; a real user wants to be told. Both are right, only one is the product.
 
-The playground runs on **its own port block** — app `41730`, inspector `41740` — so it never fights
-a real chopchop dev server on `417x0`. Its `appId` is
+The playground runs on **its own port block** — app `41730`, with `41740` reserved beside it — so it
+never fights a real chopchop dev server on `417x0`. Its `appId` is
 `dev.arrz.projectzero`, so native installs don't collide either. Both can run at once.
 
 ## A fresh worktree
