@@ -41,6 +41,7 @@
 @import "./swipeable.css";
 @import "./collapsible.css";
 @import "./skeleton.css";
+@import "./divider.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";
