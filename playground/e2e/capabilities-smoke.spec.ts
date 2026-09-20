@@ -60,6 +60,7 @@ const PAGES = [
   ["/lab/haptics", "Haptics"],
   ["/lab/keyboard", "Keyboard"],
   ["/lab/native-theme", "Native theme"],
+  ["/lab/battery", "Battery"],
   ["/lab/network", "Network"],
   ["/lab/splash", "Splash"],
   ["/lab/status-bar", "Status bar"],
