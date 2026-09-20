@@ -505,6 +505,21 @@ export function useGestureEngine({
       const wasLongPress = longPressFired.current
       const wasInside = inside.current
 
+      //A tap that COMMITS before the show-delay is painted now, so the floor in
+      //`hidePressed` holds it for {@link MIN_PRESSED_MS}. The defer exists so a
+      //scroll never paints; a clean in-region release is the opposite verdict, and
+      //finger contact on a real tap is often shorter than 100ms — dropping the
+      //pending show here gave the most common tap in the app no feedback at all.
+      //Ionic's `setActivatedElement` force-adds on the same release (prior-art §6).
+      //A release outside, a cancel and a long-press keep dropping it: they
+      //activated nothing, and the drop is what keeps them flash-free.
+      if (wasInside && !wasLongPress && showTimer.current !== null) {
+        clearTimeout(showTimer.current)
+        showTimer.current = null
+        shownAt.current = Date.now()
+        setPressedFlag(pressTargetEl.current, true)
+      }
+
       cleanup()
       notifyState("idle")
 
