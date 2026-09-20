@@ -12,7 +12,13 @@ import path from "node:path"
 import type { Plugin, ResolvedConfig } from "vite"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
+import { requireAppConfig } from "#adaptv/vite/adaptv-context.ts"
 import { computeBuildTag } from "#adaptv/vite/build-tag.ts"
+import {
+  defaultIconAssets,
+  manifestIcons,
+  resolveIconSet,
+} from "#adaptv/vite/icon-set.ts"
 import { adaptvSwBuildPlugin } from "#adaptv/vite/sw-build.ts"
 
 /*
@@ -88,12 +94,134 @@ function scaffold(render: "ssr" | "spa", target: "web" | "capacitor") {
   return { appRoot, clientDir, context }
 }
 
-async function buildWorker(context: AdaptvContext): Promise<void> {
+/** A minimal but REAL png header — signature + IHDR, which is all the icon scanner reads. */
+function pngHeader(size: number): Buffer {
+  const buf = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
+    buf,
+    0,
+  )
+  buf.writeUInt32BE(13, 8)
+  buf.write("IHDR", 12)
+  buf.writeUInt32BE(size, 16)
+  buf.writeUInt32BE(size, 20)
+  buf[24] = 8
+  buf[25] = 6
+  return buf
+}
+
+/**
+ * The full family spread `adaptv gen icons` plus a favicon generator leave in an
+ * app's icon directory — the playground's own set, by name and measured size.
+ * `favicon-512x512.png` duplicates `android-chrome-512.png`'s slot, which the
+ * head and manifest tie-break to the android file.
+ */
+const APP_ICON_SET: Record<string, number> = {
+  "icon.png": 1024,
+  "icon-dark.png": 1024,
+  "icon-tinted.png": 1024,
+  "icon-monochrome.png": 1024,
+  "icon-maskable.png": 1024,
+  "favicon-16x16.png": 16,
+  "favicon-32x32.png": 32,
+  "favicon-96x96.png": 96,
+  "favicon-512x512.png": 512,
+  "android-chrome-192.png": 192,
+  "android-chrome-512.png": 512,
+  "android-maskable-192.png": 192,
+  "android-maskable-512.png": 512,
+  "apple-touch-icon-180.png": 180,
+}
+
+/**
+ * Put the icon art where a real build has it: the SOURCE directory under
+ * `public/` (what `resolveIconSet` scans) and its copy in the client output
+ * (what the precache globs).
+ */
+function withAppIcons(built: ReturnType<typeof scaffold>) {
+  const files: Record<string, Buffer> = {
+    ...Object.fromEntries(
+      Object.entries(APP_ICON_SET).map(([name, px]) => [
+        name,
+        pngHeader(px),
+      ]),
+    ),
+    "favicon.ico": Buffer.from("ico"),
+    //not art the scanner measures, so not adaptv's to judge
+    "safari-pinned-tab.svg": Buffer.from("<svg/>"),
+  }
+  for (const dir of [
+    path.join(built.appRoot, "public/favicons"),
+    path.join(built.clientDir, "favicons"),
+  ]) {
+    mkdirSync(dir, { recursive: true })
+    for (const [name, contents] of Object.entries(files))
+      writeFileSync(path.join(dir, name), contents)
+  }
+  requireAppConfig(built.context).icons = "./public/favicons"
+  return built
+}
+
+/** adaptv's own set, emitted the way `default-icons.ts` emits it. */
+function withDefaultIcons(built: ReturnType<typeof scaffold>) {
+  const dir = path.join(built.clientDir, "adaptv-icons")
+  mkdirSync(dir, { recursive: true })
+  for (const file of defaultIconAssets())
+    writeFileSync(path.join(dir, path.basename(file)), readFileSync(file))
+  return built
+}
+
+/**
+ * The app's set under a deploy base, with the manifest a base-aware build writes:
+ * every generated `src` under the base, `/app/favicons/…`. `headIconLinks` still
+ * writes paths under the public root, which never carry the base.
+ */
+function withAppIconsUnderBase(built: ReturnType<typeof scaffold>) {
+  withAppIcons(built)
+  const config = requireAppConfig(built.context)
+  config.manifestExtra = {
+    icons: manifestIcons(resolveIconSet(built.appRoot, config)).map(
+      (icon) => ({ ...icon, src: `/app${icon.src}` }),
+    ),
+  }
+  return built
+}
+
+/**
+ * The app's set with an `icons` array of its own, written every way a manifest
+ * URL can name the same file: `./`-relative, bare relative, absolute on the
+ * app's origin — and one on a CDN, which is no file of this output.
+ */
+function withManifestUrlForms(built: ReturnType<typeof scaffold>) {
+  withAppIcons(built)
+  const config = requireAppConfig(built.context)
+  config.origin = "https://app.example.com"
+  config.manifestExtra = {
+    icons: [
+      { src: "./favicons/icon.png", sizes: "1024x1024" },
+      { src: "favicons/icon-dark.png", sizes: "1024x1024" },
+      {
+        src: "https://app.example.com/favicons/icon-tinted.png",
+        sizes: "1024x1024",
+      },
+      {
+        src: "https://cdn.example.net/favicons/icon-monochrome.png",
+        sizes: "1024x1024",
+      },
+    ],
+  }
+  return built
+}
+
+async function buildWorker(
+  context: AdaptvContext,
+  base = "/",
+): Promise<void> {
   const plugin = adaptvSwBuildPlugin(context)
   // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
   ;(plugin.configResolved as any).call({}, {
     root: context.appRoot,
-    base: "/",
+    base,
     environments: { client: { build: { outDir: "dist/client" } } },
   } as unknown as ResolvedConfig)
   const hook = (plugin as Plugin).buildApp
@@ -126,20 +254,34 @@ function stampedValues(worker: string, key: string): string[] {
 type Built = { clientDir: string; worker: string; urls: string[] }
 let spa: Built
 let ssr: Built
+let appIcons: Built
+let defaultIcons: Built
+let subpathIcons: Built
+let manifestUrlIcons: Built
 let savedOverride: string | undefined
 
 beforeAll(async () => {
   savedOverride = process.env.ADAPTV_BUILD_TAG
   delete process.env.ADAPTV_BUILD_TAG
-  const build = async (render: "ssr" | "spa") => {
-    const { clientDir, context } = scaffold(render, "web")
-    await buildWorker(context)
+  const build = async (
+    render: "ssr" | "spa",
+    icons: (built: ReturnType<typeof scaffold>) => unknown = () => {},
+    base = "/",
+  ) => {
+    const built = scaffold(render, "web")
+    icons(built)
+    const { clientDir, context } = built
+    await buildWorker(context, base)
     const worker = readFileSync(path.join(clientDir, "sw.js"), "utf8")
     return { clientDir, worker, urls: precachedUrls(worker) }
   }
   //sequential: both builds share workbox and esbuild, and the gate is busy
   spa = await build("spa")
   ssr = await build("ssr")
+  appIcons = await build("ssr", withAppIcons)
+  defaultIcons = await build("spa", withDefaultIcons)
+  subpathIcons = await build("ssr", withAppIconsUnderBase, "/app/")
+  manifestUrlIcons = await build("ssr", withManifestUrlForms)
 }, BUILD_TIMEOUT)
 
 //restored only after the tests, which recompute the tag and must see the
@@ -217,6 +359,120 @@ describe("adaptvSwBuildPlugin — the precache manifest", () => {
       //runtime static route instead (§3.3)
       expect(urls).not.toContain("assets/huge-777777.js")
     }
+  })
+})
+
+describe("adaptvSwBuildPlugin — the icon art in the precache", () => {
+  const iconUrls = (urls: string[], dir: string) =>
+    urls.filter((url) => url.startsWith(`${dir}/`))
+
+  it("precaches exactly the icons the head and the manifest link, and none of the native source art", () => {
+    //The directory has to be inside `public/`, so all of it is in the glob — and
+    //the 1024px master, the iOS 18 appearances, Android's monochrome layer, the
+    //maskable master and a duplicate 512 are nothing a browser asks for. On the
+    //playground that was 24% of the install download.
+    expect(iconUrls(appIcons.urls, "favicons")).toEqual([
+      "favicons/android-chrome-192.png",
+      "favicons/android-chrome-512.png",
+      "favicons/android-maskable-192.png",
+      "favicons/android-maskable-512.png",
+      "favicons/apple-touch-icon-180.png",
+      "favicons/favicon-16x16.png",
+      "favicons/favicon-32x32.png",
+      "favicons/favicon-96x96.png",
+      "favicons/favicon.ico",
+      //left to the glob: not a member the icon set measured, so possibly the
+      //app's own `<link rel="mask-icon">`
+      "favicons/safari-pinned-tab.svg",
+    ])
+    //taken out of the install, not out of the deploy: still served, and cached
+    //by the runtime static route only if a page requests it as an image online
+    for (const name of [
+      "icon.png",
+      "icon-dark.png",
+      "favicon-512x512.png",
+    ])
+      expect(
+        existsSync(path.join(appIcons.clientDir, "favicons", name)),
+      ).toBe(true)
+    //and the rest of the app is untouched by it
+    expect(appIcons.urls).toEqual(
+      expect.arrayContaining([
+        "assets/client-abc123.js",
+        "manifest.json",
+        "adaptv-shell.html",
+      ]),
+    )
+  })
+
+  it("keeps exactly the linked icons for an app deployed under a subpath base", () => {
+    //Under `base: "/app/"` the manifest writes `/app/favicons/…`, and Workbox
+    //writes the same file as `favicons/…`. Compared raw, the manifest-only icons
+    //(Android's maskable pair) fell out of the install, silently. The same set
+    //as at `/`, and still none of the native source art.
+    expect(iconUrls(subpathIcons.urls, "favicons")).toEqual([
+      "favicons/android-chrome-192.png",
+      "favicons/android-chrome-512.png",
+      "favicons/android-maskable-192.png",
+      "favicons/android-maskable-512.png",
+      "favicons/apple-touch-icon-180.png",
+      "favicons/favicon-16x16.png",
+      "favicons/favicon-32x32.png",
+      "favicons/favicon-96x96.png",
+      "favicons/favicon.ico",
+      "favicons/safari-pinned-tab.svg",
+    ])
+  })
+
+  it("reads a manifest icon URL the way the browser resolves it", () => {
+    //`manifestExtra.icons` replaces the generated array, so the maskable pair
+    //is linked by nothing now; the head's links are unchanged.
+    expect(iconUrls(manifestUrlIcons.urls, "favicons")).toEqual([
+      "favicons/android-chrome-192.png",
+      "favicons/android-chrome-512.png",
+      "favicons/apple-touch-icon-180.png",
+      "favicons/favicon-16x16.png",
+      "favicons/favicon-32x32.png",
+      "favicons/favicon-96x96.png",
+      "favicons/favicon.ico",
+      //`favicons/icon-dark.png`
+      "favicons/icon-dark.png",
+      //`https://app.example.com/favicons/icon-tinted.png`, on the app's origin
+      "favicons/icon-tinted.png",
+      //`./favicons/icon.png`
+      "favicons/icon.png",
+      "favicons/safari-pinned-tab.svg",
+    ])
+    //the CDN copy is not this file, so the local one links to nothing
+    expect(manifestUrlIcons.urls).not.toContain(
+      "favicons/icon-monochrome.png",
+    )
+  })
+
+  it("applies the same rule to adaptv's own set, for an app with no icons", () => {
+    expect(iconUrls(defaultIcons.urls, "adaptv-icons")).toEqual([
+      "adaptv-icons/android-chrome-192.png",
+      "adaptv-icons/android-chrome-512.png",
+      "adaptv-icons/android-maskable-192.png",
+      "adaptv-icons/android-maskable-512.png",
+      "adaptv-icons/apple-touch-icon-180.png",
+      "adaptv-icons/favicon-16x16.png",
+      "adaptv-icons/favicon-32x32.png",
+      "adaptv-icons/favicon-96x96.png",
+      "adaptv-icons/favicon.ico",
+      "adaptv-icons/icon.svg",
+    ])
+    //emitted into the output for the head's sake, never linked
+    for (const name of [
+      "icon.png",
+      "icon-maskable.png",
+      "favicon-512x512.png",
+    ])
+      expect(
+        existsSync(
+          path.join(defaultIcons.clientDir, "adaptv-icons", name),
+        ),
+      ).toBe(true)
   })
 })
 
