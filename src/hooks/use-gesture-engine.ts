@@ -38,6 +38,19 @@ export interface UseGestureEngineOptions {
   onPressDown?: (e: GestureEvent) => void
   /** Released inside the press region without a long-press — the tap. */
   onPressUp?: (e: GestureEvent) => void
+  /**
+   * A click reached the element that no press on it produced: an OUTER `<label>`
+   * forwarded its activation to the control inside (the settings-row idiom,
+   * `FieldGroup.Row render={<label />}` around a `Switch`), or a script called
+   * `.click()`. The engine cannot have activated anything for it, so the element
+   * decides what the click means. Without this, the click is swallowed like every
+   * other native click on an engine element, which is the right default for a
+   * button that owns its activation and the wrong one for a control a label is
+   * allowed to toggle. The click is left uncancelled: a cancelled checkbox click
+   * is reverted by the browser after React has committed, so the DOM and the
+   * state would disagree.
+   */
+  onUnownedClick?: (e: React.MouseEvent) => void
   /** Long-press recognized at the threshold, while still held (native `perform`). */
   onLongPressDown?: (e: GestureEvent) => void
   /** Pointer moved after the long-press fired — the drag phase of a held gesture. */
@@ -169,6 +182,7 @@ function isWithinRegion(
 export function useGestureEngine({
   onPressDown,
   onPressUp,
+  onUnownedClick,
   onLongPressDown,
   onLongPressMove,
   onLongPressUp,
@@ -195,6 +209,11 @@ export function useGestureEngine({
   //armed when a gesture resolves as anything but a clean in-region tap (drag
   //off, cancel, or long-press). the next click on this element is then swallowed
   const suppressClick = useRef(false)
+  //whether the click the browser is about to fire was produced by a press this
+  //engine handled. set on pointerdown/keydown, cleared by the click that follows
+  //or by any path that already vetoed that click; a click arriving while it is
+  //false came from somewhere else (an outer label, a script)
+  const clickOwned = useRef(false)
   const anchorX = useRef(0)
   const anchorY = useRef(0)
   const isKeyboard = useRef(false)
@@ -368,6 +387,7 @@ export function useGestureEngine({
       cleanup()
       //a fresh press starts clean; only this gesture's own outcome may re-arm it
       suppressClick.current = false
+      clickOwned.current = true
       active.current = true
       inside.current = true
       anchorX.current = e.clientX
@@ -487,6 +507,7 @@ export function useGestureEngine({
         //a completed hold is not a tap — swallow the click the browser fires on
         //release so a held control never also activates on let-go
         suppressClick.current = true
+        clickOwned.current = false
         onLongPressUp?.(e)
         return
       }
@@ -497,6 +518,7 @@ export function useGestureEngine({
       }
       //released outside the region — no activation; veto any trailing click
       suppressClick.current = true
+      clickOwned.current = false
     },
     [cleanup, notifyState, onPressUp, onLongPressUp, disabled],
   )
@@ -507,6 +529,7 @@ export function useGestureEngine({
       //a cancel (scroll-hijack, platform steal) is not a tap; swallow any trailing
       //click and report it distinctly from a clean release
       suppressClick.current = true
+      clickOwned.current = false
       cleanup()
       notifyState("cancelled")
     },
@@ -520,6 +543,7 @@ export function useGestureEngine({
     //rescue a wedged tap (also the path a sibling swipe uses to veto this tap)
     if (!active.current || longPressFired.current) return
     suppressClick.current = true
+    clickOwned.current = false
     cleanup()
     notifyState("cancelled")
   }, [cleanup, notifyState])
@@ -531,6 +555,7 @@ export function useGestureEngine({
       if (e.repeat) return
 
       cleanup()
+      clickOwned.current = true
       active.current = true
       inside.current = true
       isKeyboard.current = true
@@ -569,23 +594,46 @@ export function useGestureEngine({
   const onClickCapture = useCallback((e: React.MouseEvent) => {
     if (!suppressClick.current) return
     suppressClick.current = false
+    clickOwned.current = false
     e.preventDefault()
     e.stopPropagation()
   }, [])
 
-  //this element owns activation via onPressUp, so a stray native click on it (a
-  //synthetic touch click, or a label's implicit input toggle) is always
-  //swallowed — the engine, not the browser, decides when activation fires
-  const onClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }, [])
+  //this element owns activation via onPressUp, so the native click a press leaves
+  //behind (a synthetic touch click, the input toggle its own label implies) is
+  //always swallowed — the engine, not the browser, decides when activation fires.
+  //A click NO press produced is a different thing: an outer label forwarded its
+  //activation, or a script clicked. Nothing has activated for it yet, so it goes
+  //to `onUnownedClick` when the element opts in, and is swallowed otherwise. The
+  //unowned click is NOT cancelled: cancelling a checkbox click makes the browser
+  //restore the pre-click `checked` after dispatch, which is after React's
+  //commit, so the DOM would land on the old value under an aria-checked that
+  //says the new one. Left alone, the browser's own toggle and the value the
+  //element commits are the same value
+  const onClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (clickOwned.current) {
+        clickOwned.current = false
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+      if (onUnownedClick && !disabled) {
+        onUnownedClick(e)
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+    },
+    [disabled, onUnownedClick],
+  )
 
   //cancel an in-flight gesture if the control is disabled mid-press, so it can't
   //get stuck active with a live timer / lit visual
   useEffect(() => {
     if (!disabled || !active.current) return
     suppressClick.current = true
+    clickOwned.current = false
     cleanup()
     notifyState("cancelled")
   }, [disabled, cleanup, notifyState])
