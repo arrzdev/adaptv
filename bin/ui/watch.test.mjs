@@ -198,19 +198,23 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
   //(`docs/design/cli-visual.md` §6), and 80 is where the longest notice `dev` really raises
   //already did not fit.
   it.each([
-    ["config change", 40],
-    ["config + native change · ios, android", 40],
-    ["config + native change · ios, android", 80],
+    ["config change", 40, {}],
+    ["config + native change · ios, android", 40, {}],
+    ["config + native change · ios, android", 80, {}],
+    ["adaptv source change", 40, { restart: true }],
   ])(
-    "keeps the notice %j to ONE row at %i columns (R10, R44)",
-    async (label, columns) => {
+    "keeps the notice %j to ONE row at %i columns (R10, R44) %o",
+    async (label, columns, options) => {
       //A length bound alone passed while the notice wrapped: every flex item shrank and wrapped
       //inside its own sliver, so each row stayed short and the block grew a row instead, glyph
       //gone and words split down columns:
       //
       //     config     ·   b to rebuild and see
       //     change   press  the changes
-      const rows = await screenRaw((w) => w.notice(label), columns)
+      const rows = await screenRaw(
+        (w) => w.notice(label, options),
+        columns,
+      )
       for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
       //notice, blank, keys: a wrapped notice makes this four or five
       expect(rows).toHaveLength(3)
@@ -218,10 +222,15 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
       expect(rows[0].startsWith("  ! ")).toBe(true)
       //The notice CLIPS at its end, like every live row: the glyph and cause come first, and
       //whatever is cut is cut from the tail, marked, rather than carried to a second row.
-      const full = `  ! ${label}  · press b to rebuild and see the changes`
+      //`full` is the same notice with room to spare, so the copy lives in one place and this
+      //test is about the clip, not the wording.
+      const [full] = await screenRaw((w) => w.notice(label, options), 200)
+      expect(full.startsWith(`  ! ${label}  · `)).toBe(true)
       //the premise: at this width the full notice does not fit, or nothing here was clipped
       expect(full.length).toBeGreaterThan(columns)
       expect(rows[0]).toBe(`${full.slice(0, columns - 1)}…`)
+      //a clipped restart notice still must not start offering the key it has no use for (R54)
+      if (options.restart) expect(rows[0]).not.toContain("press")
     },
   )
 
@@ -267,6 +276,120 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     expect(after).toContain(`${esc}[2K`)
     expect(after).toContain(`${esc}[1A`)
   })
+})
+
+describe("a notice whose fix is a RESTART (R54)", () => {
+  const REBUILD =
+    "  ! config change  · press b to rebuild and see the changes"
+  const RESTART = "  ! adaptv source change  · restart to apply"
+
+  it("says restart to apply, and never offers b", async () => {
+    //`b` reruns the build with the modules THIS process already loaded, so it cannot apply an
+    //edit to adaptv's own source. The Ink block used to drop the `restart` option and tell the
+    //dev to press it anyway — a key that does nothing, the lie the keys guard exists to prevent.
+    const rows = await screenRaw((w) =>
+      w.notice("adaptv source change", { restart: true }),
+    )
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toBe(RESTART)
+    expect(rows[0]).not.toContain("press b")
+    expect(rows[0]).not.toContain("rebuild")
+    //the keys row is untouched (R41): the notice changes its own action, not the block
+    expect(rows[2]).toContain("ctrl-c")
+  })
+
+  //Each notice carries its own action, exactly as `liveWatcher` does: a later notice replaces
+  //the text AND the action, in either order, and nothing is sticky in the renderer. Which cause
+  //wins the row is decided where the causes are known, in the `dev` poll.
+  it.each([
+    [
+      "restart, then a rebuild notice",
+      ["adaptv source change", { restart: true }],
+      ["config change"],
+      REBUILD,
+    ],
+    [
+      "a rebuild notice, then restart",
+      ["config change"],
+      ["adaptv source change", { restart: true }],
+      RESTART,
+    ],
+  ])(
+    "the later notice decides the action: %s",
+    async (_, first, second, want) => {
+      const block = await mount()
+      try {
+        await settled(() => block.w.notice(...first))
+        const painted = block.fake.frames.length
+        await settled(() => block.w.notice(...second))
+        //a NEW frame, or the row below is still the first notice
+        expect(block.fake.frames.length).toBeGreaterThan(painted)
+        expect(block.rows()[0]).toBe(want)
+      } finally {
+        block.unmount()
+      }
+    },
+  )
+
+  it("forgets the restart when the notice clears", async () => {
+    const block = await mount()
+    try {
+      await settled(() =>
+        block.w.notice("adaptv source change", { restart: true }),
+      )
+      await settled(() => block.w.clearNotice())
+      await settled(() => block.w.notice("config change"))
+      expect(block.rows()[0]).toBe(REBUILD)
+    } finally {
+      block.unmount()
+    }
+  })
+
+  //the string renderer and Ink each draw this block, so the two must say the same thing or the
+  //renderers drift apart unnoticed. 200 columns, so neither clip is in play — the two renderers
+  //mark a clip differently, and that is not this test.
+  it.each([
+    ["config change", {}],
+    ["adaptv source change", { restart: true }],
+  ])(
+    "draws %j %o the same as the string renderer",
+    async (label, options) => {
+      const ink = await screenRaw((w) => w.notice(label, options), 200)
+
+      const fake = new FakeStdout(200)
+      fake.isTTY = true
+      const real = Object.getOwnPropertyDescriptor(process, "stdout")
+      Object.defineProperty(process, "stdout", {
+        value: fake,
+        configurable: true,
+      })
+      const restoreCi = withInteractiveInk()
+      restore = () => {
+        vi.useRealTimers()
+        restoreCi()
+        Object.defineProperty(process, "stdout", real)
+      }
+      //`isTTY` is read once at module load, so the fake is in place BEFORE the fresh import
+      vi.resetModules()
+      const { liveWatcher } = await import("../lib/render.mjs")
+      vi.useFakeTimers()
+      const w = liveWatcher({ keys: false })
+      w.notice(label, options)
+      vi.advanceTimersByTime(80)
+      //Every draw begins by wiping from the top of the block; the last one is the screen.
+      const drawn = fake.frames.join("").split("\r\x1b[0J").at(-1)
+      w.stop()
+      restore()
+      restore = null
+      const text = drawn
+        .replace(ANSI, "")
+        .replaceAll("\r", "")
+        .split("\n")
+        .map((l) => l.trimEnd())
+      expect(text[0]).toContain(label)
+      expect(ink).toEqual(text)
+    },
+  )
 })
 
 describe("the watch block's own breathing room (R64)", () => {
