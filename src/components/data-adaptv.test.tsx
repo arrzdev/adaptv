@@ -7,6 +7,7 @@ import { Divider } from "#adaptv/components/divider"
 import { ExternalLink } from "#adaptv/components/external-link"
 import { FieldGroup } from "#adaptv/components/field-group"
 import { Fab } from "#adaptv/components/fab"
+import { Icon } from "#adaptv/components/icon"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -87,6 +88,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["view", <View key="view" />],
   ["scroll-view", <ScrollView key="scroll-view" />],
   ["text", <Text key="text">t</Text>],
+  ["icon", <Icon key="icon" render={<svg />} />],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
   [
