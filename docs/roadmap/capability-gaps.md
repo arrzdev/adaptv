@@ -86,7 +86,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 
 ## Tier 3 — the long tail
 
-Sensors / motion · ~~battery~~ (shipped 2026-09-02: `src/capabilities/battery.ts`, `@capacitor/device` re-read on resume and a timer on native, `navigator.getBattery` events on Chromium, `unknown` for the simulator's -1, `unsupported` on WebKit and Firefox) · brightness · contacts · calendar · SMS + mail · print · speech ·
+~~Sensors / motion~~ (shipped 2026-09-02: `src/capabilities/motion.ts` over `devicemotion` on every target, no plugin; `prompt`/`granted`/`denied`/`unsupported`, and `silent` on the hook for a document with the API and no sensor) · ~~battery~~ (shipped 2026-09-02: `src/capabilities/battery.ts`, `@capacitor/device` re-read on resume and a timer on native, `navigator.getBattery` events on Chromium, `unknown` for the simulator's -1, `unsupported` on WebKit and Firefox) · brightness · contacts · calendar · SMS + mail · print · speech ·
 store review · screen-capture blocking · barcode scanning · text zoom.
 
 ---
