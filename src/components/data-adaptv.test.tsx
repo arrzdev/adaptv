@@ -22,6 +22,7 @@ import { Slider } from "#adaptv/components/slider"
 import { Select } from "#adaptv/components/select"
 import { Skeleton } from "#adaptv/components/skeleton"
 import { Spinner } from "#adaptv/components/spinner"
+import { ProgressBar, Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { Text } from "#adaptv/components/text"
@@ -92,6 +93,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["text", <Text key="text">t</Text>],
   ["icon", <Icon key="icon" render={<svg />} />],
   ["spinner", <Spinner key="spinner" />],
+  ["progress-bar", <ProgressBar key="progress-bar" />],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
   [

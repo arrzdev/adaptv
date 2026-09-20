@@ -74,3 +74,155 @@
     animation-play-state: paused;
   }
 }
+
+/*
+ * ProgressBar — the fill, the sweep, their pause, their reduced-motion form, RTL and
+ * forced colors (components/spinner.tsx, same module).
+ *
+ * Everything moves by `transform` only: the fill is `scaleX(--progress-value)`, the
+ * sweep `translateX`, so no frame lays out and both are on every engine's composited
+ * list (docs/decisions/animation.md A3). spinner.test.tsx and progress-bar.spec.ts pin
+ * that no `width`, `left` or `inset` is ever animated. The parts are styled here, on
+ * `data-part`, rather than with classes: a utility class beats this layer, and the
+ * indicator's geometry must follow the mode, not a stray `w-*`.
+ *
+ * The sweep is 40% of the track, travelling from just outside the start edge to just
+ * outside the end edge: translate percentages are of the indicator's own width, so
+ * -100% hides it past the left edge and 250% (100 / 40) past the right one.
+ *
+ * ## Direction is read in ONE place
+ *
+ * A transform has no logical form: `transform-origin` and `translateX` are physical.
+ * So the parts are placed physically too (`left: 0`), and the only thing that decides
+ * right-to-left is the `[dir="rtl"]` selector, which flips the origin and the sweep's
+ * keyframes together. Placing the parts with `inset-inline-start` read the ELEMENT's
+ * direction instead, and wherever that disagreed with the attribute (a `dir="ltr"`
+ * island inside an RTL page, or CSS `direction: rtl` with no attribute) the sweep
+ * started halfway across the track. `:dir(rtl)` would read the element's direction
+ * for all three, but it is Safari 16.4 and Chromium 120, above the iOS 15 floor, so
+ * it would make the answer depend on the OS version. What holds instead: a
+ * `[dir="rtl"]` attribute on the bar or any ancestor makes it RTL (an ltr island
+ * inside one included), anything else is LTR, and the fill and the sweep always agree.
+ */
+
+@keyframes adaptv-progress-bar-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes adaptv-progress-bar-sweep-rtl {
+  from {
+    transform: translateX(250%);
+  }
+
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@layer adaptv.components {
+  [data-adaptv="progress-bar"] > [data-part] {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: currentColor;
+  }
+
+  /*
+   * The track is the text colour at a fifth, as its own child rather than
+   * `bg-current/20` on the box: Tailwind compiles that to color-mix() with a solid
+   * `currentcolor` fallback, and below Safari 16.2 (the iOS 15 floor) the solid track
+   * would hide the fill.
+   */
+  [data-adaptv="progress-bar"] > [data-part="track"] {
+    opacity: 0.2;
+  }
+
+  [data-adaptv="progress-bar"] > [data-part="indicator"] {
+    transform: scaleX(var(--progress-value, 0));
+    transform-origin: left;
+    transition: transform 200ms ease-out;
+  }
+
+  [dir="rtl"] [data-adaptv="progress-bar"] > [data-part="indicator"],
+  [data-adaptv="progress-bar"][dir="rtl"] > [data-part="indicator"] {
+    transform-origin: right;
+  }
+
+  [data-adaptv="progress-bar"][data-progress-bar-indeterminate]
+    > [data-part="indicator"] {
+    width: 40%;
+    transform: none;
+    transition: none;
+  }
+
+  /*
+   * The sweep is declared only where motion is welcome, so the RTL rule can swap the
+   * keyframes by NAME without a reduced-motion rule beneath it having to undo it.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-adaptv="progress-bar"][data-progress-bar-indeterminate]
+      > [data-part="indicator"] {
+      animation: adaptv-progress-bar-sweep 1.5s ease-in-out infinite;
+    }
+
+    [dir="rtl"]
+      [data-adaptv="progress-bar"][data-progress-bar-indeterminate]
+      > [data-part="indicator"],
+    [data-adaptv="progress-bar"][data-progress-bar-indeterminate][dir="rtl"]
+      > [data-part="indicator"] {
+      animation-name: adaptv-progress-bar-sweep-rtl;
+    }
+  }
+
+  /*
+   * Reduced motion, Spinner's rule: an indeterminate bar never stands still. It spans
+   * the track and breathes with Spinner's own pulse, on the indicator child, so a
+   * consumer's opacity on the box still multiplies. A determinate bar jumps.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="progress-bar"] > [data-part="indicator"] {
+      transition: none;
+    }
+
+    [data-adaptv="progress-bar"][data-progress-bar-indeterminate]
+      > [data-part="indicator"] {
+      width: 100%;
+      animation: adaptv-spinner-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  /*
+   * Off screen, the sweep (or the pulse) does not tick. Three attributes outrank the
+   * two above, whose shorthands reset the play state to `running`.
+   */
+  [data-adaptv="progress-bar"][data-progress-bar-indeterminate][data-progress-bar-offscreen]
+    > [data-part="indicator"] {
+    animation-play-state: paused;
+  }
+
+  /*
+   * Forced colors repaint every background in the system background, which would
+   * erase both parts. The indicator opts out and paints the system text colour
+   * itself — spelled `CanvasText`, not `currentColor`: an element that opts out
+   * inherits the author's colour, not the forced one (measured, Chromium). The box
+   * gets an outline, so the empty part of the track still has an edge.
+   */
+  @media (forced-colors: active) {
+    [data-adaptv="progress-bar"] {
+      outline: 1px solid;
+    }
+
+    [data-adaptv="progress-bar"] > [data-part="indicator"] {
+      forced-color-adjust: none;
+      background-color: CanvasText;
+    }
+  }
+}
