@@ -2811,8 +2811,10 @@ main().catch((err) => {
   if (!wasReported(err)) {
     log.error(err?.message ?? String(err))
     //`tail` is one line or several — a usage block is several, and joining them would put a
-    //comma where a line break belongs.
-    for (const line of [].concat(err?.tail ?? [])) detail(line)
+    //comma where a line break belongs. It is the failure's detail, so it survives the modes the
+    //`✖` above it does: `--quiet` dropped it at step level, and `--json` never showed it (R46).
+    for (const line of [].concat(err?.tail ?? []))
+      detail(line, { failure: true })
   }
   process.exit(1)
 })
