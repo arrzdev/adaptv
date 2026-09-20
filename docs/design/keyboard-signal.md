@@ -73,9 +73,45 @@ On web the predictive seed already starts the grow on the focus frame, so the tw
 One unified accessor, identical shape on every target — the JS layer above it never learns which
 platform it is on (`docs/roadmap/native-shell-plugin.md §2`).
 
-- [capabilities/keyboard.ts](../src/capabilities/keyboard.ts) emits `{ isOpen, height }` and
+- [capabilities/keyboard.ts](../src/capabilities/keyboard.ts) emits
+  `{ isOpen, height, unpaidHeight, resizesLayoutViewport }` and
   [use-keyboard.ts](../src/hooks/use-keyboard.ts) consumes it, publishing `--adaptv-keyboard-height`
-  + `data-keyboard-open` on `<html>` for app chrome.
+  + `data-keyboard-open` on `<html>` for app chrome. `useKeyboard()` returns the same four fields.
+- **`height` is the keyboard; `unpaidHeight` is what is left to lay out around.** `unpaidHeight` is
+  `max(0, height - (rest - innerHeight))`: the part of the keyboard the layout viewport has not
+  already given up. It equals `height` on web, PWA, the VirtualKeyboard API path, iOS native and the
+  harness seam, where the layout viewport keeps its size. On Android native the WebView shrinks by
+  the keyboard itself (§6), so it drops to 0 once that resize lands, and `resizesLayoutViewport` is
+  `true`: the keyboard's top edge is then `innerHeight - unpaidHeight` in layout coordinates. Layout
+  against `unpaidHeight` (AvoidKeyboard does); `height` stays the whole keyboard for consumers that
+  subtract their own measured shrink (the drawer).
+- **The rest is app-wide and per width.** `initNativeKeyboard` seeds `innerHeight` at boot, keyed by
+  `innerWidth` like the height cache (§4). A resize becomes the rest only while the keyboard is closed
+  and no field that raises it has focus (an `<input>` that types, a `<textarea>` or a
+  contenteditable, looked for through open shadow roots), because the resize lands before the
+  plugin's event as often as after it. Any other resize can only raise the rest. A width first
+  reached with the keyboard up counts as paid in full.
+- **A resize is never a report.** On Android native `subscribeNativeKeyboard` re-sends the last
+  `{ isOpen, height }` unchanged, with a new `unpaidHeight`, on every window resize, so an unchanged
+  report there is no sign of a new keyboard event. `useKeyboard` hears the two apart (the withheld
+  `listenNativeKeyboard`): every OS report, a repeat of the last included, reaches its prediction
+  and height cache, and a resize only re-reads the payment.
+- **Known limits of `unpaidHeight` on Android native** (each measured in a unit probe, none on a
+  device). Window growth while the keyboard is up reads as the keyboard shrinking and leaves that
+  growth as a band until the keyboard closes: 24px for a system bar hiding, 223px for a split-screen
+  divider. A field focused inside a closed shadow root or an iframe is invisible to the focus check,
+  so a resize that lands before the plugin's event passes for the rest and leaves a band.
+  Under-reservation is brief: a window that shrank under a focused field for another reason (a
+  split screen with a hardware keyboard), or a rotation to a new width with the keyboard up, counts
+  as paid until the keyboard's own resize lands, so the field can sit covered for those frames; on a
+  WebView that never shrinks for the keyboard (not adaptv's configuration) a new width stays
+  covered. A shorter keyboard (a suggestion strip hiding) is held for `useKeyboard`'s 350ms shrink
+  hold while the viewport has already grown, so a band that tall shows for that beat.
+- **`height` and its CSS var still carry the whole keyboard.** `--adaptv-keyboard-height` (on `<html>`
+  and on the AvoidKeyboard wrapper) and `useKeyboardAvoidance().keyboardHeight` publish `height`, so on Android
+  native a stylesheet that lays out against `100vh - var(--adaptv-keyboard-height)` counts the
+  keyboard twice (`docs/decisions/styling.md` §4). Redefining them to the unpaid part is the
+  follow-up to #83.
 - **Native today** reports a single discrete height on will-show. The plugin work upgrades *this
   source* to continuous (Android `onProgress`) + curve-bearing (iOS `userInfo`) — the consumer shape
   does not change. If FOLLOW ever needs it, extend the event with a `phase`/`velocity` field; the
@@ -108,8 +144,13 @@ Android `hasHardwareKeyboard`) and skip prediction outright rather than relying 
 
 ## 6. Invariants (from `docs/roadmap/native-shell-plugin.md`, do not relitigate)
 
-- **`resize: none`** — already set in [capabilities/keyboard.ts](../src/capabilities/keyboard.ts); the
-  OS must not push the WebView, adaptv lifts content itself.
+- **`resize: none`** — set in [capabilities/keyboard.ts](../src/capabilities/keyboard.ts) on iOS, so
+  the OS does not push the WebView there and adaptv lifts content itself. **Measured, Android does
+  not hold to it:** that plugin has no resize mode, and Capacitor 8's `SystemBars` still pads the
+  WebView by the IME inset, so the layout viewport shrinks by the keyboard (PR #83, Pixel 10
+  emulator: `innerHeight` 923 → 587 under a 336px keyboard, `virtualKeyboard.overlaysContent` true
+  throughout). The accessor answers that shrink as `unpaidHeight` (§3); nothing above it branches on
+  the platform.
 - **Never build on `visualViewport` on native** — Capacitor resizes shrink the WebView, making the
   keyboard invisible to it. Web/PWA only.
 - **Report continuously, not on discrete show/hide** — changing `type`→`tel` or opening emoji resizes
