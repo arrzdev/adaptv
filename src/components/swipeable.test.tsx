@@ -1191,6 +1191,242 @@ describe("Swipeable · controlled and imperative", () => {
   })
 })
 
+/* ---- callbacks ----------------------------------------------------------- */
+
+//onOpen and onClose report a change of state, closed to open and open to
+//closed. A release that springs the row back to where it already was, or a
+//close that finds nothing open, changed nothing, so it reports nothing
+describe("Swipeable · onOpen and onClose report changes, not releases", () => {
+  function openRight(content: HTMLElement) {
+    slowDrag(content, -40)
+    settle()
+    expect(tx(content)).toBe(-W)
+  }
+
+  it("a drag from closed that springs back closed reports no close", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} onClose={onClose} />)
+    const { content } = parts(container)
+    slowDrag(content, -20) //under the 24px open line
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("an open row nudged and sprung back open reports its open once", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} onClose={onClose} />)
+    const { content } = parts(container)
+    openRight(content)
+    slowDrag(content, 12) //-80 → -68, inside the -60 close line
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("right")
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("a real open and a real close each report once, every time round", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(
+      <Row ref={ref} onOpen={onOpen} onClose={onClose} />,
+    )
+    const { content } = parts(container)
+    openRight(content)
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("right")
+    expect(onClose).not.toHaveBeenCalled()
+
+    slowDrag(content, 24) //-80 → -56, past the -60 line
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+
+    //the same side again is a new open, and a close() a new close
+    openRight(content)
+    expect(onOpen).toHaveBeenCalledTimes(2)
+    act(() => ref.current?.close())
+    settle()
+    expect(onClose).toHaveBeenCalledTimes(2)
+    expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
+  it("a closing row grabbed and thrown back open reports neither a close nor a second open", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(
+      <Row ref={ref} onOpen={onOpen} onClose={onClose} />,
+    )
+    const { content } = parts(container)
+    openRight(content)
+    act(() => ref.current?.close())
+    advance(FRAME)
+    advance(FRAME)
+    expect(tx(content)).toBeLessThan(-0.5)
+    //the grab stops the close spring before it lands, then opens again
+    mouseDrag(content, -60, { steps: 6 })
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(ref.current?.open).toBe("right")
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("right")
+  })
+
+  it("a row whose open prop follows its own callbacks reports each change once", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    function Controlled() {
+      const [open, setOpen] = useState<false | "left" | "right">(false)
+      return (
+        <Row
+          open={open}
+          onOpen={(side) => {
+            onOpen(side)
+            setOpen(side)
+          }}
+          onClose={() => {
+            onClose()
+            setOpen(false)
+          }}
+        />
+      )
+    }
+    const { container } = render(<Controlled />)
+    const { content } = parts(container)
+    openRight(content)
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("right")
+
+    slowDrag(content, 24)
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it("a close() during a drag that never opened the row reports no close", () => {
+    const onClose = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} onClose={onClose} />)
+    const { content } = parts(container)
+    mouseDrag(content, -20, { steps: 10, release: false })
+    expect(tx(content)).toBe(-20)
+    act(() => ref.current?.close())
+    act(() => {
+      fireEvent.pointerUp(content, { pointerId: 1, pointerType: "mouse" })
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("a tray action closes an open row with exactly one close", () => {
+    const onClose = vi.fn()
+    const onDelete = vi.fn()
+    const { container, getByText } = render(
+      <Row onClose={onClose} onDelete={onDelete} />,
+    )
+    const { content } = parts(container)
+    openRight(content)
+    act(() => {
+      fireEvent.click(getByText("delete row"))
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it("a row with only onOpen reports every open, not just the first", () => {
+    const onOpen = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} onOpen={onOpen} />)
+    const { content } = parts(container)
+    openRight(content)
+    act(() => ref.current?.close())
+    settle()
+    openRight(content)
+    expect(onOpen).toHaveBeenCalledTimes(2)
+  })
+
+  it("a close the parent asked for, caught and thrown back open, tells the parent it opened", () => {
+    const seen: string[] = []
+    let parentOpen: false | "left" | "right" = false
+    let setParentOpen: (open: false | "left" | "right") => void = () => {}
+    function Controlled() {
+      const [open, setOpen] = useState<false | "left" | "right">(false)
+      parentOpen = open
+      setParentOpen = setOpen
+      return (
+        <Row
+          open={open}
+          onOpen={(side) => {
+            seen.push(`open ${side}`)
+            setOpen(side)
+          }}
+          onClose={() => {
+            seen.push("close")
+            setOpen(false)
+          }}
+        />
+      )
+    }
+    const { container } = render(<Controlled />)
+    const { content } = parts(container)
+    openRight(content)
+    expect(parentOpen).toBe("right")
+
+    act(() => setParentOpen(false))
+    advance(FRAME)
+    advance(FRAME)
+    expect(tx(content)).toBeLessThan(-0.5)
+    mouseDrag(content, -60, { steps: 6 })
+    settle()
+    expect(tx(content)).toBe(-W)
+    //the close never landed, so no onClose; the parent hears the row is open
+    expect(seen).toEqual(["open right", "open right"])
+    expect(parentOpen).toBe("right")
+
+    //and its next close still closes the row
+    act(() => setParentOpen(false))
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(seen).toEqual(["open right", "open right", "close"])
+  })
+
+  it("in a Group, a row closed by its sibling and thrown back open closes that sibling", () => {
+    const a$ = { open: vi.fn(), close: vi.fn() }
+    const b$ = { open: vi.fn(), close: vi.fn() }
+    const { container } = render(
+      <Swipeable.Group>
+        <Row label="a" onOpen={a$.open} onClose={a$.close} />
+        <Row label="b" onOpen={b$.open} onClose={b$.close} />
+      </Swipeable.Group>,
+    )
+    const a = parts(container, 0).content
+    const b = parts(container, 1).content
+    openRight(a)
+    //by touch, so no pointerup lands outside a: only the Group closes it
+    touchDrag(b, line(20, -40))
+    advance(FRAME)
+    advance(FRAME)
+    expect(tx(a)).toBeLessThan(-0.5)
+    touchDrag(a, line(12, -60))
+    settle()
+    expect(tx(a)).toBe(-W)
+    expect(tx(b)).toBe(0)
+    //a never closed, so it reports nothing new; b opened and was closed
+    expect(a$.open).toHaveBeenCalledTimes(1)
+    expect(a$.close).not.toHaveBeenCalled()
+    expect(b$.open).toHaveBeenCalledTimes(1)
+    expect(b$.close).toHaveBeenCalledTimes(1)
+  })
+})
+
 /* ---- structure ----------------------------------------------------------- */
 
 describe("Swipeable · slots and structure", () => {
