@@ -102,6 +102,12 @@ const COMPONENTS = [
     isNew: false,
   },
   {
+    to: "/lab/collapsible",
+    title: "Collapsible",
+    summary: "measured height · until-found · reduced motion",
+    isNew: true,
+  },
+  {
     to: "/lab/swipeable",
     title: "Swipeable",
     summary: "row actions · the gesture that must not lose the finger",
