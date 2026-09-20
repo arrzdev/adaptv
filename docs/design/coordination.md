@@ -124,7 +124,7 @@ adaptvBack()                         // platform-agnostic programmatic back for 
 > path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs back instead of
 > being left mid-translate with no pointer to finish it.
 >
-> `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > SwipeableRow 200 > Scroll 100`.
+> `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > Slider 250 > SwipeableRow 200 > Scroll 100`.
 >
 > **All three primitives are migrated.** Each claims the arbiter at the point where its gesture becomes
 > unambiguous, which differs per primitive and is the part worth getting right:
@@ -138,6 +138,12 @@ adaptvBack()                         // platform-agnostic programmatic back for 
 >
 > Every one wires `onLost` so a pre-empted gesture resets rather than being stranded mid-translate with
 > no pointer left to finish it — the drawer snaps back, the row springs back.
+>
+> `Slider` is the second primitive on the arbiter to claim at the horizontal lock. It requests with
+> the `Slider` band (250), between `DrawerDrag` and `SwipeableRow`: direct manipulation of the control
+> under the finger outranks a row swipe, and a drawer requests only on a vertical lock, so the two
+> never contest. A touch that goes vertical first is abandoned without a request, so the `ScrollView`
+> keeps the pointer it never had to contest. A mouse or pen sets the value on pointerdown.
 >
 > ⏳ **Still owed: device tuning.** The priority *numbers* are reasoned, not felt. The ordering wants
 > confirming on hardware with a drawer, a swipeable row and a scroller on one screen — exactly the kind
