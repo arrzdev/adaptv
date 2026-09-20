@@ -459,6 +459,16 @@ does nothing. So this cause wins the row with its own action:
 > cannot change mid-session, so a real consumer never sees it. It exists because a merged
 > edge-to-edge fix looked broken until the CLI was restarted: the running `dev` still held the
 > pre-fix generator and said nothing. Polled off `cliSourceFingerprint`, `.test.mjs` excluded.
+>
+> Violated by the Ink watch block, which draws this row for `dev ios`/`android`: its `notice()`
+> dropped the `{ restart: true }` the poll passed. Only the string renderer had the copy, and only
+> native runs raise notices, so once Ink became their only renderer no surface drew this row and
+> the native block offered the key that does nothing:
+> ```
+>   ! adaptv source change  · press b to rebuild and see the changes
+> ```
+> Both renderers now take the action with the text, and `bin/ui/watch.test.mjs` draws the same
+> notice through each and compares the rows.
 
 **R41 — A notice is added to the live block, never swapped in for something still true.** The
 watch row used to be one row with one slot, so a pending notice REPLACED the keys — the moment
