@@ -876,6 +876,11 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       if (s.length < 2) return 0
       const last = s[s.length - 1]
 
+      //a finger that stops before it lifts sends no more moves, so the samples
+      //still end on the flick. Measured against the release itself, a pause
+      //longer than the window is the stillness it is, and position decides
+      if (performance.now() - last.t > VELOCITY_WINDOW_MS) return 0
+
       //release velocity over a short trailing window — averaging the whole
       //buffer reports a stale flick after deceleration and swallows a late one
       let first = s[s.length - 2]
