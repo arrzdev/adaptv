@@ -997,6 +997,27 @@ causes, either distinguish them or describe only what was observed.
 > ours. `warmDevServer` now returns a verdict (`unreachable` | `error` + status | `thin`), and the
 > port advice is attached ONLY to the two verdicts it can be true for.
 
+**R72 — A step settles on what the device DID, not on the command having returned.** A `✓`
+is a claim about the device. A call whose answer nobody reads cannot back that claim, and a call
+that undoes something first (a force-stop before a relaunch) turns an unread failure into a
+worse state than doing nothing.
+> Violated by the Android relaunch on `dev`'s build path, on an AVD made by `avdmanager create
+> avd` (its default is `hw.keyboard=no`). It force-stopped the app, then opened it with
+> `monkey`, which refused to run on a device with no keys (`** SYS_KEYS has no physical keys but
+> with factor 2.0%.`, exit 251). Nothing read the exit code:
+> ```
+>   ✓ android  Google sdk_gphone64_arm64 · 15.5s      ← the app is not running
+> ```
+> The launch is now `openAndroidApp` in `bin/lib/native.mjs`: it resolves the launcher activity,
+> starts it with `am start -W`, and returns a verdict read from the exit code AND the output
+> (`am` exits 0 on API 24-25 when it started nothing). A relaunch that fails throws
+> `appDidNotOpen`, whose sentence says the build and the install worked; the device's own words
+> go dim underneath, past the opacity boundary:
+> ```
+>   ✖ android  installed, but the app did not open · 6.8s
+>     Activity class {dev.arrz.projectzero.dev/dev.arrz.projectzero.MainActivity} does not exist.
+> ```
+
 **R57 — A stream nobody is reading is a stream that is lying to you.** When a subprocess's output
 has no sink yet, the CLI is blind for exactly as long as that lasts — and startup is when things
 break. Capture from the first byte; wire the live consumer up later if you must.
