@@ -389,10 +389,15 @@ describe("doctor", () => {
         cli(["doctor", "--json"], { timeout: DOCTOR_TIMEOUT_MS - 5_000 }),
         cli(["doctor"], { timeout: DOCTOR_TIMEOUT_MS - 5_000 }),
       ])
-      expect(json.code, json.stderr).toBe(0)
       const lines = json.stdout.split("\n").filter(Boolean)
       expect(lines).toHaveLength(1)
       const doc = JSON.parse(lines[0])
+      //Whether THIS run passes is not up to the test. `cli()` hands the child only PATH and
+      //HOME, so ANDROID_HOME and JAVA_HOME never reach it, and doctor's fallbacks for both
+      //are macOS paths: on a Linux runner the Android SDK and JDK rows are red even with an
+      //SDK installed, and a red required row fails the run. What is held is that the code,
+      //`ok` and `error` tell one story, and that `error` names exactly the rows that failed.
+      expect(json.code, json.stderr).toBe(doc.ok ? 0 : 1)
       expect(Object.keys(doc)).toEqual([
         "ok",
         "command",
@@ -400,7 +405,14 @@ describe("doctor", () => {
         "notices",
         "steps",
         "result",
+        ...(doc.ok ? [] : ["error"]),
       ])
+      if (!doc.ok)
+        expect(doc.error.labels).toEqual(
+          doc.steps
+            .filter((s) => !s.ok && !s.optional)
+            .map((s) => s.label),
+        )
       expect(doc.command).toBe("doctor")
       expect(doc.version).toBe(VERSION)
       expect(typeof doc.ok).toBe("boolean")
@@ -413,7 +425,7 @@ describe("doctor", () => {
       //The one row every machine that can run this suite passes.
       expect(doc.steps.find((s) => s.label === "node")?.ok).toBe(true)
       //And the human page is the same run, rendered: it exits the same way.
-      expect(human.code, human.stderr).toBe(0)
+      expect(human.code, human.stderr).toBe(json.code)
       expect(plain(human.stdout)).toMatch(/adaptv\s+·\s+doctor/)
     },
     DOCTOR_TIMEOUT_MS,
