@@ -618,6 +618,16 @@ describe("useKeyboard — native", () => {
     )
   }
 
+  /** The hook's state on iOS native: the WebView pays for none of the keyboard, so it is all unpaid. */
+  function nativeState(isOpen: boolean, height: number) {
+    return {
+      isOpen,
+      height,
+      unpaidHeight: height,
+      resizesLayoutViewport: false,
+    }
+  }
+
   /** `renderNative`, plus every height the hook ever rendered — a bounce is a value in between. */
   function renderNativeRecording() {
     const heights: number[] = []
@@ -794,13 +804,13 @@ describe("useKeyboard — native", () => {
     emit({ isOpen: true, height: 290 }) //small shrink: held, the window opens here
     advance(100)
     emit({ isOpen: true, height: 340 }) //a second small shrink, inside the same window
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
 
     //the window keeps its original deadline: a second report replaces the value, not the clock
     advance(SHRINK_HOLD_MS - 101)
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
     advance(1)
-    expect(result.current).toEqual({ isOpen: true, height: 340 })
+    expect(result.current).toEqual(nativeState(true, 340))
   })
 
   //The reverse order: the first shrink is the dip and the settled height follows late in the window.
@@ -814,9 +824,9 @@ describe("useKeyboard — native", () => {
     advance(300)
     emit({ isOpen: true, height: 330 }) //taller than the held value: replaces it, clock untouched
     advance(SHRINK_HOLD_MS - 301)
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
     advance(1)
-    expect(result.current).toEqual({ isOpen: true, height: 330 })
+    expect(result.current).toEqual(nativeState(true, 330))
   })
 
   //A genuine small shrink opens the window, then the AutoFill bar dips late in it. Committing the
@@ -835,9 +845,9 @@ describe("useKeyboard — native", () => {
     expect(heights).toEqual([0, 346]) //nothing has landed yet, least of all the 290
 
     advance(SHRINK_HOLD_MS - 261) //649
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
     advance(1) //650
-    expect(result.current).toEqual({ isOpen: true, height: 330 })
+    expect(result.current).toEqual(nativeState(true, 330))
     expect(heights).toEqual([0, 346, 330])
   })
 
@@ -857,9 +867,9 @@ describe("useKeyboard — native", () => {
     emit({ isOpen: true, height: 295 }) //500: shorter again, but the re-arm is spent
 
     advance(SHRINK_HOLD_MS - 201) //649
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
     advance(1) //650: the latest value, on the re-armed deadline, not at 500 + 350
-    expect(result.current).toEqual({ isOpen: true, height: 295 })
+    expect(result.current).toEqual(nativeState(true, 295))
   })
 
   //The re-arm is spent per HOLD, not per session: once a grow cancels a hold that used it, the next
@@ -884,7 +894,7 @@ describe("useKeyboard — native", () => {
     advance(89) //1149
     expect(heights).toEqual([0, 346]) //no 290 at 850
     advance(1) //1150
-    expect(result.current).toEqual({ isOpen: true, height: 330 })
+    expect(result.current).toEqual(nativeState(true, 330))
     expect(heights).toEqual([0, 346, 330])
   })
 
@@ -901,7 +911,7 @@ describe("useKeyboard — native", () => {
 
     const second = renderNative()
     focusField()
-    expect(second.result.current).toEqual({ isOpen: true, height: 346 })
+    expect(second.result.current).toEqual(nativeState(true, 346))
   })
 
   //The same race on the path a login form really takes once the cache has drifted: the bar or the
@@ -913,18 +923,18 @@ describe("useKeyboard — native", () => {
     const { result, unmount } = renderNative()
 
     focusField()
-    expect(result.current).toEqual({ isOpen: true, height: 346 }) //the stale guess
+    expect(result.current).toEqual(nativeState(true, 346)) //the stale guess
     emit({ isOpen: true, height: 295 }) //bare keyboard: held
     advance(250)
     emit({ isOpen: true, height: 340 }) //the AutoFill step, 6px shorter than last time
     advance(SHRINK_HOLD_MS)
-    expect(result.current).toEqual({ isOpen: true, height: 340 })
+    expect(result.current).toEqual(nativeState(true, 340))
 
     emit({ isOpen: false, height: 0 })
     unmount()
     const second = renderNative()
     focusField()
-    expect(second.result.current).toEqual({ isOpen: true, height: 340 })
+    expect(second.result.current).toEqual(nativeState(true, 340))
   })
 
   //A grow inside the hold commits and cancels it; the next small shrink opens a NEW window with its
@@ -942,9 +952,9 @@ describe("useKeyboard — native", () => {
 
     //past where the cancelled window would have fired — nothing lands, least of all its 301
     advance(SHRINK_HOLD_MS - 1)
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
     advance(1)
-    expect(result.current).toEqual({ isOpen: true, height: 320 })
+    expect(result.current).toEqual(nativeState(true, 320))
   })
 
   it("drops a held shrink when the keyboard hides inside the window", () => {
@@ -954,12 +964,12 @@ describe("useKeyboard — native", () => {
     emit({ isOpen: true, height: 346 })
     emit({ isOpen: true, height: 301 }) //held
     emit({ isOpen: false, height: 0 })
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual(nativeState(false, 0))
 
     //the next raise is a raise, not a shrink: it commits, and the dropped 301 never lands after it
     emit({ isOpen: true, height: 346 })
     advance(SHRINK_HOLD_MS * 2)
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual(nativeState(true, 346))
   })
 
   it("commits a dismiss straight through", () => {

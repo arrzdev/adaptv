@@ -44,9 +44,6 @@ export {
   requestKeepAwake,
   subscribeKeepAwake,
 } from "../capabilities/keep-awake"
-export * from "../capabilities/keyboard"
-export * from "../capabilities/locale"
-export * from "../capabilities/motion"
 //NOT `export *`: `measureKeyboardPayment` and `listenNativeKeyboard` are withheld. They complete
 //the keyboard signal with the unpaid part a predicted or held height leaves and keep OS reports
 //apart from resizes, and `useKeyboard` is their one owner — the public answers are `unpaidHeight`
@@ -58,6 +55,8 @@ export {
   type KeyboardInfo,
   subscribeNativeKeyboard,
 } from "../capabilities/keyboard"
+export * from "../capabilities/locale"
+export * from "../capabilities/motion"
 export * from "../capabilities/native-theme"
 export * from "../capabilities/network"
 export * from "../capabilities/notifications"

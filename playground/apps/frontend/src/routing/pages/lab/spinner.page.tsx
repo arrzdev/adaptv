@@ -17,6 +17,8 @@ export const Route = createFileRoute("/_providers/lab/spinner")({
 
 /** How many spinners sit below the spacer — the size of Quasar's measurement. */
 const FIELD_COUNT = 100
+//the field is static and never reordered, so its ids are its positions
+const FIELD = Array.from({ length: FIELD_COUNT }, (_, i) => `cell-${i}`)
 
 /** How long the busy button holds the main thread. */
 const BUSY_MS = 1000
@@ -315,9 +317,8 @@ function FieldProbe() {
             data-testid="spinner-field"
             className="grid grid-cols-10 gap-2 text-foreground"
           >
-            {Array.from({ length: FIELD_COUNT }, (_, i) => (
-              //the list is static and never reordered
-              <Spinner key={i} className="size-5" />
+            {FIELD.map((id) => (
+              <Spinner key={id} className="size-5" />
             ))}
           </div>
         )}

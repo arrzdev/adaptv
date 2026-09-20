@@ -101,7 +101,8 @@ export function armStale(state, { before, native, config, applied }) {
  */
 export function pollStale(state, now, platforms, staleInstalls = []) {
   const changed = platforms.filter(
-    (p) => now.native[p] !== state.native?.[p] || staleInstalls.includes(p),
+    (p) =>
+      now.native[p] !== state.native?.[p] || staleInstalls.includes(p),
   )
   const configChanged = now.config !== state.config
   const cliChanged = now.cli !== state.cli
