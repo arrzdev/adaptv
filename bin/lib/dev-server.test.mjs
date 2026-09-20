@@ -222,11 +222,19 @@ describe("warmDevServer — naming WHICH way it failed", () => {
  * LAN — the address block quietly lost its `network` row, and a phone on the same Wi-Fi
  * had no URL to type.
  */
+const fakeRoots = []
+afterEach(async () => {
+  const { rmSync } = await import("node:fs")
+  for (const root of fakeRoots.splice(0))
+    rmSync(root, { recursive: true, force: true })
+})
+
 async function fakeVite(gapMs) {
   const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } =
     await import("node:fs")
   const { tmpdir } = await import("node:os")
   const root = mkdtempSync(path.join(tmpdir(), "adaptv-devserver-"))
+  fakeRoots.push(root)
   const bin = path.join(root, "node_modules", ".bin")
   mkdirSync(bin, { recursive: true })
   const script = path.join(bin, "vite")
