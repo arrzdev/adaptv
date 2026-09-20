@@ -478,6 +478,35 @@ ${ANDROID_EDGE_TO_EDGE_JAVA}}
 }
 
 /**
+ * The roots the app's `FileProvider` may hand to another app. The scaffold ships only
+ * external storage and the cache directory, so a file the app wrote into its own data
+ * directory could not reach the share sheet: the share plugin threw `Failed to find
+ * configured root that contains /data/data/<id>/files/lab/share.txt`, rejected the call,
+ * and still opened a chooser carrying only the text (measured 2026-09-02, Pixel 10
+ * emulator). adaptv's filesystem capability writes to both directories, so both are
+ * roots here; external storage stays for anything a plugin puts there. The files root is
+ * the capability's own `adaptv/` namespace rather than the whole directory, because
+ * filesDir also holds the live-update plugin's `_capacitor_live_update_bundles`, and
+ * nothing there is the app's to hand out.
+ */
+const ANDROID_FILE_PROVIDER_PATHS = `<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="files" path="adaptv/" />
+    <cache-path name="cache" path="." />
+    <external-path name="external" path="." />
+</paths>
+`
+
+/** Write the provider roots; the manifest's `@xml/file_paths` already points at them. */
+export function patchAndroidFileProvider(appRoot) {
+  const res = path.join(nativeDir(appRoot, "android"), "app/src/main/res")
+  if (!existsSync(res)) return
+  const p = path.join(res, "xml/file_paths.xml")
+  mkdirSync(path.dirname(p), { recursive: true })
+  writeFileSync(p, ANDROID_FILE_PROVIDER_PATHS)
+}
+
+/**
  * Patch the Android themes: the launch theme (flat mask colour + transparent icon) and
  * the post-splash app theme (app-coloured window, transparent system bars).
  */
@@ -693,6 +722,7 @@ const ASSET_OUTPUTS = {
     "app/src/main/res/values-v29/styles.xml",
     "app/src/main/res/values-v31/styles.xml",
     "app/src/main/res/drawable/splash_icon.xml",
+    "app/src/main/res/xml/file_paths.xml",
     //The generated `MainActivity` lives at a path derived from `appId`, so the whole
     //source root is walked rather than one computed file. Over-inclusive by the rule
     //every hash here follows: an app's own hand-written Java re-derives byte-identical
@@ -791,8 +821,10 @@ export async function generateAssets(
   )
   if (stale.length === 0) return
 
-  if (stale.includes("android"))
+  if (stale.includes("android")) {
     patchAndroidSplash(appRoot, mask, config.appId)
+    patchAndroidFileProvider(appRoot)
+  }
   if (stale.includes("ios")) patchIosTheme(appRoot, mask)
 
   //One scan for the whole run, even an `all` one: the same set brands both platforms, and
