@@ -82,3 +82,4 @@ being surprising.
 | `Slider` (component-gaps Tier 1) | `src/components/slider.tsx`; lab `/lab/slider` |
 | `Select` / `Picker` menu appearance (component-gaps Tier 1) | `src/components/select.tsx` (2026-09-02); `WheelColumn` remains the wheel appearance |
 | Grouped-settings form / `FieldGroup` (component-gaps Tier 1) | `src/components/field-group.tsx` (2026-09-02); the grouped corners are `first:` / `last:` / `only:` in the consumer's `className`, not a `data-position` |
+| Component gaps Tier 4 `FAB` | `src/components/fab.tsx`, exported from `@arrzdev/adaptv/components` → [`component-gaps.md`](component-gaps.md) |
