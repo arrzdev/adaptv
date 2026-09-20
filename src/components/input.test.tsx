@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import type { KeyboardEvent } from "react"
-import { createRef } from "react"
+import { act, createRef, useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { InputHandle } from "#adaptv/components/input"
 import { Input, useInput } from "#adaptv/components/input"
@@ -300,6 +300,56 @@ describe("Input group — a press on the shell keeps an already-focused field", 
     //cancelling a press on the field itself would break caret placement
     expect(fireEvent.mouseDown(field())).toBe(true)
     expect(fireEvent.mouseDown(raw)).toBe(true)
+  })
+})
+
+describe("Input — clear() is an edit React sees", () => {
+  //`clear()` exists for a Tier 2 clear button, and that button is almost always on a
+  //controlled field: if React's value tracker is told about "" before the `input`
+  //event runs, `onChange` never fires and the field shows "" over stale state
+  it("a controlled field's state follows the DOM to empty", () => {
+    const ref = createRef<InputHandle>()
+    function Search() {
+      const [value, setValue] = useState("hello")
+      return (
+        <>
+          <Input
+            ref={ref}
+            aria-label="q"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <output data-testid="state">{value}</output>
+        </>
+      )
+    }
+    render(<Search />)
+
+    act(() => ref.current?.clear())
+
+    expect(field().value).toBe("")
+    expect(screen.getByTestId("state").textContent).toBe("")
+  })
+
+  it("an uncontrolled field's onChange runs once, with the empty value", () => {
+    const ref = createRef<InputHandle>()
+    const onChange = vi.fn(
+      (e: { target: HTMLInputElement }) => e.target.value,
+    )
+    render(
+      <Input
+        ref={ref}
+        aria-label="q"
+        defaultValue="hello"
+        onChange={onChange}
+      />,
+    )
+
+    act(() => ref.current?.clear())
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.results[0]?.value).toBe("")
+    expect(ref.current?.value).toBe("")
   })
 })
 
