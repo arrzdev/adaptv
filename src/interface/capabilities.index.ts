@@ -55,6 +55,7 @@ export {
 } from "../capabilities/orientation"
 export * from "../capabilities/print"
 export * from "../capabilities/privacy-screen"
+export * from "../capabilities/screen-reader"
 export {
   canShareTarget,
   type ShareOutcome,
