@@ -53,6 +53,40 @@ test.describe(`offline (render: ${RENDER})`, () => {
     expect(result.isAppDocument).toBe(true)
   })
 
+  test("every icon the page links still loads", async ({ page }) => {
+    //The precache carries only the linked icons now, so the linked ones are the
+    //ones that must survive the network going away. Read off the head, fetched
+    //through the worker with the origin down (the control below).
+    const results = await page.evaluate(async () => {
+      const hrefs = [
+        ...document.querySelectorAll<HTMLLinkElement>(
+          'link[rel~="icon"], link[rel="apple-touch-icon"]',
+        ),
+      ].map((link) => link.href)
+      return Promise.all(
+        hrefs.map(async (href) => {
+          try {
+            const response = await fetch(href)
+            return {
+              href,
+              ok: response.ok,
+              type: response.headers.get("content-type") ?? "",
+            }
+          } catch (error) {
+            return { href, ok: false, type: String(error) }
+          }
+        }),
+      )
+    })
+    expect(results, "the page links no icons").not.toHaveLength(0)
+    for (const result of results) {
+      expect(result.ok, `${result.href} offline: ${result.type}`).toBe(
+        true,
+      )
+      expect(result.type).toMatch(/^image\//)
+    }
+  })
+
   test("the origin really is unreachable", async ({ page }) => {
     //THE CONTROL. Without it every assertion above is equally consistent with
     //`setOffline` having done nothing at all, and the suite passes forever.
