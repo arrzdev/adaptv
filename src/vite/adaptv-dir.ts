@@ -16,21 +16,14 @@
  * file trees forever.
  *
  * One dot-prefixed directory, regenerated on every `dev`/`build`, gitignored, and
- * treated exactly like `dist/`. The consumer wires none of it: adaptv emits the
- * tsconfig `paths` mapping, the Vite alias, and the ignore entry itself.
+ * treated exactly like `dist/`. The consumer wires none of it: adaptv stamps the
+ * tsconfig entries and the ignore entry (`stamp.ts`) and resolves the Vite alias
+ * itself.
  */
 import path from "node:path"
 
 /** The generated directory, relative to the app root. */
 export const ADAPTV_DIR = ".adaptv"
-
-/**
- * The alias generated code uses to reach into `.adaptv/`.
- *
- * A distinct namespace from `#adaptv/*` (which is the framework's own internal
- * self-alias) so the two can never be confused when reading a stack trace.
- */
-const ADAPTV_GEN_ALIAS = "#adaptv-gen"
 
 export type GeneratedPaths = {
   /** The stamped router entry (`createRouter` + the Register declaration). */
@@ -84,17 +77,6 @@ export function resolveGeneratedPaths(appRoot: string): GeneratedPaths {
  */
 export function resolveGeneratedTmpDir(appRoot: string): string {
   return path.join(appRoot, ADAPTV_DIR, "tmp", "router")
-}
-
-/**
- * The `compilerOptions.paths` entry an app's tsconfig needs.
- *
- * Emitted by adaptv rather than documented for the consumer to copy: a path
- * mapping that must stay in sync with a framework internal is precisely the kind
- * of per-project wiring that rots silently.
- */
-export function adaptvDirTsconfigPaths(): Record<string, string[]> {
-  return { [`${ADAPTV_GEN_ALIAS}/*`]: [`./${ADAPTV_DIR}/*`] }
 }
 
 /**
