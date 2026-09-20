@@ -80,3 +80,4 @@ being surprising.
 | **Android target API 36** | `src/native/android-sdk.ts` (`ANDROID_SDK_LEVELS`, stamped into `variables.gradle` on every Android prepare by `bin/lib/native.mjs`); `adaptv doctor` reads `variables.gradle`. The record is **B9** in [`../decisions/register.md`](../decisions/register.md) |
 | `Collapsible` (component-gaps Tier 1) | `src/components/collapsible.tsx` + `src/styles/collapsible.css`; lab `/lab/collapsible` |
 | `Slider` (component-gaps Tier 1) | `src/components/slider.tsx`; lab `/lab/slider` |
+| `Select` / `Picker` menu appearance (component-gaps Tier 1) | `src/components/select.tsx` (2026-09-02); `WheelColumn` remains the wheel appearance |

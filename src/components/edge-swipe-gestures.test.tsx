@@ -1,5 +1,9 @@
 import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  BackPriority,
+  registerBackHandler,
+} from "#adaptv/capabilities/back-chain"
 import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
 
 afterEach(cleanup)
@@ -29,6 +33,48 @@ describe("EdgeSwipeGestures", () => {
     render(<EdgeSwipeGestures left={left} />)
     swipe({ clientX: 5, clientY: 200 }, { clientX: 120, clientY: 205 })
     expect(left).toHaveBeenCalledTimes(1)
+  })
+
+  it("walks the back chain before firing left, so an open menu consumes the swipe", () => {
+    //what the iPhone simulator showed with a Select open: the edge swipe popped
+    //the route while the Android button, which runs the chain, closed the list
+    const left = vi.fn()
+    const menu = vi.fn(() => true)
+    const unregister = registerBackHandler(menu, BackPriority.Transient)
+    render(<EdgeSwipeGestures left={left} />)
+    swipe({ clientX: 5, clientY: 200 }, { clientX: 120, clientY: 205 })
+    expect(menu).toHaveBeenCalledTimes(1)
+    expect(left).not.toHaveBeenCalled()
+    unregister()
+  })
+
+  it("fires left when nothing in the chain claims the swipe", () => {
+    const left = vi.fn()
+    const deferring = vi.fn(() => false)
+    const unregister = registerBackHandler(
+      deferring,
+      BackPriority.Transient,
+    )
+    render(<EdgeSwipeGestures left={left} />)
+    swipe({ clientX: 5, clientY: 200 }, { clientX: 120, clientY: 205 })
+    expect(deferring).toHaveBeenCalledTimes(1)
+    expect(left).toHaveBeenCalledTimes(1)
+    unregister()
+  })
+
+  it("a right-edge swipe is not a back press and never touches the chain", () => {
+    const right = vi.fn()
+    const menu = vi.fn(() => true)
+    const unregister = registerBackHandler(menu, BackPriority.Transient)
+    render(<EdgeSwipeGestures right={right} />)
+    const w = window.innerWidth
+    swipe(
+      { clientX: w - 5, clientY: 200 },
+      { clientX: w - 120, clientY: 205 },
+    )
+    expect(menu).not.toHaveBeenCalled()
+    expect(right).toHaveBeenCalledTimes(1)
+    unregister()
   })
 
   it("fires right on a right-edge leftward swipe", () => {

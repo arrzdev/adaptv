@@ -29,6 +29,7 @@ export const routes = rootRoute([
     route("/lab/drawer", "pages/lab/drawer.page.tsx"),
     route("/lab/dropdown", "pages/lab/dropdown.page.tsx"),
     route("/lab/collapsible", "pages/lab/collapsible.page.tsx"),
+    route("/lab/select", "pages/lab/select.page.tsx"),
     //the drawer's keyboard conformance harness — drives adaptv's keyboard test
     //seam and asserts the sheet's geometry, so one screenshot is the report on
     //every target (a real software keyboard cannot be scripted)

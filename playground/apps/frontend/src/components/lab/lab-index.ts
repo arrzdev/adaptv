@@ -111,6 +111,10 @@ const COMPONENTS = [
     to: "/lab/collapsible",
     title: "Collapsible",
     summary: "measured height · until-found · reduced motion",
+    to: "/lab/select",
+    title: "Select",
+    summary:
+      "menu on every target · keyboard + typeahead · back closes it · a native select for forms",
     isNew: true,
   },
   {

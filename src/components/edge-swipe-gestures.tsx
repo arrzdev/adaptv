@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { runBackChain } from "#adaptv/capabilities/back-chain"
 import {
   GesturePriority,
   useGestureCapture,
@@ -7,7 +8,11 @@ import {
 export interface EdgeSwipeGesturesProps {
   /**
    * Fired on a swipe in from the **left** screen edge (a rightward drag) — the
-   * iOS "back" gesture. Wire to your back navigation.
+   * iOS "back" gesture. Wire to your back navigation. It is a BACK PRESS first:
+   * the swipe walks the back chain the way the Android button does, so an open
+   * drawer, menu or Select consumes it and closes, and `left` fires only when
+   * nothing in the chain claimed it. Without that, the gesture popped the route
+   * from under an open list on iOS while the same press closed it on Android.
    */
   left?: () => void
   /**
@@ -119,8 +124,12 @@ export function EdgeSwipeGestures({
       const dy = touch.clientY - startY
       //must be horizontal-dominant, past the distance, in the edge's direction
       if (Math.abs(dx) <= Math.abs(dy) || Math.abs(dx) < threshold) return
-      if (startedFrom === "left" && dx > 0) leftRef.current?.()
-      else if (startedFrom === "right" && dx < 0) rightRef.current?.()
+      if (startedFrom === "left" && dx > 0) {
+        //a back gesture is a back press: transient UI dismisses before anything
+        //navigates (coordination.md §2), exactly as the hardware button does
+        if (runBackChain()) return
+        leftRef.current?.()
+      } else if (startedFrom === "right" && dx < 0) rightRef.current?.()
     }
 
     function onTouchCancel() {
