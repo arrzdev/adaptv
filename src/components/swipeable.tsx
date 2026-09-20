@@ -962,6 +962,18 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
               return false
             }
             stopSpring()
+            //a row caught in flight: the spring carried it on between the
+            //touch and this lock, so the offset recorded at the touch is
+            //stale by that travel, and tracking from it would throw the row
+            //back by that much in one frame. Track from where the row IS.
+            //From rest the two agree and the dead zone stays as pinned.
+            //The spring's last velocity dies with it: the finger owns the
+            //row now, and the release spring starts from the finger's own
+            //velocity, not the one the interrupted spring left behind
+            if (offsetRef.current !== down.start) {
+              down.start = offsetRef.current - dx
+            }
+            velRef.current = 0
             //a close this grab interrupted is over: its spring and onSettled
             //are gone, so the release decides afresh. Left latched, that
             //release's close() was a no-op and the row stuck in view
