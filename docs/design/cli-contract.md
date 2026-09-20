@@ -73,6 +73,17 @@ and then print `✖ ios failed — …` underneath.
 >     [UNRESOLVED_IMPORT] Error: Could not resolve './definitely-missing-module' in vite.config.ts
 > ```
 > A settled row takes `explain`, and its catch asks `wasReported` before it says anything.
+>
+> And by a reason that brought its own mark. The native runner behind `dev ios` narrates its
+> steps with a glyph of its own, writes the verdict on the failed one BEFORE the tool's output,
+> and the verdict says `failed` — so the tail kept it and the pick took it first:
+> ```
+> ✖ ios  ✖ Running xcodebuild - failed! · 41.2s
+> ```
+> A runner's verdict (`✖ … - failed!`, and `✔ … in 3.21ms` for the step that passed before it)
+> restates the row's own outcome, like `** BUILD FAILED **`, so `explain.mjs` drops it from the
+> candidates. When nothing else in the tail says a word, the step it names is still the reason
+> (`✖ ios  xcodebuild failed`), and its mark is not.
 
 **R3 — Never interleave platforms.** In an `all` run, a platform's failure detail must sit with
 its own line, never after another platform's. Collect and group; don't emit as you go.
@@ -699,6 +710,22 @@ loud, never by name.
 **R9 — Never print absolute paths.** Artifact and file paths are app-root-relative.
 > Violated by: `✓ android /Users/arrz/Documents/Github/project-zero/apps/front…`.
 > Want: `✓ android .adaptv/builds/app-debug.apk`.
+>
+> A tool's words are held to it too. The failure pick lifts the line that explains the failure,
+> and xcodebuild explains a failure by naming files:
+> ```
+> ✖ ios  Unable to load contents of file list: '/Users/arrz/…/chopchop/.adaptv/ios/App/Pods/…
+>     PhaseScriptExecution [CP]\ Embed\ Pods\ Frameworks /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzb…/Script-9592….sh (in target 'App' from project 'App')
+> ```
+> `withoutAbsolutePaths` in `explain.mjs` runs over every reason and detail line: a path under
+> the app root becomes relative (`.adaptv/ios/App/Pods/…`), and a path on disk outside it —
+> DerivedData, the home directory, Xcode — is cut to its file name, since those directories are
+> the machine's. "On disk" means it starts from a real top-level directory: a macOS root
+> (`/Users`, `/Library`, `/Applications`, …) always, and a Linux root (`/home`, `/var`, `/dev`,
+> …) only when its first two segments exist on the machine, since `/home/feed/3` is as likely a
+> route as a file. Slash-led text that is not a file is the dev's own and stays whole:
+> `Failed to load url /src/routes/cart.tsx`, `No route matched /products/featured/42`, an API
+> path, a regex. Cutting those to a last segment printed `No route matched 42`, a false sentence.
 
 **R10 — Never exceed the terminal width, never wrap.** `compose()` in `render.mjs` clips the dim
 right-hand detail; `clipAnsi()` clips a whole pre-coloured row (both preserve ANSI codes). A
@@ -890,6 +917,21 @@ and a build they started so they could keep working is the worst moment to take 
 > value of type 'String' to specified type 'Int'` inline is 100+ columns of which the first 60 are
 > a path — clipped, the dev learns nothing. Split it: the message goes on the ✖ line, a short
 > `at AppDelegate.swift:54:32` goes on the dim line under it.
+>
+> A syscall is not the reason either. A `.adaptv/android` copied by something that drops file
+> modes leaves `gradlew` without its exec bit, nothing runs, so there is no tail to pick from,
+> and the row was Node's own message:
+> ```
+> ✖ android  spawn /Users/arrz/…/chopchop/.adaptv/android/gradlew EACCES · 3ms
+> ✖ android  spawn ./gradlew EACCES · 1.2s          ← the same file, through the native runner
+> ```
+> adaptv owns that file, so every prepare gives the bit back (`restoreGradleWrapperMode`) and
+> the failure mostly stops existing. When the restore cannot happen, `notExecutable` says what
+> is wrong with the file and the action that still works:
+> ```
+> ✖ android  .adaptv/android/gradlew is not executable · 3ms
+>     Delete .adaptv/android and run again. adaptv regenerates it.
+> ```
 
 **R14 — Detail appears once**, dim, grouped under that platform — or only under `--verbose`.
 Never a second glyph, never a raw dump in the calm path.
@@ -996,6 +1038,15 @@ causes, either distinguish them or describe only what was observed.
 > — clipped from *"…isn't responding. Another process is likely using that port."* The port was
 > ours. `warmDevServer` now returns a verdict (`unreachable` | `error` + status | `thin`), and the
 > port advice is attached ONLY to the two verdicts it can be true for.
+>
+> The same holds for a verb. Patching the install identity read the plist and then wrote it, and
+> one message served both failures, so a file adaptv could not READ was reported as one it could
+> not write:
+> ```
+>   ✖ ios  could not write .adaptv/ios/App/App/Info.plist (EACCES) · 0ms
+> ```
+> The dev checks the write permission, finds it fine, and has been sent after the wrong bit. The
+> read failure now says `could not read`.
 
 **R72 — A step settles on what the device DID, not on the command having returned.** A `✓`
 is a claim about the device. A call whose answer nobody reads cannot back that claim, and a call
