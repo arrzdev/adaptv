@@ -70,6 +70,7 @@ const PAGES = [
   ["/lab/battery", "Battery"],
   ["/lab/motion", "Motion"],
   ["/lab/network", "Network"],
+  ["/lab/storage", "Storage"],
   ["/lab/splash", "Splash"],
   ["/lab/status-bar", "Status bar"],
   ["/lab/hooks", "Standalone hooks"],
