@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events"
 import { act } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { FRAMES } from "./theme.mjs"
 
 // Ink writes whole frames, so the last frame it wrote IS the screen. That makes these
 // assertions about what the dev actually sees.
@@ -130,8 +131,8 @@ afterEach(() => {
   restore = null
 })
 
-async function withFakeStdout(fn) {
-  const fake = new FakeStdout()
+async function withFakeStdout(fn, columns = 100) {
+  const fake = new FakeStdout(columns)
   const stdin = new FakeStdin()
   const real = Object.getOwnPropertyDescriptor(process, "stdout")
   const realIn = Object.getOwnPropertyDescriptor(process, "stdin")
@@ -242,6 +243,70 @@ describe("the live block", () => {
     expect(rows[0]).toContain("compiling")
     expect(rows[0]).not.toContain("syncing")
   })
+})
+
+/*
+ * A phase row is ONE physical line at any width (R10, R44), and what yields on a narrow terminal
+ * is the phase's TAIL. The spinner and the label used to be `Text`s Yoga was free to shrink, so a
+ * real phase at 40 columns took the spinner off the front of the row, and at 30 the label wrapped
+ * inside its own sliver and the block grew rows:
+ *
+ *        android  reading the published mani…
+ *
+ * Every expected row is derived from the same block drawn at 200 columns.
+ */
+describe("a phase row holds ONE line on a narrow terminal (R10, R44)", () => {
+  //the spinner advances on its own clock, so two renders may catch different frames of it
+  const SPIN = new RegExp(`^( {2})[${FRAMES.join("")}] `)
+  const still = (row) => row.replace(SPIN, "$1* ")
+  const LANES = {
+    web: "starting server",
+    ios: "processing resources",
+    //the longest phase adaptv chooses for itself (`OWN_PHASES`), on the longest label
+    android: "reading the published manifest",
+  }
+
+  /** Mount the lanes at `columns`, set every phase, and return the painted rows. */
+  const paint = (columns) =>
+    withFakeStdout(async (f) => {
+      const b = liveRows(Object.keys(LANES))
+      try {
+        await settled(() => {
+          for (const [label, phase] of Object.entries(LANES))
+            b.phase(label, phase)
+        })
+        return strip(f.frames.at(-1) ?? "")
+          .split("\n")
+          .map((l) => l.trimEnd())
+          .slice(0, -1)
+      } finally {
+        b.stop()
+      }
+    }, columns)
+
+  it.each([40, 30, 80])(
+    "keeps the spinner and the label, and clips the phase, at %i columns",
+    async (columns) => {
+      const rows = await paint(columns)
+      const full = await paint(200)
+      expect(full.map(still)).toEqual(
+        Object.entries(LANES).map(([l, p]) => `  * ${l}  ${p}`),
+      )
+      //the premise, at the narrow widths: the android row does not fit, or nothing yielded here
+      if (columns < 80) expect(full[2].length).toBeGreaterThan(columns)
+      //one row per lane: a wrapped label makes the block taller
+      expect(rows).toHaveLength(3)
+      rows.forEach((row, i) => {
+        expect(row.length).toBeLessThanOrEqual(columns)
+        expect(row).toMatch(SPIN)
+        const want =
+          full[i].length > columns
+            ? `${still(full[i]).slice(0, columns - 1)}…`
+            : still(full[i])
+        expect(still(row)).toBe(want)
+      })
+    },
+  )
 })
 
 describe("the device picker", () => {
@@ -497,5 +562,214 @@ describe("the picker sits on the body grid (R65)", () => {
     })
     //three spaces between offers, not a `·` — same shape as `r reload js   b rebuild app`
     expect(out).toContain("↑↓ move   ↵ select   esc cancel")
+  })
+})
+
+/*
+ * Every row of the picker holds ONE line on a narrow terminal (R10, R44). A picker row that wraps
+ * costs the window a line, so the block stops being the height `WINDOW` promises and the list
+ * jumps under the cursor. Every row was a paragraph that Ink wrapped, and at 40 columns:
+ *
+ *       › iPhone 16 Pro Max (simulator)  · iOS
+ *        26.1
+ *
+ * What yields is the label's TAIL: the cursor and the hint stay whole, because with two runtimes
+ * installed the hint is the only thing telling a pair of rows apart. The keys row gives up whole
+ * offers from the right, `esc cancel` first. Every expected row is derived from the same picker
+ * drawn at 200 columns.
+ */
+describe("every row of the picker holds ONE line on a narrow terminal (R10, R44)", () => {
+  const DOWN = `${ESC}[B`
+  /** Two runtimes, so every name is listed twice: the hint is all that tells a pair apart. */
+  const PAIRS = [
+    "iPhone 17 Pro Max (simulator)",
+    "iPad Pro 13-inch (M5) (simulator)",
+    "iPad Air 11-inch (M3) (simulator)",
+    "iPhone Air (simulator)",
+    "iPad mini (A17 Pro) (simulator)",
+    "iPhone 16e (simulator)",
+    "iPad (A16) (simulator)",
+  ].flatMap((label, i) => [
+    { value: `${i}-26`, label, hint: "iOS 26.1" },
+    { value: `${i}-18`, label, hint: "iOS 18.6" },
+  ])
+
+  /** Mount the picker at `columns`, press ↓ `downs` times, and return the painted rows. */
+  const paint = (message, options, columns, downs = 0) =>
+    withFakeStdout(async (f, stdin) => {
+      let answer
+      await settled(() => {
+        answer = inkSelect(message, options)
+      })
+      try {
+        for (let i = 0; i < downs; i++)
+          await settled(() => stdin.press(DOWN))
+        return strip(f.frames.at(-1) ?? "")
+          .split("\n")
+          .map((l) => l.trimEnd())
+          .slice(0, -1)
+      } finally {
+        stdin.press("\r")
+        await answer
+      }
+    }, columns)
+
+  /** Ink's clip of a prose row: the head, marked with `…` in the last column. */
+  const clipped = (full, columns) =>
+    full.length > columns ? `${full.slice(0, columns - 1)}…` : full
+  /**
+   * A device row as it must read at `columns`: the cursor and the whole hint, and the label
+   * clipped to what is left. Narrow, nothing is padded (`hintColumn` gives 0 when the aligned row
+   * does not fit), so the 200-column row loses its padding first.
+   */
+  const device = (full, columns) => {
+    const at = full.lastIndexOf("  · ")
+    const head = (at < 0 ? full : full.slice(0, at)).trimEnd()
+    const hint = at < 0 ? "" : full.slice(at)
+    if (head.length + hint.length <= columns) return head + hint
+    return `${head.slice(0, columns - hint.length - 1)}…${hint}`
+  }
+
+  it.each([40, 30])(
+    "keeps the block's height, the cursor and every hint at %i columns",
+    async (columns) => {
+      //seven presses: the cursor on row 7, the window on rows 2..7, counts at both ends
+      const rows = await paint("which ios device?", PAIRS, columns, 7)
+      const full = await paint("which ios device?", PAIRS, 200, 7)
+      expect(full[0]).toBe("  which ios device?")
+      expect(full[1]).toBe("    ↑ 2 more")
+      expect(full.at(-2)).toBe("    ↓ 6 more")
+      //the premise: every device row is wider than the terminal, or nothing yielded here
+      for (const row of full.slice(2, 8))
+        expect(row.length).toBeGreaterThan(columns)
+      //message + both markers + the window + keys: a wrapped row makes this taller
+      expect(rows).toHaveLength(1 + 2 + 6 + 1)
+      for (const row of rows)
+        expect(row.length).toBeLessThanOrEqual(columns)
+      expect(rows[0]).toBe(clipped(full[0], columns))
+      expect(rows[1]).toBe(clipped(full[1], columns))
+      expect(rows[8]).toBe(clipped(full[8], columns))
+      const devices = rows.slice(2, 8)
+      devices.forEach((row, i) => {
+        expect(row).toBe(device(full[2 + i], columns))
+        expect(row).toMatch(/ {2}· iOS (26\.1|18\.6)$/)
+      })
+      //the cursor is on row 7, the sixth row of the window, and on no other
+      expect(devices[5].startsWith("  › iPhone Air")).toBe(true)
+      expect(devices.filter((r) => r.includes("›"))).toHaveLength(1)
+      //and the pairs are still pairs: no two rows on screen read the same
+      expect(new Set(devices).size).toBe(devices.length)
+    },
+  )
+
+  it.each([40, 30])(
+    "clips the question and drops whole keys from the right at %i columns",
+    async (columns) => {
+      const message =
+        "replace the 11 icons adaptv generated in public/icons?"
+      const options = [
+        { value: true, label: "replace them" },
+        { value: false, label: "cancel" },
+      ]
+      const rows = await paint(message, options, columns, 1)
+      const full = await paint(message, options, 200, 1)
+      expect(full).toEqual([
+        `  ${message}`,
+        "    replace them",
+        "  › cancel",
+        "  ↑↓ move   ↵ select   esc cancel",
+      ])
+      //the premise: the question does not fit, and at 30 neither do the keys
+      expect(full[0].length).toBeGreaterThan(columns)
+      if (columns === 30) expect(full[3].length).toBeGreaterThan(columns)
+      //no window, so no markers: message + two rows + keys
+      expect(rows).toHaveLength(4)
+      for (const row of rows)
+        expect(row.length).toBeLessThanOrEqual(columns)
+      expect(rows[0]).toBe(clipped(full[0], columns))
+      expect(rows[1]).toBe(full[1])
+      expect(rows[2]).toBe(full[2])
+      //as many whole offers as the row has room for, from the left
+      const offers = full[3].trim().split("   ")
+      let want = full[3]
+      for (let n = offers.length; n > 0; n--) {
+        want = `  ${offers.slice(0, n).join("   ")}`
+        if (want.length <= columns) break
+      }
+      expect(rows[3]).toBe(want)
+      for (const shown of rows[3].trim().split("   "))
+        expect(offers).toContain(shown)
+      //nobody can answer without these two, and `q` and ctrl-c still cancel
+      expect(rows[3]).toContain("↑↓ move   ↵ select")
+      if (columns === 30) expect(rows[3]).not.toContain("esc")
+    },
+  )
+
+  it("clips a scroll marker that outgrows a very narrow terminal", async () => {
+    //120 rows: `  ↓ 114 more` is 12 columns, and the indent makes it 14
+    const options = Array.from({ length: 120 }, (_, i) => ({
+      value: i,
+      label: `device ${i}`,
+    }))
+    const rows = await paint("pick", options, 12)
+    const full = await paint("pick", options, 200)
+    expect(full[8]).toBe("    ↓ 114 more")
+    expect(rows).toHaveLength(1 + 2 + 6 + 1)
+    for (const row of rows) expect(row.length).toBeLessThanOrEqual(12)
+    expect(rows[8]).toBe(clipped(full[8], 12))
+  })
+
+  it("re-fits its rows when the terminal is resized, with no keypress", async () => {
+    //The hint column is chosen for the width the picker was DRAWN at, and Ink's own resize
+    //only re-lays the old rows out. Mounted at 60 (padded) and narrowed to 42 (too narrow to
+    //pad), a label that fits came out whole and marked cut, `iPad (A16) (simulator)   …  · iOS
+    //18.0`, and widening again left the rows ragged until the dev pressed a key.
+    const options = [
+      {
+        value: "a",
+        label: "iPhone 16 Pro Max (simulator)",
+        hint: "iOS 26.1",
+      },
+      { value: "b", label: "iPad (A16) (simulator)", hint: "iOS 18.0" },
+      { value: "c", label: "iPhone 16e (simulator)", hint: "iOS 26.1" },
+    ]
+    const read = (f) =>
+      strip(f.frames.at(-1) ?? "")
+        .split("\n")
+        .map((l) => l.trimEnd())
+        .slice(0, -1)
+    const [wide, narrowed, widened] = await withFakeStdout(
+      async (f, stdin) => {
+        let answer
+        await settled(() => {
+          answer = inkSelect("which ios device?", options)
+        })
+        try {
+          const wide = read(f)
+          f.columns = 42
+          await settled(() => f.emit("resize"))
+          const narrowed = read(f)
+          f.columns = 60
+          await settled(() => f.emit("resize"))
+          return [wide, narrowed, read(f)]
+        } finally {
+          stdin.press("\r")
+          await answer
+        }
+      },
+      60,
+    )
+    //the premise: at 60 the hints line up, so the shorter labels carry padding
+    expect(wide[2]).toBe("    iPad (A16) (simulator)         · iOS 18.0")
+    //narrowed, the picker reads exactly as one drawn at 42 in the first place
+    expect(narrowed).toEqual(await paint("which ios device?", options, 42))
+    expect(narrowed[2]).toBe("    iPad (A16) (simulator)  · iOS 18.0")
+    expect(narrowed[3]).toBe("    iPhone 16e (simulator)  · iOS 26.1")
+    //only the label that does not fit is marked cut
+    expect(narrowed.filter((r) => r.includes("…"))).toEqual([
+      "  › iPhone 16 Pro Max (simula…  · iOS 26.1",
+    ])
+    //and widened, it lines up again
+    expect(widened).toEqual(wide)
   })
 })
