@@ -234,6 +234,10 @@ const CAPABILITIES = [
     to: "/lab/compose",
     title: "Compose",
     summary: "mail and SMS drafts · handed to the OS composer",
+    to: "/lab/print",
+    title: "Print",
+    summary:
+      "window.print · the dialog where one exists, named silence where none does",
     isNew: true,
   },
   {
