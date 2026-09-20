@@ -24,8 +24,24 @@ export const Route = createFileRoute("/_providers/lab/back-chain")({
   component: LabBackChainPage,
 })
 
+/**
+ * A second handler in the SAME band as the fake overlay. Two stacked overlays tie
+ * on priority, and the one registered last — opened last — has to consume first,
+ * whichever you open first. It is a component on purpose: it is mounted only while
+ * open and registers through `useBackHandler`, so closing it is an UNMOUNT, and the
+ * hook's own cleanup is the only thing that takes it back out of the chain.
+ */
+function SecondOverlay({ onBack }: { onBack: () => void }) {
+  useBackHandler(() => {
+    onBack()
+    return true
+  }, BackPriority.Overlay)
+  return null
+}
+
 function LabBackChainPage() {
   const [overlayOpen, setOverlayOpen] = useState(false)
+  const [secondOverlayOpen, setSecondOverlayOpen] = useState(false)
   const [transientOpen, setTransientOpen] = useState(false)
   const [log, setLog] = useState<LabLogEntry[]>([])
   const [native, setNative] = useState(false)
@@ -90,13 +106,14 @@ function LabBackChainPage() {
           "Open the fake overlay AND the fake transient, then press back once. The Overlay band (400) must consume it — check the log.",
           "Press back again. The Transient band (300) must consume that one.",
           "Press back a third time with nothing open. It must pop the route and take you back to the testing index.",
-          "Re-open both, then use the PLATFORM back rather than the button: Android hardware/gesture back, or the browser Back button. The order must be identical.",
+          "Re-open both, then use the PLATFORM back rather than the button: Android hardware/gesture back. The order must be identical. In a browser tab the Back button is not this chain — it navigates with the fakes still open.",
           "Watch for the deferring handler in the log: it must be reached and must NOT consume the press.",
+          "Open the second fake overlay, then the first, and press back. Both sit in the Overlay band, so the one opened LAST must consume first. Repeat in the other order: the winner must swap.",
         ]}
         expected={{
           web: {
             verdict: "partial",
-            note: "The in-page button works, and so does the browser's Back button — adaptvBack pops history. There is no app to exit, so the floor is just a pop.",
+            note: "The in-page button walks the chain and its floor pops history. The browser's own Back button and Escape are NOT chain inputs in a tab: Back navigates with a fake overlay still open. There is no app to exit, so with no history the floor defers.",
           },
           pwa: {
             verdict: "works",
@@ -125,6 +142,17 @@ function LabBackChainPage() {
           <LabButton onClick={() => setOverlayOpen(true)}>
             Open a fake overlay
           </LabButton>
+          <LabButton onClick={() => setSecondOverlayOpen(true)}>
+            Open a second fake overlay
+          </LabButton>
+          {secondOverlayOpen && (
+            <SecondOverlay
+              onBack={() => {
+                append("Second overlay (400) consumed the press")
+                setSecondOverlayOpen(false)
+              }}
+            />
+          )}
           <LabButton onClick={() => setTransientOpen(true)}>
             Open a fake menu
           </LabButton>
@@ -134,6 +162,14 @@ function LabBackChainPage() {
           value={
             <LabBadge tone={overlayOpen ? "ok" : "muted"}>
               {String(overlayOpen)}
+            </LabBadge>
+          }
+        />
+        <LabRow
+          label="second overlay registered"
+          value={
+            <LabBadge tone={secondOverlayOpen ? "ok" : "muted"}>
+              {String(secondOverlayOpen)}
             </LabBadge>
           }
         />
