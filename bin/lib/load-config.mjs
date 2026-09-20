@@ -21,6 +21,14 @@ export async function loadConfig(appRoot) {
     "vite/app-config-loader.ts",
   )
   const { loaded } = await readAppConfig(appRoot)
+  // A file with no default export reads as `undefined`, and every key of that is missing: it
+  // used to be told "missing 'appId'" while plainly holding one under a named export. The
+  // sentence is the build's own for the same file (`loadAppConfig`), quoted for a terminal.
+  if (!loaded || typeof loaded !== "object") {
+    throw new Error(
+      "adaptv.config.ts must 'export default defineApp({ ... })'",
+    )
+  }
   // `appId` is optional to the build — a web app has none — and required by every command
   // here: the native project, the OTA channel and the doctor report are all keyed on it.
   if (!loaded?.appId) {
