@@ -45,7 +45,7 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | 23 | `adaptvStaticHostPlugin` | `static-host.ts` | **Web lineage only**, see §2.4. |
 | 24 | `adaptvNativeBundlePlugin` | `native-bundle.ts` | The mirror image, native lineage only. **`enforce: "post"`**, see §2.5. |
 | 25 | `adaptvBuildStampPlugin` | `build-stamp.ts` | **Last of the emitters**, `enforce: "post"` and after the native prune: it records where the build wrote and hashes the final shell. |
-| 25 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
+| 26 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
 
 ## 2. The five places order is load-bearing
 
