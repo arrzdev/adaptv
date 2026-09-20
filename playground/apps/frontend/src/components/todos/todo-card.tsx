@@ -9,6 +9,11 @@ import {
 } from "@/data/collections/todos/priority"
 import type { Todo } from "@/data/collections/todos/schema"
 
+//keeps a press on the checkbox to itself, so it never reaches the row's drag
+function stopPropagation(event: { stopPropagation: () => void }) {
+  event.stopPropagation()
+}
+
 type TodoCardProps = {
   todo: Todo
   /**
@@ -25,8 +30,9 @@ type TodoCardProps = {
   /**
    * Reorder mode. The row's dnd-kit long-press owns drag-to-reorder, so tap-to-
    * open rides a plain `onClick` (the row suppresses the post-drag click) and the
-   * checkbox stops pointer propagation so it can't arm a drag. Swipe-to-delete
-   * stays available — a horizontal swipe beats the drag's hold-delay. @default false
+   * checkbox stops pointer, mouse and touch propagation so it can't arm a drag.
+   * Swipe-to-delete stays available — a horizontal swipe beats the drag's
+   * hold-delay. @default false
    */
   dragMode?: boolean
   /**
@@ -127,11 +133,16 @@ export function TodoCard({
         todo.checked && "opacity-80",
       )}
     >
-      {/* in drag mode, keep a checkbox tap from arming the row's reorder
-          gesture so the box still toggles without starting a drag */}
+      {/* in drag mode, keep a checkbox press from arming the row's reorder
+          gesture so the box still toggles without starting a drag. dnd-kit's
+          Mouse and Touch sensors arm on the row's mousedown and touchstart, not
+          on pointerdown, so all three stop here: stopping pointerdown alone let
+          a press on the box, carried onto another card, reorder the list */}
       <View
         className={cn(showMeta && "pt-0.5")}
-        onPointerDown={dragMode ? (e) => e.stopPropagation() : undefined}
+        onPointerDown={dragMode ? stopPropagation : undefined}
+        onMouseDown={dragMode ? stopPropagation : undefined}
+        onTouchStart={dragMode ? stopPropagation : undefined}
       >
         {/* archived todos lock the box checked — it reads as done but can't be
             toggled; unarchive (swipe) is the way back */}
