@@ -143,13 +143,16 @@ route chunks** (Workbox precache manifest — adaptv builds this). Combined with
 > everyone. Generating makes user-agnosticism structural rather than a rule someone has to remember.
 >
 > The shell carries the pre-paint platform + theme stamps, inlined critical CSS, the hashed stylesheet
-> and entry, and an empty `#root`. Asset names come from Vite's manifest (the plugin turns
-> `build.manifest` on for the client), so they track content hashes. The manifest is read out of the
-> bundle and **not written**: on disk it was deployed with the app, and Nitro's server listed it
-> in its public assets, so an SSR app served its whole source-to-chunk map at `/.vite/manifest.json`
-> (41 KB on the playground). Nothing reads it at runtime; Start builds its preloads from the bundle.
-> An app (or a plugin) that turns `build.manifest` on itself keeps its file at the path it chose, in
-> the web output, and the shell reads that one.
+> and entry, and an empty `#root`. When the app has a `splashScreen` it also carries the launch-height
+> script, as the server-rendered document does, placed after the stylesheet link because it reads the
+> top inset. A boot from the shell is a fresh client root, which clears `<html>`'s attributes, so the
+> shell layout puts the stamps and the frozen height back in a layout effect (`restoreLaunchHeight`).
+> Asset names come from Vite's manifest (the plugin turns `build.manifest` on for the client), so they
+> track content hashes. The manifest is read out of the bundle and **not written**: on disk it was
+> deployed with the app, and Nitro's server listed it in its public assets, so an SSR app served its
+> whole source-to-chunk map at `/.vite/manifest.json` (41 KB on the playground). Nothing reads it at
+> runtime; Start builds its preloads from the bundle. An app (or a plugin) that turns `build.manifest`
+> on itself keeps its file at the path it chose, in the web output, and the shell reads that one.
 >
 > **One structural fix this forced:** `getUiThemeInitScript` lived in `hooks/use-theme.ts`, which imports
 > React and transitively the Capacitor native-theme accessor. A Node-side Vite plugin cannot import

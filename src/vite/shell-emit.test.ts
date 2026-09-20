@@ -13,6 +13,7 @@ import path from "node:path"
 import type { Plugin, ResolvedConfig } from "vite"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { BOOT_FALLBACK_ID } from "#adaptv/shell/boot-fallback.ts"
+import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport.ts"
 import { PREFERENCE_ATTR } from "#adaptv/shell/theme-init-script.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
@@ -20,7 +21,8 @@ import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
 /*
  * The emitted app shell, per lineage. → `docs/design/rendering.md` §3.1.2 (generated,
  * never captured), §3.1.3 (the boot fallback), §3.1 (the measured modulepreload
- * gap), §3.3 (the filename per render mode)
+ * gap), §3.3 (the filename per render mode); the launch-height script, the same one
+ * the server-rendered document carries (`create-root-route.tsx`)
  *
  * `renderAppShell` has its own suite for the markup. What only the emitter can
  * get wrong is the wiring: reading Vite's manifest into hrefs, prerendering the
@@ -65,6 +67,7 @@ function scaffold(
   render: "ssr" | "spa",
   target: "web" | "capacitor",
   clientManifest: object = manifest,
+  splash = true,
 ) {
   const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-shell-emit-"))
   roots.push(appRoot)
@@ -100,6 +103,13 @@ function scaffold(
         themeColor: { light: "#f0f0f0", dark: "#101010" },
         styles: "./src/styles/main.css",
         router: {},
+        //the emitter only checks that a splash is configured, as
+        //`create-root-route.tsx` does; it never loads the thunk
+        ...(splash
+          ? {
+              splashScreen: () => Promise.resolve({ default: () => null }),
+            }
+          : {}),
       },
     },
   }
@@ -175,15 +185,19 @@ let spa: Emitted
 let spaAgain: Emitted
 let ssr: Emitted
 let native: Emitted
+let noSplash: Emitted
 
 beforeAll(async () => {
   const build = async (
     render: "ssr" | "spa",
     target: "web" | "capacitor",
+    splash = true,
   ) => {
     const { appRoot, clientDir, context, clientManifest } = scaffold(
       render,
       target,
+      manifest,
+      splash,
     )
     await emit(context, appRoot, clientManifest)
     const name = render === "spa" ? "index.html" : "adaptv-shell.html"
@@ -192,11 +206,12 @@ beforeAll(async () => {
       html: readFileSync(path.join(clientDir, name), "utf8"),
     }
   }
-  ;[spa, spaAgain, ssr, native] = await Promise.all([
+  ;[spa, spaAgain, ssr, native, noSplash] = await Promise.all([
     build("spa", "web"),
     build("spa", "web"),
     build("ssr", "web"),
     build("spa", "capacitor"),
+    build("spa", "web", false),
   ])
 }, PRERENDER_TIMEOUT)
 
@@ -247,6 +262,21 @@ describe("adaptvShellEmitPlugin — the shell each lineage boots from", () => {
       expect(html).toContain(`id="${BOOT_FALLBACK_ID}"`)
       expect(html).toContain('data-adaptv="boot-error"')
     }
+  })
+
+  it("freezes the launch height, as the server-rendered document does, when the app has a splash", () => {
+    //the SSR worker serves this shell for an offline launch, and a spa deploy
+    //serves it for every launch. Without the script, the playground's splash
+    //falls back to its own `100lvh`. It reads the top inset, so it runs behind
+    //the stylesheet and ahead of the entry (`app-shell.ts`)
+    const script = getLaunchViewportInitScript()
+    for (const { html } of [spa, ssr, native]) {
+      const at = html.indexOf(script)
+      expect(at).toBeGreaterThan(html.indexOf('rel="stylesheet"'))
+      expect(at).toBeLessThan(html.indexOf('type="module"'))
+    }
+    //no splash, nothing to pin: the root route leaves it out too
+    expect(noSplash.html).not.toContain("--pwa-launch-height")
   })
 
   it("is generated, never captured: an empty root, no route content, and the same bytes on every build", () => {
