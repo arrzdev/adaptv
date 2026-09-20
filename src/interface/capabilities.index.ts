@@ -54,6 +54,7 @@ export {
   canShareTarget,
   type ShareOutcome,
   type ShareTarget,
+  type StoredFile,
   share,
 } from "../capabilities/share"
 export * from "../capabilities/splash"
