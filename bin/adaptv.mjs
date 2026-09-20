@@ -719,7 +719,7 @@ async function runLive(appRoot, platforms, opts) {
   // Config + assets, checked and reported before the dev server or any native project is
   // touched (R33). `dev web` runs without an adaptv.config.ts, so there it checks one only
   // if the app has one.
-  //`let`, because the `b` key re-reads it — see `reloadConfig`. A dev editing
+  //`let`, because the `b` key re-reads it — see `rebuild`. A dev editing
   //adaptv.config.ts mid-run and rebuilding must not get the config the run started with.
   let config = await preflight(appRoot, platforms, { optional: webOnly })
 

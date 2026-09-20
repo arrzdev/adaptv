@@ -4,7 +4,10 @@ import type { Plugin as EsbuildPlugin } from "esbuild"
 import { build as esbuild } from "esbuild"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import type { LoadedAppConfig } from "#adaptv/vite/adaptv-context"
-import { appConfigErrors } from "#adaptv/vite/app-config-errors.ts"
+import {
+  appConfigErrors,
+  defaultExportError,
+} from "#adaptv/vite/app-config-errors.ts"
 
 export const APP_CONFIG_BASENAME = "adaptv.config.ts"
 
@@ -70,11 +73,9 @@ export async function loadAppConfig(
   appRoot: string,
 ): Promise<LoadedAppConfig> {
   const { loaded, watchFiles } = await readAppConfig(appRoot)
-  if (!loaded || typeof loaded !== "object") {
-    throw new Error(
-      `[adaptv] ${APP_CONFIG_BASENAME} must \`export default defineApp({ ... })\``,
-    )
-  }
+  //the CLI's own guard too, so both faces refuse the same file in the same words
+  const notAConfig = defaultExportError(loaded)
+  if (notAConfig) throw new Error(`[adaptv] ${notAConfig}`)
   //The boundary. Nothing type-checks the config before it is evaluated, so a
   //value the type forbids arrives here anyway — and every consumer past this
   //line reads it as if it were right. Refuse it here, naming the key, or the
