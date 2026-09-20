@@ -1,4 +1,4 @@
-import { useDevice } from "@arrzdev/adaptv/hooks"
+import { useDevice, useLocale } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import {
   getOS,
@@ -19,7 +19,8 @@ export const Route = createFileRoute("/_providers/lab/device")({
 })
 
 function LabDevicePage() {
-  const { info, id, languageTag, loading } = useDevice()
+  const { info, id, loading } = useDevice()
+  const { languageTag } = useLocale()
   //utils/platform is synchronous but still browser-only, so it is read after
   //mount for the same reason the hook is: the server has no navigator
   const [platform, setPlatform] = useState<Record<string, string> | null>(
@@ -48,13 +49,13 @@ function LabDevicePage() {
         steps={[
           "Wait for the state row to read `resolved`, then read every row. Anything italic and grey is “this target cannot tell you”, which is a different fact from an empty value.",
           "Compare the platform block at the bottom with the target badge at the top of the page. They must agree.",
-          "Change the device or browser language in the OS settings, come back, and reload. getLanguageTag() must follow.",
+          "Change the device or browser language in the OS settings, come back, and reload. The language tag must follow — the full record, and whether the change arrives live, is /lab/locale.",
           "On native, confirm model and manufacturer are real strings — if they are null on a native build, the Device plugin is not registered.",
         ]}
         expected={{
           web: {
             verdict: "partial",
-            note: "os, osVersion and the language tag resolve. model, manufacturer, isVirtual, webViewVersion and the device id are all null — no browser reports them, and manufacturing an id would mean fingerprinting the user.",
+            note: "os and osVersion resolve. model, manufacturer, isVirtual, webViewVersion and the device id are all null — no browser reports them, and manufacturing an id would mean fingerprinting the user.",
           },
           pwa: {
             verdict: "partial",
@@ -106,9 +107,9 @@ function LabDevicePage() {
 
       <LabSection
         title="The mutable half"
-        description="A function, not a constant — the user can change the locale in Settings and come back."
+        description="Not part of the record: the user can change the locale in Settings and come back, so it lives in its own capability. Shown here so the two pages can be compared."
       >
-        <LabRow label="getLanguageTag()" value={languageTag} />
+        <LabRow label="useLocale().languageTag" value={languageTag} />
       </LabSection>
 
       <LabSection title="Identifier">

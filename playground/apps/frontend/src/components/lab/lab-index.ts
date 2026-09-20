@@ -223,8 +223,15 @@ const CAPABILITIES = [
   {
     to: "/lab/device",
     title: "Device",
-    summary: "model / OS / locale — and every null the web can't fill",
+    summary: "model / OS / id — and every null the web can't fill",
     isNew: false,
+  },
+  {
+    to: "/lab/locale",
+    title: "Locale",
+    summary:
+      "tag, direction, clock, week, separators · live on the web, a reload on Android",
+    isNew: true,
   },
   {
     to: "/lab/orientation",
