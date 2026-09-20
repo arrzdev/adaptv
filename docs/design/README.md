@@ -39,7 +39,7 @@ When something ships, the design moves *in*. When something is only proposed, it
 | [`keyboard-signal.md`](keyboard-signal.md) | The keyboard-height signal and its cache. |
 | [`performance-boost.md`](performance-boost.md) | Compositor-promotion policy: when to promote, and when emphatically not. |
 | [`patches.md`](patches.md) | The four dependency patches, why they are verified at build time, and what to do when one stops applying. |
-| [`vite-plugin-map.md`](vite-plugin-map.md) | A map of `src/vite/` — which files are seams, which are shims, and the four places plugin order is load-bearing. |
+| [`vite-plugin-map.md`](vite-plugin-map.md) | A map of `src/vite/` — which files are seams, which are shims, and the five places plugin order is load-bearing. |
 | [`cli-contract.md`](cli-contract.md) | **The CLI output contract** — ~50 numbered rules, each from a real regression. Read before touching `bin/`. |
 | [`cli-visual.md`](cli-visual.md) | The CLI's visual design system. `bin/ui/theme.mjs` is its executable half. |
 

@@ -142,6 +142,10 @@ export function adaptvBuildStampPlugin(context: AdaptvContext): Plugin {
   return {
     name: "adaptv:build-stamp",
     apply: "build",
+    //`enforce: "post"` for the same reason as `native-bundle.ts`, which now is: a plain
+    //plugin's post hook runs before every enforced one, so without it the stamp would
+    //be written ahead of the native prune it has to come after.
+    enforce: "post",
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
     },
