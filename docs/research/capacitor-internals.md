@@ -299,8 +299,8 @@ works as long as `VITE_BACKEND_URL` points at the remote backend (not localhost,
   just never active. Don't try to make it optional; the hooks depend on it.
 - Native "installed app" uses in-memory history (`standaloneMemoryHistory` → `isInstalledApp()`),
   so the OS gesture is inert and the app owns back (Android hardware back → router).
-- Keyboard on native currently uses the web `visualViewport` path (works); `@capacitor/keyboard`
-  precision + `@capacitor/screen-orientation` lock are follow-on refinements.
+- Keyboard on native uses `@capacitor/keyboard`'s exact height when the binary carries the plugin
+  (`hasNativeKeyboard()`), and falls through to the web `visualViewport` path when it does not.
 - Edge-to-edge on Android native = `StatusBar.setOverlaysWebView(true)` + the `app:`/`p-safe`
   safe-area utilities (which now apply on native). The nav bar is native-theme territory.
 

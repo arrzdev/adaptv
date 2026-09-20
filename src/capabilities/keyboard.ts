@@ -13,6 +13,7 @@
 //sheet never lifts. A single app-lifetime subscription set up at startup is always
 //live by the time any drawer opens, so autofocus and tap-to-focus behave the same.
 import { Keyboard, KeyboardResize } from "@capacitor/keyboard"
+import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { getOS, isNativePlatform } from "#adaptv/utils/platform"
 
 export type KeyboardInfo = {
@@ -38,7 +39,7 @@ function emit(next: KeyboardInfo): void {
  * async listener registration against the immediate keyboard raise.
  */
 export function initNativeKeyboard(): void {
-  if (attached || !isNativePlatform()) return
+  if (attached || !hasNativeKeyboard()) return
   attached = true
   //don't let the OS resize/push the webview — we lift content ourselves. Resize mode
   //only exists on iOS: the Android plugin answers `setResizeMode` with
@@ -52,8 +53,8 @@ export function initNativeKeyboard(): void {
   }
   //never removed — keyboard visibility is an app-global concern, so the handles are
   //not kept and a subscriber leaving early has nothing to orphan. A registration
-  //that rejects (plugin missing from the binary, an OS error) is dropped the same
-  //way: consumers then simply never hear a keyboard event.
+  //that rejects anyway (an OS error on a binary that does carry the plugin) is
+  //dropped the same way: consumers then simply never hear a keyboard event.
   void Keyboard.addListener("keyboardWillShow", (info) =>
     emit({ isOpen: true, height: info.keyboardHeight }),
   ).catch(() => {})
@@ -62,9 +63,17 @@ export function initNativeKeyboard(): void {
   ).catch(() => {})
 }
 
-/** Whether native keyboard events (exact height + will-show/hide) are available. */
+/**
+ * Whether native keyboard events (exact height + will-show/hide) are available:
+ * a native shell whose **binary** carries the Keyboard plugin. Asked of the binary,
+ * not the bundle, because an OTA bundle can land on a binary built without it, and
+ * an Android project that failed to link adaptv's plugins ships without it too.
+ * There every Keyboard call rejects, so `true` would send consumers down a native
+ * path whose events never come; `false` sends them down the web path, which works
+ * in any WebView.
+ */
 export function hasNativeKeyboard(): boolean {
-  return isNativePlatform()
+  return isNativePlatform() && hasNativePlugin("Keyboard")
 }
 
 /**
@@ -73,10 +82,10 @@ export function hasNativeKeyboard(): boolean {
  * [autofocus] field's immediate `keyboardWillShow` is never missed. The current
  * state is delivered synchronously on subscribe when the keyboard is already up
  * (e.g. a drawer reopening under a still-raised keyboard). Returns an unsubscribe.
- * No-op off native.
+ * No-op wherever {@link hasNativeKeyboard} is false.
  */
 export function subscribeNativeKeyboard(cb: Listener): () => void {
-  if (!isNativePlatform()) return () => {}
+  if (!hasNativeKeyboard()) return () => {}
   //defensive: normally the shell has already initialised at startup
   initNativeKeyboard()
   listeners.add(cb)
