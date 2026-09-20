@@ -526,11 +526,13 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       priority: GesturePriority.SwipeableRow,
       blocksScroll: true,
       enabled,
-      //pre-empted by a higher-priority gesture — end the drag so the row springs
-      //back instead of being left mid-translate with no pointer to finish it
+      //pre-empted by a higher-priority gesture, or turned off under the
+      //finger — cancel the drag so the row springs back instead of being left
+      //mid-translate with no pointer to finish it. Cancel, not end: a finger
+      //that lost the row did not release it, so there is no verdict to take
       onLost: () => {
         capturedRef.current = false
-        handlersRef.current.endDrag()
+        handlersRef.current.cancelDrag()
       },
     })
     const captureRef = useRef(capture)
@@ -1055,9 +1057,26 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       syncTrays()
     }, [close, hasLeft, hasRight, setWillChange, syncTrays, velocity])
 
+    //the drag taken away: the row goes back to where the finger found it,
+    //open or closed, and reports nothing new (an open that settles back open
+    //is unreported by openTo; a row only dragged springs back unreported)
+    const cancelDrag = useCallback(() => {
+      if (!downRef.current) return
+      downRef.current = null
+      const side = openRef.current
+      if (side) openToRef.current(side)
+      else close()
+      syncTrays()
+    }, [close, syncTrays])
+
     //stable handler refs for the imperative touch listeners
-    const handlersRef = useRef({ beginDrag, dragMove, endDrag })
-    handlersRef.current = { beginDrag, dragMove, endDrag }
+    const handlersRef = useRef({
+      beginDrag,
+      dragMove,
+      endDrag,
+      cancelDrag,
+    })
+    handlersRef.current = { beginDrag, dragMove, endDrag, cancelDrag }
 
     /* ---- touch (passive:false on move so we can block vertical scroll) --- */
 

@@ -1765,6 +1765,97 @@ describe("Swipeable · one finger owns the row", () => {
   })
 })
 
+/* ---- the drag taken away ------------------------------------------------- */
+
+describe("Swipeable · a drag taken away", () => {
+  //a finger that lost the row did not release it: there is no verdict to
+  //take. The row goes back to where the finger found it and reports nothing
+
+  afterEach(() => {
+    gestureController.unregister("test:higher")
+  })
+
+  it("turned off mid-swipe past half-way, the row closes and never reports an open", () => {
+    const onOpen = vi.fn()
+    const view = render(<Row enabled onOpen={onOpen} />)
+    const { content } = parts(view.container)
+    const { trace } = touchDrag(content, line(30, -60), { release: false })
+    expect(trace.at(-1)).toBe(-60)
+    view.rerender(<Row enabled={false} onOpen={onOpen} />)
+    expect(gestureController.getCaptured()).toBeNull()
+    settle()
+    expect(tx(content)).toBe(0)
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it("pre-empted past half-way, the row springs back closed, not open", () => {
+    const onOpen = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} />)
+    const { content } = parts(container)
+    const { trace } = touchDrag(content, line(30, -60), { release: false })
+    expect(trace.at(-1)).toBe(-60)
+    act(() => {
+      gestureController.requestCapture("test:higher", 400)
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(onOpen).not.toHaveBeenCalled()
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+  })
+
+  it("pre-empted while dragging an open row shut, the row springs back open and reports nothing new", () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} onClose={onClose} />)
+    const { content } = parts(container)
+    slowDrag(content, -60)
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    //a touch drag toward closed, not released: past half-way back
+    act(() => {
+      fireEvent.pointerDown(content, {
+        pointerId: 7,
+        pointerType: "touch",
+        button: 0,
+        clientX: ORIGIN.x,
+        clientY: ORIGIN.y,
+      })
+      content.dispatchEvent(touchEvent("touchstart", ORIGIN))
+    })
+    for (const m of line(30, 60)) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          touchEvent("touchmove", { x: ORIGIN.x + m.x, y: ORIGIN.y }),
+        )
+      })
+    }
+    expect(tx(content)).toBe(-20)
+    act(() => {
+      gestureController.requestCapture("test:higher", 400)
+    })
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    settle()
+    expect(tx(content)).toBe(-W)
+  })
+})
+
 /* ---- a row grabbed in flight --------------------------------------------- */
 
 describe("Swipeable · a row grabbed in flight", () => {
