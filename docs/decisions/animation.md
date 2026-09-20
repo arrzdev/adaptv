@@ -19,7 +19,7 @@
 | A4 | **`composite: "add"` is forbidden** in adaptv primitives — it silently disables the Chromium compositor. |
 | A5 | **Overlays are ordinary positioned elements, not the top layer.** `overlay` is Chromium-only and unrequested in WebKit — `<dialog>`/popover exits break on iOS permanently. |
 | A6 | **View Transitions are opt-in polish, never the mechanism** for gesture-driven navigation. |
-| A7 | **Ship `LazyMotion` + `m`**, not the full `motion/react` barrel. |
+| A7 | **Ship motion's engine, not its components.** adaptv animates imperatively (`JSAnimation` on a style, `animate()` on a motion value): no `motion`, no `m`, no `LazyMotion`, and no motion context around app content. *Amended 2026-09-14; it was "`LazyMotion` + `m`" (§3.1).* |
 
 ---
 
@@ -164,7 +164,7 @@ and visual jumps."* That is roughly the whole argument for renting rather than b
 - **`acceleratedValues` means "hand off to WAAPI", not "guaranteed compositor."** `clipPath` is on
   motion's list but is paint-worklet-gated in Chromium (§1).
 
-### 3.1 🔒 Bundle: `LazyMotion` + `m`, not the full barrel
+### 3.1 🔒 Bundle: motion's engine, not its components
 
 | Path | min+gzip |
 |---|---|
@@ -174,8 +174,97 @@ and visual jumps."* That is roughly the whole argument for renting rather than b
 | `+ domMax` (adds drag/pan + layout) | +25kb |
 | `animate()` mini (`motion/mini`) | 2.3kb |
 
-The `m`/`LazyMotion` path is alive in v12 (`motion/react-m` is a live export). For a framework that
-ships to a WebView on low-end Android, the ~45kb difference is worth the ergonomic cost.
+**Amended 2026-09-14.** This section first locked `LazyMotion` + `m`, and that shipped (`Button` and
+`PullToRefresh` rendering `m` under a `LazyMotion` they owned, with `domMin`). It fixed the bytes and
+broke the app, because both components wrap the app's content and a provider there reaches it:
+
+- **Re-renders.** `LazyMotion` hands its subtree a new context object on every render, and every
+  motion element reads that context, so each app `motion`/`m` element inside re-renders whenever the
+  wrapper does, even though React was handed the same element. `PullToRefresh` renders on every
+  pointer frame of a pull, and an app row with `layout` re-snapshots on each of them: 10 wrapper
+  renders took one app `layout` row from 1 render to 11 (1 → 1 on the full component).
+- **Override.** The provider replaces the app's own `LazyMotion` for everything inside. With async
+  `features`, the app's `m` elements got adaptv's renderer before the app's features loaded (they
+  animated when the app said not yet), and did not pick up `hover` when the features did arrive,
+  until something else re-rendered them. The app's `strict` was silently off inside. `LazyContext` is
+  not exported, so a component cannot re-provide the outer value.
+
+So the rule is now about context, not only bytes: **an adaptv component that wraps app content
+installs no motion context around it.** In practice adaptv ships no motion component or provider at
+all.
+
+**What shipped.** `src/hooks/use-animated-style.ts` drives an element's inline style from an effect
+with motion's own `JSAnimation` (the generators and frameloop a `motion.div` ends up running), and
+renders nothing. It copies the component rules the two call sites depended on: a first target jumps
+(`initial={false}`); only a changed *target* starts an animation, with that render's transition; a
+zero duration lands on the next frame; the completion callback fires when a render's animations have
+all landed and never for an interrupted batch (`onAnimationComplete`, which is the only way
+`PullToRefresh` leaves `closing`); an interrupted animation is sampled at the moment it stops. An
+animation cut short by an app's `<Activity>` hiding the component (React disconnects its effects and
+keeps it mounted) restarts from where it stopped when shown, and still completes, as a motion
+component re-animates; without that, a hidden close left `PullToRefresh` in `closing`. One
+compositor detail is copied on purpose: a spring on `opacity` is baked into an easing over a 0–100
+range the way motion's WAAPI path bakes it, because fed raw, the pull's px/s release velocity flings
+the fading spinner back up. `Button`'s width row, and `PullToRefresh`'s content layer and spinner,
+use it. The content layer is now one element whether lifted or not, so a pull no longer remounts the
+app's content (it did on the full component too, which swapped a `motion.div` for a `div`).
+
+Measured on the playground (vite builds, byte-deterministic, sourcemap attribution; raw / gzip / brotli
+KB), the shell's initial JS on every target:
+
+| | web SSR shell, SPA `index.html` | native `index.html` | motion's share, raw |
+|---|---|---|---|
+| full `motion` component (before A7) | 735.4 / 242.6 / 212.3 | 734.2 / 242.2 / 212.0 | 118.1 |
+| `m` + component-owned `LazyMotion` | 686.4 / 228.7 / 200.1 | 685.1 / 228.3 / 199.8 | 68.7 |
+| **`JSAnimation` via `useAnimatedStyle`** | **637.6 / 213.0 / 185.8** | **636.4 / 212.6 / 185.8** | **18.3** |
+
+A served SSR route (`/settings`, `/lab/button`, `/lab/pull-to-refresh`) gains less, about −60 KB raw
+against the full component and −11 KB against `m`, because it also preloads the drawer's chunk, whose
+`animate()` carries motion's visual element and sequence code (62 KB of motion there).
+
+Frame by frame on chromium and webkit (`playground/e2e/button-width-tween.spec.ts`, and the pull
+specs sampled per frame), the width tween and the pull's release spring, refresh snap and close trace
+the full component's curves: within 2 px per frame on the 62 px tween, 0.2 px on the release spring
+and 0.8 px on the refresh close. The refresh snap's first frame starts a frame late in some runs, on
+`main` as on this path. What is not copied: a key removed from the targets leaves its batch, which
+still completes, where motion animates the value back to its base and interrupts the batch (Button
+drops its width only when its label measures zero); nothing runs on the compositor (the spinner's
+opacity did); a spring with no explicit `velocity` starts at rest instead of inheriting the interrupted
+value's; a positional value starts on the frame it is set instead of after motion measures it; and an
+app's `<MotionConfig>` does not reach adaptv's layers, which follow the OS reduced-motion preference.
+
+**Rejected, with the imperative options measured as lone tree-shaken entries (min, raw / gzip):**
+
+- **`m` + component-owned `LazyMotion`** (108.5 / 30.0 KB): the two findings above.
+- **One shell-level `LazyMotion` with `features={() => import(…)}`** (the "~4.6kb initial" row): it
+  measured 656.0 / 219.3 / 191.7 KB initial, but the deferred chunk (32.8 / 13.1 / 11.9 KB) loads on
+  every boot because `Button` is in the shell, an `m` outside the shell never animates, a late chunk
+  parks `PullToRefresh` in `closing`, and it is still a provider around app content.
+- **`animate()` from `motion/react` on the element** (96.8 / 26.4 KB): the full visual element and
+  sequence support for three numeric styles.
+- **`motionValue` + `animateMotionValue`** (53.7 / 15.4 KB): builds motion's options exactly, but
+  drags in the WAAPI and keyframe-resolver path a value with no element never uses.
+- **`animate` from `motion/mini`** (13.3 / 4.0 KB): WAAPI only. A spring there is a `linear()` easing,
+  which WebKit only has from Safari 17.2 (below it, motion falls back to a 300 ms ease-out on the iOS
+  15 floor), and its velocity is relative to a 0–100 range, so the content's release spring would not
+  be the same curve.
+- **`JSAnimation` + `useAnimatedStyle`** (34.3 / 10.2 KB with `motionValue`, 30.1 / 9.3 KB without):
+  shipped, without `motionValue`.
+
+`strict` is not set anywhere: an app's own `motion` components (the playground's `layout` lists) must
+keep working, and inside adaptv's wrappers the app's own `strict` now applies again.
+
+**The drawer.** `drawer-engine.tsx` (`useMotionValue`) and `drawer-motion.ts` (`animate` on a motion
+value) are imperative and wrap no app content in motion context, so they are within this rule.
+
+The guard is three-part. Biome's `noRestrictedImports` refuses `motion`, `m`, `LazyMotion`,
+`MotionConfig`, `AnimatePresence` and `LayoutGroup` from `motion/react`, and all of
+`motion/react-client`, `motion/react-m` and `framer-motion`, in `src/`.
+`src/components/motion-surface.test.ts` bundles the package's browser entries and fails if a motion
+component, `LazyMotion`, `LazyContext`/`MotionContext`, projection, drag or any feature bundle survives
+tree-shaking. `src/components/app-motion.test.tsx` holds the app-facing behaviour: an app `layout` row
+inside either wrapper renders once across wrapper renders, an app's `strict` still throws inside, and
+an app's async features reach elements inside when they load and not before.
 
 ---
 
@@ -271,7 +360,7 @@ The Navigation API is now Baseline (**Safari 26.2**, 2025-12-12; **Firefox 147**
 - [ ] `Drawer`/`Sheet`/`Modal` use no `<dialog>`, no Popover top layer, no `overlay`.
 - [ ] Exit animations verified on **iOS 18** (the `display`-transition floor) and in Firefox (where
       they must degrade to an instant hide, not a broken state).
-- [ ] `LazyMotion` + `m` in the shipped bundle; the full `motion/react` barrel is not imported.
+- [x] motion's engine in the shipped bundle and none of its components or providers; no adaptv component installs motion context around app content (§3.1, amended 2026-09-14; guarded by `src/components/motion-surface.test.ts` and `src/components/app-motion.test.tsx`).
 - [ ] Edge-swipe remains pointer-driven; no dependency on the Navigation API or View Transitions.
 
 ---
