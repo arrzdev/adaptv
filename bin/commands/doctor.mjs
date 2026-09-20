@@ -14,13 +14,34 @@ import { ADAPTV_ROOT, loadAdaptvModule } from "../lib/load-ts.mjs"
 import { ADAPTV_DIR, capCmd, iosEnv, nativeDir } from "../lib/native.mjs"
 import { locatePackage, ownNativeModules } from "../lib/own-modules.mjs"
 import {
-  check,
   detail,
+  check as drawRow,
   header,
   log,
+  record,
+  recordError,
   section,
   spacer,
 } from "../lib/render.mjs"
+
+/**
+ * The labels of every row that failed the run: a required row that came back red, and every
+ * error the project checks raised. Per process, like the renderer's journal it mirrors.
+ *
+ * A red row used to be on the page and in `steps` while the run exited 0 with `ok: true`,
+ * because only `fail()` marks a run failed and doctor draws its rows with `check()`. A
+ * script asking "can this machine build my app?" got yes from a report that said no, against
+ * R46 (a failing run's document carries `ok:false` and a structured `error`) and B22's
+ * "fail loudly" on the WKAppBoundDomains trap. `fail()` itself is not the way through: it
+ * prints its own `✖`, and the row already printed one (R2).
+ */
+const failed = []
+
+/** `check()`, remembering a red required row. An optional row's absence is fine by definition. */
+function check(ok, label, note = "", { optional = false } = {}) {
+  drawRow(ok, label, note, { optional })
+  if (!ok && !optional) failed.push(label)
+}
 
 /** Run a tool for its version. Answers, rather than printing, so a caller that reports on
  * several tools as ONE row can still ask about each of them. */
@@ -87,7 +108,8 @@ async function checkOwnInstall(appRoot) {
     verbose: process.env.ADAPTV_VERBOSE === "1",
   })
   check(report.ok, report.label, report.note)
-  for (const line of [...report.notices, ...report.detail]) detail(line)
+  for (const line of [...report.notices, ...report.detail])
+    detail(line, { failure: !report.ok })
 }
 
 /** Project-level checks (the silent failures), from src/native/doctor.ts. */
@@ -113,7 +135,24 @@ async function runProjectChecks(appRoot) {
   if (diagnostics.length === 0) {
     check(true, "no issues found")
   } else {
-    for (const l of formatDiagnostics(diagnostics).split("\n")) detail(l)
+    //One diagnostic at a time, so an error's lines are marked a failure and survive
+    //'--quiet' while a warning's stay narration. The page is the same text the whole list
+    //formats to: the blank line between two findings belongs to the one below it.
+    diagnostics.forEach((d, i) => {
+      const failure = d.severity === "error"
+      if (i > 0) detail("", { failure })
+      for (const l of formatDiagnostics([d]).split("\n"))
+        detail(l, { failure })
+    })
+  }
+  //The page draws these as dim lines, so `check()` never saw them and `--json` had none of
+  //them. Each lands where its glyph already says it belongs: an error (`✖`) is a failed
+  //step and fails the run, a warning (`!`) is a notice (R5) and does not.
+  for (const d of diagnostics) {
+    if (d.severity === "error") {
+      record("steps", { label: d.title, ok: false, optional: false })
+      failed.push(d.title)
+    } else record("notices", d.title)
   }
 }
 
@@ -199,4 +238,17 @@ export async function doctor(appRoot) {
   await runProjectChecks(appRoot)
   //no "doctor complete" footer: every row above already reported itself (R18).
   spacer()
+  //The report went on past every red row, because a dev runs doctor to see ALL of what is
+  //wrong. Only now does the run fail, and it adds nothing to the page: each failure already
+  //has its `✖`. The labels are the rows' own text, already on the page: adaptv's literals
+  //and the framework's diagnostic titles, which bin/lib/opacity.test.mjs scans for engine
+  //names. Nothing from a tool reaches them, so there is nothing here to filter.
+  if (failed.length > 0) {
+    recordError({
+      kind: "check-failed",
+      labels: failed,
+      message: `${failed.length} ${failed.length === 1 ? "check" : "checks"} failed: ${failed.join(", ")}`,
+    })
+    process.exitCode = 1
+  }
 }
