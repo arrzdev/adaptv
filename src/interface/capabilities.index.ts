@@ -44,6 +44,7 @@ export * from "../capabilities/locale"
 export * from "../capabilities/motion"
 export * from "../capabilities/native-theme"
 export * from "../capabilities/network"
+export * from "../capabilities/notifications"
 export {
   getScreenOrientation,
   lockScreenOrientation,

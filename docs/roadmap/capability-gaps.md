@@ -57,7 +57,11 @@ The row that said the web tier is "nothing beyond `window.confirm`" now has a nu
 the iOS simulator and on the Android emulator that is one string, two fixed buttons, no title and no
 destructive styling. See O22.
 
-### 2. Notifications (local + push)
+### 2. Notifications (~~local~~ + push)
+
+**The local half shipped 2026-09-02** (`src/capabilities/notifications.ts` over the official
+`@capacitor/local-notifications`, with the web tier on the service worker registration adaptv
+already owns). What remains here is push, which owes a credentials story of its own.
 
 `@capacitor/local-notifications` / `@capacitor/push-notifications`; on web the Notification and Push
 APIs **through the service worker adaptv already owns end to end** (`src/sw/`). The web tier is
