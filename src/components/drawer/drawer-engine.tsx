@@ -490,11 +490,26 @@ export function DrawerEngine({
     }
   }, [open])
 
+  //Whether this drawer can have dimmed the chrome at all: only a backdrop dims it. Mirrored
+  //after every commit because React detaches the ref before the unmount cleanup below reads it.
+  const hadBackdropRef = useRef(false)
+  useLayoutEffect(() => {
+    hadBackdropRef.current = backdropRef.current !== null
+  })
+
   useEffect(() => {
     return () => {
       if (unmountTimerRef.current) clearTimeout(unmountTimerRef.current)
       if (floorRetractTimerRef.current) {
         clearTimeout(floorRetractTimerRef.current)
+      }
+      //unmounted while still open, so no close ever ran to hand the chrome back: the
+      //page left under the sheet (a browser Back, or Safari's edge swipe, with it
+      //open). Without this the toolbar kept the dim on the next page. A drawer whose
+      //`open` has already turned false has restored the tint or is restoring it, and
+      //one with no backdrop never dimmed it; neither may undo another drawer's dim.
+      if (openRef.current && hadBackdropRef.current) {
+        clearDrawerChromeTint()
       }
     }
   }, [])
