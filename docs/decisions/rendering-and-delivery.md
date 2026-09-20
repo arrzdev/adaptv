@@ -172,7 +172,7 @@ favicon, an install prompt, an HTTP host — keys off `target`.
 **Fixed, and it paid for itself in bytes.** The native lineage moved to `.adaptv/web` (an intermediate
 the native project consumes, not something a host deploys), the static-host emitter is registered only
 on `target: "web"`, and a mirror-image `adaptvNativeBundlePlugin` drops what a WebView can never read:
-the icon art, `.vite/manifest.json`, `registerSW`'s body (`virtual:adaptv/pwa-register` emits a stub when
+the icon art, `registerSW`'s body (`virtual:adaptv/pwa-register` emits a stub when
 `sw.enabled` is false) and the manifest's `icons` array. Head links and manifest entries are suppressed
 at their source, not merely deleted — a dangling `<link rel="icon">` is a burst of 404s on every cold
 launch. **4.5 MB → 3.1 MB on the playground**, 1.3 MB of it icon art. → `docs/design/lifecycle.md §3.2a`
