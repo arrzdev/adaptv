@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import {
-  androidDevices,
+  androidSerialForTarget,
   capConfigFromEnv,
   nativeDir,
   updateCapacitorEnv,
@@ -176,58 +176,67 @@ export function healDevAtsLeftover(appRoot) {
   return { healed: true }
 }
 
-/** Set the `adb reverse tcp:<port>` mapping on every connected device. */
-function setAndroidReverse(serials, port, env) {
-  for (const s of serials) {
-    // `-s <serial>` explicitly: a bare `adb reverse` throws with >1 emulator running.
-    spawnSync("adb", ["-s", s, "reverse", `tcp:${port}`, `tcp:${port}`], {
-      env,
-    })
-  }
-}
-
 /**
- * KEEP an `adb reverse tcp:<port>` mapping alive for the whole run so an emulator's
- * `localhost:<port>` always reaches the host dev server. Setting it once isn't enough:
- * the mapping is global to the adb server, so ANY other `adaptv dev` tearing down (even
- * a stale/orphaned one) runs `adb reverse --remove tcp:<port>` and silently kills the
- * route for THIS run too — the app keeps rendering but stops hot-reloading. So we set
- * it, then re-assert it on a short interval (only re-adding when it's actually missing,
- * so it's cheap), and the Android watchdog reconnects HMR once the route is back.
- * Returns a revert fn that stops the interval and removes the mapping.
+ * KEEP an `adb reverse tcp:<port>` mapping alive on the run's target device for the whole run,
+ * so the emulator's `localhost:<port>` always reaches the host dev server. Setting it once
+ * isn't enough: `cap run` resets the device's reverse table while installing, and anything
+ * else that runs `adb reverse --remove tcp:<port>` on the device silently kills the route —
+ * the app keeps rendering but stops hot-reloading. So we set it, then re-assert it on a short
+ * interval (only re-adding when it's actually missing, so it's cheap), and the Android
+ * watchdog reconnects HMR once the route is back.
+ *
+ * ONE device, the target, resolved to its serial by `androidSerialForTarget` with `exact`: the
+ * serial itself or the emulator whose AVD name it is, never merely the only device connected.
+ * Every connected device is not the run's: another session's emulator on the same
+ * adb server has its own reverse table, and a mapping for this port there belongs to whatever
+ * run put it there — which is what setting it everywhere and removing it everywhere on
+ * teardown used to break.
+ *
+ * A target that does not resolve yet touches nothing and is retried on each tick: both
+ * callers run after the target was launched, so it is a moment (a console that has not
+ * answered its AVD name), and guessing — every connected device — is the bug itself.
+ *
+ * Returns a revert fn that stops the interval and removes the mapping from the one device it
+ * was set on, if any.
  */
 export async function androidReverse(
   port,
+  target,
   env,
   { intervalMs = 4000 } = {},
 ) {
-  const serials = await androidDevices(env)
-  setAndroidReverse(serials, port, env)
-  const ensure = () => {
-    for (const s of serials) {
-      const r = spawnSync("adb", ["-s", s, "reverse", "--list"], {
-        env,
-        encoding: "utf8",
-      })
-      if (!(r.stdout ?? "").includes(`tcp:${port}`)) {
-        spawnSync(
-          "adb",
-          ["-s", s, "reverse", `tcp:${port}`, `tcp:${port}`],
-          {
-            env,
-          },
-        )
-      }
+  const adb = (serial, ...args) =>
+    // `-s <serial>` explicitly: a bare `adb reverse` throws with >1 emulator running.
+    spawnSync("adb", ["-s", serial, "reverse", ...args], {
+      env,
+      encoding: "utf8",
+    })
+  const map = (serial) => adb(serial, `tcp:${port}`, `tcp:${port}`)
+  let serial = await androidSerialForTarget(target, env, { exact: true })
+  if (serial) map(serial)
+  let stopped = false
+  let resolving = false
+  const ensure = async () => {
+    if (serial) {
+      if (!(adb(serial, "--list").stdout ?? "").includes(`tcp:${port}`))
+        map(serial)
+      return
     }
+    if (resolving) return
+    resolving = true
+    const found = await androidSerialForTarget(target, env, {
+      exact: true,
+    })
+    resolving = false
+    if (!found || stopped) return
+    serial = found
+    map(serial)
   }
   const timer = setInterval(ensure, intervalMs)
   timer.unref?.() // don't keep the process alive on its own
   return () => {
+    stopped = true
     clearInterval(timer)
-    for (const s of serials) {
-      spawnSync("adb", ["-s", s, "reverse", "--remove", `tcp:${port}`], {
-        env,
-      })
-    }
+    if (serial) adb(serial, "--remove", `tcp:${port}`)
   }
 }

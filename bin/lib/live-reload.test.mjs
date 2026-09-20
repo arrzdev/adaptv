@@ -33,6 +33,8 @@ import { installOfflinePage, OFFLINE_PAGE } from "./offline-page.mjs"
 const adb = vi.hoisted(() => ({
   /** what `adb devices` prints */
   devices: "",
+  /** serial → AVD name, what `adb -s <serial> emu avd name` prints */
+  avd: /** @type {Record<string, string>} */ ({}),
   /** serial → what `adb -s <serial> reverse --list` prints */
   reverses: /** @type {Record<string, string>} */ ({}),
   /** @type {string[][]} every adb call, as argv */
@@ -50,9 +52,12 @@ vi.mock("node:child_process", async (importOriginal) => {
       const stdout = new EventEmitter()
       stdout.setEncoding = () => {}
       child.stdout = stdout
+      let out = ""
+      if (args[0] === "devices") out = adb.devices
+      if (args[2] === "emu" && args[3] === "avd" && adb.avd[args[1]])
+        out = `${adb.avd[args[1]]}\nOK\n`
       queueMicrotask(() => {
-        if (args[0] === "devices" && adb.devices)
-          stdout.emit("data", adb.devices)
+        if (out) stdout.emit("data", out)
         child.emit("close", 0)
       })
       return child
@@ -410,13 +415,19 @@ describe.runIf(onMac)("the dev plist patches", () => {
 
 /*
  * The Android half of live-reload has no plist: an emulator reaches the dev server as
- * `localhost` through `adb reverse`, which `androidReverse` sets on every attached device and
- * then keeps asserting, because any other `adaptv dev` tearing down removes the same global
- * mapping (live-reload.mjs `androidReverse`).
+ * `localhost` through `adb reverse`, which `androidReverse` sets on the run's target device and
+ * then keeps asserting, because `cap run` resets it and anything else on that device can remove
+ * it (live-reload.mjs `androidReverse`). Another session's emulator
+ * attached to the same adb server is not the run's to touch: its reverse table may carry a
+ * mapping for this very port that another run relies on.
  */
+const TWO_EMULATORS =
+  "List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n"
+
 describe("the emulator's route to the dev server", () => {
   beforeEach(() => {
-    adb.devices = ""
+    adb.devices = TWO_EMULATORS
+    adb.avd = { "emulator-5554": "Pixel_7", "emulator-5556": "Pixel_10" }
     adb.reverses = {}
     adb.calls = []
     vi.useFakeTimers()
@@ -427,8 +438,42 @@ describe("the emulator's route to the dev server", () => {
 
   const reverseCalls = () =>
     adb.calls.filter((a) => a[0] === "-s" && a[2] === "reverse")
+  /** the run's keeper for port 43880, re-asserting every 4 s, aimed at `target` */
+  const keepRoute = (target) =>
+    androidReverse(43880, target, {}, { intervalMs: 4000 })
+  /** the reverse calls that CHANGE a device's table: a set or a remove, never a `--list` */
+  const writes = () => reverseCalls().filter((a) => a[3] !== "--list")
 
-  it("maps the port on every ready device, each by serial, and skips one that is not ready", async () => {
+  it("sets, re-asserts and removes the mapping only on the run's target, never on another connected device", async () => {
+    const revert = await keepRoute("Pixel_10")
+    const set = writes()
+
+    //both tables lost the mapping (`cap run` on the target, anything at all on the other)
+    adb.reverses = { "emulator-5554": "", "emulator-5556": "" }
+    await vi.advanceTimersByTimeAsync(4000)
+    const reasserted = writes().slice(set.length)
+
+    const from = adb.calls.length
+    revert()
+    const removed = adb.calls.slice(from).filter((a) => a[2] === "reverse")
+
+    expect({ set, reasserted, removed }).toEqual({
+      set: [["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"]],
+      reasserted: [
+        ["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"],
+      ],
+      removed: [
+        ["-s", "emulator-5556", "reverse", "--remove", "tcp:43880"],
+      ],
+    })
+    //Nothing the run did, a `--list` included, named the other emulator: it was asked its AVD
+    //name, to find the target, and nothing else.
+    expect(adb.calls.filter((a) => a[1] === "emulator-5554")).toEqual([
+      ["-s", "emulator-5554", "emu", "avd", "name"],
+    ])
+  })
+
+  it("takes a target that is already a serial, and skips a device that is not ready", async () => {
     adb.devices = [
       "* daemon not running; starting now at tcp:5037",
       "* daemon started successfully",
@@ -439,44 +484,98 @@ describe("the emulator's route to the dev server", () => {
       "1A2B3C4D5E\tdevice",
       "",
     ].join("\n")
-    await androidReverse(43880, {})
+    await keepRoute("emulator-5554")
     expect(reverseCalls()).toEqual([
       ["-s", "emulator-5554", "reverse", "tcp:43880", "tcp:43880"],
-      ["-s", "1A2B3C4D5E", "reverse", "tcp:43880", "tcp:43880"],
     ])
   })
 
   it("does nothing, and fails nothing, with no device attached", async () => {
     adb.devices = "List of devices attached\n\n"
-    const revert = await androidReverse(43880, {})
+    const revert = await keepRoute("Pixel_10")
     vi.advanceTimersByTime(20_000)
     revert()
     expect(reverseCalls()).toEqual([])
   })
 
-  it("re-adds only a mapping that has gone, and stops asserting after teardown", async () => {
-    adb.devices =
-      "List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n"
-    const revert = await androidReverse(43880, {}, { intervalMs: 4000 })
-    adb.calls = []
-    //another dev session's teardown removed the mapping on 5556 only
-    adb.reverses = {
-      "emulator-5554": "UsbFfs tcp:43880 tcp:43880\n",
-      "emulator-5556": "",
-    }
-    vi.advanceTimersByTime(4000)
-    expect(reverseCalls().filter((a) => a[3] !== "--list")).toEqual([
+  //The call sites run after the target was launched, so an unresolvable target is a moment (an
+  //emulator console not answering its name yet), not a state. Guessing would be the bug: every
+  //connected device is exactly the set that includes other sessions' emulators.
+  it("touches no device while the target cannot be resolved, and maps it once it can", async () => {
+    adb.avd = { "emulator-5554": "Pixel_7" }
+    const revert = await keepRoute("Pixel_10")
+    //the tick is async while it resolves, so the clock is advanced with its promises
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(reverseCalls()).toEqual([])
+
+    adb.avd["emulator-5556"] = "Pixel_10"
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(writes()).toEqual([
       ["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"],
     ])
 
     adb.calls = []
     revert()
-    expect(reverseCalls()).toEqual([
-      ["-s", "emulator-5554", "reverse", "--remove", "tcp:43880"],
+    expect(writes()).toEqual([
       ["-s", "emulator-5556", "reverse", "--remove", "tcp:43880"],
     ])
+  })
+
+  //A single connected device is not the target by being alone. The target that has not resolved
+  //can also drop off adb, and the one device left can be another session's emulator.
+  it("never takes the only connected device for the target unless it is the target", async () => {
+    adb.avd = { "emulator-5554": "Pixel_7" }
+    const revert = await keepRoute("Pixel_10")
+
+    //Pixel_10 goes away, and another session's emulator is all adb lists
+    adb.devices = "List of devices attached\nemulator-5554\tdevice\n"
+    await vi.advanceTimersByTimeAsync(12_000)
+    revert()
+    expect(reverseCalls()).toEqual([])
+
+    //and a run that starts with only another session's emulator attached maps nothing either
     adb.calls = []
-    vi.advanceTimersByTime(20_000)
+    const other = await keepRoute("Pixel_10")
+    await vi.advanceTimersByTimeAsync(12_000)
+    other()
+    expect(reverseCalls()).toEqual([])
+  })
+
+  it("maps the only connected device when it is the target", async () => {
+    adb.devices = "List of devices attached\nemulator-5556\tdevice\n"
+    const revert = await keepRoute("Pixel_10")
+    revert()
+    expect(writes()).toEqual([
+      ["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"],
+      ["-s", "emulator-5556", "reverse", "--remove", "tcp:43880"],
+    ])
+  })
+
+  it("removes nothing on teardown when the target never resolved", async () => {
+    adb.avd = {}
+    const revert = await keepRoute("Pixel_10")
+    await vi.advanceTimersByTimeAsync(12_000)
+    revert()
+    expect(reverseCalls()).toEqual([])
+  })
+
+  it("re-adds the mapping only when it has gone, and stops asserting after teardown", async () => {
+    const revert = await keepRoute("Pixel_10")
+    adb.calls = []
+    adb.reverses = { "emulator-5556": "UsbFfs tcp:43880 tcp:43880\n" }
+    vi.advanceTimersByTime(4000)
+    expect(writes()).toEqual([])
+
+    adb.reverses = { "emulator-5556": "" }
+    vi.advanceTimersByTime(4000)
+    expect(writes()).toEqual([
+      ["-s", "emulator-5556", "reverse", "tcp:43880", "tcp:43880"],
+    ])
+
+    adb.calls = []
+    revert()
+    adb.calls = []
+    await vi.advanceTimersByTimeAsync(20_000)
     expect(adb.calls).toEqual([])
   })
 })
