@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { createServer } from "node:http"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from "vitest"
 import {
   realClock,
   SAW_OPTIMIZE,
@@ -221,42 +228,61 @@ describe("warmDevServer — naming WHICH way it failed", () => {
  * When the pipe split them, `networkUrl` stayed null on a server that WAS bound to the
  * LAN — the address block quietly lost its `network` row, and a phone on the same Wi-Fi
  * had no URL to type.
+ *
+ * ONE fake for the whole file, written and run once before any test times anything,
+ * with the gap handed to each start through the environment. macOS scans an executable
+ * the first time it runs, and a fresh file per test paid that scan inside the test:
+ * 380–660 ms at load 10, measured, and past the 1000 ms bound below under the load a full
+ * gate puts on the machine. The bound is about adaptv not waiting for a line it never
+ * asked for, so the scan belongs outside it, not in a looser number.
  */
-const fakeRoots = []
-afterEach(async () => {
-  const { rmSync } = await import("node:fs")
-  for (const root of fakeRoots.splice(0))
-    rmSync(root, { recursive: true, force: true })
-})
+let viteRoot = null
 
-async function fakeVite(gapMs) {
+beforeAll(async () => {
   const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } =
     await import("node:fs")
   const { tmpdir } = await import("node:os")
-  const root = mkdtempSync(path.join(tmpdir(), "adaptv-devserver-"))
-  fakeRoots.push(root)
-  const bin = path.join(root, "node_modules", ".bin")
+  const { execFileSync } = await import("node:child_process")
+  viteRoot = mkdtempSync(path.join(tmpdir(), "adaptv-devserver-"))
+  const bin = path.join(viteRoot, "node_modules", ".bin")
   mkdirSync(bin, { recursive: true })
   const script = path.join(bin, "vite")
   writeFileSync(
     script,
     `#!/usr/bin/env node
+if (process.env.FAKE_VITE_WARM) process.exit(0)
 process.stdout.write("\\n  VITE v8.0.11  ready in 300 ms\\n\\n")
 process.stdout.write("  \\u279c  Local:   http://localhost:41730/\\n")
 setTimeout(() => {
   process.stdout.write("  \\u279c  Network: http://192.168.1.25:41730/\\n")
-}, ${gapMs})
+}, Number(process.env.FAKE_VITE_GAP_MS))
 setInterval(() => {}, 1000)
 `,
   )
   chmodSync(script, 0o755)
-  return root
+  //the first run, and with it the scan, happens here
+  execFileSync(script, {
+    env: { ...process.env, FAKE_VITE_WARM: "1" },
+    timeout: 10_000,
+  })
+}, 30_000)
+
+afterAll(async () => {
+  const { rmSync } = await import("node:fs")
+  if (viteRoot) rmSync(viteRoot, { recursive: true, force: true })
+})
+
+/** Start the shared fake with `gapMs` between its `Local:` and `Network:` lines. */
+function startFakeVite(gapMs, options) {
+  return startDevServer(viteRoot, {
+    ...options,
+    env: { ...options?.env, FAKE_VITE_GAP_MS: String(gapMs) },
+  })
 }
 
 describe("startDevServer — the Network line arriving in its own chunk", () => {
   it("still reports networkUrl when the banner is split across writes", async () => {
-    const root = await fakeVite(60)
-    const s = await startDevServer(root, { host: true })
+    const s = await startFakeVite(60, { host: true })
     try {
       expect(s.localUrl).toBe("http://localhost:41730")
       expect(s.networkUrl).toBe("http://192.168.1.25:41730")
@@ -268,9 +294,8 @@ describe("startDevServer — the Network line arriving in its own chunk", () => 
   it("does not wait for a Network line it never asked for", async () => {
     //`host: false` means localhost-only, so there is no second line coming and the grace
     //would be a flat delay on every `dev web`.
-    const root = await fakeVite(5000)
     const started = Date.now()
-    const s = await startDevServer(root, { host: false })
+    const s = await startFakeVite(5000, { host: false })
     try {
       expect(s.localUrl).toBe("http://localhost:41730")
       expect(s.networkUrl).toBe(null)
