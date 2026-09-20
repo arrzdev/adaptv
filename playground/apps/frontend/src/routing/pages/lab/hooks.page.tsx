@@ -1,3 +1,4 @@
+import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
 import {
   adaptvBack,
   createBootstrapGate,
@@ -31,12 +32,14 @@ const QUERIES = [
   "(min-width: 768px)",
 ]
 
+const PREFERENCES: UiThemePreference[] = ["light", "dark", "system"]
+
 //a gate is a plain object, not a hook — created once at module scope, the same
 //way an app creates its real one
 const DEMO_GATE = createBootstrapGate()
 
 function LabHooksPage() {
-  const [resolvedTheme, toggleTheme] = useTheme()
+  const theme = useTheme()
   const reduceMotion = useReducedMotion()
   const vibrate = useVibrate()
   //the raw answer is what this row is for, so it is read after hydration, not
@@ -46,7 +49,7 @@ function LabHooksPage() {
 
   //useStatusBar is wiring, not a value: it syncs the native bars to the theme
   //and returns nothing. Mounted here so the page exercises it.
-  useStatusBar(resolvedTheme)
+  useStatusBar(theme.resolved)
 
   return (
     <LabPage
@@ -56,7 +59,7 @@ function LabHooksPage() {
       <LabBrief
         what="The hooks with no capability behind them: media queries, motion preference, theme, vibration, and the bootstrap gate that holds the app at boot."
         steps={[
-          "Press Toggle and confirm the whole app changes appearance, not just this page.",
+          "Pick Dark, then Light, and confirm the whole app changes appearance, not just this page. Pick System and flip the OS appearance: the app must follow live.",
           "Read the media-query rows and compare them with the target badge at the top. (display-mode: standalone) reading FALSE inside a native build is correct and is why isInstalledApp() exists.",
           "Turn on Reduce Motion in the OS accessibility settings, come back, and check the useReducedMotion row — it must flip live, with no reload.",
           "Press each vibrate button on a real device.",
@@ -81,20 +84,31 @@ function LabHooksPage() {
             note: "Everything. Same standalone caveat.",
           },
         }}
-        wrong="The theme toggle changes this page but not the rest of the app. A media query row that never updates when the condition changes — that is a dead subscription, and every layout keyed on it will be stale. Or adaptvBack() exiting the app when there was history left to pop."
+        wrong="The theme changes this page but not the rest of the app, or System stops following the OS. A media query row that never updates when the condition changes — that is a dead subscription, and every layout keyed on it will be stale. Or adaptvBack() exiting the app when there was history left to pop."
       />
 
       <LabSection title="useTheme()">
         <LabRow
-          label="resolved appearance"
-          value={<LabBadge tone="muted">{resolvedTheme}</LabBadge>}
+          label="preference"
+          value={<LabBadge tone="muted">{theme.preference}</LabBadge>}
+        />
+        <LabRow
+          label="resolved"
+          value={<LabBadge tone="muted">{theme.resolved}</LabBadge>}
         />
         <LabActions>
-          <LabButton onClick={toggleTheme}>Toggle</LabButton>
+          {PREFERENCES.map((preference) => (
+            <LabButton
+              key={preference}
+              onClick={() => theme.setPreference(preference)}
+            >
+              {preference}
+            </LabButton>
+          ))}
         </LabActions>
         <p className="text-xs text-muted">
-          <code>useStatusBar(resolvedTheme)</code> is mounted on this page
-          — on a native build the system bar icons follow the toggle.
+          <code>useStatusBar(theme.resolved)</code> is mounted on this page
+          — on a native build the system bar icons follow it.
         </p>
       </LabSection>
 
