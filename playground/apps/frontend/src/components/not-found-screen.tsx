@@ -1,5 +1,5 @@
 import { Link, View } from "@arrzdev/adaptv/components"
-import { StressedMascot } from "@/components/illustrations/stressed-mascot"
+import stressedMascotUrl from "@/components/illustrations/stressed-mascot.svg?url"
 import { ReservedSvgSpace } from "@/components/reserved-svg-space"
 
 export function NotFoundScreen() {
@@ -18,7 +18,21 @@ export function NotFoundScreen() {
           </span>
         </span>
         <ReservedSvgSpace className="relative z-10 w-[min(72vw,18rem,52dvh)]">
-          <StressedMascot />
+          {/* A file, not an inline <svg>: this screen is a static import of
+              the root route, so inline art would ride in every page's initial
+              JS. Eager and default decoding on purpose: it is the page's
+              only art. Its box is held twice while it loads, by
+              ReservedSvgSpace's aspect ratio and by the width/height
+              attributes' own ratio. No pointer events: it is art, not a
+              picture to drag out or long-press-save, which the inline <svg>
+              never offered. */}
+          <img
+            src={stressedMascotUrl}
+            alt=""
+            width={1024}
+            height={1024}
+            className="pointer-events-none"
+          />
         </ReservedSvgSpace>
       </div>
 
