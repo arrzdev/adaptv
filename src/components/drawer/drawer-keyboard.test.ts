@@ -13,6 +13,7 @@ import {
   viewportShrinksUnderKeyboard,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
+import { resolveCompiledLength } from "#adaptv/styles/viewport-units.test-helper"
 
 //the caret repaint is a real DOM side effect irrelevant to the scroll maths under test
 vi.mock("#adaptv/hooks/use-caret-repaint", () => ({
@@ -166,6 +167,61 @@ describe("the cap the box grows into", () => {
     //`100vh` is `lvh` and both ceilings are strictly under it, so an unset variable resolves
     //the `min()` to the platform cap unchanged — the default is not a behaviour change
     expect(css).not.toContain("max-height: var(--pwa-drawer-max-height)")
+  })
+
+  it("is the box an installed app can show, on iOS 26 as on iOS 18", async () => {
+    const cap = (surface: Parameters<typeof resolveCompiledLength>[2]) =>
+      resolveCompiledLength(
+        DRAWER_CONTENT_LAYOUT_CLASS,
+        "max-height",
+        surface,
+      )
+    //iOS 26.1 installed: the page starts 62pt down the 874pt screen, below the status bar, with
+    //a top inset of 0, and 100dvh is 812 while 100vh is still 874. A 100vh cap made a tall sheet
+    //874pt tall, so its handle and title slid 62pt up under the status bar.
+    expect(
+      await cap({
+        platform: "standalone",
+        vh: 874,
+        dvh: 812,
+        insetTop: 0,
+      }),
+    ).toBe(812)
+    //iOS 18.0 installed runs under the status bar: the screen minus the 59pt inset, as before,
+    //whether 100dvh reads 852 (the playground) or 793 (a static installed page)
+    expect(
+      await cap({
+        platform: "standalone",
+        vh: 852,
+        dvh: 852,
+        insetTop: 59,
+      }),
+    ).toBe(793)
+    expect(
+      await cap({
+        platform: "standalone",
+        vh: 852,
+        dvh: 793,
+        insetTop: 59,
+      }),
+    ).toBe(793)
+    //the consumer's request still wins when it is lower
+    expect(
+      await cap({
+        platform: "standalone",
+        vh: 874,
+        dvh: 812,
+        insetTop: 0,
+        vars: { "--pwa-drawer-max-height": "60dvh" },
+      }),
+    ).toBeCloseTo(487.2)
+    //native stays on the layout viewport whatever the dynamic one does, and a tab on 97dvh
+    expect(
+      await cap({ platform: "native", vh: 852, dvh: 500, insetTop: 59 }),
+    ).toBe(793)
+    expect(
+      await cap({ platform: "web", vh: 754, dvh: 714, insetTop: 0 }),
+    ).toBeCloseTo(692.58)
   })
 
   it("keeps the cap on the content box — never on the panel, which carries the tail", () => {
