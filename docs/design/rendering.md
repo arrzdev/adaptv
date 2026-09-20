@@ -975,13 +975,10 @@ Stated because a suite's silence reads as coverage:
   suite runs Chromium and WebKit only — the branch is reached by disabling preload rather than by the
   engine that actually lacks it.
 
-#### ⚠️ OPEN: `update.spec.ts` is intermittent on Chromium — not root-caused
+#### `update.spec.ts` on Chromium — NOT REPRODUCED 2026-09-13, never root-caused
 
-Roughly 1 run in 3–5 of the full SSR config, **Chromium only**, `update.spec.ts` fails with a waiting
-worker that is never applied. It is recorded here rather than retried away, because a flaky test on the
-one path with no remote fix is itself a production-readiness problem.
-
-What is MEASURED at the moment of failure:
+Recorded with #59 (2026-08-15): roughly 1 run in 3–5 of the full SSR config failed on **Chromium only**,
+with a waiting worker that was never applied. MEASURED at that failure:
 
 | | |
 |---|---|
@@ -992,18 +989,31 @@ What is MEASURED at the moment of failure:
 | `registration.update()` then post again | no effect after 15s |
 | a further `page.reload()` | **hangs** (hit a 900s test timeout) |
 
-The last row is the interesting one. adaptv has no code that can make a navigation hang — the SSR
-handler falls back to the precached shell after 3s (§3.3) — so this reads as the origin's whole service
-worker machinery wedging under a harness that rebuilds the served output underneath a live
-registration, rather than as the launch-apply branch being wrong. **That is a reading, not a diagnosis;
-it is not root-caused.** Against it being an adaptv defect: WebKit never shows it, and the Simulator
-walk below applied a real deploy across two real cold launches.
+adaptv cannot make a navigation hang — the SSR handler falls back to the shell after 3s (§3.3) — so the
+last row points at the browser's own service worker machinery; WebKit never showed it, and the Simulator
+walk below applied a real deploy. That reading is still unrefuted: start there.
 
-Worth knowing when picking this up: `page.reload()` is **not** a cold launch. The client stays alive, so
-the browser never auto-promotes the waiting worker and adaptv's `SKIP_WAITING` is solely responsible —
-in a true relaunch the previous client is gone and the browser promotes it with no message at all. The
-spec wraps its final assertion so any recurrence prints the worker's full state instead of four
-booleans.
+On 2026-09-13 it did not recur: **0 in 15 full-suite Chromium runs**, where the old rate predicts 3 to 5
+failures, and 0 in 61 Chromium update cycles (below about 5% at 95%, if a lone cycle is as exposed as
+one inside the suite) — idle, with four of 14 cores busy, and with the page renderer (not the worker
+thread) under 6× CPU throttling. In the 17 cycles with a recorded timeline, `SKIP_WAITING` was posted
+48–62 ms after the second reload committed (282–372 ms throttled), `controllerchange` followed within
+15 ms, and the update applied 1.3 s later (1.6 s throttled). A worker left paused by Playwright's attach
+is ruled out in the two batches with protocol logs: 174 paused attaches, all resumed.
+
+Re-measure with five runs of the full config and `E2E_SW_PORT=<p> pnpm --dir playground exec playwright
+test --config playwright.sw.config.ts update.spec.ts --project=chromium --repeat-each=10`. A recurrence
+is `update.spec` failing its final poll with `waiting` installed and an activated controller in the dump
+its catch prints (`installing`, `waiting`, `active`, `controller`, cache names; `update.spec.ts:153–177`).
+In the spec, `page.reload()` is **not** a cold launch: only adaptv's `SKIP_WAITING` can promote there.
+
+Two failures look like it and are not. Both are the 30 s test timeout expiring inside `bootControlled`'s
+wait for a controller (`playground/e2e-sw/sw.ts:92`), not a stuck `waiting`:
+
+- **More than one worker.** The worker configs pin `workers: 1`; see [`e2e.md`](../guides/e2e.md) §3.4.
+- **A slow precache install.** `vite preview`'s static server, Nitro's `srvx/static`, brotli-compresses
+  every file per request at quality 11: an install takes 6–11 s of fetches idle, and on a machine busy
+  with other runs (load 15) 86 of 122 had taken 26 s when the wait gave up, 1 lost wait in 85 tests.
 
 #### 📱 Walked on the iOS Simulator — VERIFIED 2026-08-14
 
