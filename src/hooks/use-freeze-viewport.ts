@@ -70,15 +70,13 @@ function isScrollable(node: Element, checkOverflow: boolean) {
   return scrollable
 }
 
-function getScrollParent(node: Element, checkOverflow: boolean) {
+//the scroller a touch on `node` would move: the node itself when it scrolls. A
+//finger lands on the scroller's own box wherever no child covers it — its padding,
+//the gap between two rows, the margins beside a centred column on an iPad-wide
+//viewport. The scroll-parent walk this came from skipped `node`, which resolved
+//those touches to the document and cancelled a scroll the page could make.
+function getNearestScroller(node: Element, checkOverflow: boolean) {
   let current: Element | null = node
-
-  if (
-    current instanceof HTMLElement &&
-    isScrollable(current, checkOverflow)
-  ) {
-    current = current.parentElement
-  }
 
   while (current && !isScrollable(current, checkOverflow)) {
     current = current.parentElement
@@ -113,7 +111,7 @@ function lockScrollMobileSafari() {
     touchStartY = touch?.clientY ?? 0
 
     const target = event.composedPath()[0]
-    scrollable = getScrollParent(target as Element, true)
+    scrollable = getNearestScroller(target as Element, true)
 
     //a touch born in the left/right edge strip is a horizontal OS edge-swipe
     //candidate — flag it so onTouchMove won't pin it (see the carve there)
