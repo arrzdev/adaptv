@@ -40,8 +40,11 @@ import { applyPlatformStamp } from "#adaptv/utils/platform"
 
 const DOCUMENT_SHELL_CLASS = "m-0 h-dvh touch-none overscroll-none"
 
-const APP_SHELL_CLASS =
-  "box-border flex min-h-0 min-w-0 w-full flex-col overflow-hidden h-dvh app:h-screen"
+//No height here: it is a per-surface rule on `[data-app-shell]` in styles/screen.css, so a
+//consumer's height in `shellClassName` wins on every surface.
+//Exported for app-shell-height.test.ts, which checks that nothing here sets a height.
+export const APP_SHELL_CLASS =
+  "box-border flex min-h-0 min-w-0 w-full flex-col overflow-hidden"
 
 const APP_SCREEN_FRAME_CLASS =
   "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"

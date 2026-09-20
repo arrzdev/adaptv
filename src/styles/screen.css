@@ -3,7 +3,7 @@
  *
  * ## The boilerplate this removes
  *
- * The shell already gives every route a full-screen frame: `h-dvh` on the shell,
+ * The shell already gives every route a full-screen frame: a viewport height on the shell (below),
  * `flex-1 min-h-0 overflow-hidden` on the frame inside it (`shell/shell-layout.tsx`).
  * What it did NOT do was make the page's own root grow into it, because a flex child
  * does not grow unless something says so. So every page opened with
@@ -42,5 +42,39 @@
   [data-adaptv-screen] > :only-child {
     flex: 1 1 0%;
     min-height: 0;
+  }
+}
+
+/*
+ * The shell's height, per surface.
+ *
+ * It lives here rather than in the shell's classes so that a consumer's `shellClassName`
+ * height wins on every surface. Any utility beats this layer, whereas an arbitrary
+ * platform variant would outrank an `app:h-*` and survive tailwind-merge beside it.
+ *
+ * - A browser tab takes the dynamic viewport.
+ * - A native build takes the whole layout viewport (100vh), which does not move while
+ *   the viewport settles or when the Android WebView gives up height to the keyboard.
+ * - An installed web app takes the smaller of 100vh and the dynamic viewport plus the top
+ *   inset, because iOS gives it two different screens:
+ *   - iOS 18 runs the page under the status bar (inset 59), and 100dvh can read 793 of
+ *     852pt there (a static installed page did); 793 + 59 is still the whole screen.
+ *   - iOS 26 starts the page 62pt down, below the status bar, with a top inset of 0,
+ *     while 100vh stays the whole 874pt screen. A 100vh shell hangs 62pt past the
+ *     bottom, so the end of a page taller than the screen never scrolls into view.
+ *     The dynamic viewport (812) is the box.
+ *
+ * The stamp is written before first paint (`utils/platform.ts`). The rules are resolved
+ * per surface against simulator readings in `shell/app-shell-height.test.ts`.
+ */
+@layer adaptv.components {
+  [data-app-shell] {
+    height: 100dvh;
+  }
+  html[data-adaptv-platform="native"] [data-app-shell] {
+    height: 100vh;
+  }
+  html[data-adaptv-platform="standalone"] [data-app-shell] {
+    height: min(100vh, calc(100dvh + var(--adaptv-inset-top, 0px)));
   }
 }
