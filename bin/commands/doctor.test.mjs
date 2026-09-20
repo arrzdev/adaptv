@@ -159,9 +159,9 @@ afterEach(() => {
 /**
  * Run `doctor` in a fresh process's worth of modules: the renderer's journal and the output
  * mode are per process, so a case must not inherit the last one's rows.
- * @param {{ json?: boolean }} [opts]
+ * @param {{ json?: boolean, quiet?: boolean }} [opts]
  */
-async function runDoctor({ json = false } = {}) {
+async function runDoctor({ json = false, quiet = false } = {}) {
   vi.resetModules()
   const render = await import("../lib/render.mjs")
   const { doctor } = await import("./doctor.mjs")
@@ -179,7 +179,7 @@ async function runDoctor({ json = false } = {}) {
   process.exitCode = undefined
   let exitCode
   try {
-    render.setOutputMode({ json })
+    render.setOutputMode({ json, quiet })
     await doctor(app)
     render.emitJson({ command: "doctor" })
   } finally {
@@ -190,14 +190,16 @@ async function runDoctor({ json = false } = {}) {
   const stdout = out.join("").replace(ANSI, "")
   const stderr = err.join("").replace(ANSI, "")
   //Held on every page, so no case can forget it: doctor never names the engines (R8, R71)
-  //outside '--verbose', never draws a second glyph set (R26), and quotes with ' (R43).
+  //outside '--verbose', never draws a second glyph set (R26), and quotes with ' (R43). On
+  //BOTH streams: under '--json' a failure speaks on stderr.
+  const both = `${stdout}\n${stderr}`.split("\n")
   if (process.env.ADAPTV_VERBOSE !== "1")
     expect(
-      stdout.split("\n").filter((l) => namesPlumbing(l)),
+      both.filter((l) => namesPlumbing(l)),
       "doctor named the engines",
     ).toEqual([])
   expect(
-    stdout.split("\n").filter((l) => /[✔✗⚠`]/.test(l)),
+    both.filter((l) => /[✔✗⚠`]/.test(l)),
     "doctor spoke a second visual language",
   ).toEqual([])
   return {
@@ -283,7 +285,9 @@ describe("a machine with everything installed", () => {
   })
 
   it("serialises every row under '--json', with nothing else on stdout", async () => {
-    const { doc } = await runDoctor({ json: true })
+    const { doc, stderr } = await runDoctor({ json: true })
+    //Nothing failed, so nothing speaks on stderr either.
+    expect(stderr).toBe("")
     expect(doc.ok).toBe(true)
     expect(doc.command).toBe("doctor")
     expect(
@@ -302,6 +306,17 @@ describe("a machine with everything installed", () => {
       ["no issues found", true, false],
     ])
     expect(doc.steps[0].note).toBe("v26.0.0")
+    expect(doc.error).toBeUndefined()
+  })
+
+  it("prints nothing under '--quiet', because nothing failed", async () => {
+    //A passing row is the report's narration, not the run's outcome: the outcome of a
+    //machine that can build is the exit code. '--quiet' printed nothing here before the
+    //run could fail, and it still does.
+    const { stdout, stderr, exitCode } = await runDoctor({ quiet: true })
+    expect(stdout).toBe("")
+    expect(stderr).toBe("")
+    expect(exitCode).toBeUndefined()
   })
 })
 
@@ -310,7 +325,7 @@ describe("a required tool that is missing", () => {
     tools({ node: null })
     vi.stubEnv("JAVA_HOME", undefined)
     vi.stubEnv("ANDROID_HOME", path.join(sdk, "absent"))
-    const { lines } = await runDoctor()
+    const { lines, stdout, stderr, exitCode } = await runDoctor()
     //No note: a tool that did not answer has no version to show.
     expect(row(lines, "node")).toBe("  ✖ node")
     expect(row(lines, "JDK")).toBe(
@@ -319,27 +334,72 @@ describe("a required tool that is missing", () => {
     expect(row(lines, "Android SDK")).toBe(
       `  ✖ Android SDK  · ${path.join(sdk, "absent")}`,
     )
-    //Everything after the failures still ran.
+    //Everything after the failures still ran, to the last row and the closing gap.
     expect(row(lines, "no issues found")).toBe("  ✓ no issues found")
+    expect(
+      stdout.endsWith("  Project checks\n  ✓ no issues found\n\n"),
+    ).toBe(true)
+    //The run fails, and says nothing more than its rows already did: no summary, no second
+    //`✖` on stderr for a failure the page has already drawn (R2, R18).
+    expect(exitCode).toBe(1)
+    expect(stderr).toBe("")
   })
 
-  it("is recorded as failed, but neither the exit code nor '--json' ok says so", async () => {
-    //A KNOWN GAP, pinned so closing it is a decision rather than an accident, not endorsed.
-    //A red row is on the page and in `steps`, yet the run exits 0 with `ok: true`: only
-    //`fail()` marks a run failed, and doctor draws its rows with `check()`. That sits badly
-    //with R46 in docs/design/cli-contract.md, where a failing run's `--json` document carries
-    //`ok:false`, and with docs/decisions/register.md (~L1129), which says doctor should "fail
-    //loudly" on the WKAppBoundDomains trap. No decision sets doctor's exit code yet; when one
-    //does, flip this case.
+  it("fails the run, and '--json' says so with the row's name", async () => {
+    //Closes the gap #192 pinned: a red row was on the page and in `steps` while the run
+    //exited 0 with `ok: true`. R46 in docs/design/cli-contract.md has a failing run's
+    //`--json` document carry `ok:false` and a structured `error`.
     tools({ node: null })
-    const { doc, exitCode } = await runDoctor({ json: true })
+    const { doc, stderr, exitCode } = await runDoctor({ json: true })
+    //The page is gone under '--json', and stderr always speaks (R46): the red row, as drawn.
+    expect(stderr).toBe("  ✖ node\n")
     expect(doc.steps.find((s) => s.label === "node")).toEqual({
       label: "node",
       ok: false,
       optional: false,
     })
-    expect(doc.ok).toBe(true)
-    expect(exitCode).toBeUndefined()
+    expect(doc.ok).toBe(false)
+    expect(doc.error).toEqual({
+      kind: "check-failed",
+      labels: ["node"],
+      message: "1 check failed: node",
+    })
+    expect(exitCode).toBe(1)
+  })
+
+  it("keeps every red row under '--quiet', and nothing that passed", async () => {
+    //R46: a run that fails under '--quiet' with nothing on either stream "is not quiet, it
+    //is broken". Failing the run is what made that silence a failure.
+    tools({ node: null })
+    vi.stubEnv("JAVA_HOME", undefined)
+    vi.stubEnv("ANDROID_HOME", path.join(sdk, "absent"))
+    const { stdout, stderr, exitCode } = await runDoctor({ quiet: true })
+    expect(stdout).toBe(
+      [
+        "  ✖ node",
+        `  ✖ Android SDK  · ${path.join(sdk, "absent")}`,
+        "  ✖ JDK  · install Android Studio or set JAVA_HOME",
+        "",
+      ].join("\n"),
+    )
+    expect(stderr).toBe("")
+    expect(exitCode).toBe(1)
+  })
+
+  it("names every failing row, in page order, and only the failing ones", async () => {
+    tools({ node: null, adb: null })
+    vi.stubEnv("JAVA_HOME", undefined)
+    vi.stubEnv("ANDROID_HOME", path.join(sdk, "absent"))
+    const { doc, exitCode } = await runDoctor({ json: true })
+    expect(doc.error.labels).toEqual(["node", "Android SDK", "JDK"])
+    expect(doc.error.message).toBe(
+      "3 checks failed: node, Android SDK, JDK",
+    )
+    //The error and the steps are one account of the run, never two.
+    expect(doc.error.labels).toEqual(
+      doc.steps.filter((s) => !s.ok && !s.optional).map((s) => s.label),
+    )
+    expect(exitCode).toBe(1)
   })
 })
 
@@ -363,6 +423,15 @@ describe("an optional tool that is missing", () => {
     expect(row(lines, "adb")).toBe("  ○ adb")
     expect(row(lines, "xcodebuild")).toBe("  ○ xcodebuild")
     expect(lines.some((l) => l.includes("✖"))).toBe(false)
+  })
+
+  it("never fails the run", async () => {
+    tools({ adb: null, xcodebuild: null, pod: null, podResolved: null })
+    const { doc, exitCode } = await runDoctor({ json: true })
+    expect(doc.steps.filter((s) => !s.ok).length).toBeGreaterThan(3)
+    expect(doc.ok).toBe(true)
+    expect(doc.error).toBeUndefined()
+    expect(exitCode).toBeUndefined()
   })
 
   it("looks for 'pod' through a login shell before calling it absent", async () => {
@@ -443,6 +512,32 @@ describe("adaptv's own install", () => {
       "Reinstall with 'pnpm install'.",
       "Run with '--verbose' to list what is missing.",
     ])
+  })
+
+  it("fails the run under its own name, which stays opaque even under '--verbose'", async () => {
+    //`--verbose` is the one surface where the page may name the engines (R71), and the
+    //broken install's detail does. The document's error is not that surface.
+    vi.stubEnv("ADAPTV_VERBOSE", "1")
+    tools({ cap: null })
+    const { doc, exitCode } = await runDoctor({ json: true })
+    expect(doc.error.labels).toEqual(["adaptv's own install"])
+    expect(namesPlumbing(JSON.stringify(doc.error))).toBe(false)
+    expect(exitCode).toBe(1)
+  })
+
+  it("keeps its action with its row under '--quiet', and on stderr under '--json'", async () => {
+    tools({ cap: null })
+    const want = [
+      "  ✖ adaptv's own install  · incomplete",
+      "    Reinstall with 'pnpm install'.",
+      "    Run with '--verbose' to list what is missing.",
+      "",
+    ].join("\n")
+    const quiet = await runDoctor({ quiet: true })
+    expect(quiet.stdout).toBe(want)
+    expect(quiet.exitCode).toBe(1)
+    const json = await runDoctor({ json: true })
+    expect(json.stderr).toBe(want)
   })
 
   it("names what it checked only under '--verbose', the one surface allowed to", async () => {
@@ -571,6 +666,78 @@ describe("the project checks", () => {
     expect(titles).toHaveLength(3)
     //An error takes the failure glyph and a warning the notice glyph, as on every other row.
     expect(titles.map((l) => l.slice(0, 2))).toEqual(["✖ ", "✖ ", "! "])
+  })
+
+  it("fails the run on an error, and hands '--json' each finding where its glyph puts it", async () => {
+    //B22 in docs/decisions/register.md: doctor should "fail loudly" on this trap. An error
+    //(`✖`) is a failed step; a warning (`!`) is a notice (R5) and fails nothing.
+    mkdirSync(path.join(app, ".adaptv/ios/App/App"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/ios/App/App/Info.plist"),
+      INFO_PLIST,
+    )
+    mkdirSync(path.join(app, ".adaptv/android"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/android/variables.gradle"),
+      "targetSdkVersion = 34\n",
+    )
+    const [appBound, privacy, target] = await report({
+      iosInfoPlist: INFO_PLIST,
+      androidVariablesGradle: "targetSdkVersion = 34\n",
+      hasPrivacyManifest: false,
+    })
+      .then((l) => l.filter((t) => /^[✖!] /.test(t)))
+      .then((l) => l.map((t) => t.slice(2)))
+    const { doc, exitCode } = await runDoctor({ json: true })
+    expect(doc.steps.slice(-2)).toEqual([
+      { label: appBound, ok: false, optional: false },
+      { label: privacy, ok: false, optional: false },
+    ])
+    expect(doc.notices).toEqual([target])
+    expect(doc.ok).toBe(false)
+    expect(doc.error.labels).toEqual([appBound, privacy])
+    expect(exitCode).toBe(1)
+  })
+
+  it("keeps the errors' report under '--quiet' and on stderr under '--json', never the warning's", async () => {
+    mkdirSync(path.join(app, ".adaptv/ios/App/App"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/ios/App/App/Info.plist"),
+      INFO_PLIST,
+    )
+    mkdirSync(path.join(app, ".adaptv/android"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/android/variables.gradle"),
+      "targetSdkVersion = 34\n",
+    )
+    //The framework's own report for the two errors alone, as doctor's dim lines.
+    const errors = (
+      await report({ iosInfoPlist: INFO_PLIST, hasPrivacyManifest: false })
+    ).map((l) => `    ${l}\n`)
+    const want = errors.join("")
+    expect(errors.filter((l) => l.startsWith("    ✖ "))).toHaveLength(2)
+    const quiet = await runDoctor({ quiet: true })
+    expect(quiet.stdout).toBe(want)
+    expect(quiet.stdout).not.toMatch(/Android target SDK/)
+    expect(quiet.exitCode).toBe(1)
+    const json = await runDoctor({ json: true })
+    expect(json.stderr).toBe(want)
+  })
+
+  it("does not fail the run on a warning alone", async () => {
+    mkdirSync(path.join(app, ".adaptv/android"), { recursive: true })
+    writeFileSync(
+      path.join(app, ".adaptv/android/variables.gradle"),
+      "targetSdkVersion = 34\n",
+    )
+    expect((await runDoctor({ quiet: true })).stdout).toBe("")
+    const { doc, stderr, exitCode } = await runDoctor({ json: true })
+    expect(stderr).toBe("")
+    expect(doc.notices).toHaveLength(1)
+    expect(doc.notices[0]).toMatch(/^Android target SDK is 34 /)
+    expect(doc.steps.some((s) => s.label === doc.notices[0])).toBe(false)
+    expect(doc.ok).toBe(true)
+    expect(exitCode).toBeUndefined()
   })
 
   it("reads the target SDK from variables.gradle, never from app/build.gradle", async () => {
