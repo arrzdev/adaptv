@@ -1,6 +1,6 @@
 import type { SVGProps } from "react"
 
-/** Inline splash mascot artwork (from `public/creature/splash.svg`). */
+/** Inline splash mascot artwork. */
 export function SplashMascot(props: SVGProps<SVGSVGElement>) {
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: decorative mascot (aria-hidden); a <title> here is never announced
