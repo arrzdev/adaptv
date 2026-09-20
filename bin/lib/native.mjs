@@ -1739,8 +1739,10 @@ function probe(command, args, { env, encoding = "utf8" } = {}) {
  * the app is fronted INSIDE the device, and the desktop window is the dev's own to raise.
  */
 export async function ensureDeviceWindow(platform, target, env) {
+  //Before the physical-device question: on Android that costs an `adb devices` nobody reads.
+  if (platform !== "ios") return
   if (await isPhysicalTarget(platform, target, env)) return
-  if (platform === "ios") await probe("open", ["-g", "-a", "Simulator"])
+  await probe("open", ["-g", "-a", "Simulator"])
 }
 
 /**
