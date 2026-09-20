@@ -46,6 +46,7 @@ function isKnown(text: string): boolean {
 const PAGES = [
   ["/lab/share", "Share"],
   ["/lab/compose", "Compose"],
+  ["/lab/print", "Print"],
   ["/lab/clipboard", "Clipboard"],
   ["/lab/device", "Device"],
   ["/lab/locale", "Locale"],

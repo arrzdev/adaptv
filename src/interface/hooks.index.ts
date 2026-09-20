@@ -22,6 +22,7 @@ export * from "../hooks/use-layout-viewport-shrink"
 export * from "../hooks/use-media-query"
 export * from "../hooks/use-motion"
 export * from "../hooks/use-orientation"
+export * from "../hooks/use-print"
 export * from "../hooks/use-reduced-motion"
 export * from "../hooks/use-screen-lifecycle"
 //the app side of the worker⇄app channel. Its counterpart (`sendToApp`) lives in

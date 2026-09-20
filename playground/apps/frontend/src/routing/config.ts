@@ -54,6 +54,7 @@ export const routes = rootRoute([
     //capabilities and hooks
     route("/lab/share", "pages/lab/share.page.tsx"),
     route("/lab/compose", "pages/lab/compose.page.tsx"),
+    route("/lab/print", "pages/lab/print.page.tsx"),
     route("/lab/clipboard", "pages/lab/clipboard.page.tsx"),
     route("/lab/device", "pages/lab/device.page.tsx"),
     route("/lab/locale", "pages/lab/locale.page.tsx"),

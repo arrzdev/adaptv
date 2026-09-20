@@ -53,6 +53,7 @@ export {
   subscribeScreenOrientation,
   unlockScreenOrientation,
 } from "../capabilities/orientation"
+export * from "../capabilities/print"
 export {
   canShareTarget,
   type ShareOutcome,
