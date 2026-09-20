@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute, useLocation } from "@arrzdev/adaptv/router"
 import { useEffect, useState } from "react"
 import { LoginDrawer } from "@/components/auth/login-drawer"
 import { DeckFormDrawer } from "@/components/decks/deck-form-drawer"
@@ -111,6 +111,49 @@ const REAL_DECKS = [
 
 type RealDrawer = "signin" | "deck" | "task" | null
 
+//`?open-on-mount` in the URL server-renders section 8's drawer already open
+const OPEN_ON_MOUNT_PARAM = "open-on-mount"
+
+/*
+ * A drawer that is open the moment it mounts, uncontrolled, with its own trigger. Being open on
+ * the first render is the whole point: the portal target is only known after mount, so this sheet
+ * is committed inline first and then moved into the portal, which no tap-opened drawer goes
+ * through. Closing it and reopening from the trigger is the same instance taking the ordinary
+ * path, so the two can be compared on one sheet.
+ */
+function OpenOnMountDrawer({
+  onOpenChange,
+}: {
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <AppDrawer defaultOpen onOpenChange={onOpenChange}>
+      <LabActions>
+        <AppDrawer.Trigger className="clickable rounded-md bg-secondary px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border-subtle">
+          Reopen it from its trigger
+        </AppDrawer.Trigger>
+      </LabActions>
+      <AppDrawer.Portal>
+        <AppDrawer.Overlay />
+        <AppDrawer.Content>
+          <AppDrawer.Handle />
+          <AppDrawer.Shell>
+            <AppDrawer.Title>Open on mount</AppDrawer.Title>
+            <AppDrawer.Description>
+              Drag this sheet down anywhere on it, not only on the handle.
+              It must follow the finger exactly like a sheet opened by a
+              tap.
+            </AppDrawer.Description>
+            <AppDrawer.Close className="clickable mt-4 w-full rounded-md bg-secondary px-4 py-3 text-sm font-medium text-foreground">
+              Close
+            </AppDrawer.Close>
+          </AppDrawer.Shell>
+        </AppDrawer.Content>
+      </AppDrawer.Portal>
+    </AppDrawer>
+  )
+}
+
 const LINES = [
   "one",
   "two",
@@ -140,6 +183,11 @@ function LabDrawerPage() {
   const [tall, setTall] = useState<TallSheet>(null)
   const [promote, setPromote] = useState(true)
   const [realOpen, setRealOpen] = useState<RealDrawer>(null)
+  const openAtLoad = useLocation({
+    select: (location) =>
+      new URLSearchParams(location.searchStr).has(OPEN_ON_MOUNT_PARAM),
+  })
+  const [openOnMount, setOpenOnMount] = useState(openAtLoad)
   const [draft, setDraft] = useState("")
   const [log, setLog] = useState<LabLogEntry[]>([])
 
@@ -176,6 +224,7 @@ function LabDrawerPage() {
           "Open the disableDrag drawer and try to drag it. Nothing must move; the close button must still work.",
           "Open the tall drawer and read the verdict row underneath: the sheet has far more content than it is allowed, so the cap alone decides where the top edge lands. Rotate the device and re-open it — the proportion has to hold, not the pixel count.",
           "Open each of the app's own drawers. They must behave exactly like the lab ones; anything that only happens here is something a copy would have hidden.",
+          "Mount the drawer that starts open and drag the sheet down from its middle, away from the handle. It must follow your finger and close on a long drag, the same as after you close it and reopen it from its trigger.",
         ]}
         expected={{
           web: {
@@ -556,6 +605,26 @@ function LabDrawerPage() {
           defaultDeckId="deck-inbox"
           onSubmit={() => setRealOpen(null)}
         />
+      </LabSection>
+
+      <LabSection
+        title="8 · Open on mount"
+        description="A drawer that is already open when it mounts (defaultOpen, or open on the first render) is committed inline and then moved into the portal. Its sheet has to drag exactly like one opened by a tap. Load this page with ?open-on-mount to get it server-rendered open."
+      >
+        <LabActions>
+          <LabButton onClick={() => setOpenOnMount((on) => !on)}>
+            {openOnMount
+              ? "Unmount the open-on-mount drawer"
+              : "Mount a drawer that starts open"}
+          </LabButton>
+        </LabActions>
+        {openOnMount && (
+          <OpenOnMountDrawer
+            onOpenChange={(open) =>
+              note(`open-on-mount drawer ${open ? "opened" : "closed"}`)
+            }
+          />
+        )}
       </LabSection>
 
       <LabSection title="Log">
