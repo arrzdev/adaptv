@@ -3,7 +3,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
-import type { PluginOption } from "vite"
+import type { Plugin, PluginOption } from "vite"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config.ts"
 import type { ResolvedWebConfig } from "#adaptv/config/web-config.ts"
 import { resolveWebConfig } from "#adaptv/config/web-config.ts"
@@ -442,8 +442,18 @@ function deriveStartOptions(
  * stamp happen in the `adaptv()` factory. Changing a BUILD option (`render` or the
  * `router` paths) still needs a dev-server restart — those configure Start, which
  * is instantiated once at startup.
+ *
+ * A save that does not load — a syntax error, or a value `appConfigErrors` refuses
+ * — is reported in the terminal and on the page's error overlay, and the server
+ * keeps the config that last loaded. It used to be a rejection nothing handled, and
+ * a consumer's Vite runs from `node_modules`, where it installs no handler for one:
+ * Node's default ended the dev server on a half-typed line. The next save that
+ * loads full-reloads the page, which clears the overlay.
+ *
+ * A module the edited config starts importing joins the watch set, so its own
+ * edits reload too.
  */
-function adaptvConfigLoaderPlugin(context: AdaptvContext): PluginOption {
+export function adaptvConfigLoaderPlugin(context: AdaptvContext): Plugin {
   return {
     name: "adaptv:config-watcher",
     configureServer(server) {
@@ -457,8 +467,31 @@ function adaptvConfigLoaderPlugin(context: AdaptvContext): PluginOption {
         ) {
           return
         }
-        context.loaded = await loadAppConfig(context.appRoot)
-        stampGeneratedFiles(context)
+        try {
+          const loaded = await loadAppConfig(context.appRoot)
+          server.watcher.add(loaded.watchFiles)
+          context.loaded = loaded
+          stampGeneratedFiles(context)
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error)
+          server.config.logger.error(
+            `[adaptv] ${APP_CONFIG_BASENAME} did not reload, so the dev server keeps the last config that loaded:\n${message}`,
+            { timestamp: true },
+          )
+          //No stack: it is esbuild's or the loader's own frames, and the message
+          //already carries the file, the line and the key.
+          server.ws.send({
+            type: "error",
+            err: {
+              message,
+              stack: "",
+              id: configPath,
+              plugin: "adaptv:config-watcher",
+            },
+          })
+          return
+        }
         server.ws.send({ type: "full-reload" })
       }
 
