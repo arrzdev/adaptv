@@ -46,7 +46,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.clearAllMocks()
+  vi.resetAllMocks()
 })
 
 describe("keyboardCacheKey", () => {
@@ -152,6 +152,34 @@ describe("keyboardCacheKey", () => {
     expect(keyboardCacheKey(inputEl({ type: "range" }), 390)).toBeNull()
     expect(keyboardCacheKey(document.createElement("div"), 390)).toBeNull()
   })
+
+  //an inputmode that names no digit pad (`text`, `email`, `search`) is still the author's explicit
+  //choice, so it beats a numeric `type` and lands the full keyboard
+  it("keys an inputmode that is not a digit pad as text, even over a numeric type", async () => {
+    const { keyboardCacheKey } = await load()
+    expect(
+      keyboardCacheKey(inputEl({ type: "tel", inputmode: "text" }), 390),
+    ).toBe("390:text:-")
+    expect(
+      keyboardCacheKey(
+        inputEl({ type: "number", inputmode: "email" }),
+        390,
+      ),
+    ).toBe("390:text:-")
+  })
+
+  it("keys a contenteditable field by its inputmode", async () => {
+    const { keyboardCacheKey } = await load()
+    const editor = document.createElement("div")
+    editor.setAttribute("contenteditable", "true")
+    expect(keyboardCacheKey(editor, 390)).toBe("390:text:-")
+
+    editor.setAttribute("inputmode", "DECIMAL")
+    expect(keyboardCacheKey(editor, 390)).toBe("390:numeric:-")
+
+    editor.setAttribute("inputmode", "search")
+    expect(keyboardCacheKey(editor, 390)).toBe("390:text:-")
+  })
 })
 
 describe("predict / record", () => {
@@ -216,6 +244,46 @@ describe("predict / record", () => {
     recordKeyboardHeight(el, 335.7)
     expect(predictKeyboardHeight(el)).toBe(336)
   })
+
+  //a re-measurement a pixel off is noise, not a keyboard change: it neither moves the prediction
+  //nor rewrites storage, which is what makes it cheap to call on every read
+  it("drops a height within the noise floor without touching storage", async () => {
+    const {
+      KEYBOARD_HEIGHT_CACHE_STORAGE_KEY,
+      predictKeyboardHeight,
+      recordKeyboardHeight,
+    } = await load()
+    const el = inputEl({ type: "text" })
+    recordKeyboardHeight(el, 336)
+    localStorage.removeItem(KEYBOARD_HEIGHT_CACHE_STORAGE_KEY)
+
+    recordKeyboardHeight(el, 337.4)
+    expect(predictKeyboardHeight(el)).toBe(336)
+    expect(
+      localStorage.getItem(KEYBOARD_HEIGHT_CACHE_STORAGE_KEY),
+    ).toBeNull()
+
+    //two px is a real change
+    recordKeyboardHeight(el, 338)
+    expect(predictKeyboardHeight(el)).toBe(338)
+    expect(
+      localStorage.getItem(KEYBOARD_HEIGHT_CACHE_STORAGE_KEY),
+    ).toContain("338")
+  })
+
+  it("neither predicts nor records for an element that raises no keyboard", async () => {
+    const {
+      KEYBOARD_HEIGHT_CACHE_STORAGE_KEY,
+      predictKeyboardHeight,
+      recordKeyboardHeight,
+    } = await load()
+    const div = document.createElement("div")
+    recordKeyboardHeight(div, 336)
+    expect(predictKeyboardHeight(div)).toBeNull()
+    expect(
+      localStorage.getItem(KEYBOARD_HEIGHT_CACHE_STORAGE_KEY),
+    ).toBeNull()
+  })
 })
 
 describe("durable persistence", () => {
@@ -252,8 +320,13 @@ describe("durable persistence", () => {
     await Promise.resolve()
 
     const next = await load()
+    const { Preferences } = await import("@capacitor/preferences")
+    vi.mocked(Preferences.set).mockClear()
     await next.loadKeyboardHeightCache()
     expect(next.predictKeyboardHeight(inputEl({ type: "text" }))).toBe(336)
+    //a quiet boot reads the store and writes nothing back
+    await new Promise((r) => setTimeout(r, 0))
+    expect(Preferences.set).not.toHaveBeenCalled()
     //nothing leaked into web storage on the native path
     expect(
       localStorage.getItem(first.KEYBOARD_HEIGHT_CACHE_STORAGE_KEY),
@@ -265,5 +338,113 @@ describe("durable persistence", () => {
     const { loadKeyboardHeightCache, predictKeyboardHeight } = await load()
     await loadKeyboardHeightCache()
     expect(predictKeyboardHeight(inputEl({ type: "text" }))).toBeNull()
+  })
+
+  it("drops stored entries that are not a positive height, and rounds the rest", async () => {
+    localStorage.setItem(
+      "adaptv-kb-heights",
+      JSON.stringify({
+        "390:text:-": 0,
+        "390:numeric:-": -260,
+        "390:text:af": "346",
+        "844:text:-": 301.6,
+      }),
+    )
+    const { loadKeyboardHeightCache, predictKeyboardHeight } = await load()
+    await loadKeyboardHeightCache()
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    })
+    expect(predictKeyboardHeight(inputEl({ type: "text" }))).toBeNull()
+    expect(predictKeyboardHeight(inputEl({ type: "tel" }))).toBeNull()
+    expect(predictKeyboardHeight(inputEl({ type: "password" }))).toBeNull()
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 844,
+    })
+    expect(predictKeyboardHeight(inputEl({ type: "text" }))).toBe(302)
+  })
+
+  //Safari private mode, a full quota, a sandboxed iframe: the store throws, and the cache degrades to
+  //this session only instead of taking the keyboard signal down with it
+  it("keeps predicting within the session when localStorage throws", async () => {
+    const setItem = vi.fn(() => {
+      throw new DOMException("full", "QuotaExceededError")
+    })
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new DOMException("denied", "SecurityError")
+      },
+      setItem,
+    })
+    const {
+      loadKeyboardHeightCache,
+      predictKeyboardHeight,
+      recordKeyboardHeight,
+    } = await load()
+    await expect(loadKeyboardHeightCache()).resolves.toBeUndefined()
+
+    const el = inputEl({ type: "text" })
+    recordKeyboardHeight(el, 336)
+    await vi.waitFor(() => expect(setItem).toHaveBeenCalled())
+    expect(predictKeyboardHeight(el)).toBe(336)
+  })
+
+  it("keeps predicting within the session when native Preferences rejects", async () => {
+    forceNative(true)
+    const {
+      loadKeyboardHeightCache,
+      predictKeyboardHeight,
+      recordKeyboardHeight,
+    } = await load()
+    const { Preferences } = await import("@capacitor/preferences")
+    vi.mocked(Preferences.get).mockRejectedValueOnce(new Error("bridge"))
+    vi.mocked(Preferences.set).mockRejectedValueOnce(new Error("bridge"))
+    await expect(loadKeyboardHeightCache()).resolves.toBeUndefined()
+
+    const el = inputEl({ type: "text" })
+    recordKeyboardHeight(el, 336)
+    await vi.waitFor(() => expect(Preferences.set).toHaveBeenCalled())
+    expect(predictKeyboardHeight(el)).toBe(336)
+  })
+
+  //The native read is a dynamic import plus a bridge round trip, so the boot hydration is not
+  //instant. A keyboard measured while that read is in flight (an autofocused field raising the
+  //keyboard at launch) is newer than anything stored: the late load must not put last session's
+  //height back over it, and the store must end up holding the stored entries alongside it.
+  it("lets a height measured while the native store loads win over the stored one", async () => {
+    forceNative(true)
+    const mod = await load()
+    const { Preferences } = await import("@capacitor/preferences")
+    let landRead: (value: string) => void = () => {}
+    vi.mocked(Preferences.get).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          landRead = (value) => resolve({ value })
+        }),
+    )
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    })
+
+    const loading = mod.loadKeyboardHeightCache()
+    await vi.waitFor(() => expect(Preferences.get).toHaveBeenCalled())
+    mod.recordKeyboardHeight(inputEl({ type: "text" }), 300)
+    await vi.waitFor(() => expect(Preferences.set).toHaveBeenCalled())
+    landRead(JSON.stringify({ "390:text:-": 336, "390:numeric:-": 260 }))
+    await loading
+
+    expect(mod.predictKeyboardHeight(inputEl({ type: "text" }))).toBe(300)
+    expect(mod.predictKeyboardHeight(inputEl({ type: "tel" }))).toBe(260)
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(prefsStore.get("adaptv-kb-heights") ?? "{}"),
+      ).toEqual({
+        "390:text:-": 300,
+        "390:numeric:-": 260,
+      }),
+    )
   })
 })
