@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events"
+import { act } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // Ink writes whole frames, so the last frame it wrote IS the screen. That makes these
@@ -71,6 +72,33 @@ function screen(frames) {
   return lines.join("\n")
 }
 
+/**
+ * Make a change the screen reacts to, and resolve once React has finished everything it caused,
+ * the frame Ink writes included.
+ *
+ * Ink paints a region's FIRST frame and starts reading keys inside `render()`, so a test needs
+ * no wait before either. Every frame after that is painted by a React scheduler task, a
+ * macrotask after the keypress or `phase()` that caused it, and a test that reads the screen a
+ * fixed time later is betting that task has run by then. A starved worker loses the bet: under
+ * a gate at load 25 the picker read its cursor on row 7 of a list that had already moved to
+ * row 8, and answered `id-8`. Holding that one scheduler slice back 60ms fails it every time.
+ * `act()` runs the queued work itself before it returns, so a test reads a frame without
+ * waiting on a clock. Only the stop race below keeps its timers, because those gaps are what
+ * it tests.
+ */
+async function settled(change) {
+  const was = globalThis.IS_REACT_ACT_ENVIRONMENT
+  //without it React logs "not configured to support act(...)" on every change
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  try {
+    await act(async () => {
+      change()
+    })
+  } finally {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = was
+  }
+}
+
 /*
  * Ink must be imported with `CI` ABSENT, and imported fresh.
  *
@@ -139,8 +167,7 @@ describe("the live block", () => {
     //underneath them. Every step appeared twice.
     const fake = await withFakeStdout(async (f) => {
       const b = liveRows(["web", "ios"])
-      b.phase("web", "syncing")
-      await new Promise((r) => setTimeout(r, 120))
+      await settled(() => b.phase("web", "syncing"))
       b.stop()
       return f
     })
@@ -156,7 +183,8 @@ describe("the live block", () => {
     //says "alive", and the total lands on `✓ ios  … · 20.0s` when the row settles.
     const fake = await withFakeStdout(async (f) => {
       const b = liveRows(["ios"])
-      b.phase("ios", "compiling")
+      await settled(() => b.phase("ios", "compiling"))
+      //long enough for a clock to tick: the time IS the premise here, not a wait for a frame
       await new Promise((r) => setTimeout(r, 400))
       const frames = f.frames.map(strip)
       b.stop()
@@ -171,7 +199,6 @@ describe("the live block", () => {
   it("keeps one row per label, in the order given", async () => {
     const fake = await withFakeStdout(async (f) => {
       const b = liveRows(["web", "ios", "android"])
-      await new Promise((r) => setTimeout(r, 120))
       const frame = strip(f.frames.at(-1) ?? "")
       b.stop()
       return { frame }
@@ -204,10 +231,8 @@ describe("the live block", () => {
   it("updates a row in place rather than adding one", async () => {
     const fake = await withFakeStdout(async (f) => {
       const b = liveRows(["ios"])
-      b.phase("ios", "syncing")
-      await new Promise((r) => setTimeout(r, 120))
-      b.phase("ios", "compiling")
-      await new Promise((r) => setTimeout(r, 120))
+      await settled(() => b.phase("ios", "syncing"))
+      await settled(() => b.phase("ios", "compiling"))
       const frame = strip(f.frames.at(-1) ?? "")
       b.stop()
       return { frame }
@@ -233,9 +258,7 @@ describe("the device picker", () => {
         { value: "sim-a", label: "iPhone 16 Pro" },
         { value: "sim-b", label: "iPhone 16 Plus" },
       ])
-      await new Promise((r) => setTimeout(r, 120))
-      stdin.press(`${ESC}[B`) // ↓
-      await new Promise((r) => setTimeout(r, 120))
+      await settled(() => stdin.press(`${ESC}[B`)) // ↓
       stdin.press("\r") // ↵
       return { chosen: await answer, frames: f.frames }
     })
@@ -265,7 +288,6 @@ describe("the device picker", () => {
         },
         { value: "phone", label: "Andre's iPhone" },
       ])
-      await new Promise((r) => setTimeout(r, 120))
       //the frame WHILE the question is up — after the answer it is erased on purpose
       const asked = screen(f.frames)
       stdin.press("\r")
@@ -284,7 +306,6 @@ describe("the device picker", () => {
       const answer = inkSelect("Choose a ios device", [
         { value: "sim-a", label: "iPhone 16 Pro" },
       ])
-      await new Promise((r) => setTimeout(r, 120))
       stdin.press(ESC) // esc
       return { chosen: await answer, frames: f.frames }
     })
@@ -387,7 +408,6 @@ describe("the picker's window (R63)", () => {
   it("shows six rows and counts what is hidden, instead of the whole list", async () => {
     const out = await withFakeStdout(async (f, stdin) => {
       const answer = inkSelect("Choose a ios device", MANY)
-      await new Promise((r) => setTimeout(r, 120))
       const asked = screen(f.frames)
       stdin.press("\r")
       await answer
@@ -409,11 +429,8 @@ describe("the picker's window (R63)", () => {
   it("scrolls the window under the cursor and re-counts both ends", async () => {
     const out = await withFakeStdout(async (f, stdin) => {
       const answer = inkSelect("Choose a ios device", MANY)
-      await new Promise((r) => setTimeout(r, 120))
-      for (let i = 0; i < 8; i++) {
-        stdin.press(`${ESC}[B`)
-        await new Promise((r) => setTimeout(r, 40))
-      }
+      for (let i = 0; i < 8; i++)
+        await settled(() => stdin.press(`${ESC}[B`))
       const asked = screen(f.frames)
       stdin.press("\r")
       return { asked, chosen: await answer }
@@ -432,7 +449,6 @@ describe("the picker's window (R63)", () => {
     //under every yes/no adaptv asks.
     const out = await withFakeStdout(async (f, stdin) => {
       const answer = inkSelect("Choose a ios device", MANY.slice(0, 3))
-      await new Promise((r) => setTimeout(r, 120))
       const asked = screen(f.frames)
       stdin.press("\r")
       await answer
@@ -458,7 +474,6 @@ describe("the picker sits on the body grid (R65)", () => {
           hint: "iOS 26.1",
         },
       ])
-      await new Promise((r) => setTimeout(r, 120))
       const asked = screen(f.frames)
       stdin.press("\r")
       await answer
@@ -475,7 +490,6 @@ describe("the picker sits on the body grid (R65)", () => {
       const answer = inkSelect("which ios device?", [
         { value: "a", label: "iPhone 16 Pro" },
       ])
-      await new Promise((r) => setTimeout(r, 120))
       const asked = screen(f.frames)
       stdin.press("\r")
       await answer
