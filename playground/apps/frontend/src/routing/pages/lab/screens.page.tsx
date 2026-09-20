@@ -65,7 +65,7 @@ function LabScreensPage() {
           "From the 404, press Back home. It must land on the tasks screen with the app fully working.",
           "Rotate the device to landscape. The rotate guard must cover the screen with the app's own message, and rotating back must dismiss it with no flash.",
           "Check the guard's padding while it is up: its text must clear the notch and the home indicator on both edges.",
-          "Cold-start the app (fully quit it, or hard-reload) and watch the splash: the mascot must be centred in the screen below the status bar and must NOT jump downward a moment after it appears. On iOS 26 an installed app may move it up once, by up to 31 pt, in its first ~100 ms: that is the launch height following the view below the status bar. A hard-reload there still sits 31 pt low (a known case).",
+          "Cold-start the app (fully quit it, or hard-reload) and watch the splash: the mascot must be centred in the screen below the status bar and must NOT jump downward a moment after it appears. On iOS 26 an installed app may move it up once, by up to 31 pt, in its first ~100 ms: that is the launch height following the view below the status bar.",
           "Confirm the splash hands over to the app rather than lingering — and that no splash element is left in the DOM afterwards (the row below checks this).",
         ]}
         expected={{
