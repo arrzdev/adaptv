@@ -416,6 +416,10 @@ export function DrawerEngine({
   //panel is still mounted). Drives whether the open animation snaps to the hidden position or
   //resumes from the panel's current visual position.
   const freshOpenRef = useRef(false)
+  //Known only after mount (there is no `document.body` to portal into on the server). So a drawer
+  //open on its FIRST render commits its tree inline, and the next commit moves it into the portal
+  //— which React does by mounting new panel/content elements. Any effect that binds to those
+  //elements has to list this, or it stays bound to the inline ones the move just detached.
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(
     null,
   )
@@ -927,7 +931,8 @@ export function DrawerEngine({
   }, [])
 
   useLayoutEffect(() => {
-    if (!mounted) return
+    //not before the portal exists: until then the content box on screen is one it will replace
+    if (!mounted || !portalTarget) return
     //no initial measure here — the open/close animation effect below measures in the same
     //commit; a second updateMetrics() was ~4 redundant layout reads per open
 
@@ -961,7 +966,13 @@ export function DrawerEngine({
       window.visualViewport?.removeEventListener("resize", handleResize)
       contentObserver?.disconnect()
     }
-  }, [updateMetrics, mounted, driveCloseToTarget, reaimKeyboardRoom])
+  }, [
+    updateMetrics,
+    mounted,
+    portalTarget,
+    driveCloseToTarget,
+    reaimKeyboardRoom,
+  ])
 
   //vaul: drive transform directly; overlay opacity inline only while dragging. All-refs so the
   //subscriptions attach once per mount instead of detaching at every gesture commit.
@@ -1633,8 +1644,10 @@ export function DrawerEngine({
   // required: a downward pan over a scroll container makes the browser cancel pointer events to
   // scroll, so we must preventDefault to take the gesture back. Mouse keeps the handle path.
   useEffect(() => {
-    // `mounted` gates this so the listeners (re)attach when the panel element appears/changes.
-    if (!mounted) return
+    // Bound to the panel on screen, so keyed on everything that replaces it: `mounted` (each open
+    // mounts a new panel) and `portalTarget` (a drawer open on its first render is committed inline,
+    // then remounted into the portal — keyed on `mounted` alone, the sheet stayed dead to touch).
+    if (!mounted || !portalTarget) return
     const panel = panelRef.current
     if (!panel) return
 
@@ -1836,7 +1849,13 @@ export function DrawerEngine({
       panel.removeEventListener("touchend", onTouchEnd)
       panel.removeEventListener("touchcancel", onTouchCancel)
     }
-  }, [mounted, y, keyboardFlip, syncBackdropGestureAttributes])
+  }, [
+    mounted,
+    portalTarget,
+    y,
+    keyboardFlip,
+    syncBackdropGestureAttributes,
+  ])
 
   //memoized so gesture-phase work and unrelated engine renders don't re-render every consumer
   //(Overlay / Content) — all handlers above are stable useCallbacks reading refs
