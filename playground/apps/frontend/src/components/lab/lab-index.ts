@@ -270,6 +270,10 @@ const CAPABILITIES = [
     title: "Privacy screen",
     summary:
       "content kept out of the switcher and, on Android, out of captures",
+    to: "/lab/screen-reader",
+    title: "Screen reader",
+    summary:
+      "VoiceOver / TalkBack status · announce to the reader, or to a live region",
     isNew: true,
   },
   {
