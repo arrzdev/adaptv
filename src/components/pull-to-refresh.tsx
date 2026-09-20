@@ -44,7 +44,10 @@ export type PullToRefreshContextValue = {
   isRefreshing: boolean
   /** True while the indicator animates closed after refresh or release. */
   isClosing: boolean
-  /** Mirrors the root `enabled` prop — false when gestures are detached. */
+  /**
+   * Mirrors the root `enabled` prop: false once new pulls are refused. A
+   * refresh or close still under way reports through the other fields.
+   */
   isEnabled: boolean
 }
 
@@ -78,7 +81,11 @@ export interface PullToRefreshProps {
   children: ReactNode
   /** Tier 2 layout utilities on the gesture root (scroll container when omitted). */
   className?: string
-  /** When false, renders children only — no pull gestures or indicator. */
+  /**
+   * When false, new pulls are refused. A refresh or close already under way
+   * still finishes (a pull still held is closed without refreshing), and then
+   * the row renders children only — no pull gestures or indicator.
+   */
   enabled?: boolean
   /** Minimum time (ms) to hold the refreshing snap before closing. */
   stuckMinMs?: number
@@ -327,6 +334,7 @@ export const PullToRefresh = forwardRef<
   const isPulling = useRef(false)
   const phaseRef = useRef(phase)
   const pullOffsetRef = useRef(pullOffset)
+  const enabledRef = useRef(enabled)
   const refreshingStartedAtRef = useRef(0)
   //When a settled refresh may close: a time, not a timer, so a timer the app's
   //`<Activity>` cleared by hiding the row is armed again, for the time left,
@@ -337,6 +345,7 @@ export const PullToRefresh = forwardRef<
   const lastPointerSampleRef = useRef({ y: 0, t: 0 })
   phaseRef.current = phase
   pullOffsetRef.current = pullOffset
+  enabledRef.current = enabled
 
   const isDragging = phase === "pulling"
   const isRefreshing = phase === "refreshing"
@@ -411,6 +420,8 @@ export const PullToRefresh = forwardRef<
 
   const beginGesture = useCallback(
     (clientX: number, clientY: number) => {
+      //`enabled={false}` refuses a new pull; what is already showing still ends
+      if (!enabledRef.current) return false
       const p = phaseRef.current
       if (p === "refreshing") return false
       if (p === "closing") {
@@ -431,7 +442,9 @@ export const PullToRefresh = forwardRef<
 
   const processPullMove = useCallback(
     (clientX: number, clientY: number) => {
-      if (!gestureActive.current) return false
+      //defensive: the disable effect clears the gesture once it runs; this
+      //covers the moves between that commit and the effect, which no test reaches
+      if (!gestureActive.current || !enabledRef.current) return false
       const p = phaseRef.current
       if (p === "refreshing" || p === "closing") return false
 
@@ -526,6 +539,25 @@ export const PullToRefresh = forwardRef<
     closeCauseRef.current = "release"
     setPhase("closing")
   }, [clearGesture, runRefresh])
+
+  //Turned off, the row lets go of any finger: a press that has not moved yet
+  //would otherwise stay armed across the toggle and pull on the next hover. A
+  //pull already under way closes what is showing, never refreshing: touch
+  //listeners are already gone, so no release would come.
+  useEffect(() => {
+    if (enabled) return
+    const wasPulling = phaseRef.current === "pulling"
+    const offset = pullOffsetRef.current
+    clearGesture()
+    if (!wasPulling) return
+    if (offset < SPINNER_APPEAR_OFFSET) {
+      setPullOffset(0)
+      setPhase("idle")
+      return
+    }
+    closeCauseRef.current = "release"
+    setPhase("closing")
+  }, [enabled, clearGesture])
 
   const onCloseAnimationComplete = useCallback(() => {
     setPhase("idle")
@@ -714,7 +746,10 @@ export const PullToRefresh = forwardRef<
   //of those frames and overrides the app's own `LazyMotion`. The spinner goes
   //the same way so the component carries no motion context at all.
   //→ docs/decisions/animation.md §3.1
-  const liveSpinner = enabled && showSpinner
+  //Off, the row still draws until it is idle: a refresh under way settles and
+  //a close finishes, and only then do the gesture layers go.
+  const attached = enabled || phase !== "idle"
+  const liveSpinner = attached && showSpinner
   useAnimatedStyle(
     spinnerTrackRef,
     liveSpinner
@@ -731,12 +766,12 @@ export const PullToRefresh = forwardRef<
   //content lifted until the next touch
   useAnimatedStyle(
     contentRef,
-    enabled && liftContent ? { y: contentY } : null,
+    attached && liftContent ? { y: contentY } : null,
     { y: contentTransition },
     isClosing ? onCloseAnimationComplete : undefined,
   )
 
-  if (!enabled) {
+  if (!attached) {
     return (
       <PullToRefreshContext.Provider value={contextValue}>
         <div
