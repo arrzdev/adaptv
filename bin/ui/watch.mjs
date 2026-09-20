@@ -13,7 +13,7 @@
 //
 // NO JSX: `bin/` ships as raw source (`docs/decisions/register.md` O12, `files: ["bin"]`, and tsdown builds only
 // `src/`), so there is no build step to compile it. `h` is `createElement`.
-import { Box, render, Text, useApp, useInput } from "ink"
+import { Box, render, Text, useApp } from "ink"
 import { createElement as h, useEffect, useState } from "react"
 import { eraseRegion, REGION } from "./live.mjs"
 import { FRAME_MS, FRAMES, GLYPH, HMR_FLASH_MS, ROLE } from "./theme.mjs"
@@ -110,20 +110,6 @@ function Watch({ bus, keys, available }) {
     return () => clearTimeout(t)
   }, [state.changed])
 
-  //`isActive` gates the raw-mode listener, and it must: Ink throws outright when raw mode is
-  //unavailable, which is every non-TTY — a CI job, a piped run, a test. The string renderer
-  //guards the same case with `keysAvailable()`, and the keys row already says so rather than
-  //advertising keys that will never arrive.
-  useInput(
-    (input, key) => {
-      if (key.ctrl && input === "c") return bus.onQuit?.()
-      if (input === "q") return bus.onQuit?.()
-      if (input === "r") return bus.onReload?.()
-      if (input === "b") return bus.onRebuild?.()
-    },
-    { isActive: keys && available },
-  )
-
   //Registered so `exit` is reachable from the bus without the caller knowing about Ink.
   useEffect(() => {
     bus._exit = exit
@@ -145,14 +131,15 @@ function Watch({ bus, keys, available }) {
  * Mount the watch block. Returns the SAME interface `liveWatcher` in `render.mjs` returns —
  * `hmr`, `notice`, `clearNotice`, `stop` — so `runLive` cannot tell which renderer it got.
  * That is what makes the port switchable one component at a time.
- * @param {{ keys?: boolean, onReload?: () => void, onRebuild?: () => void, onQuit?: () => void }} [handlers]
+ *
+ * It draws the keys row and READS NO KEYS. The listener is the session's (`sessionKeys`, wired
+ * once by `dev`), because this block is taken down for every `r` and `b` and a listener that lives
+ * in it goes down with it: Ink hands the terminal back to cooked mode on unmount, so a `q`
+ * pressed during a reload was echoed as a literal `q` and never read, and the session ran on
+ * until a SIGINT. A reader here as well would act on every keypress twice.
+ * @param {{ keys?: boolean }} [opts]
  */
-export function inkWatcher({
-  keys = true,
-  onReload,
-  onRebuild,
-  onQuit,
-} = {}) {
+export function inkWatcher({ keys = true } = {}) {
   let listener = null
   let state = { notice: null, changed: null }
   const push = (next) => {
@@ -167,9 +154,6 @@ export function inkWatcher({
         listener = null
       }
     },
-    onReload,
-    onRebuild,
-    onQuit,
   }
   const available =
     Boolean(process.stdin.isTTY) &&
