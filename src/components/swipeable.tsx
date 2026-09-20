@@ -879,9 +879,15 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         scroller.removeEventListener("scroll", onScroll, { capture: true })
     }, [])
 
-    //close on outside pointer release
+    //close on outside pointer release. A finger dragging THIS row is never
+    //the outside pointer, however many other fingers are down: a second
+    //finger lifting beside the list, on a window listener that never sees
+    //which row it landed on, must not reach into a swipe the first finger
+    //is still running. A row being dragged is dismissed by its own
+    //release (endDrag/cancelDrag), never by someone else's
     useEffect(() => {
       const onPointerUp = (e: PointerEvent) => {
+        if (downRef.current) return
         const root = rootRef.current
         if (!root || root.contains(e.target as Node)) return
         closeRef.current()
@@ -1047,13 +1053,30 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       const node = contentRef.current
       if (!node) return
 
+      //the finger that started the drag. A phone is held in a hand: a thumb
+      //steadying it, a knuckle, a second finger resting on the glass each
+      //start a touch of their own mid-swipe, on this same event stream. The
+      //row belongs to the first finger until IT lifts — the others neither
+      //restart the gesture from their own position nor release it
+      let fingerId: number | null = null
+      const tracked = (list: TouchList) => {
+        for (let i = 0; i < list.length; i++) {
+          const t = list[i]
+          if (t && t.identifier === fingerId) return t
+        }
+        return null
+      }
+
       const onStart = (e: TouchEvent) => {
         if (!enabledRef.current) return
-        const t = e.touches[0]
-        if (t) handlersRef.current.beginDrag(t.clientX, t.clientY)
+        if (fingerId !== null && downRef.current) return
+        const t = e.changedTouches[0]
+        if (!t) return
+        fingerId = t.identifier
+        handlersRef.current.beginDrag(t.clientX, t.clientY)
       }
       const onMove = (e: TouchEvent) => {
-        const t = e.touches[0]
+        const t = tracked(e.touches)
         if (!t) return
         if (handlersRef.current.dragMove(t.clientX, t.clientY)) {
           e.preventDefault()
@@ -1069,7 +1092,19 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           }
         }
       }
-      const onEnd = () => {
+      const onEnd = (e: TouchEvent) => {
+        //a lift or a cancel that names another finger changes nothing: the
+        //browser cancels the points it names in changedTouches (a palm, a
+        //finger dragged onto the chrome), and when it takes the whole touch
+        //away the tracked finger is among them. A cancel naming no point at
+        //all (a driver's bare cancel) ends the touch
+        if (
+          fingerId !== null &&
+          e.changedTouches.length > 0 &&
+          !tracked(e.changedTouches)
+        )
+          return
+        fingerId = null
         captureRef.current.release()
         handlersRef.current.endDrag()
       }

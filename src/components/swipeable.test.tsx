@@ -252,14 +252,30 @@ function mousePath(content: HTMLElement, points: [number, number][]) {
   })
 }
 
-//the component reads touches[0] off the event and nothing else, so a plain
-//cancelable Event carrying that list is a faithful stand-in
-function touchEvent(type: string, point?: { x: number; y: number }) {
+type Finger = { id: number; x: number; y: number }
+
+//the component reads the touch lists off the event and nothing else, so a
+//plain cancelable Event carrying them is a faithful stand-in. `touches` is
+//every finger still down, `changedTouches` the fingers this event is about —
+//the lists a browser fills in
+function fingersEvent(type: string, touches: Finger[], changed: Finger[]) {
   const event = new Event(type, { bubbles: true, cancelable: true })
-  Object.defineProperty(event, "touches", {
-    value: point ? [{ clientX: point.x, clientY: point.y }] : [],
-  })
+  const list = (fingers: Finger[]) =>
+    fingers.map((f) => ({ identifier: f.id, clientX: f.x, clientY: f.y }))
+  Object.defineProperty(event, "touches", { value: list(touches) })
+  Object.defineProperty(event, "changedTouches", { value: list(changed) })
   return event
+}
+
+/** A one-finger touch event: the finger at `point` is down and is the one
+ *  that changed; no point is the lift. */
+function touchEvent(type: string, point?: { x: number; y: number }) {
+  const finger = point ? [{ id: 0, ...point }] : []
+  return fingersEvent(
+    type,
+    finger,
+    point ? finger : [{ id: 0, x: 0, y: 0 }],
+  )
 }
 
 /** A touch drag the way a browser delivers one: pointerdown (which is where the
@@ -934,6 +950,69 @@ describe("Swipeable · how an open row is dismissed", () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it("a second finger lifting elsewhere on the screen does not close a row being dragged", () => {
+    //the outside-pointer-release rule above is for a FINISHED gesture: a tap
+    //elsewhere while nothing is held. A second finger — a thumb steadying
+    //the phone beside the list — lifts on the very same window listener
+    //while the first finger is still dragging this row, and that touch's
+    //own pointerup is one THIS row never sees, because it never landed
+    //inside the root. The listener has no way to tell the two apart except
+    //by asking whether a drag is live at all
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    act(() => {
+      fireEvent.pointerDown(content, {
+        pointerId: 1,
+        pointerType: "touch",
+        button: 0,
+        clientX: ORIGIN.x,
+        clientY: ORIGIN.y,
+      })
+      content.dispatchEvent(touchEvent("touchstart", ORIGIN))
+    })
+    for (const m of line(20, -60)) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          touchEvent("touchmove", { x: ORIGIN.x + m.x, y: ORIGIN.y }),
+        )
+      })
+    }
+    expect(tx(content)).toBe(-60)
+
+    //a foreign pointer's release, outside the row, on the window (not
+    //fireEvent.pointerUp — that helper targets an Element, and the outside
+    //listener in question is registered on window itself)
+    act(() => {
+      window.dispatchEvent(
+        new PointerEvent("pointerup", {
+          pointerId: 99,
+          pointerType: "touch",
+          bubbles: true,
+          cancelable: true,
+        }),
+      )
+    })
+    //a spring only moves the row on later animation frames, so the offset
+    //has to be read after some run, not right after the dispatch: untouched
+    //means no spring ever fired, not that none has landed yet
+    advance(FRAME * 4)
+    expect(tx(content)).toBe(-60)
+
+    //the dragging finger's own moves and release still work as normal
+    act(() => {
+      content.dispatchEvent(
+        touchEvent("touchmove", { x: ORIGIN.x - 80, y: ORIGIN.y }),
+      )
+    })
+    expect(tx(content)).toBe(-80)
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    settle()
+    expect(tx(content)).toBe(-W)
+  })
+
   it("activating a tray action runs the action once and closes the row", () => {
     const ref = createRef<SwipeableHandle>()
     const onDelete = vi.fn()
@@ -1572,6 +1651,117 @@ describe("Swipeable · unmount", () => {
     settle()
     expect(onClose).not.toHaveBeenCalled()
     orphan.remove()
+  })
+})
+
+/* ---- one finger owns the row --------------------------------------------- */
+
+describe("Swipeable · one finger owns the row", () => {
+  //a phone is held in a hand: a thumb resting on the screen, a knuckle, a
+  //second finger steadying the device all start touches of their own while
+  //the swipe is under way. The row belongs to the finger that locked it —
+  //the others neither restart the gesture nor end it
+
+  const f1 = (x: number): Finger => ({
+    id: 0,
+    x: ORIGIN.x + x,
+    y: ORIGIN.y,
+  })
+  const f2: Finger = { id: 1, x: ORIGIN.x + 60, y: ORIGIN.y + 200 }
+
+  it("a second finger landing mid-swipe changes nothing: the row still tracks the first from its next pixel", () => {
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    const { trace } = touchDrag(content, line(20, -20), { release: false })
+    expect(trace.at(-1)).toBe(-20)
+
+    act(() => {
+      content.dispatchEvent(
+        fingersEvent("touchstart", [f1(-20), f2], [f2]),
+      )
+    })
+    //no fresh dead zone, no fresh origin: pixel for pixel from where it was
+    const seen: number[] = []
+    for (let i = 1; i <= 4; i++) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          fingersEvent("touchmove", [f1(-20 - i), f2], [f1(-20 - i)]),
+        )
+      })
+      seen.push(tx(content))
+    }
+    expect(seen).toEqual([-21, -22, -23, -24])
+  })
+
+  it("the second finger lifting leaves the row on the first; only the first finger's lift releases it", () => {
+    const onOpen = vi.fn()
+    const { container } = render(<Row onOpen={onOpen} />)
+    const { content } = parts(container)
+    const { trace } = touchDrag(content, line(20, -20), { release: false })
+    expect(trace.at(-1)).toBe(-20)
+
+    act(() => {
+      content.dispatchEvent(
+        fingersEvent("touchstart", [f1(-20), f2], [f2]),
+      )
+    })
+    advance(FRAME)
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchend", [f1(-20)], [f2]))
+    })
+    //the first finger still holds the row and the arbiter
+    expect(gestureController.getCaptured()).not.toBeNull()
+    for (const m of line(20, -40)) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          fingersEvent("touchmove", [f1(-20 + m.x)], [f1(-20 + m.x)]),
+        )
+      })
+    }
+    expect(tx(content)).toBe(-60)
+    expect(onOpen).not.toHaveBeenCalled()
+
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchend", [], [f1(-60)]))
+    })
+    expect(gestureController.getCaptured()).toBeNull()
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it("a cancel naming another finger changes nothing; one naming the tracked finger ends the drag", () => {
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    touchDrag(content, line(20, -20), { release: false })
+    //the browser cancels the thumb (it slid onto the chrome): not the row's
+    //finger, which is still down and still owns the row
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchcancel", [f1(-20)], [f2]))
+    })
+    expect(gestureController.getCaptured()).not.toBeNull()
+    expect(tx(content)).toBe(-20)
+    //the whole touch taken away: the tracked finger is among the cancelled
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchcancel", [], [f1(-20), f2]))
+    })
+    expect(gestureController.getCaptured()).toBeNull()
+    settle()
+    expect(tx(content)).toBe(0)
+  })
+
+  it("a cancel naming no finger at all (a driver's bare cancel) ends the drag", () => {
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    touchDrag(content, line(20, -20), { release: false })
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchcancel", [], []))
+    })
+    expect(gestureController.getCaptured()).toBeNull()
+    settle()
+    expect(tx(content)).toBe(0)
   })
 })
 
