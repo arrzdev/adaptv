@@ -10,7 +10,8 @@ beside the policy and updater they serve. The array is unchanged; only the impor
 
 Everything is composed by one function: `adaptvPlugin()` in
 [`src/vite/adaptv-plugin.ts`](../../src/vite/adaptv-plugin.ts). That file returns a single flat array,
-and Vite calls same-`order` hooks in plugin-array position. **Several adjacent pairs in that array
+and Vite calls same-`order` hooks in plugin-array position among plugins of the same `enforce` (every
+plain plugin's hook runs before any `enforce: "post"` one's). **Several adjacent pairs in that array
 have a documented reason to sit where they do; read §2 before reordering anything.**
 
 ---
@@ -41,10 +42,11 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | 20 | `adaptvSwBuildPlugin` | `sw-build.ts` | ″ |
 | 21 | `adaptvSwDevPlugin` | `sw-dev.ts` | `apply: "serve"`, no-op unless `ADAPTV_DEV_SW` is set. |
 | 22 | `adaptvStaticHostPlugin` | `static-host.ts` | **Web lineage only**, see §2.4. |
-| 23 | `adaptvNativeBundlePlugin` | `native-bundle.ts` | The mirror image, native lineage only. |
-| 24 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
+| 23 | `adaptvNativeBundlePlugin` | `native-bundle.ts` | The mirror image, native lineage only. **`enforce: "post"`**, see §2.5. |
+| 24 | `adaptvBuildStampPlugin` | `build-stamp.ts` | **Last of the emitters**, `enforce: "post"` and after the native prune: it records where the build wrote and hashes the final shell. |
+| 25 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
 
-## 2. The four places order is load-bearing
+## 2. The five places order is load-bearing
 
 Each of these is a bug that shipped once.
 
@@ -78,6 +80,17 @@ A native bundle is `render: "spa"` **too**. Gating on `render` alone put `_redir
 
 And note the mechanism: **not registering the plugin beats an early `return` in its hook.** There is
 then no hook to reason about in the ordering above.
+
+### 2.5 The native prune is `enforce: "post"`, not just late in the array
+
+The router writes its prerendered `_shell.html` from a `buildApp` hook that is `enforce: "post"` with
+`order: "post"`, and Vite runs every plain plugin's `order: "post"` hook before any enforced plugin's,
+whatever the array says. As a plain plugin the prune ran first and the file landed a second later: the
+log printed the prune above `Prerendering pages`, every `.adaptv/web` shipped the 66 KB file, and
+because it carries the render's time, two builds of one checkout got two OTA build tags. Among
+enforced plugins array order holds again, so the prune sits after the framework plugin and the build
+stamp, also enforced, sits after the prune. A real Vite build in `native-bundle.test.ts` holds it.
+→ [`../decisions/register.md`](../decisions/register.md) B31
 
 ## 3. Support modules (not plugins)
 
