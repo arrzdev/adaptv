@@ -446,6 +446,16 @@ is itself what rewrites the native tree — so the causes combine into one sente
 > at all, because the only fingerprint being polled folds in `ADAPTV_CAPACITOR_CONFIG`, an env
 > var nothing re-stamps until something rebuilds. Reported as commenting `icons` out and watching
 > nothing happen.
+>
+> Also violated by the `dev` poll across polls. It merged only the causes ONE poll saw and
+> re-armed both fingerprints, so a config edit and a native edit a poll apart took turns after
+> all, and the row named whichever came last while the config edit still waited for its `b`:
+> ```
+>   ! config change  · press b to rebuild and see the changes
+>   ! native change · ios  · press b to rebuild and see the changes     ← the next poll, no b between
+> ```
+> The causes, and the platforms, now accumulate until a `b` applies them
+> (`bin/lib/watch-staleness.mjs`), in the copy a single poll uses: `config + native change · ios`.
 
 **R54 — A change to adaptv's OWN source notices a RESTART, not a rebuild.** R40's action is
 identical for config and native because `press b` applies both. adaptv's own `bin/` is the
@@ -521,6 +531,18 @@ telling the dev to press:
 > block is parked adds a blank only when that line asks for one, and it clears the row it steps
 > over. A finished `dev web` session ends on its last printed line and one blank row, the same
 > as a native run.
+> Also violated by `r` and by a `b` whose web bundle failed. Each mounts a fresh block, a fresh
+> block starts empty, and only a restart was raised on it again, so a config or native row came
+> down with neither key having applied it:
+> ```
+>   ✓ ios  iPhone 16 Pro (simulator) · reloaded
+>
+>   r reload js   b rebuild app   ctrl-c stop     ← after r, the config change row is gone
+> ```
+> Every fresh block now opens with the row still owed, and only a `b` lane that succeeded clears
+> what it owed. A `b` whose ios lane fails keeps `native change · ios`, and a pending config with
+> it, because the config reaches a device only through each platform's lane, never through the
+> web bundle alone.
 
 **R44 — A live row CLIPS; a static page WRAPS.** R10/R31 keep a live row to exactly one physical
 line, because a row redrawn with `\r\x1b[2K` must occupy exactly one — a wrapped row erases only
