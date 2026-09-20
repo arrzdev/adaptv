@@ -254,12 +254,13 @@ a dangling `<link rel="icon">` would cost a burst of 404s inside the WebView on 
 
 Measured on the playground: **4.5 MB → 3.1 MB**, of which 1.3 MB was icon art.
 
-### 3.3 Generated files & the `.adaptv/` future
+### 3.3 Generated files & `.adaptv/`
 
-The plugin **stamps** the generated root route + router entry (`router.gen`) unless the app ejects
-(`src/router.tsx` / `src/client.tsx`). Today these land at the app root; the `docs/design/architecture.md §3` plan
-relocates them (and the TanStack `*.gen` route tree) into a hidden `.adaptv/` dir so the consumer's source
-imports only `adaptv`. That's a build-plumbing change layered on top of this same stamping step.
+The root route and router entry are **package modules**, not stamped files: an app ejects the root by
+passing its own file to `rootRoute()`, the router by writing `src/router.tsx`, and the client entry by
+writing `src/client.tsx`. What adaptv does generate (TanStack's route tree, the worker's `sw.gen.ts`, the
+generator's scratch under `tmp/router/`) lands in the hidden, gitignored `.adaptv/`, and `stamp.ts` only
+keeps the app's `.gitignore` and tsconfig wired to it. → `docs/design/architecture.md §3`
 
 ---
 
