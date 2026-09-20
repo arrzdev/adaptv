@@ -8,7 +8,8 @@ import { awaitClientHandover } from "./support/hydrated"
  * boolean, the caveat naming the service worker, that scheduling for later is
  * refused in words instead of being faked with a timer, and that the pending
  * list stays empty because nothing on the web can hold one. The banner itself
- * is a device surface and is exercised on the simulator and the emulator.
+ * is a device surface and is exercised on the simulator and the emulator, as is
+ * a real press on one.
  */
 
 const FOUR_STATES = ["granted", "denied", "prompt", "unavailable"]
@@ -92,6 +93,77 @@ test.describe("Notifications", () => {
         body: "This one was posted by the app itself.",
       },
     ])
+  })
+
+  /*
+   * The tap. A real banner cannot be pressed in a headless browser, so the two
+   * halves are pinned separately and neither one is a mock of the other: the
+   * page half is fed the exact message the worker sends, and the worker half is
+   * driven inside the real registered worker where one exists — a synthetic
+   * `notificationclick` dispatched at adaptv's own handler, which then has to
+   * find the window and post to it on its own.
+   */
+  test("a tap the worker reports fills the row with the payload it carried", async ({
+    page,
+  }) => {
+    await expect(page.getByTestId("notify-opened")).toHaveText("—")
+
+    await page.evaluate(() => {
+      navigator.serviceWorker.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            type: "ADAPTV_NOTIFICATION_OPENED",
+            id: 4001,
+            data: { where: "now" },
+          },
+        }),
+      )
+    })
+    await expect(page.getByTestId("notify-opened")).toHaveText("4001 now")
+  })
+
+  test("a message that is not a tap is not one", async ({ page }) => {
+    for (const data of [
+      { type: "push", id: 9, data: { where: "elsewhere" } },
+      //the right type with a string id: an app's own worker module sending
+      //this by accident must not move the app
+      { type: "ADAPTV_NOTIFICATION_OPENED", id: "9" },
+    ])
+      await page.evaluate((message) => {
+        navigator.serviceWorker.dispatchEvent(
+          new MessageEvent("message", { data: message }),
+        )
+      }, data)
+    await expect(page.getByTestId("notify-opened")).toHaveText("—")
+  })
+
+  //Only Chromium can run code inside a service worker, and only a built app has
+  //one at all: the dev server this suite usually runs against registers none.
+  //Point E2E_BASE_URL at a preview to make this one bite.
+  test("adaptv's own worker turns a click into a message the app hears", async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "no worker evaluation elsewhere")
+    const worker = context.serviceWorkers()[0]
+    test.skip(!worker, "the app under test registers no service worker")
+
+    await worker.evaluate(() => {
+      const event = new Event("notificationclick")
+      Object.assign(event, {
+        notification: {
+          tag: "4321",
+          data: { id: 4321, data: { where: "tapped" } },
+          close: () => {},
+        },
+        waitUntil: () => {},
+      })
+      self.dispatchEvent(event)
+    })
+    await expect(page.getByTestId("notify-opened")).toHaveText(
+      "4321 tapped",
+    )
   })
 
   test("showing one resolves without granting itself the permission it does not have", async ({

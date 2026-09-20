@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { ADAPTV_BROADCAST_TYPES } from "#adaptv/sw/sw.notification-protocol"
 
 /** Mirrors `ServiceWorkerMessage` on the worker side. */
 export type ServiceWorkerMessage = {
@@ -32,8 +33,9 @@ export function sendToServiceWorker(message: ServiceWorkerMessage): void {
  * })
  * ```
  *
- * Nothing is filtered: adaptv's own worker never broadcasts, so everything that
- * arrives here came from the app's own modules.
+ * adaptv's own broadcasts are filtered out — a tapped notification is delivered
+ * by `onNotificationOpened`, which knows its shape, rather than arriving here as
+ * a message an app handler would have to recognise and ignore.
  */
 export function useServiceWorkerMessage(
   handler: (message: ServiceWorkerMessage) => void,
@@ -50,6 +52,7 @@ export function useServiceWorkerMessage(
     const listener = (event: MessageEvent) => {
       const data = event.data as ServiceWorkerMessage | null | undefined
       if (!data || typeof data.type !== "string") return
+      if (ADAPTV_BROADCAST_TYPES.has(data.type)) return
       handlerRef.current(data)
     }
 
