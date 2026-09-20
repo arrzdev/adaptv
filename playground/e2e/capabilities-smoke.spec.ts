@@ -54,6 +54,7 @@ const PAGES = [
   ["/lab/keep-awake", "Keep awake"],
   ["/lab/filesystem", "Filesystem"],
   ["/lab/speech", "Speech"],
+  ["/lab/privacy-screen", "Privacy screen"],
   ["/lab/app-state", "App state"],
   ["/lab/back-chain", "Back chain"],
   ["/lab/browser", "Browser"],
