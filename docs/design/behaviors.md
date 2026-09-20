@@ -298,7 +298,52 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 ### 8. External links
 - **How:** `src/components/link.tsx` routes `isExternalUrl(to)` to `ExternalLink` → system browser
   (`@capacitor/browser`) on native, a new tab on web. Internal routes keep the gesture/smart-back path.
+- **ExternalLink on web intercepts nothing.** Its `<a target="_blank" rel="noopener noreferrer">`
+  opens the tab itself, so the browser guarantees no Referer and no opener. Only a native plain
+  left-click is routed through `openExternal()`. A component has no caller to hand an outcome to, so
+  intercepting on web would only add a script that has to get the Referer right.
+- **Outcome:** `openExternal()` resolves `"opened"`, `"blocked"` (a popup blocker refused the tab),
+  `"invalid"` (the URL does not parse — `window.open` would throw a `SyntaxError` — or its scheme is
+  `javascript:`, `data:`, `blob:`, `about:` or `file:`, which would run in or replace the app) or
+  `"unsupported"` (no window, i.e. the server). It never rejects.
+- **Schemes:** only `http:`/`https:` open a browser. `mailto:`, `tel:` and app schemes are assigned to
+  `location`: both native shells cancel that navigation and hand the URL to the OS
+  (`WebViewDelegationHandler` on iOS, `Bridge.launchIntent` on Android) and a browser launches the
+  handler without leaving the page. `"opened"` there means handed over. The in-app browser takes only
+  http(s) (`SFSafariViewController`), and the old fall-through to `window.open` in a WebView read
+  `"blocked"`, which was false. A native build missing that plugin hands an http(s) URL over through
+  `location` the same way, never through a tab: iOS would give the OS the tab's `about:blank`, and
+  Android's WebView has no second window. A protocol-relative `//host` resolves against the page, or takes
+  `https:` when the page is on `capacitor://`.
+- **The web tab, and why it is opened blank:** `window.open(url, "_blank")` sends the app's Referer,
+  and under a `Referrer-Policy: unsafe-url` that is the full URL, query included. The `noopener` and
+  `noreferrer` features would stop it, but either makes `window.open` return `null` even on success,
+  the value a blocker returns. So the tab is opened at `about:blank` with no features, its `opener`
+  is nulled, and an `<a rel="noreferrer">` clicked inside its own document carries it to the URL.
+  The blank document is what keeps the Referer off: the navigation is its own, and an `about:blank`
+  URL is never sent (removing the `rel` leaves the tests green; assigning `tab.location` from the
+  app's script sends the full URL on both engines).
+  Measured 2026-09-13 with the page served `unsafe-url` and a `?secret=` query:
+
+  | | Referer on the request | `document.referrer` | a real blocker reads |
+  |---|---|---|---|
+  | `window.open(url)`, Chromium 149 | full URL | full URL | `blocked` |
+  | `window.open(url)`, WebKit 26.5 | full URL | origin | no blocker to test |
+  | blank tab + anchor, Chromium 149 | none | `""` | `blocked` |
+  | blank tab + anchor, WebKit 26.5 | none | `""` | no blocker to test |
+
+  One cost: WebKit keeps the `about:blank` entry, so the new tab's back button returns to a blank page
+  (`history.length` 2 at the destination; Chromium replaces it, 1). A meta refresh inside the blank
+  document avoids that on both engines, but a browser can be set to ignore refreshes and the tab would
+  then sit blank while reporting `"opened"`; `location.replace` from the app's script sends the app's
+  Referer on Chromium.
 - **Test:** a `<Link to="https://…">` opens the in-app system browser on native (6), a new tab on web.
+  `playground/e2e/browser.spec.ts` pins, on Chromium and WebKit with the page served `unsafe-url`:
+  `opened` with no opener and no Referer from both the accessor and `ExternalLink`, `invalid` for an
+  unparseable URL, `mailto:` opening no tab and leaving the page, and a `window.open` that returns
+  `null` reading `blocked`. On full Chromium with its popup blocker on (Playwright's default headless
+  shell has none) a real click opens the tab and a call after the user activation expired reads
+  `blocked`.
 
 ### 9. Network status
 - **How:** `src/capabilities/network.ts` — `@capacitor/network` (accurate) on native, `navigator.onLine`
