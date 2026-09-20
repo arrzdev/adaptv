@@ -50,6 +50,14 @@ export default defineApp({
   //the app open, and the update stages itself DURING the session, so the colour
   //lands on the very next launch instead of the one after it.
   otaPollMinutes: 5,
+  //The policy the design doc itself uses as its example, and the one a real app
+  //without a moved server contract would pick: two weeks for the store to catch
+  //up, then adaptv's own screen takes over. Declared so that screen exists in the
+  //one app that can show it — with no number it never renders, anywhere — and
+  //so `e2e/forced-screens.spec.ts` can walk it through the real wiring. A device
+  //that falls behind in `ota:lab` today reads `behind` on /lab/ota for 13 days
+  //before anything covers that page.
+  updateRequiredAfterDays: 14,
   router: {
     //route generator — adaptv owns the generated tree's location (.adaptv/) and
     //the generator's formatting, so only these two are ours to set
