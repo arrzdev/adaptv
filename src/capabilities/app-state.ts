@@ -25,6 +25,14 @@ let lastNotified: AppState = "active"
 let bound = false
 
 /**
+ * Whether the resume for the page's latest trip into the back-forward cache has
+ * already gone out: `false` from its `pagehide`, `true` once a resume is delivered,
+ * `null` while no trip is open. Read by the `pageshow` that ends the trip — see
+ * {@link bindWeb}.
+ */
+let restoreResumed: boolean | null = null
+
+/**
  * The live native binding, or `null` when none is held. `disposed` is per binding
  * because the bridge answers asynchronously: the last subscriber can leave before
  * either `addListener` resolves (StrictMode's dev double-mount always does), and a
@@ -54,6 +62,7 @@ function emit(force = false): void {
   //again on every subsequent notification while already foregrounded
   if (state === lastNotified && !force) return
   lastNotified = state
+  if (state === "active" && restoreResumed === false) restoreResumed = true
   for (const listener of listeners) listener(state)
 }
 
@@ -70,8 +79,22 @@ function bindWeb(): void {
   //
   //`persisted` distinguishes a real bfcache restore from an ordinary first load,
   //which must NOT be reported as a resume.
+  //
+  //But force only a resume nobody delivered yet. Chromium restores with
+  //`visibilitychange → visible` BEFORE `pageshow`, and that edge is already the
+  //resume — forcing again made one return two resumes, measured in
+  //`playground/e2e/app-state.spec.ts`. The trip is opened by the `pagehide` that
+  //sends the page into the cache, which a browser dispatches before freezing it
+  //(it is the one departure event that cannot be missed), and `emit` closes it on
+  //the first resume it delivers. A `pageshow` with no trip open is still forced.
+  window.addEventListener("pagehide", (event) => {
+    if ((event as PageTransitionEvent).persisted) restoreResumed = false
+  })
   window.addEventListener("pageshow", (event) => {
-    emit((event as PageTransitionEvent).persisted === true)
+    const restore = (event as PageTransitionEvent).persisted === true
+    const force = restore && restoreResumed !== true
+    if (restore) restoreResumed = null
+    emit(force)
   })
 }
 
