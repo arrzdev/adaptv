@@ -9,7 +9,11 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
-import { patchAndroidSplash, patchNativeIdentity } from "./native.mjs"
+import {
+  patchAndroidFileProvider,
+  patchAndroidSplash,
+  patchNativeIdentity,
+} from "./native.mjs"
 
 // The generated MainActivity is the ONLY thing that puts an Android app under the system
 // bars — nothing in Capacitor asks for it below API 35 (`docs/roadmap/native-shell-plugin.md` §0.0). Each
@@ -197,5 +201,33 @@ describe("the .dev flavour launches adaptv's MainActivity, not a stub", () => {
       "WindowCompat.setDecorFitsSystemWindows(getWindow(), false)",
     )
     expect(launched).toContain("adaptvEdgeToEdge()")
+  })
+})
+
+describe("the FileProvider roots", () => {
+  it("cover the app's own files directory as well as the cache, so a stored file reaches the share sheet", () => {
+    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
+    dirs.push(appRoot)
+    const res = path.join(appRoot, ADAPTV_DIR, "android/app/src/main/res")
+    mkdirSync(path.join(res, "xml"), { recursive: true })
+    //what the scaffold ships: external storage and the cache, nothing under files/
+    writeFileSync(
+      path.join(res, "xml/file_paths.xml"),
+      `<paths><external-path name="my_images" path="." /><cache-path name="my_cache_images" path="." /></paths>`,
+    )
+    patchAndroidFileProvider(appRoot)
+    const xml = readFileSync(path.join(res, "xml/file_paths.xml"), "utf8")
+    //the filesystem capability's namespace, and nothing beside it: filesDir also
+    //holds the live-update plugin's `_capacitor_live_update_bundles`
+    expect(xml).toContain('<files-path name="files" path="adaptv/" />')
+    expect(xml).not.toMatch(/<files-path[^>]*path="\."/)
+    expect(xml).toContain('<cache-path name="cache" path="." />')
+    expect(xml).toContain('<external-path name="external" path="." />')
+  })
+
+  it("does nothing when there is no Android project to patch", () => {
+    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
+    dirs.push(appRoot)
+    expect(() => patchAndroidFileProvider(appRoot)).not.toThrow()
   })
 })
