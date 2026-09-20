@@ -43,7 +43,8 @@ export default defineConfig({
     { name: "webkit", use: { ...devices["iPhone 13"] } },
   ],
   webServer: {
-    command: `pnpm run build && pnpm exec vite preview --port ${port} --strictPort`,
+    //`vite preview` without per-request compression — see e2e-sw/preview-host.mjs
+    command: `pnpm run build && pnpm exec node ../../e2e-sw/preview-host.mjs ${port}`,
     //`cwd` is resolved against THIS config file, so the server can only ever be
     //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
     //matches by package NAME: any second workspace member under `apps/*` calling
