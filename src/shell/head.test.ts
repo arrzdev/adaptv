@@ -8,7 +8,11 @@ import { pwaHead } from "#adaptv/shell/head"
  * to a fallback chain (`twitter:title` → `og:title` → `title`) is a change
  * this file has to say yes to.
  */
-const base = { title: "Probe", themeColorLight: "#eeeeec" }
+const base = {
+  title: "Probe",
+  themeColorLight: "#eeeeec",
+  manifestPath: "/manifest.json",
+}
 
 describe("pwaHead — the fixed part", () => {
   it("emits the app-capable metas, the tile colour, the title and the manifest", () => {
