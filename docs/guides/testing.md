@@ -21,8 +21,8 @@ adaptv ships one app to **six** runtime targets. A change to a shell, primitive,
 | 1 | **Desktop browser** | Chrome/Safari on the Mac | dev server, hot reload |
 | 2 | **Mobile browser — iOS** | Safari in the iOS Simulator | dev server, hot reload |
 | 3 | **Mobile browser — Android** | Chrome in the Android emulator | dev server, hot reload |
-| 4 | **Standalone PWA — iOS** | Add-to-Home-Screen in the iOS sim | dev server; cold-launch to re-cache |
-| 5 | **Standalone PWA — Android** | Add-to-Home-Screen in the emulator | dev server; cold-launch to re-cache |
+| 4 | **Standalone PWA — iOS** | Add-to-Home-Screen in the iOS sim | dev server; `pnpm preview:web` for the worker |
+| 5 | **Standalone PWA — Android** | Add-to-Home-Screen in the emulator | dev server; `pnpm preview:web` for the worker |
 | 6 | **Native — iOS `.ipa` & Android `.apk`** | Capacitor WebView | rebuild (`pnpm preview:ios` / `preview:android`) |
 
 `app:` = installed (standalone **or** native) · `web:` = browser tab. Detect in JS with
@@ -59,10 +59,12 @@ override `vite.config.ts` reads — rather than killing a neighbour's session.
 browse `http://10.0.2.2:41730` or map the port once with `adb reverse tcp:41730 tcp:41730`. For 4 and
 5, Add to Home Screen from that browser and launch the icon.
 
-> ⚠︎ **The service worker is live in dev.** The old version of this doc said "dev has no SW, so
-> usually just reload". That is no longer true — adaptv owns the worker end to end and
-> `src/vite/sw-dev.ts` is a dev-mode worker path. An installed PWA needs a genuine **cold launch** to
-> pick up a new shell; a reload is not a cold launch.
+> ⚠︎ **adaptv's service worker does not run in dev; `pnpm preview:web` is where it runs.** By default
+> the dev server's shell unregisters every service worker on the origin and deletes every cache
+> (`src/shell/service-worker-shell.ts`). `ADAPTV_DEV_SW=1` swaps that for a worker built from the app's
+> own `serviceWorkers` modules only (`src/vite/sw-dev.ts`), never adaptv's precache or navigation
+> fallback. When a new worker takes over on `preview:web` is `serviceWorkerUpdate`'s call
+> ([`../design/rendering.md`](../design/rendering.md) §3.4).
 
 ---
 
