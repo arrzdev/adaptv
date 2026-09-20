@@ -840,7 +840,7 @@ From the research pass — re-check health before relying on the ✅ row.
   CLI). The hybrid split above is what its two build lineages compile.
 - `docs/design/coordination.md` — the runtime lifecycle spine (app state, back, gestures, routes) that leaf primitives
   compose onto; consumes the §4 accessor pattern (`useAppState`).
-- `docs/design/rendering.md` — the isomorphism boundary (no `createServerFn`); Surface 3 respects it.
+- `docs/design/rendering.md` — the isomorphism boundary (no `createServerFn` on an artifact with no server); Surface 3 respects it.
 - `docs/design/behaviors.md` — the per-fix catalogue that the contracts here implement.
 - [`../decisions/prior-art.md`](../decisions/prior-art.md) — what Ionic already solved, ranked, plus the attribution convention.
 - [`../research/capacitor-internals.md`](../research/capacitor-internals.md) — version pins, native gotchas, and the upstream issues to re-check before any version bump.
