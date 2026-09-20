@@ -247,6 +247,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/app-info",
+    title: "App info",
+    summary:
+      "name · id · store version · build number, and the web's honest none",
+    isNew: true,
+  },
+  {
     to: "/lab/device",
     title: "Device",
     summary: "model / OS / id — and every null the web can't fill",
