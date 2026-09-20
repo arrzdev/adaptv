@@ -62,9 +62,7 @@ export function adaptvNativeBundlePlugin(context: AdaptvContext): Plugin {
       captureClientOutDir(context, resolved)
     },
     //`buildApp`, `order: "post"`, and registered AFTER the three emitters — this
-    //deletes things they read. `shell-emit` in particular reads
-    //`.vite/manifest.json` out of the client dir, so pruning it any earlier would
-    //take the shell's asset tags with it.
+    //deletes things they may still read, and the build stamp records the result.
     buildApp: {
       order: "post",
       async handler() {
