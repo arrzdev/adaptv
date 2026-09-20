@@ -59,6 +59,9 @@ const COMPONENTS = [
     title: "Divider",
     summary:
       "one device pixel at every density · a border, not a background",
+    to: "/lab/icon",
+    title: "Icon",
+    summary: "decorative vs labelled svg · 1em · iOS Dynamic Type",
     isNew: true,
   },
   {
