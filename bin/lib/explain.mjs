@@ -6,7 +6,9 @@
  * `adaptv.mjs` runs the CLI on import, so nothing could hold this to a rule. Here it can be,
  * and `explain.test.mjs` holds it to the opacity boundary using real captured tool output.
  */
+import { existsSync } from "node:fs"
 import path from "node:path"
+import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
 import { gradleCause, isDestinationEntry, portInUse } from "./tool-log.mjs"
@@ -25,6 +27,21 @@ const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 // so a crash inside the web build lost the ✖ line to the trailer above it
 // (`error during build:`) — a line that says nothing.
 const NAMED_ERROR = /^(?:\[\w+\]\s*)?\w*Error(?:\s*\[\w+\])?\s*:/
+// A task runner's verdict on one of its own steps, the way the native CLI adaptv drives writes
+// it: `✖ Running xcodebuild - failed!`, or `✔ Copying web assets in 3.21ms` for a step that
+// passed before the one that did not (`×`/`√` on Windows). It carries `failed`, so the tail
+// keeps it, and it arrives BEFORE the tool's own output, so it was the first line the generic
+// pick below reached — and the row rendered as `✖ ios  ✖ Running xcodebuild - failed!`, two
+// failure marks and nothing a dev can act on (R2). It is a restatement of the ✖, like
+// `** BUILD FAILED **`. Char codes rather than the marks themselves: the glyph set is the
+// engine's alone (R26, `engine.test.mjs`), and these belong to the tool.
+const RUNNER_MARKS = String.fromCharCode(0x2714, 0x2716, 0x221a, 0xd7)
+const TASK_VERDICT = new RegExp(
+  `^[${RUNNER_MARKS}]\\s+(.+?)\\s+(?:-\\s+failed!|in\\s+[\\d.]+\\s*(?:s|ms|\u03bcs))$`,
+  "u",
+)
+// A tool log's level tag, `[error] Command error. …`. On the ✖ line adaptv is the one speaking.
+const LOG_TAG = /^\[(?:error|warn|info|debug|success)\]\s*/i
 
 /**
  * Describe a failure the way the renderer wants it: a concise `reason` shown INLINE on
@@ -40,9 +57,13 @@ const NAMED_ERROR = /^(?:\[\w+\]\s*)?\w*Error(?:\s*\[\w+\])?\s*:/
  *
  * Whatever it settles on then passes the opacity boundary (`opacity.mjs`): a tool's own words
  * are not automatically fit to print, because the tools ARE the thing the consumer must not
- * be told about.
+ * be told about. And every path in it is made relative to `appRoot` — the directory the CLI
+ * runs in, which is the app root by definition (`bin/adaptv.mjs`) — or cut to its file name
+ * when it lies outside, because a tool's words are no more exempt from R9 than adaptv's.
+ * @param {string} label
+ * @param {string} [appRoot]
  */
-export function explainFailure(label) {
+export function explainFailure(label, appRoot = process.cwd()) {
   return (err) => {
     // Fix steps the THROWER authored, when it knew something the text can't show — the dev
     // server's warm probe knows an HTTP status, and no amount of reading its output reveals
@@ -61,12 +82,15 @@ export function explainFailure(label) {
       const safe = namesPlumbing(reason)
         ? String(err?.message ?? err).split("\n")[0]
         : reason
+      //Relative AFTER the plumbing test, never before: a store path names the engine in its
+      //directories, and cutting it to a file name first would hide that from the test.
+      const rel = (line) => withoutAbsolutePaths(line, appRoot)
       return {
-        reason: safe,
+        reason: rel(safe),
         //Deduped: the tail of a server that answered the warm's probes carries the SAME stack
         //once per request, and three identical 200-column lines under one ✖ is not detail.
         detail: [
-          ...new Set([...withoutPlumbing(detail), ...authored]),
+          ...new Set([...withoutPlumbing(detail), ...authored].map(rel)),
         ].slice(0, DETAIL_LINES),
       }
     }
@@ -78,11 +102,20 @@ export function explainFailure(label) {
     // dev never chose. Same sentence wherever it surfaces — a build, or the server itself.
     const busy = portInUse(text)
     if (busy) return settle({ reason: busy.msg, detail: busy.fix })
+    const locked = notExecutable(text)
+    if (locked) return settle({ reason: locked.msg, detail: locked.fix })
 
-    const lines = String(err?.tail ?? "")
+    const captured = String(err?.tail ?? "")
       .split("\n")
-      .map((l) => l.replace(ANSI, "").trim())
+      .map((l) => l.replace(ANSI, "").trim().replace(LOG_TAG, ""))
       .filter(Boolean)
+    // The step the runner says failed, kept for the one case where nothing else in the tail
+    // says anything: then `xcodebuild failed` is still more than the spawn's own message.
+    const failedTask = captured
+      .map((l) => l.match(TASK_VERDICT))
+      .find((m) => m?.[0].endsWith("failed!"))?.[1]
+    const lines = captured
+      .filter((l) => !TASK_VERDICT.test(l))
       // `** BUILD FAILED **` & friends only restate the ✖ that's already printing.
       .filter((l) => !/^\*{2}.*\*{2}$/.test(l))
       // xcodebuild answers an unresolvable destination with its whole inventory of
@@ -115,7 +148,9 @@ export function explainFailure(label) {
     const picked = errors.length ? errors : lines
     if (picked.length === 0)
       return settle({
-        reason: String(err?.message ?? err).split("\n")[0],
+        reason: failedTask
+          ? taskFailed(failedTask)
+          : String(err?.message ?? err).split("\n")[0],
         detail: [],
       })
     const { message, where } = toolErrorParts(picked[0])
@@ -131,8 +166,7 @@ export function explainFailure(label) {
         ...picked
           .slice(1)
           .filter((l) => toolErrorParts(l).message !== message)
-          .slice(0, DETAIL_LINES)
-          .map(shortenLocator),
+          .slice(0, DETAIL_LINES),
       ].filter(Boolean),
     })
   }
@@ -179,5 +213,118 @@ export function toolErrorParts(raw) {
   return { message: message || raw, where: "" }
 }
 
-/** Same idea for a detail line: keep the filename, drop the directories. */
-export const shortenLocator = (l) => l.replace(/^\/\S*\//, "")
+/**
+ * A program that could not be started because it is not executable, in the dev's terms.
+ *
+ * Node says `spawn <file> EACCES`, and that is all it says: no tail, since nothing ran to write
+ * one. The gradle wrapper is where it happens — a project directory copied or unzipped by
+ * something that drops file modes leaves `gradlew` without its exec bit — and it reaches the
+ * page two ways, by its absolute path from `build android` and as `./gradlew` from the native
+ * runner, which spawns it from inside `.adaptv/android`. Either way the row read
+ * `spawn … EACCES`: a syscall, an errno, and no action.
+ *
+ * adaptv restores the wrapper's bit on every prepare (`restoreGradleWrapperMode`), so reaching
+ * this for a file adaptv generated means that restore could not happen, and regenerating the
+ * project is the action that still works. For anything else, the mode is the dev's to set.
+ *
+ * Returns `{ msg, fix }` like `portInUse`, or null when the text is not about this.
+ * @param {string} text
+ */
+export function notExecutable(text) {
+  //Lazy to the errno, not `\S+`: Node does not quote the path, and an app under
+  //`My Apps` or iCloud's `Mobile Documents` has a space in it.
+  const spawned = String(text).match(/\bspawn\s+(.+?)\s+EACCES\b/)
+  if (!spawned) return null
+  const file =
+    spawned[1] === "./gradlew"
+      ? `${ADAPTV_DIR}/android/gradlew`
+      : spawned[1]
+  const project = file.match(
+    new RegExp(`(?:^|/)(${ADAPTV_DIR.replace(".", "\\.")}/[^/]+)/`),
+  )?.[1]
+  return {
+    msg: `${file} is not executable`,
+    fix: project
+      ? [`Delete ${project} and run again. adaptv regenerates it.`]
+      : ["Make it executable ('chmod +x'), then run again."],
+  }
+}
+
+/**
+ * A runner's step title as the phrase a ✖ carries: `Running xcodebuild` → `xcodebuild failed`,
+ * `Updating iOS plugins` → `updating iOS plugins failed`. `Running` goes because the row
+ * already says a step ran; the rest is lowercased at its head only, so `iOS` keeps its case.
+ */
+const taskFailed = (task) => {
+  const what = task.replace(/^Running\s+/i, "")
+  return `${what.charAt(0).toLowerCase()}${what.slice(1)} failed`
+}
+
+/**
+ * One character of a path as tools print it: anything but whitespace and the punctuation that
+ * ends a path in a sentence — quotes, brackets, a `:` before a line number — with xcodebuild's
+ * escaped space (`Target\\ Support\\ Files`) kept inside it.
+ */
+const PATH_CHAR = String.raw`(?:\\ |[^\s"'\`()[\]{}<>,:;\\])`
+// The directories an absolute path on disk starts from. A slash-led token that does not start
+// with one is not a file on this machine: a dev server's module id (`/src/routes/cart.tsx`), a
+// route (`/products/featured/42`), an API path, a regex literal. Those are the dev's words about
+// their own app, and cutting them to a last segment turned `No route matched /products/featured/42`
+// into `No route matched 42`, which is false (R56).
+// macOS's own roots name nothing else a dev would write, so a path under one is cut on any
+// machine, which keeps a Mac tool's output reading the same when a test runs on Linux CI.
+const MAC_ROOTS = "Users|Library|Applications|System|Volumes|private"
+// Linux's roots are ordinary words (`/home/feed/3`, `GET /dev/tools/1`), so a path under one is
+// cut only when its first two segments are a directory on this machine: `/home/runner` is, a
+// route's `/home/feed` is not.
+const LINUX_ROOTS =
+  "var|tmp|opt|usr|home|etc|dev|bin|sbin|root|mnt|nix|snap"
+// An absolute path on disk, where a path can start: the head of the line, after whitespace, a
+// quote, `=` or an opening bracket, or a `file://` URL. `//` inside any other URL is preceded
+// by `:`, which is none of those, so `http://localhost:41730/` survives.
+const ABSOLUTE_PATH = new RegExp(
+  String.raw`(^|[\s"'\`=([]|file:\/\/)(\/(?:(${MAC_ROOTS})|${LINUX_ROOTS})\/${PATH_CHAR}+)`,
+  "g",
+)
+/** Whether `/<root>/<name>` exists, asked once per prefix. @type {Map<string, boolean>} */
+const onDisk = new Map()
+/** @param {string} p a path under one of LINUX_ROOTS */
+function startsOnDisk(p) {
+  const prefix = p.split("/").slice(0, 3).join("/").replaceAll("\\ ", " ")
+  if (prefix.endsWith("/")) return false
+  if (!onDisk.has(prefix)) onDisk.set(prefix, existsSync(prefix))
+  return onDisk.get(prefix)
+}
+
+/**
+ * R9 for text adaptv did not write. xcodebuild names the file it could not read and the script
+ * phase that failed by their absolute paths, and those lines are exactly the ones a failure is
+ * explained with:
+ *
+ *     Unable to load contents of file list: '/Users/arrz/app/.adaptv/ios/App/Pods/…' …
+ *     PhaseScriptExecution … /Users/arrz/Library/Developer/Xcode/DerivedData/App-gqzb…/Script-95.sh
+ *
+ * A path under the app root becomes app-root-relative (`.adaptv/ios/App/Pods/…`), which is how
+ * every artifact row names a file; a path on disk outside it — DerivedData, the home directory,
+ * Xcode itself — is cut to its file name, because the directories are the machine's, not the
+ * app's. Only a path that starts from a real top-level directory counts as one, and under a
+ * Linux root only when its first two segments exist here: slash-led text that is not on disk
+ * (a module id, a route, a regex) is the dev's and is left whole. Text only ever loses
+ * directories here: a URL, a `file:line:col` locator and every word around a path are left as
+ * they were.
+ * @param {string} line
+ * @param {string} [appRoot]
+ */
+export function withoutAbsolutePaths(line, appRoot) {
+  let s = String(line ?? "")
+  const root = String(appRoot ?? "").replace(/\/+$/, "")
+  //Textual, not tokenised: a path under the app root keeps its tail even when that tail has
+  //an unescaped space in it (`Target Support Files`), which no token rule could span.
+  if (root)
+    s = s.split(`file://${root}/`).join("").split(`${root}/`).join("")
+  return s.replace(ABSOLUTE_PATH, (whole, lead, p, macRoot) =>
+    macRoot || startsOnDisk(p)
+      ? `${lead === "file://" ? "" : lead}${path.basename(p)}`
+      : whole,
+  )
+}

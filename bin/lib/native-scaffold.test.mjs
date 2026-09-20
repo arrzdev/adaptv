@@ -1,9 +1,11 @@
 // @vitest-environment node
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -41,9 +43,11 @@ vi.mock("node:module", async (importOriginal) => {
   }
 })
 
-const { capAddIfMissing, ownInstallMissingPlatform } = await import(
-  "./native.mjs"
-)
+const {
+  capAddIfMissing,
+  ownInstallMissingPlatform,
+  restoreGradleWrapperMode,
+} = await import("./native.mjs")
 
 describe("capAddIfMissing — the app root is the dev's", () => {
   const roots = []
@@ -71,4 +75,47 @@ describe("capAddIfMissing — the app root is the dev's", () => {
       )
     },
   )
+})
+
+describe("restoreGradleWrapperMode — the wrapper adaptv generated stays runnable", () => {
+  const roots = []
+  afterEach(() => {
+    for (const dir of roots.splice(0))
+      rmSync(dir, { recursive: true, force: true })
+  })
+  const tempRoot = (prefix) => {
+    const dir = mkdtempSync(path.join(tmpdir(), prefix))
+    roots.push(dir)
+    return dir
+  }
+  const wrapper = (appRoot) =>
+    path.join(appRoot, ".adaptv", "android", "gradlew")
+
+  function projectWithWrapper(mode) {
+    const appRoot = tempRoot("adaptv-gradlew-mode-")
+    mkdirSync(path.dirname(wrapper(appRoot)), { recursive: true })
+    writeFileSync(wrapper(appRoot), "#!/bin/sh\nexit 0\n")
+    chmodSync(wrapper(appRoot), mode)
+    return appRoot
+  }
+
+  it("gives back the exec bit a copy that drops file modes took", () => {
+    //What an unzip or a mode-dropping copy leaves: every byte, and a 644 wrapper that both
+    //ways an Android build starts refuse to spawn.
+    const appRoot = projectWithWrapper(0o644)
+    restoreGradleWrapperMode(appRoot)
+    expect(statSync(wrapper(appRoot)).mode & 0o777).toBe(0o755)
+  })
+
+  it("leaves a wrapper that is already executable exactly as it is", () => {
+    const appRoot = projectWithWrapper(0o700)
+    restoreGradleWrapperMode(appRoot)
+    expect(statSync(wrapper(appRoot)).mode & 0o777).toBe(0o700)
+  })
+
+  it("does nothing, and throws nothing, for a project without a wrapper", () => {
+    const appRoot = tempRoot("adaptv-gradlew-none-")
+    expect(() => restoreGradleWrapperMode(appRoot)).not.toThrow()
+    expect(existsSync(wrapper(appRoot))).toBe(false)
+  })
 })
