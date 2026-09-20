@@ -18,7 +18,6 @@ import {
 import type { GestureAxis } from "#adaptv/components/pull-to-refresh-physics"
 import {
   ACTIVATION_ROTATION_DEG,
-  clamp,
   getPullVisuals,
   ICON_SIZE,
   PULL_MAX,
@@ -31,6 +30,7 @@ import {
 import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { clamp } from "#adaptv/utils/clamp"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 

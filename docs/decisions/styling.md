@@ -72,7 +72,7 @@ consumer. That is a category of leverage worth paying a peer dependency for.
   behaviour. Coverage tracks how much of their hover styling stays in utilities.
   > ⏭ **A plan now exists to close this limit without changing this decision:** a Vite
   > `transform` over the *emitted* CSS rewrites `:hover` whatever produced it — Tailwind, SCSS or
-  > plain CSS — on the mechanism `src/vite/ring-shadow-fallback.ts` already ships. →
+  > plain CSS — on the mechanism `src/vite/tailwind-empty-fallback.ts` already ships. →
   > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It does **not** require dropping
   > Tailwind, but it moves the pillar this section rests on — see **O24**.
 - **Only the `:not(:is(:focus, :focus-within))` half is adaptv's.** Tailwind v4 already compiles
