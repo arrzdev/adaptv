@@ -662,7 +662,9 @@ system location services are switched off** — a device state arriving through 
 2. **Distinguish "can't ask" from "haven't asked."** The web branch is the sharp case: a missing
    `navigator.geolocation` is `"unavailable"` (asking cannot help), but a missing
    `navigator.permissions` is `"prompt"` — older Safari/Firefox can *request* geolocation while being
-   unable to *query* it. Collapsing those two strands the user on old browsers.
+   unable to *query* it. Collapsing those two strands the user on old browsers. The same gap means a
+   refusal there is known only from the request's own code 1 rejection, so it answers `"denied"`; a
+   re-read could only say `"prompt"` again and keep offering a prompt that never appears.
 
 Consequences that become **rules** for every new primitive:
 - **Reactive → hook, imperative → API** (`VISION.md §6`): one-shot reads are async fns; live watches are
