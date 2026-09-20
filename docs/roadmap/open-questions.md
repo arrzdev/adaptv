@@ -202,6 +202,31 @@ measurement, and it did not win.
 
 ---
 
+### O23 — Does adaptv ever ship a second framework binding?
+
+**If the primitives are split into a framework-free core and a React binding
+([`core-binding-split.md`](core-binding-split.md)), does a `vue` / `svelte` / `angular` binding ever
+get built on top of it — or does the core stay an internal organising principle?**
+
+Evidence, both ways. **For:** roughly half of `src/` and effectively all of `bin/` are already
+framework-free (22,843 LOC of CLI, 5,815 of capabilities, zero React in either), and markup is 6.9 %
+of the lines in the files that render — so the part that is genuinely React is much smaller than the
+tree suggests. **Against, and it is the heavier side:**
+[`../decisions/positioning.md`](../decisions/positioning.md) §1 documents Ionic dying *of this exact
+thing* — three bindings, human commits down 82 %, and `@ionic/react-router` still pinned to React
+Router v5 with the v6 request open since 2021 at 409 👍. Three bindings is not what they shipped; it
+is why none of them is current. Also unresolved: the second half of adaptv's stated wedge — the
+`createServerFn` ban — is written against TanStack's vocabulary, so each framework needs its own
+inventory of what to forbid, and that inventory *is* the product.
+
+Note the shape is already constrained if the answer is ever yes: **L1** (single package) and register
+§5.0.0 (the npm scope must match the repo owner) mean a subpath export, `@arrzdev/adaptv/vue`, never a
+separate `@adaptv/*` package.
+
+Decided by: whether adaptv ever has a second consumer asking, and by one person's maintenance budget.
+**Explicitly not decided by the split itself** — that work is justified as organisation, and answering
+this question `no` does not undo it.
+
 ## The one live question `VISION.md §9` has that the register does not
 
 **Secure storage / auth — how opinionated should adaptv be about the bearer-token + biometric flow?**
