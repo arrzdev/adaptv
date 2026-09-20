@@ -3,10 +3,7 @@ export type {
   RootHeadScript,
 } from "../shell/create-root-route"
 export { createRootRoute } from "../shell/create-root-route"
-export {
-  clearPreloadErrorGuard,
-  installPreloadErrorRecovery,
-} from "../shell/preload-error-recovery"
+export { installPreloadErrorRecovery } from "../shell/preload-error-recovery"
 //The shape of the build-time route→chrome-tint table. Exported for the ambient
 //declaration of `virtual:adaptv/route-tints`, which is the only place a consumer
 //meets it — the option itself is declared on the route.
