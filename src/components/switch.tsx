@@ -338,6 +338,10 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
   const gestureEngineHandlers = useGestureEngine({
     disabled: isDisabled,
     onPressUp: toggle,
+    //an OUTER label (a settings row wrapping this switch) forwards its click to
+    //the input; no press on the track produced it, so the engine hands it here
+    //and the switch toggles exactly as if the track had been tapped
+    onUnownedClick: toggle,
   })
 
   const thumbChild = resolveSwitchThumbChild(children)
