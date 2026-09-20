@@ -1,5 +1,6 @@
 export * from "../hooks/create-bootstrap-gate"
 export * from "../hooks/use-android-back-button"
+export * from "../hooks/use-app-info"
 export * from "../hooks/use-app-state"
 export * from "../hooks/use-back-handler"
 export * from "../hooks/use-battery"
