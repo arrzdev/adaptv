@@ -21,7 +21,6 @@ import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
 import { RadioGroup } from "#adaptv/components/radio-group"
 import { ScrollView } from "#adaptv/components/scroll-view"
 import { Skeleton } from "#adaptv/components/skeleton"
-import { Spinner } from "#adaptv/components/spinner"
 import { ProgressBar, Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
@@ -849,6 +848,9 @@ describe("Skeleton", () => {
   it("Region: takes the consumer className unopposed", () => {
     const c = classOf(<Skeleton.Region loading className="flex gap-2" />)
     expect(c).toBe("flex gap-2")
+  })
+})
+
 describe("Icon", () => {
   //the size is the consumer's and exposure is attributes, not classes, so there is
   //nothing to lock — `locked` is passed as `undefined` on purpose. The pair that
@@ -873,6 +875,10 @@ describe("Icon", () => {
     const el = firstEl(
       <Icon render={<svg />} style={{ color: "rgb(1, 2, 3)" }} />,
     )
+    expect(el.style.color).toBe("rgb(1, 2, 3)")
+  })
+})
+
 describe("Spinner", () => {
   //the size and the colour are the consumer's, and the motion is CSS on
   //`data-adaptv`, not a class — so there is nothing to lock; `locked` is passed as

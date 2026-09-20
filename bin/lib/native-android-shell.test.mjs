@@ -230,6 +230,9 @@ describe("the FileProvider roots", () => {
     const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
     dirs.push(appRoot)
     expect(() => patchAndroidFileProvider(appRoot)).not.toThrow()
+  })
+})
+
 describe("the composer schemes in the manifest", () => {
   const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">

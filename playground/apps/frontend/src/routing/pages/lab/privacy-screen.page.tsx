@@ -91,11 +91,11 @@ function LabPrivacyScreenPage() {
         ]}
         expected={{
           web: {
-            verdict: "unsupported",
+            verdict: "absent",
             note: "No browser exposes a way to keep a page out of a screenshot or a recording. Support reads unsupported, the state reads —, and every button yields unsupported.",
           },
           pwa: {
-            verdict: "unsupported",
+            verdict: "absent",
             note: "Same as the tab it was installed from: the installed shell adds no capture control.",
           },
           ios: {
