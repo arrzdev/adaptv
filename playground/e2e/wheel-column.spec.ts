@@ -12,8 +12,10 @@ import { awaitClientHandover } from "./support/hydrated"
  * the centred value follows the drum row by row rather than jumping only on rest.
  *
  * Driven with `mouse.wheel` after three instruments were tried and rejected:
- *   - `el.scrollTop = …` moves the box but does NOT fire the scroll event React's
- *     `onScroll` is bound to — the handler never runs and the value never tracks.
+ *   - `el.scrollTop = …` is a jump, not a gesture: nothing coasts and nothing rolls
+ *     row by row. The write always fires ONE scroll event; hydration is only what
+ *     attaches React's `onScroll` to it. The settle test at the bottom records that
+ *     event on both engines and relies on it.
  *   - CDP `Input.dispatchTouchEvent` works from mid-list but is swallowed on the
  *     first gesture and will not engage a compositor scroll that BEGINS at
  *     scrollTop 0 (a CDP quirk — a real finger scrolls down from the top on the
@@ -32,7 +34,8 @@ import { awaitClientHandover } from "./support/hydrated"
  * just written down: the webkit project is a mobile device profile, where
  * `mouse.wheel` throws "Mouse wheel is not supported in mobile WebKit". Every webkit
  * run failed on it deterministically — retries only made it fail three times
- * instead of once. The KEYBOARD test at the bottom needs no wheel and runs on both.
+ * instead of once. The KEYBOARD and SETTLE tests at the bottom need no wheel and run
+ * on both.
  */
 
 test.use({ viewport: { width: 390, height: 844 } })
@@ -378,5 +381,60 @@ test.describe("WheelColumn from the keyboard", () => {
     await settle(page)
     expect(await activeHour(page)).toBe("00")
     expect(await hourScrollTop(page)).toBe(0)
+  })
+})
+
+/*
+ * The settle, on BOTH engines: it must not report the row the wheel already reported.
+ *
+ * The settle timer is armed by the scroll event that reported a row, in the render
+ * before the consumer stored it, so a settle that read that render's `value` reported
+ * the row a second time whenever a gesture's LAST scroll event was the one that
+ * crossed. A real drag rarely ends that way on cue, so the test moves the drum exactly
+ * one row with a single `scrollTop` write and counts what arrives: exactly one scroll
+ * event (recorded, so a second one cannot hide the case) and exactly one onChange,
+ * read off the lab page's `onChange calls` counter.
+ */
+test.describe("WheelColumn's settle", () => {
+  test("a scroll whose one event crosses a row reports that row once, settle included", async ({
+    page,
+  }) => {
+    await page.goto("/lab/wheel-column")
+    await awaitClientHandover(page)
+    const hour = page.locator(HOUR)
+    await expect(
+      page.locator(`${HOUR} button[data-active="true"]`),
+    ).toHaveText(label(START))
+    await hour.scrollIntoViewIfNeeded()
+    await settle(page)
+
+    const calls = () =>
+      page.evaluate(() => {
+        const name = [...document.querySelectorAll("span")].find(
+          (span) => span.textContent === "onChange calls",
+        )
+        return Number(name?.nextElementSibling?.textContent)
+      })
+    expect(await calls()).toBe(0)
+
+    await hour.evaluate((el) => {
+      const events: number[] = []
+      ;(window as { wheelScrolls?: number[] }).wheelScrolls = events
+      el.addEventListener("scroll", () => events.push(el.scrollTop))
+      el.scrollTop += 30
+    })
+    await expect(hour.locator('button[data-active="true"]')).toHaveText(
+      label(START + 1),
+    )
+    //past the 120ms settle, with room for the render the report triggers
+    await page.waitForTimeout(600)
+
+    expect(
+      await page.evaluate(
+        () => (window as { wheelScrolls?: number[] }).wheelScrolls,
+      ),
+      "one scroll event, landing on the row it crossed into",
+    ).toEqual([(START + 1) * ITEM_H])
+    expect(await calls(), "one row crossed is one onChange").toBe(1)
   })
 })

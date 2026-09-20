@@ -66,7 +66,8 @@ export interface WheelColumnProps {
   value: number
   /**
    * Fired whenever the centered value changes — live while the wheel is
-   * moving, plus a final commit once scrolling settles.
+   * moving, plus a final commit once scrolling settles on a row that is not
+   * the current `value`.
    */
   onChange: (value: number) => void
   /** Accessible name for the column (rendered as a `<fieldset>`). */
@@ -117,6 +118,15 @@ export function WheelColumn({
   //lands while the first roll is still travelling, and counting from the centred row
   //then would swallow it
   const keyTargetRef = useRef<number | null>(null)
+  //the settle as of the latest commit, for the timers to call: a timer is armed by an
+  //event handler from the render BEFORE the consumer stores the row it reported (or
+  //clamps a day the month no longer has), and that render's own commit would read its
+  //stale value, items and onChange — reporting the stored row a second time, a row
+  //that left the list, or a row through a callback that closes over an old month
+  const commitRef = useRef(() => {})
+  useLayoutEffect(() => {
+    commitRef.current = commit
+  })
 
   const selectedIndex = Math.max(
     0,
@@ -229,7 +239,7 @@ export function WheelColumn({
     // while a finger is down, leave the wheel free; the timer also keeps
     // resetting through the snap glide, so we settle only once it idles
     if (draggingRef.current) return
-    commitTimer.current = window.setTimeout(commit, 120)
+    commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
   }
 
   // touch (not pointer) events: iOS fires pointercancel mid-scroll, which would
@@ -246,7 +256,7 @@ export function WheelColumn({
     if (!draggingRef.current) return
     draggingRef.current = false
     window.clearTimeout(commitTimer.current)
-    commitTimer.current = window.setTimeout(commit, 120)
+    commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
   }
 
   //iOS-native affordance: tapping a row rolls it into the center. The smooth
