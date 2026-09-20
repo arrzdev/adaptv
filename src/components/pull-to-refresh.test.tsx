@@ -81,3 +81,148 @@ describe("usePullToRefresh", () => {
     expect(seen.at(-1)).toBe("pulling")
   })
 })
+/* ---- one finger owns the pull -------------------------------------------- */
+
+describe("one finger owns the pull", () => {
+  //a thumb steadying the phone, a knuckle, a second finger resting on the
+  //screen: every one starts a touch of its own while the pull is under way.
+  //The pull belongs to the finger that started it — the others neither
+  //restart it from their own position nor release it when they lift
+
+  type Finger = { id: number; x: number; y: number }
+  //the component reads the touch lists off the event and nothing else, so a
+  //plain cancelable Event carrying them is a faithful stand-in
+  function fingersEvent(type: string, touches: Finger[], changed: Finger[]) {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    const list = (fingers: Finger[]) =>
+      fingers.map((f) => ({ identifier: f.id, clientX: f.x, clientY: f.y }))
+    Object.defineProperty(event, "touches", { value: list(touches) })
+    Object.defineProperty(event, "changedTouches", { value: list(changed) })
+    return event
+  }
+
+  function pullRow() {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const phase = { current: "idle" }
+    function Probe() {
+      const pull = usePullToRefresh()
+      phase.current = pull.isPulling
+        ? "pulling"
+        : pull.isRefreshing
+          ? "refreshing"
+          : pull.isClosing
+            ? "closing"
+            : "idle"
+      return null
+    }
+    const { container } = render(
+      <PullToRefresh onRefresh={onRefresh}>
+        <Probe />
+      </PullToRefresh>,
+    )
+    const root = container.querySelector('[data-adaptv="pull-to-refresh"]')
+    if (!(root instanceof HTMLElement)) throw new Error("no gesture root")
+    return { root, phase, onRefresh }
+  }
+
+  const f1 = (y: number): Finger => ({ id: 0, x: 0, y })
+  const f2: Finger = { id: 1, x: 100, y: 300 }
+
+  it("a cancel naming another finger changes nothing; one naming the pulling finger ends the pull (touch)", () => {
+    const { root, phase, onRefresh } = pullRow()
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchstart", [f1(0)], [f1(0)]))
+    })
+    for (let y = 12; y <= 40; y += 4) {
+      act(() => {
+        root.dispatchEvent(fingersEvent("touchmove", [f1(y)], [f1(y)]))
+      })
+    }
+    expect(phase.current).toBe("pulling")
+    //the browser cancels the thumb: the pulling finger is still down
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchcancel", [f1(40)], [f2]))
+    })
+    expect(phase.current).toBe("pulling")
+    //the whole touch taken away: the pulling finger is among the cancelled
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchcancel", [], [f1(40), f2]))
+    })
+    expect(phase.current).not.toBe("pulling")
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("a second finger landing and lifting mid-pull neither restarts nor releases it (touch)", () => {
+    const { root, phase, onRefresh } = pullRow()
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchstart", [f1(0)], [f1(0)]))
+    })
+    for (let y = 12; y <= 60; y += 4) {
+      act(() => {
+        root.dispatchEvent(fingersEvent("touchmove", [f1(y)], [f1(y)]))
+      })
+    }
+    expect(phase.current).toBe("pulling")
+
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchstart", [f1(60), f2], [f2]))
+    })
+    for (let y = 64; y <= 120; y += 4) {
+      act(() => {
+        root.dispatchEvent(fingersEvent("touchmove", [f1(y), f2], [f1(y)]))
+      })
+    }
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchend", [f1(120)], [f2]))
+    })
+    expect(phase.current).toBe("pulling")
+    expect(onRefresh).not.toHaveBeenCalled()
+
+    //the first finger lifts past the threshold: its pull, its refresh
+    act(() => {
+      root.dispatchEvent(fingersEvent("touchend", [], [f1(120)]))
+    })
+    expect(phase.current).toBe("refreshing")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it("a second finger landing and lifting mid-pull neither restarts nor releases it (pointer)", () => {
+    const { root, phase, onRefresh } = pullRow()
+    const second = (x: number, y: number) => ({
+      clientX: x,
+      clientY: y,
+      pointerId: 2,
+      isPrimary: false,
+    })
+    act(() => {
+      fireEvent.pointerDown(root, pointer(0, 0))
+    })
+    for (let y = 12; y <= 60; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(root, pointer(0, y))
+      })
+    }
+    expect(phase.current).toBe("pulling")
+
+    act(() => {
+      fireEvent.pointerDown(root, second(100, 300))
+    })
+    for (let y = 64; y <= 120; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(root, pointer(0, y))
+      })
+    }
+    act(() => {
+      fireEvent.pointerUp(root, second(100, 300))
+    })
+    expect(phase.current).toBe("pulling")
+    expect(onRefresh).not.toHaveBeenCalled()
+
+    act(() => {
+      fireEvent.pointerUp(root, pointer(0, 120))
+    })
+    expect(phase.current).toBe("refreshing")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+})
