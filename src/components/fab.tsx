@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react"
-import { forwardRef, useEffect, useRef, useState } from "react"
+import { forwardRef } from "react"
 import type { ButtonHandle, ButtonProps } from "#adaptv/components/button"
 import { Button } from "#adaptv/components/button"
 import { useKeyboard } from "#adaptv/hooks/use-keyboard"
+import { useLayoutViewportShrink } from "#adaptv/hooks/use-layout-viewport-shrink"
 import { mergeStyles } from "#adaptv/utils/styles"
 
 /** Which screen corner {@link Fab} sits in. `end`/`start` are inline-relative, so RTL is right by construction. */
@@ -130,49 +131,6 @@ export function fabPositionStyle({
 
   if (hidden) style.pointerEvents = "none"
   return style
-}
-
-/**
- * How far the LAYOUT viewport has shrunk since the keyboard opened, in px. `0` while
- * `active` is false, and the resting height is re-read on every resize until then.
- *
- * `--adaptv-keyboard-height` is the OS keyboard's height, and whether that height
- * OVERLAPS the page depends on the target: iOS keeps the web view's frame (the OS resize
- * is off, `docs/design/behaviors.md §4`), so the keyboard covers the bottom of the layout
- * viewport and a fixed control has to lift by all of it; the Android WebView resizes for
- * the keyboard, so the layout viewport ends where the keyboard begins and `bottom: 0` is
- * already clear. `AvoidKeyboard` measures its own box against the obstruction and never
- * sees this; a control positioned by the cascade has to subtract it. One state update per
- * resize while the keyboard is up — the frames in between still flow through the variable.
- *
- * The rest height is `innerHeight` while the keyboard is closed, so a FAB mounted with a
- * keyboard already up reads a shrink of `0` until that keyboard closes once.
- */
-export function useLayoutViewportShrink(active: boolean): number {
-  const restHeightRef = useRef(0)
-  const [shrink, setShrink] = useState(0)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    if (!active) {
-      setShrink(0)
-      const rememberRest = () => {
-        restHeightRef.current = window.innerHeight
-      }
-      rememberRest()
-      window.addEventListener("resize", rememberRest)
-      return () => window.removeEventListener("resize", rememberRest)
-    }
-    const measure = () => {
-      const rest = restHeightRef.current
-      setShrink(rest > 0 ? Math.max(0, rest - window.innerHeight) : 0)
-    }
-    measure()
-    window.addEventListener("resize", measure)
-    return () => window.removeEventListener("resize", measure)
-  }, [active])
-
-  return shrink
 }
 
 /**
