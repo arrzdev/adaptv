@@ -177,11 +177,20 @@ export function LabButton({
   onClick,
   disabled,
   tone = "default",
+  pressed,
+  testId,
   children,
 }: {
   onClick: () => void
   disabled?: boolean
   tone?: "default" | "danger"
+  /**
+   * The selected member of a segmented row — `aria-pressed` plus a primary
+   * ring, so a row of options shows which one is live without a badge.
+   */
+  pressed?: boolean
+  /** A stable handle for an e2e, where the label is the thing under test. */
+  testId?: string
   children: ReactNode
 }) {
   return (
@@ -189,12 +198,15 @@ export function LabButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
+      data-testid={testId}
       className={cn(
         "clickable rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition-colors",
         "disabled:opacity-40",
         tone === "danger"
           ? "bg-surface text-error ring-border"
           : "bg-secondary text-foreground ring-border-subtle hover:bg-surface",
+        pressed && "bg-primary/15 ring-primary",
       )}
     >
       {children}
