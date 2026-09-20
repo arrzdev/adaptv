@@ -65,7 +65,7 @@ function LabScreensPage() {
           "From the 404, press Back home. It must land on the tasks screen with the app fully working.",
           "Rotate the device to landscape. The rotate guard must cover the screen with the app's own message, and rotating back must dismiss it with no flash.",
           "Check the guard's padding while it is up: its text must clear the notch and the home indicator on both edges.",
-          "Cold-start the app (fully quit it, or hard-reload) and watch the splash: the mascot must be centred and must NOT jump downward a moment after it appears.",
+          "Cold-start the app (fully quit it, or hard-reload) and watch the splash: the mascot must be centred in the screen below the status bar and must NOT jump downward a moment after it appears. On iOS 26 an installed app may move it up once, by up to 31 pt, in its first ~100 ms: that is the launch height following the view below the status bar. A hard-reload there still sits 31 pt low (a known case).",
           "Confirm the splash hands over to the app rather than lingering — and that no splash element is left in the DOM afterwards (the row below checks this).",
         ]}
         expected={{
@@ -86,7 +86,7 @@ function LabScreensPage() {
             note: "All three. Also check the hardware back button from the 404 screen: it must leave the app or return to the previous route, not sit there doing nothing.",
           },
         }}
-        wrong="A bad URL shows the router's default error page or a blank screen instead of the app's 404. The rotate guard appears and then will not go away, or its text sits under the status bar. The splash mascot jumps a few pixels after the first frame (the launch-height freeze is gone), or a splash element is still in the DOM after boot and is silently eating taps."
+        wrong="A bad URL shows the router's default error page or a blank screen instead of the app's 404. The rotate guard appears and then will not go away, or its text sits under the status bar. The splash mascot jumps downward after the first frame (the launch-height freeze is gone), or a splash element is still in the DOM after boot and is silently eating taps."
       />
 
       <LabSection
