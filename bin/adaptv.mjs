@@ -74,6 +74,7 @@ import {
 } from "./lib/lock.mjs"
 import {
   ADAPTV_DIR,
+  appDidNotOpen,
   BUILDS_DIR,
   buildWeb,
   CAP_WEB_DIR,
@@ -1121,10 +1122,14 @@ async function runLive(appRoot, platforms, opts) {
           await relaunchAndroidApp(appRoot, env, target.id)
         } else if (platform === "ios" && wasRunning) {
           // The old process kept running through the build; load the fresh install now
-          // (one relaunch, at the end — not a kill-then-wait-15s at the start).
-          await launchInstalledApp(appRoot, platform, target.id, env, {
-            restart: true,
-          })
+          // (one relaunch, at the end — not a kill-then-wait-15s at the start). The restart
+          // terminates first, so a launch that fails leaves the app closed: the row fails.
+          if (
+            !(await launchInstalledApp(appRoot, platform, target.id, env, {
+              restart: true,
+            }))
+          )
+            throw appDidNotOpen()
         }
         await ensureDeviceWindow(platform, target.id, env)
         // Record AFTER the build: `cap sync` rewrites files in the native project, so a
@@ -1694,12 +1699,16 @@ async function pipeline(kind, appRoot, platforms, opts) {
       // Nothing to rebuild — but RELAUNCH (restart), never just foreground: a stale run
       // (e.g. a prior `dev` session's offline screen) must not linger on screen.
       report("relaunching device")
-      await launchInstalledApp(appRoot, platform, target.id, env, {
-        restart: true,
-      })
-      await ensureDeviceWindow(platform, target.id, env)
-      done[platform] = `launched on ${target.name}`
-      return `${target.name} · cached`
+      if (
+        await launchInstalledApp(appRoot, platform, target.id, env, {
+          restart: true,
+        })
+      ) {
+        await ensureDeviceWindow(platform, target.id, env)
+        done[platform] = `launched on ${target.name}`
+        return `${target.name} · cached`
+      }
+      // couldn't open it after all — fall through and rebuild, the way `dev`'s cached path does.
     }
     // Say what starts, not what it ends in — `cap run` is a build first and a launch last.
     // See the same note on `dev`'s launch path.
@@ -1715,11 +1724,13 @@ async function pipeline(kind, appRoot, platforms, opts) {
     )
     await capRun(appRoot, platform, target.id, env, { report })
     report("launching device")
-    if (wasRunning) {
-      await launchInstalledApp(appRoot, platform, target.id, env, {
+    if (
+      wasRunning &&
+      !(await launchInstalledApp(appRoot, platform, target.id, env, {
         restart: true,
-      })
-    }
+      }))
+    )
+      throw appDidNotOpen()
     await ensureDeviceWindow(platform, target.id, env)
     buildCache.run[key] = { id: runIdOf(platform) }
     done[platform] = `launched on ${target.name}`
