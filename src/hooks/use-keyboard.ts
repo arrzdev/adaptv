@@ -53,7 +53,8 @@ export function getVirtualKeyboardApi(): VirtualKeyboardApi | null {
   return navigator.virtualKeyboard as VirtualKeyboardApi
 }
 
-function getActiveInputElement() {
+/** The focused element if focusing it raises the on-screen keyboard (shadow roots walked), else `null`. */
+export function getActiveInputElement() {
   let active: Element | null = document.activeElement
 
   while (
