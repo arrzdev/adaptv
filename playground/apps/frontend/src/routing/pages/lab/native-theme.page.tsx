@@ -3,7 +3,7 @@ import {
   persistNativeThemePreference,
 } from "@arrzdev/adaptv/capabilities"
 import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
-import { readPreference, useTheme } from "@arrzdev/adaptv/hooks"
+import { useTheme } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import { isNativePlatform } from "@arrzdev/adaptv/utils"
 import { useEffect, useState } from "react"
@@ -25,14 +25,12 @@ export const Route = createFileRoute("/_providers/lab/native-theme")({
 const PREFERENCES: UiThemePreference[] = ["light", "dark", "system"]
 
 function LabNativeThemePage() {
-  const [resolvedTheme, toggleTheme] = useTheme()
+  const theme = useTheme()
   const [native, setNative] = useState(false)
-  const [stored, setStored] = useState<UiThemePreference | null>(null)
   const [lastWrite, setLastWrite] = useState<string | null>(null)
 
   useEffect(() => {
     setNative(isNativePlatform())
-    setStored(readPreference())
   }, [])
 
   async function persist(preference: UiThemePreference) {
@@ -88,15 +86,19 @@ function LabNativeThemePage() {
       <LabSection title="Current theme">
         <LabRow
           label="resolved appearance"
-          value={<LabBadge tone="muted">{resolvedTheme}</LabBadge>}
+          value={<LabBadge tone="muted">{theme.resolved}</LabBadge>}
         />
-        <LabRow label="stored preference" value={stored} />
+        <LabRow
+          label="preference"
+          value={<LabBadge tone="muted">{theme.preference}</LabBadge>}
+        />
         <LabActions>
           <LabButton
-            onClick={() => {
-              toggleTheme()
-              setStored(readPreference())
-            }}
+            onClick={() =>
+              theme.setPreference(
+                theme.resolved === "dark" ? "light" : "dark",
+              )
+            }
           >
             Toggle theme
           </LabButton>

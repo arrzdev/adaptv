@@ -376,7 +376,7 @@ await storage.secure.set("token", jwt)  // localStorage (web) / Keychain·Keysto
 ```ts
 const online = useNetwork()             // navigator.onLine+events / @capacitor/network
 const { open, height } = useKeyboard()  // visualViewport / virtualKeyboard / @capacitor/keyboard
-const [theme, toggle] = useTheme()
+const { preference, resolved, setPreference } = useTheme()
 ```
 
 **Permission-gated → async fn (one-shot) or hook (watch)**, modeled on geolocation (exists):
