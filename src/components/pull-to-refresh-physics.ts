@@ -5,6 +5,8 @@
  * geometry are testable without a DOM. The component keeps the gesture plumbing.
  */
 
+import { clamp } from "#adaptv/utils/clamp"
+
 export type GestureAxis = "pending" | "vertical" | "horizontal"
 
 /** Distance (px) the finger must travel before the gesture commits to an axis —
@@ -24,10 +26,6 @@ const INDICATOR_DOCK_CENTER_Y = STUCK_HEIGHT / 2
 const INDICATOR_FOLLOW_RATIO = INDICATOR_DOCK_CENTER_Y / PULL_THRESHOLD
 export const ACTIVATION_ROTATION_DEG = 270
 const SPINNER_SCALE_MIN = 0.75
-
-export function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
 
 /**
  * Which way is this gesture going? `pending` until it clears the slop, then the

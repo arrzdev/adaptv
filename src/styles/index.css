@@ -34,9 +34,8 @@
 /* 2. Reset rules and platform patches */
 @import "./patches.css";
 
-/* 3. Component-owned styles (drawer keyframes, swipeable layout, collapsible motion, skeleton pulse) */
-/* 3. Component-owned styles (drawer keyframes, swipeable layout, spinner motion) */
-/* 3. Component-owned styles (drawer keyframes, swipeable layout, the wheel's focus ring) */
+/* 3. Component-owned styles (screen, scroll fade, drawer keyframes, swipeable layout,
+ *    collapsible motion, skeleton pulse, divider, spinner motion, the wheel's focus ring) */
 @import "./screen.css";
 @import "./scroll-fade.css";
 @import "./drawer.css";

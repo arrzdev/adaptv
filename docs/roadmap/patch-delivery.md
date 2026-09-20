@@ -219,7 +219,7 @@ it. The correction stops depending on how the consumer spells their styles.
 
 ### 4.2 The mechanism is already shipped, twice
 
-`src/vite/ring-shadow-fallback.ts` is the working model and should be copied wholesale:
+`src/vite/tailwind-empty-fallback.ts` is the working model and should be copied wholesale:
 
 - **A `transform` hook on CSS ids, with NO `enforce`.** This is a measured slot, and both sides are
   documented failures: `enforce: "pre"` runs before Tailwind's own `pre` generate plugin and sees the
