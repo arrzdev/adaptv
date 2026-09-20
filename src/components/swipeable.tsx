@@ -121,6 +121,52 @@ function readAdjacentActionBackground(
   return null
 }
 
+/**
+ * Park or expose one tray. A parked tray sits off-screen under a transform,
+ * which hides it from the eye and from nothing else — so it is `inert`: out of
+ * the tab order, the accessibility tree, find-in-page and selection alike.
+ *
+ * `inert` alone, no `aria-hidden` + `tabIndex=-1` fallback. BCD 8.0.6
+ * (`html.global_attributes.inert`) has it from Safari and WebView iOS 15.5,
+ * Chrome and WebView Android 102. Android refuses to boot below WebView 111
+ * (`MIN_ANDROID_WEBVIEW`, vite/capacitor-config.ts), so the only gap is iOS
+ * 15.0–15.4. Below 15.4 a fallback would do harm: the tray's layout
+ * lives in `styles/swipeable.css` inside `@layer` (iOS 15.4), so there the tray
+ * is never positioned off-screen, it lays out in flow and in view, and hiding
+ * it would hide visible buttons. That leaves 15.4 alone, where the unknown
+ * attribute degrades to exactly the behaviour before it — and `aria-hidden` is
+ * the mechanism the register already rejected for VoiceOver (B20, WebKit
+ * 201887).
+ *
+ * A tray about to go inert that holds focus hands it to the row's content
+ * first. Left alone, the browser drops it to <body> and the next Tab starts
+ * from the top of the page; the content is what the user was acting on. It is
+ * made focusable for that hand-off only, never joining the tab order.
+ */
+function parkTray(
+  tray: HTMLElement | null,
+  parked: boolean,
+  content: HTMLElement | null,
+) {
+  if (!tray || tray.hasAttribute("inert") === parked) return
+  const active = document.activeElement
+  if (parked && content && active && tray.contains(active)) {
+    if (!content.hasAttribute("tabindex")) {
+      content.tabIndex = -1
+      const release = () => content.removeAttribute("tabindex")
+      content.addEventListener("blur", release, { once: true })
+      content.focus({ preventScroll: true })
+      if (document.activeElement !== content) {
+        content.removeEventListener("blur", release)
+        release()
+      }
+    } else {
+      content.focus({ preventScroll: true })
+    }
+  }
+  tray.toggleAttribute("inert", parked)
+}
+
 type DismissEntry = { isOpen: () => boolean; close: () => void }
 
 const dismissRegistry = new Set<DismissEntry>()
@@ -485,40 +531,66 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
 
     /* ---- painting -------------------------------------------------------- */
 
-    const applyOffset = useCallback((x: number) => {
-      offsetRef.current = x
-      const settled = Math.abs(x) < 0.5
+    //A tray is reachable while the row is open to its side, or while a locked
+    //drag is revealing it: "opening" counts, so what the finger uncovers can be
+    //read before it lifts. It goes inert the moment a close STARTS, not when the
+    //spring lands: `openRef` and `useSwipeable().isOpen` both flip there, and a
+    //Tab during the slide-out should not land on a button that is leaving.
+    const syncTrays = useCallback(() => {
+      const x = offsetRef.current
+      const open = openRef.current
+      const dragging = downRef.current !== null && lockRef.current === "h"
       const content = contentRef.current
-      if (content) {
-        content.style.transform = settled ? "" : `translateX(${x}px)`
-      }
-
-      //panels slide in until their natural width, then park (the action button
-      //stays pinned to the edge). a panel-width fill covers any rubber-band
-      //overshoot gap. the fill is a panel child parked just past the panel's
-      //OUTER edge, so its own transform cancels the panel's slide and adds the
-      //raw offset instead: net, the fill tracks the content's trailing edge and
-      //rides in the gap between content and parked panel, sitting off-screen when
-      //closed. nothing is ever parked *behind* the content, so caller content may
-      //be transparent. translating a solid block (not scaling) keeps it flicker-free.
-      const lw = lwRef.current
-      const leftPanelX = Math.min(0, x - lw)
-      if (leftRef.current) {
-        leftRef.current.style.transform = `translateX(${leftPanelX}px)`
-      }
-      if (leftFillRef.current) {
-        leftFillRef.current.style.transform = `translateX(${x - leftPanelX}px)`
-      }
-
-      const rw = rwRef.current
-      const rightPanelX = Math.max(0, x + rw)
-      if (rightRef.current) {
-        rightRef.current.style.transform = `translateX(${rightPanelX}px)`
-      }
-      if (rightFillRef.current) {
-        rightFillRef.current.style.transform = `translateX(${x - rightPanelX}px)`
-      }
+      parkTray(
+        leftRef.current,
+        !(x > 0.5 && (dragging || open === "left")),
+        content,
+      )
+      parkTray(
+        rightRef.current,
+        !(x < -0.5 && (dragging || open === "right")),
+        content,
+      )
     }, [])
+
+    const applyOffset = useCallback(
+      (x: number) => {
+        offsetRef.current = x
+        const settled = Math.abs(x) < 0.5
+        const content = contentRef.current
+        if (content) {
+          content.style.transform = settled ? "" : `translateX(${x}px)`
+        }
+
+        //panels slide in until their natural width, then park (the action button
+        //stays pinned to the edge). a panel-width fill covers any rubber-band
+        //overshoot gap. the fill is a panel child parked just past the panel's
+        //OUTER edge, so its own transform cancels the panel's slide and adds the
+        //raw offset instead: net, the fill tracks the content's trailing edge and
+        //rides in the gap between content and parked panel, sitting off-screen when
+        //closed. nothing is ever parked *behind* the content, so caller content may
+        //be transparent. translating a solid block (not scaling) keeps it flicker-free.
+        const lw = lwRef.current
+        const leftPanelX = Math.min(0, x - lw)
+        if (leftRef.current) {
+          leftRef.current.style.transform = `translateX(${leftPanelX}px)`
+        }
+        if (leftFillRef.current) {
+          leftFillRef.current.style.transform = `translateX(${x - leftPanelX}px)`
+        }
+
+        const rw = rwRef.current
+        const rightPanelX = Math.max(0, x + rw)
+        if (rightRef.current) {
+          rightRef.current.style.transform = `translateX(${rightPanelX}px)`
+        }
+        if (rightFillRef.current) {
+          rightFillRef.current.style.transform = `translateX(${x - rightPanelX}px)`
+        }
+        syncTrays()
+      },
+      [syncTrays],
+    )
 
     const setWillChange = useCallback((on: boolean) => {
       const value = on ? "transform" : ""
@@ -632,13 +704,14 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         if (releaseVelocity !== undefined) velRef.current = releaseVelocity
         closingRef.current = true
         openRef.current = false
+        syncTrays()
         setOpenSide(false)
         springTo(0, () => {
           closingRef.current = false
           onCloseRef.current?.()
         })
       },
-      [springTo],
+      [springTo, syncTrays],
     )
 
     //stable identity shared by the group + dismiss registries
@@ -842,6 +915,10 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
               return false
             }
             stopSpring()
+            //a close this grab interrupted is over: its spring and onSettled
+            //are gone, so the release decides afresh. Left latched, that
+            //release's close() was a no-op and the row stuck in view
+            closingRef.current = false
             setWillChange(true)
           }
         }
@@ -914,7 +991,10 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       })
       if (decision.action === "open") openToRef.current(decision.side)
       else close(decision.velocity)
-    }, [close, hasLeft, hasRight, setWillChange, velocity])
+      //the finger no longer holds a tray open by itself; the side the release
+      //committed to does (a close already synced, unless it was a no-op)
+      syncTrays()
+    }, [close, hasLeft, hasRight, setWillChange, syncTrays, velocity])
 
     //stable handler refs for the imperative touch listeners
     const handlersRef = useRef({ beginDrag, dragMove, endDrag })
@@ -1042,8 +1122,11 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
             lockedStyle: undefined,
           })}
         >
+          {/* `inert` here is the server's HTML and the mount: a row renders
+              closed. The prop never changes, so React never writes it again,
+              and from the first layout on parkTray owns it (see there). */}
           {hasLeft && (
-            <div ref={leftRef} data-swipeable-actions="left">
+            <div ref={leftRef} data-swipeable-actions="left" inert>
               <div
                 ref={leftFillRef}
                 aria-hidden
@@ -1053,7 +1136,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
             </div>
           )}
           {hasRight && (
-            <div ref={rightRef} data-swipeable-actions="right">
+            <div ref={rightRef} data-swipeable-actions="right" inert>
               <div
                 ref={rightFillRef}
                 aria-hidden

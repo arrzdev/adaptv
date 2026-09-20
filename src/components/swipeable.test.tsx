@@ -1,6 +1,7 @@
 import { act, fireEvent, render } from "@testing-library/react"
 import type { ComponentProps, ReactNode } from "react"
 import { createRef, useState } from "react"
+import { renderToString } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import type {
@@ -1335,5 +1336,173 @@ describe("Swipeable · unmount", () => {
     settle()
     expect(onClose).not.toHaveBeenCalled()
     orphan.remove()
+  })
+})
+
+/* ---- a parked tray ------------------------------------------------------- */
+
+describe("Swipeable · a parked tray is out of reach", () => {
+  //A closed row parks its trays off-screen with a transform, which hides them
+  //from the eye and from nothing else: a Tab walked into the buttons and a screen
+  //reader read them out. `inert` is what removes a subtree from both. happy-dom
+  //has no tab order to walk, so the attribute is the contract pinned here, and
+  //playground/e2e/swipeable-tray.spec.ts walks the real one in Chromium.
+  function openRight(content: HTMLElement) {
+    slowDrag(content, -40)
+    settle()
+    expect(tx(content)).toBe(-W)
+  }
+
+  it("a closed row's trays are inert, from the server's HTML on", () => {
+    //before hydration there is no engine to park anything, so the markup has to
+    //arrive parked
+    expect(renderToString(<Row />).match(/ inert=""/g)).toHaveLength(2)
+
+    const { container } = render(<Row />)
+    const { leftPanel, rightPanel } = parts(container)
+    expect(leftPanel?.inert).toBe(true)
+    expect(rightPanel?.inert).toBe(true)
+  })
+
+  it("the tray a drag is revealing is reachable before the finger lifts, and only that one", () => {
+    const { container } = render(<Row />)
+    const { content, leftPanel, rightPanel } = parts(container)
+    mouseDrag(content, -40, { release: false })
+    expect(rightPanel?.inert).toBe(false)
+    expect(leftPanel?.inert).toBe(true)
+
+    act(() => {
+      fireEvent.pointerUp(content, { pointerId: 1, pointerType: "mouse" })
+    })
+    settle()
+    expect(tx(content)).toBe(-W)
+    expect(rightPanel?.inert).toBe(false)
+    expect(leftPanel?.inert).toBe(true)
+  })
+
+  it("a row opened through its open prop exposes the tray it opened", () => {
+    const { container } = render(<Row open="left" />)
+    const { leftPanel, rightPanel } = parts(container)
+    settle()
+    expect(leftPanel?.inert).toBe(false)
+    expect(rightPanel?.inert).toBe(true)
+  })
+
+  it("the tray goes inert the moment the row starts to close, not when the spring lands", () => {
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} />)
+    const { content, rightPanel } = parts(container)
+    openRight(content)
+
+    act(() => ref.current?.close())
+    advance(FRAME)
+    //still sliding out
+    expect(tx(content)).toBeLessThan(0)
+    expect(rightPanel?.inert).toBe(true)
+    settle()
+    expect(rightPanel?.inert).toBe(true)
+  })
+
+  it("a drag that snaps back, or drags an open row shut, leaves the tray inert", () => {
+    const { container } = render(<Row />)
+    const { content, rightPanel } = parts(container)
+    slowDrag(content, -20)
+    expect(rightPanel?.inert).toBe(true)
+    settle()
+
+    openRight(content)
+    slowDrag(content, 24) //-80 → -56, past the close line
+    expect(rightPanel?.inert).toBe(true)
+  })
+
+  it("focus inside the tray when the row closes moves to the row's content", () => {
+    const ref = createRef<SwipeableHandle>()
+    const { container, getByText } = render(<Row ref={ref} />)
+    const { content, rightPanel } = parts(container)
+    openRight(content)
+
+    const del = getByText("delete row")
+    act(() => del.focus())
+    expect(document.activeElement).toBe(del)
+
+    //Enter on the focused action: a click, which closes the row
+    act(() => {
+      fireEvent.click(del)
+    })
+    expect(document.activeElement).toBe(content)
+    expect(rightPanel?.inert).toBe(true)
+    //focusable for that hand-off only — it never joins the tab order
+    expect(content.getAttribute("tabindex")).toBe("-1")
+
+    const elsewhere = document.createElement("button")
+    document.body.append(elsewhere)
+    act(() => elsewhere.focus())
+    expect(content.hasAttribute("tabindex")).toBe(false)
+    elsewhere.remove()
+  })
+
+  it("a close while focus is outside the tray leaves focus where it is", () => {
+    const { container, getByText, getByTestId } = render(
+      <>
+        <Row />
+        <input data-testid="text" />
+      </>,
+    )
+    const { content, rightPanel } = parts(container)
+    openRight(content)
+    act(() => getByText("delete row").focus())
+
+    //focusing a text field closes open rows (the keyboard is coming); that
+    //close must not take the focus back from the field that caused it
+    const field = getByTestId("text")
+    act(() => field.focus())
+    expect(rightPanel?.inert).toBe(true)
+    expect(document.activeElement).toBe(field)
+  })
+
+  it("a drag that crosses zero hands the reveal from one tray to the other", () => {
+    const { container } = render(<Row />)
+    const { content, leftPanel, rightPanel } = parts(container)
+    openRight(content)
+    mouseDrag(content, 140, { release: false }) //-80 → +60, inside the left tray
+    expect(tx(content)).toBe(60)
+    expect(leftPanel?.inert).toBe(false)
+    expect(rightPanel?.inert).toBe(true)
+  })
+
+  //grabbing a row mid-close stops its spring. The close used to stay latched
+  //(closingRef still set), so the release's own close was a no-op: the row
+  //stuck where the finger left it, onClose never fired, every later close()
+  //did nothing — and with the tray inert, the sliver left in view was a dead one
+  it("a row grabbed while it closes follows the finger, then closes for real, and closes again later", () => {
+    const onClose = vi.fn()
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} onClose={onClose} />)
+    const { content, rightPanel } = parts(container)
+    openRight(content)
+
+    act(() => ref.current?.close())
+    advance(FRAME)
+    advance(FRAME)
+    mouseDrag(content, 60, { release: false })
+    //what the finger is holding in view is live
+    expect(tx(content)).toBeLessThan(-0.5)
+    expect(rightPanel?.inert).toBe(false)
+
+    act(() => {
+      fireEvent.pointerUp(content, { pointerId: 1, pointerType: "mouse" })
+    })
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(rightPanel?.inert).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    openRight(content)
+    expect(rightPanel?.inert).toBe(false)
+    act(() => ref.current?.close())
+    settle()
+    expect(tx(content)).toBe(0)
+    expect(rightPanel?.inert).toBe(true)
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 })
