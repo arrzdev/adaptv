@@ -6,7 +6,7 @@ import {
   View,
 } from "@arrzdev/adaptv/components"
 import { useTheme } from "@arrzdev/adaptv/hooks"
-import { createFileRoute, useRouter } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "@arrzdev/adaptv/router"
 import {
   ChevronRight,
   FlaskConical,
@@ -33,13 +33,13 @@ import { useSettings } from "@/data/collections/preferences/settings"
 import { useDataMutation } from "@/hooks/use-data-mutation"
 import { useHaptics } from "@/hooks/use-haptics"
 import { useIsInstalledApp } from "@/hooks/use-installed-app"
+import { useSwipeBack } from "@/hooks/use-swipe-back"
 
 export const Route = createFileRoute("/_providers/settings")({
   component: SettingsPage,
 })
 
 function SettingsPage() {
-  const router = useRouter()
   //Own the edge-swipe-back wherever this app is INSTALLED. This app runs on memory
   //history once installed (`memoryHistoryInStandalone` in adaptv.config.ts), so
   //there is no history entry behind us and the shell's own back-forward swipe is
@@ -48,6 +48,8 @@ function SettingsPage() {
   //second recogniser on the same edge pops two entries. See useIsInstalledApp for
   //why this is not `(display-mode: standalone)`.
   const isInstalled = useIsInstalledApp()
+  //a back press, not a navigation: an open drawer takes it first (useSwipeBack)
+  const swipeBack = useSwipeBack("/")
   const { settings, setSettings } = useSettings()
   const haptic = useHaptics()
   const [resolvedTheme, toggleTheme] = useTheme()
@@ -86,10 +88,7 @@ function SettingsPage() {
 
   return (
     <PageWithSmoothEdges>
-      <EdgeSwipeGestures
-        enabled={isInstalled}
-        left={() => router.navigate({ to: "/" })}
-      />
+      <EdgeSwipeGestures enabled={isInstalled} left={swipeBack} />
       <SettingsHeader />
 
       {/* Login drawer rendered here, in page/outlet scope, NOT up at provider

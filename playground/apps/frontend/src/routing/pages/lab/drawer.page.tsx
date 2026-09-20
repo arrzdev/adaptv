@@ -168,7 +168,7 @@ function LabDrawerPage() {
           "Open the basic drawer. Drag the handle down slowly: the sheet must follow your finger the whole way and settle back if you release near the top.",
           "Drag down past about a third of its height and release. It must close, not snap back.",
           "Flick it down fast from only a few pixels of travel. Velocity alone must close it.",
-          "Tap the dimmed overlay. It must close. Then reopen and press the back affordance (Android hardware back, or the iOS edge swipe): it must close the drawer FIRST, not navigate away from this page.",
+          "Tap the dimmed overlay. It must close. Then reopen and press the back affordance (Android hardware back, or the left-edge swipe in an installed app): it must close the drawer FIRST, not navigate away from this page.",
           "Open the scrolling drawer. Scroll its content to the bottom, then keep pulling down: the sheet must NOT start dragging while the scroller has room, and must only take over once the scroller is at the top.",
           "Open the keyboard drawer and focus the field. The sheet must lift so the field stays visible, and closing the keyboard must put it back.",
           "Open the nested drawer, then the inner one. Back / overlay must close the INNER one first.",
@@ -179,11 +179,11 @@ function LabDrawerPage() {
         expected={{
           web: {
             verdict: "works",
-            note: "Everything, with the mouse standing in for a finger. Back is the browser's Back button here. The keyboard drawer does nothing visible on desktop because there is no on-screen keyboard.",
+            note: "Everything, with the mouse standing in for a finger. The browser's Back button, and Safari's own edge swipe, are browser history rather than the back chain: with a drawer open they leave the page, drawer and all (an iOS 18.0 simulator and headless Chromium and WebKit). The keyboard drawer does nothing visible on desktop because there is no on-screen keyboard.",
           },
           pwa: {
             verdict: "works",
-            note: "Everything. On an installed iOS PWA the keyboard case is the interesting one: the sheet has to lift against a visualViewport-inferred height rather than an exact one, so a frame of lag is expected and a wrong resting position is not.",
+            note: "Everything. On an installed iOS PWA the keyboard case is the interesting one: the sheet has to lift against a visualViewport-inferred height rather than an exact one, so a frame of lag is expected and a wrong resting position is not. The left-edge swipe with a drawer open must close the drawer and stay on the page.",
           },
           ios: {
             verdict: "works",
