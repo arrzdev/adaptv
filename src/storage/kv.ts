@@ -76,10 +76,50 @@ function hydrateFromLocalStorage(): void {
   }
 }
 
+function dropClearedKeys(): void {
+  const dropped: string[] = []
+  try {
+    for (const name of map.keys()) {
+      if (localStorage.getItem(KV_PREFIX + name) === null)
+        dropped.push(name)
+    }
+  } catch {
+    //storage became unreadable: nothing to reconcile against, keep the map
+    return
+  }
+  for (const name of dropped) {
+    map.delete(name)
+    emit(name)
+  }
+}
+
+/** Whether a storage event is about localStorage, the only area kv mirrors. */
+function isLocalStorageEvent(event: StorageEvent): boolean {
+  try {
+    return event.storageArea === localStorage
+  } catch {
+    //Safari private mode throws on access — then kv never mirrored it either
+    return false
+  }
+}
+
 function bindCrossTab(): void {
   window.addEventListener("storage", (event) => {
+    //sessionStorage raises the same event, from a frame of this very tab, with
+    //the same keys a page could pick. None of it is kv's: a keyless one is a
+    //sessionStorage.clear(), and treating it as a wipe would drop the values
+    //kv holds only in memory after localStorage refused them.
+    if (!isLocalStorageEvent(event)) return
     const key = event.key
-    if (!key?.startsWith(KV_PREFIX)) return
+    //a null key is a whole-storage clear in another tab — a consumer's logout
+    //wipe through the platform API — and it took every adaptv key with it.
+    //Reconcile against what localStorage still holds rather than dropping the
+    //map blind: another tab may already have written again since the clear.
+    if (key === null) {
+      dropClearedKeys()
+      return
+    }
+    if (!key.startsWith(KV_PREFIX)) return
     const name = key.slice(KV_PREFIX.length)
     const value = parse(event.newValue)
     if (value === undefined) map.delete(name)
