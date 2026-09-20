@@ -336,6 +336,13 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/battery",
+    title: "Battery",
+    summary:
+      "level and charging · a real number, an honest unknown, or unsupported",
+    isNew: true,
+  },
+  {
     to: "/lab/network",
     title: "Network",
     summary: "reachability · accurate on native, coarse on web",
