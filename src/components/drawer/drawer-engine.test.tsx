@@ -5,6 +5,8 @@ import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import type { DrawerHandle } from "#adaptv/components/drawer"
 import { Drawer } from "#adaptv/components/drawer"
 import { resolveDrawerDragRelease } from "#adaptv/components/drawer/drawer-constants"
+import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
+import { Swipeable } from "#adaptv/components/swipeable"
 import type { GestureCapture } from "#adaptv/hooks/use-gesture-capture"
 import {
   GesturePriority,
@@ -229,5 +231,261 @@ describe("the whole-sheet touch drag", () => {
     dispatchTouch(body, "touchmove", 200)
     expect(translateY(panel)).toBe(90)
     dispatchTouch(body, "touchend", 200)
+  })
+})
+
+/*
+ * The handle's mouse drag claims the shared arbiter, so it has to give it back.
+ *
+ * A trackpad on an iPad or a touchscreen laptop's mouse drags the sheet by its handle, and that
+ * path claims the pointer at pointerdown with `blocksScroll`. If its pointerup or pointercancel
+ * does not release, the drawer stays the arbiter's holder after the drag is over — even after it
+ * closed the sheet — so the next edge swipe pre-empts a drag that no longer exists (and the
+ * drawer's `onLost` snaps a sheet nobody is touching), and a row swipe, which ranks below a drawer
+ * drag, is refused outright.
+ */
+
+function mouse(
+  target: Element,
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  clientY: number,
+  pointerType: "mouse" | "touch" = "mouse",
+) {
+  act(() => {
+    target.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType,
+        pointerId: 7,
+        button: 0,
+        clientX: 200,
+        clientY,
+      }),
+    )
+  })
+}
+
+/** Counts the drawer's own `onLost`: every capture requested at the drawer band is wrapped on its way in. */
+function spyOnDrawerLost() {
+  const request = gestureController.requestCapture
+  const onLost = vi.fn()
+  vi.spyOn(gestureController, "requestCapture").mockImplementation(
+    (id, priority, lost, options) =>
+      request(
+        id,
+        priority,
+        priority === GesturePriority.DrawerDrag
+          ? () => {
+              onLost()
+              lost?.()
+            }
+          : lost,
+        options,
+      ),
+  )
+  return onLost
+}
+
+async function mountForHandleDrag() {
+  //happy-dom has no active pointer to capture
+  vi.spyOn(HTMLElement.prototype, "setPointerCapture").mockImplementation(
+    () => {},
+  )
+  const drawerLost = spyOnDrawerLost()
+  const mounted = await mountOpenDrawer()
+  const handle = mounted.panel.firstElementChild
+    ?.firstElementChild as HTMLElement | null
+  if (!handle) throw new Error("drawer handle did not mount")
+  return { ...mounted, handle, drawerLost }
+}
+
+describe("the handle's mouse drag", () => {
+  it("premise: holds the arbiter, blocking scroll, while the drag is live", async () => {
+    const { panel, handle } = await mountForHandleDrag()
+    expect(gestureController.getCaptured()).toBeNull()
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 110)
+    expect(translateY(panel)).toBe(10)
+    expect(gestureController.getCaptured()).not.toBeNull()
+    expect(gestureController.isScrollBlocked()).toBe(true)
+    mouse(handle, "pointerup", 110)
+  })
+
+  it("gives the arbiter back when a short drag snaps the sheet open", async () => {
+    const { panel, backdrop, handle, onOpenChange, drawerLost } =
+      await mountForHandleDrag()
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 110)
+    //held still, so the release reads as a slow 10px drag, not a flick
+    await settle(600)
+    mouse(handle, "pointerup", 110)
+
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(gestureController.isScrollBlocked()).toBe(false)
+    await settle()
+    expect(translateY(panel)).toBe(0)
+    expect(backdrop.dataset.state).toBe("open")
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(drawerLost).not.toHaveBeenCalled()
+  })
+
+  it("gives the arbiter back when the drag closes the sheet", async () => {
+    const { handle, onOpenChange, drawerLost } = await mountForHandleDrag()
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 400)
+    mouse(handle, "pointerup", 400)
+
+    //free at once, not only once the close has run: the close animation is nobody's gesture
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(gestureController.isScrollBlocked()).toBe(false)
+    await vi.waitFor(() =>
+      expect(onOpenChange).toHaveBeenCalledWith(false),
+    )
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(drawerLost).not.toHaveBeenCalled()
+  })
+
+  it("gives the arbiter back when the pointer is cancelled mid-drag", async () => {
+    const { handle, drawerLost } = await mountForHandleDrag()
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 150)
+    expect(gestureController.getCaptured()).not.toBeNull()
+    mouse(handle, "pointercancel", 150)
+
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(gestureController.isScrollBlocked()).toBe(false)
+    expect(drawerLost).not.toHaveBeenCalled()
+  })
+
+  it("a touch cancel on the handle does not free a whole-sheet touch drag that still holds the arbiter", async () => {
+    const { panel, body, handle } = await mountForHandleDrag()
+
+    dispatchTouch(body, "touchstart", 100)
+    dispatchTouch(body, "touchmove", 110)
+    dispatchTouch(body, "touchmove", 200)
+    const drawerCapture = gestureController.getCaptured()
+    expect(drawerCapture).not.toBeNull()
+
+    //the handle's cancel is wired for every pointer type; a touch one is not the mouse drag's end
+    mouse(handle, "pointercancel", 200, "touch")
+    expect(gestureController.getCaptured()).toBe(drawerCapture)
+    expect(gestureController.isScrollBlocked()).toBe(true)
+
+    dispatchTouch(body, "touchmove", 220)
+    expect(translateY(panel)).toBe(110)
+    dispatchTouch(body, "touchend", 220)
+    expect(gestureController.getCaptured()).toBeNull()
+  })
+
+  it("after the drag, an edge swipe claims without pre-empting the drawer", async () => {
+    const { panel, handle, drawerLost } = await mountForHandleDrag()
+    const onBack = vi.fn()
+    render(<EdgeSwipeGestures left={onBack} />)
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 110)
+    const drawerCapture = gestureController.getCaptured()
+    expect(drawerCapture).not.toBeNull()
+    await settle(600)
+    mouse(handle, "pointerup", 110)
+    await settle()
+
+    //a touch in the left edge strip — the real recogniser claims at touchstart
+    const start = new Touch({
+      identifier: 2,
+      target: document.body,
+      clientX: 4,
+      clientY: 300,
+    })
+    act(() => {
+      document.body.dispatchEvent(
+        new TouchEvent("touchstart", {
+          bubbles: true,
+          touches: [start],
+          changedTouches: [start],
+        }),
+      )
+    })
+    const edgeCapture = gestureController.getCaptured()
+    expect(edgeCapture).not.toBeNull()
+    expect(edgeCapture).not.toBe(drawerCapture)
+    expect(gestureController.isScrollBlocked()).toBe(false)
+    //nothing was pre-empted: no drawer drag was live to lose, and the settled sheet stays put
+    expect(drawerLost).not.toHaveBeenCalled()
+    expect(translateY(panel)).toBe(0)
+
+    const end = new Touch({
+      identifier: 2,
+      target: document.body,
+      clientX: 120,
+      clientY: 300,
+    })
+    act(() => {
+      document.body.dispatchEvent(
+        new TouchEvent("touchend", {
+          bubbles: true,
+          touches: [],
+          changedTouches: [end],
+        }),
+      )
+    })
+    expect(onBack).toHaveBeenCalledOnce()
+    expect(gestureController.getCaptured()).toBeNull()
+  })
+
+  it("after the drag, a swipeable row's claim is granted", async () => {
+    const { handle, drawerLost } = await mountForHandleDrag()
+    const { container } = render(
+      <Swipeable>
+        <Swipeable.Content>row</Swipeable.Content>
+        <Swipeable.RightActions>
+          <button type="button">delete</button>
+        </Swipeable.RightActions>
+      </Swipeable>,
+    )
+    const row = container.querySelector<HTMLElement>(
+      "[data-swipeable-content]",
+    )
+    if (!row) throw new Error("swipeable row did not mount")
+
+    mouse(handle, "pointerdown", 100)
+    mouse(handle, "pointermove", 110)
+    const drawerCapture = gestureController.getCaptured()
+    expect(drawerCapture).not.toBeNull()
+    await settle(600)
+    mouse(handle, "pointerup", 110)
+    await settle()
+
+    //a mouse row swipe, past the 8px dead zone and horizontal: the row claims at its lock
+    const rowPointer = (type: string, clientX: number) =>
+      act(() => {
+        row.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerType: "mouse",
+            pointerId: 9,
+            button: 0,
+            clientX,
+            clientY: 50,
+          }),
+        )
+      })
+    rowPointer("pointerdown", 200)
+    rowPointer("pointermove", 180)
+    rowPointer("pointermove", 160)
+    const rowCapture = gestureController.getCaptured()
+    expect(rowCapture).not.toBeNull()
+    expect(rowCapture).not.toBe(drawerCapture)
+    expect(gestureController.isScrollBlocked()).toBe(true)
+    expect(drawerLost).not.toHaveBeenCalled()
+
+    rowPointer("pointerup", 160)
+    expect(gestureController.getCaptured()).toBeNull()
   })
 })
