@@ -967,7 +967,10 @@ Stated because a suite's silence reads as coverage:
   spec asserts what the worker **did**, never its reported state.
 - **One host.** Everything is Nitro `node-server` under `vite preview`. Cloudflare and Vercel resolve
   static assets before the server (which is why the SSR shell is not named `index.html` — §3.3), and
-  that ordering is verified by reading their config, not by a test.
+  that ordering is verified by reading their config, not by a test. And that host answers static assets
+  uncompressed, because `e2e-sw/preview-host.mjs` strips `Accept-Encoding`: the worker never sees a
+  static response with `Content-Encoding` or `Vary: Accept-Encoding` in either engine, so the
+  `ignoreVary` reasoning in `sw.strategies.ts` is not exercised (SSR documents were never compressed).
 - **Firefox.** Playwright ships it and the no-preload branch above is written *because* of it, but the
   suite runs Chromium and WebKit only — the branch is reached by disabling preload rather than by the
   engine that actually lacks it.

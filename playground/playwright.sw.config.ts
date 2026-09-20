@@ -56,8 +56,10 @@ export default defineConfig({
   ],
   webServer: {
     //build THEN preview: `vite preview` serves whatever is on disk, so without
-    //the build a green run can be measuring the previous commit's worker.
-    command: `pnpm run build && pnpm exec vite preview --port ${port} --strictPort`,
+    //the build a green run can be measuring the previous commit's worker. The
+    //preview is `e2e-sw/preview-host.mjs`, which is `vite preview` minus the
+    //per-request compression that made every fresh precache install slow.
+    command: `pnpm run build && pnpm exec node ../../e2e-sw/preview-host.mjs ${port}`,
     //`cwd` is resolved against THIS config file, so the server can only ever be
     //the app next to it. It used to be `pnpm --filter @repo/frontend`, which
     //matches by package NAME: any second workspace member under `apps/*` calling

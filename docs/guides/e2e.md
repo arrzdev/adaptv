@@ -17,9 +17,9 @@ pnpm --dir playground test:e2e:sw:all     # all three worker suites, built outpu
 | Suite | Config | Specs | Serves | Port |
 |---|---|---|---|---|
 | **Main** | `playwright.config.ts` | `e2e/` — 37 | `vite` (dev) | `41730` (`E2E_PORT`) |
-| **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → `vite preview`** | `41750` (`E2E_SW_PORT`) |
-| **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → preview**, `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
-| **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |
+| **Worker, `ssr`** | `playwright.sw.config.ts` | `e2e-sw/`, minus `update-prompt` | **build → preview**, via `e2e-sw/preview-host.mjs` | `41750` (`E2E_SW_PORT`) |
+| **Worker, `spa`** | `playwright.sw-spa.config.ts` | same | **build → preview**, via `e2e-sw/preview-host.mjs`, `ADAPTV_RENDER=spa` | `41760` (`E2E_SW_SPA_PORT`) |
+| **Worker, `prompt`** | `playwright.sw-prompt.config.ts` | `update-prompt.spec.ts` only | **build → preview**, via `e2e-sw/preview-host.mjs`, `ADAPTV_SW_UPDATE=prompt` | `41770` (`E2E_SW_PROMPT_PORT`) |
 
 Every suite runs two projects: **chromium** (Desktop Chrome) and **webkit** (`iPhone 13` device
 descriptor). WebKit here is the desktop engine, **not a real device** — escalate device-only quirks
@@ -76,8 +76,17 @@ neighbour's session.
 
 The worker configs set `reuseExistingServer: false` unconditionally: **a server already up is a
 server built from unknown source**, and that suite exists to catch exactly that staleness. Their
-`webServer.command` is `build && vite preview` for the same reason — `vite preview` serves whatever is
-on disk, so without the build a green run can be measuring the previous commit's worker.
+`webServer.command` is `pnpm run build && pnpm exec node ../../e2e-sw/preview-host.mjs <port>` for the
+same reason — the preview serves whatever is on disk, so without the build a green run can be measuring
+the previous commit's worker.
+
+The preview is started through `e2e-sw/preview-host.mjs` rather than the `vite preview` CLI, and the
+only difference is that it drops `Accept-Encoding` before the static handler reads it. That handler
+(`serveStatic` from `srvx/static`) brotli-compresses every file on every request at the slowest
+quality, or gzips it for a request that accepts gzip without br, and a fresh registration precaches
+the whole build one file at a time: MEASURED, every install waited seconds on the server's CPU, and on
+a loaded machine one install outlasted `bootControlled`'s 30 s wait. The build, the server and the
+bytes are the same; only the transfer encoding of static files is gone.
 
 ### 3.3 The main suite runs plain `vite`, not the CLI
 
