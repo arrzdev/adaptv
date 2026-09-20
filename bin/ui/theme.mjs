@@ -1,22 +1,18 @@
 // The executable half of `docs/design/cli-visual.md`.
 //
-// Every visual constant the CLI has lives here — the indents, the glyph set, the colour roles,
-// the spinner. Components import these rather than writing `"  "` or `"✓"` inline, so the
+// The visual constants the CLI shares live here — the glyph set, the colour roles, the spinner,
+// the table's columns. Components import these rather than writing `"✓"` inline, so the
 // design system is a thing the code depends on rather than a thing the code is supposed to
-// remember. If this file and the document disagree, the document wins and this is a bug.
+// remember. The 2- and 4-space indents and the ` · ` separator are not tokens: they are the
+// grid in `docs/design/cli-visual.md` §1, written as literals where each row is drawn. If this
+// file and the document disagree, the document wins and this is a bug.
 //
 // Deliberately data, with no imports: it is the one module both the Ink components and the
 // string renderer can share while the port is in progress, so the two cannot drift apart on
 // the way.
 
-/** Every top-level row. Two spaces, always. */
-export const INDENT = 2
-/** Detail hanging under a row: dim, and one level deeper. */
-export const DETAIL_INDENT = 4
 /** The fallback width when stdout is not a terminal (a pipe, a CI log). */
 export const DEFAULT_COLUMNS = 80
-/** ` · ` — two spaces before, one after. Opens the right-hand metadata column. */
-export const META = " · "
 
 /* -----------------------------------------------------------------------------
  * the glyph set — CLOSED
@@ -172,6 +168,3 @@ export const MIN_RIGHT_COLUMN = 28
 
 /** Gap between the two columns of a table. */
 export const COLUMN_GAP = 2
-
-/** How much captured tool output a failed row expands into before it becomes `--verbose`. */
-export const DETAIL_LINES = 10

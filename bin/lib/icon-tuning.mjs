@@ -66,7 +66,7 @@ export function parseTuning(flags) {
     }
     values[name] = n
     const [low, high] = spec.band
-    if (n < low) warnings.push(tighter(name, n, low))
+    if (n < low) warnings.push(tighter(n, low))
     else if (n > high) warnings.push(looser(name, n, spec))
   }
 
@@ -76,13 +76,14 @@ export function parseTuning(flags) {
 /**
  * Below the band: the dev has asked for less room than adaptv leaves, which is the direction
  * that can actually cost them pixels. Named as the consequence, not as "you disagreed with us".
+ *
+ * Only `--margin` can get here: padding's band starts at its own minimum, and a value under
+ * the minimum is an error above, never a warning.
  */
-function tighter(name, n, low) {
-  if (name === "margin")
-    return n === 0
-      ? `--margin 0 leaves no room, so art sits flush to every edge`
-      : `--margin ${n} leaves less room than the ${low}% default`
-  return `--${name} ${n} is below the ${low}% default`
+function tighter(n, low) {
+  return n === 0
+    ? `--margin 0 leaves no room, so art sits flush to every edge`
+    : `--margin ${n} leaves less room than the ${low}% default`
 }
 
 /** Above the band: legal, and the mark starts getting small. */
