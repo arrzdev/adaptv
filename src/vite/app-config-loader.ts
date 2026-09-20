@@ -41,6 +41,12 @@ export async function readAppConfig(
     target: "es2022",
     minify: false,
     metafile: true,
+    //The metafile's input paths, and the paths in a syntax error, are relative to
+    //this directory, which defaults to `process.cwd()`. They are resolved against
+    //`appRoot` below, so they have to be written against it too: with an `appRoot`
+    //that is not the cwd, a module the config imports was watched at a path that
+    //does not exist, and its edits never reloaded anything.
+    absWorkingDir: path.resolve(appRoot),
     plugins: [externalizeDynamicImports],
   })
 
