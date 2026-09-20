@@ -52,7 +52,9 @@ import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 const CARET_MOVE_THRESHOLD_PX = 0.5
 //quiet window after the last detected movement before the caret is restored. Long enough to ride
 //out a momentum-scroll deceleration tail without flicker, short enough to feel immediate on stop.
-const CARET_SETTLE_MS = 120
+//Exported because it is the one definition of "a scroll with no end signal has stopped": a
+//smooth scroll that needs its end where `scrollend` is missing waits out the same window.
+export const CARET_SETTLE_MS = 120
 //how long the rect poll keeps looking after a scroll / viewport event, in frames. The event says
 //something is moving NOW, but the field's own rect may not have crossed the threshold yet on the
 //frame the event arrives — and that event can be the last one of the burst. Frames, not ms,

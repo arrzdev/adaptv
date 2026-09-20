@@ -1,6 +1,9 @@
 import type { RefObject } from "react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { preMuteCaret } from "#adaptv/hooks/use-caret-repaint"
+import {
+  CARET_SETTLE_MS,
+  preMuteCaret,
+} from "#adaptv/hooks/use-caret-repaint"
 import { useInsets } from "#adaptv/hooks/use-insets"
 import {
   useKeyboard,
@@ -164,7 +167,10 @@ function getScrollParentWithin(
   return container
 }
 
-/** Scroll `input`'s nearest in-`container` scroller so the field clears the keyboard line. */
+/**
+ * Scroll `input`'s nearest in-`container` scroller so the field clears the keyboard line.
+ * Returns the scroller when it started a scroll, `null` when the field was already clear.
+ */
 export function scrollFocusedInputIntoView(
   container: HTMLElement,
   input: HTMLElement,
@@ -173,7 +179,7 @@ export function scrollFocusedInputIntoView(
     behavior,
     keyboardTop,
   }: { buffer: number; behavior: ScrollBehavior; keyboardTop: number },
-) {
+): HTMLElement | null {
   const scroller = getScrollParentWithin(input, container)
   const scrollerRect = scroller.getBoundingClientRect()
   const inputRect = input.getBoundingClientRect()
@@ -191,18 +197,97 @@ export function scrollFocusedInputIntoView(
     buffer,
   })
 
-  if (top === scroller.scrollTop) return
+  if (top === scroller.scrollTop) return null
   //mute the caret before the scroll's first frame. A pre-mute rather than a bracket: this
   //scroll never says when it stopped, so the quiet window has to decide.
   preMuteCaret()
   scroller.scrollTo({ top, behavior })
+  return scroller
+}
+
+//input that means a person has hold of the page. Any of it between an aim and the end of its
+//scroll hands the scroller to them, and aiming again would drag it back out of their hands.
+const USER_SCROLL_INTENT_EVENTS = [
+  "touchstart",
+  "pointerdown",
+  "wheel",
+] as const
+
+/**
+ * Call `onSettle` once, when the programmatic scroll just started on `scroller` comes to rest —
+ * or never, if the user touches, clicks or wheels before it does. Returns a cancel.
+ *
+ * Until the first `scroll` event, the end is the caret patch's quiet window,
+ * {@link CARET_SETTLE_MS}, counted from the aim itself, on every engine. A scroll that never
+ * starts fires neither `scroll` nor `scrollend` (an aim past the end of a scroller already
+ * clamped there, measured on both engines), and waiting for a `scrollend` that is not coming
+ * would leave this armed until some later, unrelated scroll ended and aimed again then.
+ *
+ * Once the scroll has started, the end is `scrollend` where the engine has it. Where it does
+ * not (older WebKit, which includes adaptv's iOS 15 floor), it is the same quiet window, pushed
+ * out by every `scroll`. That fallback can mistake a stall for the end; a caller that re-aims
+ * from fresh geometry then aims at the destination the scroll was already heading for.
+ *
+ * Nothing here is keyboard-specific: any surface that aims a smooth scroll and wants a second
+ * look at where it landed can take it.
+ */
+export function onProgrammaticScrollSettled(
+  scroller: HTMLElement,
+  onSettle: () => void,
+): () => void {
+  const intent = { capture: true, passive: true } as const
+  const hasScrollEnd = "onscrollend" in window
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let done = false
+
+  function cancel() {
+    if (done) return
+    done = true
+    if (timer !== null) clearTimeout(timer)
+    scroller.removeEventListener("scrollend", settle)
+    scroller.removeEventListener("scroll", handleScroll)
+    for (const type of USER_SCROLL_INTENT_EVENTS) {
+      window.removeEventListener(type, cancel, intent)
+    }
+  }
+
+  function settle() {
+    if (done) return
+    cancel()
+    onSettle()
+  }
+
+  function restartQuietWindow() {
+    if (timer !== null) clearTimeout(timer)
+    timer = setTimeout(settle, CARET_SETTLE_MS)
+  }
+
+  function handleScroll() {
+    if (!hasScrollEnd) {
+      restartQuietWindow()
+      return
+    }
+    //the scroll has started, so a `scrollend` is coming: it owns the settle from here
+    if (timer !== null) clearTimeout(timer)
+    timer = null
+    scroller.removeEventListener("scroll", handleScroll)
+  }
+
+  for (const type of USER_SCROLL_INTENT_EVENTS) {
+    window.addEventListener(type, cancel, intent)
+  }
+  if (hasScrollEnd) scroller.addEventListener("scrollend", settle)
+  scroller.addEventListener("scroll", handleScroll, { passive: true })
+  restartQuietWindow()
+  return cancel
 }
 
 /**
  * Headless keyboard avoidance for a wrapper element. Observes the on-screen keyboard
  * ({@link useKeyboard}), reports how much room to reserve below `containerRef`, and —
  * when `scrollIntoView` — scrolls the focused descendant input clear of the keyboard
- * on focus and on keyboard open. Pair with {@link useFreezeViewport} (held app-wide),
+ * on focus and on keyboard open, looking once more when that scroll ends in case content
+ * arrived above the field meanwhile. Pair with {@link useFreezeViewport} (held app-wide),
  * which keeps the layout viewport height stable so the reserved space is exact.
  */
 export function useKeyboardAvoidance({
@@ -287,26 +372,58 @@ export function useKeyboardAvoidance({
       ? "auto"
       : "smooth"
     let frame = 0
+    let cancelReaim = () => {}
+
+    function aim(owner: HTMLElement, target: HTMLElement) {
+      //the keyboard line is read fresh from visualViewport on every aim: the debounced
+      //keyboard.height can lag a field-switch (no open/close event to update it)
+      const vv = window.visualViewport
+      const keyboardTop = vv
+        ? vv.offsetTop + vv.height
+        : window.innerHeight
+      return scrollFocusedInputIntoView(owner, target, {
+        buffer: scrollBuffer,
+        behavior: scrollBehavior,
+        keyboardTop,
+      })
+    }
 
     function scrollClear(target: HTMLElement) {
       if (!container) return
       const owner = container
       cancelAnimationFrame(frame)
-      //Two frames out, reading the keyboard line fresh from visualViewport. One frame is
-      //too early on iOS — WebKit runs its own focus layout first and drops our scroll; and
-      //the debounced keyboard.height can lag a field-switch (no open/close event to update
-      //it), so derive the line from live geometry instead of the React state.
+      cancelReaim()
+      //Two frames out. One frame is too early on iOS — WebKit runs its own focus layout
+      //first and drops our scroll.
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(() => {
-          const vv = window.visualViewport
-          const keyboardTop = vv
-            ? vv.offsetTop + vv.height
-            : window.innerHeight
-          scrollFocusedInputIntoView(owner, target, {
-            buffer: scrollBuffer,
-            behavior: scrollBehavior,
-            keyboardTop,
+          const scroller = aim(owner, target)
+          //An aim picks an absolute scrollTop from the geometry of the frame it ran in. A
+          //smooth scroll then spends 200-450ms getting there, and content that lands above
+          //the field meanwhile (a validation message, suggestions, an image without
+          //dimensions) moves the field and not the destination: it arrives short, under the
+          //keyboard. So look once more when the scroll ends and aim again from what is on
+          //screen then. Once: the second aim arms nothing, or a feed that keeps growing
+          //would chain aims forever. Not at all under reduced motion — an instant scroll
+          //has no flight for content to land in.
+          if (!scroller || scrollBehavior !== "smooth") return
+          const stop = onProgrammaticScrollSettled(scroller, () => {
+            release()
+            if (
+              document.activeElement === target &&
+              owner.contains(target)
+            ) {
+              aim(owner, target)
+            }
           })
+          function release() {
+            stop()
+            target.removeEventListener("focusout", release)
+            if (cancelReaim === release) cancelReaim = () => {}
+          }
+          //a blur leaves nothing to aim for, so stop listening now rather than at scroll end
+          target.addEventListener("focusout", release)
+          cancelReaim = release
         })
       })
     }
@@ -339,6 +456,7 @@ export function useKeyboardAvoidance({
     return () => {
       container.removeEventListener("focusin", handleFocusIn)
       cancelAnimationFrame(frame)
+      cancelReaim()
     }
   }, [
     containerRef,
