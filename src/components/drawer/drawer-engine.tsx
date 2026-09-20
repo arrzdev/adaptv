@@ -335,11 +335,17 @@ export function DrawerEngine({
     blocksScroll: true,
     //Pre-empted (an edge swipe outranks a drawer drag) — snap back rather than
     //leaving the sheet mid-translate with no pointer left to finish it.
-    //`dragActionsRef` is declared further down; this closure only runs on a real
-    //pre-emption, long after render, so the forward reference is safe.
+    //The rest of that touch is no longer ours either: clearing the touch flags makes
+    //its later moves and its touchend no-ops until a new touchstart, instead of
+    //dragging the snapped sheet back under the finger and deciding a close with
+    //no start time. The refs are declared further down; this closure only runs on
+    //a real pre-emption, long after render, so the forward references are safe.
     onLost: () => {
       isPointerDraggingRef.current = false
+      isTouchDragCommittedRef.current = false
+      isTouchActiveRef.current = false
       dragStartTimeRef.current = null
+      syncBackdropGestureAttributes()
       dragActionsRef.current?.snapOpen()
     },
   })
