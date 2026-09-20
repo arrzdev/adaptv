@@ -1911,11 +1911,24 @@ export function explainLaunchFailure(platform, text = "") {
  * checking "is the app installed" across ALL connected emulators means a second, idle
  * emulator that has never seen the app makes the answer `false` forever, and the run
  * cache can never hit. Returns null when ambiguous so callers fall back to the safe path.
+ *
+ * `exact` drops the one guess: without it, the only connected device is taken for the target
+ * without asking its name. That is right for a question about the app (one device is the one
+ * the run installed to) and wrong for a caller that WRITES to the device on its own schedule:
+ * the target can drop off adb and leave only another session's emulator connected.
+ * `androidReverse` passes it.
+ * @param {string | undefined} target
+ * @param {NodeJS.ProcessEnv} env
+ * @param {{ exact?: boolean }} [opts]
  */
-export async function androidSerialForTarget(target, env) {
+export async function androidSerialForTarget(
+  target,
+  env,
+  { exact = false } = {},
+) {
   const serials = await androidDevices(env)
   if (serials.length === 0) return null
-  if (serials.length === 1) return serials[0]
+  if (serials.length === 1 && !exact) return serials[0]
   if (!target) return null
   if (serials.includes(target)) return target // already a serial
   for (const s of serials) {
