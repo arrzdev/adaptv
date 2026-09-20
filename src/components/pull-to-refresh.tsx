@@ -1,4 +1,3 @@
-import { motion } from "motion/react"
 import type {
   MutableRefObject,
   PointerEvent,
@@ -30,6 +29,7 @@ import {
   STUCK_VERTICAL_PADDING,
 } from "#adaptv/components/pull-to-refresh-physics"
 import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
+import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
@@ -306,6 +306,9 @@ export const PullToRefresh = forwardRef<
   const [phase, setPhase] = useState<RefreshPhase>("idle")
   const [pullOffset, setPullOffset] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const spinnerTrackRef = useRef<HTMLDivElement>(null)
+  const spinnerRotatorRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const pullStartX = useRef(0)
   const pullStartY = useRef(0)
   const gestureAxis = useRef<GestureAxis>("pending")
@@ -686,6 +689,34 @@ export const PullToRefresh = forwardRef<
   // composited descendants (e.g. swipeable row content) under that transform.
   const liftContent = phase !== "idle" || pullOffset > 0
 
+  //Imperative, not motion components: the content layer wraps the app's whole
+  //scroll content, and this component renders on every pointer frame of a pull.
+  //A motion component there re-renders every app motion element inside on each
+  //of those frames and overrides the app's own `LazyMotion`. The spinner goes
+  //the same way so the component carries no motion context at all.
+  //→ docs/decisions/animation.md §3.1
+  const liveSpinner = enabled && showSpinner
+  useAnimatedStyle(
+    spinnerTrackRef,
+    liveSpinner
+      ? { top: spinnerTop, opacity: spinnerOpacity, scale: spinnerScale }
+      : null,
+    spinnerTrackTransition,
+  )
+  useAnimatedStyle(
+    spinnerRotatorRef,
+    liveSpinner ? { rotate: spinnerRotate } : null,
+    spinnerRotateTransition,
+  )
+  //the close resolves here, and only here: a phase left in `closing` keeps the
+  //content lifted until the next touch
+  useAnimatedStyle(
+    contentRef,
+    enabled && liftContent ? { y: contentY } : null,
+    { y: contentTransition },
+    isClosing ? onCloseAnimationComplete : undefined,
+  )
+
   if (!enabled) {
     return (
       <PullToRefreshContext.Provider value={contextValue}>
@@ -725,47 +756,34 @@ export const PullToRefresh = forwardRef<
           {liveStatus}
         </div>
         {showSpinner && (
-          <motion.div
+          <div
+            ref={spinnerTrackRef}
             className={PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS}
-            initial={false}
-            animate={{
-              top: spinnerTop,
-              opacity: spinnerOpacity,
-              scale: spinnerScale,
-            }}
-            transition={spinnerTrackTransition}
           >
-            <motion.div
+            <div
+              ref={spinnerRotatorRef}
               className={PULL_TO_REFRESH_INDICATOR_ROTATOR_LAYOUT_CLASS}
-              initial={false}
-              animate={{ rotate: spinnerRotate }}
-              transition={spinnerRotateTransition}
             >
               <PullIndicatorArc
                 arcProgress={isDragging ? pulling.arcProgress : 1}
                 spinning={isRefreshing}
                 reducedMotion={reducedMotion}
               />
-            </motion.div>
-          </motion.div>
-        )}
-        {liftContent ? (
-          <motion.div
-            className={PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS}
-            initial={false}
-            animate={{ y: contentY }}
-            transition={contentTransition}
-            onAnimationComplete={
-              isClosing ? onCloseAnimationComplete : undefined
-            }
-          >
-            {children}
-          </motion.div>
-        ) : (
-          <div className={PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS}>
-            {children}
+            </div>
           </div>
         )}
+        {/* One element whether lifted or not, so a pull never remounts the
+            app's content; idle, it carries no transform at all. */}
+        <div
+          ref={contentRef}
+          className={
+            liftContent
+              ? PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS
+              : PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS
+          }
+        >
+          {children}
+        </div>
       </div>
     </PullToRefreshContext.Provider>
   )
