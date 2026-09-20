@@ -482,6 +482,24 @@ telling the dev to press:
 > row still clipped to one physical line (R31), and it is erased as a whole. Cursor arithmetic is
 > where this goes wrong — a redraw that rewinds to the top when it is already parked there walks
 > the block one row up the screen per frame, and the erase then eats the settled lines above it.
+>
+> The erase is also how a session ENDS. A quit that writes anything while the block is still
+> parked moves the cursor off its top row, and the erase then runs one row too low. `dev web`
+> did exactly that: its quit asks for breathing room before it tears down, the string watcher's
+> last `\r` made that a newline, and every `q` and ctrl-c left the terminal advertising a key
+> for a process that was already gone:
+> ```
+>   ✓ web  · 1.1s
+>     local  http://localhost:41730
+>
+>   ctrl-c stop
+> $
+> ```
+> The block's own bytes never count as what the page last said; the last line printed above it
+> does, whether that is the address block or a `vite │` line from `--verbose`. A spacer while the
+> block is parked adds a blank only when that line asks for one, and it clears the row it steps
+> over. A finished `dev web` session ends on its last printed line and one blank row, the same
+> as a native run.
 
 **R44 — A live row CLIPS; a static page WRAPS.** R10/R31 keep a live row to exactly one physical
 line, because a row redrawn with `\r\x1b[2K` must occupy exactly one — a wrapped row erases only
@@ -1759,6 +1777,9 @@ Tests do not cover any of this. Run it and read it:
       `NSAppTransportSecurity` left in it (R39)
 - [ ] SIGKILL a `dev ios` run, then start another one — the stranded ATS exception is healed at
       prepare rather than adopted, and reverted again on a clean exit
+- [ ] `q`, then ctrl-c, in `dev web` and in `dev web --verbose` — no `ctrl-c stop` row is left
+      behind: the session ends on its last printed line and one blank row, as a native run does
+      (R41)
 - [ ] `pnpm typecheck && pnpm biome:check && pnpm test`
 
 Capture output through a pty so live-line rendering behaves as in a real terminal:

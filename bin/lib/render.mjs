@@ -393,7 +393,24 @@ export function spacer() {
   //command) and they meet — `preview all` with nothing to warn about put the gap after the
   //banner AND before the first step, and the run started two lines lower than every other.
   openBlock = false
-  if (currentTail() !== "\n\n") out("\n")
+  if (currentTail() === "\n\n") return
+  //A parked watch row sits on the very row this newline steps over, and stepping over it would
+  //leave it there for good, one row above where the next frame or the quit's erase looks (R41).
+  if (sink === "out" && parkedWatcher) transient("\r\x1b[0J")
+  out("\n")
+}
+
+/** The string watch row on screen right now, if any — see `spacer()` and `liveWatcher`. */
+let parkedWatcher = null
+/**
+ * Bytes that are redrawn and erased, never settled: written, but kept out of the stream's
+ * memory of what the page last said. The cursor ends where they began, so that memory is still
+ * whatever was written before them — a banner's blank, or the last `vite │` line under the row.
+ */
+const transient = (s) => {
+  const tail = streams.out.tail
+  out(s)
+  streams.out.tail = tail
 }
 
 /** One dim, indented line hanging under a settled step — the same shape failure detail
@@ -644,6 +661,12 @@ export function liveWatcher({ keys = true } = {}) {
       stop: () => {},
     }
   }
+  // The block's bytes are `transient`: they never become the engine's memory of what the page
+  // last said. The Ink block gets that for free, since its frames never pass through `out()`.
+  // This one did not: `dev`'s quit calls `spacer()` before `teardown()` stops the block, the `\r`
+  // of the last draw made the spacer write a newline, the cursor stepped off the row, and the
+  // erase ran one row too low. Every `q` and ctrl-c ended on a `ctrl-c stop` that no longer
+  // stopped anything (R41).
   let frame = 0
   let changed = null
   let clearAt = 0
@@ -682,14 +705,15 @@ export function liveWatcher({ keys = true } = {}) {
     // block one row up the screen per frame, and `stop()` then erased the settled platform
     // lines above it.) Clipping keeps each row ONE physical line: a wrapped status row redrawn
     // in place stacks a copy every frame, and a block does it several rows at a time.
-    out("\r\x1b[0J")
-    out(rows.map((r) => clipAnsi(r, Math.max(10, width()))).join("\n"))
-    if (rows.length > 1) out(`\x1b[${rows.length - 1}A`)
-    out("\r")
+    const body = rows
+      .map((r) => clipAnsi(r, Math.max(10, width())))
+      .join("\n")
+    const up = rows.length > 1 ? `\x1b[${rows.length - 1}A` : ""
+    transient(`\r\x1b[0J${body}${up}\r`)
   }
   draw()
   const anim = setInterval(draw, 80)
-  return {
+  const handle = {
     hmr: (files) => {
       changed = files
       clearAt = Date.now() + 900
@@ -707,9 +731,12 @@ export function liveWatcher({ keys = true } = {}) {
       // The cursor is parked at the top of the block, so this erases the whole thing however
       // many rows it grew to — and leaves the cursor exactly where the block began, which is
       // what `rewindLines` counts back from.
-      out("\r\x1b[0J")
+      transient("\r\x1b[0J")
+      if (parkedWatcher === handle) parkedWatcher = null
     },
   }
+  parkedWatcher = handle
+  return handle
 }
 
 /**
