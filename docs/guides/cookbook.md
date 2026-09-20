@@ -21,7 +21,7 @@
 | 4. Offline-first data with an IDB persister | ⚠︎ stub | `storage.store` (`docs/design/architecture.md §2.2`) |
 | 5. Refetch-on-resume | ⚠︎ stub | `useAppState` (`docs/design/coordination.md`) |
 | 6. Bearer-token auth + secure storage | ⚠︎ stub | `storage.secure` (`docs/design/architecture.md §2.3`) |
-| 7. Deep-link → route mapping | ⚠︎ stub | `appUrlOpen` normalisation (`docs/decisions/register.md §5.0.3`) |
+| 7. Deep-link → route mapping | ✅ built in — no recipe to write | `deepLinks.scheme`, `onUrlOpened` (`src/capabilities/url-open.ts`) |
 
 ---
 
@@ -243,6 +243,19 @@ Each of these has a decision recorded elsewhere and wants a worked example befor
   is architectural rather than a misconfiguration. Use `storage.secure`, which is Keychain on iOS and
   Keystore on Android; the platform's ordinary preferences store is **plaintext** and must never hold
   a token. adaptv's own storage tiers are explicit about which of them is actually secure.
-- **Deep-link → route mapping** — `appUrlOpen` payloads and `getLaunchUrl()` semantics differ per
-  platform and need normalising; memory history must be seeded from the deep link at boot.
-  → `docs/decisions/register.md §5.0.3`.
+- **Deep-link → route mapping** — built in, so there is nothing to wire. Set
+  `deepLinks: { scheme: "myapp" }` in `adaptv.config.ts` and adaptv declares the scheme in both
+  native projects; `myapp://settings/profile?tab=2` then opens the app at `/settings/profile?tab=2`
+  (the host is the first path segment, and `myapp:///settings` means the same as `myapp://settings`).
+  A link that launches the app **replaces** the screen it was about to show, so back does not land
+  on a first screen the user never saw; a link that arrives while the app runs is an ordinary push.
+  A link that launches the app reaches it by two routes at once, and adaptv reads only one of them,
+  so each link routes exactly once and runs its route's `beforeLoad` and loader once. Android is
+  unverified: recreating the app's activity (reopening it from Recents after it finished, or after
+  the system killed it) replays its launch link. `onUrlOpened(({ url, path }) => …)` from `@arrzdev/adaptv/capabilities` hears links
+  after they are routed — for analytics or finishing a sign-in callback, not for navigating — and
+  only while subscribed, so read the launching link from the route it landed on. Nothing happens on
+  the web, where a link is simply the page's URL. **Not built:** universal links and Android app
+  links (an `https://` link that opens the app), which need a signing team, an associated-domains
+  entitlement and files hosted on your domain; dev and release builds also claim the same scheme.
+  → `src/capabilities/url-open.ts`, `docs/decisions/register.md §5.0.3`.
