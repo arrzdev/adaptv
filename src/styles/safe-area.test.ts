@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { join, sep } from "node:path"
 import { describe, expect, it } from "vitest"
 import {
   compileAdaptvStyles,
@@ -325,8 +325,15 @@ describe("safe-area contract — bare env(safe-area-inset) is banned outside saf
   //One invariant, one test: the walk covers ~370 files, and a test per file reported
   //each of them as a separate pass — the suite count moved every time a file landed,
   //for one grep. A violation is listed as `file:line`, all of them at once.
+  //
+  //`fixtures/` is skipped: it holds Tailwind's compiled output for a whole app, captured
+  //byte for byte from a dev run, not source anyone wrote. Editing it to satisfy this rule
+  //would make it stop being the real input its test depends on.
   const files = walk(SRC, [".ts", ".tsx", ".css"]).filter(
-    (f) => f !== SAFE_AREA_CSS && !f.endsWith("safe-area.test.ts"),
+    (f) =>
+      f !== SAFE_AREA_CSS &&
+      !f.endsWith("safe-area.test.ts") &&
+      !f.includes(`${sep}fixtures${sep}`),
   )
 
   it("finds bare env() nowhere but the contract file", () => {
