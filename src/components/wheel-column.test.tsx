@@ -129,14 +129,6 @@ describe("WheelColumn — mount", () => {
     expect(wheel().scrollTop).toBe(0)
     expect(activeRows()).toEqual(["00"])
   })
-
-  it("keeps the rows out of the tab order and names the column for assistive tech", () => {
-    render(<Controlled initial={9} onChange={() => {}} />)
-    expect(wheel().tagName).toBe("FIELDSET")
-    for (const row of wheel().querySelectorAll("button")) {
-      expect(row.tabIndex).toBe(-1)
-    }
-  })
 })
 
 describe("WheelColumn — what onChange receives for a scroll", () => {
@@ -371,6 +363,115 @@ describe("WheelColumn — tapping a row", () => {
     scrollWheel(10 * H)
     scrollWheel(11 * H)
     expect(onChange.mock.calls).toEqual([[10], [11]])
+  })
+})
+
+describe("WheelColumn — the keyboard", () => {
+  //the rows stay out of the tab order on purpose, so the column itself is the one
+  //keyboard stop — without it a keyboard user cannot reach the value at all
+  it("is one tab stop, and the rows inside it are not", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    expect(wheel().tabIndex).toBe(0)
+    //what focus lands on is the column assistive tech names, not an anonymous box
+    act(() => wheel().focus())
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "Hour" }),
+    )
+    for (const row of wheel().querySelectorAll("button")) {
+      expect(row.tabIndex).toBe(-1)
+    }
+  })
+
+  it("rolls one row per arrow press, and the value follows the roll", () => {
+    const onChange = vi.fn()
+    render(<Controlled initial={9} onChange={onChange} />)
+    const down = fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    //handled: the engine's own 40px arrow scroll would land between rows
+    expect(down).toBe(false)
+    expect(smoothRolls()).toEqual([10 * H])
+
+    scrollWheel(10 * H)
+    advance(120)
+    expect(onChange).toHaveBeenLastCalledWith(10)
+
+    fireEvent.keyDown(wheel(), { key: "ArrowUp" })
+    fireEvent.keyDown(wheel(), { key: "ArrowUp" })
+    expect(smoothRolls()).toEqual([10 * H, 9 * H, 8 * H])
+  })
+
+  it("counts presses that land before the roll arrives", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    for (const _ of [1, 2, 3]) {
+      fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    }
+    expect(smoothRolls()).toEqual([10 * H, 11 * H, 12 * H])
+  })
+
+  it("jumps a page of rows, or to either end, and never past the list", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    fireEvent.keyDown(wheel(), { key: "End" })
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    fireEvent.keyDown(wheel(), { key: "PageUp" })
+    fireEvent.keyDown(wheel(), { key: "Home" })
+    fireEvent.keyDown(wheel(), { key: "ArrowUp" })
+    fireEvent.keyDown(wheel(), { key: "PageDown" })
+    expect(smoothRolls()).toEqual([23 * H, 23 * H, 18 * H, 0, 0, 5 * H])
+  })
+
+  it("leaves the keys to the page when the list is empty", () => {
+    render(
+      <WheelColumn
+        items={[]}
+        value={0}
+        onChange={() => {}}
+        ariaLabel="Hour"
+      />,
+    )
+    //no row to step to: the key is not taken, and it rolls nothing
+    expect(fireEvent.keyDown(wheel(), { key: "ArrowDown" })).toBe(true)
+    expect(fireEvent.keyDown(wheel(), { key: "End" })).toBe(true)
+    expect(smoothRolls()).toEqual([])
+  })
+
+  it("leaves every other key to the page", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    expect(fireEvent.keyDown(wheel(), { key: "Tab" })).toBe(true)
+    expect(fireEvent.keyDown(wheel(), { key: "a" })).toBe(true)
+    expect(smoothRolls()).toEqual([])
+  })
+
+  it("leaves Alt, Cmd and Ctrl with an arrow to the browser and the OS", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    for (const modifier of ["altKey", "metaKey", "ctrlKey"]) {
+      for (const key of ["ArrowDown", "ArrowUp", "Home", "End"]) {
+        expect(
+          fireEvent.keyDown(wheel(), { key, [modifier]: true }),
+          `${modifier}+${key}`,
+        ).toBe(true)
+      }
+    }
+    expect(smoothRolls()).toEqual([])
+    //Shift is not a browser chord on a picker: Shift+Arrow still steps
+    fireEvent.keyDown(wheel(), { key: "ArrowDown", shiftKey: true })
+    expect(smoothRolls()).toEqual([10 * H])
+  })
+
+  it("starts counting from where a touch or a settled scroll left the wheel, not from an earlier press", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" }) // aims at 10
+    fireEvent.touchStart(wheel())
+    scrollWheel(15 * H)
+    fireEvent.touchEnd(wheel())
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    expect(smoothRolls().at(-1)).toBe(16 * H)
+
+    //the roll arrives and settles; a mouse wheel then moves it, with no touch at all
+    scrollWheel(16 * H)
+    advance(120)
+    scrollWheel(20 * H)
+    advance(120)
+    fireEvent.keyDown(wheel(), { key: "ArrowDown" })
+    expect(smoothRolls().at(-1)).toBe(21 * H)
   })
 })
 

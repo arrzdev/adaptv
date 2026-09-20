@@ -1,0 +1,28 @@
+/*
+ * WheelColumn's keyboard focus indicator.
+ *
+ * The column is the one tab stop (its rows are tabIndex -1), so it matches
+ * `:focus-visible` and patches.css gives it the shipped ring. That ring is drawn outside
+ * the column's border box, and the drum's `mask-image` clips everything to that box: the
+ * ring computes to a 2px outline and paints nothing, on every engine. Measured in
+ * Playwright WebKit, a focused and an unfocused column screenshot byte-identical.
+ *
+ * So the indicator is the same ring — the same `--adaptv-ring` extension point and the
+ * same `currentColor` fallback (docs/decisions/styling.md §4.1) — drawn on the CENTRED
+ * row while the column has keyboard focus. That row sits in the mask's fully opaque band
+ * (34%–66% of the 150px column), and `outline-offset: -2px` keeps the ring inside the
+ * row's own box, which the column's `overflow-x: hidden` would otherwise clip at the
+ * sides. It marks the value the keys will move, which is the thing a keyboard user needs
+ * to find. The column's own clipped outline is left alone: it paints nothing, and a
+ * `outline: none` on a focus selector is what patches.test.ts forbids.
+ *
+ * Layered in `adaptv.components` (STYLING.md §6), so a consumer's `itemClassName` outline
+ * utility or an unlayered rule restyles it without a fight.
+ */
+
+@layer adaptv.components {
+  [data-adaptv="wheel-column"]:focus-visible button[data-active="true"] {
+    outline: 2px solid var(--adaptv-ring, currentColor);
+    outline-offset: -2px;
+  }
+}
