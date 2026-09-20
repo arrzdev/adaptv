@@ -41,7 +41,11 @@ export default defineConfig({
   //not root-caused — and a single CI retry is precisely what would turn it into a
   //green run and delete the only evidence that it is still there.
   retries: 0,
-  reporter: process.env.CI ? "line" : "list",
+  //Same shape as the main config: under CI the line reporter names the failing
+  //test and the HTML report — the job's artifact on failure — carries its trace.
+  reporter: process.env.CI
+    ? [["line"], ["html", { open: "never" }]]
+    : "list",
   use: { baseURL, trace: "retain-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
