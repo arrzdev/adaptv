@@ -52,6 +52,12 @@ const COMPONENTS = [
     isNew: true,
   },
   {
+    to: "/lab/skeleton",
+    title: "Skeleton",
+    summary: "silent, still under Reduce Motion, visible in high contrast",
+    isNew: true,
+  },
+  {
     to: "/lab/button",
     title: "Button",
     summary: "press engine + haptics + slots, with real semantics",

@@ -16,6 +16,7 @@ import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
 import { ScrollView } from "#adaptv/components/scroll-view"
+import { Skeleton } from "#adaptv/components/skeleton"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { TextArea } from "#adaptv/components/text-area"
@@ -637,6 +638,30 @@ describe("AvoidKeyboard", () => {
     expect(el.style.getPropertyValue("--adaptv-keyboard-height")).not.toBe(
       "",
     )
+  })
+})
+
+describe("Skeleton", () => {
+  it("className beats the base look, and nothing is locked", () => {
+    //the shape and the size ARE the className (§5.4.1: no shape prop), so the base
+    //radius and surface must both yield; the pulse and the forced-colors outline are
+    //CSS on `data-adaptv`, not classes, so there is nothing here for a consumer to
+    //lose against — `locked` is passed as `undefined` on purpose
+    const c = classOf(<Skeleton className="rounded-full bg-red-500" />)
+    expect(hasClass(c, "rounded-full")).toBe(true)
+    expect(hasClass(c, "rounded-md")).toBe(false)
+    expect(hasClass(c, "bg-red-500")).toBe(true)
+    expect(hasClass(c, "bg-gray-200")).toBe(false)
+  })
+
+  it("forwards the consumer style, and declares no locked inline tier", () => {
+    const el = firstEl(<Skeleton style={{ width: "3px" }} />)
+    expect(el.style.width).toBe("3px")
+  })
+
+  it("Region: takes the consumer className unopposed", () => {
+    const c = classOf(<Skeleton.Region loading className="flex gap-2" />)
+    expect(c).toBe("flex gap-2")
   })
 })
 
