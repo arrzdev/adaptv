@@ -37,7 +37,8 @@ type TallSheet = "capped" | "uncapped" | null
  *
  * `ceiling` is the load-bearing one: `getComputedStyle(...).maxHeight` is the browser's OWN
  * resolution of adaptv's cap — a `min()` over the consumer's variable and the platform ceiling,
- * which is `97dvh` in a browser tab and `100vh - var(--adaptv-inset-top)` in an installed app. So
+ * which is `97dvh` in a browser tab and `100vh - var(--adaptv-inset-top)` in an installed app
+ * (an installed web app also never above `100dvh`). So
  * it is read, never recomputed here. A lab that re-derives the number it is checking will agree
  * with itself on a platform where both are wrong; this one can only agree with the engine.
  *
