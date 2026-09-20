@@ -804,7 +804,7 @@ demands more than the library was built for.
 
 From the research pass — re-check health before relying on the ✅ row.
 
-- ✅ **Wrap:** `motion` (12.42.2, active — use `LazyMotion` + `m`, not the full barrel),
+- ✅ **Wrap:** `motion` (12.42.2, active — its engine only, driven imperatively; no motion component or provider around app content; `docs/decisions/animation.md` §3.1),
   `@tanstack/react-virtual`, `embla-carousel` (pin 8.x), `vite-plugin-pwa`.
 - 📖 **Read, don't depend:** **`vaul`** (dead, but the sheet physics/snap-point/nested-scroll
   arbitration are the reference — and adaptv's `Drawer` already descends from it), **`@use-gesture`**
