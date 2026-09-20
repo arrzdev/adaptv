@@ -70,6 +70,11 @@ consumer. That is a category of leverage worth paying a peer dependency for.
 - **The fix covers `hover:` utilities, not `:hover` anywhere.** A consumer who writes
   `.card:hover { … }` in their own stylesheet — still possible under this decision — gets stock
   behaviour. Coverage tracks how much of their hover styling stays in utilities.
+  > ⏭ **A plan now exists to close this limit without changing this decision:** a Vite
+  > `transform` over the *emitted* CSS rewrites `:hover` whatever produced it — Tailwind, SCSS or
+  > plain CSS — on the mechanism `src/vite/ring-shadow-fallback.ts` already ships. →
+  > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It does **not** require dropping
+  > Tailwind, but it moves the pillar this section rests on — see **O24**.
 - **Only the `:not(:is(:focus, :focus-within))` half is adaptv's.** Tailwind v4 already compiles
   `hover:` inside `@media (hover: hover)` by default (verified in `tailwindcss@4.2.4`
   `dist/chunk-3IR7ZFJX.mjs`). Overriding the variant *discards* that, so adaptv must re-supply the
@@ -87,6 +92,11 @@ and because it would forfeit the leverage above for the primitives it touched.
 > target: core in the layer, utilities still emitted for Tailwind consumers. Nothing in §2–§7 changes
 > under that model; the variant-delivered fixes simply stop reaching the non-Tailwind tier, which is
 > an accepted downgrade rather than a regression.
+>
+> ⏭ **Invoked 2026-09-09** — going to alpha with a hard dependency on someone else's build is the
+> owner raising exactly this condition. Now tracked, with the cost measured, as **O24** in
+> [`../roadmap/open-questions.md`](../roadmap/open-questions.md). This decision stands until that
+> question is answered.
 
 ### What follows, and is therefore non-negotiable
 
