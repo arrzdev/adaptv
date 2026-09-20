@@ -397,6 +397,24 @@ describe("unpaidHeight", () => {
     },
   )
 
+  //An Android binary without the plugin takes `useKeyboard`'s web path (`hasNativeKeyboard`),
+  //where the visual viewport is the keyboard measure. Reporting that the layout viewport
+  //resizes for the keyboard there would hand AvoidKeyboard a line it never reads, and an
+  //`unpaidHeight` of 0 for a keyboard the web path measured in full.
+  it("pays for nothing on an Android binary without the plugin", async () => {
+    const addListener = vi.spyOn(window, "addEventListener")
+    const { initNativeKeyboard, measureKeyboardPayment } = await load()
+    forceNativeBinary(["Haptics", "Device"], "android")
+    setViewport(412, 923)
+    initNativeKeyboard()
+    expect(resizeListenerCount(addListener)).toBe(0)
+    setViewport(412, 587) //the WebView did shrink, but nobody here measures it
+    expect(measureKeyboardPayment(336)).toEqual({
+      unpaidHeight: 336,
+      resizesLayoutViewport: false,
+    })
+  })
+
   describe("Android native", () => {
     async function boot(width: number, height: number) {
       const loaded = await load()
