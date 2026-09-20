@@ -534,14 +534,49 @@ describe("a step that fails through fail()", () => {
         expect(lines).toHaveLength(1)
         const doc = JSON.parse(lines[0])
         expect(doc.ok).toBe(false)
-        expect(doc.error).toMatchObject({
+        expect(doc.error).toEqual({
           kind: "step-failed",
-          label: "channel",
+          labels: ["channel"],
+          message: "1 step failed: channel",
         })
         //stderr always speaks (R46), and adding `--quiet` to `--json` must not take that away.
         expect(r.stderr).toBe(human.stderr)
       }
       for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
+    },
+    PROCESS_TIMEOUT_MS,
+  )
+})
+
+describe("a native build whose web bundle fails first", () => {
+  it(
+    "under --json names the bundle's label, never the bundler's sentence",
+    async () => {
+      //The shared bundle is the first work `build ios` does: nothing before it reaches Xcode or
+      //CocoaPods, and it fails on the missing `index.html` before any native project exists.
+      //Its row is transient, so the catch reports it through `fail()` with the reason
+      //`explainFailure` lifted from the bundler, which the document used as its message.
+      const app = failingApp()
+      const r = await cli(["build", "ios", "--json"], { cwd: app.cwd })
+      expect(r.code, r.stderr).toBe(1)
+      const lines = r.stdout.split("\n").filter(Boolean)
+      expect(lines, r.stdout).toHaveLength(1)
+      const doc = JSON.parse(lines[0])
+      expect(doc.ok).toBe(false)
+      expect(doc.error).toEqual({
+        kind: "step-failed",
+        labels: ["web"],
+        message: "1 step failed: web",
+      })
+      expect(namesPlumbing(JSON.stringify(doc.error))).toBe(false)
+      //The sentence is not lost: it is the step's reason, and the row on stderr.
+      const [step] = doc.steps
+      expect(step).toMatchObject({ label: "web", ok: false })
+      expect(step.reason).not.toBe("")
+      expect(plain(r.stderr)).toContain(
+        `  ${GLYPH.fail} web  · ${step.reason}`,
+      )
+      expect(tree(app.cwd)).toEqual(app.before)
     },
     PROCESS_TIMEOUT_MS,
   )
@@ -577,6 +612,48 @@ describe("a build that fails in its own row", () => {
       //more on either stream, in either mode.
       expect(human.stderr).toBe("")
       expect(quiet.stderr).toBe("")
+      for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
+    },
+    PROCESS_TIMEOUT_MS,
+  )
+
+  it(
+    "under --json is ok:false with the failed row's label, and the row and its fix on stderr",
+    async () => {
+      const apps = [0, 1, 2].map(() => failingApp())
+      const [human, json, both] = await Promise.all([
+        cli(["build", "web"], { cwd: apps[0].cwd }),
+        cli(["build", "web", "--json"], { cwd: apps[1].cwd }),
+        cli(["build", "web", "--json", "--quiet"], { cwd: apps[2].cwd }),
+      ])
+      expect(human.code, human.stdout).toBe(1)
+      const rows = human.stdout.split("\n")
+      const bad = rows.findIndex((l) =>
+        plain(l).startsWith(`  ${GLYPH.fail} web  `),
+      )
+      expect(bad, human.stdout).toBeGreaterThan(-1)
+      const block = `${rows
+        .slice(bad)
+        .filter((l) => l !== "")
+        .join("\n")}\n`
+      for (const r of [json, both]) {
+        //It exited 1 with `"ok":true`, no `error` and an empty stderr: the row settled on
+        //stdout, which the document replaces, and nothing told the document the step failed.
+        expect(r.code, r.stderr).toBe(1)
+        const lines = r.stdout.split("\n").filter(Boolean)
+        expect(lines, r.stdout).toHaveLength(1)
+        const doc = JSON.parse(lines[0])
+        expect(doc.ok).toBe(false)
+        //adaptv's own label, never the bundler's sentence the row carries.
+        expect(doc.error).toEqual({
+          kind: "step-failed",
+          labels: ["web"],
+          message: "1 step failed: web",
+        })
+        //stderr always speaks (R46): the page's row and its fix, and nothing more.
+        expect(plain(r.stderr)).toContain(`  ${GLYPH.fail} web  `)
+        expect(untimed(r.stderr)).toBe(untimed(block))
+      }
       for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
     },
     PROCESS_TIMEOUT_MS,
