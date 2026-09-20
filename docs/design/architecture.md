@@ -187,13 +187,16 @@ One `storage` namespace, **three tiers**, each hiding its per-target backend beh
 | Tier | API shape | Web / PWA backend | Native backend | For |
 |---|---|---|---|---|
 | `storage.kv` | **sync** + reactive hook | `localStorage` (sync, durable) | in-memory mirror ↔ `@capacitor/preferences` | flags, settings, small values read in render |
-| `storage.store` | **async** + reactive hook | IndexedDB (Dexie) | SQLite / Filesystem | large values, offline cache |
+| `storage.store` | **async** + reactive hook | IndexedDB (Dexie) | IndexedDB (the WebView's) | large values, offline cache |
 | `storage.secure` | **async**, no hook | best-effort `localStorage` | Keychain / Keystore | tokens, secrets |
 
-All backends store **strings**; adaptv JSON-encodes/decodes, so values must be JSON-serializable. All
-tiers are **SSR-safe** (reads return `undefined`/fallback on the server; hooks use a server snapshot,
-mirroring `useIsOffline`). adaptv-managed keys carry a stable prefix so `clear()` and cross-tab sync
-never touch the consumer's own `localStorage`.
+Encoding is **per tier**: `kv` JSON-encodes into string storage, so its values must be
+JSON-serializable; `secure` takes and returns strings only (§2.3) and stores them as given; `store`
+keeps values by structured clone (§2.2). All tiers are **SSR-safe** (reads return
+`undefined`/fallback on the server; hooks use a server snapshot, mirroring `useIsOffline`). `kv` and
+`secure` prefix every key (`adaptv:kv:`, `adaptv:secure:`), and the `kv` prefix is what keeps its
+`clear()` and cross-tab sync off the consumer's own `localStorage`; `store` needs no prefix because
+it owns its own IndexedDB database (`adaptv-store`).
 
 ### 2.1 `storage.kv` — fast KV, **sync**, memory-backed
 
@@ -234,7 +237,7 @@ await storage.store.remove(key): Promise<void>
 const { data, isLoading } = useStore<T>(key)         // reactive, async-backed
 ```
 
-Dexie over IndexedDB (web) / SQLite table or Filesystem (native). **Scope boundary (important):**
+Dexie over IndexedDB, on native the WebView's own IndexedDB. **Scope boundary (important):**
 `store` is an **async large-value KV**, *not* a query engine / ORM. A real query layer (indexes,
 where-clauses, migrations) is **consumer-owned** — `docs/design/rendering.md` already makes the data layer the
 consumer's (client token + IndexedDB / TanStack Query persister). adaptv's job is to (a) provide the
@@ -293,7 +296,7 @@ bearer tokens).
 - [ ] On native, `initKv()` completes during boot (behind splash) before the app reads KV; a value
       written pre-background survives an app restart (persisted to Preferences).
 - [ ] `useKv` re-renders a second component when a first component calls `set` (same-process reactivity).
-- [ ] `storage.store` round-trips a large structured object async on web (IndexedDB) and native (SQLite).
+- [ ] `storage.store` round-trips a large structured object async on web and native (IndexedDB on both).
 - [ ] `storage.secure` round-trips a token on native (Keychain/Keystore); the web path works and is
       documented as best-effort, not secure.
 - [ ] Every tier returns `undefined`/fallback under SSR without throwing.
