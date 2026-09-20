@@ -11,6 +11,7 @@ import { appShellFile } from "#adaptv/config/sw-helpers.ts"
 import { getCriticalShellCss } from "#adaptv/shell/critical-css.ts"
 import { getUiThemeInitScript } from "#adaptv/shell/theme-init-script.ts"
 import { getPlatformInitScript } from "#adaptv/utils/platform.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import {
   appRelativePath,
@@ -42,7 +43,10 @@ type ViteManifest = Record<
  * by the width of that middle level. Dynamic imports stay out: they are every
  * route in the app, and the shell serves any of them.
  */
-function entryModulepreloadHrefs(manifest: ViteManifest): string[] {
+function entryModulepreloadHrefs(
+  manifest: ViteManifest,
+  base: string,
+): string[] {
   const entryId = Object.keys(manifest).find((id) => manifest[id]?.isEntry)
   if (!entryId) return []
   const seen = new Set<string>()
@@ -56,7 +60,7 @@ function entryModulepreloadHrefs(manifest: ViteManifest): string[] {
   return [...seen]
     .map((id) => manifest[id]?.file)
     .filter((file): file is string => typeof file === "string")
-    .map((file) => `/${file}`)
+    .map((file) => publicPath(base, file))
 }
 
 /**
@@ -72,17 +76,18 @@ function entryModulepreloadHrefs(manifest: ViteManifest): string[] {
 function resolveStylesHref(
   manifest: ViteManifest,
   clientDir: string,
+  base: string,
 ): string {
   const entry = Object.values(manifest).find((chunk) => chunk.isEntry)
   const fromManifest =
     entry?.css?.[0] ??
     Object.values(manifest).find((chunk) => chunk.css?.length)?.css?.[0]
-  if (fromManifest) return `/${fromManifest}`
+  if (fromManifest) return publicPath(base, fromManifest)
 
   const assetsDir = path.join(clientDir, "assets")
   if (existsSync(assetsDir)) {
     const css = readdirSync(assetsDir).find((f) => f.endsWith(".css"))
-    if (css) return `/assets/${css}`
+    if (css) return publicPath(base, `assets/${css}`)
   }
   return ""
 }
@@ -123,10 +128,12 @@ export function adaptvShellEmitPlugin(context: AdaptvContext): Plugin {
     },
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
-      //The emitted shell is served at whatever base the app deploys under, and
-      //the route-tint patterns are matched against `location.pathname` — so the
-      //base has to be baked into the script here too, not just in the runtime
-      //document (`create-root-route.tsx`, which reads `import.meta.env.BASE_URL`).
+      //The emitted shell is served at whatever base the app deploys under, so
+      //every URL it writes starts there: the entry, its preloads, the
+      //stylesheet and the manifest link. A root-absolute href under
+      //`base: "/app/"` is a 404 for the whole bundle, and the page boots straight
+      //into the boot error screen. The route-tint script needs it too, because
+      //its patterns are matched against `location.pathname`.
       base = resolved.base
     },
     //`buildApp`, not `closeBundle`, and `order: "post"` — see the note in
@@ -161,7 +168,7 @@ async function emitShell(
   //chunk (Start routes CSS through its prerender). So fall back: any chunk's
   //css, then a scan of the assets dir. Missing this shipped `href="/"`, which
   //loads index.html as a stylesheet — a fully unstyled app.
-  const stylesHref = resolveStylesHref(manifest, clientDir)
+  const stylesHref = resolveStylesHref(manifest, clientDir, base)
 
   const theme = resolveThemeColors(config.themeColor)
 
@@ -210,9 +217,9 @@ async function emitShell(
         base,
       }),
     stylesHref,
-    entryHref: `/${entry.file}`,
-    modulepreloadHrefs: entryModulepreloadHrefs(manifest),
-    headExtra: '<link rel="manifest" href="/manifest.json">',
+    entryHref: publicPath(base, entry.file),
+    modulepreloadHrefs: entryModulepreloadHrefs(manifest, base),
+    headExtra: `<link rel="manifest" href="${publicPath(base, "manifest.json")}">`,
     bootFallbackByCode,
   })
 

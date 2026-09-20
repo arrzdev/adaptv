@@ -14,10 +14,15 @@ import type { ServiceWorkerLifecycleOptions } from "#adaptv/sw/sw.types"
  */
 export async function sweepStaleRuntimeCaches(
   currentBuildTag: string,
+  base: string,
 ): Promise<void> {
   try {
     if (typeof caches === "undefined") return
-    const stale = selectStaleCaches(await caches.keys(), currentBuildTag)
+    const stale = selectStaleCaches(
+      await caches.keys(),
+      currentBuildTag,
+      base,
+    )
     await Promise.allSettled(stale.map((name) => caches.delete(name)))
   } catch {
     //storage unavailable or partitioned — try again next activate
@@ -44,13 +49,13 @@ function registerClientsClaimOnActivate() {
 
 /**
  * Sweep previous builds' runtime caches on activate. Pass the build tag the
- * worker was stamped with (`__ADAPTV_BUILD_TAG__`).
+ * worker was stamped with (`__ADAPTV_BUILD_TAG__`) and the base it is scoped to.
  */
-function registerRuntimeCacheSweep(buildTag: string) {
+function registerRuntimeCacheSweep(buildTag: string, base: string) {
   const sw = serviceWorkerScope()
 
   sw.addEventListener("activate", (event: ExtendableEvent) => {
-    event.waitUntil(sweepStaleRuntimeCaches(buildTag))
+    event.waitUntil(sweepStaleRuntimeCaches(buildTag, base))
   })
 }
 
@@ -109,15 +114,13 @@ export function registerNavigationPreload(enabled: boolean) {
 export function registerServiceWorkerLifecycle(
   options: ServiceWorkerLifecycleOptions = {},
 ) {
-  const {
-    claimClients = true,
-    skipWaitingOnMessage = true,
-    buildTag,
-  } = options
+  const { claimClients = true, skipWaitingOnMessage = true } = options
 
   if (skipWaitingOnMessage) registerSkipWaitingOnMessage()
   if (claimClients) registerClientsClaimOnActivate()
   //without a build tag there is nothing to compare against, so sweeping would
   //either delete everything or nothing — skip rather than guess
-  if (buildTag) registerRuntimeCacheSweep(buildTag)
+  if (options.buildTag) {
+    registerRuntimeCacheSweep(options.buildTag, options.base)
+  }
 }

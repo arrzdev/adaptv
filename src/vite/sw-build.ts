@@ -10,6 +10,7 @@ import {
   DEFAULT_SW_GLOB_PATTERNS,
   DEFAULT_SW_MAX_FILE_BYTES,
 } from "#adaptv/config/sw-helpers.ts"
+import { publicPath } from "#adaptv/utils/public-path.ts"
 import type { AdaptvContext } from "#adaptv/vite/adaptv-context.ts"
 import {
   appRelativePath,
@@ -45,11 +46,15 @@ function adaptvWorkerPath(): string {
  * own worker file — see {@link resolveWorkerEntry}.
  */
 export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
+  let base = "/"
   return {
     name: "adaptv:sw-build",
     apply: "build",
     configResolved(resolved) {
       captureClientOutDir(context, resolved)
+      //the worker is served from `<base>sw.js` and scoped to `<base>`, so every
+      //path it binds or matches lives under the same prefix
+      base = resolved.base
     },
     //`buildApp`, `order: "post"` — MEASURED, and the reason is the precache
     //manifest. On `closeBundle` the deploy plugin has not finished assembling the
@@ -60,13 +65,16 @@ export function adaptvSwBuildPlugin(context: AdaptvContext): Plugin {
     buildApp: {
       order: "post",
       async handler() {
-        await buildServiceWorker(context)
+        await buildServiceWorker(context, base)
       },
     },
   }
 }
 
-async function buildServiceWorker(context: AdaptvContext): Promise<void> {
+async function buildServiceWorker(
+  context: AdaptvContext,
+  base: string,
+): Promise<void> {
   const config = requireAppConfig(context)
   //The ONLY case with no worker, and it comes from the target, not a key.
   if (context.web?.sw.enabled === false) return
@@ -119,8 +127,16 @@ async function buildServiceWorker(context: AdaptvContext): Promise<void> {
       //The shell URL the navigation route binds to. A `define` rather than a
       //literal in the worker, because the name now varies with the render
       //mode — and the worker binding one name while the build emitted another
-      //fails only at RUNTIME, offline, where nobody is watching.
-      __ADAPTV_APP_SHELL_URL__: JSON.stringify(`/${shellFile}`),
+      //fails only at RUNTIME, offline, where nobody is watching. Under the
+      //base, like everything else the worker binds: a root-absolute shell URL
+      //under `base: "/app/"` is a precache miss, so a SPA worker throws
+      //`non-precached-url` and an SSR one has nothing to fall back to.
+      __ADAPTV_APP_SHELL_URL__: JSON.stringify(
+        publicPath(base, shellFile),
+      ),
+      //the deploy base, which the navigation denylist and the asset matcher
+      //resolve their default prefixes under
+      __ADAPTV_BASE__: JSON.stringify(publicPath(base, "")),
     },
   })
 

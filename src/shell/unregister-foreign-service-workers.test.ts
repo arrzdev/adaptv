@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { unregisterForeignServiceWorkers } from "#adaptv/shell/unregister-foreign-service-workers"
 
 type Slots = {
+  /** The registration's scope. Defaults to the origin root. */
+  scope?: string
   active?: string
   waiting?: string
   installing?: string
@@ -13,6 +15,7 @@ function registration(slots: Slots) {
   const worker = (url: string | undefined) =>
     url === undefined ? null : ({ scriptURL: url } as ServiceWorker)
   return {
+    scope: slots.scope ?? `${window.location.origin}/`,
     active: worker(slots.active),
     waiting: worker(slots.waiting),
     installing: worker(slots.installing),
@@ -75,14 +78,60 @@ describe("unregisterForeignServiceWorkers", () => {
     //A hardcoded `/sw.js` would call the subpath worker foreign and unregister it
     //on every launch — the same subpath bug B1/B26 recorded for registration.
     vi.stubEnv("BASE_URL", "/app/")
-    const subpath = registration({ active: `${origin()}/app/sw.js` })
-    const root = registration({ active: `${origin()}/sw.js` })
-    stubRegistrations(async () => [subpath, root])
+    const subpath = registration({
+      scope: `${origin()}/app/`,
+      active: `${origin()}/app/sw.js`,
+    })
+    //inside the app's scope but running the root-absolute script, which is
+    //what the hardcoded path would have registered
+    const rootScript = registration({
+      scope: `${origin()}/app/`,
+      active: `${origin()}/sw.js`,
+    })
+    stubRegistrations(async () => [subpath, rootScript])
 
     await unregisterForeignServiceWorkers()
 
     expect(subpath.unregister).not.toHaveBeenCalled()
-    expect(root.unregister).toHaveBeenCalledOnce()
+    expect(rootScript.unregister).toHaveBeenCalledOnce()
+  })
+
+  it("leaves every registration outside the app's base alone", async () => {
+    //Two project sites share one `<user>.github.io` origin, and
+    //`getRegistrations()` lists both. The app at `/app/` owns `/app/`; the worker
+    //at `/other/` is another site's, and the origin root is the user site's.
+    vi.stubEnv("BASE_URL", "/app/")
+    const otherSite = registration({
+      scope: `${origin()}/other/`,
+      active: `${origin()}/other/sw.js`,
+    })
+    const userSite = registration({
+      scope: `${origin()}/`,
+      active: `${origin()}/sw.js`,
+    })
+    const lookalike = registration({
+      scope: `${origin()}/application/`,
+      active: `${origin()}/application/sw.js`,
+    })
+    const insideForeign = registration({
+      scope: `${origin()}/app/legacy/`,
+      active: `${origin()}/app/legacy/sw.js`,
+    })
+    stubRegistrations(async () => [
+      otherSite,
+      userSite,
+      lookalike,
+      insideForeign,
+    ])
+
+    await unregisterForeignServiceWorkers()
+
+    expect(otherSite.unregister).not.toHaveBeenCalled()
+    expect(userSite.unregister).not.toHaveBeenCalled()
+    //`/application/` starts with `/app` but not with `/app/`
+    expect(lookalike.unregister).not.toHaveBeenCalled()
+    //a stray worker INSIDE the app's own scope is still the app's to clean up
+    expect(insideForeign.unregister).toHaveBeenCalledOnce()
   })
 
   it("never rejects when one foreign unregister fails, and still removes the rest", async () => {

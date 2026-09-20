@@ -132,7 +132,7 @@ type RoutingShellProps = {
   themeColorDark: string
   splashScreenComponent?: ComponentType<SplashScreenProps>
   /** Manifest path; its `orientation` field drives the touch-device rotate guard. */
-  manifestPath?: string
+  manifestPath: string
   orientationGuardComponent?: ComponentType<OrientationGuardProps>
   /** Days unreachable by OTA before the screen is taken. Omitted means never. */
   updateRequiredAfterDays?: number
@@ -175,7 +175,7 @@ export function RoutingShell({
   themeColorLight,
   themeColorDark,
   splashScreenComponent,
-  manifestPath = "/manifest.json",
+  manifestPath,
   orientationGuardComponent,
   updateRequiredAfterDays,
   updateRequiredComponent,

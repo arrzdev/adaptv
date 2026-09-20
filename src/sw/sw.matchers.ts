@@ -1,19 +1,28 @@
 import { serviceWorkerScope } from "#adaptv/sw/sw.scope"
+import { publicPath } from "#adaptv/utils/public-path"
 
 export type StaticAssetMatchOptions = {
+  /**
+   * The deploy base; `assets/` is resolved under it, and `api/` is declined both
+   * under it and at the origin root.
+   */
+  base: string
   excludePathPrefixes?: string[]
 }
 
-const DEFAULT_EXCLUDE_PREFIXES = ["/api/"] as const
-
-/** Same-origin GET assets: scripts, styles, fonts, images, `/assets/*`. */
+/** Same-origin GET assets: scripts, styles, fonts, images, `<base>assets/*`. */
 export function createStaticAssetMatcher(
-  options: StaticAssetMatchOptions = {},
+  options: StaticAssetMatchOptions,
 ) {
+  //Both API roots. Navigations to a root `/api/` never reach a worker scoped to
+  //`/app/`, but a page under `/app/` can still fetch an image from the origin's
+  //API, and that request does come through this worker. At the root the two are
+  //one prefix.
   const excludePrefixes = [
-    ...DEFAULT_EXCLUDE_PREFIXES,
+    ...new Set(["/api/", publicPath(options.base, "api/")]),
     ...(options.excludePathPrefixes ?? []),
   ]
+  const assetsPrefix = publicPath(options.base, "assets/")
 
   return function matchesStaticAsset(url: URL, request: Request) {
     const sw = serviceWorkerScope()
@@ -34,7 +43,7 @@ export function createStaticAssetMatcher(
       destination === "style" ||
       destination === "font" ||
       destination === "image" ||
-      url.pathname.startsWith("/assets/")
+      url.pathname.startsWith(assetsPrefix)
     )
   }
 }

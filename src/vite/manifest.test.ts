@@ -55,6 +55,7 @@ describe("buildManifest — icons come from the files, not the filenames", () =>
     const manifest = buildManifest(
       { ...BASE, icons: "./public/favicons" },
       root,
+      "/",
     )
     expect(manifest.icons).toEqual([
       {
@@ -73,7 +74,7 @@ describe("buildManifest — icons come from the files, not the filenames", () =>
   it("re-reads on every call, so a dev adding art doesn't have to restart", () => {
     const root = appWithIcons({ "icon-192.png": 192 })
     const config = { ...BASE, icons: "./public/favicons" }
-    expect(buildManifest(config, root).icons).toHaveLength(1)
+    expect(buildManifest(config, root, "/").icons).toHaveLength(1)
 
     const buf = Buffer.alloc(33)
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(
@@ -87,7 +88,7 @@ describe("buildManifest — icons come from the files, not the filenames", () =>
     buf[24] = 8
     buf[25] = 6
     writeFileSync(path.join(root, "public/favicons/icon-512.png"), buf)
-    expect(buildManifest(config, root).icons).toHaveLength(2)
+    expect(buildManifest(config, root, "/").icons).toHaveLength(2)
   })
 
   it("falls back to adaptv's own set when the app has no art at all", () => {
@@ -95,6 +96,7 @@ describe("buildManifest — icons come from the files, not the filenames", () =>
     const manifest = buildManifest(
       { ...BASE, icons: "./public/favicons" },
       root,
+      "/",
       [
         {
           file: "/adaptv/assets/default-icons/android-chrome-512.png",
@@ -116,9 +118,28 @@ describe("buildManifest — icons come from the files, not the filenames", () =>
   })
 })
 
+describe("buildManifest — under a subpath base", () => {
+  it("launches and draws its icons from inside the base", () => {
+    //a GitHub Pages project site: `/` is somebody else's page, and so is
+    //`/favicons/`. The slashless base is how Vite hands over `base: "/app"`.
+    const root = appWithIcons({ "icon-512.png": 512 })
+    for (const base of ["/app/", "/app"]) {
+      const manifest = buildManifest(
+        { ...BASE, icons: "./public/favicons" },
+        root,
+        base,
+      )
+      expect(manifest.start_url).toBe("/app/")
+      expect(manifest.icons.map((icon) => icon.src)).toEqual([
+        "/app/favicons/icon-512.png",
+      ])
+    }
+  })
+})
+
 describe("buildManifest", () => {
   it("maps config fields to manifest fields", () => {
-    const manifest = buildManifest(BASE, "/tmp")
+    const manifest = buildManifest(BASE, "/tmp", "/")
     expect(manifest.name).toBe("ChopChop")
     expect(manifest.short_name).toBe("ChopChop")
     expect(manifest.start_url).toBe("/")
@@ -136,13 +157,17 @@ describe("buildManifest", () => {
 
   it("defaults short_name to name and background to light theme", () => {
     const { backgroundColor: _drop, shortName: _drop2, ...rest } = BASE
-    const manifest = buildManifest(rest, "/tmp")
+    const manifest = buildManifest(rest, "/tmp", "/")
     expect(manifest.short_name).toBe("ChopChop")
     expect(manifest.background_color).toBe("#eeeeec")
   })
 
   it("omits orientation when 'any'", () => {
-    const manifest = buildManifest({ ...BASE, orientation: "any" }, "/tmp")
+    const manifest = buildManifest(
+      { ...BASE, orientation: "any" },
+      "/tmp",
+      "/",
+    )
     expect(manifest.orientation).toBeUndefined()
   })
 
@@ -150,6 +175,7 @@ describe("buildManifest", () => {
     const manifest = buildManifest(
       { ...BASE, manifestExtra: { categories: ["productivity"] } },
       "/tmp",
+      "/",
     )
     expect(manifest.categories).toEqual(["productivity"])
   })
@@ -159,6 +185,7 @@ describe("buildManifest", () => {
     const manifest = buildManifest(
       { ...rest, themeColor: { light: "#eeeeec" } },
       "/tmp",
+      "/",
     )
     expect(manifest.theme_color).toBe("#eeeeec")
     expect(manifest.background_color).toBe("#eeeeec")
@@ -169,6 +196,7 @@ describe("buildManifest", () => {
     const manifest = buildManifest(
       { ...rest, themeColor: { dark: "#0a0a0c" } },
       "/tmp",
+      "/",
     )
     expect(manifest.theme_color).toBe("#0a0a0c")
     expect(manifest.background_color).toBe("#0a0a0c")

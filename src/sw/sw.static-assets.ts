@@ -5,7 +5,7 @@ import type { StaticAssetsRouteOptions } from "#adaptv/sw/sw.types"
 
 /**
  * Runtime cache for hashed build assets. Precache covers install; this handles any
- * same-origin `/assets/*` and resource fetch that the manifest missed.
+ * same-origin `<base>assets/*` and resource fetch that the manifest missed.
  *
  * Cache-first — why, and why not stale-while-revalidate:
  * {@link createHashedAssetStrategy} in `sw.strategies.ts`.
@@ -13,14 +13,19 @@ import type { StaticAssetsRouteOptions } from "#adaptv/sw/sw.types"
 export function registerStaticAssetsRoute(
   options: StaticAssetsRouteOptions,
 ) {
-  const strategy = createStaticAssetStrategy(options.buildTag, {
-    expiration: options.expiration,
-    matchOptions: options.matchOptions,
-  })
+  const strategy = createStaticAssetStrategy(
+    options.buildTag,
+    options.base,
+    {
+      expiration: options.expiration,
+      matchOptions: options.matchOptions,
+    },
+  )
 
   registerRoute(
     ({ url, request }) =>
       createStaticAssetMatcher({
+        base: options.base,
         excludePathPrefixes: options.excludePathPrefixes,
       })(url, request),
     strategy,

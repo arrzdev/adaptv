@@ -72,6 +72,19 @@ const serverRendered =
 //would construct a new router on every pass and throw the match state away.
 const clientRouter = serverRendered ? null : getRouter()
 
+//The deploy base, applied the way the server-rendered path applies it: that
+//path's `hydrateStart()` sets `basepath` from this same build constant before it
+//hydrates, and a router booted from the shell skips it. Without it every route
+//under `base: "/app/"` resolves as `/app/...` against a tree rooted at `/`, so a
+//GitHub Pages project site boots straight into the not-found screen.
+//
+//Only under a subpath. At the origin root the constant is `""`, the bundler
+//drops the branch, and a shell-booted router (every native launch among them,
+//which never has a base) keeps exactly the state it booted with.
+if (process.env.TSS_ROUTER_BASEPATH) {
+  clientRouter?.update({ basepath: process.env.TSS_ROUTER_BASEPATH })
+}
+
 //native dev only: a WebView inside a stale native build never renders the app; it waits on
 //the offline screen for the rebuilt one. Everywhere else this is a plain call to `boot`.
 bootWhenNativeShellMatches(() => {
