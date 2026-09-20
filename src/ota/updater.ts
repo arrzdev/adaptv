@@ -123,6 +123,20 @@ type LiveUpdatePlugin = {
 const EMBEDDED_BUILD_TAG = "\u0000embedded"
 
 /**
+ * A plugin read that failed, kept apart from the `null` it would otherwise become.
+ *
+ * 🔴 `null` is a real answer from `getCurrentBundle`, `getNextBundle` and
+ * `ready()` — the embedded bundle, nothing staged — so a `.catch(() => null)`
+ * turns "could not tell" into a confident statement about the device, and the
+ * code after it acts on that statement.
+ *
+ * ⚠︎ Every catch returning it spells out `typeof UNREADABLE`. Inferred, the
+ * return widens to `symbol`, an `=== UNREADABLE` guard then narrows nothing, and
+ * the compiler stops seeing a sentinel that got past its guard.
+ */
+const UNREADABLE = Symbol("unreadable")
+
+/**
  * How long a first launch may hold the splash waiting for the current build.
  *
  * Short on purpose. The wait is worth having (§5.4a: the embedded bundle can be
@@ -271,10 +285,16 @@ export async function settleLaunch(options: {
     //is safe to fall back to. A bundle proved itself on ONE app, not for ever.
     const identity = lastSeenBinary() ?? ""
 
-    const outcome = await plugin.ready().catch(() => null)
-    const current = outcome?.currentBundleId ?? null
+    const outcome = await plugin
+      .ready()
+      .catch((): typeof UNREADABLE => UNREADABLE)
+    //🔴 Without the answer, `current` would read as the embedded bundle, and
+    //pruning around THAT deletes the bundle actually running. Nothing below is
+    //worth that guess; the next launch settles again.
+    if (outcome === UNREADABLE) return
+    const current = outcome.currentBundleId
 
-    if (outcome?.rollback) {
+    if (outcome.rollback) {
       //`previousBundleId` is the one that was in place before the revert — i.e.
       //the bundle that just failed to start.
       if (outcome.previousBundleId) {
@@ -362,7 +382,7 @@ async function returnToEmbedded(
     plugin
       .getCurrentBundle()
       .then((r) => r.bundleId)
-      .catch(() => null),
+      .catch((): typeof UNREADABLE => UNREADABLE),
   ])
   //An unreadable version is not a changed one. Guessing here would reset a
   //healthy device on every launch.
@@ -370,6 +390,17 @@ async function returnToEmbedded(
 
   const identity = `${name}+${code}`
   const last = lastSeenBinary()
+  //🔴 Nor is an unreadable current bundle the embedded one. Taken for it, a
+  //store release is remembered without a reset — the stranding above by another
+  //road — and whatever bundle is running hands the binary its own fingerprint.
+  //Resetting instead would be the guess the line above refuses, so this launch
+  //does nothing and the next one asks again. A first launch has no change to
+  //miss, so it keeps the identity, without a fingerprint: what booted here is
+  //then proven on this app rather than on none.
+  if (current === UNREADABLE) {
+    if (last === null) rememberBinary(identity)
+    return false
+  }
   //`null` is a first launch, not a change — and `current === null` means this is
   //already the embedded bundle, so there is nothing to drop back to.
   if (last === null || last === identity || current === null) {
@@ -420,8 +451,12 @@ async function prune(
     plugin
       .getNextBundle()
       .then((r) => r.bundleId)
-      .catch(() => null),
+      .catch((): typeof UNREADABLE => UNREADABLE),
   ])
+  //🔴 The staged bundle is pending, not current and not retained — exactly what
+  //pruning deletes — and the filter below is all that protects it. Without
+  //knowing which bundle that is, nothing is deleted; the next launch prunes.
+  if (next === UNREADABLE) return
 
   const prunable = selectPrunableBundles(
     readLedger(),
