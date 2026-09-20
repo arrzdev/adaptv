@@ -59,11 +59,24 @@ function Keys({ keys, available }) {
   )
 }
 
-/** `! config change  · press b to rebuild and see the changes` */
+/**
+ * `! config change  · press b to rebuild and see the changes`
+ *
+ * ONE `Text` that clips at its end, never a `Box` of them. In a row `Box` every `Text` is a flex
+ * item Yoga may shrink, and each one then wraps inside its own sliver of the row, so a notice
+ * wider than the terminal came out as columns of syllables on two or three rows, glyph gone:
+ *
+ *     config     ·   b to rebuild and see
+ *     change   press  the changes
+ *
+ * That was 40 columns for `config change`, and 80 for the real `config + native change · ios,
+ * android`. A live row is one physical line (R10, R44), so the notice is one clipping `Text`:
+ * the glyph and the cause come first and survive, the action yields its tail.
+ */
 function Notice({ text }) {
   return h(
-    Box,
-    null,
+    Text,
+    { wrap: "truncate-end" },
     h(Text, { ...ROLE.notice.text }, GLYPH.notice),
     h(Text, null, " "),
     h(Text, { bold: true }, text),
