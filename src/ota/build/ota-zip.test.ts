@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { randomBytes } from "node:crypto"
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { crc32, inflateRawSync } from "node:zlib"
@@ -146,22 +146,26 @@ describe("the OTA bundle archive", () => {
 
   it("is accepted by an unzip adaptv did not write", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "adaptv-zip-"))
-    const file = path.join(dir, "bundle.zip")
-    writeFileSync(
-      file,
-      createZip([
-        text("index.html", "<!doctype html>"),
-        text("assets/app.js", "export const x = 1".repeat(20)),
-      ]),
-    )
+    try {
+      const file = path.join(dir, "bundle.zip")
+      writeFileSync(
+        file,
+        createZip([
+          text("index.html", "<!doctype html>"),
+          text("assets/app.js", "export const x = 1".repeat(20)),
+        ]),
+      )
 
-    //`-t` verifies every entry's CRC against its decompressed bytes
-    const report = execFileSync("unzip", ["-t", file], {
-      encoding: "utf8",
-    })
-    expect(report).toContain("No errors detected")
-    expect(
-      execFileSync("unzip", ["-Z1", file], { encoding: "utf8" }),
-    ).toContain("assets/app.js")
+      //`-t` verifies every entry's CRC against its decompressed bytes
+      const report = execFileSync("unzip", ["-t", file], {
+        encoding: "utf8",
+      })
+      expect(report).toContain("No errors detected")
+      expect(
+        execFileSync("unzip", ["-Z1", file], { encoding: "utf8" }),
+      ).toContain("assets/app.js")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

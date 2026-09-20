@@ -1,8 +1,14 @@
 // @vitest-environment node
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 /**
  * The native project has ONE home, `.adaptv/<platform>`, and nothing at the app root is
@@ -40,10 +46,17 @@ const { capAddIfMissing, ownInstallMissingPlatform } = await import(
 )
 
 describe("capAddIfMissing — the app root is the dev's", () => {
+  const roots = []
+  afterEach(() => {
+    for (const r of roots.splice(0))
+      rmSync(r, { recursive: true, force: true })
+  })
+
   it.each(["ios", "android"])(
     "leaves an app-root %s/ exactly where the dev put it",
     async (platform) => {
       const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-scaffold-"))
+      roots.push(appRoot)
       const theirs = path.join(appRoot, platform, "App")
       mkdirSync(theirs, { recursive: true })
       writeFileSync(path.join(theirs, "theirs.txt"), "not adaptv's\n")

@@ -71,6 +71,7 @@ function helperSource(paths: string[]): string {
 let appRoot: string
 let routesDir: string
 let treePath: string
+let realTmp: string | undefined
 
 const routeFile = (name: string, routePath: string) =>
   writeFileSync(
@@ -82,6 +83,10 @@ beforeEach(() => {
   appRoot = realpathSync(
     mkdtempSync(path.join(tmpdir(), "adaptv-route-config-")),
   )
+  //the generator loads the config through jiti, which keeps a transpile cache under
+  //the OS temp dir for good; point that at this app so the case removes it too
+  realTmp = process.env.TMPDIR
+  process.env.TMPDIR = path.join(appRoot, "tmp")
   routesDir = path.join(appRoot, "src/routing")
   treePath = path.join(appRoot, ".adaptv/routeTree.gen.ts")
   mkdirSync(routesDir, { recursive: true })
@@ -97,6 +102,8 @@ afterEach(() => {
   const cache = createRequire(import.meta.url).cache
   for (const id of Object.keys(cache))
     if (id.startsWith(appRoot)) delete cache[id]
+  if (realTmp === undefined) delete process.env.TMPDIR
+  else process.env.TMPDIR = realTmp
   rmSync(appRoot, { recursive: true, force: true })
 })
 

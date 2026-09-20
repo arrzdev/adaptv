@@ -9,7 +9,14 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from "vitest"
 import { withBackgroundSimulator } from "./native.mjs"
 
 // `cap run ios` reaches the Simulator through native-run, which runs, verbatim:
@@ -24,6 +31,22 @@ const dirs = []
 afterEach(() => {
   for (const d of dirs.splice(0))
     rmSync(d, { recursive: true, force: true })
+})
+
+//The shim's home is a FIXED name under the OS temp dir, because a dev's every `cap run`
+//reuses it. A test that wrote it there would leave it behind for good, so the file gives
+//the module a temp dir of its own for the duration and removes it afterwards.
+let realTmp
+let home
+beforeAll(() => {
+  realTmp = process.env.TMPDIR
+  home = mkdtempSync(path.join(tmpdir(), "adaptv-shim-home-"))
+  process.env.TMPDIR = home
+})
+afterAll(() => {
+  if (realTmp === undefined) delete process.env.TMPDIR
+  else process.env.TMPDIR = realTmp
+  rmSync(home, { recursive: true, force: true })
 })
 
 /** The shim adaptv would hand `cap run ios`, as an absolute path. */
