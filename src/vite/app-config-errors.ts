@@ -164,7 +164,8 @@ export function appConfigErrors(config: unknown): string[] {
     errors.push("'themeColor' needs at least one of 'light' / 'dark'")
   for (const [key, value] of colorKeys(config)) {
     if (value === undefined) continue
-    if (typeof value !== "string" || !HEX.test(value.trim()))
+    //untrimmed: the native colour writers read the value exactly as written
+    if (typeof value !== "string" || !HEX.test(value))
       errors.push(
         `'${key}' must be a hex colour like #1b1b1b, got ${show(value)}`,
       )
