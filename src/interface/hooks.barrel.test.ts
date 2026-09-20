@@ -106,7 +106,7 @@ describe("the hooks barrel", () => {
    * The vacuous pass: every assertion below compares against a directory scan
    * and a parse of one file, so a walk pointed at nothing — or a parser that
    * stops matching — compares two empty lists and goes green. The floors are well
-   * under the real counts today (36 hooks on disk, 29 export lines) and well over
+   * under the real counts today (37 hooks on disk, 29 export lines) and well over
    * zero. → `docs/roadmap/src-reorg.md` §7
    */
   it("actually walked the directory it claims to have walked", () => {

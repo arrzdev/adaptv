@@ -36,8 +36,8 @@ rather than assumed.
 
 `Icon`.
 
-The form-control set now runs button / input / textarea / checkbox / switch / slider / select.
-**The grouped-settings form (`FieldGroup`) is the remaining hole in it.**
+The form-control set now runs button / input / textarea / checkbox / switch / slider / select,
+grouped by `FieldGroup`. **`Icon` is the last Tier 1 item.**
 
 The grouped-settings form is off the list: **`FieldGroup` shipped 2026-09-02**
 (`src/components/field-group.tsx`, recorded below). `Slider`, `Select` and `Collapsible` each have

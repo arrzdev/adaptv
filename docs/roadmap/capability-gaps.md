@@ -16,7 +16,7 @@
 `../research/capability-surface.md` disagrees with itself about how many capabilities adaptv has —
 its intro says *"17 capabilities + 23 hooks"* and §4, ten lines later, says *"adaptv has 12
 capabilities"*. **Neither is right.** Counted from `src/interface/capabilities.index.ts` on
-2026-08-30: **18 capability modules and 27 hook modules.**
+2026-09-02: **19 capability modules and 28 hook modules.**
 
 The §4 prose list also omits `theme-color` entirely — a whole shipped capability with 8 exported
 symbols (`src/capabilities/theme-color.ts`), landed in PR #64, which drives per-route browser chrome
@@ -83,8 +83,7 @@ WebAuthn on web is genuinely good; native needs a community plugin. Pairs natura
 ## Tier 3 — the long tail
 
 Sensors / motion · battery · brightness · contacts · calendar · SMS + mail · print · speech ·
-store review · screen-capture blocking · localization (`Intl` makes the web tier free) ·
-barcode scanning · text zoom.
+store review · screen-capture blocking · barcode scanning · text zoom.
 
 ---
 
