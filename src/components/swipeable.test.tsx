@@ -1765,6 +1765,107 @@ describe("Swipeable · one finger owns the row", () => {
   })
 })
 
+/* ---- a row grabbed in flight --------------------------------------------- */
+
+describe("Swipeable · a row grabbed in flight", () => {
+  it("tracks from where the finger caught it — the lock does not throw it back to where it was at the touch", () => {
+    //a slow drag past half-way, released: the row springs the rest of the
+    //way open. A finger lands on it in flight and creeps one pixel a frame
+    //toward closed, the way a real finger starts
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    slowDrag(content, -60)
+    const grabbed = tx(content)
+    expect(grabbed).toBe(-60)
+    act(() => {
+      fireEvent.pointerDown(content, {
+        pointerId: 7,
+        pointerType: "touch",
+        button: 0,
+        clientX: ORIGIN.x,
+        clientY: ORIGIN.y,
+      })
+      content.dispatchEvent(touchEvent("touchstart", ORIGIN))
+    })
+    const trace: number[] = []
+    for (let i = 1; i <= 12; i++) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          touchEvent("touchmove", { x: ORIGIN.x + i, y: ORIGIN.y }),
+        )
+      })
+      trace.push(tx(content))
+    }
+    const steps = trace.map(
+      (v, i) => v - (i === 0 ? grabbed : trace[i - 1]),
+    )
+    //the premise: the spring kept carrying the row through the dead zone
+    expect(trace[6]).not.toBe(grabbed)
+    const springStep = Math.max(...steps.slice(0, 7).map(Math.abs))
+    expect(springStep).toBeGreaterThan(0)
+    //the lock (the eighth move) moves the row no further than the spring was
+    //already moving it a frame, and from there it is the finger's own pixel
+    expect(Math.abs(steps[7])).toBeLessThanOrEqual(springStep)
+    expect(steps.slice(8)).toEqual([1, 1, 1, 1])
+  })
+
+  it("released still a hair short of open, the row settles from rest: the interrupted spring's speed is not the finger's", () => {
+    //the same catch in flight, early, while the spring is fast: the finger
+    //locks the row within two frames, walks it to a few pixels short of
+    //open, holds it still past the velocity window and lifts. The release
+    //spring starts from the finger's velocity, which is nothing — from a few
+    //pixels out it barely moves in its first frame. One that inherits the
+    //speed the spring had when the finger stopped it starts at that speed
+    const { container } = render(<Row />)
+    const { content } = parts(container)
+    slowDrag(content, -60)
+    advance(FRAME)
+    const a = tx(content)
+    advance(FRAME)
+    const springStep = Math.abs(tx(content) - a)
+    //PREMISE: the spring is carrying the row
+    expect(springStep).toBeGreaterThan(1)
+    act(() => {
+      fireEvent.pointerDown(content, {
+        pointerId: 7,
+        pointerType: "touch",
+        button: 0,
+        clientX: ORIGIN.x,
+        clientY: ORIGIN.y,
+      })
+      content.dispatchEvent(touchEvent("touchstart", ORIGIN))
+    })
+    //eight pixels toward closed lock the row, then the finger walks it back
+    //toward open, a pixel every 4ms
+    const path = [1, 2, 3, 4, 5, 6, 7, 8, 7, 6, 5, 4, 3, 2, 1, 0, -1]
+    for (const dx of path) {
+      advance(4)
+      act(() => {
+        content.dispatchEvent(
+          touchEvent("touchmove", { x: ORIGIN.x + dx, y: ORIGIN.y }),
+        )
+      })
+    }
+    advance(120)
+    const held = tx(content)
+    //PREMISE: held a few pixels short of open, past half-way
+    expect(held).toBeLessThan(-W / 2)
+    expect(held).toBeGreaterThan(-W + 1)
+    //release on a frame boundary, so the first tick is a whole frame
+    advance(FRAME - (performance.now() % FRAME))
+    act(() => {
+      content.dispatchEvent(touchEvent("touchend"))
+    })
+    advance(FRAME)
+    const first = Math.abs(tx(content) - held)
+    expect(
+      first,
+      `released ${(held + W).toFixed(1)}px short of open, the first frame moved the row ${first.toFixed(2)}px; the spring the finger stopped was moving it ${springStep.toFixed(2)}px a frame`,
+    ).toBeLessThan(springStep / 4)
+  })
+})
+
 /* ---- a parked tray ------------------------------------------------------- */
 
 describe("Swipeable · a parked tray is out of reach", () => {
@@ -1910,8 +2011,10 @@ describe("Swipeable · a parked tray is out of reach", () => {
     act(() => ref.current?.close())
     advance(FRAME)
     advance(FRAME)
-    mouseDrag(content, 60, { release: false })
-    //what the finger is holding in view is live
+    //caught in flight, the row is picked up where the spring left it (see
+    //"a row grabbed in flight"), so a short drag toward closed keeps the tray
+    //partly in view — and what the finger is holding in view is live
+    mouseDrag(content, 20, { release: false })
     expect(tx(content)).toBeLessThan(-0.5)
     expect(rightPanel?.inert).toBe(false)
 
