@@ -1,9 +1,22 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { artTarget, SAFE_ZONE } from "./icon-geometry.mjs"
 import { writeIconPreview } from "./icon-preview.mjs"
+
+const roots = []
+afterEach(() => {
+  for (const dir of roots.splice(0))
+    rmSync(dir, { recursive: true, force: true })
+})
+
+/** A fresh temp directory, removed again after the test. */
+function tempDir(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix))
+  roots.push(dir)
+  return dir
+}
 
 /**
  * The sheet is ONE big template literal, which makes it the one module in `bin/` that can be
@@ -14,7 +27,7 @@ import { writeIconPreview } from "./icon-preview.mjs"
  */
 async function sheet(over = {}) {
   const sharp = (await import("sharp")).default
-  const dir = mkdtempSync(path.join(tmpdir(), "adaptv-preview-"))
+  const dir = tempDir("adaptv-preview-")
   const names = ["icon-maskable.png", "favicon-32x32.png"]
   for (const n of names)
     writeFileSync(
@@ -82,6 +95,14 @@ describe("writeIconPreview", () => {
     expect(await sheet({ margin: 25 })).toContain("--margin 25")
   })
 
+  it("names --padding only when the run used some", async () => {
+    //Padding stacks on the fit; a sheet that hid it would draw art smaller than its legend.
+    expect(await sheet({ padding: 12 })).toContain(
+      "--margin 10 · --padding 12",
+    )
+    expect(await sheet()).not.toContain("--padding")
+  })
+
   it("escapes what it interpolates", async () => {
     const html = await sheet({ sourceRel: "<script>alert(1)</script>" })
     expect(html).not.toContain("<script>alert(1)</script>")
@@ -98,7 +119,7 @@ describe("the sheet is organised by STATE, and names the file behind each", () =
   it("captions the state and names the file under it", async () => {
     //Both, always: a filename does not say where it is used, and a state does not say what to
     //re-draw when it looks wrong.
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-states-"))
+    const dir = tempDir("adaptv-states-")
     const sharp = (await import("sharp")).default
     const names = ["icon.png", "icon-dark.png", "icon-tinted.png"]
     for (const n of names)
@@ -149,7 +170,7 @@ describe("the sheet is organised by STATE, and names the file behind each", () =
     //Showing `icon-monochrome.png` itself would show a white square on a white page. The tile
     //has to reproduce Android's SRC_IN tint — a block of the launcher's ink, cut to the file's
     //alpha — or it proves nothing about how the icon will actually look.
-    const dir = mkdtempSync(path.join(tmpdir(), "adaptv-themed-"))
+    const dir = tempDir("adaptv-themed-")
     const sharp = (await import("sharp")).default
     const names = ["icon-monochrome.png"]
     writeFileSync(

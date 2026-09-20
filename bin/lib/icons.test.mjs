@@ -1,7 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 // The scan itself lives in `src/vite/icon-set.ts` — the manifest and the head need the same
 // answer, so there is one implementation of it and these tests exercise the native half only.
 import { iconFamily, resolveIconSet } from "#adaptv/vite/icon-set"
@@ -27,6 +33,19 @@ const icon = (name, width, { transparent = true } = {}) => ({
   alpha: transparent,
   transparent,
 })
+
+const roots = []
+afterEach(() => {
+  for (const dir of roots.splice(0))
+    rmSync(dir, { recursive: true, force: true })
+})
+
+/** A fresh temp directory, removed again after the test. */
+function tempDir(prefix) {
+  const dir = mkdtempSync(path.join(tmpdir(), prefix))
+  roots.push(dir)
+  return dir
+}
 
 /** The output of a real favicon generator — nothing above 512px, which is the normal case. */
 const PWA_SET = [
@@ -86,6 +105,18 @@ describe("pickIcon — the right art for the build being produced", () => {
       icon("favicon-64x64.png", 64),
     ]
     expect(pickIcon(tiny, "ios").name).toBe("favicon-64x64.png")
+  })
+
+  it("breaks a size tie among undersized art on family, then on name", () => {
+    //Nothing clears iOS's bar, so the largest wins — and between two equally small files the
+    //family still decides, or the pick would turn on alphabetical order alone.
+    const set = [
+      icon("android-chrome-64.png", 64),
+      icon("logo-64.png", 64),
+    ]
+    expect(pickIcon(set, "ios").name).toBe("logo-64.png")
+    const same = [icon("logo-b-64.png", 64), icon("logo-a-64.png", 64)]
+    expect(pickIcon(same, "ios").name).toBe("logo-a-64.png")
   })
 
   it("returns null for an empty set rather than inventing a source", () => {
@@ -221,7 +252,7 @@ const RES = "app/src/main/res"
 /** An app root with a real icon set on disk, plus scaffolded native project dirs. */
 async function fixture(sources) {
   const { default: sharp } = await import("sharp")
-  const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-icons-e2e-"))
+  const appRoot = tempDir("adaptv-icons-e2e-")
   const icons = path.join(appRoot, "public/favicons")
   mkdirSync(icons, { recursive: true })
   for (const [name, size, opaque] of sources) {
@@ -279,6 +310,109 @@ describe("brandLauncherIcon — iOS", () => {
     ).metadata()
     expect(meta.hasAlpha).toBe(false)
     expect(meta.channels).toBe(3)
+  })
+})
+
+/** Render an SVG into the fixture's icon directory as a PNG. */
+async function drawIcon(sharp, appRoot, name, svg) {
+  const dir = path.join(appRoot, "public/favicons")
+  mkdirSync(dir, { recursive: true })
+  await sharp(
+    Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">${svg}</svg>`,
+    ),
+  )
+    .png()
+    .toFile(path.join(dir, name))
+}
+
+/** The width left after trimming a file's uniform surround — how big the art really is. */
+async function artWidth(sharp, file) {
+  const { info } = await sharp(file)
+    .trim()
+    .toBuffer({ resolveWithObject: true })
+  return info.width
+}
+
+const APPICONSET = "App/App/Assets.xcassets/AppIcon.appiconset"
+
+describe("brandLauncherIcon — iOS 18 appearances", () => {
+  it("writes the dark and tinted slots when the set has that art, and declares all three", async () => {
+    //With no variant declared, iOS has nothing to switch to and shows the light icon on a dark
+    //home screen. A catalog naming a file that is not there fails the Xcode build instead.
+    const { appRoot, nativeRoot, brand, sharp } = await fixture([
+      ["icon-tinted.png", 1024, true],
+    ])
+    await drawIcon(
+      sharp,
+      appRoot,
+      "icon.png",
+      `<circle cx="512" cy="512" r="512" fill="#dc323c"/>`,
+    )
+    await drawIcon(
+      sharp,
+      appRoot,
+      "icon-dark.png",
+      `<circle cx="512" cy="512" r="512" fill="#f0f0f0"/>`,
+    )
+    await brand("ios")
+
+    const dir = path.join(nativeRoot("ios"), APPICONSET)
+    const slot = (filename, value) => ({
+      ...(value
+        ? { appearances: [{ appearance: "luminosity", value }] }
+        : {}),
+      filename,
+      idiom: "universal",
+      platform: "ios",
+      size: "1024x1024",
+    })
+    expect(
+      JSON.parse(readFileSync(path.join(dir, "Contents.json"), "utf8")),
+    ).toEqual({
+      images: [
+        slot("AppIcon-512@2x.png"),
+        slot("AppIcon-Dark-512@2x.png", "dark"),
+        slot("AppIcon-Tinted-512@2x.png", "tinted"),
+      ],
+      info: { author: "adaptv", version: 1 },
+    })
+
+    //dark: the mark on NOTHING, whole — the system draws its own backdrop under it
+    const dark = path.join(dir, "AppIcon-Dark-512@2x.png")
+    expect((await sharp(dark).metadata()).hasAlpha).toBe(true)
+    expect((await sharp(dark).stats()).isOpaque).toBe(false)
+    expect(await artWidth(sharp, dark)).toBe(1024)
+    //light: flattened, and the measured mark was fitted rather than left edge to edge
+    const light = path.join(dir, "AppIcon-512@2x.png")
+    expect((await sharp(light).metadata()).hasAlpha).toBe(false)
+    expect(await artWidth(sharp, light)).toBeLessThan(1024)
+    expect(
+      (await sharp(path.join(dir, "AppIcon-Tinted-512@2x.png")).metadata())
+        .width,
+    ).toBe(1024)
+  })
+
+  it("declares only the slots the set has art for, and skips a missing one", async () => {
+    //A catalog naming a file that is not there fails the Xcode build, and a set with a tinted
+    //variant but no dark one must still get its tinted slot.
+    const { nativeRoot, brand } = await fixture([
+      ["icon.png", 1024, false],
+      ["icon-tinted.png", 1024, true],
+    ])
+    await brand("ios")
+    const dir = path.join(nativeRoot("ios"), APPICONSET)
+    const { images } = JSON.parse(
+      readFileSync(path.join(dir, "Contents.json"), "utf8"),
+    )
+    expect(images.map((i) => i.filename)).toEqual([
+      "AppIcon-512@2x.png",
+      "AppIcon-Tinted-512@2x.png",
+    ])
+    expect(images[0].appearances).toBeUndefined()
+    expect(existsSync(path.join(dir, "AppIcon-Dark-512@2x.png"))).toBe(
+      false,
+    )
   })
 })
 
@@ -376,6 +510,61 @@ describe("brandLauncherIcon — Android", () => {
       await alphaMax("ic_launcher_foreground.png"),
     )
     expect(await alphaMax("ic_launcher_monochrome.png")).toBeGreaterThan(0)
+  })
+
+  it("brands the themed layer from an authored icon-monochrome.png, whole and un-ramped", async () => {
+    //`gen icons --monochrome` exists because the derived alpha was wrong for that mark. Deriving
+    //it again from the foreground, or re-ramping the file the dev drew, puts that decision back.
+    const { appRoot, nativeRoot, brand, sharp } = await fixture([
+      ["icon.png", 1024, true],
+    ])
+    //two tones, so a ramp has a range to normalise: a near-black ring around a light core
+    await drawIcon(
+      sharp,
+      appRoot,
+      "icon-monochrome.png",
+      `<circle cx="512" cy="512" r="256" fill="#101010"/><circle cx="512" cy="512" r="128" fill="#f0f0f0"/>`,
+    )
+    await brand("android")
+    const mono = path.join(
+      nativeRoot("android"),
+      RES,
+      "mipmap-xxxhdpi/ic_launcher_monochrome.png",
+    )
+    //the authored disc is half its tile; the solid foreground would have filled all 432px
+    expect(await artWidth(sharp, mono)).toBeLessThan(230)
+    expect(await artWidth(sharp, mono)).toBeGreaterThan(200)
+    //the dark ring keeps the alpha the dev drew — re-ramped, it would sit at the ramp's floor
+    const { data, info } = await sharp(mono)
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    const ring = (216 * info.width + 216 + 80) * info.channels
+    expect(data[ring + 3]).toBe(255)
+  })
+
+  it("paints the adaptive tile the colour the mark was drawn on, not the config's", async () => {
+    //A white mark exported flat on blue, branded over the config's white `background`, is a
+    //white mark on a white tile: nothing at all on the home screen.
+    const { appRoot, nativeRoot, brand, sharp } = await fixture([])
+    await drawIcon(
+      sharp,
+      appRoot,
+      "icon.png",
+      `<rect width="1024" height="1024" fill="#2040c0"/><circle cx="512" cy="512" r="300" fill="#ffffff"/>`,
+    )
+    await brand("android")
+    for (const dir of ["values", "values-night"])
+      expect(
+        readFileSync(
+          path.join(
+            nativeRoot("android"),
+            RES,
+            dir,
+            "ic_launcher_background.xml",
+          ),
+          "utf8",
+        ),
+      ).toContain('<color name="ic_launcher_background">#2040c0</color>')
   })
 
   it("gives both appearances the SAME tile colour, so it can't follow the device theme", async () => {
@@ -505,7 +694,7 @@ describe("resolveLauncherSource — the sentence the dev reads", () => {
     //A default set is by construction a perfect source, so `iconIssue` has nothing to say
     //about it. That the app is wearing someone else's logo is app-level and belongs to
     //`iconWarnings`, once — see `preflight.test.mjs`.
-    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-icons-def-"))
+    const appRoot = tempDir("adaptv-icons-def-")
     const { default: sharp } = await import("sharp")
     const marks = path.join(appRoot, "adaptv-marks")
     mkdirSync(marks, { recursive: true })
@@ -535,6 +724,38 @@ describe("resolveLauncherSource — the sentence the dev reads", () => {
     const { pick, warning } = await resolveLauncherSource(set, "android")
     expect(pick.name).toBe("icon.png")
     expect(warning).toBeNull()
+  })
+})
+
+describe("resolveLauncherSource — a file it cannot decode", () => {
+  it("falls back to what the header declared rather than failing the run", async () => {
+    //A wrong inset is a much smaller failure than no icon at all: the pick still resolves,
+    //measured as full bleed, and the warning follows the header's alpha channel.
+    const setOf = (alpha) => ({
+      source: "app",
+      icons: [
+        {
+          file: path.join(tempDir("adaptv-icons-gone-"), "icon.png"),
+          name: "icon.png",
+          family: "generic",
+          width: 1024,
+          height: 1024,
+          alpha,
+        },
+      ],
+    })
+    const opaque = await resolveLauncherSource(setOf(false), "android")
+    expect(opaque.pick).toMatchObject({
+      name: "icon.png",
+      fit: 1,
+      fitCircle: 1,
+    })
+    expect(opaque.warning).toBe(
+      "android launcher icon is opaque. Add one with a transparent background",
+    )
+    expect(
+      (await resolveLauncherSource(setOf(true), "android")).warning,
+    ).toBeNull()
   })
 })
 
