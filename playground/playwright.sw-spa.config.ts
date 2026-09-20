@@ -32,7 +32,11 @@ export default defineConfig({
   //No retries — #57's rule, and `playwright.sw.config.ts` says why it matters
   //double for this suite. `on-first-retry` would never fire with none.
   retries: 0,
-  reporter: process.env.CI ? "line" : "list",
+  //Same shape as the main config: under CI the line reporter names the failing
+  //test and the HTML report — the job's artifact on failure — carries its trace.
+  reporter: process.env.CI
+    ? [["line"], ["html", { open: "never" }]]
+    : "list",
   use: { baseURL, trace: "retain-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
