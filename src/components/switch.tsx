@@ -114,7 +114,16 @@ const SWITCH_TRACK_CURSOR_CLASS = "cursor-pointer"
 const SWITCH_TRACK_NON_INTERACTION_CLASS =
   PRESS_TARGET_DISABLED_LOCKED_CLASS
 const SWITCH_TRACK_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-const SWITCH_INPUT_CHROMELESS_CLASS = "peer sr-only"
+//LOCKED: the input is the ONLY element assistive tech and automation see, so its
+//box is the control's frame to VoiceOver, TalkBack and every tap aimed at it. It
+//used to be `sr-only`: a clipped 1px box at the track's left edge, so the frame
+//announced was under a point wide and a tap at its centre landed OUTSIDE the
+//track and did nothing (measured: a 1x1 box at x=343 beside a 48x28 track at
+//x=344). Covering the track exactly, invisibly, makes the accessible frame and
+//the hit area one rectangle on every engine. Pointer events now land on the
+//input and bubble to the label, where the gesture engine still owns the press.
+const SWITCH_INPUT_LOCKED_CLASS =
+  "peer absolute inset-0 m-0 size-full cursor-[inherit] appearance-none opacity-0"
 //LOCKED: the thumb is decorative and sits over the track's hit area — taking
 //pointer events would swallow the tap the label's gesture engine needs. The
 //absolute placement + vertical centring are what the computed `left` assumes.
@@ -399,7 +408,7 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
           checked={isChecked}
           disabled={disabled}
           readOnly
-          className={SWITCH_INPUT_CHROMELESS_CLASS}
+          className={SWITCH_INPUT_LOCKED_CLASS}
         />
         {thumbChild}
       </label>
