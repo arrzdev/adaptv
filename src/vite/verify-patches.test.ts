@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest"
 import {
   assertRouteTreeIsOpaque,
   checkNativePatch,
-  checkPatches,
   describeMissingPatches,
   missingNativePatchMessage,
   NATIVE_PATCH_MARKER,
@@ -14,58 +13,6 @@ import {
 } from "#adaptv/vite/verify-patches"
 
 const WHY = ["it fails silently, so the build still succeeds"]
-
-const PATCHED_FOOTER = `function adaptvStartPkg(f){return process.env.ADAPTV_START_PKG || \`@tanstack/\${f}-start\`}`
-const UNPATCHED_FOOTER = `declare module '@tanstack/react-start' {`
-const PATCHED_TEMPLATE = `function adaptvRouterPkg(f){return process.env.ADAPTV_ROUTER_PKG || f}`
-const UNPATCHED_TEMPLATE = `fullPkg: "@tanstack/react-router",`
-
-describe("checkPatches — detects behaviour, not pnpm metadata", () => {
-  //Checking the INSTALLED SOURCE is the honest test: true exactly when the
-  //feature works, and immune to a stale lockfile, a partial install, or a
-  //hoisting layout that resolved a different copy than the one patched.
-  it("passes when both patches are applied", () => {
-    expect(
-      checkPatches({
-        startFooter: PATCHED_FOOTER,
-        generatorTemplate: PATCHED_TEMPLATE,
-      }).ok,
-    ).toBe(true)
-  })
-
-  it("catches the unpatched Start footer", () => {
-    const status = checkPatches({
-      startFooter: UNPATCHED_FOOTER,
-      generatorTemplate: PATCHED_TEMPLATE,
-    })
-    expect(status.ok).toBe(false)
-    expect(status.missing).toContain("@tanstack/start-plugin-core")
-  })
-
-  it("catches the unpatched generator template", () => {
-    const status = checkPatches({
-      startFooter: PATCHED_FOOTER,
-      generatorTemplate: UNPATCHED_TEMPLATE,
-    })
-    expect(status.ok).toBe(false)
-    expect(status.missing).toContain("@tanstack/router-generator")
-  })
-
-  it("reports both when both are missing", () => {
-    expect(
-      checkPatches({
-        startFooter: UNPATCHED_FOOTER,
-        generatorTemplate: UNPATCHED_TEMPLATE,
-      }).missing,
-    ).toHaveLength(2)
-  })
-
-  it("stays silent about a file it could not read", () => {
-    //an unreadable dependency is not evidence of an unpatched one — guessing
-    //would fail builds that are actually fine
-    expect(checkPatches({}).ok).toBe(true)
-  })
-})
 
 describe("describeMissingPatches", () => {
   it("explains WHY the failure is loud rather than silent", () => {
@@ -175,9 +122,8 @@ describe("the native patch, checked where it would be compiled in", () => {
   })
 
   it("treats a source it cannot read as missing, not as fine", () => {
-    //🔴 The opposite of `checkPatches`, on purpose. There an unreadable file is a
-    //resolution quirk; here it means the upstream moved the file the patch edits,
-    //which is exactly what the version-pinned key exists to catch.
+    //🔴 An unreadable file is not a pass. It means the upstream moved the file the
+    //patch edits, which is exactly what the version-pinned key exists to catch.
     expect(
       checkNativePatch([{ path: "ios/x.swift", source: null }]).ok,
     ).toBe(false)

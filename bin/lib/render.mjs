@@ -10,8 +10,10 @@
 //   - non-TTY  → plain "· step" / "✓ step  · 1.2s" lines, no cursor tricks (CI-safe)
 //   - --verbose→ the raw underlying tool output is streamed through instead
 import {
+  COLUMN_GAP,
   DEFAULT_COLUMNS,
   GLYPH,
+  MIN_RIGHT_COLUMN,
   OWN_PHASES,
   PHASE_DWELL_MS as THEME_DWELL_MS,
   FRAMES as THEME_FRAMES,
@@ -473,7 +475,10 @@ export function wrap(text, { max = 80, hang = 0 } = {}) {
  * line — because a description wrapped into a four-character gutter is not a table, it is a
  * column of syllables. `addresses()` is the same shape and goes through here.
  */
-export function table(rows, { indent = 4, gap = 2, minRight = 28 } = {}) {
+export function table(
+  rows,
+  { indent = 4, gap = COLUMN_GAP, minRight = MIN_RIGHT_COLUMN } = {},
+) {
   const cols = Math.max(20, width())
   const left = Math.max(...rows.map((r) => visibleLength(r.left)))
   const start = indent + left + gap
