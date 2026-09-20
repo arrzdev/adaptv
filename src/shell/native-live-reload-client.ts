@@ -54,7 +54,15 @@ export type LiveReloadHot = Pick<NonNullable<ImportMeta["hot"]>, "on">
  * and points Capacitor's `server.errorPath` at it. Enforced by
  * `offline-page-name.test.ts` so the two can't drift.
  */
-const OFFLINE_PAGE = "adaptv-offline.html"
+export const OFFLINE_PAGE = "adaptv-offline.html"
+
+/**
+ * The window property the recovery below sets once it can see the dev server go: it is subscribed
+ * to the disconnect event and the server has answered it since. It is the handoff from the
+ * document's inline watchdog (`native-dev-boot-watchdog.ts`), which covers a dev server that
+ * stops before then, to the recovery, which covers it after.
+ */
+export const DEV_RECOVERY_ARMED_KEY = "__adaptvDevRecoveryArmed"
 
 /**
  * Consecutive failed reachability polls before we hand off to the offline screen.
@@ -67,7 +75,7 @@ const OFFLINE_PAGE = "adaptv-offline.html"
  * inside ~0.6s — comfortably ahead of a human. A server that's merely restarting costs a
  * brief offline screen that reconnects itself, which is the right trade against a dead end.
  */
-const OFFLINE_AFTER_FAILURES = 2
+export const OFFLINE_AFTER_FAILURES = 2
 /** Poll fast while deciding the server is gone, then back off to a reconnect cadence. */
 const DECIDING_POLL_MS = 300
 const RECONNECT_POLL_MS = 1500
@@ -179,8 +187,13 @@ export function installNativeLiveReloadRecovery(
       ).text()
       token = src.match(/wsToken\s*=\s*["'`]([^"'`]+)["'`]/)?.[1] ?? null
     } catch {
+      // Not armed: the server may have stopped before the disconnect subscription below, and its
+      // event went to nobody. The document's watchdog is still polling and takes this case.
       return false
     }
+    // The server answered after the disconnect subscription, so a server that stops from here on
+    // is this module's to see: the document's boot watchdog stands down.
+    Object.assign(window, { [DEV_RECOVERY_ARMED_KEY]: true })
     if (!token) return false
 
     const url = `${proto}://${location.host}/?token=${token}`

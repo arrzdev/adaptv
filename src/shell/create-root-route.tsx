@@ -26,6 +26,7 @@ import { getCriticalShellCss } from "#adaptv/shell/critical-css"
 import type { PwaHeadConfig } from "#adaptv/shell/head"
 import { pwaHead } from "#adaptv/shell/head"
 import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport"
+import { getNativeDevBootWatchdogScript } from "#adaptv/shell/native-dev-boot-watchdog"
 import type { RootDocumentProps } from "#adaptv/shell/shell-layout"
 import {
   createRootDocument,
@@ -188,7 +189,11 @@ export function createRootRoute(config: CreateRootRouteConfig) {
           //matching or every route tint silently misses
           base: import.meta.env.BASE_URL,
         }) +
-        (splashScreenComponent ? getLaunchViewportInitScript() : ""),
+        (splashScreenComponent ? getLaunchViewportInitScript() : "") +
+        //native dev only: a dev server that stops before the bundle can see it go takes the
+        //app to the offline screen instead of leaving it on the splash. Folds away in a
+        //production build.
+        (import.meta.env.DEV ? getNativeDevBootWatchdogScript() : ""),
     })
 
   const NotFound: NotFoundRouteComponent =
