@@ -122,6 +122,10 @@ describe("buildManifest", () => {
     expect(manifest.name).toBe("ChopChop")
     expect(manifest.short_name).toBe("ChopChop")
     expect(manifest.start_url).toBe("/")
+    //the install's identity is stated rather than inferred: a browser that
+    //falls back to start_url turns a changed landing route into a second
+    //installed app
+    expect(manifest.id).toBe("/")
     expect(manifest.display).toBe("standalone")
     //theme_color defaults to the LIGHT theme (seeds launch chrome; useSyncTheme
     //takes over the live theme-color meta once mounted)

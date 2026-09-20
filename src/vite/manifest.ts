@@ -15,6 +15,7 @@ const MANIFEST_PATH = "/manifest.json"
 export type { WebManifestIcon }
 
 export type WebManifest = {
+  id: string
   name: string
   short_name: string
   description: string
@@ -84,6 +85,11 @@ export function buildManifest(
 ): WebManifest {
   const theme = resolveThemeColors(config.themeColor)
   const manifest: WebManifest = {
+    //The install's identity, and the reason it is here rather than left out:
+    //without it a browser identifies the installed app by its start_url, so
+    //changing the landing route turns an update into a SECOND installed app.
+    //Pinned to the origin root, which start_url also is, so the two agree.
+    id: "/",
     name: config.name,
     short_name: config.shortName ?? config.name,
     description: config.description,
