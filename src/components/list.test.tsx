@@ -1,5 +1,5 @@
 import { cleanup, render } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { List } from "#adaptv/components/list"
 
 // happy-dom has no layout, so the real virtualizer would window 0 rows. Mock it to a
@@ -74,6 +74,34 @@ describe("List", () => {
         onEndReached={onEndReached}
       />,
     )
+    expect(onEndReached).toHaveBeenCalled()
+  })
+})
+
+describe("List on an engine without Array.prototype.at (iOS 15.0–15.3)", () => {
+  let at: PropertyDescriptor | undefined
+
+  beforeEach(() => {
+    at = Object.getOwnPropertyDescriptor(Array.prototype, "at")
+    Reflect.deleteProperty(Array.prototype, "at")
+  })
+
+  afterEach(() => {
+    if (at) Object.defineProperty(Array.prototype, "at", at)
+  })
+
+  it("renders its rows and still finds the last windowed one", () => {
+    expect(Array.prototype.at).toBeUndefined()
+    const onEndReached = vi.fn()
+    const { getByText } = render(
+      <List
+        data={DATA}
+        keyExtractor={(r) => r.id}
+        renderItem={(r) => <span>{r.label}</span>}
+        onEndReached={onEndReached}
+      />,
+    )
+    expect(getByText("Bravo")).toBeTruthy()
     expect(onEndReached).toHaveBeenCalled()
   })
 })
