@@ -16,6 +16,7 @@ import { UiNotFound } from "#adaptv/components/not-found"
 import { Offline } from "#adaptv/components/offline"
 import { Pressable } from "#adaptv/components/pressable"
 import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
+import { RadioGroup } from "#adaptv/components/radio-group"
 import { ScrollView } from "#adaptv/components/scroll-view"
 import { Slider } from "#adaptv/components/slider"
 import { Select } from "#adaptv/components/select"
@@ -110,6 +111,12 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["switch", <Switch key="switch" />],
   ["slider", <Slider key="slider" aria-label="s" />],
   [
+    "radio-group",
+    <RadioGroup key="radio-group" aria-label="r">
+      <RadioGroup.Item value="a">a</RadioGroup.Item>
+    </RadioGroup>,
+  ],
+  [
     "external-link",
     <ExternalLink key="external-link" href="https://a.dev" />,
   ],
@@ -186,6 +193,25 @@ describe("composition does not leak", () => {
     expect(root.getAttribute("data-adaptv")).toBe("list")
     //…while the structural scroll marker is still there, because it still IS one
     expect(root.getAttribute("data-scroll-view")).toBe("y")
+  })
+
+  it("RadioGroup's identity is on the group alone; its items are parts", () => {
+    //a selector for every radio group must not also match every option in it
+    const { container } = render(
+      <RadioGroup aria-label="r">
+        <RadioGroup.Item value="a">a</RadioGroup.Item>
+        <RadioGroup.Item value="b">b</RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const matches = container.querySelectorAll(
+      '[data-adaptv="radio-group"]',
+    )
+    expect(matches).toHaveLength(1)
+    expect(matches[0].getAttribute("data-part")).toBe("root")
+    const items = container.querySelectorAll('[data-part="item"]')
+    expect(items).toHaveLength(2)
+    for (const item of items)
+      expect(item.hasAttribute("data-adaptv")).toBe(false)
   })
 
   it("Link reports itself, not the ExternalLink it delegates to", () => {
