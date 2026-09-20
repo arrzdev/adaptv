@@ -39,7 +39,8 @@ export function useAndroidBackButton(): void {
         //tab must NOT be closed out from under the user, so defer instead and let
         //the browser do whatever it normally would.
         if (!isNativePlatform()) return false
-        void App.exitApp()
+        //a rejecting bridge call must not surface as an unhandled rejection
+        void App.exitApp().catch(() => {})
         return true
       }, BackPriority.RouterBack),
     [router],
@@ -48,13 +49,21 @@ export function useAndroidBackButton(): void {
   useEffect(() => {
     if (!isNativePlatform() || getOS() !== "android") return
     let handle: PluginListenerHandle | undefined
+    //the bridge answers asynchronously, so the cleanup can run first — StrictMode's
+    //dev double-mount always does. A handle that arrives after that is removed on
+    //arrival, or its listener outlives the effect and every press runs the chain twice.
+    let disposed = false
     void App.addListener("backButton", () => {
       runBackChain()
-    }).then((h) => {
-      handle = h
     })
+      .then((h) => {
+        if (disposed) void h.remove().catch(() => {})
+        else handle = h
+      })
+      .catch(() => {})
     return () => {
-      void handle?.remove()
+      disposed = true
+      void handle?.remove().catch(() => {})
     }
   }, [])
 }
