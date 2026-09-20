@@ -7,6 +7,7 @@ import { Checkbox } from "#adaptv/components/checkbox"
 import { Drawer } from "#adaptv/components/drawer"
 import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import { ExternalLink } from "#adaptv/components/external-link"
+import { Fab, fabPositionStyle } from "#adaptv/components/fab"
 import { Image } from "#adaptv/components/image"
 import { Input } from "#adaptv/components/input"
 import { Link } from "#adaptv/components/link"
@@ -249,6 +250,60 @@ describe("Button", () => {
     )
     expect(label.className).toContain("inline-flex")
     expect(label.className).not.toContain("block")
+  })
+})
+
+describe("Fab", () => {
+  it("className beats the base look; the motion classes are locked", () => {
+    const c = classOf(
+      <Fab
+        aria-label="f"
+        className="h-12 w-12 shadow-none transition-none"
+      >
+        +
+      </Fab>,
+    )
+    expect(hasClass(c, "h-12")).toBe(true)
+    expect(hasClass(c, "w-12")).toBe(true)
+    expect(hasClass(c, "h-14")).toBe(false)
+    expect(hasClass(c, "w-14")).toBe(false)
+    expect(hasClass(c, "shadow-none")).toBe(true)
+    expect(hasClass(c, "shadow-lg")).toBe(false)
+    //the hide/show motion is the behaviour: a consumer `transition-none` loses to it
+    expect(hasClass(c, "transition-[translate]")).toBe(true)
+    expect(hasClass(c, "transition-none")).toBe(false)
+    expect(hasClass(c, "motion-reduce:transition-none")).toBe(true)
+    //and Button's own press class survives the extra layer
+    expect(c).toContain("touch-pan-x")
+  })
+
+  it("forwards the consumer style, and the position keys stay the component's", () => {
+    const el = firstEl(
+      <Fab
+        aria-label="f"
+        style={{
+          color: "rgb(1, 2, 3)",
+          position: "absolute",
+          insetInlineEnd: "0px",
+          pointerEvents: "auto",
+        }}
+        hidden
+      >
+        +
+      </Fab>,
+    )
+    expect(el.style.color).toBe("rgb(1, 2, 3)")
+    //happy-dom keeps these three of the position keys (see fab.test.tsx for the
+    //rest, asserted on `fabPositionStyle` directly): each is the lockedStyle value
+    const own = fabPositionStyle({
+      placement: "end",
+      avoidKeyboard: true,
+      gap: 4,
+      hidden: true,
+    })
+    expect(el.style.position).toBe("fixed")
+    expect(el.style.insetInlineEnd).toBe(own.insetInlineEnd)
+    expect(el.style.pointerEvents).toBe("none")
   })
 })
 
