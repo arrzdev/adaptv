@@ -224,9 +224,11 @@ const KEYBOARD_HEIGHT_CONFIRM_MS = 120
 // sheet doesn't bounce down and back up on the flicker.
 const NATIVE_KEYBOARD_SHRINK_HYSTERESIS_PX = 60
 
-// How long a small shrink is held before it's honored. Longer than the bar's ~260ms dip so the
-// toggle is absorbed, short enough that a GENUINE small reduction still lands promptly — the sheet
-// is never stuck too tall, which is what keeps the drawer responsive to real keyboard changes.
+// How long a small shrink is held before it's honored; what lands is the last small shrink reported
+// inside the window, and a shorter one re-arms it once (see the subscription). Longer than the
+// bar's ~260ms dip so the toggle is absorbed, short enough that a GENUINE small reduction still
+// lands promptly — the sheet is never stuck too tall, which is what keeps the drawer responsive to
+// real keyboard changes.
 const NATIVE_KEYBOARD_SHRINK_HOLD_MS = 350
 
 /**
@@ -567,6 +569,25 @@ export function useKeyboard({
       let committedHeight = 0
       let committedOpen = false
       let shrinkHoldTimer: ReturnType<typeof setTimeout> | null = null
+      //the latest small shrink the open hold absorbed — what it commits when its window expires
+      let heldHeight = 0
+      //whether the open hold already spent its one re-arm on a shorter replacement
+      let shrinkHoldRearmed = false
+
+      function cancelShrinkHold() {
+        if (shrinkHoldTimer) {
+          clearTimeout(shrinkHoldTimer)
+          shrinkHoldTimer = null
+        }
+      }
+
+      //reads `heldHeight` when it FIRES, so every replacement made inside the window is what lands
+      function armShrinkHold() {
+        shrinkHoldTimer = setTimeout(() => {
+          shrinkHoldTimer = null
+          commitMeasuredNative({ isOpen: true, height: heldHeight })
+        }, NATIVE_KEYBOARD_SHRINK_HOLD_MS)
+      }
 
       function commitNative(next: KeyboardState) {
         committedOpen = next.isOpen
@@ -661,28 +682,38 @@ export function useKeyboard({
         )
 
         if (!isSmallShrink) {
-          if (shrinkHoldTimer) {
-            clearTimeout(shrinkHoldTimer)
-            shrinkHoldTimer = null
-          }
+          cancelShrinkHold()
           commitMeasuredNative(info)
           return
         }
 
+        // The hold is a delay, not a snapshot. The bridge is push-only: once the keyboard stops
+        // changing nothing reports again, so the value the hold commits is the last word until the
+        // field blurs. A second small shrink inside the window (a stale prediction corrected by the
+        // AutoFill step, a field switch that settles in two reports) therefore REPLACES the value —
+        // committing the first one would leave content behind the keyboard the OS last reported.
+        //
+        // A TALLER replacement is the keyboard settling and keeps the deadline. A SHORTER one may be
+        // the bar dipping late in a window a genuine shrink opened, and committing it on that
+        // deadline would drop the sheet and lift it again ~260ms later — so it re-arms the window
+        // for a full hold of its own, ONCE per hold: a keyboard that keeps dipping holds the sheet
+        // too tall for two windows at most, never for as long as the reports keep coming.
         if (!shrinkHoldTimer) {
-          const held = info.height
-          shrinkHoldTimer = setTimeout(() => {
-            shrinkHoldTimer = null
-            commitMeasuredNative({ isOpen: true, height: held })
-          }, NATIVE_KEYBOARD_SHRINK_HOLD_MS)
+          shrinkHoldRearmed = false
+          armShrinkHold()
+        } else if (info.height < heldHeight && !shrinkHoldRearmed) {
+          shrinkHoldRearmed = true
+          cancelShrinkHold()
+          armShrinkHold()
         }
+        heldHeight = info.height
       })
 
       return () => {
         document.removeEventListener("focusin", handleNativeFocusIn)
         unsubscribe()
         cancelNativePrediction()
-        if (shrinkHoldTimer) clearTimeout(shrinkHoldTimer)
+        cancelShrinkHold()
         commitNative({ isOpen: false, height: 0 })
       }
     }
