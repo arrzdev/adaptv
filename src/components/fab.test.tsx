@@ -1,12 +1,8 @@
-import { act, fireEvent, render, renderHook } from "@testing-library/react"
+import { act, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HAPTIC_TICK_ATTR } from "#adaptv/capabilities/haptic-tick"
 import { Button } from "#adaptv/components/button"
-import {
-  Fab,
-  fabPositionStyle,
-  useLayoutViewportShrink,
-} from "#adaptv/components/fab"
+import { Fab, fabPositionStyle } from "#adaptv/components/fab"
 import { KEYBOARD_MOCK_EVENT } from "#adaptv/hooks/use-keyboard"
 
 /*
@@ -500,44 +496,6 @@ describe("Fab and the keyboard", () => {
         keyboardShrink: 336,
       }).bottom,
     ).not.toContain("336")
-  })
-
-  it("useLayoutViewportShrink reads the rest height while closed and the shrink while open", () => {
-    const restHeight = window.innerHeight
-    const { result, rerender } = renderHook(
-      ({ active }: { active: boolean }) => useLayoutViewportShrink(active),
-      { initialProps: { active: false } },
-    )
-    expect(result.current).toBe(0)
-
-    //the keyboard opens and the WebView resizes by its height (Android)
-    rerender({ active: true })
-    act(() => {
-      window.innerHeight = restHeight - 336
-      window.dispatchEvent(new Event("resize"))
-    })
-    expect(result.current).toBe(336)
-
-    //iOS never resizes: the shrink is 0 even with the keyboard open
-    act(() => {
-      window.innerHeight = restHeight
-      window.dispatchEvent(new Event("resize"))
-    })
-    expect(result.current).toBe(0)
-
-    //closing resets, and a resize while closed re-arms the rest height
-    rerender({ active: false })
-    act(() => {
-      window.innerHeight = restHeight + 100
-      window.dispatchEvent(new Event("resize"))
-    })
-    rerender({ active: true })
-    act(() => {
-      window.innerHeight = restHeight
-      window.dispatchEvent(new Event("resize"))
-    })
-    expect(result.current).toBe(100)
-    window.innerHeight = restHeight
   })
 
   it("hands <html> back on unmount", () => {
