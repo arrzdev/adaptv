@@ -223,11 +223,14 @@ export type UseKeyboardOptions = {
 const KEYBOARD_DISMISS_CONFIRM_MS = 150
 
 // A prediction (seeded from the height cache on focus, before the OS confirms anything) is held
-// this long waiting for a real measurement. The keyboard's own slide is ~250ms, so the window has
-// to clear that — retract sooner and a genuine keyboard gets killed mid-appearance and flickers
-// back. If nothing ever materialises (hardware keyboard, programmatic focus, a readonly field the
-// gate missed), the prediction retracts at the end of this window and the sheet settles back.
-const KEYBOARD_PREDICT_CONFIRM_MS = 400
+// this long waiting for a real measurement. The keyboard's own slide is ~250ms, but the first raise
+// after a launch is slower — Android measures the IME's height 850ms–1.1s after the focus tap on a
+// Pixel 7 emulator — and a window that closes before it lands retracts a prediction that was right:
+// the sheet grows on focus, eases back, and grows again when the height arrives. If nothing ever
+// materialises (hardware keyboard, programmatic focus, a readonly field the gate missed), the
+// prediction retracts at the end of this window and the sheet settles back — the only cost of a
+// longer window is that this rarer case holds the predicted height a little longer first.
+const KEYBOARD_PREDICT_CONFIRM_MS = 800
 
 // Same discipline for a height DECREASE while already open: switching fields makes iOS emit
 // transient mid-animation dips (device-measured: 380 → 335 → 380 within ~85ms) that must not

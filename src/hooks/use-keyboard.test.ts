@@ -69,7 +69,7 @@ const INNER_HEIGHT = 800
 const DEBOUNCE_MS = 50
 const DISMISS_CONFIRM_MS = 150
 const HEIGHT_CONFIRM_MS = 120
-const PREDICT_CONFIRM_MS = 400
+const PREDICT_CONFIRM_MS = 800
 
 describe("willOpenVirtualKeyboard", () => {
   it("matches text inputs and textareas", () => {

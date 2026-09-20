@@ -173,9 +173,9 @@ const DRAWER_SETTLE_FALLBACK_MS = 32
 // is held this long waiting for the keyboard whose arrival the focus predicted. If none confirms —
 // a hardware keyboard, a programmatic focus, a readonly field the gate missed — the floor eases back
 // down and releases, so a focus that raises no keyboard never leaves the sheet stuck tall. Mirrors
-// use-keyboard's KEYBOARD_PREDICT_CONFIRM_MS: the keyboard's own slide is ~250ms, so the window has
+// use-keyboard's KEYBOARD_PREDICT_CONFIRM_MS (and its first-raise measurements): the window has
 // to clear it or a genuine keyboard gets retracted mid-appearance and flickers back.
-const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 400
+const DRAWER_KEYBOARD_FLOOR_CONFIRM_MS = 800
 
 // Window after a keyboard GROW in which a further grow is re-aimed as a CONTINUATION rather than
 // restarted — the grow-correction block in the keyboard-room effect owns why. Wide enough for iOS's
