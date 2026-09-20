@@ -34,10 +34,27 @@ rather than assumed.
 
 ## Tier 1 — in the universal set *and* Ionic, and missing from adaptv
 
-`Icon`.
+~~`Icon`~~ — Tier 1 is closed.
+
+**`Icon` shipped** (`src/components/icon.tsx`), with no dependency and no bundled icon set: it takes
+any set's `<svg>` through `render` and owns two quirks. **Exposure:** a decorative icon is
+`aria-hidden`, never `role="none"`, because a named svg is announced through `role="presentation"`
+by every reader Manuel Matuzović tested in February 2026 except JAWS (VoiceOver on macOS 26.3 says
+"group"); a labelled one is `role="img"` + `aria-label`, the pattern announced as an image in every
+pairing Scott O'Hara tested. `lucide-react` 0.544.0 never sets the role, and `ion-icon` sets it even
+unlabelled. **Dynamic Type:** the box defaults to `1em`, so an icon inside `Text` follows it, and
+`scaleWithSystem` multiplies a fixed-size sibling icon by the same measured factor
+`Text scaleWithSystem` uses (Flutter's `Icon.applyTextScaling` is the same idea). The `@expo/ui`
+universal `Icon` is not prior art for the web half: its `index.tsx` returns `null`, and only the
+`.ios.tsx` / `.android.tsx` files render. Deliberately absent: a `mirror` prop (`rtl:-scale-x-100` is
+already Tailwind vocabulary) and a sprite `href`, which brings two more quirks of its own — a `data:`
+URL in `<use href>` renders nothing in WebKit or current Chromium while Vite inlines a sprite under
+4 KB as exactly that in the production build only, and a `display: none` sprite drops its gradients
+(Chromium 41337331, WebKit 243341). A **bundled, named icon set** — which is what would make
+automatic RTL flipping possible — is an owner call, not a gap.
 
 The form-control set now runs button / input / textarea / checkbox / switch / slider / select,
-grouped by `FieldGroup`. **`Icon` is the last Tier 1 item.**
+grouped by `FieldGroup`, and `Icon` closes the tier.
 
 The grouped-settings form is off the list: **`FieldGroup` shipped 2026-09-02**
 (`src/components/field-group.tsx`, recorded below). `Slider`, `Select` and `Collapsible` each have

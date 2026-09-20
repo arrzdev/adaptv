@@ -320,7 +320,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **Test:** install on Android (5): home-screen icon fills its shape (no white box), the launch chrome
   isn't a dark strip. *(Shipped to chopchop in PR #91.)*
 
-### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Skeleton` / `Fab` / `Divider`
+### 12. Primitives — `View` / `List` / `Text` / `Image` / `ScrollView` / `Skeleton` / `Fab` / `Divider` / `Icon`
 - **How:** `src/components/view.tsx` (row/center/fill/safe layout, identical everywhere),
   `src/components/list.tsx` (virtualized long lists), `src/components/scroll-view.tsx`,
   `src/components/text.tsx`, `src/components/image.tsx`, `src/components/skeleton.tsx` (the
@@ -331,12 +331,16 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   the keyboard otherwise, and a `hidden` slide that honours reduced motion), `src/components/divider.tsx` (a 1px
   border scaled by `1 / floor(dpr)` to one device pixel at every density — a sub-pixel border width is
   rounded up by Chromium and floored to nothing by WebKit at 3x — and never a background, so it
-  survives forced colours).
+  survives forced colours), `src/components/icon.tsx` (any icon
+  set's `<svg>`: `aria-hidden` when decorative, `role="img"` + `aria-label` when labelled, a `1em`
+  box, and the same Dynamic Type multiply as `Text` behind `scaleWithSystem`).
 - **Test:** `View` lays out identically on 1–6; `List` scrolls a long dataset smoothly on device;
   `Skeleton` stops pulsing with Reduce Motion on, on 1–6, with no frame of motion first.
   `Fab`: on native (6) it clears the home indicator, and focusing a field lifts it above the
   keyboard on the keyboard's own curve (`/lab/fab` on a device; `playground/e2e/fab.spec.ts` drives
   the same path headless through the keyboard mock seam).
+  on iOS (2, 4, 6) VoiceOver skips a decorative `Icon` and reads a labelled one as an image by name, and
+  a `scaleWithSystem` icon grows with Larger Text after a reload.
 - **`Select` (2026-09-02):** `src/components/select.tsx`. iOS renders `<select>` as a wheel, never a
   menu, and focusing it scrolls the page and raises the Done bar — so `Select` paints its own trigger
   and an anchored listbox on every target, keeps a real `<select>` mounted, hidden and never focused
@@ -359,7 +363,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   §5.4.1), and `getFieldItemPosition(index, total)` is exported for rows that are not DOM siblings,
   a virtualised list being the case.
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
-  The public surface is 33 barrels (`Collapsible`, `Slider`, `Select`, `FieldGroup`, `Skeleton`, `Fab` and `Divider` landed together on 2026-09-02) — `src/interface/components.index.ts` is the list, and
+  The public surface is 34 barrels (`Collapsible`, `Slider`, `Select`, `FieldGroup`, `Skeleton`, `Fab`, `Divider` and `Icon` landed together on 2026-09-02) — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
   That test exists because **the drift which hid `Text` from consumers passed typecheck, lint, the
   unit suite and `build:check`**: a missing re-export is invisible to every gate that does not
