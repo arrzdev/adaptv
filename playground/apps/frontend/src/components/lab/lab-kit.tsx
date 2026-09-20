@@ -79,10 +79,13 @@ export function LabRow({
   label,
   value,
   hint,
+  testId,
 }: {
   label: string
   value: ReactNode
   hint?: ReactNode
+  /** Lands on the value span as `data-testid`, so a spec reads the value alone. */
+  testId?: string
 }) {
   const missing = value === null || value === undefined || value === ""
   return (
@@ -97,6 +100,7 @@ export function LabRow({
          * broken component rather than as elided text. Rich values wrap instead.
          */}
         <span
+          data-testid={testId}
           className={cn(
             "min-w-0 text-end font-mono text-sm",
             typeof value === "string" || missing
@@ -179,8 +183,8 @@ export function LabButton({
   tone = "default",
   pressed,
   testId,
+  "data-testid": dataTestId,
   children,
-  "data-testid": testId,
 }: {
   onClick: () => void
   disabled?: boolean
@@ -190,19 +194,20 @@ export function LabButton({
    * ring, so a row of options shows which one is live without a badge.
    */
   pressed?: boolean
-  /** A stable handle for an e2e, where the label is the thing under test. */
+  /** A stable handle for an e2e, where the label is the thing under test. Lands on the button as `data-testid`. */
   testId?: string
-  children: ReactNode
-  /** A stable hook for e2e, for a page whose buttons a spec has to press by id. */
+  /** The same handle, for a page whose buttons a spec has to press by id. */
   "data-testid"?: string
+  children: ReactNode
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       aria-pressed={pressed}
-      data-testid={testId}
+      data-testid={testId ?? dataTestId}
       className={cn(
         "clickable rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition-colors",
         "disabled:opacity-40",
