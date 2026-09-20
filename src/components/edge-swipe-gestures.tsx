@@ -89,13 +89,23 @@ export function EdgeSwipeGestures({
     let startX = 0
     let startY = 0
 
+    //Every way out of an edge gesture goes through here. The claim taken at
+    //touchstart holds every lower-priority gesture on the screen still until it
+    //is released, so an edge touch dropped without a release — a second finger,
+    //a touch whose end never arrived, a re-bind mid-touch — would leave rows and
+    //drawers dead with no error anywhere.
+    function abandon() {
+      if (edge !== null) captureRef.current.release()
+      edge = null
+    }
+
     function onTouchStart(event: TouchEvent) {
+      //a touchstart always begins a new decision: whatever the previous one held
+      //is given back first (re-claimed below if this touch is also an edge one)
+      abandon()
       const touch = event.touches[0]
       //ignore multi-touch (pinch/zoom) and touches away from an edge
-      if (event.touches.length !== 1 || !touch) {
-        edge = null
-        return
-      }
+      if (event.touches.length !== 1 || !touch) return
       const width = window.innerWidth
       if (touch.clientX <= edgeZone) edge = "left"
       else if (touch.clientX >= width - edgeZone) edge = "right"
@@ -130,8 +140,7 @@ export function EdgeSwipeGestures({
     }
 
     function onTouchCancel() {
-      if (edge !== null) captureRef.current.release()
-      edge = null
+      abandon()
     }
 
     const options = { passive: true } as const
@@ -142,6 +151,8 @@ export function EdgeSwipeGestures({
       document.removeEventListener("touchstart", onTouchStart)
       document.removeEventListener("touchend", onTouchEnd)
       document.removeEventListener("touchcancel", onTouchCancel)
+      //the listeners that would have seen this touch end are going away
+      abandon()
     }
   }, [enabled, edgeZone, threshold])
 
