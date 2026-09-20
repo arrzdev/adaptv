@@ -1,5 +1,11 @@
 import type { KeyboardEvent } from "react"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
 import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
 import {
   snapIndex,
@@ -124,8 +130,19 @@ export function WheelColumn({
   //stale value, items and onChange — reporting the stored row a second time, a row
   //that left the list, or a row through a callback that closes over an old month
   const commitRef = useRef(() => {})
+  //the row a live report named since the wheel's last commit. A scroll event reads
+  //`value` from that commit, so a second event before the consumer's re-render (the
+  //engine ran a frame ahead of React's render task, as WebKit does after a long task)
+  //would report the stored row again. Every report also forces a commit, which is
+  //what clears it: a consumer that does not store still hears the row every frame
+  const reportedRef = useRef<number | null>(null)
+  const [, forceCommit] = useReducer((count: number) => count + 1, 0)
+  //a layout effect, not a passive one: passive effects can run after the next frame's
+  //scroll event, which would find the ref still set and swallow the row a consumer
+  //that does not store is owed
   useLayoutEffect(() => {
     commitRef.current = commit
+    reportedRef.current = null
   })
 
   const selectedIndex = Math.max(
@@ -234,7 +251,15 @@ export function WheelColumn({
     //report live — whatever row is centered right now IS the value, so a
     //close/submit mid-glide saves what the user last saw
     const next = items[index]
-    if (next && next.value !== value) onChange(next.value)
+    if (
+      next &&
+      next.value !== value &&
+      next.value !== reportedRef.current
+    ) {
+      reportedRef.current = next.value
+      forceCommit()
+      onChange(next.value)
+    }
     window.clearTimeout(commitTimer.current)
     // while a finger is down, leave the wheel free; the timer also keeps
     // resetting through the snap glide, so we settle only once it idles
