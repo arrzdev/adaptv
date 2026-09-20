@@ -87,7 +87,8 @@ export function binaryFingerprint(): string | null {
 }
 
 /**
- * Record the binary now running. Written **before** acting on a change.
+ * Record the binary now running. Written **before** the reload that acts on a
+ * change, and only once the reset it follows has landed.
  *
  * `fingerprint` is only ever passed when the **embedded** bundle is the one
  * executing, because that is the single moment the two fingerprints coincide: the
