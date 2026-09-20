@@ -35,6 +35,7 @@
 @import "./patches.css";
 
 /* 3. Component-owned styles (drawer keyframes, swipeable layout, collapsible motion, skeleton pulse) */
+/* 3. Component-owned styles (drawer keyframes, swipeable layout, spinner motion) */
 @import "./screen.css";
 @import "./scroll-fade.css";
 @import "./drawer.css";
@@ -42,6 +43,7 @@
 @import "./collapsible.css";
 @import "./skeleton.css";
 @import "./divider.css";
+@import "./spinner.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
 @import "./utils.css";

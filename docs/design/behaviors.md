@@ -363,7 +363,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   §5.4.1), and `getFieldItemPosition(index, total)` is exported for rows that are not DOM siblings,
   a virtualised list being the case.
 - ⚠︎ **This entry was written when the surface was two components and is a floor, not a census.**
-  The public surface is 34 barrels (`Collapsible`, `Slider`, `Select`, `FieldGroup`, `Skeleton`, `Fab`, `Divider` and `Icon` landed together on 2026-09-02) — `src/interface/components.index.ts` is the list, and
+  The public surface is 35 barrels (`Collapsible`, `Slider`, `Select`, `FieldGroup`, `Skeleton`, `Fab`, `Divider`, `Icon` and `Spinner` landed together on 2026-09-02) — `src/interface/components.index.ts` is the list, and
   `src/components/barrels.test.ts` is what keeps it in lockstep with `src/components/` itself.
   That test exists because **the drift which hid `Text` from consumers passed typecheck, lint, the
   unit suite and `build:check`**: a missing re-export is invisible to every gate that does not

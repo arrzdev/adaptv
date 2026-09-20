@@ -20,6 +20,7 @@ import { ScrollView } from "#adaptv/components/scroll-view"
 import { Slider } from "#adaptv/components/slider"
 import { Select } from "#adaptv/components/select"
 import { Skeleton } from "#adaptv/components/skeleton"
+import { Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { Text } from "#adaptv/components/text"
@@ -89,6 +90,7 @@ const PRIMITIVES: Array<[string, ReactElement]> = [
   ["scroll-view", <ScrollView key="scroll-view" />],
   ["text", <Text key="text">t</Text>],
   ["icon", <Icon key="icon" render={<svg />} />],
+  ["spinner", <Spinner key="spinner" />],
   ["pressable", <Pressable key="pressable" />],
   ["button", <Button key="button">b</Button>],
   [

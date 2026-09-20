@@ -1,0 +1,76 @@
+/*
+ * Spinner — the motion, its off-screen pause and its reduced-motion form
+ * (components/spinner.tsx).
+ *
+ * ## Why the rotation is `transform` on the HTML box, in a @keyframes rule
+ *
+ * Chromium runs some SVG animations on the main thread, where they freeze exactly while
+ * the app is busy: SMIL, a shape inside the drawing, the individual
+ * `rotate`/`scale`/`translate` properties, and `stroke-dasharray`. A `transform`
+ * keyframe on the outer `<svg>` is composited (traced: compositeFailed 0), so this is a
+ * guard against those forms, not a rescue of `animate-spin`. `transform` on the `<span>`
+ * is on every engine's composited list (docs/decisions/animation.md A3), and a
+ * `@keyframes` rule is the authoring the drawer measured clean on device (drawer.css).
+ * Keep the turn on the box and spelled `transform`; spinner.test.tsx pins both.
+ *
+ * ## Why these are rules on the identity attribute and not classes
+ *
+ * The reduced-motion answer must be right on the first paint and on the server; a hook
+ * is `false` during SSR and hydration. The off-screen pause is an attribute the shared
+ * IntersectionObserver writes without React. Keying both on `[data-adaptv="spinner"]` is
+ * docs/decisions/styling.md §2's escape hatch — no class for tailwind-merge to drop.
+ *
+ * Layered in `adaptv.components` so an unlayered consumer rule, or `animate-none` in
+ * `className` (`utilities` is a later layer), wins. No `!important` (§6.0.1).
+ * `@keyframes` stay outside the layer for drawer.css's reason: keyframe names resolve
+ * from one flat namespace where the last definition wins regardless of layer.
+ */
+
+@keyframes adaptv-spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+ * Reduced motion: nothing turns, and the drawing breathes. The pulse is on the `<svg>`
+ * CHILD, not the box: an animation outranks every normal declaration, so `opacity` keyed
+ * on the box itself would override a consumer's `opacity-50` for as long as it ran. On
+ * the child the two multiply. An indicator that simply stopped would read as "done".
+ */
+@keyframes adaptv-spinner-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@layer adaptv.components {
+  [data-adaptv="spinner"] {
+    animation: adaptv-spinner-spin 1s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="spinner"] {
+      animation: none;
+    }
+
+    [data-adaptv="spinner"] > svg {
+      animation: adaptv-spinner-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  /*
+   * Off screen, nothing ticks — the turn on the box or the pulse on its drawing. Two
+   * attributes outrank one, so this also beats the shorthands above, which reset the
+   * play state to `running`.
+   */
+  [data-adaptv="spinner"][data-spinner-offscreen],
+  [data-adaptv="spinner"][data-spinner-offscreen] > svg {
+    animation-play-state: paused;
+  }
+}
