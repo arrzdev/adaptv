@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { LiveReloadHot } from "#adaptv/shell/native-live-reload-client"
-import { installNativeLiveReloadRecovery } from "#adaptv/shell/native-live-reload-client"
+import {
+  bootWhenNativeShellMatches,
+  installNativeLiveReloadRecovery,
+} from "#adaptv/shell/native-live-reload-client"
 
 vi.mock("#adaptv/utils/platform", () => ({
   isNativePlatform: () => true,
@@ -132,6 +135,80 @@ describe("installNativeLiveReloadRecovery — the dev server's own disconnect ev
   })
 })
 
+describe("bootWhenNativeShellMatches — a stale native build never renders the app", () => {
+  const IOS_UA =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 adaptv-shell/ios-3f9a1c2b"
+
+  /** The dev server answering the shell check with `verdict`; records what was asked. */
+  function serverSays(verdict: string) {
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ verdict }), { status: 200 }),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+    return fetchMock
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("navigator", { userAgent: IOS_UA })
+  })
+
+  it("boots once the dev server confirms this build, asking with the id the WebView carries", async () => {
+    const asked = serverSays("match")
+    const boot = vi.fn()
+    bootWhenNativeShellMatches(boot, fakeHot().hot)
+    expect(boot).not.toHaveBeenCalled()
+    await vi.runAllTimersAsync()
+    expect(boot).toHaveBeenCalledTimes(1)
+    expect(replace).not.toHaveBeenCalled()
+    expect(asked.mock.calls[0]?.[0]).toBe(
+      "/__adaptv/native-shell?id=ios-3f9a1c2b",
+    )
+  })
+
+  it("never boots a stale build: it waits on the offline screen for the rebuilt app", async () => {
+    serverSays("stale")
+    const boot = vi.fn()
+    bootWhenNativeShellMatches(boot, fakeHot().hot)
+    await vi.runAllTimersAsync()
+    expect(boot).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith(
+      "capacitor://localhost/adaptv-offline.html",
+    )
+  })
+
+  it("never boots while the CLI is still deciding, either", async () => {
+    serverSays("pending")
+    const boot = vi.fn()
+    bootWhenNativeShellMatches(boot, fakeHot().hot)
+    await vi.runAllTimersAsync()
+    expect(boot).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledTimes(1)
+  })
+
+  it("goes to the offline screen when the server stops answering mid-check", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Load failed")
+      }),
+    )
+    const boot = vi.fn()
+    bootWhenNativeShellMatches(boot, fakeHot().hot)
+    await vi.runAllTimersAsync()
+    expect(boot).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledTimes(1)
+  })
+
+  it("boots at once, asking nothing, without the dev hook — a production bundle has none", () => {
+    const asked = serverSays("stale")
+    const boot = vi.fn()
+    bootWhenNativeShellMatches(boot, null)
+    expect(boot).toHaveBeenCalledTimes(1)
+    expect(asked).not.toHaveBeenCalled()
+  })
+})
+
 describe("production bundle", () => {
   it("guards on the build-time constant before the parameter, so a build folds the client away", async () => {
     // A build replaces `import.meta.hot` with `undefined`; the first statement must be the
@@ -155,5 +232,23 @@ describe("production bundle", () => {
     expect(beforeGuard).not.toMatch(
       /\bawait\b|\bfetch\(|\bnew WebSocket\(/,
     )
+  })
+
+  it("folds the boot gate to a bare boot() the same way", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { resolve } = await import("node:path")
+    const source = readFileSync(
+      resolve(__dirname, "native-live-reload-client.ts"),
+      "utf8",
+    )
+    const body = source.slice(
+      source.indexOf("export function bootWhenNativeShellMatches("),
+    )
+    const constantGuard = body.indexOf("if (!import.meta.hot) {")
+    const parameterGuard = body.indexOf("if (!hot ||")
+    const request = body.indexOf("fetch(")
+    expect(constantGuard).toBeGreaterThan(-1)
+    expect(parameterGuard).toBeGreaterThan(constantGuard)
+    expect(request).toBeGreaterThan(parameterGuard)
   })
 })
