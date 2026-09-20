@@ -231,6 +231,98 @@ test.describe("the app's edge-swipe back", () => {
     ).toBeVisible()
   })
 
+  /*
+   * The swipe is a BACK press, so an open overlay has to take it before the route
+   * does — the order the back chain gives Android's back button. It used to call
+   * `router.navigate` straight away, and on an iOS 18.0 simulator the installed app
+   * left the page with the drawer still open on it, 2 of 2. The page is reached by
+   * an in-app tap here, so the second swipe has history to pop, the way a user
+   * gets there.
+   */
+  const PANEL = "[data-pwa-drawer]"
+
+  test("standalone: with a lab drawer open, the swipe closes the drawer before it leaves the page", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== "chromium",
+      "CDP touch injection is chromium-only",
+    )
+    const cdp = await gotoInstalled(page, "/lab")
+    expect(
+      await page.evaluate(
+        () => document.documentElement.dataset.adaptvPlatform,
+      ),
+    ).toBe("standalone")
+    await page
+      .getByRole("link", { name: /^Drawer\b/ })
+      .first()
+      .click()
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Drawer" }),
+    ).toBeVisible()
+    await page.getByRole("button", { name: "Open basic drawer" }).click()
+    await expect(page.locator(PANEL)).toBeVisible()
+
+    await swipe(cdp, 8, 140)
+
+    await expect(page.locator(PANEL)).toHaveCount(0)
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Drawer" }),
+    ).toBeVisible()
+
+    //with nothing open the same swipe is back again: it pops the tap that got here,
+    //rather than pushing the fallback on top of it
+    await swipe(cdp, 8, 140)
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Testing" }),
+    ).toBeVisible()
+    expect(
+      await page.evaluate(() =>
+        (
+          window as unknown as {
+            __TSR_ROUTER__: { history: { canGoBack(): boolean } }
+          }
+        ).__TSR_ROUTER__.history.canGoBack(),
+      ),
+    ).toBe(false)
+  })
+
+  test("standalone: with a settings drawer open, the swipe closes the drawer and stays on settings", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== "chromium",
+      "CDP touch injection is chromium-only",
+    )
+    const cdp = await gotoInstalled(page, "/settings")
+    await expect(
+      page.getByRole("button", { name: BACK_TO_TASKS }),
+    ).toBeVisible()
+    await page
+      .getByRole("button", { name: "Sign in", exact: true })
+      .click()
+    await expect(page.locator(PANEL)).toBeVisible()
+
+    await swipe(cdp, 8, 140)
+
+    await expect(page.locator(PANEL)).toHaveCount(0)
+    await expect(
+      page.getByRole("button", { name: BACK_TO_TASKS }),
+    ).toBeVisible()
+
+    //the gesture is still live, and the press the drawer consumed left nothing behind:
+    //with no history on a cold launch, the next swipe reaches the fallback
+    await swipe(cdp, 8, 140)
+
+    await expect(
+      page.getByRole("button", { name: CREATE_TASK }),
+    ).toBeVisible()
+  })
+
   test("standalone: a swipe from the MIDDLE stays on settings", async ({
     page,
     browserName,
