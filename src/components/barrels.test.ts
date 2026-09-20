@@ -108,7 +108,7 @@ describe("the component barrel", () => {
    * zero. → `docs/roadmap/src-reorg.md` §7
    */
   it("actually walked the directory it claims to have walked", () => {
-    expect(modulesOnDisk().length).toBeGreaterThanOrEqual(30)
+    expect(modulesOnDisk().length).toBeGreaterThanOrEqual(31)
     expect(modulesInBarrel().length).toBeGreaterThanOrEqual(27)
     for (const module of WITHHELD) {
       expect(
