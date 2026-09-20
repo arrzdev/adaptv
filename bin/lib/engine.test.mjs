@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process"
-import { readdirSync, readFileSync } from "node:fs"
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -44,6 +51,46 @@ function cliModules() {
   return files
 }
 
+//Runs inside ONE child node: compiles each path as an ES module — V8's module parser, the one
+//`node --check` and the runtime use — without linking or evaluating it, and answers one entry
+//per path, `null` or the error's text.
+const PARSE = `const { SourceTextModule } = require("node:vm")
+const { readFileSync } = require("node:fs")
+const out = []
+for (const f of JSON.parse(readFileSync(0, "utf8"))) {
+  try { new SourceTextModule(readFileSync(f, "utf8"), { identifier: f }); out.push(null) }
+  catch (e) { out.push(String(e)) }
+}
+process.stdout.write(JSON.stringify(out))`
+
+/**
+ * The paths that do not parse as ES modules, as `path:line  SyntaxError: …`.
+ *
+ * One process for the whole sweep. It was one `node --check` per module, and a node process
+ * costs ~60ms to start whatever it then does: 37 modules made this the slowest test in the
+ * file (1.8–2.4s alone) and it timed out at 5s under a loaded gate. `node --check` still runs,
+ * but only for a path that failed, because it is what names the line.
+ */
+function unparseable(paths) {
+  const r = spawnSync(
+    process.execPath,
+    ["--experimental-vm-modules", "--no-warnings", "-e", PARSE],
+    { input: JSON.stringify(paths), encoding: "utf8" },
+  )
+  //A child that died, or answered for fewer paths, would otherwise read as "nothing broken".
+  expect(r.status, r.stderr).toBe(0)
+  const errors = JSON.parse(r.stdout)
+  expect(errors).toHaveLength(paths.length)
+  return paths.flatMap((p, i) => {
+    if (errors[i] === null) return []
+    const check = spawnSync(process.execPath, ["--check", p], {
+      encoding: "utf8",
+    })
+    const where = (check.stderr ?? "").split("\n")[0] || p
+    return [`${where}  ${errors[i]}`]
+  })
+}
+
 describe("the render engine owns every byte the CLI prints", () => {
   it("finds the CLI's modules (guard against an empty sweep)", () => {
     const mods = cliModules()
@@ -67,20 +114,34 @@ describe("the render engine owns every byte the CLI prints", () => {
     //command and no test. It is also ONE enormous template literal, so ordinary prose can break
     //it: a backtick in a CSS comment closes the literal and turns the rest of the sheet into
     //JavaScript. That shipped a `SyntaxError` past a fully green run, and only the dev running
-    //the command ever saw it. `node --check` is the cheap floor under that — the same parser
-    //that will refuse the file at runtime, rather than a regex guessing at one.
-    const broken = cliModules()
-      .map((rel) => [
-        rel,
-        spawnSync(process.execPath, ["--check", join(BIN, rel)], {
-          encoding: "utf8",
-        }),
-      ])
-      .filter(([, r]) => r.status !== 0)
-      .map(
-        ([rel, r]) => `${rel}: ${(r.stderr ?? "").split("\n")[2] ?? ""}`,
+    //the command ever saw it. Compiling every module as an ES module is the cheap floor under
+    //that — the same parser that will refuse the file at runtime, rather than a regex guessing
+    //at one — and `node --check` names the line of whatever it refuses.
+    expect(unparseable(cliModules().map((rel) => join(BIN, rel)))).toEqual(
+      [],
+    )
+  })
+
+  it("parses — and the sweep refuses the break it exists for", () => {
+    //The sweep is only worth its place while it can fail. Plant the shipped bug — a backtick in
+    //a CSS comment closing the template literal, below valid lines as it was in the real sheet —
+    //beside a module that must pass (a hashbang and top-level await, as `adaptv.mjs` has), and
+    //require exactly the first to be named, at its line.
+    const dir = mkdtempSync(join(tmpdir(), "adaptv-parse-"))
+    try {
+      const broken = join(dir, "sheet.mjs")
+      const fine = join(dir, "entry.mjs")
+      writeFileSync(
+        broken,
+        "export const a = 1\nexport const b = 2\n\nexport const css = `a { color: red } /* a `b` note */ b {}`\n",
       )
-    expect(broken).toEqual([])
+      writeFileSync(fine, "#!/usr/bin/env node\nawait Promise.resolve()\n")
+      const found = unparseable([fine, broken])
+      expect(found).toHaveLength(1)
+      expect(found[0]).toMatch(/sheet\.mjs:4 {2}SyntaxError: /)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("keeps commander behind one door", () => {
