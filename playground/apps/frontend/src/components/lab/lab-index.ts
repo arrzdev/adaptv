@@ -265,6 +265,9 @@ const CAPABILITIES = [
     to: "/lab/filesystem",
     title: "Filesystem",
     summary: "the app's own files · plugin on native, OPFS on the web",
+    to: "/lab/speech",
+    title: "Speech",
+    summary: "text to speech · spoke, cancelled, silent, failed",
     isNew: true,
   },
   {

@@ -180,6 +180,7 @@ export function LabButton({
   pressed,
   testId,
   children,
+  "data-testid": testId,
 }: {
   onClick: () => void
   disabled?: boolean
@@ -192,10 +193,13 @@ export function LabButton({
   /** A stable handle for an e2e, where the label is the thing under test. */
   testId?: string
   children: ReactNode
+  /** A stable hook for e2e, for a page whose buttons a spec has to press by id. */
+  "data-testid"?: string
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       aria-pressed={pressed}
