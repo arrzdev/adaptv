@@ -581,3 +581,99 @@ describe("classifyImageSrc — three facts, no heuristic", () => {
     }
   })
 })
+
+describe("Image — the consumer's ref", () => {
+  function tracked(log: string[]) {
+    return (node: HTMLImageElement | null) => {
+      log.push(node ? "attach" : "null")
+      return () => {
+        log.push("cleanup")
+      }
+    }
+  }
+
+  it("runs a callback ref's React 19 cleanup on unmount, not a call with null", () => {
+    const log: string[] = []
+    withPendingImages(() => {
+      const { unmount } = render(
+        <Image
+          src="/a.png"
+          alt="a"
+          width={640}
+          height={400}
+          ref={tracked(log)}
+        />,
+      )
+      unmount()
+    })
+    expect(log).toEqual(["attach", "cleanup"])
+  })
+
+  it("stays attached across re-renders instead of detaching and re-attaching", () => {
+    const log: string[] = []
+    const ref = tracked(log)
+    withPendingImages(() => {
+      const { rerender, container } = render(
+        <Image
+          src="/a.png"
+          alt="a"
+          title="a"
+          width={640}
+          height={400}
+          ref={ref}
+        />,
+      )
+      rerender(
+        <Image
+          src="/a.png"
+          alt="a"
+          title="b"
+          width={640}
+          height={400}
+          ref={ref}
+        />,
+      )
+      rerender(
+        <Image
+          src="/a.png"
+          alt="a"
+          title="c"
+          width={640}
+          height={400}
+          ref={ref}
+        />,
+      )
+      //the re-renders reached the <img>, and it is the same node throughout, so any
+      //extra call is the ref churning
+      expect(container.querySelector("img")?.getAttribute("title")).toBe(
+        "c",
+      )
+    })
+    expect(log).toEqual(["attach"])
+  })
+
+  //The merge also feeds Image's own imgRef, and the only thing that reads it is the
+  //layout effect that promotes an image the browser already had: a cached image fires
+  //no load event, so if the merge stopped reaching imgRef it would sit in loading.
+  it("still promotes a cached image on mount, through the merged ref", () => {
+    vi.spyOn(
+      HTMLImageElement.prototype,
+      "complete",
+      "get",
+    ).mockReturnValue(true)
+    vi.spyOn(
+      HTMLImageElement.prototype,
+      "naturalWidth",
+      "get",
+    ).mockReturnValue(640)
+    const ref = { current: null as HTMLImageElement | null }
+    const { container, unmount } = render(
+      <Image src="/a.png" alt="a" width={640} height={400} ref={ref} />,
+    )
+    const el = container.firstElementChild as HTMLElement
+    expect(el.hasAttribute("data-image-loaded")).toBe(true)
+    expect(ref.current).toBe(container.querySelector("img"))
+    unmount()
+    expect(ref.current).toBe(null)
+  })
+})
