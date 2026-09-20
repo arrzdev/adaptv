@@ -39,6 +39,17 @@ export type AppShellOptions = {
   criticalCss: string
   /** Pre-paint platform + theme stamp. Must run before the stylesheet. */
   headInitScript: string
+  /**
+   * Pre-paint script that reads the app's CSS custom properties, so it goes AFTER the
+   * stylesheet link: a script behind a pending stylesheet waits for it. The launch-height
+   * script reads `--adaptv-inset-top`; ahead of the stylesheet it would read 0, and an
+   * iOS 18 reload (100vh 852 over innerHeight 793 under a 59pt inset, pinned in
+   * `launch-viewport.test.ts`) would lower the height to 793, by the script's arithmetic
+   * (not run in the shell). The server-rendered page gets the same wait from React
+   * hoisting its stylesheets. After the modulepreload links too, so the parser has
+   * reached them before it waits.
+   */
+  styledInitScript?: string
   stylesHref: string
   entryHref: string
   /**
@@ -99,6 +110,9 @@ export function renderAppShell(options: AppShellOptions): string {
     ...(options.modulepreloadHrefs ?? []).map(
       (href) => `<link rel="modulepreload" href="${href}">`,
     ),
+    ...(options.styledInitScript
+      ? [`<script>${options.styledInitScript}</script>`]
+      : []),
     "</head>",
     "<body>",
     //empty by design — this is the boot scaffolding, not a page

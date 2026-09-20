@@ -4,6 +4,7 @@ import type { Plugin } from "vite"
 import { resolveThemeColors } from "#adaptv/config/app-config.ts"
 import { appShellFile } from "#adaptv/config/sw-helpers.ts"
 import { getCriticalShellCss } from "#adaptv/shell/critical-css.ts"
+import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport.ts"
 import { getUiThemeInitScript } from "#adaptv/shell/theme-init-script.ts"
 import { getPlatformInitScript } from "#adaptv/utils/platform.ts"
 import { publicPath } from "#adaptv/utils/public-path.ts"
@@ -252,6 +253,12 @@ async function emitShell(
         ),
         base,
       }),
+    //the launch height, on the same condition as `create-root-route.tsx`: this
+    //document boots an offline launch, and every launch of a spa deploy. It
+    //reads the top inset, so it waits for the stylesheet (see `app-shell.ts`).
+    styledInitScript: config.splashScreen
+      ? getLaunchViewportInitScript()
+      : undefined,
     stylesHref,
     entryHref: publicPath(base, entry.file),
     modulepreloadHrefs: entryModulepreloadHrefs(manifest, base),
