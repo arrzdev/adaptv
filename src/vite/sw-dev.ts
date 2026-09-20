@@ -53,18 +53,25 @@ export function adaptvSwDevPlugin(context: AdaptvContext): Plugin {
     configureServer(server) {
       if (!devServiceWorkerEnabled()) return
 
-      const modules = requireAppConfig(context).serviceWorkers ?? []
-      if (modules.length === 0) {
+      //Read per request, never captured here: the config watcher replaces
+      //`context.loaded` when adaptv.config.ts changes and full-reloads the page,
+      //which re-fetches this route. A list captured at startup kept serving the
+      //old modules until the dev server was restarted.
+      const serviceWorkers = () =>
+        requireAppConfig(context).serviceWorkers ?? []
+
+      if (serviceWorkers().length === 0) {
         //Nothing to serve, and saying so beats a silent 404 on a flag the dev
         //deliberately set — the config is the thing that is empty, not the flag.
         server.config.logger.warn(
           `[adaptv] ${DEV_SW_ENV} is set but \`serviceWorkers: []\` is empty — no dev worker to serve`,
         )
-        return
       }
 
       server.middlewares.use((req, res, next) => {
         if ((req.url ?? "").split("?")[0] !== DEV_SW_PATH) return next()
+        const modules = serviceWorkers()
+        if (modules.length === 0) return next()
         void (async () => {
           try {
             const source = await bundleDevWorker(context, modules)
