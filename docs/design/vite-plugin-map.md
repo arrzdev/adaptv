@@ -22,7 +22,7 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 |---|---|---|---|
 | 1 | `adaptvBanServerApisPlugin` | `ban-server-apis.ts` | **`enforce: "pre"`, and FIRST.** The isomorphism ban must win the specifier before the framework plugin resolves it. The one layer a consumer cannot disable, misconfigure, or forget. |
 | 2 | `adaptvCssLayerOrderPlugin` | `css-layer-order.ts` | Also `pre` — must reach the app's stylesheet **before** `@tailwindcss/vite` compiles the Tailwind import away. |
-| 3 | `adaptvRingShadowPlugin` | `ring-shadow-fallback.ts` | The mirror image: `enforce: "post"`, because it rewrites what `@tailwindcss/vite` **produced**. |
+| 3 | `adaptvTailwindEmptyFallbackPlugin` | `tailwind-empty-fallback.ts` | The mirror image: **no `enforce`**, because it rewrites what `@tailwindcss/vite` **produced** — `pre` sees no utilities yet and `post` is already past Vite's CSS stage. |
 | 4 | `adaptvConfigLoaderPlugin` | *(local to `adaptv-plugin.ts`)* | Serves the loaded `adaptv.config.ts` as a module. |
 | 5 | `adaptvManifestPlugin` | `manifest.ts` | The web app manifest. |
 | 6 | `adaptvDefaultIconsPlugin` | `default-icons.ts` | Falls back to the shipped icon set. |

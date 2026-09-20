@@ -175,7 +175,7 @@ shipped half, and a curated public surface.
 ```
 src/
   build/          ← src/vite/ (36) + src/native/ (4).  Node. The dev's machine. Never bundled.
-    plugins/        ban-server-apis, css-layer-order, ring-shadow-fallback, manifest,
+    plugins/        ban-server-apis, css-layer-order, tailwind-empty-fallback, manifest,
                     default-icons, adaptv-image, deploy-server, shell-emit, sw-build,
                     sw-dev, static-host, native-bundle            (14)
     modules/        the virtual-module providers                   (5)
@@ -483,7 +483,7 @@ order is the contract** — [`../design/vite-plugin-map.md §2`](../design/vite-
 four adjacent pairs, *each of which is a bug that shipped once*. Slicing plugins out to domain
 folders does not change the array, but it makes the array's imports come from eight places, and it
 makes the map doc harder to keep true. **Do not move a plugin whose position §2 explains** —
-`ban-server-apis`, `css-layer-order`, `ring-shadow-fallback`, `adaptv-image`, `shell-emit`,
+`ban-server-apis`, `css-layer-order`, `tailwind-empty-fallback`, `adaptv-image`, `shell-emit`,
 `sw-build`, `static-host`, `native-bundle`. The OTA and router modules named in §2.2 are all either
 virtual-module providers or support modules, which is why they are the safe slice.
 

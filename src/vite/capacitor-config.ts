@@ -61,9 +61,10 @@ export const CAPACITOR_WEB_DIR = ".adaptv/web"
  * The Android WebView adaptv refuses to run below.
  *
  * **This is a floor, not a fix.** The bug that prompted it — Chromium 113–118 silently
- * dropping every Tailwind v4 `ring-*` utility — is *patched*, unconditionally, by
- * `vite/ring-shadow-fallback.ts`. Gating those devices out would now mean refusing to boot
- * on hardware adaptv renders correctly, so the floor sits below them.
+ * dropping every Tailwind v4 `ring-*` utility, and every composition built on the same empty
+ * `var()` fallback — is *patched*, unconditionally, by `vite/tailwind-empty-fallback.ts`.
+ * Gating those devices out would now mean refusing to boot on hardware adaptv renders
+ * correctly, so the floor sits below them.
  *
  * 111 is **Tailwind v4's own Chromium minimum**. Below it the app's stylesheet is outside
  * what its CSS toolchain claims to compile for, so adaptv cannot honestly promise anything —
