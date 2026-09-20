@@ -7,8 +7,13 @@ import { publicPath } from "#adaptv/utils/public-path"
 const SW_PATH = "sw.js"
 
 function getExpectedServiceWorkerScriptUrl(): string {
-  const base = import.meta.env.BASE_URL
-  return new URL(`${base}${SW_PATH}`, window.location.origin).href
+  //through `publicPath`, never `${BASE_URL}sw.js`: under `--base /app` BASE_URL
+  //is `"/app"`, and the concatenation expects `/appsw.js` and unregisters the
+  //app's own `/app/sw.js` on every launch
+  return new URL(
+    publicPath(import.meta.env.BASE_URL, SW_PATH),
+    window.location.origin,
+  ).href
 }
 
 /**

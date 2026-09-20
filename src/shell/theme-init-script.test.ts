@@ -134,6 +134,16 @@ describe("getUiThemeInitScript — a route that pins the chrome", () => {
     expect(runAt("/app/settings", TINTS, "/app/").meta).toBe("#0b6e4f")
   })
 
+  it("strips a base written without its slash the same way", () => {
+    //the runtime shell passes `import.meta.env.BASE_URL`, which is `"/app"` under
+    //`--base /app`; stripping that left `p/settings`, so every tint missed
+    expect(runAt("/app/settings", TINTS, "/app").meta).toBe("#0b6e4f")
+    //and `/app` is not a prefix of `/application`
+    expect(runAt("/application/settings", TINTS, "/app").meta).toBe(
+      "#0a0a0c",
+    )
+  })
+
   it("is the plain theme script when no route declares a tint", () => {
     expect(runAt("/settings", []).meta).toBe("#0a0a0c")
   })
