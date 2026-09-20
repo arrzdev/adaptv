@@ -1,3 +1,11 @@
+//`.ts` specifiers on purpose: Node loads this file through `vite/shell-emit.ts`
+//(see the note in theme-init-script.ts)
+import { BOOT_FAILED_ATTR } from "#adaptv/shell/boot-fallback.ts"
+import {
+  PREPAINT_TINT_ATTR,
+  PREPAINT_TINT_VAR,
+} from "#adaptv/shell/theme-init-script.ts"
+
 /**
  * Inline critical CSS — painted before the app stylesheet loads so the launch never
  * flashes unpainted, and the splash policy resolves from the very first frame.
@@ -5,6 +13,9 @@
  * Pure string builder (no React / vite deps) so it's unit-testable in isolation.
  *
  * - **Base background** (`html,body`) applies everywhere — plain anti-flash.
+ * - **A route's tint** outranks it before hydration, from the stamp the head script puts on
+ *   `<html>` (`theme-init-script.ts`), because the script cannot reach `<body>` and the body is
+ *   the edge iOS 26 takes its bars from.
  * - **Overscan bleed** (`html::before`, `--viewport-cover-bleed` past every edge) is
  *   gated to **installed** contexts: it covers the overscan when a standalone PWA /
  *   native WebView's initial containing block paints small then expands on launch. A
@@ -28,6 +39,14 @@ export function getCriticalShellCss(
 ): string {
   //base background — all contexts
   const base = `:root{--viewport-cover-bleed:5rem}html,body{background-color:${themeColorLight}}@media (prefers-color-scheme:dark){html,body{background-color:${themeColorDark}}}html.light,html.light body{background-color:${themeColorLight}}html.dark,html.dark body{background-color:${themeColorDark}}`
+  //a route's own tint before hydration: the head script stamps the attribute and
+  //the colour (theme-init-script.ts PREPAINT_TINT_ATTR / PREPAINT_TINT_VAR) on
+  //<html>, because it cannot reach <body> — which the rules above paint in the
+  //theme colour, over html, on the edge iOS 26 takes its bars from. Not once the
+  //boot fallback is showing: `useSyncTheme` never ran to remove the stamp, and that
+  //screen inherits the body colour and sets theme-coloured text on it
+  const stamped = `html[${PREPAINT_TINT_ATTR}]:not([${BOOT_FAILED_ATTR}])`
+  const prepaintTint = `${stamped},${stamped} body{background-color:var(${PREPAINT_TINT_VAR})!important}`
   //launch-overscan bleed — installed / standalone only
   const bleed = `@media (display-mode:standalone){html::before{content:"";position:fixed;inset:calc(-1*var(--viewport-cover-bleed));z-index:-1;background-color:${themeColorLight}}html.light::before{background-color:${themeColorLight}}html.dark::before{background-color:${themeColorDark}}}@media (display-mode:standalone) and (prefers-color-scheme:dark){html::before{background-color:${themeColorDark}}}`
   //same bleed for a native Capacitor build (reports display-mode:browser, so the
@@ -43,5 +62,7 @@ export function getCriticalShellCss(
   //splash animation hold — see the note above. Scoped to the splash subtree: the app
   //tree is behind it and its own animations are not adaptv's to freeze.
   const splashHold = `html:not([data-adaptv-splash-revealed]) [data-adaptv-splash],html:not([data-adaptv-splash-revealed]) [data-adaptv-splash] *{animation-play-state:paused!important}`
-  return base + bleed + nativeBleed + splashGate + splashHold
+  return (
+    base + prepaintTint + bleed + nativeBleed + splashGate + splashHold
+  )
 }

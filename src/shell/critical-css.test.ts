@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { SPLASH_REVEALED_ATTR } from "#adaptv/hooks/use-splash-handoff"
+import { BOOT_FAILED_ATTR } from "#adaptv/shell/boot-fallback"
 import { getCriticalShellCss } from "#adaptv/shell/critical-css"
+import {
+  PREPAINT_TINT_ATTR,
+  PREPAINT_TINT_VAR,
+} from "#adaptv/shell/theme-init-script"
 
 const LIGHT = "#eeeeec"
 const DARK = "#0a0a0c"
@@ -63,5 +68,45 @@ describe("getCriticalShellCss — splash policy gate", () => {
     const css = getCriticalShellCss(LIGHT, DARK, false)
     expect(css).toContain(`background-color:${LIGHT}`)
     expect(css).toContain(`background-color:${DARK}`)
+  })
+})
+
+//The head script can reach <html> but not <body>, and the base rules paint the body in
+//the THEME colour over html. This rule is how a route's tint reaches the body before
+//hydration; the names are written into the CSS string by hand, so pin them to the
+//constants the script and `useSyncTheme` use.
+describe("getCriticalShellCss — a route's tint before hydration", () => {
+  const stamped = `html[${PREPAINT_TINT_ATTR}]:not([${BOOT_FAILED_ATTR}])`
+
+  it("paints html and body from the script's stamp, over the theme rules", () => {
+    expect(getCriticalShellCss(LIGHT, DARK, false)).toContain(
+      `${stamped},${stamped} body{background-color:var(${PREPAINT_TINT_VAR})!important}`,
+    )
+  })
+
+  //the boot fallback inherits the body's colour and sets theme-coloured text on it;
+  //when the bundle fails nothing removes the stamp, so the tint must step aside
+  it("steps aside once the boot fallback is showing", () => {
+    const css = getCriticalShellCss(LIGHT, DARK, false)
+    document.head.innerHTML = `<style>${css}</style>`
+    document.documentElement.className = "light"
+    document.documentElement.setAttribute(PREPAINT_TINT_ATTR, "")
+    document.documentElement.style.setProperty(
+      PREPAINT_TINT_VAR,
+      "#0b6e4f",
+    )
+    try {
+      expect(getComputedStyle(document.body).backgroundColor).toBe(
+        "#0b6e4f",
+      )
+      document.documentElement.setAttribute(BOOT_FAILED_ATTR, "")
+      expect(getComputedStyle(document.body).backgroundColor).toBe(LIGHT)
+    } finally {
+      document.head.innerHTML = ""
+      document.documentElement.className = ""
+      document.documentElement.removeAttribute(PREPAINT_TINT_ATTR)
+      document.documentElement.removeAttribute(BOOT_FAILED_ATTR)
+      document.documentElement.removeAttribute("style")
+    }
   })
 })
