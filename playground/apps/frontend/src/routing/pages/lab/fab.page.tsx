@@ -244,6 +244,7 @@ function FabReadout({
   const [geometry, setGeometry] = useState<FabGeometry | null>(null)
   const [root, setRoot] = useState<RootKeyboard | null>(null)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the flags are inputs to the FAB's inline style; the readout re-reads the DOM once React has committed each change
   useEffect(() => {
     const html = document.documentElement
     const readRoot = () =>
@@ -306,8 +307,6 @@ function FabReadout({
       viewport?.removeEventListener("resize", readFab)
       viewport?.removeEventListener("scroll", readFab)
     }
-    //the flags are inputs to the FAB's inline style; re-read once React has
-    //committed each change, in case the observer fired before layout settled
   }, [placement, hidden, avoidKeyboard])
 
   return (

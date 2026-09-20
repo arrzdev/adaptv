@@ -17,6 +17,8 @@ export const Route = createFileRoute("/_providers/lab/progress-bar")({
 
 /** How many indeterminate bars sit below the spacer — Spinner's field size. */
 const FIELD_COUNT = 100
+//the field is static and never reordered, so its ids are its positions
+const FIELD = Array.from({ length: FIELD_COUNT }, (_, i) => `cell-${i}`)
 
 /** How long the busy button holds the main thread. */
 const BUSY_MS = 1000
@@ -298,9 +300,8 @@ function FieldProbe() {
             data-testid="progress-field"
             className="grid grid-cols-5 gap-2 text-foreground"
           >
-            {Array.from({ length: FIELD_COUNT }, (_, i) => (
-              //the list is static and never reordered
-              <ProgressBar key={i} />
+            {FIELD.map((id) => (
+              <ProgressBar key={id} />
             ))}
           </div>
         )}
