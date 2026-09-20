@@ -1,0 +1,79 @@
+/*
+ * Divider — the hairline rules the separator owns (components/divider.tsx).
+ *
+ * ## One device pixel, whatever the density
+ *
+ * `1px` is one CSS pixel: three device pixels on a 3x iPhone, two and five eighths on a
+ * Pixel, and visibly heavier than the rule the platform draws between its own rows. A
+ * hairline is one DEVICE pixel — and a sub-pixel BORDER WIDTH cannot say so, measured on
+ * both engines on 2026-09-02: Chromium rounds any border width between 0 and 1 CSS px up
+ * to 1 CSS px at style time, so `0.5px` paints two device rows at 2x and `calc(1px / 3)`
+ * paints three at 3x; WebKit stores `calc(1px / 3)` as a LayoutUnit of 21/64 and floors
+ * 0.328 × 3 to ZERO device rows — the rule vanishes. So the border stays a whole `1px`,
+ * which every engine draws, and the element is SCALED down to one device pixel with a
+ * transform, which no engine snaps: `scaleY` across, `scaleX` down, from the leading edge.
+ *
+ * The factor is `1 / floor(dpr)`, not `1 / dpr`. Both engines snap a `1px` border to a
+ * whole number of device pixels first, rounding DOWN: on a 2.625x Pixel the computed width
+ * is `0.761905px` (two device pixels) before any transform, so scaling that by `1 / 2.625`
+ * drew 0.76 of a device pixel (one faint row, measured over CDP on the emulator) while
+ * `1 / 2` draws exactly one. The floor is what the `min-resolution` buckets already give —
+ * `2dppx`, `3dppx`, `4dppx` — so the ladder has three steps and a density between whole
+ * numbers lands on the right one for free. The stylesheet answers before the first paint
+ * (SSR-safe, no JS). The rule still takes its 1 CSS px in layout on every density, so a
+ * list measures the same everywhere; only the paint thins.
+ *
+ * ## A border, never a background
+ *
+ * Under `forced-colors: active` the engine drops every author background to `Canvas`, so a
+ * `bg-*` rule disappears; a border is recoloured to `CanvasText` and stays. The colour
+ * itself is the consumer's (`border-border` on the base tier, any `border-*` utility on
+ * theirs): `border: 0 solid` below resets width and style only, and the colour utility in
+ * the later `utilities` layer sets the colour.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
+ * rule or utility wins over any of it, and nothing here is `!important` (§6.0.1). A
+ * consumer's own `transform` would replace the scale — `translate` and `rotate`, the
+ * utilities Tailwind v4 uses, are separate properties and do not.
+ */
+
+@layer adaptv.components {
+  [data-adaptv="divider"] {
+    --adaptv-hairline-scale: 1;
+    border: 0 solid;
+    border-block-start-width: 1px;
+    /* a flex column must not squeeze the rule away, and a stray height must not thicken it */
+    flex-shrink: 0;
+    block-size: 0;
+    transform: scaleY(var(--adaptv-hairline-scale));
+    transform-origin: 0 0;
+  }
+
+  [data-adaptv="divider"][data-orientation="vertical"] {
+    border-block-start-width: 0;
+    border-inline-start-width: 1px;
+    block-size: auto;
+    inline-size: 0;
+    /* down the whole row, without the consumer having to know the row's height */
+    align-self: stretch;
+    transform: scaleX(var(--adaptv-hairline-scale));
+  }
+
+  @media (min-resolution: 2dppx) {
+    [data-adaptv="divider"] {
+      --adaptv-hairline-scale: 0.5;
+    }
+  }
+
+  @media (min-resolution: 3dppx) {
+    [data-adaptv="divider"] {
+      --adaptv-hairline-scale: calc(1 / 3);
+    }
+  }
+
+  @media (min-resolution: 4dppx) {
+    [data-adaptv="divider"] {
+      --adaptv-hairline-scale: 0.25;
+    }
+  }
+}
