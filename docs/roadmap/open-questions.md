@@ -47,6 +47,14 @@ concerns (`ion-tabs`/`ion-router-outlet`; `expo-router`'s `Stack`/`NativeTabs`) 
 free-standing components. adaptv owns its router, which is why this has the most leverage and why it
 cannot be lifted from either API directly.
 
+**Part of it: what a browser's Back does to an open overlay.** In a browser tab nothing listens to
+`popstate`, so the browser's Back button, and Safari's own edge swipe, pop the route under an open
+drawer or menu and the page leaves with it: measured on an iOS 18.0 simulator in Safari, and headless
+in Chromium and WebKit. The back chain only hears Android's back button, `adaptvBack()`, and the
+installed app's edge swipe that calls it. Closing an overlay on a browser's Back would mean giving each
+open overlay its own history entry, which costs an extra entry per sheet, a Forward that reopens one,
+and a refresh that lands on an entry with nothing open. That choice is left open.
+
 ### O6 — Is the Ionic port inventory discharged?
 
 Marked 🔄 *in progress*. The three **mechanisms** now exist — `src/capabilities/gesture-controller.ts`,

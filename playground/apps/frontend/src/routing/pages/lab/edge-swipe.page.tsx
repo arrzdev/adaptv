@@ -119,7 +119,7 @@ function LabEdgeSwipePage() {
 
       <LabSection
         title="The probe"
-        description="It logs instead of navigating, so you can swipe repeatedly without leaving the page. The real one, on every lab page, calls router.navigate."
+        description="It logs instead of navigating, so you can swipe repeatedly without leaving the page. The real one, on every lab page, is a back press (useSwipeBack): an open drawer or menu takes it before the page leaves."
       >
         <EdgeSwipeGestures
           enabled={enabled}

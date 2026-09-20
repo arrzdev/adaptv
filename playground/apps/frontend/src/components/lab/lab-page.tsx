@@ -13,6 +13,7 @@ import { LabBadge } from "@/components/lab/lab-kit"
 import { PageWithSmoothEdges } from "@/components/page"
 import { IconButton } from "@/components/ui"
 import { useIsInstalledApp } from "@/hooks/use-installed-app"
+import { useSwipeBack } from "@/hooks/use-swipe-back"
 
 /**
  * Shell for every lab page: the same header, the same back target, and a strip
@@ -41,6 +42,8 @@ export function LabPage({
   //only way out. Off in a browser tab, where the browser's edge swipe already is
   //back and a second recogniser would pop twice. See useIsInstalledApp.
   const isInstalled = useIsInstalledApp()
+  //a back press, not a navigation: an open drawer takes it first (useSwipeBack)
+  const swipeBack = useSwipeBack(backTo)
 
   //The e2e seam for a back press. The real inputs are a hardware button and an OS
   //gesture, neither of which a headless browser has, and an on-page button cannot
@@ -60,10 +63,7 @@ export function LabPage({
 
   return (
     <PageWithSmoothEdges>
-      <EdgeSwipeGestures
-        enabled={isInstalled}
-        left={() => router.navigate({ to: backTo })}
-      />
+      <EdgeSwipeGestures enabled={isInstalled} left={swipeBack} />
       <header className="flex shrink-0 flex-col gap-y-2">
         <div className="flex items-center gap-x-2">
           <IconButton
