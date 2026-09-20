@@ -231,6 +231,12 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/compose",
+    title: "Compose",
+    summary: "mail and SMS drafts · handed to the OS composer",
+    isNew: true,
+  },
+  {
     to: "/lab/clipboard",
     title: "Clipboard",
     summary: "copy is ungated, paste is permission-gated",

@@ -199,7 +199,6 @@ export function LabButton({
   return (
     <button
       type="button"
-      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       aria-pressed={pressed}

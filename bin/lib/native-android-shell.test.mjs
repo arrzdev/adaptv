@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import {
   patchAndroidFileProvider,
+  patchAndroidQueries,
   patchAndroidSplash,
   patchNativeIdentity,
 } from "./native.mjs"
@@ -229,5 +230,55 @@ describe("the FileProvider roots", () => {
     const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
     dirs.push(appRoot)
     expect(() => patchAndroidFileProvider(appRoot)).not.toThrow()
+describe("the composer schemes in the manifest", () => {
+  const MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="@string/app_name">
+    </application>
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
+`
+  function root() {
+    const appRoot = mkdtempSync(path.join(tmpdir(), "adaptv-android-"))
+    dirs.push(appRoot)
+    return appRoot
+  }
+
+  function manifestProject() {
+    const appRoot = root()
+    const main = path.join(appRoot, ADAPTV_DIR, "android/app/src/main")
+    mkdirSync(main, { recursive: true })
+    writeFileSync(path.join(main, "AndroidManifest.xml"), MANIFEST)
+    return { appRoot, file: path.join(main, "AndroidManifest.xml") }
+  }
+
+  it("declares ACTION_VIEW for mailto and sms, the probe the launcher makes", () => {
+    const { appRoot, file } = manifestProject()
+    patchAndroidQueries(appRoot)
+    const out = readFileSync(file, "utf8")
+    expect(out).toContain("<queries>")
+    expect(out).toContain(
+      '<action android:name="android.intent.action.VIEW" />',
+    )
+    expect(out).toContain('<data android:scheme="mailto" />')
+    expect(out).toContain('<data android:scheme="sms" />')
+    expect(out.trimEnd().endsWith("</manifest>")).toBe(true)
+    expect(out).toContain(
+      '<uses-permission android:name="android.permission.INTERNET" />',
+    )
+  })
+
+  it("is idempotent, and replaces its own block rather than stacking one", () => {
+    const { appRoot, file } = manifestProject()
+    patchAndroidQueries(appRoot)
+    const once = readFileSync(file, "utf8")
+    patchAndroidQueries(appRoot)
+    expect(readFileSync(file, "utf8")).toBe(once)
+    expect(once.match(/<queries>/g)).toHaveLength(1)
+  })
+
+  it("leaves a project without a manifest alone", () => {
+    const appRoot = root()
+    expect(() => patchAndroidQueries(appRoot)).not.toThrow()
   })
 })
