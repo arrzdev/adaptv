@@ -38,7 +38,7 @@ import { renderFault, renderHelp, renderVersion } from "./lib/cli-help.mjs"
 import { CliFault, parse } from "./lib/cli-parse.mjs"
 import { startDevServer, warmDevServer } from "./lib/dev-server.mjs"
 import { listTargets, resolveTarget } from "./lib/devices.mjs"
-import { exec } from "./lib/exec.mjs"
+import { exec, stopChildren } from "./lib/exec.mjs"
 import { explainFailure } from "./lib/explain.mjs"
 import {
   appConfigFingerprint,
@@ -112,13 +112,13 @@ import {
   confirm,
   detail,
   emitJson,
+  eraseLive,
   fail,
   flushNotices,
   footer,
   header,
   liveWatcher,
   log,
-  onKeys,
   rawOut,
   record,
   recordError,
@@ -132,6 +132,7 @@ import {
   verbatim,
   wasReported,
 } from "./lib/render.mjs"
+import { sessionKeys } from "./lib/session-keys.mjs"
 import { readBuildState, writeBuildState } from "./lib/state.mjs"
 import { errorTail, portInUse } from "./lib/tool-log.mjs"
 
@@ -668,6 +669,12 @@ async function runLive(appRoot, platforms, opts) {
   const onSigint = () => {
     if (tearing) return
     tearing = true
+    //A step's tools lead their own process groups, so a SIGINT from the terminal never reached
+    //them: stop them before anything else, or they run on through the teardown (`spawnStep`).
+    stopChildren()
+    //A quit can land mid-step (a `q` during `r` or `b`): the step's live row goes first, while
+    //the erase can still count its rows — see `eraseLive`.
+    eraseLive()
     // Quiet teardown — no implementation chatter. It reverts the capacitor.config server
     // block, the iOS ATS/Local-Network exceptions, and the adb reverse, then exits.
     spacer()
@@ -1233,7 +1240,7 @@ async function runLive(appRoot, platforms, opts) {
      * through it on a device — so the flag only bought a second, colder rendering path that
      * nothing exercised and every change to the block had to keep working.
      *
-     * Ink also owns the keypresses when it is in play — see `if (!useInk)` below.
+     * Neither of them reads keys. The session does — see `sessionKeys` below.
      */
     const useInk = !webOnly
     //Imported HERE, not at the top of the file. `ink` + `react` cost 136-177ms to load against
@@ -1243,12 +1250,7 @@ async function runLive(appRoot, platforms, opts) {
     const openWatcher = async () => {
       if (!useInk) return liveWatcher({ keys: !webOnly })
       const { inkWatcher } = await import("./ui/watch.mjs")
-      return inkWatcher({
-        keys: !webOnly,
-        onReload: () => void reload(),
-        onRebuild: () => void rebuild(),
-        onQuit: () => onSigint(),
-      })
+      return inkWatcher({ keys: !webOnly })
     }
 
     // watch: a single live line (✓ turns to a spinner on HMR), no raw vite logs.
@@ -1381,12 +1383,11 @@ async function runLive(appRoot, platforms, opts) {
       watcher = await openWatcher()
       reloading = false
     }
-    //Ink owns stdin when it is rendering: `useInput` puts the terminal in raw mode itself, and
-    //a second listener on the same stdin would take half the bytes.
-    if (!useInk)
-      cleanups.push(
-        onKeys({ onReload: reload, onRebuild: rebuild, onQuit: onSigint }),
-      )
+    //The session's keys, for either renderer, and never the watch block's: `r` and `b` take
+    //the block down while they run (R73). A quit stops the step's tools, then `onSigint`.
+    cleanups.push(
+      sessionKeys({ onReload: reload, onRebuild: rebuild, onSigint }),
+    )
 
     // Two kinds of edit can't hot-reload, and both leave the installed app quietly wrong.
     //

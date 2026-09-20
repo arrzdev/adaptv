@@ -3,7 +3,7 @@
 // Extracted from bin/adaptv.mjs so the entry file stays a thin dispatcher. Every
 // long-running command streams through the captured `exec` (see exec.mjs) so its
 // output can be rendered as calm steps instead of a raw log dump.
-import { spawn, spawnSync } from "node:child_process"
+import { spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import {
   chmodSync,
@@ -22,7 +22,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { buildIdEnv } from "./build-stamp.mjs"
-import { exec } from "./exec.mjs"
+import { exec, spawnStep } from "./exec.mjs"
 import { appConfigFingerprint } from "./fingerprint.mjs"
 import { brandLauncherIcon, loadIconSet } from "./icons.mjs"
 import { loadAdaptvModule } from "./load-ts.mjs"
@@ -1705,7 +1705,7 @@ export async function capRun(
 function probe(command, args, { env, encoding = "utf8" } = {}) {
   return new Promise((resolve) => {
     let out = ""
-    const child = spawn(command, args, {
+    const child = spawnStep(command, args, {
       env,
       stdio: ["ignore", "pipe", "ignore"],
     })
