@@ -159,6 +159,54 @@ describe("appConfigErrors", () => {
     ])
   })
 
+  it("accepts a deep-link scheme the native projects can declare", () => {
+    for (const scheme of [
+      "myapp",
+      "adaptvlab",
+      "com.example.app",
+      "my-app+2",
+    ])
+      expect(appConfigErrors({ ...ok, deepLinks: { scheme } })).toEqual([])
+  })
+
+  it("refuses a deep-link scheme that would build and then open nothing", () => {
+    //written verbatim into Info.plist and AndroidManifest.xml, neither of which
+    //validates it: an uppercase scheme never matches Android's case-sensitive
+    //filter, and `myapp://` is a URL, not a scheme
+    const shape =
+      "'deepLinks.scheme' must be a lowercase URL scheme like myapp (a letter, then letters, digits, '+', '-' or '.'), got"
+    expect(
+      ["MyApp", "my_app", "myapp://", "2app", "", 42, undefined].flatMap(
+        (scheme) => appConfigErrors({ ...ok, deepLinks: { scheme } }),
+      ),
+    ).toEqual([
+      `${shape} "MyApp"`,
+      `${shape} "my_app"`,
+      `${shape} "myapp://"`,
+      `${shape} "2app"`,
+      `${shape} ""`,
+      `${shape} 42`,
+      `${shape} undefined`,
+    ])
+    expect(appConfigErrors({ ...ok, deepLinks: "myapp" })).toEqual([
+      '\'deepLinks\' must be an object like { scheme: "myapp" }, got "myapp"',
+    ])
+  })
+
+  it("refuses a reserved scheme", () => {
+    const reserved = ["http", "https", "file", "javascript", "capacitor"]
+    expect(
+      reserved.flatMap((scheme) =>
+        appConfigErrors({ ...ok, deepLinks: { scheme } }),
+      ),
+    ).toEqual(
+      reserved.map(
+        (scheme) =>
+          `'deepLinks.scheme' can't be "${scheme}": that scheme is reserved`,
+      ),
+    )
+  })
+
   it("reports every problem at once, not the first", () => {
     const errors = appConfigErrors({
       name: "",

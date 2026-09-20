@@ -29,6 +29,30 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
  */
 const APP_ID = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/
 
+/**
+ * A URL scheme as the native projects declare it: RFC 3986's letter-then-letters,
+ * digits, `+`, `-` or `.`, lowercase only. Schemes compare case-insensitively, but
+ * Android's intent filter matches `android:scheme` case-sensitively — an uppercase
+ * scheme is declared and then never matched there.
+ */
+const URL_SCHEME = /^[a-z][a-z0-9+.-]*$/
+
+/**
+ * Schemes that already mean something to every app: a web link, or the WebView's own
+ * pages. Declaring one would either be ignored by the OS or take links meant for the
+ * browser.
+ */
+const RESERVED_SCHEMES = new Set([
+  "http",
+  "https",
+  "file",
+  "about",
+  "data",
+  "blob",
+  "javascript",
+  "capacitor",
+])
+
 type Raw = Record<string, unknown>
 
 const isObject = (value: unknown): value is Raw =>
@@ -53,6 +77,28 @@ function colorKeys(config: Raw): Array<[string, unknown]> {
     ["splashMaskLightColor", config.splashMaskLightColor],
     ["splashMaskDarkColor", config.splashMaskDarkColor],
   ]
+}
+
+/**
+ * `deepLinks` is written into `Info.plist` and `AndroidManifest.xml` verbatim, and a
+ * wrong scheme builds green on both: the app installs, and the link opens nothing.
+ */
+function deepLinkErrors(value: unknown): string[] {
+  if (value === undefined) return []
+  if (!isObject(value))
+    return [
+      `'deepLinks' must be an object like { scheme: "myapp" }, got ${show(value)}`,
+    ]
+  const scheme = value.scheme
+  if (typeof scheme !== "string" || !URL_SCHEME.test(scheme))
+    return [
+      `'deepLinks.scheme' must be a lowercase URL scheme like myapp (a letter, then letters, digits, '+', '-' or '.'), got ${show(scheme)}`,
+    ]
+  if (RESERVED_SCHEMES.has(scheme))
+    return [
+      `'deepLinks.scheme' can't be ${show(scheme)}: that scheme is reserved`,
+    ]
+  return []
 }
 
 /** The keys whose value is one of a closed set, and what the set is. */
@@ -110,6 +156,8 @@ export function appConfigErrors(config: unknown): string[] {
     errors.push(
       `'appId' must be reverse-DNS like com.example.app, got ${show(config.appId)}`,
     )
+
+  errors.push(...deepLinkErrors(config.deepLinks))
 
   const theme = isObject(config.themeColor) ? config.themeColor : null
   if (!theme?.light && !theme?.dark)
