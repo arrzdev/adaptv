@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { appConfigErrors } from "#adaptv/vite/app-config-errors"
+import {
+  appConfigErrors,
+  defaultExportError,
+} from "#adaptv/vite/app-config-errors"
 
 /** The smallest config the build can produce an app from. */
 const ok = {
@@ -38,11 +41,18 @@ describe("appConfigErrors", () => {
     ).toEqual([])
   })
 
-  it("refuses anything that is not an object", () => {
-    expect(appConfigErrors(undefined)).toEqual([
-      "the config must be an object",
-    ])
-    expect(appConfigErrors([])).toEqual(["the config must be an object"])
+  it("refuses anything that is not an object, as a file with no config in it", () => {
+    //A default export that is not an object has no keys to name, so the one sentence is the
+    //export itself, the same one both faces print before they ever ask for this list. An
+    //array is an object to `typeof`, and is not a config.
+    const sentence =
+      "adaptv.config.ts must 'export default defineApp({ ... })'"
+    for (const value of [undefined, null, [], [{ ...ok }], "Probe", 42]) {
+      expect(defaultExportError(value)).toBe(sentence)
+      expect(appConfigErrors(value)).toEqual([sentence])
+    }
+    expect(defaultExportError(ok)).toBeNull()
+    expect(defaultExportError({})).toBeNull()
   })
 
   //Reproduced on the playground with plain `vite build` (2026-09-02): `name`
