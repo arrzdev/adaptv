@@ -23,7 +23,7 @@
     "biome:fix": "biome check --write .",
     "biome:check": "biome check .",
     "start": "vite preview",
-    "test": "echo \"No tests configured\""
+    "test": "tsx --test scripts/ota-lab.test.ts"
   },
   "dependencies": {
     "@arrzdev/adaptv": "link:../../..",
