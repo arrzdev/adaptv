@@ -541,8 +541,13 @@ ecosystem only.
 > reasoning; that file is the remainder, kept current as things ship.
 
 **Tier 1 — in the universal set *and* Ionic, and missing from adaptv:**
-| Collapsible / Accordion | ✅ | | ✅ | ✅ | | | `Collapsible` |
-| Grouped form / settings list | ✅ (`ion-list inset`) | | ✅ (`FieldGroup`) | ✅ (`Form`/`Section`) | | | `FieldGroup` |
+`Icon`.
+
+These are the ones both teams paid the tri-platform tax for. `Slider`, `Select` (the menu
+appearance; `WheelColumn` stays the wheel), `Collapsible` and the grouped-settings form
+(`FieldGroup`, `src/components/field-group.tsx`) all shipped 2026-09-02, so adaptv's form-control
+set is now button/input/textarea/checkbox/switch/slider/select, grouped by `FieldGroup`; what
+`FieldGroup` locks and what it refuses is in `../roadmap/component-gaps.md`.
 
 **Tier 2 — every native toolkit has it, Ionic has it, adaptv has none of it: the feedback layer.**
 `Alert` · `ActionSheet` · `Toast` · `Spinner` · `ProgressBar`. Note that Ionic's five overlays all
