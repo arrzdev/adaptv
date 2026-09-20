@@ -25,7 +25,9 @@ const SPLASH_PULSE_MS = 1700
 // frozen launch-viewport height at top:0. On an iOS standalone cold start the ICB paints
 // small then expands after first paint, which would re-center the mascot downward — the
 // launch shift. `--pwa-launch-height` is captured pre-paint from the resolved 100vh
-// (getLaunchViewportInitScript), so the centering region is stable from the first frame.
+// (getLaunchViewportInitScript), so the centering region never grows. It can shrink once: an
+// iOS 26 installed app's view drops below the status bar ~120ms after the head script, and the
+// height follows it down until the splash is revealed.
 // The coverage box stays `fixed inset-0` (live viewport), so its bottom can never leak app
 // content even if the frozen height comes in short. In the browser there's no shift, so the
 // region keeps inset-0 (lvh fallback) and a frozen height can't fight the address bar.
