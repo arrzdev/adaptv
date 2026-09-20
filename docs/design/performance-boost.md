@@ -775,7 +775,7 @@ Two rows landed late, and one item never landed at all:
   resolve against body's padding box, which is `m-0 h-dvh` (`DOCUMENT_SHELL_CLASS`). Those two boxes are
   equal in the static case and **not** equal where the drawer's geometry actually lives: `100dvh` tracks
   the dynamic viewport while fixed positioning resolves against the layout viewport, so the panel's
-  `bottom: -excessHeight` and the keyboard offsets would shift by the URL-bar delta on targets 1 and 4.
+  `bottom: 0` anchor and the keyboard offsets would shift by the URL-bar delta on targets 1 and 4.
   Per §9 this belongs on its own PR anyway, after §8.3 — the port stays queued at
   [`docs/decisions/prior-art.md §1`](../decisions/prior-art.md) rank 1, now with a named element to check rather than a general
   "overlay check".

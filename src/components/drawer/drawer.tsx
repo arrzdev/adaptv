@@ -144,14 +144,13 @@ const DRAWER_OVERLAY_BASE_CLASS = "bg-black/40 will-change-[opacity]"
 //`flex flex-col` is what makes the handle / scroller / footer stack a stack — the
 //scroller's `min-h-0` only means anything inside a flex column.
 //
-//The three height utilities are locked to their initial values, which is not busywork: this
-//element is NOT the sheet, it is the sheet PLUS the hidden tail below the fold (`bottom:
-//-excessHeight` and a spacer of the same height, ~0.55 viewports). So a height set here is
-//silently spent on the tail first — measured at a 900px viewport, `max-h-[85dvh]` left 269px
-//of sheet on screen, ~30dvh, and pushed 605px of the scroller past the bottom edge. There is
-//no value a consumer could pass that means what it reads as, so the property is not theirs to
-//pass; `maxHeight` on Drawer.Content is, and it lands on the box that actually decides the
-//visible height. → DRAWER_CONTENT_MAX_HEIGHT_VAR
+//The three height utilities are locked to their initial values, which is not busywork: the
+//visible height is decided on the content box (`maxHeight` on Drawer.Content, the cap the
+//keyboard lift primes and animates — → DRAWER_CONTENT_MAX_HEIGHT_VAR), and a cap on this element
+//would sit above it and disagree with it. It used to be worse: until the tail below moved out of
+//the panel's box, a height here was silently spent on that tail first — measured at a 900px
+//viewport, `max-h-[85dvh]` left 269px of sheet on screen, ~30dvh, and pushed 605px of the
+//scroller past the bottom edge.
 //
 //`max-h-[none]` and not `max-h-none`, which is the same CSS and does NOT hold: tailwind-merge
 //3.4 does not list `none` among the `max-h` group's values, so `cn("max-h-[85dvh]",
@@ -526,9 +525,17 @@ function DrawerContent({
         </div>
         {footer}
       </div>
+      {/*the hidden tail: the sheet's own paint continued below the fold, so an over-drag or
+         the keyboard lift never shows a gap under it. An absolutely positioned child (drawer.css)
+         rather than a spacer in the flex stack, because the panel's border box must stay the
+         sheet's: Safari on iOS 26 tints its bottom toolbar from the fixed element it finds at
+         the bottom edge, and refuses one taller than 1.05 viewports (WebKit's
+         `LocalFrameView::fixedContainerEdges`, the `TooLarge` branch). With the tail inside the
+         box a form-sized sheet was 1.3 viewports tall, Safari fell back to the page colour, and
+         the toolbar sat in the theme colour under a white sheet. → docs/decisions/register.md B33*/}
       <div
         aria-hidden
-        className="shrink-0"
+        data-pwa-drawer-tail=""
         style={{ height: engine.excessHeight }}
       />
     </div>

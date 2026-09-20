@@ -43,7 +43,7 @@ type TallSheet = "capped" | "uncapped" | null
  * with itself on a platform where both are wrong; this one can only agree with the engine.
  *
  * The thing that can go wrong is the cap landing somewhere other than where it reads — on the
- * panel (which is the sheet PLUS the hidden tail, so a cap there is spent on the tail first), or
+ * panel (whose height utilities are locked; the content box is the one that is capped), or
  * against a viewport nobody re-measured when the browser chrome moved. Hence: measured off the
  * element, on every resize.
  */
@@ -300,9 +300,9 @@ function LabDrawerPage() {
         <AppDrawer open={scrolling} onOpenChange={setScrolling}>
           <AppDrawer.Portal>
             <AppDrawer.Overlay />
-            {/*`maxHeight`, not a `max-h-*` class. The panel is the sheet PLUS the hidden tail it
-               over-travels into, so a height class here is spent on the tail first and the sheet
-               ends up far shorter than it reads — those utilities are locked out for that reason.*/}
+            {/*`maxHeight`, not a `max-h-*` class. The panel's height utilities are locked: the
+               visible height is decided on the content box, and `maxHeight` is the channel that
+               lands there.*/}
             <AppDrawer.Content
               maxHeight="70dvh"
               className={promote ? undefined : "will-change-auto"}

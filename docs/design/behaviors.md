@@ -92,7 +92,7 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   wheeled, or focus moved.
   **Test:** `/lab/avoid-keyboard` → *Content arriving mid-scroll* → Run: the clearance must read >= 0.
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
-  infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
+  infinitely tall (its paint continues into a hidden tail below the fold) and only ever grows to what it needs, so
   a keyboard is not something to translate away from — it is a slice of the bottom that stops being
   usable. Who else shrinks the viewport differs per platform, and the engine MEASURES it rather
   than assuming: `useLayoutViewportShrink` reads what `innerHeight` gave up, and the room is

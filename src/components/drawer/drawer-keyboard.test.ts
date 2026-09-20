@@ -225,8 +225,8 @@ describe("the cap the box grows into", () => {
   })
 
   it("keeps the cap on the content box — never on the panel, which carries the tail", () => {
-    //the panel is sheet + hidden tail (`bottom: -excess` + a spacer), so a cap there is spent on
-    //the tail first. This constant is the one that must own it.
+    //the cap is primed and animated on the content box (the panel is what the drag and the FLIP
+    //translate, and its height utilities are locked). This constant is the one that must own it.
     expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain("max-h-")
     expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain(
       DRAWER_CONTENT_MAX_HEIGHT_VAR,
