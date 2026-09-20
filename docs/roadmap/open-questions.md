@@ -108,8 +108,11 @@ Evidence: every screen in `adaptv.config.ts` is written `() => import("…")` an
 `importThunk` (`src/vite/root-route-module.ts`) into a static `import` in the generated root route,
 so all of them ride in the entry chunk. The comment there justifies it for `offlineComponent` only —
 the offline UI must not live in a chunk that can fail to load — and the others inherit the mechanism
-without a reason of their own. Measured on the playground: a lazy `notFoundScreen` cuts the entry by
-131 KB raw / 46 KB gzipped on every load, for a screen most sessions never render.
+without a reason of their own. Measured on the playground: a lazy `notFoundScreen` cut the entry by
+131 KB raw / 46 KB gzipped on every load, for a screen most sessions never render. Nearly all of that
+was the 404's inline mascot art, which the playground now ships as an `.svg` file behind an `<img>`,
+so what the static import still costs there is the screen's own ~2 KB. The question stands for an
+app whose not-found screen carries weight of its own.
 
 Decided by: whether the static rewrite is the contract (then the config syntax should stop looking
 lazy) or the exception (then `offlineComponent` stays static and the rest split). Either answer ends
