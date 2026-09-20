@@ -15,8 +15,8 @@
 
 `../research/capability-surface.md` disagrees with itself about how many capabilities adaptv has —
 its intro says *"17 capabilities + 23 hooks"* and §4, ten lines later, says *"adaptv has 12
-capabilities"*. **Neither is right.** Counted from `src/interface/capabilities.index.ts` on
-2026-09-02: **20 capability modules and 29 hook modules.**
+capabilities"*. **Neither is right.** Counted from `src/interface/capabilities.index.ts` and `hooks.index.ts` on
+2026-09-20: **30 capability modules and 39 hook modules.**
 
 **App identity is no longer part of that remainder.** `src/capabilities/app-info.ts` shipped
 2026-09-02 over the official app plugin: the name, the bundle id, the store version and the build

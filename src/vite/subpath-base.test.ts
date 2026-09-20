@@ -58,15 +58,6 @@ function scaffold() {
   mkdirSync(path.join(appRoot, "src/routing"), { recursive: true })
   const clientDir = path.join(appRoot, "dist/client")
   const files: Record<string, string> = {
-    ".vite/manifest.json": JSON.stringify({
-      "src/client-entry.tsx": {
-        file: "assets/client-e1.js",
-        isEntry: true,
-        imports: ["_react.js"],
-        css: ["assets/main-c1.css"],
-      },
-      "_react.js": { file: "assets/react-r1.js" },
-    }),
     "assets/client-e1.js": "console.log('entry')",
     "assets/react-r1.js": "console.log('react')",
     "assets/main-c1.css": "html{}",
@@ -105,6 +96,62 @@ function resolve(plugin: Plugin, appRoot: string, base: string) {
   } as unknown as ResolvedConfig)
 }
 
+/**
+ * The client manifest, as the shell emitter reads it: out of the bundle in
+ * `generateBundle`, under the path its `configEnvironment` asked Vite for. It
+ * is never on disk (`shell-emit.ts`), so the scaffold writes no file for it.
+ */
+const CLIENT_MANIFEST = {
+  "src/client-entry.tsx": {
+    file: "assets/client-e1.js",
+    isEntry: true,
+    imports: ["_react.js"],
+    css: ["assets/main-c1.css"],
+  },
+  "_react.js": { file: "assets/react-r1.js" },
+}
+const SHELL_MANIFEST_FILE = ".vite/adaptv-shell-manifest.json"
+
+/** Vite's client-build hooks the shell emitter reads the manifest through. */
+async function bundleClient(plugin: Plugin): Promise<void> {
+  const configEnvironment = plugin.configEnvironment
+  if (typeof configEnvironment !== "object" || !configEnvironment.handler)
+    throw new Error(
+      `${plugin.name}: configEnvironment must be an object hook`,
+    )
+    // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  ;(configEnvironment.handler as any).call(
+    {},
+    "client",
+    { build: {} },
+    { command: "build", mode: "production" },
+  )
+  const generate = plugin.generateBundle
+  if (typeof generate !== "object" || !generate.handler)
+    throw new Error(
+      `${plugin.name}: generateBundle must be an object hook`,
+    )
+  const bundle = {
+    [SHELL_MANIFEST_FILE]: {
+      type: "asset",
+      fileName: SHELL_MANIFEST_FILE,
+      source: JSON.stringify(CLIENT_MANIFEST),
+    },
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+  await (generate.handler as any).call(
+    {
+      environment: {
+        name: "client",
+        config: { build: { manifest: SHELL_MANIFEST_FILE } },
+      },
+    },
+    {},
+    bundle,
+    false,
+  )
+}
+
 async function buildApp(plugin: Plugin): Promise<void> {
   const hook = plugin.buildApp
   if (typeof hook !== "object" || !hook.handler)
@@ -123,11 +170,13 @@ type Emitted = {
 /** Run the post-build emitters in the order `adaptv-plugin.ts` registers them. */
 async function emitAt(base: string): Promise<Emitted> {
   const { appRoot, clientDir, context } = scaffold()
+  const shell = adaptvShellEmitPlugin(context)
   const plugins = [
-    adaptvShellEmitPlugin(context),
+    shell,
     adaptvSwBuildPlugin(context),
     adaptvStaticHostPlugin(context),
   ]
+  await bundleClient(shell)
   for (const plugin of plugins) resolve(plugin, appRoot, base)
   for (const plugin of plugins) await buildApp(plugin)
 
