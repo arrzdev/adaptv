@@ -340,6 +340,10 @@ const CAPABILITIES = [
     title: "Battery",
     summary:
       "level and charging · a real number, an honest unknown, or unsupported",
+    to: "/lab/motion",
+    title: "Motion",
+    summary:
+      "accelerometer + gyroscope · the permission step and the silence, named",
     isNew: true,
   },
   {
