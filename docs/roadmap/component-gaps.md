@@ -116,6 +116,18 @@ segmented control (a §8 row that is also in no tier) is best read as an appeara
 §9 item 4's `interface` idea — its sliding indicator is a composited `translate` and its RTL is
 `rtl:` vocabulary, so it brings no quirk of its own.
 
+**`RadioGroup` shipped** (`src/components/radio-group.tsx`, lab page `/lab/radio-group`), on the two
+quirks it owns. **Radios are keyed on `name`** within one document or form, so each instance with no
+`name` takes an id-derived one and two mounted groups never clear each other; an explicit `name` is
+kept for form submission. **A clipped `sr-only` input is a speck-sized accessibility frame** on iOS
+Safari (PR #132 measured it on `Switch` and `Checkbox`), so each native radio lies invisibly over its
+whole item. Everything else is the browser's radio: arrow keys, Space, disabled options, `required`
+and `FormData`. Selection is the input's `change` event rather than the gesture engine's release,
+because a radio's activation is idempotent and every non-pointer path (arrow keys, assistive tech,
+an outer label) arrives as a click no press produced. Measured and left native, in
+`playground/e2e/radio-group.spec.ts`: past the last radio Chromium wraps and WebKit stops; under RTL
+Chromium flips ArrowLeft/ArrowRight and WebKit does not; WebKit's default Tab order skips radios.
+
 ## Tier 2 — the feedback layer
 
 `Alert` · `ActionSheet` · `Toast` · ~~`Spinner`~~ · `ProgressBar`. Every native toolkit has these,
