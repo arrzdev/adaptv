@@ -5,7 +5,7 @@ import { lowerDevCss } from "#adaptv/vite/dev-css-lowering"
 import {
   rewriteRingShadow,
   usesEmptyRingFallback,
-} from "#adaptv/vite/ring-shadow-fallback"
+} from "#adaptv/vite/tailwind-empty-fallback"
 
 /*
  * The fixture is NOT hand-written. It is the exact string `@tailwindcss/vite:generate:serve`

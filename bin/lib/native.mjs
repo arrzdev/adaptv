@@ -37,6 +37,7 @@ import {
   mergeSettingsGradle,
   podsNeedInstall,
   resolvePluginPackages,
+  rewritePodfileHelpers,
 } from "./native-state.mjs"
 import { withoutPlumbing } from "./opacity.mjs"
 import { readSection, writeSection } from "./state.mjs"
@@ -1383,7 +1384,14 @@ async function injectIosPluginPods(
   addToIosPackageClassList(appRoot, classNames)
   if (pods.length === 0) return
   const src = readFileSync(podfile, "utf8")
-  const next = src.replace(
+  const iosDir = resolvePkgDir("@capacitor/ios")
+  const helpersRel = iosDir
+    ? path
+        .relative(podfileDir, path.join(iosDir, "scripts", "pods_helpers"))
+        .split(path.sep)
+        .join("/")
+    : null
+  const next = rewritePodfileHelpers(src, helpersRel).replace(
     /def capacitor_pods[\s\S]*?\n\s*end/,
     `def capacitor_pods\n${pods.join("\n")}\nend`,
   )
@@ -2674,7 +2682,13 @@ export function androidEnv() {
 /** LANG (CocoaPods on Ruby 3.4 needs UTF-8) + `pod` on PATH. */
 export function iosEnv() {
   /** @type {NodeJS.ProcessEnv} */
-  const env = { ...process.env, LANG: process.env.LANG ?? "en_US.UTF-8" }
+  const env = { ...process.env }
+  //`??` left `LANG=""` alone, and Ruby 3.4 then dies in unicode_normalize before
+  //it can even read the Podfile — CocoaPods' error report quotes line 1 as a
+  //blank `#` and adaptv surfaces `pod install exited with code 1`.
+  const lang = env.LANG || env.LC_ALL || ""
+  if (!/utf-?8/i.test(lang)) env.LANG = "en_US.UTF-8"
+  if (env.LC_ALL && !/utf-?8/i.test(env.LC_ALL)) env.LC_ALL = env.LANG
   const onPath = spawnSync("sh", ["-c", "command -v pod"], { env })
   if (onPath.status !== 0) {
     const gemRoot = path.join(homedir(), ".gem/ruby")

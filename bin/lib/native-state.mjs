@@ -62,6 +62,23 @@ export function podsNeedInstall({
 }
 
 /**
+ * Point the Podfile's `require_relative` at the `@capacitor/ios` this run resolved —
+ * the same directory the pod `:path`s use.
+ *
+ * `cap sync` writes that line from its own resolver; adaptv then rewrites the pod
+ * paths from a second one. After a Capacitor bump they diverge: CocoaPods dies on
+ * line 1 (`cannot load such file`) while the rest of the file already names the
+ * new package. `rel` is POSIX (Ruby `require_relative` does not accept `\`).
+ */
+export function rewritePodfileHelpers(src, rel) {
+  if (!rel) return src
+  return src.replace(
+    /require_relative ['"][^'"]+pods_helpers['"]/,
+    `require_relative '${rel}'`,
+  )
+}
+
+/**
  * The plugin classes the native project must register: whatever `cap sync` discovered, plus
  * adaptv's own (which it cannot discover, because they're adaptv's dependencies and not the
  * consumer's). Order-stable and deduped — `cap` rewrites this list on every sync, so the
