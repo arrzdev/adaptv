@@ -256,8 +256,9 @@ export function samplePanelFlight(
   panel: HTMLElement | null,
 ): PanelFlight | null {
   if (!panel || typeof panel.getAnimations !== "function") return null
-  //the panel's motion is the keyframe now, but a transition can still be mid-flight on a surface
-  //that armed one (the backdrop shares this element's stylesheet), so both are worth finding
+  //the open, close and snaps run on the keyframe, but the keyboard FLIP still arms an inline
+  //`transform` transition on the panel itself (`applyDrawerPanelTransition`), so both are worth
+  //finding
   const running = panel
     .getAnimations()
     .find(

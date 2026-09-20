@@ -10,9 +10,11 @@
  */
 
 /*
- * The panel's motion. Every tween the sheet performs — the entrance, the close, the snap back
- * from a drag, the keyboard's FLIP — runs through this one rule, aimed by the two custom
- * properties the engine writes.
+ * The panel's motion. The entrance, the close, the snap back from a drag and the keyboard snap
+ * run through this one rule, aimed by the two custom properties the engine writes. The keyboard's
+ * FLIP does not: its grow and shrink still ride an inline `transition` on the panel's transform
+ * (`applyDrawerPanelTransition`), the construct the bisect below convicted. Moving it here is
+ * owed together with the OS keyboard's own curve (docs/roadmap/native-keyboard-curve.md).
  *
  * It is a `@keyframes` rule rather than an inline `transition` for a measured reason. The settle
  * at the end of the open was bisected on a physical iPhone across four ladders of otherwise
