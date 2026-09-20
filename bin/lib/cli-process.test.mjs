@@ -1,7 +1,15 @@
 // @vitest-environment node
 import { spawn } from "node:child_process"
 import { createPrivateKey, createPublicKey } from "node:crypto"
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
@@ -20,8 +28,9 @@ import { namesPlumbing } from "./opacity.mjs"
  *
  * So these spawn `node bin/adaptv.mjs` for real: piped (non-TTY), stdin closed, a clean env,
  * and a throwaway cwd. Nothing here may reach a dev server, a build, a device or the network —
- * every case is either answered by the parser, or is a command (`--version`, `--help`, `keys`,
- * `doctor`) that only reads the machine.
+ * every case is either answered by the parser, is a command (`--version`, `--help`, `keys`,
+ * `doctor`) that only reads the machine, or is a `build web` that fails before it produces
+ * anything, on the repo's own bundler.
  *
  * OPACITY. Every capture, on both streams, goes through `opacity.mjs` inside `cli()`: the CLI
  * must never name TanStack or Capacitor to the dev (R8), and a sentence made "more helpful" is
@@ -34,6 +43,7 @@ import { namesPlumbing } from "./opacity.mjs"
  * `doctor`) rather than the suite-wide 5s, which was sized for in-process tests.
  */
 
+const require = createRequire(import.meta.url)
 const ENTRY = path.join(process.cwd(), "bin/adaptv.mjs")
 const VERSION = JSON.parse(
   readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
@@ -429,5 +439,146 @@ describe("doctor", () => {
       expect(plain(human.stdout)).toMatch(/adaptv\s+·\s+doctor/)
     },
     DOCTOR_TIMEOUT_MS,
+  )
+})
+
+/** Every path under `dir`, relative and sorted: what a run left in the app it was handed. */
+function tree(dir) {
+  return readdirSync(dir, { recursive: true })
+    .map((p) => String(p))
+    .sort()
+}
+
+/**
+ * A throwaway app `build web` fails on before it produces anything, and the paths it holds.
+ *
+ * With `origin` it publishes updates and declares no key to verify them with, so `build web`
+ * refuses through `fail()` before a bundle is built. Without it, the web build runs and fails on
+ * the missing `index.html`, and its row settles in `runLine`. That build is the repo's own vite,
+ * reached through the app's `node_modules/.bin` the way a consumer's is: with no local bin the CLI
+ * falls back to `npx --yes vite`, which is the network.
+ */
+function failingApp({ origin = false } = {}) {
+  const cwd = scratch()
+  writeFileSync(
+    path.join(cwd, "adaptv.config.ts"),
+    `export default {
+  appId: "dev.example.quiet",
+  name: "Quiet",
+  styles: "./main.css",
+  router: {},
+  themeColor: { light: "#ffffff" },${origin ? '\n  origin: "https://updates.example.com",' : ""}
+}
+`,
+  )
+  writeFileSync(path.join(cwd, "main.css"), "")
+  if (!origin) {
+    const vite = path.join(
+      path.dirname(require.resolve("vite/package.json")),
+      "bin/vite.js",
+    )
+    mkdirSync(path.join(cwd, "node_modules/.bin"), { recursive: true })
+    writeFileSync(
+      path.join(cwd, "node_modules/.bin/vite"),
+      `#!/bin/sh\nexec "${process.execPath}" "${vite}" "$@"\n`,
+      { mode: 0o755 },
+    )
+  }
+  return { cwd, before: tree(cwd) }
+}
+
+/** The elapsed time a settled row carries, which is the one byte two runs cannot share. */
+const untimed = (s) => s.replace(/· \d+(\.\d+)?m?s/g, "· <time>")
+
+describe("a step that fails through fail()", () => {
+  it(
+    "still says so under --quiet: the row and its fix on stderr, exactly as the page has them",
+    async () => {
+      const apps = [
+        failingApp({ origin: true }),
+        failingApp({ origin: true }),
+      ]
+      const [human, quiet] = await Promise.all([
+        cli(["build", "web"], { cwd: apps[0].cwd }),
+        cli(["build", "web", "--quiet"], { cwd: apps[1].cwd }),
+      ])
+      expect(human.code, human.stderr).toBe(1)
+      const err = plain(human.stderr)
+      expect(err).toMatch(new RegExp(`^ {2}${GLYPH.fail} channel {2}· `))
+      expect(err).toContain("run 'adaptv keys ota'")
+      //R46: `--quiet` keeps outcomes and failures. It exited 1 with both streams empty, because
+      //the row was written at step level and the mode dropped it before it reached stderr.
+      expect(quiet.code).toBe(1)
+      expect(quiet.stdout).toBe("")
+      //Byte for byte the block the dev reads on the page, fix line included: quiet drops the
+      //narration around a failure, never the failure or what to do about it.
+      expect(quiet.stderr).toBe(human.stderr)
+      //Refused before anything was built: both apps are as they were handed over.
+      for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
+    },
+    PROCESS_TIMEOUT_MS,
+  )
+
+  it(
+    "under --json is the document on stdout and the same block on stderr, quiet or not",
+    async () => {
+      const apps = [0, 1, 2].map(() => failingApp({ origin: true }))
+      const [human, json, both] = await Promise.all([
+        cli(["build", "web"], { cwd: apps[0].cwd }),
+        cli(["build", "web", "--json"], { cwd: apps[1].cwd }),
+        cli(["build", "web", "--json", "--quiet"], { cwd: apps[2].cwd }),
+      ])
+      for (const r of [json, both]) {
+        expect(r.code, r.stderr).toBe(1)
+        const lines = r.stdout.split("\n").filter(Boolean)
+        expect(lines).toHaveLength(1)
+        const doc = JSON.parse(lines[0])
+        expect(doc.ok).toBe(false)
+        expect(doc.error).toMatchObject({
+          kind: "step-failed",
+          label: "channel",
+        })
+        //stderr always speaks (R46), and adding `--quiet` to `--json` must not take that away.
+        expect(r.stderr).toBe(human.stderr)
+      }
+      for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
+    },
+    PROCESS_TIMEOUT_MS,
+  )
+})
+
+describe("a build that fails in its own row", () => {
+  it(
+    "still says so under --quiet: the settled row and its fix, as the page has them",
+    async () => {
+      const apps = [failingApp(), failingApp()]
+      const [human, quiet] = await Promise.all([
+        cli(["build", "web"], { cwd: apps[0].cwd }),
+        cli(["build", "web", "--quiet"], { cwd: apps[1].cwd }),
+      ])
+      expect(human.code, human.stdout).toBe(1)
+      const rows = human.stdout.split("\n")
+      const bad = rows.findIndex((l) =>
+        plain(l).startsWith(`  ${GLYPH.fail} web  `),
+      )
+      expect(bad, human.stdout).toBeGreaterThan(-1)
+      //The page's block from the `✖` down, minus the blank line that closes the command.
+      const block = `${rows
+        .slice(bad)
+        .filter((l) => l !== "")
+        .join("\n")}\n`
+      //A fix under the row, so the case holds the detail as well as the row.
+      expect(plain(block)).toContain("index.html")
+      //R46's second bullet, on the path every `--quiet` run takes: off a TTY the row settled at
+      //step level, and a build that did not build exited 1 with both streams empty.
+      expect(quiet.code).toBe(1)
+      expect(untimed(quiet.stdout)).toBe(untimed(block))
+      //One failure, one `✖` (R2): the row owns the report, so the command's catch says nothing
+      //more on either stream, in either mode.
+      expect(human.stderr).toBe("")
+      expect(quiet.stderr).toBe("")
+      for (const app of apps) expect(tree(app.cwd)).toEqual(app.before)
+    },
+    PROCESS_TIMEOUT_MS,
   )
 })
