@@ -16,6 +16,7 @@ import {
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
+import { createWarnOnce } from "#adaptv/utils/warn-once"
 
 /**
  * What a statically-imported image resolves to.
@@ -294,13 +295,8 @@ function imageSlotHasContent(children: ReactNode): boolean {
  * (`fill` needs a parent adaptv cannot inspect at compile time).
  * ============================================================================= */
 
-const warned = new Set<string>()
-
-function warnOnce(key: string, message: string): void {
-  if (warned.has(key)) return
-  warned.add(key)
-  console.error(`[adaptv] Image: ${message}`)
-}
+const imageWarnings = createWarnOnce("Image")
+const warnOnce = imageWarnings.warn
 
 //Test seam, NOT consumer API — the dev warnings are once-per-message for the life
 //of the module, and the suite needs them re-armable between cases. It carries the
@@ -308,7 +304,7 @@ function warnOnce(key: string, message: string): void {
 //an explicit name list to hide one function would leave it the only primitive whose
 //new exports must be wired by hand, which is a worse footgun than a visible seam.
 export function unstable_resetImageWarnings(): void {
-  warned.clear()
+  imageWarnings.reset()
 }
 
 type ImageSlotLayerProps = HTMLAttributes<HTMLDivElement> & {
