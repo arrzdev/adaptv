@@ -31,6 +31,10 @@ exclude it. Consequences, all verified against source:
    resizes the WebView. And [#61](https://github.com/ionic-team/capacitor-keyboard/issues/61) — a grey
    bar the height of the top inset appearing above the keyboard — has been open ~12 months across
    `capacitor#8095` → `#8398`, with users pinning to 8.0.0/8.0.1 to escape it.
+   *2026-09-13: both are closed by [capacitor#8535](https://github.com/ionic-team/capacitor/pull/8535)
+   (released in 8.5.2), which also moves the SystemBars listener to the decor view. adaptv pins 8.4.3,
+   and the move breaks its old-WebView override →
+   [`platform-releases-2026-09.md §1.1`](platform-releases-2026-09.md).*
 
 3. **The maintainer's official position kills the current architecture.** jcesarmobile,
    [capacitor-plugins#2517](https://github.com/ionic-team/capacitor-plugins/issues/2517), 2026-06-25:
@@ -75,7 +79,9 @@ they disagree with `env(safe-area-inset-*)` by up to 1px; and **`--safe-area-ins
 `DOMContentLoaded` listener it calls `onDOMReady()`, which reads the **last** `meta[name=viewport]` and
 looks for the literal string `viewport-fit=cover`. The answer (`hasViewportCover`) gates
 `shouldPassthroughInsets`, and **nothing re-checks it** — not a rotation, not `onPageCommitVisible`, not
-a new inset dispatch.
+a new inset dispatch. *(True of the pinned 8.4.3. In 8.5.2 the check re-runs on every
+`onPageCommitVisible` and `onDOMReady()` is deleted, which turns fix 1 below into a no-op →
+[`platform-releases-2026-09.md §1.1`](platform-releases-2026-09.md).)*
 
 A static `index.html` never loses that race. A framework that manages `<head>` on the client does: the
 router replaces the viewport tag during boot, and a probe landing in the gap reads "no cover".
@@ -204,7 +210,9 @@ So:
 **Capacitor 9 is in alpha** (`@capacitor/core@9.0.0-alpha.6`) and `SystemBars.java` carries a
 `// TODO: In Cap 9, add an additional option "full"` beside `insetsHandling`. **The inset contract is
 going to change again.** Do not freeze `@adaptv/shell`'s public API against Capacitor 8's shape without
-reading the Cap 9 alpha first.
+reading the Cap 9 alpha first. *2026-09-13: the TODO line is deleted in the 8.5.2 hunk that adds
+`insetsHandling: "native"` (no injected variables), which Capacitor 9 is set to make the default →
+[`platform-releases-2026-09.md §1.1`](platform-releases-2026-09.md).*
 
 > **Net effect on the roadmap: `@adaptv/shell` gets smaller and less risky, but stops being "the wedge
 > vs Ionic"** — Capacitor core now solves the part that was going to be adaptv's differentiator. The
