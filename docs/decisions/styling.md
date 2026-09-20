@@ -311,6 +311,11 @@ Support `'auto'` as a value (Base UI does; Radix doesn't). Note this forces a sy
 per open/close — a real if small jank source, and the thing `interpolate-size: allow-keywords` will
 eventually obsolete (Chrome 129+ only today — see `docs/decisions/animation.md §2`).
 
+`Collapsible` (`src/components/collapsible.tsx`) does not need the suppress-and-measure step: its
+panel is `overflow: hidden` while it transitions, so `scrollHeight` is the natural height with
+nothing to suppress. It publishes no variable — the target goes on as an inline `height` that the
+CSS transition retargets, and the panel rests at `auto` with the inline value removed.
+
 ### 3.3 🔒 `render` prop over `asChild`, with a tailwind-merge-aware default
 
 **`asChild` has four failure modes, all evidenced** — 36 issues in `radix-ui/primitives` with `asChild`

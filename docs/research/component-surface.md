@@ -507,7 +507,7 @@ ecosystem only.
 | Bottom sheet / Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `Drawer` |
 | Pull-to-refresh | ✅ | ✅ | ✅ (`List.onRefresh`) | ✅ (modifier) | ✅ | | `PullToRefresh` |
 | Icon | (ionicons) | | ✅ | ✅ | ✅ | ✅ | **—** |
-| **Collapsible / Accordion** | ✅ | | ✅ | ✅ | | | **—** |
+| Collapsible / Accordion | ✅ | | ✅ | ✅ | | | `Collapsible` |
 | **Grouped form / settings list** | ✅ (`ion-list inset`) | | ✅ (`FieldGroup`) | ✅ (`Form`/`Section`) | | | **—** |
 | **Alert dialog** | ✅ | ✅ (`Alert`) | | ✅ | ✅ | | **—** |
 | **Action sheet / confirmation** | ✅ | ✅ (`ActionSheetIOS`) | | ✅ | | | **—** |

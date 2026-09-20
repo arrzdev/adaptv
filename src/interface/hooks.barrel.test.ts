@@ -65,6 +65,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
     "src/components/swipeable.tsx",
   ],
   "use-isomorphic-layout-effect": [
+    "src/components/collapsible.tsx",
     "src/components/text.tsx",
     "src/hooks/use-status-bar.ts",
     "src/hooks/use-sync-theme.ts",
