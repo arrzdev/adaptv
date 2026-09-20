@@ -1,6 +1,6 @@
-import { fireEvent, render } from "@testing-library/react"
-import type { KeyboardEvent } from "react"
-import { act, createRef } from "react"
+import { fireEvent, render, screen } from "@testing-library/react"
+import type { KeyboardEvent, Ref } from "react"
+import { act, createRef, useState } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { TextAreaHandle } from "#adaptv/components/text-area"
 import { TextArea, useTextArea } from "#adaptv/components/text-area"
@@ -314,6 +314,75 @@ describe("TextArea — imperative handle", () => {
     expect(textarea().value).toBe("")
     expect(ref.current?.value).toBe("")
     expect(seen).toEqual(["input:true:", "change:true:"])
+  })
+})
+
+describe("TextArea — clear() is an edit React sees", () => {
+  function Notes({
+    handle,
+    initial = "hello",
+  }: {
+    handle: Ref<TextAreaHandle>
+    initial?: string
+  }) {
+    const [value, setValue] = useState(initial)
+    return (
+      <>
+        <TextArea
+          ref={handle}
+          aria-label="notes"
+          rows={2}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <output data-testid="state">{value}</output>
+      </>
+    )
+  }
+
+  it("a controlled field's state follows the DOM to empty", () => {
+    const ref = createRef<TextAreaHandle>()
+    render(<Notes handle={ref} />)
+
+    act(() => ref.current?.clear())
+
+    expect(textarea().value).toBe("")
+    expect(screen.getByTestId("state").textContent).toBe("")
+  })
+
+  it("an uncontrolled field's onChange runs once, with the empty value", () => {
+    const ref = createRef<TextAreaHandle>()
+    const onChange = vi.fn(
+      (e: { target: HTMLTextAreaElement }) => e.target.value,
+    )
+    render(
+      <TextArea
+        ref={ref}
+        aria-label="notes"
+        defaultValue="hello"
+        onChange={onChange}
+      />,
+    )
+
+    act(() => ref.current?.clear())
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange.mock.results[0]?.value).toBe("")
+    expect(ref.current?.value).toBe("")
+  })
+
+  describe("with layout", () => {
+    beforeEach(installFakeLayout)
+
+    it("a controlled field that is cleared shrinks back to its rows floor", () => {
+      const ref = createRef<TextAreaHandle>()
+      render(<Notes handle={ref} initial={lines(6)} />)
+      expect(heightPx()).toBe(6 * LINE)
+
+      act(() => ref.current?.clear())
+
+      expect(heightPx()).toBe(2 * LINE)
+    })
   })
 })
 

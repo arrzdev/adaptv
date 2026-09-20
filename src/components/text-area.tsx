@@ -309,7 +309,13 @@ function partitionTextAreaChildren(
   return { label, hint, error }
 }
 
-function dispatchFieldValueEvents(field: HTMLTextAreaElement) {
+/**
+ * Empties the field the way an edit does, so React's `onChange` sees it. Writing
+ * `field.value` would go through React's value tracker and leave a controlled field
+ * showing "" over stale state; see `clearFieldValue` in input.tsx for the mechanism.
+ */
+function clearFieldValue(field: HTMLTextAreaElement) {
+  Reflect.set(HTMLTextAreaElement.prototype, "value", "", field)
   field.dispatchEvent(new Event("input", { bubbles: true }))
   field.dispatchEvent(new Event("change", { bubbles: true }))
 }
@@ -1056,8 +1062,7 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
         clear: () => {
           const field = fieldRef.current
           if (!field) return
-          field.value = ""
-          dispatchFieldValueEvents(field)
+          clearFieldValue(field)
         },
       }),
       [],
