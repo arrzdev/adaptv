@@ -118,8 +118,22 @@ segmented control (a §8 row that is also in no tier) is best read as an appeara
 
 ## Tier 2 — the feedback layer
 
-`Alert` · `ActionSheet` · `Toast` · `Spinner` · `ProgressBar`. Every native toolkit has these, Ionic
-has them, adaptv has none of them.
+`Alert` · `ActionSheet` · `Toast` · ~~`Spinner`~~ · `ProgressBar`. Every native toolkit has these,
+Ionic has them, and adaptv has only the inline `Spinner`.
+
+**An inline `Spinner` shipped** (`src/components/spinner.tsx`, lab page `/lab/spinner`). It is a
+`1em`, `currentColor` `<span>` turning a static arc with one `transform` keyframe, and it owns
+three things a hand-rolled spinner leaves out. **Off screen it idles:** one shared
+`IntersectionObserver` stamps `data-spinner-offscreen` and the stylesheet pauses the animation. On
+the lab page 100 paused spinners draw 0 frames per 2 s against 240 with the pause forced off
+(Chromium, CDP trace). **Exposure:** unlabelled it is `aria-hidden`; with a `label` it is an
+indeterminate `role="progressbar"`, and the label is announced once per loading episode through
+one shared polite live region, however many spinners with that label mount. **Reduced motion** is
+an opacity pulse on the drawing, never a stop. The motion's form is a guard, not a fix: a
+`transform` keyframe on an outer `<svg>` (`animate-spin` on an icon) is composited too, and the
+forms Chromium runs on the main thread are `rotate:` on an svg (traced) and, per its
+`compositor_animations.cc`, SMIL, shapes inside the drawing and dash animation. A blocking **`Loading` overlay** (`ion-loading`) is still a gap; it belongs to the
+overlay engine below.
 
 **Probably one overlay engine plus five thin presets, not five components.** Ionic's five overlays
 all share one interface, and adaptv's `Drawer` is *already* an overlay with a gesture engine behind

@@ -20,6 +20,7 @@ import { PullToRefresh } from "#adaptv/components/pull-to-refresh"
 import { PwaSplashOverlay } from "#adaptv/components/pwa-splash-overlay"
 import { ScrollView } from "#adaptv/components/scroll-view"
 import { Skeleton } from "#adaptv/components/skeleton"
+import { Spinner } from "#adaptv/components/spinner"
 import { Swipeable } from "#adaptv/components/swipeable"
 import { Switch } from "#adaptv/components/switch"
 import { TextArea } from "#adaptv/components/text-area"
@@ -775,6 +776,21 @@ describe("Icon", () => {
     const el = firstEl(
       <Icon render={<svg />} style={{ color: "rgb(1, 2, 3)" }} />,
     )
+describe("Spinner", () => {
+  //the size and the colour are the consumer's, and the motion is CSS on
+  //`data-adaptv`, not a class — so there is nothing to lock; `locked` is passed as
+  //`undefined` on purpose. The pair that matters is the 1em box losing on BOTH axes.
+  it("className beats the 1em base, and nothing is locked", () => {
+    const c = classOf(<Spinner className="size-8 block" />)
+    expect(hasClass(c, "size-8")).toBe(true)
+    expect(hasClass(c, "w-[1em]")).toBe(false)
+    expect(hasClass(c, "h-[1em]")).toBe(false)
+    expect(hasClass(c, "block")).toBe(true)
+    expect(hasClass(c, "inline-block")).toBe(false)
+  })
+
+  it("forwards the consumer style, and declares no locked inline tier", () => {
+    const el = firstEl(<Spinner style={{ color: "rgb(1, 2, 3)" }} />)
     expect(el.style.color).toBe("rgb(1, 2, 3)")
   })
 })

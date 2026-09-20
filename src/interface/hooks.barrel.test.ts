@@ -79,6 +79,7 @@ const WITHHELD_INTERNAL: Record<string, string[]> = {
     "src/components/avoid-keyboard/avoid-keyboard.tsx",
     "src/components/image.tsx",
     "src/components/icon.tsx",
+    "src/components/spinner.tsx",
     "src/components/text.tsx",
   ],
   "use-scroll-edge-fade": ["src/components/scroll-view.tsx"],

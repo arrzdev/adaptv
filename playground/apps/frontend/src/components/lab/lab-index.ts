@@ -62,6 +62,9 @@ const COMPONENTS = [
     to: "/lab/icon",
     title: "Icon",
     summary: "decorative vs labelled svg · 1em · iOS Dynamic Type",
+    to: "/lab/spinner",
+    title: "Spinner",
+    summary: "pauses off screen · turns through a busy main thread",
     isNew: true,
   },
   {
