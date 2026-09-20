@@ -40,6 +40,21 @@ function stubNavigatorProp(key: string, value: unknown): void {
   })
 }
 
+/**
+ * A position error shaped like the browser's: GeolocationPositionError carries
+ * `code` and `message` as getters on its prototype, not as own properties.
+ */
+function positionError(code: number, message: string) {
+  return Object.create({
+    get code() {
+      return code
+    },
+    get message() {
+      return message
+    },
+  }) as GeolocationPositionError
+}
+
 /** Stub navigator.geolocation with a reader that either finds a fix or fails. */
 function webPositionReader(outcome: {
   fix?: true
@@ -52,7 +67,7 @@ function webPositionReader(outcome: {
       _options?: PositionOptions,
     ) => {
       if (outcome.error) {
-        failure?.(outcome.error as GeolocationPositionError)
+        failure?.(positionError(outcome.error.code, outcome.error.message))
         return
       }
       success({
@@ -275,7 +290,8 @@ describe("geolocation — web", () => {
 
 describe("geolocation — web permission request", () => {
   //the web has no request API: a position read raises the browser prompt, so
-  //the read's outcome IS the answer, and only a failure needs the state re-read
+  //the read's outcome IS the answer, and a failure re-reads the state unless
+  //it is a refusal on a browser that has no state to read
 
   it("grants when the position read succeeds, without re-reading the state", async () => {
     forceNative(false)
@@ -302,7 +318,8 @@ describe("geolocation — web permission request", () => {
 
   it("keeps 'prompt' when the prompt is dismissed without a choice", async () => {
     //a dismissed prompt fails the read with the same PERMISSION_DENIED code as a
-    //refusal while the state stays "prompt", so the re-read wins over the code
+    //refusal while the state stays "prompt", so where the state can be queried
+    //the re-read wins over the code
     forceNative(false)
     webPositionReader({ error: { code: 1, message: "User denied" } })
     const query = permissionsAnswering("prompt")
@@ -317,6 +334,38 @@ describe("geolocation — web permission request", () => {
     const query = permissionsAnswering("granted")
     await expect(requestGeoPermission()).resolves.toBe("granted")
     expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it("answers 'denied' when the user refuses on a browser without the Permissions API", async () => {
+    //Safari before 16 cannot query the state, so a re-read there always says
+    //"prompt"; the refusal's own PERMISSION_DENIED code is the only answer, and
+    //the message is free text, so it must not decide
+    forceNative(false)
+    webPositionReader({ error: { code: 1, message: "User refused" } })
+    stubNavigatorProp("permissions", undefined)
+    await expect(requestGeoPermission()).resolves.toBe("denied")
+  })
+
+  it.each([
+    [2, "Position unavailable"],
+    [3, "Timeout expired"],
+  ])(
+    "keeps 'prompt' when the read fails with code %i on a browser without the Permissions API",
+    async (code, message) => {
+      //no fix is not a refusal: without a state to query, "you may ask" stands
+      forceNative(false)
+      webPositionReader({ error: { code, message } })
+      stubNavigatorProp("permissions", undefined)
+      await expect(requestGeoPermission()).resolves.toBe("prompt")
+    },
+  )
+
+  it("grants on a browser without the Permissions API when the read succeeds", async () => {
+    forceNative(false)
+    const read = webPositionReader({ fix: true })
+    stubNavigatorProp("permissions", undefined)
+    await expect(requestGeoPermission()).resolves.toBe("granted")
+    expect(read).toHaveBeenCalledTimes(1)
   })
 
   it("reports 'unavailable' when the geolocation API is absent", async () => {
