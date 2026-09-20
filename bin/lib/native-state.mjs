@@ -19,13 +19,18 @@
 // simulator, an Xcode toolchain, or a 30-second build.
 
 /**
- * Does the config baked into the native project disagree with what this command intends?
+ * Does the config baked into the native project, or into the app installed on a device,
+ * disagree with what this command intends?
  *
  * Only two fields matter, and both decide what the INSTALLED app does: `appId` (which app
- * this is) and whether a `server.url` is present (a `dev` live-reload shell vs a static
- * build). Everything else in the file is written by `cap sync` and adaptv's own plugin pass
- * (`packageClassList`, plugin settings), so comparing whole objects would report a
+ * this is) and `server.url` (a `dev` live-reload shell, and WHICH dev server it loads, vs a
+ * static build). Everything else in the file is written by `cap sync` and adaptv's own plugin
+ * pass (`packageClassList`, plugin settings), so comparing whole objects would report a
  * difference on every run and defeat the caches entirely.
+ *
+ * The URL is compared by value, not by presence. Presence alone once let `dev` relaunch a
+ * shell another checkout of the same app had installed for its own port: it opened on the
+ * offline screen, polling a port nothing served, and the CLI printed `cached`.
  *
  * Unreadable/absent counts as stale: never reuse an install we can't vouch for.
  */
@@ -34,7 +39,7 @@ export function configIsStale(baked, want) {
   const intended = want ?? {}
   return (
     baked.appId !== intended.appId ||
-    Boolean(baked.server?.url) !== Boolean(intended.server?.url)
+    (baked.server?.url ?? null) !== (intended.server?.url ?? null)
   )
 }
 
