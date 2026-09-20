@@ -438,3 +438,119 @@ test.describe("WheelColumn's settle", () => {
     expect(await calls(), "one row crossed is one onChange").toBe(1)
   })
 })
+
+/*
+ * The live report under a busy main thread: a row the consumer stores is reported once.
+ *
+ * A scroll event reads `value` from the wheel's last commit, and React renders the
+ * consumer's store in a task of its own. When other work queued during that scroll
+ * event runs long, WebKit runs the next frame, and its scroll event, ahead of React's
+ * render task, so the drum reported the same row twice. The work here is what a
+ * scroll listener elsewhere on the page hands off: a 30ms task per event, queued
+ * ahead of React's. Every scroll event is the engine's own, one scrollTop write per
+ * animation frame.
+ *
+ * WebKit only. Chromium runs React's render task before the next frame in the same
+ * setup, so no scroll event ever reads a stale value there and the test would be
+ * vacuous: 0 of 10 runs raced, against 10 of 10 on WebKit.
+ */
+test.describe("WheelColumn's live report", () => {
+  test("a busy main thread does not report a stored row twice", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(
+      browserName !== "webkit",
+      "Chromium renders before the next frame here, so nothing races",
+    )
+    await page.goto("/lab/wheel-column")
+    await awaitClientHandover(page)
+    const hour = page.locator(HOUR)
+    await expect(
+      page.locator(`${HOUR} button[data-active="true"]`),
+    ).toHaveText(label(START))
+    await hour.scrollIntoViewIfNeeded()
+    await settle(page)
+
+    const rows = 10
+    const seen = await hour.evaluate(
+      (el, [rowCount, itemH]) =>
+        new Promise<{ calls: number; crossed: number; stale: number }>(
+          (resolve) => {
+            const spans = [...document.querySelectorAll("span")]
+            const readout = (name: string) =>
+              spans.find((span) => span.textContent === name)
+                ?.nextElementSibling as HTMLElement
+            const counter = readout("onChange calls")
+            const stored = readout("hour")
+            const row = () => Math.round(el.scrollTop / itemH)
+            const before = Number(counter.textContent)
+
+            //other work, queued by a scroll listener that is not the wheel's
+            const work = new MessageChannel()
+            work.port1.onmessage = () => {
+              const end = performance.now() + 30
+              while (performance.now() < end) {}
+            }
+            let last = row()
+            let crossed = 0
+            //a scroll event over a row the consumer has not stored yet, after one
+            //that was already over that row: the event the duplicate came from
+            let stale = 0
+            let previous = { at: -1, stored: "", count: "" }
+            el.addEventListener("scroll", () => {
+              work.port2.postMessage(0)
+              const at = row()
+              if (at !== last) crossed++
+              last = at
+              const now = {
+                at,
+                stored: stored.textContent ?? "",
+                count: counter.textContent ?? "",
+              }
+              if (
+                Number(now.stored) !== at &&
+                previous.at === at &&
+                previous.stored === now.stored &&
+                previous.count === now.count
+              )
+                stale++
+              previous = now
+            })
+
+            const from = el.scrollTop
+            const tick = () => {
+              const next = el.scrollTop + 7
+              el.scrollTop = Math.min(next, from + rowCount * itemH)
+              if (next < from + rowCount * itemH) {
+                requestAnimationFrame(tick)
+                return
+              }
+              //past the 120ms settle, with room for the renders the work delays
+              setTimeout(
+                () =>
+                  resolve({
+                    calls: Number(counter.textContent) - before,
+                    crossed,
+                    stale,
+                  }),
+                1500,
+              )
+            }
+            requestAnimationFrame(tick)
+          },
+        ),
+      [rows, ITEM_H] as const,
+    )
+
+    expect(seen.crossed, "the drum crossed every row once").toBe(rows)
+    expect(
+      seen.stale,
+      "a scroll event ran ahead of the consumer's re-render",
+    ).toBeGreaterThan(0)
+    expect(seen.calls, "one onChange per row crossed").toBe(rows)
+    await expect(
+      page.locator(`${HOUR} button[data-active="true"]`),
+    ).toHaveText(label(START + rows))
+  })
+})
