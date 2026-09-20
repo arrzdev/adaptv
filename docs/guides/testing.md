@@ -104,7 +104,7 @@ Version pins and native gotchas live in
 | **Typecheck** | `pnpm typecheck` | |
 | **Lint** | `pnpm biome:check` · `pnpm biome:check:playground` | the playground is its own pnpm project, so the root check never reaches it — both are required |
 | **Colour** | `node scripts/check-colour.mjs` | the CLI's live layer under a pty |
-| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 36 specs in `playground/e2e/` |
+| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 37 specs in `playground/e2e/` |
 | **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across three configs (default, spa, prompt) |
 | **The gate** | `pnpm gate` | lint, typecheck, unit and colour — **not** the Playwright suites, which take minutes where the gate takes seconds |
 
