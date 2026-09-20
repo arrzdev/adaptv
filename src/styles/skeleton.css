@@ -1,0 +1,71 @@
+/*
+ * Skeleton — the three platform rules the placeholder box owns (components/skeleton.tsx).
+ *
+ * ## Why these are CSS rules on the identity attribute and not classes
+ *
+ * Every one of them is a `@media` condition the page must honour BEFORE the first paint
+ * and identically on the server: a `prefers-reduced-motion` answer that arrives from a
+ * hook is `false` during SSR and hydration (hooks/use-reduced-motion.ts), so a class it
+ * toggles would ship one shimmering frame to the user who asked for none and then
+ * mismatch. A stylesheet rule has no such gap — the engine evaluates the query on the
+ * very first style resolution, with no JavaScript in the loop. Keying it on
+ * `[data-adaptv="skeleton"]` is docs/decisions/styling.md §2's escape hatch: there is no
+ * class in the consumer's `className` for tailwind-merge to drop it against.
+ *
+ * ## Pulse, not a sliding gradient
+ *
+ * An opacity keyframe is composited on every target adaptv ships to; a moving
+ * `background-position` is a raster per frame on a WebView, and repeats on every row of
+ * a list that is nothing but skeletons. The two read the same to a user waiting for data.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) so a consumer turns any
+ * of it off with an ordinary unlayered rule — or with `animate-none` in `className`, since
+ * `utilities` is a later layer than this one. No `!important` anywhere (§6.0.1).
+ * `@keyframes` stays outside the layer for the reason drawer.css records: keyframe names
+ * resolve from a single flat namespace where the last definition wins regardless of layer.
+ */
+
+@keyframes adaptv-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@layer adaptv.components {
+  [data-adaptv="skeleton"] {
+    animation: adaptv-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    /*
+     * Under forced colors (Windows High Contrast, `forced-colors: active`) the engine
+     * replaces every author background with `Canvas` — the page colour — so a box that
+     * is ONLY a background paints nothing and the layout reads as empty rather than
+     * loading. Opting the element out keeps its own paint; the rule below draws the
+     * outline that makes the shape visible in that mode either way.
+     */
+    forced-color-adjust: none;
+  }
+
+  /*
+   * The shimmer stops here, and only here — not in a hook. Pre-paint, no hydration
+   * mismatch, and the reduced-motion user never sees a single animated frame.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    [data-adaptv="skeleton"] {
+      animation: none;
+    }
+  }
+
+  /*
+   * `CanvasText` is the system colour the user chose for text against `Canvas`, so a
+   * 1px border in it is guaranteed visible on their palette, whatever it is.
+   */
+  @media (forced-colors: active) {
+    [data-adaptv="skeleton"] {
+      border: 1px solid CanvasText;
+    }
+  }
+}
