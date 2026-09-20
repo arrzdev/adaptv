@@ -152,6 +152,38 @@ describe("resolveSwipeRelease · from an open row", () => {
     expect(r).toEqual({ action: "close", velocity: 500 })
   })
 
+  it("a flick from closed opens the tray it points at, gated on that tray's own width", () => {
+    //unequal trays, so a gate reading the wrong side's width cannot pass
+    const flick = (vel: number, lw: number, rw: number) =>
+      resolveSwipeRelease({
+        x: 4 * Math.sign(vel),
+        vel,
+        lw,
+        rw,
+        wasOpen: false,
+        cfg: CFG,
+      })
+    expect(flick(600, W, 0)).toEqual({ action: "open", side: "left" })
+    expect(flick(-600, 0, W)).toEqual({ action: "open", side: "right" })
+    expect(flick(-600, W, 0)).toEqual({ action: "close" })
+  })
+
+  it("left-open mirrors right-open: holds, closes past the line, flicks shut, flicks through", () => {
+    const from = (x: number, vel: number, rw = W) =>
+      resolveSwipeRelease({ x, vel, lw: W, rw, wasOpen: "left", cfg: CFG })
+    //closes once x falls below lw·(1−closeThreshold) = 60
+    expect(from(61, 0)).toEqual({ action: "open", side: "left" })
+    expect(from(59, 0)).toEqual({ action: "close" })
+    //a slow drift is not a flick, however far
+    expect(from(W, -250)).toEqual({ action: "open", side: "left" })
+    expect(from(W, -500, 0)).toEqual({ action: "close", velocity: -500 })
+    //still right of centre, the flick only shuts it
+    expect(from(10, -500)).toEqual({ action: "close", velocity: -500 })
+    expect(from(-10, -500)).toEqual({ action: "open", side: "right" })
+    //through, but no right tray to land in
+    expect(from(-10, -500, 0)).toEqual({ action: "close", velocity: -500 })
+  })
+
   it("a flick THROUGH an open row swaps to the opposite side", () => {
     //open right, still left of centre, flicked hard leftward with left actions
     //present → don't just re-open right, swap to left
