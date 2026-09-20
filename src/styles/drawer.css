@@ -109,6 +109,30 @@
     }
   }
 
+  /*
+   * The sheet's hidden tail: its own paint, continued below the fold, so an over-drag or the
+   * keyboard lift never opens a gap under the sheet. The engine sizes it (`excessHeight`,
+   * ~0.55 viewports) and it inherits whatever background the consumer painted on the panel.
+   *
+   * It hangs OFF the panel's box (`top: 100%`) instead of being a spacer inside it, and the
+   * reason is measured. Safari on iOS 26 colours its bottom toolbar from the fixed element it
+   * finds at the bottom edge of the viewport — WebKit's `LocalFrameView::fixedContainerEdges`
+   * hit-tests the edge, walks up to the first fixed/sticky ancestor and takes its
+   * `background-color` — and it refuses an ancestor whose border box is taller than 1.05
+   * viewports (`TooLarge`). A form-sized sheet plus the tail was ~1.3 viewports, so Safari found
+   * nothing, fell back to the page colour, and drew the toolbar in the theme colour under a white
+   * sheet. An absolute child paints the same pixels and leaves the panel's box the sheet's.
+   * → docs/decisions/register.md B33.
+   */
+  [data-pwa-drawer-tail] {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: inherit;
+    pointer-events: none;
+  }
+
   /* iOS inflates text in a transformed subtree unless the adjustment is pinned. Tailwind's
    * preflight sets `-webkit-text-size-adjust: 100%` on <html>, but that lives in `@layer base`
    * — an earlier layer — so this wins with no `!important`. */
