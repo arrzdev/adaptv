@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Pencil, Plus, Trash2 } from "lucide-react"
-import { useRef } from "react"
+import { useCallback, useRef } from "react"
 import { SettingsAddRow } from "@/components/settings/settings-list-row"
 import { IconButton } from "@/components/ui"
 import { resolveDeckEmoji } from "@/data/collections/decks/constants"
@@ -159,17 +159,40 @@ function SettingsDeckRow({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
     isSorting,
     newIndex,
   } = useSortable({ id: deck.id, disabled })
+  //the row is its own keyboard activator. dnd-kit starts a keyboard drag on
+  //Space/Enter from ANY descendant unless an activator is set, so Space on a
+  //task's checkbox, or Enter on a deck's Edit button, also lifted the row into
+  //a drag. With the li as the activator, only a key pressed on the focused row
+  //itself picks it up
+  const setRowRef = useCallback(
+    (node: HTMLLIElement | null) => {
+      setNodeRef(node)
+      setActivatorNodeRef(node)
+    },
+    [setNodeRef, setActivatorNodeRef],
+  )
 
-  //drop dnd-kit's role="button"/tabIndex: this li wraps real <button>s, and a
+  //drop dnd-kit's role="button": this li wraps real <button>s, and a
   //button-role node containing buttons is invalid nested interactive content.
-  //the drag listeners are untouched, so drag still works
-  const { role, ...dragAttributes } = attributes
+  //drop its aria-disabled too — without the role it no longer describes the
+  //drag handle, and every control inside inherits it, so a row that merely
+  //can't be dragged read its checkbox and buttons as disabled to a screen
+  //reader. the drag listeners are untouched, so drag still works
+  const {
+    role,
+    "aria-disabled": cannotDrag,
+    ...sortableAttributes
+  } = attributes
+  //a row that cannot be dragged is not a sortable item: no tab stop that Space
+  //cannot pick up, no "sortable" role description, and no drag instructions
+  const dragAttributes = cannotDrag ? {} : sortableAttributes
 
   //the lifted row morphs its top corners once it will land in the top slot — the
   //one real card edge (the New deck button is the group's bottom)
@@ -194,7 +217,7 @@ function SettingsDeckRow({
 
   return (
     <li
-      ref={setNodeRef}
+      ref={setRowRef}
       style={style}
       className={cn(
         //the surface lives on the whole row so it covers the divider band edge-to-
@@ -225,11 +248,16 @@ function SettingsDeckRow({
             {deck.name}
           </Text>
         </View>
-        {/* stop pointer-down here so pressing a button never arms the drag */}
+        {/* a press on a button is not a grab of the row. dnd-kit's Mouse and
+            Touch sensors arm on the row's mousedown and touchstart, not on
+            pointerdown, so all three stop here: stopping pointerdown alone let a
+            press on Edit, carried off the button, reorder the decks */}
         <View
           row
           className="flex shrink-0 items-center gap-x-1"
           onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <IconButton
             onClick={() => onEdit(deck)}
