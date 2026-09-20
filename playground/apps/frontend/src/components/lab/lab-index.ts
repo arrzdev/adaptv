@@ -262,6 +262,12 @@ const CAPABILITIES = [
     isNew: false,
   },
   {
+    to: "/lab/filesystem",
+    title: "Filesystem",
+    summary: "the app's own files · plugin on native, OPFS on the web",
+    isNew: true,
+  },
+  {
     to: "/lab/app-state",
     title: "App state",
     summary: "foreground / background across resume and bfcache",
