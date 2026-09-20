@@ -664,7 +664,7 @@ Two companions from the same bug family, both affecting `use-gesture-engine.ts`:
 - **[WebKit 194173](https://bugs.webkit.org/show_bug.cgi?id=194173) (NEW):** iOS does not dispatch `pointercancel` **unless another pointer event type is also registered.** A lone `pointercancel` listener is dead code — always register `pointerdown`/`move`/`up` alongside it.
 - **[WebKit 239014](https://bugs.webkit.org/show_bug.cgi?id=239014) (NEW):** right-edge forward swipe fires `pointerdown` then nothing.
 
-**Two MDN corrections worth knowing** (both verified against engine source): Safari **has** been passive-by-default for `touchstart`/`touchmove` since **iOS 11.3**, contra MDN; and **`document.documentElement` IS in the root-target set** in all three engines, so reaching for `<html>` to escape the rule doesn't work. `preventDefault()` in a passive listener fails **silently** — console warning, never an exception.
+**Two MDN corrections worth knowing** (both verified against engine source): Safari **has** been passive-by-default for `touchstart`/`touchmove` since **iOS 11.3**, contra MDN; and **`document.documentElement` IS in the root-target set** in all three engines, so reaching for `<html>` to escape the rule doesn't work. `preventDefault()` in a passive listener fails **silently** — console warning, never an exception. `Slider` (`src/components/slider.tsx`) joins `Button`, `Swipeable` and the drawer handle in the family that depends on this: it registers all four pointer listeners so `pointercancel` reaches it on iOS and ends the drag, and its root uses the longhand `pan-y pinch-zoom`, never `manipulation`.
 
 ### B20 — accessibility: two decisions adaptv must own, because nothing above the shell can
 
