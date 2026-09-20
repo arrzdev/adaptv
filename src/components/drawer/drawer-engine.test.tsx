@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import type { DrawerHandle } from "#adaptv/components/drawer"
 import { Drawer } from "#adaptv/components/drawer"
-import { resolveDrawerDragRelease } from "#adaptv/components/drawer/drawer-constants"
+import { drawerReleaseCloses } from "#adaptv/components/drawer/drawer-constants"
 import { EdgeSwipeGestures } from "#adaptv/components/edge-swipe-gestures"
 import { Swipeable } from "#adaptv/components/swipeable"
 import type { GestureCapture } from "#adaptv/hooks/use-gesture-capture"
@@ -24,7 +24,7 @@ vi.mock(
       >()
     return {
       ...real,
-      resolveDrawerDragRelease: vi.fn(real.resolveDrawerDragRelease),
+      drawerReleaseCloses: vi.fn(real.drawerReleaseCloses),
     }
   },
 )
@@ -35,7 +35,7 @@ vi.mock("#adaptv/hooks/use-caret-repaint", () => ({
   preMuteCaret: () => {},
 }))
 
-const releaseSpy = vi.mocked(resolveDrawerDragRelease)
+const releaseSpy = vi.mocked(drawerReleaseCloses)
 
 //happy-dom lays nothing out, so the engine would measure a 0px sheet and never close from a drag.
 //400px of content is the geometry the release decision reads (closedY = 400).
@@ -176,9 +176,7 @@ describe("the whole-sheet touch drag", () => {
     const [draggedDown, startTime] = releaseSpy.mock.calls[0]
     expect(draggedDown).toBe(370)
     expect(typeof startTime).toBe("number")
-    expect(
-      Number.isFinite(releaseSpy.mock.results[0].value.velocityY),
-    ).toBe(true)
+    expect(releaseSpy.mock.results[0].value).toBe(true)
 
     await vi.waitFor(() =>
       expect(onOpenChange).toHaveBeenCalledWith(false),

@@ -292,7 +292,7 @@ function unlinkedIconFiles(
 
   const publicRoot = new URL(`${PLACEHOLDER_ORIGIN}/`)
   const manifestRoot = deployRoot(base, config.origin)
-  const manifest = buildManifest(config, appRoot)
+  const manifest = buildManifest(config, appRoot, base)
   const manifestSrcs = Array.isArray(manifest.icons)
     ? manifest.icons.map((icon) => icon?.src)
     : []

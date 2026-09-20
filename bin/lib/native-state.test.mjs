@@ -10,6 +10,7 @@ import {
   mergeSettingsGradle,
   podsNeedInstall,
   resolvePluginPackages,
+  rewritePodfileHelpers,
 } from "./native-state.mjs"
 
 // Each block below is a bug that shipped once. The comment on each `it` is the symptom the
@@ -104,6 +105,23 @@ describe("podsNeedInstall — the out-of-sync sandbox dead end", () => {
         hasManifestLock: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe("rewritePodfileHelpers — the require_relative cap and adaptv disagree on", () => {
+  it("points the helpers require at the @capacitor/ios the pods already use", () => {
+    const src = `require_relative '../../../../../../node_modules/.pnpm/@capacitor+ios@8.4.2_@capacitor+core@8.4.2/node_modules/@capacitor/ios/scripts/pods_helpers'\n\ndef capacitor_pods\nend\n`
+    const rel =
+      "../../../../../../node_modules/.pnpm/@capacitor+ios@8.4.3_@capacitor+core@8.4.3/node_modules/@capacitor/ios/scripts/pods_helpers"
+    const next = rewritePodfileHelpers(src, rel)
+    expect(next).toContain("@capacitor+ios@8.4.3")
+    expect(next).not.toContain("@capacitor+ios@8.4.2")
+  })
+
+  it("leaves the rest of the Podfile alone, and a missing path writes nothing", () => {
+    const src = "platform :ios, '15.0'\n"
+    expect(rewritePodfileHelpers(src, "anything")).toBe(src)
+    expect(rewritePodfileHelpers(src, null)).toBe(src)
   })
 })
 
