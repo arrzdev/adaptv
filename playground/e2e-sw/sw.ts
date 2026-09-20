@@ -66,17 +66,28 @@ export function engineSupportsOffline(browserName: string): boolean {
  *
  * Not `process.cwd()`, which is wherever the developer happened to be standing,
  * and not `import.meta.dirname`, which Playwright's CJS transpile does not have.
+ *
+ * `buildArgs` go to `vite build` — for a deploy that must change the CLIENT's
+ * bytes too, which the tag alone never does (`stale-chunk.spec.ts`).
  */
-export function deploy(buildTag: string, workspaceRoot: string): void {
-  execFileSync("pnpm", ["--filter", "@repo/frontend", "run", "build"], {
-    cwd: workspaceRoot,
-    //ADAPTV_RENDER is already on the environment, set by the config — the new
-    //build has to be the same MODE as the one it replaces, or this stops being an
-    //update and becomes a different app.
-    env: { ...process.env, ADAPTV_BUILD_TAG: buildTag },
-    stdio: "pipe",
-    timeout: 240_000,
-  })
+export function deploy(
+  buildTag: string,
+  workspaceRoot: string,
+  buildArgs: readonly string[] = [],
+): void {
+  execFileSync(
+    "pnpm",
+    ["--filter", "@repo/frontend", "run", "build", ...buildArgs],
+    {
+      cwd: workspaceRoot,
+      //ADAPTV_RENDER is already on the environment, set by the config — the new
+      //build has to be the same MODE as the one it replaces, or this stops being an
+      //update and becomes a different app.
+      env: { ...process.env, ADAPTV_BUILD_TAG: buildTag },
+      stdio: "pipe",
+      timeout: 240_000,
+    },
+  )
 }
 
 /**
