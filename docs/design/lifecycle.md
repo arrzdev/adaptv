@@ -230,12 +230,14 @@ WebView does not have. `render` is the wrong question for that decision; `target
 The mirror image, and the reason `AdaptvContext` carries `target` separately from `render`. A native
 build is a normal client build, so it inherits every asset the web build emits for **browser chrome** —
 and inside a WebView reading files off the device there is no tab, no bookmark, no address bar and no
-install prompt to render any of it. `adaptvNativeBundlePlugin` (`src/vite/native-bundle.ts`) prunes it:
+install prompt to render any of it. `adaptvNativeBundlePlugin` (`src/vite/native-bundle.ts`) prunes it, as an
+`enforce: "post"` plugin so it runs after the router's own post-build prerender (`vite-plugin-map.md` §2.5):
 
 | dropped | why it can't be used on device |
 |---|---|
 | the icon art (`icons`, or adaptv's default set) | no browser chrome to draw a favicon in — launcher icons are generated into the native project from the **source** dir, never from here |
 | `.vite/manifest.json` | Vite's source→chunk map, for a **server** emitting preload tags; a static SPA ships those tags in the document |
+| `_shell.html` | the router's own prerendered SPA shell; the WebView boots adaptv's `index.html` (register B31), so nothing reads it. It also stamps the render's time, and the OTA build tag hashes every file here: while it shipped, two builds of one checkout announced two bundles (66 KB on the playground, measured 2026-09-13) |
 | `_redirects`, `404.html`, `.nojekyll` | not emitted at all now — see above |
 | `registerSW`'s body | `virtual:adaptv/pwa-register` emits a stub when `sw.enabled` is false |
 | the manifest's `icons` array | kept as `[]`; `manifest.json` itself stays, because `useManifestOrientation` fetches it on device |
