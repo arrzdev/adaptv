@@ -436,9 +436,10 @@ Wiring (both adaptv-generated, so the consumer writes neither):
 > **Absolute, not relative** — measured, not assumed: `tmpDir` resolves against `process.cwd()`, ignoring
 > the root passed to `getConfig()`. A relative value scatters scratch dirs wherever Vite is invoked from.
 >
-> A leftover `.tanstack/` is pruned by `stamp.ts`, but **only when it is an empty husk** (empty, or
-> holding nothing but an empty `tmp/`). The directory is in the consumer's repo and a future upstream
-> version may keep real state there; `isPrunableLegacyTmpDir` is the pure, tested predicate that decides.
+> **Nothing prunes a `.tanstack/` that an older adaptv already left behind.** The redirect only stops new
+> ones appearing. A pruner shipped with it, guarded to delete nothing but an empty husk, and was removed
+> on 2026-08-15 without a migration path (pre-alpha), so an app that still carries the empty directory
+> deletes it once, by hand.
 
 > ### ✅ FIXED — the route tree named TanStack for the whole of `dev` and `preview` (2026-07-26)
 >
