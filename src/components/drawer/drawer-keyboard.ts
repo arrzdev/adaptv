@@ -42,44 +42,108 @@ export function resolveDrawerKeyboardRoom(
 }
 
 /**
- * Whether the on-screen keyboard resizes the VISUAL viewport out from under the sheet — the one
- * case the room mechanism must NOT run.
+ * Whether the keyboard has already been paid for by the viewport itself — the case the room
+ * mechanism must NOT run, because reserving `room` on top of a shrink double-counts: the sheet
+ * grows by the keyboard's height a second time, holds a keyboard-sized blank band above the
+ * keyboard, and its footer lands below the visible viewport.
  *
- * `useFreezeViewport` normally keeps the layout height whole while a drawer is up (iOS scroll-lock,
- * or Chromium's `virtualKeyboard.overlaysContent`), so the sheet answers the keyboard by holding
- * `room` below its content and growing into it. But `virtualKeyboard` is a secure-context-only API,
- * so over a plain-http `ip:port` origin (a LAN dev build) there is no freeze on Chromium: the
- * keyboard shrinks the visual viewport itself. Reserving room ON TOP of that shrink double-counts —
- * the sheet grows by the keyboard's height a second time and its top climbs off-screen behind the
- * URL bar. iOS still freezes (scroll-lock needs no API) and native reports an exact height without
- * shrinking, so both stay on the room path; only VK-less non-iOS Chromium falls here.
+ * Measured first, guessed second. `layoutShrink` is what the layout viewport actually gave up
+ * (`useLayoutViewportShrink`); when it covers the keyboard the answer is yes on any platform. That
+ * is the Android WebView under Capacitor 8: `SystemBars` pads the WebView by the IME inset, so
+ * `innerHeight` drops by the keyboard's exact height (923 → 587 for a 336px keyboard) while
+ * `virtualKeyboard.overlaysContent` reads true and the native plugin reports 336 — the two signals
+ * describe the same slice, and the old "native reports an exact height without shrinking" rule
+ * counted it twice. iOS never shrinks (the OS resize is off; scroll-lock holds the page) and stays on
+ * the room path by the same measurement.
+ *
+ * The guess covers the frame before a resize can be measured: VK-less non-iOS Chromium (a plain-http
+ * `ip:port` origin, where `virtualKeyboard` does not exist and nothing can hold the viewport) is known
+ * to shrink, so it takes this path from the first keyboard event rather than one resize later.
+ *
+ * `capHeld` makes the answer sticky: once the cap path has written the box, the keyboard's close
+ * (height 0, shrink 0) must come back through the same path to release it with its own settle,
+ * not fall into the room path with nothing to hand back.
  */
 export function viewportShrinksUnderKeyboard({
   isIOS,
   hasNativeKeyboard,
   hasVirtualKeyboardApi,
+  keyboardHeight = 0,
+  layoutShrink = 0,
+  capHeld = false,
 }: {
   isIOS: boolean
   hasNativeKeyboard: boolean
   hasVirtualKeyboardApi: boolean
+  keyboardHeight?: number
+  layoutShrink?: number
+  capHeld?: boolean
 }): boolean {
+  if (capHeld) return true
+  if (
+    keyboardHeight > 0 &&
+    layoutShrinkCoversKeyboard(keyboardHeight, layoutShrink)
+  ) {
+    return true
+  }
   return !isIOS && !hasNativeKeyboard && !hasVirtualKeyboardApi
 }
 
+/** Sub-pixel slack between the plugin's reported height and the WebView's inset padding. */
+const LAYOUT_SHRINK_TOLERANCE_PX = 1
+
+function layoutShrinkCoversKeyboard(
+  keyboardHeight: number,
+  layoutShrink: number,
+): boolean {
+  return layoutShrink >= keyboardHeight - LAYOUT_SHRINK_TOLERANCE_PX
+}
+
 /**
- * The box's `max-height` on the {@link viewportShrinksUnderKeyboard} path: fit the VISIBLE viewport,
- * never the layout one. The visual viewport has already shrunk by the keyboard, so the sheet holds
- * no room — it just caps at what's on screen (content taller than that scrolls inside), clamped by
- * the stylesheet's own cap. `null` while the keyboard is closed: nothing to constrain, so the box
- * rides the stylesheet cap and follows its own content.
+ * The part of the keyboard the sheet still has to hold room for: its height minus what the layout
+ * viewport already gave up. Whole on iOS (shrink 0), zero on the Android WebView (shrink equals the
+ * height, and the cap path runs instead), the remainder anywhere a viewport shrinks by less than the
+ * keyboard — an old WebView that keeps its nav-bar inset inside the reported height, say.
+ */
+export function unpaidKeyboardHeight(
+  keyboardHeight: number,
+  layoutShrink: number,
+): number {
+  return Math.max(0, keyboardHeight - Math.max(0, layoutShrink))
+}
+
+/**
+ * The box's `max-height` on the {@link viewportShrinksUnderKeyboard} path: fit the LAYOUT viewport,
+ * which is what shrank. It has already lost the keyboard, so the sheet holds no room — it just caps
+ * at what is on screen (content taller than that scrolls inside), clamped by the stylesheet's own
+ * cap. Not the visual viewport: while the IME animates, the Android WebView's `visualViewport`
+ * passes through values far below the layout height (measured 250.67 with `innerHeight` already at
+ * 587, settling to 587.05 a frame later), and a cap read from it pins the sheet at a fraction of the
+ * screen with nothing to re-read it once the value settles. `null` while the keyboard is closed:
+ * nothing to constrain, so the box rides the stylesheet cap and follows its own content.
  */
 export function resolveShrunkViewportCap(
   keyboardOpen: boolean,
-  visibleViewportHeight: number,
+  layoutViewportHeight: number,
   cssCap: number,
 ): number | null {
-  if (!keyboardOpen || visibleViewportHeight <= 0) return null
-  return Math.min(cssCap, visibleViewportHeight)
+  if (!keyboardOpen || layoutViewportHeight <= 0) return null
+  return Math.min(cssCap, layoutViewportHeight)
+}
+
+/**
+ * The stylesheet's cap as it resolves NOW, with the engine's inline override lifted for the read
+ * and put back. The cap is written in viewport units (`100vh - inset-top` installed, `97dvh` in a
+ * tab), so it changes when the viewport does: a value cached at rest (869 on a 923px viewport) is
+ * wrong once the WebView has shrunk to 587, where the same rule resolves to 533. One extra style
+ * resolution per keyboard event, never per frame.
+ */
+export function readDrawerStylesheetCap(contentEl: HTMLElement): number {
+  const inline = contentEl.style.maxHeight
+  contentEl.style.maxHeight = ""
+  const parsed = Number.parseFloat(getComputedStyle(contentEl).maxHeight)
+  contentEl.style.maxHeight = inline
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
 /**

@@ -88,12 +88,27 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
   infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
   a keyboard is not something to translate away from — it is a slice of the bottom that stops being
-  usable. Nothing else shrinks the viewport for us either: the OS webview resize is off on iOS
+  usable. Who else shrinks the viewport differs per platform, and the engine MEASURES it rather
+  than assuming: `useLayoutViewportShrink` reads what `innerHeight` gave up, and the room is
+  `keyboard - shrink`. On iOS nothing else shrinks it — the OS webview resize is off
   (`KeyboardResize.None`; Android's plugin has no resize mode, so it is not asked there) and
-  `useFreezeViewport` pins the layout viewport, deliberately. So on a
-  keyboard the content box holds `room` = the keyboard's height BELOW its stack, and is allowed to
-  grow into `max-h` by the same amount — the content that was visible stays visible, and where the
-  cap refuses the growth the scroller absorbs it and the rest stays reachable by scrolling. Both
+  `useFreezeViewport` pins the layout viewport, deliberately — so the
+  room is the whole keyboard. On the Android WebView Capacitor 8's `SystemBars` pads the WebView by
+  the IME inset (measured on a Pixel 10 emulator: `innerHeight` 923 → 587 for a 336px keyboard,
+  `--adaptv-inset-bottom` 24 → 0, `virtualKeyboard.overlaysContent` true throughout), so the shrink
+  IS the keyboard, the room is 0 and the box only caps at the visible viewport; holding room there
+  double-counted — a 336px blank band above the keyboard with the footer below the viewport, which
+  is what the installed Android target showed before the measurement replaced the platform table.
+  Three traps in that measurement, each seen on the emulator: the plugin's event and the WebView
+  resize land in either order (event first on one raise, resize first on the next), so the shrink
+  is read at render time, never held in effect state; `visualViewport.height` passes through 250
+  while the IME animates with `innerHeight` already at 587, so the cap is the layout viewport, not
+  the visual one; and the stylesheet cap is in viewport units, so it is re-read against the shrunk
+  viewport (869 at rest, 533 shrunk) rather than cached from rest.
+  So on a keyboard the content box holds `room` = the unpaid keyboard height BELOW its stack, and
+  is allowed to grow into `max-h` by the same amount — the content that was visible stays visible,
+  and where the cap refuses the growth the scroller absorbs it and the rest stays reachable by
+  scrolling. Both
   properties animate on one curve, with the cap primed at the box's current height first so the
   growth starts where the sheet actually is (unprimed, the cap spends most of its travel in the
   slack above the content, where it changes nothing, and the raise reads as a snap: measured at
@@ -101,7 +116,11 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `top 264 → 125 → 72 → 65 → 62` with the box growing `610 → 812` and the room `0 → 336`.
 - **Test:** a form drawer tall enough to hit the cap (playground → new task). Focus the field: the
   sheet must GROW upward as one decelerating motion — no snap, no shrink-then-settle — its actions
-  must end up just above the keyboard, and there must be no empty band under the last field.
+  must end up just above the keyboard (the playground keeps them in the scroll flow, so one swipe
+  brings them there: iOS native measured Add task at 387–431pt and Cancel at 443–487pt against a
+  keyboard top of 529pt), and there must be no empty band under the last field (Android native
+  measured the last button at 622px in a 587px viewport before the shrink was subtracted, and the
+  content box flush at 587 with 0px of room after).
   Dismiss the keyboard: it gives the room back on one ease. Close it with the keyboard still up: no
   re-aim mid-slide.
 

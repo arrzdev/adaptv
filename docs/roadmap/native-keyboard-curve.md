@@ -25,6 +25,41 @@ moment and arrive at slightly different ones.
 The agreed fix: **carry the OS duration and curve through the accessor, and tween the sheet on
 them** rather than on adaptv's own constants.
 
+## Baseline, measured 2026-09-02
+
+iPhone 17 Pro simulator (iOS 26.1, software keyboard, 402×874pt), the playground's create-task
+drawer, `xcrun simctl io recordVideo` at passthrough frame rate, one pixel column in the sheet's
+right margin read per frame: the sheet's top edge and the keyboard's top edge, in points, from the
+frame the keyboard first appears.
+
+```
+   t(ms)  sheetTop  kbTop    dSheet   dKb
+    0.0    269.0    867.0
+   15.0    269.0    838.3     0.0   -28.7
+   36.7    219.3    782.0   -49.7   -56.3
+   51.7    186.3    734.7   -33.0   -47.3
+   70.0    149.7    692.0   -36.7   -42.7
+   90.0    120.7    655.0   -29.0   -37.0
+  101.7    106.7    630.7    -6.0   -12.0
+  118.3     96.7    607.3   -10.0   -23.3
+  135.0     89.7    588.7    -7.0   -18.7
+  151.7     84.3    575.3    -5.3   -13.3
+  185.0     77.7    557.3    -3.0    -8.0
+  235.0     72.0    545.0    -1.3    -2.7
+  285.0     69.7    540.0    -0.7    -1.0
+  338.3     67.0    538.0    -1.3    -0.7
+  353.3     67.0    537.7     0.0    -0.3
+  405.0     67.0    537.3     0.0     0.0
+```
+
+What it says: the keyboard travels 330pt in about 355ms; the sheet travels 202pt and starts one
+frame after the keyboard's first move (about 22ms), then arrives about 15ms before it. Both
+decelerate, but on different curves — the sheet covers 64% of its travel in the first 70ms
+where the keyboard covers 53% — and the sheet's tail is the drawer's own settle, not the
+keyboard's. That is the coincidence this item replaces with the OS's own duration and curve.
+The keyboard's height on this device is 345pt; the sheet's `room` after the raise is that whole
+height (iOS gives none of it up in the layout viewport, see `design/behaviors.md §4`).
+
 ## Why it is its own change
 
 This is deliberately *not* folded into the drawer work, for two reasons that are both recorded
