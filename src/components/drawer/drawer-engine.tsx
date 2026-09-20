@@ -81,11 +81,12 @@ const DRAWER_CLOSE_OVERTRAVEL_PX = 64
 
 // A visual viewport this many px shorter than the layout viewport means the on-screen
 // keyboard is covering the bottom (well below any browser-chrome delta, well under a
-// keyboard's height). While it covers, we freeze the panel's `excessHeight` anchor —
+// keyboard's height). While it covers, we freeze the panel's `excessHeight` (the tail's size) —
 // see updateMetrics.
 const KEYBOARD_COVERAGE_PX = 120
 
-// The hidden panel tail below the fold (`bottom: -excess` + an equal spacer) only exists to
+// The hidden panel tail below the fold (an absolutely positioned child of the panel, hanging
+// off its bottom edge — see Drawer.Content) only exists to
 // back the keyboard lift, which never exceeds the keyboard's own height — and iOS keyboards
 // top out around ~45% of the viewport including the accessory bar. Reserving a FULL viewport
 // (the old behavior) made the panel's rasterized GPU layer 2-3× its visible pixels, inflating
@@ -208,11 +209,12 @@ function measureDrawerMetrics(
   const contentHeight = contentEl.getBoundingClientRect().height
   if (contentHeight <= 0) return null
 
-  // Closed Y = the panel's on-screen height (everything above the hidden excess),
-  // i.e. content height PLUS any consumer bottom padding (e.g. safe-area). Translating
-  // by just the content height would leave that padding band peeking at the bottom edge.
+  // Closed Y = the panel's on-screen height, i.e. content height PLUS any consumer bottom
+  // padding (e.g. safe-area). Translating by just the content height would leave that padding
+  // band peeking at the bottom edge. The hidden tail is an absolute child hanging below the
+  // panel's box, so the box IS the on-screen height — nothing to subtract.
   const panelHeight = panelEl?.getBoundingClientRect().height ?? 0
-  const closedY = Math.max(contentHeight, panelHeight - excessHeight)
+  const closedY = Math.max(contentHeight, panelHeight)
 
   return { excessHeight, contentHeight, closedY }
 }
@@ -384,7 +386,7 @@ export function DrawerEngine({
     getMetrics: () => DrawerMetrics | null
   } | null>(null)
   const [excessHeight, setExcessHeight] = useState(0)
-  //mirrors excessHeight so updateMetrics can freeze the anchor while the keyboard is up
+  //mirrors excessHeight so updateMetrics can freeze the tail while the keyboard is up
   const excessHeightRef = useRef(0)
   //room currently held under the content stack for the keyboard, and the stylesheet cap read
   //back while nothing of ours was overriding it (see the keyboard-room effect)
@@ -722,18 +724,17 @@ export function DrawerEngine({
 
   const backdropState: "open" | "closed" = open ? "open" : "closed"
 
-  // `commitExcess` controls whether the measured excess is written to state (which moves the
-  // panel's `bottom: -excessHeight` anchor). During a close we measure but DON'T commit — the
-  // keyboard dismissing grows the viewport, and shifting the anchor mid-slide makes the close
-  // lurch. The geometry is frozen at the close-start value instead.
+  // `commitExcess` controls whether the measured excess is written to state (which resizes the
+  // panel's hidden tail). During a close we measure but DON'T commit — the keyboard dismissing
+  // grows the viewport, and resizing the tail mid-slide makes the close lurch. The geometry is
+  // frozen at the close-start value instead.
   //
   // Same discipline for the keyboard LIFT: while the on-screen keyboard covers the bottom, the
-  // visual viewport is short, so `measureExcessHeight` shrinks. But `excessHeight` only backs the
-  // panel tail hidden below the fold — it cancels out of the content's on-screen position
-  // (`bottom: -excess` + an equal spacer), so committing the shrunk value moves NOTHING visible
-  // while mutating `bottom` + the spacer on the layer that's mid-lift, forcing a GPU re-raster
-  // (the on-screen stutter). Freeze the anchor at its pre-keyboard baseline and let the transform
-  // clear the keyboard. Always take a first baseline so `excess` is never left at 0.
+  // visual viewport is short, so `measureExcessHeight` shrinks. But `excessHeight` only sizes the
+  // tail hanging below the fold — nothing on screen depends on it — so committing the shrunk
+  // value moves NOTHING visible while mutating a child of the layer that's mid-lift, forcing a
+  // GPU re-raster (the on-screen stutter). Freeze it at its pre-keyboard baseline and let the
+  // transform clear the keyboard. Always take a first baseline so `excess` is never left at 0.
   const updateMetrics = useCallback((commitExcess = true) => {
     const measured = measureExcessHeight()
     // The coverage check needs the RAW measurement (capping it would always read as covered);
@@ -997,7 +998,7 @@ export function DrawerEngine({
 
   // ---- keyboard room ------------------------------------------------------------------
   //
-  // The sheet is infinitely tall (`bottom: -excess` + the matching spacer) and only ever grows
+  // The sheet is infinitely tall (its paint continues into the hidden tail below the fold) and only ever grows
   // to what it needs. So the keyboard is not something to translate away from — it is a slice of
   // the bottom that stops being usable. Two things happen, together:
   //
@@ -1870,7 +1871,8 @@ export function DrawerEngine({
       backdropZ: DRAWER_BACKDROP_Z,
       panelPosition: "fixed",
       panelZ: DRAWER_PANEL_Z,
-      panelStyle: { bottom: excessHeight > 0 ? -excessHeight : 0 },
+      //the panel sits ON the fold; the tail below it is a child outside its box (Drawer.Content)
+      panelStyle: { bottom: 0 },
       contentLayoutClass: DRAWER_CONTENT_LAYOUT_CLASS,
       backdropState,
       overlayDuration: OVERLAY_DURATION,
