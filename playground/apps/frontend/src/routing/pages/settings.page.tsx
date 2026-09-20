@@ -1,10 +1,12 @@
 import {
+  Button,
   EdgeSwipeGestures,
   Link,
   Pressable,
   Text,
   View,
 } from "@arrzdev/adaptv/components"
+import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
 import { useTheme } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 import {
@@ -25,6 +27,7 @@ import { DeleteDeckDrawer } from "@/components/settings/delete-deck-drawer"
 import { SettingsAccountCard } from "@/components/settings/settings-account-card"
 import { SettingsDeckList } from "@/components/settings/settings-deck-list"
 import { SettingsHeader } from "@/components/settings/settings-header"
+import { SettingsListRow } from "@/components/settings/settings-list-row"
 import { SettingsRow } from "@/components/settings/settings-row"
 import { reorderDecks } from "@/data/collections/decks/mutations"
 import { useDecks } from "@/data/collections/decks/queries"
@@ -39,6 +42,12 @@ export const Route = createFileRoute("/_providers/settings")({
   component: SettingsPage,
 })
 
+const THEMES: { preference: UiThemePreference; label: string }[] = [
+  { preference: "light", label: "Light" },
+  { preference: "dark", label: "Dark" },
+  { preference: "system", label: "System" },
+]
+
 function SettingsPage() {
   //Own the edge-swipe-back wherever this app is INSTALLED. This app runs on memory
   //history once installed (`memoryHistoryInStandalone` in adaptv.config.ts), so
@@ -52,7 +61,7 @@ function SettingsPage() {
   const swipeBack = useSwipeBack("/")
   const { settings, setSettings } = useSettings()
   const haptic = useHaptics()
-  const [resolvedTheme, toggleTheme] = useTheme()
+  const theme = useTheme()
   const { data: decks } = useDecks()
   const [createOpen, setCreateOpen] = useState(false)
   const [editingDeck, setEditingDeck] = useState<Deck | null>(null)
@@ -65,12 +74,13 @@ function SettingsPage() {
 
   const canDeleteDeck = decks.length > 1
 
-  //the Switch wrapper fires the selection haptic on toggle (gated by the haptics
-  //preference), so these handlers only carry the state change
-  function handleDarkModeChange() {
-    toggleTheme()
+  function handleThemeChange(preference: UiThemePreference) {
+    haptic.selection()
+    theme.setPreference(preference)
   }
 
+  //the Switch wrapper fires the selection haptic on toggle (gated by the haptics
+  //preference), so these handlers only carry the state change
   function handleAnimationsChange(checked: boolean) {
     setSettings({ animations: checked })
   }
@@ -108,12 +118,29 @@ function SettingsPage() {
           Preferences
         </Text>
         <View className="flex flex-col overflow-hidden rounded-md bg-surface">
-          <SettingsRow
-            label="Dark mode"
+          <SettingsListRow
+            label="Theme"
             icon={Moon}
-            checked={resolvedTheme === "dark"}
-            onCheckedChange={handleDarkModeChange}
             showSeparator
+            trailing={
+              <View
+                row
+                role="group"
+                aria-label="Theme"
+                className="shrink-0 gap-x-0.5 rounded-md bg-secondary p-0.5"
+              >
+                {THEMES.map(({ preference, label }) => (
+                  <Button
+                    key={preference}
+                    aria-pressed={theme.preference === preference}
+                    onClick={() => handleThemeChange(preference)}
+                    className="rounded-sm bg-transparent px-2.5 py-1 text-sm font-medium text-subtle aria-pressed:bg-surface aria-pressed:text-foreground aria-pressed:shadow-sm"
+                  >
+                    <Button.Text>{label}</Button.Text>
+                  </Button>
+                ))}
+              </View>
+            }
           />
           <SettingsRow
             label="Animations"
