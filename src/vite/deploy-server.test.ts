@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
+import {
+  adaptvDeployServerPlugins,
+  DEPLOY_SERVER_ENVIRONMENT,
+  emitIntoClientOutput,
+} from "#adaptv/vite/deploy-server.ts"
 
 describe("adaptvDeployServerPlugins", () => {
   it("produces a server build for ssr", async () => {
@@ -35,5 +39,59 @@ describe("adaptvDeployServerPlugins", () => {
     expect(names.length).toBeGreaterThan(0)
     //no adaptv-authored wrapper in the chain — the plugins are upstream's own
     expect(names.some((name) => name?.startsWith("adaptv:"))).toBe(false)
+  })
+})
+
+describe("emitIntoClientOutput", () => {
+  //the hooks, called the way Vite calls them, outside Vite
+  function hooks(emit: () => Promise<void>) {
+    const { buildStart, buildApp } = emitIntoClientOutput(emit)
+    if (typeof buildStart !== "object" || typeof buildApp !== "object")
+      throw new Error("both must be object hooks")
+    return {
+      start: (environment: string) =>
+        // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+        (buildStart.handler as any).call({
+          environment: { name: environment },
+        }),
+      app: (environments: Record<string, unknown>) =>
+        // biome-ignore lint/suspicious/noExplicitAny: calling a Vite hook outside Vite
+        (buildApp.handler as any).call({}, { environments }),
+      order: buildApp.order,
+    }
+  }
+
+  it("writes at the start of the server environment, once, and not again after the build", async () => {
+    const calls: string[] = []
+    const h = hooks(async () => {
+      calls.push("emit")
+    })
+    //the client and SSR environments start first, before Nitro copies `public/`
+    await h.start("client")
+    await h.start("ssr")
+    expect(calls).toEqual([])
+    await h.start(DEPLOY_SERVER_ENVIRONMENT)
+    await h.app({ [DEPLOY_SERVER_ENVIRONMENT]: {} })
+    expect(calls).toEqual(["emit"])
+    expect(h.order).toBe("post")
+  })
+
+  it("writes in buildApp post when the build has no server", async () => {
+    const calls: string[] = []
+    const h = hooks(async () => {
+      calls.push("emit")
+    })
+    await h.start("client")
+    await h.app({ client: {} })
+    expect(calls).toEqual(["emit"])
+  })
+
+  it("fails a server build that never started the environment it names", async () => {
+    //a renamed environment would otherwise write after the asset table exists:
+    //the 404 at /sw.js again, with a green build
+    const h = hooks(async () => {})
+    await expect(
+      h.app({ [DEPLOY_SERVER_ENVIRONMENT]: {} }),
+    ).rejects.toThrow(/built without the app shell and the service worker/)
   })
 })
