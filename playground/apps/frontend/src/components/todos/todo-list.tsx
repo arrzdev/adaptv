@@ -1,7 +1,11 @@
-import { Pressable, Text, View } from "@arrzdev/adaptv/components"
+import {
+  Pressable,
+  Skeleton,
+  Text,
+  View,
+} from "@arrzdev/adaptv/components"
 import { useAppState } from "@arrzdev/adaptv/hooks"
 import { cn } from "@arrzdev/adaptv/utils"
-import { Loader2 } from "lucide-react"
 import type { Transition } from "motion/react"
 import { motion } from "motion/react"
 import type { ReactNode } from "react"
@@ -42,6 +46,10 @@ function useIsPast8pmLocal() {
 }
 
 const EMPTY_CREATURE_SPACE_CLASS = "w-[min(88vw,20rem,60dvh)]"
+
+//how many placeholder rows the loading state shows. three is enough to read as
+//"a list is coming" without overshooting a short one
+const TODO_SKELETON_ROWS = ["a", "b", "c"] as const
 
 //fill the viewport below the page chrome so the empty-state mascot centers in the
 //visible list area instead of pinning to the top of the list container. 20rem is a
@@ -349,7 +357,6 @@ export function TodoList({
   onUnarchive,
   onDelete,
 }: TodoListProps) {
-  const reducedMotion = useAppReducedMotion()
   const isPast8pm = useIsPast8pmLocal()
   //enable the slide only after the first commit, so the initial data load settles
   //in place instead of animating. flipped once on mount (a useEffect, so it fires
@@ -378,18 +385,29 @@ export function TodoList({
   let content: ReactNode
 
   if (isLoading) {
+    //three placeholder rows in the shape of a TodoCard (see todo-card.tsx: a
+    //rounded-md surface, px-4 py-3.5, a checkbox then a single title line), so
+    //the real list lands on top of the same silhouette instead of replacing a
+    //spinner. min-h-48 is kept from the spinner days: the page must not jump
+    //between this state and an error or empty state either. the region speaks
+    //"Loading tasks" once for all three rows; the rows themselves are silent.
     content = (
-      <output
-        className="flex min-h-48 flex-col items-center justify-center"
-        aria-label="Loading tasks"
+      <Skeleton.Region
+        loading
+        label="Loading tasks"
+        className="flex min-h-48 flex-col gap-y-4"
       >
-        <Loader2
-          size={32}
-          strokeWidth={2}
-          aria-hidden
-          className={cn("text-muted", !reducedMotion && "animate-spin")}
-        />
-      </output>
+        {TODO_SKELETON_ROWS.map((key) => (
+          <View
+            key={key}
+            row
+            className="flex min-h-[3.125rem] w-full items-center gap-x-3 rounded-md bg-surface px-4 py-3.5"
+          >
+            <Skeleton className="size-5 shrink-0 rounded-sm" />
+            <Skeleton className="h-4 w-3/5 rounded-md" />
+          </View>
+        ))}
+      </Skeleton.Region>
     )
   } else if (isError) {
     content = (
