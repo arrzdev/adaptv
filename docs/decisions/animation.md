@@ -19,7 +19,7 @@
 | A4 | **`composite: "add"` is forbidden** in adaptv primitives — it silently disables the Chromium compositor. |
 | A5 | **Overlays are ordinary positioned elements, not the top layer.** `overlay` is Chromium-only and unrequested in WebKit — `<dialog>`/popover exits break on iOS permanently. |
 | A6 | **View Transitions are opt-in polish, never the mechanism** for gesture-driven navigation. |
-| A7 | **Ship motion's engine, not its components.** adaptv animates imperatively (`JSAnimation` on a style, `animate()` on a motion value): no `motion`, no `m`, no `LazyMotion`, and no motion context around app content. *Amended 2026-09-14; it was "`LazyMotion` + `m`" (§3.1).* |
+| A7 | **Ship motion's engine, not its components.** adaptv animates imperatively (`JSAnimation` on a style; the drawer's panel through a CSS `@keyframes` rule): no `motion`, no `m`, no `LazyMotion`, no `animate()`, and no motion context around app content. *Amended 2026-09-14; it was "`LazyMotion` + `m`", and the drawer's `animate()` on its motion value was removed the same day (§3.1).* |
 
 ---
 
@@ -218,9 +218,10 @@ KB), the shell's initial JS on every target:
 | `m` + component-owned `LazyMotion` | 686.4 / 228.7 / 200.1 | 685.1 / 228.3 / 199.8 | 68.7 |
 | **`JSAnimation` via `useAnimatedStyle`** | **637.6 / 213.0 / 185.8** | **636.4 / 212.6 / 185.8** | **18.3** |
 
-A served SSR route (`/settings`, `/lab/button`, `/lab/pull-to-refresh`) gains less, about −60 KB raw
+A served SSR route (`/settings`, `/lab/button`, `/lab/pull-to-refresh`) gained less, about −60 KB raw
 against the full component and −11 KB against `m`, because it also preloads the drawer's chunk, whose
-`animate()` carries motion's visual element and sequence code (62 KB of motion there).
+`animate()` carried motion's visual element and sequence code (62 KB of motion there). That call is
+gone; see the drawer paragraph below.
 
 Frame by frame on chromium and webkit (`playground/e2e/button-width-tween.spec.ts`, and the pull
 specs sampled per frame), the width tween and the pull's release spring, refresh snap and close trace
@@ -254,15 +255,34 @@ app's `<MotionConfig>` does not reach adaptv's layers, which follow the OS reduc
 `strict` is not set anywhere: an app's own `motion` components (the playground's `layout` lists) must
 keep working, and inside adaptv's wrappers the app's own `strict` now applies again.
 
-**The drawer.** `drawer-engine.tsx` (`useMotionValue`) and `drawer-motion.ts` (`animate` on a motion
-value) are imperative and wrap no app content in motion context, so they are within this rule.
+**The drawer.** `drawer-engine.tsx` keeps a motion value (`useMotionValue`) as the store its drag
+frames and targets write to, and wraps no app content in motion context. It never animates that value.
+Every panel motion (open, close, the snap back after a short drag, the close after a long one, the
+keyboard snap) is a CSS `@keyframes` rule the engine aims (`tweenDrawerPanelTransform`), because an
+inline transition or a scripted animation settles visibly on iOS
+(`docs/research/composited-transform-authoring.md`).
+
+`drawer-motion.ts` used to also call motion's `animate()` on that value, behind a `mode: "spring"` that
+no drawer transition had: all three (`DEFAULT_`, `DRAWER_SHRINK_`, `DRAWER_CLOSE_TRANSITION`) were
+tweens, the type was not exported from the package, and nothing in `src/` or the playground built one. The branch, its
+`mode`/`velocity`/`bounce` fields and the drag velocity threaded to it were deleted on 2026-09-14, not
+ported to `JSAnimation`: a spring there would put the panel's transform back on the main thread, which
+is the settle the keyframe exists to avoid. Nothing on screen changed. Sampled every frame on chromium
+and webkit, the four motions it could have driven kept the same keyframe aim (from, to, duration,
+easing) run for run, every sample was a `CSSAnimation`, and chromium's samples sit on the analytic
+curve at their own `currentTime` to 0.000 px before and after. The bytes did change: served routes that
+preload the drawer lost 42.1 / 14.5 / 13.2 KB (raw / gzip / brotli) of initial JS, all of it motion's
+visual element, sequence and animation-interface code (motion 62.3 → 21.5 KB raw on `/settings`, `/lab`
+and every drawer lab route; the shell, SPA and native entries do not load the drawer and are unchanged).
 
 The guard is three-part. Biome's `noRestrictedImports` refuses `motion`, `m`, `LazyMotion`,
-`MotionConfig`, `AnimatePresence` and `LayoutGroup` from `motion/react`, and all of
-`motion/react-client`, `motion/react-m` and `framer-motion`, in `src/`.
-`src/components/motion-surface.test.ts` bundles the package's browser entries and fails if a motion
-component, `LazyMotion`, `LazyContext`/`MotionContext`, projection, drag or any feature bundle survives
-tree-shaking. `src/components/app-motion.test.tsx` holds the app-facing behaviour: an app `layout` row
+`MotionConfig`, `AnimatePresence` and `LayoutGroup` from `motion/react`, and `animate`, `useAnimate`,
+`animateMini`, `useAnimateMini`, `animateValue`, `animateMotionValue`, `animateSingleValue`,
+`animateVisualElement` and `createScopedAnimate`, and all of `motion/react-client`, `motion/react-m`
+and `framer-motion`, in `src/`. `src/components/motion-surface.test.ts` bundles the package's browser
+entries and fails if a motion component, `LazyMotion`, `LazyContext`/`MotionContext`, projection, drag
+or any feature bundle survives tree-shaking, or any visual element, `animate`/sequence or animation
+interface module does. `src/components/app-motion.test.tsx` holds the app-facing behaviour: an app `layout` row
 inside either wrapper renders once across wrapper renders, an app's `strict` still throws inside, and
 an app's async features reach elements inside when they load and not before.
 

@@ -48,9 +48,18 @@
                   "LazyMotion",
                   "MotionConfig",
                   "AnimatePresence",
-                  "LayoutGroup"
+                  "LayoutGroup",
+                  "animate",
+                  "useAnimate",
+                  "animateMini",
+                  "useAnimateMini",
+                  "animateValue",
+                  "animateMotionValue",
+                  "animateSingleValue",
+                  "animateVisualElement",
+                  "createScopedAnimate"
                 ],
-                "message": "No motion components or providers in adaptv: they wrap app content in motion's context. Animate imperatively with #adaptv/hooks/use-animated-style or animate() on a motion value (docs/decisions/animation.md A7)."
+                "message": "No motion components, providers or animate(): components wrap app content in motion's context, and animate() ships motion's visual element and sequence code. Animate an element with #adaptv/hooks/use-animated-style, or with CSS (docs/decisions/animation.md A7)."
               },
               "motion/react-client": "No motion components in adaptv; animate imperatively with #adaptv/hooks/use-animated-style (docs/decisions/animation.md A7).",
               "motion/react-m": "No motion components in adaptv; animate imperatively with #adaptv/hooks/use-animated-style (docs/decisions/animation.md A7).",

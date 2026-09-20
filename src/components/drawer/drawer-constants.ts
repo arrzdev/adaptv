@@ -89,31 +89,32 @@ export function dampenDrawerPull(v: number) {
 }
 
 /**
- * Decide whether a downward drag release should close the drawer or snap it back open, and the
- * release velocity to hand the close animation. Shared by the mouse handle path and the whole-sheet
- * touch path so the velocity/distance thresholds can't drift between the two inputs. `draggedDown`
- * is the downward travel in px (>= 0); `dragStartTime` is the drag-start timestamp (or null).
+ * Decide whether a downward drag release should close the drawer or snap it back open. Shared by
+ * the mouse handle path and the whole-sheet touch path so the velocity/distance thresholds can't
+ * drift between the two inputs. `draggedDown` is the downward travel in px (>= 0); `dragStartTime`
+ * is the drag-start timestamp (or null).
  */
-export function resolveDrawerDragRelease(
+export function drawerReleaseCloses(
   draggedDown: number,
   dragStartTime: number | null,
   closedY: number,
-): { shouldClose: boolean; velocityY: number } {
+): boolean {
   const timeTaken = dragStartTime ? Date.now() - dragStartTime : 0
-  const velocityY = timeTaken > 0 ? (draggedDown / timeTaken) * 1000 : 0
-  const velocityPxPerMs = Math.abs(velocityY) / 1000
-  const shouldClose =
+  const velocityPxPerMs =
+    timeTaken > 0 ? Math.abs(draggedDown) / timeTaken : 0
+  return (
     velocityPxPerMs > DRAWER_VELOCITY_THRESHOLD ||
     draggedDown >= closedY * DRAWER_CLOSE_THRESHOLD
-  return { shouldClose, velocityY }
+  )
 }
 
-export type DrawerTransitionMode = "spring" | "tween"
-
+/**
+ * A panel motion: a `cubic-bezier` over `duration` seconds, run by the `@keyframes` rule in
+ * `styles/drawer.css`. There is no other kind. A JS-driven spring branch (motion's `animate()` on
+ * the panel's motion value) sat here unreachable, since every config below is this shape, and was
+ * deleted → docs/decisions/animation.md §3.1.
+ */
 export type DrawerTransition = {
-  mode: DrawerTransitionMode
-  velocity: number
-  bounce: number
   duration: number
   bezier: [number, number, number, number]
 }
@@ -126,9 +127,6 @@ export type DrawerTransition = {
  * on this curve from the panel's live rendered position.
  */
 export const DEFAULT_DRAWER_TRANSITION: DrawerTransition = {
-  mode: "tween",
-  velocity: 0,
-  bounce: 0,
   duration: DRAWER_TRANSITIONS.DURATION,
   bezier: [...DRAWER_TRANSITIONS.EASE],
 }

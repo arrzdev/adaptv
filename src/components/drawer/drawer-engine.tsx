@@ -27,7 +27,7 @@ import {
   DRAWER_CLOSE_TRANSITION,
   DRAWER_SHRINK_TRANSITION,
   dampenDrawerPull,
-  resolveDrawerDragRelease,
+  drawerReleaseCloses,
 } from "#adaptv/components/drawer/drawer-constants"
 import {
   startDrawerFpsSample,
@@ -373,7 +373,7 @@ export function DrawerEngine({
   const dragDisabledRef = useRef(disableDrag)
   const keyboardOpenRef = useRef(false)
   const dragActionsRef = useRef<{
-    closeFromDrag: (dragOffsetY: number, dragVelocity: number) => void
+    closeFromDrag: (dragOffsetY: number) => void
     snapOpen: () => void
     getMetrics: () => DrawerMetrics | null
   } | null>(null)
@@ -1443,23 +1443,19 @@ export function DrawerEngine({
     return updateMetrics() ?? metricsRef.current
   }, [updateMetrics])
 
-  const animateToClosed = useCallback(
-    (dragVelocity?: number) => {
-      const metrics = getMetrics()
-      if (!metrics) return Promise.resolve()
+  const animateToClosed = useCallback(() => {
+    const metrics = getMetrics()
+    if (!metrics) return Promise.resolve()
 
-      return Promise.resolve(
-        animateDrawerY(
-          y,
-          panelRef.current,
-          metrics.closedY,
-          DRAWER_CLOSE_TRANSITION,
-          { dragVelocity },
-        ),
-      )
-    },
-    [getMetrics, y],
-  )
+    return Promise.resolve(
+      animateDrawerY(
+        y,
+        panelRef.current,
+        metrics.closedY,
+        DRAWER_CLOSE_TRANSITION,
+      ),
+    )
+  }, [getMetrics, y])
 
   const requestClose = useCallback(() => {
     if (!openRef.current || isGestureClosingRef.current) return
@@ -1467,7 +1463,7 @@ export function DrawerEngine({
   }, [])
 
   const closeFromDrag = useCallback(
-    (dragOffsetY: number, dragVelocity: number) => {
+    (dragOffsetY: number) => {
       if (!openRef.current || isGestureClosingRef.current) return
 
       const metrics = getMetrics()
@@ -1483,7 +1479,7 @@ export function DrawerEngine({
 
       //the run ends in handleExitComplete once the close effect confirms the settled position
       beginPanelAnimation("drag-close")
-      void animateToClosed(dragVelocity).then(() => {
+      void animateToClosed().then(() => {
         isGestureClosingRef.current = false
         syncBackdropGestureAttributes()
         onRequestCloseRef.current()
@@ -1603,13 +1599,10 @@ export function DrawerEngine({
 
       //close threshold measures against full close travel (closedY), not just content
       //height — tall bottom safe-area insets push closedY past contentHeight.
-      const { shouldClose, velocityY } = resolveDrawerDragRelease(
-        draggedDown,
-        dragStartTime,
-        metrics.closedY,
-      )
-      if (shouldClose) {
-        closeFromDrag(draggedDown, velocityY)
+      if (
+        drawerReleaseCloses(draggedDown, dragStartTime, metrics.closedY)
+      ) {
+        closeFromDrag(draggedDown)
         return
       }
 
@@ -1796,13 +1789,10 @@ export function DrawerEngine({
         return
       }
 
-      const { shouldClose, velocityY } = resolveDrawerDragRelease(
-        draggedDown,
-        dragStartTime,
-        metrics.closedY,
-      )
-      if (shouldClose) {
-        actions.closeFromDrag(draggedDown, velocityY)
+      if (
+        drawerReleaseCloses(draggedDown, dragStartTime, metrics.closedY)
+      ) {
+        actions.closeFromDrag(draggedDown)
         return
       }
       actions.snapOpen()
