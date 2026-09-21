@@ -79,7 +79,7 @@ function LabRouteTintPage() {
           },
           pwa: {
             verdict: "partial",
-            note: "No toolbar, and only one band takes the tint: measured on the iOS simulator, iOS 18.0 shows it at the bottom only and iOS 26.1 at the top only (B33).",
+            note: "No toolbar, and only one band takes the tint: measured on the iOS simulator, iOS 18.0 shows it at the bottom only and iOS 26.1 at the top only (B33). On 18.0 the page runs under a see-through status bar, so the top band is the page's own top: it stays the page background while the page is parked at the top, and the tint reaches it only through the edge fade once the page scrolls.",
           },
           ios: {
             verdict: "partial",
@@ -95,7 +95,7 @@ function LabRouteTintPage() {
 
       <LabSection
         title="What the two outputs say"
-        description="Both must read the route's colour. They are not redundant: the meta tag is the Android/Chrome and iOS ≤ 18 path, and the html paint is the iOS 26+ one, where the tag is inert."
+        description="Both must read the route's colour. They are not redundant: the meta tag is the Android/Chrome and iOS ≤ 18 Safari path, and the html paint is the iOS 26+ one, where the tag is inert."
       >
         <LabRow
           label="declared chromeTint"
@@ -109,12 +109,14 @@ function LabRouteTintPage() {
         <LabRow
           label="html background"
           value={<LabBadge tone="muted">{html ?? "—"}</LabBadge>}
-          hint="what iOS 26 reads, and what paints the safe-area bands"
+          hint="what iOS 26 reads, and what paints the safe-area bands the content leaves"
         />
         <LabCaveat>
           The app's own content covers the edges, so the html paint is only
-          visible in the bands above and below it. That is the point — on
-          iOS 26 those bands ARE the chrome.
+          visible in the bands above and below it. That is the point — in
+          iOS 26 Safari those bands ARE the chrome. The native iOS app, and
+          the installed app on iOS 18, keep the page's own pixels at the
+          top.
         </LabCaveat>
       </LabSection>
 
