@@ -1883,6 +1883,73 @@ describe("Swipeable · a row grabbed in flight", () => {
     expect(steps.slice(8)).toEqual([1, 1, 1, 1])
   })
 
+  it("a spring that lands under the finger is no catch in flight: the dead zone stays, and the row does not trail the finger by it", () => {
+    //The closing spring crosses its last half-pixel with the transform already
+    //parked at "" — the row is home to every eye and every measurement, and
+    //only the engine's own offset still says otherwise. A finger landing in
+    //that window records a `start` the settling spring then contradicts by a
+    //fraction of a pixel. Read as a catch in flight, that fiction re-anchors
+    //the drag onto the finger's position at the lock and so eats the whole
+    //dead zone, and the row trails the finger by it for the rest of the drag
+    const ref = createRef<SwipeableHandle>()
+    const { container } = render(<Row ref={ref} />)
+    const { content } = parts(container)
+    slowDrag(content, -60)
+    settle()
+    expect(tx(content)).toBe(-W)
+    act(() => {
+      ref.current?.close()
+    })
+
+    //advance to the frame where the row reads closed but the spring is still
+    //running — will-change is the engine's own "a spring owns this element"
+    let landing = false
+    for (let i = 0; i < 60 && !landing; i += 1) {
+      advance(FRAME)
+      landing =
+        tx(content) === 0 && content.style.willChange === "transform"
+    }
+    //PREMISE: the window exists at all. Without it the case is not being run
+    expect(landing).toBe(true)
+
+    act(() => {
+      fireEvent.pointerDown(content, {
+        pointerId: 7,
+        pointerType: "touch",
+        button: 0,
+        clientX: ORIGIN.x,
+        clientY: ORIGIN.y,
+      })
+      content.dispatchEvent(touchEvent("touchstart", ORIGIN))
+    })
+    //the spring lands between the touch and the finger's first move — the
+    //sub-pixel carry the drag would otherwise be re-anchored onto
+    for (let i = 0; i < 30 && content.style.willChange !== ""; i += 1) {
+      advance(FRAME)
+    }
+    expect(content.style.willChange).toBe("")
+    expect(tx(content)).toBe(0)
+
+    //one pixel a frame, as in the dead-zone case: the row holds through 8px
+    //and then tracks the finger 1:1 from the touch origin
+    const trace: number[] = []
+    for (let i = 1; i <= 20; i += 1) {
+      advance(FRAME)
+      act(() => {
+        content.dispatchEvent(
+          touchEvent("touchmove", { x: ORIGIN.x - i, y: ORIGIN.y }),
+        )
+      })
+      trace.push(tx(content))
+    }
+    //a settling sub-pixel is allowed to survive in `start`; a swallowed dead
+    //zone is eight whole pixels and is not
+    expect(trace.map((v) => Math.round(v))).toEqual([
+      0, 0, 0, 0, 0, 0, 0, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17,
+      -18, -19, -20,
+    ])
+  })
+
   it("released still a hair short of open, the row settles from rest: the interrupted spring's speed is not the finger's", () => {
     //the same catch in flight, early, while the spring is fast: the finger
     //locks the row within two frames, walks it to a few pixels short of
