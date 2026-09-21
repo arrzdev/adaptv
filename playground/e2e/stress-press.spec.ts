@@ -151,15 +151,44 @@ test.describe("press engine under touch stress (chromium, CDP)", () => {
     const cdp = await setup(page)
     const { button, point } = await aimAt(page, ENGINE_BUTTON)
     const before = await logCount(page)
+    //the premise is read where it matters, in the page: the releases the engine
+    //saw, timed by the page's own clock. A wall-clock bound on the driver loop
+    //measured the machine (two CDP round trips per tap under load) and not the
+    //mash, and failed at 902 ms against 900 on a loaded host
+    await button.evaluate((el) => {
+      const w = window as unknown as { __releases?: number[] }
+      w.__releases = []
+      el.addEventListener("pointerup", () => {
+        w.__releases?.push(performance.now())
+      })
+    })
 
-    const started = Date.now()
     for (let i = 0; i < 20; i += 1) {
       await touch(cdp, "touchStart", point)
       await touch(cdp, "touchEnd")
       await page.waitForTimeout(15)
     }
-    const elapsed = Date.now() - started
-    expect(elapsed, "the mash must be a mash").toBeLessThan(900)
+    const gaps = await page.evaluate(() => {
+      const t = (window as unknown as { __releases?: number[] }).__releases
+      if (!t) throw new Error("the release listener is gone")
+      return t.slice(1).map((v, i) => v - (t[i] ?? v))
+    })
+    expect(
+      gaps.length,
+      "premise: twenty releases reached the engine",
+    ).toBe(19)
+    const sorted = [...gaps].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)] ?? Number.NaN
+    test.info().annotations.push({
+      type: "mash-gaps",
+      description: `median ${median.toFixed(1)} ms, max ${sorted.at(-1)?.toFixed(1)} ms between releases`,
+    })
+    //a mash is taps that arrive faster than the press visual's own 100 ms
+    //show-delay: each release lands while the previous press is still deferred
+    expect(
+      median,
+      "the mash must be a mash: releases closer than the 100 ms show-delay",
+    ).toBeLessThan(100)
 
     await expect.poll(() => logCount(page)).toBe(before + 20)
     await expect
