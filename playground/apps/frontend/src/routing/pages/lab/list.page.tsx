@@ -30,6 +30,11 @@ function LabListPage() {
   const [rows, setRows] = useState(() => makeRows(2000))
   const [empty, setEmpty] = useState(false)
   const [endReached, setEndReached] = useState(0)
+  //the callback's identity is the whole point of one check: an app that
+  //passes an inline `onEndReached` hands the list a new function every render,
+  //including the render its own counter causes. Inline mode counts and appends
+  //nothing, so the list sits at the same end: one arrival, one call
+  const [inlineCallback, setInlineCallback] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const [domRows, setDomRows] = useState<number | null>(null)
 
@@ -65,6 +70,7 @@ function LabListPage() {
           "Read “rows in the DOM” before touching anything: it must be a small number (roughly what fits plus the overscan), never the row count.",
           "Fling the list hard to the bottom. Watch the DOM count — it must stay small the whole way.",
           "Keep scrolling at the bottom: onEndReached fires and 500 more rows are appended, up to 4 000. The counter above must tick up by one per arrival, not continuously.",
+          "Switch the callback to inline and scroll to the bottom again: a fresh callback identity every render must not turn a list parked at its end into a stream of calls. The counter ticks once.",
           "Check for blank gaps during a fast fling. A row that has not measured yet may flash at the estimated height; a persistent white band is a different thing.",
           "Press “empty the list”. The empty state must replace the scroller entirely — not appear inside it.",
         ]}
@@ -120,6 +126,11 @@ function LabListPage() {
           <LabButton onClick={() => setRows(makeRows(2000))}>
             reset to 2 000
           </LabButton>
+          <LabButton onClick={() => setInlineCallback((on) => !on)}>
+            {inlineCallback
+              ? "callback: inline (new identity per render)"
+              : "callback: stable (useCallback)"}
+          </LabButton>
         </LabActions>
       </LabSection>
 
@@ -132,7 +143,11 @@ function LabListPage() {
             data={empty ? [] : rows}
             keyExtractor={(row) => row.id}
             estimateSize={56}
-            onEndReached={onEndReached}
+            onEndReached={
+              inlineCallback
+                ? () => setEndReached((n) => n + 1)
+                : onEndReached
+            }
             fade
             className="h-full rounded-md bg-background"
             emptyState={
