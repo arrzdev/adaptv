@@ -143,8 +143,12 @@ route chunks** (Workbox precache manifest — adaptv builds this). Combined with
 > everyone. Generating makes user-agnosticism structural rather than a rule someone has to remember.
 >
 > The shell carries the pre-paint platform + theme stamps, inlined critical CSS, the hashed stylesheet
-> and entry, and an empty `#root`. Asset names come from Vite's manifest (the plugin turns
-> `build.manifest` on), so they track content hashes.
+> and entry, and an empty `#root`. When the app has a `splashScreen` it also carries the launch-height
+> script, as the server-rendered document does, placed after the stylesheet link because it reads the
+> top inset. A boot from the shell is a fresh client root, which clears `<html>`'s attributes, so the
+> shell layout puts the stamps and the frozen height back in a layout effect (`restoreLaunchHeight`).
+> Asset names come from Vite's manifest (the plugin turns `build.manifest` on), so they track content
+> hashes.
 >
 > **One structural fix this forced:** `getUiThemeInitScript` lived in `hooks/use-theme.ts`, which imports
 > React and transitively the Capacitor native-theme accessor. A Node-side Vite plugin cannot import
