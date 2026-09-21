@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
-  BAND_DONOR_ATTR,
   getChromeTint,
   getChromeTintBase,
   restoreChromeTint,
@@ -114,12 +113,15 @@ function stubStandalone() {
   })) as unknown as typeof window.matchMedia
 }
 
+/** The strip is found by its attribute — the module keeps the name private. */
+const BAND_DONOR = "[data-adaptv-band-donor]"
+
 function donor(): HTMLElement | null {
-  return document.body.querySelector(`[${BAND_DONOR_ATTR}]`)
+  return document.body.querySelector(BAND_DONOR)
 }
 
 function donors(): number {
-  return document.body.querySelectorAll(`[${BAND_DONOR_ATTR}]`).length
+  return document.body.querySelectorAll(BAND_DONOR).length
 }
 
 describe("getChromeTint / setChromeTint", () => {

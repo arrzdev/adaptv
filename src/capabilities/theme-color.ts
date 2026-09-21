@@ -141,14 +141,14 @@ export function subscribeChromeTintBase(listener: () => void): () => void {
  * write through this module, and the band has to agree with every one of them. One writer, two
  * outputs.
  */
-export const BAND_DONOR_ATTR = "data-adaptv-band-donor"
+const BAND_DONOR_ATTR = "data-adaptv-band-donor"
 
 /**
  * The strip is measured against WebKit's own thresholds, not styled: taller than the 10px
  * "thin border" cut-off, wider than 90% of the viewport, and above the 0.1 opacity floor with
  * a margin for float rounding on either side.
  */
-export const BAND_DONOR_STYLE =
+const BAND_DONOR_STYLE =
   "position:fixed;top:0;left:0;right:0;height:12px;opacity:0.12;pointer-events:none;z-index:2147483647"
 
 let donor: HTMLElement | null = null
