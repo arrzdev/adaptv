@@ -48,7 +48,8 @@ import {
  * `"held"` — the screen is being kept on.
  * `"unsupported"` — no wake-lock API here; asking again cannot help.
  * `"rejected"` — the API exists but refused (low battery, power-save mode, or
- * the document was not visible); retryable once the condition clears.
+ * the document was not visible), or the lock was released before the request
+ * resolved; retryable once the condition clears.
  */
 export type KeepAwakeOutcome = "held" | "unsupported" | "rejected"
 
@@ -127,6 +128,19 @@ async function acquire(): Promise<KeepAwakeOutcome> {
   if (!api) return "unsupported"
   try {
     const next = await api.request("screen")
+    //the answer outlived what asked for it: the release ran while the request
+    //was in flight (StrictMode's mount → cleanup → remount does this), or a
+    //second request already won. Either way this sentinel is surplus — let it
+    //go, or it holds the platform lock with nothing left to release it
+    if (!wanted || isKeepAwakeActive()) {
+      //a refused release of a surplus sentinel is nobody's error to see
+      next.release().catch(() => {})
+      return wanted ? "held" : "rejected"
+    }
+    //the platform let the lock go before its answer arrived (the document hid
+    //in between): there is nothing to hold, and the visibility re-acquire will
+    //ask again, so this is the retryable outcome
+    if (next.released) return "rejected"
     sentinel = next
     //the platform releases the lock itself whenever the document hides; the
     //sentinel's own event is the only notification, so mirror it into our state

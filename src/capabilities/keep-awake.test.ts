@@ -208,3 +208,133 @@ describe("keep-awake — holding and releasing", () => {
     expect(request).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("keep-awake — a request that resolves late", () => {
+  /** A wake-lock API whose every request waits for the test to answer it. */
+  function deferredWakeLock(): {
+    request: ReturnType<typeof vi.fn>
+    resolvers: Array<(sentinel: FakeSentinel) => void>
+  } {
+    const resolvers: Array<(sentinel: FakeSentinel) => void> = []
+    const request = vi.fn(
+      () =>
+        new Promise<FakeSentinel>((resolve) => {
+          resolvers.push(resolve)
+        }),
+    )
+    stubWakeLock(request)
+    return { request, resolvers }
+  }
+
+  it("lets go of a sentinel that arrives after the release", async () => {
+    //request, then release before the platform answers: the intent is gone,
+    //so the late sentinel must not become a lock nothing will ever release
+    forceNative(false)
+    const { request, resolvers } = deferredWakeLock()
+
+    const pending = requestKeepAwake()
+    expect(request).toHaveBeenCalledTimes(1)
+    await releaseKeepAwake()
+    expect(isKeepAwakeActive()).toBe(false)
+
+    const late = fakeSentinel()
+    resolvers[0](late)
+    await expect(pending).resolves.toBe("rejected")
+    expect(isKeepAwakeActive()).toBe(false)
+    expect(late.released).toBe(true)
+  })
+
+  it("swallows a refused release of the surplus sentinel", async () => {
+    //the platform can refuse to release a sentinel it already let go of;
+    //nobody asked for that sentinel any more, so its rejection reaches no one
+    forceNative(false)
+    const { resolvers } = deferredWakeLock()
+    const refused: unknown[] = []
+    const onRefused = (reason: unknown) => refused.push(reason)
+    process.on("unhandledRejection", onRefused)
+
+    const pending = requestKeepAwake()
+    await releaseKeepAwake()
+    const late = fakeSentinel()
+    late.release = () => {
+      late.released = true
+      return Promise.reject(new Error("NotAllowedError"))
+    }
+    resolvers[0](late)
+    await expect(pending).resolves.toBe("rejected")
+    //an unhandled rejection is reported a macrotask later
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    process.off("unhandledRejection", onRefused)
+    expect(refused).toEqual([])
+    expect(late.released).toBe(true)
+  })
+
+  it("does not install a sentinel that arrives already released", async () => {
+    //the document hid between the request and the answer, so the platform
+    //released the lock before handing it over: nothing is held, and the
+    //re-acquire on the next visibilitychange is the retry
+    forceNative(false)
+    const { resolvers } = deferredWakeLock()
+    const pending = requestKeepAwake()
+    const gone = fakeSentinel()
+    gone.released = true
+    resolvers[0](gone)
+    await expect(pending).resolves.toBe("rejected")
+    expect(isKeepAwakeActive()).toBe(false)
+  })
+
+  it("holds exactly one sentinel when two requests overlap", async () => {
+    //the second resolve used to overwrite the first sentinel, which then
+    //leaked on the platform until the document hid
+    forceNative(false)
+    const { request, resolvers } = deferredWakeLock()
+
+    const first = requestKeepAwake()
+    const second = requestKeepAwake()
+    expect(request).toHaveBeenCalledTimes(2)
+
+    const a = fakeSentinel()
+    const b = fakeSentinel()
+    resolvers[0](a)
+    resolvers[1](b)
+    await expect(first).resolves.toBe("held")
+    await expect(second).resolves.toBe("held")
+
+    expect(isKeepAwakeActive()).toBe(true)
+    expect([a, b].filter((s) => !s.released)).toHaveLength(1)
+    expect(a.released).toBe(false)
+    expect(b.released).toBe(true)
+
+    await releaseKeepAwake()
+    expect(a.released).toBe(true)
+    expect(isKeepAwakeActive()).toBe(false)
+  })
+
+  it("survives the StrictMode mount → cleanup → remount sequence", async () => {
+    //useKeepAwake({ enabled: true }) under React 19 StrictMode does exactly
+    //this: request (pending), release, request again (pending) — and both
+    //platform answers land afterwards
+    forceNative(false)
+    const { request, resolvers } = deferredWakeLock()
+
+    const mount = requestKeepAwake()
+    void releaseKeepAwake()
+    const remount = requestKeepAwake()
+    expect(request).toHaveBeenCalledTimes(2)
+
+    const a = fakeSentinel()
+    const b = fakeSentinel()
+    resolvers[0](a)
+    resolvers[1](b)
+    await expect(mount).resolves.toBe("held")
+    await expect(remount).resolves.toBe("held")
+
+    expect(isKeepAwakeActive()).toBe(true)
+    expect([a, b].filter((s) => !s.released)).toHaveLength(1)
+
+    await releaseKeepAwake()
+    expect(a.released).toBe(true)
+    expect(b.released).toBe(true)
+    expect(isKeepAwakeActive()).toBe(false)
+  })
+})

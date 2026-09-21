@@ -398,6 +398,14 @@ export function onNotificationOpened(
   return webOpenSubscription(handler)
 }
 
+//A removal the bridge refuses (the plugin gone from this binary under an OTA
+//bundle, an OS error) is fire-and-forget inside the unsubscribe, so nothing
+//would handle it: it would reach the window's `unhandledrejection` event, and
+//with it the console and any error reporter the app installed, on every unmount
+//of a screen that listens. There is nothing left to do about a handle that
+//cannot be removed, so the refusal is dropped.
+const ignoreBridgeRejection = () => {}
+
 function nativeOpenSubscription(
   handler: (opened: OpenedNotification) => void,
 ): () => void {
@@ -425,9 +433,9 @@ function nativeOpenSubscription(
 
   return () => {
     live = false
-    pending.then((h) => {
-      if (h && !live) h.remove()
-    })
+    void pending
+      .then((h) => (h && !live ? h.remove() : undefined))
+      .catch(ignoreBridgeRejection)
   }
 }
 

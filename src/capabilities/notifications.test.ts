@@ -505,3 +505,82 @@ describe("notifications — a tap comes back", () => {
     expect(LocalNotifications.addListener).not.toHaveBeenCalled()
   })
 })
+
+/** Every rejection nobody handled while `run` executed, read after the turn ends. */
+async function unhandledDuring(
+  run: () => void | Promise<void>,
+): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on("unhandledRejection", listener)
+  try {
+    await run()
+    //Node decides a rejection went unhandled only once the microtask queue has
+    //drained, so leave the turn (twice: a rejection can be chained) before reading
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  } finally {
+    process.off("unhandledRejection", listener)
+  }
+  return seen
+}
+
+type Handle = { removed: number; remove: () => Promise<void> }
+
+/**
+ * A plain function, not `vi.fn`: the mock attaches its own settle handlers to
+ * the promise it returns, which counts as handling the rejection and would make
+ * the assertion below pass against the very leak it is here to catch.
+ */
+function refusingHandle(): Handle {
+  const handle: Handle = {
+    removed: 0,
+    remove: () => {
+      handle.removed += 1
+      return Promise.reject(new Error("bridge: no plugin"))
+    },
+  }
+  return handle
+}
+
+describe("onNotificationOpened — native, over a bridge that refuses the removal", () => {
+  //`remove()` is fire-and-forget inside the unsubscribe, so nothing downstream
+  //would handle its rejection: it would reach the window's `unhandledrejection`
+  //event, the console and any error reporter the app installed — on every
+  //unmount of a screen that listens, under a binary whose plugin is gone.
+  it("lets no rejected remove escape when the unsubscribe follows the handle", async () => {
+    native()
+    const handle = refusingHandle()
+    vi.mocked(LocalNotifications.addListener).mockResolvedValue(
+      handle as never,
+    )
+    const escaped = await unhandledDuring(async () => {
+      const stop = onNotificationOpened(() => {})
+      //the handle has resolved by the time the component leaves
+      await Promise.resolve()
+      stop()
+    })
+    expect(handle.removed).toBe(1)
+    expect(escaped).toEqual([])
+  })
+
+  it("lets no rejected remove escape when the unsubscribe beats the handle", async () => {
+    native()
+    const handle = refusingHandle()
+    let deliver: (handle: Handle) => void = () => {}
+    vi.mocked(LocalNotifications.addListener).mockReturnValue(
+      new Promise<Handle>((resolve) => {
+        deliver = resolve
+      }) as never,
+    )
+    const escaped = await unhandledDuring(async () => {
+      const stop = onNotificationOpened(() => {})
+      //unmounted before the bridge answered; the late handle must still be
+      //removed, and its refusal must still go nowhere
+      stop()
+      deliver(handle)
+    })
+    expect(handle.removed).toBe(1)
+    expect(escaped).toEqual([])
+  })
+})

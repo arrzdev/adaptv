@@ -17,7 +17,20 @@ export type CreateTodoInput = {
   dueAt?: Date
 }
 
-export async function createTodo(input: CreateTodoInput): Promise<Todo> {
+//creates run one after another. the position is a read (the current max) and
+//then a write (max+1), and two creates in flight at once both read before either
+//writes, so both land on the same slot and the custom order has two tasks in one
+//place. queueing each create behind the one before it makes the read see the
+//write. a create that fails does not hold the queue.
+let createQueue: Promise<unknown> = Promise.resolve()
+
+export function createTodo(input: CreateTodoInput): Promise<Todo> {
+  const created = createQueue.then(() => insertTodo(input))
+  createQueue = created.catch(() => undefined)
+  return created
+}
+
+async function insertTodo(input: CreateTodoInput): Promise<Todo> {
   //append to the end of the custom order; max+1 survives gaps from deletes
   const existing = (await store.todos.query()) as TodoDoc[]
   const maxPosition = existing.reduce(
