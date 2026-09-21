@@ -85,6 +85,12 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   `hw.keyboard=no`): open a drawer whose input is `autoFocus` — the whole sheet lifts above the keyboard
   immediately, no double-shift, dismisses on scroll. Retest the web `visualViewport` path (2/4) after any
   keyboard change.
+- **`AvoidKeyboard` looks twice.** Its aim picks a scrollTop on the focus frame, so content that lands
+  above the field during the smooth scroll (suggestions, a validation message) left the field 76px under
+  the box; when that scroll ends (`scrollend`, or the caret patch's 120ms quiet window where it is
+  missing or the scroll never starts) it aims once more from fresh geometry, unless the user touched or
+  wheeled, or focus moved.
+  **Test:** `/lab/avoid-keyboard` → *Content arriving mid-scroll* → Run: the clearance must read >= 0.
 - **…and the sheet answers the keyboard by GROWING, not by moving.** The drawer is effectively
   infinitely tall (`bottom: -excess` + a matching spacer) and only ever grows to what it needs, so
   a keyboard is not something to translate away from — it is a slice of the bottom that stops being
@@ -155,13 +161,16 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   - Found on the way, and not an anchoring effect: both surfaces aim from the geometry at the
     moment they scroll, and correct a change above the field only if they aim again afterwards.
     The drawer re-aims 420ms after the raise and AvoidKeyboard when the keyboard raise lands, which
-    is why the spec's mid-scroll insertion lands clear. A change after the last aim is not
-    corrected. Inserted at 450ms, just after the drawer's re-aim, it leaves the field `clearance
+    is why the spec's mid-scroll insertion lands clear. AvoidKeyboard now also takes one more look
+    when each of its smooth scrolls ends (see *`AvoidKeyboard` looks twice* above), so a change during
+    its last scroll is corrected too. The drawer still has the gap after its 420ms re-aim: a change
+    after that is not corrected. Inserted at 450ms, it leaves the field `clearance
     -88` (`scrollTop` 871) on chromium with anchoring on or off, because its slower smooth scroll is
     still travelling and overwrites the adjustment; on webkit the scroll has already stopped, so
     anchoring keeps the field 12px clear (971), and only the control lands at -88. AvoidKeyboard
-    with the keyboard already up (a field switch, which fires no keyboard event) lands
-    `clearance -76` on both engines, anchoring on or off.
+    with the keyboard already up (a field switch, which fires no keyboard event) used to land
+    `clearance -76` on both engines, anchoring on or off; its look at the end of the scroll now
+    lands it at its 24px buffer.
 - **Test (iOS, target 2):** `xcrun simctl openurl booted "http://localhost:<port>/lab/drawer-keyboard"`,
   tap *Open drawer*, screenshot. **(Android, target 3):** `adb reverse tcp:<port> tcp:<port>` then
   `adb shell am start -a android.intent.action.VIEW -d "http://localhost:<port>/lab/drawer-keyboard"`.
