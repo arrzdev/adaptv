@@ -15,10 +15,11 @@
  *
  * ⚠︎ Three limits, all of them the platform's and none of them fixable here:
  *
- * - **iOS 26.0–26.5 ignores the tag entirely** (`docs/decisions/register.md` B17). WebKit dropped it and now
- *   derives the top-bar tint from the rendered `html`/`body` background near the viewport edge,
- *   so this is the **Android/Chrome + iOS ≤ 18** path. It is a progressive enhancement: where the
- *   tag is inert, callers get a no-op, not a broken frame.
+ * - **iOS 26 ignores the tag entirely** (`docs/decisions/register.md` B17). WebKit dropped it and now
+ *   derives each band from the fixed element touching that edge of the viewport (B33). The tag
+ *   alone is therefore the **Android/Chrome + iOS ≤ 18** path; on an iOS 26 browser tab the same
+ *   colour is ALSO painted onto a band donor — see {@link bandDonor} — which is the one platform
+ *   branch in this file, and it exists because that element is on the page, not in the head.
  * - **Firefox has never supported it.**
  * - **The top bar only.** Android's navigation bar tracks the *device* theme and cannot be made
  *   to follow the app on web or PWA — measured across four Chrome versions in `docs/decisions/register.md` B29.
@@ -35,6 +36,7 @@ import type { Rgb } from "#adaptv/utils/color"
 import { formatHex, mixRgb, parseCssColor } from "#adaptv/utils/color"
 import type { EasingBezier } from "#adaptv/utils/easing"
 import { easingValueAtX } from "#adaptv/utils/easing"
+import { isInstalledApp, isIOS } from "#adaptv/utils/platform"
 
 export type ChromeTintOptions = {
   /** Seconds, matching the CSS/`DrawerTransition` convention. Default `0.3`. */
@@ -107,6 +109,73 @@ export function subscribeChromeTintBase(listener: () => void): () => void {
   }
 }
 
+/**
+ * Marks the band donor: a 12px fixed strip at the top of the page whose `background-color` is
+ * written in step with the meta, so an iOS 26 Safari tab shows the same tint the meta would have
+ * given iOS 18.
+ *
+ * Why an element at all: iOS 26 Safari paints its top band from the `position: fixed` element
+ * WebKit hit-tests 4px inside the top edge (`LocalFrameView::fixedContainerEdges`, B33). A
+ * viewport-sized dimming layer — every drawer backdrop — is read ONCE and then latched for as
+ * long as it is the element at that edge, which is why the band snapped to full dim at the start
+ * of the open and hung ~140ms behind the close (`register.md` B33, 2026-09-21). A full-width strip
+ * thinner than the viewport is a plain candidate instead: no latch, and every repaint of it
+ * schedules a re-read, so the band follows the strip frame by frame. Measured on the iOS 26.1
+ * simulator, both directions, tracking the scrim exactly.
+ *
+ * Why it is not visible: WebKit reads the strip's `background-color`, not its composited pixels,
+ * and only skips a box under `opacity: 0.1` — so the strip is painted at 12% and nobody sees 12%
+ * of the chrome colour over the first 12px of a page that is almost always that colour anyway.
+ * It is `pointer-events: none` (the hit-test ignores that property on its first pass) and sits at
+ * the top of the stacking order so the backdrop never covers the point WebKit samples.
+ *
+ * Why an iOS browser tab, and not "iOS 26": an installed web app and a Capacitor build render
+ * under the status bar with no band to donate to, and Android reads the meta, so those have no
+ * audience for a strip. iOS ≤ 18 reads the meta too, but it cannot be told apart: Safari 26
+ * reports itself as `iPhone OS 18_7` (measured on the 26.1 simulator), so `isOSVersionAtLeast`
+ * cannot see 26 and a version gate would silently switch the fix off on the one OS it is for.
+ * On iOS 18 the strip is a 12px layer repainted only while the tint moves — the price of not
+ * guessing.
+ *
+ * Why here and not in the drawer: the drawer, `useChromeTint` and a route's `chromeTint` all
+ * write through this module, and the band has to agree with every one of them. One writer, two
+ * outputs.
+ */
+const BAND_DONOR_ATTR = "data-adaptv-band-donor"
+
+/**
+ * The strip is measured against WebKit's own thresholds, not styled: taller than the 10px
+ * "thin border" cut-off, wider than 90% of the viewport, and above the 0.1 opacity floor with
+ * a margin for float rounding on either side.
+ */
+const BAND_DONOR_STYLE =
+  "position:fixed;top:0;left:0;right:0;height:12px;opacity:0.12;pointer-events:none;z-index:2147483647"
+
+let donor: HTMLElement | null = null
+
+function wantsBandDonor(): boolean {
+  return isIOS() && !isInstalledApp()
+}
+
+/** The donor, created on the first paint that has an audience; `null` everywhere else. */
+function bandDonor(): HTMLElement | null {
+  if (donor?.isConnected) return donor
+  if (typeof document === "undefined" || !document.body) return null
+  if (!wantsBandDonor()) return null
+  const el = document.createElement("div")
+  el.setAttribute(BAND_DONOR_ATTR, "")
+  el.setAttribute("aria-hidden", "true")
+  el.style.cssText = BAND_DONOR_STYLE
+  document.body.appendChild(el)
+  donor = el
+  return el
+}
+
+function removeBandDonor(): void {
+  donor?.remove()
+  donor = null
+}
+
 function metaElement(): HTMLMetaElement | null {
   if (typeof document === "undefined") return null
   return document.getElementById(
@@ -148,10 +217,16 @@ export function setChromeTint(color: string): void {
   writeMeta(color)
 }
 
+/**
+ * The one place the tint lands: the meta for the browsers that read it, the band donor for the
+ * one that does not. Nothing writes either output on its own.
+ */
 function writeMeta(color: string) {
   const meta = metaElement()
   if (!meta) return
   meta.content = color
+  const strip = bandDonor()
+  if (strip) strip.style.backgroundColor = color
 }
 
 /**
@@ -167,6 +242,7 @@ export function setThemeColorBase(color: string | null): void {
   base = color
   if (color === null) {
     overridden = false
+    removeBandDonor()
   } else if (!overridden) {
     writeMeta(color)
   }
@@ -182,7 +258,7 @@ export function getChromeTintBase(): string | null {
 
 /**
  * Hand the chrome back to the app's theme, along a curve. A no-op when nothing took it — so a
- * drawer that never dimmed the tint (an installed app, or iOS 26) does not have to know that.
+ * drawer that never dimmed the tint (an installed app) does not have to know that.
  */
 export function restoreChromeTint(
   options: Omit<ChromeTintOptions, "from"> = {},
@@ -257,7 +333,7 @@ export function transitionChromeTint(
     //near colours round to the tint already on the tag — skip the write and the invalidation
     if (hex === last) return
     last = hex
-    if (meta) meta.content = hex
+    writeMeta(hex)
   }
 
   function step(now: number) {
