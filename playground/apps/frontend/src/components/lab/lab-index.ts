@@ -213,6 +213,13 @@ const COMPONENTS = [
     summary: "UiNotFound · OrientationGuard · PwaSplashOverlay",
     isNew: true,
   },
+  {
+    to: "/lab/stress-display",
+    title: "Display stress",
+    summary:
+      "100 images, 200 spinners, a bar driven every frame, 300 mount cycles",
+    isNew: true,
+  },
 ] as const satisfies readonly LabEntry[]
 
 const FRAMEWORK = [

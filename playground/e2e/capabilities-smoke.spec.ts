@@ -78,8 +78,15 @@ const PAGES = [
   ["/lab/hooks", "Standalone hooks"],
 ] as const
 
-/** Visits `route` and fails on any uncaught or unexcused console error. */
-async function smoke(page: Page, route: string, title: string) {
+/**
+ * Visits `route` and fails on any uncaught or unexcused console error.
+ *
+ * Named `goto…` on purpose: the route inventory guard (`e2e/lab-inventory.spec.ts`)
+ * counts a visit only through a call named `goto…` or `navigate…`, and the rows of
+ * `PAGES` reach the page through this helper alone — under any other name the nine
+ * routes only this file walks read as never visited.
+ */
+async function gotoAndSmoke(page: Page, route: string, title: string) {
   const errors: string[] = []
   page.on("pageerror", (e) => errors.push(`uncaught: ${String(e)}`))
   page.on("console", (message) => {
@@ -105,7 +112,7 @@ test.describe("Capabilities smoke", () => {
     test(`${title} mounts and throws nothing uncaught`, async ({
       page,
     }) => {
-      await smoke(page, route, title)
+      await gotoAndSmoke(page, route, title)
     })
   }
 
@@ -115,6 +122,6 @@ test.describe("Capabilities smoke", () => {
   test("App state with a fragment in the URL throws nothing uncaught", async ({
     page,
   }) => {
-    await smoke(page, "/lab/app-state#from-a-link", "App state")
+    await gotoAndSmoke(page, "/lab/app-state#from-a-link", "App state")
   })
 })
