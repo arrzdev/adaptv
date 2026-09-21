@@ -529,6 +529,13 @@ test.describe("1 · an open/close mash faster than the slide", () => {
  * handle), then jumped to the finger's offset the instant the keyframe ended. The takeover now
  * reads the painted position, drops the keyframe at that value and measures the finger from
  * there; this case is the failing-before proof and stays as the regression test.
+ *
+ * What it still shows on chromium, as a FINDING: between the touchstart and the commit the slide
+ * runs on under the finger. Chromium's input pipeline delivers no touchmove inside its own touch
+ * slop, so the engine's 4px commit cannot happen before the browser's ~15px one, and for that
+ * stretch the sheet is still the keyframe's. A finger landing on a moving sheet stopping it where
+ * it is (UIKit's touch-down on a decelerating scroll) is a separate design — it would have to
+ * resume the slide on a lift that never became a drag — and is not made here.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 const TRAVEL_PX = 160
@@ -572,7 +579,11 @@ test.describe("2 · a drag started during the open slide", () => {
     await driver.start(from)
     const samples: number[] = []
     const slides: string[] = []
-    let dragging = ""
+    //the move at which the engine took the sheet over (it flips the overlay's data-dragging
+    //at the commit). Chromium's real input pipeline swallows touchmoves inside its own touch
+    //slop (about 15px), so under CDP the first 13px step delivers nothing and the commit lands
+    //on move 2; webkit's synthetic events reach the engine from move 1.
+    let committedAt = 0
     let point = from
     for (let step = 1; step <= STEPS; step += 1) {
       point = { x: from.x, y: from.y + (TRAVEL_PX * step) / STEPS }
@@ -580,7 +591,12 @@ test.describe("2 · a drag started during the open slide", () => {
       const state = await readPanel(page)
       samples.push(state?.translateY ?? Number.NaN)
       slides.push(state?.slide?.playState ?? "none")
-      if (step === 2) dragging = (await readOverlay(page))?.dragging ?? ""
+      if (
+        committedAt === 0 &&
+        (await readOverlay(page))?.dragging === "true"
+      ) {
+        committedAt = step
+      }
       await page.waitForTimeout(12)
     }
     const beforeEnd = (await readTranslateY(page)) ?? Number.NaN
@@ -589,28 +605,42 @@ test.describe("2 · a drag started during the open slide", () => {
     await page.waitForTimeout(50)
     const laterAfterEnd = (await readTranslateY(page)) ?? Number.NaN
 
-    //premise: the drag really committed (the engine flips the overlay's data-dragging at commit)
-    expect(dragging, "premise: the drag committed on the sheet").toBe(
-      "true",
-    )
-    //the first move already clears the 4px slop, so the drag rebases there: the finger travel
-    //that should have moved the sheet is everything after move 1
+    //premise: the drag really committed, and early — by the third move at the latest
+    expect(
+      committedAt,
+      `premise: the drag committed on the sheet within the first moves (committed at move ${committedAt || "never"})`,
+    ).toBeGreaterThan(0)
+    expect(
+      committedAt,
+      "premise: the commit was not late",
+    ).toBeLessThanOrEqual(3)
+    //the drag rebases at the commit move, so the finger travel that must have moved the sheet
+    //is everything after it; what happened BEFORE the commit (the slide still running under a
+    //finger that is down but whose moves the browser has not delivered) is reported, not
+    //judged — see the finding in the case header
     const perMove = TRAVEL_PX / STEPS
-    const fingerAfterCommit = TRAVEL_PX - perMove
-    const verdict = judgeFollowing(samples, fingerAfterCommit)
+    const fingerAfterCommit = TRAVEL_PX - perMove * committedAt
+    const verdict = judgeFollowing(
+      samples.slice(committedAt - 1),
+      fingerAfterCommit,
+    )
+    const preCommit = samples.slice(0, committedAt - 1)
     report(
-      `touch drag mid-open (${driver.kind}): slide at ${at.toFixed(0)}ms, y at touchstart ${yAtStart.toFixed(1)}; ` +
-        `translateY per move: ${fmt(samples)}; slide per move: ${slides.join(",")}; ` +
+      `touch drag mid-open (${driver.kind}): slide at ${at.toFixed(0)}ms, y at touchstart ${yAtStart.toFixed(1)}, committed at move ${committedAt}` +
+        (preCommit.length > 0
+          ? ` (the slide ran on under the finger before it: ${fmt(preCommit)})`
+          : "") +
+        `; translateY per move: ${fmt(samples)}; slide per move: ${slides.join(",")}; ` +
         `before touchend ${beforeEnd.toFixed(1)}, right after ${rightAfterEnd.toFixed(1)}, +50ms ${laterAfterEnd.toFixed(1)}`,
     )
 
     expect(
       verdict.decreases,
-      `the sheet moved UP against a finger moving down on ${verdict.decreases} of ${STEPS - 1} moves — translateY per move: ${fmt(samples)}`,
+      `the sheet moved UP against a finger moving down on ${verdict.decreases} of ${STEPS - committedAt} moves after the commit — translateY per move: ${fmt(samples)}`,
     ).toBe(0)
     expect(
       verdict.gained,
-      `by the last move the sheet had gained ${verdict.gained.toFixed(1)}px for ${fingerAfterCommit.toFixed(1)}px of finger — translateY per move: ${fmt(samples)}`,
+      `from the commit the sheet had gained ${verdict.gained.toFixed(1)}px for ${fingerAfterCommit.toFixed(1)}px of finger — translateY per move: ${fmt(samples)}`,
     ).toBeGreaterThanOrEqual(fingerAfterCommit - LAG_PX)
   })
 })
