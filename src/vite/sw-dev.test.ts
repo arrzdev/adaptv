@@ -151,7 +151,7 @@ type Served = {
 }
 
 /** A dev server with only the sw-dev plugin, listening on an ephemeral port. */
-async function serve(context: AdaptvContext): Promise<Served> {
+async function serve(context: AdaptvContext, base = "/"): Promise<Served> {
   const warnings: string[] = []
   const logger: Logger = {
     info() {},
@@ -165,6 +165,7 @@ async function serve(context: AdaptvContext): Promise<Served> {
   const vite: ViteDevServer = await createServer({
     configFile: false,
     root: context.appRoot,
+    base,
     appType: "custom",
     customLogger: logger,
     optimizeDeps: { noDiscovery: true, include: [] },
@@ -435,6 +436,101 @@ describe("the dev worker route", () => {
     },
     SERVE_TIMEOUT,
   )
+
+  describe("under a subpath base", () => {
+    //Vite runs a plugin's middleware before the one that strips the base, so the
+    //route sees the full path, and has to match where the built worker lives.
+    for (const [base, label] of [
+      ["/app/", "answers /app/sw.js with the bundle"],
+      [
+        "/app",
+        "answers /app/sw.js for a base written without its slash, which Vite normalises",
+      ],
+    ] as const) {
+      it(
+        label,
+        async () => {
+          process.env[DEV_SW_ENV] = "1"
+          const appRoot = tempApp({
+            "src/sw/push.ts": "self.__probe = 'push'",
+          })
+          const { get } = await serve(
+            contextFor(appRoot, ["./src/sw/push.ts"]),
+            base,
+          )
+          const response = await get("/app/sw.js")
+          expect(response.status).toBe(200)
+          expect(response.headers.get("content-type")).toBe(
+            "text/javascript",
+          )
+          expect(response.headers.get("cache-control")).toBe("no-store")
+          expect(await response.text()).toContain("__probe")
+        },
+        SERVE_TIMEOUT,
+      )
+    }
+
+    it(
+      "strips the query string from the registration URL there too",
+      async () => {
+        process.env[DEV_SW_ENV] = "1"
+        const appRoot = tempApp({
+          "src/sw/push.ts": "self.__probe = 'push'",
+        })
+        const { get } = await serve(
+          contextFor(appRoot, ["./src/sw/push.ts"]),
+          "/app/",
+        )
+        const withQuery = await get("/app/sw.js?v=2")
+        expect(withQuery.status).toBe(200)
+        expect(await withQuery.text()).toContain("__probe")
+      },
+      SERVE_TIMEOUT,
+    )
+
+    it(
+      "leaves the bare /sw.js alone, because the built worker is not there either",
+      async () => {
+        //A worker at the origin root would be scoped to the whole origin, over
+        //every other app on it, and nothing under the base registers that URL.
+        process.env[DEV_SW_ENV] = "1"
+        const appRoot = tempApp({
+          "src/sw/push.ts": "self.__probe = 'push'",
+        })
+        const { get } = await serve(
+          contextFor(appRoot, ["./src/sw/push.ts"]),
+          "/app/",
+        )
+        const bare = await get("/sw.js")
+        expect(bare.status).toBe(404)
+        expect(await bare.text()).not.toContain("__probe")
+        const nested = await get("/app/app/sw.js")
+        expect(await nested.text()).not.toContain("__probe")
+      },
+      SERVE_TIMEOUT,
+    )
+
+    it(
+      "still answers /sw.js at the root base, and not a path under it",
+      async () => {
+        process.env[DEV_SW_ENV] = "1"
+        const appRoot = tempApp({
+          "src/sw/push.ts": "self.__probe = 'push'",
+        })
+        const { get } = await serve(
+          contextFor(appRoot, ["./src/sw/push.ts"]),
+          "/",
+        )
+        const root = await get("/sw.js")
+        expect(root.status).toBe(200)
+        expect(await root.text()).toContain("__probe")
+        expect(await (await get("/app/sw.js")).text()).not.toContain(
+          "__probe",
+        )
+      },
+      SERVE_TIMEOUT,
+    )
+  })
 
   it("is a dev-server plugin only, never part of a build", () => {
     //the built worker is sw-build's; a build that also carried this would have
