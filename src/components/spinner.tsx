@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef } from "react"
+import type { ComponentPropsWithRef, CSSProperties } from "react"
 import { useEffect, useRef } from "react"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { mergeStyles } from "#adaptv/utils/styles"
@@ -60,32 +60,38 @@ const SPINNER_LOCKED_CLASS = undefined
 const SPINNER_ANNOUNCER_CLASS = "sr-only"
 
 /* =============================================================================
- * Q1 — one IntersectionObserver for every spinner on the page
+ * Q1 — one IntersectionObserver for every indicator on the page
  * ============================================================================= */
 
 let offscreenObserver: IntersectionObserver | null = null
 
+/** The presence attribute each observed node is stamped with — its component's own. */
+const offscreenAttributes = new WeakMap<Element, string>()
+
 /**
- * Observe `el` and stamp {@link SPINNER_OFFSCREEN_ATTRIBUTE} while it is not on screen.
- * The attribute is written straight to the node — no React state, so a hundred
- * spinners scrolling in and out re-render nothing — and styles/spinner.css turns it
- * into `animation-play-state: paused`.
+ * Observe `el` and stamp `attribute` while it is not on screen. The attribute is
+ * written straight to the node — no React state, so a hundred spinners scrolling in
+ * and out re-render nothing — and styles/spinner.css turns it into
+ * `animation-play-state: paused`. Spinner and an indeterminate ProgressBar share the
+ * one observer; each keeps its own attribute name (styling.md §3.1: namespaced per
+ * component).
  */
-function observeOffscreen(el: Element): () => void {
+function observeOffscreen(el: Element, attribute: string): () => void {
   if (typeof IntersectionObserver === "undefined") return () => {}
+  offscreenAttributes.set(el, attribute)
   offscreenObserver ??= new IntersectionObserver((entries) => {
     //entries arrive in time order, so the last one for a target is its state now
     for (const entry of entries) {
-      entry.target.toggleAttribute(
-        SPINNER_OFFSCREEN_ATTRIBUTE,
-        !entry.isIntersecting,
-      )
+      const stamp = offscreenAttributes.get(entry.target)
+      //a record queued before the node stopped being watched has nothing to stamp
+      if (stamp) entry.target.toggleAttribute(stamp, !entry.isIntersecting)
     }
   })
   offscreenObserver.observe(el)
   return () => {
     offscreenObserver?.unobserve(el)
-    el.removeAttribute(SPINNER_OFFSCREEN_ATTRIBUTE)
+    offscreenAttributes.delete(el)
+    el.removeAttribute(attribute)
   }
 }
 
@@ -94,9 +100,11 @@ function observeOffscreen(el: Element): () => void {
  * ============================================================================= */
 
 /**
- * Labelled spinners mounted right now, per label, and the episode they belong to. An
- * episode starts when a label's count goes from 0 to 1 and ends when it returns to 0;
- * its object identity is what a pending announcement checks it still belongs to.
+ * Labelled indicators mounted right now — spinners and progress bars alike — per label,
+ * and the episode they belong to. An episode starts when a label's count goes from 0 to
+ * 1 and ends when it returns to 0; its object identity is what a pending announcement
+ * checks it still belongs to. A Spinner and a ProgressBar saying the same thing are one
+ * loading episode, so they share the count.
  */
 const mountedLabels = new Map<string, { count: number; episode: object }>()
 let announcer: HTMLElement | null = null
@@ -130,7 +138,7 @@ function announceEpisode(label: string, episode: object) {
 }
 
 /**
- * Register a mounted labelled spinner. The label is announced when its count goes from
+ * Register a mounted labelled indicator. The label is announced when its count goes from
  * 0 to 1 and stays up for the delay — a list of twenty "Loading" spinners, a re-render,
  * or StrictMode's second effect pass is one announcement; a later episode, after every
  * spinner with that label unmounted, is a new one.
@@ -254,7 +262,7 @@ export function Spinner({
   useEffect(() => {
     const el = node.current
     if (!el) return
-    return observeOffscreen(el)
+    return observeOffscreen(el, SPINNER_OFFSCREEN_ATTRIBUTE)
   }, [])
 
   useEffect(() => {
@@ -294,3 +302,194 @@ export function Spinner({
 }
 
 Spinner.displayName = "Spinner"
+
+/* =============================================================================
+ * ProgressBar — the same module, because it owns the same engine facts
+ * ============================================================================= */
+
+/**
+ * Props for {@link ProgressBar}. Native `<span>` props pass through, except the
+ * exposure attributes and `children`: how a bar reaches assistive technology is `label`
+ * and `value`, and what it draws is its own.
+ */
+export interface ProgressBarProps
+  extends Omit<
+    ComponentPropsWithRef<"span">,
+    | "children"
+    | "role"
+    | "aria-label"
+    | "aria-labelledby"
+    | "aria-hidden"
+    | "aria-valuenow"
+    | "aria-valuemin"
+    | "aria-valuemax"
+    | "aria-valuetext"
+  > {
+  /**
+   * How much is done, from `0` to `1`; clamped to that range. Omitted → indeterminate:
+   * a sweep that says "working" without saying how far. A value that is not a finite
+   * number (`NaN`, `Infinity` — `loaded / total` while the total is still `0`) is
+   * indeterminate too: the amount is unknown, and drawing it as 0 % or 100 % would
+   * claim a state nobody knows.
+   */
+  value?: number
+  /**
+   * What is progressing ("Uploading photo"). Present → `role="progressbar"` +
+   * `aria-label`, plus `aria-valuenow` (a percentage) when determinate, and the label
+   * is announced ONCE through Spinner's shared live region — the value never is.
+   * Absent (or blank) → `aria-hidden="true"`, exactly like an unlabelled Spinner: the
+   * bar is decoration and the text beside it carries the state, so a determinate value
+   * reaches assistive technology only with a label.
+   */
+  label?: string
+}
+
+/** The presence attribute the shared observer writes while an indeterminate bar is off screen. */
+const PROGRESS_BAR_OFFSCREEN_ATTRIBUTE = "data-progress-bar-offscreen"
+
+//BASE: a full-width, 4px, rounded track in the text colour — the height, the radius
+//and the colour (`text-primary`) are the consumer's.
+const PROGRESS_BAR_BASE_CLASS = "block h-1 w-full rounded-full"
+//LOCKED: the track and the indicator are absolutely positioned children, and the
+//indeterminate sweep travels outside the box on both ends — `overflow-visible` or
+//`static` in className would draw it across the page.
+const PROGRESS_BAR_LOCKED_CLASS = "relative overflow-hidden"
+
+/** `value` as a fraction in [0, 1], or `undefined` when there is no known amount. */
+function progressOf(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value)) return undefined
+  return Math.min(1, Math.max(0, value))
+}
+
+/**
+ * A progress bar: determinate (`value` 0–1) or indeterminate (no `value`). It lives
+ * beside {@link Spinner} because the indeterminate bar is the same problem drawn
+ * differently, and it reuses Spinner's machinery rather than a copy of it.
+ *
+ * ```tsx
+ * <ProgressBar value={loaded / total} label="Uploading photo" />
+ * <ProgressBar label="Loading tasks" className="h-2 text-primary" />
+ * <ProgressBar className="fixed inset-x-0 top-0" />   // decorative page loader
+ * ```
+ *
+ * ## The quirks it owns
+ *
+ * **1. An off-screen indeterminate bar keeps the page from idling** — Spinner's quirk
+ * 1, answered by the same shared `IntersectionObserver`, which stamps
+ * `data-progress-bar-offscreen`; the stylesheet pauses the sweep there. A determinate
+ * bar is not observed: at rest it has no animation to pause.
+ *
+ * **2. The motion is `transform`, never `width` or `left`.** The fill is
+ * `scaleX(value)` and the sweep is `translateX`, so neither lays out a frame and both
+ * run on the compositor (docs/decisions/animation.md A3). A value change is a 200 ms
+ * `transform` transition.
+ *
+ * **3. Forced colors erase a CSS bar.** A bar drawn with `background-color` is
+ * repainted in the system background under forced colors, so the fill would vanish
+ * (Spinner is a stroke and never had this problem). The indicator opts out of that
+ * repaint and paints `CanvasText`, the system text colour, and the box gets an outline
+ * so the empty part of the track still reads.
+ *
+ * **4. RTL fills from the right.** `scaleX` grows from `transform-origin` and the sweep
+ * is `translateX`, and neither has a logical form, so the parts are placed physically
+ * and one selector decides direction for all of them: a `dir="rtl"` attribute on the
+ * bar or any ancestor. Under it the fill grows from the right and the sweep travels
+ * leftwards; the fill and the sweep always agree, and the sweep always enters and
+ * leaves off the track.
+ * ⚠︎ A `dir="ltr"` island inside an RTL page still draws RTL, and CSS `direction: rtl`
+ * with no `dir` attribute draws LTR — the ancestor rule scroll-fade.css uses.
+ * `:dir()` would follow the element's own direction, but it is above the iOS 15 floor.
+ *
+ * **Reduced motion, as Spinner:** an indeterminate bar never stops (a still bar reads
+ * as stalled). The sweep ends, the indicator spans the track, and it pulses its opacity
+ * with Spinner's own keyframes — on the child, so a consumer's opacity on the box still
+ * applies. A determinate bar jumps to its value instead of easing.
+ *
+ * **Not `<progress>`:** its fill is `::-webkit-progress-value` / `::-moz-progress-bar`,
+ * a pseudo-element no transform or transition reaches the same way on every engine,
+ * its indeterminate look is the engine's own, and it cannot be decorative.
+ *
+ * | Tier | Classes | Why |
+ * |------|---------|-----|
+ * | base | `block h-1 w-full rounded-full` | the look — height, radius, colour are yours |
+ * | className | yours | `h-2`, `text-primary`, `rounded-none` |
+ * | locked | `relative overflow-hidden` | positioned parts; the sweep must be clipped |
+ *
+ * | Attribute | When |
+ * |-----------|------|
+ * | `data-adaptv="progress-bar"` | always |
+ * | `data-progress-bar-indeterminate` | no known value |
+ * | `data-progress-bar-offscreen` | indeterminate and out of the viewport (written by the observer) |
+ * | `data-part="track"` / `data-part="indicator"` | the two children |
+ * | `--progress-value` | the clamped fraction, determinate only |
+ */
+export function ProgressBar({
+  value,
+  label,
+  className,
+  style,
+  ref,
+  ...props
+}: ProgressBarProps) {
+  const progress = progressOf(value)
+  const indeterminate = progress === undefined
+
+  const merged = mergeStyles({
+    base: PROGRESS_BAR_BASE_CLASS,
+    className,
+    locked: PROGRESS_BAR_LOCKED_CLASS,
+    style,
+    //the fill reads it; locked so a consumer `style` cannot desynchronise the bar
+    //from its own aria-valuenow
+    lockedStyle: indeterminate
+      ? undefined
+      : ({ "--progress-value": progress } as CSSProperties),
+  })
+
+  //a blank label names nothing, as for Spinner
+  const name = label?.trim() || undefined
+  const percent =
+    name !== undefined && progress !== undefined
+      ? Math.round(progress * 100)
+      : undefined
+
+  const node = useRef<HTMLSpanElement | null>(null)
+  const setRef = useMergedRef(node, ref ?? null)
+
+  useEffect(() => {
+    if (!indeterminate) return
+    const el = node.current
+    if (!el) return
+    return observeOffscreen(el, PROGRESS_BAR_OFFSCREEN_ATTRIBUTE)
+  }, [indeterminate])
+
+  useEffect(() => {
+    if (name === undefined) return
+    return holdLabel(name)
+  }, [name])
+
+  return (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-label and the values are only ever set together with role="progressbar", which the static check cannot see through the conditional
+    <span
+      {...props}
+      ref={setRef}
+      className={merged.className}
+      style={merged.style}
+      data-adaptv="progress-bar"
+      data-progress-bar-indeterminate={indeterminate ? "" : undefined}
+      role={name ? "progressbar" : undefined}
+      aria-label={name}
+      aria-hidden={name ? undefined : "true"}
+      aria-valuemin={percent === undefined ? undefined : 0}
+      aria-valuemax={percent === undefined ? undefined : 100}
+      aria-valuenow={percent}
+    >
+      {/* A progressbar's children are presentational: both parts are drawing only,
+          styled from styles/spinner.css on data-part. */}
+      <span data-part="track" />
+      <span data-part="indicator" />
+    </span>
+  )
+}
+
+ProgressBar.displayName = "ProgressBar"
