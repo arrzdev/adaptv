@@ -1,5 +1,6 @@
 import { PullToRefresh, ScrollView } from "@arrzdev/adaptv/components"
 import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Trash2 } from "lucide-react"
 import { useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -14,6 +15,7 @@ import {
   labLogEntry,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
+import { AppSwipeable, IconButton } from "@/components/ui"
 
 export const Route = createFileRoute("/_providers/lab/pull-to-refresh")({
   component: LabPullToRefreshPage,
@@ -38,11 +40,15 @@ const LINES = [
   "sixteen",
 ] as const
 
+const MESSAGES = ["first", "second", "third", "fourth", "fifth"] as const
+
 function LabPullToRefreshPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rowsRef = useRef<HTMLDivElement>(null)
   const [enabled, setEnabled] = useState(true)
   const [slow, setSlow] = useState(false)
   const [refreshes, setRefreshes] = useState(0)
+  const [rowRefreshes, setRowRefreshes] = useState(0)
   const [log, setLog] = useState<LabLogEntry[]>([])
 
   const note = (text: string) =>
@@ -53,6 +59,13 @@ function LabPullToRefreshPage() {
     await new Promise((resolve) => setTimeout(resolve, slow ? 3000 : 600))
     setRefreshes((n) => n + 1)
     note("onRefresh resolved")
+  }
+
+  async function refreshRows() {
+    note("rows box refresh started")
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    setRowRefreshes((n) => n + 1)
+    note("rows box refresh resolved")
   }
 
   return (
@@ -140,6 +153,56 @@ function LabPullToRefreshPage() {
           <code>overscroll-behavior: contain</code> the View &amp;
           ScrollView page tests, reached from a different direction.
         </LabCaveat>
+      </LabSection>
+
+      <LabSection
+        title="Pull over swipeable rows"
+        description="The screen this exists for: a list of rows that swipe. Every finger lands on a row, so a pull must be able to start on one — and a sideways drag on a row is the row's swipe, never a pull."
+      >
+        <LabRow
+          label="row-box refreshes"
+          value={rowRefreshes}
+          hint="Must increase by exactly one per pull past the threshold that starts on a row."
+        />
+        <PullToRefresh
+          onRefresh={refreshRows}
+          scrollContainerRef={rowsRef}
+          className="overflow-hidden rounded-md bg-secondary"
+        >
+          <div
+            ref={rowsRef}
+            data-lab-rows-scroller
+            className="h-56 overflow-y-auto overscroll-y-contain"
+          >
+            <AppSwipeable.Group>
+              <div className="flex flex-col gap-y-2 p-3">
+                {MESSAGES.map((row) => (
+                  <AppSwipeable
+                    key={row}
+                    className="bg-surface"
+                    onOpen={(side) =>
+                      note(`${row} message opened (${side})`)
+                    }
+                    onClose={() => note(`${row} message closed`)}
+                  >
+                    <AppSwipeable.Content className="px-4 py-4 text-sm text-foreground">
+                      the {row} message — pull down on me, or swipe me left
+                    </AppSwipeable.Content>
+                    <AppSwipeable.RightActions>
+                      <IconButton
+                        onClick={() => note(`${row} message deleted`)}
+                        aria-label={`Delete the ${row} message`}
+                        className="h-full min-w-20 rounded-none bg-error text-primary-foreground hover:bg-error active:scale-100"
+                      >
+                        <Trash2 size={20} strokeWidth={1.75} aria-hidden />
+                      </IconButton>
+                    </AppSwipeable.RightActions>
+                  </AppSwipeable>
+                ))}
+              </div>
+            </AppSwipeable.Group>
+          </div>
+        </PullToRefresh>
       </LabSection>
 
       <LabSection title="Log">

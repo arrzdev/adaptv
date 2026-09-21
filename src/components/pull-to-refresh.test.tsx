@@ -1,9 +1,11 @@
 import { act, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import {
   PullToRefresh,
   usePullToRefresh,
 } from "#adaptv/components/pull-to-refresh"
+import { Swipeable } from "#adaptv/components/swipeable"
 
 /*
  * `usePullToRefresh()` is the public reactive surface — a wrapper reads it to
@@ -92,12 +94,22 @@ describe("one finger owns the pull", () => {
   type Finger = { id: number; x: number; y: number }
   //the component reads the touch lists off the event and nothing else, so a
   //plain cancelable Event carrying them is a faithful stand-in
-  function fingersEvent(type: string, touches: Finger[], changed: Finger[]) {
+  function fingersEvent(
+    type: string,
+    touches: Finger[],
+    changed: Finger[],
+  ) {
     const event = new Event(type, { bubbles: true, cancelable: true })
     const list = (fingers: Finger[]) =>
-      fingers.map((f) => ({ identifier: f.id, clientX: f.x, clientY: f.y }))
+      fingers.map((f) => ({
+        identifier: f.id,
+        clientX: f.x,
+        clientY: f.y,
+      }))
     Object.defineProperty(event, "touches", { value: list(touches) })
-    Object.defineProperty(event, "changedTouches", { value: list(changed) })
+    Object.defineProperty(event, "changedTouches", {
+      value: list(changed),
+    })
     return event
   }
 
@@ -224,5 +236,194 @@ describe("one finger owns the pull", () => {
     })
     expect(phase.current).toBe("refreshing")
     expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+})
+
+/* ---- a pull that starts on a swipeable row ------------------------------- */
+
+describe("a pull that starts on a swipeable row", () => {
+  //the screen this exists for is a mail list: pull-to-refresh over rows
+  //that swipe. Every finger lands on a row, so a pull that refuses to start
+  //there is a pull that never starts. The axis decides: a horizontal drag
+  //is the row's and clears the pull, a vertical one is the pull's
+
+  type Finger = { id: number; x: number; y: number }
+  function fingersEvent(
+    type: string,
+    touches: Finger[],
+    changed: Finger[],
+  ) {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    const list = (fingers: Finger[]) =>
+      fingers.map((f) => ({
+        identifier: f.id,
+        clientX: f.x,
+        clientY: f.y,
+      }))
+    Object.defineProperty(event, "touches", { value: list(touches) })
+    Object.defineProperty(event, "changedTouches", {
+      value: list(changed),
+    })
+    return event
+  }
+
+  function mailList() {
+    stubMatchMedia()
+    const onRefresh = vi.fn(async () => {})
+    const phase = { current: "idle" }
+    function Probe() {
+      const pull = usePullToRefresh()
+      phase.current = pull.isPulling
+        ? "pulling"
+        : pull.isRefreshing
+          ? "refreshing"
+          : pull.isClosing
+            ? "closing"
+            : "idle"
+      return null
+    }
+    const { container } = render(
+      <PullToRefresh onRefresh={onRefresh}>
+        <Probe />
+        <Swipeable>
+          <Swipeable.Content>
+            <p>a message</p>
+          </Swipeable.Content>
+          <Swipeable.RightActions>
+            <button type="button">delete</button>
+          </Swipeable.RightActions>
+        </Swipeable>
+      </PullToRefresh>,
+    )
+    const content = container.querySelector("[data-swipeable-content] p")
+    if (!(content instanceof HTMLElement))
+      throw new Error("no row content")
+    return { content, phase, onRefresh }
+  }
+
+  const f = (x: number, y: number): Finger => ({ id: 0, x, y })
+
+  it("pulls (touch)", () => {
+    const { content, phase, onRefresh } = mailList()
+    act(() => {
+      content.dispatchEvent(
+        fingersEvent("touchstart", [f(0, 0)], [f(0, 0)]),
+      )
+    })
+    for (let y = 12; y <= 120; y += 4) {
+      act(() => {
+        content.dispatchEvent(
+          fingersEvent("touchmove", [f(0, y)], [f(0, y)]),
+        )
+      })
+    }
+    expect(phase.current).toBe("pulling")
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchend", [], [f(0, 120)]))
+    })
+    expect(phase.current).toBe("refreshing")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it("pulls (pointer)", () => {
+    const { content, phase, onRefresh } = mailList()
+    act(() => {
+      fireEvent.pointerDown(content, pointer(0, 0))
+    })
+    for (let y = 12; y <= 120; y += 4) {
+      act(() => {
+        fireEvent.pointerMove(content, pointer(0, y))
+      })
+    }
+    expect(phase.current).toBe("pulling")
+    act(() => {
+      fireEvent.pointerUp(content, pointer(0, 120))
+    })
+    expect(phase.current).toBe("refreshing")
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it("yields a horizontal drag to the row (touch)", () => {
+    const { content, phase, onRefresh } = mailList()
+    act(() => {
+      content.dispatchEvent(
+        fingersEvent("touchstart", [f(0, 0)], [f(0, 0)]),
+      )
+    })
+    for (let x = -12; x >= -120; x -= 4) {
+      act(() => {
+        content.dispatchEvent(
+          fingersEvent("touchmove", [f(x, 4)], [f(x, 4)]),
+        )
+      })
+    }
+    expect(phase.current).toBe("idle")
+    //yielded means the row took it: the row holds the shared arbiter from
+    //its lock to the lift (happy-dom measures no tray width, so the offset
+    //is not the evidence here; the arbiter claim is)
+    expect(gestureController.getCaptured()).not.toBeNull()
+    act(() => {
+      content.dispatchEvent(fingersEvent("touchend", [], [f(-120, 4)]))
+    })
+    expect(gestureController.getCaptured()).toBeNull()
+    expect(phase.current).toBe("idle")
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("captures the pointer on its own root once the pull is vertical, never on the row it started in (pointer)", () => {
+    //a capture at pointerdown steals the click from a button the press was
+    //aimed at, and a capture on the child under the pointer is one the row
+    //moves to its own content at its lock, which fires lostpointercapture at
+    //that child and ends the row's mouse swipe the moment it locks
+    const { content, phase } = mailList()
+    const root = content.closest('[data-adaptv="pull-to-refresh"]')
+    if (!(root instanceof HTMLElement)) throw new Error("no gesture root")
+    const captures: EventTarget[] = []
+    const releases: EventTarget[] = []
+    const proto = HTMLElement.prototype as HTMLElement & {
+      setPointerCapture?: (id: number) => void
+      releasePointerCapture?: (id: number) => void
+    }
+    const had = {
+      set: Object.getOwnPropertyDescriptor(proto, "setPointerCapture"),
+      release: Object.getOwnPropertyDescriptor(
+        proto,
+        "releasePointerCapture",
+      ),
+    }
+    proto.setPointerCapture = function (this: HTMLElement) {
+      captures.push(this)
+    }
+    proto.releasePointerCapture = function (this: HTMLElement) {
+      releases.push(this)
+    }
+    try {
+      act(() => {
+        fireEvent.pointerDown(content, pointer(0, 0))
+      })
+      expect(
+        captures,
+        "a press captures nothing: a click may follow",
+      ).toEqual([])
+      for (let y = 12; y <= 60; y += 4) {
+        act(() => {
+          fireEvent.pointerMove(content, pointer(0, y))
+        })
+      }
+      expect(phase.current).toBe("pulling")
+      expect(captures).toEqual([root])
+      act(() => {
+        fireEvent.pointerUp(content, pointer(0, 60))
+      })
+      expect(releases).toEqual([root])
+    } finally {
+      for (const [name, d] of [
+        ["setPointerCapture", had.set],
+        ["releasePointerCapture", had.release],
+      ] as const) {
+        if (d) Object.defineProperty(proto, name, d)
+        else Reflect.deleteProperty(proto, name)
+      }
+    }
   })
 })
