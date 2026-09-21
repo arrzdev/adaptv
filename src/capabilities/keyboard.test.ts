@@ -53,9 +53,36 @@ async function load() {
   return { ...sut, Keyboard, listenerFor }
 }
 
+function setViewport(width: number, height: number): void {
+  Object.defineProperty(window, "innerWidth", {
+    value: width,
+    configurable: true,
+    writable: true,
+  })
+  Object.defineProperty(window, "innerHeight", {
+    value: height,
+    configurable: true,
+    writable: true,
+  })
+}
+
+function resizeViewport(width: number, height: number): void {
+  setViewport(width, height)
+  window.dispatchEvent(new Event("resize"))
+}
+
+const RESTING_VIEWPORT = {
+  width: window.innerWidth,
+  height: window.innerHeight,
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.clearAllMocks()
+  setViewport(RESTING_VIEWPORT.width, RESTING_VIEWPORT.height)
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  document.body.replaceChildren()
 })
 
 describe("hasNativeKeyboard", () => {
@@ -183,10 +210,20 @@ describe("subscribeNativeKeyboard", () => {
     subscribeNativeKeyboard(cb)
 
     listenerFor("keyboardWillShow")?.({ keyboardHeight: 336 })
-    expect(cb).toHaveBeenCalledWith({ isOpen: true, height: 336 })
+    expect(cb).toHaveBeenCalledWith({
+      isOpen: true,
+      height: 336,
+      unpaidHeight: 336,
+      resizesLayoutViewport: false,
+    })
 
     listenerFor("keyboardWillHide")?.()
-    expect(cb).toHaveBeenCalledWith({ isOpen: false, height: 0 })
+    expect(cb).toHaveBeenCalledWith({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("delivers the current state synchronously when already open", async () => {
@@ -198,7 +235,12 @@ describe("subscribeNativeKeyboard", () => {
 
     const late = vi.fn()
     subscribeNativeKeyboard(late)
-    expect(late).toHaveBeenCalledWith({ isOpen: true, height: 300 })
+    expect(late).toHaveBeenCalledWith({
+      isOpen: true,
+      height: 300,
+      unpaidHeight: 300,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("does not re-register OS listeners per subscriber (shares the app-wide set)", async () => {
@@ -230,7 +272,12 @@ describe("subscribeNativeKeyboard", () => {
     subscribeNativeKeyboard(later)
     expect(vi.mocked(Keyboard.addListener).mock.calls).toHaveLength(2)
     listenerFor("keyboardWillShow")?.({ keyboardHeight: 310 })
-    expect(later).toHaveBeenCalledWith({ isOpen: true, height: 310 })
+    expect(later).toHaveBeenCalledWith({
+      isOpen: true,
+      height: 310,
+      unpaidHeight: 310,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("unsubscribing stops delivery to that consumer only", async () => {
@@ -243,6 +290,251 @@ describe("subscribeNativeKeyboard", () => {
     unsubA()
     listenerFor("keyboardWillShow")?.({ keyboardHeight: 320 })
     expect(a).not.toHaveBeenCalled()
-    expect(b).toHaveBeenCalledWith({ isOpen: true, height: 320 })
+    expect(b).toHaveBeenCalledWith({
+      isOpen: true,
+      height: 320,
+      unpaidHeight: 320,
+      resizesLayoutViewport: false,
+    })
+  })
+})
+
+/* =============================================================================
+ * The unpaid part: what the layout viewport has not already given up for the keyboard.
+ * Pixel 10 emulator numbers: `innerHeight` 923 at rest, 587 under a 336px keyboard.
+ * ============================================================================= */
+
+describe("unpaidHeight", () => {
+  function resizeListenerCount(spy: ReturnType<typeof vi.spyOn>): number {
+    return spy.mock.calls.filter((call: unknown[]) => call[0] === "resize")
+      .length
+  }
+
+  function focusTextField(): HTMLInputElement {
+    const field = document.createElement("input")
+    document.body.appendChild(field)
+    field.focus()
+    return field
+  }
+
+  it.each([
+    ["iOS native", true],
+    ["web", false],
+  ] as const)(
+    "equals height and watches no resize off Android native (%s)",
+    async (_, native) => {
+      const addListener = vi.spyOn(window, "addEventListener")
+      const {
+        initNativeKeyboard,
+        measureKeyboardPayment,
+        subscribeNativeKeyboard,
+        listenerFor,
+      } = await load()
+      forceNative(native, "ios")
+      setViewport(390, 844)
+      initNativeKeyboard()
+      const cb = vi.fn()
+      subscribeNativeKeyboard(cb)
+      expect(resizeListenerCount(addListener)).toBe(0)
+
+      setViewport(390, 508) //even a viewport that did shrink pays nothing here
+      expect(measureKeyboardPayment(336)).toEqual({
+        unpaidHeight: 336,
+        resizesLayoutViewport: false,
+      })
+      listenerFor("keyboardWillShow")?.({ keyboardHeight: 336 })
+      if (native) {
+        expect(cb).toHaveBeenLastCalledWith({
+          isOpen: true,
+          height: 336,
+          unpaidHeight: 336,
+          resizesLayoutViewport: false,
+        })
+      }
+    },
+  )
+
+  describe("Android native", () => {
+    async function boot(width: number, height: number) {
+      const loaded = await load()
+      forceNative(true, "android")
+      setViewport(width, height)
+      loaded.initNativeKeyboard()
+      const cb = vi.fn()
+      loaded.subscribeNativeKeyboard(cb)
+      const show = (keyboardHeight: number) =>
+        loaded.listenerFor("keyboardWillShow")?.({ keyboardHeight })
+      const hide = () => loaded.listenerFor("keyboardWillHide")?.()
+      return { ...loaded, cb, show, hide }
+    }
+
+    it("seeds the rest at boot, so a keyboard before any resize is wholly unpaid", async () => {
+      const { cb, show } = await boot(412, 923)
+      show(336)
+      expect(cb).toHaveBeenLastCalledWith({
+        isOpen: true,
+        height: 336,
+        unpaidHeight: 336,
+        resizesLayoutViewport: true,
+      })
+    })
+
+    it("re-emits on the resize that pays for the keyboard", async () => {
+      const { cb, show } = await boot(412, 923)
+      show(336)
+      resizeViewport(412, 587)
+      expect(cb).toHaveBeenLastCalledWith({
+        isOpen: true,
+        height: 336,
+        unpaidHeight: 0,
+        resizesLayoutViewport: true,
+      })
+    })
+
+    it("keeps the rest when the resize lands first, under a focused field", async () => {
+      const { cb, show, measureKeyboardPayment } = await boot(412, 923)
+      focusTextField()
+      resizeViewport(412, 587)
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ isOpen: false, height: 0 }),
+      )
+      expect(measureKeyboardPayment(336).unpaidHeight).toBe(0)
+      show(336)
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ unpaidHeight: 0 }),
+      )
+    })
+
+    it("keeps the rest for a resize while the keyboard is open, focus or not", async () => {
+      const { cb, show } = await boot(412, 923)
+      show(336)
+      resizeViewport(412, 587)
+      resizeViewport(412, 580) //the suggestion strip grows under a keyboard nobody focused
+      show(343)
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ height: 343, unpaidHeight: 0 }),
+      )
+    })
+
+    it.each([
+      ["a textarea", () => document.createElement("textarea")],
+      [
+        "a contenteditable",
+        () => {
+          const editable = document.createElement("div")
+          editable.contentEditable = "true"
+          return editable
+        },
+      ],
+    ])(
+      "keeps the rest when the resize lands first, under %s",
+      async (_, make) => {
+        const { measureKeyboardPayment } = await boot(412, 923)
+        const editor = make()
+        document.body.appendChild(editor)
+        editor.focus()
+        expect(document.activeElement).toBe(editor)
+
+        resizeViewport(412, 587)
+        expect(measureKeyboardPayment(336).unpaidHeight).toBe(0)
+      },
+    )
+
+    it("tells OS reports and resizes apart, a repeated report included", async () => {
+      const { listenNativeKeyboard, show, hide } = await boot(412, 923)
+      const onReport = vi.fn()
+      const onPaymentChange = vi.fn()
+      listenNativeKeyboard({ onReport, onPaymentChange })
+
+      show(336)
+      resizeViewport(412, 587)
+      show(336) //the same keyboard, reported again for the next field
+      hide()
+
+      expect(onReport.mock.calls.map(([info]) => info)).toEqual([
+        {
+          isOpen: true,
+          height: 336,
+          unpaidHeight: 336,
+          resizesLayoutViewport: true,
+        },
+        {
+          isOpen: true,
+          height: 336,
+          unpaidHeight: 0,
+          resizesLayoutViewport: true,
+        },
+        {
+          isOpen: false,
+          height: 0,
+          unpaidHeight: 0,
+          resizesLayoutViewport: true,
+        },
+      ])
+      expect(onPaymentChange).toHaveBeenCalledTimes(1)
+    })
+
+    it("finds the focused field inside an open shadow root", async () => {
+      const { show, measureKeyboardPayment } = await boot(412, 923)
+      const host = document.createElement("div")
+      document.body.appendChild(host)
+      const field = document.createElement("input")
+      host.attachShadow({ mode: "open" }).appendChild(field)
+      field.focus()
+      expect(document.activeElement).toBe(host)
+
+      resizeViewport(412, 587)
+      show(336)
+      expect(measureKeyboardPayment(336).unpaidHeight).toBe(0)
+    })
+
+    it("takes a resize with no keyboard-raising focus as the new rest", async () => {
+      const { measureKeyboardPayment } = await boot(412, 923)
+      const checkbox = document.createElement("input")
+      checkbox.type = "checkbox"
+      document.body.appendChild(checkbox)
+      checkbox.focus()
+      resizeViewport(412, 700) //split-screen, say: a real rest change
+      expect(measureKeyboardPayment(336)).toEqual({
+        unpaidHeight: 336,
+        resizesLayoutViewport: true,
+      })
+    })
+
+    it("lets a resize under a focused field only RAISE the rest", async () => {
+      //booted short (a transient inset at launch); the field is focused before the viewport grows
+      const { measureKeyboardPayment } = await boot(412, 587)
+      focusTextField()
+      resizeViewport(412, 923)
+      resizeViewport(412, 587) //the keyboard's resize, first
+      expect(measureKeyboardPayment(336).unpaidHeight).toBe(0)
+    })
+
+    it("keeps one rest per width, so a rotation under the keyboard reads its own", async () => {
+      const { cb, show } = await boot(412, 923)
+      resizeViewport(915, 380) //landscape, keyboard down
+      focusTextField()
+      resizeViewport(915, 150)
+      show(230)
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ height: 230, unpaidHeight: 0 }),
+      )
+      //rotated back with the keyboard still up
+      resizeViewport(412, 587)
+      show(336)
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ height: 336, unpaidHeight: 0 }),
+      )
+    })
+
+    it("counts a width first reached under the keyboard as already paid", async () => {
+      const { cb, show } = await boot(412, 923)
+      focusTextField()
+      show(336)
+      resizeViewport(600, 500) //a window resize to a width never seen at rest
+      expect(cb).toHaveBeenLastCalledWith(
+        expect.objectContaining({ height: 336, unpaidHeight: 0 }),
+      )
+    })
   })
 })

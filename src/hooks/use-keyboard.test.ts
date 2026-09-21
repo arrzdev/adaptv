@@ -11,31 +11,59 @@ import {
 } from "#adaptv/hooks/use-keyboard"
 
 //A controllable stand-in for the Capacitor keyboard bridge: `enabled` picks which branch of the
-//observer runs (off by default, so the web suites below are untouched) and `emit` plays the OS's
-//will-show/will-hide reports. Hoisted so the mock factory can close over it.
+//observer runs (off by default, so the web suites below are untouched), `emit` plays the OS's
+//will-show/will-hide reports and `repay` a resize that moved only the unpaid part. Hoisted so the
+//mock factory can close over it.
 const nativeBridge = vi.hoisted(() => {
   const listeners = new Set<
     (info: { isOpen: boolean; height: number }) => void
   >()
   return {
     enabled: false,
+    payment: null as
+      | null
+      | ((height: number) => {
+          unpaidHeight: number
+          resizesLayoutViewport: boolean
+        }),
     listeners,
+    payers: new Set<() => void>(),
     emit(info: { isOpen: boolean; height: number }) {
       for (const listener of [...listeners]) listener(info)
+    },
+    repay() {
+      for (const payer of [...this.payers]) payer()
     },
   }
 })
 
-vi.mock("#adaptv/capabilities/keyboard", () => ({
-  hasNativeKeyboard: () => nativeBridge.enabled,
-  initNativeKeyboard: () => {},
-  subscribeNativeKeyboard: (
-    cb: (info: { isOpen: boolean; height: number }) => void,
-  ) => {
-    nativeBridge.listeners.add(cb)
-    return () => nativeBridge.listeners.delete(cb)
-  },
-}))
+//`measureKeyboardPayment` is the real one unless a test sets `nativeBridge.payment`: off Android
+//native it hands `height` back as the unpaid part, which every expectation below spells out.
+vi.mock("#adaptv/capabilities/keyboard", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("#adaptv/capabilities/keyboard")>()
+  return {
+    measureKeyboardPayment: (height: number) =>
+      nativeBridge.payment?.(height) ??
+      actual.measureKeyboardPayment(height),
+    hasNativeKeyboard: () => nativeBridge.enabled,
+    initNativeKeyboard: () => {},
+    listenNativeKeyboard: ({
+      onReport,
+      onPaymentChange,
+    }: {
+      onReport: (info: { isOpen: boolean; height: number }) => void
+      onPaymentChange: () => void
+    }) => {
+      nativeBridge.listeners.add(onReport)
+      nativeBridge.payers.add(onPaymentChange)
+      return () => {
+        nativeBridge.listeners.delete(onReport)
+        nativeBridge.payers.delete(onPaymentChange)
+      }
+    },
+  }
+})
 
 const INNER_HEIGHT = 800
 const DEBOUNCE_MS = 50
@@ -178,7 +206,12 @@ describe("useKeyboard", () => {
 
     openKeyboard(340)
 
-    expect(result.current).toEqual({ isOpen: true, height: 340 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 340,
+      unpaidHeight: 340,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("ignores sub-threshold viewport deltas (browser chrome, not a keyboard)", () => {
@@ -186,7 +219,12 @@ describe("useKeyboard", () => {
 
     openKeyboard(50)
 
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("closes immediately when the field blurs", () => {
@@ -211,7 +249,12 @@ describe("useKeyboard", () => {
     expect(result.current.isOpen).toBe(true) //still inside the window
 
     advance(40)
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("keeps the keyboard open when a zero read recovers within the dismiss window", () => {
@@ -223,7 +266,12 @@ describe("useKeyboard", () => {
     setKeyboardHeight(340) //transient zero recovered
     advance(DISMISS_CONFIRM_MS + 60)
 
-    expect(result.current).toEqual({ isOpen: true, height: 340 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 340,
+      unpaidHeight: 340,
+      resizesLayoutViewport: false,
+    })
   })
 
   //a raise's first read can catch the keyboard mid-slide (under-reported height); the
@@ -235,7 +283,12 @@ describe("useKeyboard", () => {
     setKeyboardHeight(380)
     advance(DEBOUNCE_MS + 10) //only the resize debounce, no stability confirm
 
-    expect(result.current).toEqual({ isOpen: true, height: 380 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 380,
+      unpaidHeight: 380,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("commits a dropped height only after it holds", () => {
@@ -247,7 +300,12 @@ describe("useKeyboard", () => {
     expect(result.current.height).toBe(380) //inside the stability window
 
     advance(HEIGHT_CONFIRM_MS + 10)
-    expect(result.current).toEqual({ isOpen: true, height: 340 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 340,
+      unpaidHeight: 340,
+      resizesLayoutViewport: false,
+    })
   })
 
   //device-measured iOS behavior: switching fields emits transient dips (380 → 335 → 380
@@ -280,7 +338,12 @@ describe("useKeyboard", () => {
 
     rerender({ isEnabled: false })
 
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
   })
 
   /* ---------------------------------------------------------------------------
@@ -296,7 +359,12 @@ describe("useKeyboard", () => {
       )
       focusInput() //no viewport change yet — the keyboard has not begun to slide
 
-      expect(result.current).toEqual({ isOpen: true, height: 340 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 340,
+        unpaidHeight: 340,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("does not predict without a cache hit (cold start falls back to reactive)", () => {
@@ -304,11 +372,21 @@ describe("useKeyboard", () => {
         useKeyboard({ predictFromCache: true }),
       )
       focusInput()
-      expect(result.current).toEqual({ isOpen: false, height: 0 })
+      expect(result.current).toEqual({
+        isOpen: false,
+        height: 0,
+        unpaidHeight: 0,
+        resizesLayoutViewport: false,
+      })
 
       //the reactive path still works underneath the (absent) prediction
       openKeyboard(340)
-      expect(result.current).toEqual({ isOpen: true, height: 340 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 340,
+        unpaidHeight: 340,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("does not predict for a read-only field", () => {
@@ -320,7 +398,12 @@ describe("useKeyboard", () => {
       )
       focusInput()
 
-      expect(result.current).toEqual({ isOpen: false, height: 0 })
+      expect(result.current).toEqual({
+        isOpen: false,
+        height: 0,
+        unpaidHeight: 0,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("corrects a low guess upward the instant the real height arrives", () => {
@@ -335,7 +418,12 @@ describe("useKeyboard", () => {
       setKeyboardHeight(380) //real keyboard, taller than the guess
       advance(DEBOUNCE_MS + 10) //grow commits immediately, no stability wait
 
-      expect(result.current).toEqual({ isOpen: true, height: 380 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 380,
+        unpaidHeight: 380,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("corrects a high guess downward once the real height holds", () => {
@@ -352,7 +440,12 @@ describe("useKeyboard", () => {
       expect(result.current.height).toBe(380) //still inside the stability window
 
       advance(HEIGHT_CONFIRM_MS + 10)
-      expect(result.current).toEqual({ isOpen: true, height: 340 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 340,
+        unpaidHeight: 340,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("retracts a prediction that no keyboard ever confirms", () => {
@@ -365,7 +458,12 @@ describe("useKeyboard", () => {
       expect(result.current.isOpen).toBe(true)
 
       advance(PREDICT_CONFIRM_MS + 20)
-      expect(result.current).toEqual({ isOpen: false, height: 0 })
+      expect(result.current).toEqual({
+        isOpen: false,
+        height: 0,
+        unpaidHeight: 0,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("does not retract when the keyboard confirmed mid-window", () => {
@@ -379,7 +477,12 @@ describe("useKeyboard", () => {
       advance(DEBOUNCE_MS + 10)
       advance(PREDICT_CONFIRM_MS + 20) //past the retract window — must stay open
 
-      expect(result.current).toEqual({ isOpen: true, height: 340 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 340,
+        unpaidHeight: 340,
+        resizesLayoutViewport: false,
+      })
     })
 
     it("learns the height on a real open so the next focus can predict it", () => {
@@ -389,14 +492,24 @@ describe("useKeyboard", () => {
 
       //first open is reactive (cold cache) and records the measured height
       openKeyboard(360)
-      expect(result.current).toEqual({ isOpen: true, height: 360 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 360,
+        unpaidHeight: 360,
+        resizesLayoutViewport: false,
+      })
       blurInput()
       advance(20)
       expect(result.current.isOpen).toBe(false)
 
       //second focus now has a warm cache — it seeds before any viewport change
       focusInput()
-      expect(result.current).toEqual({ isOpen: true, height: 360 })
+      expect(result.current).toEqual({
+        isOpen: true,
+        height: 360,
+        unpaidHeight: 360,
+        resizesLayoutViewport: false,
+      })
     })
   })
 })
@@ -525,7 +638,9 @@ describe("useKeyboard — native", () => {
     cleanup()
     field.remove()
     nativeBridge.enabled = false
+    nativeBridge.payment = null
     nativeBridge.listeners.clear()
+    nativeBridge.payers.clear()
     vi.useRealTimers()
     __resetKeyboardHeightCacheForTests()
     localStorage.clear()
@@ -535,10 +650,20 @@ describe("useKeyboard — native", () => {
     const { result, unmount } = renderNative()
 
     focusField()
-    expect(result.current).toEqual({ isOpen: false, height: 0 }) //cold cache: no guess
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    }) //cold cache: no guess
     emit({ isOpen: true, height: 301 })
     emit({ isOpen: true, height: 346 }) //the AutoFill bar's second step
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
 
     //the learned height survives the drawer closing, so the NEXT open can predict it
     emit({ isOpen: false, height: 0 })
@@ -550,7 +675,12 @@ describe("useKeyboard — native", () => {
       field.focus()
       field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
     })
-    expect(second.result.current).toEqual({ isOpen: true, height: 346 })
+    expect(second.result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("collapses the two-step raise into ONE committed height once warm", () => {
@@ -559,18 +689,33 @@ describe("useKeyboard — native", () => {
 
     //the lift starts on the focus frame, already aimed at the settled height
     focusField()
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
 
     //the bare keyboard arrives 45px SHORTER than the guess — held, not committed, so the sheet
     //never drops back down between the two steps
     emit({ isOpen: true, height: 301 })
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
 
     //the AutoFill step lands on the height already committed: nothing left to animate
     advance(250)
     emit({ isOpen: true, height: 346 })
     advance(SHRINK_HOLD_MS + 50)
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("retracts a prediction the OS never confirms (hardware keyboard)", () => {
@@ -578,11 +723,21 @@ describe("useKeyboard — native", () => {
     const { result } = renderNative()
 
     focusField()
-    expect(result.current).toEqual({ isOpen: true, height: 346 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 346,
+      resizesLayoutViewport: false,
+    })
 
     //no will-show ever arrives — a Magic Keyboard is attached, or the focus was programmatic
     advance(PREDICT_CONFIRM_MS + 20)
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("does not retract when a real report arrived but is being HELD", () => {
@@ -605,7 +760,12 @@ describe("useKeyboard — native", () => {
     emit({ isOpen: true, height: 301 })
     //held for a beat in case it is the bar flickering, then committed: never stuck too tall
     advance(SHRINK_HOLD_MS + 20)
-    expect(result.current).toEqual({ isOpen: true, height: 301 })
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 301,
+      unpaidHeight: 301,
+      resizesLayoutViewport: false,
+    })
   })
 
   it("commits a dismiss straight through", () => {
@@ -615,7 +775,46 @@ describe("useKeyboard — native", () => {
     focusField()
     emit({ isOpen: true, height: 346 })
     emit({ isOpen: false, height: 0 })
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
+  })
+
+  it("re-renders a resize's new unpaid part, and commits nothing from it", () => {
+    //a WebView that pays for the keyboard: a stand-in for Android native's layer 1, 336px paid
+    let paid = 0
+    nativeBridge.payment = (height) => ({
+      unpaidHeight: Math.max(0, height - paid),
+      resizesLayoutViewport: true,
+    })
+    recordKeyboardHeight(field, 346)
+    const { result } = renderNative()
+
+    //predicted on the focus frame; the WebView's resize lands BEFORE the OS's report
+    focusField()
+    paid = 336
+    act(() => nativeBridge.repay())
+    expect(result.current).toEqual({
+      isOpen: true,
+      height: 346,
+      unpaidHeight: 10,
+      resizesLayoutViewport: true,
+    })
+
+    //the resize is no confirmation: the prediction still retracts when no report follows
+    paid = 346
+    act(() => nativeBridge.repay())
+    expect(result.current.unpaidHeight).toBe(0)
+    advance(PREDICT_CONFIRM_MS + 20)
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: true,
+    })
   })
 
   it("never predicts for a field that raises no keyboard", () => {
@@ -631,7 +830,12 @@ describe("useKeyboard — native", () => {
       readOnly.focus()
       readOnly.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
     })
-    expect(result.current).toEqual({ isOpen: false, height: 0 })
+    expect(result.current).toEqual({
+      isOpen: false,
+      height: 0,
+      unpaidHeight: 0,
+      resizesLayoutViewport: false,
+    })
     readOnly.remove()
   })
 })
