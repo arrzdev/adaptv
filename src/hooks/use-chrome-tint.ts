@@ -68,8 +68,10 @@ export type UseChromeTint = {
  * ```
  *
  * **Treat it as a progressive enhancement, and call it unconditionally.** An installed PWA and a
- * native build have no toolbar to tint, and iOS 26+ and Firefox ignore the tag outright — in all
- * of those the calls run and change nothing anyone can see, which is exactly what they should do.
+ * native build have no toolbar to tint, and Firefox ignores the tag outright — in all of those
+ * the calls run and change nothing anyone can see, which is exactly what they should do. An iOS 26
+ * Safari tab ignores the tag too, and gets the same colour through the band donor
+ * `capabilities/theme-color.ts` keeps beside it — still nothing for the caller to know.
  * There is no platform check to write at the call site, and writing one would be a bet on
  * detecting a platform correctly in exchange for nothing. The full matrix is in
  * `capabilities/theme-color.ts`.
