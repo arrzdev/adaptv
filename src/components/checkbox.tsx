@@ -461,6 +461,10 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
     const gestureEngineHandlers = useGestureEngine({
       disabled: isDisabled,
       onPressUp: toggle,
+      //an OUTER label (a settings row wrapping this checkbox) forwards its
+      //click to the input; no press on this label produced it, so the engine
+      //hands it here and the checkbox toggles exactly as if it had been tapped
+      onUnownedClick: toggle,
     })
 
     const boxChild = resolveCheckboxBoxChild(children)
