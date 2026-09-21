@@ -31,6 +31,11 @@
 //and it is what a browser without a registered worker, a private-mode Safari or
 //a pre-plugin binary reports.
 import { LocalNotifications } from "@capacitor/local-notifications"
+import type { OpenedNotification } from "#adaptv/sw/sw.notification-protocol"
+import {
+  NOTIFICATION_OPENED_QUERY,
+  readOpenedMessage,
+} from "#adaptv/sw/sw.notification-protocol"
 import { hasNativePlugin } from "#adaptv/utils/native-plugins"
 import { isIOS, isNativePlatform } from "#adaptv/utils/platform"
 
@@ -67,12 +72,20 @@ export interface NotifyOptions {
   body: string
   /** Stable id, so a later `cancelNotification` can name it. Defaults to a fresh one. */
   id?: number
+  /**
+   * Carried through the OS and handed back when someone taps it. Strings only:
+   * the payload crosses a native bridge on one target and is structured-cloned
+   * into a service worker on another, and a string is what both keep intact.
+   */
+  data?: Record<string, string>
 }
 
 export interface ScheduleOptions extends NotifyOptions {
   /** When it should fire. In the past is the OS's problem, not ours: it fires at once. */
   at: Date
 }
+
+export type { OpenedNotification }
 
 export interface ScheduledNotification {
   id: number
@@ -239,6 +252,7 @@ export async function notify({
   title,
   body,
   id = freshId(),
+  data,
 }: NotifyOptions): Promise<NotifyOutcome> {
   const permission = await checkNotifyPermission()
   if (permission === "unavailable") return "unavailable"
@@ -247,7 +261,9 @@ export async function notify({
   if (nativePlugin()) {
     try {
       await LocalNotifications.schedule({
-        notifications: [{ id, title, body, isExactNotification: false }],
+        notifications: [
+          { id, title, body, extra: data, isExactNotification: false },
+        ],
       })
       return "shown"
     } catch {
@@ -257,7 +273,14 @@ export async function notify({
   const reg = await registration(true)
   if (!reg) return "unavailable"
   try {
-    await reg.showNotification(title, { body, tag: String(id) })
+    await reg.showNotification(title, {
+      body,
+      tag: String(id),
+      //Read back by the worker's click handler; the tag alone cannot carry a
+      //payload, and a tapped notification with no payload is a tap the app
+      //cannot tell apart from any other. -> sw.notifications.ts
+      data: { id, data: data ?? {} },
+    })
     return "shown"
   } catch {
     return "unavailable"
@@ -274,6 +297,7 @@ export async function scheduleNotification({
   body,
   at,
   id = freshId(),
+  data,
 }: ScheduleOptions): Promise<ScheduleOutcome> {
   if (!nativePlugin()) return "unsupported"
   const permission = await checkNotifyPermission()
@@ -282,7 +306,14 @@ export async function scheduleNotification({
   try {
     await LocalNotifications.schedule({
       notifications: [
-        { id, title, body, schedule: { at }, isExactNotification: false },
+        {
+          id,
+          title,
+          body,
+          extra: data,
+          schedule: { at },
+          isExactNotification: false,
+        },
       ],
     })
     return "scheduled"
@@ -342,4 +373,85 @@ export async function cancelNotification(id: number): Promise<void> {
     const open = await reg.getNotifications({ tag: String(id) })
     for (const n of open) n.close()
   } catch {}
+}
+
+/**
+ * Hear which notification was tapped.
+ *
+ * The two targets deliver a tap through completely different doors and neither
+ * one is the page: iOS and Android hand it to the native bridge, a browser
+ * hands it to the service worker, and on the web the tap can arrive when there
+ * is no page at all — it is what started the app. Both are one subscription
+ * here, and it never rejects: a target that cannot deliver a tap simply never
+ * calls back.
+ *
+ * ```tsx
+ * useEffect(() => onNotificationOpened(({ data }) => go(data.route)), [])
+ * ```
+ *
+ * @returns unsubscribe
+ */
+export function onNotificationOpened(
+  handler: (opened: OpenedNotification) => void,
+): () => void {
+  if (nativePlugin()) return nativeOpenSubscription(handler)
+  return webOpenSubscription(handler)
+}
+
+function nativeOpenSubscription(
+  handler: (opened: OpenedNotification) => void,
+): () => void {
+  let live = true
+  //`addListener` resolves a handle, and a component that unmounts before it
+  //resolves must still be able to leave. The flag is what makes the early
+  //unsubscribe stick.
+  const pending = LocalNotifications.addListener(
+    "localNotificationActionPerformed",
+    (event) => {
+      //Only the body tap. adaptv registers no action buttons, but the plugin
+      //delivers those through the same event, and an app that adds one should
+      //not find its route handler firing for a "Snooze".
+      if (event.actionId && event.actionId !== "tap") return
+      const extra = (event.notification.extra ?? {}) as Record<
+        string,
+        unknown
+      >
+      const data: Record<string, string> = {}
+      for (const [key, value] of Object.entries(extra))
+        if (typeof value === "string") data[key] = value
+      handler({ id: event.notification.id, data })
+    },
+  ).catch(() => null)
+
+  return () => {
+    live = false
+    pending.then((h) => {
+      if (h && !live) h.remove()
+    })
+  }
+}
+
+function webOpenSubscription(
+  handler: (opened: OpenedNotification) => void,
+): () => void {
+  if (typeof navigator === "undefined" || !navigator.serviceWorker)
+    return () => {}
+  const container = navigator.serviceWorker
+
+  const listener = (event: MessageEvent) => {
+    const opened = readOpenedMessage(event.data)
+    if (opened) handler(opened)
+  }
+  container.addEventListener("message", listener)
+
+  //A tap with no window open starts the app, and by the time this runs the
+  //broadcast has already happened. Asking is how that tap is not lost.
+  container.ready
+    .then((reg) => {
+      const worker = reg.active ?? container.controller
+      worker?.postMessage({ type: NOTIFICATION_OPENED_QUERY })
+    })
+    .catch(() => {})
+
+  return () => container.removeEventListener("message", listener)
 }
