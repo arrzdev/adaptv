@@ -510,11 +510,12 @@ export function DrawerEngine({
     }
   }, [open])
 
-  //Whether this drawer can have dimmed the chrome at all: only a backdrop dims it. Mirrored
-  //after every commit because React detaches the ref before the unmount cleanup below reads it.
-  const hadBackdropRef = useRef(false)
+  //The backdrop this drawer can have dimmed the chrome with: only a backdrop dims it, and the
+  //dim is handed back per backdrop. Mirrored after every commit because React detaches the ref
+  //before the unmount cleanup below reads it.
+  const lastBackdropRef = useRef<HTMLElement | null>(null)
   useLayoutEffect(() => {
-    hadBackdropRef.current = backdropRef.current !== null
+    lastBackdropRef.current = backdropRef.current
   })
 
   useEffect(() => {
@@ -528,9 +529,8 @@ export function DrawerEngine({
       //open). Without this the toolbar kept the dim on the next page. A drawer whose
       //`open` has already turned false has restored the tint or is restoring it, and
       //one with no backdrop never dimmed it; neither may undo another drawer's dim.
-      if (openRef.current && hadBackdropRef.current) {
-        clearDrawerChromeTint()
-      }
+      const backdrop = lastBackdropRef.current
+      if (openRef.current && backdrop) clearDrawerChromeTint(backdrop)
     }
   }, [])
 
@@ -1418,9 +1418,9 @@ export function DrawerEngine({
           stopDrawerBackdropAnimation(backdrop)
           backdrop.style.transition = "none"
           backdrop.style.opacity = "0"
+          //nothing animates on this path, and the chrome must not be left dimmed
+          clearDrawerChromeTint(backdrop)
         }
-        //nothing animates on this path, and the chrome must not be left dimmed
-        clearDrawerChromeTint()
         return
       }
 
