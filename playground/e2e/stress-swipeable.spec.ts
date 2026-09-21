@@ -616,11 +616,14 @@ test.describe("Swipeable rows under stress", () => {
     //premise: the row follows the finger to −50. Polled, not read once: the
     //CDP call returns before the renderer has run the touchmove handler (a
     //move is dispatched with the next frame), so a single read after a
-    //fixed wait can see the row still on an earlier move under load
+    //fixed wait can see the row still on an earlier move under load.
+    //Measured flaky at 2000ms under ordinary host load in this same
+    //session, same as the other two premises above and below: give it the
+    //same 5000ms room rather than call it flaky
     await expect
       .poll(async () => Math.abs((await contentX(page, 0)) - -50), {
         message: `premise: the row must follow the finger to −50 — sat at ${await contentX(page, 0)}`,
-        timeout: 2000,
+        timeout: 5000,
       })
       .toBeLessThanOrEqual(TOLERANCE_PX)
 
