@@ -26,17 +26,6 @@ import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/**
- * True when `target` sits inside a swipeable row root (`[data-swipeable-root]`).
- * Used by `PullToRefresh` to yield the vertical gesture to an active row swipe.
- */
-export function isSwipeableGestureTarget(
-  target: EventTarget | null,
-): boolean {
-  if (!(target instanceof Element)) return false
-  return target.closest("[data-swipeable-root]") !== null
-}
-
 type SwipeableConfig = {
   /** Fraction of natural width the row must pass to open on release. */
   openThreshold: number

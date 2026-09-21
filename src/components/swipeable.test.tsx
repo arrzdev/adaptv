@@ -8,11 +8,7 @@ import type {
   SwipeableGroupHandle,
   SwipeableHandle,
 } from "#adaptv/components/swipeable"
-import {
-  isSwipeableGestureTarget,
-  Swipeable,
-  useSwipeable,
-} from "#adaptv/components/swipeable"
+import { Swipeable, useSwipeable } from "#adaptv/components/swipeable"
 
 /*
  * The row engine, driven the way a consumer's user drives it.
@@ -1580,20 +1576,6 @@ describe("Swipeable · slots and structure", () => {
       "inset(0 round 12px 12px 12px 12px)",
     )
     expect(parts(container, 1).root.style.clipPath).toBe("")
-  })
-
-  it("isSwipeableGestureTarget finds a row from anything inside it", () => {
-    const { container, getByText } = render(
-      <>
-        <Row />
-        <p>outside</p>
-      </>,
-    )
-    expect(isSwipeableGestureTarget(getByText("row"))).toBe(true)
-    expect(isSwipeableGestureTarget(parts(container).root)).toBe(true)
-    expect(isSwipeableGestureTarget(getByText("outside"))).toBe(false)
-    expect(isSwipeableGestureTarget(null)).toBe(false)
-    expect(isSwipeableGestureTarget(window)).toBe(false)
   })
 
   it("useSwipeable outside a row is a loud error", () => {

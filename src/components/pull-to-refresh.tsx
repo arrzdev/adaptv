@@ -27,7 +27,6 @@ import {
   STUCK_HEIGHT,
   STUCK_VERTICAL_PADDING,
 } from "#adaptv/components/pull-to-refresh-physics"
-import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { clamp } from "#adaptv/utils/clamp"
@@ -156,10 +155,6 @@ function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (!ref) return
   if (typeof ref === "function") ref(value)
   else (ref as MutableRefObject<T | null>).current = value
-}
-
-function isFromSwipeable(target: EventTarget | null) {
-  return isSwipeableGestureTarget(target)
 }
 
 const PULL_TO_REFRESH_MOTION_INSTANT = { duration: 0 } as const
@@ -599,7 +594,6 @@ export const PullToRefresh = forwardRef<
     }
 
     function onTouchStart(e: TouchEvent) {
-      if (isFromSwipeable(e.target)) return
       if (fingerId !== null && gestureActive.current) return
       const touch = e.changedTouches[0]
       if (!touch) return
@@ -671,13 +665,20 @@ export const PullToRefresh = forwardRef<
   }, [enabled, scrollContainerRef])
 
   //the pointer path is the mouse's, and on a touch screen the shadow of the
-  //touch path above: only the primary pointer is the pull's
+  //touch path above: only the primary pointer is the pull's.
+  //
+  //The pointer is captured on this root, and only once the axis has resolved
+  //vertical, never at pointerdown and never on the element under the
+  //pointer: a capture at pointerdown steals the click from a button the
+  //press was aimed at, and a capture on the child it landed on is a capture
+  //a Swipeable row inside this root later moves to its own content at ITS
+  //lock, which fires lostpointercapture at that child and ends the row's
+  //mouse swipe the moment it locks. A pull that is vertical is no row's
+  const capturedPointerRef = useRef<number | null>(null)
   const onPointerDown = useCallback(
     (e: PointerEvent) => {
       if (!e.isPrimary) return
-      if (isFromSwipeable(e.target)) return
-      if (!beginGesture(e.clientX, e.clientY)) return
-      ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+      beginGesture(e.clientX, e.clientY)
     },
     [beginGesture],
   )
@@ -685,7 +686,10 @@ export const PullToRefresh = forwardRef<
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
       if (!e.isPrimary) return
-      processPullMove(e.clientX, e.clientY)
+      if (!processPullMove(e.clientX, e.clientY)) return
+      if (capturedPointerRef.current === e.pointerId) return
+      capturedPointerRef.current = e.pointerId
+      ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     },
     [processPullMove],
   )
@@ -693,7 +697,12 @@ export const PullToRefresh = forwardRef<
   const onPointerUp = useCallback(
     (e: PointerEvent) => {
       if (!e.isPrimary) return
-      ;(e.target as HTMLElement).releasePointerCapture?.(e.pointerId)
+      if (capturedPointerRef.current === e.pointerId) {
+        capturedPointerRef.current = null
+        ;(e.currentTarget as HTMLElement).releasePointerCapture?.(
+          e.pointerId,
+        )
+      }
       if (!gestureActive.current) return
       if (!isPulling.current) {
         clearGesture()
