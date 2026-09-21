@@ -91,6 +91,18 @@ export interface WheelColumnProps {
   itemClassName?: string
 }
 
+/** True for an empty list, no tracked finger, or a list naming the tracked one. */
+function namesTrackedFinger(
+  list: ArrayLike<{ identifier: number }> | undefined,
+  fingerId: number | null,
+) {
+  if (!list || list.length === 0 || fingerId === null) return true
+  for (let i = 0; i < list.length; i++) {
+    if (list[i]?.identifier === fingerId) return true
+  }
+  return false
+}
+
 // FREE momentum scroll — no CSS scroll-snap. `y mandatory` on iOS truncates
 // flings to a crawl (the browser aims for a nearby snap point instead of
 // letting the drum spin), which reads as "stuck". Instead the glide runs
@@ -116,6 +128,12 @@ export function WheelColumn({
   const scrollRef = useRef<HTMLFieldSetElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const draggingRef = useRef(false)
+  //the finger that is spinning the wheel. A thumb steadying the phone lands
+  //and lifts anywhere on the screen while it spins, on this same event
+  //stream: its touchstart does not restart the spin and its lift is not the
+  //lift. `touches` is every point on the whole surface, so the lift is read
+  //off `changedTouches`, the points THIS event is about
+  const fingerIdRef = useRef<number | null>(null)
   //true from the first scroll event until settle — covers the momentum glide
   //after the finger lifts, where draggingRef is already false
   const scrollingRef = useRef(false)
@@ -269,16 +287,23 @@ export function WheelColumn({
 
   // touch (not pointer) events: iOS fires pointercancel mid-scroll, which would
   // wrongly look like a release; touchend only fires on the real finger-lift
-  function handleTouchStart() {
+  function handleTouchStart(e: React.TouchEvent) {
+    if (draggingRef.current) return
     draggingRef.current = true
+    fingerIdRef.current = e.changedTouches?.[0]?.identifier ?? null
     keyTargetRef.current = null
     window.clearTimeout(commitTimer.current)
     //paint from the first frame of the drag, before any scroll event fires
     ensurePaintLoop()
   }
 
-  function handleTouchEnd() {
+  function handleTouchEnd(e: React.TouchEvent) {
     if (!draggingRef.current) return
+    //a lift or a cancel that names another finger (the thumb) leaves the
+    //spinning finger down: not the lift, no settle yet. One that names the
+    //spinning finger, or names no finger at all (a driver's bare cancel), is
+    if (!namesTrackedFinger(e.changedTouches, fingerIdRef.current)) return
+    fingerIdRef.current = null
     draggingRef.current = false
     window.clearTimeout(commitTimer.current)
     commitTimer.current = window.setTimeout(() => commitRef.current(), 120)
