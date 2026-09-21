@@ -59,10 +59,10 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   - Native mask is **colour-driven**, not an image: Android launch theme + `colors.xml` /
     `colors-night.xml`; iOS `AdaptvSplash` colour asset + a solid launch storyboard. Mascot lives *only*
     in the React splash → appears once.
-  - `splashMaskMode`: `preferences` (follows `useTheme`) / `system` / `light` / `dark`. For
-    `preferences`, the CLI writes a per-app night override (Android `UiModeManager` in a adaptv-owned
-    `MainActivity`; iOS `AppDelegate.overrideUserInterfaceStyle`) so the splash tracks the app theme, not
-    the device — on the **next** launch (1-launch, no "open twice").
+  - `splashMaskMode`: `preferences` (follows the `useTheme` preference, §13) / `system` / `light` /
+    `dark`. For `preferences`, the CLI writes a per-app night override (Android `UiModeManager` in a
+    adaptv-owned `MainActivity`; iOS `AppDelegate.overrideUserInterfaceStyle`) so the splash tracks the
+    app theme, not the device — on the **next** launch (1-launch, no "open twice").
   - Android-12 system splash: transparent `windowSplashScreenAnimatedIcon` → flat colour, no icon.
   - Code: `bin/lib/native.mjs` (`patchAndroidSplash` / `patchIosTheme` / `resolveSplashMask`; the
     first two are re-exported through `bin/lib/icons.mjs`),
@@ -314,6 +314,24 @@ Rule of thumb: `app:` styles apply to **installed** (standalone **or** native); 
   compare the barrel to the directory. `Image` has its own design doc
   ([`image.md`](image.md)); the component sub-packages (`drawer/`, `dropdown/`, `avoid-keyboard/`)
   are a recorded documentation gap.
+
+### 13. Theme — Light / Dark / System, with no flash and no mismatch
+- **Problem:** a settings screen has to offer Light / Dark / System and show which one is chosen, and
+  "system" cannot be read back from the painted appearance. Two mounted instances (the shell's, which
+  drives the status bar, and the screen's) must never disagree, and the server cannot know the stored
+  choice.
+- **How:** `src/hooks/use-theme.ts` — `const { preference, resolved, setPreference } = useTheme()`.
+  The pre-paint script stamps `<html>` (class, `color-scheme`, `data-ui-theme`) before hydration;
+  every instance reads that stamp through one module-level `useSyncExternalStore` store, so a
+  `setPreference` in one instance moves all of them in the same render. `setPreference` is
+  `applyUiThemePreference`: stamp, `localStorage`, native mirror (§3). The OS listener acts only in
+  system mode; a resume restamps from storage. Hydration renders the server's `system`/`light`, and a
+  layout effect re-renders onto the stamp before paint.
+- **Test:** `src/hooks/use-theme.test.ts` (unit, including a `hydrateRoot` over server HTML, and one
+  outside `act` that reads the DOM before the hydration's passive effects run);
+  `playground/e2e/settings.spec.ts` on chromium + webkit: pick System under an emulated dark scheme,
+  flip the emulation, pick Dark, flip again, reload — no hydration error. On device: pick System,
+  change the OS appearance from Control Center / Quick Settings, and the app follows with no relaunch.
 
 ---
 

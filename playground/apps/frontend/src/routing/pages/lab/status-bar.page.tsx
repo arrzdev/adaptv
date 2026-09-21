@@ -66,7 +66,7 @@ function LabStatusBarPage() {
         steps={[
           "Read the support row: on web everything below is a no-op and the page says so.",
           "Press the light and dark icon-style buttons. On native the status-bar icons must actually change colour.",
-          "Toggle the theme from Settings and come back: the bars must follow, because useStatusBar(resolvedTheme) is mounted app-wide.",
+          "Change the theme in Settings and come back: the bars must follow, because the shell mounts useStatusBar(theme.resolved) app-wide.",
           "On Android, press the edge-to-edge button and confirm the app draws UNDER the bars — and that the bars are transparent, not grey.",
           "Press the inset re-probe and check the four inset variables below it: they must be non-zero for the bars that exist.",
           "Rotate the device and re-probe. The insets must change.",
