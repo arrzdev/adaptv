@@ -49,6 +49,8 @@ export const routes = rootRoute([
     route("/lab/offline", "pages/lab/offline.page.tsx"),
     route("/lab/edge-swipe", "pages/lab/edge-swipe.page.tsx"),
     route("/lab/screens", "pages/lab/screens.page.tsx"),
+    //the display cluster's stress harness — driven by e2e/stress-*.spec.ts
+    route("/lab/stress-display", "pages/lab/stress-display.page.tsx"),
     //framework behaviour with no component of its own
     route("/lab/cascade-layers", "pages/lab/cascade-layers.page.tsx"),
     route("/lab/press-states", "pages/lab/press-states.page.tsx"),

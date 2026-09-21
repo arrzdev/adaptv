@@ -233,6 +233,86 @@ describe("the whole-sheet touch drag", () => {
 })
 
 /*
+ * A drag that begins while the sheet is still sliding open.
+ *
+ * The open is a CSS keyframe, and a running keyframe outranks the inline transform. So at the
+ * moment the drag commits the sheet is PAINTED somewhere down the curve while the inline style
+ * already says 0 (the target). A takeover that only switched the transition off dropped the
+ * keyframe without committing its live value: the sheet snapped to 0 and every finger frame after
+ * that was measured from there — it moved UP against a finger moving down, then jumped by the
+ * whole remaining travel on release (stress-drawer.spec.ts, cases 2 and 2b, on both engines).
+ *
+ * happy-dom runs no keyframe, so the mid-slide paint is what `getComputedStyle` reports for the
+ * panel: 200px down while the inline transform says 0 — exactly the split the engine has to read
+ * through.
+ */
+describe("a drag that starts mid-slide", () => {
+  const PAINTED_Y = 200
+
+  function paintPanelAt(panel: HTMLElement, translateY: number) {
+    const real = window.getComputedStyle.bind(window)
+    const spy = vi
+      .spyOn(window, "getComputedStyle")
+      .mockImplementation((element, pseudo) => {
+        const style = real(element, pseudo)
+        if (element !== panel) return style
+        return new Proxy(style, {
+          get: (target, key) =>
+            key === "transform"
+              ? `translate3d(0, ${translateY}px, 0)`
+              : Reflect.get(target, key),
+        })
+      })
+    return () => spy.mockRestore()
+  }
+
+  it("the whole-sheet touch drag starts from where the sheet is painted and closes from there", async () => {
+    const { panel, body, onOpenChange } = await mountOpenDrawer()
+    const unpaint = paintPanelAt(panel, PAINTED_Y)
+
+    dispatchTouch(body, "touchstart", 100)
+    //past the slop: the takeover reads the painted 200px, not the inline 0
+    dispatchTouch(body, "touchmove", 110)
+    unpaint()
+    expect(translateY(panel)).toBe(PAINTED_Y)
+
+    dispatchTouch(body, "touchmove", 250)
+    expect(translateY(panel)).toBe(PAINTED_Y + 140)
+
+    //the release rule reads the finger's own travel, and the close continues from the sheet
+    dispatchTouch(body, "touchend", 480)
+    expect(releaseSpy.mock.calls[0]?.[0]).toBe(370)
+    await vi.waitFor(() =>
+      expect(onOpenChange).toHaveBeenCalledWith(false),
+    )
+  })
+
+  it("the handle's mouse drag starts from where the sheet is painted", async () => {
+    const { panel, handle, backdrop, onOpenChange } =
+      await mountForHandleDrag()
+    const unpaint = paintPanelAt(panel, PAINTED_Y)
+
+    mouse(handle, "pointerdown", 100)
+    unpaint()
+    expect(translateY(panel)).toBe(PAINTED_Y)
+
+    mouse(handle, "pointermove", 150)
+    expect(translateY(panel)).toBe(PAINTED_Y + 50)
+    //back above where it was taken over, the sheet still follows — it is below open
+    mouse(handle, "pointermove", 50)
+    expect(translateY(panel)).toBe(PAINTED_Y - 50)
+
+    //a short, slow drag from mid-slide is not a close: the sheet snaps open from where it is
+    await settle(600)
+    mouse(handle, "pointerup", 50)
+    await settle()
+    expect(translateY(panel)).toBe(0)
+    expect(backdrop.dataset.state).toBe("open")
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+})
+
+/*
  * The handle's mouse drag claims the shared arbiter, so it has to give it back.
  *
  * A trackpad on an iPad or a touchscreen laptop's mouse drags the sheet by its handle, and that
