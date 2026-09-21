@@ -1748,6 +1748,47 @@ Both bands, and the fallback lands on the theme rather than on the layout above.
 Declined for two reasons that do not rest on that inference. The backdrop is see-through (`bg-black/40` by default, 55% in the lab), and the bar already shows the page composited under it, so a shell dimmed underneath it would dim the band twice. And a colour painted from JavaScript every frame is a repaint of the whole page, held to 60 Hz on iOS (`animation.md` §1.1). Both reasons apply to a `body` paint as much as to `html`. The sketch above names `html`, and on its own that target misses the bars whenever the app paints its `body`, as the playground does: on the same simulator a static page with an `html` of `#0b6e4f` under a `#eeeeec` body left both bands `#eeeeec`, and the same page with a transparent `body` gave `#0b6e4f` on both. The obvious lever, a backdrop that animates its `background-color` alpha instead of `opacity` in case Safari reads the declared colour every frame, was measured and **does not work**. On a static probe page in the same Safari (a `fixed inset-0` layer, alpha 0 → 0.4 over 250 ms, `opacity` held at 1, three runs), the top band froze at the colour of the layer's first painted frame, 1–16% of the page's dim, for the whole 2.5 s the layer was open, while the page under it was fully dimmed: band minus page 71–87/255 median. On close it held that value until the layer was removed and only then cross-faded back. That is worse than the `opacity` step, which at least lands on the full dim. The `opacity` control on the same page reproduced the step, though not always on the first frame: 28–30 ms late in two runs and 252 ms late in one. It would also have collided with a locked rule: `animation.md` §1 says a design that needs `background-color` animated is a design change, and §1.1 is why. What might make Safari re-read the layer while it fades is untested.
 
 **2026-09-21, traced in WebKit and measured — how iOS 26 Safari picks each band's colour, and why the bottom one stayed in the theme colour under an open sheet.** The owner's report: with a drawer open in Safari on iOS 26 the bottom toolbar keeps the theme colour under a white sheet. Reproduced on the iOS 26.1 (`23B86`) simulator with the app's Create-task drawer on the dev server: the sheet reads `#fefefd` down to its last row at 776 pt, and the band under the toolbar (776 to 874 pt) reads `#eeeeec`, the `html`/`body` colour, at both edges of the screen. The lab's basic sheet, which B33 records taking the sheet's own colour, is short; the task form is not. The mechanism is in WebKit's source, `LocalFrameView::fixedContainerEdges` and `Page::updateFixedContainerEdges` (`Source/WebCore/page/`, main as of this date), and it is not pixel sampling first. Per edge, WebKit hit-tests the midpoint of that edge, 4 px in, and walks up from the element it hits to the first ancestor that is `position: fixed` or `sticky` and has a layer. That ancestor is measured against the viewport: narrower than 90% of it and it is skipped (a "sidebar" if it is tall); taller than **1.05 viewports** and it is skipped as too large, unless it is a dimming layer; between 90% and 105% on both axes it is viewport-sized; a viewport-sized box with no children and a transparent or translucent background is a dimming layer. The colour is the first visible `background-color` met on the way up among boxes at least 90% of the viewport wide and more than 10 px on each side, and two different ones cancel to none; a dimming layer's colour, or any with alpha below 0.75, is blended over the page background. Two rules explain B33's step and its frozen alpha: a viewport-sized or dimming container **keeps the colour already recorded** for that edge, so the backdrop's colour is read once, on the first frame it is visible, and not again; and when nothing is found, the colour is sampled from a 2 px strip at the edge, painting fixed and sticky layers only. With no fixed container at an edge at all, Safari shows the page background colour, live — which is why B17's probe with the colour on `html` moved both bands and the one with a fixed `inset-0` layer moved them to that layer's colour. So the two bands are independent on iOS 26: each is derived from whatever fixed or sticky element touches its own edge, and there is no API for either; the lever for one edge is a full-width fixed element no taller than 1.05 viewports with a solid `background-color` at that edge, and with none, the `html`/`body` paint. iOS 18 Safari is the meta tag at the top with the bottom derived from it; Android Chrome tints its top toolbar from the meta tag and never the navigation bar (which follows the device theme). The drawer's failure was the 1.05 rule: the panel was the sheet **plus** the hidden tail below the fold (`bottom: -excess` and a spacer of 55% of the viewport), so a form-sized sheet measured about 1.3 viewports, WebKit walked past it to `body`, found nothing, and Safari fell back to the page colour. A static probe reproduced it exactly: a 571 px fixed sheet in `#ffddaa` with `bottom: -314px` gave a white band (the page), and the same sheet with the tail as an absolutely positioned child gave `#fedca9`. The fix moves the tail out of the panel's box: the panel sits at `bottom: 0` and the tail is an absolute child at `top: 100%` inheriting the panel's background (`[data-pwa-drawer-tail]`, `styles/drawer.css`); `closedY` is the panel's own height, nothing subtracted. After it, the Create-task drawer's band reads `#fefefd` at both edges on the same simulator. Regression tests: `drawer-tail.test.tsx` (anchor and structure), `styles/drawer.test.ts` (the compiled rule), `playground/e2e/drawer-tail.spec.ts` (the panel's box stays under 1.05 viewports with the tail below it, both engines). The top band's step is now explained rather than inferred, and it cannot follow the fade: Safari records a dimming layer's colour once. A second full-width fixed strip at the top edge with a per-frame `background-color` would be read live (it would classify as a plain candidate), but it would sit visibly on the page and be a per-frame paint, so it is declined under `animation.md` §1. What was not measured: the installed PWA and the native app on iOS 26 run the same WebKit, so the same rule should govern their home-indicator band, but no screenshot was taken there.
+### B34 — a drag that starts while the sheet is still sliding open fights the finger ✅ **FIXED** (found 2026-09-21)
+
+**Symptom.** Tap to open and, before the slide lands, put a finger on the sheet and pull down. The
+sheet keeps sliding UP under the finger, then jumps to the finger's offset the instant the slide
+ends. Measured in `playground/e2e/stress-drawer.spec.ts` cases 2 and 2b on both engines: 11 of 11
+finger moves went against the finger on webkit, 9 of 11 on both engines from the handle, and the
+release jumped from 0 to 160px.
+
+**Cause.** The open is the `pwa-drawer-slide` `@keyframes` rule (`animation.md` §0, memory
+`drawer-settle-is-authored-in-css`), and a running animation outranks the inline transform. The
+drag's takeover (`commitSheetDrag` for the whole-sheet touch drag, `handleHandlePointerDown` for
+the handle) only wrote `transition: none`, so the keyframe kept carrying the panel while every move
+wrote `y` from the slide's TARGET (0) — a position the sheet had not reached.
+
+**Fix.** `takeOverPanelForDrag` (`drawer-engine.tsx`): read the painted `translateY`, drop the
+keyframe at that value (`clearDrawerPanelTransition`), fold the keyboard FLIP into `y`, and measure
+the finger's travel from there (`dragOriginYRef`, `dragOffsetFor`). The same freeze-at-the-live-
+position discipline `freezePanelForFlip` and the close→reopen resume already use. The release rule
+still reads the finger's own travel (`drawerReleaseCloses`), so a tap on the handle mid-slide does
+not close the sheet; the close then continues from where the sheet is. Pinned by
+`drawer-engine.test.tsx` ("a drag that starts mid-slide") and the two e2e cases.
+
+### B35 — closing the inner of two open drawers handed the browser chrome back to the theme ✅ **FIXED** (found 2026-09-21)
+
+**Symptom.** A sheet opened from inside a sheet (the lab's "4 · Nested"). Closing the inner one
+returned `<meta name="theme-color">` — the browser toolbar's tint in a tab — to the theme colour
+(`#eeeeec`) while the outer sheet still dimmed the page (`#797979`). Measured in
+`playground/e2e/stress-drawer.spec.ts` case 5 on both engines.
+
+**Cause.** `drawer-chrome-tint.ts` held ONE module-level tint, and a fade to 0 always restored the
+theme base; the tint had no notion of a sheet underneath.
+
+**Fix.** The tint is a stack of scrims keyed on the backdrop element, folded from the theme up at
+each use: the inner scrim composites over the outer's dim (the pixel the toolbar would show if it
+were part of the page), and a fade to 0 or a `clearDrawerChromeTint(backdrop)` removes only that
+backdrop's layer and returns the chrome to the layer below at full dim, or to the theme when none is
+left; a layer that leaves from the middle (a Back that unmounts the outer sheet first) leaves the
+ones above it composited over what is really under them. Layers whose backdrop left the document
+are pruned. On iOS 26 the tag is inert either way (B17); this is the iOS 18 / Android Chrome tab.
+Pinned by `drawer-chrome-tint.test.ts` ("two sheets") and the e2e case.
+
 ---
 
 ## 🚨 In dev, every Tailwind variant and breakpoint was dead on the floor browsers ✅ **FIXED** (found 2026-09-13)
