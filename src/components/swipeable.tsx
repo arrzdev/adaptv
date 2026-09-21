@@ -68,6 +68,15 @@ type OpenSide = false | Side
 /** Trailing sample window (ms) used to compute release velocity on flick. */
 const VELOCITY_WINDOW_MS = 60
 
+/**
+ * Travel the engine calls no travel at all (px).
+ *
+ * `applyOffset` parks the transform at `""` inside this of home, and `springTo`
+ * calls the row already at rest inside this of its target. Anything smaller is
+ * a rounding artefact of the spring, not a movement anyone can see.
+ */
+const SETTLE_EPSILON_PX = 0.5
+
 /** Mirror the root's border-radius onto clip-path — overflow alone lets a
  *  transformed child bleed past rounded corners on iOS WebKit. */
 function syncRootClip(root: HTMLElement) {
@@ -568,7 +577,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
     const applyOffset = useCallback(
       (x: number) => {
         offsetRef.current = x
-        const settled = Math.abs(x) < 0.5
+        const settled = Math.abs(x) < SETTLE_EPSILON_PX
         const content = contentRef.current
         if (content) {
           content.style.transform = settled ? "" : `translateX(${x}px)`
@@ -630,7 +639,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         stopSpring()
 
         const atRest =
-          Math.abs(offsetRef.current - target) < 0.5 &&
+          Math.abs(offsetRef.current - target) < SETTLE_EPSILON_PX &&
           Math.abs(velRef.current) < 1
         if (atRest || reducedMotionRef.current) {
           applyOffset(target)
@@ -957,11 +966,25 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
             //touch and this lock, so the offset recorded at the touch is
             //stale by that travel, and tracking from it would throw the row
             //back by that much in one frame. Track from where the row IS.
-            //From rest the two agree and the dead zone stays as pinned.
-            //The spring's last velocity dies with it: the finger owns the
-            //row now, and the release spring starts from the finger's own
-            //velocity, not the one the interrupted spring left behind
-            if (offsetRef.current !== down.start) {
+            //
+            //Only a carry the engine itself counts as movement re-anchors the
+            //drag. A closing spring parks the transform at `""` a fraction of
+            //a pixel from home (`applyOffset`) and zeroes the ref a frame
+            //later, so a finger landing in that window records a `start` that
+            //disagrees with the settled offset by less than a pixel on a row
+            //nobody saw move. Re-anchoring on that fiction is not free: it
+            //pins the row where it stands at the lock and so swallows the
+            //whole direction-lock dead zone, leaving every later position
+            //short of the finger by the slop for the rest of the drag.
+            //Above the threshold the row really was in flight and the dead
+            //zone is the right price for not throwing it backwards; below it,
+            //the dead zone stays as pinned, exactly as from rest.
+            //The spring's last velocity dies with it either way: the finger
+            //owns the row now, and the release spring starts from the finger's
+            //own velocity, not the one the interrupted spring left behind
+            if (
+              Math.abs(offsetRef.current - down.start) >= SETTLE_EPSILON_PX
+            ) {
               down.start = offsetRef.current - dx
             }
             velRef.current = 0
