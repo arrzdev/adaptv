@@ -89,6 +89,31 @@ export function dampenDrawerPull(v: number) {
 }
 
 /**
+ * The sheet's offset for a finger that has travelled `draggedDown` px (down positive) since the
+ * drag took the sheet over at `origin` — where it was painted at that moment: 0 at rest, further
+ * down mid-slide, ABOVE zero (negative) mid-FLIP or mid-snap-back from an upward pull.
+ *
+ * Below the open position the sheet is the finger's, 1:1. Above it the sheet only gives a little
+ * ({@link dampenDrawerPull}), and the pull is measured from where the sheet already is: a sheet
+ * taken over at -80 stays at -80 on the first move and gives from there, rather than being
+ * re-read as "80px of finger pull" and snapped to the 21px that much pull would earn — a 59px
+ * jump on the first frame of the drag, the kind `felt-bugs-live-in-the-first-few-px` is about.
+ * `f(0) = origin` in every case, so the takeover itself never moves the sheet.
+ */
+export function dragOffsetFor(
+  origin: number,
+  draggedDown: number,
+): number {
+  if (origin < 0) {
+    return draggedDown < 0
+      ? origin - dampenDrawerPull(-draggedDown)
+      : origin + draggedDown
+  }
+  const offset = origin + draggedDown
+  return offset < 0 ? -dampenDrawerPull(-offset) : offset
+}
+
+/**
  * Decide whether a downward drag release should close the drawer or snap it back open. Shared by
  * the mouse handle path and the whole-sheet touch path so the velocity/distance thresholds can't
  * drift between the two inputs. `draggedDown` is the downward travel in px (>= 0); `dragStartTime`
