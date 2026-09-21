@@ -26,7 +26,7 @@ import {
   DEFAULT_DRAWER_TRANSITION,
   DRAWER_CLOSE_TRANSITION,
   DRAWER_SHRINK_TRANSITION,
-  dampenDrawerPull,
+  dragOffsetFor,
   drawerReleaseCloses,
 } from "#adaptv/components/drawer/drawer-constants"
 import {
@@ -328,6 +328,10 @@ export function DrawerEngine({
   const isGestureClosingRef = useRef(false)
   const pointerStartRef = useRef(0)
   const dragStartTimeRef = useRef<number | null>(null)
+  //where the sheet WAS when the drag took it over. At rest that is 0, but a drag that starts
+  //while the sheet is still sliding open (or in) begins wherever the curve had it painted, and
+  //the finger's travel is measured from there — not from the target the sheet was heading for.
+  const dragOriginYRef = useRef(0)
 
   //Shared gesture arbitration. `blocksScroll` because `touch-action` cannot be
   //changed mid-touch on iOS, so holding the scroller still is the only reliable
@@ -1555,6 +1559,28 @@ export function DrawerEngine({
     if (!isTouchDragCommittedRef.current) captureRef.current.release()
   }, [syncBackdropGestureAttributes])
 
+  //The drag takes the sheet over WHERE IT IS PAINTED, and returns that position for the drag to
+  //measure its travel from. A drag that begins mid-slide finds the open keyframe still running,
+  //and a running keyframe outranks the inline transform: dropping it without first committing
+  //its live value snapped the sheet to the slide's target, and every finger frame after that was
+  //measured from a position the sheet had never reached — it moved UP against a finger moving
+  //down, then jumped by the whole remaining travel on release. The same freeze-at-the-live-
+  //position discipline as `freezePanelForFlip` and the close→reopen resume. An in-flight FLIP is
+  //folded into `y` here too, so the finger drives ONE value: split in two, the flip's own tween
+  //fought the drag and the sheet sat still under the finger.
+  const takeOverPanelForDrag = useCallback(
+    (panelEl: HTMLElement | null) => {
+      const liveY = panelEl
+        ? readPanelTranslateY(panelEl)
+        : y.get() + keyboardFlip.get()
+      clearDrawerPanelTransition(panelEl)
+      keyboardFlip.set(0)
+      y.set(liveY)
+      return liveY
+    },
+    [y, keyboardFlip],
+  )
+
   const handleHandlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       // Touch is handled by the whole-sheet native listener (with nested-scroll arbitration); the
@@ -1562,26 +1588,25 @@ export function DrawerEngine({
       if (event.pointerType !== "mouse") return
       if (isDragLockedOut()) return
 
-      applyDrawerPanelTransition(
-        panelRef.current,
-        DEFAULT_DRAWER_TRANSITION,
-        false,
-      )
-      if (backdropRef.current) {
-        stopDrawerBackdropAnimation(backdropRef.current)
-        backdropRef.current.style.transition = "none"
-      }
       //Claim the shared arbiter before taking the pointer. The handle drag
       //commits immediately (there is nothing else a handle press could mean), so
       //unlike the sheet path below there is no lock to wait for.
       if (!captureRef.current.request()) return
-      pointerStartRef.current = event.clientY
-      dragStartTimeRef.current = Date.now()
+      //the drag styling lands in the same frame the sheet is taken over, as the touch path
+      //orders it — taken over first, a frame could paint the frozen sheet under a backdrop
+      //still in its non-dragging state
       isPointerDraggingRef.current = true
       syncBackdropGestureAttributes()
+      dragOriginYRef.current = takeOverPanelForDrag(panelRef.current)
+      if (backdropRef.current) {
+        stopDrawerBackdropAnimation(backdropRef.current)
+        backdropRef.current.style.transition = "none"
+      }
+      pointerStartRef.current = event.clientY
+      dragStartTimeRef.current = Date.now()
       event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [isDragLockedOut, syncBackdropGestureAttributes],
+    [isDragLockedOut, syncBackdropGestureAttributes, takeOverPanelForDrag],
   )
 
   const handleHandlePointerMove = useCallback(
@@ -1589,14 +1614,12 @@ export function DrawerEngine({
       if (event.pointerType !== "mouse") return
       if (!isPointerDraggingRef.current || isDragLockedOut()) return
 
-      const draggedDown = event.clientY - pointerStartRef.current
-
-      if (draggedDown < 0) {
-        y.set(-dampenDrawerPull(-draggedDown))
-        return
-      }
-
-      y.set(draggedDown)
+      y.set(
+        dragOffsetFor(
+          dragOriginYRef.current,
+          event.clientY - pointerStartRef.current,
+        ),
+      )
     },
     [y, isDragLockedOut],
   )
@@ -1627,7 +1650,7 @@ export function DrawerEngine({
       if (
         drawerReleaseCloses(draggedDown, dragStartTime, metrics.closedY)
       ) {
-        closeFromDrag(draggedDown)
+        closeFromDrag(dragOriginYRef.current + draggedDown)
         return
       }
 
@@ -1697,18 +1720,10 @@ export function DrawerEngine({
     }
 
     function commitSheetDrag(clientY: number) {
-      //Take ownership of the whole transform: an in-flight FLIP is folded into `y` so the finger
-      //drives ONE value. Leaving it split let the flip's own tween fight the drag and the sheet
-      //sat still under the finger.
-      const flip = keyboardFlip.get()
-      if (flip !== 0) {
-        keyboardFlip.set(0)
-        y.set(y.get() + flip)
-      }
       isTouchDragCommittedRef.current = true
       isPointerDraggingRef.current = true
       syncBackdropGestureAttributes()
-      applyDrawerPanelTransition(panel, DEFAULT_DRAWER_TRANSITION, false)
+      dragOriginYRef.current = takeOverPanelForDrag(panel)
       if (backdropRef.current) {
         stopDrawerBackdropAnimation(backdropRef.current)
         backdropRef.current.style.transition = "none"
@@ -1784,9 +1799,11 @@ export function DrawerEngine({
       }
 
       event.preventDefault()
-      const draggedDown = touch.clientY - pointerStartRef.current
       y.set(
-        draggedDown < 0 ? -dampenDrawerPull(-draggedDown) : draggedDown,
+        dragOffsetFor(
+          dragOriginYRef.current,
+          touch.clientY - pointerStartRef.current,
+        ),
       )
     }
 
@@ -1819,7 +1836,7 @@ export function DrawerEngine({
       if (
         drawerReleaseCloses(draggedDown, dragStartTime, metrics.closedY)
       ) {
-        actions.closeFromDrag(draggedDown)
+        actions.closeFromDrag(dragOriginYRef.current + draggedDown)
         return
       }
       actions.snapOpen()
@@ -1854,8 +1871,8 @@ export function DrawerEngine({
     mounted,
     portalTarget,
     y,
-    keyboardFlip,
     syncBackdropGestureAttributes,
+    takeOverPanelForDrag,
   ])
 
   //memoized so gesture-phase work and unrelated engine renders don't re-render every consumer
