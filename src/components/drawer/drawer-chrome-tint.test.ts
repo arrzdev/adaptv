@@ -171,7 +171,75 @@ describe("clearDrawerChromeTint", () => {
     setThemeColorBase(LIGHT)
     const backdrop = backdropWith("rgba(0, 0, 0, 0.4)")
     setDrawerChromeTint(backdrop, 1)
-    clearDrawerChromeTint()
+    clearDrawerChromeTint(backdrop)
+    expect(getChromeTint()).toBe(LIGHT)
+  })
+})
+
+/*
+ * A sheet opened from inside a sheet. The page under the inner scrim is already dimmed by the
+ * outer one, so the toolbar shows the inner scrim composited over THAT — and when the inner
+ * sheet goes, the outer is still standing, so the chrome returns to its dim, not to the theme.
+ * With one shared slot for "the" tint, closing the inner sheet restored the theme colour over an
+ * open sheet (stress-drawer.spec.ts, case 5).
+ */
+describe("two sheets", () => {
+  /** `DIMMED` under `rgba(0, 0, 0, 0.4)` again — 142.8 × 0.6 = 85.7 → `0x56`, 142.2 × 0.6 = 85.3 → `0x55` */
+  const STACKED = "#565655"
+
+  function twoSheets() {
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    const outer = backdropWith("rgba(0, 0, 0, 0.4)")
+    const inner = backdropWith("rgba(0, 0, 0, 0.4)")
+    transitionDrawerChromeTint(outer, 1, INSTANT, 0)
+    expect(getChromeTint(), "premise: the outer sheet dims").toBe(DIMMED)
+    return { outer, inner }
+  }
+
+  it("the inner scrim composites over the outer sheet's dim, not over the theme", () => {
+    const { inner } = twoSheets()
+    transitionDrawerChromeTint(inner, 1, INSTANT, 0)
+    expect(getChromeTint()).toBe(STACKED)
+  })
+
+  it("closing the inner sheet returns the chrome to the outer sheet's dim", () => {
+    const { outer, inner } = twoSheets()
+    transitionDrawerChromeTint(inner, 1, INSTANT, 0)
+    transitionDrawerChromeTint(inner, 0, INSTANT, 0)
+    expect(getChromeTint()).toBe(DIMMED)
+
+    //and then the outer, so nothing is left behind
+    transitionDrawerChromeTint(outer, 0, INSTANT, 0)
+    expect(getChromeTint()).toBe(LIGHT)
+  })
+
+  it("a drag on the inner sheet tracks between the outer's dim and the stacked dim", () => {
+    const { inner } = twoSheets()
+    transitionDrawerChromeTint(inner, 1, INSTANT, 0)
+    setDrawerChromeTint(inner, 0)
+    expect(getChromeTint()).toBe(DIMMED)
+    setDrawerChromeTint(inner, 1)
+    expect(getChromeTint()).toBe(STACKED)
+  })
+
+  it("an inner sheet that leaves with nothing animating hands back only its own layer", () => {
+    const { inner } = twoSheets()
+    setDrawerChromeTint(inner, 1)
+    expect(getChromeTint()).toBe(STACKED)
+    clearDrawerChromeTint(inner)
+    expect(getChromeTint()).toBe(DIMMED)
+  })
+
+  it("the outer sheet leaving first leaves the inner's scrim over the theme, not over a ghost", () => {
+    //a browser Back with both open unmounts them in whatever order React reaches them; with the
+    //outer gone the page under the inner scrim is the theme again
+    const { outer, inner } = twoSheets()
+    transitionDrawerChromeTint(inner, 1, INSTANT, 0)
+    expect(getChromeTint()).toBe(STACKED)
+    clearDrawerChromeTint(outer)
+    expect(getChromeTint()).toBe(DIMMED)
+    clearDrawerChromeTint(inner)
     expect(getChromeTint()).toBe(LIGHT)
   })
 })

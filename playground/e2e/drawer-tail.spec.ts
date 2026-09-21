@@ -68,8 +68,115 @@ async function settled(page: Page) {
   return geometry
 }
 
+type Geometry = NonNullable<Awaited<ReturnType<typeof readGeometry>>>
+
+/** What Safari's edge sampler reads, and the tail below it — the same invariants at rest and
+ *  with the keyboard up. */
+function expectSheetAndTail(g: Geometry) {
+  //the premise: a sheet tall enough that sheet + tail (55% of the viewport) would have
+  //crossed Safari's ratio — otherwise this test could not have failed before the fix
+  expect(g.panel.height).toBeGreaterThan(g.viewport * 0.55)
+  //what Safari's edge sampler reads: the fixed element's own border box
+  expect(g.panel.height).toBeLessThanOrEqual(
+    g.viewport * SAFARI_MAX_PANEL_RATIO,
+  )
+  //the panel ends where the sheet ends — on the fold, not below it
+  expect(Math.abs(g.panel.bottom - g.viewport)).toBeLessThanOrEqual(
+    REST_TOLERANCE_PX,
+  )
+  expect(Math.abs(g.sheetBottom - g.viewport)).toBeLessThanOrEqual(
+    REST_TOLERANCE_PX,
+  )
+
+  //and the tail is still there, below the fold, the sheet's width, the sheet's paint
+  expect(g.tail.isLastChild).toBe(true)
+  expect(g.tail.height).toBeGreaterThan(0)
+  expect(Math.abs(g.tail.top - g.panel.bottom)).toBeLessThanOrEqual(1)
+  expect(Math.abs(g.tail.width - 390)).toBeLessThanOrEqual(1)
+  expect(g.background.tail).toBe(g.background.panel)
+}
+
+async function openAndSettle(page: Page, button: string) {
+  await page
+    .getByRole("button", { name: button, exact: true })
+    .first()
+    .click()
+  await page.locator(PANEL).waitFor({ state: "attached" })
+  await expect
+    .poll(async () => Math.round((await settled(page)).translateY), {
+      timeout: 4000,
+    })
+    .toBe(0)
+  await page.waitForTimeout(300)
+  return settled(page)
+}
+
+/*
+ * The keyboard lift is the other thing that changes the panel's height: the content box holds
+ * the keyboard as `padding-bottom` and grows into it (capped at the stylesheet cap), so the
+ * panel's border box — what Safari measures against its 1.05 ratio — is at its tallest with a
+ * keyboard up. Driven through adaptv's keyboard seam (installed before the hook mounts), 40% of
+ * the viewport, on both engines.
+ */
+const KEYBOARD_EVENT = "adaptv:keyboard-mock"
+const KEYBOARD_PX = Math.round(844 * 0.4)
+
+async function setKeyboard(page: Page, isOpen: boolean, height: number) {
+  await page.evaluate(
+    ({ o, h, evt }) => {
+      ;(
+        window as unknown as { __adaptvKeyboardMock?: unknown }
+      ).__adaptvKeyboardMock = { isOpen: o, height: h }
+      window.dispatchEvent(new Event(evt))
+    },
+    { o: isOpen, h: height, evt: KEYBOARD_EVENT },
+  )
+}
+
+/** The content box's inline room and whether anything is still moving on the panel. */
+function readRoom(page: Page) {
+  return page.evaluate((panelSel) => {
+    const panel = document.querySelector<HTMLElement>(panelSel)
+    const content = panel?.firstElementChild as HTMLElement | null
+    if (!panel || !content) return null
+    return {
+      padding: content.style.paddingBottom,
+      minHeight: content.style.minHeight,
+      animations: panel.getAnimations().length,
+      height: content.getBoundingClientRect().height,
+    }
+  }, PANEL)
+}
+
+async function awaitRoomSettled(page: Page, padding: string) {
+  await expect
+    .poll(async () => {
+      const a = await readRoom(page)
+      if (!a) return "no panel"
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => r(null))),
+      )
+      const b = await readRoom(page)
+      if (!b) return "no panel"
+      const stable =
+        a.padding === padding &&
+        b.padding === padding &&
+        a.animations === 0 &&
+        b.animations === 0 &&
+        Math.abs(a.height - b.height) < 0.5
+      return stable ? true : JSON.stringify(b)
+    })
+    .toBe(true)
+}
+
 test.describe("the drawer's hidden tail", () => {
   test.beforeEach(async ({ page }) => {
+    //the keyboard seam, installed before the hook mounts (the rest tests never raise it)
+    await page.addInitScript(() => {
+      ;(
+        window as unknown as { __adaptvKeyboardMock?: unknown }
+      ).__adaptvKeyboardMock = { isOpen: false, height: 0 }
+    })
     await page.goto("/lab/drawer")
     await awaitClientHandover(page)
   })
@@ -78,40 +185,36 @@ test.describe("the drawer's hidden tail", () => {
     test(`${button}: the panel's box is the sheet, the tail hangs below it`, async ({
       page,
     }) => {
-      await page
-        .getByRole("button", { name: button, exact: true })
-        .first()
-        .click()
-      await page.locator(PANEL).waitFor({ state: "attached" })
-      await expect
-        .poll(async () => Math.round((await settled(page)).translateY), {
-          timeout: 4000,
-        })
-        .toBe(0)
-      await page.waitForTimeout(300)
-      const g = await settled(page)
+      const g = await openAndSettle(page, button)
+      expectSheetAndTail(g)
+    })
 
-      //the premise: a sheet tall enough that sheet + tail (55% of the viewport) would have
-      //crossed Safari's ratio — otherwise this test could not have failed before the fix
-      expect(g.panel.height).toBeGreaterThan(g.viewport * 0.55)
-      //what Safari's edge sampler reads: the fixed element's own border box
-      expect(g.panel.height).toBeLessThanOrEqual(
-        g.viewport * SAFARI_MAX_PANEL_RATIO,
-      )
-      //the panel ends where the sheet ends — on the fold, not below it
-      expect(Math.abs(g.panel.bottom - g.viewport)).toBeLessThanOrEqual(
-        REST_TOLERANCE_PX,
-      )
-      expect(Math.abs(g.sheetBottom - g.viewport)).toBeLessThanOrEqual(
-        REST_TOLERANCE_PX,
-      )
+    test(`${button}: with the keyboard raised the panel's box still stays under Safari's ratio, the tail flush below it`, async ({
+      page,
+    }, testInfo) => {
+      const rest = await openAndSettle(page, button)
+      expectSheetAndTail(rest)
 
-      //and the tail is still there, below the fold, the sheet's width, the sheet's paint
-      expect(g.tail.isLastChild).toBe(true)
-      expect(g.tail.height).toBeGreaterThan(0)
-      expect(Math.abs(g.tail.top - g.panel.bottom)).toBeLessThanOrEqual(1)
-      expect(Math.abs(g.tail.width - 390)).toBeLessThanOrEqual(1)
-      expect(g.background.tail).toBe(g.background.panel)
+      await setKeyboard(page, true, KEYBOARD_PX)
+      await awaitRoomSettled(page, `${KEYBOARD_PX}px`)
+      const up = await settled(page)
+      const room = await readRoom(page)
+      console.log(
+        `TAIL-KB ${testInfo.project.name} ${button}: rest panel ${rest.panel.height.toFixed(1)}; keyboard ${KEYBOARD_PX}px up → panel top ${up.panel.top.toFixed(1)} bottom ${up.panel.bottom.toFixed(1)} height ${up.panel.height.toFixed(1)} (${(up.panel.height / up.viewport).toFixed(3)} viewports), sheet bottom ${up.sheetBottom.toFixed(1)}, tail top ${up.tail.top.toFixed(1)} height ${up.tail.height.toFixed(1)} width ${up.tail.width.toFixed(1)}, bg panel ${up.background.panel} tail ${up.background.tail}, room ${JSON.stringify(room)}`,
+      )
+      //the premise: the room is held and the sheet grew (or is at its cap)
+      expect(room?.padding).toBe(`${KEYBOARD_PX}px`)
+      expect(room?.minHeight).toBe("")
+      expect(up.panel.height).toBeGreaterThanOrEqual(rest.panel.height - 1)
+      expectSheetAndTail(up)
+
+      await setKeyboard(page, false, 0)
+      await awaitRoomSettled(page, "")
+      const back = await settled(page)
+      expect(
+        Math.abs(back.panel.height - rest.panel.height),
+      ).toBeLessThanOrEqual(REST_TOLERANCE_PX)
+      expectSheetAndTail(back)
     })
   }
 })

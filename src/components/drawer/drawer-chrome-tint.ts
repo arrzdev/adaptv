@@ -25,7 +25,7 @@ import {
   transitionChromeTint,
 } from "#adaptv/capabilities/theme-color"
 import type { DrawerTransition } from "#adaptv/components/drawer/drawer-constants"
-import type { Rgb } from "#adaptv/utils/color"
+import type { Rgb, Rgba } from "#adaptv/utils/color"
 import {
   compositeOver,
   formatHex,
@@ -34,30 +34,80 @@ import {
 } from "#adaptv/utils/color"
 
 type DrawerTint = {
-  /** the theme's own colour — where the chrome sits with the sheet closed */
+  /** the colour under this scrim — the theme's own, or the dim of the sheet below this one */
   base: Rgb
   /** that colour under the scrim at full strength */
   dimmed: Rgb
 }
 
+type DrawerTintLayer = {
+  backdrop: HTMLElement
+  /** the scrim as rendered, read once when the layer is taken */
+  scrim: Rgba
+}
+
 /**
- * Resolved once per open and reused for the rest of it. A drag writes the tint every frame, and
- * `getComputedStyle` on every one of those frames is a forced style recalc landing in exactly the
- * frames the sheet cannot afford to drop.
+ * One layer per backdrop that is dimming the chrome, in the order they opened.
+ *
+ * Each scrim is read once per open and reused for the rest of it. A drag writes the tint every
+ * frame, and `getComputedStyle` on every one of those frames is a forced style recalc landing in
+ * exactly the frames the sheet cannot afford to drop.
+ *
+ * It is a stack because sheets stack: a sheet opened from inside a sheet dims a page that is
+ * already dimmed, and the toolbar has to show what the page shows — the inner scrim composited
+ * over the outer's dim. Keyed on the backdrop, so each sheet hands back only its own layer: with
+ * one shared slot, closing the inner sheet restored the theme colour over an outer sheet that was
+ * still standing. The colours are folded from the theme up at each use rather than stored, so a
+ * layer that leaves from the MIDDLE (a browser Back that unmounts the outer sheet before the
+ * inner) leaves the ones above it composited over what is really under them now.
  */
-let active: DrawerTint | null = null
+const stack: DrawerTintLayer[] = []
 
-function resolveTint(backdrop: HTMLElement | null): DrawerTint | null {
-  if (!backdrop) return null
+/**
+ * A backdrop that left the document without fading out or being cleared has no layer to hand
+ * back any more; dropping it here keeps a page that tore a sheet down some other way from
+ * dimming every later sheet over a ghost.
+ */
+function pruneStack() {
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    if (!stack[i].backdrop.isConnected) stack.splice(i, 1)
+  }
+}
+
+/** The tint of the layer at `index`: its scrim over everything below it, down to the theme. */
+function tintOfLayer(index: number): DrawerTint | null {
   const baseColor = getChromeTintBase()
-  if (!baseColor) return null
+  const themeBase = baseColor ? parseCssColor(baseColor) : null
+  if (!themeBase) return null
+  let base: Rgb = themeBase
+  for (let i = 0; i < index; i += 1) {
+    base = compositeOver(stack[i].scrim, base)
+  }
+  return { base, dimmed: compositeOver(stack[index].scrim, base) }
+}
 
-  const base = parseCssColor(baseColor)
+function topTint(): DrawerTint | null {
+  pruneStack()
+  return stack.length > 0 ? tintOfLayer(stack.length - 1) : null
+}
+
+/** This backdrop's layer, read on its first use in an open and reused after that. */
+function acquireTint(backdrop: HTMLElement | null): DrawerTint | null {
+  if (!backdrop) return null
+  pruneStack()
+  const held = stack.findIndex((layer) => layer.backdrop === backdrop)
+  if (held >= 0) return tintOfLayer(held)
+
   const scrim = parseCssColor(getComputedStyle(backdrop).backgroundColor)
   //a scrim we cannot read (`oklch()`, wide gamut) or one that is not there at all
-  if (!base || !scrim || scrim.a <= 0) return null
+  if (!scrim || scrim.a <= 0) return null
+  stack.push({ backdrop, scrim })
+  return tintOfLayer(stack.length - 1)
+}
 
-  return { base, dimmed: compositeOver(scrim, base) }
+function releaseTint(backdrop: HTMLElement | null) {
+  const index = stack.findIndex((layer) => layer.backdrop === backdrop)
+  if (index >= 0) stack.splice(index, 1)
 }
 
 /** The chrome colour for a backdrop sitting at `opacity`. */
@@ -68,6 +118,9 @@ function tintAt(tint: DrawerTint, opacity: number): string {
 /**
  * Move the tint to where a backdrop at `targetOpacity` would put it, on the backdrop's curve.
  * Paired with `transitionDrawerBackdropOpacity` so the two can never be armed apart.
+ *
+ * A fade to nothing hands the chrome back to whatever is under this sheet: the sheet below it,
+ * at full dim, or the theme when this was the only one.
  */
 export function transitionDrawerChromeTint(
   backdrop: HTMLElement | null,
@@ -75,18 +128,18 @@ export function transitionDrawerChromeTint(
   config: DrawerTransition,
   duration: number,
 ): void {
+  const options = { duration, easing: config.bezier }
   if (targetOpacity <= 0) {
-    active = null
-    restoreChromeTint({ duration, easing: config.bezier })
+    releaseTint(backdrop)
+    const below = topTint()
+    if (below) transitionChromeTint(tintAt(below, 1), options)
+    else restoreChromeTint(options)
     return
   }
 
-  active = resolveTint(backdrop)
-  if (!active) return
-  transitionChromeTint(tintAt(active, targetOpacity), {
-    duration,
-    easing: config.bezier,
-  })
+  const tint = acquireTint(backdrop)
+  if (!tint) return
+  transitionChromeTint(tintAt(tint, targetOpacity), options)
 }
 
 /**
@@ -97,14 +150,18 @@ export function setDrawerChromeTint(
   backdrop: HTMLElement | null,
   opacity: number,
 ): void {
-  const tint = active ?? resolveTint(backdrop)
+  const tint = acquireTint(backdrop)
   if (!tint) return
-  active = tint
   setChromeTint(tintAt(tint, opacity))
 }
 
-/** Hand the chrome back at once — the paths that close with nothing animating. */
-export function clearDrawerChromeTint(): void {
-  active = null
-  restoreChromeTint({ duration: 0 })
+/**
+ * Hand this backdrop's layer back at once — the paths that close with nothing animating. What is
+ * under it stays: the sheet below at full dim, or the theme.
+ */
+export function clearDrawerChromeTint(backdrop: HTMLElement): void {
+  releaseTint(backdrop)
+  const below = topTint()
+  if (below) setChromeTint(tintAt(below, 1))
+  else restoreChromeTint({ duration: 0 })
 }

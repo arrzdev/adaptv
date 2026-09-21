@@ -1765,6 +1765,47 @@ native toggle after React's commit, and the row's title did nothing. Measured on
 left the readout at "off" and the input unchecked. Fixed by the same opt-in (`checkbox.tsx`
 `onUnownedClick: toggle`), pinned by `checkbox.test.tsx`, which mirrors the Switch's contract: once
 on a press, once on a forwarded click, indeterminate resolving to checked, nothing while disabled.
+
+### B35 — a drag that starts while the sheet is still sliding open fights the finger ✅ **FIXED** (found 2026-09-21)
+
+**Symptom.** Tap to open and, before the slide lands, put a finger on the sheet and pull down. The
+sheet keeps sliding UP under the finger, then jumps to the finger's offset the instant the slide
+ends. Measured in `playground/e2e/stress-drawer.spec.ts` cases 2 and 2b on both engines: 11 of 11
+finger moves went against the finger on webkit, 9 of 11 on both engines from the handle, and the
+release jumped from 0 to 160px.
+
+**Cause.** The open is the `pwa-drawer-slide` `@keyframes` rule (`animation.md` §0, memory
+`drawer-settle-is-authored-in-css`), and a running animation outranks the inline transform. The
+drag's takeover (`commitSheetDrag` for the whole-sheet touch drag, `handleHandlePointerDown` for
+the handle) only wrote `transition: none`, so the keyframe kept carrying the panel while every move
+wrote `y` from the slide's TARGET (0) — a position the sheet had not reached.
+
+**Fix.** `takeOverPanelForDrag` (`drawer-engine.tsx`): read the painted `translateY`, drop the
+keyframe at that value (`clearDrawerPanelTransition`), fold the keyboard FLIP into `y`, and measure
+the finger's travel from there (`dragOriginYRef`, `dragOffsetFor`). The same freeze-at-the-live-
+position discipline `freezePanelForFlip` and the close→reopen resume already use. The release rule
+still reads the finger's own travel (`drawerReleaseCloses`), so a tap on the handle mid-slide does
+not close the sheet; the close then continues from where the sheet is. Pinned by
+`drawer-engine.test.tsx` ("a drag that starts mid-slide") and the two e2e cases.
+
+### B36 — closing the inner of two open drawers handed the browser chrome back to the theme ✅ **FIXED** (found 2026-09-21)
+
+**Symptom.** A sheet opened from inside a sheet (the lab's "4 · Nested"). Closing the inner one
+returned `<meta name="theme-color">` — the browser toolbar's tint in a tab — to the theme colour
+(`#eeeeec`) while the outer sheet still dimmed the page (`#797979`). Measured in
+`playground/e2e/stress-drawer.spec.ts` case 5 on both engines.
+
+**Cause.** `drawer-chrome-tint.ts` held ONE module-level tint, and a fade to 0 always restored the
+theme base; the tint had no notion of a sheet underneath.
+
+**Fix.** The tint is a stack of scrims keyed on the backdrop element, folded from the theme up at
+each use: the inner scrim composites over the outer's dim (the pixel the toolbar would show if it
+were part of the page), and a fade to 0 or a `clearDrawerChromeTint(backdrop)` removes only that
+backdrop's layer and returns the chrome to the layer below at full dim, or to the theme when none is
+left; a layer that leaves from the middle (a Back that unmounts the outer sheet first) leaves the
+ones above it composited over what is really under them. Layers whose backdrop left the document
+are pruned. On iOS 26 the tag is inert either way (B17); this is the iOS 18 / Android Chrome tab.
+Pinned by `drawer-chrome-tint.test.ts` ("two sheets") and the e2e case.
 ---
 
 ## 🚨 In dev, every Tailwind variant and breakpoint was dead on the floor browsers ✅ **FIXED** (found 2026-09-13)
