@@ -567,6 +567,23 @@ function applyTextAreaAutoHeight(
   { remeasure = false }: ApplyTextAreaAutoHeightOptions = {},
 ): boolean {
   const { minHeight, maxHeightValue, shellPaddingBottom } = caps
+
+  //an empty field sits at its `rows` floor. WebKit folds the placeholder into
+  //an empty textarea's scrollHeight, so a placeholder that wraps past `rows`
+  //would size the box — up to the cap, and only on that engine — and the next
+  //fill, longer than nothing, would never remeasure down from it. The
+  //placeholder overflows the floor exactly as it does in a native textarea.
+  if (inner.value === "") {
+    if (
+      Math.abs(inner.offsetHeight - minHeight) >
+      TEXT_AREA_HEIGHT_EPSILON_PX
+    ) {
+      inner.style.height = `${pxToRem(minHeight)}rem`
+    }
+    syncTextAreaMaxRowsOverflowState(inner, false, shellPaddingBottom)
+    return false
+  }
+
   const clientHeight = inner.clientHeight
 
   if (

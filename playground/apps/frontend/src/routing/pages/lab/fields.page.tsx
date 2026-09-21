@@ -9,7 +9,9 @@ import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
 import {
+  LabActions,
   LabBadge,
+  LabButton,
   LabCaveat,
   LabLog,
   LabRow,
@@ -195,9 +197,146 @@ function LabFieldsPage() {
         </LabCaveat>
       </LabSection>
 
+      <StressProbes note={note} />
+
       <LabSection title="Log">
         <LabLog entries={log} />
       </LabSection>
     </LabPage>
+  )
+}
+
+/**
+ * Stress probes, read by `e2e/stress-fields.spec.ts`. Each is a shape the page
+ * above does not offer and a spec cannot build from outside: a parent that
+ * applies its controlled value late (what a debounced store does), a field whose
+ * `disabled` flips while it has focus, a box of zero width around an
+ * auto-resizing field, an auto-resizing field with the default `maxRows`, a field
+ * mounted with `autoFocus` on demand, and the native attributes (`readOnly`,
+ * `maxLength`, `type="number"`) the primitive forwards untouched. Nothing here is
+ * a wrapper: every field is the primitive, so a bug here is a bug in the primitive.
+ */
+function StressProbes({ note }: { note: (text: string) => void }) {
+  const [sync, setSync] = useState("")
+  const [lagged, setLagged] = useState("")
+  const [laggedArea, setLaggedArea] = useState("")
+  const [liveDisabled, setLiveDisabled] = useState(false)
+  const [autofocusMounted, setAutofocusMounted] = useState(false)
+
+  return (
+    <LabSection
+      title="Stress probes"
+      description="Hostile shapes for the e2e suite: a controlled value that lands 50ms late, a field disabled under the caret, a zero-width box, and the native attributes the primitive only forwards."
+    >
+      <Input
+        value={sync}
+        aria-label="Sync controlled field"
+        className={FIELD_SHELL}
+        onChange={(event) => setSync(event.target.value)}
+      />
+      <Input
+        value={lagged}
+        aria-label="Lagging controlled field"
+        className={FIELD_SHELL}
+        onChange={(event) => {
+          //the parent applies the value LATE — a debounced store, a round trip.
+          //React restores the DOM value to the prop after the event, so a
+          //keystroke faster than the lag is lost; that is React's contract, and
+          //the spec types slower than the lag on purpose.
+          const next = event.target.value
+          setTimeout(() => setLagged(next), 50)
+        }}
+      />
+      <LabRow
+        label="lagging value"
+        value={lagged === "" ? null : lagged}
+        testId="lagging-value"
+      />
+      <BaseTextArea
+        rows={2}
+        maxRows={5}
+        value={laggedArea}
+        aria-label="Lagging text area"
+        className={`${FIELD_SHELL} resize-none`}
+        onChange={(event) => {
+          const next = event.target.value
+          setTimeout(() => setLaggedArea(next), 50)
+        }}
+      />
+      <Input
+        defaultValue=""
+        disabled={liveDisabled}
+        aria-label="Toggleable field"
+        className={FIELD_SHELL}
+        onSubmitKey={() => note("toggleable onSubmitKey")}
+      />
+      <LabActions>
+        <LabButton
+          testId="toggle-live-disabled"
+          onClick={() => setLiveDisabled((disabled) => !disabled)}
+        >
+          {liveDisabled
+            ? "enable the toggleable field"
+            : "disable the toggleable field"}
+        </LabButton>
+        <LabButton
+          testId="mount-autofocus"
+          disabled={autofocusMounted}
+          onClick={() => setAutofocusMounted(true)}
+        >
+          mount an autofocus field
+        </LabButton>
+      </LabActions>
+      {autofocusMounted && (
+        <Input
+          autoFocus
+          defaultValue=""
+          aria-label="Autofocus field"
+          className={FIELD_SHELL}
+        />
+      )}
+      <Input
+        readOnly
+        defaultValue="read only"
+        aria-label="Read-only field"
+        className={FIELD_SHELL}
+        onSubmitKey={() => note("read-only onSubmitKey")}
+      />
+      <Input
+        maxLength={10}
+        defaultValue=""
+        aria-label="Max length field"
+        className={FIELD_SHELL}
+      />
+      <Input
+        type="number"
+        defaultValue=""
+        aria-label="Number field"
+        className={FIELD_SHELL}
+      />
+      <BaseTextArea
+        rows={2}
+        defaultValue=""
+        aria-label="Uncapped text area"
+        className={`${FIELD_SHELL} resize-none`}
+      />
+      {/*
+       * A box of zero width: every character wraps onto its own line, so the
+       * measurement is as hostile as it gets. The field must neither throw nor
+       * loop its ResizeObserver.
+       */}
+      <div
+        data-testid="zero-width-box"
+        style={{ width: 0, overflow: "hidden" }}
+      >
+        <BaseTextArea
+          rows={2}
+          maxRows={5}
+          defaultValue=""
+          aria-label="Zero-width text area"
+          className={`${FIELD_SHELL} resize-none`}
+        />
+      </div>
+    </LabSection>
   )
 }

@@ -539,6 +539,10 @@ type FakeLayout = {
 }
 
 let layout: FakeLayout
+//how many lines the placeholder takes in an EMPTY field. WebKit folds the
+//placeholder into an empty textarea's scrollHeight, so this is what the engine
+//reads there before any text exists
+let placeholderLines: number
 let frames: Map<number, FrameRequestCallback>
 let observers: FakeResizeObserver[]
 
@@ -568,6 +572,7 @@ function lines(n: number): string {
 }
 
 function contentHeight(el: HTMLTextAreaElement): number {
+  if (el.value === "") return placeholderLines * LINE
   return el.value.split("\n").length * LINE
 }
 
@@ -639,6 +644,7 @@ function installFakeLayout(): void {
     parentMaxHeight: "none",
     shellTopInParent: 0,
   }
+  placeholderLines = 1
   frames = new Map()
   observers = []
   let nextFrame = 1
@@ -774,6 +780,39 @@ describe("TextArea autoResize — grow and shrink", () => {
   it("`rows` defaults to 4", () => {
     render(<TextArea aria-label="notes" />)
     expect(heightPx()).toBe(4 * LINE)
+  })
+
+  it("an empty field sits at the `rows` floor even when its placeholder wraps past it", () => {
+    //WebKit reads the placeholder into an empty field's scrollHeight: at a
+    //narrow width or a large font a long placeholder measures taller than
+    //`rows`, and the box must not follow it (measured on the iPhone 13 project
+    //at a 200% root font, 2026-09-21: the empty field grew to the cap, and the
+    //next fill, longer than nothing, never remeasured down from it)
+    placeholderLines = 6
+    render(
+      <TextArea
+        aria-label="notes"
+        rows={2}
+        maxRows={5}
+        placeholder="a placeholder long enough to wrap six times"
+      />,
+    )
+    expect(heightPx()).toBe(2 * LINE)
+    expect(hasOverflowClass()).toBe(false)
+
+    edit(lines(3))
+    flushFrames()
+    expect(heightPx()).toBe(3 * LINE)
+
+    edit("", "deleteContentBackward")
+    flushFrames()
+    expect(heightPx(), "cleared: back at the floor").toBe(2 * LINE)
+    expect(hasOverflowClass()).toBe(false)
+
+    //a refill after the clear measures the text, not the placeholder
+    edit(lines(3))
+    flushFrames()
+    expect(heightPx()).toBe(3 * LINE)
   })
 })
 

@@ -57,6 +57,15 @@ const SIZES = [
   { value: "l", label: "L" },
 ] as const
 
+//Five hundred rows, so the open cost, the height cap and the keyboard walk over
+//a list far taller than any screen can be measured. Labels carry no space (Space
+//picks in the list, so a typeahead prefix must not need one) and are zero-padded
+//so a prefix like "n25" has exactly one first match, N250.
+const HUGE = Array.from({ length: 500 }, (_, i) => {
+  const n = String(i + 1).padStart(3, "0")
+  return { value: `n${n}`, label: `N${n}` }
+})
+
 const TRIGGER_CLASS =
   "clickable inline-flex min-w-40 items-center justify-between gap-x-2 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border data-[placeholder]:text-muted"
 
@@ -159,18 +168,21 @@ function FruitCard() {
 function ControlledCard() {
   const [value, setValue] = useState("")
   const [changes, setChanges] = useState(0)
+  //frozen: the owner still hears every pick but refuses to move — the trigger
+  //must keep showing the owner's value, and the native select must agree
+  const [frozen, setFrozen] = useState(false)
 
   return (
     <LabSection
       title="2 · Controlled"
-      description="`value` + `onValueChange`. The buttons set the value from outside; the list reports what the user picked and the owner decides what to show."
+      description="`value` + `onValueChange`. The buttons set the value from outside; the list reports what the user picked and the owner decides what to show. Frozen, the owner refuses every pick: the trigger and the hidden native select keep the owner's value."
     >
       <Select
         aria-label="Controlled"
         placeholder="Nothing yet"
         value={value}
         onValueChange={(next) => {
-          setValue(next)
+          if (!frozen) setValue(next)
           setChanges((n) => n + 1)
         }}
       >
@@ -188,10 +200,21 @@ function ControlledCard() {
           set cherry
         </LabButton>
         <LabButton onClick={() => setValue("")}>clear</LabButton>
+        <LabButton onClick={() => setFrozen((f) => !f)}>
+          {frozen ? "unfreeze" : "freeze"}
+        </LabButton>
       </LabActions>
       <LabRow
         label="value"
         value={<Readout name="controlled">{value || "none"}</Readout>}
+      />
+      <LabRow
+        label="owner"
+        value={
+          <Readout name="controlled-frozen">
+            {frozen ? "frozen" : "following"}
+          </Readout>
+        }
       />
       <LabRow
         label="onValueChange calls"
@@ -343,6 +366,108 @@ function DisabledCard() {
   )
 }
 
+function HugeCard() {
+  const [value, setValue] = useState<string | null>(null)
+  const [changes, setChanges] = useState(0)
+
+  return (
+    <LabSection
+      title="6 · Five hundred options"
+      description="A list far taller than any screen. It must open without a stall, cap its height inside the viewport, and keep Home, End and typeahead correct across all five hundred rows."
+    >
+      <Select
+        aria-label="Huge"
+        placeholder="Pick one of 500"
+        onValueChange={(next) => {
+          setValue(next)
+          setChanges((n) => n + 1)
+        }}
+      >
+        <Select.Trigger className={TRIGGER_CLASS}>
+          <Select.Value />
+        </Select.Trigger>
+        <Select.Content aria-label="Huge options">
+          {HUGE.map((row) => (
+            <Select.Option key={row.value} value={row.value}>
+              {row.label}
+            </Select.Option>
+          ))}
+        </Select.Content>
+      </Select>
+      <LabRow
+        label="value"
+        value={<Readout name="huge">{value ?? "none"}</Readout>}
+      />
+      <LabRow
+        label="onValueChange calls"
+        value={<Readout name="huge-changes">{String(changes)}</Readout>}
+      />
+    </LabSection>
+  )
+}
+
+function FlipDisabledCard() {
+  const [disabled, setDisabled] = useState(false)
+  const [value, setValue] = useState<string | null>(null)
+  const [changes, setChanges] = useState(0)
+
+  //the flip rides a timer, not a click: pressing a button while the list is open
+  //is an outside press that closes it first, and the point is to disable the
+  //Select UNDER an open list
+  return (
+    <LabSection
+      title="7 · Disabled while open"
+      description="Press the button, then open the list within a second: the Select is disabled underneath the open list. Whatever the list does next, a disabled Select must not take a pick."
+    >
+      <Select
+        aria-label="Flip"
+        placeholder="Open me, then wait"
+        disabled={disabled}
+        onValueChange={(next) => {
+          setValue(next)
+          setChanges((n) => n + 1)
+        }}
+      >
+        <Select.Trigger className={TRIGGER_CLASS}>
+          <Select.Value />
+        </Select.Trigger>
+        <Select.Content aria-label="Flip options">
+          <Select.Option value="alpha">Alpha</Select.Option>
+          <Select.Option value="beta">Beta</Select.Option>
+          <Select.Option value="gamma">Gamma</Select.Option>
+        </Select.Content>
+      </Select>
+      <LabActions>
+        <LabButton
+          disabled={disabled}
+          onClick={() => {
+            window.setTimeout(() => setDisabled(true), 1000)
+          }}
+        >
+          disable in 1 s
+        </LabButton>
+        <LabButton disabled={!disabled} onClick={() => setDisabled(false)}>
+          enable
+        </LabButton>
+      </LabActions>
+      <LabRow
+        label="disabled"
+        value={
+          <Readout name="flip-disabled">{disabled ? "yes" : "no"}</Readout>
+        }
+      />
+      <LabRow
+        label="value"
+        value={<Readout name="flip">{value ?? "none"}</Readout>}
+      />
+      <LabRow
+        label="onValueChange calls"
+        value={<Readout name="flip-changes">{String(changes)}</Readout>}
+      />
+    </LabSection>
+  )
+}
+
 function LabSelectPage() {
   return (
     <LabPage
@@ -387,6 +512,8 @@ function LabSelectPage() {
       <FormCard />
       <ClippedCard />
       <DisabledCard />
+      <HugeCard />
+      <FlipDisabledCard />
     </LabPage>
   )
 }

@@ -24,6 +24,8 @@ const ITEMS = [
   "Delete",
 ] as const
 const LONG_ITEMS = Array.from({ length: 30 }, (_, i) => `Option ${i + 1}`)
+//five hundred rows: the open cost and the cap on a menu no screen can hold
+const HUGE_ITEMS = Array.from({ length: 500 }, (_, i) => `Row ${i + 1}`)
 
 const TRIGGER_CLASS =
   "clickable shrink-0 rounded-md bg-secondary px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border"
@@ -155,6 +157,13 @@ function LabDropdownPage() {
           placement="bottom-start"
           note={note}
         />
+      </LabSection>
+
+      <LabSection
+        title="6 · Five hundred items"
+        description="A menu far taller than any screen. It must open without a stall and cap its height inside the viewport like the long menu, at any size."
+      >
+        <Menu label="Huge menu" items={HUGE_ITEMS} note={note} />
       </LabSection>
 
       <LabSection title="Log">

@@ -932,7 +932,12 @@ describe("RadioGroup — forms", () => {
     expect(spy).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenLastCalledWith("yearly")
 
-    await act(async () => {
+    //synchronous on purpose: the cleared DOM is read before any task can run.
+    //An async `act` waits a macrotask before it returns, and the group's own
+    //reset task is a 0 ms timer scheduled during the reset — on a loaded host
+    //that timer is already due when act yields, so it ran first, wrote the
+    //owner's value back, and this line read `true` (two bare gates, 2026-09-21)
+    act(() => {
       form.reset()
     })
     expect(yearly.checked, "the browser cleared every radio").toBe(false)

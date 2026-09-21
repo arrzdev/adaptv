@@ -4,7 +4,9 @@ import { useCallback, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
 import {
+  LabActions,
   LabBadge,
+  LabButton,
   LabCaveat,
   LabLog,
   LabRow,
@@ -118,6 +120,13 @@ function LabPressablePage() {
       </LabSection>
 
       <LabSection
+        title="Stress — the press outlives the control"
+        description="Two things a real app does to a control mid-press: it disables it (a submit that started pending) and it unmounts it (a row that was deleted). Neither may activate on release, leave data-pressed behind, or fire a timer against a node React has dropped."
+      >
+        <MidPressProbes note={note} />
+      </LabSection>
+
+      <LabSection
         title="render — a prop, not asChild"
         description="Render any element and keep the engine. The element's own className merges through mergeStyles, so the structural class still wins."
       >
@@ -160,5 +169,74 @@ function LabPressablePage() {
         <LabLog entries={log} />
       </LabSection>
     </LabPage>
+  )
+}
+
+//how long after contact the probes turn on themselves: past the engine's 100ms
+//show-delay, so the press visual is up when the control is pulled out from under it
+const MID_PRESS_AFTER_MS = 150
+
+/**
+ * Two controls that change while held. The first disables itself, the second
+ * unmounts; a reset restores both. `playground/e2e/stress-press.spec.ts` drives
+ * them with a held pointer and asserts on the log: the "MUST NEVER APPEAR" lines
+ * are the activations neither control may produce.
+ */
+function MidPressProbes({ note }: { note: (text: string) => void }) {
+  const [disabled, setDisabled] = useState(false)
+  const [mounted, setMounted] = useState(true)
+
+  return (
+    <>
+      <Pressable
+        data-testid="pressable-flip-disabled"
+        disabled={disabled}
+        className={`${SURFACE} ${disabled ? "opacity-40" : ""}`}
+        onPressDown={() => {
+          note(
+            `flip-disabled onPressDown — disabling in ${MID_PRESS_AFTER_MS}ms`,
+          )
+          setTimeout(() => setDisabled(true), MID_PRESS_AFTER_MS)
+        }}
+        onPress={() =>
+          note("THIS MUST NEVER APPEAR — flip-disabled onPress")
+        }
+      >
+        {disabled
+          ? "disabled while held — reset below"
+          : "hold me: I disable myself while held"}
+      </Pressable>
+      {mounted ? (
+        <Pressable
+          data-testid="pressable-unmount"
+          className={SURFACE}
+          onPressDown={() => {
+            note(
+              `unmount onPressDown — unmounting in ${MID_PRESS_AFTER_MS}ms`,
+            )
+            setTimeout(() => setMounted(false), MID_PRESS_AFTER_MS)
+          }}
+          onPress={() => note("THIS MUST NEVER APPEAR — unmount onPress")}
+        >
+          hold me: I unmount while held
+        </Pressable>
+      ) : (
+        <LabRow
+          label="unmount probe"
+          value="unmounted while held — reset below"
+        />
+      )}
+      <LabActions>
+        <LabButton
+          testId="pressable-stress-reset"
+          onClick={() => {
+            setDisabled(false)
+            setMounted(true)
+          }}
+        >
+          reset the stress probes
+        </LabButton>
+      </LabActions>
+    </>
   )
 }

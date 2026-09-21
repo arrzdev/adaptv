@@ -259,6 +259,72 @@ describe("Select — disabled", () => {
   })
 })
 
+describe("Select — disabled while open", () => {
+  it("closes the list when disabled flips true underneath it, so no row is left to pick", () => {
+    const onValueChange = vi.fn()
+    const s = mount({ onValueChange })
+    s.openWith("ArrowDown")
+    expect(s.listbox()).not.toBeNull()
+    const banana = s.option("banana")
+    if (!banana) throw new Error("no banana")
+    s.rerender(<Fruit disabled onValueChange={onValueChange} />)
+    expect(s.listbox(), "a disabled Select has no open list").toBeNull()
+    expect(s.trigger().getAttribute("aria-expanded")).toBe("false")
+    //the row the finger was already over went with the list; a click that
+    //still reaches it reaches nothing
+    fireEvent.click(banana)
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(s.native().value).toBe("")
+  })
+})
+
+describe("Select — the keyboard highlight is kept in view", () => {
+  it("scrolls the row a key moved the highlight to into view, nearest edge", () => {
+    const scrollIntoView = vi.spyOn(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    )
+    try {
+      const s = mount()
+      s.openWith("ArrowDown")
+      //opening brings the seeded row into view; that call is not the claim
+      scrollIntoView.mockClear()
+      s.press("ArrowDown")
+      expect(s.highlighted()).toBe("avocado")
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+      expect(scrollIntoView.mock.instances[0]).toBe(s.option("avocado"))
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" })
+      s.press("End")
+      expect(scrollIntoView.mock.instances[1]).toBe(s.option("banana"))
+      //typeahead moves the highlight the same way
+      s.press("a")
+      expect(s.highlighted()).toBe("apple")
+      expect(scrollIntoView.mock.instances[2]).toBe(s.option("apple"))
+    } finally {
+      scrollIntoView.mockRestore()
+    }
+  })
+
+  it("never scrolls for a pointer highlight: the row under the pointer must not move", () => {
+    const scrollIntoView = vi.spyOn(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    )
+    try {
+      const s = mount()
+      s.openWith("ArrowDown")
+      scrollIntoView.mockClear()
+      const banana = s.option("banana")
+      if (!banana) throw new Error("no banana")
+      fireEvent.pointerMove(banana)
+      expect(s.highlighted()).toBe("banana")
+      expect(scrollIntoView).not.toHaveBeenCalled()
+    } finally {
+      scrollIntoView.mockRestore()
+    }
+  })
+})
+
 describe("Select — keyboard on the trigger", () => {
   it("ArrowDown opens with the highlight on the selected option", () => {
     const s = mount({ defaultValue: "banana" })
