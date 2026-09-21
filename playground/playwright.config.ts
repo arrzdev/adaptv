@@ -18,6 +18,14 @@ const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}`
 
 export default defineConfig({
   testDir: "./e2e",
+  //The stress specs (hundreds of gesture cycles, heap and rAF probes, CPU
+  //throttling) measure the page under load and read as flakes next to a
+  //parallel neighbour. They run alone, one worker, from
+  //`playwright.stress.config.ts` (`pnpm test:e2e:stress`). The pattern is
+  //anchored to the file name: it is tested against the ABSOLUTE path, and an
+  //unanchored `stress-.*` also matched a checkout under a directory called
+  //`stress-gestures`, which ignored every spec in it.
+  testIgnore: /[\\/]stress-[^\\/]*\.spec\.ts$/,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   //No retries, anywhere. CI used to get one, and every timing-sensitive describe

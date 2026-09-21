@@ -26,17 +26,6 @@ import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-/**
- * True when `target` sits inside a swipeable row root (`[data-swipeable-root]`).
- * Used by `PullToRefresh` to yield the vertical gesture to an active row swipe.
- */
-export function isSwipeableGestureTarget(
-  target: EventTarget | null,
-): boolean {
-  if (!(target instanceof Element)) return false
-  return target.closest("[data-swipeable-root]") !== null
-}
-
 type SwipeableConfig = {
   /** Fraction of natural width the row must pass to open on release. */
   openThreshold: number
@@ -78,6 +67,15 @@ type OpenSide = false | Side
 
 /** Trailing sample window (ms) used to compute release velocity on flick. */
 const VELOCITY_WINDOW_MS = 60
+
+/**
+ * Travel the engine calls no travel at all (px).
+ *
+ * `applyOffset` parks the transform at `""` inside this of home, and `springTo`
+ * calls the row already at rest inside this of its target. Anything smaller is
+ * a rounding artefact of the spring, not a movement anyone can see.
+ */
+const SETTLE_EPSILON_PX = 0.5
 
 /** Mirror the root's border-radius onto clip-path — overflow alone lets a
  *  transformed child bleed past rounded corners on iOS WebKit. */
@@ -526,11 +524,13 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       priority: GesturePriority.SwipeableRow,
       blocksScroll: true,
       enabled,
-      //pre-empted by a higher-priority gesture — end the drag so the row springs
-      //back instead of being left mid-translate with no pointer to finish it
+      //pre-empted by a higher-priority gesture, or turned off under the
+      //finger — cancel the drag so the row springs back instead of being left
+      //mid-translate with no pointer to finish it. Cancel, not end: a finger
+      //that lost the row did not release it, so there is no verdict to take
       onLost: () => {
         capturedRef.current = false
-        handlersRef.current.endDrag()
+        handlersRef.current.cancelDrag()
       },
     })
     const captureRef = useRef(capture)
@@ -577,7 +577,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
     const applyOffset = useCallback(
       (x: number) => {
         offsetRef.current = x
-        const settled = Math.abs(x) < 0.5
+        const settled = Math.abs(x) < SETTLE_EPSILON_PX
         const content = contentRef.current
         if (content) {
           content.style.transform = settled ? "" : `translateX(${x}px)`
@@ -639,7 +639,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         stopSpring()
 
         const atRest =
-          Math.abs(offsetRef.current - target) < 0.5 &&
+          Math.abs(offsetRef.current - target) < SETTLE_EPSILON_PX &&
           Math.abs(velRef.current) < 1
         if (atRest || reducedMotionRef.current) {
           applyOffset(target)
@@ -879,9 +879,15 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
         scroller.removeEventListener("scroll", onScroll, { capture: true })
     }, [])
 
-    //close on outside pointer release
+    //close on outside pointer release. A finger dragging THIS row is never
+    //the outside pointer, however many other fingers are down: a second
+    //finger lifting beside the list, on a window listener that never sees
+    //which row it landed on, must not reach into a swipe the first finger
+    //is still running. A row being dragged is dismissed by its own
+    //release (endDrag/cancelDrag), never by someone else's
     useEffect(() => {
       const onPointerUp = (e: PointerEvent) => {
+        if (downRef.current) return
         const root = rootRef.current
         if (!root || root.contains(e.target as Node)) return
         closeRef.current()
@@ -956,6 +962,32 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
               return false
             }
             stopSpring()
+            //a row caught in flight: the spring carried it on between the
+            //touch and this lock, so the offset recorded at the touch is
+            //stale by that travel, and tracking from it would throw the row
+            //back by that much in one frame. Track from where the row IS.
+            //
+            //Only a carry the engine itself counts as movement re-anchors the
+            //drag. A closing spring parks the transform at `""` a fraction of
+            //a pixel from home (`applyOffset`) and zeroes the ref a frame
+            //later, so a finger landing in that window records a `start` that
+            //disagrees with the settled offset by less than a pixel on a row
+            //nobody saw move. Re-anchoring on that fiction is not free: it
+            //pins the row where it stands at the lock and so swallows the
+            //whole direction-lock dead zone, leaving every later position
+            //short of the finger by the slop for the rest of the drag.
+            //Above the threshold the row really was in flight and the dead
+            //zone is the right price for not throwing it backwards; below it,
+            //the dead zone stays as pinned, exactly as from rest.
+            //The spring's last velocity dies with it either way: the finger
+            //owns the row now, and the release spring starts from the finger's
+            //own velocity, not the one the interrupted spring left behind
+            if (
+              Math.abs(offsetRef.current - down.start) >= SETTLE_EPSILON_PX
+            ) {
+              down.start = offsetRef.current - dx
+            }
+            velRef.current = 0
             //a close this grab interrupted is over: its spring and onSettled
             //are gone, so the release decides afresh. Left latched, that
             //release's close() was a no-op and the row stuck in view
@@ -1037,9 +1069,26 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       syncTrays()
     }, [close, hasLeft, hasRight, setWillChange, syncTrays, velocity])
 
+    //the drag taken away: the row goes back to where the finger found it,
+    //open or closed, and reports nothing new (an open that settles back open
+    //is unreported by openTo; a row only dragged springs back unreported)
+    const cancelDrag = useCallback(() => {
+      if (!downRef.current) return
+      downRef.current = null
+      const side = openRef.current
+      if (side) openToRef.current(side)
+      else close()
+      syncTrays()
+    }, [close, syncTrays])
+
     //stable handler refs for the imperative touch listeners
-    const handlersRef = useRef({ beginDrag, dragMove, endDrag })
-    handlersRef.current = { beginDrag, dragMove, endDrag }
+    const handlersRef = useRef({
+      beginDrag,
+      dragMove,
+      endDrag,
+      cancelDrag,
+    })
+    handlersRef.current = { beginDrag, dragMove, endDrag, cancelDrag }
 
     /* ---- touch (passive:false on move so we can block vertical scroll) --- */
 
@@ -1047,13 +1096,30 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
       const node = contentRef.current
       if (!node) return
 
+      //the finger that started the drag. A phone is held in a hand: a thumb
+      //steadying it, a knuckle, a second finger resting on the glass each
+      //start a touch of their own mid-swipe, on this same event stream. The
+      //row belongs to the first finger until IT lifts — the others neither
+      //restart the gesture from their own position nor release it
+      let fingerId: number | null = null
+      const tracked = (list: TouchList) => {
+        for (let i = 0; i < list.length; i++) {
+          const t = list[i]
+          if (t && t.identifier === fingerId) return t
+        }
+        return null
+      }
+
       const onStart = (e: TouchEvent) => {
         if (!enabledRef.current) return
-        const t = e.touches[0]
-        if (t) handlersRef.current.beginDrag(t.clientX, t.clientY)
+        if (fingerId !== null && downRef.current) return
+        const t = e.changedTouches[0]
+        if (!t) return
+        fingerId = t.identifier
+        handlersRef.current.beginDrag(t.clientX, t.clientY)
       }
       const onMove = (e: TouchEvent) => {
-        const t = e.touches[0]
+        const t = tracked(e.touches)
         if (!t) return
         if (handlersRef.current.dragMove(t.clientX, t.clientY)) {
           e.preventDefault()
@@ -1069,7 +1135,19 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           }
         }
       }
-      const onEnd = () => {
+      const onEnd = (e: TouchEvent) => {
+        //a lift or a cancel that names another finger changes nothing: the
+        //browser cancels the points it names in changedTouches (a palm, a
+        //finger dragged onto the chrome), and when it takes the whole touch
+        //away the tracked finger is among them. A cancel naming no point at
+        //all (a driver's bare cancel) ends the touch
+        if (
+          fingerId !== null &&
+          e.changedTouches.length > 0 &&
+          !tracked(e.changedTouches)
+        )
+          return
+        fingerId = null
         captureRef.current.release()
         handlersRef.current.endDrag()
       }

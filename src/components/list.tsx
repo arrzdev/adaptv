@@ -88,11 +88,24 @@ export function List<T>({
   //not `.at(-1)`: Array.prototype.at is iOS 15.4
   const lastIndex = virtualItems[virtualItems.length - 1]?.index ?? -1
 
-  //infinite scroll: fire when the last row is windowed (effect, not during render)
+  //infinite scroll: fire when the last row is windowed (effect, not during
+  //render) — once per arrival. An app that passes an inline callback
+  //re-renders on every state change, and a list parked at its end must not
+  //turn each of those renders into another page request: remember the
+  //length the last call was for, and call again only when rows were
+  //appended (the new end is windowed) or the window left the end and came
+  //back. Only a CALL is remembered: an end reached while the callback is
+  //undefined (`onEndReached={loading ? undefined : loadMore}`) is still owed
+  //to the callback when it arrives
+  const endReachedForRef = useRef(-1)
   useEffect(() => {
-    if (onEndReached && data.length > 0 && lastIndex >= data.length - 1) {
-      onEndReached()
+    if (data.length === 0 || lastIndex < data.length - 1) {
+      endReachedForRef.current = -1
+      return
     }
+    if (!onEndReached || endReachedForRef.current === data.length) return
+    endReachedForRef.current = data.length
+    onEndReached()
   }, [onEndReached, lastIndex, data.length])
 
   if (data.length === 0) {

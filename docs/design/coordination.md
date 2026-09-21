@@ -126,7 +126,7 @@ adaptvBack()                         // platform-agnostic programmatic back for 
 > the wiring: capture is requested **at the moment the swipe locks**, not on `pointerdown`. A
 > pointerdown is also how a *tap* starts, so claiming there would starve every other gesture on the
 > screen for the duration of every touch. Both lock points — the mouse path and the imperative touch
-> path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs back instead of
+> path — go through the arbiter, and `onLost` cancels the drag so a pre-empted row springs back instead of
 > being left mid-translate with no pointer to finish it.
 >
 > `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > Slider 250 > SwipeableRow 200 > Scroll 100`.
@@ -223,7 +223,7 @@ const capture = useGestureCapture({
 > matters more than the wiring: capture is requested **at the moment the swipe locks**, not on
 > `pointerdown`. A pointerdown is also how a *tap* starts, so claiming there would starve every other
 > gesture on the screen for the duration of every touch. Both lock points — the mouse path and the
-> imperative touch path — go through the arbiter, and `onLost` ends the drag so a pre-empted row springs
+> imperative touch path — go through the arbiter, and `onLost` cancels the drag so a pre-empted row springs
 > back instead of being left mid-translate with no pointer to finish it.
 >
 > `GesturePriority`: `EdgeSwipe 400 > DrawerDrag 300 > SwipeableRow 200 > Scroll 100`.

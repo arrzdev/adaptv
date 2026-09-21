@@ -27,7 +27,6 @@ import {
   STUCK_HEIGHT,
   STUCK_VERTICAL_PADDING,
 } from "#adaptv/components/pull-to-refresh-physics"
-import { isSwipeableGestureTarget } from "#adaptv/components/swipeable"
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { clamp } from "#adaptv/utils/clamp"
@@ -156,10 +155,6 @@ function setRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (!ref) return
   if (typeof ref === "function") ref(value)
   else (ref as MutableRefObject<T | null>).current = value
-}
-
-function isFromSwipeable(target: EventTarget | null) {
-  return isSwipeableGestureTarget(target)
 }
 
 const PULL_TO_REFRESH_MOTION_INSTANT = { duration: 0 } as const
@@ -584,21 +579,48 @@ export const PullToRefresh = forwardRef<
 
     let boundEl: HTMLElement | null = null
     let rafId = 0
+    //the finger that started the pull. A thumb steadying the phone, a
+    //knuckle, a second finger resting on the glass each start a touch of
+    //their own mid-pull, on this same stream. The pull belongs to the first
+    //finger until IT lifts — the others neither restart it from their own
+    //position nor release it
+    let fingerId: number | null = null
+    const tracked = (list: TouchList) => {
+      for (let i = 0; i < list.length; i++) {
+        const t = list[i]
+        if (t && t.identifier === fingerId) return t
+      }
+      return null
+    }
 
     function onTouchStart(e: TouchEvent) {
-      if (isFromSwipeable(e.target)) return
-      const touch = e.touches[0]
+      if (fingerId !== null && gestureActive.current) return
+      const touch = e.changedTouches[0]
+      if (!touch) return
       if (!beginGestureRef.current(touch.clientX, touch.clientY)) return
+      fingerId = touch.identifier
     }
 
     function onTouchMove(e: TouchEvent) {
-      const touch = e.touches[0]
+      const touch = tracked(e.touches)
+      if (!touch) return
       if (processPullMoveRef.current(touch.clientX, touch.clientY)) {
         e.preventDefault()
       }
     }
 
-    function onTouchEnd() {
+    function onTouchEnd(e: TouchEvent) {
+      //a lift or a cancel that names another finger changes nothing: the
+      //browser cancels the points it names in changedTouches, and when it
+      //takes the whole touch away the tracked finger is among them. A cancel
+      //naming no point at all (a driver's bare cancel) ends the touch
+      if (
+        fingerId !== null &&
+        e.changedTouches.length > 0 &&
+        !tracked(e.changedTouches)
+      )
+        return
+      fingerId = null
       if (!gestureActive.current) return
       if (!isPulling.current) {
         clearGestureRef.current()
@@ -642,25 +664,45 @@ export const PullToRefresh = forwardRef<
     }
   }, [enabled, scrollContainerRef])
 
+  //the pointer path is the mouse's, and on a touch screen the shadow of the
+  //touch path above: only the primary pointer is the pull's.
+  //
+  //The pointer is captured on this root, and only once the axis has resolved
+  //vertical, never at pointerdown and never on the element under the
+  //pointer: a capture at pointerdown steals the click from a button the
+  //press was aimed at, and a capture on the child it landed on is a capture
+  //a Swipeable row inside this root later moves to its own content at ITS
+  //lock, which fires lostpointercapture at that child and ends the row's
+  //mouse swipe the moment it locks. A pull that is vertical is no row's
+  const capturedPointerRef = useRef<number | null>(null)
   const onPointerDown = useCallback(
     (e: PointerEvent) => {
-      if (isFromSwipeable(e.target)) return
-      if (!beginGesture(e.clientX, e.clientY)) return
-      ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+      if (!e.isPrimary) return
+      beginGesture(e.clientX, e.clientY)
     },
     [beginGesture],
   )
 
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
-      processPullMove(e.clientX, e.clientY)
+      if (!e.isPrimary) return
+      if (!processPullMove(e.clientX, e.clientY)) return
+      if (capturedPointerRef.current === e.pointerId) return
+      capturedPointerRef.current = e.pointerId
+      ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     },
     [processPullMove],
   )
 
   const onPointerUp = useCallback(
     (e: PointerEvent) => {
-      ;(e.target as HTMLElement).releasePointerCapture?.(e.pointerId)
+      if (!e.isPrimary) return
+      if (capturedPointerRef.current === e.pointerId) {
+        capturedPointerRef.current = null
+        ;(e.currentTarget as HTMLElement).releasePointerCapture?.(
+          e.pointerId,
+        )
+      }
       if (!gestureActive.current) return
       if (!isPulling.current) {
         clearGesture()

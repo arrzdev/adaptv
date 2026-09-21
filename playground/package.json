@@ -27,6 +27,7 @@
     "typecheck": "pnpm exec tsc --build tsconfig.json && pnpm exec tsc --noEmit -p apps/frontend/tsconfig.json",
     "test": "turbo run test",
     "test:e2e": "playwright test",
+    "test:e2e:stress": "playwright test --config playwright.stress.config.ts",
     "test:e2e:sw": "playwright test --config playwright.sw.config.ts",
     "test:e2e:sw:spa": "playwright test --config playwright.sw-spa.config.ts",
     "test:e2e:sw:prompt": "playwright test --config playwright.sw-prompt.config.ts",

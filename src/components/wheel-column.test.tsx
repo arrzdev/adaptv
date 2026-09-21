@@ -468,6 +468,67 @@ describe("WheelColumn — the settle snap", () => {
     expect(smoothRolls()).toEqual([10 * H])
   })
 
+  it("a second finger lifting does not settle the wheel from under the first", () => {
+    //a thumb steadying the phone lands and lifts while the spinning finger is
+    //still down: a touchend that leaves a finger on the wheel is not the lift
+    render(<Controlled initial={9} onChange={() => {}} />)
+    const one = [{ identifier: 0 }]
+    fireEvent.touchStart(wheel(), { touches: one, changedTouches: one })
+    scrollWheel(10 * H + 14)
+    const two = [{ identifier: 0 }, { identifier: 1 }]
+    fireEvent.touchStart(wheel(), {
+      touches: two,
+      changedTouches: [{ identifier: 1 }],
+    })
+    fireEvent.touchEnd(wheel(), {
+      touches: one,
+      changedTouches: [{ identifier: 1 }],
+    })
+    advance(2000)
+    expect(smoothRolls()).toEqual([])
+
+    fireEvent.touchEnd(wheel(), { touches: [], changedTouches: one })
+    advance(120)
+    expect(smoothRolls()).toEqual([10 * H])
+  })
+
+  it("the spinning finger's lift settles the wheel while a thumb rests elsewhere on the screen", () => {
+    //the thumb never touched the wheel, so its touchstart never reached it,
+    //but `touches` lists every point on the whole surface: the wheel's own
+    //finger lifting with the thumb still down IS the lift
+    render(<Controlled initial={9} onChange={() => {}} />)
+    const one = [{ identifier: 0 }]
+    fireEvent.touchStart(wheel(), { touches: one, changedTouches: one })
+    scrollWheel(10 * H + 14)
+    fireEvent.touchEnd(wheel(), {
+      touches: [{ identifier: 1 }],
+      changedTouches: one,
+    })
+    advance(120)
+    expect(smoothRolls()).toEqual([10 * H])
+  })
+
+  it("a cancel naming only the thumb does not settle the wheel; one naming the spinning finger does", () => {
+    render(<Controlled initial={9} onChange={() => {}} />)
+    const one = [{ identifier: 0 }]
+    fireEvent.touchStart(wheel(), { touches: one, changedTouches: one })
+    scrollWheel(10 * H + 14)
+    fireEvent.touchStart(wheel(), {
+      touches: [{ identifier: 0 }, { identifier: 1 }],
+      changedTouches: [{ identifier: 1 }],
+    })
+    fireEvent.touchCancel(wheel(), {
+      touches: one,
+      changedTouches: [{ identifier: 1 }],
+    })
+    advance(2000)
+    expect(smoothRolls()).toEqual([])
+
+    fireEvent.touchCancel(wheel(), { touches: [], changedTouches: one })
+    advance(120)
+    expect(smoothRolls()).toEqual([10 * H])
+  })
+
   it("settles a cancelled touch the same as a lift", () => {
     render(<Controlled initial={9} onChange={() => {}} />)
     fireEvent.touchStart(wheel())

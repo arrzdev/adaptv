@@ -129,14 +129,16 @@ jobs:
     # flows set 5 min), so only a wedged runner or webServer boot ever reaches this.
     timeout-minutes: 45
     strategy:
-      # One red cell must not cancel the other seven: the point is to see every failure.
+      # One red cell must not cancel the other nine: the point is to see every failure.
       fail-fast: false
       matrix:
-        suite: [main, sw, sw-spa, sw-prompt]
+        suite: [main, stress, sw, sw-spa, sw-prompt]
         engine: [chromium, webkit]
         include:
           - suite: main
             script: test:e2e
+          - suite: stress
+            script: test:e2e:stress
           - suite: sw
             script: test:e2e:sw
           - suite: sw-spa
