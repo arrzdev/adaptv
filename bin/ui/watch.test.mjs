@@ -194,12 +194,36 @@ describe("the watch block — a notice is ADDED, never swapped in", () => {
     for (const r of rows) expect(r.startsWith("  ")).toBe(true)
   })
 
-  it("stays inside a narrow terminal", async () => {
-    const rows = await screen((w) => w.notice("config change"), 40)
-    //the premise: a notice was drawn above the keys, or the bound below holds for one short row
-    expect(rows.length).toBeGreaterThan(1)
-    for (const r of rows) expect(r.length).toBeLessThanOrEqual(40)
-  })
+  //The widths: 40 is the narrowest the visual language asks a command to be looked at in
+  //(`docs/design/cli-visual.md` §6), and 80 is where the longest notice `dev` really raises
+  //already did not fit.
+  it.each([
+    ["config change", 40],
+    ["config + native change · ios, android", 40],
+    ["config + native change · ios, android", 80],
+  ])(
+    "keeps the notice %j to ONE row at %i columns (R10, R44)",
+    async (label, columns) => {
+      //A length bound alone passed while the notice wrapped: every flex item shrank and wrapped
+      //inside its own sliver, so each row stayed short and the block grew a row instead, glyph
+      //gone and words split down columns:
+      //
+      //     config     ·   b to rebuild and see
+      //     change   press  the changes
+      const rows = await screenRaw((w) => w.notice(label), columns)
+      for (const r of rows) expect(r.length).toBeLessThanOrEqual(columns)
+      //notice, blank, keys: a wrapped notice makes this four or five
+      expect(rows).toHaveLength(3)
+      expect(rows[2]).toContain("ctrl-c")
+      expect(rows[0].startsWith("  ! ")).toBe(true)
+      //The notice CLIPS at its end, like every live row: the glyph and cause come first, and
+      //whatever is cut is cut from the tail, marked, rather than carried to a second row.
+      const full = `  ! ${label}  · press b to rebuild and see the changes`
+      //the premise: at this width the full notice does not fit, or nothing here was clipped
+      expect(full.length).toBeGreaterThan(columns)
+      expect(rows[0]).toBe(`${full.slice(0, columns - 1)}…`)
+    },
+  )
 
   it("ERASES itself on stop, so `rewindLines` counts from the right row", async () => {
     //The bug: `stop()` unmounted and THEN cleared, and after unmounting there is nothing
