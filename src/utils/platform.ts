@@ -107,6 +107,12 @@ export function getOS(): PlatformOS {
  * OS version as a dotted string (`"18.4"`, `"14"`), or `null` when the UA
  * doesn't carry one (desktop, or an OS we don't parse).
  *
+ * ⚠︎ Safari 26 freezes the iOS number: the iOS 26.1 simulator's Safari reports
+ * `CPU iPhone OS 18_7` (measured 2026-09-21), so on the web this cannot see 26 or
+ * anything after it, and a gate on "iOS 26 or later" is silently always false
+ * there. Gate on the behaviour instead (see `capabilities/theme-color.ts`, the
+ * band donor). Inside a Capacitor shell the WebView carries the real number.
+ *
  * Read from the user-agent string rather than `@capacitor/device`, for two
  * reasons: it is **synchronous** (the Capacitor bridge is not, and a version
  * check that forces a loading state is useless for gating a render), and the

@@ -76,7 +76,53 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
   document.getElementById(THEME_COLOR_META_ID)?.remove()
+  for (const restore of restores.splice(0)) restore()
 })
+
+const UA_IOS_26 =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1"
+const UA_IOS_18 =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+const UA_ANDROID =
+  "Mozilla/5.0 (Linux; Android 15; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36"
+
+const restores: Array<() => void> = []
+
+function stubNavigator(props: Record<string, unknown>) {
+  for (const [key, value] of Object.entries(props)) {
+    const prev = Object.getOwnPropertyDescriptor(navigator, key)
+    Object.defineProperty(navigator, key, { value, configurable: true })
+    restores.push(() => {
+      if (prev) Object.defineProperty(navigator, key, prev)
+      else delete (navigator as unknown as Record<string, unknown>)[key]
+    })
+  }
+}
+
+/** A Safari tab on the given OS: no Capacitor global, `display-mode` not standalone. */
+function stubBrowserTab(userAgent: string) {
+  stubNavigator({ userAgent, platform: "iPhone", maxTouchPoints: 5 })
+}
+
+function stubStandalone() {
+  window.matchMedia = ((query: string) => ({
+    matches: query === "(display-mode: standalone)",
+    media: query,
+    addEventListener() {},
+    removeEventListener() {},
+  })) as unknown as typeof window.matchMedia
+}
+
+/** The strip is found by its attribute — the module keeps the name private. */
+const BAND_DONOR = "[data-adaptv-band-donor]"
+
+function donor(): HTMLElement | null {
+  return document.body.querySelector(BAND_DONOR)
+}
+
+function donors(): number {
+  return document.body.querySelectorAll(BAND_DONOR).length
+}
 
 describe("getChromeTint / setChromeTint", () => {
   it("reads and writes the one meta adaptv owns", () => {
@@ -295,5 +341,129 @@ describe("the base, and giving the tag back", () => {
     restoreChromeTint({ duration: 0.2 })
     expect(meta.content).toBe(LIGHT)
     expect(clock.frames).toBe(0)
+  })
+})
+
+describe("the band donor (iOS browser tab)", () => {
+  it("paints the strip alongside the meta on an iOS browser tab", () => {
+    stubBrowserTab(UA_IOS_26)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    const strip = donor()
+    expect(strip).not.toBeNull()
+    expect(strip?.style.backgroundColor).toBe(LIGHT)
+    expect(strip?.parentElement).toBe(document.body)
+    expect(strip?.getAttribute("aria-hidden")).toBe("true")
+  })
+
+  it("paints it on what Safari 26 calls iOS 18, because the user agent is frozen there", () => {
+    //Safari 26.1 on the iOS 26.1 simulator reports `CPU iPhone OS 18_7`, so a version gate
+    //would switch the donor off on the one OS that needs it; iOS 18 gets a harmless strip
+    stubBrowserTab(UA_IOS_18)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    expect(donors()).toBe(1)
+  })
+
+  it("creates nothing on Android, which reads the meta", () => {
+    stubBrowserTab(UA_ANDROID)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    setChromeTint(DIMMED)
+    expect(donors()).toBe(0)
+  })
+
+  it("creates nothing on a desktop browser", () => {
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    setChromeTint(DIMMED)
+    expect(donors()).toBe(0)
+  })
+
+  it("creates nothing in an installed web app, which has no band", () => {
+    stubBrowserTab(UA_IOS_26)
+    stubStandalone()
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    expect(donors()).toBe(0)
+  })
+
+  it("creates nothing in a Capacitor shell, which has no band", () => {
+    stubBrowserTab(UA_IOS_26)
+    vi.stubGlobal("Capacitor", {
+      isNativePlatform: () => true,
+      getPlatform: () => "ios",
+    })
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    expect(donors()).toBe(0)
+  })
+
+  it("is shaped to WebKit's thresholds: fixed, full width, over 10px, over 0.1 opacity, untouchable", () => {
+    stubBrowserTab(UA_IOS_26)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    const style = donor()?.style
+    expect(style?.position).toBe("fixed")
+    expect(style?.top).toBe("0px")
+    expect(style?.left).toBe("0px")
+    expect(style?.right).toBe("0px")
+    expect(Number.parseFloat(style?.height ?? "0")).toBeGreaterThan(10)
+    expect(Number.parseFloat(style?.opacity ?? "0")).toBeGreaterThan(0.1)
+    //12% of the chrome colour over 12px: invisible, but not "nearly transparent" to WebKit
+    expect(Number.parseFloat(style?.opacity ?? "1")).toBeLessThan(0.2)
+    expect(style?.pointerEvents).toBe("none")
+    expect(Number(style?.zIndex)).toBe(2147483647)
+  })
+
+  it("follows every frame of a transition, so the band never latches", async () => {
+    stubBrowserTab(UA_IOS_26)
+    const meta = seedMeta()
+    setThemeColorBase(LIGHT)
+    const strip = donor()
+    const seen = new Set<string>()
+    const transition = transitionChromeTint(DIMMED, { duration: 0.4 })
+    for (let i = 0; i < 30; i++) {
+      clock.tick(16)
+      expect(strip?.style.backgroundColor).toBe(meta.content)
+      seen.add(meta.content)
+    }
+    await transition.finished
+    expect(seen.size).toBeGreaterThan(5)
+    expect(strip?.style.backgroundColor).toBe(DIMMED)
+  })
+
+  it("follows a gesture write and the restore", () => {
+    stubBrowserTab(UA_IOS_26)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    setChromeTint(DIMMED)
+    expect(donor()?.style.backgroundColor).toBe(DIMMED)
+    restoreChromeTint({ duration: 0 })
+    expect(donor()?.style.backgroundColor).toBe(LIGHT)
+  })
+
+  it("keeps re-aiming under an override, like the meta", () => {
+    stubBrowserTab(UA_IOS_26)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    setChromeTint(DIMMED)
+    setThemeColorBase("#0a0a0c")
+    expect(donor()?.style.backgroundColor).toBe(DIMMED)
+    restoreChromeTint({ duration: 0 })
+    expect(donor()?.style.backgroundColor).toBe("#0a0a0c")
+  })
+
+  it("leaves with the tag, and comes back as one element, never two", () => {
+    stubBrowserTab(UA_IOS_26)
+    seedMeta()
+    setThemeColorBase(LIGHT)
+    expect(donors()).toBe(1)
+    setThemeColorBase(null)
+    expect(donors()).toBe(0)
+    setThemeColorBase(LIGHT)
+    setThemeColorBase("#0a0a0c")
+    setChromeTint(DIMMED)
+    expect(donors()).toBe(1)
   })
 })
