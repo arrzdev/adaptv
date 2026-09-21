@@ -104,8 +104,8 @@ Version pins and native gotchas live in
 | **Typecheck** | `pnpm typecheck` | |
 | **Lint** | `pnpm biome:check` · `pnpm biome:check:playground` | the playground is its own pnpm project, so the root check never reaches it — both are required |
 | **Colour** | `node scripts/check-colour.mjs` | the CLI's live layer under a pty |
-| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 35 specs in `playground/e2e/` |
-| **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across three configs (default, spa, prompt) |
+| **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 36 specs in `playground/e2e/` |
+| **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across four configs (default, spa, prompt, node server) |
 | **The gate** | `pnpm gate` | lint, typecheck, unit and colour — **not** the Playwright suites, which take minutes where the gate takes seconds |
 
 → [`e2e.md`](e2e.md) for what the Playwright estate covers and how it is wired.
@@ -113,7 +113,7 @@ Version pins and native gotchas live in
 **CI runs the gate and the main browser suite** on every PR and on pushes to `main`
 (`.github/workflows/ci.yml`): typecheck, biome, biome:playground, vitest, the colour check, and
 `test:e2e` on the **chromium** project only. Each step runs even if a prior one failed, so the summary
-reports all failures at once. The main suite's **webkit** project and all three service-worker configs
+reports all failures at once. The main suite's **webkit** project and all four service-worker configs
 run only where someone runs them — why chromium alone is recorded as answered
 ([`../roadmap/open-questions.md`](../roadmap/open-questions.md), **O11a**). Whether the native matrix
 can run in CI at all is still open (**O11b**).
