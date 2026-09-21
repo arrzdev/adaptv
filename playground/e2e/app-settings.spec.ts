@@ -212,18 +212,23 @@ test.describe("settings and decks", () => {
     ).toHaveText(["All", "🛒 Errands", "🪜 Tutorial"])
   })
 
-  test("dark mode and the animations preference survive a reload", async ({
+  test("the theme choice and the animations preference survive a reload", async ({
     page,
   }) => {
     await openApp(page, "/settings")
-    const dark = page.getByRole("switch", { name: "Dark mode" })
+    const theme = page.getByRole("group", { name: "Theme" })
+    const dark = theme.getByRole("button", { name: "Dark" })
     const animations = page.getByRole("switch", { name: "Animations" })
-    await expect(dark).not.toBeChecked()
+    //the premise: a fresh app follows the system, which Playwright renders light
+    await expect(
+      theme.getByRole("button", { name: "System" }),
+    ).toHaveAttribute("aria-pressed", "true")
+    await expect(dark).toHaveAttribute("aria-pressed", "false")
+    await expect(page.locator("html")).not.toHaveClass(/\bdark\b/)
     await expect(animations).toBeChecked()
 
-    await dark.focus()
-    await page.keyboard.press("Space")
-    await expect(dark).toBeChecked()
+    await dark.click()
+    await expect(dark).toHaveAttribute("aria-pressed", "true")
     await expect(page.locator("html")).toHaveClass(/\bdark\b/)
     await animations.focus()
     await page.keyboard.press("Space")
@@ -232,8 +237,10 @@ test.describe("settings and decks", () => {
     await reloadApp(page)
     await expect(page.locator("html")).toHaveClass(/\bdark\b/)
     await expect(
-      page.getByRole("switch", { name: "Dark mode" }),
-    ).toBeChecked()
+      page
+        .getByRole("group", { name: "Theme" })
+        .getByRole("button", { name: "Dark" }),
+    ).toHaveAttribute("aria-pressed", "true")
     await expect(
       page.getByRole("switch", { name: "Animations" }),
     ).not.toBeChecked()
