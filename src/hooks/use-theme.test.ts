@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { useTheme } from "#adaptv/hooks/use-theme"
+import { applyUiThemePreference, useTheme } from "#adaptv/hooks/use-theme"
 import {
   PREFERENCE_ATTR,
   UI_THEME_STORAGE_KEY,
@@ -121,6 +121,30 @@ describe("useTheme and the OS appearance", () => {
     expect(htmlClass()).toBe("light")
     expect(result.current[0]).toBe("light")
   })
+
+  it("follows the OS again after an explicit preference is switched back to system", async () => {
+    //The OS listener only runs in system mode, so an OS change made while the
+    //app was explicitly dark goes unseen. Switching back must re-read the OS, or
+    //the next change event compares against that stale value and bails out.
+    const { result } = mountTheme()
+    act(() => applyUiThemePreference("dark"))
+    await flush()
+    act(() => {
+      os.set(true)
+      os.emit()
+    })
+    act(() => applyUiThemePreference("system"))
+    await flush()
+    expect(result.current[0]).toBe("dark")
+
+    act(() => {
+      os.set(false)
+      os.emit()
+    })
+    await flush()
+    expect(htmlClass()).toBe("light")
+    expect(result.current[0]).toBe("light")
+  })
 })
 
 describe("useTheme on resume", () => {
@@ -133,6 +157,47 @@ describe("useTheme on resume", () => {
     })
     await flush()
     expect(htmlClass()).toBe("dark")
+  })
+
+  it("returns the appearance it restamped, so the next toggle flips the screen", async () => {
+    //The restamp alone left the hook on "light" over a dark page: the preference
+    //it re-reads is still "system", so React bailed out of the render. The shell
+    //hands this value to the native status bar, and the toggle derives its next
+    //preference from it, so one tap chose "dark" for a page already dark.
+    const { result } = mountTheme()
+    os.set(true)
+
+    act(() => {
+      window.dispatchEvent(new Event("pageshow"))
+    })
+    await flush()
+    expect(result.current[0]).toBe("dark")
+
+    act(() => result.current[1]())
+    await flush()
+    expect(htmlClass()).toBe("light")
+    expect(result.current[0]).toBe("light")
+  })
+
+  it("does not re-render when nothing changed while the page was away", async () => {
+    //Every tab switch is a resume, and the shell layout calls this hook, so a
+    //render here is a render of the shell. React may render once more to confirm
+    //a bail-out, so the bound is one render however many resume events arrive.
+    //It assumes no StrictMode, which would render every component twice.
+    const { seen } = mountTheme()
+    await flush()
+    const before = seen.length
+
+    act(() => {
+      window.dispatchEvent(new Event("pageshow"))
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    await flush()
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    await flush()
+    expect(seen.length - before).toBeLessThanOrEqual(1)
   })
 
   it("restamps on visibilitychange too, but only once visible", async () => {
