@@ -1081,20 +1081,25 @@ test.describe("AvoidKeyboard under stress", () => {
     //moving the keyboard's top edge by `shrinkBy` (`keyboardTop` above is this test's own
     //innerHeight − height) with the reservation standing still is the contract, not a gap.
     //What IS asserted: with the resized viewport in place, a new keyboard height re-derives
-    //the reservation by exactly that much — the box is fully overlapped, so the overlap is
-    //linear in the keyboard's height.
+    //the reservation from the geometry as it stands at that moment — the box where the shrink
+    //and the lab's stamps shift left it, against the keyboard's top edge lowered by the extra
+    //height — which is `after.fromGeometryNow + taller` (measured on chromium: 408 → 840 for
+    //740 + 100, on webkit 387.2 → 798.4 for 698.4 + 100). The geometry read AFTER the regrow
+    //cannot be the oracle: the box's own bottom moves by the padding it just gained, so that
+    //read folds the reservation into itself (1272 on chromium); it is reported for the record.
     const taller = 100
+    const expected = after.fromGeometryNow + taller
     await setKeyboard(page, true, kb + taller)
     await expect
       .poll(() => padBottom(page), { timeout: 1500 })
       .toBeGreaterThan(after.reserved + taller - 1)
     const regrown = await geometry()
     console.log(
-      `STRESS-KB ${testInfo.project.name} 8b: keyboard ${kb} → ${kb + taller}px in the shrunk viewport: reserved ${after.reserved} → ${regrown.reserved}`,
+      `STRESS-KB ${testInfo.project.name} 8b: keyboard ${kb} → ${kb + taller}px in the shrunk viewport: reserved ${after.reserved} → ${regrown.reserved} (expected from the geometry before it ${expected}; the box read after it ${regrown.fromGeometryNow})`,
     )
     expect(
-      Math.abs(regrown.reserved - after.reserved - taller),
-      `a new keyboard height re-derives the reservation (reserved ${after.reserved} → ${regrown.reserved} for +${taller}px)`,
+      Math.abs(regrown.reserved - expected),
+      `a new keyboard height re-derives the reservation from the geometry it finds (reserved ${regrown.reserved}, expected ${expected})`,
     ).toBeLessThanOrEqual(1)
     expect(pageErrors).toEqual([])
     await setKeyboard(page, false, 0)
