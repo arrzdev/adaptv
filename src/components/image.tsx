@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
@@ -705,11 +706,12 @@ function ImageRoot(props: ImageProps) {
     else setErrored(true)
   }, [trimmed, invalid])
 
-  function setImgRef(node: HTMLImageElement | null) {
-    imgRef.current = node
-    if (typeof ref === "function") ref(node)
-    else if (ref) ref.current = node
-  }
+  //Memoized on both refs, so while the consumer's ref is stable a re-render keeps
+  //the same callback and React does not detach and re-attach it on every pass (an
+  //inline callback ref still does, as it would on a bare <img>); and merged
+  //through the hook, so a callback ref's React 19 cleanup runs on detach instead
+  //of a call with null.
+  const setImgRef = useMergedRef(imgRef, ref)
 
   function handleLoad(event: SyntheticEvent<HTMLImageElement>) {
     setLoaded(true)
