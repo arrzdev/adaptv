@@ -107,6 +107,13 @@ type SelectInternalContextValue = SelectContextValue & {
   selected: SelectOptionRecord | undefined
   highlighted: string | undefined
   setHighlighted: (value: string | undefined) => void
+  /**
+   * True while the highlight was last moved by a key or typeahead: the content
+   * then scrolls that row into view. A pointer highlight leaves it false — the
+   * row is under the pointer already, and scrolling it would slide the next row
+   * under the pointer and highlight that one too.
+   */
+  highlightByKeyboard: RefObject<boolean>
   upsertOption: (record: SelectOptionRecord) => void
   removeOption: (id: string) => void
   triggerRef: RefObject<HTMLButtonElement | null>
@@ -262,6 +269,7 @@ function Select({
     undefined,
   )
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const highlightByKeyboard = useRef(false)
   const typeahead = useRef<{
     buffer: string
     timer: ReturnType<typeof setTimeout> | null
@@ -310,6 +318,7 @@ function Select({
           : seedFirst
             ? options[edgeEnabled(options, "first")]?.value
             : undefined
+      highlightByKeyboard.current = false
       setHighlighted(seed)
       setOpenState(true)
     },
@@ -326,6 +335,12 @@ function Select({
     [clearTypeahead],
   )
 
+  //disabled underneath an open list: the trigger can no longer close it and
+  //the rows must not pick, so the list goes with the flag, before paint
+  useLayoutEffect(() => {
+    if (disabled && open) closeList(false)
+  }, [disabled, open, closeList])
+
   const pick = useCallback(
     (next: string) => {
       commit(next)
@@ -339,7 +354,9 @@ function Select({
       const current = options.findIndex((o) => o.value === highlighted)
       const moveTo = (index: number) => {
         event.preventDefault()
-        if (index !== -1) setHighlighted(options[index]?.value)
+        if (index === -1) return
+        highlightByKeyboard.current = true
+        setHighlighted(options[index]?.value)
       }
       switch (event.key) {
         case "ArrowDown":
@@ -392,7 +409,9 @@ function Select({
         t.timer = null
       }, SELECT_TYPEAHEAD_MS)
       const hit = findTypeahead(options, current, t.buffer)
-      if (hit !== -1) setHighlighted(options[hit]?.value)
+      if (hit === -1) return
+      highlightByKeyboard.current = true
+      setHighlighted(options[hit]?.value)
     },
     [options, highlighted, pick, closeList],
   )
@@ -420,6 +439,7 @@ function Select({
         selected,
         highlighted,
         setHighlighted,
+        highlightByKeyboard,
         upsertOption,
         removeOption,
         triggerRef,
@@ -612,6 +632,7 @@ function SelectContent({
     rootAriaLabel,
     options,
     highlighted,
+    highlightByKeyboard,
     triggerRef,
     closeList,
     onListKeyDown,
@@ -659,6 +680,18 @@ function SelectContent({
       .querySelector<HTMLElement>("[data-highlighted]")
       ?.scrollIntoView({ block: "nearest" })
   }, [open, positioned])
+
+  //a key moved the highlight: keep that row in view, nearest edge, so the
+  //walk through a capped list never continues below the fold. A pointer
+  //highlight is skipped on purpose (see `highlightByKeyboard`).
+  useLayoutEffect(() => {
+    if (!open || !positioned || highlighted === undefined) return
+    if (!highlightByKeyboard.current) return
+    highlightByKeyboard.current = false
+    contentRef.current
+      ?.querySelector<HTMLElement>("[data-highlighted]")
+      ?.scrollIntoView({ block: "nearest" })
+  }, [open, positioned, highlighted, highlightByKeyboard])
 
   //re-anchor as ancestors scroll or the viewport resizes (capture catches every
   //scroller, incl. the carousel the trigger lives in)
@@ -769,6 +802,7 @@ function SelectOption({
     value: selectedValue,
     highlighted,
     setHighlighted,
+    highlightByKeyboard,
     upsertOption,
     removeOption,
     pick,
@@ -815,7 +849,9 @@ function SelectOption({
           : SELECT_OPTION_LOCKED_CLASS,
       })}
       onPointerMove={() => {
-        if (!disabled && !isHighlighted) setHighlighted(value)
+        if (disabled || isHighlighted) return
+        highlightByKeyboard.current = false
+        setHighlighted(value)
       }}
       onClick={() => {
         if (!disabled) pick(value)

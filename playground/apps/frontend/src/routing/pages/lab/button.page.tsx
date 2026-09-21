@@ -24,10 +24,14 @@ const SURFACE =
 const FILLED =
   "rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-transform duration-200 ease-out active:scale-95"
 
+//three lengths, so consecutive flips never repeat a width
+const FLIP_LABELS = ["go", "a considerably longer label", "a medium one"]
+
 function LabButtonPage() {
   const [log, setLog] = useState<LabLogEntry[]>([])
   const [pending, setPending] = useState(false)
   const [done, setDone] = useState(false)
+  const [flips, setFlips] = useState(0)
 
   const note = (text: string) =>
     setLog((entries) => [labLogEntry(text), ...entries].slice(0, 40))
@@ -186,6 +190,20 @@ function LabButtonPage() {
             fixed width — the label truncates instead of tweening
           </Button.Text>
         </Button>
+        <Button
+          data-testid="button-label-flip"
+          className={FILLED}
+          onClick={() => setFlips((n) => n + 1)}
+        >
+          <Button.Text>
+            {FLIP_LABELS[flips % FLIP_LABELS.length]}
+          </Button.Text>
+        </Button>
+        <LabRow
+          label="label flips"
+          value={<span data-testid="button-label-flips">{flips}</span>}
+          hint="Every press swaps the label for one of a different length, so pressing mid-tween retargets the row while it is still moving. It must always land on the width of the label it shows — the stress spec presses it 50 times in a second."
+        />
       </LabSection>
 
       <LabSection
