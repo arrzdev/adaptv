@@ -18,6 +18,7 @@ import {
   labLogEntry,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
+import { Checkbox } from "@/components/ui"
 
 export const Route = createFileRoute("/_providers/lab/field-group")({
   component: LabFieldGroupPage,
@@ -54,6 +55,20 @@ const POSITIONS = [
   [2, 3],
 ] as const
 
+//two hundred rows for `e2e/stress-field-group.spec.ts`: the corner classes are
+//the browser's `first:` / `last:` and the helper is the same answer as a value,
+//so every row prints what the helper says of its own index and the spec compares
+//the two. Ids are the key, not the index, so the list is stable to biome too.
+const STRESS_ROW_COUNT = 200
+const STRESS_ROWS = Array.from(
+  { length: STRESS_ROW_COUNT },
+  (_, index) => ({
+    id: `stress-row-${index}`,
+    index,
+    position: getFieldItemPosition(index, STRESS_ROW_COUNT),
+  }),
+)
+
 function PreferenceSwitch({
   checked,
   onCheckedChange,
@@ -87,6 +102,8 @@ function LabFieldGroupPage() {
   const [dark, setDark] = useState(false)
   const [animations, setAnimations] = useState(true)
   const [haptics, setHaptics] = useState(false)
+  const [checkboxOn, setCheckboxOn] = useState(false)
+  const [checkboxToggles, setCheckboxToggles] = useState(0)
   const [toggles, setToggles] = useState(0)
   const [log, setLog] = useState<LabLogEntry[]>([])
   const note = (text: string) =>
@@ -228,6 +245,68 @@ function LabFieldGroupPage() {
             <LabBadge tone="muted">slot</LabBadge>
           </FieldGroup.Row>
         </FieldGroup.Section>
+
+        {/*
+         * Stress probes, read by `e2e/stress-field-group.spec.ts`. A <label> row
+         * around a CHECKBOX (the switches above are the same idiom), and a
+         * disabled row rendered as a Link: the row says it is inert, and the spec
+         * asks whether the link agrees.
+         */}
+        <FieldGroup.Section
+          title="Stress probes"
+          footer="A checkbox in a label row must toggle from the row text exactly as the switches do. A disabled row rendered as a link must not navigate."
+          className={SECTION_CLASS}
+        >
+          <FieldGroup.Row
+            label="Checkbox row"
+            description="A label row around a checkbox"
+            render={LABEL_ROW}
+            className={ROW_CLASS}
+          >
+            <Checkbox
+              checked={checkboxOn}
+              onCheckedChange={(next) => {
+                setCheckboxOn(next)
+                setCheckboxToggles((count) => count + 1)
+                note(`Checkbox row → ${next ? "on" : "off"}`)
+              }}
+              aria-label="Checkbox row"
+            />
+          </FieldGroup.Row>
+          <FieldGroup.Row
+            label="Disabled navigation"
+            description="A disabled row rendered as a Link — must not navigate"
+            disabled
+            render={<Link to="/lab" disabled />}
+            className={cn(ROW_CLASS, "clickable")}
+          >
+            <span aria-hidden className="text-subtle">
+              ›
+            </span>
+          </FieldGroup.Row>
+        </FieldGroup.Section>
+
+        <FieldGroup.Section
+          title="Two hundred rows"
+          footer="Every row prints getFieldItemPosition(index, 200); the corners come from first: / last: on the same rows, so the two must agree on every row."
+          className={SECTION_CLASS}
+        >
+          {STRESS_ROWS.map((row) => (
+            <FieldGroup.Row
+              key={row.id}
+              label={`Row ${row.index}`}
+              className={ROW_CLASS}
+              data-index={row.index}
+            >
+              <span
+                className="text-xs text-subtle"
+                data-readout="position"
+              >
+                {row.position}
+              </span>
+            </FieldGroup.Row>
+          ))}
+        </FieldGroup.Section>
       </FieldGroup>
 
       <LabSection
@@ -260,6 +339,21 @@ function LabFieldGroupPage() {
           label="toggles"
           value={<span data-readout="toggles">{toggles}</span>}
           hint="How many times any switch reported a change. A row tap that flips the switch counts once, never twice."
+        />
+        <LabRow
+          label="Checkbox row"
+          value={
+            <span data-readout="pref-checkbox">
+              {checkboxOn ? "on" : "off"}
+            </span>
+          }
+        />
+        <LabRow
+          label="checkbox toggles"
+          value={
+            <span data-readout="checkbox-toggles">{checkboxToggles}</span>
+          }
+          hint="How many times the checkbox in its label row reported a change."
         />
       </LabSection>
 

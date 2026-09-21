@@ -26,6 +26,8 @@ function LabTogglesPage() {
   const [checked, setChecked] = useState(false)
   const [indeterminate, setIndeterminate] = useState(true)
   const [on, setOn] = useState(false)
+  const [live, setLive] = useState(false)
+  const [liveDisabled, setLiveDisabled] = useState(false)
   const [log, setLog] = useState<LabLogEntry[]>([])
 
   const note = (text: string) =>
@@ -172,6 +174,45 @@ function LabTogglesPage() {
           />
           <span className="text-sm text-muted">both inert</span>
         </div>
+      </LabSection>
+
+      {/*
+       * Stress probe, read by `e2e/stress-toggles.spec.ts`: a switch whose
+       * `disabled` can flip while a press is in flight. The engine must cancel
+       * the press, so the release that follows activates nothing.
+       */}
+      <LabSection
+        title="Stress probe — disabled mid-press"
+        description="A switch whose disabled flag flips from the button while Space is held. The release after the flip must not toggle it."
+      >
+        <div className="flex items-center gap-x-3">
+          <Switch
+            checked={live}
+            disabled={liveDisabled}
+            onCheckedChange={(next) => {
+              note(`disable-able → ${next}`)
+              setLive(next)
+            }}
+            aria-label="Disable-able switch"
+          />
+          <span className="text-sm text-foreground">
+            {liveDisabled ? "disabled — must not move" : "live"}
+          </span>
+        </div>
+        <LabRow
+          label="disable-able"
+          value={
+            <span data-readout="disableable">{live ? "on" : "off"}</span>
+          }
+        />
+        <LabActions>
+          <LabButton
+            testId="toggle-switch-disabled"
+            onClick={() => setLiveDisabled((disabled) => !disabled)}
+          >
+            {liveDisabled ? "enable the switch" : "disable the switch"}
+          </LabButton>
+        </LabActions>
       </LabSection>
 
       <LabSection title="Log">
