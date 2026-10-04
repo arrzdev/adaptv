@@ -1,15 +1,15 @@
 name: CI
 
-# Simple test-only CI: no envs, no deploys. Two kinds of job on every PR and on pushes
-# to main, each with a rendered summary:
+# Simple test-only CI: no envs, no deploys. Two kinds of job, each with a rendered
+# summary:
 #
 #   · `test` is `pnpm gate` minus nothing — typecheck, both biome checks, vitest and the
-#     live layer's colour check. Seconds of work, one job.
+#     live layer's colour check. Runs on every PR and on pushes to main; the one
+#     required check.
 #   · `e2e` is every Playwright suite the playground has, on both engines: the main
-#     suite and the three service-worker suites, each × chromium and webkit, eight jobs
-#     in parallel. The gate does not run these (minutes against seconds), so this is
-#     the only place they bind anyone: a check that only runs locally binds only the
-#     person who remembered to run it.
+#     suite, stress and the three service-worker suites, each × chromium and webkit, ten
+#     jobs in parallel. Pushes to main only — about 77 billable minutes a run, which on
+#     every PR push spent September's whole Actions quota in a week. Not required.
 
 on:
   pull_request:
@@ -124,6 +124,9 @@ jobs:
   # human decision recorded as attempt #2 on the run.
   e2e:
     name: e2e (${{ matrix.suite }}, ${{ matrix.engine }})
+    # Off the PR path to fit the free Actions minutes, until an opt-in PR run and a
+    # nightly run on main replace this.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # A backstop, not a budget: every spec is capped by its own test timeout (the update
     # flows set 5 min), so only a wedged runner or webServer boot ever reaches this.
