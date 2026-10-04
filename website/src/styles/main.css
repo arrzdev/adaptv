@@ -187,6 +187,7 @@
 .step-in { animation: step-in 0.2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .rise, .stage-in, .caret, .step-in { animation: none; }
+  [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
 
 /*
