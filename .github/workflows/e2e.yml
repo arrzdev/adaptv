@@ -1,0 +1,176 @@
+name: E2E
+
+# Browser suites, off the per-push path (pr-checks-design, tier 1). Never a
+# required check: a required check that does not run on every PR blocks those
+# PRs forever. Marta does not merge a labelled PR with a red `e2e`.
+#
+#   PR with label `e2e`  -> `e2e`: chromium, the PR suites in one job
+#   nightly on main      -> `e2e`: same job, skipped if main has not moved
+#                           since the last green scheduled run; red opens an issue
+#   weekly + on demand   -> `e2e-full`: every suite x chromium + webkit, with
+#                           stress. Run it before any release of adaptv.
+#
+# No retries, in the configs or here (docs/guides/e2e.md §3.1). The worker
+# suites carry a KNOWN intermittent (`update.spec.ts` on chromium, about 1 run
+# in 3-5). A re-run is a human decision, recorded as attempt #2 on the run.
+on:
+  pull_request:
+    types: [labeled, opened, synchronize, reopened]
+  schedule:
+    - cron: "0 3 * * *" # nightly
+    - cron: "0 4 * * 0" # weekly full matrix (Sunday)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}-${{ github.event.schedule || github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CI: 1
+  E2E_PORT: 41730
+  E2E_SW_PORT: 41750
+  E2E_SW_SPA_PORT: 41760
+  E2E_SW_PROMPT_PORT: 41770
+
+jobs:
+  e2e:
+    if: >-
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e')) ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Skip if main has not moved
+        id: moved
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last="$(gh run list -R "$GITHUB_REPOSITORY" --workflow e2e.yml --event schedule --branch main --status success -L 1 --json headSha --jq '.[0].headSha' 2>/dev/null || true)"
+          if [ "$last" = "$GITHUB_SHA" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "main is at ${GITHUB_SHA:0:7}, already green in a scheduled run: skipped." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.moved.outputs.run != 'false'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup
+        if: steps.moved.outputs.run != 'false'
+        uses: ./.github/actions/setup
+
+      - name: Install (playground)
+        if: steps.moved.outputs.run != 'false'
+        run: pnpm playground:setup
+
+      - name: Browser cache
+        if: steps.moved.outputs.run != 'false'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('playground/pnpm-lock.yaml') }}
+
+      - name: Browser (chromium)
+        if: steps.moved.outputs.run != 'false'
+        run: pnpm --dir playground exec playwright install --with-deps chromium
+
+      # In sequence, in one job: four jobs would each pay setup and a rounded-up
+      # minute. Every suite runs even if an earlier one failed.
+      - name: Test (playwright, chromium)
+        id: e2e
+        if: steps.moved.outputs.run != 'false'
+        run: |
+          set -o pipefail
+          failed=()
+          for script in test:e2e test:e2e:sw test:e2e:sw:spa test:e2e:sw:prompt; do
+            echo "::group::${script}"
+            if ! pnpm --dir playground "$script" --project=chromium; then failed+=("$script"); fi
+            echo "::endgroup::"
+          done
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "Failed: ${failed[*]}" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All chromium suites passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Playwright report
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-chromium
+          path: playground/playwright-report/
+          retention-days: 14
+
+      - name: Open an issue for a red nightly
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --title "nightly e2e failed on ${GITHUB_SHA:0:7}" \
+            --body "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Fix forward on a PR."
+
+  e2e-full:
+    name: e2e-full (${{ matrix.suite }}, ${{ matrix.engine }})
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * 0')
+    runs-on: ubuntu-latest
+    # A backstop, not a budget: every spec is capped by its own test timeout.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [main, stress, sw, sw-spa, sw-prompt]
+        engine: [chromium, webkit]
+        include:
+          - suite: main
+            script: test:e2e
+          - suite: stress
+            script: test:e2e:stress
+          - suite: sw
+            script: test:e2e:sw
+          - suite: sw-spa
+            script: test:e2e:sw:spa
+          - suite: sw-prompt
+            script: test:e2e:sw:prompt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Install (playground)
+        run: pnpm playground:setup
+
+      - name: Browser cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ hashFiles('playground/pnpm-lock.yaml') }}
+
+      - name: Browser (${{ matrix.engine }})
+        run: pnpm --dir playground exec playwright install --with-deps ${{ matrix.engine }}
+
+      - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
+        id: e2e
+        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }}
+
+      - name: Playwright report
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-${{ matrix.suite }}-${{ matrix.engine }}
+          path: playground/playwright-report/
+          retention-days: 14

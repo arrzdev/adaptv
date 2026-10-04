@@ -1,0 +1,65 @@
+name: Gate
+description: >
+  The one merge gate, `pnpm gate` in CI form. ci.yml runs it on every PR push
+  and e2e.yml's nightly reuses the same setup. Same inputs and modes as the
+  gate of the deploying repos; the steps are this repo's (no turbo, no
+  database, the playground's own biome check and the colour check).
+
+inputs:
+  mode:
+    description: "full | draft | docs. draft = affected tests only; docs = lint + skills only"
+    required: true
+  base:
+    description: "Commit to diff against (affected tests)"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Agent harness integrity, when the repo has the scripts. Python only.
+    - name: Skills and hooks
+      shell: bash
+      run: |
+        if [ -f .claude/scripts/check-skills.py ]; then python3 .claude/scripts/check-skills.py; fi
+        if [ -f .claude/scripts/test-hooks.py ]; then python3 .claude/scripts/test-hooks.py; fi
+
+    - name: Setup
+      uses: ./.github/actions/setup
+
+    - name: Lint (biome)
+      shell: bash
+      run: pnpm biome:check
+
+    # The playground is its own pnpm project, so the root `biome check .` never
+    # reaches it. The script provisions the playground's install on first run.
+    - name: Lint (biome, playground)
+      shell: bash
+      run: pnpm biome:check:playground
+
+    - name: Typecheck
+      if: inputs.mode != 'docs'
+      shell: bash
+      run: pnpm typecheck
+
+    - name: Test
+      if: inputs.mode == 'full'
+      shell: bash
+      run: pnpm test
+
+    # Draft PRs: only the tests the change reaches. A draft cannot merge, and
+    # marking it ready re-runs the full gate on the same head commit.
+    - name: Test (affected only)
+      if: inputs.mode == 'draft'
+      shell: bash
+      env:
+        BASE: ${{ inputs.base }}
+      run: pnpm exec vitest run --changed "$BASE"
+
+    # Ink drops props it does not recognise in silence, so a mis-named colour
+    # role renders the live layer flat while every unit test passes (vitest's
+    # stdout is not a terminal). This runs the components under a pty and
+    # greps the bytes.
+    - name: Colour (live layer)
+      if: inputs.mode == 'full'
+      shell: bash
+      run: node scripts/check-colour.mjs
