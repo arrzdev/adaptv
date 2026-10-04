@@ -22,8 +22,8 @@ export function Hero() {
           style={{ animationDelay: "120ms" }}
         >
           One React codebase for the browser, the home screen, the App Store and
-          Google Play. adaptv fixes the small details that make a web app feel
-          like a website.
+          Google Play. adaptv stops scroll chaining, tap flashes and input zoom,
+          and handles safe areas, the keyboard and offline.
         </p>
 
         <View
