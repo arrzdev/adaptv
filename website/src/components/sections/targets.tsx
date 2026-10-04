@@ -1,4 +1,4 @@
-import type { SVGProps } from "react"
+import { type SVGProps, useState } from "react"
 
 /*
  * Marks only where the owner allows them: the Android robot (CC BY 3.0, credited in the
@@ -30,40 +30,55 @@ const TARGETS = [
   { name: "Google Play" },
 ] as const
 
-function TargetList({ hidden }: { hidden?: boolean }) {
+function TargetRow({ as: Tag }: { as: "ul" | "span" }) {
+  const Item = Tag === "ul" ? "li" : "span"
   return (
-    <ul
-      aria-hidden={hidden || undefined}
-      aria-label={hidden ? undefined : "Runs on"}
-      className="marquee-list"
-    >
+    <Tag className="marquee-list">
       {TARGETS.map((target) => {
         const Mark = "mark" in target ? target.mark : null
         return (
-          <li
+          <Item
             key={target.name}
             className="flex shrink-0 items-center gap-2.5 whitespace-nowrap font-medium text-[17px] text-subtle"
           >
-            {Mark && <Mark className="size-6 text-foreground" />}
+            {Mark && <Mark className="size-6" />}
             {target.name}
-          </li>
+          </Item>
         )
       })}
-    </ul>
+    </Tag>
   )
 }
 
-/** The six places adaptv runs, as one slow line. The second copy only closes the loop. */
+/**
+ * The six places adaptv runs, as one slow line. The line is a toggle button so touch and
+ * keyboard users can stop it too (WCAG 2.2.2); its copies are hidden from assistive tech,
+ * which reads the plain list instead. Under reduced motion that list is the one you see.
+ */
 export function Targets() {
+  const [paused, setPaused] = useState(false)
   return (
     <section className="sheet ruled">
       <div className="flex flex-col gap-5 px-6 py-10 md:flex-row md:items-center md:gap-10 md:px-10">
         <p className="shrink-0 text-[14px] text-muted">Runs on</p>
-        <div className="marquee">
-          <div className="marquee-track">
-            <TargetList />
-            <TargetList hidden />
+        <div className="min-w-0 flex-1">
+          <div className="marquee-static">
+            <TargetRow as="ul" />
           </div>
+          <button
+            type="button"
+            aria-pressed={paused}
+            aria-label="Pause the platforms line"
+            onClick={() => setPaused((value) => !value)}
+            className="marquee"
+          >
+            <span className="marquee-viewport" aria-hidden="true">
+              <span className="marquee-track">
+                <TargetRow as="span" />
+                <TargetRow as="span" />
+              </span>
+            </span>
+          </button>
         </div>
       </div>
     </section>
