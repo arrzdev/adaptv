@@ -1,0 +1,8 @@
+# Actions are pinned by commit SHA (a tag can be moved, and the deploy job holds
+# the Cloudflare token). Dependabot proposes the bumps.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
