@@ -1,11 +1,45 @@
-import { describe, expect, it } from "vitest"
+import { nitro } from "nitro/vite"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   adaptvDeployServerPlugins,
   DEPLOY_SERVER_ENVIRONMENT,
   emitIntoClientOutput,
 } from "#adaptv/vite/deploy-server.ts"
 
+//spied, not replaced: the tests below still read the real plugins' names
+vi.mock("nitro/vite", async (importOriginal) => {
+  const real = await importOriginal<typeof import("nitro/vite")>()
+  return { ...real, nitro: vi.fn(real.nitro) }
+})
+
+beforeEach(() => {
+  vi.mocked(nitro).mockClear()
+})
+
 describe("adaptvDeployServerPlugins", () => {
+  it("asks Nitro for nothing unless the app prerenders", async () => {
+    await adaptvDeployServerPlugins("ssr")
+    expect(vi.mocked(nitro).mock.calls).toEqual([[undefined]])
+  })
+
+  it("crawls from / into x.html files when the app prerenders", async () => {
+    //TUD-131: SSR of every page view ran a Cloudflare Worker out of CPU. The files
+    //are served before the Worker, and `x.html` (not `x/index.html`) is what keeps
+    //`/x` from being redirected to `/x/` there.
+    await adaptvDeployServerPlugins("ssr", { prerender: true })
+    expect(vi.mocked(nitro).mock.calls).toEqual([
+      [
+        {
+          prerender: {
+            routes: ["/"],
+            crawlLinks: true,
+            autoSubfolderIndex: false,
+          },
+        },
+      ],
+    ])
+  })
+
   it("produces a server build for ssr", async () => {
     //The property this pins is that adaptv, not the consumer, owns the deploy
     //plugin. Before this the target came from whatever the app happened to put in
