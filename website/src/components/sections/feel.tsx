@@ -35,16 +35,8 @@ export function Feel() {
 
   return (
     <Section
-      index="01"
-      eyebrow="The difference"
-      title={
-        <>
-          Spot the
-          <br />
-          web view.
-        </>
-      }
-      lede="Same markup in both phones. The left one is what the platform hands you. The right one is adaptv. Try them."
+      title="A web view vs adaptv"
+      lede="Same markup on both phones. The left is the platform default, the right is adaptv. Try both."
     >
       <Reveal>
         <View className="overflow-hidden rounded-3xl border border-border bg-surface">

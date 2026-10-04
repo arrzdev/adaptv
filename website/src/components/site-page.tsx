@@ -111,7 +111,7 @@ function SiteFooter() {
               Documentation
             </Link>
             <Link to="/blog" className="text-subtle hover:text-foreground">
-              Field notes
+              Blog
             </Link>
           </FooterColumn>
           <FooterColumn title="Project">
