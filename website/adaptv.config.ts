@@ -12,6 +12,10 @@ export default defineApp({
   title: "adaptv — one React codebase, every screen",
   description:
     "One React codebase for desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
+  //Every page is the same for every visitor, so the build writes each one as a file
+  //and the Worker serves it from assets. Rendered per request instead, a page view
+  //cost enough Worker CPU to fail with error 1102 about one time in eight (TUD-131).
+  prerender: true,
   lang: "en",
   themeColor: { light: "#fbfbfd", dark: "#0b0c14" },
   styles: "./src/styles/main.css",

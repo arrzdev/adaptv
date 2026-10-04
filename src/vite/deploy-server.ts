@@ -116,6 +116,7 @@ export function emitIntoClientOutput(
  */
 export async function adaptvDeployServerPlugins(
   render: "ssr" | "spa",
+  { prerender = false }: { prerender?: boolean } = {},
 ): Promise<PluginOption[]> {
   //A spa build has no server to produce: the output is a bucket of files and the
   //client router resolves the URL. Injecting a server builder here would emit a
@@ -128,8 +129,31 @@ export async function adaptvDeployServerPlugins(
   //it, and so this file stays cheap to load in tests.
   const { nitro } = await import("nitro/vite")
 
-  //No options. The preset is auto-detected from the build environment, or set by
+  //No preset. It is auto-detected from the build environment, or set by
   //`NITRO_PRESET` — see above. Anything adaptv passed here would override the
   //platform's own answer with a guess.
-  return [nitro() as PluginOption]
+  return [
+    nitro(
+      prerender ? { prerender: PRERENDER } : undefined,
+    ) as PluginOption,
+  ]
+}
+
+/**
+ * Nitro's prerender, and not Start's own `prerender` option. MEASURED on the
+ * `cloudflare_module` preset: Start renders through a preview server, and the
+ * preview of that preset is `wrangler dev`, which the build spawns with `npx` and
+ * gives ten seconds to bind. It did not, and the build failed. Nitro builds a
+ * separate Node renderer of the same app and calls it in-process, so the crawl
+ * is the same on every preset.
+ *
+ * `autoSubfolderIndex: false` writes `/docs/storage` as `docs/storage.html`, not
+ * `docs/storage/index.html`. Cloudflare's asset router (and Nitro's own static
+ * handler) serves `x.html` at `/x`, but answers `/x` with a redirect to `/x/`
+ * when only `x/index.html` exists. That would change every URL on the site.
+ */
+const PRERENDER = {
+  routes: ["/"],
+  crawlLinks: true,
+  autoSubfolderIndex: false,
 }

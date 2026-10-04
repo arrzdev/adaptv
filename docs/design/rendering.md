@@ -26,6 +26,14 @@ After hydration, TanStack Router navigates **client-side on every target** — s
 already SPA-fast regardless of SSR vs SPA. SSR-default is a quality-of-life choice; for an *installed*
 app it does little beyond the very first load.
 
+**`prerender: true` (SSR only)** renders, at build time, every page a link reaches from `/`, through
+Nitro's own crawler, and ships each as `x.html` next to the client assets. A host that serves files
+before the server answers those pages with no server work at all; the server still renders anything the
+crawl did not reach. Nitro's crawler and not Start's: on `cloudflare_module`, Start renders through
+`wrangler dev`, which the build could not start. `x.html` and not `x/index.html`: Cloudflare redirects
+`/x` to `/x/` for the latter. It exists for the adaptv website, whose per-request SSR ran its Worker out
+of CPU (error 1102, TUD-131). → `src/vite/deploy-server.ts`
+
 ### Per-target build matrix
 
 | Target | Build | Server render | Service worker | Delivery / update | Server functions (direction, 2026-09-14) |

@@ -683,6 +683,26 @@ export type AdaptvAppConfig = {
   render?: "ssr" | "spa"
 
   /**
+   * Render every page the build can reach to static HTML at build time, and
+   * ship those files with the client assets. **Defaults to `false`.** SSR only:
+   * a `render: "spa"` build has no server to render with, and the build refuses
+   * the pair.
+   *
+   * The crawl starts at `/` and follows every `<a href="/…">` in the rendered
+   * markup, so a page no link reaches is not written and the server still
+   * answers it per request. A prerendered page is the same document SSR would
+   * have sent, so it hydrates the same way.
+   *
+   * For a site whose pages do not depend on the request: docs, a blog, a
+   * landing page. A host that serves files before the server (Cloudflare Workers
+   * assets, Netlify, Vercel) then answers those pages without running the
+   * server at all. That is what keeps a content site inside a request-CPU
+   * budget. A page that reads a cookie, a header or the time of the request
+   * must stay out of the crawl's reach, or every visitor gets the build's copy.
+   */
+  prerender?: boolean
+
+  /**
    * Router config — one block for all routing wiring: the SSR server entry,
    * build-time route-generator paths, and any runtime `createRouter`
    * option. See {@link AdaptvRouterConfig}.
