@@ -49,7 +49,9 @@ return (
   <View
     row
     className="absolute inset-x-0 bottom-0 gap-2 px-3 pt-2"
-    style={{ paddingBottom: isOpen ? height + 8 : undefined }}
+    style={{
+      paddingBottom: isOpen ? height + 8 : undefined,
+    }}
   >
     <Input placeholder="Message" className="flex-1" />
     <SendButton />
@@ -88,7 +90,14 @@ export function Platform() {
       <View className="gap-16 md:gap-20">
         {ROWS.map(({ title, line, docs, sample, tryIt }, index) => (
           <Reveal key={title}>
-            <View className="grid items-center gap-6 lg:grid-cols-[1fr_1.4fr] lg:gap-14">
+            <View
+              className={cn(
+                "grid items-center gap-6 lg:gap-14",
+                index % 2 === 1
+                  ? "lg:grid-cols-[1.4fr_1fr]"
+                  : "lg:grid-cols-[1fr_1.4fr]",
+              )}
+            >
               <View
                 className={cn("min-w-0 gap-2", index % 2 === 1 && "lg:order-2")}
               >
