@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AdaptvAppConfig } from "#adaptv/config/app-config"
 import { resolveOtaPublicKey } from "#adaptv/ota/build/ota-config-module"
