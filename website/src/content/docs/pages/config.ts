@@ -233,6 +233,13 @@ export default defineApp({
           description:
             'How the **web** build renders. `"ssr"`: a server renders each request and the client hydrates, so crawlers and link previews see real markup. `"spa"`: the host serves one static shell and the client router resolves the URL. It decides what a deploy needs: `"ssr"` needs something that runs per request, `"spa"` needs only a place to put files. The native build is always a static SPA, whatever this says. See [Rendering](/docs/rendering) and [Deploying](/docs/deploying).',
         },
+        {
+          name: "prerender",
+          type: "boolean",
+          default: "false",
+          description:
+            'Render, at build time, every page a link reaches from `/`, and ship each as a static HTML file next to the client assets. A host that serves files before the server answers those pages without running the server; a page the crawl did not reach is still rendered per request. Needs `render: "ssr"`. Only for pages that are the same for every visitor: a page that reads a cookie, a header or the time must not be reachable by a link, or every visitor gets the build\'s copy.',
+        },
       ],
     },
     {
