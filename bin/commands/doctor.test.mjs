@@ -163,6 +163,10 @@ afterEach(() => {
  */
 async function runDoctor({ json = false, quiet = false } = {}) {
   vi.resetModules()
+  //Each fresh copy of the modules hooks the process's exit again (exec.mjs stops its
+  //children there). A real adaptv loads them once; here a copy's hooks go with the copy,
+  //or past ten of them Node prints a leak warning into whichever page is being read.
+  const exitHooks = process.listeners("exit")
   const render = await import("../lib/render.mjs")
   const { doctor } = await import("./doctor.mjs")
   const out = []
@@ -186,6 +190,8 @@ async function runDoctor({ json = false, quiet = false } = {}) {
     exitCode = process.exitCode
     process.exitCode = before
     vi.restoreAllMocks()
+    for (const hook of process.listeners("exit"))
+      if (!exitHooks.includes(hook)) process.off("exit", hook)
   }
   const stdout = out.join("").replace(ANSI, "")
   const stderr = err.join("").replace(ANSI, "")

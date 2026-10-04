@@ -112,13 +112,15 @@ Version pins and native gotchas live in
 
 → [`e2e.md`](e2e.md) for what the Playwright estate covers and how it is wired.
 
-**CI runs the gate and the main browser suite** on every PR and on pushes to `main`
-(`.github/workflows/ci.yml`): typecheck, biome, biome:playground, vitest, the colour check, and
-`test:e2e` on the **chromium** project only. Each step runs even if a prior one failed, so the summary
-reports all failures at once. The main suite's **webkit** project and all four service-worker configs
-run only where someone runs them — why chromium alone is recorded as answered
-([`../roadmap/open-questions.md`](../roadmap/open-questions.md), **O11a**). Whether the native matrix
-can run in CI at all is still open (**O11b**).
+**CI runs `gate` on every PR push** (`.github/workflows/ci.yml` → `.github/actions/gate`): biome,
+biome:playground, typecheck, vitest and the colour check — `pnpm gate` in CI form, and the only
+required check on `main`. Draft PRs run only the affected tests; docs-only PRs run only biome.
+
+**The browser suites run off the per-push path** (`.github/workflows/e2e.yml`): add the label `e2e` to
+a PR to run the chromium PR suites (main, sw, sw-spa, sw-prompt) in one job; a nightly run does the
+same on `main` when it has moved, and opens an issue when red; a weekly run (and a manual dispatch)
+runs every suite on chromium **and** webkit, including `stress`. Run the full matrix before a release.
+Whether the native matrix can run in CI at all is still open (**O11b**).
 
 ---
 
