@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react"
 import { Activity, useRef } from "react"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type {
   AnimatedStyleTargets,
   AnimatedStyleTransitions,
@@ -34,8 +34,34 @@ function Harness(props: {
   return <div ref={ref} data-testid="layer" />
 }
 
+//motion's frame loop reads rAF and `performance.now()`, so both run on the fake
+//clock with the timers: a wait is virtual, frame by frame, instead of real
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "performance",
+    ],
+  })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 const wait = (ms: number) =>
-  act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  act(async () => {
+    for (let t = 0; t < ms; t += 16) {
+      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  })
 
 function layer(container: HTMLElement) {
   return container.querySelector("[data-testid=layer]") as HTMLElement
