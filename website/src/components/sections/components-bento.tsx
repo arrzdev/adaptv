@@ -253,16 +253,8 @@ function SheetTrigger() {
 export function ComponentsBento() {
   return (
     <Section
-      index="02"
-      eyebrow="Components"
-      title={
-        <>
-          The physics
-          <br />
-          are included.
-        </>
-      }
-      lede="Sheets, swipe rows, wheels, switches. Unstyled, so they take your Tailwind classes. The gesture work is already done. Everything below is live."
+      title="Components with native gestures"
+      lede="Sheets, swipe rows, wheels and switches. They are unstyled, so your Tailwind classes apply. Everything below is live."
     >
       <View className="grid gap-4 md:grid-cols-3">
         <Card
@@ -286,7 +278,7 @@ export function ComponentsBento() {
         </Card>
         <Card
           className="md:col-span-2"
-          title="Switches, buttons, inputs, lists"
+          title="Form controls and lists"
           line="Accessible by default, with a haptic tick on a real device. The same component on all six targets."
         >
           <Switches />

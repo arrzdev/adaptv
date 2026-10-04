@@ -53,16 +53,8 @@ function Terminal() {
 export function CodeSection() {
   return (
     <Section
-      index="04"
-      eyebrow="Developer experience"
-      title={
-        <>
-          You already
-          <br />
-          know how.
-        </>
-      }
-      lede="If you can build a React app, you can ship to the App Store this week. There is no bridge to learn and no native code to write."
+      title="Plain React, plain CSS, one config"
+      lede="If you can build a React app, you can build the native app. There is no bridge to learn and no native code to write."
     >
       <View className="grid items-start gap-10 lg:grid-cols-[1.5fr_1fr] lg:gap-14">
         <Reveal className="min-w-0">
