@@ -1,215 +1,55 @@
 name: CI
 
-# Simple test-only CI: no envs, no deploys. Two kinds of job on every PR and on pushes
-# to main, each with a rendered summary:
-#
-#   · `test` is `pnpm gate` minus nothing — typecheck, both biome checks, vitest and the
-#     live layer's colour check. Seconds of work, one job.
-#   · `e2e` is every Playwright suite the playground has, on both engines: the main
-#     suite and the three service-worker suites, each × chromium and webkit, eight jobs
-#     in parallel. The gate does not run these (minutes against seconds), so this is
-#     the only place they bind anyone: a check that only runs locally binds only the
-#     person who remembered to run it.
-
+# The PR gate. One job, `gate`, which branch protection requires on `main` and
+# `staging`. No `push` trigger: deploy.yml's verify runs the same gate after the
+# merge, so a CI run on the merged commit would be the same check a third time.
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  # One job on purpose: every job is billed rounded up to a whole minute, so
+  # small guards in their own jobs cost more than the work they do. The draft
+  # and docs-only shortcuts live INSIDE the job, never as a workflow `paths`
+  # filter: a required check whose workflow is skipped stays pending forever.
+  #
+  # No `environment:` binding and no secrets: a PR that adds an env var passes
+  # here without anyone provisioning an environment first, and forks run it.
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
+          fetch-depth: 0 # migration safety and affected tests diff against the base
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      # Each check runs even if a prior one failed (if: always()), so the summary
-      # reports ALL failures at once. A failed step still fails the job.
-      - name: Typecheck
-        id: typecheck
-        run: pnpm typecheck
-
-      - name: Lint (biome)
-        id: biome
-        if: always()
-        run: pnpm biome:check
-
-      # The playground is its own pnpm project, so the root `biome check .` above
-      # never reaches it. Without this step the gate's playground check only binds
-      # whoever runs `pnpm gate` locally — which is how two PRs landed unformatted
-      # playground files on main in a single afternoon. The script provisions the
-      # playground's own install on first run, so no extra install step is needed.
-      - name: Lint (biome, playground)
-        id: biome_playground
-        if: always()
-        run: pnpm biome:check:playground
-
-      - name: Test (vitest)
-        id: test
-        if: always()
-        run: |
-          set -o pipefail
-          pnpm test 2>&1 | tee vitest-output.txt
-
-      # The one check no unit test can make. Ink drops props it does not recognise in
-      # SILENCE, so a mis-named role (`ink:` for `color`, `dim` for `dimColor`) renders the
-      # whole live layer flat and every assertion still passes — chalk fixes its colour level
-      # from the real stdout at import time, and vitest's fake stdout is not a terminal, so a
-      # unit test there measures the harness. This runs the components under a pty and greps
-      # the bytes. It was in `pnpm gate` only, which binds whoever remembers to run the gate —
-      # the same gap that put unformatted playground files on main twice.
-      - name: Colour (live layer)
-        id: colour
-        if: always()
-        run: node scripts/check-colour.mjs
-
-      - name: Job summary
-        if: always()
-        run: |
-          icon() { [ "$1" = "success" ] && echo "✅ pass" || echo "❌ fail"; }
-          tally=$(grep -oE 'Tests[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
-          files=$(grep -oE 'Test Files[[:space:]]+[0-9]+ (passed|failed)' vitest-output.txt | head -1 || true)
-          {
-            echo "## adaptv CI"
-            echo ""
-            echo "| Check | Result |"
-            echo "| --- | :---: |"
-            echo "| Typecheck (\`tsc --noEmit\`) | $(icon '${{ steps.typecheck.outcome }}') |"
-            echo "| Biome (\`biome check\`) | $(icon '${{ steps.biome.outcome }}') |"
-            echo "| Biome (playground) | $(icon '${{ steps.biome_playground.outcome }}') |"
-            echo "| Tests (\`vitest\`) | $(icon '${{ steps.test.outcome }}') |"
-            echo "| Colour (live layer) | $(icon '${{ steps.colour.outcome }}') |"
-            echo ""
-            [ -n "$files" ] && echo "**${files}** · **${tally}**"
-            echo ""
-            echo "_Commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`._"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # Every browser suite × both engines, one job each so they run side by side and a red
-  # cell names its suite and engine in the checks list without opening a log.
-  #
-  # Both engines, because they cover different things: chromium carries the network,
-  # permission and touch tests (WebKit skips 67 of the main suite's), and webkit is the
-  # closest thing CI has to Mobile Safari — the actual target of an installed PWA. The
-  # service-worker suites are separate configs, not projects, because each is a separate
-  # `vite build` of the same app directory (docs/guides/e2e.md §2); a job gets a fresh
-  # checkout, so running them in separate jobs cannot clobber a sibling's build output.
-  #
-  # No retries, in the configs or here (docs/guides/e2e.md §3.1). The worker suites carry
-  # a KNOWN intermittent — `update.spec.ts` on chromium, roughly 1 run in 3–5, not
-  # root-caused — which reaches both the `sw` and `sw-spa` chromium cells. Those cells
-  # are NOT `continue-on-error`: that would paint the run green over a failed update
-  # flow, which is exactly the lost signal the no-retries rule exists to keep. When it
-  # fires, the cell goes red, the spec prints the worker's full state, and a re-run is a
-  # human decision recorded as attempt #2 on the run.
-  e2e:
-    name: e2e (${{ matrix.suite }}, ${{ matrix.engine }})
-    runs-on: ubuntu-latest
-    # A backstop, not a budget: every spec is capped by its own test timeout (the update
-    # flows set 5 min), so only a wedged runner or webServer boot ever reaches this.
-    timeout-minutes: 45
-    strategy:
-      # One red cell must not cancel the other nine: the point is to see every failure.
-      fail-fast: false
-      matrix:
-        suite: [main, stress, sw, sw-spa, sw-prompt]
-        engine: [chromium, webkit]
-        include:
-          - suite: main
-            script: test:e2e
-          - suite: stress
-            script: test:e2e:stress
-          - suite: sw
-            script: test:e2e:sw
-          - suite: sw-spa
-            script: test:e2e:sw:spa
-          - suite: sw-prompt
-            script: test:e2e:sw:prompt
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          # The playground is its own pnpm project with its own lockfile; both feed the
-          # one store, so both belong in the cache key.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            playground/pnpm-lock.yaml
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Install (playground)
-        run: pnpm playground:setup
-
-      # Only the engine this job drives. Browser binaries are not cached: restoring them
-      # takes about as long as downloading them, and `--with-deps` still has to apt-get
-      # the system libraries on every fresh runner either way.
-      - name: Browser (playwright, install ${{ matrix.engine }})
-        run: pnpm --dir playground exec playwright install --with-deps ${{ matrix.engine }}
-
-      # Each config boots its own server from `apps/frontend` on its own port and never
-      # reuses one under CI=1, which is also what engages forbidOnly and the line + HTML
-      # reporters. The ports are the configs' defaults, spelled out so a reader of this
-      # file does not have to open four configs to know nothing collides.
-      - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
-        id: e2e
+      - name: Choose gate mode
+        id: mode
         env:
-          CI: 1
-          E2E_PORT: 41730
-          E2E_SW_PORT: 41750
-          E2E_SW_SPA_PORT: 41760
-          E2E_SW_PROMPT_PORT: 41770
+          BASE: ${{ github.event.pull_request.base.sha }}
+          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
-          set -o pipefail
-          pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} 2>&1 | tee playwright-output.txt
+          changed="$(git diff --name-only "$BASE"...HEAD)"
+          if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(docs/|\.claude/)|\.md$'; then
+            mode=docs
+          elif [ "$DRAFT" = "true" ]; then
+            mode=draft
+          else
+            mode=full
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Gate mode: **${mode}**" >> "$GITHUB_STEP_SUMMARY"
 
-      # The line reporter says WHICH test failed; the HTML report each config adds under
-      # CI carries the trace of each failure, which says why.
-      - name: Playwright report
-        if: always() && steps.e2e.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+      - name: Gate
+        uses: ./.github/actions/gate
         with:
-          name: playwright-report-${{ matrix.suite }}-${{ matrix.engine }}
-          path: playground/playwright-report/
-          retention-days: 14
-
-      - name: Job summary
-        if: always()
-        run: |
-          icon() { [ "$1" = "success" ] && echo "✅ pass" || echo "❌ fail"; }
-          tally=$(grep -oE '^[[:space:]]*[0-9]+ (passed|failed|flaky|skipped|did not run)' playwright-output.txt 2>/dev/null | sed 's/^ *//' | paste -sd ',' - | sed 's/,/, /g' || true)
-          {
-            echo "## Playwright · ${{ matrix.suite }} · ${{ matrix.engine }} — $(icon '${{ steps.e2e.outcome }}')"
-            echo ""
-            [ -n "$tally" ] && echo "${tally}"
-            echo ""
-            echo "_Commit \`${GITHUB_SHA:0:7}\` on \`${GITHUB_REF_NAME}\`._"
-          } >> "$GITHUB_STEP_SUMMARY"
+          mode: ${{ steps.mode.outputs.mode }}
+          base: ${{ github.event.pull_request.base.sha }}
