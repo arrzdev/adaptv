@@ -81,12 +81,13 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  //unstub first, so the clear below reaches the real store and not a test's stand-in
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   localStorage.clear()
   root.className = ""
   root.removeAttribute(PREFERENCE_ATTR)
   root.style.colorScheme = ""
-  vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 
 describe("useTheme before layout", () => {
@@ -279,8 +280,10 @@ describe("useTheme and <html>", () => {
     const denied = () => {
       throw new DOMException("storage is disabled", "SecurityError")
     }
-    vi.spyOn(localStorage, "getItem").mockImplementation(denied)
-    vi.spyOn(localStorage, "setItem").mockImplementation(denied)
+    //A stand-in, not vi.spyOn: happy-dom's Storage is a Proxy whose
+    //deleteProperty trap refuses to drop the spy, so restoreAllMocks left
+    //getItem throwing for every later test in the file.
+    vi.stubGlobal("localStorage", { getItem: denied, setItem: denied })
     const shell = mountTheme()
     const settings = mountTheme()
 
