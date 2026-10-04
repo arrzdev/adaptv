@@ -183,6 +183,25 @@ describe("appConfigErrors", () => {
     ])
   })
 
+  it("accepts prerender on an ssr app, and refuses it where it would do nothing", () => {
+    expect(appConfigErrors({ ...ok, prerender: true })).toEqual([])
+    expect(
+      appConfigErrors({ ...ok, render: "ssr", prerender: false }),
+    ).toEqual([])
+    expect(
+      appConfigErrors({ ...ok, render: "spa", prerender: false }),
+    ).toEqual([])
+    //a spa build has no server to render pages with, so no page would be written
+    expect(
+      appConfigErrors({ ...ok, render: "spa", prerender: true }),
+    ).toEqual([
+      "'prerender' needs render: \"ssr\"; a spa build has no server to render pages with",
+    ])
+    expect(appConfigErrors({ ...ok, prerender: "true" })).toEqual([
+      "'prerender' must be true or false, got \"true\"",
+    ])
+  })
+
   it("accepts a deep-link scheme the native projects can declare", () => {
     for (const scheme of [
       "myapp",

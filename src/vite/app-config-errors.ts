@@ -198,6 +198,19 @@ export function appConfigErrors(config: unknown): string[] {
       errors.push(`'${key}' must be ${oneOf(values)}, got ${show(value)}`)
   }
 
+  if (
+    config.prerender !== undefined &&
+    typeof config.prerender !== "boolean"
+  )
+    errors.push(
+      `'prerender' must be true or false, got ${show(config.prerender)}`,
+    )
+  else if (config.prerender === true && config.render === "spa")
+    //a spa build has no server to render the pages with: the key would do nothing
+    errors.push(
+      "'prerender' needs render: \"ssr\"; a spa build has no server to render pages with",
+    )
+
   if (config.icons !== undefined && typeof config.icons !== "string")
     errors.push(
       `'icons' must be a path to the app's icon directory, got ${show(config.icons)}`,
