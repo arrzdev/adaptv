@@ -71,7 +71,7 @@ function BuildCode() {
       samples={[
         { label: "priority-picker.tsx", lang: "tsx", code: pickerSource },
       ]}
-      className="min-w-0 [&_pre]:max-h-[440px] [&_pre]:overflow-auto"
+      className="min-w-0 [&_pre]:max-h-[300px] [&_pre]:overflow-auto md:[&_pre]:max-h-[360px]"
     />
   )
 }
