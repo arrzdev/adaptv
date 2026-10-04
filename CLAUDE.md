@@ -53,4 +53,5 @@ when a change is visual or behavioural.
 Conventional Commits, scope required, subject says the behaviour that now happens, all lowercase, no
 final period: `fix(drawer): a drag begun mid-slide follows the finger`. One logical change per
 commit. PR body: what was wrong and what changes, `Reproduce:`, `Verify:` with the commands you ran,
-`Tested on:` / `Not tested:`. PRs target `main` and merge as squash.
+`Tested on:` / `Not tested:`. PRs target `main` and merge as squash. The full rules live in
+[`CONTRIBUTING.md`](CONTRIBUTING.md); if the two disagree, `CONTRIBUTING.md` wins.
