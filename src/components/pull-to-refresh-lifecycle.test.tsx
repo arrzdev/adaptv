@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { Activity, useState } from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   PullToRefresh,
   usePullToRefresh,
@@ -15,7 +15,25 @@ import {
  * and it is never turned into a second, unhandled promise of adaptv's own.
  */
 
+//the hold, the close and motion's frame loop all read the clock, so they run on
+//the fake one: a wait is virtual instead of real
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "performance",
+    ],
+  })
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -41,8 +59,15 @@ function pointer(x: number, y: number) {
   return { clientX: x, clientY: y, pointerId: 1, isPrimary: true }
 }
 
+//one 16ms frame at a time: motion captured happy-dom's own rAF, a real
+//`setImmediate`, at import, so each step lets that frame run before the next
 const wait = (ms: number) =>
-  act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  act(async () => {
+    for (let t = 0; t < ms; t += 16) {
+      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  })
 
 type Phase = "idle" | "pulling" | "refreshing" | "closing"
 
