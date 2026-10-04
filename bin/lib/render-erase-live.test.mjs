@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { EventEmitter } from "node:events"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 
 // A run can end in the middle of a step: `q` or ctrl-c while `r` is relaunching the app or `b` is
 // rebuilding it. The step's live row is still mounted then, and Ink's exit hook unmounts it on
@@ -75,12 +75,18 @@ async function liveRender() {
   return { render: await import("./render.mjs"), fake }
 }
 
-async function until(check, deadlineMs = 3000) {
-  const stop = Date.now() + deadlineMs
-  while (!check() && Date.now() < stop) await sleep(20)
+/** Waits on the frame itself: the test's own timeout is the only deadline. */
+async function until(check) {
+  while (!check()) await sleep(20)
 }
 
 describe("a quit mid-step leaves no live row behind", () => {
+  //`runLine` loads Ink on its first step, and the first load transforms it: seconds on a loaded
+  //host. Done here, under the hook's budget, the tests' steps load it from the transform cache.
+  beforeAll(async () => {
+    await import("../ui/live.mjs")
+  }, 30_000)
+
   it("erases a step that is still running", async () => {
     const { render, fake } = await liveRender()
     //A relaunch that never comes back: the quit lands while it is in flight.
