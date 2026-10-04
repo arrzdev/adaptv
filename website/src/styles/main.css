@@ -165,6 +165,7 @@
 .stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
 @media (prefers-reduced-motion: reduce) {
   .rise, .stage-in { animation: none; }
+  [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
 
 /*

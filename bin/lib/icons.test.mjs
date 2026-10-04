@@ -416,7 +416,11 @@ describe("brandLauncherIcon — iOS 18 appearances", () => {
   })
 })
 
-describe("brandLauncherIcon — Android", () => {
+//Each test here brands a fixture app through sharp, and the ring test brands three: CPU work
+//that fits the 5s default on a CI runner but not on a loaded 2-CPU host.
+const BUDGET = { timeout: 30_000 }
+
+describe("brandLauncherIcon — Android", BUDGET, () => {
   it("writes every mipmap bucket at its density's size", async () => {
     const { nativeRoot, brand, sharp } = await fixture([
       ["icon.png", 1024, false],
@@ -640,12 +644,9 @@ describe("brandLauncherIcon — Android", () => {
       return info.width
     }
     //432 × 0.6 (the ring, less the default margin) = 259
-    expect(
-      await spread("android-chrome-1024x1024.png", "mark"),
-    ).toBeGreaterThan(250)
-    expect(
-      await spread("android-chrome-1024x1024.png", "mark"),
-    ).toBeLessThan(268)
+    const mark = await spread("android-chrome-1024x1024.png", "mark")
+    expect(mark).toBeGreaterThan(250)
+    expect(mark).toBeLessThan(268)
     //already drawn to the spec — not inset a second time
     expect(await spread("android-maskable-1024x1024.png", "mark")).toBe(
       432,
