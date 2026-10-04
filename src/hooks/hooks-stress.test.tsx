@@ -300,73 +300,82 @@ async function settle() {
 
 const CYCLES = 300
 
-describe("every hook, 300 mount/unmount cycles under StrictMode", () => {
-  it("leaves nothing behind but the documented singletons, and grows nothing between cycles", async () => {
-    //a hook-free render first: react-dom binds its own document listener
-    //(`selectionchange`, once per document) on the first root, and that is
-    //React's, not a hook's, so it belongs in the baseline
-    render(
-      <StrictMode>
-        <div />
-      </StrictMode>,
-    ).unmount()
-    await settle()
-    const before = snapshot()
+//300 StrictMode renders of every hook is CPU work: inside the 5s default on a CI
+//runner, well past it on a loaded 2-CPU host. The budget is for the slow host; a leak
+//still fails as the census assertion it breaks, not as a timeout.
+const BUDGET = { timeout: 60_000 }
 
-    //one cycle first: the accessor pairs bind their process singletons on the
-    //first subscriber, and that one-off is what the after-cycle census must
-    //be compared against, not the pristine document
-    let view = render(
-      <StrictMode>
-        <Everything />
-      </StrictMode>,
-    )
-    await settle()
-    const mounted1 = snapshot()
-    view.unmount()
-    await settle()
-    const after1 = snapshot()
+describe(
+  "every hook, 300 mount/unmount cycles under StrictMode",
+  BUDGET,
+  () => {
+    it("leaves nothing behind but the documented singletons, and grows nothing between cycles", async () => {
+      //a hook-free render first: react-dom binds its own document listener
+      //(`selectionchange`, once per document) on the first root, and that is
+      //React's, not a hook's, so it belongs in the baseline
+      render(
+        <StrictMode>
+          <div />
+        </StrictMode>,
+      ).unmount()
+      await settle()
+      const before = snapshot()
 
-    for (let cycle = 1; cycle < CYCLES; cycle += 1) {
-      view = render(
+      //one cycle first: the accessor pairs bind their process singletons on the
+      //first subscriber, and that one-off is what the after-cycle census must
+      //be compared against, not the pristine document
+      let view = render(
         <StrictMode>
           <Everything />
         </StrictMode>,
       )
-      if (cycle % 50 === 0) await settle()
+      await settle()
+      const mounted1 = snapshot()
       view.unmount()
-    }
-    await settle()
-    const after300 = snapshot()
+      await settle()
+      const after1 = snapshot()
 
-    //the premise: the hooks really attached things while mounted, so an empty
-    //census would be a broken probe rather than a clean tree
-    expect(
-      Object.keys(mounted1.document).length +
-        Object.keys(mounted1.window).length +
-        Object.keys(mounted1.mediaLists).length,
-      `the census saw nothing while mounted: ${JSON.stringify(mounted1)}`,
-    ).toBeGreaterThan(4)
+      for (let cycle = 1; cycle < CYCLES; cycle += 1) {
+        view = render(
+          <StrictMode>
+            <Everything />
+          </StrictMode>,
+        )
+        if (cycle % 50 === 0) await settle()
+        view.unmount()
+      }
+      await settle()
+      const after300 = snapshot()
 
-    //no growth: the 300th unmount leaves exactly what the 1st left
-    expect(after300).toEqual(after1)
+      //the premise: the hooks really attached things while mounted, so an empty
+      //census would be a broken probe rather than a clean tree
+      expect(
+        Object.keys(mounted1.document).length +
+          Object.keys(mounted1.window).length +
+          Object.keys(mounted1.mediaLists).length,
+        `the census saw nothing while mounted: ${JSON.stringify(mounted1)}`,
+      ).toBeGreaterThan(4)
 
-    //and what the 1st left is the documented singleton set, nothing more
-    expect(after1.document).toEqual({
-      ...before.document,
-      ...SINGLETONS.document,
+      //no growth: the 300th unmount leaves exactly what the 1st left
+      expect(after300).toEqual(after1)
+
+      //and what the 1st left is the documented singleton set, nothing more
+      expect(after1.document).toEqual({
+        ...before.document,
+        ...SINGLETONS.document,
+      })
+      expect(after1.window).toEqual({
+        ...before.window,
+        ...SINGLETONS.window,
+      })
+      expect(after1.mediaLists).toEqual({
+        ...before.mediaLists,
+        ...SINGLETONS.mediaLists,
+      })
+      expect(after1.intervals).toBe(before.intervals)
+      expect(after1.frames).toBe(before.frames)
+      expect(after1.observers).toBe(before.observers)
+      expect(after1.timers).toBe(before.timers)
     })
-    expect(after1.window).toEqual({
-      ...before.window,
-      ...SINGLETONS.window,
-    })
-    expect(after1.mediaLists).toEqual({
-      ...before.mediaLists,
-      ...SINGLETONS.mediaLists,
-    })
-    expect(after1.intervals).toBe(before.intervals)
-    expect(after1.frames).toBe(before.frames)
-    expect(after1.observers).toBe(before.observers)
-    expect(after1.timers).toBe(before.timers)
-  })
-})
+  },
+)
