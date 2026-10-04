@@ -124,6 +124,29 @@ async function until(
   return phase.current
 }
 
+describe("a refresh that settles before `stuckMinMs`", () => {
+  it("holds the refreshing row for the rest of the minimum, then closes", async () => {
+    stubMatchMedia()
+    const { phase, Phase } = phaseProbe()
+    const { container } = render(
+      <PullToRefresh onRefresh={async () => {}} stuckMinMs={400}>
+        <Phase />
+      </PullToRefresh>,
+    )
+    pullPastThreshold(container)
+    expect(await until(phase, "refreshing")).toBe("refreshing")
+    //one frame, so the settled refresh's hold is armed before the clock runs:
+    //a state update made inside a `wait` commits when that wait ends
+    await wait(16)
+    //the refresh settled at once; the row stays put until the minimum has run
+    await wait(300)
+    expect(phase.current).toBe("refreshing")
+    await wait(150)
+    expect(phase.current).not.toBe("refreshing")
+    expect(await until(phase, "idle")).toBe("idle")
+  })
+})
+
 describe("a refresh hidden by an app `<Activity>`", () => {
   it("still closes after the minimum stuck time when shown again", async () => {
     stubMatchMedia()
