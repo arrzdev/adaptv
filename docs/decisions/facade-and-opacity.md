@@ -152,7 +152,31 @@ was never the thing stopping anyone.*
 | `createMiddleware` | `@tanstack/react-start` | banned |
 | `getRequest` / `getRequestHeaders` / `getWebRequest` | `@tanstack/react-start/server` | banned (whole subpath) |
 | `setResponseHeaders` / `setCookie` / `getCookie` | `@tanstack/react-start/server` | banned (whole subpath) |
+| `createServerFn` / `createMiddleware` / `createServerOnlyFn` / `createStart` | `@tanstack/start-client-core` | banned (whole package) |
+| `createServerOnlyFn` / `createIsomorphicFn` / `createClientOnlyFn` | `@tanstack/start-fn-stubs` | banned (whole package) |
+| the same compiler roots, or server functions built on them, under another name | any `@tanstack/*-start` (`solid-start`, `vue-start`, `react-form-start`), the old `@tanstack/start` | banned (whole package) |
+| server RPC, RSC, the server-only marker | `/client-rpc`, `/server-rpc`, `/ssr-rpc`, `/rsc*`, `/server-only`, any other subpath | banned (deny by default) |
 | `server: { handlers }` on `createFileRoute({...})` | — | banned **(see below)** |
+
+> **The ban is a package family, not a specifier list (2026-09-14).** It first held two exact
+> specifiers, `@tanstack/react-start` and `/server`. The Start compiler does not decide by specifier:
+> it seeds its known roots per package — `@tanstack/start-client-core` and `@tanstack/start-fn-stubs`
+> beside `@tanstack/react-start` — and follows re-exports to the binding
+> (start-plugin-core `start-compiler/compiler.js`, `init()` and `resolveKnownImportKind()`). So
+> `import { createServerFn } from "@tanstack/start-client-core"` built clean under any hoisting
+> install, and so did every server subpath. The rule is now every Start package and subpath —
+> any `@tanstack/*-start` (react, solid, vue, and `react-form-start`, whose `getFormData` is a server
+> function Start compiles into the app), the old `@tanstack/start`, and every `@tanstack/*-start-*` /
+> `@tanstack/start-*` package — as a bare specifier, with a query
+> suffix, or as a path into `node_modules`, minus `ALLOWED_START_SPECIFIERS` in `ban-server-apis.ts`.
+> Deny by default means that set holds only what a real importer in the module graph needs:
+> `@tanstack/react-start/client` (imported by `src/routes/client-entry.tsx`) and
+> `@tanstack/react-start/server-entry` (imported by `src/interface/server-entry.ts`, which is also where
+> `router.serverEntry` and a Worker's `main` point). Under the linked playground both files are not
+> under `node_modules`, so the ban governs them like app code. `/plugin/vite` is refused: its one
+> importer, `src/vite/adaptv-plugin.ts`, loads with the Vite config, outside the plugin chain.
+> `biome-shared.json` bans the same names with the same globs (`*` never crosses a `/`) and re-allows
+> the same two; `ban-server-apis.test.ts` compares the two layers' verdicts name by name.
 
 > **⚠︎ Correction to `docs/design/rendering.md §2`.** It lists **`createServerFileRoute`** as a forbidden symbol.
 > **That export does not exist** in the pinned `@tanstack/react-start@1.167.13** — verified by grepping
@@ -176,7 +200,10 @@ function banServerApis() {
     name: "adaptv:ban-server-apis",
     enforce: "pre",
     async resolveId(source, importer) {
-      if (!/^@tanstack\/react-start(\/server)?$/.test(source)) return null
+      // every Start package and subpath, minus the two adaptv's own entries import
+      // (as shipped: `isBannedServerModule` in src/vite/ban-server-apis.ts)
+      if (!/(?:^|\/node_modules\/)@tanstack\/(?:[^/]*-)?start(?:-[^/]*)?(?:\/|$)/.test(source)) return null
+      if (["@tanstack/react-start/client", "@tanstack/react-start/server-entry"].includes(source)) return null
       // let adaptv's own internals and any other dependency resolve normally
       if (!importer || importer.includes(`${path.sep}node_modules${path.sep}`)) return null
       this.error(
