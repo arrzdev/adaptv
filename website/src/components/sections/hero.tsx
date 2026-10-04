@@ -8,19 +8,8 @@ export function Hero() {
     <section className="relative w-full overflow-hidden">
       <div className="grid-lines pointer-events-none absolute inset-0" />
       <View className="sheet items-center px-5 pt-20 pb-20 text-center sm:pt-28">
-        <ExternalLink
-          href={GITHUB_URL}
-          className="rise flex flex-row items-center gap-2 rounded-full border border-border-strong bg-surface/70 py-1 pr-3 pl-1 text-[12.5px] text-subtle backdrop-blur hover:text-foreground"
-        >
-          <span className="rounded-full bg-brand px-2 py-0.5 font-medium text-[11px] text-brand-foreground">
-            Pre-alpha
-          </span>
-          Open source, MIT. Follow along on GitHub
-          <ArrowRight className="size-3" />
-        </ExternalLink>
-
         <h1
-          className="rise mt-7 max-w-5xl text-balance font-semibold text-[clamp(2.6rem,7.4vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
+          className="rise max-w-5xl text-balance font-semibold text-[clamp(2.6rem,7.4vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
           style={{ animationDelay: "60ms" }}
         >
           Write React once.
@@ -32,9 +21,9 @@ export function Hero() {
           className="rise mt-7 max-w-[38rem] text-balance text-[17px] text-subtle leading-relaxed sm:text-[19px]"
           style={{ animationDelay: "120ms" }}
         >
-          One codebase for the browser, the home screen, the App Store and
-          Google Play. adaptv fixes the hundred small things that make a web app
-          feel like a website.
+          One React codebase for the browser, the home screen, the App Store and
+          Google Play. adaptv fixes the small details that make a web app feel
+          like a website.
         </p>
 
         <View
@@ -57,6 +46,13 @@ export function Hero() {
             Star on GitHub
           </ExternalLink>
         </View>
+
+        <p
+          className="rise mt-5 text-[14px] text-muted"
+          style={{ animationDelay: "180ms" }}
+        >
+          Open source, MIT. Pre-alpha, so expect rough edges.
+        </p>
 
         <DeviceStage />
       </View>

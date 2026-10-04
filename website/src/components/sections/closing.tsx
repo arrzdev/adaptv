@@ -1,8 +1,7 @@
-import { ExternalLink, Link, View } from "@arrzdev/adaptv/components"
-import { ArrowRight, Github } from "lucide-react"
+import { Link, View } from "@arrzdev/adaptv/components"
+import { ArrowRight } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
-import { GITHUB_URL } from "@/content/site"
 
 const COMMANDS = [
   ["adaptv dev web", "Dev server with hot reload, in the browser."],
@@ -15,16 +14,8 @@ const COMMANDS = [
 export function Cli() {
   return (
     <Section
-      index="05"
-      eyebrow="Tooling"
-      title={
-        <>
-          One command
-          <br />
-          per target.
-        </>
-      }
-      lede="No Xcode project to babysit and no Gradle file to edit. The native projects are generated from your config and rebuilt when it changes."
+      title="One command per target"
+      lede="adaptv generates the Xcode and Gradle projects from your config and rebuilds them when it changes."
     >
       <Reveal>
         <View className="overflow-hidden rounded-3xl border border-border">
@@ -58,16 +49,8 @@ const NOT_FOR = [
 export function WhenNot() {
   return (
     <Section
-      index="06"
-      eyebrow="Honest"
-      title={
-        <>
-          When not
-          <br />
-          to use it.
-        </>
-      }
-      lede="A web view is the right tool for most apps and the wrong one for a few. Better you hear it from us."
+      title="When not to use adaptv"
+      lede="A web view suits most apps. Here are the cases where it does not."
     >
       <Reveal>
         <View className="grid gap-px overflow-hidden rounded-3xl border border-border bg-border md:grid-cols-3">
@@ -94,29 +77,21 @@ export function FinalCta() {
       <View className="relative items-center px-6 py-28 text-center md:py-40">
         <Reveal className="flex flex-col items-center">
           <h2 className="text-balance font-semibold text-[clamp(2.6rem,7vw,5.5rem)] leading-[0.98] tracking-[-0.045em]">
-            Build it once.
-            <br />
-            <span className="text-gradient">Ship it everywhere.</span>
+            Start with the quick start
           </h2>
           <p className="mt-7 max-w-md text-[17px] text-subtle leading-relaxed">
-            This page is an adaptv app. Add it to your home screen, turn on
-            airplane mode, and open it again.
+            Clone the repository and run the playground on a simulator or your
+            phone.
           </p>
           <View row className="mt-9 flex-wrap justify-center gap-3">
             <Link
-              to="/docs"
+              to="/docs/$slug"
+              params={{ slug: "quick-start" }}
               className="group flex h-11 flex-row items-center gap-2 rounded-full bg-foreground px-6 font-medium text-[15px] text-background transition-transform hover:scale-[1.02]"
             >
-              Read the docs
+              Read the quick start
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
-            <ExternalLink
-              href={GITHUB_URL}
-              className="flex h-11 flex-row items-center gap-2 rounded-full border border-border-strong bg-surface/60 px-6 font-medium text-[15px] backdrop-blur hover:bg-sunken"
-            >
-              <Github className="size-4" />
-              View the source
-            </ExternalLink>
           </View>
         </Reveal>
       </View>

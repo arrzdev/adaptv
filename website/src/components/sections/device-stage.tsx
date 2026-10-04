@@ -28,16 +28,9 @@ export function DeviceStage() {
         </PhoneFrame>
       </View>
 
-      <View
-        row
-        className="relative mt-8 items-center gap-2.5 rounded-full border border-border-strong bg-surface/80 px-4 py-2 font-mono text-[11.5px] text-subtle backdrop-blur md:absolute md:-bottom-14 md:left-0 md:mt-0"
-      >
-        <span className="pulse-dot size-1.5 rounded-full bg-success" />
-        <span>
-          <span className="text-foreground">Not a video.</span> Swipe a row,
-          pull to refresh, archive it in either window.
-        </span>
-      </View>
+      <p className="relative mt-8 text-left text-[14px] text-muted md:absolute md:-bottom-14 md:left-0 md:mt-0">
+        Live components. Swipe a row, pull to refresh, archive in either window.
+      </p>
     </View>
   )
 }

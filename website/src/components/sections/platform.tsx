@@ -179,16 +179,8 @@ const CARDS = [
 export function Platform() {
   return (
     <Section
-      index="03"
-      eyebrow="Platform"
-      title={
-        <>
-          The boring parts,
-          <br />
-          already done.
-        </>
-      }
-      lede="Every team that wraps a web app rebuilds the same four things, badly, in month three. They ship in the box."
+      title="Safe areas, keyboard, offline, updates"
+      lede="Teams that wrap a web app usually rebuild these four. They ship with adaptv."
     >
       <View className="grid gap-4 md:grid-cols-2">
         {CARDS.map(({ title, line, Art }, index) => (
