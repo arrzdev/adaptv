@@ -183,101 +183,112 @@ describe("reading the source — warn, never refuse", () => {
   })
 })
 
-describe("generateIcons — the set adaptv's own consumers read back", () => {
-  it("writes every declared slot at exactly its declared size", async () => {
-    const { dir, names } = await generated()
-    for (const [name, px] of ICON_SET) {
-      expect(names).toContain(name)
-      const header = readImageHeader(
-        readFileSync(path.join(dir, name)).subarray(0, 4096),
+//Every describe that calls `generateIcons` renders the whole icon set through sharp, per test:
+//CPU work that fits the 5s default on a CI runner but not on a loaded 2-CPU host. They carry
+//this budget; it is for the slow host only.
+const BUDGET = { timeout: 30_000 }
+
+describe(
+  "generateIcons — the set adaptv's own consumers read back",
+  BUDGET,
+  () => {
+    it("writes every declared slot at exactly its declared size", async () => {
+      const { dir, names } = await generated()
+      for (const [name, px] of ICON_SET) {
+        expect(names).toContain(name)
+        const header = readImageHeader(
+          readFileSync(path.join(dir, name)).subarray(0, 4096),
+        )
+        expect([name, header.width, header.height]).toEqual([name, px, px])
+      }
+    })
+
+    it("produces a set the native ranker resolves to the right masters", async () => {
+      //The reason the names are what they are. If `pickIcon` needed a special case for
+      //adaptv's own output, the naming would be wrong.
+      const { dir } = await generated()
+      const set = scanIcons(dir)
+      expect(pickIcon(set, "ios").name).toBe("icon.png")
+      expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
+    })
+
+    it("keeps the Android adaptive foreground transparent and the iOS slot opaque", async () => {
+      //Two lineages, on purpose: the launcher composites the foreground over a colour and
+      //masks the pair, while App Store Connect rejects an icon that merely HAS an alpha channel.
+      const { dir, sharp } = await generated()
+      const meta = (name) => sharp(path.join(dir, name)).metadata()
+      expect((await meta("icon-maskable.png")).hasAlpha).toBe(true)
+      expect((await meta("apple-touch-icon-180.png")).hasAlpha).toBe(false)
+    })
+
+    it("gives the web maskable icon a solid background and the `any` icon transparency", async () => {
+      //The maskable spec is full-bleed art on a solid bg; `any` art keeps its own shape.
+      const { dir, sharp } = await generated()
+      const opaque = async (name) =>
+        (await sharp(path.join(dir, name)).stats()).isOpaque
+      expect(await opaque("android-maskable-512.png")).toBe(true)
+      expect(await opaque("android-chrome-512.png")).toBe(false)
+    })
+
+    it("fits every slot — the ring for masked art, the tile for the rest", async () => {
+      //432 × 72/108 = 288. Measured on the ART, by trimming the transparent surround —
+      //the canvas is the same size either way.
+      const { dir, sharp } = await generated()
+      const spread = async (name) => {
+        const { info } = await sharp(path.join(dir, name))
+          .trim()
+          .toBuffer({ resolveWithObject: true })
+        return info.width
+      }
+      //EVERY slot is fitted now, not just the masked ones — an unmasked icon used to take the
+      //source whole, which put a mark drawn to fill its frame flush against the tile's edge.
+      expect(await spread("icon.png")).toBeWithin(1024 * 0.9, 4)
+      //Within a few px: the mark goes through a crop and two resizes, and the property under
+      //test is "fitted to the safe ring", not a byte-exact width.
+      expect(await spread("icon-maskable.png")).toBeWithin(
+        1024 * artTarget(),
+        4,
       )
-      expect([name, header.width, header.height]).toEqual([name, px, px])
-    }
-  })
+    })
 
-  it("produces a set the native ranker resolves to the right masters", async () => {
-    //The reason the names are what they are. If `pickIcon` needed a special case for
-    //adaptv's own output, the naming would be wrong.
-    const { dir } = await generated()
-    const set = scanIcons(dir)
-    expect(pickIcon(set, "ios").name).toBe("icon.png")
-    expect(pickIcon(set, "android").name).toBe("icon-maskable.png")
-  })
-
-  it("keeps the Android adaptive foreground transparent and the iOS slot opaque", async () => {
-    //Two lineages, on purpose: the launcher composites the foreground over a colour and
-    //masks the pair, while App Store Connect rejects an icon that merely HAS an alpha channel.
-    const { dir, sharp } = await generated()
-    const meta = (name) => sharp(path.join(dir, name)).metadata()
-    expect((await meta("icon-maskable.png")).hasAlpha).toBe(true)
-    expect((await meta("apple-touch-icon-180.png")).hasAlpha).toBe(false)
-  })
-
-  it("gives the web maskable icon a solid background and the `any` icon transparency", async () => {
-    //The maskable spec is full-bleed art on a solid bg; `any` art keeps its own shape.
-    const { dir, sharp } = await generated()
-    const opaque = async (name) =>
-      (await sharp(path.join(dir, name)).stats()).isOpaque
-    expect(await opaque("android-maskable-512.png")).toBe(true)
-    expect(await opaque("android-chrome-512.png")).toBe(false)
-  })
-
-  it("fits every slot — the ring for masked art, the tile for the rest", async () => {
-    //432 × 72/108 = 288. Measured on the ART, by trimming the transparent surround —
-    //the canvas is the same size either way.
-    const { dir, sharp } = await generated()
-    const spread = async (name) => {
-      const { info } = await sharp(path.join(dir, name))
+    it("applies --padding on top of the safe zone, never instead of it", async () => {
+      //`--padding 10` on a maskable slot means "10% tighter than the safe zone". Insetting
+      //to 10% flat would push the mark OUTSIDE the zone it is supposed to sit inside.
+      const { dir, sharp } = await generated({ padding: 10 })
+      const { info } = await sharp(path.join(dir, "icon-maskable.png"))
         .trim()
         .toBuffer({ resolveWithObject: true })
-      return info.width
-    }
-    //EVERY slot is fitted now, not just the masked ones — an unmasked icon used to take the
-    //source whole, which put a mark drawn to fill its frame flush against the tile's edge.
-    expect(await spread("icon.png")).toBeWithin(1024 * 0.9, 4)
-    //Within a few px: the mark goes through a crop and two resizes, and the property under
-    //test is "fitted to the safe ring", not a byte-exact width.
-    expect(await spread("icon-maskable.png")).toBeWithin(
-      1024 * artTarget(),
-      4,
-    )
-  })
+      expect(info.width).toBeWithin(1024 * artTarget() * 0.9, 4)
+    })
 
-  it("applies --padding on top of the safe zone, never instead of it", async () => {
-    //`--padding 10` on a maskable slot means "10% tighter than the safe zone". Insetting
-    //to 10% flat would push the mark OUTSIDE the zone it is supposed to sit inside.
-    const { dir, sharp } = await generated({ padding: 10 })
-    const { info } = await sharp(path.join(dir, "icon-maskable.png"))
-      .trim()
-      .toBuffer({ resolveWithObject: true })
-    expect(info.width).toBeWithin(1024 * artTarget() * 0.9, 4)
-  })
+    it("packs favicon.ico with the sizes a desktop actually asks for", async () => {
+      const { dir } = await generated()
+      const decoded = decodeIco(
+        readFileSync(path.join(dir, "favicon.ico")),
+      )
+      expect(decoded.map((i) => i.size)).toEqual([16, 32, 48])
+      //each payload is a real PNG at its declared size, not a stub
+      for (const { size, png } of decoded)
+        expect(readImageHeader(png).width).toBe(size)
+    })
 
-  it("packs favicon.ico with the sizes a desktop actually asks for", async () => {
-    const { dir } = await generated()
-    const decoded = decodeIco(readFileSync(path.join(dir, "favicon.ico")))
-    expect(decoded.map((i) => i.size)).toEqual([16, 32, 48])
-    //each payload is a real PNG at its declared size, not a stub
-    for (const { size, png } of decoded)
-      expect(readImageHeader(png).width).toBe(size)
-  })
+    it("copies a vector source through verbatim instead of rasterising it", async () => {
+      //adaptv has no more faithful version of the dev's SVG than the file they handed over.
+      const { dir, names, source } = await generated({ svg: true })
+      expect(names).toContain("icon.svg")
+      expect(readFileSync(path.join(dir, "icon.svg"), "utf8")).toBe(
+        readFileSync(source, "utf8"),
+      )
+    })
 
-  it("copies a vector source through verbatim instead of rasterising it", async () => {
-    //adaptv has no more faithful version of the dev's SVG than the file they handed over.
-    const { dir, names, source } = await generated({ svg: true })
-    expect(names).toContain("icon.svg")
-    expect(readFileSync(path.join(dir, "icon.svg"), "utf8")).toBe(
-      readFileSync(source, "utf8"),
-    )
-  })
+    it("writes no icon.svg for a raster source", async () => {
+      const { names } = await generated()
+      expect(names).not.toContain("icon.svg")
+    })
+  },
+)
 
-  it("writes no icon.svg for a raster source", async () => {
-    const { names } = await generated()
-    expect(names).not.toContain("icon.svg")
-  })
-})
-
-describe("replacing what was there", () => {
+describe("replacing what was there", BUDGET, () => {
   it("removes the OLD icons, so the directory isn't half a generator's set", async () => {
     //"replace them" was a promise the command didn't keep: it writes thirteen fixed names, a
     //favicon-generator set has twenty-seven, and the manifest then read the leftovers as part
@@ -342,7 +353,7 @@ describe("replacing what was there", () => {
   })
 })
 
-describe("an opaque source is a finished tile, not a mark", () => {
+describe("an opaque source is a finished tile, not a mark", BUDGET, () => {
   it("draws the maskable slots FULL BLEED so the mask crops them, not floats them", async () => {
     //Insetting a tile into the safe zone produces a tile adrift inside the mask — a green
     //square in a white circle. It also makes the warning a lie: `sourceWarnings` promises
@@ -388,7 +399,7 @@ describe("an opaque source is a finished tile, not a mark", () => {
   })
 })
 
-describe("iOS 18 appearance variants", () => {
+describe("iOS 18 appearance variants", BUDGET, () => {
   it("writes a dark variant that keeps its alpha and a tinted one that is greyscale on black", async () => {
     //The two iOS 18 slots, and they want opposite things from the light icon: the dark one is
     //composited over the system's own near-black backdrop, so it must carry alpha; the tinted
@@ -495,7 +506,7 @@ describe("iOS 18 appearance variants", () => {
   })
 })
 
-describe("the background adaptv lifted off the mark", () => {
+describe("the background adaptv lifted off the mark", BUDGET, () => {
   const warn = (over = {}) =>
     sourceWarnings(
       {
@@ -622,7 +633,7 @@ describe("the background adaptv lifted off the mark", () => {
   })
 })
 
-describe("Android's themed-icon layer", () => {
+describe("Android's themed-icon layer", BUDGET, () => {
   it("writes a monochrome layer that is white and never flattened", async () => {
     //It is ONE LAYER of a two-layer icon, like `icon-maskable.png`: the launcher tints it with
     //SRC_IN and draws it on its own background, so painting a background onto it here would
