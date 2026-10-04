@@ -53,18 +53,14 @@ export function WhenNot() {
       lede="A web view suits most apps. Here are the cases where it does not."
     >
       <Reveal>
-        <View className="grid gap-px overflow-hidden rounded-3xl border border-border bg-border md:grid-cols-3">
+        <ul className="max-w-2xl list-disc pl-5 marker:text-muted">
           {NOT_FOR.map(([title, line]) => (
-            <View key={title} className="h-full gap-2 bg-background p-7">
-              <span className="font-medium text-[16px] tracking-tight">
-                {title}
-              </span>
-              <span className="text-[14.5px] text-muted leading-relaxed">
-                {line}
-              </span>
-            </View>
+            <li key={title} className="py-1.5 text-[16px] leading-relaxed">
+              <span className="font-medium">{title}.</span>{" "}
+              <span className="text-subtle">{line}</span>
+            </li>
           ))}
-        </View>
+        </ul>
       </Reveal>
     </Section>
   )
