@@ -1,6 +1,5 @@
-import { View } from "@arrzdev/adaptv/components"
+import { Link, View } from "@arrzdev/adaptv/components"
 import { cn } from "@arrzdev/adaptv/utils"
-import { Check, X } from "lucide-react"
 import { useState } from "react"
 import { OverscrollDemo } from "@/components/demos/overscroll-demo"
 import { PressDemo } from "@/components/demos/press-demo"
@@ -39,12 +38,9 @@ export function Feel() {
       lede="Same markup on both phones. The left is the platform default, the right is adaptv. Try both."
     >
       <Reveal>
-        <View className="overflow-hidden rounded-3xl border border-border bg-surface">
-          <View
-            row
-            className="items-center justify-between gap-4 border-border border-b p-3"
-          >
-            <View row className="gap-1 rounded-full bg-sunken p-1">
+        <View className="gap-10">
+          <View className="gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <View row className="gap-1 self-start rounded-full bg-sunken p-1">
               {LIVE.map((item, index) => (
                 <button
                   key={item.id}
@@ -60,28 +56,22 @@ export function Feel() {
                 </button>
               ))}
             </View>
-            <span className="hidden pr-3 font-mono text-[11.5px] text-muted sm:block">
-              {live.hint}
-            </span>
+            <span className="text-[14px] text-muted">{live.hint}</span>
           </View>
 
-          <View className="dots relative px-4 pt-12 pb-10 sm:px-10">
-            <live.Demo />
-          </View>
+          <live.Demo />
 
-          <View className="grid gap-px border-border border-t bg-border sm:grid-cols-2">
-            <View row className="items-start gap-3 bg-surface p-6">
-              <X
-                className="mt-0.5 size-4 shrink-0 text-danger"
-                strokeWidth={2.5}
-              />
+          <View className="grid gap-6 border-border border-t pt-6 sm:grid-cols-2 sm:gap-10">
+            <View className="gap-1">
+              <span className="font-medium text-[14px] text-danger">
+                Without adaptv
+              </span>
               <span className="text-[15px] text-subtle">{live.bad}</span>
             </View>
-            <View row className="items-start gap-3 bg-surface p-6">
-              <Check
-                className="mt-0.5 size-4 shrink-0 text-success"
-                strokeWidth={2.5}
-              />
+            <View className="gap-1">
+              <span className="font-medium text-[14px] text-success">
+                With adaptv
+              </span>
               <span className="text-[15px]">{live.good}</span>
             </View>
           </View>
@@ -89,28 +79,53 @@ export function Feel() {
       </Reveal>
 
       <View className="gap-6">
-        <span className="font-mono text-[11.5px] text-muted uppercase tracking-[0.16em]">
-          Also handled, before you hit it
-        </span>
-        <Reveal>
-          <View className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+        <h3 className="font-semibold text-[22px] tracking-tight">
+          Also handled
+        </h3>
+        <table className="w-full border-collapse text-left">
+          <thead className="max-sm:sr-only">
+            <tr className="border-border border-b">
+              <th className="w-1/2 py-3 pr-8 font-medium text-[14px] text-muted">
+                What a web view does
+              </th>
+              <th className="w-1/2 py-3 font-medium text-[14px] text-muted">
+                What adaptv does
+              </th>
+            </tr>
+          </thead>
+          <tbody>
             {rest.map((item) => (
-              <View key={item.id} className="h-full gap-3 bg-background p-6">
-                <View row className="items-center justify-between">
-                  <span className="font-medium text-[15.5px]">
-                    {item.card[0]}
+              <tr
+                key={item.id}
+                className="border-border border-b max-sm:flex max-sm:flex-col max-sm:gap-3 max-sm:py-6"
+              >
+                <td className="align-top sm:py-6 sm:pr-8">
+                  <span className="block font-medium text-[15.5px]">
+                    {item.title}
                   </span>
-                </View>
-                <p className="text-[14px] text-muted leading-relaxed">
-                  {item.card[1]}
-                </p>
-                <span className="mt-auto pt-2 font-mono text-[11px] text-muted/80">
-                  {item.where}
-                </span>
-              </View>
+                  <span className="mt-1.5 block text-[14.5px] text-muted leading-relaxed">
+                    {item.problem}
+                  </span>
+                </td>
+                <td className="align-top sm:py-6">
+                  <span className="block font-medium text-[13px] text-muted sm:hidden">
+                    What adaptv does
+                  </span>
+                  <span className="block text-[14.5px] leading-relaxed">
+                    {item.fix}
+                  </span>
+                  <Link
+                    to="/docs/$slug"
+                    params={{ slug: item.docs[0] }}
+                    className="mt-2 inline-block text-[14px] text-brand hover:underline"
+                  >
+                    {item.docs[1]}
+                  </Link>
+                </td>
+              </tr>
             ))}
-          </View>
-        </Reveal>
+          </tbody>
+        </table>
       </View>
     </Section>
   )
