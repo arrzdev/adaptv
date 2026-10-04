@@ -6,7 +6,6 @@ import { GITHUB_URL } from "@/content/site"
 export function Hero() {
   return (
     <section className="relative w-full overflow-hidden">
-      <div className="grid-lines pointer-events-none absolute inset-0" />
       <View className="sheet items-center px-5 pt-20 pb-20 text-center sm:pt-28">
         <h1
           className="rise max-w-5xl text-balance font-semibold text-[clamp(2.6rem,7.4vw,5.75rem)] leading-[0.98] tracking-[-0.045em]"
