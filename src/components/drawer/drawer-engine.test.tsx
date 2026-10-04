@@ -12,6 +12,7 @@ import {
   GesturePriority,
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
+import { waitFrames } from "#adaptv/test-utils/frames"
 
 //the release decision is recorded, not replaced: the real function still decides, the spy only
 //says whether the engine asked it and with what start time
@@ -163,16 +164,9 @@ beforeEach(() => {
   })
 })
 
-//comfortably past the close duration's timer fallback (no getAnimations in happy-dom). One 16ms
-//frame at a time: motion captured happy-dom's own rAF, a real `setImmediate`, at import, so each
-//step lets that frame run before the next
+//comfortably past the close duration's timer fallback (no getAnimations in happy-dom)
 function settle(ms = 700) {
-  return act(async () => {
-    for (let t = 0; t < ms; t += 16) {
-      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
-      await new Promise((resolve) => setImmediate(resolve))
-    }
-  })
+  return waitFrames(ms)
 }
 
 //`vi.waitFor` on the fake clock: polls the assertion frame by frame, failing with its last error

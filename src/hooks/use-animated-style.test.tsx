@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react"
+import { render } from "@testing-library/react"
 import { Activity, useRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type {
@@ -6,6 +6,7 @@ import type {
   AnimatedStyleTransitions,
 } from "#adaptv/hooks/use-animated-style"
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
+import { waitFrames } from "#adaptv/test-utils/frames"
 
 /*
  * `useAnimatedStyle` stands in for `<motion.div initial={false} animate
@@ -55,14 +56,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const wait = (ms: number) =>
-  act(async () => {
-    for (let t = 0; t < ms; t += 16) {
-      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
-      await new Promise((resolve) => setImmediate(resolve))
-    }
-  })
-
 function layer(container: HTMLElement) {
   return container.querySelector("[data-testid=layer]") as HTMLElement
 }
@@ -101,7 +94,7 @@ describe("useAnimatedStyle", () => {
     })
     observer.observe(el, { attributes: true })
     rerender(<Harness targets={{ y: 0 }} onComplete={onComplete} />)
-    await wait(400)
+    await waitFrames(400)
     observer.disconnect()
 
     expect(el.style.transform).toBe("none")
@@ -123,7 +116,7 @@ describe("useAnimatedStyle", () => {
         onComplete={onComplete}
       />,
     )
-    await wait(300)
+    await waitFrames(300)
     //landed on the 120ms tween it started with; a 2s restart would be midway
     expect(layer(container).style.transform).toBe("none")
     expect(onComplete).toHaveBeenCalledTimes(1)
@@ -136,7 +129,7 @@ describe("useAnimatedStyle", () => {
     )
     const el = layer(container)
     rerender(<Harness targets={{ y: 0 }} onComplete={onComplete} />)
-    await wait(40)
+    await waitFrames(40)
     const midway = translateY(el) ?? -1
     //the premise: the first tween is under way, not at either end
     expect(midway).toBeGreaterThan(0)
@@ -149,11 +142,11 @@ describe("useAnimatedStyle", () => {
         onComplete={onComplete}
       />,
     )
-    await wait(20)
+    await waitFrames(20)
     //no jump back to 100: the new tween leaves from the interrupted value
     expect(translateY(el)).toBeGreaterThanOrEqual(midway - 1)
     expect(translateY(el)).toBeLessThan(200)
-    await wait(400)
+    await waitFrames(400)
     expect(translateY(el)).toBe(200)
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
@@ -185,7 +178,7 @@ describe("useAnimatedStyle", () => {
         transitions={{ opacity: release }}
       />,
     )
-    await wait(250)
+    await waitFrames(250)
     observer.disconnect()
     //the premise: it is fading
     expect(seen.length).toBeGreaterThan(2)
@@ -207,7 +200,7 @@ describe("useAnimatedStyle", () => {
     )
     const el = layer(container)
     expect(el.style.width).toBe("10px")
-    await wait(50)
+    await waitFrames(50)
     expect(el.style.width).toBe("50px")
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
@@ -225,16 +218,16 @@ describe("useAnimatedStyle", () => {
     const { container, rerender } = render(at("visible", 100))
     const el = layer(container)
     rerender(at("visible", 0))
-    await wait(40)
+    await waitFrames(40)
     const midway = translateY(el) ?? -1
     //the premise: hidden while the tween is under way
     expect(midway).toBeGreaterThan(0)
     expect(midway).toBeLessThan(100)
     rerender(at("hidden", 0))
-    await wait(60)
+    await waitFrames(60)
     expect(onComplete).not.toHaveBeenCalled()
     rerender(at("visible", 0))
-    await wait(400)
+    await waitFrames(400)
     expect(el.style.transform).toBe("none")
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
@@ -269,7 +262,7 @@ describe("useAnimatedStyle", () => {
         onComplete={onComplete}
       />,
     )
-    await wait(200)
+    await waitFrames(200)
     //the premise: y has landed, width is still on its way
     expect(onComplete).not.toHaveBeenCalled()
     rerender(
@@ -280,7 +273,7 @@ describe("useAnimatedStyle", () => {
       />,
     )
     expect(onComplete).toHaveBeenCalledTimes(1)
-    await wait(50)
+    await waitFrames(50)
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 
@@ -297,11 +290,11 @@ describe("useAnimatedStyle", () => {
         }}
       />,
     )
-    await wait(100)
+    await waitFrames(100)
     //a 0.4 s spring is still fading here; read as 0.4 ms it has long landed
     expect(Number(el.style.opacity)).toBeGreaterThan(0.05)
     expect(Number(el.style.opacity)).toBeLessThan(1)
-    await wait(700)
+    await waitFrames(700)
     expect(Number(el.style.opacity)).toBeLessThan(0.01)
   })
 
@@ -318,7 +311,7 @@ describe("useAnimatedStyle", () => {
     expect(el.style.width).toBe("")
     rerender(<Harness targets={null} onComplete={onComplete} />)
     expect(el.style.transform).toBe("")
-    await wait(300)
+    await waitFrames(300)
     //stopped, not finished: nothing completes and nothing is written back
     expect(el.style.transform).toBe("")
     expect(onComplete).not.toHaveBeenCalled()
