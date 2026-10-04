@@ -35,12 +35,17 @@ const ANSI = new RegExp(
   "g",
 )
 const SPINNER = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+\S+\s+/
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+//The holds below are virtual: the clock, the row's 80ms tick and the recorder's 40ms sample
+//all run on fake timers, so a 1400ms hold costs a few ms of real time and every timer fires
+//in the same order it would on the wall clock. `setImmediate`, which Ink and React schedule
+//through, stays real. The clock is faked only after the import, so loading Ink costs what it did.
+const sleep = (ms) => vi.advanceTimersByTimeAsync(ms)
 
 let restore = null
 afterEach(() => {
   restore?.()
   restore = null
+  vi.useRealTimers()
 })
 
 /**
@@ -66,6 +71,15 @@ async function withLiveStdout(fn) {
   }
   vi.resetModules()
   const render = await import("./render.mjs")
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+    ],
+  })
   const out = await fn(render, fake)
   restore()
   restore = null
