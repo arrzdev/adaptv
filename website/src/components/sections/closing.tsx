@@ -76,7 +76,7 @@ export function FinalCta() {
         <Link
           to="/docs/$slug"
           params={{ slug: "quick-start" }}
-          className="group flex h-11 flex-row items-center gap-2 self-start rounded-full bg-foreground px-6 font-medium text-[15px] text-background transition-transform hover:scale-[1.02]"
+          className="group inline-flex h-11 flex-row items-center gap-2 rounded-full bg-foreground px-6 font-medium text-[15px] text-background transition-transform hover:scale-[1.02]"
         >
           Read the quick start
           <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
