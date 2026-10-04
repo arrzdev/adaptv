@@ -308,7 +308,9 @@ export async function adaptv(
     //Nitro instructions are `tanstackStart(), nitro(), viteReact()` — after the
     //framework plugin that defines the server environment, before the React
     //transform. Empty for `render: "spa"`. → src/vite/deploy-server.ts
-    ...(await adaptvDeployServerPlugins(web.render)),
+    ...(await adaptvDeployServerPlugins(web.render, {
+      prerender: context.loaded.config.prerender === true,
+    })),
     viteReact(),
     //ORDER IS LOAD-BEARING. Hooks of the same kind run in plugin-array order, so
     //the shell is emitted BEFORE the SW build globs the precache manifest, and
