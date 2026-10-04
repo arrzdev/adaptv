@@ -33,8 +33,10 @@ pnpm gate          # biome (root + playground), tsc x2, vitest, scripts/check-co
 pnpm build:check   # when you touch exports, tsdown.config.ts or anything the build emits
 ```
 
-This is what the CI `test` job runs. The Playwright suites (`pnpm --dir playground test:e2e*`) run
-only in CI; run the one you touched locally when a change is visual or behavioural.
+This is what the CI `gate` job (the one required check) runs; docs-only and draft PRs get a lighter
+mode. The Playwright suites (`pnpm --dir playground test:e2e*`) run in `e2e.yml` only when the PR has
+the `e2e` label, nightly, and weekly in full; label the PR, and run the suite you touched locally,
+when a change is visual or behavioural.
 
 ## Rules
 
