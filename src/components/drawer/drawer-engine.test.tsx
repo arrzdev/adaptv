@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react"
 import { createRef } from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import type { DrawerHandle } from "#adaptv/components/drawer"
 import { Drawer } from "#adaptv/components/drawer"
@@ -119,7 +119,7 @@ async function mountOpenDrawer() {
   act(() => drawer.current?.show())
   onOpenChange.mockClear()
   //gesture on a settled sheet, so nothing of the open animation is still writing the transform
-  await vi.waitFor(() => expect(onAnimationEnd).toHaveBeenCalledWith(true))
+  await waitFor(() => expect(onAnimationEnd).toHaveBeenCalledWith(true))
   const panel = baseElement.querySelector<HTMLElement>("[data-pwa-drawer]")
   const backdrop = baseElement.querySelector<HTMLElement>(
     "[data-pwa-drawer-overlay]",
@@ -146,12 +146,51 @@ function translateY(panel: HTMLElement): number {
   return Number(match[1])
 }
 
-//comfortably past the close duration's timer fallback (no getAnimations in happy-dom)
+//the open, the close fallback and the release's drag time all read the clock, so they run on the
+//fake one: a wait is virtual instead of real
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "performance",
+    ],
+  })
+})
+
+//comfortably past the close duration's timer fallback (no getAnimations in happy-dom). One 16ms
+//frame at a time: motion captured happy-dom's own rAF, a real `setImmediate`, at import, so each
+//step lets that frame run before the next
 function settle(ms = 700) {
-  return act(() => new Promise((resolve) => setTimeout(resolve, ms)))
+  return act(async () => {
+    for (let t = 0; t < ms; t += 16) {
+      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+  })
+}
+
+//`vi.waitFor` on the fake clock: polls the assertion frame by frame, failing with its last error
+//once the timeout (`vi.waitFor`'s default 1000ms) has passed in virtual time
+async function waitFor(assertion: () => void, timeoutMs = 1000) {
+  for (let t = 0; ; t += 16) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      if (t >= timeoutMs) throw error
+    }
+    await settle(16)
+  }
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   //a test that fails mid-gesture must not leave the shared arbiter held for the next one
   const held = gestureController.getCaptured()
@@ -178,9 +217,7 @@ describe("the whole-sheet touch drag", () => {
     expect(typeof startTime).toBe("number")
     expect(releaseSpy.mock.results[0].value).toBe(true)
 
-    await vi.waitFor(() =>
-      expect(onOpenChange).toHaveBeenCalledWith(false),
-    )
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
   })
 
   it("stops following the finger once a higher-priority gesture pre-empts it", async () => {
@@ -282,9 +319,7 @@ describe("a drag that starts mid-slide", () => {
     //the release rule reads the finger's own travel, and the close continues from the sheet
     dispatchTouch(body, "touchend", 480)
     expect(releaseSpy.mock.calls[0]?.[0]).toBe(370)
-    await vi.waitFor(() =>
-      expect(onOpenChange).toHaveBeenCalledWith(false),
-    )
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
   })
 
   it("the handle's mouse drag starts from where the sheet is painted", async () => {
@@ -420,9 +455,7 @@ describe("the handle's mouse drag", () => {
     //free at once, not only once the close has run: the close animation is nobody's gesture
     expect(gestureController.getCaptured()).toBeNull()
     expect(gestureController.isScrollBlocked()).toBe(false)
-    await vi.waitFor(() =>
-      expect(onOpenChange).toHaveBeenCalledWith(false),
-    )
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
     expect(gestureController.getCaptured()).toBeNull()
     expect(drawerLost).not.toHaveBeenCalled()
   })
