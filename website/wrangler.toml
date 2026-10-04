@@ -1,0 +1,19 @@
+# The site ships as one Cloudflare Worker. `.github/workflows/website.yml` builds it with
+# NITRO_PRESET=cloudflare_module, which MERGES this file into `.output/server/wrangler.json`
+# (the build owns `main` and `assets`), then runs
+#
+#   wrangler deploy --config .output/server/wrangler.json --env production
+#
+# The top level is a dev name on purpose: a bare `wrangler deploy` from a laptop cannot
+# reach production. Production only and public, no staging (board decision, TUD-86).
+name = "adaptv-website-dev"
+compatibility_date = "2026-03-17"
+compatibility_flags = ["nodejs_compat"]
+upload_source_maps = false
+workers_dev = false
+
+[env.production]
+name = "adaptv-website"
+# pinned: without it, every deploy would also publish a *.workers.dev address
+workers_dev = false
+routes = [{ pattern = "adaptv.tudu.dev", custom_domain = true }]

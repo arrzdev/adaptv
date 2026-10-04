@@ -1,0 +1,180 @@
+name: Website
+
+# The public site in `website/` is one Cloudflare Worker, `adaptv-website`, served at
+# https://adaptv.tudu.dev. Production only and public: no staging and no Zero Trust
+# Access (board decision, TUD-86).
+#
+#   · PR touching the site or the framework it links → verify (typecheck, lint, build).
+#   · Push to main, same paths → guard (debounce) → verify → deploy to `production`.
+#   · Manual dispatch from main → verify → deploy, no debounce. Any other ref fails.
+#
+# The path filter keeps framework-only pushes off this workflow's minutes (TUD-33): the
+# site links the framework source (`link:..`), so `src/`, `bin/` and the root install
+# are what can change its build.
+
+on:
+  pull_request:
+    paths:
+      - "website/**"
+      - "src/**"
+      - "bin/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - ".github/workflows/website.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+      - "src/**"
+      - "bin/**"
+      - "patches/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Ref check and debounce. Only main reaches production. On push, wait out a merge burst
+  # and skip if a newer commit is already the tip; a failed tip lookup deploys anyway.
+  guard:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    outputs:
+      go: ${{ steps.tip.outputs.go }}
+    steps:
+      - name: Ref check
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::the website deploys from main only, not $GITHUB_REF"
+            exit 1
+          fi
+
+      - name: Debounce
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          sleep 45
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha 2>/dev/null || true)
+          if [ -n "$tip" ] && [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "A newer commit ($tip) is the tip; it deploys instead."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify:
+    needs: guard
+    if: always() && (github.event_name == 'pull_request' || needs.guard.outputs.go == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - name: Setup Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            website/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install (website)
+        run: pnpm --dir website install --frozen-lockfile
+
+      # Build first: it generates `.adaptv/routeTree.gen.ts`, which the typecheck imports.
+      # The preset makes Nitro emit a Worker plus `.output/server/wrangler.json`, merged
+      # from `website/wrangler.toml`.
+      - name: Build
+        env:
+          NITRO_PRESET: cloudflare_module
+        run: pnpm --dir website build
+
+      - name: Typecheck
+        run: pnpm --dir website typecheck
+
+      - name: Lint (biome, website)
+        run: pnpm --dir website lint
+
+      - name: Keep the build
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: website-output
+          path: website/.output/
+          include-hidden-files: true
+          retention-days: 3
+
+  deploy:
+    needs: verify
+    if: always() && needs.verify.result == 'success' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://adaptv.tudu.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Fetch the build
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: website-output
+          path: website/.output/
+
+      # `--config` and not the redirect file: wrangler refuses `env` blocks in a redirected
+      # config, and the generated one carries `[env.production]` from wrangler.toml.
+      - name: Deploy
+        working-directory: website
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          account=$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | tr -cd '0-9a-fA-F')
+          if [ "${#account}" != 32 ]; then echo "::error::CLOUDFLARE_ACCOUNT_ID is not 32 hex characters"; exit 1; fi
+          export CLOUDFLARE_ACCOUNT_ID="$account"
+          set -o pipefail
+          npx --yes wrangler@4.147.0 deploy --config .output/server/wrangler.json --env production 2>&1 | tee deploy.log
+          {
+            echo "## Website deploy"
+            echo ""
+            echo "Worker \`adaptv-website\` → https://adaptv.tudu.dev"
+            grep -oE 'Current Version ID: [0-9a-f-]+' deploy.log || true
+            echo ""
+            echo "_Commit \`${GITHUB_SHA:0:7}\`._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://adaptv.tudu.dev/ || true)
+            [ "$code" = "200" ] && { echo "https://adaptv.tudu.dev/ → 200"; exit 0; }
+            echo "attempt $i: $code"; sleep 10
+          done
+          echo "::error::https://adaptv.tudu.dev/ did not answer 200"; exit 1
