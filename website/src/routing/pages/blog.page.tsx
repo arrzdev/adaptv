@@ -14,7 +14,7 @@ function BlogIndex() {
       <View className="mx-auto w-full max-w-3xl gap-10 px-5 py-14 md:py-20">
         <View className="gap-4">
           <h1 className="font-semibold text-[44px] text-foreground leading-[1.05] tracking-[-0.035em]">
-            Field notes (preview HMR test)
+            Field notes
           </h1>
           <p className="text-[18px] text-subtle leading-relaxed">
             What a phone actually does when you put a web page in an app — one
