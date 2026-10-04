@@ -204,7 +204,7 @@ function StepTabs() {
         id={`${base}-panel`}
         role="tabpanel"
         aria-labelledby={`${base}-tab-${step.id}`}
-        className="grid min-h-[420px] content-start gap-5 md:min-h-[480px]"
+        className="grid min-h-[420px] grid-cols-1 content-start gap-5 md:min-h-[480px]"
       >
         {/* the key restarts the crossfade on every switch */}
         <View key={step.id} className="step-in gap-5">
