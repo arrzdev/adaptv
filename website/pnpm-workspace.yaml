@@ -1,0 +1,9 @@
+# The website is its OWN pnpm project, exactly as `playground/` is: without this file
+# `pnpm install` here walks up, finds the repo root's workspace file, and installs the
+# framework instead of the site. It links the local adaptv checkout (`link:..`), and the
+# singletons adaptv itself resolves — react, react-dom, vite, motion — are links to the
+# ROOT copies, so there is one instance of each (two Reacts is a null-dispatcher crash).
+packages:
+  - "."
+allowBuilds:
+  esbuild: true

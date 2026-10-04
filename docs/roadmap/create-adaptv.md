@@ -9,6 +9,13 @@
 
 ## The npm-name constraint (do not lose this)
 
+> ⚠︎ **Half of this section is overtaken (2026-09-20).** The owner has decided adaptv will be open
+> source, under MIT → [`website.md §4`](website.md). That removes the private registry, and with it
+> the PAT, the `.npmrc` lines and the chicken-and-egg below. What survives is the first sentence:
+> `create-adaptv` is unclaimed on npm, and the website's hero command depends on claiming it. The
+> owner also expects this CLI to be rewritten later, so the first version should be the smallest
+> thing that makes `pnpm create adaptv` true.
+
 `create-adaptv` is **unclaimed on npm**. Publish the *scaffolder* publicly — it is only prompts and
 file copying, with no framework source in it — and keep `@arrzdev/adaptv` private on GitHub Packages.
 

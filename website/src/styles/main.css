@@ -1,0 +1,222 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+@import "@arrzdev/adaptv/styles.css";
+
+/*
+ * Tokens. A neutral canvas — true near-black, true white — so the one brand colour (the
+ * indigo of the mark) and the hero's light are the only colour on the page. A dark theme
+ * is a second set of values and never a second set of class names.
+ */
+:root {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --surface: #ffffff;
+  --sunken: #f6f6f7;
+  --raised: #ffffff;
+  --foreground: #0a0a0c;
+  --subtle: #52525b;
+  --muted: #8b8b94;
+  --border: #ececee;
+  --border-strong: #dcdce0;
+  --brand: #5563d6;
+  --brand-strong: #4451c4;
+  --brand-soft: #eef0fd;
+  --brand-foreground: #ffffff;
+  --danger: #d6455a;
+  --danger-soft: #fdecef;
+  --success: #12996a;
+  --success-soft: #e6f6ef;
+
+  /* code */
+  --code-bg: #0c0c0f;
+  --code-fg: #e4e4ea;
+  --code-muted: #6d6d7a;
+  --code-keyword: #a5aefb;
+  --code-string: #8fd6a8;
+  --code-fn: #f2c78a;
+  --code-tag: #7fc4f5;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #08080a;
+  --surface: #0e0e11;
+  --sunken: #0b0b0e;
+  --raised: #141418;
+  --foreground: #f5f5f7;
+  --subtle: #a3a3ad;
+  --muted: #6e6e79;
+  --border: #1c1c21;
+  --border-strong: #2a2a31;
+  --brand: #8b95ff;
+  --brand-strong: #a3abff;
+  --brand-soft: #16172e;
+  --brand-foreground: #08080a;
+  --danger: #ff7a8e;
+  --danger-soft: #2a1218;
+  --success: #4fdca0;
+  --success-soft: #0d231a;
+
+  --code-bg: #0b0b0e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-raised: var(--raised);
+  --color-foreground: var(--foreground);
+  --color-subtle: var(--subtle);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+  --color-code-muted: var(--code-muted);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 28%, transparent);
+  }
+}
+
+/* syntax colours — the tiny highlighter in components/code.tsx emits these */
+.tok-k { color: var(--code-keyword); }
+.tok-s { color: var(--code-string); }
+.tok-f { color: var(--code-fn); }
+.tok-t { color: var(--code-tag); }
+.tok-c { color: var(--code-muted); font-style: italic; }
+
+/*
+ * The page is drawn on a ruled sheet: one column with a hairline down each side, a
+ * hairline between sections, and a registration mark where they cross. The mark's two
+ * brackets imply a frame that is never drawn — this is that frame, at page scale.
+ */
+.sheet {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  border-inline: 1px solid var(--border);
+}
+.ruled {
+  position: relative;
+  border-top: 1px solid var(--border);
+}
+.ruled::before,
+.ruled::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  width: 9px;
+  height: 9px;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--muted), var(--muted)) center / 100% 1px no-repeat,
+    linear-gradient(var(--muted), var(--muted)) center / 1px 100% no-repeat;
+}
+.ruled::before { left: -5px; }
+.ruled::after { right: -5px; }
+
+.grid-lines {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 5%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 0%, #000 20%, transparent 78%);
+}
+.dots {
+  background-image: radial-gradient(color-mix(in oklab, var(--foreground) 11%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* the light behind the device stage — the only saturated colour on the page */
+.aurora {
+  background:
+    radial-gradient(40% 52% at 22% 20%, #5b6cff 0%, transparent 70%),
+    radial-gradient(36% 50% at 56% 6%, #b65cff 0%, transparent 70%),
+    radial-gradient(30% 46% at 86% 24%, #ff6a9a 0%, transparent 70%),
+    radial-gradient(30% 30% at 40% 100%, #ffb86a 0%, transparent 72%);
+  filter: blur(64px) saturate(1.15);
+  opacity: 0.8;
+}
+:root:not(.dark) .aurora { opacity: 0.5; }
+
+.text-gradient {
+  background: linear-gradient(92deg, #8b95ff 0%, #c08bff 45%, #ff8fb4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root:not(.dark) .text-gradient {
+  background-image: linear-gradient(92deg, #4451c4 0%, #8a45d6 50%, #e0457f 100%);
+}
+
+/* hero entrance: CSS only, so it plays before (and without) hydration */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes stage-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.caret { animation: caret 1s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .rise, .stage-in, .pulse-dot, .caret { animation: none; }
+}
+
+/*
+ * The "plain web view" half of the press demo. UNLAYERED and written as raw :active on
+ * purpose — it is the specimen. adaptv re-points Tailwind's `active:` variant at its own
+ * press engine, so a utility class here would quietly demonstrate the fix instead.
+ */
+.plain-press {
+  transition: none;
+}
+.plain-press:active {
+  background: color-mix(in oklab, var(--brand) 22%, transparent);
+}
+
+/* and the plain half of the overscroll demo: a scroller exactly as the platform gives it */
+.plain-scroll {
+  overflow-y: auto;
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: auto;
+}
