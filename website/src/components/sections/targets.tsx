@@ -22,10 +22,10 @@ function PwaMark(props: SVGProps<SVGSVGElement>) {
 }
 
 const TARGETS = [
-  { name: "Desktop web" },
   { name: "Safari on iOS" },
   { name: "Chrome on Android", mark: AndroidMark },
-  { name: "Home screen", mark: PwaMark },
+  { name: "Desktop browsers" },
+  { name: "Home screen (PWA)", mark: PwaMark },
   { name: "App Store" },
   { name: "Google Play" },
 ] as const
