@@ -1,10 +1,8 @@
 import { createFileRoute } from "@arrzdev/adaptv/router"
-import { FinalCta, WhenNot } from "@/components/sections/closing"
+import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
-import { Feel } from "@/components/sections/feel"
 import { Hero } from "@/components/sections/hero"
 import { IdeaToInstalled } from "@/components/sections/idea-to-installed"
-import { Statement } from "@/components/sections/statement"
 import { Targets } from "@/components/sections/targets"
 import { SitePage } from "@/components/site-page"
 
@@ -17,11 +15,8 @@ function HomePage() {
     <SitePage>
       <Hero />
       <Targets />
-      <Statement />
-      <Feel />
       <ComponentsBento />
       <IdeaToInstalled />
-      <WhenNot />
       <FinalCta />
     </SitePage>
   )
