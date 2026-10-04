@@ -99,6 +99,11 @@ function SiteFooter() {
             This site is an adaptv app. Add it to your home screen — it opens
             offline.
           </p>
+          <p className="text-[12px] text-muted">
+            The Android robot is reproduced or modified from work created and
+            shared by Google and used according to terms described in the
+            Creative Commons 3.0 Attribution License.
+          </p>
         </View>
         <View row className="gap-16 text-[14px]">
           <FooterColumn title="Learn">
