@@ -127,19 +127,3 @@ export function CodePanel({
     </View>
   )
 }
-
-/** The one-line command pill in the hero. */
-export function CommandPill({ command }: { command: string }) {
-  return (
-    <View
-      row
-      className="selectable items-center gap-3 rounded-xl border border-border-strong bg-surface py-1.5 pr-1.5 pl-4 font-mono text-[14px] text-foreground shadow-sm"
-    >
-      <span className="text-muted">$</span>
-      <span>{command}</span>
-      <span className="[&_button]:text-muted [&_button]:hover:bg-sunken [&_button]:hover:text-foreground">
-        <CopyButton text={command} />
-      </span>
-    </View>
-  )
-}
