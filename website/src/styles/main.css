@@ -168,66 +168,6 @@
 }
 
 /*
- * The platforms line: two identical lists side by side, the track slides left by one
- * list's width and starts over, so the seam never shows. Each list carries its own
- * trailing gap (padding, not the track's gap) so -50% is exactly one list.
- */
-.marquee {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  text-align: inherit;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.marquee:focus { outline: none; }
-.marquee:focus-visible { outline: 2px solid var(--brand); outline-offset: 6px; }
-.marquee-viewport {
-  display: block;
-  overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
-}
-.marquee-track {
-  display: flex;
-  width: max-content;
-  animation: marquee 48s linear infinite;
-}
-.marquee[aria-pressed="true"] .marquee-track { animation-play-state: paused; }
-/* touch browsers keep :hover after a tap, which would stop a second tap from resuming */
-@media (hover: hover) {
-  .marquee:hover .marquee-track { animation-play-state: paused; }
-}
-.marquee-list {
-  display: flex;
-  gap: 3.5rem;
-  padding-right: 3.5rem;
-}
-/* the list assistive tech reads while the line moves; visible only under reduced motion */
-.marquee-static {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-@keyframes marquee {
-  to { transform: translateX(-50%); }
-}
-/* same speed in px, but a phone shows less of the line, so slow it down */
-@media (max-width: 640px) {
-  .marquee-track { animation-duration: 64s; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .marquee { display: none; }
-  .marquee-static { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; }
-  .marquee-static .marquee-list { flex-wrap: wrap; gap: 0.75rem 2rem; padding-right: 0; }
-}
-
-/*
  * The "plain web view" half of the press demo. UNLAYERED and written as raw :active on
  * purpose — it is the specimen. adaptv re-points Tailwind's `active:` variant at its own
  * press engine, so a utility class here would quietly demonstrate the fix instead.
