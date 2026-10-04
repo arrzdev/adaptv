@@ -19,7 +19,7 @@
 # The one exception is `main`, which the build owns: it points at the bundled entry it just
 # produced. There is deliberately no `main` here — declaring one only earns a per-build
 # "will be ignored" warning.
-name = "chopchop-frontend"
+name = "adaptv-playground"
 compatibility_date = "2026-03-17"
 compatibility_flags = ["nodejs_compat"]
 upload_source_maps = false
