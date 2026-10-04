@@ -1,41 +1,6 @@
 import { Link, View } from "@arrzdev/adaptv/components"
 import { ArrowRight } from "lucide-react"
 import { Reveal } from "@/components/reveal"
-import { Section } from "@/components/section"
-
-const COMMANDS = [
-  ["adaptv dev web", "Dev server with hot reload, in the browser."],
-  ["adaptv dev ios", "Same, live on a simulator or the phone in your hand."],
-  ["adaptv build android", "A signed bundle, ready for Google Play."],
-  ["adaptv icons logo.png", "Every icon and splash size, for every target."],
-  ["adaptv doctor", "Checks your machine and tells you what's missing."],
-] as const
-
-export function Cli() {
-  return (
-    <Section
-      title="One command per target"
-      lede="adaptv generates the Xcode and Gradle projects from your config and rebuilds them when it changes."
-    >
-      <Reveal>
-        <View className="overflow-hidden rounded-3xl border border-border">
-          {COMMANDS.map(([command, line]) => (
-            <View
-              key={command}
-              className="gap-1.5 border-border bg-surface px-6 py-5 sm:flex-row sm:items-center sm:gap-8 [&:not(:first-child)]:border-t"
-            >
-              <span className="selectable font-mono text-[14px] sm:w-64 sm:shrink-0">
-                <span className="text-muted">$ </span>
-                {command}
-              </span>
-              <span className="text-[14.5px] text-muted">{line}</span>
-            </View>
-          ))}
-        </View>
-      </Reveal>
-    </Section>
-  )
-}
 
 export function FinalCta() {
   return (
