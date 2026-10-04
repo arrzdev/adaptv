@@ -6,6 +6,7 @@ import {
   PullToRefresh,
   usePullToRefresh,
 } from "#adaptv/components/pull-to-refresh"
+import { waitFrames } from "#adaptv/test-utils/frames"
 
 /*
  * A refresh ends. Whatever the app's `onRefresh` does — resolve, reject — and
@@ -59,16 +60,6 @@ function pointer(x: number, y: number) {
   return { clientX: x, clientY: y, pointerId: 1, isPrimary: true }
 }
 
-//one 16ms frame at a time: motion captured happy-dom's own rAF, a real
-//`setImmediate`, at import, so each step lets that frame run before the next
-const wait = (ms: number) =>
-  act(async () => {
-    for (let t = 0; t < ms; t += 16) {
-      await vi.advanceTimersByTimeAsync(Math.min(16, ms - t))
-      await new Promise((resolve) => setImmediate(resolve))
-    }
-  })
-
 type Phase = "idle" | "pulling" | "refreshing" | "closing"
 
 function mountInActivity(refresh: ReactNode) {
@@ -120,9 +111,32 @@ async function until(
   timeoutMs = 2000,
 ) {
   for (let t = 0; t < timeoutMs && phase.current !== wanted; t += 20)
-    await wait(20)
+    await waitFrames(20)
   return phase.current
 }
+
+describe("a refresh that settles before `stuckMinMs`", () => {
+  it("holds the refreshing row for the rest of the minimum, then closes", async () => {
+    stubMatchMedia()
+    const { phase, Phase } = phaseProbe()
+    const { container } = render(
+      <PullToRefresh onRefresh={async () => {}} stuckMinMs={400}>
+        <Phase />
+      </PullToRefresh>,
+    )
+    pullPastThreshold(container)
+    expect(await until(phase, "refreshing")).toBe("refreshing")
+    //one frame, so the settled refresh's hold is armed before the clock runs:
+    //a state update made inside a `waitFrames` commits when that wait ends
+    await waitFrames(16)
+    //the refresh settled at once; the row stays put until the minimum has run
+    await waitFrames(300)
+    expect(phase.current).toBe("refreshing")
+    await waitFrames(150)
+    expect(phase.current).not.toBe("refreshing")
+    expect(await until(phase, "idle")).toBe("idle")
+  })
+})
 
 describe("a refresh hidden by an app `<Activity>`", () => {
   it("still closes after the minimum stuck time when shown again", async () => {
@@ -136,11 +150,11 @@ describe("a refresh hidden by an app `<Activity>`", () => {
     pullPastThreshold(container)
     expect(await until(phase, "refreshing")).toBe("refreshing")
     //the premise: the refresh already settled and the row is holding its snap
-    await wait(60)
+    await waitFrames(60)
     expect(phase.current).toBe("refreshing")
 
     act(() => handle.setMode("hidden"))
-    await wait(100)
+    await waitFrames(100)
     act(() => handle.setMode("visible"))
     //shown with time left on the hold: it is still held, not closed early
     expect(phase.current).toBe("refreshing")
@@ -167,9 +181,9 @@ describe("a refresh hidden by an app `<Activity>`", () => {
     expect(await until(phase, "refreshing")).toBe("refreshing")
 
     act(() => handle.setMode("hidden"))
-    await wait(20)
+    await waitFrames(20)
     await act(async () => settle())
-    await wait(200)
+    await waitFrames(200)
     act(() => handle.setMode("visible"))
     expect(await until(phase, "idle")).toBe("idle")
   })
@@ -223,7 +237,7 @@ describe("a rejecting onRefresh", () => {
         pullPastThreshold(container)
         expect(await until(phase, "idle")).toBe("idle")
         //a few more turns, so an unhandled rejection has been noticed
-        await wait(50)
+        await waitFrames(50)
         expect(listener.unhandled).toEqual([])
         expect(reported).toEqual([failure])
       } finally {
@@ -250,7 +264,7 @@ describe("a rejecting onRefresh", () => {
       )
       pullPastThreshold(container)
       expect(await until(phase, "idle")).toBe("idle")
-      await wait(50)
+      await waitFrames(50)
       expect(listener.unhandled).toEqual([])
       expect(logged.mock.calls).toEqual([[failure]])
     } finally {
@@ -423,7 +437,7 @@ describe("a row whose app turns `enabled` off mid-gesture", () => {
     act(() => {
       fireEvent.pointerLeave(again, pointer(0, 120))
     })
-    await wait(100)
+    await waitFrames(100)
     expect(phase.current).toBe("idle")
     expect(onRefresh).not.toHaveBeenCalled()
   })
@@ -434,7 +448,7 @@ describe("a row whose app turns `enabled` off mid-gesture", () => {
     const { container, root, phase, handle } = toggledRow(onRefresh, 0)
     act(() => handle.setEnabled(false))
     pullTo(root, 120, true)
-    await wait(100)
+    await waitFrames(100)
     expect(phase.current).toBe("idle")
     expect(onRefresh).not.toHaveBeenCalled()
 
