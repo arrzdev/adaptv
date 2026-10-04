@@ -113,37 +113,17 @@
 .tok-t { color: var(--code-tag); }
 .tok-c { color: var(--code-muted); font-style: italic; }
 
-/*
- * The page is drawn on a ruled sheet: one column with a hairline down each side, a
- * hairline between sections, and a registration mark where they cross. The mark's two
- * brackets imply a frame that is never drawn — this is that frame, at page scale.
- */
+/* one centred column; sections are separated by space and a single hairline, nothing else */
 .sheet {
   position: relative;
   width: 100%;
   max-width: 1200px;
   margin-inline: auto;
-  border-inline: 1px solid var(--border);
 }
 .ruled {
   position: relative;
   border-top: 1px solid var(--border);
 }
-.ruled::before,
-.ruled::after {
-  content: "";
-  position: absolute;
-  top: -5px;
-  width: 9px;
-  height: 9px;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--muted), var(--muted)) center / 100% 1px no-repeat,
-    linear-gradient(var(--muted), var(--muted)) center / 1px 100% no-repeat;
-}
-.ruled::before { left: -5px; }
-.ruled::after { right: -5px; }
 
 .grid-lines {
   background-image:
