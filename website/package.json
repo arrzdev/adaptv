@@ -1,0 +1,36 @@
+{
+  "name": "adaptv-website",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "@/*": "./src/*"
+  },
+  "scripts": {
+    "dev": "adaptv dev web",
+    "preview": "adaptv preview web",
+    "build": "adaptv build web",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "format": "../node_modules/.bin/biome format --write .",
+    "lint": "../node_modules/.bin/biome check ."
+  },
+  "dependencies": {
+    "@arrzdev/adaptv": "link:..",
+    "@tailwindcss/vite": "4.2.4",
+    "lucide-react": "0.544.0",
+    "motion": "link:../node_modules/motion",
+    "react": "link:../node_modules/react",
+    "react-dom": "link:../node_modules/react-dom",
+    "tailwindcss": "4.2.4",
+    "vite": "link:../node_modules/vite"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@11.1.1"
+}
