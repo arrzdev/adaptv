@@ -170,10 +170,8 @@
 }
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
-@keyframes caret { 50% { opacity: 0; } }
-.caret { animation: caret 1s steps(1) infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .rise, .stage-in, .caret { animation: none; }
+  .rise, .stage-in { animation: none; }
 }
 
 /*
