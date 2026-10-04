@@ -170,15 +170,10 @@
 }
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-.pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .rise, .stage-in, .pulse-dot, .caret { animation: none; }
+  .rise, .stage-in, .caret { animation: none; }
 }
 
 /*
