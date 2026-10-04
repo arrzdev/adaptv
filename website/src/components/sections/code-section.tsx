@@ -21,15 +21,7 @@ const FACTS = [
 
 function Terminal() {
   return (
-    <View className="selectable min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-code-bg font-mono text-[12.5px] text-code-fg leading-[1.75] shadow-2xl shadow-black/30">
-      <View
-        row
-        className="items-center gap-1.5 border-white/10 border-b px-4 py-3"
-      >
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-      </View>
+    <View className="selectable min-w-0 overflow-hidden rounded-2xl bg-code-bg font-mono text-[12.5px] text-code-fg leading-[1.75]">
       <pre className="overflow-x-auto p-5">
         <span className="text-code-muted">$ </span>adaptv build ios{"\n\n"}
         <span className="text-[#ff7a8e]">✖ ios</span>
@@ -77,11 +69,8 @@ export function CodeSection() {
       </View>
 
       <Reveal>
-        <View className="grid items-center gap-8 overflow-hidden rounded-3xl border border-border bg-surface p-6 md:p-10 lg:grid-cols-[1fr_1.35fr] lg:gap-12">
+        <View className="grid items-center gap-8 lg:grid-cols-[1fr_1.35fr] lg:gap-12">
           <View className="min-w-0 gap-4">
-            <span className="font-mono text-[11.5px] text-muted uppercase tracking-[0.16em]">
-              Build-time honesty
-            </span>
             <h3 className="text-balance font-semibold text-[28px] leading-[1.08] tracking-[-0.03em] md:text-[34px]">
               It fails your build, not your users.
             </h3>
