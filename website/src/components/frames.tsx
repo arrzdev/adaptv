@@ -48,7 +48,7 @@ export function PhoneFrame({
         <View
           row
           className={cn(
-            "items-center gap-2 font-mono text-[11.5px] uppercase tracking-[0.14em]",
+            "items-center gap-2 font-medium text-[13px]",
             tone === "bad" && "text-danger",
             tone === "good" && "text-success",
             tone === "neutral" && "text-muted",
