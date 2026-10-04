@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { nitro } from "nitro/vite"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
