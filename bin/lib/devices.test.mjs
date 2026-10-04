@@ -215,7 +215,8 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(inFlight)
   rmSync(appRoot, { recursive: true, force: true })
   for (const [stream, desc] of [
     [process.stdout, saved.stdout],
@@ -256,8 +257,25 @@ function remember(devices, extra = {}) {
   writeFileSync(stateFile(), JSON.stringify({ ...extra, devices }))
 }
 
+/*
+ * Every resolve `promptly` is watching. One it gave up on is not stopped: a picker that is only
+ * slow (a loaded host) keeps running after its test failed, and would push its rows into the NEXT
+ * test's `picker.shown` and shift its scripted replies. `afterEach` waits for them all first.
+ */
+const inFlight = new Set()
+
+//A picker test is quick on any host; the budget only has to outlast `promptly`'s own ceiling,
+//so a picker that never settles fails as `still waiting`, not as a bare timeout.
+const BUDGET = { timeout: 20_000 }
+
 /** Settle within `ms`, or fail — a picker that waits on stdin must not hang the suite. */
-function promptly(promise, ms = 2000) {
+function promptly(promise, ms = 8000) {
+  const late = promise.then(
+    () => {},
+    () => {},
+  )
+  inFlight.add(late)
+  late.then(() => inFlight.delete(late))
   return Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -441,7 +459,7 @@ describe("--target", () => {
   })
 })
 
-describe("--latest", () => {
+describe("--latest", BUDGET, () => {
   it("reuses the remembered device while it is still listed, without asking", async () => {
     const { resolveTarget } = await devicesUnder()
     remember({ ios: { id: IOS_SIM_26.id, name: IOS_SIM_26.name } })
@@ -523,7 +541,7 @@ describe("--latest", () => {
  * so a device picker answers for itself rather than waiting — "any simulator will do". The memory
  * `preview-ios-headless-needs-target` is what waiting costs — 11 minutes on `which ios device?`.
  */
-describe("with nobody at the keyboard", () => {
+describe("with nobody at the keyboard", BUDGET, () => {
   const SEVERAL = [IOS_SIM_16, IOS_SIM_18, IOS_SIM_26]
   const UNANSWERED = [
     ["output piped", { stdout: false, stdin: true }],
@@ -638,7 +656,7 @@ describe("with nobody at the keyboard", () => {
   })
 })
 
-describe("with somebody at the keyboard", () => {
+describe("with somebody at the keyboard", BUDGET, () => {
   it("shows every device in the listing's own order, phones included, and remembers the pick", async () => {
     //A person reads the list, so it is not reordered for them; only a run nobody can answer
     //has to choose, and only that choice prefers a simulator.
