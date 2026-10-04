@@ -38,7 +38,9 @@ export function SitePage({
 }
 
 function SiteHeader() {
-  const [, toggleTheme] = useTheme()
+  const { resolved, setPreference } = useTheme()
+  const toggleTheme = () =>
+    setPreference(resolved === "dark" ? "light" : "dark")
   return (
     <header className="sticky top-0 z-40 w-full px-3 pt-safe-offset-3">
       <View
