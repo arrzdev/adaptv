@@ -376,17 +376,19 @@ async function enterFullscreen() {
     {
       type: "api",
       name: "useTheme()",
-      signature: 'function useTheme(): readonly ["light" | "dark", () => void]',
+      signature:
+        'function useTheme(): { preference: "light" | "dark" | "system"; resolved: "light" | "dark"; setPreference: (preference: "light" | "dark" | "system") => void }',
       description:
-        'The resolved appearance and a toggle. The user\'s preference is `"light"`, `"dark"` or `"system"`; the hook returns what that resolves to right now. It follows OS appearance changes while the preference is `"system"`, re-applies the theme when the app returns to the foreground, and keeps `<html class="light|dark">`, `color-scheme` and the `data-ui-theme` attribute in step. The app shell already calls it once, so the theme is applied whether or not you call it.',
+        'The theme preference, the appearance it resolves to, and the one way to change it. The user\'s preference is `"light"`, `"dark"` or `"system"`; `resolved` is what that paints right now. Every `useTheme` reads the same store, so a settings screen and the shell stay in step. It follows OS appearance changes while the preference is `"system"`, re-applies the theme when the app returns to the foreground, and keeps `<html class="light|dark">`, `color-scheme` and the `data-ui-theme` attribute in step. The app shell already calls it once, so the theme is applied whether or not you call it.',
       returns:
-        '`[resolved, toggleTheme]`. `toggleTheme()` sets the preference to the opposite of the current resolved appearance, so it always leaves `"system"` behind.',
+        '`{ preference, resolved, setPreference }`. `setPreference(p)` stamps `<html>`, persists the choice and mirrors it to native. A light/dark toggle sets the opposite of `resolved`, which leaves `"system"` behind.',
     },
     {
       type: "code",
       label: "theme-toggle.tsx",
       lang: "tsx",
-      code: `const [theme, toggleTheme] = useTheme()
+      code: `const { resolved, setPreference } = useTheme()
+const toggleTheme = () => setPreference(resolved === "dark" ? "light" : "dark")
 
 <Button onClick={toggleTheme} aria-label="Toggle theme">
   <Sun className="hidden dark:block" />
@@ -396,7 +398,7 @@ async function enterFullscreen() {
     {
       type: "note",
       tone: "warn",
-      text: 'On the first client render the hook reads the class the pre-paint script already put on `<html>`. The server has no DOM and renders `"light"`. If your markup branches on the returned value (`theme === "dark" ? <Moon /> : <Sun />`), a dark-mode visitor gets a hydration mismatch. Render both and let the `dark:` variant choose, as above. Use the returned value for things that are not markup: a chart palette, a map style, a value passed to a native call.',
+      text: 'On the first client render the hook reads the class the pre-paint script already put on `<html>`. The server has no DOM and renders `"light"`. If your markup branches on the returned value (`resolved === "dark" ? <Moon /> : <Sun />`), a dark-mode visitor gets a hydration mismatch. Render both and let the `dark:` variant choose, as above. Use the returned value for things that are not markup: a chart palette, a map style, a value passed to a native call.',
     },
     {
       type: "p",
@@ -405,7 +407,7 @@ async function enterFullscreen() {
     { type: "h3", text: "Setting a specific preference" },
     {
       type: "p",
-      text: "The toggle only flips between light and dark. For a three-way control (light, dark, system) call `applyUiThemePreference`, exported from the same module. Every mounted `useTheme` picks the change up.",
+      text: "For a three-way control (light, dark, system) pass the choice to `setPreference` and mark the selected option with `preference`. Outside a component, call `applyUiThemePreference`, exported from the same module; it is the same function. Every mounted `useTheme` picks the change up.",
     },
     {
       type: "api",

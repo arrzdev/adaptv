@@ -109,7 +109,8 @@ export const page: DocPage = {
 import { Moon, Sun } from "lucide-react"
 
 function ThemeToggle() {
-  const [, toggleTheme] = useTheme()
+  const { resolved, setPreference } = useTheme()
+  const toggleTheme = () => setPreference(resolved === "dark" ? "light" : "dark")
   return (
     <button type="button" onClick={toggleTheme} aria-label="Toggle light and dark">
       <Sun className="hidden size-5 dark:block" />
@@ -120,32 +121,23 @@ function ThemeToggle() {
     },
     {
       type: "p",
-      text: '[useTheme](/docs/hooks-device) returns `[resolved, toggle]`: the resolved appearance, `"light"` or `"dark"`, and a function that flips to the other one and persists it. The toggle never returns to `system`. For a three-way picker, call `applyUiThemePreference("light" | "dark" | "system")` and read the stored choice with `readPreference()` after mount, both exported from `@arrzdev/adaptv/hooks`. Every mounted `useTheme` follows the change, because the hook observes the class on `<html>`.',
+      text: '[useTheme](/docs/hooks-device) returns `{ preference, resolved, setPreference }`: what the user chose (`"light"`, `"dark"` or `"system"`), what that paints (`"light"` or `"dark"`), and the function that sets a new preference and persists it. The toggle above sets the opposite of `resolved`, so it never returns to `system`. For a three-way picker, pass the choice to `setPreference` and mark the selected option with `preference`. Every mounted `useTheme` follows the change, because they all read one store.',
     },
     {
       type: "code",
       label: "appearance-setting.tsx",
       lang: "tsx",
-      code: `import {
-  applyUiThemePreference,
-  readPreference,
-  type UiThemePreference,
-} from "@arrzdev/adaptv/hooks"
+      code: `import { useTheme } from "@arrzdev/adaptv/hooks"
 
 const OPTIONS = ["light", "dark", "system"] as const
 
 function AppearanceSetting() {
-  // Read after mount: the server cannot know the stored choice.
-  const [value, setValue] = useState<UiThemePreference | null>(null)
-  useEffect(() => setValue(readPreference()), [])
+  const { preference, setPreference } = useTheme()
   return OPTIONS.map((option) => (
     <Pressable
       key={option}
-      className={cn("flex px-4 py-3", value === option && "font-semibold")}
-      onPress={() => {
-        applyUiThemePreference(option)
-        setValue(option)
-      }}
+      className={cn("flex px-4 py-3", preference === option && "font-semibold")}
+      onPress={() => setPreference(option)}
     >
       {option}
     </Pressable>
@@ -167,8 +159,8 @@ function AppearanceSetting() {
       label: "logo.tsx",
       lang: "tsx",
       code: `// Mismatches for every dark-mode visitor:
-const [theme] = useTheme()
-return theme === "dark" ? <LogoLight /> : <LogoDark />
+const { resolved } = useTheme()
+return resolved === "dark" ? <LogoLight /> : <LogoDark />
 
 // Correct on the first frame, on every target:
 return (
