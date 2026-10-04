@@ -4,6 +4,10 @@ import { artTarget, fitScale, SAFE_ZONE } from "./icon-geometry.mjs"
 
 const sharpP = import("sharp").then((m) => m.default)
 
+//The describes that render through sharp take ~1.4s a test at worst on a 2-CPU host at load 6,
+//against the 5s default. They carry this budget; it is for the slow host only.
+const BUDGET = { timeout: 20_000 }
+
 /** Render an SVG to a PNG buffer at `size`. */
 async function png(svg, size = 512) {
   const sharp = await sharpP
@@ -97,7 +101,7 @@ describe("fitScale — the placement falls out of the measurement", () => {
   })
 })
 
-describe("measureArtwork — where the background stops", () => {
+describe("measureArtwork — where the background stops", BUDGET, () => {
   it("reads a transparent surround as background", async () => {
     const art = await measureArtwork(await sharpP, await png(disc()))
     expect(art.background).toBeNull()
@@ -165,7 +169,7 @@ describe("measureArtwork — where the background stops", () => {
   })
 })
 
-describe("the fitted mark actually clears the ring", () => {
+describe("the fitted mark actually clears the ring", BUDGET, () => {
   it("puts the furthest pixel of an awkward mark ON the safe circle, not past it", async () => {
     //End to end, in the units the mask uses: measure → scale → place → re-measure.
     const sharp = await sharpP
@@ -249,31 +253,35 @@ describe("fitScale — whole file vs cropped mark", () => {
   })
 })
 
-describe("measureArtwork — luminance decides the dark appearance", () => {
-  it("reads the MARK, not the frame — a black logo on white is a dark mark", async () => {
-    //Averaging the whole image would call this bright and let adaptv derive an iOS dark icon
-    //that is invisible on the system's near-black backdrop.
-    const art = await measureArtwork(
-      await sharpP,
-      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+describe(
+  "measureArtwork — luminance decides the dark appearance",
+  BUDGET,
+  () => {
+    it("reads the MARK, not the frame — a black logo on white is a dark mark", async () => {
+      //Averaging the whole image would call this bright and let adaptv derive an iOS dark icon
+      //that is invisible on the system's near-black backdrop.
+      const art = await measureArtwork(
+        await sharpP,
+        await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
         <rect width="512" height="512" fill="#ffffff"/>
         <circle cx="256" cy="256" r="150" fill="#0a0a0a"/></svg>`),
-    )
-    expect(art.luminance).toBeLessThan(0.1)
-  })
+      )
+      expect(art.luminance).toBeLessThan(0.1)
+    })
 
-  it("reads a light mark as light, whatever it sits on", async () => {
-    const art = await measureArtwork(
-      await sharpP,
-      await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
+    it("reads a light mark as light, whatever it sits on", async () => {
+      const art = await measureArtwork(
+        await sharpP,
+        await png(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
         <rect width="512" height="512" fill="#123456"/>
         <circle cx="256" cy="256" r="150" fill="#ffffff"/></svg>`),
-    )
-    expect(art.luminance).toBeGreaterThan(0.9)
-  })
-})
+      )
+      expect(art.luminance).toBeGreaterThan(0.9)
+    })
+  },
+)
 
-describe("monochromeMark — Android's themed layer", () => {
+describe("monochromeMark — Android's themed layer", BUDGET, () => {
   /** `{ coverage, mean, opaqueShare }` over the alpha channel's non-empty pixels. */
   async function alphaStats(buf) {
     const sharp = await sharpP

@@ -32,7 +32,7 @@ crash that names neither.
 | `src/components/demos/` | The live *plain web view vs adaptv* side-by-sides. |
 | `src/components/section.tsx`, `reveal.tsx` | The band primitive (figure number, claim left, one sentence right) and the scroll-in fade. |
 | `src/components/frames.tsx` | Phone and browser frames drawn in CSS. They take children, because what is inside them runs. |
-| `src/content/` | Everything the landing page and blog say: the divergence catalogue, code samples, field notes. |
+| `src/content/` | Everything the landing page and blog say: code samples, field notes. |
 | `src/content/docs/` | The documentation. `pages/<slug>.ts` is one page; `index.ts` is the sidebar order, and the overview, search and pager all read it. `../blocks.ts` is the block vocabulary (prose, props tables, API signatures, per-target tables, live demos). |
 | `src/components/docs-demos/` | One small live component per reference page, built from the real adaptv component. |
 | `src/components/docs-layout.tsx`, `docs-home.tsx`, `prose.tsx` | The docs chrome (sidebar, search, on-this-page, pager, the mobile sheet), the `/docs` overview, and the block renderer. |
@@ -80,8 +80,7 @@ then capture the simulator at full resolution, `sips --resampleWidth 660`, and d
 `src/assets/captures/`. Import it with `?adaptv-image` and render it with `<Image>` so the build
 measures it and the frame reserves its box.
 
-Still owed: recorded clips for the divergences that cannot run in a page — the loupe, the keyboard,
-the launch shift — and a real-device photo or capture for social cards.
+Still owed: a real-device photo or capture for social cards.
 
 ## What is a draft here
 

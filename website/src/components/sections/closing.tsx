@@ -37,35 +37,6 @@ export function Cli() {
   )
 }
 
-const NOT_FOR = [
-  ["Games and heavy graphics", "You want a native renderer, not a web view."],
-  ["Camera or AR pipelines", "Real-time native APIs are the whole product."],
-  [
-    "A team already shipping great native apps",
-    "Keep them. This isn't for you.",
-  ],
-] as const
-
-export function WhenNot() {
-  return (
-    <Section
-      title="When not to use adaptv"
-      lede="A web view suits most apps. Here are the cases where it does not."
-    >
-      <Reveal>
-        <ul className="max-w-2xl list-disc pl-5 marker:text-muted">
-          {NOT_FOR.map(([title, line]) => (
-            <li key={title} className="py-1.5 text-[16px] leading-relaxed">
-              <span className="font-medium">{title}.</span>{" "}
-              <span className="text-subtle">{line}</span>
-            </li>
-          ))}
-        </ul>
-      </Reveal>
-    </Section>
-  )
-}
-
 export function FinalCta() {
   return (
     <section className="sheet ruled relative overflow-hidden">
