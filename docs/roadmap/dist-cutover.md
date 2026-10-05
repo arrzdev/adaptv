@@ -29,20 +29,21 @@ fourth tsdown build now writes each module named in `bin/lib/cli-modules.mjs` to
 the loader reads from there when the package has no `src/`. `pnpm build:check` loads all of them
 from a package staged without `src/`. A checkout still loads `src/`, so editing it needs no build.
 
-### The `/vite` entry still resolves files by the `src/` layout
+### The `/vite` entry no longer assumes `src/`
 
-Found when the CLI work began, and missing from the size estimate above. `src/vite/*` finds files
-relative to its own `import.meta.url`, which is right in `src/vite/` and wrong in `dist/vite.mjs`:
+`src/vite/*` used to find files relative to its own `import.meta.url` (`../routes/*.tsx`,
+`../sw/default-worker.ts`, `../..` as the package root, `../../patches`), which is right in
+`src/vite/` and wrong from `dist/vite.mjs` or `dist/cli/**`. `src/vite/package-files.ts` now
+finds the root by walking up to adaptv's `package.json` and hands the consumer's build the copy
+that matches the layout it runs from. The modules that build compiles — the client and router
+entries, the root route, the service worker and the boot screen — are tsdown entries, so
+`dist/` has them. `pnpm build:check` fails on any `new URL("../…", import.meta.url)` left in
+`dist/`.
 
-| Reference | In `dist/vite.mjs` it points at |
-|---|---|
-| `../routes/client-entry.tsx`, `../routes/router-entry.tsx`, `../routes/root-route.tsx` (`adaptv-plugin.ts`, `route-tree-opacity.ts`) | `<pkg>/routes/*.tsx`, which does not exist. The consumer's Vite compiles these files, so they need dist entries of their own, not just a new path. |
-| `../sw/default-worker.ts` (`sw-build.ts`) | `<pkg>/sw/default-worker.ts`, the same kind of file |
-| `../..` as the package root (`adaptv-plugin.ts`, `tanstack-resolve.ts`, `installed-plugins.ts`) | the directory above the package |
-| `../../patches` (`verify-patches.ts`) | a sibling of the package |
-
-`exports` cannot point `/vite` at `dist/` until these resolve in both layouts. The entries also
-import `#adaptv/*`, which `imports` maps to `./src/*`.
+Checked by hand once: an app from `create-adaptv`, linked against a staged package with no `src/`
+and `exports` on `dist/`, passes `adaptv build web` (route tree, boot screen and `sw.js`
+included). `exports` still names `src/` until the flip below, and `imports` still maps
+`#adaptv/*` to `./src/*` for the checkout; neither reaches a built file.
 
 ### The three playground shims that disappear
 
