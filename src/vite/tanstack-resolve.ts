@@ -33,6 +33,15 @@ const START_DEDUPE = new Set([
  * call"). The two entries are dropped, so each import resolves from its importer: the
  * app's through the redirect above, a package's from its own dependencies. React and
  * React DOM stay deduped — they are the app's own dependencies.
+ *
+ * In `adaptv dev web` the server never reaches the redirect. Vite's SSR import analysis
+ * leaves a bare import that it externalizes as written, before any plugin resolves it,
+ * and decides that once per specifier: adaptv's own `@tanstack/react-router` import
+ * settles it for the app's split route too. The module runner then asks Node for
+ * `@tanstack/react-router` from the route file, and a standalone pnpm app answered
+ * every page with a 500 ("Cannot find module"). So in dev the router is inlined, and
+ * every import of it goes through the redirect. Every importer resolves the same file,
+ * so the server still loads one router.
  */
 export function adaptvTanstackResolvePlugin(
   appRoot: string,
@@ -43,6 +52,10 @@ export function adaptvTanstackResolvePlugin(
   return {
     name: "adaptv:tanstack-resolve",
     enforce: "pre",
+    config: (_config, { command }) =>
+      command === "serve"
+        ? { resolve: { noExternal: ["@tanstack/react-router"] } }
+        : undefined,
     //`post`: Start adds the entries in its own `configEnvironment`, merged before this
     //runs. Removing one takes a write to the merged options, not a returned partial,
     //because Vite concatenates arrays when it merges.
