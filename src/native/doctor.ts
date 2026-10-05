@@ -65,17 +65,21 @@ function checkAppBoundDomains(input: DoctorInput): Diagnostic | null {
 
   return {
     severity: "error",
-    title: "WKAppBoundDomains is set without the matching adaptv opt-in",
+    title: "WKAppBoundDomains is set, which blocks the native bridge",
     detail:
       "WebKit will refuse WKUserScript injection, which is how the native bridge reaches " +
       "the page. 'isNativePlatform()' will return false and EVERY native capability will " +
       "silently fall back to its web implementation. No error, no crash, just an app that " +
       "quietly has none of the native surface it was built for.",
+    //The fix used to tell the dev to set `ios.limitsNavigationsToAppBoundDomains` in
+    //the app's config. There is no `ios` key there: adaptv generates the whole native
+    //config and nothing in the app's config reaches that block, so the only fix is the
+    //removal. doctor.test.ts checks every key a fix names against `AdaptvAppConfig`.
     fix:
-      "Remove WKAppBoundDomains from .adaptv/ios/App/App/Info.plist. adaptv never adds it, and the " +
-      "usual reason for adding it (relaxing ITP's storage cap) does not work: WebKit's " +
-      "isAppBoundITPRelaxationEnabled is a constexpr false. If you genuinely need it, also " +
-      "set 'ios.limitsNavigationsToAppBoundDomains: true' in adaptv.config.ts.",
+      "Remove WKAppBoundDomains from .adaptv/ios/App/App/Info.plist. adaptv never adds it and " +
+      "has no setting that opts the app into app-bound navigation, so with the key in place " +
+      "the bridge cannot load. The usual reason for adding it (relaxing ITP's storage cap) " +
+      "does not work: WebKit's isAppBoundITPRelaxationEnabled is a constexpr false.",
   }
 }
 
