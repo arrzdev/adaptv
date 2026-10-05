@@ -3,39 +3,54 @@ import type { DocPage } from "@/content/docs/types"
 export const page: DocPage = {
   slug: "six-targets",
   title: "The six targets",
-  summary:
-    "One codebase ships to six runtimes. The hard bugs live where they diverge.",
+  summary: "Style and branch for a tab, an installed app or a native build.",
   blocks: [
-    {
-      type: "p",
-      text: "When adaptv says “every screen” it means six concrete runtimes, and every behaviour in the framework is verified against all of them.",
-    },
     {
       type: "ul",
       items: [
-        "Desktop browser — Chrome, Safari, Firefox on a computer.",
-        "Mobile browser, iOS — Safari, with its collapsing toolbar.",
-        "Mobile browser, Android — Chrome.",
-        "Home-screen app, iOS — Add to Home Screen. No browser chrome, different viewport rules.",
-        "Home-screen app, Android — Install app. A different splash, a different back button.",
-        "Native, iOS and Android — a store app. Real haptics, a real keychain, no server behind it.",
+        "Desktop browser.",
+        "iOS browser tab (Safari).",
+        "Android browser tab (Chrome).",
+        "iOS installed PWA.",
+        "Android installed PWA.",
+        "Native app (iOS and Android count as one).",
       ],
     },
-    { type: "h2", text: "Styling for where you are" },
+    { type: "h2", text: "Style per target" },
     {
       type: "p",
-      text: "Two variants cover the split that matters most. app: applies when the app is installed — on the home screen or from a store. web: applies in a browser tab. A media query alone cannot tell you this, because a native shell reports itself as a browser.",
+      text: "`app:` applies in an installed PWA and in a native app. `web:` applies in a browser tab only. A native app reports `display-mode: browser`, so a media query cannot tell them apart.",
     },
     {
       type: "code",
       label: "header.tsx",
       lang: "tsx",
-      code: `// A back arrow only where there is no browser back button,
-// and safe-area padding only where there is a notch to clear.
-<View row className="web:py-4 app:py-safe-offset-2">
+      code: `import { View } from "@arrzdev/adaptv/components"
+
+<View row className="web:py-4 app:pt-safe-offset-2 app:pb-2">
   <BackButton className="web:hidden app:flex" />
   <Title />
 </View>`,
+    },
+    {
+      type: "p",
+      text: 'To style per OS, select the stamp on `<html>`: `[data-adaptv-os="ios"] &`. There is no `ios:` variant.',
+    },
+    { type: "h2", text: "Branch in JavaScript" },
+    {
+      type: "code",
+      label: "platform.ts",
+      lang: "ts",
+      code: `import { getOS, isInstalledApp, isNativePlatform } from "@arrzdev/adaptv/utils"
+
+isInstalledApp() // PWA or native
+isNativePlatform() // native only
+getOS() // "ios" | "android" | other`,
+    },
+    {
+      type: "note",
+      text: 'Do not use `matchMedia("(display-mode: standalone)")` for this. It is false in a native app.',
+      tone: "warn",
     },
   ],
 }
