@@ -22,6 +22,28 @@
 **One flip, and its fallout.** `package.json` `exports` still points every subpath at
 `./src/interface/*.index.ts`. Repointing them at `dist/` is the cutover.
 
+### The CLI no longer needs `src/`
+
+`bin/lib/load-ts.mjs` loaded every framework module the CLI uses from `src/` with esbuild. A
+fourth tsdown build now writes each module named in `bin/lib/cli-modules.mjs` to `dist/cli/`, and
+the loader reads from there when the package has no `src/`. `pnpm build:check` loads all of them
+from a package staged without `src/`. A checkout still loads `src/`, so editing it needs no build.
+
+### The `/vite` entry still resolves files by the `src/` layout
+
+Found when the CLI work began, and missing from the size estimate above. `src/vite/*` finds files
+relative to its own `import.meta.url`, which is right in `src/vite/` and wrong in `dist/vite.mjs`:
+
+| Reference | In `dist/vite.mjs` it points at |
+|---|---|
+| `../routes/client-entry.tsx`, `../routes/router-entry.tsx`, `../routes/root-route.tsx` (`adaptv-plugin.ts`, `route-tree-opacity.ts`) | `<pkg>/routes/*.tsx`, which does not exist. The consumer's Vite compiles these files, so they need dist entries of their own, not just a new path. |
+| `../sw/default-worker.ts` (`sw-build.ts`) | `<pkg>/sw/default-worker.ts`, the same kind of file |
+| `../..` as the package root (`adaptv-plugin.ts`, `tanstack-resolve.ts`, `installed-plugins.ts`) | the directory above the package |
+| `../../patches` (`verify-patches.ts`) | a sibling of the package |
+
+`exports` cannot point `/vite` at `dist/` until these resolve in both layouts. The entries also
+import `#adaptv/*`, which `imports` maps to `./src/*`.
+
 ### The three playground shims that disappear
 
 All three exist *only* because the exports point at `src/*.ts`, which compiles adaptv's source inside

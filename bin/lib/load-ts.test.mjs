@@ -1,8 +1,22 @@
 // @vitest-environment node
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { ADAPTV_ROOT } from "./load-ts.mjs"
+import { CLI_MODULES } from "./cli-modules.mjs"
+import {
+  ADAPTV_ROOT,
+  builtModulePath,
+  frameworkLayout,
+} from "./load-ts.mjs"
 
 /*
  * `bin/` reaches into `src/` by string: `loadAdaptvModule("ota/build/ota-emit.ts")`,
@@ -92,5 +106,41 @@ describe("loadAdaptvModule — the strings bin/ resolves against src/", () => {
       })
       .map(({ file, line, target }) => `${file}:${line} → src/${target}`)
     expect(dangling).toEqual([])
+  })
+})
+
+/*
+ * A published package has no `src/`, so each of those strings must also be built into
+ * `dist/cli/`, and tsdown builds exactly the list in `cli-modules.mjs`. A call missing from
+ * the list works in the checkout and fails only once installed from the registry;
+ * `scripts/verify-dist.mjs` then loads every listed module from a package staged without
+ * `src/`.
+ */
+describe("loadAdaptvModule — what a published package can load", () => {
+  const targets = new Set(stringLoads().map((l) => l.target))
+
+  it("every module the CLI loads is built into dist/cli", () => {
+    expect([...targets].filter((t) => !CLI_MODULES.includes(t))).toEqual(
+      [],
+    )
+  })
+
+  it("every module built into dist/cli is one the CLI loads", () => {
+    expect(CLI_MODULES.filter((m) => !targets.has(m))).toEqual([])
+  })
+
+  it("reads src/ when the package has it and dist/cli/ when it does not", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "adaptv-layout-"))
+    try {
+      expect(frameworkLayout(root)).toBe("dist")
+      mkdirSync(path.join(root, "src"))
+      expect(frameworkLayout(root)).toBe("src")
+      expect(frameworkLayout(ADAPTV_ROOT)).toBe("src")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+    expect(builtModulePath("ota/build/ota-emit.ts", "/pkg")).toBe(
+      path.join("/pkg", "dist", "cli", "ota", "build", "ota-emit.mjs"),
+    )
   })
 })

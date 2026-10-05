@@ -65,7 +65,11 @@ import {
   patchServerUrl,
 } from "./lib/live-reload.mjs"
 import { loadConfig } from "./lib/load-config.mjs"
-import { ADAPTV_ROOT, loadAdaptvModule } from "./lib/load-ts.mjs"
+import {
+  ADAPTV_ROOT,
+  FRAMEWORK_DIR,
+  loadAdaptvModule,
+} from "./lib/load-ts.mjs"
 import {
   acquireDevLock,
   assertNoActiveDevLock,
@@ -2303,7 +2307,7 @@ function otaCacheKey(appRoot, ota) {
   return createHash("sha1")
     .update(fingerprint(appRoot))
     .update(ota.nativeFingerprint)
-    .update(cliSourceFingerprint(path.join(ADAPTV_ROOT, "src")))
+    .update(cliSourceFingerprint(FRAMEWORK_DIR))
     .digest("hex")
 }
 
