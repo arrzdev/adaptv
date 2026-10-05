@@ -36,7 +36,7 @@
     "dev:android": "node scripts/playground.mjs dev:android",
     "dev:ios": "node scripts/playground.mjs dev:ios",
     "dev:web": "node scripts/playground.mjs dev:web",
-    "gate": "pnpm biome:check && pnpm biome:check:playground && pnpm typecheck && pnpm test && node scripts/check-colour.mjs",
+    "gate": "pnpm biome:check && pnpm biome:check:playground && pnpm typecheck && pnpm test && node scripts/check-colour.mjs && pnpm build:check",
     "playground:setup": "node scripts/playground-setup.mjs",
     "preview:all": "node scripts/playground.mjs preview:all",
     "preview:android": "node scripts/playground.mjs preview:android",
