@@ -52,12 +52,16 @@ included).
 ### The playground shims: one is gone, two come from `link:`
 
 The third shim, the `node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts` include, is gone.
-`src/interface/route-globals.d.ts` references all seven declarations by relative path, tsdown
-copies them into `dist/` with `src/`'s layout, and `src/vite/stamp.ts` writes
-`node_modules/@arrzdev/adaptv/dist/interface/route-globals.d.ts` into the app's `include`. The two
-that imported `#adaptv/*` now import `@arrzdev/adaptv/router`, which resolves in a published
-package. Checked: the playground typecheck passes without the glob and fails on its
-`?adaptv-image` import when the references are removed.
+`src/interface/route-globals.d.ts` references all seven declarations by relative path, and tsdown
+copies them into `dist/` with `src/`'s layout. `src/vite/stamp.ts` used to put
+`node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts` in the app's `include`, but an
+`exclude` of `node_modules` (the website's, and `create-adaptv`'s template) silently drops such an
+entry. It now generates `.adaptv/adaptv-env.d.ts`, a `/// <reference types>` to
+`@arrzdev/adaptv/route-globals` that resolves through `exports`. The two declarations that
+imported `#adaptv/*` now import `@arrzdev/adaptv/router`, which resolves in a published package.
+Checked in the playground and the website: the typecheck passes without the glob or the include
+line, and fails on an `?adaptv-image` import when the generated reference or the
+`/// <reference path>`s are removed.
 
 **Shims 1 and 2 were not caused by `src/`.** With `exports` on `dist/` and both deleted, the
 playground typecheck fails with the same two-copies errors (`vite.config.ts`: `PluginOption` from

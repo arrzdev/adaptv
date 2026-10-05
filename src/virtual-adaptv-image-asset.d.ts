@@ -3,8 +3,8 @@
  * to import the plugin's types by hand.
  *
  * Reaches the consumer through `interface/route-globals.d.ts`, which references every
- * `virtual-adaptv-*.d.ts` and is the one file an app's tsconfig already includes, so it
- * needs no wiring at all. `?adaptv-image` is a specifier only adaptv's Vite plugin knows how
+ * `virtual-adaptv-*.d.ts` and which every app reaches through the reference adaptv
+ * generates into `.adaptv/` (`src/vite/stamp.ts`), so it needs no wiring at all. `?adaptv-image` is a specifier only adaptv's Vite plugin knows how
  * to resolve, which is the same category as the virtual modules beside it — a new
  * package export would have been one more line every consumer must remember.
  *

@@ -163,8 +163,8 @@ export default defineConfig([
       // and drags in the co-located `utils.test.ts`.
       { from: "src/styles/*.css", to: "dist/styles" },
       // The ambient declarations — hand-authored `.d.ts`, not generated, so copied
-      // verbatim. `route-globals.d.ts` is the one file an app's tsconfig names (stamped by
-      // `src/vite/stamp.ts`); it pulls in the seven `virtual-adaptv-*.d.ts` with relative
+      // verbatim. `route-globals.d.ts` is the one file an app reaches (through `exports`,
+      // from `.adaptv/adaptv-env.d.ts`, `src/vite/stamp.ts`); it pulls in the seven `virtual-adaptv-*.d.ts` with relative
       // `/// <reference path>`s, so `dist/` keeps their `src/` layout and the same
       // references hold in both trees. → `src/interface/route-globals.d.ts`
       {
