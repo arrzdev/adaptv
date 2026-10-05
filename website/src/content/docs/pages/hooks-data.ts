@@ -5,7 +5,7 @@ export const page: DocPage = {
   slug: "hooks-data",
   title: "Clipboard, share, location and network hooks",
   summary:
-    "Copy and paste, the OS share sheet, the device position and connectivity, each with one API across every target and the gaps returned as values.",
+    "Copy and paste, the share sheet, the device position and the connection state.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
     'import { useClipboard, useShare, useGeolocation, useIsOffline } from "@arrzdev/adaptv/hooks"',
@@ -28,7 +28,7 @@ const isOffline = useIsOffline()
     },
     {
       type: "p",
-      text: "These hooks share one rule: an expected refusal is a value, never an exception. No share sheet on desktop Chrome, a paste the browser refused, a denied location permission: each comes back as a status you can render. Every hook also reports whether the feature exists here, so a button can be left out of the first render instead of failing on tap.",
+      text: "These hooks do not throw when the platform refuses. The refusal is a value that you can render.",
     },
 
     { type: "h2", text: "useClipboard" },
@@ -36,8 +36,7 @@ const isOffline = useIsOffline()
       type: "api",
       name: "useClipboard()",
       signature: "function useClipboard(): UseClipboardResult",
-      description:
-        "Copy and paste text. Read and write are kept apart because they are different capabilities: copying is ungated almost everywhere, while pasting is a permission on Chromium and a per-gesture allowance on Safari and Firefox.",
+      description: "Copy and paste text.",
       returns:
         "`{ canWrite, canRead, readPermission, copy, paste, text, status, refreshPermission }`.",
     },
@@ -47,48 +46,45 @@ const isOffline = useIsOffline()
         {
           name: "canWrite",
           type: "boolean",
-          description:
-            "Whether copying works here. `false` until mount, then `true` on every real target, including a plain-http origin, where copying falls back to `document.execCommand`.",
+          description: "`true` if copy works. `false` until mount.",
         },
         {
           name: "canRead",
           type: "boolean",
           description:
-            "Whether pasting can work here. `false` until mount, and `false` on any insecure web origin: there is no fallback for reading.",
+            "`true` if paste can work. `false` until mount and on insecure web origins.",
         },
         {
           name: "readPermission",
           type: '"granted" | "denied" | "prompt" | "unavailable"',
           description:
-            'Read permission, without prompting. Starts as `"prompt"` and settles on mount. `"unavailable"` means do not render a paste button. Safari and Firefox always report `"prompt"`: they have no queryable permission and ask per gesture instead.',
+            'Starts as `"prompt"`. Hide the paste button on `"unavailable"`. Safari and Firefox always give `"prompt"`.',
         },
         {
           name: "copy",
           type: '(text: string) => Promise<"ok" | "denied" | "unsupported">',
-          description: "Copy text. Never rejects.",
+          description: "Copy text. It never rejects.",
         },
         {
           name: "paste",
           type: "() => Promise<string | null>",
           description:
-            "Read the clipboard. Resolves to the text, or `null` when refused or unsupported; `status` says which. Call it from a user gesture. Afterwards it re-reads the permission, because Chromium flips it to granted only once a read has happened.",
+            "Read the clipboard. Returns `null` if refused. Call it from a user gesture.",
         },
         {
           name: "text",
           type: "string | null",
-          description: "The last text `paste()` read.",
+          description: "The last text that `paste()` read.",
         },
         {
           name: "status",
           type: '"ok" | "denied" | "unsupported" | null',
-          description:
-            "Outcome of the last copy or paste, `null` before the first.",
+          description: "Result of the last copy or paste.",
         },
         {
           name: "refreshPermission",
           type: "() => Promise<ClipboardPermission>",
-          description:
-            "Re-read the permission, for example after the user changes it in site settings.",
+          description: "Read the permission again.",
         },
       ],
     },
@@ -97,14 +93,8 @@ const isOffline = useIsOffline()
       head: ["Status", "Meaning"],
       rows: [
         ['`"ok"`', "Done."],
-        [
-          '`"denied"`',
-          "The platform refused: no user gesture, an unfocused document, or permission withheld. Retry from a real tap.",
-        ],
-        [
-          '`"unsupported"`',
-          "There is no clipboard path here, or the native plugin itself refused. A retry cannot help.",
-        ],
+        ['`"denied"`', "The platform refused. Retry from a real tap."],
+        ['`"unsupported"`', "No clipboard path exists. Do not retry."],
       ],
     },
     {
@@ -123,7 +113,7 @@ const isOffline = useIsOffline()
         {
           target: "Desktop web",
           status: "partial",
-          note: "Copy works. Paste is a real permission on Chromium; Safari shows its own Paste button per read. On an http origin paste is unavailable.",
+          note: "Paste needs a permission on Chromium. It is not available on http.",
         },
         {
           target: "Mobile web",
@@ -133,17 +123,17 @@ const isOffline = useIsOffline()
         {
           target: "Installed PWA",
           status: "partial",
-          note: "Same as the browser it was installed from.",
+          note: "Same as the browser.",
         },
         {
           target: "iOS",
           status: "yes",
-          note: 'Both directions through the native pasteboard, no permission dialog. iOS shows its own "pasted from" banner.',
+          note: "No permission dialog. iOS shows its own paste banner.",
         },
         {
           target: "Android",
           status: "yes",
-          note: "Both directions. Android 13+ shows its own copy confirmation, so a second in-app toast duplicates it.",
+          note: "Android 13+ shows its own copy message.",
         },
       ],
     },
@@ -154,7 +144,7 @@ const isOffline = useIsOffline()
       name: "useShare()",
       signature: "function useShare(): UseShareResult",
       description:
-        "Open the OS share sheet. `supported` is the half people forget: desktop Chrome and every Firefox have no share sheet, and a share button rendered there does nothing. Branch on it to hide the button or swap it for copy-link.",
+        "Open the share sheet. Desktop Chrome and Firefox have none. If `supported` is `false`, hide the button or show a copy-link button.",
       returns: "`{ supported, canShare, share, outcome, sharing, error }`.",
     },
     {
@@ -163,25 +153,24 @@ const isOffline = useIsOffline()
         {
           name: "supported",
           type: "boolean",
-          description:
-            "Whether a share sheet exists here. `false` on the server, correct from the first client render.",
+          description: "`true` if a share sheet exists. `false` on the server.",
         },
         {
           name: "canShare",
           type: "(target: ShareTarget) => boolean",
           description:
-            "Whether this specific payload would go through. Check it whenever the payload has `files`: only the browser knows whether it has a handler for them.",
+            "`true` if this payload can be shared. Check it for files.",
         },
         {
           name: "share",
           type: '(target: ShareTarget) => Promise<"shared" | "dismissed" | "unsupported" | null>',
           description:
-            "Open the sheet. Resolves to the outcome, or `null` when the attempt threw, in which case `error` holds why. Call it directly in the tap handler: on web an `await` before the call loses the user activation and the browser throws.",
+            "Open the sheet. Returns `null` if it threw. Then `error` has the cause. Call it from a tap handler. On web, it throws outside a user gesture.",
         },
         {
           name: "outcome",
           type: '"shared" | "dismissed" | "unsupported" | null',
-          description: "The last outcome, `null` before the first attempt.",
+          description: "The last outcome.",
         },
         {
           name: "sharing",
@@ -191,8 +180,7 @@ const isOffline = useIsOffline()
         {
           name: "error",
           type: "Error | null",
-          description:
-            "A real failure, such as calling `share` outside a user gesture on web. A dismissed sheet is an outcome and does not set it.",
+          description: "A real failure. A dismissed sheet does not set it.",
         },
       ],
     },
@@ -200,23 +188,25 @@ const isOffline = useIsOffline()
     {
       type: "props",
       rows: [
-        {
-          name: "title",
-          type: "string",
-          description: "Title of the shared item.",
-        },
+        { name: "title", type: "string", description: "Title." },
         { name: "text", type: "string", description: "Body text." },
         { name: "url", type: "string", description: "A link." },
         {
           name: "files",
           type: "File[]",
           description:
-            'Web and PWA only. The native plugin takes file paths, and a `File` inside a WebView has none, so on native a payload with files reports `canShare: false` and `"unsupported"` instead of silently dropping them.',
+            'Web only. On native, a payload with `files` gives `"unsupported"`. Use `storedFiles`.',
+        },
+        {
+          name: "storedFiles",
+          type: "StoredFile[]",
+          description:
+            "Files you wrote with the filesystem capability, as `{ path, scope?, type? }`. Works on every target. `share` rejects if a path is missing.",
         },
         {
           name: "dialogTitle",
           type: "string",
-          description: "Title of the native chooser. Ignored on web.",
+          description: "Sheet title. iOS only.",
         },
       ],
     },
@@ -240,34 +230,25 @@ return (
         {
           target: "Desktop web",
           status: "partial",
-          note: "Safari has a share sheet. Chrome and Firefox have none, so `supported` is `false`.",
+          note: "Safari has a sheet. Chrome and Firefox do not.",
         },
         {
           target: "Mobile web",
           status: "yes",
-          note: "Safari and Chrome on Android both have it. File payloads are the ones most often refused; use `canShare`.",
+          note: "Browsers often refuse files.",
         },
-        {
-          target: "Installed PWA",
-          status: "yes",
-          note: "Same as the mobile browser.",
-        },
+        { target: "Installed PWA", status: "yes" },
         {
           target: "iOS",
           status: "yes",
-          note: 'The system share sheet. A dismissed sheet reports `"dismissed"`. No file payloads.',
+          note: 'A dismissed sheet gives `"dismissed"`.',
         },
         {
           target: "Android",
           status: "yes",
-          note: 'The system chooser. It resolves as `"shared"` whether or not the user picked an app. No file payloads.',
+          note: 'Gives `"shared"` even if the user picks nothing.',
         },
       ],
-    },
-    {
-      type: "note",
-      tone: "info",
-      text: "The source comments disagree about `dialogTitle`: the type says it is for native iOS and ignored on Android, while the framework's own test page says Android honours it and iOS ignores it. It is passed to the native plugin on both. Treat it as optional decoration.",
     },
 
     { type: "h2", text: "useGeolocation" },
@@ -276,7 +257,7 @@ return (
       name: "useGeolocation()",
       signature: "function useGeolocation(): UseGeolocationResult",
       description:
-        "Read the device position once, on demand. Nothing is requested on mount: call `locate()` from a user gesture, and it asks for permission if needed and then reads the position. There is no continuous watch today.",
+        "Read the position once. Nothing runs on mount. Call `locate()` from a user gesture. There is no continuous watch.",
       returns:
         "`{ coords, permission, error, loading, locate, refreshPermission }`.",
     },
@@ -286,19 +267,18 @@ return (
         {
           name: "coords",
           type: "{ latitude: number; longitude: number; accuracy: number } | null",
-          description: "The last position read. `accuracy` is in metres.",
+          description: "The last position. `accuracy` is in metres.",
         },
         {
           name: "permission",
           type: '"granted" | "denied" | "prompt" | "unavailable"',
           description:
-            'Starts as `"prompt"` and is not read on mount; call `refreshPermission()` in an effect if the first render needs the real state. `"unavailable"` means location cannot be used at all right now: no API (an http origin), or system location services switched off.',
+            'Starts as `"prompt"`. Call `refreshPermission()` for the real state. `"unavailable"` means location cannot work now.',
         },
         {
           name: "error",
           type: "Error | null",
-          description:
-            "Why the last `locate()` failed: permission not granted, a timeout, or no fix.",
+          description: "Why the last `locate()` failed.",
         },
         {
           name: "loading",
@@ -309,12 +289,12 @@ return (
           name: "locate",
           type: "(options?: GeoOptions) => Promise<GeoCoords | null>",
           description:
-            "Request permission if needed, then read the position. Resolves to the coordinates, or `null` on failure with `error` set. Never rejects.",
+            "Ask for permission, then read the position. Returns `null` on failure. It never rejects.",
         },
         {
           name: "refreshPermission",
           type: "() => Promise<GeoPermission>",
-          description: "Re-read the permission without prompting.",
+          description: "Read the permission again, without a prompt.",
         },
       ],
     },
@@ -326,13 +306,13 @@ return (
           name: "highAccuracy",
           type: "boolean",
           default: "false",
-          description: "Ask for GPS-grade accuracy. Slower, and costs battery.",
+          description: "Ask for GPS accuracy. Uses more battery.",
         },
         {
           name: "timeoutMs",
           type: "number",
           default: "10000",
-          description: "Give up after this many ms.",
+          description: "Give up after this many milliseconds.",
         },
       ],
     },
@@ -340,10 +320,10 @@ return (
       type: "code",
       label: "nearby.tsx",
       lang: "tsx",
-      code: `const { coords, permission, error, loading, locate } = useGeolocation()
+      code: `const { coords, permission, loading, locate } = useGeolocation()
 
 if (permission === "unavailable") return <Text>Location is off on this device.</Text>
-if (permission === "denied") return <Text>Allow location in settings to see what is nearby.</Text>
+if (permission === "denied") return <Text>Allow location in settings.</Text>
 
 return (
   <Button onClick={() => locate({ highAccuracy: true })} disabled={loading}>
@@ -354,12 +334,12 @@ return (
     {
       type: "note",
       tone: "info",
-      text: 'Send the user to different places for the two dead ends: `"denied"` is fixed in the app\'s or site\'s own permission settings, `"unavailable"` in the system location settings. On web there is no separate permission request, so `locate()` reads the position once to raise the browser prompt and then reads it again for the result.',
+      text: 'Fix `"denied"` in the app or site permissions. Fix `"unavailable"` in the system location settings.',
     },
     {
       type: "note",
       tone: "warn",
-      text: "Native builds need the OS permission declared: `NSLocationWhenInUseUsageDescription` in the iOS `Info.plist` and `ACCESS_FINE_LOCATION` in the Android manifest. adaptv does not generate either today, and without them the first `locate()` on a device fails. Add them to the native project by hand; see [native builds](/docs/native-builds).",
+      text: "Native builds need the OS permission: `NSLocationWhenInUseUsageDescription` in the iOS `Info.plist` and `ACCESS_FINE_LOCATION` in the Android manifest. adaptv does not add them. Without them, `locate()` fails. See [native builds](/docs/native-builds).",
     },
     {
       type: "targets",
@@ -367,27 +347,23 @@ return (
         {
           target: "Desktop web",
           status: "partial",
-          note: 'HTTPS or localhost only. On a plain-http origin the API is absent and `permission` reads `"unavailable"` after a refresh.',
+          note: 'HTTPS or localhost only. On http, `permission` is `"unavailable"`.',
         },
         {
           target: "Mobile web",
           status: "partial",
-          note: "Same secure-origin rule.",
+          note: "Same as desktop web.",
         },
-        {
-          target: "Installed PWA",
-          status: "yes",
-          note: "Same as the browser. The grant is remembered per origin.",
-        },
+        { target: "Installed PWA", status: "yes" },
         {
           target: "iOS",
           status: "yes",
-          note: "The iOS permission sheet. After a denial the OS does not ask again; the user has to change it in Settings.",
+          note: "After a denial, the user must use Settings.",
         },
         {
           target: "Android",
           status: "yes",
-          note: "The runtime permission dialog. Two denials become permanent.",
+          note: "Two denials are permanent.",
         },
       ],
     },
@@ -398,9 +374,8 @@ return (
       name: "useIsOffline()",
       signature: "function useIsOffline(): boolean",
       description:
-        "Reactive connectivity. `true` is trustworthy: the device has no connection. `false` on web only means a network interface exists, which a captive portal or a router with no upstream also satisfies.",
-      returns:
-        "`true` when offline. `false` on the server and during hydration.",
+        "The connection state. `true` means no connection. On web, `false` only means a network interface exists.",
+      returns: "`true` when offline. `false` on the server.",
     },
     {
       type: "code",
@@ -414,11 +389,7 @@ return (
     },
     {
       type: "p",
-      text: "Use it for an indicator, a disabled submit button, a banner over content that is still live. Do not use it alone to decide whether to show an offline screen: offline with cached data should render normally, and online with a failed request usually wants the same screen as offline. The question to ask is whether you have anything to show. See the [offline guide](/docs/offline) and [OfflineBoundary](/docs/offline-boundary).",
-    },
-    {
-      type: "p",
-      text: "To feed a data library's online manager, use `getOnline` and `subscribeOnline` from [capabilities](/docs/capabilities).",
+      text: "Use it for an indicator, a disabled button or a banner. Do not use it alone to show an offline screen. Ask if you have anything to show. See [offline](/docs/offline) and [OfflineBoundary](/docs/offline-boundary). To feed a data library, use `getOnline` and `subscribeOnline` from [capabilities](/docs/capabilities).",
     },
     {
       type: "targets",
@@ -426,24 +397,16 @@ return (
         {
           target: "Desktop web",
           status: "partial",
-          note: "`navigator.onLine` and the `online` / `offline` events. Coarse by construction.",
+          note: "Uses `navigator.onLine`. It is coarse.",
         },
         { target: "Mobile web", status: "partial", note: "Same." },
-        {
-          target: "Installed PWA",
-          status: "partial",
-          note: "Same. The service worker can keep the app working while this reads offline.",
-        },
+        { target: "Installed PWA", status: "partial", note: "Same." },
         {
           target: "iOS",
           status: "yes",
-          note: "Event-driven from the OS. Accurate enough to gate a sync on. Reads online until the first native status arrives.",
+          note: "Driven by the OS. Reads online until the first status arrives.",
         },
-        {
-          target: "Android",
-          status: "yes",
-          note: "Same. Doze mode can delay an event by a few seconds on a sleeping device.",
-        },
+        { target: "Android", status: "yes", note: "Same as iOS." },
       ],
     },
   ],
