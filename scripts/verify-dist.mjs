@@ -39,7 +39,7 @@ const pkg = JSON.parse(
  * not one of the available outcomes.
  */
 const rootFile = {
-  //Copied verbatim into the tarball; `staged.files` below is what puts them there.
+  //Copied verbatim into the tarball; `packed` below is what puts them there.
   "./package.json": "package.json",
   "./biome-shared.json": "biome-shared.json",
 }
@@ -187,6 +187,25 @@ for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
     problems.push(`missing dist/styles/${css}.css`)
   }
 }
+// The file list npm itself would pack, `!` entries in `files` applied. `bin/` keeps its tests
+// and their fixtures next to the code they test, so shipping `bin` shipped them too until
+// `files` excluded them; this is what keeps them out.
+const packed = JSON.parse(
+  execFileSync(
+    "npm",
+    ["pack", "--dry-run", "--json", "--ignore-scripts"],
+    {
+      cwd: repo,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  ),
+)[0].files.map((f) => f.path)
+for (const f of packed)
+  if (/\.test\.mjs$|(^|\/)fixtures\//.test(f))
+    problems.push(
+      `the tarball ships ${f} — exclude it with a "!" entry in package.json files`,
+    )
 
 /**
  * One row per check in the CI job summary, so publint and attw read as their own lines next to
@@ -226,8 +245,8 @@ const staged = { ...pkg, scripts: undefined, devDependencies: undefined }
 const work = mkdtempSync(path.join(tmpdir(), "adaptv-publish-"))
 process.on("exit", () => rmSync(work, { recursive: true, force: true }))
 const dir = path.join(work, "package")
-for (const f of staged.files)
-  cpSync(path.join(repo, f), path.join(dir, f), { recursive: true })
+//File by file from npm's own list: `files` holds `!` exclusions, which are not paths to copy.
+for (const f of packed) cpSync(path.join(repo, f), path.join(dir, f))
 writeFileSync(
   path.join(dir, "package.json"),
   JSON.stringify(staged, null, 2),
