@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { capabilitiesUrl } from "./support/framework"
 import { awaitClientHandover } from "./support/hydrated"
 
 /*
@@ -20,14 +21,11 @@ import { awaitClientHandover } from "./support/hydrated"
  * The lab page registers through React effects, so its handlers leave the chain
  * only after a commit. For the mid-chain and throwing cases the test registers
  * handlers directly on the capability's own module — the module the app itself
- * imports, at the `/@fs` URL the dev server serves the linked framework from,
- * built from the client entry's resource entry so it holds on every checkout
- * (drawer-handle-mouse.spec.ts does the same). The premise that it IS that
+ * imports, reached through the `/capabilities` entry (`support/framework.ts`).
+ * The premise that it IS that
  * instance (a handler registered there wins a press the lab's own log can see)
  * is asserted before anything else is.
  */
-
-const BACK_CHAIN_MODULE = "capabilities/back-chain.ts"
 
 type Chain = {
   registerBackHandler: (
@@ -46,16 +44,13 @@ declare global {
 }
 
 async function loadChain(page: Page) {
-  await page.evaluate(async (file) => {
-    const entry = performance
-      .getEntriesByType("resource")
-      .map((resource) => resource.name)
-      .find((name) => /\/src\/routes\/client-entry\.tsx$/.test(name))
-    if (!entry) throw new Error("the adaptv client entry was never loaded")
-    const url = entry.replace(/routes\/client-entry\.tsx$/, file)
-    window.__chain = (await import(/* @vite-ignore */ url)) as Chain
-    window.__chainLog = []
-  }, BACK_CHAIN_MODULE)
+  await page.evaluate(
+    async (url) => {
+      window.__chain = (await import(/* @vite-ignore */ url)) as Chain
+      window.__chainLog = []
+    },
+    await capabilitiesUrl(page),
+  )
 }
 
 const labLog = (page: Page) => page.locator("[data-lab-log] li")
