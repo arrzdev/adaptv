@@ -48,9 +48,10 @@ jobs:
       - name: Pack adaptv
         run: pnpm build && pnpm pack
 
-      # The app is built OUTSIDE the checkout, as a consumer's would be: inside it, Node
-      # resolves react-dom from the repo's own node_modules and react from the app's, and the
-      # prerender dies on two Reacts. The tarball and patches keep their relative paths.
+      # The app is built OUTSIDE the checkout, as a consumer's would be: with no repo
+      # node_modules above it, a dependency the tarball fails to declare fails the install or
+      # the build instead of resolving from the repo. The tarball and patches keep their
+      # relative paths.
       # The example's own home page has nothing to navigate to or type into, so the smoke's
       # routes replace its routing. Everything else is the example as shipped.
       - name: Copy examples/basic out of the checkout
