@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { EventEmitter } from "node:events"
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
