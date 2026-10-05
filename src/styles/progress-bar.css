@@ -1,0 +1,23 @@
+/*
+ * ProgressBar — the box's default look (components/spinner.tsx, ProgressBar): a
+ * full-width, 4px, fully rounded block. The height, the radius and the colour are the
+ * consumer's (`h-2 rounded-none text-primary`), so all of it is a zero-specificity
+ * default any `className` beats.
+ *
+ * The parts, the motion, RTL and forced colors are in spinner.css, beside the Spinner
+ * machinery they share. `position: relative` and `overflow: hidden` are not here: they
+ * are inline style the component writes (docs/decisions/styling.md §2.0), because the
+ * parts are positioned against the box and the sweep must stay clipped whatever the
+ * consumer's className says.
+ *
+ * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  :where([data-adaptv="progress-bar"][data-part="root"]) {
+    height: calc(var(--spacing, 0.25rem) * 1);
+    border-radius: calc(infinity * 1px);
+    width: 100%;
+    display: block;
+  }
+}

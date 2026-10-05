@@ -36,20 +36,14 @@ import { restoreLaunchHeight } from "#adaptv/shell/launch-viewport"
 import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recovery"
 import { useRouteTint } from "#adaptv/shell/use-route-tint"
 import { initKv } from "#adaptv/storage/kv"
-import { cn } from "#adaptv/utils/cn"
 import { PATCHES } from "#adaptv/utils/patch-registry"
 import { applyPlatformStamp } from "#adaptv/utils/platform"
 
-const DOCUMENT_SHELL_CLASS = "m-0 h-dvh touch-none overscroll-none"
-
-//No height here: it is a per-surface rule on `[data-app-shell]` in styles/screen.css, so a
-//consumer's height in `shellClassName` wins on every surface.
-//Exported for app-shell-height.test.ts, which checks that nothing here sets a height.
-export const APP_SHELL_CLASS =
-  "box-border flex min-h-0 min-w-0 w-full flex-col overflow-hidden"
-
-const APP_SCREEN_FRAME_CLASS =
-  "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+//The document's, the shell's and the screen frame's default layout is
+//styles/shell-layout.css, keyed on the `data-adaptv` / `data-part` pairs below; every
+//`className` here is the consumer's alone. No height on the shell: it is a per-surface
+//rule on `[data-app-shell]` in styles/screen.css, so a consumer's height in
+//`shellClassName` wins on every surface (app-shell-height.test.ts).
 
 export type AppShellProps = {
   children: ReactNode
@@ -59,13 +53,20 @@ export type AppShellProps = {
 
 function AppShell({ children, className, frameClassName }: AppShellProps) {
   return (
-    <div data-app-shell className={cn(APP_SHELL_CLASS, className)}>
+    <div
+      data-app-shell
+      data-adaptv="app-shell"
+      data-part="root"
+      className={className}
+    >
       {/* `data-adaptv-screen` is what `styles/screen.css` hooks: a page's root element
           is stretched to the frame when it is the only one, so a page never has to
           remember `fill` just to be full-height. */}
       <div
         data-adaptv-screen
-        className={cn(APP_SCREEN_FRAME_CLASS, frameClassName)}
+        data-adaptv="app-shell"
+        data-part="screen"
+        className={frameClassName}
       >
         {children}
       </div>
@@ -98,7 +99,9 @@ function DefaultRootDocument({
   return (
     <html
       lang={lang}
-      className={cn(DOCUMENT_SHELL_CLASS, htmlClassName)}
+      data-adaptv="document"
+      data-part="html"
+      className={htmlClassName}
       suppressHydrationWarning
       {...htmlAttrs}
     >
@@ -114,7 +117,11 @@ function DefaultRootDocument({
         )}
         <HeadContent />
       </head>
-      <body className={DOCUMENT_SHELL_CLASS} suppressHydrationWarning>
+      <body
+        data-adaptv="document"
+        data-part="body"
+        suppressHydrationWarning
+      >
         {children}
         <Scripts />
       </body>

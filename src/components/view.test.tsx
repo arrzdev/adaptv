@@ -2,46 +2,135 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { render } from "@testing-library/react"
 import type { ReactElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { droppedBySafe, View } from "#adaptv/components/view"
 import { resetWarnOnce } from "#adaptv/utils/warn-once"
 
-function classOf(ui: ReactElement): string {
+function rootOf(ui: ReactElement): HTMLElement {
   const { container } = render(ui)
-  return (container.firstChild as HTMLElement).className
+  return container.firstChild as HTMLElement
+}
+
+/**
+ * The inline style the server renders, per property. Read off the markup because
+ * happy-dom's CSSOM drops a `var()` padding value, so `el.style` cannot show the lock.
+ */
+function inlineStyleOf(ui: ReactElement): Record<string, string> {
+  const style = renderToStaticMarkup(ui).match(
+    /^<[^>]*\bstyle="([^"]*)"/,
+  )?.[1]
+  return Object.fromEntries(
+    (style ?? "")
+      .split(";")
+      .filter(Boolean)
+      .map((decl) => {
+        const at = decl.indexOf(":")
+        return [decl.slice(0, at).trim(), decl.slice(at + 1).trim()]
+      }),
+  )
+}
+
+/** The body of one `:where(…)` default rule in view.css. */
+function viewRule(selector: string): string | undefined {
+  const css = readFileSync(
+    resolve(__dirname, "../styles/view.css"),
+    "utf8",
+  )
+  const escaped = selector.replace(/[[\]()"=.*-]/g, "\\$&")
+  return css.match(
+    new RegExp(`:where\\(${escaped}\\)\\s*\\{([^}]*)\\}`),
+  )?.[1]
 }
 
 describe("View", () => {
-  it("is a flex column by default", () => {
-    const c = classOf(<View />)
-    expect(c).toContain("flex")
-    expect(c).toContain("flex-col")
+  it("is a flex column by default — a layered rule, no class of its own", () => {
+    const el = rootOf(<View />)
+    expect(el.getAttribute("data-adaptv")).toBe("view")
+    expect(el.getAttribute("data-part")).toBe("root")
+    expect(el.hasAttribute("class")).toBe(false)
+    const rule = viewRule('[data-adaptv="view"][data-part="root"]')
+    expect(rule).toContain("display: flex;")
+    expect(rule).toContain("flex-direction: column;")
   })
 
-  it("row switches direction (and drops flex-col)", () => {
-    const c = classOf(<View row />)
-    expect(c).toContain("flex-row")
-    expect(c).not.toContain("flex-col")
+  it("row switches direction", () => {
+    const el = rootOf(<View row />)
+    expect(el.hasAttribute("data-view-row")).toBe(true)
+    expect(rootOf(<View />).hasAttribute("data-view-row")).toBe(false)
+    expect(
+      viewRule('[data-adaptv="view"][data-part="root"][data-view-row]'),
+    ).toContain("flex-direction: row;")
   })
 
   it("center + fill add the flex helpers", () => {
-    const c = classOf(<View center fill />)
-    expect(c).toContain("items-center")
-    expect(c).toContain("justify-center")
-    expect(c).toContain("flex-1")
-    expect(c).toContain("min-h-0")
+    const el = rootOf(<View center fill />)
+    expect(el.hasAttribute("data-view-center")).toBe(true)
+    expect(el.hasAttribute("data-view-fill")).toBe(true)
+    const center = viewRule(
+      '[data-adaptv="view"][data-part="root"][data-view-center]',
+    )
+    expect(center).toContain("align-items: center;")
+    expect(center).toContain("justify-content: center;")
+    const fill = viewRule(
+      '[data-adaptv="view"][data-part="root"][data-view-fill]',
+    )
+    expect(fill).toContain("flex: 1;")
+    expect(fill).toContain(
+      "min-height: calc(var(--spacing, 0.25rem) * 0);",
+    )
   })
 
-  it("safe maps to safe-area padding and wins over a conflicting className", () => {
-    const c = classOf(<View safe="bottom" className="pb-0" />)
-    expect(c).toContain("pb-safe")
-    expect(c).not.toContain("pb-0")
+  it("safe locks the safe-area padding inline, over a conflicting className and style", () => {
+    const ui = (
+      <View
+        safe="bottom"
+        className="pb-0"
+        style={{ paddingBottom: "0px", opacity: 0.5 }}
+      />
+    )
+    expect(inlineStyleOf(ui)).toEqual({
+      "padding-bottom": "var(--adaptv-inset-bottom, 0px)",
+      opacity: "0.5",
+    })
+    //the consumer class passes through untouched; it simply cannot win that edge
+    expect(rootOf(ui).className).toBe("pb-0")
   })
 
-  it("applies the consumer className (look)", () => {
-    const c = classOf(<View className="bg-surface gap-3" />)
-    expect(c).toContain("bg-surface")
-    expect(c).toContain("gap-3")
+  it("safe names its edges, and only those", () => {
+    const top = "var(--adaptv-inset-top, 0px)"
+    const right = "var(--adaptv-inset-right, 0px)"
+    const bottom = "var(--adaptv-inset-bottom, 0px)"
+    const left = "var(--adaptv-inset-left, 0px)"
+    expect(inlineStyleOf(<View safe="all" />)).toEqual({
+      "padding-top": top,
+      "padding-right": right,
+      "padding-bottom": bottom,
+      "padding-left": left,
+    })
+    expect(inlineStyleOf(<View safe="x" />)).toEqual({
+      "padding-right": right,
+      "padding-left": left,
+    })
+    expect(inlineStyleOf(<View safe="y" />)).toEqual({
+      "padding-top": top,
+      "padding-bottom": bottom,
+    })
+    expect(inlineStyleOf(<View safe="top" />)).toEqual({
+      "padding-top": top,
+    })
+    expect(inlineStyleOf(<View safe="bottom" />)).toEqual({
+      "padding-bottom": bottom,
+    })
+    expect(inlineStyleOf(<View />)).toEqual({})
+  })
+
+  it("applies the consumer className (look) and style untouched", () => {
+    const el = rootOf(
+      <View className="bg-surface gap-3" style={{ opacity: "0.5" }} />,
+    )
+    expect(el.className).toBe("bg-surface gap-3")
+    expect(el.style.opacity).toBe("0.5")
   })
 
   it("forwards native div props", () => {

@@ -1,0 +1,102 @@
+/*
+ * BootError — the default boot error screen's look (components/boot-error.tsx): a
+ * centred column with the adaptv mark, its copy, and the one retry Button dressed in an
+ * inverted fill.
+ *
+ * This screen is prerendered to static HTML and shown when the app's bundle never ran,
+ * so it must look right from the stylesheet alone: every value reads a Tailwind token
+ * with Tailwind's own default as the fallback (docs/decisions/styling.md §7), never a
+ * semantic token the app may not define. All of it is a default the consumer's
+ * `className` beats. The screen renders a `View` with `data-adaptv="boot-error"`, so
+ * View's own defaults do not reach it — the flex column is spelled here; the safe-area
+ * padding is View's `safe="all"` inline lock, which outranks the horizontal padding
+ * below on every edge.
+ *
+ * The Button keeps its own `data-adaptv="button"`; the rule for it is keyed on the
+ * Button inside this root and sits later in source than button.css, so it wins over
+ * the Button's own defaults at the same zero specificity.
+ *
+ * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root */
+  :where([data-adaptv="boot-error"][data-part="root"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    justify-content: center;
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 6);
+    width: 100%;
+    padding-inline: calc(var(--spacing, 0.25rem) * 6);
+    text-align: center;
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+    flex-direction: column;
+    flex: 1;
+    display: flex;
+  }
+
+  :where([data-adaptv="boot-error"][data-part="root"]:where(.dark, .dark *)) {
+    color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+  }
+
+  /* brand: the mark over the wordmark */
+  :where([data-adaptv="boot-error"][data-part="brand"]) {
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 3);
+    flex-direction: column;
+    display: flex;
+  }
+
+  :where([data-adaptv="boot-error"][data-part="mark"]) {
+    width: calc(var(--spacing, 0.25rem) * 14);
+    height: calc(var(--spacing, 0.25rem) * 14);
+  }
+
+  :where([data-adaptv="boot-error"][data-part="wordmark"]) {
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--text-xs--line-height, calc(1 / 0.75));
+    font-weight: var(--font-weight-semibold, 600);
+    letter-spacing: 0.08em;
+    opacity: 0.45;
+  }
+
+  /* copy: title over description */
+  :where([data-adaptv="boot-error"][data-part="copy"]) {
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    flex-direction: column;
+    display: flex;
+  }
+
+  :where([data-adaptv="boot-error"][data-part="title"]) {
+    font-size: var(--text-lg, 1.125rem);
+    line-height: var(--text-lg--line-height, calc(1.75 / 1.125));
+    font-weight: var(--font-weight-semibold, 600);
+    letter-spacing: var(--tracking-tight, -0.025em);
+  }
+
+  :where([data-adaptv="boot-error"][data-part="description"]) {
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
+    opacity: 0.6;
+  }
+
+  /* the retry Button: inverted, because it is the one action here */
+  :where([data-adaptv="boot-error"][data-part="root"] > [data-adaptv="button"]) {
+    border-radius: var(--radius-xl, 0.75rem);
+    background-color: var(--color-gray-950, oklch(13% 0.028 261.692));
+    padding-inline: calc(var(--spacing, 0.25rem) * 4);
+    padding-block: calc(var(--spacing, 0.25rem) * 2.5);
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+  }
+
+  :where(
+      [data-adaptv="boot-error"][data-part="root"]
+        > [data-adaptv="button"]:where(.dark, .dark *)
+    ) {
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+}

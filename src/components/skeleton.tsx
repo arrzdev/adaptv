@@ -65,19 +65,10 @@ export interface SkeletonRegionProps extends ComponentPropsWithRef<"div"> {
   label?: string
 }
 
-//BASE: the neutral placeholder look, fully the consumer's to repaint. `bg-gray-200`
-//rather than the `bg-gray-50` every control surface uses: a control carries its own
-//content on that surface, but a skeleton IS its background, and gray-50 over the
-//page is indistinguishable from nothing. `rounded-md` because a bare rectangle reads
-//as a layout bug rather than a placeholder; `rounded-full` from the consumer beats
-//it through tailwind-merge's `rounded` group.
-const SKELETON_BASE_SURFACE_CLASS = "rounded-md bg-gray-200"
-//LOCKED: nothing on the class tier, and that is a decision — see the note at the
-//`mergeStyles` call.
-const SKELETON_LOCKED_CLASS = undefined
-//The announcement is a live region: `sr-only` is Tailwind's own visually-hidden
-//recipe, the same one `PullToRefresh` uses for its status line.
-const SKELETON_REGION_STATUS_LAYOUT_CLASS = "sr-only"
+//The neutral placeholder look (`border-radius: var(--radius-md)`, a gray-200 fill) and
+//the region's visually-hidden status line are default rules in styles/skeleton.css,
+//keyed on `data-adaptv` / `data-part` — the "why" of each value is recorded there.
+//Nothing is locked, and that is a decision — see the note at the `mergeStyles` call.
 
 /**
  * A placeholder box for content that has not arrived — and the three platform rules
@@ -120,27 +111,27 @@ const SKELETON_REGION_STATUS_LAYOUT_CLASS = "sr-only"
  *
  * ## Tiers
  *
- * | Tier | Classes | Why |
- * |------|---------|-----|
- * | base | `rounded-md bg-gray-200` | the neutral look; repaint it freely |
+ * | Tier | Where | What |
+ * |------|-------|------|
+ * | default | styles/skeleton.css | `border-radius: var(--radius-md)`, a gray-200 fill — the neutral look; repaint it freely |
  * | className | yours | the SHAPE and the SIZE — `h-4 w-40`, `rounded-full`, `size-12` |
  * | locked | — | see below |
  *
  * There is no shape prop and no size prop (`docs/decisions/styling.md §5.4.1`): a
  * circle is `rounded-full`, a line is `h-4 w-40`, and Tailwind already spells both.
  *
- * The animation and the forced-colors rules are not `locked` classes either. They are
- * CSS on the identity attribute (`§2`'s escape hatch — a `prop → data-* → CSS rule`
- * has no class for tailwind-merge to drop it against), because all three are `@media`
- * conditions the stylesheet must answer without React. A consumer who wants a still
+ * The animation and the forced-colors rules are not locked inline style either. They
+ * are CSS on the identity attribute (`§2`'s escape hatch), because all three are
+ * `@media` conditions the stylesheet must answer without React. A consumer who wants a still
  * placeholder writes `animate-none`; `utilities` is a later layer than adaptv's, so
  * it wins, and that is deliberate.
  *
  * | Attribute | On | When |
  * |-----------|----|------|
- * | `data-adaptv="skeleton"` | the box | while loading |
+ * | `data-adaptv="skeleton"` + `data-part="root"` | the box | while loading |
  * | `aria-hidden="true"` | the box | while loading |
- * | `data-adaptv="skeleton-region"` | the region | always |
+ * | `data-adaptv="skeleton-region"` + `data-part="root"` | the region | always |
+ * | `data-adaptv="skeleton-region"` + `data-part="status"` | the live region inside it | always |
  * | `aria-busy="true"` | the region | while loading |
  *
  * ⚠︎ **`loading={false}` renders no element.** `className`, `style`, `ref` and every
@@ -163,28 +154,27 @@ function SkeletonRoot({
   if (!loading) return <>{children}</>
 
   //An element passed to `render` carries its own className/style, written at the
-  //same call site as Skeleton's own — both are the CONSUMER tier. §3.3: the
-  //composition path routes through mergeStyles instead of concatenating and letting
-  //stylesheet source order decide. Skeleton's own props go last, so they win the
-  //per-property tie — Base UI's order, and the more local of the two.
+  //same call site as Skeleton's own — both are the CONSUMER tier. §3.3: the two class
+  //lists are joined, the render element's first, and nothing of adaptv's is in the
+  //join. Skeleton's own `style` goes last, so it wins the per-property tie — Base
+  //UI's order, and the more local of the two.
   //
-  //`locked` is `undefined` EXPLICITLY (B8, style-precedence.test.tsx): the only
-  //structural styling — the pulse, its reduced-motion stop, the forced-colors
-  //outline — lives in styles/skeleton.css keyed on `data-adaptv`, so there is no
-  //class here that a consumer's className could accidentally cancel.
+  //No `lockedStyle`, EXPLICITLY (B8, style-precedence.test.tsx): the only structural
+  //styling — the pulse, its reduced-motion stop, the forced-colors outline — lives in
+  //styles/skeleton.css keyed on `data-adaptv`, so there is nothing here that a
+  //consumer's className could accidentally cancel.
   const merged = mergeStyles({
-    base: SKELETON_BASE_SURFACE_CLASS,
     className: [render?.props.className, className],
-    locked: SKELETON_LOCKED_CLASS,
     style: { ...render?.props.style, ...style },
   })
 
   const slotProps: SkeletonSlotProps = {
     ...props,
     ref,
-    className: merged.className,
+    className: merged.className || undefined,
     style: merged.style,
     "data-adaptv": "skeleton",
+    "data-part": "root",
     //A placeholder has nothing to say. Twenty of them in a list would otherwise be
     //twenty "group" or "blank" announcements; the REGION speaks, once.
     "aria-hidden": "true",
@@ -222,13 +212,14 @@ function SkeletonRegion({
     <div
       {...props}
       data-adaptv="skeleton-region"
+      data-part="root"
       //`undefined` rather than `false`: React would stringify to `aria-busy="false"`,
       //which is a value assistive technology has to parse. Absent is the resting state.
       aria-busy={loading || undefined}
     >
       {/* `<output>` IS `role="status"` (implicitly `aria-live="polite"`) — the
           semantic element, rather than a span wearing the role. */}
-      <output className={SKELETON_REGION_STATUS_LAYOUT_CLASS}>
+      <output data-adaptv="skeleton-region" data-part="status">
         {loading ? label : null}
       </output>
       {children}

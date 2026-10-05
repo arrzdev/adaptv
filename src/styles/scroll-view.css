@@ -1,0 +1,47 @@
+/*
+ * ScrollView — the scroller's default layout, and the `::-webkit-scrollbar` half of
+ * its indicator lock (components/scroll-view.tsx). The edge fade is scroll-fade.css.
+ *
+ * The defaults (a flex box that may shrink below its content, a column when vertical,
+ * `flex: 1` under the `fill` prop) are overridable: `className="block"` or a height
+ * wins. The scroll axis, overscroll containment, touch pass-through and
+ * `scrollbar-width` are NOT here — they are inline style the component writes, the one
+ * tier an unlayered consumer class cannot beat (docs/decisions/styling.md §2.0).
+ *
+ * The exception is the WebKit/Blink scrollbar: a pseudo-element has no inline style,
+ * so its half of the lock is a rule keyed on the attributes ScrollView stamps on its
+ * root — `data-scroll-view` (always, also under `List`, which renames `data-adaptv`)
+ * and `data-scroll-view-indicator` (the `shows*ScrollIndicator` prop). It sits in a
+ * later layer than the `ui.hideScrollbars` reset (patches.css), which is what lets a
+ * scroller SHOW its indicator in an installed app where the reset hides every other.
+ *
+ * Layered in `adaptv.components` under `:where()` (zero specificity, §6.0.1); no
+ * `!important`.
+ */
+
+@layer adaptv.components {
+  /* root */
+  :where([data-adaptv="scroll-view"][data-part="root"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    display: flex;
+  }
+
+  /* direction is unconditional; GROWTH is the `fill` prop — see its docblock */
+  :where([data-adaptv="scroll-view"][data-part="root"][data-scroll-view="y"]) {
+    flex-direction: column;
+  }
+
+  :where([data-adaptv="scroll-view"][data-part="root"][data-scroll-view-fill]) {
+    flex: 1;
+  }
+
+  /* the indicator, WebKit/Blink half: hidden unless the prop asks for it */
+  :where([data-scroll-view])::-webkit-scrollbar {
+    display: none;
+  }
+
+  :where([data-scroll-view][data-scroll-view-indicator])::-webkit-scrollbar {
+    display: initial;
+  }
+}

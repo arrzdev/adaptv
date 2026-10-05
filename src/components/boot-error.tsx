@@ -2,7 +2,6 @@ import { Button } from "#adaptv/components/button"
 import { View } from "#adaptv/components/view"
 import type { BootCode } from "#adaptv/shell/boot-fallback"
 import { BOOT_RETRY_ATTR } from "#adaptv/shell/boot-fallback"
-import { mergeStyles } from "#adaptv/utils/styles"
 
 export type { BootCode }
 
@@ -50,7 +49,8 @@ function AdaptvMark() {
       aria-hidden
       viewBox="192 192 640 640"
       fill="none"
-      className="size-14"
+      data-adaptv="boot-error"
+      data-part="mark"
     >
       <title>adaptv logo</title>
       <circle cx="512" cy="512" r="164" fill="currentColor" />
@@ -108,24 +108,25 @@ export function BootError({
       safe="all"
       role="alert"
       aria-live="assertive"
-      //`locked: undefined`, matching `Offline`: the one structural thing here is
-      //the safe-area padding, and that is the `safe="all"` PROP — View locks it.
-      className={mergeStyles({
-        base: "flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-6 px-6 text-center text-gray-950 dark:text-gray-50",
-        className,
-        locked: undefined,
-      })}
+      //No lock of its own, matching `Offline`: the one structural thing here is the
+      //safe-area padding, and that is the `safe="all"` PROP — View locks it inline.
+      //The look is styles/boot-error.css.
+      className={className}
     >
-      <div className="flex flex-col items-center gap-3">
+      <div data-adaptv="boot-error" data-part="brand">
         <AdaptvMark />
-        <span className="text-xs font-semibold tracking-[0.08em] opacity-45">
+        <span data-adaptv="boot-error" data-part="wordmark">
           adaptv
         </span>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm opacity-60">{description}</p>
+      <div data-adaptv="boot-error" data-part="copy">
+        <h1 data-adaptv="boot-error" data-part="title">
+          {title}
+        </h1>
+        <p data-adaptv="boot-error" data-part="description">
+          {description}
+        </p>
       </div>
 
       {/* `onClick` is the live path only. In the fallback it was never
@@ -134,14 +135,13 @@ export function BootError({
         {...bootErrorRetryProps}
         haptic
         onClick={() => location.reload()}
-        //`Button` ships no variants on purpose — its base is layout plus a neutral
+        //`Button` ships no variants on purpose — its default is layout plus a neutral
         //fill, and every app dresses it. So this screen has to dress it too, or the
-        //only control on it renders as bare text. Inverted fill because it is the
-        //one action here, and in gray-scale utilities rather than the app's
-        //semantic tokens: `styles/index.css` (`@source`) guarantees these classes
-        //exist in the stylesheet, while `bg-background` and friends only exist if
-        //the consumer happens to define them. This screen does not get to assume.
-        className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-gray-50 dark:bg-gray-50 dark:text-gray-950"
+        //only control on it renders as bare text: an inverted fill, because it is the
+        //one action here, as a rule keyed on the Button inside this root
+        //(styles/boot-error.css). Gray-scale tokens with literal fallbacks rather
+        //than the app's semantic tokens, which only exist if the consumer happens to
+        //define them. This screen does not get to assume.
       >
         <Button.Text>{retryLabel}</Button.Text>
       </Button>
