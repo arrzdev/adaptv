@@ -16,13 +16,20 @@ concurrency:
 
 jobs:
   # One job on purpose: every job is billed rounded up to a whole minute, so
-  # small guards in their own jobs cost more than the work they do. The draft
-  # and docs-only shortcuts live INSIDE the job, never as a workflow `paths`
+  # small guards in their own jobs cost more than the work they do. The
+  # docs-only shortcut lives INSIDE the job, never as a workflow `paths`
   # filter: a required check whose workflow is skipped stays pending forever.
+  #
+  # Draft PRs run nothing (TUD-222): the job is skipped by `if`, which bills no
+  # minute and reports `gate` as skipped. A draft cannot merge, and marking it
+  # ready (`ready_for_review`) runs the full gate on the same head commit, so a
+  # skipped draft run never lets a change through. Open PRs as draft, run the
+  # gate locally, and mark the PR ready once, when it is green.
   #
   # No `environment:` binding and no secrets: a PR that adds an env var passes
   # here without anyone provisioning an environment first, and forks run it.
   gate:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -35,13 +42,10 @@ jobs:
         id: mode
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-          DRAFT: ${{ github.event.pull_request.draft }}
         run: |
           changed="$(git diff --name-only "$BASE"...HEAD)"
           if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(docs/|\.claude/)|\.md$'; then
             mode=docs
-          elif [ "$DRAFT" = "true" ]; then
-            mode=draft
           else
             mode=full
           fi
