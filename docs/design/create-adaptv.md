@@ -99,14 +99,16 @@ Measured by installing a `pnpm pack` tarball of the framework into a created app
 
 - **The `dist` cutover.** Installed from a tarball, the app's `vite.config.ts` did not load: Node
   refuses to strip types under `node_modules`, and `exports` pointed at `src/*.ts`. `exports` now
-  point at `dist/`; the tarball check itself is still open.
+  point at `dist/`, and [`examples/basic`](../../examples/basic), a created app installed from the
+  tarball, runs `adaptv dev web` and `adaptv build web`.
   → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md)
 - **The patches, inside the app.** pnpm applies `patchedDependencies` only from the root project
   ([`patches.md §2`](patches.md)), and the block adaptv's own error suggests points at
   `node_modules/@arrzdev/adaptv/patches/`. On a fresh install that fails with
   `ERR_PNPM_PATCH_NOT_FOUND`, because the files are inside the package being installed. Copied into
   the app's `patches/` and declared from there, the install succeeds. The template does not carry
-  them: until the cutover, nothing can build the result to check it. Both items are in the cutover's
+  them yet; a created app installed from the tarball, with the patches copied in, passes `adaptv
+  build web`. Both items are in the cutover's
   definition of done → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md).
 
 ## 5. The npm name
