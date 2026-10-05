@@ -73,7 +73,7 @@ SolidBase) or a custom MDX app (Next, Expo, Tailwind, TanStack).
 
 Block 4 — proof — is the one that carries most landing pages, and adaptv has **none of it**: no
 logos, no download count, no testimonials, and today no install command either (`private: true`,
-no scaffolder → [`create-adaptv.md`](create-adaptv.md), [`dist-cutover.md`](dist-cutover.md)).
+a scaffolder that no published framework can install yet → [`../design/create-adaptv.md`](../design/create-adaptv.md), [`dist-cutover.md`](dist-cutover.md)).
 
 What it has is something none of the sixteen have: **a catalogue of specific, felt bugs, each with a
 recorded experiment and a shipped fix** ([`../VISION.md §3`](../VISION.md),
@@ -214,7 +214,7 @@ reader would trip on it. None is verified beyond what is stated.
 
 | Section | Contents | Source today |
 |---|---|---|
-| **Get started** | install · first app · run it on a phone · project structure | unwritten — blocked on the scaffolder |
+| **Get started** | install · first app · run it on a phone · project structure | unwritten — the scaffolder exists ([`../design/create-adaptv.md`](../design/create-adaptv.md)); its published install waits on the `dist` cutover |
 | **Guides** | offline UI · auth without cookies · offline-first data · theming · icons · deploying web · shipping iOS / Android · OTA | [`../guides/cookbook.md`](../guides/cookbook.md) is the seed |
 | **Concepts** | the frame you inherit · `View` · layout shift as a correctness bug · rendering and offline | rewrite from `VISION.md`, `design/architecture.md`, `design/rendering.md` |
 | **Reference** | config · CLI · components · hooks · capabilities · storage · OTA | unwritten; 16 export subpaths, ~30 components, 40 hooks. Generate what can be generated from TSDoc |
@@ -245,7 +245,7 @@ day one.
 |---|---|---|
 | **0** | `website/` scaffold on adaptv ✅; landing page with 3 live divergence demos; 3 field notes | nothing |
 | **1** | Docs: Concepts, Platform notes, Guides | nothing — none of it needs an install command |
-| **2** | Get started, the create command in the hero, Reference | open-sourcing, [`dist-cutover.md`](dist-cutover.md), [`create-adaptv.md`](create-adaptv.md) |
+| **2** | Get started, the create command in the hero, Reference | open-sourcing, [`dist-cutover.md`](dist-cutover.md) (the scaffolder is built → [`../design/create-adaptv.md`](../design/create-adaptv.md)) |
 | **3** | Proof, as it arrives: stats, a showcase, quotes | users |
 
 Phases 0–1 can go public before the package does; a site that explains the problem well is worth
@@ -268,4 +268,4 @@ having while the install command is still "soon".
 - **`create-adaptv` is needed, and is expected to be rewritten later.** So build the smallest one
   that makes the hero's command true — prompts and a template copy — and do not design for the
   rewrite. Open source also deletes the reason for its public-scaffolder / private-framework split
-  → [`create-adaptv.md`](create-adaptv.md).
+  → [`../design/create-adaptv.md`](../design/create-adaptv.md).

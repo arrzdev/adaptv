@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -33,6 +34,17 @@ describe("describeMissingPatches", () => {
     expect(message).toContain("patchedDependencies:")
     expect(message).toContain("@arrzdev/adaptv/patches/")
     expect(message).toContain("pnpm install")
+  })
+
+  it("declares the patches from the app's own patches/, which a fresh install can read", () => {
+    //pnpm reads a patch before it installs the package holding it: a row pointing into
+    //`node_modules/@arrzdev/adaptv/` failed a fresh install with ERR_PNPM_PATCH_NOT_FOUND
+    const rows = patchInstructions([
+      "@tanstack__router-generator@1.167.21.patch",
+    ])
+    expect(rows).toEqual([
+      "    '@tanstack/router-generator@1.167.21': patches/@tanstack__router-generator@1.167.21.patch",
+    ])
   })
 
   it("mentions the incremental-install trap that cost real debugging time", () => {

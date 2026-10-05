@@ -14,6 +14,11 @@ import type {
   UiOpenGraphConfig,
   UiTwitterConfig,
 } from "#adaptv/shell/head"
+import type {
+  BooleanPatchConfig,
+  UiPatchConfig,
+  UiPatchScope,
+} from "#adaptv/utils/patch-registry"
 
 /**
  * A screen reference for `adaptv.config.ts` — a thunk around a literal dynamic
@@ -30,26 +35,10 @@ export type ScreenThunk<Props> = () => Promise<{
 
 /**
  * Native-feel WebKit fixes adaptv applies app-wide. **Every one defaults to
- * `true`** — set a field to `false` only to opt out of that specific fix.
+ * `true`** — set a field to `false` only to opt out of that specific fix. The
+ * keys come from the patch registry (`utils/patch-registry.ts`).
  */
-export type AdaptvPatches = {
-  /**
-   * Repaint a focused input's caret when it moves (scroll / drawer / keyboard)
-   * so iOS never leaves a detached "ghost" caret behind. Default `true`.
-   */
-  caretRepaint?: boolean
-  /**
-   * Suppress the iOS double-tap text-magnifier loupe (WebKit bug 231161 — not
-   * fixable in CSS). Default `true`.
-   */
-  textMagnifier?: boolean
-  /**
-   * Hold an app-wide scroll + virtual-keyboard-overlay lock so the on-screen
-   * keyboard / URL bar can't shift the layout — you own keyboard avoidance for
-   * inputs outside an overlay (wrap them in `<AvoidKeyboard>`). Default `true`.
-   */
-  viewportFreeze?: boolean
-}
+export type AdaptvPatches = BooleanPatchConfig
 
 /**
  * When a waiting service worker is applied. → `serviceWorkerUpdate`
@@ -62,66 +51,18 @@ export type AdaptvPatches = {
  */
 export type ServiceWorkerUpdatePolicy = "auto" | "prompt"
 
-/**
- * How far one of the *questionable* app-feel resets reaches.
- *
- * - `"app"` — installed PWA + native only.
- * - `"all"` — every target, browser tab included.
- * - `"off"` — adaptv does not touch the property at all.
- *
- * Only the resets whose alternative is **different, not broken**, are configurable.
- * The hover-stickiness fix, the `touch-action` longhand (WebKit 240917), the caret
- * mute, the autofill cover and the safe-area `env()` ordering (crbug/40699457) have
- * no knob and never will — nobody has a legitimate reason to want the broken
- * behaviour, so a flag there would only be a way to break the app.
- */
-export type UiPatchScope = "app" | "all" | "off"
+export type { UiPatchScope }
 
 /**
  * The `ui` block — the app-feel resets whose right answer depends on what the app
  * *is*, not on correctness. Per-option defaults, because the options do not share a
- * right answer (`utils/platform.ts`: `UI_SCOPE_DEFAULTS`).
+ * right answer (the `default` on each `utils/patch-registry.ts` row).
  *
  * Resolved **once**, in the pre-paint init script, against the runtime platform;
  * the result is a boolean-presence attribute on `<html>`. So `styles.css` stays a
  * single static artifact — there is no per-config CSS and no build matrix.
  */
-export type AdaptvUiConfig = {
-  /**
-   * The global `user-select: none` reset. Default `"app"`.
-   *
-   * `"all"` is hostile in a real browser tab: the user cannot select an error
-   * message, cannot `Ctrl+A`, cannot copy a code snippet. Text-editing surfaces
-   * (`input`, `textarea`, `[contenteditable="true"]`) always keep native selection
-   * whatever this is set to, and any element can opt back in with the `selectable`
-   * utility.
-   */
-  noSelect?: UiPatchScope
-  /**
-   * The global `scrollbar-width: none` + `::-webkit-scrollbar { display: none }`
-   * reset. Default `"all"` — the one option that is stricter than `"app"`, because
-   * it is the one with a per-scroller escape: `ScrollView`'s
-   * `showsVerticalScrollIndicator` emits `scrollbar-visible`, which outranks this
-   * reset, so a scroller that genuinely wants a desktop scroll-position indicator
-   * asks for one. That escape is what lets the same code feel the same on all six
-   * targets without stranding a desktop user.
-   */
-  hideScrollbars?: UiPatchScope
-  /**
-   * The `a[href] { -webkit-touch-callout: none }` reset — iOS's long-press link
-   * preview sheet. Default `"app"`.
-   *
-   * Same shape as {@link noSelect}: in an installed app the sheet is a browser
-   * artefact leaking through (and it fights any long-press gesture the app owns),
-   * but in an iOS Safari tab it is a real affordance the user expects — long-press
-   * a link to copy it or open it in a new tab. `"all"` takes that away.
-   *
-   * ⚠︎ Only the callout is configurable. The `-webkit-tap-highlight-color:
-   * transparent` half of the same rule stays universal: the grey flash is a
-   * duplicate of the press feedback adaptv already draws, and nobody wants both.
-   */
-  touchCallout?: UiPatchScope
-}
+export type AdaptvUiConfig = UiPatchConfig
 
 /**
  * The build-time image pipeline, behind `?adaptv-image`.

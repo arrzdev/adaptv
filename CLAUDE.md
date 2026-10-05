@@ -29,8 +29,8 @@ in `playground/` or `scripts/` ships.
 ## Before every commit
 
 ```bash
-pnpm gate          # biome (root + playground), tsc x2, vitest, scripts/check-colour.mjs
-pnpm build:check   # when you touch exports, tsdown.config.ts or anything the build emits
+pnpm gate          # biome (root + playground), tsc x2, vitest, check-colour, build:check
+pnpm build:check   # alone: tsdown + scripts/verify-dist.mjs (structure, publint, attw)
 ```
 
 This is what the CI `gate` job (the one required check) runs; docs-only and draft PRs get a lighter
@@ -44,8 +44,9 @@ when a change is visual or behavioural.
 - A fix comes with the test that fails without it.
 - No retries in the Playwright configs. `update.spec.ts` on chromium is a known intermittent in the
   `sw` and `sw-spa` cells; a re-run is a human decision, never a config change.
-- `exports` still points at `src/` until the dist cutover (`docs/roadmap/dist-cutover.md`). The CLI
-  loads `src/` at runtime, so do not drop `src` from `files`.
+- `exports` and `files` point at `dist/`. The playground and the website run the built framework
+  (`scripts/ensure-dist.mjs` rebuilds it when `src/` changed), and their typechecks read
+  `dist/*.d.mts`, so run `pnpm build` first. In a checkout the CLI still loads `src/`.
 - Never `wrangler deploy` the playground: its worker name is copied from another project.
 
 ## Commits and PRs

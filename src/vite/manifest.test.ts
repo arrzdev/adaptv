@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import type { ServerResponse } from "node:http"
 import { tmpdir } from "node:os"

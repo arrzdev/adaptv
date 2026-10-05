@@ -1,24 +1,25 @@
 /**
- * Prove `dist/` is publish-correct — WITHOUT flipping the live package off source.
+ * Prove `dist/` is publish-correct: that it holds every file `package.json` `exports`
+ * names, and that the package passes the validators a publish would.
  *
- * The repo's `package.json` still resolves `@arrzdev/adaptv/*` to `src/` (the
- * inner-loop dev workflow depends on it — see `tsdown.config.ts`). So this stages
- * a throwaway "publish view" whose `exports` point at `dist/`, and runs the same
- * validators a publish would. The exports map below is therefore also the SPEC the
- * eventual cutover hand-writes into `package.json` (§6.2: "hand-write the exports
- * map … let publint + attw police it" — auto-`exports: true` silently drops all
- * but the last build in an array config).
+ * `exports` is hand-written (§6.2: "hand-write the exports map … let publint + attw
+ * police it" — auto-`exports: true` silently drops all but the last build in an array
+ * config), so this reads it verbatim and stages the package exactly as `files` ships it:
+ * no `src/`.
  *
  * Run after `pnpm build`. Exits non-zero on any real problem.
  */
 import { execFileSync } from "node:child_process"
 import {
+  appendFileSync,
   closeSync,
   cpSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -43,12 +44,14 @@ const rootFile = {
   "./biome-shared.json": "biome-shared.json",
 }
 /** Ambient route factories — types-only, no runtime. Hand-authored, copied by tsdown. */
-const typesOnly = { "./route-globals": "dist/route-globals.d.ts" }
+const typesOnly = {
+  "./route-globals": "dist/interface/route-globals.d.ts",
+}
 /** Plain CSS, consumed via `@import`; attw can't model it, so it's excluded below. */
 const stylesheet = { "./styles.css": "dist/styles/index.css" }
 
 /**
- * Every JS/TS subpath, `.mjs` + `.d.mts` (types first, per Node's own advice) — DERIVED
+ * Every JS/TS subpath, `.mjs` + `.d.mts` (types first, per Node's own advice) — read
  * from `package.json` `exports`, never listed again here.
  *
  * It was listed, and it had already gone wrong: `exports` published `./root-route` and
@@ -62,23 +65,28 @@ const jsEntries = Object.keys(pkg.exports)
   .filter((k) => !(k in rootFile || k in typesOnly || k in stylesheet))
   .map((k) => k.replace(/^\.\//, ""))
 
-const publishExports = {}
+// ── 1. Structural invariants the validators don't cover ──────────────────────
+const problems = []
+const read = (p) => readFileSync(path.join(repo, p), "utf8")
+
+for (const e of jsEntries) {
+  const target = pkg.exports[`./${e}`]
+  if (
+    target?.types !== `./dist/${e}.d.mts` ||
+    target?.default !== `./dist/${e}.mjs`
+  )
+    problems.push(
+      `exports './${e}' must be { types: ./dist/${e}.d.mts, default: ./dist/${e}.mjs }`,
+    )
+}
 for (const [subpath, file] of Object.entries({
   ...rootFile,
   ...typesOnly,
   ...stylesheet,
 }))
-  publishExports[subpath] = `./${file}`
-for (const e of jsEntries) {
-  publishExports[`./${e}`] = {
-    types: `./dist/${e}.d.mts`,
-    default: `./dist/${e}.mjs`,
-  }
-}
+  if (pkg.exports[subpath] !== `./${file}`)
+    problems.push(`exports '${subpath}' must be ./${file}`)
 
-// ── 1. Structural invariants the validators don't cover ──────────────────────
-const problems = []
-const read = (p) => readFileSync(path.join(repo, p), "utf8")
 /**
  * Which runtime each entry is for — the ONE thing `exports` cannot say, and the reason these
  * three lists are still written out. They mirror the three build objects in
@@ -156,6 +164,21 @@ for (const e of [...node, ...worker]) {
   if (emitted(e)?.startsWith('"use client"'))
     problems.push(`${e}.mjs must NOT carry "use client"`)
 }
+// A file located relative to the module that asks for it holds in `src/` and nowhere else:
+// bundled into `dist/vite.mjs` or `dist/cli/**`, `../routes/x.tsx` and `../..` point past
+// the package. `src/vite/package-files.ts` is the one place adaptv finds its own files.
+const builtModules = readdirSync(path.join(repo, "dist"), {
+  recursive: true,
+})
+  .filter((f) => f.endsWith(".mjs"))
+  .map((f) => path.join("dist", f))
+for (const file of builtModules)
+  for (const [ref] of read(file).matchAll(
+    /new URL\(\s*["'`]\.{1,2}\/[^"'`]*["'`]\s*,\s*import\.meta\.url\s*\)/g,
+  ))
+    problems.push(
+      `${file} resolves ${ref} — use src/vite/package-files.ts`,
+    )
 // `index.css`'s relative `@import`s must resolve to co-located siblings.
 for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
   try {
@@ -165,9 +188,28 @@ for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
   }
 }
 
+/**
+ * One row per check in the CI job summary, so publint and attw read as their own lines next to
+ * the gate mode instead of being buried in the step log. A no-op outside Actions.
+ */
+function summarise(rows) {
+  const file = process.env.GITHUB_STEP_SUMMARY
+  if (!file) return
+  const lines = rows.map(
+    ([label, ok]) => `| ${label} | ${ok ? "✔ pass" : "✘ fail"} |`,
+  )
+  appendFileSync(
+    file,
+    ["", "| Publish check | Result |", "| --- | --- |", ...lines, ""].join(
+      "\n",
+    ),
+  )
+}
+
 if (problems.length) {
   console.error("✘ structural checks failed:")
   for (const p of problems) console.error("  -", p)
+  summarise([["dist structure", false]])
   process.exit(1)
 }
 console.log(
@@ -176,25 +218,8 @@ console.log(
   "entries, banners, styles",
 )
 
-// ── 2. publint + attw against a staged publish view ──────────────────────────
-const staged = {
-  name: pkg.name,
-  version: pkg.version,
-  type: "module",
-  sideEffects: pkg.sideEffects,
-  bin: pkg.bin,
-  peerDependencies: pkg.peerDependencies,
-  peerDependenciesMeta: pkg.peerDependenciesMeta,
-  dependencies: pkg.dependencies,
-  exports: publishExports,
-  files: [
-    "dist",
-    "bin",
-    "patches",
-    "biome-shared.json",
-    "THIRD_PARTY_LICENSES",
-  ],
-}
+// ── 2. publint + attw against the package as `files` ships it ─────────────────
+const staged = { ...pkg, scripts: undefined, devDependencies: undefined }
 //One throwaway directory holds the staged package and attw's report, and it goes on
 //every way out — a pass, a failure, or a throw — so a check run on every build does not
 //leave a copy of the package behind in the OS temp dir each time.
@@ -315,4 +340,40 @@ const okAudit = attwInternalResolutionOk()
 if (okAudit)
   console.log("✔ attw audit: only the app-supplied route tree is open")
 
-process.exit(okPublint && okAttw && okAudit ? 0 : 1)
+// ── 3. The CLI runs from what is published ───────────────────────────────────
+// The staged package has no `src/`, so `loadAdaptvModule` takes its `dist/cli/` path here,
+// for every module the CLI can ask for: one missing from the build, or one that throws when
+// loaded from there, fails now instead of on a user's machine. The repo's `node_modules`
+// stands in for the install, linked in only after attw has packed the directory.
+symlinkSync(
+  path.join(repo, "node_modules"),
+  path.join(dir, "node_modules"),
+  "dir",
+)
+const okCli = run("cli modules load from dist/cli", process.execPath, [
+  "--input-type=module",
+  "-e",
+  `import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
+import { frameworkLayout, loadAdaptvModule } from "./bin/lib/load-ts.mjs"
+if (frameworkLayout() !== "dist") throw new Error("the staged package has a src/")
+for (const m of CLI_MODULES) await loadAdaptvModule(m)`,
+])
+
+// ── 4. The shipped stylesheet scans what ships ────────────────────────────────
+// `dist/styles/index.css` is a copy, so its `@source` glob resolves against `dist/`. Compile
+// it like an app's Tailwind would and check that classes adaptv's components use are there.
+const okStyles = run(
+  "stylesheet scans the built components",
+  process.execPath,
+  [path.join(repo, "scripts", "check-dist-styles.mjs"), dir],
+)
+
+summarise([
+  ["dist structure", true],
+  ["publint --strict", okPublint],
+  ["attw (node16 profile)", okAttw],
+  ["attw audit (only `#adaptv-route-tree` unresolved)", okAudit],
+  ["cli modules load from dist/cli", okCli],
+  ["stylesheet scans the built components", okStyles],
+])
+process.exit(okPublint && okAttw && okAudit && okCli && okStyles ? 0 : 1)

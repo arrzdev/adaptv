@@ -39,10 +39,12 @@ work*. Three separate couplings, worth knowing individually because they fail di
    silently** — the plain-CSS patches (autofill, scrollbar, iOS callout) survive, the `hover:` fix and
    every `@utility` vanish with no error. Silent partial failure is the worst mode; say so in the
    quickstart.
-3. **`index.css` declares `@source "../**/*.{ts,tsx}"`** — adaptv instructing the consumer's Tailwind
-   to scan adaptv's own source. This also couples the styling layer to **shipping as source**: the
-   `exports` map points at `./src/interface/*.ts` today, and the deferred `dist` cutover must move
-   this path with it or every internal utility silently stops being generated.
+3. **`index.css` declares `@source "../**/*.{ts,tsx,mjs}"`** — adaptv instructing the consumer's
+   Tailwind to scan adaptv's own code. The one file serves two trees: in a checkout `..` is `src/`;
+   in the package it is `dist/`, where the components are `.mjs` and `@source not "../cli"` drops the
+   Node-only CLI modules. A glob that matches nothing fails silently (every internal utility stops
+   being generated), so `pnpm build:check` compiles the shipped copy and checks for classes only
+   adaptv's components use (`scripts/check-dist-styles.mjs`).
 
 ### The positive reason: build-time rewriting is a capability, not ergonomics
 
@@ -70,10 +72,11 @@ consumer. That is a category of leverage worth paying a peer dependency for.
 - **The fix covers `hover:` utilities, not `:hover` anywhere.** A consumer who writes
   `.card:hover { … }` in their own stylesheet — still possible under this decision — gets stock
   behaviour. Coverage tracks how much of their hover styling stays in utilities.
-  > ⏭ **A plan now exists to close this limit without changing this decision:** a Vite
-  > `transform` over the *emitted* CSS rewrites `:hover` whatever produced it — Tailwind, SCSS or
-  > plain CSS — on the mechanism `src/vite/tailwind-empty-fallback.ts` already ships. →
-  > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It does **not** require dropping
+  > ✅ **Closed 2026-10-05 without changing this decision:** `src/vite/css-patch-rewrite.ts`, a Vite
+  > `transform` over the *emitted* CSS, rewrites every `:hover` and `:active` rule whatever produced
+  > it — Tailwind, SCSS, CSS modules or plain CSS, `node_modules` included — on the slot
+  > `src/vite/tailwind-empty-fallback.ts` measured, and prints a count per build. →
+  > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It did **not** require dropping
   > Tailwind, but it moves the pillar this section rests on — see **O24**.
 - **Only the `:not(:is(:focus, :focus-within))` half is adaptv's.** Tailwind v4 already compiles
   `hover:` inside `@media (hover: hover)` by default (verified in `tailwindcss@4.2.4`

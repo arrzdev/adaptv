@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { bootControlled, workerState } from "./sw"
+import { awaitHeadIcons, bootControlled, workerState } from "./sw"
 
 /*
  * The worker exists, installs, and precached the app.
@@ -46,6 +46,8 @@ test.describe("registration", () => {
   }) => {
     await bootControlled(page)
     const state = await workerState(page)
+
+    await awaitHeadIcons(page)
 
     //What the web surfaces point at, read off the served app rather than from a
     //list: the head's icon links and the shipped manifest's `icons`.

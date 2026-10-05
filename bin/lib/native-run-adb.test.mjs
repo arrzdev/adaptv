@@ -11,7 +11,7 @@ import {
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { afterAll, describe, it } from "vitest"
+import { afterAll, beforeAll, describe, it, vi } from "vitest"
 import { listTargets } from "./devices.mjs"
 
 /*
@@ -39,13 +39,13 @@ const run = runnerRequire("native-run/dist/android/utils/run.js")
  *
  * - `emulator-5554` is online and answers `getprop` at once;
  * - `emulator-5556` is online and never answers `getprop` (the sleep outlasts the runner's
- *   hardcoded 5 s by far, so load cannot eat the margin; the runner's own kill ends it);
+ *   timeout by far, so load cannot eat the margin; the runner's own kill ends it);
  * - `emulator-5558` is offline, and `getprop` on it exits 1.
  *
  * `am start -W` hangs, a plain `am start` returns. `getprop dev.bootcomplete` answers `1` on
  * `emulator-5554`, fails every time on `emulator-5560`, and fails three times on
  * `emulator-5562` before answering `1`. Every behaviour hangs off a serial rather than off
- * per-test state, so the tests run concurrently and the 5 s waits overlap instead of adding up.
+ * per-test state, so the tests on the real clock run concurrently and their waits overlap.
  *
  * The script runs once before any test: macOS scans a freshly written executable on its first
  * exec, measured at 240-940 ms here and past 2 s under load, and that latency belongs to the
@@ -113,7 +113,46 @@ afterAll(() => rmSync(fake.root, { recursive: true, force: true }))
 const serverRestarts = () =>
   fake.log().filter((l) => l === "kill-server" || l === "start-server")
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+/**
+ * The runner gives every adb call 5 s. Waiting that out on the silent device is what made this
+ * file slow, and the timer is Node's own `execFile` timeout (in this process, and in the `cap`
+ * process the listing spawns), which a fake clock cannot reach. The patch reads the limit from
+ * `ADAPTV_ADB_TIMEOUT_MS`, so the silent device costs a second here. Still well past what the
+ * answering devices take once the script is primed, so the timeout is never the race it ends.
+ */
+const ADB_TIMEOUT_MS = "1000"
+let adbTimeoutBefore
+beforeAll(() => {
+  adbTimeoutBefore = process.env.ADAPTV_ADB_TIMEOUT_MS
+  process.env.ADAPTV_ADB_TIMEOUT_MS = ADB_TIMEOUT_MS
+})
+afterAll(() => {
+  if (adbTimeoutBefore === undefined)
+    delete process.env.ADAPTV_ADB_TIMEOUT_MS
+  else process.env.ADAPTV_ADB_TIMEOUT_MS = adbTimeoutBefore
+})
+
+const realSetTimeout = globalThis.setTimeout
+const realSleep = (ms) => new Promise((r) => realSetTimeout(r, ms))
+
+/**
+ * Settle `promise` on the fake clock. The boot check polls every 100 ms and each poll is a real
+ * adb call, so step the clock one interval at a time and give the poll real time to answer
+ * before the next step. A poll still running when the interval fires is skipped, as on the wall
+ * clock, so the count of polls is what it would be.
+ */
+async function onFakeClock(promise) {
+  let settled = false
+  const done = () => {
+    settled = true
+  }
+  promise.then(done, done)
+  while (!settled) {
+    vi.advanceTimersByTime(100)
+    await realSleep(2)
+  }
+  return promise
+}
 
 describe.concurrent(
   "the device runner never restarts the machine's adb server",
@@ -193,46 +232,6 @@ describe.concurrent(
       expect(serverRestarts()).toEqual([])
     }, 20_000)
 
-    it("waits out failed boot checks without a rejection or a restart, even 5 s later", async ({
-      expect,
-    }) => {
-      //Upstream swallowed each failed poll and armed a 5 s timer for it that restarted the
-      //server, after waitForBoot had long resolved. So the check has to outlast those timers.
-      const rejections = []
-      const onRejection = (reason) => rejections.push(reason)
-      process.on("unhandledRejection", onRejection)
-      try {
-        const started = Date.now()
-        await adb.waitForBoot(fake.sdk, { serial: "emulator-5562" })
-        await sleep(Math.max(0, 6500 - (Date.now() - started)))
-        const polls = fake
-          .log()
-          .filter((l) => l.startsWith("-s emulator-5562 "))
-        expect(serverRestarts()).toEqual([])
-        expect(rejections).toEqual([])
-        //three failures and the answer, one poll at a time
-        expect(polls.length).toBe(4)
-      } finally {
-        process.off("unhandledRejection", onRejection)
-      }
-    }, 20_000)
-
-    it("gives up on a device that fails 50 boot checks in a row", async ({
-      expect,
-    }) => {
-      //A device that went away mid-boot used to be polled every 100 ms forever.
-      await expect(
-        adb.waitForBoot(fake.sdk, { serial: "emulator-5560" }),
-      ).rejects.toThrow(
-        /emulator-5560 stopped answering: 50 boot checks in a row failed/,
-      )
-      const polls = fake
-        .log()
-        .filter((l) => l.startsWith("-s emulator-5560 "))
-      expect(polls.length).toBe(50)
-      expect(serverRestarts()).toEqual([])
-    }, 30_000)
-
     it("adaptv's listing offers the answering device next to an offline and a silent one", async ({
       expect,
     }) => {
@@ -256,3 +255,66 @@ describe.concurrent(
     }, 20_000)
   },
 )
+
+//The boot checks poll on `setInterval`, so they run on the fake clock, and the fake clock is
+//global: these two take turns instead of running beside the tests above.
+describe("the device runner's boot check", () => {
+  beforeAll(() => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+      ],
+    })
+  })
+  afterAll(() => {
+    vi.useRealTimers()
+  })
+
+  it("waits out failed boot checks without a rejection or a restart, even 5 s later", async ({
+    expect,
+  }) => {
+    //Upstream swallowed each failed poll and armed a 5 s timer for it that restarted the
+    //server, after waitForBoot had long resolved. So the check has to outlast those timers.
+    const rejections = []
+    const onRejection = (reason) => rejections.push(reason)
+    process.on("unhandledRejection", onRejection)
+    try {
+      await onFakeClock(
+        adb.waitForBoot(fake.sdk, { serial: "emulator-5562" }),
+      )
+      //Nothing may still be armed once it resolved. Then let 6.5 s pass anyway, and give any
+      //restart a timer would have started real time to reach the log.
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(6500)
+      await realSleep(200)
+      const polls = fake
+        .log()
+        .filter((l) => l.startsWith("-s emulator-5562 "))
+      expect(serverRestarts()).toEqual([])
+      expect(rejections).toEqual([])
+      //three failures and the answer, one poll at a time
+      expect(polls.length).toBe(4)
+    } finally {
+      process.off("unhandledRejection", onRejection)
+    }
+  }, 20_000)
+
+  it("gives up on a device that fails 50 boot checks in a row", async ({
+    expect,
+  }) => {
+    //A device that went away mid-boot used to be polled every 100 ms forever.
+    await expect(
+      onFakeClock(adb.waitForBoot(fake.sdk, { serial: "emulator-5560" })),
+    ).rejects.toThrow(
+      /emulator-5560 stopped answering: 50 boot checks in a row failed/,
+    )
+    const polls = fake
+      .log()
+      .filter((l) => l.startsWith("-s emulator-5560 "))
+    expect(polls.length).toBe(50)
+    expect(serverRestarts()).toEqual([])
+  }, 30_000)
+})

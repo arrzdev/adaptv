@@ -73,6 +73,19 @@ const BROWSER_ENTRIES = [
   "src/interface/server-entry.ts",
 ]
 
+/**
+ * Browser-side entries with no `exports` subpath: the modules adaptv's Vite plugin hands
+ * the consumer's build by path, built so a package without `src/` still has them.
+ * `default-worker.ts` is the second one built from `workerEntry`.
+ * → src/vite/package-files.ts
+ */
+const CONSUMER_BUILD_ENTRIES = [
+  "src/routes/client-entry.tsx",
+  "src/routes/router-entry.tsx",
+  "src/components/boot-error.tsx",
+  "src/sw/default-worker.ts",
+]
+
 /** The `platform: "node"` entries — build-time tools and the SW toolkit. */
 const NODE_ENTRIES = [
   "src/interface/vite.index.ts",
@@ -236,7 +249,10 @@ function closureOf(entries: string[]): string[] {
 }
 
 const ALL = sourceFiles()
-const BROWSER_CLOSURE = closureOf(BROWSER_ENTRIES)
+const BROWSER_CLOSURE = closureOf([
+  ...BROWSER_ENTRIES,
+  ...CONSUMER_BUILD_ENTRIES,
+])
 const NODE_CLOSURE = closureOf(NODE_ENTRIES)
 
 describe("execution boundary", () => {
@@ -254,7 +270,11 @@ describe("execution boundary", () => {
     expect(ALL.filter((f) => !isTest(f)).length).toBeGreaterThan(200)
     expect(BROWSER_CLOSURE.length).toBeGreaterThan(120)
     expect(NODE_CLOSURE.length).toBeGreaterThan(60)
-    for (const entry of [...BROWSER_ENTRIES, ...NODE_ENTRIES]) {
+    for (const entry of [
+      ...BROWSER_ENTRIES,
+      ...CONSUMER_BUILD_ENTRIES,
+      ...NODE_ENTRIES,
+    ]) {
       expect(existsSync(path.join(ROOT, entry)), entry).toBe(true)
     }
   })
@@ -279,25 +299,37 @@ describe("execution boundary", () => {
         .sort()
     }
 
-    //`server-entry` is the one browser-side entry built outside `browserEntry`
-    expect(entriesIn("browserEntry")).toEqual(
-      BROWSER_ENTRIES.filter(
-        (e) => e !== "src/interface/server-entry.ts",
-      ).sort(),
-    )
-    expect(entriesIn("workerEntry")).toEqual([
+    //the worker-side entries are the browser-side ones built outside `browserEntry`
+    const workerSide = [
       "src/interface/server-entry.ts",
-    ])
+      "src/sw/default-worker.ts",
+    ]
+    expect(entriesIn("browserEntry")).toEqual(
+      [...BROWSER_ENTRIES, ...CONSUMER_BUILD_ENTRIES]
+        .filter((e) => !workerSide.includes(e))
+        .sort(),
+    )
+    expect(entriesIn("workerEntry")).toEqual(workerSide)
     expect(entriesIn("nodeEntry")).toEqual([...NODE_ENTRIES].sort())
 
+    //`exports` names built files (`./dist/<name>.mjs`); the build config says which
+    //source each `<name>` is built from
+    const sourceOf = new Map(
+      [...config.matchAll(/^\s*"?([\w-]+)"?:\s*"(src\/[^"]+)",?$/gm)].map(
+        (m) => [m[1], m[2]],
+      ),
+    )
     const pkg = JSON.parse(
       readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { exports: Record<string, string> }
+    ) as { exports: Record<string, string | { default: string }> }
     const exported = Object.values(pkg.exports)
-      .map((target) => target.replace(/^\.\//, ""))
-      .filter(
-        (target) => /\.tsx?$/.test(target) && !target.endsWith(".d.ts"),
+      .flatMap((target) =>
+        typeof target === "string" ? [] : [target.default],
       )
+      .map((built) => {
+        const name = /^\.\/dist\/([\w-]+)\.mjs$/.exec(built)?.[1]
+        return (name && sourceOf.get(name)) ?? built
+      })
       .sort()
     expect(exported).toEqual([...BROWSER_ENTRIES, ...NODE_ENTRIES].sort())
   })

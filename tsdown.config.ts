@@ -1,5 +1,6 @@
 import type { UserConfig } from "tsdown"
 import { defineConfig } from "tsdown"
+import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
 
 /**
  * The dist build. → `docs/decisions/dist-build.md` ("The dist build — empirically settled")
@@ -20,20 +21,16 @@ import { defineConfig } from "tsdown"
  * safe: every browser-surface import of a `config/*` module is `import type`
  * (erased at build), so no browser entry drags a `node:` builtin into its graph.
  *
- * ## Cutover is deliberately NOT wired here
+ * ## What reads `dist/`
  *
- * This produces a publish-correct `dist/` and nothing more. It does **not** flip
- * `package.json` `exports`/`files` or the CLI off source, because:
- *   - the inner-loop DX depends on `link:` resolving `@arrzdev/adaptv/*` to `src/`
- *     (edit source → `adaptv dev` shows it live); pointing `exports` at `dist/`
- *     forces a rebuild between every edit.
- *   - `bin/adaptv.mjs` loads adaptv's own TS modules straight from `ADAPTV_ROOT/src`
- *     (`loadAdaptvModule`, esbuild at runtime), so dropping `src` from `files`
- *     breaks the CLI until it is refactored — and that can only be confirmed by
- *     running `adaptv dev|build` on a device.
- * The cutover (exports → dist, hand-written per the array-merge trap below, plus
- * `publint`/`attw` policing and the CLI refactor) is a separate, device-tested
- * change. This file is the foundation it builds on.
+ * Everything outside this repo's own `src/` tree: `package.json` `exports` and
+ * `files` point here, so an app — the playground and the website included, through
+ * `link:` — resolves `@arrzdev/adaptv/*` to this output and needs a build first
+ * (`scripts/playground.mjs` runs one when `src/` is newer). The modules the `/vite`
+ * entry hands the consumer's build are entries below, and
+ * `src/vite/package-files.ts` picks the copy that matches the layout it runs from.
+ * The fourth build puts every module the CLI loads into `dist/cli/`, which
+ * `bin/lib/load-ts.mjs` reads when the package ships no `src/`.
  */
 
 /** The React surface — everything a component tree imports at runtime. */
@@ -53,6 +50,13 @@ const browserEntry = {
   ota: "src/interface/ota.index.ts",
   routes: "src/interface/routes.index.ts",
   utils: "src/interface/utils.index.ts",
+  //Not public subpaths either: the modules adaptv's Vite plugin hands the CONSUMER's
+  //build — Start's client and router entries, and the boot screen prerendered into the
+  //shell. Entries of this build rather than copies, so they share chunks with the
+  //surface above and the app gets one router, not two. → src/vite/package-files.ts
+  "client-entry": "src/routes/client-entry.tsx",
+  "router-entry": "src/routes/router-entry.tsx",
+  "boot-error": "src/components/boot-error.tsx",
 }
 
 /**
@@ -71,6 +75,9 @@ const browserEntry = {
  */
 const workerEntry = {
   "server-entry": "src/interface/server-entry.ts",
+  //The service worker the consumer's build bundles with esbuild — a worker too, and
+  //no client module. → src/vite/sw-build.ts, src/vite/package-files.ts
+  "default-worker": "src/sw/default-worker.ts",
 }
 
 /** The Node tools — build-time (`/vite`, `/config`) and the SW toolkit. */
@@ -79,6 +86,15 @@ const nodeEntry = {
   sw: "src/interface/sw.index.ts",
   config: "src/interface/config.index.ts",
 }
+
+/**
+ * The framework modules the CLI loads at runtime, one entry each under `dist/cli/`, keyed by
+ * their path under `src/` so `bin/lib/load-ts.mjs` finds each by the name it already uses.
+ * A checkout loads them from `src/` with esbuild; a published package has no `src/`.
+ */
+const cliEntry = Object.fromEntries(
+  CLI_MODULES.map((m) => [m.replace(/\.tsx?$/, ""), `src/${m}`]),
+)
 
 /** Shared across both builds so their outputs stay symmetrical. */
 const base = {
@@ -146,13 +162,28 @@ export default defineConfig([
       // resolve. Glob the `.css` only — a bare dir copy nests (`dist/styles/styles`)
       // and drags in the co-located `utils.test.ts`.
       { from: "src/styles/*.css", to: "dist/styles" },
-      // Ambient route factories — a hand-authored `.d.ts`, not generated. Already
-      // references the public `@arrzdev/adaptv/router` specifier, so it copies
-      // verbatim. → `src/interface/route-globals.d.ts`.
-      { from: "src/interface/route-globals.d.ts", to: "dist" },
-      // Ambient `*?adaptv-image` module — same category, and the consumer picks it
-      // up through the `virtual-adaptv-*` include glob. → `src/virtual-adaptv-image-asset.d.ts`.
-      { from: "src/**/virtual-adaptv-*.d.ts", to: "dist" },
+      // The ambient declarations — hand-authored `.d.ts`, not generated, so copied
+      // verbatim. `route-globals.d.ts` is the one file an app reaches (through `exports`,
+      // from `.adaptv/adaptv-env.d.ts`, `src/vite/stamp.ts`); it pulls in the seven `virtual-adaptv-*.d.ts` with relative
+      // `/// <reference path>`s, so `dist/` keeps their `src/` layout and the same
+      // references hold in both trees. → `src/interface/route-globals.d.ts`
+      {
+        from: [
+          "src/interface/route-globals.d.ts",
+          "src/**/virtual-adaptv-*.d.ts",
+        ],
+        to: "dist",
+        flatten: false,
+      },
     ],
+  },
+  {
+    ...base,
+    clean: false,
+    platform: "node",
+    entry: cliEntry,
+    outDir: "dist/cli",
+    // Only the CLI imports these, from plain `.mjs`: no consumer types against them.
+    dts: false,
   },
 ])

@@ -1,6 +1,6 @@
 {
   "name": "@arrzdev/adaptv",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "One React codebase, shipped as desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
   "type": "module",
@@ -36,7 +36,7 @@
     "dev:android": "node scripts/playground.mjs dev:android",
     "dev:ios": "node scripts/playground.mjs dev:ios",
     "dev:web": "node scripts/playground.mjs dev:web",
-    "gate": "pnpm biome:check && pnpm biome:check:playground && pnpm typecheck && pnpm test && node scripts/check-colour.mjs",
+    "gate": "pnpm biome:check && pnpm biome:check:playground && pnpm typecheck && pnpm test && node scripts/check-colour.mjs && pnpm build:check",
     "playground:setup": "node scripts/playground-setup.mjs",
     "preview:all": "node scripts/playground.mjs preview:all",
     "preview:android": "node scripts/playground.mjs preview:android",
@@ -49,31 +49,69 @@
     "website:dev": "pnpm --dir website dev"
   },
   "imports": {
-    "#adaptv/*": [
-      "./src/*",
-      "./src/*.ts",
-      "./src/*.tsx"
-    ]
+    "#adaptv/*": "./src/*"
   },
   "exports": {
     "./package.json": "./package.json",
     "./biome-shared.json": "./biome-shared.json",
-    "./shell": "./src/interface/shell.index.ts",
-    "./router": "./src/interface/router.index.ts",
-    "./root-route": "./src/routes/root-route.tsx",
-    "./route-globals": "./src/interface/route-globals.d.ts",
-    "./server-entry": "./src/interface/server-entry.ts",
-    "./config": "./src/interface/config.index.ts",
-    "./components": "./src/interface/components.index.ts",
-    "./hooks": "./src/interface/hooks.index.ts",
-    "./capabilities": "./src/interface/capabilities.index.ts",
-    "./storage": "./src/interface/storage.index.ts",
-    "./ota": "./src/interface/ota.index.ts",
-    "./routes": "./src/interface/routes.index.ts",
-    "./utils": "./src/interface/utils.index.ts",
-    "./sw": "./src/interface/sw.index.ts",
-    "./vite": "./src/interface/vite.index.ts",
-    "./styles.css": "./src/styles/index.css"
+    "./shell": {
+      "types": "./dist/shell.d.mts",
+      "default": "./dist/shell.mjs"
+    },
+    "./router": {
+      "types": "./dist/router.d.mts",
+      "default": "./dist/router.mjs"
+    },
+    "./root-route": {
+      "types": "./dist/root-route.d.mts",
+      "default": "./dist/root-route.mjs"
+    },
+    "./route-globals": "./dist/interface/route-globals.d.ts",
+    "./server-entry": {
+      "types": "./dist/server-entry.d.mts",
+      "default": "./dist/server-entry.mjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "default": "./dist/config.mjs"
+    },
+    "./components": {
+      "types": "./dist/components.d.mts",
+      "default": "./dist/components.mjs"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.mts",
+      "default": "./dist/hooks.mjs"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.mts",
+      "default": "./dist/capabilities.mjs"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.mts",
+      "default": "./dist/storage.mjs"
+    },
+    "./ota": {
+      "types": "./dist/ota.d.mts",
+      "default": "./dist/ota.mjs"
+    },
+    "./routes": {
+      "types": "./dist/routes.d.mts",
+      "default": "./dist/routes.mjs"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.mts",
+      "default": "./dist/utils.mjs"
+    },
+    "./sw": {
+      "types": "./dist/sw.d.mts",
+      "default": "./dist/sw.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "default": "./dist/vite.mjs"
+    },
+    "./styles.css": "./dist/styles/index.css"
   },
   "peerDependencies": {
     "clsx": "2.1.1",
@@ -119,6 +157,7 @@
     "ink": "6.4.0",
     "lightningcss": "1.32.0",
     "nitro": "3.0.260610-beta",
+    "postcss": "8.5.19",
     "sharp": "0.35.3",
     "workbox-build": "7.4.1",
     "workbox-core": "7.4.1",
@@ -130,6 +169,7 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.3.2",
+    "@tailwindcss/vite": "4.2.4",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.2",
     "@types/react": "19.2.7",
@@ -150,7 +190,7 @@
     "vitest": "4.1.2"
   },
   "files": [
-    "src",
+    "dist",
     "patches",
     "bin",
     "assets",

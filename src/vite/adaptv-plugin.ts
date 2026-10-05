@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import type { Plugin, PluginOption } from "vite"
@@ -27,6 +26,7 @@ import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
 import { adaptvBuildStampPlugin } from "#adaptv/vite/build-stamp.ts"
 import { adaptvClientTargetsPlugin } from "#adaptv/vite/client-targets.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
+import { adaptvCssPatchRewritePlugin } from "#adaptv/vite/css-patch-rewrite.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
 import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
@@ -36,6 +36,10 @@ import {
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
 import { adaptvNativeShellPlugins } from "#adaptv/vite/native-shell-plugin.ts"
+import {
+  adaptvPackageRoot,
+  adaptvShippedFile,
+} from "#adaptv/vite/package-files.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvRouteConfigWatchPlugin } from "#adaptv/vite/route-config-watch.ts"
 import {
@@ -57,6 +61,7 @@ import {
   devServiceWorkerEnabled,
 } from "#adaptv/vite/sw-dev.ts"
 import { adaptvTailwindEmptyFallbackPlugin } from "#adaptv/vite/tailwind-empty-fallback.ts"
+import { adaptvTanstackResolvePlugin } from "#adaptv/vite/tanstack-resolve.ts"
 import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 
 /**
@@ -214,10 +219,7 @@ export async function adaptv(
   //because it is computed from the module's real resolved location rather than
   //guessed from a package name.
   process.env.ADAPTV_ROOT_ROUTE_FILE = path
-    .relative(
-      routesDir,
-      fileURLToPath(new URL("../routes/root-route.tsx", import.meta.url)),
-    )
+    .relative(routesDir, adaptvShippedFile("root-route"))
     .split(path.sep)
     .join("/")
 
@@ -248,6 +250,11 @@ export async function adaptv(
     //113–118.
     //→ src/vite/tailwind-empty-fallback.ts
     adaptvTailwindEmptyFallbackPlugin(),
+    //Same slot, same reason: NO `enforce`. Applies the `hover:`/`active:` corrections to
+    //every `:hover`/`:active` rule in the app's CSS, however it was written — plain CSS,
+    //SCSS, CSS modules, a dependency's sheet — and prints a count per build.
+    //→ src/vite/css-patch-rewrite.ts
+    adaptvCssPatchRewritePlugin(),
     adaptvConfigLoaderPlugin(context),
     //Both lineages, no gate: the capacitor bundle is the same client build, and
     //an iOS WebView is only ever as new as the OS it ships in. → src/vite/client-targets.ts
@@ -274,6 +281,10 @@ export async function adaptv(
     }),
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
+    //TanStack writes `@tanstack/*` imports into the app's route modules; they resolve
+    //from adaptv, which is what depends on TanStack. It also keeps adaptv itself out of
+    //Node on the server (`virtual:adaptv-*`). → src/vite/tanstack-resolve.ts
+    adaptvTanstackResolvePlugin(appRoot),
     //Dev only, and ahead of `tanstackStart()`: a running server otherwise never
     //regenerates after an edit to the route config, because the config is read
     //through a module cache that outlives the edit. → src/vite/route-config-watch.ts
@@ -400,11 +411,7 @@ function deriveStartOptions(
       ? { client: { entry: "./client" } }
       : {
           client: {
-            entry: `./${fromSrc(
-              fileURLToPath(
-                new URL("../routes/client-entry.tsx", import.meta.url),
-              ),
-            )}`,
+            entry: `./${fromSrc(adaptvShippedFile("client-entry"))}`,
           },
         }),
     ...(router.serverEntry
@@ -438,11 +445,7 @@ function deriveStartOptions(
       ...(routerEjected
         ? {}
         : {
-            entry: `./${fromSrc(
-              fileURLToPath(
-                new URL("../routes/router-entry.tsx", import.meta.url),
-              ),
-            )}`,
+            entry: `./${fromSrc(adaptvShippedFile("router-entry"))}`,
           }),
     },
   }
@@ -540,8 +543,7 @@ export function addFsAllowRoot(allow: string[], root: string): void {
  * the build reads from disk instead of going through the dev server's sandbox.
  */
 function adaptvFsAllowPlugin(): PluginOption {
-  //the package root — two levels up from src/vite/
-  const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
+  const packageRoot = adaptvPackageRoot()
   return {
     name: "adaptv:fs-allow",
     configResolved(resolved) {

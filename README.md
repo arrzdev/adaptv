@@ -32,9 +32,9 @@
 </p>
 
 > [!WARNING]
-> **Pre-alpha and private — there is no install command.** The package is `private: true` and its
-> `exports` still resolve to `./src/**`. It is consumed today by linking a local checkout, which is
-> exactly what [`playground/`](playground/) does. See [Status](#-status).
+> **Pre-alpha and unpublished — there is no install command yet.** The package is `private: true`.
+> You build it and install the tarball, which is what the [Quick start](#-quick-start) does. See
+> [Status](#-status).
 
 ---
 
@@ -60,6 +60,125 @@ adaptv build   web|ios|android|all   # deployable site · unsigned .ipa · debug
 adaptv keys ota                      # the signing pair for the update channel
 adaptv icons --input ./mark.png      # every icon your app needs
 ```
+
+## ⚡ Quick start
+
+Nothing is published yet, so you install the package you pack. You need Node 22.12 or newer and
+pnpm 11. [`examples/basic/`](examples/basic) is a minimal app that installs adaptv from that
+tarball, not from this checkout:
+
+```bash
+git clone https://github.com/arrzdev/adaptv.git && cd adaptv
+pnpm install
+pnpm build && pnpm pack   # writes arrzdev-adaptv-0.1.0-alpha.1.tgz, which examples/basic installs
+
+cd examples/basic
+pnpm install
+pnpm dev                  # adaptv dev web: serves the app on http://localhost:3000
+pnpm build                # adaptv build web: the deployable site in .output/public
+```
+
+Every command prints `! no 'icons' in adaptv.config.ts`. That is expected: an app with no icons
+wears adaptv's mark. To use your own, add `icons: "./public/favicons"` to `adaptv.config.ts` and
+run `pnpm exec adaptv icons --input ./mark.png` (one png or svg, 1024px or larger).
+
+`adaptv.config.ts` is the one config file — the web manifest, the native
+projects, icons and theme all come from it:
+
+```ts
+import { defineApp } from "@arrzdev/adaptv/config"
+
+export default defineApp({
+  appId: "com.example.basic",
+  name: "basic",
+  description: "basic, built with adaptv.",
+  themeColor: { light: "#ffffff", dark: "#0a0a0c" },
+  styles: "./src/styles/main.css",
+  router: {},
+})
+```
+
+`src/routing/config.ts` declares the routes, and each route is a file whose root is a `View`:
+
+```tsx
+// src/routing/config.ts
+import { index, rootRoute } from "@arrzdev/adaptv/routes"
+
+export const routes = rootRoute([index("pages/home.page.tsx")])
+export default routes
+
+// src/routing/pages/home.page.tsx
+import { View } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
+
+export const Route = createFileRoute("/")({
+  component: Home,
+})
+
+function Home() {
+  return (
+    <View fill center className="gap-2 p-safe-offset-6 text-center">
+      <h1 className="font-semibold text-2xl">basic</h1>
+      <p className="opacity-60">
+        Edit src/routing/pages/home.page.tsx and save.
+      </p>
+    </View>
+  )
+}
+```
+
+`vite.config.ts` adds `adaptv()` and Tailwind:
+
+```ts
+import { adaptv } from "@arrzdev/adaptv/vite"
+import tailwindcss from "@tailwindcss/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+  resolve: { tsconfigPaths: true },          // `@/` is `src/`; adaptv imports your stylesheet through it
+  ssr: { noExternal: ["@arrzdev/adaptv"] },  // the dev server runs adaptv through Vite, not Node
+  plugins: [adaptv(), tailwindcss()],
+})
+```
+
+and `src/styles/main.css` imports `@arrzdev/adaptv/styles.css` after Tailwind.
+
+### Your own app
+
+Start from a copy of `examples/basic`. Run this from the adaptv checkout, after `pnpm pack`:
+
+```bash
+cp -r examples/basic ../my-app
+cp arrzdev-adaptv-0.1.0-alpha.1.tgz ../my-app/
+cd ../my-app
+npm pkg set "dependencies.@arrzdev/adaptv=file:arrzdev-adaptv-0.1.0-alpha.1.tgz"
+pnpm install
+pnpm dev
+```
+
+The example's `package.json` points at `../../arrzdev-adaptv-0.1.0-alpha.1.tgz`, the tarball at the root
+of the checkout. The `npm pkg set` line points it at the copy next to your app instead. Keep the
+tarball there: `pnpm install` reads it on every install. The example's `packageManager` pins
+pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
+
+> [!IMPORTANT]
+> **Your app carries adaptv's dependency patches.** pnpm applies `patchedDependencies` only from
+> the project it installs, so a package cannot bring its own. The example has them in its
+> `patches/`, declared with app-relative paths in its `pnpm-workspace.yaml`, so a copy installs as
+> it is. An app from `create-adaptv` has them the same way. Without them the first
+> `adaptv build web` writes a second `createFileRoute` import into every route file →
+> [`design/patches.md`](docs/design/patches.md).
+>
+> An app you set up by hand needs the files before its first `pnpm install`, because pnpm fails
+> with `Patch file not found` for any file the block lists that does not exist yet. Take them from
+> the tarball rather than from `node_modules`, then copy the `patchedDependencies` block from
+> [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml):
+>
+> ```bash
+> tar -xzf arrzdev-adaptv-0.1.0-alpha.1.tgz --strip-components=1 package/patches   # writes ./patches/
+> ```
+>
+> After you upgrade adaptv, extract them again and update the keys to the new versions.
 
 ## ✨ Why it exists
 
@@ -91,12 +210,12 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 
 | The question | Where it stands |
 |---|---|
-| 📦 **Published?** | **No.** `private: true`, `exports` resolve to `./src/**` — there is no install command to give you. |
-| 🔗 **How it's consumed** | A local checkout linked into the app — `"@arrzdev/adaptv": "link:../../.."`, as [`playground/`](playground/) does. |
-| 🏗️ **Dist build** | Built and verified (`pnpm build:check`); the cutover hasn't happened → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
+| 📦 **Published?** | **No.** `private: true` — there is no registry install to give you. |
+| 🔗 **How it's consumed** | A `pnpm pack` tarball installed into the app, as [`examples/basic/`](examples/basic) does, or a local checkout linked into it (`"@arrzdev/adaptv": "link:../../.."`), as [`playground/`](playground/) does. |
+| 🏗️ **Dist build** | `exports` and `files` point at `dist/` (`pnpm build:check`), and an app installed from the tarball runs `adaptv dev web` and `adaptv build web` → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
 | ✅ **Green today** | typecheck · lint · **2,618 unit tests across 167 files** — all gated in CI on every pull request |
 | 📱 **Verified on device** | iOS Simulator and Android emulator, driven from this repo, plus a browser e2e suite in the playground |
-| 🚧 **Not built yet** | a first-party native shell module · a scaffolder for new apps · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
+| 🚧 **Not built yet** | a first-party native shell module · a published install (the scaffolder exists and the framework ships `dist/`) · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
 
 ## 📚 Documentation
 
@@ -122,6 +241,7 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 - [`src/`](src) — the framework: the build plugin, the runtime primitives, capabilities, storage, OTA.
 - [`bin/`](bin) — the `adaptv` CLI. Read [`design/cli-contract.md`](docs/design/cli-contract.md) before touching it.
 - [`docs/`](docs) — five folders, split by the kind of claim each file makes.
+- [`examples/basic/`](examples/basic) — the Quick start app, installed from the packed tarball.
 - [`playground/`](playground) — a real app vendored into the repo and linked against the local checkout.
 - [`scripts/`](scripts) — repo tooling. Nothing here ships.
 
@@ -137,7 +257,7 @@ pnpm dev:ios        pnpm preview:ios        pnpm build:android
 pnpm dev:android    pnpm preview:android    pnpm build:all
 pnpm dev:all        pnpm preview:all
 
-pnpm gate           # typecheck, lint, unit tests, colour — everything CI runs
+pnpm gate           # typecheck, lint, unit tests, colour, publint + attw — everything CI runs
 ```
 
 The full loop — fresh worktrees, ports, what the playground is and is not — is in

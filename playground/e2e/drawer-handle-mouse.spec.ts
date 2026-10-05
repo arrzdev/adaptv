@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { capabilitiesUrl } from "./support/framework"
 import { awaitClientHandover } from "./support/hydrated"
 
 /*
@@ -11,8 +12,9 @@ import { awaitClientHandover } from "./support/hydrated"
  * after the drag closed the sheet — so the next edge swipe pre-empted a finished
  * drag and a row swipe, which ranks below a drawer drag, was refused. Nothing on
  * screen shows who holds the arbiter, so this reads it: the page's own
- * `gesture-controller` module, imported by the exact URL the dev server served it
- * at, is the same instance the drawer claims through. The premise (the drawer
+ * `gestureController`, imported through the `/capabilities` entry at the URL the
+ * dev server serves it at (`support/framework.ts`), is the same instance the
+ * drawer claims through. The premise (the drawer
  * DOES hold it mid-drag) proves that, so a different instance cannot pass as
  * "released".
  *
@@ -33,28 +35,18 @@ const PANEL = "[data-pwa-drawer]"
 const HANDLE = `${PANEL} > *:first-child > *:first-child`
 
 /** Who holds the arbiter right now, read through the module instance the app itself loaded. */
-function arbiterHolder(page: Page) {
-  return page.evaluate(async () => {
-    //the dev server serves the linked framework source at one /@fs URL per file, and the
-    //browser keeps one module per URL. The resource timeline is capped (250 entries) well
-    //short of a dev page's module count, so the URL is built from the client entry, which
-    //is among the first few loaded, rather than searched for.
-    const entry = performance
-      .getEntriesByType("resource")
-      .map((resource) => resource.name)
-      .find((name) => /\/src\/routes\/client-entry\.tsx$/.test(name))
-    if (!entry) throw new Error("the adaptv client entry was never loaded")
-    const url = entry.replace(
-      /routes\/client-entry\.tsx$/,
-      "capabilities/gesture-controller.ts",
-    )
-    const arbiter = await import(/* @vite-ignore */ url)
-    return {
-      holder: arbiter.gestureController.getCaptured() as string | null,
-      scrollBlocked:
-        arbiter.gestureController.isScrollBlocked() as boolean,
-    }
-  })
+async function arbiterHolder(page: Page) {
+  return page.evaluate(
+    async (url) => {
+      const arbiter = await import(/* @vite-ignore */ url)
+      return {
+        holder: arbiter.gestureController.getCaptured() as string | null,
+        scrollBlocked:
+          arbiter.gestureController.isScrollBlocked() as boolean,
+      }
+    },
+    await capabilitiesUrl(page),
+  )
 }
 
 function readTranslateY(page: Page) {

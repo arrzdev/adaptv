@@ -13,8 +13,5 @@ export default defineConfig({
     tsconfigPaths: true,
     dedupe: ["react", "react-dom"],
   },
-  ssr: {
-    noExternal: ["@arrzdev/adaptv"],
-  },
   plugins: [adaptv(), tailwindcss()],
 })

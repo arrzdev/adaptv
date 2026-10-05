@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { DEFAULT_MARGIN } from "./icon-geometry.mjs"
 import { parseTuning, TUNING } from "./icon-tuning.mjs"

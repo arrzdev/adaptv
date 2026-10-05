@@ -167,36 +167,18 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
+/* no fade: the iPhone is the page's largest paint, and a transparent element has not painted */
 @keyframes stage-in {
-  from { opacity: 0; transform: translateY(40px) scale(0.98); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(24px); }
+  to { transform: none; }
 }
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
+/* the hero's phones rise once, after the buttons */
+.stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
 /* a tab switch in "From idea to installed app": a 200 ms crossfade, no movement */
 @keyframes step-in { from { opacity: 0; } }
 .step-in { animation: step-in 0.2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .rise, .stage-in, .step-in { animation: none; }
   [data-reveal] { opacity: 1 !important; transform: none !important; }
-}
-
-/*
- * The "plain web view" half of the press demo. UNLAYERED and written as raw :active on
- * purpose — it is the specimen. adaptv re-points Tailwind's `active:` variant at its own
- * press engine, so a utility class here would quietly demonstrate the fix instead.
- */
-.plain-press {
-  transition: none;
-}
-.plain-press:active {
-  background: color-mix(in oklab, var(--brand) 22%, transparent);
-}
-
-/* and the plain half of the overscroll demo: a scroller exactly as the platform gives it */
-.plain-scroll {
-  overflow-y: auto;
-  overscroll-behavior: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: auto;
 }

@@ -30,7 +30,7 @@ const NOT_FOUND = "/lab/definitely-not-a-route"
 const MASCOT = 'img[src*="/assets/stressed-mascot"]'
 //the first path of the artwork, as it is written in both the .svg and, when it
 //was one, the component's compiled JS. Nothing else in the app draws it
-const ART = "M341.53 247.141a217.4 217.4 0 0 1 57.902-33.972"
+const ART = "M341.53 247.14a217.4 217.4 0 0 1 57.9-33.97"
 //a class only the not-found screen writes: the chunk that has it is the chunk the
 //screen compiled into
 const SCREEN = "w-[min(72vw,18rem,52dvh)]"

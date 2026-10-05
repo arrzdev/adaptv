@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OWN_PHASES } from "../ui/theme.mjs"
 import { namesPlumbing } from "./opacity.mjs"

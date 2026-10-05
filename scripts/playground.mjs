@@ -33,6 +33,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { log } from "../bin/lib/render.mjs"
+import { ensureDist } from "./ensure-dist.mjs"
 
 const WORKTREE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -146,6 +147,19 @@ try {
   }
 } catch {
   // no link yet (a package that doesn't declare it, or a partial install) — the run will say so
+}
+
+// The app resolves `@arrzdev/adaptv/*` to `dist/` like any install, so an edit under `src/`
+// reaches it only through a build. Skipped when nothing changed since the last one, and for
+// the commands that never run the app (`biome:check`).
+if (
+  /^(dev|preview|build|adaptv)\b/.test(args[0]) &&
+  !ensureDist(WORKTREE, {
+    onBuild: () =>
+      log.info("src/ changed since the last build, building dist/…"),
+  })
+) {
+  die("pnpm build failed.", "the output above says why.")
 }
 
 // `--silent` because this is a PASSTHROUGH and pnpm's own chatter is not part of the command

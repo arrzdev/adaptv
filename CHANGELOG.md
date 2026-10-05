@@ -7,8 +7,10 @@ API.
 
 ## [Unreleased]
 
-The first public alpha, planned as `0.1.0-alpha.1`. Nothing has been published yet: the package is
-consumed from a local checkout. What exists today:
+## 0.1.0-alpha.1
+
+The first public alpha. Not published to npm yet: publishing waits on approval, and until then the
+package is installed from the `pnpm pack` tarball. What it contains:
 
 ### Added
 
@@ -17,6 +19,8 @@ consumed from a local checkout. What exists today:
 - **The `adaptv` CLI.** `doctor`, `dev`, `preview` and `build` for `web`, `ios`, `android` or `all`
   (live reload including a physical device over the LAN, an unsigned `.ipa`, a debug `.apk`),
   `keys ota` and `icons`.
+- **`create-adaptv`.** `pnpm create adaptv my-app` writes a new app: a flat config, one route,
+  a stylesheet and scripts for `doctor`, `dev`, `preview` and `build`. Not published yet.
 - **The shell.** It owns the document, critical CSS, the pre-paint theme stamp, safe areas and the
   edge-to-edge frame; SSR app shell and static-host files for the web build.
 - **Primitives.** `View`, `ScrollView`, `List`, `Drawer`, `Dropdown`, `Swipeable`, `PullToRefresh`,
@@ -33,7 +37,7 @@ consumed from a local checkout. What exists today:
 - **Offline and updates:** a framework-owned service worker and a self-hosted, signed over-the-air
   update channel for installed apps.
 - **Icons from one image,** including iOS dark and tinted variants and Android's themed icon.
-- **A `dist` build** (`pnpm build:check`). The package `exports` still point at `src/`; the cutover
-  is on the [roadmap](docs/roadmap/dist-cutover.md).
+- **A `dist` build.** The package `exports` and `files` point at `dist/`, and an app installed from
+  the packed tarball runs (`examples/basic`).
 
 [Unreleased]: https://github.com/arrzdev/adaptv/commits/main
