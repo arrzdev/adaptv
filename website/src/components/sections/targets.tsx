@@ -58,7 +58,7 @@ function TargetRow({ as: Tag }: { as: "ul" | "span" }) {
 export function Targets() {
   const [paused, setPaused] = useState(false)
   return (
-    <section className="sheet ruled">
+    <section className="sheet">
       <div className="flex flex-col gap-5 px-6 py-10 md:flex-row md:items-center md:gap-10 md:px-10">
         <p className="shrink-0 text-[14px] text-muted">Runs on</p>
         <div className="min-w-0 flex-1">

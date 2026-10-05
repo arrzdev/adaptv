@@ -11,58 +11,23 @@ import {
 import { CodePanel } from "@/components/code"
 import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
+import { Terminal } from "@/components/terminal"
+import buildWeb from "@/content/captures/build-web.ansi?raw"
+
+//raw ANSI recorded by scripts/capture-cli.ts; re-capture when the CLI's output changes
+import devWeb from "@/content/captures/dev-web.ansi?raw"
 //the file itself, not a copy: the playground's typecheck is what keeps it compiling
 import pickerSource from "../../../../playground/apps/frontend/src/components/todos/priority-picker.tsx?raw"
 
 /*
- * Nothing to an installed app, as a tabbed panel. Every panel is a real artefact: CLI
- * output copied from the real CLI as text (re-capture it when the CLI's output changes),
- * never an illustration. Build shows a screen from the playground until the template
- * exists. The Create tab joins when `pnpm create adaptv` exists; the phone recordings
- * join the panels when they are captured.
+ * Nothing to an installed app, as a tabbed panel. Every panel is a real artefact: code
+ * from the playground, and CLI sessions captured from the real CLI and replayed, never
+ * an illustration. Run and Ship show the web target until `dev all` and `build all` are
+ * captured on a Mac. The Create tab joins when `pnpm create adaptv` exists.
  */
 
-function TerminalWindow({ children }: { children: ReactNode }) {
-  return (
-    <View className="selectable min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-code-bg font-mono text-[13px] text-code-fg leading-[1.75] shadow-2xl shadow-black/30">
-      <View
-        row
-        className="items-center gap-1.5 border-white/10 border-b px-4 py-3"
-      >
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-        <span className="size-2.5 rounded-full bg-white/15" />
-      </View>
-      {/* long output scrolls inside the window, never the page, and never wraps */}
-      <pre className="max-h-[440px] overflow-auto p-5">{children}</pre>
-    </View>
-  )
-}
-
-/**
- * `adaptv dev web --host`, its settled frame with the CLI's own styles: bold magenta
- * name, green tick, dim detail, cyan key. Only the address is swapped for a LAN example
- * and the port for vite's default.
- */
 function DevOutput() {
-  return (
-    <TerminalWindow>
-      <span className="text-code-muted">$ </span>adaptv dev web --host{"\n\n  "}
-      <span className="font-bold text-[#c08bff]">adaptv</span>
-      <span className="text-code-muted">{" · dev web\n\n  "}</span>
-      <span className="text-[#4fdca0]">✓</span>
-      {" web  "}
-      <span className="text-code-muted">{"· 13.2s\n    local    "}</span>
-      <span className="text-code-muted">{"http://localhost:5173\n    "}</span>
-      <span className="text-code-muted">
-        {"network  http://192.168.1.24:5173\n\n  "}
-      </span>
-      <span className="text-code-muted">device loads from </span>
-      <span className="font-bold">{"http://192.168.1.24:5173\n\n  "}</span>
-      <span className="font-bold text-[#7fc4f5]">ctrl-c</span>
-      <span className="text-code-muted"> stop</span>
-    </TerminalWindow>
-  )
+  return <Terminal command="adaptv dev web --host" capture={devWeb} />
 }
 
 function BuildCode() {
@@ -82,20 +47,18 @@ const OUTCOMES = [
   "Installs from the browser.",
 ] as const
 
-function ShipOutcomes() {
+function ShipOutput() {
   return (
-    <View className="justify-center gap-5 rounded-2xl border border-border bg-surface p-8 md:p-10">
-      {OUTCOMES.map((line) => (
-        <View key={line} row className="items-start gap-3.5">
-          <Check
-            className="mt-1 size-5 shrink-0 text-success"
-            strokeWidth={2.5}
-          />
-          <span className="text-balance font-medium text-[20px] leading-snug tracking-[-0.02em] md:text-[24px]">
+    <View className="gap-4">
+      <Terminal command="adaptv build web" capture={buildWeb} />
+      <ul className="flex flex-col gap-x-6 gap-y-2 text-[14.5px] text-muted md:flex-row md:flex-wrap">
+        {OUTCOMES.map((line) => (
+          <li key={line} className="flex items-center gap-2">
+            <Check className="size-4 shrink-0 text-success" strokeWidth={2.5} />
             {line}
-          </span>
-        </View>
-      ))}
+          </li>
+        ))}
+      </ul>
     </View>
   )
 }
@@ -103,8 +66,6 @@ function ShipOutcomes() {
 type Step = {
   id: string
   label: string
-  /** A shorter label for narrow screens, where the four tabs share one row. */
-  short?: string
   caption: string
   Panel: () => ReactNode
 }
@@ -118,16 +79,15 @@ const STEPS: Step[] = [
   },
   {
     id: "run",
-    label: "Run on your phone",
-    short: "On your phone",
-    caption: "Open the app on a real phone while you edit.",
+    label: "Run",
+    caption: "One dev server. Every platform reloads as you edit.",
     Panel: DevOutput,
   },
   {
     id: "ship",
     label: "Ship",
-    caption: "Put it in front of users.",
-    Panel: ShipOutcomes,
+    caption: "One command builds every platform.",
+    Panel: ShipOutput,
   },
 ]
 
@@ -188,14 +148,7 @@ function StepTabs() {
                 : "border-border-strong text-subtle hover:text-foreground",
             )}
           >
-            {item.short ? (
-              <>
-                <span className="md:hidden">{item.short}</span>
-                <span className="hidden md:inline">{item.label}</span>
-              </>
-            ) : (
-              item.label
-            )}
+            {item.label}
           </button>
         ))}
       </div>
@@ -220,7 +173,7 @@ export function IdeaToInstalled() {
   return (
     <Section
       title="From idea to installed app"
-      lede="Write plain React. Put it on your phone and ship."
+      lede="Write plain React. Run it everywhere, then ship."
     >
       <Reveal>
         <StepTabs />
