@@ -78,7 +78,7 @@ export type OfflineProps = {
 
 export function Offline({ onRetry, error }: OfflineProps) {
   return (
-    <View fill center safe="all" className="gap-4 px-6">
+    <View fill center className="gap-4 py-safe px-safe-offset-6">
       <h1 className="text-lg font-medium">You're offline</h1>
       <p className="text-center opacity-70">
         {error ? "Something didn't load." : "Check your connection and try again."}
