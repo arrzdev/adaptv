@@ -16,8 +16,8 @@ by `"license": "MIT"` in `core/package.json@8.8.14`. No CLA, no patent grant, no
 
 MIT requires only: *"The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software."* **Porting substantial logic counts as a substantial
-portion.** adaptv's own `package.json` says `UNLICENSED`, which is fine — MIT permits relicensing
-derivative work under any terms, including proprietary, as long as the notice travels with the code.
+portion.** adaptv itself is MIT too (since 2026-10-05; it was `UNLICENSED` before). Either is fine — MIT permits
+relicensing derivative work under any terms, as long as the notice travels with the code.
 
 ### 🔒 The convention
 
