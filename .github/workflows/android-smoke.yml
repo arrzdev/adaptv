@@ -48,20 +48,28 @@ jobs:
       - name: Pack adaptv
         run: pnpm build && pnpm pack
 
+      # The app is built OUTSIDE the checkout, as a consumer's would be: inside it, Node
+      # resolves react-dom from the repo's own node_modules and react from the app's, and the
+      # prerender dies on two Reacts. The tarball and patches keep their relative paths.
       # The example's own home page has nothing to navigate to or type into, so the smoke's
-      # routes replace its routing for this build. Everything else is the example as shipped.
-      - name: Smoke routes into examples/basic
+      # routes replace its routing. Everything else is the example as shipped.
+      - name: Copy examples/basic out of the checkout
         run: |
-          rm -rf examples/basic/src/routing
-          cp -R .github/android-smoke/routing examples/basic/src/routing
+          app="$RUNNER_TEMP/app"
+          mkdir -p "$app/examples"
+          cp -R examples/basic "$app/examples/basic"
+          cp -R patches arrzdev-adaptv-*.tgz "$app/"
+          rm -rf "$app/examples/basic/src/routing"
+          cp -R .github/android-smoke/routing "$app/examples/basic/src/routing"
+          echo "APP_DIR=$app/examples/basic" >> "$GITHUB_ENV"
 
       # examples/basic has no lockfile on purpose; CI=1 would otherwise imply --frozen-lockfile.
-      - name: Install examples/basic
-        working-directory: examples/basic
+      - name: Install the app
+        working-directory: ${{ env.APP_DIR }}
         run: pnpm install --no-frozen-lockfile
 
       - name: Build the debug apk
-        working-directory: examples/basic
+        working-directory: ${{ env.APP_DIR }}
         run: |
           pnpm exec adaptv build android
           apk="$(ls .adaptv/builds/*.apk | head -n 1)"
