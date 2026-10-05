@@ -53,6 +53,40 @@ adaptv re-exports **only what it endorses.** Three rules:
    re-exporting is not enough on its own — the consumer can
    always import the package directly.
 
+4. **🔒 adaptv's dependencies are not the app's.** *Decided 2026-10-05 (TUD-236).* An app imports
+   what its own `package.json` lists and what `@arrzdev/adaptv/*` exports. Every package in
+   adaptv's `dependencies`, and the whole `@tanstack/` scope (the engine's transitive packages
+   reach the app's `node_modules` the same way), is refused in app source **unless the app lists
+   that package itself**, in which case it is the app's own and imports like any other. A dev who
+   wants a library installs it.
+
+   **Mechanism:** `src/vite/engine-imports.ts`, the second plugin in `adaptv()`'s array,
+   `enforce: "pre"`. Its `transform` parses each of the app's own modules (`vite`'s `parseAst`;
+   files under the app root, outside `node_modules`, without a query) and fails the build, or the
+   dev server's request, at the specifier when an import names one of those packages and the
+   app's `package.json` does not. It reads the source **before** any plugin writes imports into
+   it, which is why it is not a `resolveId` rule: TanStack's code-splitter writes
+   `@tanstack/react-router` into the app's route modules, and `tanstack-resolve.ts` must keep
+   resolving those from adaptv. The server-only modules stay with §2's ban, which refuses them
+   whether listed or not.
+
+   **Why the install layout could not be the rule:** pnpm's strict layout used to refuse an
+   unlisted package by accident, until `tanstack-resolve.ts` began resolving every `@tanstack/*`
+   import in the app's files from adaptv; npm and Yarn hoist adaptv's dependencies into the
+   app's `node_modules`, so there it always resolved (§2.6 "Relying on pnpm strictness").
+   `packages/create-adaptv/create.test.mjs` builds a created app outside the repo under both
+   layouts: refused, refused, and built once the app lists the package.
+
+   **What the dev sees:** the first line of the message is the whole of it (file, problem, the
+   two ways out) and names no engine, because the CLI drops any line that does
+   (`bin/lib/opacity.mjs`): `✖ web  src/routing/pages/home.page.tsx imports a package missing
+   from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.` The
+   second line quotes the import the dev wrote, for the dev overlay and a plain `vite build`.
+
+   **Not covered:** the type checker. Under a hoisted install `tsc` and the editor still resolve
+   an unlisted package; the build is the gate. The shipped lint config does not add Biome's
+   `noUndeclaredDependencies`, because a created app does not extend it.
+
 **What "stop re-exporting `createServerFn`" concretely means:** adaptv has no root `.` export today
 and no barrel that forwards TanStack Start. There is nothing to remove. The work is (a) keeping it
 that way as barrels grow, and (b) adding the enforcement in §2, because *absence from adaptv's barrel

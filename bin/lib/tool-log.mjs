@@ -316,8 +316,11 @@ export const isRawToolNoise = (line) =>
 const ERROR_LINE =
   /(?:\berror\b[: ]|^\s*\w*Error(?:\s*\[\w+\])?:|\bfatal\b|BUILD FAILED|FAILURE:|\bfailed\b|xcodebuild: error|The sandbox is not in sync)/i
 // "N errors generated" is a COUNT, not the error; keeping it would win the "first error
-// line" race against the diagnostic that explains what to fix.
-const NOT_ERROR = /^\s*(?:\d+\s+errors?\s+generated|0\s+error)/i
+// line" race against the diagnostic that explains what to fix. The bundler's
+// `Build failed with 1 error:` is the same count, above the plugin error that says what
+// broke, and it was the whole ✖ line of a web build an adaptv plugin refused.
+const NOT_ERROR =
+  /^\s*(?:\d+\s+errors?\s+generated|0\s+error|Build failed with \d+ errors?:)/i
 // Gradle states the cause on the lines AFTER this header, and those lines need not contain
 // "error"/"failed" themselves ("> Android resource linking failed" does; "Could not find
 // method compile()" does not). So a header drags its next few lines in with it.
