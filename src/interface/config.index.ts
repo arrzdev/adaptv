@@ -11,6 +11,8 @@ export {
 //adaptv's worker is not configurable, and the app's own modules are named in
 //`serviceWorkers: []`. → `docs/design/rendering.md §3`
 export type {
+  NotFoundScreenComponent,
+  NotFoundScreenProps,
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
