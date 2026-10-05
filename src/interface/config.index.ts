@@ -7,11 +7,14 @@ export {
   type ScreenThunk,
   type UiPatchScope,
 } from "../config/app-config.ts"
-//No `defineSwConfig` / `SwConfig`: an app has no service-worker config to define.
-//adaptv's worker is not configurable, and the app's own modules are named in
-//`serviceWorkers: []`. → `docs/design/rendering.md §3`
+//Every screen option's props type is public, here or beside its default
+//component in the components barrel. `config.barrel.test.ts` holds that.
 export type {
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
+  UpdateRequiredProps,
 } from "../config/types.ts"
+//No `defineSwConfig` / `SwConfig`: an app has no service-worker config to define.
+//adaptv's worker is not configurable, and the app's own modules are named in
+//`serviceWorkers: []`. → `docs/design/rendering.md §3`
