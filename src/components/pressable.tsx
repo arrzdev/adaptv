@@ -67,7 +67,7 @@ export type PressableProps = OmitGestureEngineHandlers<
   onPress?: (e: GestureEvent) => void
   /** Pointer/keyboard went down (the moment of contact), before any activation. */
   onPressDown?: (e: GestureEvent) => void
-  /** Drop every gesture. Emits `data-disabled` + `aria-disabled` and locks the disabled interaction class. */
+  /** Drop every gesture. Emits `data-disabled` + `aria-disabled` and locks the disabled interaction style inline. */
   disabled?: boolean
   /**
    * Margin (px) around the frame within which the press stays armed — larger forgives
@@ -79,6 +79,17 @@ export type PressableProps = OmitGestureEngineHandlers<
    * `(props, state) => node`. → `docs/decisions/styling.md §3.3` (a prop, not `asChild`).
    */
   render?: PressableRender
+}
+
+/**
+ * The `data-part` a node already carries — a consumer's prop or the `render` element's
+ * own — which Pressable keeps rather than stamping its `root` over it.
+ */
+function ownDataPart(source: object | undefined): string | undefined {
+  const part = (source as { "data-part"?: unknown } | undefined)?.[
+    "data-part"
+  ]
+  return typeof part === "string" ? part : undefined
 }
 
 /**
@@ -99,6 +110,7 @@ export type PressableProps = OmitGestureEngineHandlers<
  * | Attribute | When |
  * |-----------|------|
  * | `data-adaptv="pressable"` | always — target it from global CSS with no imports |
+ * | `data-part="root"` | always, unless the node already carries a `data-part` |
  * | `data-pressed` | pointer down within the press region |
  * | `data-disabled` | `disabled` |
  *
@@ -131,7 +143,7 @@ export function Pressable({
   pressOutset,
   ...props
 }: PressableProps) {
-  const { handlers, locked } = usePressCore({
+  const { handlers, lockedStyle } = usePressCore({
     disabled,
     pressOutset,
     onPressDown,
@@ -140,30 +152,31 @@ export function Pressable({
 
   //An element passed to `render` carries its own className/style, written at the same
   //call site as Pressable's own — so both are the CONSUMER tier, and neither may
-  //outrank `locked`. §3.3: the composition path routes through mergeStyles instead of
-  //concatenating and letting stylesheet source order decide, which is what every other
-  //library does (in two opposite orders). Pressable's own props go last, so they win
+  //outrank the lock. §3.3: the composition path joins the classes (render element
+  //first) and merges the styles per property, Pressable's own props last so they win
   //the per-property tie — Base UI's order, and the more local of the two.
+  //Pressable emits no class of its own and has no default rule: it adds mechanics,
+  //not a look, so `className` is the consumer's alone.
   const slot = typeof render === "function" ? null : render
   const merged = mergeStyles({
     className: [slot?.props.className, className],
-    //structural, not styling — {@link PRESS_TARGET_LOCKED_CLASS} carries the
-    //`touch-action` longhand the engine needs, and a consumer `touch-none` landing on
-    //top of it would strand a gesture.
-    locked,
     style: { ...slot?.props.style, ...style },
-    //nothing about a press target is structural in INLINE style — the touch-action
-    //workaround is a class, and per-frame writes belong in a custom property (§3.2).
-    //Named explicitly so the omission reads as a decision.
-    lockedStyle: undefined,
+    //structural, not styling — the press core's inline `touch-action` longhand
+    //(`PRESS_TARGET_LOCKED_STYLE`, plus `user-select: none` when disabled) is what the
+    //engine needs, and inline style is the one tier a consumer `touch-none` class or
+    //`style={{ touchAction }}` cannot land on top of (docs/decisions/styling.md §2.0).
+    lockedStyle,
   })
 
   const slotProps: PressableSlotProps = {
     ...props,
     ...handlers,
-    className: merged.className,
+    //no consumer class, no attribute: an empty `class=""` is still a class adaptv wrote
+    className: merged.className || undefined,
     style: merged.style,
     "data-adaptv": "pressable",
+    //a `data-part` already on the node (a row rendering as a Pressable) is kept
+    "data-part": ownDataPart(props) ?? ownDataPart(slot?.props) ?? "root",
     //`""`, not `true`: React stringifies a boolean data-* value to "true", and this
     //is a PRESENCE attribute (§3.1) — the same shape the engine writes data-pressed in
     "data-disabled": disabled ? "" : undefined,

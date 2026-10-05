@@ -1,13 +1,12 @@
 import type { ComponentPropsWithRef, MouseEvent } from "react"
 import { openExternal } from "#adaptv/capabilities/browser"
-import {
-  PRESS_TARGET_CURSOR_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
-} from "#adaptv/components/press-core"
+import { PRESS_TARGET_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isNativePlatform } from "#adaptv/utils/platform"
 import { mergeStyles } from "#adaptv/utils/styles"
 
-const EXTERNAL_LINK_BASE_CLASS = "text-left no-underline"
+//The look — left-aligned, no underline, a pointer cursor — is a default rule in
+//styles/link.css; the press-core touch longhand is locked, inline
+//(docs/decisions/styling.md §2.0).
 
 export interface ExternalLinkProps extends ComponentPropsWithRef<"a"> {
   /** The external destination (http/https/mailto/tel/…). */
@@ -34,9 +33,16 @@ export function ExternalLink({
   href,
   onClick,
   className,
+  style,
   children,
   ...props
 }: ExternalLinkProps) {
+  const merged = mergeStyles({
+    className,
+    style,
+    lockedStyle: PRESS_TARGET_LOCKED_STYLE,
+  })
+
   function handleClick(e: MouseEvent<HTMLAnchorElement>) {
     onClick?.(e)
     if (e.defaultPrevented) return
@@ -58,17 +64,17 @@ export function ExternalLink({
 
   return (
     <a
+      //both ahead of the spread: `Link` renders this anchor under its own scope
+      //(`data-adaptv="link"`), and a wrapper's `data-part` reaches the element
       data-adaptv="external-link"
+      data-part="root"
       {...props}
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       onClick={handleClick}
-      className={mergeStyles({
-        base: [EXTERNAL_LINK_BASE_CLASS, PRESS_TARGET_CURSOR_CLASS],
-        className,
-        locked: PRESS_TARGET_LOCKED_CLASS,
-      })}
+      className={merged.className || undefined}
+      style={merged.style}
     >
       {children}
     </a>

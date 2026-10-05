@@ -1,4 +1,9 @@
-import type { ComponentProps, ReactNode, RefObject } from "react"
+import type {
+  ComponentProps,
+  CSSProperties,
+  ReactNode,
+  RefObject,
+} from "react"
 import {
   Children,
   createContext,
@@ -104,35 +109,46 @@ export function resolveButtonHaptic(
   return haptic === true ? "light" : haptic
 }
 
-//LOCKED on the slots: the content row tweens to a MEASURED width, so a slot that
-//shrinks (`shrink`) or stops being an inline flex row changes what `scrollWidth`
-//reports and the animation lands on the wrong size. Everything cosmetic about a
-//slot — alignment, the svg display fix — stays in `base`.
-const BUTTON_SLOT_LOCKED_LAYOUT_CLASS = "inline-flex shrink-0 items-center"
-const BUTTON_SLOT_BASE_LAYOUT_CLASS = "justify-center [&>svg]:block"
-//LOCKED: these two ARE the width mode. `shrink-0` is what makes an intrinsic-width
-//button size to its label; `min-w-0` is what lets the label truncate inside a fixed
-//one. Swapping either by hand desyncs the label from the root's measured width.
-const BUTTON_TEXT_INTRINSIC_LAYOUT_CLASS =
-  "inline-flex shrink-0 items-center"
-const BUTTON_TEXT_FIXED_LAYOUT_CLASS = "inline-flex min-w-0 items-center"
-const BUTTON_CONTENT_MEASURE_ROW_CLASS =
-  "inline-flex w-max max-w-full items-center"
-const BUTTON_CONTENT_MOTION_SHELL_CLASS =
-  "relative inline-flex max-w-full items-center overflow-hidden"
-const BUTTON_CONTENT_INNER_ROW_CLASS =
-  "inline-flex w-max max-w-full items-center"
-const BUTTON_ROOT_LAYOUT_CLASS =
-  "inline-flex w-fit min-w-0 max-w-full items-center justify-center select-none"
-//⚠︎ Do NOT re-add `border border-transparent` here to pre-allocate a toggled border.
-//It was tried and reverted: it only cancels the shift for a border of exactly 1px
-//(a consumer writing `border-2` shifts again), while permanently and invisibly
-//costing 2px of content box on EVERY button — a fixed-height control silently stops
-//matching its design spec. A mitigation that works in one case and fails silently in
-//the rest manufactures false confidence, which is worse than none (VISION.md, layout
-//shift). For toggled emphasis the correct primitive is `outline`, which never
-//participates in layout at any width and follows `border-radius`.
-const BUTTON_ROOT_SURFACE_CLASS = "bg-gray-50 text-gray-950"
+//LOCKED on the slots, inline (docs/decisions/styling.md §2.0): the content row tweens
+//to a MEASURED width, so a slot that shrinks or stops being an inline flex row changes
+//what `scrollWidth` reports and the animation lands on the wrong size. Everything
+//cosmetic about a slot — alignment, the svg display fix — is a default rule in
+//styles/button.css.
+const BUTTON_SLOT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "inline-flex",
+  flexShrink: 0,
+  alignItems: "center",
+})
+//LOCKED, inline: these two ARE the width mode. `flex-shrink: 0` is what makes an
+//intrinsic-width button size to its label; `min-width: 0` is what lets the label
+//truncate inside a fixed one. Swapping either by hand desyncs the label from the
+//root's measured width.
+const BUTTON_TEXT_INTRINSIC_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "inline-flex",
+  flexShrink: 0,
+  alignItems: "center",
+})
+const BUTTON_TEXT_FIXED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "inline-flex",
+  minWidth: 0,
+  alignItems: "center",
+})
+//The root's look, the content rows and the slot defaults are rules in
+//styles/button.css, keyed on `[data-adaptv="button"][data-part="…"]`; the ⚠︎ note on
+//why there is no pre-allocated transparent border lives there with the root's rule.
+
+/**
+ * A {@link Fab}'s default width is fixed — `fab.css` sizes its root — so its width
+ * mode is "fixed" until the consumer's `className` names a width of its own, unprefixed
+ * (`w-*` / `size-*`); then that class decides, as for any Button. A prefixed one
+ * (`sm:w-auto`) leaves the default in force below its breakpoint, so it is still fixed.
+ */
+function fabHasFixedWidth(className?: string): boolean {
+  const ownWidth = (className ?? "")
+    .split(/\s+/)
+    .some((token) => /^(?:w|size)-/.test(token))
+  return ownWidth ? buttonHasFixedWidth(className) : true
+}
 
 /** Programmatic state Tier 2 reads via {@link useButton}. */
 export type ButtonContextValue = {
@@ -236,11 +252,10 @@ function ButtonLeading({ children, className }: ButtonLeadingProps) {
   return (
     <span
       aria-hidden
-      className={mergeStyles({
-        base: BUTTON_SLOT_BASE_LAYOUT_CLASS,
-        className,
-        locked: BUTTON_SLOT_LOCKED_LAYOUT_CLASS,
-      })}
+      data-adaptv="button"
+      data-part="leading"
+      className={className || undefined}
+      style={BUTTON_SLOT_LOCKED_STYLE}
     >
       {children}
     </span>
@@ -273,11 +288,10 @@ function ButtonTrailing({ children, className }: ButtonTrailingProps) {
   return (
     <span
       aria-hidden
-      className={mergeStyles({
-        base: BUTTON_SLOT_BASE_LAYOUT_CLASS,
-        className,
-        locked: BUTTON_SLOT_LOCKED_LAYOUT_CLASS,
-      })}
+      data-adaptv="button"
+      data-part="trailing"
+      className={className || undefined}
+      style={BUTTON_SLOT_LOCKED_STYLE}
     >
       {children}
     </span>
@@ -301,15 +315,16 @@ function ButtonText({ children, className }: ButtonTextProps) {
 
   return (
     <span
-      className={mergeStyles({
-        //nothing neutral to override here — the label's only intrinsic styling IS
-        //the width mode, and that is the root's `w-*` decision, not the label's
-        base: undefined,
-        className,
-        locked: hasFixedWidth
-          ? BUTTON_TEXT_FIXED_LAYOUT_CLASS
-          : BUTTON_TEXT_INTRINSIC_LAYOUT_CLASS,
-      })}
+      data-adaptv="button"
+      data-part="label"
+      className={className || undefined}
+      //nothing neutral to override here — the label's only intrinsic styling IS the
+      //width mode, and that is the root's `w-*` decision, not the label's
+      style={
+        hasFixedWidth
+          ? BUTTON_TEXT_FIXED_LOCKED_STYLE
+          : BUTTON_TEXT_INTRINSIC_LOCKED_STYLE
+      }
     >
       {children}
     </span>
@@ -396,17 +411,19 @@ function ButtonContentRow({
     },
   )
 
+  //the row's look is styles/button.css (`content`, and the clipping `content-shell`
+  //the width tween runs on); no class of adaptv's reaches either span
   if (hasFixedWidth || reducedMotion) {
     return (
-      <span className={BUTTON_CONTENT_MEASURE_ROW_CLASS} ref={measureRef}>
+      <span data-adaptv="button" data-part="content" ref={measureRef}>
         {children}
       </span>
     )
   }
 
   return (
-    <span ref={shellRef} className={BUTTON_CONTENT_MOTION_SHELL_CLASS}>
-      <span ref={measureRef} className={BUTTON_CONTENT_INNER_ROW_CLASS}>
+    <span ref={shellRef} data-adaptv="button" data-part="content-shell">
+      <span ref={measureRef} data-adaptv="button" data-part="content">
         {children}
       </span>
     </span>
@@ -429,8 +446,8 @@ ButtonContentRow.displayName = "ButtonContentRow"
  * **Baseline styles**: neutral gray, `w-fit`, `inline-flex`, and deliberately **no
  * pre-allocated border**. Under `box-sizing: border-box` a border that appears later
  * eats the content box and shifts the label, but reserving a transparent 1px one only
- * cancels that for a border of exactly 1px — see the ⚠︎ note on
- * `BUTTON_ROOT_SURFACE_CLASS` for why it was tried and reverted. For toggled emphasis
+ * cancels that for a border of exactly 1px — see the ⚠︎ note on the root's rule in
+ * `styles/button.css` for why it was tried and reverted. For toggled emphasis
  * (`className={selected ? "outline-orange-500" : ""}`) reach for `outline`, which never
  * participates in layout at any width and follows `border-radius`.
  * Provide variants via `className` — no internal variant logic. With intrinsic width, the content
@@ -462,7 +479,7 @@ ButtonContentRow.displayName = "ButtonContentRow"
  * ```
  */
 const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
-  { className, children, disabled, onClick, haptic, ...props },
+  { className, style, children, disabled, onClick, haptic, ...props },
   ref,
 ) {
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -482,7 +499,13 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
   )
 
   const isDisabled = Boolean(disabled)
-  const hasFixedWidth = buttonHasFixedWidth(className)
+  //a composing Fab stamps its own scope over `button`, and with it a fixed default
+  //width the consumer's className may or may not replace (fabHasFixedWidth)
+  const scope = (props as { "data-adaptv"?: unknown })["data-adaptv"]
+  const hasFixedWidth =
+    scope === "fab"
+      ? fabHasFixedWidth(className)
+      : buttonHasFixedWidth(className)
 
   //iOS web can only produce a haptic from a real finger landing on a real
   //`<input switch>`, so the `haptic` prop mounts a transducer overlay in addition
@@ -504,12 +527,11 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
   )
 
   //the same press implementation Pressable ships — engine + the locked interaction
-  //class. Button adds what a press target alone does not have: semantics, haptics,
+  //style. Button adds what a press target alone does not have: semantics, haptics,
   //slots. → src/components/press-core.ts
   const {
     handlers: gestureEngineHandlers,
-    locked: pressLocked,
-    base: pressBase,
+    lockedStyle: pressLockedStyle,
   } = usePressCore({
     disabled: isDisabled,
     pressOutset: BUTTON_PRESS_OUTSET_PX,
@@ -526,6 +548,12 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
     ),
   })
 
+  const merged = mergeStyles({
+    className,
+    style,
+    lockedStyle: pressLockedStyle,
+  })
+
   return (
     <ButtonContext.Provider value={{ isDisabled, hasFixedWidth }}>
       <button
@@ -536,25 +564,17 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
         //the component the CONSUMER wrote; a composing primitive (Fab) overrides it
         //by passing its own, which is why this sits ahead of the `{...props}` spread
         data-adaptv="button"
+        data-part="root"
         {...props}
         {...gestureEngineHandlers}
-        //The interaction utility is LOCKED, the look is not — `pressLocked` is the
-        //press core's structural class (`PRESS_TARGET_LOCKED_CLASS`, or
-        //`PRESS_TARGET_DISABLED_LOCKED_CLASS` when disabled), and why it cannot be
-        //overridden is documented there.
-        //Layout and surface stay overridable: restyling a button is the point.
-        className={mergeStyles({
-          base: [
-            BUTTON_ROOT_LAYOUT_CLASS,
-            BUTTON_ROOT_SURFACE_CLASS,
-            //the cursor rides the BASE tier so `className="cursor-wait"` on a
-            //pending button actually lands — it used to be inside the locked
-            //`clickable` bundle and was silently unreachable
-            pressBase,
-          ],
-          className,
-          locked: pressLocked,
-        })}
+        //The interaction style is LOCKED, the look is not — `pressLockedStyle` is the
+        //press core's inline `touch-action` longhand (`PRESS_TARGET_LOCKED_STYLE`, or
+        //`PRESS_TARGET_DISABLED_LOCKED_STYLE` when disabled), and why it cannot be
+        //overridden is documented there. Layout, surface and cursor are default rules
+        //in styles/button.css (the cursor keyed on `:disabled`), so `className` is the
+        //consumer's alone and restyling a button is the point.
+        className={merged.className || undefined}
+        style={merged.style}
       >
         <ButtonContentRow
           buttonRef={buttonRef}

@@ -40,16 +40,44 @@
 /* 2. Reset rules and platform patches */
 @import "./patches.css";
 
-/* 3. Component-owned styles (screen, scroll fade, drawer keyframes, swipeable layout,
- *    collapsible motion, skeleton pulse, divider, spinner motion, the wheel's focus ring) */
+/* 3. Component-owned styles, all in `@layer adaptv.components`: each primitive's default
+ *    look and soft structure, keyed on `[data-adaptv][data-part]` under `:where()`, so any
+ *    consumer `className` wins over it (docs/decisions/styling.md §2). What a consumer
+ *    must not undo is inline style the primitive writes, never a rule here. */
 @import "./screen.css";
 @import "./scroll-fade.css";
-@import "./drawer.css";
-@import "./swipeable.css";
-@import "./collapsible.css";
+@import "./button.css";
+@import "./fab.css";
+@import "./link.css";
+@import "./view.css";
+@import "./scroll-view.css";
+@import "./list.css";
+@import "./icon.css";
+@import "./spinner.css";
+@import "./progress-bar.css";
 @import "./skeleton.css";
 @import "./divider.css";
-@import "./spinner.css";
+@import "./offline.css";
+@import "./not-found.css";
+@import "./boot-error.css";
+@import "./update-required.css";
+@import "./orientation-guard.css";
+@import "./shell-layout.css";
+@import "./pwa-splash-overlay.css";
+@import "./checkbox.css";
+@import "./radio-group.css";
+@import "./switch.css";
+@import "./slider.css";
+@import "./input.css";
+@import "./text-area.css";
+@import "./field-group.css";
+@import "./select.css";
+@import "./dropdown.css";
+@import "./drawer.css";
+@import "./image.css";
+@import "./pull-to-refresh.css";
+@import "./swipeable.css";
+@import "./collapsible.css";
 @import "./wheel-column.css";
 
 /* 4. Atomic utility definitions go last to win the cascade */
