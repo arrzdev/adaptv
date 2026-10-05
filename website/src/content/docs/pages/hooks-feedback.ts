@@ -5,7 +5,7 @@ export const page: DocPage = {
   slug: "hooks-feedback",
   title: "Input and feedback hooks",
   summary:
-    "The on-screen keyboard, haptics, the press engine behind every adaptv control, taps on canvas surfaces, and freezing the viewport under an overlay.",
+    "The on-screen keyboard, haptics, the press engine, taps on canvas surfaces, and freezing the viewport under an overlay.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
     'import { useKeyboard, useHaptics, useHapticTick, useVibrate, useGestureEngine, useClickFix, useFreezeViewport } from "@arrzdev/adaptv/hooks"',
@@ -41,43 +41,42 @@ const handlers = useGestureEngine({
       signature:
         "function useKeyboard(options?: UseKeyboardOptions): KeyboardState",
       description:
-        "The on-screen keyboard as state: whether it is up and how tall it is. On native the OS reports an exact height. On web the height is read from the VirtualKeyboard API where it exists and otherwise worked out from `visualViewport` geometry, with the transient readings browsers emit while the keyboard animates filtered out. It reports open only while a text field is focused. Most screens do not need this hook: [AvoidKeyboard](/docs/avoid-keyboard) and [Drawer](/docs/drawer) already use it. Reach for it when you lay out around the keyboard yourself. The [keyboard guide](/docs/keyboard) covers the whole model.",
+        "The on-screen keyboard: open or closed, and its height. It reports open only while a text field has focus. [AvoidKeyboard](/docs/avoid-keyboard) and [Drawer](/docs/drawer) use it already. Use the hook to lay out around the keyboard yourself. See the [keyboard guide](/docs/keyboard).",
       params: [
         {
           name: "isEnabled",
           type: "boolean",
           default: "true",
           description:
-            "Set `false` to remove the listeners. The hook then reports closed.",
+            "`false` removes the listeners. The hook reports closed.",
         },
         {
           name: "visualViewportThreshold",
           type: "number",
           default: "100",
           description:
-            "Web only. The smallest visual-viewport shrink, in px, treated as a keyboard. Smaller changes are browser chrome moving.",
+            "Web only. The smallest viewport shrink, in px, that counts as a keyboard.",
         },
         {
           name: "debounceDelay",
           type: "number",
           default: "50",
-          description:
-            "Web only. Settle delay in ms for bursts of viewport resize and scroll events.",
+          description: "Web only. Settle delay in ms for viewport events.",
         },
         {
           name: "predictFromCache",
           type: "boolean",
           default: "false",
           description:
-            "Report a height the moment a field is focused, taken from what the keyboard measured last time on this device, so a lift can start on the same frame as the tap. The real measurement then confirms or corrects it; if no keyboard appears within 400 ms (a hardware keyboard, a programmatic focus) the prediction is withdrawn. Works on web and native.",
+            "On focus, report the last measured height, so your lift starts on the tap frame. The real value then corrects it. With no keyboard after 800 ms, the guess is withdrawn.",
         },
       ],
       returns:
-        "`{ isOpen, height }`. `height` is in px and `0` when closed. Closed on the server and until the first keyboard event.",
+        "`{ isOpen, height, unpaidHeight, resizesLayoutViewport }`. `height` is in px. `unpaidHeight` is the part of `height` that the layout has not already given up. On Android native the WebView shrinks, so use `unpaidHeight` there. Closed on the server.",
     },
     {
       type: "p",
-      text: "While at least one enabled `useKeyboard` is mounted, the same state is published on `<html>` for CSS: the `--adaptv-keyboard-height` custom property (always defined, `0px` when closed) and the `data-keyboard-open` attribute (present or absent). Chrome that lives outside the focused form, such as a tab bar, can respond without any React state.",
+      text: "While the hook is mounted, `<html>` has `--adaptv-keyboard-height` (`0px` when closed) and `data-keyboard-open` (when open). Use them in CSS.",
     },
     {
       type: "code",
@@ -100,89 +99,57 @@ const handlers = useGestureEngine({
   padding-bottom: calc(var(--adaptv-keyboard-height) + 8px);
 }`,
     },
-    { type: "h3", text: "Helpers exported with it" },
+    { type: "h3", text: "Helpers" },
     {
       type: "props",
       rows: [
         {
           name: "dismissVirtualKeyboard()",
           type: "() => void",
-          description:
-            "Blur the focused text field so the keyboard can close. Does nothing when the focused element is not a text field.",
+          description: "Blur the focused text field.",
         },
         {
           name: "willOpenVirtualKeyboard(target)",
           type: "(target: Element) => boolean",
-          description:
-            "Whether focusing the element raises a keyboard: a text-like `<input>`, a `<textarea>` or a contenteditable. Checkboxes, radios, ranges, colour, file and button inputs do not.",
+          description: "`true` if focusing the element raises a keyboard.",
         },
         {
           name: "getVirtualKeyboardApi()",
           type: "() => VirtualKeyboardApi | null",
-          description:
-            "`navigator.virtualKeyboard` when it exists and the page is a secure context, else `null`. Chromium only.",
-        },
-        {
-          name: "isSecureContext()",
-          type: "() => boolean",
-          description: "`window.isSecureContext`, `false` on the server.",
-        },
-        {
-          name: "KEYBOARD_MOCK_EVENT",
-          type: '"adaptv:keyboard-mock"',
-          description:
-            "Test seam. Simulators do not raise a software keyboard for a scripted run, so a test harness can set `window.__adaptvKeyboardMock = { isOpen, height }` before the hook mounts and dispatch this event on `window` after each change. While the mock is set the hook reports it and nothing else.",
-        },
-        {
-          name: "isSuppressibleKeyboardShrink(...)",
-          type: "(wasOpen: boolean, committedHeight: number, next: KeyboardState, thresholdPx: number) => boolean",
-          description:
-            "The pure rule behind the native shrink filter: `true` for a small shrink of an open keyboard, which the hook holds for a moment instead of applying (iOS toggles its password AutoFill bar on and off). Exported for unit tests; an app has no use for it.",
+          description: "`navigator.virtualKeyboard`, or `null`. Chromium only.",
         },
       ],
     },
     {
       type: "targets",
       rows: [
-        {
-          target: "Desktop web",
-          status: "no",
-          note: "No on-screen keyboard. `height` stays `0` and `data-keyboard-open` never appears, which is correct.",
-        },
+        { target: "Desktop web", status: "no", note: "No on-screen keyboard." },
         {
           target: "Mobile web",
           status: "partial",
-          note: "An inferred height from viewport geometry. It trails the keyboard's animation by a few frames; `predictFromCache` closes most of that gap after the first open.",
+          note: "Height is inferred. It trails by a few frames.",
         },
         {
           target: "Installed PWA",
           status: "partial",
-          note: "Same inference as the mobile browser.",
+          note: "Same as mobile web.",
         },
-        {
-          target: "iOS",
-          status: "yes",
-          note: "An exact height from the OS. adaptv turns off the WebView's own resize, so the layout height does not change when the keyboard opens.",
-        },
-        {
-          target: "Android",
-          status: "yes",
-          note: "An exact height from the OS. Keyboards with and without a suggestion strip differ by 40 to 50 px.",
-        },
+        { target: "iOS", status: "yes", note: "Exact height from the OS." },
+        { target: "Android", status: "yes", note: "Exact height from the OS." },
       ],
     },
 
     { type: "h2", text: "Haptics" },
     {
       type: "p",
-      text: "There are two ways to fire a haptic and they are not interchangeable. An imperative call (`useHaptics`) reaches the real engine on native and `navigator.vibrate` on Android browsers. iOS browsers have no vibration API, and from iOS 26.5 a script can no longer trigger the system tick at all; only a real finger landing on a native switch element can. That is what the declarative path (`useHapticTick`, and the `haptic` prop on [Button](/docs/button)) does. For feedback on a tap, prefer the `haptic` prop. For feedback that is not a tap (an upload finished, a timer ended), use `useHaptics`.",
+      text: "iOS browsers have no vibration API, and from iOS 26.5 a script cannot trigger the system tick. Only a real finger on a native switch can. `useHapticTick` and the `haptic` prop on [Button](/docs/button) use that path. For a tap, use the `haptic` prop. For other events, use `useHaptics`.",
     },
     {
       type: "api",
       name: "useHaptics()",
       signature: "function useHaptics(): typeof haptics",
       description:
-        "Returns the imperative `haptics` object from [capabilities](/docs/capabilities) and prepares the iOS web fallback on mount, so the first call in a handler fires without delay. Call the methods from event handlers. They return nothing and never throw.",
+        "Returns the `haptics` object from [capabilities](/docs/capabilities). The methods never throw.",
       returns: "`{ impact, notify, selection, isSupported }`.",
     },
     {
@@ -192,26 +159,24 @@ const handlers = useGestureEngine({
           name: "impact(weight?)",
           type: '(weight?: "light" | "medium" | "heavy") => void',
           default: '"light"',
-          description:
-            "A physical tap. The three weights are distinct on native; on web they are vibration lengths of 8, 22 and 26 ms.",
+          description: "A physical tap. On web: 8, 22 or 26 ms of vibration.",
         },
         {
           name: "notify(type)",
           type: '(type: "success" | "warning" | "error") => void',
           description:
-            "Notification feedback. On web: one 40 ms pulse for success, a double pulse for warning and error.",
+            "Result feedback. On web: one pulse for success, two for the others.",
         },
         {
           name: "selection()",
           type: "() => void",
-          description:
-            "A light tick for a picker or segmented control changing value.",
+          description: "A light tick for a picker or segmented control.",
         },
         {
           name: "isSupported()",
           type: "() => boolean",
           description:
-            "Whether a haptic path exists here. It is still `true` on iOS 26.5+ Safari, where the call runs and nothing fires: the OS change cannot be detected. Do not gate UI on it for that case.",
+            "`true` if a haptic path exists. It is `true` on iOS 26.5+ Safari, where nothing fires.",
         },
       ],
     },
@@ -233,32 +198,28 @@ async function upload(file: File) {
     {
       type: "note",
       tone: "info",
-      text: "On web, pulses closer together than 200 ms are dropped, because rapid vibration reads as noise. Native has no such throttle.",
+      text: "On web, a pulse within 200 ms of another is dropped.",
     },
     {
       type: "targets",
       rows: [
-        {
-          target: "Desktop web",
-          status: "no",
-          note: "No hardware. The calls do nothing.",
-        },
+        { target: "Desktop web", status: "no", note: "No hardware." },
         {
           target: "Mobile web",
           status: "partial",
-          note: "Android browsers: vibration patterns. iOS Safari 18 to 26.4: one system tick per call, no weights. iOS 26.5+: nothing.",
+          note: "Android: vibration. iOS Safari before 26.5: one tick, no weights. iOS 26.5+: nothing.",
         },
         {
           target: "Installed PWA",
           status: "partial",
-          note: "Same as the browser it was installed from.",
+          note: "Same as the browser.",
         },
         {
           target: "iOS",
           status: "yes",
-          note: "The Taptic Engine, with all three weights and notification types. A simulator has no engine.",
+          note: "A simulator has no engine.",
         },
-        { target: "Android", status: "yes", note: "The OS haptic constants." },
+        { target: "Android", status: "yes" },
       ],
     },
     {
@@ -267,13 +228,13 @@ async function upload(file: File) {
       signature:
         "function useHapticTick(enabled?: boolean): (el: HTMLElement | null) => void",
       description:
-        "Returns a ref callback that makes taps on the element produce the iOS system tick in a browser or installed PWA. It overlays an invisible, non-focusable native switch on the element so the user's finger lands on it; the tap still bubbles to the element, so your click handler runs as normal. On native and on any browser with `navigator.vibrate` it attaches nothing. It is a ref callback, not an effect, so the overlay exists before the first paint.",
+        "Returns a ref callback. Taps on the element give the iOS system tick in a browser or PWA. It puts an invisible native switch over the element. Your click handler still runs. On native, and where `navigator.vibrate` exists, it attaches nothing.",
       params: [
         {
           name: "enabled",
           type: "boolean",
           default: "true",
-          description: "Pass `false` to detach.",
+          description: "`false` detaches it.",
         },
       ],
       returns: "A ref callback for the tap target.",
@@ -288,57 +249,36 @@ async function upload(file: File) {
     },
     {
       type: "p",
-      text: "Limits: the system tick only, with no weights or patterns; one extra DOM node per target; the element is given `position: relative` if it has no inline position; and it needs System Haptics switched on in iOS settings, which a page cannot detect.",
+      text: "It gives one tick, with no weights. It adds one DOM node. The user must turn on System Haptics in iOS settings.",
     },
     {
       type: "note",
       tone: "warn",
-      text: "The tick has not been confirmed on physical iOS 26.5+ hardware yet; simulators produce no haptics. There is also an ordering hazard in the current build: the overlay is skipped whenever `navigator.vibrate` exists, and the iOS fallback that `useHaptics()` and `haptics.*` install defines `navigator.vibrate`. On iOS Safari, a target attached after that fallback is installed gets no overlay.",
+      text: "Not tested on a physical iOS 26.5+ device. The overlay is skipped when `navigator.vibrate` exists. The fallback that `useHaptics()` installs on iOS defines it. A target attached after that gets no overlay.",
     },
     {
       type: "targets",
       rows: [
         { target: "Desktop web", status: "no", note: "Attaches nothing." },
-        {
-          target: "Mobile web",
-          status: "partial",
-          note: "iOS browsers only. Android browsers have `navigator.vibrate`, so nothing is attached.",
-        },
-        {
-          target: "Installed PWA",
-          status: "partial",
-          note: "The main case: an installed iOS PWA has no other haptic path.",
-        },
-        {
-          target: "iOS",
-          status: "no",
-          note: "Attaches nothing. The native engine is used instead.",
-        },
-        {
-          target: "Android",
-          status: "no",
-          note: "Attaches nothing. The native engine is used instead.",
-        },
+        { target: "Mobile web", status: "partial", note: "iOS browsers only." },
+        { target: "Installed PWA", status: "partial", note: "iOS only." },
+        { target: "iOS", status: "no", note: "Native uses the engine." },
+        { target: "Android", status: "no", note: "Native uses the engine." },
       ],
     },
     {
       type: "api",
       name: "useVibrate()",
-      signature: "function useVibrate(): UseVibrateResult",
+      signature: "function useVibrate()",
       description:
-        "Named shortcuts over `haptics`, plus a helper that adds tap feedback to an element's handlers. Same targets as `useHaptics`.",
-      returns: "The members below. Every function has a stable identity.",
+        "Named shortcuts over `haptics`. Same targets as `useHaptics`.",
+      returns: "The members below.",
     },
     {
       type: "props",
       rows: [
         {
-          name: "vibrateOk",
-          type: "() => void",
-          description: '`impact("light")`.',
-        },
-        {
-          name: "vibrateCancel",
+          name: "vibrateOk / vibrateCancel",
           type: "() => void",
           description: '`impact("light")`.',
         },
@@ -353,31 +293,21 @@ async function upload(file: File) {
           description: "`selection()`.",
         },
         {
-          name: "vibrateSuccess",
+          name: "vibrateSuccess / vibrateWarning / vibrateError",
           type: "() => void",
-          description: '`notify("success")`.',
-        },
-        {
-          name: "vibrateWarning",
-          type: "() => void",
-          description: '`notify("warning")`.',
-        },
-        {
-          name: "vibrateError",
-          type: "() => void",
-          description: '`notify("error")`.',
+          description:
+            '`notify("success")`, `notify("warning")`, `notify("error")`.',
         },
         {
           name: "canVibrate",
           type: "() => boolean",
-          description:
-            "`haptics.isSupported()`. Also exported on its own from the hooks entry.",
+          description: "`haptics.isSupported()`.",
         },
         {
           name: "hapticPointerHandlers",
           type: '(handler: () => void, kind: "ok" | "success" | "cancel") => { onTouchEnd, onClick }',
           description:
-            "Handlers to spread onto an element. A touch fires the haptic on `touchend`, ahead of the click; a mouse or pen fires it on click. `handler` runs on click either way.",
+            "Handlers to spread onto an element. A touch fires the haptic on `touchend`. A mouse or pen fires it on click. `handler` runs on click.",
         },
       ],
     },
@@ -397,109 +327,100 @@ async function upload(file: File) {
       signature:
         "function useGestureEngine(options: UseGestureEngineOptions): GestureHandlers",
       description:
-        "The press engine under [Pressable](/docs/pressable), [Button](/docs/button) and every other adaptv control. It gives an element the press behaviour of a native control: the press stays armed while the finger wanders inside a forgiving region around the element, goes out when it leaves, and comes back when it returns; a touch that turns into a scroll cancels the press and swallows the click; a long press is recognised separately. Use `Pressable` first. Use the hook when you build a control from an element `Pressable` cannot render.",
+        "The press engine under [Pressable](/docs/pressable), [Button](/docs/button) and other adaptv controls. The press stays armed while the finger is inside a margin around the element. It ends when the finger leaves and returns when it comes back. A touch that becomes a scroll cancels the press. Use `Pressable` first. Use the hook for an element that `Pressable` cannot render.",
       params: [
         {
           name: "onPressDown",
           type: "(e: GestureEvent) => void",
-          description: "Pointer or key went down on the element.",
+          description: "Pointer or key down.",
         },
         {
           name: "onPressUp",
           type: "(e: GestureEvent) => void",
+          description: "The tap. Enter and Space also fire it.",
+        },
+        {
+          name: "onUnownedClick",
+          type: "(e: React.MouseEvent) => void",
           description:
-            "Released inside the press region with no long press: the tap. Also fired by Enter and Space.",
+            "A click that no press produced, such as one from an outer `<label>`. Without it, the engine blocks the click.",
         },
         {
           name: "onLongPressDown",
           type: "(e: GestureEvent) => void",
           description:
-            "The hold reached `longPressThreshold`, while still held.",
+            "The hold reached `longPressThreshold`. A long press needs one `onLongPress*` callback. Without it, a long hold ends as a tap.",
         },
         {
           name: "onLongPressMove",
           type: "(e: React.PointerEvent) => void",
-          description:
-            "The pointer moved after the long press fired: the drag phase.",
+          description: "The pointer moved after the long press.",
         },
         {
           name: "onLongPressUp",
           type: "(e: GestureEvent) => void",
-          description: "Released after a long press fired.",
+          description: "Released after a long press.",
         },
         {
           name: "onStateChange",
           type: "(state: GestureState) => void",
           description:
-            '`"idle"`, `"pressing"`, `"outside"` (dragged out, still recoverable), `"longpress"`, or `"cancelled"` (a scroll or another gesture took the pointer; `onPressUp` will not fire).',
+            '`"idle"`, `"pressing"`, `"outside"` (dragged out), `"longpress"` or `"cancelled"` (`onPressUp` does not fire).',
         },
         {
           name: "longPressThreshold",
           type: "number",
           default: "500",
-          description: "Hold time in ms before a long press is recognised.",
+          description: "Hold time in ms for a long press.",
         },
         {
           name: "longPressMaxDistance",
           type: "number",
           default: "10",
           description:
-            'Travel in px that abandons a pending long press. The tap is unaffected. Used when `slopMode` is `"distance"`.',
+            'Travel in px that cancels a pending long press. Used when `slopMode` is `"distance"`.',
         },
         {
           name: "pressOutset",
           type: "number",
           default: "24 touch, 6 mouse and pen",
           description:
-            "Margin in px around the element's frame within which the press stays armed. The defaults are exported as `TOUCH_PRESS_OUTSET_PX` and `POINTER_PRESS_OUTSET_PX`.",
+            "Margin in px where the press stays armed. Defaults are exported as `TOUCH_PRESS_OUTSET_PX` and `POINTER_PRESS_OUTSET_PX`.",
         },
         {
           name: "slopMode",
           type: '"distance" | "leave"',
           default: '"distance"',
           description:
-            "What abandons a pending long press: travelling past `longPressMaxDistance`, or leaving the press region.",
+            "What cancels a pending long press: travel past `longPressMaxDistance`, or leaving the region.",
         },
         {
           name: "claimPointerOnLongPress",
           type: "boolean",
           default: "true",
-          description:
-            "Once a long press fires, block page scroll so the hold can own a drag.",
+          description: "After a long press, block page scroll.",
         },
         {
           name: "disabled",
           type: "boolean",
           default: "false",
-          description: "Drop every interaction.",
+          description: "Ignore all input.",
         },
       ],
       returns:
-        "A handler bag to spread onto the element: the pointer, key and click handlers plus a `data-press-engine` marker. `OmitGestureEngineHandlers<T>` removes those keys from a props type.",
+        "Handlers to spread onto the element. `OmitGestureEngineHandlers<T>` removes their keys from a props type.",
     },
     {
       type: "p",
-      text: "A long press is only recognised when you pass at least one `onLongPress*` callback. Without one, a hold past the threshold still ends as a tap.",
-    },
-    {
-      type: "p",
-      text: "Style the pressed state with Tailwind's `active:` variant. On an element carrying the engine's marker, adaptv's stylesheet points `active:` at the engine's `data-pressed` attribute instead of the browser's `:active`, so it goes out when the finger leaves the region and returns when it comes back. The attribute appears 100 ms after the pointer goes down, so a touch that becomes a scroll never lights the control, and stays for at least 150 ms, so a quick tap is still visible. Keyboard activation does not set it.",
+      text: "Style the pressed state with the Tailwind `active:` variant. On an engine element, `active:` follows `data-pressed`, not the browser `:active`. The attribute appears 100 ms after the pointer goes down and stays at least 150 ms. Keyboard activation does not set it.",
     },
     {
       type: "targets",
       rows: [
-        {
-          target: "Desktop web",
-          status: "yes",
-          note: "Mouse, pen and keyboard. Dragging out and back re-arms the press.",
-        },
+        { target: "Desktop web", status: "yes" },
         { target: "Mobile web", status: "yes" },
         { target: "Installed PWA", status: "yes" },
-        {
-          target: "iOS",
-          status: "yes",
-          note: "The target the engine exists for: the browser's own `:active` cannot be cleared from script and does not come back on re-entry.",
-        },
+        { target: "iOS", status: "yes" },
         { target: "Android", status: "yes" },
       ],
     },
@@ -511,30 +432,30 @@ async function upload(file: File) {
       signature:
         "function useClickFix(onClick: (e: React.PointerEvent<HTMLElement>) => void, options?: UseClickFixOptions): ClickFixHandlers",
       description:
-        "Tap detection for a surface that does its own hit-testing: a canvas, a map, a diagram. The press engine decides a tap by whether the release landed inside the element, which is always true for a canvas, so a scroll that started on a shape would count as a tap on it. This hook measures how far the pointer travelled instead, with the same budgets the engine uses. It tracks each pointer separately, so a second finger does not disturb the first. It never calls `preventDefault` or `stopPropagation`; do that in your callback once you know what was hit.",
+        "Tap detection for a surface with its own hit-testing, such as a canvas. It measures how far the pointer moved, with the press engine's limits. It never calls `preventDefault` or `stopPropagation`.",
       params: [
         {
           name: "onClick",
           type: "(e: React.PointerEvent<HTMLElement>) => void",
           required: true,
-          description: "Called on a release that stayed within the budgets.",
+          description: "Called on a release within the limits.",
         },
         {
           name: "options.maxTravel",
           type: "number | { touch?: number; pointer?: number }",
           default: "24 touch, 6 mouse and pen",
           description:
-            "Travel in px, per axis, past which a release is not a tap. A number applies to every pointer; the object form pins one kind and leaves the other on its default.",
+            "Travel in px, per axis, above which a release is not a tap. The object form sets one kind and keeps the default for the other.",
         },
         {
           name: "options.maxDuration",
           type: "number",
           description:
-            "Longest press in ms that still counts as a tap. Unbounded by default. Set it when a hold means something else on this surface, such as hold to pan.",
+            "Longest press in ms that counts as a tap. No limit by default.",
         },
       ],
       returns:
-        "`{ onPointerDown, onPointerUp, onPointerCancel }` with stable identities. Spread them onto the surface.",
+        "`{ onPointerDown, onPointerUp, onPointerCancel }`. Spread them onto the surface.",
     },
     {
       type: "code",
@@ -557,7 +478,7 @@ return <canvas {...handlers} />`,
       name: "useFreezeViewport()",
       signature: "function useFreezeViewport(isEnabled?: boolean): void",
       description:
-        "Hold the page still while an overlay with a text field is up, so the keyboard covers the overlay's own scroller and the page underneath does not get pushed or scrolled. It applies two things together: a document scroll lock, and on Chromium `virtualKeyboard.overlaysContent`, which keeps the layout height fixed when the keyboard opens. Both are reference-counted, so nested callers stack and the page is released when the last one lets go. [Drawer](/docs/drawer) already holds it while open. Pair it with `useKeyboard` when you build your own overlay.",
+        "Hold the page still while an overlay with a text field is open. It locks document scroll. On Chromium it also keeps the layout height fixed. Nested callers stack. [Drawer](/docs/drawer) already uses it.",
       params: [
         {
           name: "isEnabled",
@@ -580,15 +501,11 @@ return <canvas {...handlers} />`,
     {
       type: "targets",
       rows: [
-        {
-          target: "Desktop web",
-          status: "yes",
-          note: "The scroll lock applies. There is no keyboard to account for.",
-        },
+        { target: "Desktop web", status: "yes", note: "Scroll lock only." },
         {
           target: "Mobile web",
           status: "yes",
-          note: "iOS: the scroll lock does the work, including the touch handling Safari needs. Android Chrome: the keyboard overlay too, on a secure origin.",
+          note: "iOS: scroll lock. Android Chrome: scroll lock and keyboard overlay, on a secure origin.",
         },
         { target: "Installed PWA", status: "yes" },
         { target: "iOS", status: "yes" },
