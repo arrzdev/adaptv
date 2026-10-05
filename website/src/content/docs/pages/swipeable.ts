@@ -4,8 +4,7 @@ import type { DocPage } from "@/content/docs/types"
 export const page: DocPage = {
   slug: "swipeable",
   title: "Swipeable",
-  summary:
-    "A list row that slides sideways to reveal actions, and leaves a vertical scroll alone.",
+  summary: "A row that slides sideways to show actions.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
     'import { Swipeable, useSwipeable } from "@arrzdev/adaptv/components"',
@@ -45,62 +44,25 @@ export const page: DocPage = {
     { type: "h2", text: "Usage" },
     {
       type: "p",
-      text: "A `Swipeable` takes up to three slots as direct children. `Swipeable.Content` is the row that slides. `Swipeable.LeftActions` sits behind the row's left edge and is revealed by dragging right. `Swipeable.RightActions` sits behind the right edge and is revealed by dragging left. Leave a slot out and the row cannot be dragged in that direction.",
+      text: "Give `Swipeable` up to three direct children. `Swipeable.Content` is the row that slides. `Swipeable.LeftActions` shows on a drag right. `Swipeable.RightActions` shows on a drag left. Omit a slot and the row does not move that way. Size the action buttons yourself, for example `w-20 h-full`. Wrap the rows of one list in `Swipeable.Group` so that opening a row closes the others. A row also closes when its list scrolls, when a button in its panel is clicked, or when a text field raises the keyboard.",
     },
     {
       type: "p",
-      text: "The action panel is as wide as its content, so size the buttons (`w-20`) and give them `h-full`. Put any number of buttons in one panel; wrap them in a `<View row>` to lay them out. The buttons are ordinary elements: use [Pressable](/docs/pressable) or [Button](/docs/button) with your own handler. A horizontal swipe cancels a press that started on the row, so a drag never fires the row's `onPress`.",
-    },
-    {
-      type: "p",
-      text: "Wrap the rows of one list in `Swipeable.Group` so that opening a row closes the others. Without a group every row opens and closes on its own.",
-    },
-    {
-      type: "note",
-      text: "There is no full-swipe action. Dragging a row all the way across opens the panel; it does not run the first button. Deleting on a long swipe is something you build from `onOpen`.",
-    },
-    { type: "h3", text: "When a row closes by itself" },
-    {
-      type: "ul",
-      items: [
-        "Another row in the same `Swipeable.Group` opens.",
-        "The nearest scrollable ancestor scrolls.",
-        "A pointer is released anywhere outside the row.",
-        "A button inside one of its action panels is clicked. Your handler runs first, then the row closes.",
-        "A text field anywhere on the page takes focus and is about to raise the on-screen keyboard. This closes every open row.",
-      ],
-    },
-    { type: "h3", text: "Vertical scrolling" },
-    {
-      type: "p",
-      text: "A row decides what a gesture is after 8px of movement. Within 30 degrees of horizontal it is a swipe: the row takes the pointer and holds the page still for the rest of the touch. Anything steeper is a scroll, and the row ignores the gesture until the finger lifts. The content element sets `touch-action: pan-y`, so the browser keeps handling vertical pans natively. A list of swipeable rows inside a [ScrollView](/docs/scroll-view) scrolls as if the rows were plain.",
-    },
-    {
-      type: "p",
-      text: "A row swipe goes through the same gesture arbiter as the rest of adaptv. An [edge swipe](/docs/app-shell-components) and a [Drawer](/docs/drawer) drag both outrank it: a touch that starts in the screen's edge strip never opens a row, and a row that loses the pointer mid-swipe springs back. [PullToRefresh](/docs/pull-to-refresh) ignores touches that start on a row.",
+      text: "A swipe starts after 8px of movement within 30 degrees of horizontal. A steeper move scrolls. A [ScrollView](/docs/scroll-view) of swipeable rows scrolls as normal. An [edge swipe](/docs/app-shell-components) and a [Drawer](/docs/drawer) drag outrank a row swipe. There is no full-swipe action.",
     },
     { type: "h2", text: "Props" },
     {
       type: "props",
       rows: [
         {
-          name: "children",
-          type: "ReactNode",
-          required: true,
-          description:
-            "`Swipeable.Content`, and one or both of `Swipeable.LeftActions` and `Swipeable.RightActions`. Other children are ignored.",
-        },
-        {
           name: "open",
           type: 'false | "left" | "right"',
-          description:
-            "Controlled open side. Omit it for an uncontrolled row. Once you have passed a value, passing `undefined` later closes the row, the same as `false`.",
+          description: "Controlled open side. Omit it for an uncontrolled row.",
         },
         {
           name: "onOpen",
           type: '(side: "left" | "right") => void',
-          description:
-            "Called when the row commits to opening, at the start of the spring.",
+          description: "Called when the row starts to open.",
         },
         {
           name: "onClose",
@@ -111,14 +73,12 @@ export const page: DocPage = {
           name: "enabled",
           type: "boolean",
           default: "true",
-          description:
-            "When `false` a new gesture does not start. It does not close a row that is already open.",
+          description: "`false` stops new gestures. An open row stays open.",
         },
         {
           name: "className",
           type: "string",
-          description:
-            "Classes for the root. Put the radius here: the root is the only clipping surface.",
+          description: "Classes for the root. Put `rounded-*` here.",
         },
         {
           name: "style",
@@ -129,10 +89,6 @@ export const page: DocPage = {
     },
     { type: "h3", text: "Tuning" },
     {
-      type: "p",
-      text: "The release thresholds and the spring are props on the root too. The defaults are tuned to feel like a native mail list; change them per row only when you have a reason.",
-    },
-    {
       type: "props",
       rows: [
         {
@@ -140,35 +96,35 @@ export const page: DocPage = {
           type: "number",
           default: "0.3",
           description:
-            "Fraction of the action panel's width the row must pass to open on release.",
+            "Fraction of the panel width to pass to open on release.",
         },
         {
           name: "closeThreshold",
           type: "number",
           default: "0.25",
           description:
-            "Fraction of the open offset an open row must retreat to close on release.",
+            "Fraction of the open offset to retreat to close on release.",
         },
         {
           name: "velocityThreshold",
           type: "number",
           default: "250",
           description:
-            "Release speed in px/s that flicks the row open or closed regardless of position. A flick on an open row that carries it past closed and into the other side opens that side.",
+            "Release speed in px/s that flicks the row open or closed.",
         },
         {
           name: "directionLockAngle",
           type: "number",
           default: "30",
           description:
-            "Largest angle from horizontal, in degrees, still treated as a swipe.",
+            "Largest angle from horizontal, in degrees, that counts as a swipe.",
         },
         {
           name: "overshootFriction",
           type: "number",
           default: "0.4",
           description:
-            "How much of the finger's travel the row keeps once it is past the panel's width, from 0 to 1. Overshoot never exceeds half the panel's width.",
+            "Share of finger travel kept past the panel width, 0 to 1.",
         },
         {
           name: "springStiffness",
@@ -186,8 +142,7 @@ export const page: DocPage = {
           name: "springDampingClose",
           type: "number",
           default: "55",
-          description:
-            "Damping while closing. Heavier, so the row does not bounce back open.",
+          description: "Damping while closing.",
         },
         {
           name: "springMass",
@@ -200,41 +155,12 @@ export const page: DocPage = {
     { type: "h2", text: "Slots" },
     {
       type: "p",
-      text: "`Swipeable.Content`, `Swipeable.LeftActions` and `Swipeable.RightActions` are markers. The root reads their `children` and renders them into its own elements; the slot components never render, and any other prop you give them is dropped. Style the element you put inside the slot.",
-    },
-    {
-      type: "p",
-      text: "To wrap a slot in your own component, give the wrapper the matching display name (`Swipeable.Content`, `Swipeable.LeftActions`, `Swipeable.RightActions`) and have it return the adaptv slot with your markup inside. The root recognises a slot by identity, by that display name, or by the exported symbols `SWIPEABLE_CONTENT_SLOT`, `SWIPEABLE_LEFT_ACTIONS_SLOT` and `SWIPEABLE_RIGHT_ACTIONS_SLOT` set to `true` on the component.",
-    },
-    {
-      type: "code",
-      label: "components/ui/swipeable.tsx",
-      lang: "tsx",
-      code: `function RightActions({ children }: { children: ReactNode }) {
-  return (
-    <Swipeable.RightActions>
-      <View row className="h-full items-stretch">
-        {children}
-      </View>
-    </Swipeable.RightActions>
-  )
-}
-RightActions.displayName = "Swipeable.RightActions"`,
+      text: "The three slots are markers. They render nothing themselves and drop any prop except `children`. Style the element inside the slot. To wrap a slot, set the wrapper `displayName` to the slot name, for example `Swipeable.RightActions`. The wrapper must return the adaptv slot.",
     },
     { type: "h2", text: "Swipeable.Group" },
     {
-      type: "p",
-      text: "Renders no element. Rows anywhere below it register themselves, however deeply nested.",
-    },
-    {
       type: "props",
       rows: [
-        {
-          name: "children",
-          type: "ReactNode",
-          required: true,
-          description: "The list.",
-        },
         {
           name: "closeOnOpen",
           type: "boolean",
@@ -245,18 +171,7 @@ RightActions.displayName = "Swipeable.RightActions"`,
     },
     {
       type: "p",
-      text: "A ref on the group gives a `SwipeableGroupHandle`:",
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "closeAll()",
-          type: "() => void",
-          description:
-            "Animates every open row in the group closed. Call it before entering an edit mode or navigating away.",
-        },
-      ],
+      text: "A ref on the group has `closeAll()`, which closes every open row.",
     },
     { type: "h2", text: "useSwipeable" },
     {
@@ -264,100 +179,34 @@ RightActions.displayName = "Swipeable.RightActions"`,
       name: "useSwipeable()",
       signature: "function useSwipeable(): SwipeableContextValue",
       description:
-        "Reads the state of the nearest `Swipeable` from inside its content or its actions. Use it to paint a row differently while it is open. It throws when called outside a `Swipeable`.",
-      returns: "An object with the fields below.",
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "isOpen",
-          type: "boolean",
-          description: "Whether either side is open.",
-        },
-        {
-          name: "openSide",
-          type: 'false | "left" | "right"',
-          description: "Which side is open.",
-        },
-        {
-          name: "isEnabled",
-          type: "boolean",
-          description: "The root's `enabled` prop.",
-        },
-      ],
-    },
-    {
-      type: "code",
-      label: "row-card.tsx",
-      lang: "tsx",
-      code: `function RowCard({ children }: { children: ReactNode }) {
-  const { isOpen } = useSwipeable()
-  return (
-    <View className={cn("bg-white px-4 py-3", isOpen && "bg-gray-50")}>
-      {children}
-    </View>
-  )
-}
-
-<Swipeable>
-  <Swipeable.Content>
-    <RowCard>Groceries</RowCard>
-  </Swipeable.Content>
-  <Swipeable.RightActions>…</Swipeable.RightActions>
-</Swipeable>`,
+        "Reads the state of the nearest `Swipeable`, from its content or actions. Throws outside a `Swipeable`.",
+      returns:
+        '`isOpen` (boolean), `openSide` (`false | "left" | "right"`) and `isEnabled` (boolean).',
     },
     { type: "h2", text: "Ref" },
     {
       type: "p",
-      text: "A ref on the row gives a `SwipeableHandle`. There is no imperative `open`; use the `open` prop for that.",
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "open",
-          type: 'false | "left" | "right"',
-          description: "Live open side. Read only.",
-        },
-        {
-          name: "close()",
-          type: "() => void",
-          description:
-            "Animates the row closed. Does nothing when it is closed.",
-        },
-      ],
+      text: "A ref on the row is a `SwipeableHandle`. It has `open` (the live side, read only) and `close()`. To open a row, use the `open` prop.",
     },
     { type: "h2", text: "Styling" },
     {
       type: "p",
-      text: "`className` and `style` land on the root, which is `position: relative`, `overflow: hidden` and its own stacking context. Give the root your `rounded-*`. The action panels sit flush behind the content and the root's clip rounds their outer corners, so the buttons need no radius of their own. The root's radius is mirrored to a `clip-path`, which is what keeps a moving row inside rounded corners on iOS.",
-    },
-    {
-      type: "p",
-      text: "The panels and the overshoot fill are parked off screen while the row is closed, so nothing is drawn behind the content and the content may be transparent. When you drag past the panel's width, the gap is filled with the background colour of the button nearest the content, read from the DOM when the panel is measured.",
-    },
-    {
-      type: "p",
-      text: "The content element sets `user-select: none`, so pressing on a label and dragging swipes the row and does not select text. All structural rules live in a low-priority cascade layer, so an ordinary rule of yours overrides any of them.",
+      text: "`className` and `style` go on the root. It is `position: relative` and `overflow: hidden`. Its radius clips the action panels, so buttons need no radius. Panels are off screen while the row is closed, so the content may be transparent. Past the panel width, the gap takes the colour of the nearest button. Content has `user-select: none`.",
     },
     {
       type: "table",
       head: ["Attribute", "On"],
       rows: [
         ['`data-adaptv="swipeable"`, `data-swipeable-root`', "the root"],
-        ["`data-swipeable-content`", "the sliding element around your content"],
-        [
-          '`data-swipeable-actions="left"` / `"right"`',
-          "the panel around your actions",
-        ],
-        ['`data-swipeable-fill="left"` / `"right"`', "the overshoot fill"],
+        ["`data-swipeable-content`", "the sliding element"],
+        ['`data-swipeable-actions="left"` or `"right"`', "the action panel"],
+        ['`data-swipeable-fill="left"` or `"right"`', "the overshoot fill"],
       ],
     },
     { type: "h2", text: "Accessibility" },
     {
       type: "p",
-      text: "Swiping is a pointer gesture with no keyboard equivalent, and the action buttons are in the DOM but off screen while the row is closed. Give every action another route: a context menu, an edit mode, or buttons on the detail screen. With reduced motion on, the row jumps to its open or closed position with no spring.",
+      text: "A swipe has no keyboard equivalent. Give each action another route, such as a menu or the detail screen. With reduced motion on, the row jumps with no spring.",
     },
     { type: "h2", text: "Where it works" },
     {
@@ -366,23 +215,19 @@ RightActions.displayName = "Swipeable.RightActions"`,
         {
           target: "Desktop web",
           status: "yes",
-          note: "Drag with the left mouse button or a pen.",
+          note: "Drag with the mouse or a pen.",
         },
         { target: "Mobile web", status: "yes" },
         {
           target: "Installed PWA",
           status: "yes",
-          note: "With [EdgeSwipeGestures](/docs/app-shell-components) mounted, a touch that starts in the edge strip goes to the edge swipe and never opens a row.",
+          note: "A touch in the edge strip goes to the edge swipe.",
         },
-        {
-          target: "iOS",
-          status: "yes",
-          note: "Same edge rule as the installed PWA.",
-        },
+        { target: "iOS", status: "yes", note: "Same edge rule." },
         {
           target: "Android",
           status: "yes",
-          note: "Under gesture navigation the system claims a touch that starts at the very edge of the screen for its own back gesture, so that touch never reaches the row.",
+          note: "The system back gesture takes touches at the very edge.",
         },
       ],
     },
