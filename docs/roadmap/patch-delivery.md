@@ -1,6 +1,13 @@
 # adaptv — the patch registry, and the CSS post-processor
 
-> 📐 **A plan, not a change.** Decided by the owner **2026-09-09**: every patch adaptv applies answers
+> ✅ **Both halves shipped 2026-10-05** (TUD-188): the registry (§2) as `src/utils/patch-registry.ts`
+> with `isPatchDisabled` in `src/utils/is-patch-disabled.ts`, and the post-processor (§4) as
+> `src/vite/css-patch-rewrite.ts`. Where the build differs from the plan, §8.1 says how and why. Still
+> open: the real-device check of the rewrite
+> ([`owed-device-verification.md`](owed-device-verification.md) row 8) and the candidate patches in
+> §9, none of which is designed. The rest of this file is kept as the reasoning behind what shipped.
+>
+> 📐 **The plan, as decided.** Decided by the owner **2026-09-09**: every patch adaptv applies answers
 > to **two tiers** — a global toggle in `adaptv.config.ts`, resolved pre-paint to an attribute on
 > `<html>`, and a **local opt-out on the element**. Both are generated from **one registry**, so the
 > config key, the stamp and the escape hatch cannot drift apart.
@@ -390,3 +397,53 @@ It is independent of the `dist` cutover and of `src-reorg`.
   that question. It does, however, change the answer: once the correctness fixes live below the
   authoring layer, Tailwind is demoted from a correctness requirement to ergonomics — which is the
   state in which O24 becomes an ordinary cost/benefit call instead of a risk to correctness.
+
+### 8.1 What shipped differently, and why
+
+- **The registry lives in `src/utils/`, not `src/config/`.** `src/config/` is built as a Node entry,
+  and `execution-boundary.test.ts` holds every browser import of it to `import type`. The registry is
+  read at runtime by the shell and the hooks, so it sits where the platform stamp already does.
+- **The `active:` hatch is a third branch, not a clause on both.** §6.1's composed variant excludes a
+  hatched element from both branches, which would leave it with no press feedback at all. Shipped:
+  `&[data-pressed]:not(:where(<hatch>))` (still (0,1,0) — `:where()` counts zero),
+  `&:active:not([data-press-engine])` unchanged, and `&:active:is(<hatch>)` (0,2,0), so an element
+  inside `data-adaptv-no-active` gets native `:active`, whoever owns its press.
+- **The hatch covers the subtree.** `[hatch], [hatch] *` in CSS, a `closest()` walk in JS, so marking a
+  container opts out everything in it — one spelling for both layers.
+- **The two hover hatches differ on purpose.** On a `hover:` utility the hatch drops adaptv's half only
+  (§6.3) and the media query stays, because it is Tailwind's. On a hand-written `:hover` rule both
+  halves are adaptv's, so the hatch restores the rule as written, unwrapped. The post-processor emits
+  that copy beside the wrapped one; it is what keeps §4 on the right side of L7 (§5).
+- **The guard is `:not(:where(…))`, not `:not(:is(…))`, in rewritten CSS.** A hand-written rule never
+  paid for the focus guard, so the rewrite adds zero specificity; the variant keeps the (0,2,0) it
+  already had.
+- **postcss, not lightningcss, walks the stylesheet.** lightningcss 1.32's JS visitor throws "failed to
+  deserialize" handing back a sheet Tailwind compiled (an identity visitor fails on `:host` and on an
+  `@import` with no media, 439 nodes in the fixture). postcss leaves every byte it does not change, and
+  the selector goes through a tokenizer that knows strings, escapes, attribute values and which
+  functional pseudo-class encloses a `:hover`. postcss was already in the lockfile through Vite.
+- **What it refuses, it counts.** A `:hover`/`:active` inside `:not()` or `:has()` is left as written:
+  `.x:not(:hover)` matches on a touch screen today, and wrapping it would turn it off there. The build
+  line reads `[adaptv] css patches: hover N rules (M left as written), active K rules`.
+- **No global toggle for `hover`/`active`.** §4.4's `html[data-adaptv-active-patch]` stamp would need a
+  config key the inventory (§3) does not give these patches. Not built; the registry rows say
+  `config: null`.
+
+---
+
+## 9. Candidate patches — not designed, not built
+
+The board asked whether adaptv should go deeper than `hover`/`active`: corrections a developer would
+otherwise write per platform. These are candidates only, written so the next decision starts from the
+registry's questions — layer, species (§2.2), whether a hatch would harm the user (§2.4), and blast
+radius (§4.3). None is a commitment, and each needs its own owner decision under **L23** before code.
+
+| Candidate | Layer | Species | What it would correct | The first risk |
+|---|---|---|---|---|
+| **`:focus` → `:focus-visible` in plain CSS** | css-rewrite | B | A hand-written `.btn:focus { outline … }` draws a ring after every tap and click; the reset adaptv ships only covers its own ring. Same machinery as `hover`. | A `:focus` rule that styles an input's caret or border on purpose, which a tap *should* show. Probably `inputs keep :focus`, as the magnifier keeps editables. |
+| **Focus indicator shape per platform** (ring vs border) | css-layered | A | iOS draws focus as a thickened border, Material as an offset ring; one `outline` everywhere reads foreign on both. Keyed on `html[data-adaptv-os]`, so it stays one static sheet. | WCAG 2.4.7 and 2.4.11 must hold on every shape, so it inherits the focus reset's `hatch: false`. |
+| **Press feedback per platform** | css-layered / js | A or B | iOS dims on press, Android ripples; `active:` today is one look on both. | A ripple is drawn content, not a property — that makes it species B, with a hatch and a gesture-engine dependency. |
+| **`100vh` in plain CSS** | css-rewrite | B | adaptv's screen frame picks its height per shell, because `100vh` and `100dvh` are each wrong somewhere (`styles/screen.css`); a developer's own `height: 100vh` gets none of that. | Rewriting a length changes layout, not state, so a wrong guess is visible at once and everywhere. |
+| **Raw `env(safe-area-inset-*)` in plain CSS** (crbug/40699457) | css-rewrite | A | adaptv's own insets read `var(--safe-area-inset-top, env(safe-area-inset-top, 0px))` (`styles/safe-area.css`), so the injected value wins where `env()` is wrong; a developer's `padding-top: env(safe-area-inset-top)` does not. | Low: the ordering fix is already `hatch: false` and byte-identical where the bug is absent. |
+| **iOS zoom on focus of an input under 16px** | build (warn) | — | iOS Safari zooms the page when a field with `font-size < 16px` gets focus. | L7: a size change is the developer's design. This one should warn in `adaptv doctor`, not rewrite. |
+

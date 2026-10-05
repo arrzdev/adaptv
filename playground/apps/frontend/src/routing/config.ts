@@ -55,6 +55,7 @@ export const routes = rootRoute([
     route("/lab/cascade-layers", "pages/lab/cascade-layers.page.tsx"),
     route("/lab/press-states", "pages/lab/press-states.page.tsx"),
     route("/lab/hover-focus", "pages/lab/hover-focus.page.tsx"),
+    route("/lab/plain-css", "pages/lab/plain-css.page.tsx"),
     route("/lab/safe-area", "pages/lab/safe-area.page.tsx"),
     route("/lab/service-worker", "pages/lab/service-worker.page.tsx"),
     //capabilities and hooks
