@@ -3,24 +3,23 @@ import type { DocPage } from "@/content/docs/types"
 export const page: DocPage = {
   slug: "config",
   title: "adaptv.config.ts",
-  summary:
-    "Every key of defineApp: the one file the web build, the service worker, the manifest and both native projects are derived from.",
+  summary: "Every key of defineApp, with its type, default and effect.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine: 'import { defineApp } from "@arrzdev/adaptv/config"',
   source: "src/config/app-config.ts",
   blocks: [
     {
       type: "p",
-      text: "`adaptv.config.ts` sits at the app root and default-exports `defineApp({ ... })`. `defineApp` is an identity function: it returns what you pass and exists for the types. The [Vite plugin](/docs/vite-plugin) and the [CLI](/docs/cli) both read this file, and everything else is generated from it: the document head, the web manifest, the service worker, the router, and the iOS and Android projects. You never write a manifest, a service-worker registration or a native project setting by hand.",
+      text: "`adaptv.config.ts` is in the app root and default-exports `defineApp({ ... })`, which returns what you pass and exists for the types. The [Vite plugin](/docs/vite-plugin) and the [CLI](/docs/cli) generate the head, manifest, service worker, routes and native projects from it.",
     },
     {
       type: "p",
-      text: 'The file is loaded as data. Dynamic imports inside it are never executed, which is what makes the screen keys below work: `splashScreen: () => import("@/components/splash-screen")` is read for its path, and the plugin turns it into a static import in the generated root. In `dev`, saving the file reloads the config and the page. Changing `render` or the two `router` path keys needs a dev-server restart.',
+      text: 'Write each screen thunk as a literal import, because adaptv reads the path from the source text: `() => import("@/components/splash-screen")`. Do not use a variable or template string. In dev, a saved change reloads the config. If it is invalid, dev keeps the last valid one and prints the errors. A change to `render` or the `router` paths needs a restart.',
     },
     { type: "h2", text: "Minimal example" },
     {
       type: "p",
-      text: "Five keys are required by the type: `name`, `description`, `themeColor`, `styles` and `router` (an empty object is enough). `appId` is optional in the type but required by the CLI today. See the note under Native app below.",
+      text: "Required keys: `name`, `description`, `themeColor`, `styles`, `router` (can be empty), and for the CLI `appId`.",
     },
     {
       type: "code",
@@ -37,575 +36,437 @@ export default defineApp({
   router: {},
 })`,
     },
-    { type: "h2", text: "Full example" },
-    {
-      type: "code",
-      label: "adaptv.config.ts",
-      lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
-
-export default defineApp({
-  // identity
-  appId: "com.acme.notes",
-  appName: "Notes",
-  name: "Acme Notes",
-  shortName: "Notes",
-  title: "Acme Notes: write anywhere",
-  description: "Notes that work offline.",
-  lang: "en",
-
-  // look
-  themeColor: { light: "#ffffff", dark: "#0a0a0c" },
-  backgroundColor: "#ffffff",
-  defaultThemePreference: "system",
-  icons: "./public/favicons",
-  styles: "./src/styles/main.css",
-  orientation: "portrait",
-  allowZoom: false,
-  openGraph: { image: "https://notes.acme.com/og.png", type: "website" },
-  twitter: { card: "summary_large_image" },
-
-  // web delivery
-  render: "ssr",
-  serviceWorkers: ["./src/sw/push.ts"],
-  serviceWorkerUpdate: "auto",
-  manifestExtra: { categories: ["productivity"] },
-
-  // behaviour
-  ui: { noSelect: "app", hideScrollbars: "all", touchCallout: "app" },
-  patches: { textMagnifier: true },
-  images: { placeholder: true },
-
-  // screens
-  splashScreen: () => import("@/components/splash-screen"),
-  splashMaskMode: "preferences",
-  orientationGuardScreen: () => import("@/components/rotate-guard"),
-  notFoundScreen: () => import("@/components/not-found-screen"),
-  offlineComponent: () => import("@/components/offline"),
-  bootErrorScreen: () => import("@/components/boot-error"),
-
-  // native
-  plugins: ["@capacitor/camera"],
-  pluginConfig: { Camera: { saveToGallery: false } },
-  privacy: { tracking: false },
-
-  // over-the-air updates
-  origin: "https://notes.acme.com",
-  otaPublicKey: "-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----",
-  otaOnNativeSkew: "install",
-  otaPollMinutes: 60,
-
-  router: {
-    routesDirectory: "./routing",
-    routerConfig: "./src/routing/config.ts",
-    memoryHistoryInStandalone: true,
-    defaultPreload: "intent",
-  },
-})`,
-    },
     { type: "h2", text: "Validation" },
     {
       type: "p",
-      text: "The CLI checks the config before it does any work, and prints every problem at once, each naming its key. The same rules run inside the build. What is checked: `name` and `styles` are non-empty strings, `router` is an object, `themeColor` has at least one side, every colour key is a 3 or 6 digit hex colour, every enum key holds one of its values, `appId` is reverse-DNS, `icons` is a string, `otaPollMinutes` and `updateRequiredAfterDays` are numbers, and `plugins` and `serviceWorkers` are lists of strings. On a native run, a name in `plugins` that is not installed is an error too.",
+      text: 'The CLI and build print every problem with its key. They check that the default export is an object, `name` and `styles` are non-empty strings, `router` is an object, colours are 3 or 6 digit hex (`white` fails), `appId` is reverse-DNS, and `deepLinks.scheme` is lowercase and not reserved (`http` and similar). They also check enum values, number and list types, and that `prerender` has `render: "ssr"`. On a native run, each `plugins` name must be installed. Keys marked Native apply to iOS and Android, keys marked Web to the web and PWA.',
     },
     { type: "h2", text: "Identity" },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "name",
-          type: "string",
-          required: true,
-          description:
-            "The app's name. Becomes the manifest `name`, and the document `<title>` unless `title` overrides it.",
-        },
-        {
-          name: "shortName",
-          type: "string",
-          default: "name",
-          description:
-            "Manifest `short_name`: the label under a home-screen icon.",
-        },
-        {
-          name: "title",
-          type: "string",
-          default: "name",
-          description: "Document `<title>` override.",
-        },
-        {
-          name: "description",
-          type: "string",
-          required: true,
-          description:
-            "One line. Used for the description meta tag and the manifest `description`.",
-        },
-        {
-          name: "lang",
-          type: "string",
-          default: '"en"',
-          description: "The document language, written to `<html lang>`.",
-        },
+        [
+          "`name`",
+          "`string`",
+          "required",
+          "Sets the manifest `name` and the page `<title>`.",
+        ],
+        [
+          "`shortName`",
+          "`string`",
+          "`name`",
+          "Manifest `short_name`, shown under the home-screen icon.",
+        ],
+        ["`title`", "`string`", "`name`", "Overrides the page `<title>`."],
+        [
+          "`description`",
+          "`string`",
+          "required",
+          "One line, for the meta tag and manifest.",
+        ],
+        ["`lang`", "`string`", '`"en"`', "Sets `<html lang>`."],
       ],
     },
     { type: "h2", text: "Colours and theme" },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "themeColor",
-          type: "{ light: string; dark?: string } | { light?: string; dark: string }",
-          required: true,
-          description:
-            "The brand background per theme. The launch-gap background, the pre-paint script and the `theme-color` meta all use exactly these values. Give one side and it is used for both. Hex only. See [Theming](/docs/theming).",
-        },
-        {
-          name: "backgroundColor",
-          type: "string",
-          default: "themeColor.light",
-          description:
-            "Manifest `background_color`: what the OS paints behind an installed PWA while it cold-starts. Set it only when that backdrop should differ from the light theme colour. Hex only.",
-        },
-        {
-          name: "defaultThemePreference",
-          type: '"light" | "dark" | "system"',
-          default: '"system"',
-          description: "The theme when the user has no saved preference.",
-        },
+        [
+          "`themeColor`",
+          "`{ light?: string; dark?: string }`",
+          "required",
+          "Brand background per theme, hex. One side is used for both. See [Theming](/docs/theming).",
+        ],
+        [
+          "`backgroundColor`",
+          "`string`",
+          "`themeColor.light`",
+          "Manifest `background_color`, shown while an installed PWA starts.",
+        ],
+        [
+          "`defaultThemePreference`",
+          '`"light" | "dark" | "system"`',
+          '`"system"`',
+          "Theme when the user has not chosen.",
+        ],
       ],
     },
     { type: "h2", text: "Styles, icons and the document" },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "styles",
-          type: "string",
-          required: true,
-          description:
-            'The app stylesheet entry, for example `"./src/styles/main.css"`. adaptv builds it and links it in the head. See [Styling](/docs/styling).',
-        },
-        {
-          name: "icons",
-          type: "string",
-          description:
-            "The directory holding the app's icon set. It must be inside `public/` so the files are served. There is no default directory: name one and adaptv reads it. It measures every file, then derives the manifest icons, the head links and the native launcher icons from what is there. With no usable art the app ships adaptv's own mark and the CLI tells you once per run. Generate a set with `adaptv icons --input <image>`. See [Icons and splash](/docs/icons-and-splash).",
-        },
-        {
-          name: "orientation",
-          type: '"portrait" | "landscape" | "any"',
-          description:
-            'The manifest orientation lock. It also drives the runtime rotate guard, which is the only thing that holds the lock on iOS. `"any"`, or leaving it out, turns the guard off.',
-        },
-        {
-          name: "allowZoom",
-          type: "boolean",
-          default: "false",
-          description:
-            "Allow pinch-zoom. `false` gives a fixed scale and stops Safari zooming into inputs with text under 16px. `true` restores pinch-zoom, which is the WCAG 1.4.4 choice and the right one for a site people read.",
-        },
-        {
-          name: "openGraph",
-          type: "{ title?, description?, image?, url?, type? }",
-          description:
-            "Open Graph meta tags. Every field is an optional string.",
-        },
-        {
-          name: "twitter",
-          type: '{ card?: "summary" | "summary_large_image"; title?, description?, image? }',
-          description: "Twitter card meta tags.",
-        },
-        {
-          name: "manifestExtra",
-          type: "Record<string, unknown>",
-          description:
-            "Extra fields merged as they are into the generated web manifest.",
-        },
+        [
+          "`styles`",
+          "`string`",
+          "required",
+          'The stylesheet entry, such as `"./src/styles/main.css"`. See [Styling](/docs/styling).',
+        ],
+        [
+          "`icons`",
+          "`string`",
+          "none",
+          "Folder of the icon set, inside `public/`. adaptv builds the manifest, head and native icons from it. Without icons, the app uses adaptv's mark and the CLI warns. See [Icons and splash](/docs/icons-and-splash).",
+        ],
+        [
+          "`orientation`",
+          '`"portrait" | "landscape" | "any"`',
+          "none",
+          "Manifest orientation lock. It also enables the rotate guard, the only lock on iOS.",
+        ],
+        [
+          "`allowZoom`",
+          "`boolean`",
+          "`false`",
+          "`false` fixes the scale. `true` allows pinch-zoom.",
+        ],
+        [
+          "`openGraph`",
+          "`{ title?, description?, image?, url?, type? }`",
+          "none",
+          "Open Graph tags.",
+        ],
+        [
+          "`twitter`",
+          '`{ card?: "summary" | "summary_large_image"; title?, description?, image? }`',
+          "none",
+          "Twitter card meta tags.",
+        ],
+        [
+          "`manifestExtra`",
+          "`Record<string, unknown>`",
+          "none",
+          "Fields merged into the manifest. Web.",
+        ],
       ],
     },
     { type: "h2", text: "Rendering" },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "render",
-          type: '"ssr" | "spa"',
-          default: '"ssr"',
-          description:
-            'How the **web** build renders. `"ssr"`: a server renders each request and the client hydrates, so crawlers and link previews see real markup. `"spa"`: the host serves one static shell and the client router resolves the URL. It decides what a deploy needs: `"ssr"` needs something that runs per request, `"spa"` needs only a place to put files. The native build is always a static SPA, whatever this says. See [Rendering](/docs/rendering) and [Deploying](/docs/deploying).',
-        },
-        {
-          name: "prerender",
-          type: "boolean",
-          default: "false",
-          description:
-            'Render, at build time, every page a link reaches from `/`, and ship each as a static HTML file next to the client assets. A host that serves files before the server answers those pages without running the server; a page the crawl did not reach is still rendered per request. Needs `render: "ssr"`. Only for pages that are the same for every visitor: a page that reads a cookie, a header or the time must not be reachable by a link, or every visitor gets the build\'s copy.',
-        },
+        [
+          "`render`",
+          '`"ssr" | "spa"`',
+          '`"ssr"`',
+          '`"ssr"`: a server renders each request. It needs a host that runs code. `"spa"`: one static shell, which needs only file hosting. Web. See [Rendering](/docs/rendering) and [Deploying](/docs/deploying).',
+        ],
+        [
+          "`prerender`",
+          "`boolean`",
+          "`false`",
+          'Renders every page linked from `/` to static HTML at build time. Other pages render per request. Needs `render: "ssr"`. Only for pages that are the same for every visitor. Web.',
+        ],
       ],
     },
     {
-      type: "note",
-      text: "There is no `host` key. adaptv wires the server build itself and the deploy target is detected from the platform's build environment, or set with the `NITRO_PRESET` environment variable. See [Deploying](/docs/deploying).",
+      type: "p",
+      text: "There is no `host` key. To set the deploy target, use `SERVER_PRESET`.",
     },
     { type: "h2", text: "Service worker" },
     {
       type: "p",
-      text: "adaptv registers exactly one service worker on the web and in an installed PWA, and never in a native build. It precaches every route chunk, which is what makes a web build navigate like the native one. There is no key to disable, replace or retune it. See [Offline](/docs/offline).",
+      text: "adaptv registers one service worker on the web and in a PWA, never in a native build. You cannot disable or replace it. See [Offline](/docs/offline).",
     },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "serviceWorkers",
-          type: "string[]",
-          description:
-            "Your own worker modules, for behaviour the framework has no opinion about: push handlers, background sync, a runtime cache for your API. Each file is bundled into adaptv's worker and evaluated after its setup, so it can add handlers but cannot take over precaching or navigation. Write them against `@arrzdev/adaptv/sw` (`sendToApp`, `onAppMessage`, `cacheRoute`) and read messages in the app with `useServiceWorkerMessage()`.",
-        },
-        {
-          name: "serviceWorkerUpdate",
-          type: '"auto" | "prompt"',
-          default: '"auto"',
-          description:
-            'When a new build\'s worker is applied. `"auto"` applies it at the next cold launch with no UI. `"prompt"` never applies it on its own: the app decides, through `useServiceWorkerUpdate()`. Nothing is ever applied mid-session in either mode. See [Update hooks](/docs/hooks-updates).',
-        },
+        [
+          "`serviceWorkers`",
+          "`string[]`",
+          "none",
+          "Your worker modules, for push or sync. Use `@arrzdev/adaptv/sw`. Web.",
+        ],
+        [
+          "`serviceWorkerUpdate`",
+          '`"auto" | "prompt"`',
+          '`"auto"`',
+          '`"auto"` applies a new worker at the next cold launch. `"prompt"` waits for `useServiceWorkerUpdate()`. See [Update hooks](/docs/hooks-updates). Web.',
+        ],
       ],
     },
     { type: "h2", text: "App feel" },
     {
-      type: "h3",
-      text: "ui",
-    },
-    {
       type: "p",
-      text: 'The resets whose right answer depends on what the app is. Each takes a scope: `"app"` (installed PWA and native only), `"all"` (every target, browser tab included) or `"off"` (adaptv does not touch the property).',
+      text: 'Each `ui` key takes `"app"` (installed PWA and native), `"all"` (also browser tabs) or `"off"`.',
     },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "ui.noSelect",
-          type: '"app" | "all" | "off"',
-          default: '"app"',
-          description:
-            "The global `user-select: none` reset. Inputs, textareas and `contenteditable` always keep native selection, and any element can opt back in with the `selectable` utility.",
-        },
-        {
-          name: "ui.hideScrollbars",
-          type: '"app" | "all" | "off"',
-          default: '"all"',
-          description:
-            "Hides scrollbars globally. A scroller that wants one asks with `showsVerticalScrollIndicator` on [ScrollView](/docs/scroll-view), which outranks this reset.",
-        },
-        {
-          name: "ui.touchCallout",
-          type: '"app" | "all" | "off"',
-          default: '"app"',
-          description:
-            "Suppresses iOS's long-press link preview sheet. In a Safari tab that sheet is a real affordance, which is why the default leaves it alone there. The tap highlight is always removed and is not configurable.",
-        },
-      ],
-    },
-    { type: "h3", text: "patches" },
-    {
-      type: "p",
-      text: "Native-feel WebKit fixes adaptv applies app-wide. Every one defaults to `true`. Set a field to `false` to opt out of that fix.",
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "patches.caretRepaint",
-          type: "boolean",
-          default: "true",
-          description:
-            "Repaints a focused input's caret when it moves (scroll, drawer, keyboard) so iOS never leaves a detached caret behind.",
-        },
-        {
-          name: "patches.textMagnifier",
-          type: "boolean",
-          default: "true",
-          description: "Suppresses the iOS double-tap text magnifier loupe.",
-        },
-        {
-          name: "patches.viewportFreeze",
-          type: "boolean",
-          default: "true",
-          description:
-            "Holds an app-wide scroll and virtual-keyboard-overlay lock so the on-screen keyboard and the URL bar cannot shift the layout. You own keyboard avoidance for inputs outside an overlay: wrap them in [AvoidKeyboard](/docs/avoid-keyboard). See [Keyboard](/docs/keyboard).",
-        },
-      ],
-    },
-    { type: "h3", text: "images" },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "images.placeholder",
-          type: "boolean",
-          default: "true",
-          description:
-            "Generate the blurred low-resolution placeholder for `?adaptv-image` imports. Turning it off still resolves `width` and `height`, so the box is still reserved and nothing shifts. There is no switch for the dimensions: a build that cannot resolve them fails. See [Image](/docs/image) and [Layout shift](/docs/layout-shift).",
-        },
+        [
+          "`ui.noSelect`",
+          '`"app" | "all" | "off"`',
+          '`"app"`',
+          "Sets `user-select: none`. Inputs keep selection. Opt in with the `selectable` utility.",
+        ],
+        [
+          "`ui.hideScrollbars`",
+          '`"app" | "all" | "off"`',
+          '`"all"`',
+          "Hides scrollbars.",
+        ],
+        [
+          "`ui.touchCallout`",
+          '`"app" | "all" | "off"`',
+          '`"app"`',
+          "Hides the iOS long-press link preview.",
+        ],
+        [
+          "`patches.caretRepaint`",
+          "`boolean`",
+          "`true`",
+          "Repaints the caret when it moves, so iOS leaves none behind.",
+        ],
+        [
+          "`patches.textMagnifier`",
+          "`boolean`",
+          "`true`",
+          "Stops the iOS double-tap text magnifier.",
+        ],
+        [
+          "`patches.viewportFreeze`",
+          "`boolean`",
+          "`true`",
+          "Stops the keyboard shifting the layout. Wrap inputs in [AvoidKeyboard](/docs/avoid-keyboard).",
+        ],
+        [
+          "`images.placeholder`",
+          "`boolean`",
+          "`true`",
+          "Blurred placeholder for `?adaptv-image`. See [Image](/docs/image).",
+        ],
       ],
     },
     { type: "h2", text: "Screens" },
     {
       type: "p",
-      text: "Each screen key is a thunk around a literal dynamic import, and the module it names must have a matching `default` export. The thunk is never executed. The plugin reads the path and emits a static import, so the screen is in the entry bundle and paints on the first frame. See [App shell components](/docs/app-shell-components) for the props each one receives.",
+      text: "Each screen is a literal import thunk to a module with a default export. See [App shell components](/docs/app-shell-components).",
     },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Props type", "Default", "Description"],
       rows: [
-        {
-          name: "splashScreen",
-          type: "() => Promise<{ default: ComponentType<SplashScreenProps> }>",
-          description:
-            "Your boot splash overlay. adaptv renders it while the app is installed (native app or home-screen PWA). It dismisses itself by returning `null`. It is mounted underneath the OS launch splash, so it receives `revealedAt`, the moment it became visible (`null` until then). Time a minimum visible duration from that, never from mount.",
-        },
-        {
-          name: "splashScreenInBrowser",
-          type: "boolean",
-          default: "false",
-          description: "Also show `splashScreen` in a browser tab.",
-        },
-        {
-          name: "splashMaskMode",
-          type: '"preferences" | "system" | "light" | "dark"',
-          default: '"preferences"',
-          description:
-            'How the native OS launch splash picks its flat mask colour. `"preferences"` follows the app\'s theme preference, `"system"` always follows the device, `"light"` and `"dark"` are fixed.',
-        },
-        {
-          name: "splashMaskLightColor",
-          type: "string",
-          default: "backgroundColor ?? themeColor.light",
-          description: "The launch mask colour in light mode. Hex only.",
-        },
-        {
-          name: "splashMaskDarkColor",
-          type: "string",
-          default: "themeColor.dark",
-          description: "The launch mask colour in dark mode. Hex only.",
-        },
-        {
-          name: "orientationGuardScreen",
-          type: "() => Promise<{ default: ComponentType<OrientationGuardProps> }>",
-          description:
-            "The full-screen prompt shown when a touch device is rotated against `orientation`. Receives `orientation`, the one the app requires. adaptv has a built-in prompt when you omit it.",
-        },
-        {
-          name: "notFoundScreen",
-          type: "() => Promise<{ default: NotFoundRouteComponent }>",
-          description:
-            "The full-screen 404, rendered at the root whenever a route throws `notFound()` or no route matches.",
-        },
-        {
-          name: "offlineComponent",
-          type: "() => Promise<{ default: ComponentType<OfflineProps> }>",
-          default: "adaptv's Offline",
-          description:
-            "The app's offline UI. adaptv renders it when the app cannot boot far enough for a route to exist (a route chunk fails to load), and you render the same component from a route whose data is unavailable. Every prop is optional so one component serves both. See [OfflineBoundary](/docs/offline-boundary).",
-        },
-        {
-          name: "bootErrorScreen",
-          type: "() => Promise<{ default: ComponentType<BootErrorProps> }>",
-          default: "adaptv's BootError",
-          description:
-            "The screen shown when the bundle never ran: a 404 on the entry chunk, a syntax error, a corrupt update. It is prerendered to static HTML at build time, so it must render from its `code` prop alone, with no hooks and no browser APIs. It is not for runtime errors: a route that throws is yours to catch with your own boundary.",
-        },
-        {
-          name: "updateRequiredScreen",
-          type: "() => Promise<{ default: ComponentType<UpdateRequiredProps> }>",
-          description:
-            "Your screen for `updateRequiredAfterDays`, instead of adaptv's. Receives `days`, `since` (ms since the epoch) and `buildTag`.",
-        },
+        [
+          "`splashScreen`",
+          "`SplashScreenProps`",
+          "none",
+          "Boot overlay for installed apps. It hides by returning `null`. Time a minimum duration from `revealedAt`.",
+        ],
+        [
+          "`splashScreenInBrowser`",
+          "`boolean`",
+          "`false`",
+          "Also show `splashScreen` in a tab.",
+        ],
+        [
+          "`splashMaskMode`",
+          '`"preferences" | "system" | "light" | "dark"`',
+          '`"preferences"`',
+          "Launch splash colour. `preferences` follows the app theme, `system` the device. Native.",
+        ],
+        [
+          "`splashMaskLightColor`",
+          "`string`",
+          "`backgroundColor`, else `themeColor.light`",
+          "Light launch colour. Native.",
+        ],
+        [
+          "`splashMaskDarkColor`",
+          "`string`",
+          "`themeColor.dark`",
+          "Dark launch colour. Native.",
+        ],
+        [
+          "`orientationGuardScreen`",
+          "`OrientationGuardProps`",
+          "built-in prompt",
+          "Prompt when a device is rotated against `orientation`.",
+        ],
+        [
+          "`notFoundScreen`",
+          "router not-found props",
+          "built-in",
+          "Full-screen 404, for `notFound()` and for no match.",
+        ],
+        [
+          "`offlineComponent`",
+          "`OfflineProps`",
+          "built-in `Offline`",
+          "Shown when a route chunk fails to load. Also usable in your routes. See [OfflineBoundary](/docs/offline-boundary).",
+        ],
+        [
+          "`bootErrorScreen`",
+          "`BootErrorProps`",
+          "built-in `BootError`",
+          "Shown when the bundle never ran. Built at build time, so use only its `code` prop, with no hooks.",
+        ],
+        [
+          "`updateRequiredScreen`",
+          "`days`, `since`, `buildTag`",
+          "built-in",
+          "Your screen for `updateRequiredAfterDays`. Native.",
+        ],
       ],
     },
     {
-      type: "note",
-      text: "There is no `providers` key. An app-wide provider tree is a layout route: declare one in the route config and wrap `<Outlet />`. See [Routing](/docs/routing).",
+      type: "p",
+      text: "Import `OfflineProps` and `BootErrorProps` from `@arrzdev/adaptv/components`. The `updateRequiredScreen` props type is not exported. There is no `providers` key: use a layout route that wraps `<Outlet />`. See [Routing](/docs/routing).",
     },
     { type: "h2", text: "Native app" },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "appId",
-          type: "string",
-          description:
-            'The native app id, reverse-DNS, for example `"com.acme.notes"`. adaptv generates the whole iOS and Android project from this one field.',
-        },
-        {
-          name: "appName",
-          type: "string",
-          default: "name",
-          description:
-            "The display name on the device home screen. Also names the built `.ipa` and `.apk`.",
-        },
-        {
-          name: "plugins",
-          type: "string[]",
-          description:
-            'Extra Capacitor-compatible native plugins, by package name, added to the set adaptv already ships for its own [capabilities](/docs/capabilities). Install the package, list it here, and use its JS API. adaptv wires the iOS and Android side. Do not list the plugins adaptv bundles. Example: `["@capacitor/camera"]`.',
-        },
-        {
-          name: "pluginConfig",
-          type: "Record<string, Record<string, unknown>>",
-          description:
-            "Native runtime settings for plugins, keyed by the plugin's class name (`Camera`, `PushNotifications`), merged into the generated native config.",
-        },
-        {
-          name: "privacy",
-          type: "AdaptvPrivacyConfig",
-          description:
-            "What only your app can know about its iOS privacy manifest. adaptv generates `PrivacyInfo.xcprivacy` on every iOS build and derives the required-reason APIs of every compiled-in plugin. This key adds the rest.",
-        },
+        [
+          "`appId`",
+          "`string`",
+          "none",
+          "Reverse-DNS id, such as `com.acme.notes`. The CLI requires it.",
+        ],
+        [
+          "`appName`",
+          "`string`",
+          "`name`",
+          "Home-screen name. Names the `.ipa` and `.apk`.",
+        ],
+        ["`plugins`", "`string[]`", "none", "Native plugins, by package name."],
+        [
+          "`pluginConfig`",
+          "`Record<string, object>`",
+          "none",
+          "Settings per plugin, keyed by class name.",
+        ],
+        [
+          "`deepLinks`",
+          "`{ scheme: string }`",
+          "none",
+          "Registers a URL scheme. With `myapp`, `myapp://settings/profile?tab=2` opens `/settings/profile?tab=2`. Listen with `onUrlOpened` from `@arrzdev/adaptv/capabilities`. Universal links are not built.",
+        ],
+        [
+          "`privacy`",
+          "see below",
+          "none",
+          "iOS privacy manifest data only your app knows. adaptv derives the rest.",
+        ],
       ],
     },
     {
-      type: "note",
-      tone: "warn",
-      text: "Known gap: the type says a web-only app omits `appId`, and the Vite build accepts a config without it. The CLI does not: `adaptv dev`, `preview`, `build` and `icons` stop with `missing 'appId' in adaptv.config.ts`, for every surface including `web`. Until the CLI agrees with the type, set an `appId` even if you never ship to a store.",
-    },
-    { type: "h3", text: "privacy" },
-    {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "privacy.requiredReasonAPIs",
-          type: "Record<string, string[]>",
-          description:
-            'Required-reason APIs adaptv cannot derive, keyed by Apple\'s category and valued by reason codes. Merged with the derived set. Example: `{ NSPrivacyAccessedAPICategoryFileTimestamp: ["C617.1"] }`.',
-        },
-        {
-          name: "privacy.tracking",
-          type: "boolean",
-          default: "false",
-          description:
-            "`NSPrivacyTracking`: whether the app tracks users as Apple defines it.",
-        },
-        {
-          name: "privacy.trackingDomains",
-          type: "string[]",
-          description:
-            "`NSPrivacyTrackingDomains`: the domains the app connects to for tracking.",
-        },
-        {
-          name: "privacy.collectedData",
-          type: "{ type: string; linked: boolean; tracking: boolean; purposes: string[] }[]",
-          description:
-            "`NSPrivacyCollectedDataTypes`: what the app collects. adaptv never infers this. An app with analytics, accounts or telemetry declares it here.",
-        },
+        [
+          "`privacy.requiredReasonAPIs`",
+          "`Record<string, string[]>`",
+          "none",
+          "Reason codes for APIs adaptv cannot derive.",
+        ],
+        [
+          "`privacy.tracking`",
+          "`boolean`",
+          "`false`",
+          "`NSPrivacyTracking`: whether the app tracks users.",
+        ],
+        [
+          "`privacy.trackingDomains`",
+          "`string[]`",
+          "none",
+          "`NSPrivacyTrackingDomains`.",
+        ],
+        [
+          "`privacy.collectedData`",
+          "`{ type; linked; tracking; purposes }[]`",
+          "none",
+          "`NSPrivacyCollectedDataTypes`. adaptv never infers it.",
+        ],
       ],
     },
     { type: "h2", text: "Over-the-air updates" },
     {
       type: "p",
-      text: "An installed native app can take a new JS bundle without a store release. `origin` turns that on. See [OTA updates](/docs/ota-updates) for the whole flow.",
+      text: "`origin` turns on JS updates without a store release. See [OTA updates](/docs/ota-updates).",
     },
     {
-      type: "props",
+      type: "table",
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        {
-          name: "origin",
-          type: "string",
-          description:
-            'The app\'s public origin, for example `"https://app.acme.com"`. Origin only: no path, no trailing slash, and `https` outside localhost, enforced at build time. `adaptv build web` writes the update channel under `<origin>/.well-known/adaptv/ota/` and installed apps poll it. It is baked into the store binary, so treat it as permanent. Omit it and OTA is off.',
-        },
-        {
-          name: "otaPublicKey",
-          type: "string",
-          description:
-            "The public half of the OTA signing key, a PEM RSA public key. Committed on purpose. Generate the pair with `adaptv keys ota` and give the private half to the deploy as `ADAPTV_OTA_PRIVATE_KEY`. Without it, a build with an `origin` refuses to publish a channel.",
-        },
-        {
-          name: "otaOnNativeSkew",
-          type: '"install" | "refuse"',
-          default: '"install"',
-          description:
-            'What an installed app does with an update built against a different set of native plugins than it has. `"install"` takes it, and capabilities that need the missing native code report `supported: false`. `"refuse"` stays on the last matching bundle until a store release.',
-        },
-        {
-          name: "otaPollMinutes",
-          type: "number",
-          default: "60",
-          description:
-            "How often an installed app checks for a bundle while it is in use, in whole minutes. `0` turns the poll off. The minimum is 5. adaptv always checks on launch and on resume as well. A poll changes when the download happens, never when the swap does: the bundle is applied at the next cold start.",
-        },
-        {
-          name: "updateRequiredAfterDays",
-          type: "number",
-          description:
-            "How many days the channel may have been ahead of this install's native layer before adaptv takes the screen. Omit it, the default, and it never does. Set it only when a server contract moved with a native release. For anything short of a full screen, read the same state with `useStoreRelease()`.",
-        },
+        [
+          "`origin`",
+          "`string`",
+          "none",
+          "Public origin, such as `https://app.acme.com`. Must be `https`, except `http` for `localhost`, `127.0.0.1`, `[::1]` and `10.0.2.2` (Android emulator). Without it, OTA is off. A change needs a store release.",
+        ],
+        [
+          "`otaPublicKey`",
+          "`string`",
+          "none",
+          "PEM public key from `adaptv keys ota`. Commit it. With `origin` set and no key, `build web` stops with exit code 1. A change needs a store release.",
+        ],
+        [
+          "`otaOnNativeSkew`",
+          '`"install" | "refuse"`',
+          '`"install"`',
+          'For an update built for different native plugins: `"install"` takes it, and features that need missing code report `supported: false`. `"refuse"` keeps the last matching bundle.',
+        ],
+        [
+          "`otaPollMinutes`",
+          "`number`",
+          "`60`",
+          "Minutes between update checks while the app is in use. `0` turns polling off. A value above 0 and below 5 fails the build. Launch and resume always check. A bundle applies at the next cold start.",
+        ],
+        [
+          "`updateRequiredAfterDays`",
+          "`number`",
+          "none",
+          "Days the channel may be ahead of the installed native layer before the update-required screen shows. Without it, it never shows.",
+        ],
       ],
+    },
+    {
+      type: "p",
+      text: "For local tests only: `ADAPTV_OTA_ORIGIN` overrides `origin`. With it, `ADAPTV_OTA_PUBLIC_KEY` overrides `otaPublicKey`, and `ADAPTV_OTA_ALLOW_UNSIGNED=1` allows an unsigned channel.",
     },
     { type: "h2", text: "router" },
     {
       type: "p",
-      text: "One block for all routing wiring. adaptv consumes the three keys it recognises for the build, handles `memoryHistoryInStandalone` itself, and passes every other key to the router as a runtime option (`defaultPreload`, `defaultPreloadStaleTime`, `scrollRestoration`, and so on). The block is required, and may be empty. See [Routing](/docs/routing) and the [Router API](/docs/router-api).",
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "router.routesDirectory",
-          type: "string",
-          default: '"./routing"',
-          description:
-            "Where the route files live, relative to `src/`. The default is `src/routing`.",
-        },
-        {
-          name: "router.routerConfig",
-          type: "string",
-          default: '"./src/routing/config.ts"',
-          description:
-            "The route config file, relative to the app root: the module that calls `rootRoute([...])`.",
-        },
-        {
-          name: "router.serverEntry",
-          type: "string",
-          description:
-            'A custom server entry for `render: "ssr"`, relative to the app root. The built-in one is used otherwise.',
-        },
-        {
-          name: "router.memoryHistoryInStandalone",
-          type: "boolean",
-          default: "false",
-          description:
-            "Use in-memory router history when the app runs installed (home-screen PWA or native). The OS edge-swipe-back then has no browser-history entry to navigate, so navigation stays app-controlled. Ignored in a browser tab.",
-        },
-        {
-          name: "router.*",
-          type: "unknown",
-          description:
-            'Any other key is forwarded to the router constructor. adaptv sets `notFoundMode: "root"` unless you set it yourself.',
-        },
-      ],
-    },
-    { type: "h2", text: "Environment overrides" },
-    {
-      type: "p",
-      text: "These exist for local verification of the update channel, not for production builds.",
+      text: "The block is required and can be empty. Other keys go to the router as runtime options, such as `defaultPreload`. See [Routing](/docs/routing) and [Router API](/docs/router-api).",
     },
     {
       type: "table",
-      head: ["Variable", "Effect"],
+      head: ["Key", "Type", "Default", "Description"],
       rows: [
-        ["`ADAPTV_OTA_ORIGIN`", "Overrides `origin`."],
         [
-          "`ADAPTV_OTA_PUBLIC_KEY`",
-          "Overrides `otaPublicKey`, so you can verify a signed channel with a throwaway pair. Only alongside `ADAPTV_OTA_ORIGIN`.",
+          "`router.routesDirectory`",
+          "`string`",
+          '`"./routing"`',
+          "Route files folder, relative to `src/`.",
         ],
         [
-          "`ADAPTV_OTA_ALLOW_UNSIGNED=1`",
-          "Lets a build publish an unsigned channel. Only alongside `ADAPTV_OTA_ORIGIN`.",
+          "`router.routerConfig`",
+          "`string`",
+          '`"./src/routing/config.ts"`',
+          "Module with `rootRoute([...])`, from the app root.",
+        ],
+        [
+          "`router.serverEntry`",
+          "`string`",
+          "built-in",
+          'Custom server entry for `render: "ssr"`, relative to the app root.',
+        ],
+        [
+          "`router.memoryHistoryInStandalone`",
+          "`boolean`",
+          "`false`",
+          "In-memory history when installed, so OS swipe-back does nothing. Ignored in a tab.",
         ],
       ],
     },
-    { type: "h2", text: "Exported types" },
     {
       type: "p",
-      text: "`@arrzdev/adaptv/config` also exports the types you annotate screens with: `AdaptvAppConfig`, `AdaptvRouterConfig`, `AdaptvUiConfig`, `AdaptvPatches`, `UiPatchScope`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps` and `OrientationLock`.",
+      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps` and `OrientationGuardProps`, from `@arrzdev/adaptv/config`.",
     },
   ],
 }
