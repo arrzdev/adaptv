@@ -2,6 +2,9 @@
 //is gone: adaptv's worker is not configurable, so there is no entry, no
 //register mode and no app-owned `sw.config.ts` to type. → `docs/design/rendering.md §3`
 
+import type { NotFoundRouteProps } from "@tanstack/react-router"
+import type { ReactNode } from "react"
+
 /**
  * Props for the splash component (`splashScreen`). It still owns its own lifecycle and
  * dismisses by **returning `null`** when the app is ready (self-unmounts) — adaptv only
@@ -41,6 +44,21 @@ export type SplashScreenProps = {
  * disables the guard and is what an absent manifest field reads as.
  */
 export type OrientationLock = "portrait" | "landscape" | "any"
+
+/**
+ * Props for the not-found screen (`notFoundScreen`): `routeId` is the route the
+ * miss happened under, and `data` is whatever a `notFound({ data })` threw.
+ *
+ * An interface over the router's own props rather than an alias of them, because
+ * TypeScript prints an alias by the name it aliases: every hover and type error
+ * on `notFoundScreen` would name the engine. → docs/decisions/facade-and-opacity.md §1
+ */
+export interface NotFoundScreenProps extends NotFoundRouteProps {}
+
+/** The component `notFoundScreen` resolves to, and `notFoundComponent` takes. */
+export type NotFoundScreenComponent = (
+  props: NotFoundScreenProps,
+) => ReactNode
 
 /** Props injected into `orientationGuardComponent` when the device is rotated away from the lock. */
 export type OrientationGuardProps = {
