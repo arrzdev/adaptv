@@ -21,10 +21,8 @@ import type {
 import { resolveDropdownPosition } from "#adaptv/components/dropdown/dropdown-position"
 import { subscribeOutsidePress } from "#adaptv/components/dropdown/outside-press"
 import {
-  PRESS_TARGET_CURSOR_CLASS,
-  PRESS_TARGET_DISABLED_CURSOR_CLASS,
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { useInsets } from "#adaptv/hooks/use-insets"
@@ -63,22 +61,28 @@ function useDropdownContext(): DropdownContextValue {
 //engine, and content past the cap must scroll, not overflow the viewport), sits
 //above app chrome, and contains its overscroll so a menu fling never scrolls the
 //page behind it. z-index and the fixed layer are not the consumer's to reshape.
-const DROPDOWN_CONTENT_LOCKED_CLASS =
-  "z-50 overflow-y-auto overscroll-contain"
-//BASE neutral look — a menu surface, fully overridable via Tier 2 `className`.
-const DROPDOWN_CONTENT_BASE_CLASS =
-  "min-w-[8rem] rounded-md bg-surface p-1 shadow-lg ring-1 ring-border"
-const DROPDOWN_ITEM_BASE_CLASS =
-  "flex w-full items-center rounded-sm px-3 py-2 text-sm text-foreground disabled:opacity-40"
-//LOCKED: `text-start` is structure, not paint — an item is a full-width row whose
-//label reads from the inline start, never a centred `<button>` label. Beside it rides
-//the press-target `touch-action` longhand: an item sits INSIDE the panel's own
+//The neutral menu surface is a default in dropdown.css, fully overridable.
+const DROPDOWN_CONTENT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  zIndex: 50,
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+})
+//LOCKED: `text-align: start` is structure, not paint — an item is a full-width row
+//whose label reads from the inline start, never a centred `<button>` label. Beside it
+//rides the press-target `touch-action` longhand: an item sits INSIDE the panel's own
 //scroller, so it is exactly the "tappable and gesture-driven" case press-core.ts
 //describes (WebKit 240917), and a consumer `touch-none` here would turn every row of
 //a scrolling menu into a dead zone. The cursor is the other half of the pair and
-//stays in the BASE tier, so `className="cursor-wait"` on a pending item still wins.
-const DROPDOWN_ITEM_LOCKED_CLASS = `${PRESS_TARGET_LOCKED_CLASS} text-start`
-const DROPDOWN_ITEM_DISABLED_LOCKED_CLASS = `${PRESS_TARGET_DISABLED_LOCKED_CLASS} text-start`
+//stays a default in dropdown.css, so `className="cursor-wait"` on a pending item
+//still wins.
+const DROPDOWN_ITEM_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...PRESS_TARGET_LOCKED_STYLE,
+  textAlign: "start",
+})
+const DROPDOWN_ITEM_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  textAlign: "start",
+})
 
 export type DropdownProps = {
   children: ReactNode
@@ -145,15 +149,12 @@ function DropdownTrigger({
       ref={triggerRef}
       type="button"
       data-adaptv="dropdown-trigger"
+      data-part="trigger"
       aria-haspopup="menu"
       aria-expanded={open}
-      //Both tiers undefined by decision (like Drawer.Trigger): a trigger is a plain
-      //button adaptv wires open/close onto, with no neutral look of its own.
-      className={mergeStyles({
-        base: undefined,
-        className,
-        locked: undefined,
-      })}
+      //No default and no lock, by decision (like Drawer.Trigger): a trigger is a
+      //plain button adaptv wires open/close onto, with no neutral look of its own.
+      className={mergeStyles({ className }) || undefined}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -261,11 +262,10 @@ function DropdownContent({
 
   const positioned = pos !== null
   const merged = mergeStyles({
-    base: DROPDOWN_CONTENT_BASE_CLASS,
     className,
-    locked: DROPDOWN_CONTENT_LOCKED_CLASS,
     style,
     lockedStyle: {
+      ...DROPDOWN_CONTENT_LOCKED_STYLE,
       position: "fixed",
       left: pos?.left ?? 0,
       top: pos?.top ?? 0,
@@ -280,11 +280,12 @@ function DropdownContent({
     <div
       ref={contentRef}
       data-adaptv="dropdown"
+      data-part="content"
       data-side={pos?.side}
       data-align={pos?.align}
       role="menu"
       tabIndex={-1}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
       {...props}
     >
@@ -313,24 +314,21 @@ function DropdownItem({
   ...props
 }: DropdownItemProps) {
   const { setOpen } = useDropdownContext()
+  const merged = mergeStyles({
+    className,
+    lockedStyle: disabled
+      ? DROPDOWN_ITEM_DISABLED_LOCKED_STYLE
+      : DROPDOWN_ITEM_LOCKED_STYLE,
+  })
   return (
     <button
       type="button"
       role="menuitem"
       data-adaptv="dropdown-item"
+      data-part="item"
       disabled={disabled}
-      className={mergeStyles({
-        base: [
-          DROPDOWN_ITEM_BASE_CLASS,
-          disabled
-            ? PRESS_TARGET_DISABLED_CURSOR_CLASS
-            : PRESS_TARGET_CURSOR_CLASS,
-        ],
-        className,
-        locked: disabled
-          ? DROPDOWN_ITEM_DISABLED_LOCKED_CLASS
-          : DROPDOWN_ITEM_LOCKED_CLASS,
-      })}
+      className={merged.className || undefined}
+      style={merged.style}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return

@@ -132,6 +132,7 @@ describe("TextArea — slot validation", () => {
     expect(root.tagName).toBe("DIV")
     expect(root).toBe(shell())
     expect(root.getAttribute("data-adaptv")).toBe("text-area")
+    expect(root.getAttribute("data-part")).toBe("root")
     expect(textarea().hasAttribute("aria-describedby")).toBe(false)
   })
 })
@@ -148,8 +149,15 @@ describe("TextArea — slot wiring", () => {
     const fieldset = container.firstElementChild as HTMLFieldSetElement
     expect(fieldset.tagName).toBe("FIELDSET")
     expect(fieldset.getAttribute("data-adaptv")).toBe("text-area")
-    //stamped once: `[data-adaptv="text-area"]` must not match two nested elements
-    expect(shell().hasAttribute("data-adaptv")).toBe(false)
+    //one root: `[data-adaptv="text-area"][data-part="root"]` must not match two
+    //nested elements — the shell inside is a part, not a second root
+    expect(fieldset.getAttribute("data-part")).toBe("root")
+    expect(
+      container.querySelectorAll(
+        '[data-adaptv="text-area"][data-part="root"]',
+      ),
+    ).toHaveLength(1)
+    expect(shell().getAttribute("data-part")).toBe("shell")
     expect(Array.from(fieldset.children).map((el) => el.tagName)).toEqual([
       "LABEL",
       "DIV",
@@ -697,8 +705,9 @@ function isScrollPadded(): boolean {
   return textarea().style.getPropertyValue("scroll-padding-bottom") !== ""
 }
 
-function hasOverflowClass(): boolean {
-  return textarea().classList.contains("overflow-y-auto")
+//the at-max-rows scroll is a LOCK, so it is inline style React writes, not a class
+function hasOverflowLock(): boolean {
+  return textarea().style.overflowY === "auto"
 }
 
 describe("TextArea autoResize — grow and shrink", () => {
@@ -798,7 +807,7 @@ describe("TextArea autoResize — grow and shrink", () => {
       />,
     )
     expect(heightPx()).toBe(2 * LINE)
-    expect(hasOverflowClass()).toBe(false)
+    expect(hasOverflowLock()).toBe(false)
 
     edit(lines(3))
     flushFrames()
@@ -807,7 +816,7 @@ describe("TextArea autoResize — grow and shrink", () => {
     edit("", "deleteContentBackward")
     flushFrames()
     expect(heightPx(), "cleared: back at the floor").toBe(2 * LINE)
-    expect(hasOverflowClass()).toBe(false)
+    expect(hasOverflowLock()).toBe(false)
 
     //a refill after the clear measures the text, not the placeholder
     edit(lines(3))
@@ -822,13 +831,13 @@ describe("TextArea autoResize — the maxRows cap", () => {
   it("stops at maxRows, scrolls inside, and mirrors the shell's bottom padding as scroll inset", () => {
     layout.shellPadding = [8, 12]
     render(<TextArea aria-label="notes" rows={2} maxRows={5} />)
-    expect(hasOverflowClass()).toBe(false)
+    expect(hasOverflowLock()).toBe(false)
     expect(isScrollPadded()).toBe(false)
 
     edit(lines(10))
     flushFrames()
     expect(heightPx()).toBe(5 * LINE)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
     expect(
       textarea().style.getPropertyValue("scroll-padding-bottom"),
     ).toBe("12px")
@@ -846,7 +855,7 @@ describe("TextArea autoResize — the maxRows cap", () => {
     edit(lines(14))
     flushFrames()
     expect(heightPx()).toBe(5 * LINE)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
     expect(isScrollPadded()).toBe(true)
   })
 
@@ -858,7 +867,7 @@ describe("TextArea autoResize — the maxRows cap", () => {
     edit(lines(3), "deleteContentBackward")
     flushFrames()
     expect(heightPx()).toBe(3 * LINE)
-    expect(hasOverflowClass()).toBe(false)
+    expect(hasOverflowLock()).toBe(false)
     expect(isScrollPadded()).toBe(false)
   })
 
@@ -867,12 +876,12 @@ describe("TextArea autoResize — the maxRows cap", () => {
     edit(lines(100))
     flushFrames()
     expect(heightPx()).toBe(100 * LINE)
-    expect(hasOverflowClass()).toBe(false)
+    expect(hasOverflowLock()).toBe(false)
 
     edit(lines(101))
     flushFrames()
     expect(heightPx()).toBe(100 * LINE)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
   })
 
   it("a new maxRows applies on the next sync without waiting for a resize", () => {
@@ -885,7 +894,7 @@ describe("TextArea autoResize — the maxRows cap", () => {
 
     rerender(<TextArea aria-label="notes" rows={2} maxRows={5} />)
     expect(heightPx()).toBe(5 * LINE)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
   })
 
   it("a new rows floor applies on the next sync without waiting for a resize", () => {
@@ -907,7 +916,7 @@ describe("TextArea autoResize — CSS and parent caps", () => {
     edit(lines(10))
     flushFrames()
     expect(heightPx()).toBe(100)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
   })
 
   it("a shell max-height that the chrome alone fills is ignored", () => {
@@ -936,7 +945,7 @@ describe("TextArea autoResize — CSS and parent caps", () => {
     edit(lines(10))
     flushFrames()
     expect(heightPx()).toBe(5 * LINE)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
   })
 
   it.each([
@@ -968,7 +977,7 @@ describe("TextArea autoResize — CSS and parent caps", () => {
     for (const observer of observers) observer.notify()
     flushFrames()
     expect(heightPx()).toBe(100)
-    expect(hasOverflowClass()).toBe(true)
+    expect(hasOverflowLock()).toBe(true)
   })
 })
 
@@ -1089,12 +1098,27 @@ describe("TextArea autoResize={false} — fill mode", () => {
   beforeEach(installFakeLayout)
 
   it("lays the shell out as a column that fills its box, with the field scrolling inside", () => {
-    render(<TextArea aria-label="notes" autoResize={false} />)
-    for (const token of ["flex", "h-full", "min-h-0", "flex-col"]) {
-      expect(shell().classList.contains(token)).toBe(true)
-    }
-    expect(textarea().classList.contains("flex-1")).toBe(true)
-    expect(hasOverflowClass()).toBe(true)
+    render(
+      <TextArea
+        aria-label="notes"
+        autoResize={false}
+        className="consumer-notes"
+        style={{ flex: "none", minHeight: "40px", letterSpacing: "1px" }}
+      />,
+    )
+    //the consumer's class lands untouched and alone: adaptv adds none of its own
+    expect(shell().className).toBe("consumer-notes")
+    expect(textarea().hasAttribute("class")).toBe(false)
+    //locked inline: neither a consumer class nor a consumer style reshapes it
+    expect(shell().style.display).toBe("flex")
+    expect(shell().style.height).toBe("100%")
+    expect(shell().style.minHeight).toMatch(/^0(px)?$/)
+    expect(shell().style.flexDirection).toBe("column")
+    //the consumer's style reaches the field and loses only where the lock is
+    expect(textarea().style.letterSpacing).toBe("1px")
+    expect(textarea().style.flex).toMatch(/^1( 1 0%)?$/)
+    expect(textarea().style.minHeight).toMatch(/^0(px)?$/)
+    expect(hasOverflowLock()).toBe(true)
   })
 
   it("renders a one-row field too: the shell's box, not `rows`, sets the height", () => {
@@ -1111,13 +1135,14 @@ describe("TextArea autoResize={false} — fill mode", () => {
     layout.autoBoxHeight = 4 * LINE
     const { rerender } = render(<TextArea aria-label="notes" rows={6} />)
     expect(textarea().style.height).not.toBe("")
-    textarea().style.minHeight = "10px"
-    textarea().style.overflow = "hidden"
 
     rerender(<TextArea aria-label="notes" rows={6} autoResize={false} />)
     expect(textarea().style.height).toBe("")
-    expect(textarea().style.minHeight).toBe("")
-    expect(textarea().style.overflow).toBe("")
+    //…and only the height: the fill lock React wrote inline (`min-height: 0`,
+    //`overflow-y: auto`) is not the engine's to strip, or the field stops
+    //scrolling inside itself the moment it syncs
+    expect(textarea().style.minHeight).toMatch(/^0(px)?$/)
+    expect(textarea().style.overflowY).toBe("auto")
   })
 
   it("overflowing content gets the shell's bottom padding as scroll inset, and an unfocused field scrolls back to the top", () => {
