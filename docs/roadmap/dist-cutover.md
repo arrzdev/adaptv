@@ -108,5 +108,6 @@ about sequencing, not about the decision.**
    install with `ERR_PNPM_PATCH_NOT_FOUND`. An app created against the tarball, outside the repo,
    ran `pnpm install`, `adaptv build web` (exit 0) and `adaptv dev web` (200) with nothing copied
    by hand. `examples/basic` is that app, run by the README quick start.
-   [`../design/create-adaptv.md §4`](../design/create-adaptv.md). `ssr.noExternal` stays in the
-   template: dist imports `virtual:adaptv-*` modules, which Node cannot load in dev.
+   [`../design/create-adaptv.md §4`](../design/create-adaptv.md). `adaptv()` adds `@arrzdev/adaptv` to
+   `noExternal` (dist imports `virtual:adaptv-*` modules, which Node cannot load in dev), so the
+   template's `vite.config.ts` has no `ssr` key.
