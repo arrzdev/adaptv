@@ -67,3 +67,8 @@ about sequencing, not about the decision.**
    test, and it is the one that proves the cutover actually worked rather than merely built.
 3. The seven `virtual-adaptv-*.d.ts` ambient declarations still reach a consumer once `src/` is no
    longer the shipped path — see the trap above.
+4. An app from `create-adaptv`, installed from a `pnpm pack` tarball of the framework outside the
+   repo, passes `adaptv build web`. Today its `vite.config.ts` does not load: Node will not strip
+   types under `node_modules`. The template then carries the patches in the app's own `patches/`,
+   because the `node_modules/@arrzdev/adaptv/patches/` block fails a fresh install with
+   `ERR_PNPM_PATCH_NOT_FOUND` → [`../design/create-adaptv.md §4`](../design/create-adaptv.md).

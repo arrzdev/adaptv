@@ -249,7 +249,7 @@ Full designs exist; the next step is TDD, not more design.
 |---|---|---|---|
 | D1 | `.adaptv/` hidden generated dir + `adaptv` barrel | `../design/architecture.md §3` | ✅ **shipped** — `src/vite/adaptv-dir.ts`, `route-tree-opacity.ts`, `router-autoimport.ts`; enforced by `bin/lib/opacity.mjs` |
 | D2 | First-party `@adaptv/shell` Capacitor plugin (edge-to-edge + insets/IME, then splash/status-bar/theme) | `../roadmap/native-shell-plugin.md` | 📐 **still live, and the design is stale.** Capacitor 8's core `SystemBars` already owns Android insets + IME, so the premise changed — **redesign before implementing** (`§0.0` of that doc). **HIGH** risk. |
-| D3 | `create-adaptv` scaffolder | `../roadmap/create-adaptv.md` | 📐 **still live.** Low risk. |
+| D3 | `create-adaptv` scaffolder | `../design/create-adaptv.md` | ✅ **shipped** — `packages/create-adaptv/` (2026-10-05). Unpublished; a published app waits on the `dist` cutover (§4 of that doc) |
 | D4 | `web` config block (`render`/`host`/`sw`) → Start deploy presets | — | ❌ **withdrawn.** The config went *flat* instead: [`rendering-and-delivery.md §2`](rendering-and-delivery.md) deletes `web.host`, and `src/config/types.ts` records that the service worker is not configurable at all, so there is no `sw` block either. |
 | D5 | Capacitor OTA (fingerprint-gated self-hosted bundle swap) | `../design/ota.md` | ✅ **shipped** — `src/ota/` (policy, updater, ledger, manifest-signing, native-fingerprint, store-release) + `src/vite/{ota-emit,ota-zip,ota-config-module}.ts` + `adaptv keys ota` |
 | D6 | `adaptv dev [--host ios\|android]` with device live-reload | `../design/lifecycle.md §2.2` | ✅ **shipped** — see [`positioning.md §2`](positioning.md) for the LAN-IP path as built |
@@ -290,7 +290,7 @@ Full designs exist; the next step is TDD, not more design.
 | # | Question | Resolution |
 |---|---|---|
 | O10 | **Animation substrate** | **Keep `motion`; adaptv builds no engine.** CSS (`@starting-style` + `allow-discrete`) for enter/exit, `motion` for gesture/interruptible/layout. Accelerated set is `transform`/`opacity`/`filter`/`backdrop-filter` only. **`composite:"add"` is banned** — Baseline-available, but it silently kills the Chromium compositor. **Overlays are ordinary positioned elements, not the top layer** — `overlay` is Chromium-only with no WebKit bug, so `<dialog>`/popover exits break on iOS permanently. → `docs/decisions/animation.md` |
-| O12 | **Ship source vs dist / publishing** | ❌ **This closure is superseded — see the O12 row in §5 above and [`dist-build.md`](dist-build.md).** It read *"stay on raw source + git dependency until there's a second consumer"*, which the repo has since reversed: `tsdown.config.ts` exists, `pnpm build:check` verifies the output, and `package.json` `publishConfig` points at GitHub Packages. The one part still worth keeping is the constraint on the scaffolder, which has moved to [`../roadmap/create-adaptv.md`](../roadmap/create-adaptv.md): **`create-adaptv` is unclaimed on npm** — publish the *scaffolder* publicly (it is just prompts + file copying) and keep `@arrzdev/adaptv` private, which fixes the chicken-and-egg where you would need a PAT configured before you could run the tool that configures your PAT. |
+| O12 | **Ship source vs dist / publishing** | ❌ **This closure is superseded — see the O12 row in §5 above and [`dist-build.md`](dist-build.md).** It read *"stay on raw source + git dependency until there's a second consumer"*, which the repo has since reversed: `tsdown.config.ts` exists, `pnpm build:check` verifies the output, and `package.json` `publishConfig` points at GitHub Packages. The one part still worth keeping is the constraint on the scaffolder, which has moved to [`../design/create-adaptv.md`](../design/create-adaptv.md): **`create-adaptv` is unclaimed on npm** — publish the *scaffolder* publicly (it is just prompts + file copying) and keep `@arrzdev/adaptv` private, which fixes the chicken-and-egg where you would need a PAT configured before you could run the tool that configures your PAT. |
 | O16 | **Signing/distribution** | **Stop at the artifact.** Confirmed: no fastlane. |
 | — | **IAP / monetization** | **EXCLUDE from core.** RevenueCat already *is* the vendor-neutral abstraction (`@revenuecat/purchases-capacitor` 13.2.3, ~weekly releases); the hard parts are server-side; and the legal surface moves in *weeks* — US link-out commission is being actively litigated right now (9th Cir. affirmed contempt but **vacated** the 0% ban, remanded to set a "reasonable" rate). A framework release would encode a legal snapshot that expires before the release does. Document the regional matrix, don't wrap it. |
 
@@ -310,9 +310,9 @@ A handle in the specifier is normal for a private/org package — Expo apps impo
 `@ionic/*`. If a public identity is ever wanted, that is the moment to register `@adaptv` and re-scope;
 the `routerSpecifier` plugin option already makes that a one-line change for consumers mid-migration.
 
-> ⚠︎ Unchanged and still worth doing: **`create-adaptv` is unclaimed on npm.** Publish the *scaffolder*
-> publicly even while the framework stays private, or a new user needs a GitHub PAT configured before
-> they can run the tool that configures their PAT.
+> ⚠︎ **`create-adaptv` is unclaimed on npm.** The scaffolder is built (`packages/create-adaptv/`) and
+> unpublished. The private-framework half of this note was overtaken by the open-source decision →
+> [`../design/create-adaptv.md §5`](../design/create-adaptv.md).
 
 ### 5.0.1 The highest-value actionable finding
 

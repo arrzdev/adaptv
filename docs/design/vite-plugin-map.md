@@ -1,6 +1,6 @@
 # adaptv — a map of `src/vite/`
 
-**34 non-test files. This page says which are core seams, which are one-off shims, and — the part
+**40 non-test files. This page says which are core seams, which are one-off shims, and — the part
 that matters most — where the ORDER is load-bearing.**
 
 Two of the plugins below are composed here but no longer *live* here: the OTA slice moved
@@ -35,18 +35,19 @@ have a documented reason to sit where they do; read §2 before reordering anythi
 | 13 | `adaptvImagePlugin` | `adaptv-image.ts` | **`enforce: "pre"`, and not as a precaution.** See §2.1. |
 | 14 | `adaptvRootRoutePlugin` | `root-route-module.ts` | The generated root route. |
 | 15 | `adaptvRouteTreeAliasPlugin` | *(local)* | Aliases the generated tree. |
-| 16 | `adaptvFsAllowPlugin` | *(local)* | Widens Vite's `fs.allow` to the generated dir. |
-| 17 | `adaptvRouteAutoImportPlugin` | `router-autoimport.ts` | Race guard: supplies the route-factory binding for the beat before the generator writes it. |
-| 18 | *(framework plugin)* | — wrapped by `stripTanStackAutoImport` | Defensive filter; the upstream autoimport plugin was folded into the generator, so it is a no-op unless a release re-introduces it. |
-| 19 | `adaptvDeployServerPlugins` | `deploy-server.ts` | **Position is documented upstream behaviour**, see §2.2. Empty for `render: "spa"`. |
-| 20 | `viteReact()` | — | The React transform, after the server environment is defined. |
-| 21 | `adaptvShellEmitPlugin` | `shell-emit.ts` | **ORDER IS LOAD-BEARING**, see §2.3. |
-| 22 | `adaptvSwBuildPlugin` | `sw-build.ts` | ″ |
-| 23 | `adaptvSwDevPlugin` | `sw-dev.ts` | `apply: "serve"`, no-op unless `ADAPTV_DEV_SW` is set. |
-| 24 | `adaptvStaticHostPlugin` | `static-host.ts` | **Web lineage only**, see §2.4. |
-| 25 | `adaptvNativeBundlePlugin` | `native-bundle.ts` | The mirror image, native lineage only. **`enforce: "post"`**, see §2.5. |
-| 26 | `adaptvBuildStampPlugin` | `build-stamp.ts` | **Last of the emitters**, `enforce: "post"` and after the native prune: it records where the build wrote and hashes the final shell. |
-| 27 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
+| 16 | `adaptvTanstackResolvePlugin` | `tanstack-resolve.ts` | `enforce: "pre"`. Resolves the `@tanstack/*` imports TanStack's code-splitter writes into the app's route modules from adaptv's own dependencies; a standalone pnpm app has none of its own. |
+| 17 | `adaptvFsAllowPlugin` | *(local)* | Widens Vite's `fs.allow` to the generated dir. |
+| 18 | `adaptvRouteAutoImportPlugin` | `router-autoimport.ts` | Race guard: supplies the route-factory binding for the beat before the generator writes it. |
+| 19 | *(framework plugin)* | — wrapped by `stripTanStackAutoImport` | Defensive filter; the upstream autoimport plugin was folded into the generator, so it is a no-op unless a release re-introduces it. |
+| 20 | `adaptvDeployServerPlugins` | `deploy-server.ts` | **Position is documented upstream behaviour**, see §2.2. Empty for `render: "spa"`. |
+| 21 | `viteReact()` | — | The React transform, after the server environment is defined. |
+| 22 | `adaptvShellEmitPlugin` | `shell-emit.ts` | **ORDER IS LOAD-BEARING**, see §2.3. |
+| 23 | `adaptvSwBuildPlugin` | `sw-build.ts` | ″ |
+| 24 | `adaptvSwDevPlugin` | `sw-dev.ts` | `apply: "serve"`, no-op unless `ADAPTV_DEV_SW` is set. |
+| 25 | `adaptvStaticHostPlugin` | `static-host.ts` | **Web lineage only**, see §2.4. |
+| 26 | `adaptvNativeBundlePlugin` | `native-bundle.ts` | The mirror image, native lineage only. **`enforce: "post"`**, see §2.5. |
+| 27 | `adaptvBuildStampPlugin` | `build-stamp.ts` | **Last of the emitters**, `enforce: "post"` and after the native prune: it records where the build wrote and hashes the final shell. |
+| 28 | `adaptvOpacityCheckPlugin` | `route-tree-opacity.ts` | **Last.** Asserts the opacity invariant on the finished tree. → [`patches.md`](patches.md) |
 
 ## 2. The five places order is load-bearing
 

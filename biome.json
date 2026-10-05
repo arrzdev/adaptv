@@ -121,7 +121,7 @@
       }
     },
     {
-      "includes": ["bin/**"],
+      "includes": ["bin/**", "packages/**"],
       "linter": {
         "rules": {
           "style": {

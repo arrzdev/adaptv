@@ -1,0 +1,5 @@
+# pnpm settings only. esbuild ships a prebuilt binary and only verifies it; sharp
+# resolves a prebuilt one from its optional deps and never needs its build step.
+allowBuilds:
+  esbuild: true
+  sharp: false

@@ -434,8 +434,7 @@ is derived from the build rather than answered by a human (§5.2).
 
 ## 8. `create-adaptv` — scaffolding
 
-**Moved.** Still genuinely not built, so it belongs with the other unbuilt work:
-[`../roadmap/create-adaptv.md`](../roadmap/create-adaptv.md).
+**Moved** to its own file: [`create-adaptv.md`](create-adaptv.md).
 
 ---
 
