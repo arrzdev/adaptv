@@ -1,0 +1,95 @@
+name: Android smoke
+
+# examples/basic, installed from the packed tarball, built as a debug .apk and driven on an
+# Android emulator: launch, navigate, keyboard, back. Screenshots of each step are the
+# artifact. On demand (run it before a release of adaptv) and on a PR that changes the
+# smoke itself. Never a required check.
+#
+# GitHub-hosted ubuntu runners expose /dev/kvm to the job once a udev rule opens it, which
+# is what makes an x86_64 emulator usable here at no cost; the VM the agents use has no
+# KVM and cannot run one.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/android-smoke.yml
+      - .github/android-smoke/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 1
+  APP_ID: com.example.basic
+  API_LEVEL: 34
+
+jobs:
+  android-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      # Capacitor 8's Gradle build wants JDK 21; the runner's default is 17.
+      - name: Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Pack adaptv
+        run: pnpm build && pnpm pack
+
+      # The example's own home page has nothing to navigate to or type into, so the smoke's
+      # routes replace its routing for this build. Everything else is the example as shipped.
+      - name: Smoke routes into examples/basic
+        run: |
+          rm -rf examples/basic/src/routing
+          cp -R .github/android-smoke/routing examples/basic/src/routing
+
+      # examples/basic has no lockfile on purpose; CI=1 would otherwise imply --frozen-lockfile.
+      - name: Install examples/basic
+        working-directory: examples/basic
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build the debug apk
+        working-directory: examples/basic
+        run: |
+          pnpm exec adaptv build android
+          apk="$(ls .adaptv/builds/*.apk | head -n 1)"
+          echo "APK=$PWD/$apk" >> "$GITHUB_ENV"
+          ls -l "$apk"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke on the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/android-smoke/smoke.sh "$APK" "$APP_ID" "$RUNNER_TEMP/android-smoke"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-smoke
+          path: ${{ runner.temp }}/android-smoke
+          if-no-files-found: ignore
+          retention-days: 14
