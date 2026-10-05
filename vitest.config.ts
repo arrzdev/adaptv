@@ -15,8 +15,8 @@ import {
 } from "./src/vite/secure-storage-module"
 import { adaptvPwaRegisterPlugin } from "./src/vite/virtuals"
 
-//mirror the package's "#adaptv/*" subpath import (package.json "imports") so tests can
-//use the same self-alias the source does instead of brittle relative paths
+//the source's "#adaptv/*" self-alias, the same one the root tsconfig `paths` and the
+//CLI's esbuild loader map, so tests import the way the source does
 const srcDir = fileURLToPath(new URL("./src", import.meta.url))
 
 /**
@@ -89,6 +89,11 @@ export default defineConfig({
     alias: { "#adaptv": srcDir },
   },
   test: {
+    //The default, not the rule: code that runs in Node — the CLI under `bin/` and
+    //the build plugins under `src/vite/` — says `// @vitest-environment node` at
+    //the top of its test. Loading happy-dom is most of what an isolated test file
+    //costs, and a build plugin tested inside a fake browser is tested somewhere it
+    //never runs.
     environment: "happy-dom",
     //unmounts every Testing Library render between tests — see vitest.setup.ts
     setupFiles: ["./vitest.setup.ts"],

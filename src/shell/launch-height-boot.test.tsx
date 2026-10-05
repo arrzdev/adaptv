@@ -1,5 +1,13 @@
 import { waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
 import { getLaunchViewportInitScript } from "#adaptv/shell/launch-viewport"
 import { renderAppShell } from "#adaptv/vite/app-shell"
 
@@ -99,6 +107,18 @@ afterEach(() => {
   Reflect.deleteProperty(window.navigator, "standalone")
 })
 
+//client-entry boots at import, so the test has to import it, but not the graph under it:
+//loaded here, under the hook's budget, that graph costs the test nothing. On a loaded 2-cpu
+//host it took the whole 5s default inside the test
+beforeAll(async () => {
+  await Promise.all([
+    import("@tanstack/react-start/client"),
+    import("react-dom/client"),
+    import("#adaptv/routes/router-entry"),
+    import("#adaptv/shell/native-live-reload-client"),
+  ])
+}, 30_000)
+
 //one boot per file: client-entry boots at import and the module cache keeps it, so a
 //second test here needs `vi.resetModules()`
 describe("the launch height — a boot with no server render", () => {
@@ -123,7 +143,10 @@ describe("the launch height — a boot with no server render", () => {
 
     await import("#adaptv/routes/client-entry")
 
-    await waitFor(() => expect(atInsert).toHaveLength(1))
+    //the boot renders in a later task: waited for, up to the test's own budget
+    await waitFor(() => expect(atInsert).toHaveLength(1), {
+      timeout: 4000,
+    })
     observer.disconnect()
     expect(atInsert[0]).toBe("812px")
   })

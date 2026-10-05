@@ -1,32 +1,54 @@
 import { View } from "@arrzdev/adaptv/components"
-import { BrowserFrame, PhoneFrame } from "@/components/frames"
-import { DesktopInbox } from "@/components/inbox/desktop-inbox"
-import { useInbox } from "@/components/inbox/inbox-data"
-import { PhoneInbox } from "@/components/inbox/phone-inbox"
+import starterAndroid from "@/assets/hero/starter-android.png?adaptv-image"
+import starterIos from "@/assets/hero/starter-ios.png?adaptv-image"
+import { PhoneFrame } from "@/components/frames"
 
 /**
- * The hero's argument, made by running it: one inbox, rendered twice. Both frames hold
- * real adaptv components over ONE piece of state, so archiving a message on the phone
- * takes it out of the browser window too.
+ * The hero's picture: the app `pnpm create adaptv` writes, on two phones. Each screen is
+ * one file in src/assets/hero/, today a stand-in rendered by scripts/capture-starter.ts,
+ * so a device screenshot of the same screen replaces it without a code change.
+ *
+ * A plain <img> rather than adaptv's Image: Image keeps the picture hidden until hydration
+ * says it loaded, and the iPhone is the page's largest paint.
  */
 export function DeviceStage() {
-  const inbox = useInbox()
   return (
-    <View className="stage-in relative mt-16 w-full max-w-[1040px] items-center sm:mt-20">
+    <View className="stage-in relative mt-[72px] w-full items-center">
       <div className="aurora pointer-events-none absolute -inset-x-16 -top-20 -bottom-16" />
-
-      <BrowserFrame
-        url="inbox.example.com"
-        className="relative hidden h-[580px] w-full text-left md:flex"
+      <View
+        row
+        role="img"
+        aria-label="The adaptv starter app in an iPhone frame and an Android frame, showing the same home screen."
+        className="relative w-full justify-center"
       >
-        <DesktopInbox inbox={inbox} />
-      </BrowserFrame>
-
-      <View className="relative w-[78%] max-w-[300px] text-left md:absolute md:-right-6 md:-bottom-14 md:w-[256px] lg:-right-10">
-        <PhoneFrame>
-          <PhoneInbox inbox={inbox} />
+        <PhoneFrame
+          platform="android"
+          //on a phone the front one is centred and this one shows its left quarter, cut by the screen edge
+          className="mt-8 w-[70vw] shrink-0 -rotate-2 max-sm:absolute max-sm:left-[calc(50%-60vw)] sm:-mr-10 sm:w-[280px]"
+        >
+          <Screen image={starterAndroid} />
+        </PhoneFrame>
+        <PhoneFrame
+          platform="ios"
+          className="relative w-[70vw] shrink-0 rotate-2 sm:w-[280px]"
+        >
+          <Screen image={starterIos} />
         </PhoneFrame>
       </View>
     </View>
+  )
+}
+
+function Screen({ image }: { image: typeof starterIos }) {
+  return (
+    <img
+      src={image.src}
+      width={image.width}
+      height={image.height}
+      alt=""
+      decoding="async"
+      draggable={false}
+      className="block h-auto w-full select-none bg-[#0a0a0c]"
+    />
   )
 }

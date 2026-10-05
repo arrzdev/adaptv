@@ -3,6 +3,7 @@ import {
   getVirtualKeyboardApi,
   willOpenVirtualKeyboard,
 } from "#adaptv/hooks/use-keyboard"
+import { isPatchDisabled } from "#adaptv/utils/is-patch-disabled"
 import { isIOS } from "#adaptv/utils/platform"
 
 /*
@@ -103,6 +104,9 @@ function lockScrollMobileSafari() {
   let touchStartX = 0
   let touchStartY = 0
   let edgeSwipe = false
+  //the touch began inside `data-adaptv-no-viewport-freeze`: the developer opted that
+  //subtree out, so neither the pin nor the keyboard nudge touches it
+  let optedOut = false
 
   function onTouchStart(event: TouchEvent) {
     const touch = event.changedTouches[0]
@@ -112,6 +116,7 @@ function lockScrollMobileSafari() {
 
     const target = event.composedPath()[0]
     scrollable = getNearestScroller(target as Element, true)
+    optedOut = isPatchDisabled(target ?? null, "viewportFreeze")
 
     //a touch born in the left/right edge strip is a horizontal OS edge-swipe
     //candidate — flag it so onTouchMove won't pin it (see the carve there)
@@ -131,7 +136,7 @@ function lockScrollMobileSafari() {
       touchMoved = true
     }
 
-    if (!scrollable) return
+    if (!scrollable || optedOut) return
 
     //a touch over a non-scrollable region resolves to document/body — pin it so the
     //page can't scroll/shift. a real inner scroller is left alone to scroll +
@@ -153,7 +158,7 @@ function lockScrollMobileSafari() {
 
   function onTouchEnd(event: TouchEvent) {
     //a scroll that happens to release over a field must not focus it / raise the keyboard
-    if (touchMoved) return
+    if (touchMoved || optedOut) return
 
     const target = event.composedPath()[0]
     if (
@@ -176,7 +181,8 @@ function lockScrollMobileSafari() {
     const target = event.composedPath()[0]
     if (
       !(target instanceof HTMLElement) ||
-      !willOpenVirtualKeyboard(target)
+      !willOpenVirtualKeyboard(target) ||
+      isPatchDisabled(target, "viewportFreeze")
     ) {
       return
     }

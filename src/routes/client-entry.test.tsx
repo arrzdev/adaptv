@@ -6,7 +6,15 @@ import {
   Outlet,
 } from "@tanstack/react-router"
 import { waitFor } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
 import { APP_ROOT_ID } from "#adaptv/shell/boot-fallback"
 import { renderAppShell } from "#adaptv/vite/app-shell"
 
@@ -93,12 +101,26 @@ afterEach(() => {
   window.removeEventListener("error", onError)
 })
 
+//client-entry boots at import, so the test has to import it, but not the graph under it:
+//loaded here, under the hook's budget, that graph costs the test nothing. On a loaded 2-cpu
+//host the same load took the whole 5s default in launch-height-boot
+beforeAll(async () => {
+  await Promise.all([
+    import("@tanstack/react-start/client"),
+    import("react-dom/client"),
+    import("#adaptv/routes/router-entry"),
+    import("#adaptv/shell/native-live-reload-client"),
+  ])
+}, 30_000)
+
 describe("client entry — booting a shell with no server render", () => {
   it("renders the app over the shell without a hydration error", async () => {
     await import("#adaptv/routes/client-entry")
 
-    await waitFor(() =>
-      expect(document.body.textContent).toContain(APP_TEXT),
+    //the boot renders in a later task: waited for, up to the test's own budget
+    await waitFor(
+      () => expect(document.body.textContent).toContain(APP_TEXT),
+      { timeout: 4000 },
     )
     //the shell's scaffolding is gone — the app owns the document now
     expect(document.getElementById(APP_ROOT_ID)).toBeNull()

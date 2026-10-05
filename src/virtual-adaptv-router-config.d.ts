@@ -1,7 +1,10 @@
 declare module "virtual:adaptv/router-config" {
-  import type { AdaptvRouterOptions } from "#adaptv/shell/create-adaptv-router"
+  import type { createAdaptvRouter } from "@arrzdev/adaptv/router"
   /** `createRouter` options resolved from `adaptv.config.ts`. */
-  export const routerOptions: Omit<AdaptvRouterOptions, "routeTree">
+  export const routerOptions: Omit<
+    Parameters<typeof createAdaptvRouter>[0],
+    "routeTree"
+  >
 }
 
 //⚠︎ `#adaptv-route-tree` is deliberately NOT declared here, and this file is the

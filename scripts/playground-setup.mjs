@@ -5,9 +5,9 @@
  * `pnpm dev:*` in a worktree that has no `playground/node_modules`, so the intended
  * experience is `git worktree add` → `pnpm dev:ios` and nothing in between.
  *
- * One step, idempotent: install. The playground's own `pnpm install`, whose
- * `link:../../..` dependency then resolves to THIS worktree — the whole point of
- * vendoring it in-repo.
+ * Two steps, idempotent: install, then build. The playground's own `pnpm install`,
+ * whose `link:../../..` dependency then resolves to THIS worktree — the whole point of
+ * vendoring it in-repo — and the framework's `dist/`, which that link's `exports` name.
  *
  * There is deliberately nothing else. The playground is a frontend-only app: no
  * API, no database to migrate, and no `env/.env` to copy across from the main
@@ -19,6 +19,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { c, log, spacer } from "../bin/lib/render.mjs"
+import { ensureDist } from "./ensure-dist.mjs"
 
 const WORKTREE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -46,6 +47,16 @@ if (!existsSync(path.join(WORKTREE, "node_modules"))) {
 }
 log.info("installing playground deps…")
 run(["install"], { cwd: PLAYGROUND, label: "pnpm install (playground)" })
+
+// ── build ───────────────────────────────────────────────────────────────────
+// The app links this checkout and `exports` point at `dist/`, so it runs nothing until
+// the framework is built.
+if (
+  !ensureDist(WORKTREE, { onBuild: () => log.info("building dist/…") })
+) {
+  log.error("pnpm build failed")
+  process.exit(1)
+}
 
 spacer()
 log.success("playground ready")

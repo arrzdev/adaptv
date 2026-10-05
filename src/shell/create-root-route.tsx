@@ -97,9 +97,9 @@ export type CreateRootRouteConfig = Omit<PwaHeadConfig, "manifestPath"> & {
   patches?: AdaptvPatches
   /**
    * The app-feel resets that are the app's call — text selection, scrollbar
-   * visibility, and the iOS link callout. Per-option defaults (`utils/platform.ts`:
-   * `UI_SCOPE_DEFAULTS`), not a uniform one. Resolved against the runtime platform
-   * in the pre-paint init script and stamped on `<html>`. See {@link AdaptvUiConfig}.
+   * visibility, and the iOS link callout. Per-option defaults (each row's `default`
+   * in `utils/patch-registry.ts`), not a uniform one. Resolved against the runtime
+   * platform in the pre-paint init script and stamped on `<html>`. See {@link AdaptvUiConfig}.
    */
   ui?: AdaptvUiConfig
 }

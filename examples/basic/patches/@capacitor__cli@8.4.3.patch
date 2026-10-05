@@ -1,0 +1,23 @@
+diff --git a/dist/config.js b/dist/config.js
+index 2dc8bb03470d02dc1f4dcb9b30c10aae298bab30..89b48b0b973b4488cce4fa1003b253b153d08568 100644
+--- a/dist/config.js
++++ b/dist/config.js
+@@ -119,6 +119,18 @@ async function loadExtConfigJS(rootDir, extConfigName, extConfigFilePath) {
+ }
+ async function loadExtConfig(rootDir) {
+     var _a;
++    // adaptv (@arrzdev/adaptv): the config is supplied in-memory via this env var, so no
++    // capacitor.config.* file is needed at the project root — adaptv.config.ts is the single
++    // source and the framework passes the derived Capacitor config here. Absent => upstream
++    // file-based behaviour, unchanged.
++    if (process.env.ADAPTV_CAPACITOR_CONFIG) {
++        return {
++            extConfigType: 'json',
++            extConfigName: exports.CONFIG_FILE_NAME_JSON,
++            extConfigFilePath: (0, path_1.resolve)(rootDir, exports.CONFIG_FILE_NAME_JSON),
++            extConfig: JSON.parse(process.env.ADAPTV_CAPACITOR_CONFIG),
++        };
++    }
+     const extConfigFilePathTS = (0, path_1.resolve)(rootDir, exports.CONFIG_FILE_NAME_TS);
+     if (await (0, fs_extra_1.pathExists)(extConfigFilePathTS)) {
+         return loadExtConfigTS(rootDir, exports.CONFIG_FILE_NAME_TS, extConfigFilePathTS);

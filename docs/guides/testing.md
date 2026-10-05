@@ -106,14 +106,16 @@ Version pins and native gotchas live in
 | **Typecheck** | `pnpm typecheck` | |
 | **Lint** | `pnpm biome:check` · `pnpm biome:check:playground` | the playground is its own pnpm project, so the root check never reaches it — both are required |
 | **Colour** | `node scripts/check-colour.mjs` | the CLI's live layer under a pty |
+| **Publish** | `pnpm build:check` | tsdown, then `scripts/verify-dist.mjs`: dist structure, `publint --strict` and `attw` on a staged dist-shaped package |
 | **e2e** (Playwright) | `pnpm --dir playground test:e2e` | 83 specs in `playground/e2e/` |
 | **e2e, service worker** | `pnpm --dir playground test:e2e:sw:all` | `playground/e2e-sw/` across five configs (default, spa, prompt, subpath, node server) |
-| **The gate** | `pnpm gate` | lint, typecheck, unit and colour — **not** the Playwright suites, which take minutes where the gate takes seconds |
+| **The gate** | `pnpm gate` | lint, typecheck, unit, colour and publish — **not** the Playwright suites, which take minutes where the gate takes seconds |
 
 → [`e2e.md`](e2e.md) for what the Playwright estate covers and how it is wired.
 
 **CI runs `gate` on every PR push** (`.github/workflows/ci.yml` → `.github/actions/gate`): biome,
-biome:playground, typecheck, vitest and the colour check — `pnpm gate` in CI form, and the only
+biome:playground, typecheck, vitest, the colour check and the publish check (publint, attw, one
+job-summary row each) — `pnpm gate` in CI form, and the only
 required check on `main`. Draft PRs run only the affected tests; docs-only PRs run only biome.
 
 **The browser suites run off the per-push path** (`.github/workflows/e2e.yml`): add the label `e2e` to

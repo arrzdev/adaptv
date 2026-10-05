@@ -6,6 +6,8 @@
       "!!**/.vscode",
       "!!**/node_modules",
       "!!**/dist",
+      "!!**/.adaptv",
+      "!!**/.output",
       "!!**/.tsbuild",
       "!!**/.turbo",
       "!!**/coverage",
@@ -121,7 +123,7 @@
       }
     },
     {
-      "includes": ["bin/**"],
+      "includes": ["bin/**", "packages/**", "scripts/**"],
       "linter": {
         "rules": {
           "style": {

@@ -63,3 +63,11 @@ runs:
       if: inputs.mode == 'full'
       shell: bash
       run: node scripts/check-colour.mjs
+
+    # publint and attw against the built package. The exports still point at
+    # src/, so verify-dist stages a dist-shaped publish view and checks that;
+    # it writes one job-summary row per tool.
+    - name: Publish check (publint, attw)
+      if: inputs.mode == 'full'
+      shell: bash
+      run: pnpm build:check

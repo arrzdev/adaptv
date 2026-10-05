@@ -22,7 +22,7 @@ commands per target, fresh worktrees and ports. Node and pnpm versions come from
 
 ## The gate
 
-Run `pnpm gate` before every commit. It is everything the CI `test` job runs. CI also runs the
+Run `pnpm gate` before every commit. It is everything the CI `gate` job runs. CI also runs the
 playground's Playwright suites on Chromium and WebKit; run the specs your change touches locally
 (see `DEVELOPMENT.md`).
 

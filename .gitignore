@@ -13,3 +13,6 @@ coverage/
 # Not part of the framework; never committed.
 .project-zero/
 
+
+# `pnpm pack` output, installed by examples/basic.
+/*.tgz

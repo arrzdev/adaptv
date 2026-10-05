@@ -8,6 +8,6 @@
     "module": "nodenext",
     "moduleResolution": "nodenext"
   },
-  "include": ["bin/**/*.mjs"],
-  "exclude": ["bin/**/*.test.mjs"]
+  "include": ["bin/**/*.mjs", "packages/create-adaptv/*.mjs"],
+  "exclude": ["bin/**/*.test.mjs", "packages/**/*.test.mjs"]
 }
