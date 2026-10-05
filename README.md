@@ -32,9 +32,9 @@
 </p>
 
 > [!WARNING]
-> **Pre-alpha and private — there is no install command.** The package is `private: true` and its
-> `exports` still resolve to `./src/**`. It is consumed today by linking a local checkout, which is
-> exactly what [`playground/`](playground/) does. See [Status](#-status).
+> **Pre-alpha and unpublished — there is no install command yet.** The package is `private: true`.
+> You build it and install the tarball, which is what the [Quick start](#-quick-start) does. See
+> [Status](#-status).
 
 ---
 
@@ -60,6 +60,74 @@ adaptv build   web|ios|android|all   # deployable site · unsigned .ipa · debug
 adaptv keys ota                      # the signing pair for the update channel
 adaptv icons --input ./mark.png      # every icon your app needs
 ```
+
+## ⚡ Quick start
+
+Nothing is published yet, so you install the package you pack. You need Node 22.12 or newer and
+pnpm 11. [`examples/basic/`](examples/basic) is a minimal app that installs adaptv from that
+tarball, not from this checkout:
+
+```bash
+git clone https://github.com/arrzdev/adaptv.git && cd adaptv
+pnpm install
+pnpm build && pnpm pack   # writes arrzdev-adaptv-0.1.0.tgz, which examples/basic installs
+
+cd examples/basic
+pnpm install
+pnpm dev                  # adaptv dev web: serves the app on http://localhost:3000
+pnpm build                # adaptv build web: the deployable site in .output/public
+```
+
+`adaptv.config.ts` is the one config file — the web manifest, the native
+projects, icons and theme all come from it:
+
+```ts
+import { defineApp } from "@arrzdev/adaptv/config"
+
+export default defineApp({
+  appId: "com.example.basic",
+  name: "basic",
+  description: "basic, built with adaptv.",
+  themeColor: { light: "#ffffff", dark: "#0a0a0c" },
+  styles: "./src/styles/main.css",
+  router: {},
+})
+```
+
+`src/routing/config.ts` declares the routes, and each route is a file whose root is a `View`:
+
+```tsx
+// src/routing/config.ts
+import { index, rootRoute } from "@arrzdev/adaptv/routes"
+
+export const routes = rootRoute([index("pages/home.page.tsx")])
+export default routes
+
+// src/routing/pages/home.page.tsx
+import { View } from "@arrzdev/adaptv/components"
+import { createFileRoute } from "@arrzdev/adaptv/router"
+
+export const Route = createFileRoute("/")({ component: Home })
+
+function Home() {
+  return (
+    <View fill center safe="all">
+      <h1>basic</h1>
+    </View>
+  )
+}
+```
+
+`vite.config.ts` adds `adaptv()` and Tailwind, and `src/styles/main.css` imports
+`@arrzdev/adaptv/styles.css`.
+
+> [!IMPORTANT]
+> **Your own app also declares adaptv's dependency patches.** pnpm applies `patchedDependencies` only
+> from the project it installs, so a package cannot bring its own. Copy
+> `node_modules/@arrzdev/adaptv/patches/` into your app's `patches/` and list each file in its
+> `pnpm-workspace.yaml`, as [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml)
+> does. Without them the first `adaptv build web` writes a second `createFileRoute` import into
+> every route file → [`design/patches.md`](docs/design/patches.md).
 
 ## ✨ Why it exists
 
@@ -91,12 +159,12 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 
 | The question | Where it stands |
 |---|---|
-| 📦 **Published?** | **No.** `private: true`, `exports` resolve to `./src/**` — there is no install command to give you. |
-| 🔗 **How it's consumed** | A local checkout linked into the app — `"@arrzdev/adaptv": "link:../../.."`, as [`playground/`](playground/) does. |
-| 🏗️ **Dist build** | `exports` and `files` point at `dist/` (`pnpm build:check`); the tarball install check is open → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
+| 📦 **Published?** | **No.** `private: true` — there is no registry install to give you. |
+| 🔗 **How it's consumed** | A `pnpm pack` tarball installed into the app, as [`examples/basic/`](examples/basic) does, or a local checkout linked into it (`"@arrzdev/adaptv": "link:../../.."`), as [`playground/`](playground/) does. |
+| 🏗️ **Dist build** | `exports` and `files` point at `dist/` (`pnpm build:check`), and an app installed from the tarball runs `adaptv dev web` and `adaptv build web` → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
 | ✅ **Green today** | typecheck · lint · **2,618 unit tests across 167 files** — all gated in CI on every pull request |
 | 📱 **Verified on device** | iOS Simulator and Android emulator, driven from this repo, plus a browser e2e suite in the playground |
-| 🚧 **Not built yet** | a first-party native shell module · a published install (the scaffolder exists; the framework still ships source) · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
+| 🚧 **Not built yet** | a first-party native shell module · a published install (the scaffolder exists and the framework ships `dist/`) · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
 
 ## 📚 Documentation
 
@@ -122,6 +190,7 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 - [`src/`](src) — the framework: the build plugin, the runtime primitives, capabilities, storage, OTA.
 - [`bin/`](bin) — the `adaptv` CLI. Read [`design/cli-contract.md`](docs/design/cli-contract.md) before touching it.
 - [`docs/`](docs) — five folders, split by the kind of claim each file makes.
+- [`examples/basic/`](examples/basic) — the Quick start app, installed from the packed tarball.
 - [`playground/`](playground) — a real app vendored into the repo and linked against the local checkout.
 - [`scripts/`](scripts) — repo tooling. Nothing here ships.
 

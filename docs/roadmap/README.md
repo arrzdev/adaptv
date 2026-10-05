@@ -31,7 +31,7 @@ against shipped code are not roadmap items either — those live as `B` entries 
 | # | Item | Where | Size | Note |
 |---|---|---|---|---|
 | 1 | **First-party `@adaptv/shell` plugin** | [`native-shell-plugin.md`](native-shell-plugin.md) | large | ⚠︎ **Needs a redesign before an implementation.** Capacitor 8's core `SystemBars` took over the ground it was designed to claim. |
-| 2 | **`dist` cutover** | [`dist-cutover.md`](dist-cutover.md) | small | `exports` and `files` point at `dist/`. Left: the tarball install check, and whether the two `link:` shims stay. |
+| 2 | **`dist` cutover** | [`dist-cutover.md`](dist-cutover.md) | small | `exports` and `files` point at `dist/`. An app installed from the `pnpm pack` tarball runs (`examples/basic`). Left: the `create-adaptv` template carrying the patches, and whether the two `link:` shims stay. |
 | 4 | **Capability gaps** | [`capability-gaps.md`](capability-gaps.md) | large | Tier 2 (dialogs, notifications, camera, biometrics, deep links; filesystem shipped 2026-09-02) is the best-formed roadmap material in the repo. Tier 3 is the long tail. |
 | 5 | **Component gaps** | [`component-gaps.md`](component-gaps.md) | large | Ranked against Ionic and Expo. `Modal` and `Tabs` are the named holes; `Text`, `Collapsible`, `Slider`, `Select`, `FieldGroup`, `Icon`, `RadioGroup`, an inline `Spinner`, `ProgressBar`, `Skeleton` and `Divider` are **done**. |
 | 6 | **Dev-loop debt** | [`dev-loop-debt.md`](dev-loop-debt.md) | medium | Four named items. Five of the original nine are discharged and were removed. |
