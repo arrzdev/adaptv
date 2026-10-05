@@ -70,6 +70,11 @@ describe("adaptvTanstackResolvePlugin", () => {
  * and a standalone pnpm app served a 500. The end-to-end proof is a created app,
  * installed from the tarball outside the repo, running `adaptv dev web`.
  *
+ * A build resolves a bare import from the app root instead. Inside a repo with its own
+ * TanStack, the server bundle left the router to Node, which loaded it and
+ * `react-dom/server` from the repo, and the prerender of `adaptv build android` in
+ * `examples/basic` saw two Reacts. The end-to-end proof is that build, in the checkout.
+ *
  * adaptv itself is inlined in both commands: its modules import `virtual:adaptv-*`,
  * which Node refuses, so every app used to carry `ssr.noExternal: ["@arrzdev/adaptv"]`.
  */
@@ -90,9 +95,9 @@ describe("adaptvTanstackResolvePlugin noExternal", () => {
     })
   })
 
-  it("inlines adaptv in a build and leaves the router to the redirect", () => {
+  it("inlines adaptv and TanStack in a build, so the server loads one React", () => {
     expect(configFor("build")).toEqual({
-      resolve: { noExternal: ["@arrzdev/adaptv"] },
+      resolve: { noExternal: ["@arrzdev/adaptv", /^@tanstack\//] },
     })
   })
 })
