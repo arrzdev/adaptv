@@ -159,6 +159,30 @@ describe("ProgressBar renders", () => {
     expect(node).toBe(el)
   })
 
+  it("locks its positioning and clip inline, over a consumer className and style", () => {
+    //the parts are positioned against the box and the sweep travels outside it on both
+    //ends, so `static` / `overflow-visible` must not land (styling.md §2.0)
+    const el = firstEl(
+      <ProgressBar
+        value={0.25}
+        className="overflow-visible static h-2"
+        style={{ position: "static", overflow: "visible", opacity: "0.5" }}
+      />,
+    )
+    expect(el.style.position).toBe("relative")
+    expect(el.style.overflow).toBe("hidden")
+    expect(el.style.getPropertyValue("--progress-value")).toBe("0.25")
+    //the rest of the consumer's style and className pass through untouched
+    expect(el.style.opacity).toBe("0.5")
+    expect(el.className).toBe("overflow-visible static h-2")
+    expect(el.getAttribute("data-part")).toBe("root")
+    //indeterminate keeps the same lock
+    const bar = firstEl(<ProgressBar />)
+    expect(bar.style.position).toBe("relative")
+    expect(bar.style.overflow).toBe("hidden")
+    expect(bar.hasAttribute("class")).toBe(false)
+  })
+
   it("is exported through the public components barrel", async () => {
     const barrel = await import("#adaptv/interface/components.index")
     expect(barrel.ProgressBar).toBe(ProgressBar)

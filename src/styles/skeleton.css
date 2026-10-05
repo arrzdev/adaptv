@@ -18,6 +18,17 @@
  * `background-position` is a raster per frame on a WebView, and repeats on every row of
  * a list that is nothing but skeletons. The two read the same to a user waiting for data.
  *
+ * ## The neutral look, and the region's status line
+ *
+ * The fill and the radius are zero-specificity defaults under `:where()`: the SHAPE and
+ * the colour are the consumer's (`rounded-full`, `bg-*`), and any `className` beats
+ * them. `gray-200` rather than the `gray-50` every control surface uses: a control
+ * carries its own content on that surface, but a skeleton IS its background, and
+ * gray-50 over the page is indistinguishable from nothing. `radius-md` because a bare
+ * rectangle reads as a layout bug rather than a placeholder. The `Skeleton.Region`
+ * status line is a live region, visually hidden with Tailwind's own `sr-only` recipe,
+ * the same one `PullToRefresh` uses for its status line.
+ *
  * Layered in `adaptv.components` (docs/decisions/styling.md §6) so a consumer turns any
  * of it off with an ordinary unlayered rule — or with `animate-none` in `className`, since
  * `utilities` is a later layer than this one. No `!important` anywhere (§6.0.1).
@@ -37,6 +48,25 @@
 }
 
 @layer adaptv.components {
+  /* the box's neutral look */
+  :where([data-adaptv="skeleton"][data-part="root"]) {
+    border-radius: var(--radius-md, 0.375rem);
+    background-color: var(--color-gray-200, oklch(92.8% 0.006 264.531));
+  }
+
+  /* the region's live status line: read, never seen */
+  :where([data-adaptv="skeleton-region"][data-part="status"]) {
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+  }
+
   [data-adaptv="skeleton"] {
     animation: adaptv-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     /*

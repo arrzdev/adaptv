@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { OrientationGuard } from "#adaptv/components/orientation-guard"
@@ -85,9 +87,20 @@ describe("OrientationGuard", () => {
       //the identity attribute the rest of the primitives carry — asserted here
       //rather than in data-adaptv.test.tsx because getting it to render is the work
       expect(root?.getAttribute("data-adaptv")).toBe("orientation-guard")
-      //it must actually cover the app, or it is just a message behind the UI
-      expect(root?.className).toContain("fixed")
-      expect(root?.className).toContain("inset-0")
+      //it must actually cover the app, or it is just a message behind the UI: the
+      //cover is the layered default keyed on this part (styles/orientation-guard.css)
+      expect(root?.getAttribute("data-part")).toBe("root")
+      expect(root?.hasAttribute("class")).toBe(false)
+      const rule = readFileSync(
+        resolve(__dirname, "../styles/orientation-guard.css"),
+        "utf8",
+      ).match(
+        /:where\(\[data-adaptv="orientation-guard"\]\[data-part="root"\]\)\s*\{([^}]*)\}/,
+      )?.[1]
+      expect(rule).toMatch(/position:\s*fixed;/)
+      expect(rule).toMatch(
+        /inset:\s*calc\(var\(--spacing, 0\.25rem\) \* 0\);/,
+      )
       //and be announced, because it replaces the entire screen
       expect(root?.getAttribute("role")).toBe("alert")
     })
