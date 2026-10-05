@@ -191,23 +191,3 @@
   .rise, .stage-in, .caret, .step-in { animation: none; }
   [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
-
-/*
- * The "plain web view" half of the press demo. UNLAYERED and written as raw :active on
- * purpose — it is the specimen. adaptv re-points Tailwind's `active:` variant at its own
- * press engine, so a utility class here would quietly demonstrate the fix instead.
- */
-.plain-press {
-  transition: none;
-}
-.plain-press:active {
-  background: color-mix(in oklab, var(--brand) 22%, transparent);
-}
-
-/* and the plain half of the overscroll demo: a scroller exactly as the platform gives it */
-.plain-scroll {
-  overflow-y: auto;
-  overscroll-behavior: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: auto;
-}
