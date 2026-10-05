@@ -1,7 +1,5 @@
 {
-  "include": ["node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts", 
-    "../src/interface/route-globals.d.ts",
-    "../src/**/virtual-adaptv-*.d.ts",
+  "include": ["node_modules/@arrzdev/adaptv/dist/interface/route-globals.d.ts",
     ".adaptv/**/*.ts",
     "**/*.ts",
     "**/*.tsx"

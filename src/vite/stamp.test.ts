@@ -215,7 +215,7 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
   })
 
   const ROUTE_GLOBALS =
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts"
+    "node_modules/@arrzdev/adaptv/dist/interface/route-globals.d.ts"
   const GENERATED_TS = ".adaptv/**/*.ts"
   const ROUTE_TREE_ALIAS = "#adaptv-route-tree"
 

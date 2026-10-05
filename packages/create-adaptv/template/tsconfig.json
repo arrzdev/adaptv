@@ -1,6 +1,6 @@
 {
   "include": [
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
+    "node_modules/@arrzdev/adaptv/dist/interface/route-globals.d.ts",
     ".adaptv/**/*.ts",
     "**/*.ts",
     "**/*.tsx"

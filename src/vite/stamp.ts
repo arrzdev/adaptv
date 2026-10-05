@@ -79,7 +79,7 @@ function ensureGitignored(appRoot: string): void {
 function ensureTsconfigWiring(appRoot: string): void {
   const tsconfigPath = path.resolve(appRoot, "tsconfig.json")
   const includes = [
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
+    "node_modules/@arrzdev/adaptv/dist/interface/route-globals.d.ts",
     `${ADAPTV_DIR}/**/*.ts`,
   ]
 

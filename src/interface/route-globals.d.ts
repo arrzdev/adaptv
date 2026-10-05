@@ -1,3 +1,14 @@
+//The ambient declarations for the modules adaptv's Vite plugin serves. This file is the one
+//an app's tsconfig names (`src/vite/stamp.ts` writes it into `include`), so it carries the
+//rest. Relative, and `dist/` keeps `src/`'s layout for them, so the same paths hold in the
+//checkout and in the published package. → tsdown.config.ts
+/// <reference path="../virtual-adaptv-image-asset.d.ts" />
+/// <reference path="../virtual-adaptv-pwa-register.d.ts" />
+/// <reference path="../virtual-adaptv-root-route.d.ts" />
+/// <reference path="../virtual-adaptv-route-tints.d.ts" />
+/// <reference path="../virtual-adaptv-router-config.d.ts" />
+/// <reference path="../virtual-adaptv-secure-storage.d.ts" />
+/// <reference path="../ota/virtual-adaptv-ota-config.d.ts" />
 import type { CreateFileRoute } from "@arrzdev/adaptv/router"
 
 /**

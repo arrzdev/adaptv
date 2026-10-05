@@ -2,9 +2,9 @@
  * Types `import hero from "./hero.jpg?adaptv-image"` without the consumer having
  * to import the plugin's types by hand.
  *
- * Named `virtual-adaptv-*` so the consumer's existing tsconfig `include` glob —
- * `virtual-adaptv-*.d.ts` anywhere under `node_modules/@arrzdev/adaptv/src`, which
- * is why it is recursive — picks it up with no wiring at all. `?adaptv-image` is a specifier only adaptv's Vite plugin knows how
+ * Reaches the consumer through `interface/route-globals.d.ts`, which references every
+ * `virtual-adaptv-*.d.ts` and is the one file an app's tsconfig already includes, so it
+ * needs no wiring at all. `?adaptv-image` is a specifier only adaptv's Vite plugin knows how
  * to resolve, which is the same category as the virtual modules beside it — a new
  * package export would have been one more line every consumer must remember.
  *

@@ -93,7 +93,7 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 |---|---|
 | 📦 **Published?** | **No.** `private: true`, `exports` resolve to `./src/**` — there is no install command to give you. |
 | 🔗 **How it's consumed** | A local checkout linked into the app — `"@arrzdev/adaptv": "link:../../.."`, as [`playground/`](playground/) does. |
-| 🏗️ **Dist build** | Built and verified (`pnpm build:check`); the cutover hasn't happened → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
+| 🏗️ **Dist build** | `exports` and `files` point at `dist/` (`pnpm build:check`); the tarball install check is open → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
 | ✅ **Green today** | typecheck · lint · **2,618 unit tests across 167 files** — all gated in CI on every pull request |
 | 📱 **Verified on device** | iOS Simulator and Android emulator, driven from this repo, plus a browser e2e suite in the playground |
 | 🚧 **Not built yet** | a first-party native shell module · a published install (the scaffolder exists; the framework still ships source) · real breadth in the primitive catalogue → [`roadmap/`](docs/roadmap/README.md) |
