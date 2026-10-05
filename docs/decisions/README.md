@@ -27,7 +27,7 @@ ones that stop somebody spending a week rediscovering that an approach cannot wo
 |---|---|
 | [`register.md`](register.md) | **The register** — the index of every locked decision (`L1`–`L21`), the open questions (`O1`–`O16`), and the numbered bug catalogue (`B1`–`B33`). Start here. |
 | [`positioning.md`](positioning.md) | Why adaptv exists next to Ionic: the market picture, and the dev-loop comparison. |
-| [`facade-and-opacity.md`](facade-and-opacity.md) | The `createServerFn` ban, how it is enforced unbypassably, and the opacity tier model. The ban's direction changed on 2026-09-14 → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md). |
+| [`facade-and-opacity.md`](facade-and-opacity.md) | The `createServerFn` ban, how it is enforced unbypassably, and the opacity tier model. The ban covers every target (owner, 2026-10-05); its detection is still to widen → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md). |
 | [`styling.md`](styling.md) | How consumers restyle primitives: `className` + `data-*` + `@layer`, and the three-layer precedence contract. |
 | [`animation.md`](animation.md) | The motion substrate, the composited-only rule, and the iOS 60Hz ceiling. |
 | [`rendering-and-delivery.md`](rendering-and-delivery.md) | `render` defaults to `"ssr"`; `web.host` is deleted. |
