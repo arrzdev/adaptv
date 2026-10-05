@@ -9,12 +9,13 @@ import {
   useEffect,
   useState,
 } from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Button } from "#adaptv/components/button"
 import {
   PullToRefresh,
   usePullToRefresh,
 } from "#adaptv/components/pull-to-refresh"
+import { waitFrames } from "#adaptv/test-utils/frames"
 
 /*
  * Button and PullToRefresh wrap the app's content, and the app is free to
@@ -247,8 +248,30 @@ describe("adaptv's animated wrappers inside an app `<Activity>`", () => {
   //React 19.2 disconnects a hidden subtree's effects and keeps it mounted, so an
   //animation cut short by hiding must pick up again when the app shows it
 
-  const wait = (ms: number) =>
-    act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  //each test hides the tree partway through an animation, so the animation
+  //must still be under way when the test looks: on the real clock a loaded host
+  //can let it finish inside one wait. The hold, the close, the tween and
+  //motion's frame loop all read the clock, so they run on the fake one
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "Date",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const wait = waitFrames
 
   function activityHost(children: ReactNode) {
     const handle = { setMode: (_mode: "visible" | "hidden") => {} }

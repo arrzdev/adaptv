@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { isPatchDisabled } from "#adaptv/utils/is-patch-disabled"
 
 //iOS recognizes a double-tap only when the second tap lands within ~this window
 //of the first; past it the OS reads two separate single taps and never arms the
@@ -54,7 +55,8 @@ function isProtectedTarget(target: EventTarget | null): boolean {
  * of a double-tap, so the only thing that stops it is a non-passive `touchstart`
  * listener that `preventDefault()`s exactly that second tap. Wired into
  * {@link RoutingShell} as part of the native-feeling shell — on by default, opt out
- * per app with `patches.textMagnifier: false`.
+ * per app with `patches.textMagnifier: false`, or per element with
+ * `data-adaptv-no-text-magnifier`.
  *
  * ## Why this shape (and not a time-only heuristic)
  *
@@ -75,6 +77,8 @@ function isProtectedTarget(target: EventTarget | null): boolean {
  *  5. Its target is not an editable host ({@link isProtectedTarget}) — a control is
  *     not exempt, because the engine's pointer-based activation survives the
  *     `preventDefault()` on `touchstart` that a control's loupe suppression needs.
+ *  6. Its target is not inside `data-adaptv-no-text-magnifier` — the developer's
+ *     per-element opt-out (`utils/is-patch-disabled.ts`).
  *
  * After a suppression the first-tap anchor is cleared and the consumed touch is
  * not re-recorded, so a third rapid tap starts a fresh pair instead of chaining
@@ -151,6 +155,7 @@ export function useSuppressTextMagnifier({
 
       if (!withinTime || !withinSpot) return
       if (isProtectedTarget(event.target)) return
+      if (isPatchDisabled(event.target, "textMagnifier")) return
 
       //this is the second tap of a double-tap over plain content: its default
       //action arms the loupe. cancel only this; passive:false (below) allows it.

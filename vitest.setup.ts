@@ -1,4 +1,3 @@
-import { cleanup } from "@testing-library/react"
 import { afterEach } from "vitest"
 
 //Testing Library's automatic cleanup only self-registers when the test framework
@@ -9,7 +8,19 @@ import { afterEach } from "vitest"
 //That failure is nasty because it usually presents as "found multiple elements"
 //in a test that renders exactly one, and it can also produce false PASSES when a
 //stale node happens to satisfy the assertion.
-afterEach(cleanup)
+//
+//So `afterEach` is exposed as the one global it looks for, and Testing Library
+//registers its own `afterEach(cleanup)` when a test file imports it. Importing it
+//here instead loaded React, react-dom and Testing Library into every one of the
+//318 files to clean up after the 100 that render — in an isolated run that load
+//is paid again per file, and it was a large share of the suite's time on CI.
+//Only `afterEach`: with `beforeAll`/`afterAll` global too, Testing Library would
+//also start flipping React's act environment, which this suite has never had.
+Object.defineProperty(globalThis, "afterEach", {
+  value: afterEach,
+  configurable: true,
+  writable: true,
+})
 
 //happy-dom 20 does not provide Web Storage (Node warns that localStorage needs
 //`--localstorage-file`). The code under test targets browsers, where both exist

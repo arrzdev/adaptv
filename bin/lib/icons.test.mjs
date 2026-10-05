@@ -1,3 +1,4 @@
+// @vitest-environment node
 import {
   existsSync,
   mkdirSync,
@@ -249,6 +250,10 @@ const IOS_ICON =
   "App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png"
 const RES = "app/src/main/res"
 
+//Each test below brands a fixture app through sharp, and the Android ring test brands three:
+//CPU work that fits the 5s default on a CI runner but not on a loaded 2-CPU host.
+const BUDGET = { timeout: 30_000 }
+
 /** An app root with a real icon set on disk, plus scaffolded native project dirs. */
 async function fixture(sources) {
   const { default: sharp } = await import("sharp")
@@ -286,7 +291,7 @@ async function fixture(sources) {
   return { appRoot, nativeRoot, brand, sharp }
 }
 
-describe("brandLauncherIcon — iOS", () => {
+describe("brandLauncherIcon — iOS", BUDGET, () => {
   it("writes the one 1024px slot the scaffolded asset catalog declares", async () => {
     const { nativeRoot, brand, sharp } = await fixture([
       ["icon.png", 1024, false],
@@ -336,7 +341,7 @@ async function artWidth(sharp, file) {
 
 const APPICONSET = "App/App/Assets.xcassets/AppIcon.appiconset"
 
-describe("brandLauncherIcon — iOS 18 appearances", () => {
+describe("brandLauncherIcon — iOS 18 appearances", BUDGET, () => {
   it("writes the dark and tinted slots when the set has that art, and declares all three", async () => {
     //With no variant declared, iOS has nothing to switch to and shows the light icon on a dark
     //home screen. A catalog naming a file that is not there fails the Xcode build instead.
@@ -415,10 +420,6 @@ describe("brandLauncherIcon — iOS 18 appearances", () => {
     )
   })
 })
-
-//Each test here brands a fixture app through sharp, and the ring test brands three: CPU work
-//that fits the 5s default on a CI runner but not on a loaded 2-CPU host.
-const BUDGET = { timeout: 30_000 }
 
 describe("brandLauncherIcon — Android", BUDGET, () => {
   it("writes every mipmap bucket at its density's size", async () => {

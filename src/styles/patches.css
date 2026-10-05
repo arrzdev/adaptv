@@ -27,9 +27,29 @@
  * class-level points every consumer override had to out-specify. See
  * styles/utils.test.ts, which asserts the compiled selector.
  */
+/*
+ * `data-adaptv-no-hover` (patch-delivery.md §6.3) drops adaptv's half only: an element
+ * inside it keeps the media query, which is Tailwind's, and loses the focus guard.
+ * Both branches stay (0,2,0) — the hatch joins the `:is()`, whose specificity is that
+ * of its most specific argument, and the opted-out branch is `:hover:is(…)`.
+ *
+ * `vite/css-patch-rewrite.ts` applies the same correction to every `:hover` rule that
+ * was NOT written as `hover:`, and leaves these alone because they are already inside
+ * `(hover: hover)`.
+ */
 @custom-variant hover {
   @media (hover: hover) {
-    &:hover:not(:is(:focus, :focus-within)) {
+    &:hover:not(
+        :is(
+          :focus,
+          :focus-within,
+          [data-adaptv-no-hover],
+          [data-adaptv-no-hover] *
+        )
+      ) {
+      @slot;
+    }
+    &:hover:is([data-adaptv-no-hover], [data-adaptv-no-hover] *) {
       @slot;
     }
   }
@@ -62,11 +82,26 @@
  * media-query half to re-supply (unlike `hover:`), so these two branches are the
  * whole of it. Specificity is asserted in styles/utils.test.ts alongside `hover:`.
  */
+/*
+ * `data-adaptv-no-active` (patch-delivery.md §6.1) sits BESIDE `[data-press-engine]`,
+ * it does not replace it: the engine marker routes, the hatch opts out. An element
+ * inside the hatch gets native `:active` whoever owns its press. Specificity is
+ * unchanged — the hatch on the engine branch is inside `:where()`, which counts zero,
+ * and the opted-out branch weighs what the plain one does, (0,2,0).
+ *
+ * `vite/css-patch-rewrite.ts` gives every hand-written `:active` rule the same three
+ * branches, and skips these because they already name the attributes.
+ */
 @custom-variant active {
-  &[data-pressed] {
+  &[data-pressed]:not(
+      :where([data-adaptv-no-active], [data-adaptv-no-active] *)
+    ) {
     @slot;
   }
   &:active:not([data-press-engine]) {
+    @slot;
+  }
+  &:active:is([data-adaptv-no-active], [data-adaptv-no-active] *) {
     @slot;
   }
 }

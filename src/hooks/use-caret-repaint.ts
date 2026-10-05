@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
+import { isPatchDisabled } from "#adaptv/utils/is-patch-disabled"
 
 /*
  * App-wide iOS caret-repaint patch.
@@ -330,6 +331,7 @@ export function useCaretRepaint({
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!willOpenVirtualKeyboard(target)) return
+      if (isPatchDisabled(target, "caretRepaint")) return
       track(target)
     }
 
