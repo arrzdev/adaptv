@@ -17,7 +17,7 @@ import { Checkbox } from "#adaptv/components/checkbox"
 
 function labelOf(container: HTMLElement): HTMLElement {
   const label = container.querySelector<HTMLElement>(
-    "[data-adaptv='checkbox']",
+    "[data-adaptv='checkbox'][data-part='root']",
   )
   if (!label) throw new Error("no checkbox label")
   //happy-dom has no Pointer Capture API; the engine claims the pointer on the
@@ -83,25 +83,25 @@ describe("Checkbox — the accessible element is the hit area", () => {
     )
     const label = labelOf(container)
     const input = getByRole("checkbox")
-    const classes = input.className.split(/\s+/)
 
     //its containing block is the label: a direct child of the positioned root
     expect(input.parentElement).toBe(label)
-    expect(label.className.split(/\s+/)).toContain("relative")
-    //and it fills that box exactly — no inset, no margin, no clip
-    for (const cls of [
-      "absolute",
-      "inset-0",
-      "size-full",
-      "m-0",
-      "opacity-0",
-      "appearance-none",
-    ]) {
-      expect(classes, `the input carries ${cls}`).toContain(cls)
-    }
-    expect(classes, "a 1px clipped box is not a frame").not.toContain(
-      "sr-only",
-    )
+    expect(label.style.position).toBe("relative")
+    //and it fills that box exactly — no inset, no margin, no clip — as inline
+    //style, the one tier no consumer class can beat
+    expect(input.style.position).toBe("absolute")
+    expect(input.style.inset).toMatch(/^0(px)?$/)
+    expect(input.style.width).toBe("100%")
+    expect(input.style.height).toBe("100%")
+    expect(input.style.margin).toMatch(/^0(px)?$/)
+    expect(input.style.opacity).toBe("0")
+    expect(input.style.appearance).toBe("none")
+    expect(input.style.cursor).toBe("inherit")
+    //a 1px clipped box is not a frame
+    expect(input.style.clipPath).toBe("")
+    expect(input.style.overflow).toBe("")
+    //and the input carries no class of adaptv's at all
+    expect(input.hasAttribute("class")).toBe(false)
   })
 
   it("paints the input over the positioned box by order, not by z-index", () => {
@@ -113,16 +113,22 @@ describe("Checkbox — the accessible element is the hit area", () => {
     //the box is `relative`; an earlier sibling would sit under it and the box
     //would take the tap and the hit-test instead of the input
     expect(label.lastElementChild).toBe(input)
-    expect(input.className).not.toMatch(/(^|\s)z-/)
+    expect(input.style.zIndex).toBe("")
   })
 
-  it("keeps `relative` on the label when the consumer asks for `static`", () => {
+  it("keeps `position: relative` on the label when the consumer asks for `static`", () => {
     const { container } = render(
-      <Checkbox aria-label="Agree" className="static" />,
+      <Checkbox
+        aria-label="Agree"
+        className="static"
+        style={{ position: "static" }}
+      />,
     )
-    const classes = labelOf(container).className.split(/\s+/)
-    expect(classes).toContain("relative")
-    expect(classes).not.toContain("static")
+    const label = labelOf(container)
+    //the consumer's class passes through untouched; the inline lock outranks it
+    //in the cascade, and outranks the consumer's own inline `position` here
+    expect(label.className).toBe("static")
+    expect(label.style.position).toBe("relative")
   })
 
   it("renders its controlled input without React's read-only-field warning", () => {

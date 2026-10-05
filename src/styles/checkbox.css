@@ -1,0 +1,41 @@
+/*
+ * Checkbox — the default look of the label root and the painted box
+ * (components/checkbox.tsx).
+ *
+ * Only defaults live here: the root's inline-flex layout and cursor, and the box's
+ * surface. Everything the control's correctness depends on — the root's
+ * `position: relative` and touch pass-through, the box's positioning and clip, the
+ * mark's `pointer-events: none`, and the invisible input laid over the label — is
+ * inline style written by the component (docs/decisions/styling.md §2.0), the one tier
+ * a consumer's `className` cannot beat.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
+ * rule or utility wins over any of it, every selector is wrapped in `:where()` so it has
+ * zero specificity (§6.0.1), and nothing here is `!important`.
+ */
+
+@layer adaptv.components {
+  /* root: the label, and the hit area */
+  :where([data-adaptv="checkbox"][data-part="root"]) {
+    cursor: pointer;
+    flex-shrink: 0;
+    justify-content: center;
+    align-items: center;
+    display: inline-flex;
+  }
+
+  /* the cursor is a look, so it is the consumer's to change (press-core explains the split) */
+  :where([data-adaptv="checkbox"][data-part="root"][data-disabled]) {
+    cursor: not-allowed;
+  }
+
+  /*
+   * box: the painted square.
+   * ⚠︎ Do NOT re-add `border: 1px solid transparent` here — see the note in button.tsx.
+   * It cancels the shift only for a 1px border and permanently shrinks the content box
+   * of every checkbox. Use `outline` for a toggled checked/selected ring instead.
+   */
+  :where([data-adaptv="checkbox"][data-part="box"]) {
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+  }
+}
