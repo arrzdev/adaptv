@@ -20,6 +20,7 @@ import {
   openSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -335,10 +336,30 @@ const okAudit = attwInternalResolutionOk()
 if (okAudit)
   console.log("✔ attw audit: only the app-supplied route tree is open")
 
+// ── 3. The CLI runs from what is published ───────────────────────────────────
+// The staged package has no `src/`, so `loadAdaptvModule` takes its `dist/cli/` path here,
+// for every module the CLI can ask for: one missing from the build, or one that throws when
+// loaded from there, fails now instead of on a user's machine. The repo's `node_modules`
+// stands in for the install, linked in only after attw has packed the directory.
+symlinkSync(
+  path.join(repo, "node_modules"),
+  path.join(dir, "node_modules"),
+  "dir",
+)
+const okCli = run("cli modules load from dist/cli", process.execPath, [
+  "--input-type=module",
+  "-e",
+  `import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
+import { frameworkLayout, loadAdaptvModule } from "./bin/lib/load-ts.mjs"
+if (frameworkLayout() !== "dist") throw new Error("the staged package has a src/")
+for (const m of CLI_MODULES) await loadAdaptvModule(m)`,
+])
+
 summarise([
   ["dist structure", true],
   ["publint --strict", okPublint],
   ["attw (node16 profile)", okAttw],
   ["attw audit (only `#adaptv-route-tree` unresolved)", okAudit],
+  ["cli modules load from dist/cli", okCli],
 ])
-process.exit(okPublint && okAttw && okAudit ? 0 : 1)
+process.exit(okPublint && okAttw && okAudit && okCli ? 0 : 1)

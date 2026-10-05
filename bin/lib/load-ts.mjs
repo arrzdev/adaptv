@@ -7,9 +7,15 @@
 // module with esbuild and imports it from memory, so there is one copy of each idea and no
 // build step between editing `src/` and running the CLI.
 //
+// A published package ships no `src/`, only `dist/`: there the same modules come prebuilt
+// from `dist/cli/` (`tsdown.config.ts`, from the list in `cli-modules.mjs`). The checkout and
+// a `link:`ed framework keep loading `src/`, so editing it still needs no build.
+//
 // Extracted from `bin/adaptv.mjs`, where it lived as a private helper: `bin/lib/*` modules
 // need it too, and importing it back out of the entry point would be a cycle.
+import { existsSync } from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import { build as esbuild } from "esbuild"
 
 // `import.meta.dirname`, not `fileURLToPath(import.meta.url)`: under vitest a module imported
@@ -18,6 +24,30 @@ import { build as esbuild } from "esbuild"
 // path on both paths and has existed since node 20.11 (this package requires 22).
 /** The framework package root — `bin/lib/` is two levels under it. */
 export const ADAPTV_ROOT = path.resolve(import.meta.dirname, "../..")
+
+/**
+ * Where the framework's code comes from for this package: `src` in a checkout, `dist` in a
+ * published package. Taken from the root rather than fixed, so a test can name one of each.
+ */
+export function frameworkLayout(root = ADAPTV_ROOT) {
+  return existsSync(path.join(root, "src")) ? "src" : "dist"
+}
+
+/**
+ * The directory the CLI's framework code is read from — what a cache keyed on "adaptv
+ * changed" has to hash. → `otaCacheKey` in `bin/adaptv.mjs`
+ */
+export const FRAMEWORK_DIR = path.join(ADAPTV_ROOT, frameworkLayout())
+
+/** `dist/cli/<rel>` with `.mjs` for `.ts` — where tsdown writes each module in `cli-modules.mjs`. */
+export function builtModulePath(relFromSrc, root = ADAPTV_ROOT) {
+  return path.join(
+    root,
+    "dist",
+    "cli",
+    relFromSrc.replace(/\.tsx?$/, ".mjs"),
+  )
+}
 
 // Bundling is ~30ms and every caller wants the same handful of modules, sometimes once per
 // platform in an `all` run. Keyed by specifier, resolved once per process.
@@ -30,7 +60,10 @@ const cache = new Map()
 export function loadAdaptvModule(relFromSrc) {
   const hit = cache.get(relFromSrc)
   if (hit) return hit
-  const pending = bundle(relFromSrc)
+  const pending =
+    frameworkLayout() === "src"
+      ? bundle(relFromSrc)
+      : import(pathToFileURL(builtModulePath(relFromSrc)).href)
   cache.set(relFromSrc, pending)
   return pending
 }
