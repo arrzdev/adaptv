@@ -282,7 +282,8 @@ export async function adaptv(
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
     //TanStack writes `@tanstack/*` imports into the app's route modules; they resolve
-    //from adaptv, which is what depends on TanStack. → src/vite/tanstack-resolve.ts
+    //from adaptv, which is what depends on TanStack. It also keeps adaptv itself out of
+    //Node on the server (`virtual:adaptv-*`). → src/vite/tanstack-resolve.ts
     adaptvTanstackResolvePlugin(appRoot),
     //Dev only, and ahead of `tanstackStart()`: a running server otherwise never
     //regenerates after an edit to the route config, because the config is read
