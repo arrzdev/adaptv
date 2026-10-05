@@ -24,8 +24,8 @@ typecheck (`tsconfig.bin.json`) and vitest.
 | `template/` | The app, verbatim except for two placeholders. |
 | `create.test.mjs` | What it emits, what it prints, and a created app passing `adaptv build web`. |
 
-`package.json` says `private: true`. The first public publish is a board decision, and it also waits on
-§4.
+`package.json` says `private: true`. The first public publish is a board decision. What a published
+app needed from the framework is in §4.
 
 ## 2. What it emits
 
@@ -34,7 +34,8 @@ my-app/
   .gitignore
   adaptv.config.ts            flat: appId, name, description, themeColor, styles, router
   package.json                doctor · dev · preview · build, on the real CLI surface
-  pnpm-workspace.yaml         allowBuilds for esbuild and sharp
+  patches/                    adaptv's dependency patches, copied from the framework
+  pnpm-workspace.yaml         allowBuilds for esbuild and sharp; patchedDependencies → patches/
   src/routing/config.ts       rootRoute([index(...)])
   src/routing/pages/home.page.tsx   one route, rooted in a View
   src/styles/main.css         the layer order, tailwindcss, adaptv's styles
@@ -53,7 +54,7 @@ What it does **not** emit, on purpose:
 - **No `android/` or `ios/`.** A native project is generated from config on the first native run.
 - **No `adaptv run`.** That command does not exist; `adaptv build` does what it was imagined to do.
 
-Three details are there because the framework expects them:
+Four details are there because the framework expects them:
 
 - **`@/` is `src/`** (`tsconfig.json` `paths`, `resolve.tsconfigPaths` in `vite.config.ts`). adaptv
   imports the app's stylesheet and screen thunks through that alias (`src/vite/root-route-module.ts`
@@ -62,8 +63,14 @@ Three details are there because the framework expects them:
   layer order are what `src/vite/stamp.ts` and `adaptv:css-layer-order` write into an app that lacks
   them. A created app already has them, so its first build changes none of its files. The test checks
   that.
-- **`ssr.noExternal: ["@arrzdev/adaptv"]`**, because the package ships TypeScript source until the
-  `dist` cutover.
+- **`ssr.noExternal: ["@arrzdev/adaptv"]`.** `dist/` imports the modules adaptv's Vite plugin serves
+  (`virtual:adaptv-*`). Without the entry, `adaptv dev web` hands the package to Node, which refuses
+  the `virtual:` scheme, and every page is a 500. A build bundles everything, so it passes either
+  way.
+- **The patches, in `patches/`.** pnpm applies `patchedDependencies` only from the project it
+  installs ([`patches.md §2`](patches.md)), so the app declares them from its own copy. The template's
+  copy is the framework's `patches/`, held byte for byte by `create.test.mjs`. Bumping a patch means
+  copying it here too.
 
 The app's `@arrzdev/adaptv` dependency is the framework's version (`ADAPTV_VERSION`). Its peers are
 pinned to the versions the framework pins. **`ADAPTV_SPEC`** overrides the framework spec, so you can
@@ -93,7 +100,7 @@ The next steps use the package manager that ran it (`npm_config_user_agent`). A 
 stderr that names the fix, and exit 1: a missing name, a name that is not a lowercase package name, an
 unknown option, a directory that already holds something.
 
-## 4. What a published app still needs
+## 4. What a published app needed
 
 Measured by installing a `pnpm pack` tarball of the framework into a created app, outside the repo:
 
@@ -103,13 +110,19 @@ Measured by installing a `pnpm pack` tarball of the framework into a created app
   tarball, runs `adaptv dev web` and `adaptv build web`.
   → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md)
 - **The patches, inside the app.** pnpm applies `patchedDependencies` only from the root project
-  ([`patches.md §2`](patches.md)), and the block adaptv's own error suggests points at
-  `node_modules/@arrzdev/adaptv/patches/`. On a fresh install that fails with
-  `ERR_PNPM_PATCH_NOT_FOUND`, because the files are inside the package being installed. Copied into
-  the app's `patches/` and declared from there, the install succeeds. The template does not carry
-  them yet; a created app installed from the tarball, with the patches copied in, passes `adaptv
-  build web`. Both items are in the cutover's
-  definition of done → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md).
+  ([`patches.md §2`](patches.md)). A block that points at `node_modules/@arrzdev/adaptv/patches/`
+  fails a fresh install with `ERR_PNPM_PATCH_NOT_FOUND`, because the files are inside the package
+  being installed. The template now carries them in the app's `patches/` (§2), and adaptv's
+  missing-patch error tells a hand-made app to copy them there.
+- **The route's split chunk on the dev server.** The code-splitter writes `@tanstack/react-router`
+  into the app's route module. Vite's SSR import analysis externalized that bare import before
+  adaptv's redirect could resolve it, so Node looked for TanStack from the app, and a standalone pnpm
+  app served a 500 in `adaptv dev web`. In dev, `src/vite/tanstack-resolve.ts` now inlines the router
+  on the server.
+
+Both were measured on 2026-10-05: an app created against the tarball, outside the repo, ran
+`pnpm install`, `adaptv build web` (exit 0) and `adaptv dev web` (200), with nothing copied by hand
+→ [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md) item 4.
 
 ## 5. The npm name
 

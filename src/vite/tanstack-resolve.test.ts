@@ -65,6 +65,32 @@ describe("adaptvTanstackResolvePlugin", () => {
 })
 
 /*
+ * In dev, Vite's SSR import analysis externalizes a bare import before any plugin
+ * resolves it, so the split route's `@tanstack/react-router` went to Node from the app,
+ * and a standalone pnpm app served a 500. The end-to-end proof is a created app,
+ * installed from the tarball outside the repo, running `adaptv dev web`.
+ */
+describe("adaptvTanstackResolvePlugin in dev", () => {
+  function configFor(command: "serve" | "build") {
+    const hook = adaptvTanstackResolvePlugin(APP, ADAPTV).config as (
+      config: object,
+      env: { command: string; mode: string },
+    ) => unknown
+    return hook({}, { command, mode: "development" })
+  }
+
+  it("inlines the router on the server, so the app's import reaches the redirect", () => {
+    expect(configFor("serve")).toEqual({
+      resolve: { noExternal: ["@tanstack/react-router"] },
+    })
+  })
+
+  it("leaves a build to the bundler, which resolves through the redirect already", () => {
+    expect(configFor("build")).toBeUndefined()
+  })
+})
+
+/*
  * Start dedupes its packages, and Vite resolves a deduped package from the app root.
  * An app with no TanStack of its own, inside a repo that has one, loaded TanStack and
  * a second React from the repo's `node_modules`, and `adaptv dev web` served a 500.

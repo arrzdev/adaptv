@@ -1,0 +1,207 @@
+diff --git a/dist/android/utils/adb.js b/dist/android/utils/adb.js
+index a4b4ec5597e891dbfacc3e9b4a26cfe639872028..40c2eb8d98f5836fd9eea28485af9152d5a03b7c 100644
+--- a/dist/android/utils/adb.js
++++ b/dist/android/utils/adb.js
+@@ -11,6 +11,11 @@ const errors_1 = require("../../errors");
+ const process_1 = require("../../utils/process");
+ const sdk_1 = require("./sdk");
+ const modulePrefix = 'native-run:android:utils:adb';
++// ADAPTV PATCH: how long one adb call may take before it rejects. 5 s, as upstream; the
++// variable exists for adaptv's tests, whose fake adb never answers and should not cost 5 s.
++function adbTimeout() {
++    return Number(process.env.ADAPTV_ADB_TIMEOUT_MS) || 5000;
++}
+ const ADB_GETPROP_MAP = new Map([
+     ['ro.product.manufacturer', 'manufacturer'],
+     ['ro.product.model', 'model'],
+@@ -21,10 +26,22 @@ async function getDevices(sdk) {
+     const debug = Debug(`${modulePrefix}:${getDevices.name}`);
+     const args = ['devices', '-l'];
+     debug('Invoking adb with args: %O', args);
+-    const stdout = await execAdb(sdk, args, { timeout: 5000 });
++    const stdout = await execAdb(sdk, args, { timeout: adbTimeout() });
+     const devices = parseAdbDevices(stdout);
+     await Promise.all(devices.map(async (device) => {
+-        const properties = await getDeviceProperties(sdk, device);
++        // ADAPTV PATCH: a device that does not answer getprop (offline, unauthorized, or too
++        // slow) keeps what `adb devices -l` said about it instead of failing the whole call:
++        // a run still finds a freshly booted emulator by serial, and its port stays taken.
++        // The target listing leaves it out (`answeredGetprop`, utils/list.js).
++        let properties;
++        try {
++            properties = await getDeviceProperties(sdk, device);
++        }
++        catch (e) {
++            debug('%s did not answer getprop: %O', device.serial, e);
++            unanswered.add(device);
++            return;
++        }
+         for (const [prop, deviceProp] of ADB_GETPROP_MAP.entries()) {
+             const value = properties[prop];
+             if (value) {
+@@ -36,11 +53,16 @@ async function getDevices(sdk) {
+     return devices;
+ }
+ exports.getDevices = getDevices;
++const unanswered = new WeakSet();
++function answeredGetprop(device) {
++    return !unanswered.has(device);
++}
++exports.answeredGetprop = answeredGetprop;
+ async function getDeviceProperty(sdk, device, property) {
+     const debug = Debug(`${modulePrefix}:${getDeviceProperty.name}`);
+     const args = ['-s', device.serial, 'shell', 'getprop', property];
+     debug('Invoking adb with args: %O', args);
+-    const stdout = await execAdb(sdk, args, { timeout: 5000 });
++    const stdout = await execAdb(sdk, args, { timeout: adbTimeout() });
+     return stdout.trim();
+ }
+ exports.getDeviceProperty = getDeviceProperty;
+@@ -48,7 +70,7 @@ async function getDeviceProperties(sdk, device) {
+     const debug = Debug(`${modulePrefix}:${getDeviceProperties.name}`);
+     const args = ['-s', device.serial, 'shell', 'getprop'];
+     debug('Invoking adb with args: %O', args);
+-    const stdout = await execAdb(sdk, args, { timeout: 5000 });
++    const stdout = await execAdb(sdk, args, { timeout: adbTimeout() });
+     const re = /^\[([a-z0-9.]+)\]: \[(.*)\]$/;
+     const propAllowList = [...ADB_GETPROP_MAP.keys()];
+     const properties = {};
+@@ -74,10 +96,32 @@ async function waitForDevice(sdk, serial) {
+ exports.waitForDevice = waitForDevice;
+ async function waitForBoot(sdk, device) {
+     const debug = Debug(`${modulePrefix}:${waitForBoot.name}`);
+-    return new Promise((resolve) => {
++    // ADAPTV PATCH: a poll that fails is a device that has not booted yet, not an unhandled
++    // rejection; polls never overlap; and 50 failures in a row reject, so a device that went
++    // away does not keep this polling forever.
++    return new Promise((resolve, reject) => {
++        let polling = false;
++        let failures = 0;
+         const interval = setInterval(async () => {
+-            const booted = await getDeviceProperty(sdk, device, 'dev.bootcomplete');
+-            if (booted) {
++            if (polling) {
++                return;
++            }
++            polling = true;
++            let booted = '';
++            try {
++                booted = await getDeviceProperty(sdk, device, 'dev.bootcomplete');
++                failures = 0;
++            }
++            catch (e) {
++                failures++;
++                debug('Boot check %d on %s failed: %O', failures, device.serial, e);
++            }
++            polling = false;
++            if (failures >= 50) {
++                clearInterval(interval);
++                reject(new errors_1.ADBException(`${device.serial} stopped answering: ${failures} boot checks in a row failed`));
++            }
++            else if (booted) {
+                 debug('Device %s is booted!', device.serial);
+                 clearInterval(interval);
+                 resolve();
+@@ -207,9 +251,11 @@ function parseAdbInstallOutput(line) {
+ exports.parseAdbInstallOutput = parseAdbInstallOutput;
+ async function startActivity(sdk, device, packageName, activityName) {
+     const debug = Debug(`${modulePrefix}:${startActivity.name}`);
+-    const args = ['-s', device.serial, 'shell', 'am', 'start', '-W', '-n', `${packageName}/${activityName}`];
++    // ADAPTV PATCH: no `-W`. It waits for the first frame, which a cold emulator can take
++    // longer than the 5 s timeout to draw, and nothing reads what it reports.
++    const args = ['-s', device.serial, 'shell', 'am', 'start', '-n', `${packageName}/${activityName}`];
+     debug('Invoking adb with args: %O', args);
+-    await execAdb(sdk, args, { timeout: 5000 });
++    await execAdb(sdk, args, { timeout: adbTimeout() });
+ }
+ exports.startActivity = startActivity;
+ function parseAdbDevices(output) {
+@@ -263,56 +309,35 @@ async function forwardPorts(sdk, device, ports) {
+     const debug = Debug(`${modulePrefix}:${forwardPorts.name}`);
+     const args = ['-s', device.serial, 'reverse', `tcp:${ports.device}`, `tcp:${ports.host}`];
+     debug('Invoking adb with args: %O', args);
+-    await execAdb(sdk, args, { timeout: 5000 });
++    await execAdb(sdk, args, { timeout: adbTimeout() });
+ }
+ exports.forwardPorts = forwardPorts;
+ async function unforwardPorts(sdk, device, ports) {
+     const debug = Debug(`${modulePrefix}:${unforwardPorts.name}`);
+     const args = ['-s', device.serial, 'reverse', '--remove', `tcp:${ports.device}`];
+     debug('Invoking adb with args: %O', args);
+-    await execAdb(sdk, args, { timeout: 5000 });
++    await execAdb(sdk, args, { timeout: adbTimeout() });
+ }
+ exports.unforwardPorts = unforwardPorts;
+ async function execAdb(sdk, args, options = {}) {
+-    const debug = Debug(`${modulePrefix}:${execAdb.name}`);
+-    let timer;
+-    const retry = async () => {
+-        const msg = `ADBs is unresponsive after ${options.timeout}ms, killing server and retrying...\n`;
+-        if (process.argv.includes('--json')) {
+-            debug(msg);
+-        }
+-        else {
+-            process.stderr.write(msg);
+-        }
+-        debug('ADB timeout of %O reached, killing server and retrying...', options.timeout);
+-        debug('Invoking adb with args: %O', ['kill-server']);
+-        await execAdb(sdk, ['kill-server']);
+-        debug('Invoking adb with args: %O', ['start-server']);
+-        await execAdb(sdk, ['start-server']);
+-        debug('Retrying...');
+-        return run();
+-    };
+-    const run = async () => {
+-        const platformTools = await (0, sdk_1.getSDKPackage)(path.join(sdk.root, 'platform-tools'));
+-        const adbBin = path.join(platformTools.location, 'adb');
++    // ADAPTV PATCH: a call that outlives its timeout, or fails, rejects. Upstream answered
++    // both with `adb kill-server` + `adb start-server` and a retry, and the adb server is one
++    // process for the whole machine: restarting it drops every device's `adb reverse` mappings
++    // and every other adb client's connection. The timeout kills this adb client only.
++    const platformTools = await (0, sdk_1.getSDKPackage)(path.join(sdk.root, 'platform-tools'));
++    const adbBin = path.join(platformTools.location, 'adb');
++    try {
+         const { stdout } = await (0, process_1.execFile)(adbBin, args, {
+             env: (0, sdk_1.supplementProcessEnv)(sdk),
++            timeout: options.timeout,
+         });
+-        if (timer) {
+-            clearTimeout(timer);
+-            timer = undefined;
+-        }
+         return stdout;
+-    };
+-    return new Promise((resolve, reject) => {
+-        if (options.timeout) {
+-            timer = setTimeout(() => retry().then(resolve, reject), options.timeout);
++    }
++    catch (e) {
++        if (options.timeout && e.killed) {
++            throw new errors_1.ADBException(`adb ${args.join(' ')} did not answer within ${options.timeout}ms`);
+         }
+-        run().then(resolve, (err) => {
+-            if (!timer) {
+-                reject(err);
+-            }
+-        });
+-    });
++        throw e;
++    }
+ }
+ exports.execAdb = execAdb;
+diff --git a/dist/android/utils/list.js b/dist/android/utils/list.js
+index c6656d13f5e08acbe449ad9271b0c15307908a79..5e36f049476bf6cde2e53c295ba267d0221d55a0 100644
+--- a/dist/android/utils/list.js
++++ b/dist/android/utils/list.js
+@@ -4,7 +4,10 @@ exports.avdToTarget = exports.deviceToTarget = exports.getVirtualTargets = expor
+ const adb_1 = require("./adb");
+ const avd_1 = require("./avd");
+ async function getDeviceTargets(sdk) {
+-    return (await (0, adb_1.getDevices)(sdk)).filter((device) => device.type === 'hardware').map(deviceToTarget);
++    // ADAPTV PATCH: only devices that are online and answered getprop are offered as targets.
++    return (await (0, adb_1.getDevices)(sdk))
++        .filter((device) => device.type === 'hardware' && device.state === 'device' && (0, adb_1.answeredGetprop)(device))
++        .map(deviceToTarget);
+ }
+ exports.getDeviceTargets = getDeviceTargets;
+ async function getVirtualTargets(sdk) {
