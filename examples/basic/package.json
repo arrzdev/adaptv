@@ -11,7 +11,7 @@
     "build": "adaptv build web"
   },
   "dependencies": {
-    "@arrzdev/adaptv": "file:../../arrzdev-adaptv-0.1.0.tgz",
+    "@arrzdev/adaptv": "file:../../arrzdev-adaptv-0.1.0-alpha.1.tgz",
     "@tailwindcss/vite": "4.2.4",
     "clsx": "2.1.1",
     "motion": "12.35.0",
