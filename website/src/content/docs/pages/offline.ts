@@ -47,7 +47,7 @@ export const page: DocPage = {
     { type: "h2", text: "Show an offline screen" },
     {
       type: "p",
-      text: "With no network, the worker serves the shell, React boots and the router resolves the URL. A route whose data is missing renders the [Offline](/docs/offline-boundary) component in place. The URL and back stack stay. When the network returns, the route re-runs its query.",
+      text: "With no network, the worker serves the shell, React boots and the router resolves the URL. The URL and back stack stay. adaptv does not decide when a route shows offline UI: your route renders the [Offline](/docs/offline-boundary) component when its data is missing, and your data layer refetches when the network returns.",
     },
     {
       type: "code",
@@ -71,11 +71,11 @@ function Product({ id }: { id: string }) {
     },
     {
       type: "p",
-      text: 'To use your own screen, set `offlineComponent: () => import("@/components/offline")` in `adaptv.config.ts`. The module needs a default export. It gets `onRetry` and `error`. adaptv bundles it in the main chunk, so it works offline. `bootErrorScreen` is the matching setting for a bundle that never started.',
+      text: 'To use your own screen, set `offlineComponent: () => import("@/components/offline")` in `adaptv.config.ts`. The module needs a default export. adaptv renders it with no props, so `onRetry` and `error` are optional. adaptv bundles it in the main chunk, so it works offline. `bootErrorScreen` is the matching setting for a bundle that never started.',
     },
     {
       type: "p",
-      text: "If a route chunk fails to load, adaptv reloads the page once, then shows the offline screen. A later deploy gets its own reload after 30 seconds.",
+      text: "If a route chunk fails to load, adaptv reloads the page once, then shows the offline screen. A stale chunk more than 30 seconds after that reload triggers a new reload at once.",
     },
     { type: "h2", text: "Update the app" },
     {
