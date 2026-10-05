@@ -162,4 +162,17 @@ describe("useSuppressTextMagnifier", () => {
     const prevented = fireTouch("touchstart", clickable, { x: 50, y: 50 })
     expect(prevented).toBe(true)
   })
+
+  it("leaves the loupe alone inside data-adaptv-no-text-magnifier", () => {
+    //the developer's per-element opt-out, inherited by the whole subtree
+    const opted = appendEl({
+      tag: "section",
+      attrs: { "data-adaptv-no-text-magnifier": "" },
+    })
+    const child = opted.appendChild(document.createElement("span"))
+    tap(child, { x: 50, y: 50 })
+    vi.advanceTimersByTime(120)
+    const prevented = fireTouch("touchstart", child, { x: 50, y: 50 })
+    expect(prevented).toBe(false)
+  })
 })
