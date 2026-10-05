@@ -9,6 +9,11 @@ API.
 
 ### Changed
 
+- **An app imports only what its own `package.json` lists.** Importing one of adaptv's
+  dependencies (the router included) from app source fails the build and the dev server unless
+  the app lists that package itself. It used to resolve: npm hoists adaptv's dependencies, and
+  under pnpm adaptv resolved them for the app.
+
 - **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
   root and in `packages/create-adaptv`.
 
