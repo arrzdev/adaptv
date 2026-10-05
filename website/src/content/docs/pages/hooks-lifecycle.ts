@@ -26,14 +26,13 @@ useOnResume(() => setResumes((n) => n + 1))
     { type: "h2", text: "App state" },
     {
       type: "p",
-      text: "React effects and route lifecycle only run while the app is in the foreground. The most common mobile event, going to the background and coming back, fires none of them. It also fires no browser `focus` event inside a native WebView, so anything keyed on window focus (a data library's refetch-on-focus, for instance) never runs on native. These hooks are the one signal that is right on every target.",
+      text: "A native WebView sends no browser `focus` event when the app returns. These hooks give the right signal on every target.",
     },
     {
       type: "api",
       name: "useAppState()",
       signature: 'function useAppState(): "active" | "background"',
-      description:
-        "Reactive foreground state. Re-renders the component when the app moves between foreground and background.",
+      description: "The foreground state.",
       returns: '`"active"` or `"background"`. `"active"` on the server.',
     },
     {
@@ -41,13 +40,13 @@ useOnResume(() => setResumes((n) => n + 1))
       name: "useOnResume()",
       signature: "function useOnResume(callback: () => void): void",
       description:
-        "Run a callback each time the app returns to the foreground. Use it for token refresh, re-locking behind biometrics, reconnecting a socket, refetching stale data. The callback is held in a ref, so an inline arrow does not re-subscribe on every render. It is edge-triggered: one resume, one call. A page restored from the browser's back-forward cache counts as a resume; an ordinary first load does not.",
+        "Run a callback when the app returns to the foreground. A page restored from the back-forward cache counts. A first load does not.",
       params: [
         {
           name: "callback",
           type: "() => void",
           required: true,
-          description: "Called on every background to foreground transition.",
+          description: "Called on each return.",
         },
       ],
     },
@@ -56,13 +55,13 @@ useOnResume(() => setResumes((n) => n + 1))
       name: "useOnPause()",
       signature: "function useOnPause(callback: () => void): void",
       description:
-        "Run a callback each time the app leaves the foreground. Use it to save a draft or pause media. Keep the work synchronous and short: the OS may suspend the process straight after.",
+        "Run a callback when the app leaves the foreground. Keep the work short. The OS can suspend the app right after.",
       params: [
         {
           name: "callback",
           type: "() => void",
           required: true,
-          description: "Called on every foreground to background transition.",
+          description: "Called on each exit.",
         },
       ],
     },
@@ -87,24 +86,12 @@ useOnPause(() => saveDraft(draft))`,
         {
           target: "Desktop web",
           status: "yes",
-          note: "Driven by `visibilitychange`. Switching tabs or minimising counts as background; clicking another window does not, because the page is still visible.",
+          note: "Uses `visibilitychange`. Another window with focus is not background.",
         },
-        {
-          target: "Mobile web",
-          status: "yes",
-          note: "Same, plus the back-forward cache restore on Safari.",
-        },
+        { target: "Mobile web", status: "yes" },
         { target: "Installed PWA", status: "yes" },
-        {
-          target: "iOS",
-          status: "yes",
-          note: "The OS resume and pause events, so a phone call or pulling down Notification Centre counts too.",
-        },
-        {
-          target: "Android",
-          status: "yes",
-          note: "The OS resume and pause events.",
-        },
+        { target: "iOS", status: "yes", note: "Uses the OS events." },
+        { target: "Android", status: "yes", note: "Uses the OS events." },
       ],
     },
 
@@ -115,18 +102,17 @@ useOnPause(() => saveDraft(draft))`,
       signature:
         "function useScreenLifecycle(lifecycle: { onEnter?: () => void; onLeave?: () => void }): void",
       description:
-        "Enter and leave callbacks for a route component. adaptv does not keep popped screens mounted, so a screen's mount is its enter and its unmount is its leave; this hook is a mount effect with stable callbacks and the names you think in. Inline arrows are safe: they are held in refs and do not re-trigger on re-render.",
+        "Enter and leave callbacks for a route component. adaptv does not keep closed screens mounted. Mount is enter. Unmount is leave.",
       params: [
         {
           name: "onEnter",
           type: "() => void",
-          description: "Called once when the screen mounts.",
+          description: "Called when the screen mounts.",
         },
         {
           name: "onLeave",
           type: "() => void",
-          description:
-            "Called once when the screen unmounts. Its return value is ignored.",
+          description: "Called when the screen unmounts.",
         },
       ],
     },
@@ -142,13 +128,13 @@ useOnPause(() => saveDraft(draft))`,
     {
       type: "note",
       tone: "info",
-      text: "It does not fire when the app goes to the background and comes back. The screen stays mounted through that. Use `useOnResume` and `useOnPause` for it.",
+      text: "It does not fire when the app goes to the background. Use `useOnResume` and `useOnPause`.",
     },
 
     { type: "h2", text: "The back press" },
     {
       type: "p",
-      text: "A back press has several possible owners: an open menu should close, then a sheet, and only then should the router navigate. adaptv keeps one chain of handlers. A back press walks it from the highest priority to the lowest, and the first handler to return `true` consumes the press. Within one priority the most recently registered handler goes first, so the top of two stacked sheets closes first. A handler that throws is treated as having returned `false`.",
+      text: "adaptv keeps one chain of back handlers. A back press runs them from the highest priority down. The first handler that returns `true` consumes the press. At equal priority, the newest runs first. A handler that throws counts as `false`.",
     },
     {
       type: "api",
@@ -156,57 +142,40 @@ useOnPause(() => saveDraft(draft))`,
       signature:
         "function useBackHandler(handler: () => boolean, priority?: number): void",
       description:
-        "Intercept the back press while the component is mounted. Return `true` to consume it, `false` to pass it to the next handler. The handler is held in a ref, so changing its identity does not re-register it, and its place in the chain stays tied to mount order.",
+        "Intercept the back press while the component is mounted. Return `true` to consume it. Return `false` to pass it on.",
       params: [
         {
           name: "handler",
           type: "() => boolean",
           required: true,
-          description: "Return `true` when you handled the press.",
+          description: "Return `true` if you handled the press.",
         },
         {
           name: "priority",
           type: "number",
           default: "BackPriority.Transient (300)",
-          description:
-            "Where in the chain to sit. Use a `BackPriority` band, or any number to slot between two bands. Changing it re-registers the handler.",
+          description: "Place in the chain. A change re-registers the handler.",
         },
       ],
     },
     { type: "h3", text: "BackPriority" },
     {
       type: "p",
-      text: 'Exported from [capabilities](/docs/capabilities): `import { BackPriority } from "@arrzdev/adaptv/capabilities"`.',
+      text: 'Import it from [capabilities](/docs/capabilities): `import { BackPriority } from "@arrzdev/adaptv/capabilities"`.',
     },
     {
       type: "table",
       head: ["Band", "Value", "For"],
       rows: [
-        [
-          "`BackPriority.Overlay`",
-          "400",
-          "Drawers, modals, sheets, while open.",
-        ],
+        ["`BackPriority.Overlay`", "400", "Drawers, modals and sheets."],
         [
           "`BackPriority.Transient`",
           "300",
-          "Menus, search fields, anything that should dismiss before navigating. The default.",
+          "Menus and search fields. Default.",
         ],
-        [
-          "`BackPriority.Affordance`",
-          "200",
-          "An in-app back control with its own logic.",
-        ],
-        [
-          "`BackPriority.RouterBack`",
-          "100",
-          "Router history back. adaptv's floor handler lives here.",
-        ],
-        [
-          "`BackPriority.ExitApp`",
-          "0",
-          "Exit the app. Reached only with no history left.",
-        ],
+        ["`BackPriority.Affordance`", "200", "An in-app back control."],
+        ["`BackPriority.RouterBack`", "100", "Router history back."],
+        ["`BackPriority.ExitApp`", "0", "Exit the app."],
       ],
     },
     {
@@ -225,16 +194,15 @@ useBackHandler(() => {
     {
       type: "note",
       tone: "info",
-      text: "[Dropdown](/docs/dropdown) registers itself in the `Transient` band while open. [Drawer](/docs/drawer) does not register a back handler today; add the snippet above next to a drawer that should close on back.",
+      text: "[Drawer](/docs/drawer) registers at `Overlay` while open. [Dropdown](/docs/dropdown) registers at `Transient` while open.",
     },
     {
       type: "api",
       name: "adaptvBack()",
       signature: "function adaptvBack(): boolean",
       description:
-        "Go back, programmatically, through the same chain the Android hardware button uses. Wire it to your header's back button so it closes an open overlay first and navigates second, exactly like the hardware button.",
-      returns:
-        "`true` if something handled the press. `false` on web with no history left, where nothing should happen.",
+        "Go back through the same chain as the Android hardware button. Use it for a header back button.",
+      returns: "`true` if a handler consumed the press.",
     },
     {
       type: "code",
@@ -249,7 +217,7 @@ useBackHandler(() => {
       name: "useAndroidBackButton()",
       signature: "function useAndroidBackButton(): void",
       description:
-        "Installs the chain's floor handler and, on Android native, the hardware back button listener. The app shell mounts it once inside the router; you do not call it in an app built on the shell. The floor handler goes back in router history when there is history, exits the app on native when there is none, and on web returns `false` so a tab is never closed from under the user.",
+        "Installs the base handler and the Android hardware back listener. The app shell calls it. You do not. The base handler goes back in history. With no history, it exits the app on native and does nothing on web.",
     },
     {
       type: "targets",
@@ -257,7 +225,7 @@ useBackHandler(() => {
         {
           target: "Desktop web",
           status: "partial",
-          note: "No hardware button. The chain runs when you call `adaptvBack()`. The browser's own back button goes to the router directly and does not walk the chain.",
+          note: "No hardware button. The browser back button skips the chain.",
         },
         {
           target: "Mobile web",
@@ -267,17 +235,17 @@ useBackHandler(() => {
         {
           target: "Installed PWA",
           status: "partial",
-          note: "No browser chrome, so an in-app back control calling `adaptvBack()` is the way back.",
+          note: "Call `adaptvBack()` from an in-app control.",
         },
         {
           target: "iOS",
           status: "partial",
-          note: "No hardware button. `adaptvBack()` walks the chain; with no history left the floor handler asks the OS to exit the app.",
+          note: "No hardware button. Call `adaptvBack()`.",
         },
         {
           target: "Android",
           status: "yes",
-          note: "The system back button walks the chain. With no history left it exits the app.",
+          note: "The system back button runs the chain.",
         },
       ],
     },
@@ -289,14 +257,14 @@ useBackHandler(() => {
       signature:
         "function useKeepAwake(options?: { enabled?: boolean }): UseKeepAwakeResult",
       description:
-        "Hold the screen on: a recipe, a workout timer, a boarding pass. One implementation on every target, the Screen Wake Lock API, which the native WebViews also carry. The platform drops the lock whenever the page is hidden; adaptv takes it again when the app comes back, until you release it.",
+        "Keep the screen on. It uses the Screen Wake Lock API on every target. adaptv takes the lock again when the app returns to the foreground.",
       params: [
         {
           name: "enabled",
           type: "boolean",
           default: "false",
           description:
-            "Hold the lock for as long as the component is mounted and release it on unmount. Leave it off and call `request` and `release` yourself when the lock follows a user toggle.",
+            "Hold the lock while the component is mounted. Leave it off to call `request` and `release` yourself.",
         },
       ],
       returns:
@@ -308,37 +276,34 @@ useBackHandler(() => {
         {
           name: "supported",
           type: "boolean",
-          description:
-            "Whether the wake lock API exists here. `false` on the server. When `false`, do not render the toggle.",
+          description: "`true` if the API exists. `false` on the server.",
         },
         {
           name: "active",
           type: "boolean",
-          description: "Whether the screen is being held on right now.",
+          description: "`true` while the screen is held on.",
         },
         {
           name: "caveat",
           type: "string | null",
           description:
-            "A sentence describing a way the lock can report success and still fail, or `null`. Today there is one: an installed PWA on iOS below 18.4 resolves the lock and dims the screen anyway. Render it next to the toggle.",
+            "A case where the lock reports success and fails, or `null`. Today: an installed PWA on iOS below 18.4. Show it next to the toggle.",
         },
         {
           name: "request",
           type: '() => Promise<"held" | "unsupported" | "rejected">',
           description:
-            "Take the lock. Never rejects. Call it from a user gesture where you can: a request made while the page is hidden is refused.",
+            "Take the lock. It never rejects. Call it from a user gesture.",
         },
         {
           name: "release",
           type: "() => Promise<void>",
-          description:
-            "Let the screen sleep again. Safe to call when nothing is held.",
+          description: "Let the screen sleep.",
         },
         {
           name: "lastOutcome",
           type: '"held" | "unsupported" | "rejected" | null',
-          description:
-            "Outcome of the most recent request, `null` before the first.",
+          description: "Result of the last request.",
         },
       ],
     },
@@ -346,11 +311,11 @@ useBackHandler(() => {
       type: "table",
       head: ["Outcome", "Meaning"],
       rows: [
-        ['`"held"`', "The screen is being kept on."],
-        ['`"unsupported"`', "No wake lock API. Asking again cannot help."],
+        ['`"held"`', "The screen stays on."],
+        ['`"unsupported"`', "No API. Do not retry."],
         [
           '`"rejected"`',
-          "The API refused: power-save mode, low battery, or a hidden page. Temporary; retry once the condition clears.",
+          "Refused: power-save, low battery or hidden page. Retry later.",
         ],
       ],
     },
@@ -358,7 +323,7 @@ useBackHandler(() => {
       type: "code",
       label: "recipe.page.tsx",
       lang: "tsx",
-      code: `// Held for as long as the recipe is on screen
+      code: `// Held while the recipe is on screen
 useKeepAwake({ enabled: true })
 
 // Or behind a toggle
@@ -370,7 +335,7 @@ if (!supported) return null
     {
       type: "note",
       tone: "info",
-      text: "The lock is one per app, not one per component. Two components that both pass `enabled: true` share it, and the first to unmount releases it for both.",
+      text: "There is one lock for the app. The first component to unmount releases it for all.",
     },
     {
       type: "targets",
@@ -380,22 +345,18 @@ if (!supported) return null
           status: "yes",
           note: "Chrome 84+, Firefox 126+, Safari 16.4+.",
         },
-        { target: "Mobile web", status: "yes", note: "Same browser versions." },
+        { target: "Mobile web", status: "yes", note: "Same versions." },
         {
           target: "Installed PWA",
           status: "partial",
-          note: "Works, except on iOS below 18.4, where the request resolves and the screen still dims. `caveat` reports it.",
+          note: "On iOS below 18.4 the screen still dims.",
         },
         {
           target: "iOS",
           status: "yes",
-          note: "The same API inside the native WebView. Confirmed on the simulator; the lit screen on a physical iPhone is still to be verified.",
+          note: "Checked on the simulator only.",
         },
-        {
-          target: "Android",
-          status: "yes",
-          note: 'Holds the screen, verified against the OS power state. Power-save mode answers `"rejected"`.',
-        },
+        { target: "Android", status: "yes" },
       ],
     },
 
@@ -405,8 +366,8 @@ if (!supported) return null
       name: "createBootstrapGate()",
       signature: "function createBootstrapGate(): BootstrapGate",
       description:
-        "A small ready flag for cold start. Create one at module scope, set it when the app's own boot work is done (a local database seeded, a session restored), and read it wherever something should wait, usually the splash screen. It is a factory, so an app can hold more than one gate. It has no connection to the router or the shell; it is only the flag and its subscription.",
-      returns: "A `BootstrapGate` with the five members below.",
+        "A ready flag for cold start. Create it at module scope. Set it when boot work is done. Read it where something must wait, such as the splash screen.",
+      returns: "A `BootstrapGate` with the members below.",
     },
     {
       type: "props",
@@ -419,24 +380,22 @@ if (!supported) return null
         {
           name: "getBootstrapReady",
           type: "() => boolean",
-          description: "The flag, read once.",
+          description: "Read the flag.",
         },
         {
           name: "setBootstrapReady",
           type: "() => void",
-          description: "Mark ready. Does nothing if already ready.",
+          description: "Mark ready.",
         },
         {
           name: "resetBootstrapReady",
           type: "() => void",
-          description:
-            "Back to not ready, for example when the user signs out and boot work must run again.",
+          description: "Mark not ready.",
         },
         {
           name: "subscribeBootstrapReady",
           type: "(onStoreChange: () => void) => () => void",
-          description:
-            "Subscribe to changes outside React. Returns an unsubscribe.",
+          description: "Subscribe outside React.",
         },
       ],
     },
@@ -464,7 +423,7 @@ const ready = useAppReady()`,
     },
     {
       type: "p",
-      text: "See [icons and splash](/docs/icons-and-splash) for how the splash screen uses a gate to decide when to reveal the app.",
+      text: "See [icons and splash](/docs/icons-and-splash).",
     },
   ],
 }
