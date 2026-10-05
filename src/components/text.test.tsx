@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { render } from "@testing-library/react"
 import type { ReactElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -178,26 +180,65 @@ describe("textClampStyle", () => {
 })
 
 describe("Text style precedence", () => {
-  //The `base` half of §2's pair, and it is deliberately EMPTY: a run of text has no
-  //default look, so there is no adaptv class for a consumer's to have to beat. Asserted
-  //rather than assumed, because "over-locking looks fine until someone cannot restyle
-  //it and files a bug adaptv cannot fix from their side."
+  //The default half of §2's pair, and it is deliberately EMPTY: a run of text has no
+  //default look, so there is no adaptv class or rule for a consumer's to have to beat.
+  //Asserted rather than assumed, because "over-locking looks fine until someone cannot
+  //restyle it and files a bug adaptv cannot fix from their side."
   it("contributes no class of its own, so className is unopposed", () => {
-    expect(firstEl(<Text />).className).toBe("")
+    expect(firstEl(<Text />).hasAttribute("class")).toBe(false)
     const el = firstEl(<Text className="block font-bold" />)
-    expect(hasClass(el, "block")).toBe(true)
-    expect(hasClass(el, "font-bold")).toBe(true)
+    expect(el.className).toBe("block font-bold")
   })
 
-  //A class that MUST WIN. `selectable` is `locked`: the consumer asked for selection
-  //with a prop, and their own `select-none` must not silently cancel it.
-  it("locked `selectable` is emitted alongside a consumer select utility", () => {
-    const el = firstEl(<Text selectable className="select-none" />)
-    expect(hasClass(el, "selectable")).toBe(true)
+  it("the stylesheet has no rule for text: the look is the consumer's alone", () => {
+    const sheets = readdirSync(resolve(__dirname, "../styles"))
+      .filter((name) => name.endsWith(".css"))
+      .map((name) =>
+        readFileSync(resolve(__dirname, "../styles", name), "utf8"),
+      )
+      .join("\n")
+    expect(sheets).not.toContain('[data-adaptv="text"]')
   })
 
-  it("selectable is opt-in — no class when the prop is absent", () => {
-    expect(hasClass(firstEl(<Text />), "selectable")).toBe(false)
+  it("names its part, keeping one the node already carries", () => {
+    expect(firstEl(<Text />).getAttribute("data-part")).toBe("root")
+    expect(
+      firstEl(<Text data-part="title" />).getAttribute("data-part"),
+    ).toBe("title")
+    expect(
+      firstEl(<Text render={<p data-part="body" />} />).getAttribute(
+        "data-part",
+      ),
+    ).toBe("body")
+  })
+
+  //A lock that MUST WIN. `selectable` is locked inline: the consumer asked for selection
+  //with a prop, and their own `select-none` class or `userSelect` style must not
+  //silently cancel it.
+  it("locks `selectable` inline, against a consumer select class and style", () => {
+    const el = firstEl(
+      <Text
+        selectable
+        className="select-none"
+        style={{ userSelect: "none", color: "red" }}
+      />,
+    )
+    expect(el.style.userSelect).toBe("text")
+    expect(el.style.color).toBe("red")
+    //the consumer's class reaches the DOM untouched; it just loses to the inline lock
+    expect(el.className).toBe("select-none")
+    expect(hasClass(el, "selectable")).toBe(false)
+  })
+
+  it("selectable is opt-in — nothing inline when the prop is absent", () => {
+    expect(firstEl(<Text />).getAttribute("style")).toBeNull()
+    expect(firstEl(<Text />).style.userSelect).toBe("")
+  })
+
+  it("selectable and the clamp lock together", () => {
+    const el = firstEl(<Text selectable numberOfLines={2} />)
+    expect(el.style.userSelect).toBe("text")
+    expect(el.style.overflow).toBe("hidden")
   })
 
   //The inline tier, and the whole reason the clamp lives there: inline style is its

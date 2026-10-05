@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HAPTIC_TICK_ATTR } from "#adaptv/capabilities/haptic-tick"
@@ -91,18 +93,21 @@ describe("Button haptic — the one surface that works on iOS web", () => {
   })
 })
 
-describe("Button — structural classes the consumer cannot break (B8)", () => {
-  it("keeps `clickable` when a className fights the touch-action", () => {
-    //`clickable` carries the `touch-action: pan-x pan-y pinch-zoom` longhand that
-    //keeps `pointercancel` alive on iOS (WebKit 240917). A consumer `touch-none`
-    //silently strands the gesture state machine — invisible in every browser
-    //except the broken one.
+describe("Button — structural style the consumer cannot break (B8)", () => {
+  it("locks the touch-action inline, against a consumer class and style", () => {
+    //the `touch-action: pan-x pan-y pinch-zoom` longhand keeps `pointercancel` alive on
+    //iOS (WebKit 240917). A consumer `touch-none` silently strands the gesture state
+    //machine — invisible in every browser except the broken one — so the lock is inline
+    //style, which no class reaches, and it is written after the consumer's `style`.
     const { container } = render(
-      <Button className="touch-none">Go</Button>,
+      <Button className="touch-none" style={{ touchAction: "none" }}>
+        Go
+      </Button>,
     )
     const root = container.querySelector("button")
-    expect(root?.className).toContain("touch-pan-x")
-    expect(root?.className).not.toContain("touch-none")
+    expect(root?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    //the class itself reaches the DOM untouched: it simply loses to the inline lock
+    expect(root?.className).toBe("touch-none")
   })
 
   it("keeps a disabled button inert without making it a scroll dead zone", () => {
@@ -114,24 +119,143 @@ describe("Button — structural classes the consumer cannot break (B8)", () => {
      * Measured in `playground/e2e/disabled-scroll.spec.ts`.
      */
     const el = render(
-      <Button disabled>Go</Button>,
+      <Button disabled style={{ userSelect: "text" }}>
+        Go
+      </Button>,
     ).container.querySelector("button") as HTMLElement
-    expect(el.className).not.toContain("touch-none")
-    expect(el.className).toContain("touch-pan-x")
+    expect(el.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(el.style.userSelect).toBe("none")
     //inert is carried by the attribute and the engine, which is where it belongs
     expect(el.hasAttribute("disabled")).toBe(true)
   })
 
   it("still lets the consumer restyle the look — locking stays narrow", () => {
-    //restyling a button is the entire point; if `locked` swallowed presentation
-    //the component would be useless
+    //restyling a button is the entire point; if the lock swallowed presentation the
+    //component would be useless
     const { container } = render(
-      <Button className="bg-blue-600 text-white rounded-full">Go</Button>,
+      <Button
+        className="bg-blue-600 text-white rounded-full"
+        style={{ color: "rgb(255, 0, 0)" }}
+      >
+        Go
+      </Button>,
     )
-    const className = container.querySelector("button")?.className ?? ""
-    expect(className).toContain("bg-blue-600")
-    expect(className).toContain("rounded-full")
-    //and the overridden default surface is gone
-    expect(className).not.toContain("bg-gray-50")
+    const root = container.querySelector("button")
+    //the consumer's className is all there is: the default surface is a layer rule
+    expect(root?.className).toBe("bg-blue-600 text-white rounded-full")
+    expect(root?.style.color).toBe("rgb(255, 0, 0)")
+    //nothing but the interaction longhand is inline
+    expect(root?.style.backgroundColor).toBe("")
+    expect(root?.style.display).toBe("")
+  })
+})
+
+describe("Button — parts: attributes, no class of adaptv's", () => {
+  function parts(container: HTMLElement) {
+    return [...container.querySelectorAll<HTMLElement>("[data-part]")]
+  }
+
+  it("names every part it renders and writes no class on any of them", () => {
+    const { container } = render(
+      <Button>
+        <Button.Leading>+</Button.Leading>
+        <Button.Text>Go</Button.Text>
+        <Button.Trailing>›</Button.Trailing>
+      </Button>,
+    )
+    const root = container.querySelector("button")
+    expect(root?.getAttribute("data-adaptv")).toBe("button")
+    expect(root?.getAttribute("data-part")).toBe("root")
+    expect(root?.hasAttribute("class")).toBe(false)
+    const named = parts(container).map((el) =>
+      el.getAttribute("data-part"),
+    )
+    for (const part of [
+      "root",
+      "content-shell",
+      "content",
+      "leading",
+      "label",
+      "trailing",
+    ]) {
+      expect(named, part).toContain(part)
+    }
+    for (const el of parts(container)) {
+      expect(el.getAttribute("data-adaptv"), el.dataset.part).toBe(
+        "button",
+      )
+      expect(el.hasAttribute("class"), el.dataset.part).toBe(false)
+    }
+  })
+
+  it("passes a slot's and the label's className through untouched", () => {
+    const { container } = render(
+      <Button>
+        <Button.Leading className="pe-2 shrink">+</Button.Leading>
+        <Button.Text className="truncate">Go</Button.Text>
+      </Button>,
+    )
+    const leading = container.querySelector<HTMLElement>(
+      "[data-part='leading']",
+    )
+    const label = container.querySelector<HTMLElement>(
+      "[data-part='label']",
+    )
+    expect(leading?.className).toBe("pe-2 shrink")
+    expect(label?.className).toBe("truncate")
+    //…and the slot's width-mode layout is locked inline, so `shrink` cannot reach it
+    expect(leading?.style.display).toBe("inline-flex")
+    expect(leading?.style.flexShrink).toBe("0")
+    expect(leading?.style.alignItems).toBe("center")
+  })
+
+  it("locks the label's width mode inline: intrinsic by default, truncatable when fixed", () => {
+    const intrinsic = render(
+      <Button>
+        <Button.Text>Go</Button.Text>
+      </Button>,
+    ).container.querySelector<HTMLElement>("[data-part='label']")
+    expect(intrinsic?.style.display).toBe("inline-flex")
+    expect(intrinsic?.style.flexShrink).toBe("0")
+    expect(intrinsic?.style.minWidth).toBe("")
+
+    const fixed = render(
+      <Button className="w-full">
+        <Button.Text>Go</Button.Text>
+      </Button>,
+    ).container.querySelector<HTMLElement>("[data-part='label']")
+    expect(fixed?.style.display).toBe("inline-flex")
+    expect(fixed?.style.minWidth).toMatch(/^0(px)?$/)
+    expect(fixed?.style.flexShrink).toBe("")
+  })
+
+  it("a fixed width renders the plain measured row, no tween shell", () => {
+    const { container } = render(<Button className="w-full">Go</Button>)
+    expect(container.querySelector("[data-part='content']")).not.toBeNull()
+    expect(
+      container.querySelector("[data-part='content-shell']"),
+    ).toBeNull()
+  })
+})
+
+describe("Button — the default look is a layer rule (styles/button.css)", () => {
+  const css = readFileSync(
+    resolve(__dirname, "../styles/button.css"),
+    "utf8",
+  )
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "")
+
+  it("lives in adaptv.components under :where(), with no !important", () => {
+    expect(rules).toContain("@layer adaptv.components")
+    expect(rules).toContain(
+      ':where(\n    [data-adaptv="button"][data-part="root"]',
+    )
+    expect(rules).not.toContain("!important")
+  })
+
+  //⚠︎ the transparent pre-allocated border was tried and reverted (see the note on the
+  //root rule): it costs every button 2px of content box and only helps a 1px border
+  it("declares no border on the root", () => {
+    expect(rules).not.toMatch(/\bborder(-width|-style|-color)?\s*:/)
   })
 })
