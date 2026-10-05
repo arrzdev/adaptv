@@ -13,6 +13,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, relative } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import { GLYPH as CLI_GLYPH } from "../../bin/ui/theme.mjs"
+import { ensureDist } from "../../scripts/ensure-dist.mjs"
 import {
   ADAPTV_VERSION,
   appIdFor,
@@ -239,6 +240,9 @@ describe("a created app", () => {
   it(
     "passes adaptv build web",
     () => {
+      //the app resolves the framework through `exports`, which name `dist/`: build it
+      //if `src/` moved since, or this checks whatever build happens to be lying around
+      expect(ensureDist(ROOT)).toBe(true)
       const dir = join(tempDir(), "my-app")
       create({ dir, name: "my-app", adaptv: `link:${ROOT}` })
       //before the links: a recursive walk follows them into the repo's whole dependency tree

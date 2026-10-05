@@ -1,10 +1,5 @@
 {
-  "include": [
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
-    ".adaptv/**/*.ts",
-    "**/*.ts",
-    "**/*.tsx"
-  ],
+  "include": [".adaptv/**/*.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist", ".output"],
   "compilerOptions": {
     "target": "ES2022",

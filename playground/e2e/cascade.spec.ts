@@ -20,9 +20,9 @@ import { awaitClientHandover } from "./support/hydrated"
  *
  * ⚠︎ These probes inject class names into a live page, and Tailwind only emits what
  * it found by SCANNING SOURCE — a spec file is not scanned. The utilities used here
- * are present today only because adaptv's `@source` sweeps its own `src/`, test files
- * included, so `active:scale-95` and `pb-safe-or-4` reach every consumer's CSS as a
- * side effect. That is a wart, and if it is ever tightened these tests go red for a
+ * are present today only because adaptv's `@source` sweeps its own code (`src/` with
+ * its tests in a checkout, the built `dist/` with its comments in the package), so
+ * `active:scale-95` and `pb-safe-or-4` reach every consumer's CSS as a side effect. That is a wart, and if it is ever tightened these tests go red for a
  * reason that has nothing to do with the cascade — hence `expectCompiled`, which says
  * so out loud instead of failing as if the contract broke.
  */
