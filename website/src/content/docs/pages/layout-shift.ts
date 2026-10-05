@@ -2,23 +2,24 @@ import type { DocPage } from "@/content/docs/types"
 
 export const page: DocPage = {
   slug: "layout-shift",
-  title: "Layout shift is a bug",
-  summary:
-    "Why adaptv treats a moving button as a correctness problem, not polish.",
+  title: "Layout shift",
+  summary: "Stop buttons moving under a thumb.",
   blocks: [
     {
       type: "p",
-      text: "A button that moves out from under a thumb is not a cosmetic issue. On a touch screen it is a mis-tap: the user pressed the thing that was there a frame ago. adaptv names layout shift as an enemy and designs against it everywhere.",
+      text: "A button that moves is a mis-tap. adaptv removes the usual causes. You must do three things.",
     },
-    { type: "h2", text: "What that means in practice" },
     {
       type: "ul",
       items: [
-        "Safe-area insets, the theme and the platform are stamped before first paint, so nothing resolves a frame late and jumps.",
-        "The shell owns a single full-viewport frame. Pages do not write viewport units, so there is no vh/dvh disagreement to shift on.",
-        "Images must resolve their dimensions at build time. A build that cannot work them out fails, rather than shipping a layout that jumps when the image loads.",
-        "The software keyboard never resizes your layout behind your back. You opt content into avoiding it.",
+        "Do not write `vh`, `dvh` or `h-screen` in pages. The shell frame fills the screen. Use `fill` and `flex-1` on [View](/docs/view). See [The frame](/docs/the-frame). Nothing checks this for you.",
+        "Give every [Image](/docs/image) a size: `width` and `height`, `aspectRatio` or `fill`. Types require it. An `?adaptv-image` import gets its size at build time, and the build fails if it cannot.",
+        "Pad edges with [safe areas](/docs/safe-areas) utilities, not `env()`. The inset values exist before the first paint.",
       ],
+    },
+    {
+      type: "p",
+      text: "adaptv sets the theme and platform on `<html>` before the first paint, so `dark:` and `app:` styles do not jump. On iOS and in the browser, the keyboard opens over the page. On Android native the window shrinks. See [Keyboard](/docs/keyboard). `patches.viewportFreeze: false` turns the freeze off.",
     },
   ],
 }
