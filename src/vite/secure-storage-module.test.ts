@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The only question worth asking about this module is whether the backend's CODE
 // reaches the bundle — not whether its NAME appears in it.
 //

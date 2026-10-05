@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Declaring adaptv's plugins in the generated Android project — the injector itself, against a
 // real directory, not just the merge helpers it calls.
 //

@@ -70,10 +70,11 @@ consumer. That is a category of leverage worth paying a peer dependency for.
 - **The fix covers `hover:` utilities, not `:hover` anywhere.** A consumer who writes
   `.card:hover { … }` in their own stylesheet — still possible under this decision — gets stock
   behaviour. Coverage tracks how much of their hover styling stays in utilities.
-  > ⏭ **A plan now exists to close this limit without changing this decision:** a Vite
-  > `transform` over the *emitted* CSS rewrites `:hover` whatever produced it — Tailwind, SCSS or
-  > plain CSS — on the mechanism `src/vite/tailwind-empty-fallback.ts` already ships. →
-  > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It does **not** require dropping
+  > ✅ **Closed 2026-10-05 without changing this decision:** `src/vite/css-patch-rewrite.ts`, a Vite
+  > `transform` over the *emitted* CSS, rewrites every `:hover` and `:active` rule whatever produced
+  > it — Tailwind, SCSS, CSS modules or plain CSS, `node_modules` included — on the slot
+  > `src/vite/tailwind-empty-fallback.ts` measured, and prints a count per build. →
+  > [`../roadmap/patch-delivery.md`](../roadmap/patch-delivery.md) §4. It did **not** require dropping
   > Tailwind, but it moves the pillar this section rests on — see **O24**.
 - **Only the `:not(:is(:focus, :focus-within))` half is adaptv's.** Tailwind v4 already compiles
   `hover:` inside `@media (hover: hover)` by default (verified in `tailwindcss@4.2.4`

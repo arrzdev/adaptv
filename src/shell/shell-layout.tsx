@@ -37,6 +37,7 @@ import { installPreloadErrorRecovery } from "#adaptv/shell/preload-error-recover
 import { useRouteTint } from "#adaptv/shell/use-route-tint"
 import { initKv } from "#adaptv/storage/kv"
 import { cn } from "#adaptv/utils/cn"
+import { PATCHES } from "#adaptv/utils/patch-registry"
 import { applyPlatformStamp } from "#adaptv/utils/platform"
 
 const DOCUMENT_SHELL_CLASS = "m-0 h-dvh touch-none overscroll-none"
@@ -146,7 +147,7 @@ type RoutingShellProps = {
   shellClassName?: string
   /** Native-feel WebKit fixes; each defaults to `true`. See {@link AdaptvPatches}. */
   patches?: AdaptvPatches
-  /** App-feel resets that are the app's call; per-option defaults (`UI_SCOPE_DEFAULTS`). See {@link AdaptvUiConfig}. */
+  /** App-feel resets that are the app's call; per-option defaults (`utils/patch-registry.ts`). See {@link AdaptvUiConfig}. */
   ui?: AdaptvUiConfig
   children: ReactNode
 }
@@ -189,10 +190,14 @@ export function RoutingShell({
   ui,
   children,
 }: RoutingShellProps) {
-  //resolve each native-feel fix — all default on, opt out per fix via config.
-  const caretRepaint = patches?.caretRepaint ?? true
-  const textMagnifier = patches?.textMagnifier ?? true
-  const viewportFreeze = patches?.viewportFreeze ?? true
+  //resolve each native-feel fix — all default on (the registry rows), opt out per
+  //fix via config.
+  const caretRepaint =
+    patches?.caretRepaint ?? PATCHES.caretRepaint.config.default
+  const textMagnifier =
+    patches?.textMagnifier ?? PATCHES.textMagnifier.config.default
+  const viewportFreeze =
+    patches?.viewportFreeze ?? PATCHES.viewportFreeze.config.default
 
   //Restore the `<html>` platform/OS stamp that React strips when it reconciles the
   //document on the SPA/native client path. Without it every `app:` variant is inert —

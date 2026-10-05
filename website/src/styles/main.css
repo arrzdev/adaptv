@@ -37,6 +37,16 @@
   --code-fn: #f2c78a;
   --code-tag: #7fc4f5;
 
+  /* terminal: the 8 ANSI colours the captured CLI output uses; bright ones reuse them */
+  --term-black: #6d6d7a;
+  --term-red: #ff7a8e;
+  --term-green: #4fdca0;
+  --term-yellow: #f2c78a;
+  --term-blue: #8b95ff;
+  --term-magenta: #c08bff;
+  --term-cyan: #7fc4f5;
+  --term-white: #e4e4ea;
+
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -172,8 +182,11 @@
 .stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
+/* a tab switch in "From idea to installed app": a 200 ms crossfade, no movement */
+@keyframes step-in { from { opacity: 0; } }
+.step-in { animation: step-in 0.2s ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .rise, .stage-in, .caret { animation: none; }
+  .rise, .stage-in, .caret, .step-in { animation: none; }
 }
 
 /*

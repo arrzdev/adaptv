@@ -1,0 +1,30 @@
+/* Plain CSS, no Tailwind: what a consumer writing SCSS, CSS modules or a stylesheet
+   by hand ships. adaptv's post-processor (src/vite/css-patch-rewrite.ts) rewrites
+   these rules in the emitted CSS; nothing here knows it exists. */
+
+.plain-css-tile {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  background: rgb(240, 240, 240);
+  color: rgb(20, 20, 20);
+  font: inherit;
+  text-align: left;
+}
+
+.plain-css-tile:hover {
+  background: rgb(255, 0, 0);
+}
+
+.plain-css-press {
+  display: block;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  background: rgb(240, 240, 240);
+  color: rgb(20, 20, 20);
+}
+
+.plain-css-press:active {
+  background: rgb(0, 128, 0);
+}

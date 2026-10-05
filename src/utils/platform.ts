@@ -39,10 +39,12 @@
 //`web:` variant. That branch is a styling concern, and the styling path costs
 //zero re-renders (see utils.css).
 
+import type { AdaptvUiConfig } from "#adaptv/config/app-config"
 import type {
-  AdaptvUiConfig,
+  UiPatchName,
   UiPatchScope,
-} from "#adaptv/config/app-config"
+} from "#adaptv/utils/patch-registry.ts"
+import { PATCHES, UI_PATCHES } from "#adaptv/utils/patch-registry.ts"
 
 /** Runtime environment. `web` = browser tab, `standalone` = installed PWA, `native` = Capacitor. */
 export type PlatformTag = "web" | "standalone" | "native"
@@ -177,25 +179,21 @@ export function resolvePlatformTag(): PlatformTag {
  * of adaptv emitting a different stylesheet per config — which would make
  * `styles.css` non-static and turn every reset into a build matrix.
  */
-export const UI_STAMPS = [
-  ["noSelect", "data-adaptv-no-select"],
-  ["hideScrollbars", "data-adaptv-hide-scrollbars"],
-  ["touchCallout", "data-adaptv-no-touch-callout"],
-] as const satisfies ReadonlyArray<readonly [keyof AdaptvUiConfig, string]>
+export const UI_STAMPS: ReadonlyArray<readonly [UiPatchName, string]> =
+  UI_PATCHES.map((key) => [key, PATCHES[key].config.stamp] as const)
 
 /**
- * The default scope per option. Not one shared constant, because the options do not
- * share a right answer: selection and the iOS link callout are genuine browser
- * affordances a tab should keep, while a scrollbar is desktop chrome that has a
- * per-scroller escape (`ScrollView showsVerticalScrollIndicator` →
- * `scrollbar-visible`, which outranks the reset). An option with a working escape
- * can afford the stricter default; one without cannot.
+ * The default scope per option, from the registry row. Not one shared constant,
+ * because the options do not share a right answer: selection and the iOS link
+ * callout are genuine browser affordances a tab should keep, while a scrollbar is
+ * desktop chrome that has a per-scroller escape (`ScrollView
+ * showsVerticalScrollIndicator` → `scrollbar-visible`, which outranks the reset).
+ * An option with a working escape can afford the stricter default; one without
+ * cannot.
  */
-const UI_SCOPE_DEFAULTS = {
-  noSelect: "app",
-  hideScrollbars: "all",
-  touchCallout: "app",
-} as const satisfies Record<keyof AdaptvUiConfig, UiPatchScope>
+function uiScopeDefault(key: UiPatchName): UiPatchScope {
+  return PATCHES[key].config.default
+}
 
 /**
  * Coerce an untrusted config value to a scope. Anything unrecognized —
@@ -209,7 +207,7 @@ export function normalizeUiScope(
 ): UiPatchScope {
   return value === "all" || value === "off" || value === "app"
     ? value
-    : UI_SCOPE_DEFAULTS[key]
+    : uiScopeDefault(key)
 }
 
 /** Whether a scope is "on" for a given runtime platform. `app` = standalone + native. */
@@ -235,7 +233,7 @@ export function resolveUiStamp(
  *
  * `ui` is the app's {@link AdaptvUiConfig}; the same resolution the init script did
  * pre-paint is re-run here, for the same reason and against the same defaults. Pass
- * the config — calling this bare re-resolves against `UI_SCOPE_DEFAULTS`, which would
+ * the config — calling this bare re-resolves against the registry defaults, which would
  * silently drop a stamp an `"all"` config asked for.
  */
 export function applyPlatformStamp(ui?: AdaptvUiConfig): void {
