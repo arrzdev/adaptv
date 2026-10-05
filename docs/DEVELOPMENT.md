@@ -164,9 +164,9 @@ re-stamp on every setup); neither guard exists now, because neither problem does
   - `react` / `react-dom` pinned in `apps/frontend/tsconfig.json` `paths` — two `@types/react`
     copies of the same version.
 
-  The ambient declarations for the modules adaptv's Vite plugin serves need no line of their own:
-  `dist/interface/route-globals.d.ts`, which every app's `include` already names, references all
-  seven.
+  The ambient declarations for the modules adaptv's Vite plugin serves need no line of their own.
+  adaptv generates `.adaptv/adaptv-env.d.ts`, a type reference to `@arrzdev/adaptv/route-globals`,
+  and that file references all seven.
 - **Adding a command** means adding it in `playground/package.json` (plus a `turbo.json` task if it
   needs the API), then mirroring the one-line passthrough in this repo's `package.json`. The
   wrapper refuses a name the playground doesn't have, rather than failing three layers down.
