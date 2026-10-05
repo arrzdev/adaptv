@@ -33,10 +33,16 @@ pnpm gate          # biome (root + playground), tsc x2, vitest, check-colour, bu
 pnpm build:check   # alone: tsdown + scripts/verify-dist.mjs (structure, publint, attw)
 ```
 
-This is what the CI `gate` job (the one required check) runs; docs-only and draft PRs get a lighter
-mode. The Playwright suites (`pnpm --dir playground test:e2e*`) run in `e2e.yml` only when the PR has
-the `e2e` label, nightly, and weekly in full; label the PR, and run the suite you touched locally,
-when a change is visual or behavioural.
+This is what the CI `gate` job (the one required check) runs; docs-only PRs get a lighter mode.
+Open every PR as a **draft**: `gate` is skipped on drafts (no Actions minutes, TUD-222). Run `pnpm gate`
+locally and mark the PR ready once, when it is green; that runs the full gate. Each push to a ready PR
+runs it again, so push to a ready PR only what you want merged.
+
+The Playwright suites (`pnpm --dir playground test:e2e*`) and the Android smoke run **locally** for
+now: the `E2E` and `Android smoke` workflows are disabled and the `e2e` label does nothing (TUD-222).
+Before marking ready a PR that touches runtime or service-worker code (or anything visual or
+behavioural), run the suites you touched on chromium, one run at a time on the VM, and paste the
+result in the PR's `Verify:` section.
 
 ## Rules
 
