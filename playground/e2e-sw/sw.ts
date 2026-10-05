@@ -113,6 +113,25 @@ export async function bootControlled(page: Page): Promise<void> {
     .toBe(true)
 }
 
+/**
+ * Resolve once the head links an icon. Under `spa` the shell's head has none: the
+ * client writes them after `load`, so a spec that reads the head straight after
+ * `bootControlled` can see none at all.
+ */
+export async function awaitHeadIcons(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page
+          .locator(
+            'head link[rel~="icon"], head link[rel="apple-touch-icon"]',
+          )
+          .count(),
+      { message: "the head never linked an icon", timeout: 20_000 },
+    )
+    .toBeGreaterThan(0)
+}
+
 /** What the browser knows about the registration, as plain data. */
 export function workerState(page: Page) {
   return page.evaluate(async () => {

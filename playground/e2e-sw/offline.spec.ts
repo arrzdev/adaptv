@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import {
+  awaitHeadIcons,
   bootControlled,
   engineReportsServiceWorker,
   engineSupportsOffline,
@@ -57,6 +58,7 @@ test.describe(`offline (render: ${RENDER})`, () => {
     //The precache carries only the linked icons now, so the linked ones are the
     //ones that must survive the network going away. Read off the head, fetched
     //through the worker with the origin down (the control below).
+    await awaitHeadIcons(page)
     const results = await page.evaluate(async () => {
       const hrefs = [
         ...document.querySelectorAll<HTMLLinkElement>(
