@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { measureArtwork, monochromeMark } from "./artwork.mjs"
 import { artTarget, fitScale, SAFE_ZONE } from "./icon-geometry.mjs"
