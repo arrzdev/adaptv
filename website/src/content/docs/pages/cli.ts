@@ -17,8 +17,8 @@ export const page: DocPage = {
       label: "Terminal",
       lang: "bash",
       code: `adaptv <command> [surface] [options]
-adaptv <command> --help
-adaptv --version`,
+adaptv <command> --help   # or -h, or adaptv help <command>
+adaptv --version          # or -v`,
     },
     { type: "h2", text: "Surfaces" },
     {
@@ -27,7 +27,7 @@ adaptv --version`,
     },
     {
       type: "p",
-      text: "`dev`, `preview`, `build` and `icons` check `adaptv.config.ts` first. They print every problem with its key and exit with code 1. See [Config](/docs/config).",
+      text: "`dev`, `preview`, `build` and `icons` check `adaptv.config.ts` first. `dev web` and `preview web` also run without one. They print every problem with its key and exit with code 1. See [Config](/docs/config).",
     },
     {
       type: "note",
@@ -180,7 +180,7 @@ adaptv --version`,
         [
           "`--input <image>`",
           "required",
-          "A png or svg, 1024px or larger. A smaller image gives a warning.",
+          "A png, svg, webp, jpg, avif, tiff or gif, 1024px or larger. A smaller image gives a warning.",
         ],
         [
           "`-o, --output <dir>`",
@@ -267,7 +267,7 @@ adaptv --version`,
         [
           "`-- <vite args>`",
           "dev, preview",
-          "Pass the rest to the web server.",
+          "Pass the rest to the web server. Native preview ignores them.",
         ],
       ],
     },
@@ -275,7 +275,7 @@ adaptv --version`,
     {
       type: "ol",
       items: [
-        "`--target <id>`. An unknown id is an error.",
+        "`--target <id>`. An unknown id is an error. adaptv saves the device in `.adaptv/state.json`.",
         "`--latest`, if that device is still available.",
         "A picker. adaptv saves your choice in `.adaptv/state.json`.",
       ],
@@ -287,7 +287,7 @@ adaptv --version`,
     { type: "h2", text: "Terminals and exit codes" },
     {
       type: "p",
-      text: 'Keys, the picker and prompts need a terminal. Without one, output is plain and prompts choose for themselves. In Turborepo, set `"interactive": true` on the task. Errors go to stderr, so `--json > out.json` never holds one.',
+      text: 'Keys, the picker and prompts need a terminal. Without one, output is plain, the device picker chooses for itself and the icons overwrite prompt needs `--yes`. In Turborepo, set `"interactive": true` on the task. With `--json`, an error is in the `error` field of the document.',
     },
     {
       type: "table",
@@ -378,7 +378,8 @@ adaptv --version`,
           "`ADAPTV_DEV_SW`",
           "`1` serves your `serviceWorkers` modules in `dev web`.",
         ],
-        ["`CI`, `NO_COLOR`", "Plain output, no colour."],
+        ["`CI`", "Plain output: no live lines or spinners."],
+        ["`NO_COLOR`", "No colour."],
       ],
     },
     { type: "h2", text: "Files the CLI writes" },

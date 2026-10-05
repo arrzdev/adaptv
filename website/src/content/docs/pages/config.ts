@@ -403,7 +403,7 @@ export default defineApp({
           "`otaPublicKey`",
           "`string`",
           "none",
-          "PEM public key from `adaptv keys ota`. Commit it. Without it, no channel is published. A change needs a store release.",
+          "PEM public key from `adaptv keys ota`. Commit it. With `origin` set and no key, `build web` stops with exit code 1. A change needs a store release.",
         ],
         [
           "`otaOnNativeSkew`",
