@@ -146,20 +146,27 @@ re-stamp on every setup); neither guard exists now, because neither problem does
 - **The playground has its own gates** (`pnpm --dir playground typecheck` / `biome:check`). This
   repo's gates deliberately exclude it: `biome.json` ignores `**/playground`, `vitest.config.ts`
   excludes `playground/**`, and `tsconfig.json` only includes `src/`.
-- **Three lines in the playground exist to survive `link:`, and removing them breaks `typecheck`.**
-  Because the package exports point at `src/*.ts`, adaptv's *source* is compiled inside the app's
-  program — so anything the framework resolves differently from the app becomes two types with one
-  name, structurally identical and mutually unassignable:
+- **The playground runs the built framework.** `exports` point at `dist/`, so the app gets
+  `@arrzdev/adaptv/*` the way an install does. `pnpm dev:*` / `preview:*` / `build:*` (and
+  `pnpm playground:setup`) run `pnpm build` first whenever anything under `src/` is newer than the
+  last build, about 25 s. A dev server that is already up keeps the old build: restart it, or run
+  `pnpm build` and reload. The CLI is the exception, since it still loads `src/` in a checkout
+  (`bin/lib/load-ts.mjs`). The playground typecheck reads `dist/*.d.mts`, so run `pnpm build`
+  before `pnpm --dir playground typecheck`.
+- **Two lines in the playground exist to survive `link:`, and removing them breaks `typecheck`.**
+  A `link:` keeps the framework's real path, so its `.d.mts` files resolve `vite` and `react` from
+  the checkout's `node_modules`, not the app's. That leaves two physical copies of each, with one
+  name, that TypeScript will not assign to each other. An install from the registry resolves those
+  peers to the app's own copies, so the issue comes from `link:`. It did not go away with the dist
+  cutover:
   - `"vite": "link:../../../node_modules/vite"` in `apps/frontend/package.json` — one physical vite
-    for both. `paths` can't fix this: third-party plugin `.d.ts` files resolve vite from their own
-    location, which path mapping never reaches.
-  - `react` / `react-dom` pinned in `apps/frontend/tsconfig.json` `paths` — same story, two
-    `@types/react` copies of the same version.
-  - `node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts` in that tsconfig's `include` — the
-    declarations for the modules adaptv's Vite plugin serves at build time. The package ships them;
-    the app just has to look.
+    for both.
+  - `react` / `react-dom` pinned in `apps/frontend/tsconfig.json` `paths` — two `@types/react`
+    copies of the same version.
 
-  All three go away when the package is consumed as built `.d.ts` (the deferred dist cutover).
+  The ambient declarations for the modules adaptv's Vite plugin serves need no line of their own:
+  `dist/interface/route-globals.d.ts`, which every app's `include` already names, references all
+  seven.
 - **Adding a command** means adding it in `playground/package.json` (plus a `turbo.json` task if it
   needs the API), then mirroring the one-line passthrough in this repo's `package.json`. The
   wrapper refuses a name the playground doesn't have, rather than failing three layers down.

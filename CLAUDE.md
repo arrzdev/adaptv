@@ -44,8 +44,9 @@ when a change is visual or behavioural.
 - A fix comes with the test that fails without it.
 - No retries in the Playwright configs. `update.spec.ts` on chromium is a known intermittent in the
   `sw` and `sw-spa` cells; a re-run is a human decision, never a config change.
-- `exports` still points at `src/` until the dist cutover (`docs/roadmap/dist-cutover.md`). The CLI
-  loads `src/` at runtime, so do not drop `src` from `files`.
+- `exports` and `files` point at `dist/`. The playground and the website run the built framework
+  (`scripts/ensure-dist.mjs` rebuilds it when `src/` changed), and their typechecks read
+  `dist/*.d.mts`, so run `pnpm build` first. In a checkout the CLI still loads `src/`.
 - Never `wrangler deploy` the playground: its worker name is copied from another project.
 
 ## Commits and PRs

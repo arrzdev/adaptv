@@ -97,9 +97,9 @@ unknown option, a directory that already holds something.
 
 Measured by installing a `pnpm pack` tarball of the framework into a created app, outside the repo:
 
-- **The `dist` cutover.** Installed from a tarball, the app's `vite.config.ts` does not load: Node
-  refuses to strip types under `node_modules`, and `exports` still points at `src/*.ts`. A `link:`
-  install works only because the link's real path is outside `node_modules`.
+- **The `dist` cutover.** Installed from a tarball, the app's `vite.config.ts` did not load: Node
+  refuses to strip types under `node_modules`, and `exports` pointed at `src/*.ts`. `exports` now
+  point at `dist/`; the tarball check itself is still open.
   → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md)
 - **The patches, inside the app.** pnpm applies `patchedDependencies` only from the root project
   ([`patches.md §2`](patches.md)), and the block adaptv's own error suggests points at
