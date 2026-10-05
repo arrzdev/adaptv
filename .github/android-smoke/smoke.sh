@@ -33,13 +33,22 @@ fail() {
   exit 1
 }
 
+# A freshly booted CI emulator often raises "System UI isn't responding" over everything;
+# it is the emulator, not the app, so the smoke waits it out instead of failing on it.
+dismiss_anr() {
+  grep -qF "t responding" "$OUT/ui.xml" 2>/dev/null || return 1
+  echo "dismissing a system ANR dialog"
+  tap_on "Wait"
+  sleep 2
+}
+
 # wait_for <text> [seconds]: until a node carries <text>
 wait_for() {
   local deadline=$((SECONDS + ${2:-60}))
   while ((SECONDS < deadline)); do
     dump || true
     grep -qF "$1" "$OUT/ui.xml" 2>/dev/null && return 0
-    sleep 2
+    dismiss_anr || sleep 2
   done
   fail "\"$1\" never appeared on screen"
 }
