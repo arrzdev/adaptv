@@ -20,6 +20,7 @@ on:
       - "bin/**"
       - "patches/**"
       - "package.json"
+      - "tsdown.config.ts"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".nvmrc"
@@ -33,6 +34,7 @@ on:
       - "bin/**"
       - "patches/**"
       - "package.json"
+      - "tsdown.config.ts"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
       - ".nvmrc"
@@ -106,6 +108,10 @@ jobs:
 
       - name: Install (website)
         run: pnpm --dir website install --frozen-lockfile
+
+      # The site links the checkout, whose `exports` point at `dist/`.
+      - name: Build (framework)
+        run: pnpm build
 
       # Build first: it generates `.adaptv/routeTree.gen.ts`, which the typecheck imports.
       # The preset makes Nitro emit a Worker plus `.output/server/wrangler.json`, merged

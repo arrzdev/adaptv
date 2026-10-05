@@ -17,7 +17,11 @@
       // the mapping into the consumer's tsconfig). Here it can only ever be a stub —
       // a `paths` entry rather than an ambient `declare module`, because an ambient
       // one would ship and shadow the consumer's mapping. → src/routes/route-tree-stub.d.ts
-      "#adaptv-route-tree": ["./src/routes/route-tree-stub.d.ts"]
+      "#adaptv-route-tree": ["./src/routes/route-tree-stub.d.ts"],
+      // The ambient declarations name the package by its public specifiers, which
+      // `exports` resolves to `dist/`. The framework typechecks its own source, built
+      // or not. → src/interface/route-globals.d.ts
+      "@arrzdev/adaptv/*": ["./src/interface/*.index.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",

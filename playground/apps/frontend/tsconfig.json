@@ -1,13 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": [
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
-    "node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts",
-    ".adaptv/**/*.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "src/**/*.css"
-  ],
+  "include": [".adaptv/**/*.ts", "**/*.ts", "**/*.tsx", "src/**/*.css"],
   // Every workspace package the app imports is referenced here, so TypeScript
   // resolves it to its emitted .d.ts instead of pulling the package's raw source
   // into this program. `@repo/dev` used to arrive transitively (through the
