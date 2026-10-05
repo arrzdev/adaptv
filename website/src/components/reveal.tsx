@@ -13,10 +13,13 @@ export function Reveal({
   children,
   className,
   delay = 0,
+  duration = 0.7,
 }: {
   children: ReactNode
   className?: string
   delay?: number
+  /** Seconds. A recording's frame rises in 0.2: it is the result, not a reveal. */
+  duration?: number
 }) {
   return (
     <motion.div
@@ -25,7 +28,7 @@ export function Reveal({
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "0px 0px -12% 0px" }}
-      transition={{ duration: 0.7, delay, ease: [0.2, 0.7, 0.2, 1] }}
+      transition={{ duration, delay, ease: [0.2, 0.7, 0.2, 1] }}
     >
       {children}
     </motion.div>
