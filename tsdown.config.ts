@@ -28,9 +28,10 @@ import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
  *   - the inner-loop DX depends on `link:` resolving `@arrzdev/adaptv/*` to `src/`
  *     (edit source → `adaptv dev` shows it live); pointing `exports` at `dist/`
  *     forces a rebuild between every edit.
- *   - the `/vite` entry hands the consumer's build source files by their place
- *     next to it (`new URL("../routes/client-entry.tsx", import.meta.url)` and
- *     more), which holds in `src/` and not in `dist/vite.mjs`.
+ *   - the playground's three typecheck shims go with the flip, in the same change.
+ * The `/vite` entry no longer assumes `src/`: the modules it hands the consumer's
+ * build are entries below, and `src/vite/package-files.ts` picks the copy that
+ * matches the layout it runs from.
  * The CLI no longer needs `src/`: the fourth build below puts every module it
  * loads into `dist/cli/`, and `bin/lib/load-ts.mjs` reads them there when the
  * package ships no `src/`. → `docs/roadmap/dist-cutover.md`
@@ -53,6 +54,13 @@ const browserEntry = {
   ota: "src/interface/ota.index.ts",
   routes: "src/interface/routes.index.ts",
   utils: "src/interface/utils.index.ts",
+  //Not public subpaths either: the modules adaptv's Vite plugin hands the CONSUMER's
+  //build — Start's client and router entries, and the boot screen prerendered into the
+  //shell. Entries of this build rather than copies, so they share chunks with the
+  //surface above and the app gets one router, not two. → src/vite/package-files.ts
+  "client-entry": "src/routes/client-entry.tsx",
+  "router-entry": "src/routes/router-entry.tsx",
+  "boot-error": "src/components/boot-error.tsx",
 }
 
 /**
@@ -71,6 +79,9 @@ const browserEntry = {
  */
 const workerEntry = {
   "server-entry": "src/interface/server-entry.ts",
+  //The service worker the consumer's build bundles with esbuild — a worker too, and
+  //no client module. → src/vite/sw-build.ts, src/vite/package-files.ts
+  "default-worker": "src/sw/default-worker.ts",
 }
 
 /** The Node tools — build-time (`/vite`, `/config`) and the SW toolkit. */

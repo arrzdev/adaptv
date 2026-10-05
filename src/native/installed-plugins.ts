@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
 
 /**
  * One enumeration of what is compiled into the native binary, for the two
@@ -47,7 +48,7 @@ export function readPackageJson(dir: string | null): PackageJson | null {
 }
 
 /**
- * adaptv's own package root — `src/native/` is two levels down from it.
+ * adaptv's own package root, from wherever this module runs. → src/vite/package-files.ts
  *
  * The cwd fallback covers loaders that hand out a non-`file:` `import.meta.url`
  * (vitest does), where resolving from the module throws — the same fallback
@@ -57,7 +58,7 @@ export function adaptvRoots(given: string | undefined): string[] {
   const roots: string[] = []
   if (given) roots.push(given)
   try {
-    roots.push(fileURLToPath(new URL("../..", import.meta.url)))
+    roots.push(adaptvPackageRoot())
   } catch {}
   roots.push(process.cwd())
   return roots

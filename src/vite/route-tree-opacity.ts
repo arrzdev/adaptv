@@ -21,9 +21,9 @@ import {
   writeFileSync,
 } from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import type { PluginOption } from "vite"
 import { resolveGeneratedPaths } from "#adaptv/vite/adaptv-dir.ts"
+import { adaptvShippedFile } from "#adaptv/vite/package-files.ts"
 import { assertRouteTreeIsOpaque } from "#adaptv/vite/verify-patches.ts"
 
 //The route tree is the one generated file adaptv doesn't emit itself — TanStack's
@@ -90,17 +90,13 @@ function adaptvRouteTreeModules(routerPkg: string): RouteTreeModule[] {
     {
       //typed through the barrel's `export type { getRouter }`, so the tree's
       //`Register` augmentation and its `getRouter` name one identical module
-      file: fileURLToPath(
-        new URL("../routes/router-entry.tsx", import.meta.url),
-      ),
+      file: adaptvShippedFile("router-entry"),
       specifier: routerPkg,
     },
     {
       //a value import: same package, sibling subpath. Derived from `routerPkg` rather
       //than hardcoded so an aliased install rewrites to a specifier it can resolve.
-      file: fileURLToPath(
-        new URL("../routes/root-route.tsx", import.meta.url),
-      ),
+      file: adaptvShippedFile("root-route"),
       specifier: routerPkg.replace(/\/[^/]+$/, "/root-route"),
     },
   ]

@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import type { Plugin, PluginOption } from "vite"
@@ -37,6 +36,10 @@ import {
 } from "#adaptv/vite/manifest.ts"
 import { adaptvNativeBundlePlugin } from "#adaptv/vite/native-bundle.ts"
 import { adaptvNativeShellPlugins } from "#adaptv/vite/native-shell-plugin.ts"
+import {
+  adaptvPackageRoot,
+  adaptvShippedFile,
+} from "#adaptv/vite/package-files.ts"
 import { adaptvRootRoutePlugin } from "#adaptv/vite/root-route-module.ts"
 import { adaptvRouteConfigWatchPlugin } from "#adaptv/vite/route-config-watch.ts"
 import {
@@ -216,10 +219,7 @@ export async function adaptv(
   //because it is computed from the module's real resolved location rather than
   //guessed from a package name.
   process.env.ADAPTV_ROOT_ROUTE_FILE = path
-    .relative(
-      routesDir,
-      fileURLToPath(new URL("../routes/root-route.tsx", import.meta.url)),
-    )
+    .relative(routesDir, adaptvShippedFile("root-route"))
     .split(path.sep)
     .join("/")
 
@@ -410,11 +410,7 @@ function deriveStartOptions(
       ? { client: { entry: "./client" } }
       : {
           client: {
-            entry: `./${fromSrc(
-              fileURLToPath(
-                new URL("../routes/client-entry.tsx", import.meta.url),
-              ),
-            )}`,
+            entry: `./${fromSrc(adaptvShippedFile("client-entry"))}`,
           },
         }),
     ...(router.serverEntry
@@ -448,11 +444,7 @@ function deriveStartOptions(
       ...(routerEjected
         ? {}
         : {
-            entry: `./${fromSrc(
-              fileURLToPath(
-                new URL("../routes/router-entry.tsx", import.meta.url),
-              ),
-            )}`,
+            entry: `./${fromSrc(adaptvShippedFile("router-entry"))}`,
           }),
     },
   }
@@ -550,8 +542,7 @@ export function addFsAllowRoot(allow: string[], root: string): void {
  * the build reads from disk instead of going through the dev server's sandbox.
  */
 function adaptvFsAllowPlugin(): PluginOption {
-  //the package root — two levels up from src/vite/
-  const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
+  const packageRoot = adaptvPackageRoot()
   return {
     name: "adaptv:fs-allow",
     configResolved(resolved) {
