@@ -259,12 +259,6 @@ const FRAMEWORK = [
     summary: "precache · navigation preload · the update flow",
     isNew: true,
   },
-  {
-    to: "/lab/landing",
-    title: "Landing snippets",
-    summary: "the website's haptics, share and keyboard code, running",
-    isNew: true,
-  },
 ] as const satisfies readonly LabEntry[]
 
 const CAPABILITIES = [
