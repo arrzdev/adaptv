@@ -174,12 +174,14 @@
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
 }
+/* no fade: the iPhone is the page's largest paint, and a transparent element has not painted */
 @keyframes stage-in {
-  from { opacity: 0; transform: translateY(40px) scale(0.98); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(24px); }
+  to { transform: none; }
 }
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.stage-in { animation: stage-in 1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s both; }
+/* the hero's phones rise once, after the buttons */
+.stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
 @keyframes caret { 50% { opacity: 0; } }
 .caret { animation: caret 1s steps(1) infinite; }
 /* a tab switch in "From idea to installed app": a 200 ms crossfade, no movement */
