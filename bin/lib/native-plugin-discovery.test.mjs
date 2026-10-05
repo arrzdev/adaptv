@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Which packages get compiled into the native binary — and the one way that list
 // used to be wrong.
 //

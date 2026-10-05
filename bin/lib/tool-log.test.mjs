@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Real lines, copied from actual xcodebuild / gradle / CocoaPods runs against the
 // project-zero harness — the point of this suite is that the mapping keeps working on what
 // the tools ACTUALLY print, not on a tidied-up idea of it.
