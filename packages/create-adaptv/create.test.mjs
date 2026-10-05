@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, relative } from "node:path"
@@ -269,6 +270,29 @@ describe("the command", () => {
 //a whole client + server build, on a host running every other suite at once
 const BUILD_TIMEOUT = 240_000
 
+/** A created app outside this repo, its `node_modules` linked as one install would leave it. */
+function linkedApp() {
+  const dir = join(tempDir(), "my-app")
+  create({ dir, name: "my-app", adaptv: `link:${ROOT}` })
+  const link = (name, target) => {
+    mkdirSync(dirname(join(dir, "node_modules", name)), {
+      recursive: true,
+    })
+    symlinkSync(target, join(dir, "node_modules", name), "dir")
+  }
+  const build = () =>
+    spawnSync(
+      process.execPath,
+      [join(ROOT, "bin/adaptv.mjs"), "build", "web"],
+      {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...process.env, NO_COLOR: "1" },
+      },
+    )
+  return { dir, link, build }
+}
+
 describe("a created app", () => {
   it(
     "passes adaptv build web",
@@ -276,31 +300,16 @@ describe("a created app", () => {
       //the app resolves the framework through `exports`, which name `dist/`: build it
       //if `src/` moved since, or this checks whatever build happens to be lying around
       expect(ensureDist(ROOT)).toBe(true)
-      const dir = join(tempDir(), "my-app")
-      create({ dir, name: "my-app", adaptv: `link:${ROOT}` })
+      const { dir, link, build } = linkedApp()
       //before the links: a recursive walk follows them into the repo's whole dependency tree
       const before = Object.fromEntries(
         files(dir).map((f) => [f, readFileSync(join(dir, f), "utf8")]),
       )
-      const link = (name, target) => {
-        mkdirSync(dirname(join(dir, "node_modules", name)), {
-          recursive: true,
-        })
-        symlinkSync(target, join(dir, "node_modules", name), "dir")
-      }
       link("@arrzdev/adaptv", ROOT)
       for (const name of Object.keys(DEPENDENCIES))
         link(name, join(ROOT, "node_modules", name))
 
-      const result = spawnSync(
-        process.execPath,
-        [join(ROOT, "bin/adaptv.mjs"), "build", "web"],
-        {
-          cwd: dir,
-          encoding: "utf8",
-          env: { ...process.env, NO_COLOR: "1" },
-        },
-      )
+      const result = build()
 
       expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
       expect(result.stdout).toContain("✓ web  .output/public")
@@ -309,6 +318,60 @@ describe("a created app", () => {
       //lacks them; a created app already has all three, so nothing it was given moved
       for (const [file, text] of Object.entries(before))
         expect(readFileSync(join(dir, file), "utf8"), file).toBe(text)
+    },
+    BUILD_TIMEOUT,
+  )
+
+  /*
+   * adaptv's dependencies are not the app's (src/vite/engine-imports.ts). A pnpm install
+   * keeps the router out of the app's `node_modules`, and adaptv resolved the import
+   * anyway; an npm install hoists it there, and Node resolved it. Either way the build
+   * passed. It now refuses both, and builds once the app lists the package as its own.
+   */
+  it(
+    "imports a package adaptv depends on only once it lists it",
+    () => {
+      expect(ensureDist(ROOT)).toBe(true)
+      const { dir, link, build } = linkedApp()
+      link("@arrzdev/adaptv", ROOT)
+      for (const name of Object.keys(DEPENDENCIES))
+        link(name, join(ROOT, "node_modules", name))
+      const page = join(dir, "src/routing/pages/home.page.tsx")
+      writeFileSync(
+        page,
+        `import { useRouter } from "@tanstack/react-router"\n${readFileSync(
+          page,
+          "utf8",
+        ).replace(
+          "function Home() {\n",
+          "function Home() {\n  useRouter()\n",
+        )}`,
+      )
+      const refused = (result) => {
+        const out = `${result.stdout}\n${result.stderr}`
+        expect(result.status, out).toBe(1)
+        expect(out).toContain(
+          "✖ web  src/routing/pages/home.page.tsx imports a package missing from the app's package.json",
+        )
+      }
+
+      //pnpm: the router is adaptv's alone
+      refused(build())
+      //npm: hoisted next to the app's own packages
+      link(
+        "@tanstack/react-router",
+        join(ROOT, "node_modules/@tanstack/react-router"),
+      )
+      refused(build())
+
+      const pkgFile = join(dir, "package.json")
+      const pkg = JSON.parse(readFileSync(pkgFile, "utf8"))
+      pkg.dependencies["@tanstack/react-router"] =
+        rootPkg.dependencies["@tanstack/react-router"]
+      writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`)
+      const listed = build()
+      expect(listed.status, `${listed.stdout}\n${listed.stderr}`).toBe(0)
+      expect(listed.stdout).toContain("✓ web  .output/public")
     },
     BUILD_TIMEOUT,
   )
