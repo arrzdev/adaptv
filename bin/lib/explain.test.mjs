@@ -152,6 +152,35 @@ const buildFailure = (captured) => {
   return err
 }
 
+/**
+ * The shape `vite build` prints when an adaptv plugin refuses a module with `this.error()`
+ * (`src/vite/engine-imports.ts`), captured 2026-10-05 from a created app. The bundler's count
+ * sits above the plugin's sentence and says `error:`, so it was the whole ✖ line:
+ * `✖ web  Build failed with 1 error:`. The engine-naming lines below it are the dev's own
+ * import and its caret frame, which the opacity filter keeps off the CLI.
+ */
+const VITE_PLUGIN_REFUSED = [
+  "✗ Build failed in 4.72s",
+  "error during build:",
+  "Build failed with 1 error:",
+  "[plugin adaptv:engine-imports] /w/my-app/src/routing/pages/home.page.tsx:1:26",
+  "RolldownError: src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.",
+  'The import is "@tanstack/react-router". adaptv\'s own dependencies are not part of the app.',
+  '1: import { useRouter } from "@tanstack/react-router"',
+]
+
+describe("a plugin's refusal of a web build names itself on the ✖ line", () => {
+  it("puts the plugin's sentence on the ✖, not the bundler's error count", () => {
+    const { reason } = explainFailure(
+      "web",
+      "/w/my-app",
+    )(buildFailure(VITE_PLUGIN_REFUSED))
+    expect(reason).toBe(
+      "src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.",
+    )
+  })
+})
+
 describe("a crash inside the web build names itself on the ✖ line", () => {
   it("puts the TypeError's sentence on the ✖, not the trailer above it", () => {
     //Through `errorTail` deliberately: the line was lost twice, once by the tail filter

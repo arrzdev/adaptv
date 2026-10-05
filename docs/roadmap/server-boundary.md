@@ -38,7 +38,7 @@ web artifact and does not change what app code may call.
 | Surface | Built today (2026-07-20) | Direction (2026-10-05) |
 |---|---|---|
 | `createServerFn`, `createMiddleware`, server routes, request context | Refused on every target, matched by import specifier and a brace-depth scan for `server: { handlers }` | **Still refused on every target**, detected from the compiler's own set of server functions and the generated route tree (§3) |
-| Direct import of an engine package from app source | Refused only for two Start specifiers (#292, open, widens it to the Start family) | **Refused for every engine package**, whatever is imported. The reason is L20, not servers. |
+| Direct import of an engine package from app source | **Built 2026-10-05** (`src/vite/engine-imports.ts`, [`facade-and-opacity.md §1`](../decisions/facade-and-opacity.md) rule 4): refused for every adaptv dependency and the whole `@tanstack/` scope unless the app lists the package itself | Done. The server-only modules stay refused even when listed. |
 | Lint (`biome-shared.json`) | `noRestrictedImports` on the server symbols | Kept, plus the engine-import rule. Lint is the fast signal; the build is the backstop. |
 
 ---
