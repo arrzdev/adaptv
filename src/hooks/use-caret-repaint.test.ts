@@ -102,6 +102,21 @@ describe("useCaretRepaint holds", () => {
     //later test inherits — and "a mover is still holding the caret" is a state the patch acts on
     release()
   })
+
+  it("leaves a field inside data-adaptv-no-caret-repaint alone", () => {
+    renderHook(() => useCaretRepaint())
+    const host = document.createElement("div")
+    host.setAttribute("data-adaptv-no-caret-repaint", "")
+    document.body.appendChild(host)
+    const field = document.createElement("input")
+    host.appendChild(field)
+    field.focus()
+    field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+
+    const release = beginCaretHold()
+    expect(isMuted(field)).toBe(false)
+    release()
+  })
 })
 
 /*
