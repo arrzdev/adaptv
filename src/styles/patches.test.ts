@@ -58,9 +58,13 @@ describe("ui.noSelect — the selection reset is stamped, not universal", () => 
     }
     //`.selectable` leads because it is an `@utility`, emitted into Tailwind's own
     //`utilities` layer ahead of everything adaptv writes into `adaptv.*`
+    //the Button/Fab root's `user-select: none` is a component default in the layer, the
+    //rule its old `select-none` class became (docs/decisions/styling.md §2) — scoped to
+    //the primitive and overridable by any consumer class
     expect(selectors).toEqual([
       ".selectable",
       "img, svg, video, canvas",
+      ':where( [data-adaptv="button"][data-part="root"], [data-adaptv="fab"][data-part="root"] )',
       "[data-swipeable-content]",
     ])
   })
