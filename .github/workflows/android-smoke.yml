@@ -76,6 +76,13 @@ jobs:
           echo "APK=$PWD/$apk" >> "$GITHUB_ENV"
           ls -l "$apk"
 
+      # The emulator wants about 7.5 GB free for its AVD and the image leaves about 6; these
+      # preinstalled toolchains are unused here and give back well over 10.
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost "$AGENT_TOOLSDIRECTORY/CodeQL"
+          df -h "$HOME"
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -89,7 +96,6 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          # pixel_6 asks for a 7 GB userdata partition and the runner has about 6 free.
           disk-size: 2048M
           cores: 4
           disable-animations: true
