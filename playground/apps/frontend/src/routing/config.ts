@@ -57,8 +57,6 @@ export const routes = rootRoute([
     route("/lab/hover-focus", "pages/lab/hover-focus.page.tsx"),
     route("/lab/safe-area", "pages/lab/safe-area.page.tsx"),
     route("/lab/service-worker", "pages/lab/service-worker.page.tsx"),
-    //the three snippets the landing page shows, running, for its recordings
-    route("/lab/landing", "pages/lab/landing.page.tsx"),
     //capabilities and hooks
     route("/lab/share", "pages/lab/share.page.tsx"),
     route("/lab/compose", "pages/lab/compose.page.tsx"),
