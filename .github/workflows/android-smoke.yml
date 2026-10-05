@@ -89,6 +89,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # pixel_6 asks for a 7 GB userdata partition and the runner has about 6 free.
+          disk-size: 2048M
+          cores: 4
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash .github/android-smoke/smoke.sh "$APK" "$APP_ID" "$RUNNER_TEMP/android-smoke"
