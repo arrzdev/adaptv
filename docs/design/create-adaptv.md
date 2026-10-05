@@ -53,8 +53,12 @@ What it does **not** emit, on purpose:
   replaces it in one command. A committed placeholder set would be twelve files to delete.
 - **No `android/` or `ios/`.** A native project is generated from config on the first native run.
 - **No `adaptv run`.** That command does not exist; `adaptv build` does what it was imagined to do.
+- **No `ssr` key in `vite.config.ts`.** `dist/` imports the modules adaptv's Vite plugin serves
+  (`virtual:adaptv-*`), which Node refuses: a dev server that hands the package to Node answers every
+  page with a 500. Every app needs `@arrzdev/adaptv` in `noExternal`, so `adaptv()` adds it, in serve
+  and build (`src/vite/tanstack-resolve.ts`). A build bundles everything, so it passes either way.
 
-Four details are there because the framework expects them:
+Three details are there because the framework expects them:
 
 - **`@/` is `src/`** (`tsconfig.json` `paths`, `resolve.tsconfigPaths` in `vite.config.ts`). adaptv
   imports the app's stylesheet and screen thunks through that alias (`src/vite/root-route-module.ts`
@@ -63,10 +67,6 @@ Four details are there because the framework expects them:
   layer order are what `src/vite/stamp.ts` and `adaptv:css-layer-order` write into an app that lacks
   them. A created app already has them, so its first build changes none of its files. The test checks
   that.
-- **`ssr.noExternal: ["@arrzdev/adaptv"]`.** `dist/` imports the modules adaptv's Vite plugin serves
-  (`virtual:adaptv-*`). Without the entry, `adaptv dev web` hands the package to Node, which refuses
-  the `virtual:` scheme, and every page is a 500. A build bundles everything, so it passes either
-  way.
 - **The patches, in `patches/`.** pnpm applies `patchedDependencies` only from the project it
   installs ([`patches.md §2`](patches.md)), so the app declares them from its own copy. The template's
   copy is the framework's `patches/`, held byte for byte by `create.test.mjs`. Bumping a patch means

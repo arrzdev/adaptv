@@ -29,9 +29,6 @@ export default defineConfig({
     tsconfigPaths: true,
     dedupe: ["react", "react-dom"],
   },
-  ssr: {
-    noExternal: ["@arrzdev/adaptv"],
-  },
   plugins: [adaptv(), tailwindcss()],
 })`,
     },
@@ -40,7 +37,7 @@ export default defineConfig({
       items: [
         "`adaptv()` returns a promise of a plugin array. Vite awaits it and flattens it, so there is no `await` and no spread.",
         "**`adaptv()` goes before `tailwindcss()`.** adaptv injects the cascade-layer order into your stylesheet before Tailwind compiles it. With the order reversed, adaptv's base styles start beating your own utilities.",
-        '`ssr.noExternal: ["@arrzdev/adaptv"]` makes the server build bundle adaptv instead of loading it from `node_modules` at runtime. The package ships TypeScript source today.',
+        "There is no `ssr` key. adaptv's modules import ones only its plugin serves (`virtual:adaptv-*`), so `adaptv()` tells Vite to run adaptv through it on the server instead of handing it to Node.",
         "`resolve.dedupe` keeps one copy of React when adaptv is linked from a workspace.",
         "Do not add `@vitejs/plugin-react`, the router's plugin, a PWA plugin or a deploy plugin (Cloudflare, Netlify, Nitro). adaptv adds the ones it needs, and a second copy breaks the build in ways that are hard to read.",
         "The same port under `server` and `preview` keeps `adaptv dev web` and `adaptv preview web` on one address. The [CLI](/docs/cli) starts Vite with `--strictPort`.",

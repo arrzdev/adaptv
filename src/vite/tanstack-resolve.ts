@@ -42,6 +42,11 @@ const START_DEDUPE = new Set([
  * every page with a 500 ("Cannot find module"). So in dev the router is inlined, and
  * every import of it goes through the redirect. Every importer resolves the same file,
  * so the server still loads one router.
+ *
+ * adaptv itself is inlined in both commands. Its modules import the ones its Vite plugin
+ * serves (`virtual:adaptv-*`), which Node refuses: a dev server that handed adaptv to
+ * Node answered every page with a 500. A build bundles it either way. Every app needs
+ * the entry, so the plugin adds it and an app's `vite.config.ts` carries no `ssr` key.
  */
 export function adaptvTanstackResolvePlugin(
   appRoot: string,
@@ -52,10 +57,14 @@ export function adaptvTanstackResolvePlugin(
   return {
     name: "adaptv:tanstack-resolve",
     enforce: "pre",
-    config: (_config, { command }) =>
-      command === "serve"
-        ? { resolve: { noExternal: ["@tanstack/react-router"] } }
-        : undefined,
+    config: (_config, { command }) => ({
+      resolve: {
+        noExternal:
+          command === "serve"
+            ? ["@arrzdev/adaptv", "@tanstack/react-router"]
+            : ["@arrzdev/adaptv"],
+      },
+    }),
     //`post`: Start adds the entries in its own `configEnvironment`, merged before this
     //runs. Removing one takes a write to the merged options, not a returned partial,
     //because Vite concatenates arrays when it merges.
