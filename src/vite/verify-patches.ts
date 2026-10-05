@@ -55,16 +55,19 @@ export function parsePatchFilename(
   return { key, file }
 }
 
-/** The `pnpm-workspace.yaml` block a consumer must copy, built from the shipped patches. */
+/**
+ * The `pnpm-workspace.yaml` block a consumer must copy, built from the shipped patches.
+ *
+ * Each row names the app's own `patches/`, not the copy under `node_modules`: pnpm reads
+ * the patch before it installs the package that holds it, so on a fresh install a path
+ * into `node_modules/@arrzdev/adaptv/` fails with `ERR_PNPM_PATCH_NOT_FOUND`.
+ */
 export function patchInstructions(filenames: string[]): string[] {
   return filenames
     .map(parsePatchFilename)
     .filter((e): e is { key: string; file: string } => e !== null)
     .sort((a, b) => a.key.localeCompare(b.key))
-    .map(
-      (e) =>
-        `    '${e.key}': node_modules/@arrzdev/adaptv/patches/${e.file}`,
-    )
+    .map((e) => `    '${e.key}': patches/${e.file}`)
 }
 
 /**
@@ -106,8 +109,9 @@ export function describeMissingPatches(
     ...consequence,
     "",
     "pnpm only applies `patchedDependencies` from the root manifest of the project being",
-    "installed, so a library cannot carry its patches to you. Add this to your",
-    "`pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
+    "installed, so a library cannot carry its patches to you. Copy",
+    "`node_modules/@arrzdev/adaptv/patches/` into your app's `patches/`, then add this to",
+    "your `pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
     "",
     "  patchedDependencies:",
     ...patchInstructions(filenames),

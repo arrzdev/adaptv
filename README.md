@@ -122,12 +122,13 @@ function Home() {
 `@arrzdev/adaptv/styles.css`.
 
 > [!IMPORTANT]
-> **Your own app also declares adaptv's dependency patches.** pnpm applies `patchedDependencies` only
-> from the project it installs, so a package cannot bring its own. Copy
-> `node_modules/@arrzdev/adaptv/patches/` into your app's `patches/` and list each file in its
-> `pnpm-workspace.yaml`, as [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml)
-> does. Without them the first `adaptv build web` writes a second `createFileRoute` import into
-> every route file → [`design/patches.md`](docs/design/patches.md).
+> **Your app carries adaptv's dependency patches.** pnpm applies `patchedDependencies` only from
+> the project it installs, so a package cannot bring its own. An app from `create-adaptv` already
+> has them in its `patches/`, declared in its `pnpm-workspace.yaml`, as
+> [`examples/basic`](examples/basic) does. An app you set up by hand copies
+> `node_modules/@arrzdev/adaptv/patches/` into its own `patches/` and declares them the same way.
+> After you upgrade adaptv, copy them again. Without them the first `adaptv build web` writes a
+> second `createFileRoute` import into every route file → [`design/patches.md`](docs/design/patches.md).
 
 ## ✨ Why it exists
 
