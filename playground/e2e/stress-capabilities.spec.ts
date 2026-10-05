@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test"
 import { expect, test } from "@playwright/test"
+import { capabilitiesUrl } from "./support/framework"
 import { awaitClientHandover } from "./support/hydrated"
 
 /*
@@ -17,40 +18,16 @@ import { awaitClientHandover } from "./support/hydrated"
  * cooldown over `navigator.vibrate`, so a burst is one pulse. On the web every
  * one of these takes the "not installed" fallback, which is the path stressed.
  *
- * The calls go to the capability modules the app itself imports. The dev
- * server serves the linked framework at one `/@fs` URL per file, so the URL is
- * built from the client entry's own resource entry — the same instance the app
- * loaded, on every checkout (drawer-handle-mouse.spec.ts does the same).
+ * The calls go to the capability modules the app itself imports, through the
+ * `/capabilities` entry at the URL the dev server serves it at
+ * (`support/framework.ts`).
  */
-
-const MODULES = {
-  clipboard: "capabilities/clipboard.ts",
-  share: "capabilities/share.ts",
-  haptics: "capabilities/haptics.ts",
-  notifications: "capabilities/notifications.ts",
-}
-
-/** The URL the dev server serves a framework file at, from the client entry's. */
-function frameworkUrl(page: Page, file: string) {
-  return page.evaluate((file) => {
-    const entry = performance
-      .getEntriesByType("resource")
-      .map((resource) => resource.name)
-      .find((name) => /\/src\/routes\/client-entry\.tsx$/.test(name))
-    if (!entry) throw new Error("the adaptv client entry was never loaded")
-    return entry.replace(/routes\/client-entry\.tsx$/, file)
-  }, file)
-}
 
 type Settled = { status: "fulfilled" | "rejected"; value: unknown }
 
 /** Fifty concurrent calls, each settled and serialised for the assertion. */
-async function settleAll(
-  page: Page,
-  module: string,
-  body: string,
-): Promise<Settled[]> {
-  const url = await frameworkUrl(page, module)
+async function settleAll(page: Page, body: string): Promise<Settled[]> {
+  const url = await capabilitiesUrl(page)
   return page.evaluate(
     async ([url, body]) => {
       const mod = await import(/* @vite-ignore */ url)
@@ -99,7 +76,6 @@ test.describe("Capabilities under concurrency", () => {
 
     const results = await settleAll(
       page,
-      MODULES.clipboard,
       "return mod.writeClipboardText('stress ' + index)",
     )
     expect(results.every((r) => r.status === "fulfilled")).toBe(true)
@@ -112,7 +88,7 @@ test.describe("Capabilities under concurrency", () => {
           const mod = await import(/* @vite-ignore */ url)
           return mod.readClipboardText()
         },
-        await frameworkUrl(page, MODULES.clipboard),
+        await capabilitiesUrl(page),
       )
       expect(read.status).toBe("ok")
       expect(read.text).toMatch(/^stress \d+$/)
@@ -130,7 +106,7 @@ test.describe("Capabilities under concurrency", () => {
     const sheet = await page.evaluate(
       () => typeof navigator.share === "function",
     )
-    const engine = await settleAll(page, MODULES.share, call)
+    const engine = await settleAll(page, call)
     if (!sheet) {
       //headless Chromium has no navigator.share: the not-installed fallback,
       //fifty times
@@ -178,19 +154,19 @@ test.describe("Capabilities under concurrency", () => {
       )
 
     await stub(page, "abort")
-    const dismissed = await settleAll(page, MODULES.share, call)
+    const dismissed = await settleAll(page, call)
     expect(await calls(page), "the premise: the stub was the share").toBe(
       50,
     )
     expect(distinct(dismissed)).toEqual(['fulfilled:"dismissed"'])
 
     await stub(page, "refuse")
-    const refused = await settleAll(page, MODULES.share, call)
+    const refused = await settleAll(page, call)
     expect(await calls(page)).toBe(50)
     expect(distinct(refused)).toEqual(['rejected:"NotAllowedError"'])
 
     await stub(page, "resolve")
-    const shared = await settleAll(page, MODULES.share, call)
+    const shared = await settleAll(page, call)
     expect(await calls(page)).toBe(50)
     expect(distinct(shared)).toEqual(['fulfilled:"shared"'])
   })
@@ -218,7 +194,7 @@ test.describe("Capabilities under concurrency", () => {
         for (let index = 0; index < 50; index += 1) mod.haptics.selection()
         return pulses
       },
-      await frameworkUrl(page, MODULES.haptics),
+      await capabilitiesUrl(page),
     )
     expect(pulses).toBe(1)
   })
@@ -261,11 +237,7 @@ test.describe("Capabilities under concurrency", () => {
         }
       })
     }
-    const pending = settleAll(
-      page,
-      MODULES.notifications,
-      "return mod.requestNotifyPermission()",
-    )
+    const pending = settleAll(page, "return mod.requestNotifyPermission()")
     if (present) {
       await expect
         .poll(

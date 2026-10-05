@@ -312,14 +312,24 @@ describe("execution boundary", () => {
     expect(entriesIn("workerEntry")).toEqual(workerSide)
     expect(entriesIn("nodeEntry")).toEqual([...NODE_ENTRIES].sort())
 
+    //`exports` names built files (`./dist/<name>.mjs`); the build config says which
+    //source each `<name>` is built from
+    const sourceOf = new Map(
+      [...config.matchAll(/^\s*"?([\w-]+)"?:\s*"(src\/[^"]+)",?$/gm)].map(
+        (m) => [m[1], m[2]],
+      ),
+    )
     const pkg = JSON.parse(
       readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { exports: Record<string, string> }
+    ) as { exports: Record<string, string | { default: string }> }
     const exported = Object.values(pkg.exports)
-      .map((target) => target.replace(/^\.\//, ""))
-      .filter(
-        (target) => /\.tsx?$/.test(target) && !target.endsWith(".d.ts"),
+      .flatMap((target) =>
+        typeof target === "string" ? [] : [target.default],
       )
+      .map((built) => {
+        const name = /^\.\/dist\/([\w-]+)\.mjs$/.exec(built)?.[1]
+        return (name && sourceOf.get(name)) ?? built
+      })
       .sort()
     expect(exported).toEqual([...BROWSER_ENTRIES, ...NODE_ENTRIES].sort())
   })

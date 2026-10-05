@@ -39,10 +39,12 @@ work*. Three separate couplings, worth knowing individually because they fail di
    silently** — the plain-CSS patches (autofill, scrollbar, iOS callout) survive, the `hover:` fix and
    every `@utility` vanish with no error. Silent partial failure is the worst mode; say so in the
    quickstart.
-3. **`index.css` declares `@source "../**/*.{ts,tsx}"`** — adaptv instructing the consumer's Tailwind
-   to scan adaptv's own source. This also couples the styling layer to **shipping as source**: the
-   `exports` map points at `./src/interface/*.ts` today, and the deferred `dist` cutover must move
-   this path with it or every internal utility silently stops being generated.
+3. **`index.css` declares `@source "../**/*.{ts,tsx,mjs}"`** — adaptv instructing the consumer's
+   Tailwind to scan adaptv's own code. The one file serves two trees: in a checkout `..` is `src/`;
+   in the package it is `dist/`, where the components are `.mjs` and `@source not "../cli"` drops the
+   Node-only CLI modules. A glob that matches nothing fails silently (every internal utility stops
+   being generated), so `pnpm build:check` compiles the shipped copy and checks for classes only
+   adaptv's components use (`scripts/check-dist-styles.mjs`).
 
 ### The positive reason: build-time rewriting is a capability, not ergonomics
 

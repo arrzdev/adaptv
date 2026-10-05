@@ -21,20 +21,16 @@ import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
  * safe: every browser-surface import of a `config/*` module is `import type`
  * (erased at build), so no browser entry drags a `node:` builtin into its graph.
  *
- * ## Cutover is deliberately NOT wired here
+ * ## What reads `dist/`
  *
- * This produces a publish-correct `dist/` and nothing more. It does **not** flip
- * `package.json` `exports`/`files` or the CLI off source, because:
- *   - the inner-loop DX depends on `link:` resolving `@arrzdev/adaptv/*` to `src/`
- *     (edit source → `adaptv dev` shows it live); pointing `exports` at `dist/`
- *     forces a rebuild between every edit.
- *   - the playground's three typecheck shims go with the flip, in the same change.
- * The `/vite` entry no longer assumes `src/`: the modules it hands the consumer's
- * build are entries below, and `src/vite/package-files.ts` picks the copy that
- * matches the layout it runs from.
- * The CLI no longer needs `src/`: the fourth build below puts every module it
- * loads into `dist/cli/`, and `bin/lib/load-ts.mjs` reads them there when the
- * package ships no `src/`. → `docs/roadmap/dist-cutover.md`
+ * Everything outside this repo's own `src/` tree: `package.json` `exports` and
+ * `files` point here, so an app — the playground and the website included, through
+ * `link:` — resolves `@arrzdev/adaptv/*` to this output and needs a build first
+ * (`scripts/playground.mjs` runs one when `src/` is newer). The modules the `/vite`
+ * entry hands the consumer's build are entries below, and
+ * `src/vite/package-files.ts` picks the copy that matches the layout it runs from.
+ * The fourth build puts every module the CLI loads into `dist/cli/`, which
+ * `bin/lib/load-ts.mjs` reads when the package ships no `src/`.
  */
 
 /** The React surface — everything a component tree imports at runtime. */
@@ -166,13 +162,19 @@ export default defineConfig([
       // resolve. Glob the `.css` only — a bare dir copy nests (`dist/styles/styles`)
       // and drags in the co-located `utils.test.ts`.
       { from: "src/styles/*.css", to: "dist/styles" },
-      // Ambient route factories — a hand-authored `.d.ts`, not generated. Already
-      // references the public `@arrzdev/adaptv/router` specifier, so it copies
-      // verbatim. → `src/interface/route-globals.d.ts`.
-      { from: "src/interface/route-globals.d.ts", to: "dist" },
-      // Ambient `*?adaptv-image` module — same category, and the consumer picks it
-      // up through the `virtual-adaptv-*` include glob. → `src/virtual-adaptv-image-asset.d.ts`.
-      { from: "src/**/virtual-adaptv-*.d.ts", to: "dist" },
+      // The ambient declarations — hand-authored `.d.ts`, not generated, so copied
+      // verbatim. `route-globals.d.ts` is the one file an app reaches (through `exports`,
+      // from `.adaptv/adaptv-env.d.ts`, `src/vite/stamp.ts`); it pulls in the seven `virtual-adaptv-*.d.ts` with relative
+      // `/// <reference path>`s, so `dist/` keeps their `src/` layout and the same
+      // references hold in both trees. → `src/interface/route-globals.d.ts`
+      {
+        from: [
+          "src/interface/route-globals.d.ts",
+          "src/**/virtual-adaptv-*.d.ts",
+        ],
+        to: "dist",
+        flatten: false,
+      },
     ],
   },
   {

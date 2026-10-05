@@ -214,8 +214,6 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
       rmSync(dir, { recursive: true, force: true })
   })
 
-  const ROUTE_GLOBALS =
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts"
   const GENERATED_TS = ".adaptv/**/*.ts"
   const ROUTE_TREE_ALIAS = "#adaptv-route-tree"
 
@@ -302,12 +300,7 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
     const config = parseTsconfig(appRoot)
     //a route file written before the generator adds its import must still
     //know `createFileRoute`, and the generated tree must be in the program
-    expect(config.include).toEqual([
-      ROUTE_GLOBALS,
-      GENERATED_TS,
-      "src",
-      "vite.config.ts",
-    ])
+    expect(config.include).toEqual([GENERATED_TS, "src", "vite.config.ts"])
     //the route tree's TYPE must flow into `Register`; a bundler alias alone
     //builds fine and collapses typed routing to `any`
     expect(config.compilerOptions.paths).toEqual({
@@ -339,7 +332,7 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
     })
     stampGeneratedFiles(loaded(appRoot))
     const config = parseTsconfig(appRoot)
-    expect(config.include).toEqual([ROUTE_GLOBALS, GENERATED_TS, "src"])
+    expect(config.include).toEqual([GENERATED_TS, "src"])
     expect(Object.keys(config.compilerOptions.paths)).toEqual([
       ROUTE_TREE_ALIAS,
     ])
@@ -351,10 +344,34 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
     })
     stampGeneratedFiles(loaded(appRoot))
     const config = parseTsconfig(appRoot)
-    expect(config.include).toEqual([ROUTE_GLOBALS, GENERATED_TS])
+    expect(config.include).toEqual([GENERATED_TS])
     expect(config.compilerOptions.paths[ROUTE_TREE_ALIAS]).toEqual([
       "./.adaptv/routeTree.gen.ts",
     ])
+  })
+
+  it("points the app at adaptv's ambient types through exports, inside .adaptv/", () => {
+    //An `include` entry under `node_modules/` is dropped by the usual `exclude`
+    //of `node_modules`; a type reference resolves through `exports` either way,
+    //from a file the stamped `.adaptv/**/*.ts` include always reaches.
+    const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
+    stampGeneratedFiles(loaded(appRoot))
+    const env = read(appRoot, ".adaptv/adaptv-env.d.ts")
+    expect(env).toContain(
+      '/// <reference types="@arrzdev/adaptv/route-globals" />',
+    )
+    expect(
+      ts
+        .preProcessFile(env)
+        .typeReferenceDirectives.map((d) => d.fileName),
+    ).toEqual(["@arrzdev/adaptv/route-globals"])
+    expect(read(appRoot, "tsconfig.json")).not.toContain("node_modules/")
+
+    const mtime = backdate(appRoot, ".adaptv/adaptv-env.d.ts")
+    stampGeneratedFiles(loaded(appRoot))
+    expect(
+      statSync(path.join(appRoot, ".adaptv/adaptv-env.d.ts")).mtimeMs,
+    ).toBe(mtime)
   })
 
   it("does not rewrite either file once it is wired, so watchers stay quiet", () => {
