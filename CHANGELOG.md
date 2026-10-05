@@ -17,6 +17,8 @@ consumed from a local checkout. What exists today:
 - **The `adaptv` CLI.** `doctor`, `dev`, `preview` and `build` for `web`, `ios`, `android` or `all`
   (live reload including a physical device over the LAN, an unsigned `.ipa`, a debug `.apk`),
   `keys ota` and `icons`.
+- **`create-adaptv`.** `pnpm create adaptv my-app` writes a new app: a flat config, one route,
+  a stylesheet and scripts for `doctor`, `dev`, `preview` and `build`. Not published yet.
 - **The shell.** It owns the document, critical CSS, the pre-paint theme stamp, safe areas and the
   edge-to-edge frame; SSR app shell and static-host files for the web build.
 - **Primitives.** `View`, `ScrollView`, `List`, `Drawer`, `Dropdown`, `Swipeable`, `PullToRefresh`,
