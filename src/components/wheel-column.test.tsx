@@ -840,3 +840,58 @@ describe("WheelColumn — the drum", () => {
     expect(rowTransform("31")).toBe(wheelRowTransform(16))
   })
 })
+
+describe("WheelColumn — default rules in the layer, locks inline (styling.md §2)", () => {
+  function mount(
+    props: { className?: string; itemClassName?: string } = {},
+  ) {
+    render(
+      <WheelColumn
+        items={HOURS}
+        value={0}
+        onChange={() => {}}
+        ariaLabel="Hour"
+        {...props}
+      />,
+    )
+    return wheel()
+  }
+
+  it("names its parts and emits no class of its own", () => {
+    const column = mount()
+    expect(column.getAttribute("data-part")).toBe("root")
+    expect(column.getAttribute("class") ?? "").toBe("")
+    const list = column.querySelector("ul") as HTMLElement
+    expect(list.getAttribute("data-adaptv")).toBe("wheel-column")
+    expect(list.getAttribute("data-part")).toBe("list")
+    expect(list.hasAttribute("class")).toBe(false)
+    for (const row of column.querySelectorAll("button")) {
+      expect(row.getAttribute("data-part")).toBe("item")
+      expect(row.getAttribute("class") ?? "").toBe("")
+    }
+  })
+
+  it("passes consumer classes through untouched", () => {
+    const column = mount({
+      className: "border",
+      itemClassName: "text-sm data-[active=true]:text-blue-600",
+    })
+    expect(column.className).toBe("border")
+    expect(column.querySelector("button")?.className).toBe(
+      "text-sm data-[active=true]:text-blue-600",
+    )
+  })
+
+  it("keeps the scroll model, the drum and the full-slot rows locked inline", () => {
+    const column = mount()
+    expect(column.style.overflowY).toBe("auto")
+    expect(column.style.overflowX).toBe("hidden")
+    expect(column.style.overscrollBehaviorY).toBe("contain")
+    expect(column.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(column.style.height).toBe(`${5 * H}px`)
+    const row = column.querySelector("button") as HTMLElement
+    expect(row.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(row.style.height).toBe("100%")
+    expect(row.style.width).toBe("100%")
+  })
+})
