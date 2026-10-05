@@ -244,7 +244,7 @@ const FRAMEWORK = [
   {
     to: "/lab/plain-css",
     title: "Plain CSS",
-    summary: "the hover/active corrections on a stylesheet with no Tailwind",
+    summary: "hover/active corrections on a sheet with no Tailwind",
     isNew: true,
   },
   {

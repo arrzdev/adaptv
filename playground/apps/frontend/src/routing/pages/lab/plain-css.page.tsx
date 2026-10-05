@@ -3,7 +3,7 @@ import { createFileRoute } from "@arrzdev/adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabCaveat, LabSection } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
-import "./plain-css.css"
+import "@/routing/pages/lab/plain-css.css"
 
 export const Route = createFileRoute("/_providers/lab/plain-css")({
   component: LabPlainCssPage,

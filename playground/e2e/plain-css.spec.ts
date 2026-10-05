@@ -29,7 +29,9 @@ test.describe("plain CSS, touch", () => {
   const bg = (locator: import("@playwright/test").Locator) =>
     locator.evaluate((el) => getComputedStyle(el).backgroundColor)
 
-  test("the emulated screen has no hover-capable pointer", async ({ page }) => {
+  test("the emulated screen has no hover-capable pointer", async ({
+    page,
+  }) => {
     //the premise every assertion below rests on
     expect(
       await page.evaluate(() => matchMedia("(hover: hover)").matches),
