@@ -2,8 +2,9 @@
 
 > 📐 **The flip is done.** `package.json` `exports` and `files` point at `dist/`, the CLI loads
 > its framework modules from `dist/cli/` in a package without `src/`, and the ambient declarations
-> ship with `route-globals.d.ts`. **Left:** definition-of-done item 4, the tarball install check,
-> and one finding about the playground shims (below).
+> ship with `route-globals.d.ts`. An app installed from the `pnpm pack` tarball runs `adaptv dev web`
+> and `adaptv build web` (item 4, `examples/basic`). **Left:** the `create-adaptv` template does not carry the patches
+> yet (the rest of item 4), and one finding about the playground shims (below).
 
 ---
 
@@ -102,7 +103,8 @@ about sequencing, not about the decision.**
 3. The seven `virtual-adaptv-*.d.ts` ambient declarations still reach a consumer once `src/` is no
    longer the shipped path — see the trap above.
 4. An app from `create-adaptv`, installed from a `pnpm pack` tarball of the framework outside the
-   repo, passes `adaptv build web`. Today its `vite.config.ts` does not load: Node will not strip
-   types under `node_modules`. The template then carries the patches in the app's own `patches/`,
+   repo, passes `adaptv build web`. ✅ Done for the build: `examples/basic` is such an app, run by the
+   README quick start, and a copy of it outside the repo passed `adaptv build web` on 2026-10-05 with
+   the patches in its own `patches/`. **Open:** the template carries the patches in the app's own `patches/`,
    because the `node_modules/@arrzdev/adaptv/patches/` block fails a fresh install with
    `ERR_PNPM_PATCH_NOT_FOUND` → [`../design/create-adaptv.md §4`](../design/create-adaptv.md).
