@@ -52,14 +52,17 @@ server.
   place to run there. The skill says so in the report and offers the two exits: move that code to a
   separate backend the app calls over HTTP, or — for a web-only, server-rendered app, once
   `server-boundary.md` ships — re-express it as adaptv server functions. Until then, the only exit
-  is the separate backend.
-- **Cookie-based auth breaks on device** (register §5 storage notes). A session held in an
-  `HttpOnly` cookie set by the app's own server must move to a token the client holds, kept in
-  secure storage.
+  is the separate backend: today's import ban refuses server functions on every target, web
+  included. Router loaders are not server code and are allowed on every target, so data a page
+  fetches from the client can move into a loader.
+- **Cookie-based auth breaks on device** (`../design/rendering.md §2`, register **B23**). A native
+  WebView does not carry cookie sessions to the app's API, by vendor design, so a session held in
+  an `HttpOnly` cookie must move to a bearer token the client holds, kept in `storage.secure`.
 - **Next-only APIs have no counterpart** to keep: `next/image`, `next/font`, `next/head`, middleware,
-  ISR. Each maps to an adaptv piece (`Image`, the config's theme, the shell) or is dropped, and the
-  skill lists which.
-- **Never import the engine (L20).** Router and server APIs come from `@arrzdev/adaptv/*` subpaths.
+  ISR. `next/image` maps to adaptv's `Image`; for each of the others the skill names the adaptv
+  piece that replaces it or says it is dropped. Which piece that is has not been worked out yet.
+- **Never import the engine (L20).** Router APIs come from `@arrzdev/adaptv/router`. Server
+  functions will come from the server subpath `server-boundary.md` adds; its name is open there (§5).
 - **Never name or patch an underlying package in the consumer's project (L20).**
 
 ## 4. Open questions
