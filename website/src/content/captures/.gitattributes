@@ -1,0 +1,2 @@
+# a raw terminal stream: its \r and \r\n are output, never line endings to convert
+*.ansi -text
