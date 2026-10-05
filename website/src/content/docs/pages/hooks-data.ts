@@ -347,7 +347,7 @@ return (
         {
           target: "Desktop web",
           status: "partial",
-          note: 'HTTPS or localhost only. On http, `permission` is `"unavailable"`.',
+          note: 'HTTPS or localhost only. On http the browser refuses the request, so it reads as `"denied"`, not `"unavailable"`.',
         },
         {
           target: "Mobile web",

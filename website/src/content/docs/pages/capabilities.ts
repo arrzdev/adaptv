@@ -54,7 +54,7 @@ subscribeAppState((state) => dataClient.setFocused(state === "active"))`,
           name: "subscribeAppState(listener)",
           type: "(listener: (state: AppState) => void) => () => void",
           description:
-            "Call `listener` on each change, never twice with the same state. Returns an unsubscribe function.",
+            "Call `listener` on each change. A page restored from the back-forward cache calls it with `active` again. Returns an unsubscribe function.",
         },
         {
           name: "onResume(cb) / onPause(cb)",

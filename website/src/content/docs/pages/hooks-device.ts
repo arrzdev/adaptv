@@ -112,9 +112,9 @@ function DeviceReadout() {
       type: "code",
       label: "about-screen.tsx",
       lang: "tsx",
-      code: `const { info, loading } = useDevice()
+      code: `const { info } = useDevice()
 
-if (loading) return null
+if (!info) return null
 return (
   <Text>
     {info.model ?? "Unknown model"} · {info.os} {info.osVersion ?? ""}
@@ -131,7 +131,7 @@ return (
         {
           target: "Desktop web",
           status: "partial",
-          note: "Only `platform`, `os` and `webViewVersion`.",
+          note: "`platform`, `os` and `webViewVersion`. Chromium also fills `osVersion` from its user-agent hints.",
         },
         {
           target: "Mobile web",

@@ -304,7 +304,7 @@ export const sessionLifetimeDays = secure.isHardwareBacked() ? 90 : 7`,
     {
       type: "note",
       tone: "info",
-      text: "Native builds need the `@aparajita/capacitor-secure-storage` package. Add it, then rebuild with `adaptv build ios` or `adaptv build android` (see the [CLI](/docs/cli)). Without it, every `secure` call rejects. The error says to run `adaptv sync`. That command does not exist. Rebuild instead.",
+      text: "Native builds need the `@aparajita/capacitor-secure-storage` package. Add it, then rebuild with `adaptv build ios` or `adaptv build android` (see the [CLI](/docs/cli)). Without it, `get`, `set` and `remove` reject. The error says to run `adaptv sync`. That command does not exist. Rebuild instead.",
     },
     {
       type: "targets",
