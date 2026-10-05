@@ -1,10 +1,21 @@
 // @vitest-environment node
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { spawn } from "node:child_process"
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs"
+import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { dirname, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, describe, expect, it } from "vitest"
 import { create } from "../packages/create-adaptv/create.mjs"
+import { ensureDist } from "../scripts/ensure-dist.mjs"
 
 /*
  * `examples/basic` is what the README quick start runs: the app `create-adaptv` writes,
@@ -75,4 +86,96 @@ describe("examples/basic", () => {
         file,
       ).toBe(read(created, file))
   })
+})
+
+/** A port nothing listens on, from the OS. */
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once("error", reject)
+    server.listen(0, "localhost", () => {
+      const { port } = server.address()
+      server.close(() => resolve(port))
+    })
+  })
+}
+
+/**
+ * `examples/basic`, outside this repo, serves its page from `adaptv dev web`.
+ *
+ * Outside is the point: inside, resolution walks up to the repo's own `node_modules` and
+ * finds TanStack, which the app does not have. The dev server render resolves the imports
+ * TanStack writes into the app's route modules from the app, so every page was a 500
+ * (`src/vite/tanstack-resolve.ts`). There is no install — the network is not the gate's to
+ * need — so the copy's `node_modules` holds links: the framework to this checkout, each
+ * dependency to the copy the framework resolves, as `packages/create-adaptv` does.
+ */
+//a cold dev server's first render, on a host running every other suite at once
+const DEV_TIMEOUT = 240_000
+
+describe("examples/basic outside this repo", () => {
+  it(
+    "renders its page from adaptv dev web",
+    async () => {
+      expect(ensureDist(ROOT)).toBe(true)
+      const app = join(temp, "outside/basic")
+      cpSync(EXAMPLE, app, {
+        recursive: true,
+        filter: (src) =>
+          ![".adaptv", ".output", "node_modules"].some((dir) =>
+            src.startsWith(join(EXAMPLE, dir)),
+          ),
+      })
+      const link = (name, target) => {
+        mkdirSync(dirname(join(app, "node_modules", name)), {
+          recursive: true,
+        })
+        symlinkSync(target, join(app, "node_modules", name), "dir")
+      }
+      const pkg = JSON.parse(read(EXAMPLE, "package.json"))
+      for (const name of Object.keys(pkg.dependencies))
+        link(
+          name,
+          name === "@arrzdev/adaptv"
+            ? ROOT
+            : join(ROOT, "node_modules", name),
+        )
+
+      const port = await freePort()
+      let output = ""
+      const dev = spawn(
+        process.execPath,
+        [
+          join(ROOT, "bin/adaptv.mjs"),
+          "dev",
+          "web",
+          "--",
+          "--port",
+          String(port),
+          "--strictPort",
+        ],
+        { cwd: app, env: { ...process.env, NO_COLOR: "1" } },
+      )
+      for (const stream of [dev.stdout, dev.stderr])
+        stream.on("data", (chunk) => {
+          output += chunk
+        })
+      const exited = new Promise((resolve) => dev.once("exit", resolve))
+      try {
+        let response
+        while (!response && dev.exitCode === null) {
+          response = await fetch(`http://localhost:${port}/`).catch(
+            () => new Promise((resolve) => setTimeout(resolve, 500)),
+          )
+        }
+        expect(response?.status, output).toBe(200)
+        expect(await response.text()).toMatch(/<h1[^>]*>basic<\/h1>/)
+      } finally {
+        //the CLI stops vite's process group on SIGTERM
+        dev.kill("SIGTERM")
+        await exited
+      }
+    },
+    DEV_TIMEOUT,
+  )
 })
