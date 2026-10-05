@@ -43,6 +43,16 @@ const START_DEDUPE = new Set([
  * every import of it goes through the redirect. Every importer resolves the same file,
  * so the server still loads one router.
  *
+ * A build decides the other way round: Vite resolves a bare import from the app root,
+ * whoever imports it, and leaves it to Node if that lookup succeeds. A standalone app
+ * has no TanStack at its root, so TanStack is bundled. An app inside a repo found the
+ * repo's own TanStack, so the server bundle handed `@tanstack/react-router` to Node,
+ * and the router, and through it `react-dom/server`, came from the repo's
+ * `node_modules` while the app's modules got the app's React. The prerender of
+ * `adaptv build android` in `examples/basic` died on `Cannot read properties of null
+ * (reading 'useEffect')`. So a build inlines every `@tanstack/*` package, as it already
+ * did for a standalone app, and the only React it imports is the app's.
+ *
  * adaptv itself is inlined in both commands. Its modules import the ones its Vite plugin
  * serves (`virtual:adaptv-*`), which Node refuses: a dev server that handed adaptv to
  * Node answered every page with a 500. A build bundles it either way. Every app needs
@@ -62,7 +72,7 @@ export function adaptvTanstackResolvePlugin(
         noExternal:
           command === "serve"
             ? ["@arrzdev/adaptv", "@tanstack/react-router"]
-            : ["@arrzdev/adaptv"],
+            : ["@arrzdev/adaptv", /^@tanstack\//],
       },
     }),
     //`post`: Start adds the entries in its own `configEnvironment`, merged before this

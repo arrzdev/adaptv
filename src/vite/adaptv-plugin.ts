@@ -30,6 +30,7 @@ import { adaptvCssPatchRewritePlugin } from "#adaptv/vite/css-patch-rewrite.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
 import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
+import { adaptvEngineImportsPlugin } from "#adaptv/vite/engine-imports.ts"
 import {
   adaptvManifestPlugin,
   buildManifest,
@@ -231,6 +232,10 @@ export async function adaptv(
     //before tanstackStart() can resolve it. This is the one layer a consumer
     //cannot disable, misconfigure, or forget to install. → docs/decisions/facade-and-opacity.md §2.2
     adaptvBanServerApisPlugin(),
+    //Right behind it, and ahead of every plugin that writes imports into the app's
+    //modules: an app imports only the packages it lists, and adaptv's dependencies are
+    //not among them unless the app says so. → src/vite/engine-imports.ts
+    adaptvEngineImportsPlugin(appRoot),
     //Also `enforce: "pre"`, and for the same kind of reason: it has to reach the
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts

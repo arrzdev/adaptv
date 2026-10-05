@@ -118,9 +118,8 @@ Two halves, and **the second is the stronger one**:
   co-located Start server at `/__server`, absent at `capacitor://localhost`). Today every developer
   solves this by hand from a blog post. It is **concrete, documented, reproducible, and framework-shaped**
   — exactly where a framework earns its existence. `docs/decisions/facade-and-opacity.md` §2 turns it from a doc rule into a build
-  failure, which nobody else does. The owner's direction since 2026-09-14 sharpens the wedge: the
-  artifact with no server refuses with a report of what it reaches, and a web-only app keeps server
-  functions and the rest of the harness → `docs/roadmap/server-boundary.md`.
+  failure, which nobody else does, on every target: adaptv has no server side (owner, 2026-10-05), so
+  the same app code is valid on the web and on a phone → `docs/roadmap/server-boundary.md`.
 
 > **Consequence for sequencing:** `docs/decisions/facade-and-opacity.md`'s ban mechanism and `docs/design/rendering.md`'s delivery model are the
 > *differentiated* work. The primitive layer is the volume play but the contested one. Ship the wedge

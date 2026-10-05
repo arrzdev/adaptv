@@ -175,6 +175,8 @@
 .rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 /* the hero's phones rise once, after the buttons */
 .stage-in { animation: stage-in 0.3s ease-out 0.24s both; }
+@keyframes caret { 50% { opacity: 0; } }
+.caret { animation: caret 1s steps(1) infinite; }
 /* a tab switch in "From idea to installed app": a 200 ms crossfade, no movement */
 @keyframes step-in { from { opacity: 0; } }
 .step-in { animation: step-in 0.2s ease-out; }
