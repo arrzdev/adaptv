@@ -11,7 +11,7 @@ export const Route = createFileRoute("/form")({
 function Form() {
   const [value, setValue] = useState("")
   return (
-    <View fill safe="all" className="gap-4 p-6">
+    <View fill className="gap-4 p-safe-offset-6">
       <h1 className="font-semibold text-2xl">smoke form</h1>
       <input
         id="smoke-input"
