@@ -1,5 +1,6 @@
 import type { UserConfig } from "tsdown"
 import { defineConfig } from "tsdown"
+import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
 
 /**
  * The dist build. → `docs/decisions/dist-build.md` ("The dist build — empirically settled")
@@ -27,13 +28,12 @@ import { defineConfig } from "tsdown"
  *   - the inner-loop DX depends on `link:` resolving `@arrzdev/adaptv/*` to `src/`
  *     (edit source → `adaptv dev` shows it live); pointing `exports` at `dist/`
  *     forces a rebuild between every edit.
- *   - `bin/adaptv.mjs` loads adaptv's own TS modules straight from `ADAPTV_ROOT/src`
- *     (`loadAdaptvModule`, esbuild at runtime), so dropping `src` from `files`
- *     breaks the CLI until it is refactored — and that can only be confirmed by
- *     running `adaptv dev|build` on a device.
- * The cutover (exports → dist, hand-written per the array-merge trap below, plus
- * `publint`/`attw` policing and the CLI refactor) is a separate, device-tested
- * change. This file is the foundation it builds on.
+ *   - the `/vite` entry hands the consumer's build source files by their place
+ *     next to it (`new URL("../routes/client-entry.tsx", import.meta.url)` and
+ *     more), which holds in `src/` and not in `dist/vite.mjs`.
+ * The CLI no longer needs `src/`: the fourth build below puts every module it
+ * loads into `dist/cli/`, and `bin/lib/load-ts.mjs` reads them there when the
+ * package ships no `src/`. → `docs/roadmap/dist-cutover.md`
  */
 
 /** The React surface — everything a component tree imports at runtime. */
@@ -79,6 +79,15 @@ const nodeEntry = {
   sw: "src/interface/sw.index.ts",
   config: "src/interface/config.index.ts",
 }
+
+/**
+ * The framework modules the CLI loads at runtime, one entry each under `dist/cli/`, keyed by
+ * their path under `src/` so `bin/lib/load-ts.mjs` finds each by the name it already uses.
+ * A checkout loads them from `src/` with esbuild; a published package has no `src/`.
+ */
+const cliEntry = Object.fromEntries(
+  CLI_MODULES.map((m) => [m.replace(/\.tsx?$/, ""), `src/${m}`]),
+)
 
 /** Shared across both builds so their outputs stay symmetrical. */
 const base = {
@@ -154,5 +163,14 @@ export default defineConfig([
       // up through the `virtual-adaptv-*` include glob. → `src/virtual-adaptv-image-asset.d.ts`.
       { from: "src/**/virtual-adaptv-*.d.ts", to: "dist" },
     ],
+  },
+  {
+    ...base,
+    clean: false,
+    platform: "node",
+    entry: cliEntry,
+    outDir: "dist/cli",
+    // Only the CLI imports these, from plain `.mjs`: no consumer types against them.
+    dts: false,
   },
 ])
