@@ -15,40 +15,43 @@ export function DeviceStage() {
   return (
     <View className="stage-in relative mt-[72px] w-full items-center">
       <div className="aurora pointer-events-none absolute -inset-x-16 -top-20 -bottom-16" />
-      <View
-        row
-        role="img"
-        aria-label="The adaptv starter app in an iPhone frame and an Android frame, showing the same home screen."
-        className="relative w-full justify-center"
-      >
+      {/* items-start: stretched, the iPhone would grow to the Android frame's offset height */}
+      <View row className="relative w-full items-start justify-center">
         <PhoneFrame
           platform="android"
           //on a phone the front one is centred and this one shows its left quarter, cut by the screen edge
           className="mt-8 w-[70vw] shrink-0 -rotate-2 max-sm:absolute max-sm:left-[calc(50%-60vw)] sm:-mr-10 sm:w-[280px]"
         >
-          <Screen image={starterAndroid} />
+          <Screen
+            image={starterAndroid}
+            alt="The adaptv starter app's home screen in an Android frame."
+          />
         </PhoneFrame>
         <PhoneFrame
           platform="ios"
           className="relative w-[70vw] shrink-0 rotate-2 sm:w-[280px]"
         >
-          <Screen image={starterIos} />
+          <Screen
+            image={starterIos}
+            alt="The adaptv starter app's home screen in an iPhone frame."
+          />
         </PhoneFrame>
       </View>
     </View>
   )
 }
 
-function Screen({ image }: { image: typeof starterIos }) {
+function Screen({ image, alt }: { image: typeof starterIos; alt: string }) {
   return (
     <img
       src={image.src}
       width={image.width}
       height={image.height}
-      alt=""
+      alt={alt}
       decoding="async"
       draggable={false}
-      className="block h-auto w-full select-none bg-[#0a0a0c]"
+      //a failed image shows its alt on the dark screen, not only the broken-image icon
+      className="block h-auto w-full select-none bg-[#0a0a0c] text-white/70 text-xs"
     />
   )
 }
