@@ -3,9 +3,8 @@
 > The contract that lets **one codebase** run correctly as SSR web, standalone PWA, and a native
 > Capacitor app. Captures *why* the boundaries are where they are, and the **hard limitation** that
 > falls out of it: adaptv code must be **isomorphic** — no server-only logic (`createServerFn`, server
-> routes, request/cookie reads) if you want it to run on all targets. Since 2026-09-14 the owner's
-> direction is that server-backed web may use them, and the build of any artifact with no server refuses
-> with a report (→ [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md), not built yet).
+> routes, request/cookie reads). adaptv has no server side, on any target, web included (owner,
+> 2026-10-05; → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
 >
 > Locked understanding as of 2026-07-14. Pairs with `VISION.md` §"Build, distribution & updates" and
 > §"Data, offline & storage". This is doctrine, not a changelog.
@@ -36,11 +35,11 @@ of CPU (error 1102, TUD-131). → `src/vite/deploy-server.ts`
 
 ### Per-target build matrix
 
-| Target | Build | Server render | Service worker | Delivery / update | Server functions (direction, 2026-09-14) |
+| Target | Build | Server render | Service worker | Delivery / update | Server functions |
 |---|---|---|---|---|---|
-| Desktop web | SSR (default) or SPA | yes (SSR) | adaptv-owned | SW revalidate | SSR: yes · static SPA: build refuses |
-| Standalone PWA | same as web | yes (SSR) | adaptv-owned | SW revalidate | same as web |
-| Native iOS/Android | **SPA (forced)** | **no** | **off** | live-update bundle swap | **build and dev refuse, with a report** |
+| Desktop web | SSR (default) or SPA | yes (SSR) | adaptv-owned | SW revalidate | **build refuses** |
+| Standalone PWA | same as web | yes (SSR) | adaptv-owned | SW revalidate | **build refuses** |
+| Native iOS/Android | **SPA (forced)** | **no** | **off** | live-update bundle swap | **build refuses** |
 
 ---
 
@@ -66,7 +65,7 @@ What actually breaks cross-platform is **server-only logic**, not loaders:
 - TanStack Query (fetch in components), with an optional IndexedDB persister for offline.
 - Anything that runs the same in a browser tab and in a WebView.
 
-### ❌ Forbidden if the code must reach Capacitor
+### ❌ Forbidden on every target (adaptv has no server side)
 - **`createServerFn()`** — compiles to an RPC to the app's *own* server. No server in a static bundle
   → dead. **This is the headline limitation.**
 - **Server routes / API routes** (`createServerFileRoute`, Start server handlers).
@@ -77,14 +76,12 @@ What actually breaks cross-platform is **server-only logic**, not loaders:
 **The rule:** keep loaders **isomorphic** (absolute-URL fetch or local read) and the same code runs on
 the SSR server, the browser, and the Capacitor WebView. Ban *server-only calls*, not loaders.
 
-**How adaptv enforces it (owner's direction, 2026-09-14; not built).** It does not forbid the list
-above for every app. An app that ships only to the web and as a PWA can use server functions, imported
-from adaptv. The build of an artifact with no server refuses and reports each server function, server
-route and request read it reaches, with the routes that reach them: a native build, a native dev
-session, an OTA bundle, or a static SPA deploy. Native dev refuses too, because its dev server would
-answer the call and hide the failure until release. Until that ships, the import ban in
-[`../decisions/facade-and-opacity.md §2`](../decisions/facade-and-opacity.md) still runs →
-[`../roadmap/server-boundary.md`](../roadmap/server-boundary.md).
+**How adaptv enforces it.** The list above is refused for every app, on every target, a web-only
+app with `render: "ssr"` included (owner, 2026-10-05; a 2026-09-14 direction to allow it on
+server-backed web was reversed before it was built). Code that works on the web and breaks on a phone
+is the failure adaptv exists to prevent. The import ban in
+[`../decisions/facade-and-opacity.md §2`](../decisions/facade-and-opacity.md) runs today; widening its
+detection to the compiler's own verdict → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md).
 
 ### Why this app leans client-side anyway
 Auth here is a **client-held bearer token** (cookies don't work in a native WebView). A server-side
@@ -1173,8 +1170,8 @@ launches drew it at 337 pt. The Safari-tab and deploy rows were not re-walked on
 - **Shell** (routes, components, logic): SSR for web first-paint, SPA for Capacitor — *same code*.
   Loaders/beforeLoad OK **as long as they're isomorphic**.
 - **Data** (consumer-wired): remote via absolute URL and/or offline-first via IndexedDB / TanStack
-  Query persister. **Never `createServerFn`** if you want Capacitor: the native build refuses it (a
-  web-only app may use it, → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
+  Query persister. **Never `createServerFn`**: every build refuses it, web included
+  (→ [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
 - **Delivery/OTA:** web + standalone → adaptv-owned SW (precache + shell fallback + SWR). Capacitor →
   live-update bundle swap (a mechanism adaptv wraps).
 
