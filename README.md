@@ -78,6 +78,10 @@ pnpm dev                  # adaptv dev web: serves the app on http://localhost:3
 pnpm build                # adaptv build web: the deployable site in .output/public
 ```
 
+Every command prints `! no 'icons' in adaptv.config.ts`. That is expected: an app with no icons
+wears adaptv's mark. To use your own, add `icons: "./public/favicons"` to `adaptv.config.ts` and
+run `pnpm exec adaptv icons --input ./mark.png` (one png or svg, 1024px or larger).
+
 `adaptv.config.ts` is the one config file — the web manifest, the native
 projects, icons and theme all come from it:
 
@@ -107,28 +111,74 @@ export default routes
 import { View } from "@arrzdev/adaptv/components"
 import { createFileRoute } from "@arrzdev/adaptv/router"
 
-export const Route = createFileRoute("/")({ component: Home })
+export const Route = createFileRoute("/")({
+  component: Home,
+})
 
 function Home() {
   return (
-    <View fill center safe="all">
-      <h1>basic</h1>
+    <View fill center safe="all" className="gap-2 p-6 text-center">
+      <h1 className="font-semibold text-2xl">basic</h1>
+      <p className="opacity-60">
+        Edit src/routing/pages/home.page.tsx and save.
+      </p>
     </View>
   )
 }
 ```
 
-`vite.config.ts` adds `adaptv()` and Tailwind, and `src/styles/main.css` imports
-`@arrzdev/adaptv/styles.css`.
+`vite.config.ts` adds `adaptv()` and Tailwind:
+
+```ts
+import { adaptv } from "@arrzdev/adaptv/vite"
+import tailwindcss from "@tailwindcss/vite"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+  resolve: { tsconfigPaths: true },          // `@/` is `src/`; adaptv imports your stylesheet through it
+  ssr: { noExternal: ["@arrzdev/adaptv"] },  // the dev server runs adaptv through Vite, not Node
+  plugins: [adaptv(), tailwindcss()],
+})
+```
+
+and `src/styles/main.css` imports `@arrzdev/adaptv/styles.css` after Tailwind.
+
+### Your own app
+
+Start from a copy of `examples/basic`. Run this from the adaptv checkout, after `pnpm pack`:
+
+```bash
+cp -r examples/basic ../my-app
+cp arrzdev-adaptv-0.1.0.tgz ../my-app/
+cd ../my-app
+npm pkg set "dependencies.@arrzdev/adaptv=file:arrzdev-adaptv-0.1.0.tgz"
+pnpm install
+pnpm dev
+```
+
+The example's `package.json` points at `../../arrzdev-adaptv-0.1.0.tgz`, the tarball at the root
+of the checkout. The `npm pkg set` line points it at the copy next to your app instead. Keep the
+tarball there: `pnpm install` reads it on every install. The example's `packageManager` pins
+pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
 
 > [!IMPORTANT]
 > **Your app carries adaptv's dependency patches.** pnpm applies `patchedDependencies` only from
-> the project it installs, so a package cannot bring its own. An app from `create-adaptv` already
-> has them in its `patches/`, declared in its `pnpm-workspace.yaml`, as
-> [`examples/basic`](examples/basic) does. An app you set up by hand copies
-> `node_modules/@arrzdev/adaptv/patches/` into its own `patches/` and declares them the same way.
-> After you upgrade adaptv, copy them again. Without them the first `adaptv build web` writes a
-> second `createFileRoute` import into every route file → [`design/patches.md`](docs/design/patches.md).
+> the project it installs, so a package cannot bring its own. The example has them in its
+> `patches/`, declared with app-relative paths in its `pnpm-workspace.yaml`, so a copy installs as
+> it is. An app from `create-adaptv` has them the same way. Without them the first
+> `adaptv build web` writes a second `createFileRoute` import into every route file →
+> [`design/patches.md`](docs/design/patches.md).
+>
+> An app you set up by hand needs the files before its first `pnpm install`, because pnpm fails
+> with `Patch file not found` for any file the block lists that does not exist yet. Take them from
+> the tarball rather than from `node_modules`, then copy the `patchedDependencies` block from
+> [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml):
+>
+> ```bash
+> tar -xzf arrzdev-adaptv-0.1.0.tgz --strip-components=1 package/patches   # writes ./patches/
+> ```
+>
+> After you upgrade adaptv, extract them again and update the keys to the new versions.
 
 ## ✨ Why it exists
 
