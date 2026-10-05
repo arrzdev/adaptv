@@ -264,6 +264,16 @@ describe("useFreezeViewport — what the iOS pin does to a touch", () => {
     unmount()
   })
 
+  it("leaves a drag alone inside data-adaptv-no-viewport-freeze", () => {
+    //the developer's per-element opt-out: a map or canvas that wants the page gesture
+    const opted = document.body.appendChild(document.createElement("div"))
+    opted.setAttribute("data-adaptv-no-viewport-freeze", "")
+    const child = opted.appendChild(document.createElement("p"))
+    const { unmount } = renderHook(() => useFreezeViewport())
+    expect(drag(child, 200, 300).defaultPrevented).toBe(false)
+    unmount()
+  })
+
   it("leaves a drag inside a real inner scroller to scroll natively", () => {
     const { row } = scroller(900)
     //an icon in a row is SVG, not an HTMLElement: the walk has to climb through it
