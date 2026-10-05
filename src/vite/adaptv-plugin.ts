@@ -57,6 +57,7 @@ import {
   devServiceWorkerEnabled,
 } from "#adaptv/vite/sw-dev.ts"
 import { adaptvTailwindEmptyFallbackPlugin } from "#adaptv/vite/tailwind-empty-fallback.ts"
+import { adaptvTanstackResolvePlugin } from "#adaptv/vite/tanstack-resolve.ts"
 import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 
 /**
@@ -274,6 +275,9 @@ export async function adaptv(
     }),
     adaptvRootRoutePlugin(context, options.routerSpecifier),
     adaptvRouteTreeAliasPlugin(appRoot),
+    //TanStack writes `@tanstack/*` imports into the app's route modules; they resolve
+    //from adaptv, which is what depends on TanStack. → src/vite/tanstack-resolve.ts
+    adaptvTanstackResolvePlugin(appRoot),
     //Dev only, and ahead of `tanstackStart()`: a running server otherwise never
     //regenerates after an edit to the route config, because the config is read
     //through a module cache that outlives the edit. → src/vite/route-config-watch.ts
