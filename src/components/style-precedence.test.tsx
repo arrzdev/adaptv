@@ -146,7 +146,7 @@ const ROWS: Row[] = [
         <Button.Leading className={className}>x</Button.Leading>
       </Button>
     ),
-    selector: '[data-adaptv="button"][data-part="leading"]',
+    selector: '[data-adaptv="button-leading"][data-part="leading"]',
     //the content row tweens to a MEASURED width; a shrinking slot measures wrong
     lock: ["flex-shrink", "flexShrink", "0"],
     noStyle: true,
@@ -158,7 +158,7 @@ const ROWS: Row[] = [
         <Button.Text className={className}>Run</Button.Text>
       </Button>
     ),
-    selector: '[data-adaptv="button"][data-part="label"]',
+    selector: '[data-adaptv="button-label"][data-part="label"]',
     lock: ["display", "display", "inline-flex"],
     noStyle: true,
   },
@@ -246,7 +246,7 @@ const ROWS: Row[] = [
         <Checkbox.Box {...p} />
       </Checkbox>
     ),
-    selector: '[data-adaptv="checkbox"][data-part="box"]',
+    selector: '[data-adaptv="checkbox-box"][data-part="box"]',
     lock: ["overflow", "overflow", "hidden"],
   },
   {
@@ -258,7 +258,7 @@ const ROWS: Row[] = [
         </Checkbox.Box>
       </Checkbox>
     ),
-    selector: '[data-adaptv="checkbox"][data-part="icon"]',
+    selector: '[data-adaptv="checkbox-icon"][data-part="icon"]',
     //a tap must reach the label
     lock: ["pointer-events", "pointerEvents", "none"],
   },
@@ -313,7 +313,7 @@ const ROWS: Row[] = [
         <Switch.Thumb {...p} />
       </Switch>
     ),
-    selector: '[data-adaptv="switch"][data-part="thumb"]',
+    selector: '[data-adaptv="switch-thumb"][data-part="thumb"]',
     lock: ["position", "position", "absolute"],
   },
   {
@@ -330,7 +330,7 @@ const ROWS: Row[] = [
         <Input.Leading className={className}>x</Input.Leading>
       </Input>
     ),
-    selector: '[data-adaptv="input"][data-part="leading"]',
+    selector: '[data-adaptv="input-leading"][data-part="leading"]',
     //the slot `order` IS the visual order
     lock: ["order", "order", "1"],
     noStyle: true,

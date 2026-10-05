@@ -681,7 +681,7 @@ function SliderRoot({
             onKeyDown={onInputKeyDown}
             onKeyUp={onInputKeyUp}
             onChange={onInputChange}
-            data-adaptv="slider"
+            data-adaptv="slider-input"
             data-part="input"
             style={SLIDER_INPUT_LOCKED_STYLE}
           />

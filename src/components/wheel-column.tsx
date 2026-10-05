@@ -385,7 +385,7 @@ export function WheelColumn({
     >
       <ul
         ref={listRef}
-        data-adaptv="wheel-column"
+        data-adaptv="wheel-column-list"
         data-part="list"
         style={WHEEL_LIST_STYLE}
       >
@@ -398,7 +398,7 @@ export function WheelColumn({
                 //pointer-first control inside a scroll wheel — the fieldset is
                 //the one tab stop and owns the keys, so keep rows out of tab order
                 tabIndex={-1}
-                data-adaptv="wheel-column"
+                data-adaptv="wheel-column-item"
                 data-part="item"
                 data-active={isActive}
                 onClick={() => handleRowTap(index)}

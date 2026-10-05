@@ -306,7 +306,7 @@ function CheckboxBox({ className, style, children }: CheckboxBoxProps) {
 
   return (
     <span
-      data-adaptv="checkbox"
+      data-adaptv="checkbox-box"
       data-part="box"
       style={boxStyle}
       className={boxClassName || undefined}
@@ -346,7 +346,7 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
   if (children) {
     return (
       <span
-        data-adaptv="checkbox"
+        data-adaptv="checkbox-icon"
         data-part="icon"
         style={iconStyles.style}
         className={iconStyles.className || undefined}
@@ -358,7 +358,7 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
 
   return (
     <svg
-      data-adaptv="checkbox"
+      data-adaptv="checkbox-icon"
       data-part="icon"
       aria-hidden
       style={iconStyles.style}
@@ -551,7 +551,7 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
             //what tells React this controlled `checked` has no `onChange` on
             //purpose, and Chromium's accessibility tree does not expose it
             readOnly
-            data-adaptv="checkbox"
+            data-adaptv="checkbox-input"
             data-part="input"
             style={CHECKBOX_INPUT_LOCKED_STYLE}
           />

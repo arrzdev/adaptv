@@ -465,7 +465,11 @@ describe("PullToRefresh — default rules in the layer, locks inline (styling.md
         </PullToRefresh>,
       )
       const root = container.firstElementChild as HTMLElement
-      expect(root.getAttribute("data-adaptv")).toBe("pull-to-refresh")
+      //only a live gesture root answers to `pull-to-refresh`; an idle row has its own
+      expect(root.getAttribute("data-adaptv")).toBe(
+        enabled ? "pull-to-refresh" : "pull-to-refresh-root",
+      )
+      expect(root.getAttribute("data-part")).toBe("root")
       expect(root.className).toBe("flex-1 static")
       //`static` cannot unseat it: the indicator is positioned against this box
       expect(root.style.position).toBe("relative")

@@ -1,9 +1,11 @@
 /*
  * WheelColumn — the default look of the column (components/wheel-column.tsx): the
  * fieldset's UA reset, the list reset, the neutral row paint, and the keyboard focus
- * indicator. Keyed on `data-adaptv="wheel-column"` + `data-part` under `:where()`
+ * indicator. Keyed on `data-adaptv` + `data-part` under `:where()`
  * (docs/decisions/styling.md §2, §6.0.1), so every rule is zero-specificity and a
- * consumer's `className` / `itemClassName` wins, in any dialect.
+ * consumer's `className` / `itemClassName` wins, in any dialect. The root is
+ * `wheel-column`; the list and the rows have their own `wheel-column-list` /
+ * `wheel-column-item` scopes, so `[data-adaptv="wheel-column"]` names the column alone.
  *
  * The scroll model, the touch pass-through, the column height, the drum mask and the
  * row's full-slot size are NOT here: they are locks, written inline by the component
@@ -42,7 +44,7 @@
   }
 
   /* list: the UA list reset (the two-row top/bottom pad is inline, it centres index 0) */
-  :where([data-adaptv="wheel-column"][data-part="list"]) {
+  :where([data-adaptv="wheel-column-list"][data-part="list"]) {
     margin: calc(var(--spacing, 0.25rem) * 0);
     padding: calc(var(--spacing, 0.25rem) * 0);
     list-style-type: none;
@@ -55,7 +57,7 @@
    * `data-[active=true]:`. JS owns the row transform (drum projection) — never add a
    * transform or a transform transition here.
    */
-  :where([data-adaptv="wheel-column"][data-part="item"]) {
+  :where([data-adaptv="wheel-column-item"][data-part="item"]) {
     font-size: var(--text-lg, 1.125rem);
     line-height: var(--text-lg--line-height, calc(1.75 / 1.125));
     font-weight: var(--font-weight-medium, 500);
@@ -69,7 +71,7 @@
     display: flex;
   }
 
-  :where([data-adaptv="wheel-column"][data-part="item"][data-active="true"]) {
+  :where([data-adaptv="wheel-column-item"][data-part="item"][data-active="true"]) {
     color: var(--color-gray-900, oklch(21% 0.034 264.665));
   }
 

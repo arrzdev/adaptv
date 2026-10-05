@@ -149,15 +149,15 @@ describe("TextArea — slot wiring", () => {
     const fieldset = container.firstElementChild as HTMLFieldSetElement
     expect(fieldset.tagName).toBe("FIELDSET")
     expect(fieldset.getAttribute("data-adaptv")).toBe("text-area")
-    //one root: `[data-adaptv="text-area"][data-part="root"]` must not match two
-    //nested elements — the shell inside is a part, not a second root
-    expect(fieldset.getAttribute("data-part")).toBe("root")
+    //stamped once: `[data-adaptv="text-area"]` must not match two nested elements
+    expect(shell().hasAttribute("data-adaptv")).toBe(false)
     expect(
-      container.querySelectorAll(
-        '[data-adaptv="text-area"][data-part="root"]',
-      ),
+      container.querySelectorAll('[data-adaptv="text-area"]'),
     ).toHaveLength(1)
+    expect(fieldset.getAttribute("data-part")).toBe("root")
     expect(shell().getAttribute("data-part")).toBe("shell")
+    //the inner field is a part with its own scope
+    expect(textarea().getAttribute("data-adaptv")).toBe("text-area-field")
     expect(Array.from(fieldset.children).map((el) => el.tagName)).toEqual([
       "LABEL",
       "DIV",

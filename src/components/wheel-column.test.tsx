@@ -862,10 +862,17 @@ describe("WheelColumn â€” default rules in the layer, locks inline (styling.md Â
     expect(column.getAttribute("data-part")).toBe("root")
     expect(column.getAttribute("class") ?? "").toBe("")
     const list = column.querySelector("ul") as HTMLElement
-    expect(list.getAttribute("data-adaptv")).toBe("wheel-column")
+    expect(column.getAttribute("data-adaptv")).toBe("wheel-column")
+    //the list and the rows have their own scopes: `[data-adaptv="wheel-column"]`
+    //names the column alone
+    expect(list.getAttribute("data-adaptv")).toBe("wheel-column-list")
     expect(list.getAttribute("data-part")).toBe("list")
     expect(list.hasAttribute("class")).toBe(false)
+    expect(
+      document.querySelectorAll('[data-adaptv="wheel-column"]'),
+    ).toHaveLength(1)
     for (const row of column.querySelectorAll("button")) {
+      expect(row.getAttribute("data-adaptv")).toBe("wheel-column-item")
       expect(row.getAttribute("data-part")).toBe("item")
       expect(row.getAttribute("class") ?? "").toBe("")
     }

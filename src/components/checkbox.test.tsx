@@ -105,7 +105,8 @@ describe("Checkbox — styling tiers", () => {
   function parts(container: HTMLElement) {
     const q = (part: string) =>
       container.querySelector<HTMLElement>(
-        `[data-adaptv='checkbox'][data-part='${part}']`,
+        //the root carries `checkbox`; each sub-part its own `checkbox-<part>` scope
+        `[data-adaptv='checkbox${part === "root" ? "" : `-${part}`}'][data-part='${part}']`,
       ) as HTMLElement
     return {
       root: q("root"),
@@ -122,6 +123,10 @@ describe("Checkbox — styling tiers", () => {
       expect(el).not.toBeNull()
       expect(el.hasAttribute("class")).toBe(false)
     }
+    //stamped once: `[data-adaptv="checkbox"]` names the root and nothing inside it
+    expect(
+      container.querySelectorAll('[data-adaptv="checkbox"]'),
+    ).toHaveLength(1)
   })
 
   it("passes the consumer's className through untouched", () => {
@@ -184,7 +189,7 @@ describe("Checkbox — styling tiers", () => {
       ':where([data-adaptv="checkbox"][data-part="root"])',
     )
     expect(css).toContain(
-      ':where([data-adaptv="checkbox"][data-part="box"])',
+      ':where([data-adaptv="checkbox-box"][data-part="box"])',
     )
     expect(css).not.toContain("!important")
     //⚠︎ a pre-allocated border shrinks every checkbox's content box (button.tsx)

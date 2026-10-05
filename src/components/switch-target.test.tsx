@@ -19,7 +19,7 @@ import { Switch } from "#adaptv/components/switch"
 
 function trackOf(container: HTMLElement): HTMLElement {
   const track = container.querySelector<HTMLElement>(
-    "[data-adaptv='switch'][data-part='root']",
+    "[data-adaptv='switch']",
   )
   if (!track) throw new Error("no switch track")
   //happy-dom has no Pointer Capture API; the engine claims the pointer on the

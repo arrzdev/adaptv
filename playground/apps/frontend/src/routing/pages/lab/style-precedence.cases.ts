@@ -123,7 +123,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "button-leading",
-    part: '[data-adaptv="button"][data-part="leading"]',
+    part: '[data-adaptv="button-leading"][data-part="leading"]',
     override: {
       property: "justify-content",
       plain: "sp-justify-start",
@@ -134,7 +134,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "button-text",
-    part: '[data-adaptv="button"][data-part="label"]',
+    part: '[data-adaptv="button-label"][data-part="label"]',
     //the lock is `inline-flex`; as a flex item it is blockified, and computes `flex`
     lock: lockDisplay("flex"),
   },
@@ -257,7 +257,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "checkbox-box",
-    part: '[data-adaptv="checkbox"][data-part="box"]',
+    part: '[data-adaptv="checkbox-box"][data-part="box"]',
     override: bg,
     lock: {
       property: "overflow-x",
@@ -268,7 +268,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "checkbox-icon",
-    part: '[data-adaptv="checkbox"][data-part="icon"]',
+    part: '[data-adaptv="checkbox-icon"][data-part="icon"]',
     lock: lockPointerEvents,
   },
   {
@@ -302,7 +302,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "switch-thumb",
-    part: '[data-adaptv="switch"][data-part="thumb"]',
+    part: '[data-adaptv="switch-thumb"][data-part="thumb"]',
     override: bg,
     lock: {
       property: "position",
@@ -359,7 +359,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "input-leading",
-    part: '[data-adaptv="input"][data-part="leading"]',
+    part: '[data-adaptv="input-leading"][data-part="leading"]',
     override: {
       property: "align-self",
       plain: "sp-self-start",
@@ -381,7 +381,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "field-group-row",
-    part: '[data-adaptv="field-group"][data-part="row"]',
+    part: '[data-adaptv="field-group-row"][data-part="row"]',
     override: {
       property: "justify-content",
       plain: "sp-justify-start",
@@ -495,7 +495,7 @@ export const CASES: PrecedenceCase[] = [
   },
   {
     id: "wheel-column-item",
-    part: '[data-adaptv="wheel-column"][data-part="item"]',
+    part: '[data-adaptv="wheel-column-item"][data-part="item"]',
     override: color,
     lock: {
       property: "touch-action",

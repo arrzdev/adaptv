@@ -91,7 +91,8 @@ describe("Switch — styling tiers", () => {
   function parts(container: HTMLElement) {
     const q = (part: string) =>
       container.querySelector<HTMLElement>(
-        `[data-adaptv='switch'][data-part='${part}']`,
+        //the root carries `switch`; each sub-part its own `switch-<part>` scope
+        `[data-adaptv='switch${part === "root" ? "" : `-${part}`}'][data-part='${part}']`,
       ) as HTMLElement
     return { root: q("root"), thumb: q("thumb"), input: q("input") }
   }
@@ -103,6 +104,10 @@ describe("Switch — styling tiers", () => {
       expect(el).not.toBeNull()
       expect(el.hasAttribute("class")).toBe(false)
     }
+    //stamped once: `[data-adaptv="switch"]` names the root and nothing inside it
+    expect(
+      container.querySelectorAll('[data-adaptv="switch"]'),
+    ).toHaveLength(1)
   })
 
   it("passes the consumer's className through untouched", () => {
@@ -165,7 +170,7 @@ describe("Switch — styling tiers", () => {
       ':where([data-adaptv="switch"][data-part="root"])',
     )
     expect(css).toContain(
-      ':where([data-adaptv="switch"][data-part="thumb"])',
+      ':where([data-adaptv="switch-thumb"][data-part="thumb"])',
     )
     expect(css).not.toContain("!important")
     //⚠︎ a pre-allocated border shrinks the track's content box (button.tsx)

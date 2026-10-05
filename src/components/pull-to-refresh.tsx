@@ -809,8 +809,11 @@ export const PullToRefresh = forwardRef<
   if (!attached) {
     return (
       <PullToRefreshContext.Provider value={contextValue}>
+        {/* Not the gesture root, so not `pull-to-refresh`: a consumer finds the live
+            gesture root with `closest('[data-adaptv="pull-to-refresh"]')`, and an
+            idle row has none. Its own scope carries the same default look. */}
         <div
-          data-adaptv="pull-to-refresh"
+          data-adaptv="pull-to-refresh-root"
           data-part="root"
           ref={setScrollRef}
           {...mergeStyles({
