@@ -52,7 +52,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
+import { TOUCH_PASSTHROUGH_STYLE } from "#adaptv/components/press-core"
 import {
   GesturePriority,
   useGestureCapture,
@@ -125,30 +125,61 @@ const SLIDER_LOCK_SLOP_PX = 6
  */
 const SLIDER_FILL_VAR = "--slider-fill"
 
-//LOCKED: `relative` is the positioning context the thumb's `absolute` + computed
-//`left` are measured against; the pointer mapping below reads the same box, so
-//dropping it would break both. The touch-action longhand is quirk 3 above.
-const SLIDER_ROOT_LOCKED_CLASS = "relative touch-pan-y touch-pinch-zoom"
+//The root's flex layout, 44px minimum height, width and disabled cursor, and every
+//part's look (track rail, range fill, thumb size, colour and shadow) are default rules
+//in styles/slider.css. What is here is LOCKED, inline (docs/decisions/styling.md
+//§2.0), so no `className` can defeat it.
+//
+//LOCKED: `position: relative` is the positioning context the thumb's `absolute` +
+//computed `left` are measured against; the pointer mapping below reads the same box,
+//so dropping it would break both. The touch-action longhand is quirk 3 above.
+const SLIDER_ROOT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  touchAction: "pan-y pinch-zoom",
+})
 //A disabled slider must not become a dead zone for a horizontal pan either: it
 //handles no pointer, so every axis goes back to the browser (press-core has the
-//measurement for why `touch-none` on an inert control costs the page its scroll).
-const SLIDER_ROOT_DISABLED_LOCKED_CLASS = `relative ${TOUCH_PASSTHROUGH_CLASS}`
-//`min-h-11` is 44px: the finger gets a full touch target even though the painted
-//track is 4px tall. The root is the hit area, not the track.
-const SLIDER_ROOT_BASE_CLASS = "flex items-center min-h-11 w-full"
-const SLIDER_ROOT_DISABLED_BASE_CLASS = "cursor-not-allowed"
-//`sr-only` keeps the native input focusable and announced; the pointer never
-//reaches it (1px, clipped), which is the whole point of quirk 1
-const SLIDER_INPUT_CHROMELESS_CLASS = "sr-only"
-const SLIDER_TRACK_LOCKED_CLASS = "relative"
-const SLIDER_TRACK_BASE_CLASS = "h-1 w-full grow rounded-full bg-gray-200"
-const SLIDER_RANGE_LOCKED_CLASS = "absolute inset-y-0 left-0"
-const SLIDER_RANGE_BASE_CLASS = "rounded-full bg-gray-950"
+//measurement for why `touch-action: none` on an inert control costs the page its
+//scroll).
+const SLIDER_ROOT_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...TOUCH_PASSTHROUGH_STYLE,
+})
+//LOCKED, visually hidden: keeps the native input focusable and announced; the
+//pointer never reaches it (1px, clipped), which is the whole point of quirk 1. It
+//was the `sr-only` utility; inline so a stylesheet that is missing or overridden can
+//never put a native range input back under the finger.
+const SLIDER_INPUT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  width: "1px",
+  height: "1px",
+  padding: 0,
+  margin: "-1px",
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+  borderWidth: 0,
+})
+//LOCKED: the track is the box `Slider.Range` fills.
+const SLIDER_TRACK_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+})
+//LOCKED: the range is pinned to the track's leading edge and full height; its width
+//is the value.
+const SLIDER_RANGE_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  top: 0,
+  bottom: 0,
+  left: 0,
+})
 //LOCKED: the thumb is decorative and sits over the root's hit area; taking
 //pointer events would only make the mapping's start point depend on where the
-//finger landed. `top-1/2` pairs with the `-50%` in the locked translate.
-const SLIDER_THUMB_LOCKED_CLASS = "pointer-events-none absolute top-1/2"
-const SLIDER_THUMB_BASE_CLASS = "h-5 w-5 rounded-full bg-white shadow"
+//finger landed. `top: 50%` pairs with the `-50%` in the locked translate.
+const SLIDER_THUMB_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  pointerEvents: "none",
+  position: "absolute",
+  top: "50%",
+})
 
 const SliderContext = createContext<SliderContextValue | null>(null)
 
@@ -243,11 +274,9 @@ function SliderTrack({ className, children }: SliderTrackProps) {
   return (
     <div
       data-adaptv="slider-track"
-      className={mergeStyles({
-        base: SLIDER_TRACK_BASE_CLASS,
-        className,
-        locked: SLIDER_TRACK_LOCKED_CLASS,
-      })}
+      data-part="track"
+      className={className || undefined}
+      style={SLIDER_TRACK_LOCKED_STYLE}
     >
       {children}
     </div>
@@ -263,15 +292,17 @@ SliderTrack.displayName = "Slider.Track"
 function SliderRange({ className }: SliderRangeProps) {
   useSlider()
   const range = mergeStyles({
-    base: SLIDER_RANGE_BASE_CLASS,
     className,
-    locked: SLIDER_RANGE_LOCKED_CLASS,
-    lockedStyle: { width: `calc(var(${SLIDER_FILL_VAR}) * 100%)` },
+    lockedStyle: {
+      ...SLIDER_RANGE_LOCKED_LAYOUT_STYLE,
+      width: `calc(var(${SLIDER_FILL_VAR}) * 100%)`,
+    },
   })
   return (
     <div
       data-adaptv="slider-range"
-      className={range.className}
+      data-part="range"
+      className={range.className || undefined}
       style={range.style}
     />
   )
@@ -291,10 +322,9 @@ function SliderThumb({ className }: SliderThumbProps) {
   useSlider()
   const { thumbRef } = useContext(SliderInternalsContext) ?? {}
   const thumb = mergeStyles({
-    base: SLIDER_THUMB_BASE_CLASS,
     className,
-    locked: SLIDER_THUMB_LOCKED_CLASS,
     lockedStyle: {
+      ...SLIDER_THUMB_LOCKED_LAYOUT_STYLE,
       left: `calc(var(${SLIDER_FILL_VAR}) * 100%)`,
       translate: `calc(var(${SLIDER_FILL_VAR}) * -100%) -50%`,
     },
@@ -304,7 +334,8 @@ function SliderThumb({ className }: SliderThumbProps) {
       ref={thumbRef}
       aria-hidden
       data-adaptv="slider-thumb"
-      className={thumb.className}
+      data-part="thumb"
+      className={thumb.className || undefined}
       style={thumb.style}
     />
   )
@@ -608,16 +639,14 @@ function SliderRoot({
   }
 
   const root = mergeStyles({
-    base: [
-      SLIDER_ROOT_BASE_CLASS,
-      isDisabled && SLIDER_ROOT_DISABLED_BASE_CLASS,
-    ],
     className,
-    locked: isDisabled
-      ? SLIDER_ROOT_DISABLED_LOCKED_CLASS
-      : SLIDER_ROOT_LOCKED_CLASS,
     style,
-    lockedStyle: { [SLIDER_FILL_VAR]: String(percent) } as CSSProperties,
+    lockedStyle: {
+      ...(isDisabled
+        ? SLIDER_ROOT_DISABLED_LOCKED_STYLE
+        : SLIDER_ROOT_LOCKED_STYLE),
+      [SLIDER_FILL_VAR]: String(percent),
+    } as CSSProperties,
   })
 
   return (
@@ -626,10 +655,11 @@ function SliderRoot({
         <div
           ref={rootRef}
           data-adaptv="slider"
+          data-part="root"
           data-orientation="horizontal"
           data-dragging={isDragging ? "" : undefined}
           data-disabled={isDisabled ? "" : undefined}
-          className={root.className}
+          className={root.className || undefined}
           style={root.style}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -651,7 +681,9 @@ function SliderRoot({
             onKeyDown={onInputKeyDown}
             onKeyUp={onInputKeyUp}
             onChange={onInputChange}
-            className={SLIDER_INPUT_CHROMELESS_CLASS}
+            data-adaptv="slider"
+            data-part="input"
+            style={SLIDER_INPUT_LOCKED_STYLE}
           />
           {children ?? (
             <>

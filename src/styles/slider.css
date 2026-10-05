@@ -1,0 +1,56 @@
+/*
+ * Slider — the default look of the root, track, range and thumb
+ * (components/slider.tsx).
+ *
+ * Only defaults live here: the root's flex layout, 44px minimum height, width and
+ * disabled cursor, and every part's paint. Everything the control's correctness
+ * depends on — positioning, the touch-action longhand (quirk 3 in slider.tsx), the
+ * range's and thumb's value-driven geometry, the thumb's `pointer-events: none`, and
+ * the visually hidden native input — is inline style written by the component
+ * (docs/decisions/styling.md §2.0), the one tier a consumer's `className` cannot beat.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
+ * rule or utility wins over any of it, every selector is wrapped in `:where()` so it has
+ * zero specificity (§6.0.1), and nothing here is `!important`.
+ */
+
+@layer adaptv.components {
+  /*
+   * root: the hit area. `min-height` is 44px: the finger gets a full touch target even
+   * though the painted track is 4px tall. The root is the hit area, not the track.
+   */
+  :where([data-adaptv="slider"][data-part="root"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 11);
+    align-items: center;
+    width: 100%;
+    display: flex;
+  }
+
+  :where([data-adaptv="slider"][data-part="root"][data-disabled]) {
+    cursor: not-allowed;
+  }
+
+  /* track: the painted rail */
+  :where([data-adaptv="slider-track"][data-part="track"]) {
+    height: calc(var(--spacing, 0.25rem) * 1);
+    background-color: var(--color-gray-200, oklch(92.8% 0.006 264.531));
+    border-radius: calc(infinity * 1px);
+    flex-grow: 1;
+    width: 100%;
+  }
+
+  /* range: the filled part of the rail */
+  :where([data-adaptv="slider-range"][data-part="range"]) {
+    background-color: var(--color-gray-950, oklch(13% 0.028 261.692));
+    border-radius: calc(infinity * 1px);
+  }
+
+  /* thumb */
+  :where([data-adaptv="slider-thumb"][data-part="thumb"]) {
+    height: calc(var(--spacing, 0.25rem) * 5);
+    width: calc(var(--spacing, 0.25rem) * 5);
+    background-color: var(--color-white, #fff);
+    box-shadow: 0 1px 3px 0 #0000001a, 0 1px 2px -1px #0000001a;
+    border-radius: calc(infinity * 1px);
+  }
+}
