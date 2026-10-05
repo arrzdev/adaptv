@@ -225,12 +225,23 @@ export const SPEC = {
           value: "<path>",
           group: "common",
           describe:
-            "where to write the artifact (default: .adaptv/builds/)",
+            "where to write the .ipa or .apk (default: .adaptv/builds/)",
         },
         FORCE,
         JSON_OUT,
         QUIET,
         VERBOSE,
+      ],
+      //`build web` used to accept '-o' and drop it: the site lands where its render mode
+      //puts it, and a deploy that uploads the directory the dev named would ship an empty
+      //one. A flag that changes nothing is refused, so the mistake is a usage error.
+      conflicts: [
+        {
+          flag: "output",
+          whenArg: ["web"],
+          reason:
+            "'build web' writes the site where its render mode puts it. Drop '--output'",
+        },
       ],
       examples: [
         "adaptv build web",
