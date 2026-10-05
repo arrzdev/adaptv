@@ -63,3 +63,37 @@ describe("adaptvTanstackResolvePlugin", () => {
     expect(result).toBeNull()
   })
 })
+
+/*
+ * Start dedupes its packages, and Vite resolves a deduped package from the app root.
+ * An app with no TanStack of its own, inside a repo that has one, loaded TanStack and
+ * a second React from the repo's `node_modules`, and `adaptv dev web` served a 500.
+ * The end-to-end proof is `examples/basic`, run by the README quick start.
+ */
+describe("adaptvTanstackResolvePlugin dedupe", () => {
+  function dedupeAfter(dedupe: string[] | undefined) {
+    const hook = adaptvTanstackResolvePlugin(APP, ADAPTV)
+      .configEnvironment as {
+      order?: string
+      handler: (name: string, options: { resolve?: object }) => void
+    }
+    const options = { resolve: dedupe ? { dedupe } : undefined }
+    hook.handler("ssr", options)
+    return { order: hook.order, options }
+  }
+
+  it("drops Start's TanStack entries after Start has added them", () => {
+    const { order, options } = dedupeAfter([
+      "react",
+      "react-dom",
+      "@tanstack/react-start",
+      "@tanstack/react-router",
+    ])
+    expect(order).toBe("post")
+    expect(options.resolve).toEqual({ dedupe: ["react", "react-dom"] })
+  })
+
+  it("leaves an environment with no dedupe as it was", () => {
+    expect(dedupeAfter(undefined).options).toEqual({ resolve: undefined })
+  })
+})
