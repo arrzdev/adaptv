@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { formatDiagnostics, runDoctor } from "#adaptv/native/doctor"
 
@@ -166,5 +168,28 @@ describe("what a diagnostic is allowed to say (R8)", () => {
     for (const d of everyDiagnostic) {
       expect(`${d.title} ${d.detail} ${d.fix}`).not.toContain("\u2014")
     }
+  })
+})
+
+describe("runDoctor — the fixes it hands out", () => {
+  //A fix that names a config key the dev cannot set sends them looking for it.
+  //The B22 fix said "set 'ios.limitsNavigationsToAppBoundDomains: true' in
+  //adaptv.config.ts", and `AdaptvAppConfig` has no `ios` key.
+  it("names only keys that exist in adaptv.config.ts", () => {
+    const rules = readFileSync(
+      resolve(process.cwd(), "src/native/doctor.ts"),
+      "utf8",
+    )
+    const appConfig = readFileSync(
+      resolve(process.cwd(), "src/config/app-config.ts"),
+      "utf8",
+    )
+    const named = [
+      ...rules.matchAll(/'([A-Za-z]+)[^']*' in adaptv\.config\.ts/g),
+    ].map((m) => m[1] ?? "")
+    const missing = named.filter(
+      (key) => !new RegExp(`^  ${key}\\??:`, "m").test(appConfig),
+    )
+    expect(missing).toEqual([])
   })
 })
