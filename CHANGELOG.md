@@ -7,6 +7,11 @@ API.
 
 ## [Unreleased]
 
+### Changed
+
+- **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
+  root and in `packages/create-adaptv`.
+
 ## 0.1.0-alpha.1
 
 The first public alpha. Not published to npm yet: publishing waits on approval, and until then the

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Create an adaptv app: pnpm create adaptv my-app",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "node": ">=22.12"
   },

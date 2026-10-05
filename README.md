@@ -17,7 +17,7 @@
 <p align="center">
   <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-orange?style=flat-square" />
   <a href=".github/workflows/ci.yml"><img alt="CI: typecheck, lint, tests" src="https://img.shields.io/badge/CI-typecheck%20%C2%B7%20lint%20%C2%B7%20tests-blue?style=flat-square" /></a>
-  <img alt="License: UNLICENSED" src="https://img.shields.io/badge/license-UNLICENSED-lightgrey?style=flat-square" />
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" /></a>
   <img alt="Node 22.12 or newer" src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen?style=flat-square" />
 </p>
 
@@ -265,5 +265,5 @@ The full loop — fresh worktrees, ports, what the playground is and is not — 
 
 ## License
 
-`UNLICENSED` — private and unpublished. Third-party notices for code adaptv ports are in
+[MIT](LICENSE). Third-party notices for code adaptv ports are in
 [`THIRD_PARTY_LICENSES`](THIRD_PARTY_LICENSES).
