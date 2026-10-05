@@ -242,6 +242,12 @@ const FRAMEWORK = [
     isNew: true,
   },
   {
+    to: "/lab/plain-css",
+    title: "Plain CSS",
+    summary: "the hover/active corrections on a stylesheet with no Tailwind",
+    isNew: true,
+  },
+  {
     to: "/lab/safe-area",
     title: "Safe area",
     summary: "p-safe, *-safe-offset-N, *-safe-or-N and useInsets agreeing",
