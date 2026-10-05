@@ -47,13 +47,10 @@ server.
 
 ## 3. The rules it must carry
 
-- **Server code does not reach a native app, a native dev session, an OTA bundle or a static web
-  deploy (L3).** Next.js API routes, route handlers, server actions and `getServerSideProps` have no
-  place to run there. The skill says so in the report and offers the two exits: move that code to a
-  separate backend the app calls over HTTP, or — for a web-only, server-rendered app, once
-  `server-boundary.md` ships — re-express it as adaptv server functions. Until then, the only exit
-  is the separate backend: today's import ban refuses server functions on every target, web
-  included. Router loaders are not server code and are allowed on every target, so data a page
+- **adaptv has no server side, on any target (L3, owner 2026-10-05).** Next.js API routes, route
+  handlers, server actions and `getServerSideProps` have no place to run, on the web as much as on a
+  phone. The skill says so in the report and offers one exit: move that code to a separate backend
+  the app calls over HTTP. Router loaders are not server code and are allowed on every target, so data a page
   fetches from the client can move into a loader.
 - **Cookie-based auth breaks on device** (`../design/rendering.md §2`, register **B23**). A native
   WebView does not carry cookie sessions to the app's API, by vendor design, so a session held in
@@ -61,15 +58,13 @@ server.
 - **Next-only APIs have no counterpart** to keep: `next/image`, `next/font`, `next/head`, middleware,
   ISR. `next/image` maps to adaptv's `Image`; for each of the others the skill names the adaptv
   piece that replaces it or says it is dropped. Which piece that is has not been worked out yet.
-- **Never import the engine (L20).** Router APIs come from `@arrzdev/adaptv/router`. Server
-  functions will come from the server subpath `server-boundary.md` adds; its name is open there (§5).
+- **Never import the engine (L20).** Router APIs come from `@arrzdev/adaptv/router`.
 - **Never name or patch an underlying package in the consumer's project (L20).**
 
 ## 4. Open questions
 
 - **Q1 — When.** The skill is cheapest to keep true after the `dist` cutover and `create-adaptv`
-  (#2, #3) ship and the server boundary (#10) settles. Written earlier, its §3 server rule changes
-  under it.
+  (#2, #3) ship. The server rule (§3) is settled: no server side, on any target.
 - **Q2 — Where it lives.** A folder in the published package (for example `skills/migrate/`), a page
   on the website, or both. The website plan (`website.md`) owns the public docs layout.
 - **Q3 — Which source stacks first.** Proposed: Vite + React Router SPA (closest, cheapest), then
