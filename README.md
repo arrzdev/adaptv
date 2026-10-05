@@ -117,7 +117,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <View fill center safe="all" className="gap-2 p-6 text-center">
+    <View fill center className="gap-2 p-safe-offset-6 text-center">
       <h1 className="font-semibold text-2xl">basic</h1>
       <p className="opacity-60">
         Edit src/routing/pages/home.page.tsx and save.

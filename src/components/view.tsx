@@ -1,5 +1,9 @@
 import type { ComponentPropsWithRef } from "react"
+import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
+import { createWarnOnce } from "#adaptv/utils/warn-once"
+
+const viewWarnings = createWarnOnce("View")
 
 /** Which safe-area edge(s) to pad. Resolves to 0 in a browser tab, the real inset in standalone/native. */
 type SafeEdges = "top" | "bottom" | "x" | "y" | "all"
@@ -29,8 +33,29 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
    * page. Use it when this box is one of several children and should take the slack.
    */
   fill?: boolean
-  /** Pad the given safe-area edge(s). Wins over `className` (structural). */
+  /**
+   * Pad the given safe-area edge(s). Wins over `className` (structural): a padding class
+   * on the same edges is dropped, so `safe="all" className="p-6"` pads the inset alone.
+   * For the inset plus your own spacing, leave `safe` off and write
+   * `className="p-safe-offset-6"` (or `px-`/`pt-`/`pb-safe-offset-*`).
+   */
   safe?: SafeEdges
+}
+
+/**
+ * The consumer classes `safe` drops: present when `className` is merged on its own,
+ * gone once the safe class is merged after it. `safe="all"` with `p-6` loses the `p-6`;
+ * `safe="bottom"` with `p-6` keeps it, because a later `pb-safe` overrides one edge.
+ */
+export function droppedBySafe(
+  safe: SafeEdges | undefined,
+  className: string | undefined,
+): string[] {
+  if (!safe || !className) return []
+  const merged = new Set(cn(className, SAFE_CLASS[safe]).split(" "))
+  return cn(className)
+    .split(" ")
+    .filter((name) => name !== "" && !merged.has(name))
 }
 
 /**
@@ -58,6 +83,20 @@ export function View({
   children,
   ...props
 }: ViewProps) {
+  //In render, not an effect: the check is a dev-only string compare, and a View is too
+  //common a primitive to give every instance a hook for it
+  if (import.meta.env.DEV) {
+    const dropped = droppedBySafe(safe, className)
+    if (dropped.length > 0) {
+      viewWarnings.warn(
+        `safe-drops:${safe}:${dropped.join(" ")}`,
+        `safe="${safe}" owns this View's padding, so className's ` +
+          `${dropped.join(" ")} was dropped and only the safe-area inset pads it. ` +
+          "For the inset plus your own spacing, leave safe off and write " +
+          "p-safe-offset-<n> (or px-/pt-/pb-safe-offset-<n>).",
+      )
+    }
+  }
   return (
     <div
       data-adaptv="view"
