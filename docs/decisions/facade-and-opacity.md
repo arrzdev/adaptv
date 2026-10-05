@@ -47,14 +47,10 @@ adaptv re-exports **only what it endorses.** Three rules:
    `package.json` names no `@tanstack/*` at all — the playground's lists only its own
    `@tanstack/react-query`. The 07-05 evidence against barrel-based type hiding (§3.1) is still real;
    what changed is that the shipped path (§3.2's Path X) does not hide types through a barrel.
-3. > **Revised by the owner, 2026-09-14** (direction, not built → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)):
-   > adaptv **exports** server functions for server-backed web, a direct import of **any** engine package
-   > is refused whatever it imports, and the build of an artifact with no server (native, OTA, static
-   > web) refuses with a report of the server functions it reaches. The rule as written below is what
-   > runs today.
-
-   ~~**`createServerFn` and friends are simply never exported by adaptv, *and* are hard-banned from
-   consumer source by the build** (§2).~~ Not re-exporting is not enough on its own — the consumer can
+3. **`createServerFn` and friends are simply never exported by adaptv, *and* are hard-banned from
+   consumer source by the build** (§2), on every target. *Confirmed by the owner on 2026-10-05,
+   after a 2026-09-14 direction to export them for server-backed web was reversed (§2).* Not
+   re-exporting is not enough on its own — the consumer can
    always import the package directly.
 
 **What "stop re-exporting `createServerFn`" concretely means:** adaptv has no root `.` export today
@@ -66,18 +62,18 @@ was never the thing stopping anyone.*
 
 ## 2. 🔒 The ban — layered, with a build-time backstop that cannot be bypassed
 
-> ### 🔀 Direction changed by the owner, 2026-09-14 — not built yet
+> ### 🔒 The ban covers every target — owner, 2026-10-05
 >
-> A blanket ban at the import is the wrong axis. An adaptv developer never names TanStack Start at
-> all (**L20**), so which Start package an import names is not the question. Server functions are a
-> web feature that a web-only or PWA-only app should keep. The artifact that has no server is the
-> one that refuses, with a report, and it detects what the compiler actually extracted rather than
-> matching specifiers. The full direction, the detection candidates and what happens to this
-> section's machinery are in [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md).
+> **Rejected: server functions on server-backed web, refused only on artifacts with no server.** The
+> owner set that direction on 2026-09-14 and reversed it on 2026-10-05, before any of it was built.
+> The reason: adaptv's promise is one app on web, PWA, iOS and Android. An API that works on the web
+> and breaks on a phone is not offered on the web either, so adaptv has no server side at all, and a
+> web-only app gets the same rule as every other app.
 >
-> Everything below stays true as **mechanism evidence**: `resolveId` is unbypassable, a linter cannot
-> see the target, and the rejected mechanisms stay rejected. The new design reuses all of it. It is also
-> what runs until the direction ships.
+> What still changes is **coverage, not the rule**: the ban should read the compiler's own set of
+> server functions instead of matching specifiers, and refuse direct imports of every engine package
+> (**L20**) → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md). Everything below is
+> what runs today.
 
 > ### ✅ BUILT (2026-07-20) — `src/vite/ban-server-apis.ts`, 27 unit tests
 >
