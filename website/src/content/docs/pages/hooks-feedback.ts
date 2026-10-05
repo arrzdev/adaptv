@@ -269,7 +269,7 @@ async function upload(file: File) {
     {
       type: "api",
       name: "useVibrate()",
-      signature: "function useVibrate(): UseVibrateResult",
+      signature: "function useVibrate()",
       description:
         "Named shortcuts over `haptics`. Same targets as `useHaptics`.",
       returns: "The members below.",

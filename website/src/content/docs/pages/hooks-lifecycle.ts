@@ -194,7 +194,7 @@ useBackHandler(() => {
     {
       type: "note",
       tone: "info",
-      text: "[Drawer](/docs/drawer) registers at `Overlay` while open. [Dropdown](/docs/dropdown) registers at `Transient` while open.",
+      text: "[Drawer](/docs/drawer) registers at `Overlay` while open. [Dropdown](/docs/dropdown) registers at `Transient` and handles back only while open.",
     },
     {
       type: "api",
