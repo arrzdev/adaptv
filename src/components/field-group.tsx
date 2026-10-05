@@ -21,11 +21,12 @@ import { mergeStyles } from "#adaptv/utils/styles"
  *
  * ## What is locked, and why so little
  *
- * A row is `flex`, and its label column is `flex flex-col`. That is the entire
- * locked tier. A row's label and control only read as leading/trailing while
+ * A row is `display: flex`, and its label column is a flex column. That is the
+ * entire locked tier, written as inline style (docs/decisions/styling.md §2.0). A row's label and control only read as leading/trailing while
  * the row is a flex container, and the title only stacks above its description
  * while the column is one, so those two are structure. Alignment
- * (`items-center justify-between`) is a default, overridable the way Input's
+ * (`align-items: center`, `justify-content: space-between`, field-group.css) is a
+ * default in the layer, overridable the way Input's
  * slot alignment is: a multi-line description with a top-aligned control is a
  * legitimate row, and `items-start` must reach it.
  *
@@ -65,7 +66,8 @@ import { mergeStyles } from "#adaptv/utils/styles"
  *
  * | Attribute | Where | When |
  * |-----------|-------|------|
- * | `data-adaptv="field-group"` | the root `<div>` | always |
+ * | `data-adaptv="field-group"` | the root `<div>`, each row and each label column | always |
+ * | `data-part="root"` | the root `<div>` | always |
  * | `data-part="section"` | each `<section>` | always |
  * | `data-part="header"` | the section title `<div>`, id'd | a `title` or `Header` exists |
  * | `data-part="rows"` | the `<div>` whose only children are rows | always |
@@ -106,10 +108,15 @@ import { mergeStyles } from "#adaptv/utils/styles"
 
 //LOCKED: a row is a flex container or its label and control are not leading and
 //trailing; a label column is a flex column or the title and description sit on
-//one line. Alignment is a DEFAULT (base), so `items-start` on a tall row wins.
-const FIELD_ROW_LOCKED_CLASS = "flex"
-const FIELD_ROW_BASE_CLASS = "items-center justify-between"
-const FIELD_LABEL_LOCKED_CLASS = "flex flex-col"
+//one line. Alignment is a DEFAULT (field-group.css), so `items-start` on a tall
+//row wins.
+const FIELD_ROW_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "flex",
+})
+const FIELD_LABEL_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "flex",
+  flexDirection: "column",
+})
 
 type SlotComponent = { displayName?: string }
 
@@ -179,7 +186,8 @@ function FieldGroupRoot({
       {...props}
       ref={ref}
       data-adaptv="field-group"
-      className={merged.className}
+      data-part="root"
+      className={merged.className || undefined}
       style={merged.style}
     >
       {children}
@@ -210,7 +218,7 @@ function FieldGroupHeader({
       {...props}
       ref={ref}
       data-part="header"
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     >
       {children}
@@ -237,7 +245,7 @@ function FieldGroupFooter({
       {...props}
       ref={ref}
       data-part="footer"
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     >
       {children}
@@ -305,7 +313,7 @@ function FieldGroupSection({
       ref={ref}
       data-part="section"
       aria-labelledby={header ? headerId : undefined}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     >
       {header ? cloneElement(header, { id: headerId }) : null}
@@ -338,7 +346,7 @@ function FieldGroupLabel({
       {...props}
       ref={ref}
       data-part="title"
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     >
       {children}
@@ -365,7 +373,7 @@ function FieldGroupDescription({
       {...props}
       ref={ref}
       data-part="description"
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     >
       {children}
@@ -448,17 +456,17 @@ function FieldGroupRow({
   //own are both the CONSUMER tier, merged rather than concatenated, the row's
   //last so it wins the per-property tie (§3.3).
   const merged = mergeStyles({
-    base: FIELD_ROW_BASE_CLASS,
     className: [render?.props.className, className],
-    locked: FIELD_ROW_LOCKED_CLASS,
     style: { ...render?.props.style, ...style },
+    lockedStyle: FIELD_ROW_LOCKED_STYLE,
   })
 
   const slotProps: FieldGroupRowSlotProps = {
     ...props,
     ref,
-    className: merged.className,
+    className: merged.className || undefined,
     style: merged.style,
+    "data-adaptv": "field-group",
     "data-part": "row",
     //presence attribute (§3.1): `""`, never `true`, which React would stringify
     "data-disabled": disabled ? "" : undefined,
@@ -469,7 +477,11 @@ function FieldGroupRow({
   const content = (
     <>
       {hasLabelColumn ? (
-        <div data-part="label" className={FIELD_LABEL_LOCKED_CLASS}>
+        <div
+          data-adaptv="field-group"
+          data-part="label"
+          style={FIELD_LABEL_LOCKED_STYLE}
+        >
           {titleNode}
           {descriptionNode}
         </div>

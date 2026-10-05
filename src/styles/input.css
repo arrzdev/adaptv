@@ -1,0 +1,53 @@
+/*
+ * Input — the default look of the single-line field (components/input.tsx): the bare
+ * `<input>`, the grouped `<label>` shell, the grouped inner `<input>` and the
+ * Leading / Trailing slots.
+ *
+ * Only defaults live here. The structure a `className` must not undo is inline style
+ * written by the component (docs/decisions/styling.md §2.0): the slots' `display`,
+ * `flex-shrink` and `order`, the grouped field's `order`, `flex`, `min-width` and
+ * chromeless set, and the disabled `user-select` + touch pass-through.
+ *
+ * ⚠︎ No default border width — do NOT re-add one (Button's surface carries the same
+ * note). Under `box-sizing: border-box` a border that appears later eats the content
+ * box and the text jumps; pre-allocating a transparent one only cancels the shift at
+ * exactly 1px and permanently shrinks the content box. Toggled emphasis belongs on
+ * `outline`.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) and wrapped in
+ * `:where()` (§6.0.1), so any consumer rule or utility wins over all of it. No
+ * `!important` anywhere.
+ */
+
+@layer adaptv.components {
+  /* the visible box: the bare `<input>`, or the grouped `<label>` shell */
+  :where([data-adaptv="input"][data-part="root"]) {
+    cursor: text;
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  /* the bare field is `:disabled`; the label shell carries `data-disabled` */
+  :where([data-adaptv="input"][data-part="root"]:is(:disabled, [data-disabled])) {
+    cursor: not-allowed;
+  }
+
+  /* the `<input>` itself, bare (root) or grouped (field) */
+  :where(input[data-adaptv="input"]) {
+    resize: none;
+  }
+
+  /* grouped shell: one flex row, leading → field → trailing */
+  :where(label[data-adaptv="input"][data-part="root"]) {
+    width: fit-content;
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    align-items: center;
+    display: flex;
+  }
+
+  /* Leading / Trailing slots: alignment only, the order and shrink are locked inline */
+  :where([data-adaptv="input"]:is([data-part="leading"], [data-part="trailing"])) {
+    align-self: center;
+    align-items: center;
+  }
+}

@@ -1,0 +1,21 @@
+/*
+ * FieldGroup — the one default the grouped settings form owns
+ * (components/field-group.tsx): a row's alignment.
+ *
+ * Everything else is the consumer's `className`, and the structure (a row is
+ * `display: flex`, its label column a flex column) is inline style the component
+ * writes (docs/decisions/styling.md §2.0). Alignment stays a default because a
+ * multi-line description with a top-aligned control is a legitimate row, and
+ * `items-start` must reach it.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) and wrapped in
+ * `:where()` (§6.0.1), so any consumer rule or utility wins over it. No `!important`.
+ */
+
+@layer adaptv.components {
+  /* a row: label leading, control trailing, centred on the cross axis */
+  :where([data-adaptv="field-group"][data-part="row"]) {
+    justify-content: space-between;
+    align-items: center;
+  }
+}
