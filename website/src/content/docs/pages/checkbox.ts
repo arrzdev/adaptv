@@ -55,7 +55,7 @@ const some = picked.length > 0 && !all
     {
       type: "note",
       tone: "warn",
-      text: "`Checkbox` has no label text. Put the text next to it. A `<label htmlFor>` does not toggle it. To make text tappable, use a [Pressable](/docs/pressable) that sets the same state.",
+      text: "`Checkbox` has no label text. Put the text next to it. A `<label>` that wraps it toggles it.",
     },
     { type: "h2", text: "Props" },
     {

@@ -116,7 +116,7 @@ export const page: DocPage = {
     { type: "h2", text: "Styling" },
     {
       type: "p",
-      text: '`Link` has `data-adaptv="link"`, `ExternalLink` has `data-adaptv="external-link"`. Both start neutral (`text-left no-underline cursor-pointer`) and `className` overrides it. The `touch-action` classes are locked. Style `Link` press state with `active:`, as on [Pressable](/docs/pressable). A disabled `Link` has `aria-disabled="true"`. There is no active-route class: compare against the [router](/docs/router-api) location. For an icon-only `Link`, put `sr-only` text inside.',
+      text: '`Link` has `data-adaptv="link"`, `ExternalLink` has `data-adaptv="external-link"`. Both start neutral (`text-left no-underline cursor-pointer`), `Link` also sets `text-gray-950`, and `className` overrides it. The `touch-action` classes are locked. Style `Link` press state with `active:`, as on [Pressable](/docs/pressable). A disabled `Link` has `aria-disabled="true"`. There is no active-route class: compare against the [router](/docs/router-api) location. For an icon-only `Link`, put `sr-only` text inside.',
     },
     { type: "h2", text: "Where it works" },
     {

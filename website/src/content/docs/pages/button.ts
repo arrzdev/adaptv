@@ -91,7 +91,7 @@ export const page: DocPage = {
     { type: "h3", text: "Slots" },
     {
       type: "p",
-      text: "Slots must be direct children of `Button`. `Button.Text` takes `children` and `className` for type and truncation. `Button.Leading` and `Button.Trailing` take `children` (an icon or spinner) and `className` for spacing, such as `pe-2` or `ps-2`. An empty slot renders nothing. Slots are `aria-hidden`, so an icon-only button needs `aria-label`.",
+      text: "Slots must be direct children of `Button`. `Button.Text` takes `children` and `className` for type and truncation. `Button.Leading` and `Button.Trailing` take `children` (an icon or spinner) and `className` for spacing, such as `pe-2` or `ps-2`. An empty slot renders nothing. `Button.Leading` and `Button.Trailing` are `aria-hidden`, so an icon-only button needs `aria-label`.",
     },
     {
       type: "p",

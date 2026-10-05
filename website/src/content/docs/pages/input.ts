@@ -182,17 +182,17 @@ const [notes, setNotes] = useState("")
     { type: "h2", text: "Styling" },
     {
       type: "p",
-      text: '`Input` has `data-adaptv="input"` on the `<input>`, or on the `<label>` when it has slots. `TextArea` has `data-adaptv="text-area"` on the shell, or on the `<fieldset>` when it has parts. The inner field of a grouped `Input` or a `TextArea` has no padding, border or background, and takes only `placeholder:` tokens. Text colour, size and caret colour inherit from the root. Style focus with `focus-within:` on the root.',
+      text: '`Input` has `data-adaptv="input"` on the `<input>`, or on the `<label>` when it has slots. `TextArea` has `data-adaptv="text-area"` on the shell, or on the `<fieldset>` when it has parts. The inner field of a grouped `Input` or a `TextArea` has no padding, border or background, and takes only `placeholder:` and `caret:` tokens. Text colour, size and caret colour inherit from the root. Style focus with `focus-within:` on the root.',
     },
     { type: "h2", text: "Ref" },
     {
       type: "p",
-      text: "`ref` is a handle (`InputHandle`, `TextAreaHandle`), not the DOM node. It has read-only `value` and `disabled`, `focus()` and `clear()`. `Input` also has read-only `grouped`. `clear()` writes to the element and does not call `onChange`. On a controlled field, clear your own state.",
+      text: "`ref` is a handle (`InputHandle`, `TextAreaHandle`), not the DOM node. It has read-only `value` and `disabled`, `focus()` and `clear()`. `Input` also has read-only `grouped`. `clear()` empties the field like an edit, so `onChange` runs and controlled state follows.",
     },
     { type: "h2", text: "Accessibility" },
     {
       type: "p",
-      text: "Give a bare `Input` an `aria-label` or a `<label htmlFor>`. In a grouped `Input` the root is the field label, so slot text joins its name. Mark icons `aria-hidden`. Your own `aria-describedby` on a `TextArea` replaces the generated one.",
+      text: "Give a bare `Input` an `aria-label` or a `<label htmlFor>`. In a grouped `Input` the root is the field label, so slot text joins its name. Mark icons `aria-hidden`. Your own `aria-describedby` on a `TextArea` is merged with the generated hint and error ids.",
     },
     { type: "h2", text: "Where it works" },
     {
