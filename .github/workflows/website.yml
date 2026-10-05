@@ -5,7 +5,7 @@ name: Website
 # Access (board decision, TUD-86).
 #
 #   · PR touching the site or the framework it links → verify (typecheck, lint, build).
-#   · Push to main, same paths → guard (debounce) → verify → deploy to `production`.
+#   · Push to main, same paths → verify (debounce first) → deploy to `production`.
 #   · Manual dispatch from main → verify → deploy, no debounce. Any other ref fails.
 #
 # The path filter keeps framework-only pushes off this workflow's minutes (TUD-33): the
@@ -49,18 +49,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Ref check and debounce. Only main reaches production. On push, wait out a merge burst
-  # and skip if a newer commit is already the tip; a failed tip lookup deploys anyway.
-  guard:
-    if: github.event_name != 'pull_request'
+  # The ref check and the push debounce are the first steps of verify, not a job of
+  # their own: a separate job is billed a whole minute for a few seconds of work
+  # (TUD-222, pr-checks-design tier 2). Only main reaches production. On push, wait out
+  # a merge burst and skip if a newer commit is already the tip; a failed tip lookup
+  # deploys anyway. A skipped push leaves verify green with `go=false`, and no deploy.
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
+    timeout-minutes: 20
     outputs:
       go: ${{ steps.tip.outputs.go }}
     steps:
       - name: Ref check
+        if: github.event_name != 'pull_request'
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "::error::the website deploys from main only, not $GITHUB_REF"
@@ -82,19 +83,16 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"
           fi
 
-  verify:
-    needs: guard
-    if: always() && (github.event_name == 'pull_request' || needs.guard.outputs.go == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
       - name: Checkout
+        if: steps.tip.outputs.go == 'true'
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Setup pnpm
+        if: steps.tip.outputs.go == 'true'
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       - name: Setup Node
+        if: steps.tip.outputs.go == 'true'
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
@@ -104,31 +102,37 @@ jobs:
             website/pnpm-lock.yaml
 
       - name: Install
+        if: steps.tip.outputs.go == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Install (website)
+        if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website install --frozen-lockfile
 
       # The site links the checkout, whose `exports` point at `dist/`.
       - name: Build (framework)
+        if: steps.tip.outputs.go == 'true'
         run: pnpm build
 
       # Build first: it generates `.adaptv/routeTree.gen.ts`, which the typecheck imports.
       # The preset makes Nitro emit a Worker plus `.output/server/wrangler.json`, merged
       # from `website/wrangler.toml`.
       - name: Build
+        if: steps.tip.outputs.go == 'true'
         env:
           NITRO_PRESET: cloudflare_module
         run: pnpm --dir website build
 
       - name: Typecheck
+        if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website typecheck
 
       - name: Lint (biome, website)
+        if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website lint
 
       - name: Keep the build
-        if: github.event_name != 'pull_request'
+        if: steps.tip.outputs.go == 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: website-output
@@ -138,7 +142,7 @@ jobs:
 
   deploy:
     needs: verify
-    if: always() && needs.verify.result == 'success' && github.event_name != 'pull_request'
+    if: needs.verify.outputs.go == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
