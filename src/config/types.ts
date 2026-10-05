@@ -49,7 +49,7 @@ export type OrientationGuardProps = {
 }
 
 /**
- * Props injected into `updateRequiredComponent` once an install has been unable
+ * Props injected into `updateRequiredScreen` once an install has been unable
  * to update for longer than `updateRequiredAfterDays`. → `docs/design/ota.md §5.6`
  */
 export type UpdateRequiredProps = {
