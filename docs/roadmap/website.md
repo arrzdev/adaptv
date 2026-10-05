@@ -149,8 +149,8 @@ reader would trip on it. None is verified beyond what is stated.
   `onSubmitKey` is skipped on touch devices while the fields lab expects it to fire. The `caret:`
   class routing matches no Tailwind variant.
 - **Server functions are refused in every build**, SSR web included (`src/vite/ban-server-apis.ts`),
-  where the owner's direction is to refuse only the artifact with no server. The `server:` scan
-  misses an options object passed by variable.
+  which is the owner's rule (L3, 2026-10-05). The `server:` scan misses an options object passed by
+  variable.
 - **Back chain:** `Drawer` registers no back handler (only `Dropdown` does), and nothing listens to
   the browser's Back button; the drawer lab says browser Back closes it. `Drawer.Nested`'s flag is
   unused; there is no Escape-to-close, no focus trap, and `Title`/`Description` are not
