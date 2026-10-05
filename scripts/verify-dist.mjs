@@ -13,6 +13,7 @@
  */
 import { execFileSync } from "node:child_process"
 import {
+  appendFileSync,
   closeSync,
   cpSync,
   mkdtempSync,
@@ -165,9 +166,28 @@ for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
   }
 }
 
+/**
+ * One row per check in the CI job summary, so publint and attw read as their own lines next to
+ * the gate mode instead of being buried in the step log. A no-op outside Actions.
+ */
+function summarise(rows) {
+  const file = process.env.GITHUB_STEP_SUMMARY
+  if (!file) return
+  const lines = rows.map(
+    ([label, ok]) => `| ${label} | ${ok ? "✔ pass" : "✘ fail"} |`,
+  )
+  appendFileSync(
+    file,
+    ["", "| Publish check | Result |", "| --- | --- |", ...lines, ""].join(
+      "\n",
+    ),
+  )
+}
+
 if (problems.length) {
   console.error("✘ structural checks failed:")
   for (const p of problems) console.error("  -", p)
+  summarise([["dist structure", false]])
   process.exit(1)
 }
 console.log(
@@ -315,4 +335,10 @@ const okAudit = attwInternalResolutionOk()
 if (okAudit)
   console.log("✔ attw audit: only the app-supplied route tree is open")
 
+summarise([
+  ["dist structure", true],
+  ["publint --strict", okPublint],
+  ["attw (node16 profile)", okAttw],
+  ["attw audit (only `#adaptv-route-tree` unresolved)", okAudit],
+])
 process.exit(okPublint && okAttw && okAudit ? 0 : 1)

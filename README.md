@@ -137,7 +137,7 @@ pnpm dev:ios        pnpm preview:ios        pnpm build:android
 pnpm dev:android    pnpm preview:android    pnpm build:all
 pnpm dev:all        pnpm preview:all
 
-pnpm gate           # typecheck, lint, unit tests, colour — everything CI runs
+pnpm gate           # typecheck, lint, unit tests, colour, publint + attw — everything CI runs
 ```
 
 The full loop — fresh worktrees, ports, what the playground is and is not — is in
