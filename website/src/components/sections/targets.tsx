@@ -58,7 +58,7 @@ const PLATFORMS: { name: string; mark: Mark | null; size: string }[] = [
  */
 export function Targets() {
   return (
-    <section className="sheet ruled">
+    <section className="sheet">
       <div className="flex flex-col items-center gap-7 px-6 py-12 md:px-10">
         <p className="text-[14px] text-muted">One app. Every platform.</p>
         <ul className="grid grid-cols-3 items-center justify-items-center gap-x-8 gap-y-6 md:flex md:gap-12">
