@@ -307,6 +307,15 @@ this question `no` does not undo it.
 
 ### O24 — Does adaptv keep Tailwind as a hard requirement?
 
+**Answered 2026-10-05 by the owner: no.** adaptv's own styles become plain CSS in
+`@layer adaptv.components`; `tailwindcss`, `tailwind-merge` and `clsx` leave `peerDependencies`;
+`cn()` and `mergeStyles` stop being exported; the safe-area utilities and the variants move to an
+optional `@arrzdev/adaptv/tailwind.css`. The decision, and what it rejected, is
+[`../decisions/register.md`](../decisions/register.md) **L24**; the contract is
+[`../decisions/styling.md`](../decisions/styling.md) §0.1 and §2. Both preconditions below held:
+[`patch-delivery.md`](patch-delivery.md) §4 shipped first, and the bundle is measured in the PR that
+removes the peers. The question as it was put is kept below.
+
 **`styling.md` §0.1 locked Tailwind v4 as a hard requirement on 2026-07-28 and named its own revisit
 condition — *"revisit as an additive path, not a replacement, if a non-Tailwind consumer ever becomes a
 target."* Going to alpha with a hard dependency on someone else's build is the owner raising exactly
