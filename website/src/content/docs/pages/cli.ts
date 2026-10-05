@@ -371,7 +371,7 @@ adaptv --version          # or -v`,
           "Sets the build tag of the service worker and update channel.",
         ],
         [
-          "`NITRO_PRESET`",
+          "`SERVER_PRESET`",
           "Server deploy target. See [Deploying](/docs/deploying).",
         ],
         [
