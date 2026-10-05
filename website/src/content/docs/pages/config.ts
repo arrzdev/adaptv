@@ -314,7 +314,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "Import `OfflineProps` and `BootErrorProps` from `@arrzdev/adaptv/components`. The `updateRequiredScreen` props type is not exported. There is no `providers` key: use a layout route that wraps `<Outlet />`. See [Routing](/docs/routing).",
+      text: "Import `OfflineProps` and `BootErrorProps` from `@arrzdev/adaptv/components`. `UpdateRequiredProps` comes from `@arrzdev/adaptv/config`. There is no `providers` key: use a layout route that wraps `<Outlet />`. See [Routing](/docs/routing).",
     },
     { type: "h2", text: "Native app" },
     {
@@ -466,7 +466,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps` and `OrientationGuardProps`, from `@arrzdev/adaptv/config`.",
+      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps` and `UpdateRequiredProps`, from `@arrzdev/adaptv/config`.",
     },
   ],
 }
