@@ -26,7 +26,7 @@ export const TEMPLATE = fileURLToPath(
 export const GLYPH = { ok: "✓", fail: "✖" }
 
 /** The framework release a new app depends on. `create.test.mjs` holds it to the root version. */
-export const ADAPTV_VERSION = "0.1.0"
+export const ADAPTV_VERSION = "0.1.0-alpha.1"
 
 /**
  * The framework's peers, at the versions it pins them to, plus what the template itself
