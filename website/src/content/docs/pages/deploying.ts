@@ -44,7 +44,7 @@ adaptv preview web`,
     { type: "h2", text: "Host an SSR build" },
     {
       type: "p",
-      text: "adaptv detects AWS Amplify, Azure, Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel and Zeabur from the build environment. Elsewhere, set `NITRO_PRESET` (or `SERVER_PRESET`). With neither, you get a Node server.",
+      text: "adaptv detects AWS Amplify, Azure, Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel and Zeabur from the build environment. Elsewhere, set `SERVER_PRESET`. With neither, you get a Node server.",
     },
     {
       type: "code",
@@ -55,7 +55,7 @@ adaptv build web
 node .output/server/index.mjs
 
 # Cloudflare Workers, built in your own CI
-NITRO_PRESET=cloudflare_module adaptv build web`,
+SERVER_PRESET=cloudflare_module adaptv build web`,
     },
     {
       type: "p",

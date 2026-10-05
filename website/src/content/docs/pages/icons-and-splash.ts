@@ -145,7 +145,7 @@ adaptv icons --input ./mark.svg --dark ./mark-dark.png --yes`,
       rows: [
         {
           name: "themeColor",
-          type: "{ light?: string; dark?: string }",
+          type: "{ light: string; dark?: string } | { light?: string; dark: string }",
           required: true,
           description:
             "Background colour per scheme. A missing side uses the other.",
