@@ -21,7 +21,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
 
 export type PatchStatus = {
   ok: boolean
@@ -77,7 +77,7 @@ export function patchInstructions(filenames: string[]): string[] {
  */
 function shippedPatchFilenames(): string[] {
   const roots: Array<() => string> = [
-    () => fileURLToPath(new URL("../../patches", import.meta.url)),
+    () => join(adaptvPackageRoot(), "patches"),
     () => join(process.cwd(), "patches"),
   ]
   for (const root of roots) {
@@ -276,7 +276,7 @@ function resolveUpdatePluginRoot(adaptvRoot: string): string | null {
 /** adaptv's own package root, when the caller has no better answer. */
 function defaultAdaptvRoot(): string {
   try {
-    return fileURLToPath(new URL("../..", import.meta.url))
+    return adaptvPackageRoot()
   } catch {
     return process.cwd()
   }

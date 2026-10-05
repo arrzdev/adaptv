@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { build as esbuild } from "esbuild"
 import type { Plugin } from "vite"
 import { injectManifest } from "workbox-build"
@@ -28,6 +27,7 @@ import {
   resolveIconSet,
 } from "#adaptv/vite/icon-set.ts"
 import { buildManifest } from "#adaptv/vite/manifest.ts"
+import { adaptvShippedFile } from "#adaptv/vite/package-files.ts"
 
 /**
  * adaptv's own worker — a real module in the package, never generated.
@@ -37,7 +37,7 @@ import { buildManifest } from "#adaptv/vite/manifest.ts"
  * on import, taking down every suite that merely imports the plugin barrel.
  */
 function adaptvWorkerPath(): string {
-  return fileURLToPath(new URL("../sw/default-worker.ts", import.meta.url))
+  return adaptvShippedFile("default-worker")
 }
 
 /**

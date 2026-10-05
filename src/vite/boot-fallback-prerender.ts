@@ -1,10 +1,10 @@
 import { createRequire } from "node:module"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import type { Plugin as EsbuildPlugin } from "esbuild"
 import { build as esbuild } from "esbuild"
 import type { BootCode } from "#adaptv/shell/boot-fallback.ts"
 import { BOOT_CODES } from "#adaptv/shell/boot-fallback.ts"
+import { adaptvShippedFile } from "#adaptv/vite/package-files.ts"
 
 /**
  * Render the app's error component to static HTML **at build time**, so the boot
@@ -27,16 +27,6 @@ import { BOOT_CODES } from "#adaptv/shell/boot-fallback.ts"
  * already has to render in Node. Anything it reaches for that only exists in a
  * browser would already have broken the app's own server render.
  */
-
-/** adaptv's own `src/`, for resolving the default component when the app overrides nothing. */
-function adaptvSrcDir(): string {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-}
-
-/** The default screen's module path — adaptv's own `BootError`. */
-function defaultBootErrorPath(): string {
-  return path.join(adaptvSrcDir(), "components", "boot-error.tsx")
-}
 
 /**
  * Force **one** React into the bundle. → `docs/decisions/register.md B31`
@@ -114,7 +104,7 @@ export async function prerenderBootFallback({
   appRoot,
   specifier,
 }: PrerenderBootFallbackOptions): Promise<Record<BootCode, string>> {
-  const target = specifier ?? defaultBootErrorPath()
+  const target = specifier ?? adaptvShippedFile("boot-error")
   //a consumer screen thunk resolves to a module's `default` (that is the
   //`ScreenThunk` contract); adaptv's own component is a named export, because it
   //also ships on the public component surface.

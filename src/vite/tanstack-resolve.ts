@@ -1,6 +1,6 @@
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import type { Plugin } from "vite"
+import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
 
 /**
  * Resolve the `@tanstack/*` imports TanStack writes into the APP's modules from adaptv's
@@ -20,8 +20,7 @@ import type { Plugin } from "vite"
  */
 export function adaptvTanstackResolvePlugin(
   appRoot: string,
-  //the package root — two levels up from src/vite/
-  packageRoot = fileURLToPath(new URL("../..", import.meta.url)),
+  packageRoot = adaptvPackageRoot(),
 ): Plugin {
   const from = path.join(packageRoot, "package.json")
   const appDir = `${path.resolve(appRoot)}${path.sep}`
