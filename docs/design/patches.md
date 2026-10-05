@@ -117,7 +117,9 @@ with the message above. The recovery, in order:
    edits, `pnpm patch-commit`. Keep the `ADAPTV PATCH` marker in the native one.
 2. **Rename the file and the `pnpm-workspace.yaml` key together.** They must agree — the filename is
    parsed back into the key by `parsePatchFilename()`, and the consumer-facing instructions are
-   generated from the filename.
+   generated from the filename. Then copy `patches/` and the block into
+   `packages/create-adaptv/template/` and `examples/basic/`. `create.test.mjs` and
+   `examples/basic.test.mjs` fail until all three agree.
 3. **Delete `node_modules` and reinstall.** pnpm does not always re-apply patches on an incremental
    install; this is why the error message says so.
 4. **Re-run a native build**, not just `pnpm test`. The native-patch check only runs on that path.
@@ -127,7 +129,10 @@ produced a checker that could not read what it was checking and therefore always
 
 ## 6. What this costs a consumer
 
-Copying five lines into their own `pnpm-workspace.yaml`. That is a real adoption cost and it is
-tracked, not hidden — see [`../decisions/register.md`](../decisions/register.md) **L19**, **L21** and
-[`create-adaptv.md §4`](create-adaptv.md). That section records that the block adaptv's error
-suggests cannot work on a fresh install: its files are inside the package being installed.
+Five patch files in their own `patches/` and five lines in their `pnpm-workspace.yaml`. An app from
+`create-adaptv` starts with both. A hand-made app copies them, and every app copies them again when
+adaptv bumps a patch. That is a real adoption cost and it is tracked, not hidden — see
+[`../decisions/register.md`](../decisions/register.md) **L19**, **L21** and
+[`create-adaptv.md §4`](create-adaptv.md). The block points at the app's own `patches/` because a
+path into `node_modules/@arrzdev/adaptv/` cannot work on a fresh install: the files are inside the
+package being installed.

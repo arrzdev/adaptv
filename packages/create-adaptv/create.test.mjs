@@ -75,11 +75,16 @@ describe("what it emits", () => {
   create({ dir, name: "my-app" })
   const read = (file) => readFileSync(join(dir, file), "utf8")
 
-  it("is a config, a vite config, one route and a stylesheet — nothing else", () => {
+  it("is a config, a vite config, one route, a stylesheet and the patches — nothing else", () => {
     expect(files(dir)).toEqual([
       ".gitignore",
       "adaptv.config.ts",
       "package.json",
+      "patches/@capacitor__cli@8.4.3.patch",
+      "patches/@capawesome__capacitor-live-update@8.3.0.patch",
+      "patches/@tanstack__router-generator@1.167.21.patch",
+      "patches/@tanstack__start-plugin-core@1.171.24.patch",
+      "patches/native-run@2.0.3.patch",
       "pnpm-workspace.yaml",
       "src/routing/config.ts",
       "src/routing/pages/home.page.tsx",
@@ -139,6 +144,33 @@ describe("the copies it keeps of the framework", () => {
       expect(rootPkg.devDependencies[name], name).toBe(version)
   })
 
+  it("carries every patch the framework applies, byte for byte, and declares it", () => {
+    //pnpm applies patches only from the project it installs, so the app holds its own
+    //copy (docs/design/create-adaptv.md §4). A bumped patch must be copied here too.
+    const patches = (yaml) =>
+      Object.fromEntries(
+        [
+          ...(yaml.split(/^patchedDependencies:\n/m)[1] ?? "").matchAll(
+            /^ {2}'([^']+)': (\S+)$/gm,
+          ),
+        ].map((m) => [m[1], m[2]]),
+      )
+    const ours = patches(
+      readFileSync(join(TEMPLATE, "pnpm-workspace.yaml"), "utf8"),
+    )
+    expect(Object.keys(ours).length).toBeGreaterThan(0)
+    expect(ours).toEqual(
+      patches(readFileSync(join(ROOT, "pnpm-workspace.yaml"), "utf8")),
+    )
+    expect(readdirSync(join(TEMPLATE, "patches")).sort()).toEqual(
+      readdirSync(join(ROOT, "patches")).sort(),
+    )
+    for (const file of Object.values(ours))
+      expect(readFileSync(join(TEMPLATE, file), "utf8"), file).toBe(
+        readFileSync(join(ROOT, file), "utf8"),
+      )
+  })
+
   it("prints the CLI's glyphs", () => {
     expect(GLYPH).toEqual({ ok: CLI_GLYPH.ok, fail: CLI_GLYPH.fail })
   })
@@ -147,6 +179,7 @@ describe("the copies it keeps of the framework", () => {
     expect(readdirSync(TEMPLATE).sort()).toEqual([
       "adaptv.config.ts",
       "gitignore",
+      "patches",
       "pnpm-workspace.yaml",
       "src",
       "tsconfig.json",
