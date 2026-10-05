@@ -193,6 +193,8 @@
     "dist",
     "patches",
     "bin",
+    "!bin/**/*.test.mjs",
+    "!bin/lib/fixtures",
     "assets",
     "biome-shared.json",
     "THIRD_PARTY_LICENSES"
