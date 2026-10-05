@@ -1,85 +1,87 @@
-import { type SVGProps, useState } from "react"
+import type { SVGProps } from "react"
 
 /*
- * Marks only where the owner allows them: the Android robot (CC BY 3.0, credited in the
- * footer) and the PWA logo (CC0). Apple's and Google's other marks need a licence, and
- * the store badges are only for a published app, so those targets are named in text.
+ * Platform marks from simple-icons, in one colour. The iOS and macOS marks are Apple's
+ * wordmarks, never the Apple logo; the Android robot is CC BY 3.0 and credited in the
+ * footer. No Windows logo is licensed for this use, so Windows is set as a wordmark in
+ * the site font. Each viewBox is cropped to its glyph so heights line up by eye.
  */
-function AndroidMark(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z" />
-    </svg>
-  )
-}
+type Mark = (props: SVGProps<SVGSVGElement>) => React.JSX.Element
 
-function PwaMark(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M20.5967 7.482L24 16.518h-2.5098l-.5816-1.6184h-3.2452l.6933-1.7532h2.0019l-.95-2.6597 1.1881-3.0047zm-8.111 0l1.7722 5.8393L16.75 7.482h2.4154l-3.6433 9.036h-2.3833l-1.6395-5.2366-1.7196 5.2366h-2.377l-1.233-2.1161 1.2144-3.7415 1.342 2.6609 1.9029-5.8393h1.8566zm-8.7453 0c1.0635 0 1.8713.3055 2.4234.9166a2.647 2.647 0 01.2806.3684l-1.0753 3.3128-.3847 1.1854c-.352.1006-.7533.1509-1.204.1509H2.2928v3.102H0V7.482zm-.5816 1.7532h-.866v2.4276h.8597c.5577 0 .9406-.1194 1.1485-.3582.1896-.215.2845-.5058.2845-.8724 0-.364-.1079-.6544-.3235-.8714-.2157-.217-.5834-.3256-1.1032-.3256z" />
-    </svg>
-  )
-}
+const IosMark: Mark = (props) => (
+  <svg viewBox="0 6 24 12" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M1.1 6.05C.486 6.05 0 6.53 0 7.13A1.08 1.08 0 0 0 1.1 8.21C1.72 8.21 2.21 7.73 2.21 7.13C2.21 6.53 1.72 6.05 1.1 6.05M8.71 6.07C5.35 6.07 3.25 8.36 3.25 12C3.25 15.67 5.35 17.95 8.71 17.95C12.05 17.95 14.16 15.67 14.16 12C14.16 8.36 12.05 6.07 8.71 6.07M19.55 6.07C17.05 6.07 15.27 7.45 15.27 9.5C15.27 11.13 16.28 12.15 18.4 12.64L19.89 13C21.34 13.33 21.93 13.81 21.93 14.64C21.93 15.6 20.96 16.28 19.58 16.28C18.17 16.28 17.11 15.59 17 14.53H15C15.08 16.65 16.82 17.95 19.46 17.95C22.25 17.95 24 16.58 24 14.4C24 12.69 23 11.72 20.68 11.19L19.35 10.89C17.94 10.55 17.36 10.1 17.36 9.34C17.36 8.38 18.24 7.74 19.54 7.74C20.85 7.74 21.75 8.39 21.85 9.46H23.81C23.76 7.44 22.09 6.07 19.55 6.07M8.71 7.82C10.75 7.82 12.06 9.45 12.06 12C12.06 14.57 10.75 16.2 8.71 16.2C6.65 16.2 5.35 14.57 5.35 12C5.35 9.45 6.65 7.82 8.71 7.82M.111 9.31V17.76H2.1V9.31H.11Z" />
+  </svg>
+)
 
-const TARGETS = [
-  { name: "Safari on iOS" },
-  { name: "Chrome on Android", mark: AndroidMark },
-  { name: "Desktop browsers" },
-  { name: "Home screen (PWA)", mark: PwaMark },
-  { name: "App Store" },
-  { name: "Google Play" },
-] as const
+const AndroidMark: Mark = (props) => (
+  <svg
+    viewBox="0 5.3 24 13.7"
+    fill="currentColor"
+    aria-hidden="true"
+    {...props}
+  >
+    <path d="M18.4395 5.5586c-.675 1.1664-1.352 2.3318-2.0274 3.498-.0366-.0155-.0742-.0286-.1113-.043-1.8249-.6957-3.484-.8-4.42-.787-1.8551.0185-3.3544.4643-4.2597.8203-.084-.1494-1.7526-3.021-2.0215-3.4864a1.1451 1.1451 0 0 0-.1406-.1914c-.3312-.364-.9054-.4859-1.379-.203-.475.282-.7136.9361-.3886 1.5019 1.9466 3.3696-.0966-.2158 1.9473 3.3593.0172.031-.4946.2642-1.3926 1.0177C2.8987 12.176.452 14.772 0 18.9902h24c-.119-1.1108-.3686-2.099-.7461-3.0683-.7438-1.9118-1.8435-3.2928-2.7402-4.1836a12.1048 12.1048 0 0 0-2.1309-1.6875c.6594-1.122 1.312-2.2559 1.9649-3.3848.2077-.3615.1886-.7956-.0079-1.1191a1.1001 1.1001 0 0 0-.8515-.5332c-.5225-.0536-.9392.3128-1.0488.5449zm-.0391 8.461c.3944.5926.324 1.3306-.1563 1.6503-.4799.3197-1.188.0985-1.582-.4941-.3944-.5927-.324-1.3307.1563-1.6504.4727-.315 1.1812-.1086 1.582.4941zM7.207 13.5273c.4803.3197.5506 1.0577.1563 1.6504-.394.5926-1.1038.8138-1.584.4941-.48-.3197-.5503-1.0577-.1563-1.6504.4008-.6021 1.1087-.8106 1.584-.4941z" />
+  </svg>
+)
 
-function TargetRow({ as: Tag }: { as: "ul" | "span" }) {
-  const Item = Tag === "ul" ? "li" : "span"
-  return (
-    <Tag className="marquee-list">
-      {TARGETS.map((target) => {
-        const Mark = "mark" in target ? target.mark : null
-        return (
-          <Item
-            key={target.name}
-            className="flex shrink-0 items-center gap-2.5 whitespace-nowrap font-medium text-[17px] text-subtle"
-          >
-            {Mark && <Mark className="size-6" />}
-            {target.name}
-          </Item>
-        )
-      })}
-    </Tag>
-  )
-}
+const MacosMark: Mark = (props) => (
+  <svg viewBox="0 9.1 24 5.8" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M0 14.727h.941v-2.453c0-.484.318-.835.771-.835.439 0 .71.276.71.722v2.566h.915V12.25c0-.48.31-.812.764-.812.46 0 .718.28.718.77v2.518h.94v-2.748c0-.801-.517-1.334-1.307-1.334-.578 0-1.054.31-1.247.805h-.023c-.147-.514-.552-.805-1.118-.805-.545 0-.968.306-1.142.771H.903v-.695H0v4.006zm7.82-.646c-.408 0-.68-.208-.68-.537 0-.318.26-.522.714-.552l.926-.057v.307c0 .483-.427.839-.96.839zm-.284.71c.514 0 1.017-.268 1.248-.703h.018v.639h.908v-2.76c0-.804-.647-1.33-1.64-1.33-1.021 0-1.66.537-1.701 1.285h.873c.06-.332.344-.548.79-.548.464 0 .748.242.748.662v.287l-1.058.06c-.976.061-1.524.488-1.524 1.199 0 .721.564 1.209 1.338 1.209zm6.305-2.642c-.065-.843-.719-1.512-1.777-1.512-1.164 0-1.92.805-1.92 2.087 0 1.3.756 2.082 1.928 2.082 1.005 0 1.697-.59 1.772-1.485h-.888c-.087.453-.397.725-.873.725-.597 0-.982-.483-.982-1.322 0-.824.381-1.323.975-1.323.502 0 .8.321.876.748h.889zm2.906-2.967c-1.591 0-2.589 1.085-2.589 2.82 0 1.735.998 2.816 2.59 2.816 1.586 0 2.584-1.081 2.584-2.816 0-1.735-.997-2.82-2.585-2.82zm0 .832c.971 0 1.591.77 1.591 1.988 0 1.213-.62 1.984-1.59 1.984-.976 0-1.592-.77-1.592-1.984 0-1.217.616-1.988 1.591-1.988zm2.982 3.178c.042 1.006.866 1.626 2.12 1.626 1.32 0 2.151-.65 2.151-1.686 0-.813-.469-1.27-1.576-1.523l-.627-.144c-.67-.158-.945-.37-.945-.733 0-.453.415-.756 1.032-.756.623 0 1.05.306 1.096.817h.93c-.023-.96-.817-1.61-2.019-1.61-1.187 0-2.03.653-2.03 1.62 0 .78.477 1.263 1.482 1.494l.707.166c.688.163.967.39.967.782 0 .454-.457.779-1.115.779-.665 0-1.167-.329-1.228-.832h-.945z" />
+  </svg>
+)
+
+const PwaMark: Mark = (props) => (
+  <svg viewBox="0 7.4 24 9.2" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M20.5967 7.482L24 16.518h-2.5098l-.5816-1.6184h-3.2452l.6933-1.7532h2.0019l-.95-2.6597 1.1881-3.0047zm-8.111 0l1.7722 5.8393L16.75 7.482h2.4154l-3.6433 9.036h-2.3833l-1.6395-5.2366-1.7196 5.2366h-2.377l-1.233-2.1161 1.2144-3.7415 1.342 2.6609 1.9029-5.8393h1.8566zm-8.7453 0c1.0635 0 1.8713.3055 2.4234.9166a2.647 2.647 0 01.2806.3684l-1.0753 3.3128-.3847 1.1854c-.352.1006-.7533.1509-1.204.1509H2.2928v3.102H0V7.482zm-.5816 1.7532h-.866v2.4276h.8597c.5577 0 .9406-.1194 1.1485-.3582.1896-.215.2845-.5058.2845-.8724 0-.364-.1079-.6544-.3235-.8714-.2157-.217-.5834-.3256-1.1032-.3256z" />
+  </svg>
+)
+
+const CapacitorMark: Mark = (props) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M24 3.7l-5.766 5.766 5.725 5.736-3.713 3.712L5.073 3.742 8.786.03l5.736 5.726L20.284 0 24 3.7zM.029 8.785l3.713-3.713 15.173 15.173-3.713 3.714-5.732-5.726L3.7 24 0 20.285l5.754-5.764L.029 8.785z" />
+  </svg>
+)
+
+const PLATFORMS: { name: string; mark: Mark | null; size: string }[] = [
+  { name: "iOS", mark: IosMark, size: "h-[15px] md:h-[18px]" },
+  { name: "Android", mark: AndroidMark, size: "h-5 md:h-6" },
+  { name: "Windows", mark: null, size: "text-[19px] md:text-[23px]" },
+  { name: "macOS", mark: MacosMark, size: "h-[15px] md:h-[18px]" },
+  { name: "PWA", mark: PwaMark, size: "h-[15px] md:h-[18px]" },
+  { name: "Capacitor", mark: CapacitorMark, size: "h-[21px] md:h-6" },
+]
 
 /**
- * The six places adaptv runs, as one slow line. The line is a toggle button so touch and
- * keyboard users can stop it too (WCAG 2.2.2); its copies are hidden from assistive tech,
- * which reads the plain list instead. Under reduced motion that list is the one you see.
+ * Where an adaptv app runs, as one still row of marks: no motion, no captions. Each mark
+ * carries its name as hidden text, so assistive tech reads a plain list of six.
  */
 export function Targets() {
-  const [paused, setPaused] = useState(false)
   return (
     <section className="sheet">
-      <div className="flex flex-col gap-5 px-6 py-10 md:flex-row md:items-center md:gap-10 md:px-10">
-        <p className="shrink-0 text-[14px] text-muted">Runs on</p>
-        <div className="min-w-0 flex-1">
-          <div className="marquee-static">
-            <TargetRow as="ul" />
-          </div>
-          <button
-            type="button"
-            aria-pressed={paused}
-            aria-label="Pause the platforms line"
-            onClick={() => setPaused((value) => !value)}
-            className="marquee"
-          >
-            <span className="marquee-viewport" aria-hidden="true">
-              <span className="marquee-track">
-                <TargetRow as="span" />
-                <TargetRow as="span" />
-              </span>
-            </span>
-          </button>
-        </div>
+      <div className="flex flex-col items-center gap-7 px-6 py-12 md:px-10">
+        <p className="text-[14px] text-muted">One app. Every platform.</p>
+        <ul className="grid grid-cols-3 items-center justify-items-center gap-x-8 gap-y-6 md:flex md:gap-12">
+          {PLATFORMS.map(({ name, mark: Mark, size }) => (
+            <li
+              key={name}
+              className="flex h-7 items-center text-foreground opacity-50 transition-opacity duration-200 ease-out hover:opacity-80"
+            >
+              {Mark ? (
+                <>
+                  <Mark className={`w-auto ${size}`} />
+                  <span className="sr-only">{name}</span>
+                </>
+              ) : (
+                <span
+                  className={`font-semibold leading-none tracking-[-0.03em] ${size}`}
+                >
+                  {name}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )
