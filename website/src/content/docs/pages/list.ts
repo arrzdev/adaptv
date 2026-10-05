@@ -125,7 +125,7 @@ const rows: Row[] = Array.from({ length: 10_000 }, (_, index) => ({
     { type: "h2", text: "Infinite scroll" },
     {
       type: "p",
-      text: "`onEndReached` runs once each time the end comes into the window. It runs again when `data.length` changes while the end is still in view. Wrap the handler in `useCallback`. An inline function runs on every render. Guard against a request that is already running.",
+      text: "`onEndReached` runs once each time the end comes into the window. It runs again when `data.length` changes while the end is still in view. Guard against a request that is already running.",
     },
     {
       type: "code",
@@ -150,7 +150,7 @@ const rows: Row[] = Array.from({ length: 10_000 }, (_, index) => ({
     { type: "h2", text: "Styling" },
     {
       type: "p",
-      text: 'The scroll surface has `data-adaptv="list"` and takes your `className`. Its scroll axis, overscroll and touch rules are locked. Each row sits in an absolutely positioned wrapper, so a row cannot size itself against its siblings. Vertical margins on a row count toward its height. The scrollable height is the extent of the rows mounted now, so `scrollHeight` is not the full list height.',
+      text: 'The scroll surface has `data-adaptv="list"` and takes your `className`. Its scroll axis, overscroll and touch rules are locked. Each row sits in an absolutely positioned wrapper, so a row cannot size itself against its siblings. Vertical margins on a row count toward its height. The scrollable height is the estimated height of the whole list. It changes as rows are measured.',
     },
     { type: "h2", text: "Where it works" },
     {

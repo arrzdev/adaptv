@@ -83,7 +83,7 @@ const [minute, setMinute] = useState(30)
           type: "(value: number) => void",
           required: true,
           description:
-            "Called live as rows cross the centre, and once more when the wheel settles.",
+            "Called live as rows cross the centre, and once more when the wheel settles on a row other than `value`.",
         },
         {
           name: "ariaLabel",

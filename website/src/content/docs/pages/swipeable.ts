@@ -155,7 +155,7 @@ export const page: DocPage = {
     { type: "h2", text: "Slots" },
     {
       type: "p",
-      text: "The three slots are markers. They render nothing themselves and drop any prop except `children`. Style the element inside the slot. To wrap a slot, set the wrapper `displayName` to the slot name, for example `Swipeable.RightActions`. The wrapper must return the adaptv slot.",
+      text: "The three slots are markers. They render nothing themselves and drop any prop except `children`. Style the element inside the slot. To wrap a slot, set the wrapper `displayName` to the slot name, for example `Swipeable.RightActions`. adaptv reads the wrapper's `children` and never renders the wrapper, so markup the wrapper adds is dropped.",
     },
     { type: "h2", text: "Swipeable.Group" },
     {

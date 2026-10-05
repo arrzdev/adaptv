@@ -354,7 +354,7 @@ export const page: DocPage = {
       label: "src/components/splash-screen.tsx",
       lang: "tsx",
       code: `export default function SplashScreen() {
-  const ready = useAppReady()
+  const ready = useAppReady() // your app's own ready check
   if (ready) return null
   return (
     <PwaSplashOverlay className="bg-white dark:bg-black">

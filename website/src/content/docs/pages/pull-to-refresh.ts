@@ -48,7 +48,7 @@ const scrollRef = useRef<HTMLDivElement>(null)
           type: "() => Promise<unknown>",
           required: true,
           description:
-            "Called once when a pull is released past the threshold. If it rejects, the indicator still closes and the error is rethrown. Catch inside it to avoid that.",
+            "Called once when a pull is released past the threshold. If it rejects, the indicator still closes and the error goes to `reportError`, which logs it. It is not rethrown. Catch inside it to show it in the app.",
         },
         {
           name: "children",
@@ -109,7 +109,7 @@ const scrollRef = useRef<HTMLDivElement>(null)
     },
     {
       type: "p",
-      text: "A touch that starts on a [Swipeable](/docs/swipeable) row is ignored. A mostly sideways drag is ignored. A pull is cancelled if the scroller leaves the top.",
+      text: "A mostly sideways drag is ignored. A pull is cancelled if the scroller leaves the top.",
     },
     { type: "h2", text: "Styling" },
     {
