@@ -70,7 +70,7 @@ tarball, not from this checkout:
 ```bash
 git clone https://github.com/arrzdev/adaptv.git && cd adaptv
 pnpm install
-pnpm build && pnpm pack   # writes arrzdev-adaptv-0.1.0.tgz, which examples/basic installs
+pnpm build && pnpm pack   # writes arrzdev-adaptv-0.1.0-alpha.1.tgz, which examples/basic installs
 
 cd examples/basic
 pnpm install
@@ -149,14 +149,14 @@ Start from a copy of `examples/basic`. Run this from the adaptv checkout, after 
 
 ```bash
 cp -r examples/basic ../my-app
-cp arrzdev-adaptv-0.1.0.tgz ../my-app/
+cp arrzdev-adaptv-0.1.0-alpha.1.tgz ../my-app/
 cd ../my-app
-npm pkg set "dependencies.@arrzdev/adaptv=file:arrzdev-adaptv-0.1.0.tgz"
+npm pkg set "dependencies.@arrzdev/adaptv=file:arrzdev-adaptv-0.1.0-alpha.1.tgz"
 pnpm install
 pnpm dev
 ```
 
-The example's `package.json` points at `../../arrzdev-adaptv-0.1.0.tgz`, the tarball at the root
+The example's `package.json` points at `../../arrzdev-adaptv-0.1.0-alpha.1.tgz`, the tarball at the root
 of the checkout. The `npm pkg set` line points it at the copy next to your app instead. Keep the
 tarball there: `pnpm install` reads it on every install. The example's `packageManager` pins
 pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
@@ -175,7 +175,7 @@ pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
 > [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml):
 >
 > ```bash
-> tar -xzf arrzdev-adaptv-0.1.0.tgz --strip-components=1 package/patches   # writes ./patches/
+> tar -xzf arrzdev-adaptv-0.1.0-alpha.1.tgz --strip-components=1 package/patches   # writes ./patches/
 > ```
 >
 > After you upgrade adaptv, extract them again and update the keys to the new versions.

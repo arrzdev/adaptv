@@ -7,8 +7,10 @@ API.
 
 ## [Unreleased]
 
-The first public alpha, planned as `0.1.0-alpha.1`. Nothing has been published yet: the package is
-consumed from a local checkout. What exists today:
+## 0.1.0-alpha.1
+
+The first public alpha. Not published to npm yet: publishing waits on approval, and until then the
+package is installed from the `pnpm pack` tarball. What it contains:
 
 ### Added
 
@@ -35,7 +37,7 @@ consumed from a local checkout. What exists today:
 - **Offline and updates:** a framework-owned service worker and a self-hosted, signed over-the-air
   update channel for installed apps.
 - **Icons from one image,** including iOS dark and tinted variants and Android's themed icon.
-- **A `dist` build** (`pnpm build:check`). The package `exports` still point at `src/`; the cutover
-  is on the [roadmap](docs/roadmap/dist-cutover.md).
+- **A `dist` build.** The package `exports` and `files` point at `dist/`, and an app installed from
+  the packed tarball runs (`examples/basic`).
 
 [Unreleased]: https://github.com/arrzdev/adaptv/commits/main
