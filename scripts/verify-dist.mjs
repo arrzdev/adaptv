@@ -18,6 +18,7 @@ import {
   cpSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -158,6 +159,21 @@ for (const e of [...node, ...worker]) {
   if (emitted(e)?.startsWith('"use client"'))
     problems.push(`${e}.mjs must NOT carry "use client"`)
 }
+// A file located relative to the module that asks for it holds in `src/` and nowhere else:
+// bundled into `dist/vite.mjs` or `dist/cli/**`, `../routes/x.tsx` and `../..` point past
+// the package. `src/vite/package-files.ts` is the one place adaptv finds its own files.
+const builtModules = readdirSync(path.join(repo, "dist"), {
+  recursive: true,
+})
+  .filter((f) => f.endsWith(".mjs"))
+  .map((f) => path.join("dist", f))
+for (const file of builtModules)
+  for (const [ref] of read(file).matchAll(
+    /new URL\(\s*["'`]\.{1,2}\/[^"'`]*["'`]\s*,\s*import\.meta\.url\s*\)/g,
+  ))
+    problems.push(
+      `${file} resolves ${ref} — use src/vite/package-files.ts`,
+    )
 // `index.css`'s relative `@import`s must resolve to co-located siblings.
 for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
   try {
