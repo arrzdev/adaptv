@@ -83,8 +83,16 @@ async function until(check) {
 describe("a quit mid-step leaves no live row behind", () => {
   //`runLine` loads Ink on its first step, and the first load transforms it: seconds on a loaded
   //host. Done here, under the hook's budget, the tests' steps load it from the transform cache.
+  //Ink's `is-in-ci` reads `CI` once, at load, and survives `resetModules`: the load that caches
+  //it runs without `CI` too, or every later step renders in CI mode and never animates.
   beforeAll(async () => {
-    await import("../ui/live.mjs")
+    const ci = process.env.CI
+    delete process.env.CI
+    try {
+      await import("../ui/live.mjs")
+    } finally {
+      if (ci !== undefined) process.env.CI = ci
+    }
   }, 30_000)
 
   it("erases a step that is still running", async () => {
