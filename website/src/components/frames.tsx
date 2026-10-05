@@ -12,11 +12,14 @@ export function PhoneFrame({
   children,
   label,
   tone = "neutral",
+  recording = false,
   className,
 }: {
   children: ReactNode
   /** Caption under the device. */
   label?: string
+  /** A screen recording carries its own status bar and home indicator. */
+  recording?: boolean
   tone?: "neutral" | "bad" | "good"
   className?: string
 }) {
@@ -26,20 +29,24 @@ export function PhoneFrame({
         {/* absolutely placed, so tall content can never stretch the device's aspect ratio */}
         <View className="absolute inset-[7px] overflow-hidden rounded-[37px] bg-background text-foreground ring-1 ring-black">
           {/* status bar */}
-          <View
-            row
-            className="pointer-events-none relative z-20 h-9 shrink-0 items-end justify-between px-[8%] pb-0.5 font-semibold text-[11px]"
-          >
-            <span>9:41</span>
-            <View row className="items-center gap-1">
-              <Signal className="size-3" strokeWidth={2.5} />
-              <Wifi className="size-3" strokeWidth={2.5} />
-              <BatteryFull className="size-3.5" strokeWidth={2} />
+          {recording ? null : (
+            <View
+              row
+              className="pointer-events-none relative z-20 h-9 shrink-0 items-end justify-between px-[8%] pb-0.5 font-semibold text-[11px]"
+            >
+              <span>9:41</span>
+              <View row className="items-center gap-1">
+                <Signal className="size-3" strokeWidth={2.5} />
+                <Wifi className="size-3" strokeWidth={2.5} />
+                <BatteryFull className="size-3.5" strokeWidth={2} />
+              </View>
             </View>
-          </View>
+          )}
           <View className="relative min-h-0 flex-1">{children}</View>
           {/* home indicator */}
-          <span className="pointer-events-none absolute bottom-1.5 left-1/2 z-20 h-1 w-[36%] -translate-x-1/2 rounded-full bg-foreground/80" />
+          {recording ? null : (
+            <span className="pointer-events-none absolute bottom-1.5 left-1/2 z-20 h-1 w-[36%] -translate-x-1/2 rounded-full bg-foreground/80" />
+          )}
         </View>
         {/* sensor island */}
         <span className="pointer-events-none absolute top-[15px] left-1/2 z-30 h-[19px] w-[30%] -translate-x-1/2 rounded-full bg-black" />
