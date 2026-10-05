@@ -1,0 +1,25 @@
+{
+  "include": [
+    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
+    ".adaptv/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": ["node_modules", "dist", ".output"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "paths": {
+      "#adaptv-route-tree": ["./.adaptv/routeTree.gen.ts"],
+      "@/*": ["./src/*"]
+    }
+  }
+}

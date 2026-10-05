@@ -1,0 +1,19 @@
+{
+  "name": "create-adaptv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Create an adaptv app: pnpm create adaptv my-app",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "bin": {
+    "create-adaptv": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "create.mjs",
+    "template"
+  ]
+}
