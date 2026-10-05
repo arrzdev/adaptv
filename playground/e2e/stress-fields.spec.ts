@@ -192,20 +192,24 @@ test.describe("TextArea autoResize under hostile content", () => {
       scroll,
       "all 201 lines are there to scroll",
     ).toBeGreaterThanOrEqual(200 * lineHeight)
-    //the at-cap state is a class on the inner field; the computed `overflow-y`
+    //the at-cap state is an inline lock on the inner field; the computed `overflow-y`
     //cannot tell (a textarea's UA default is already `auto`)
-    await expect(
-      uncapped,
-      "at the cap the field carries the overflow class",
-    ).toHaveClass(/\boverflow-y-auto\b/)
+    const inlineOverflowY = () =>
+      uncapped.evaluate((el) => (el as HTMLElement).style.overflowY)
+    await expect
+      .poll(inlineOverflowY, {
+        message: "at the cap the field carries the overflow lock",
+      })
+      .toBe("auto")
 
     await uncapped.fill("")
     await expect(uncapped).toHaveValue("")
     expect(await settledHeight(uncapped), "back at the floor").toBe(empty)
-    await expect(
-      uncapped,
-      "under the cap again the overflow class is gone",
-    ).not.toHaveClass(/\boverflow-y-auto\b/)
+    await expect
+      .poll(inlineOverflowY, {
+        message: "under the cap again the overflow lock is gone",
+      })
+      .toBe("")
   })
 
   for (const sample of [
@@ -282,9 +286,10 @@ test.describe("TextArea autoResize under hostile content", () => {
           font: cs.fontSize,
           root: getComputedStyle(document.documentElement).fontSize,
           value: (el as HTMLTextAreaElement).value.length,
-          className: el.className.includes("overflow-y-auto")
-            ? "at-cap"
-            : "under-cap",
+          cap:
+            (el as HTMLElement).style.overflowY === "auto"
+              ? "at-cap"
+              : "under-cap",
         }
       })
       test.info().annotations.push({
