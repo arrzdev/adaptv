@@ -163,7 +163,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "There is no `host` key. To set the deploy target, use `NITRO_PRESET`.",
+      text: "There is no `host` key. To set the deploy target, use `SERVER_PRESET`.",
     },
     { type: "h2", text: "Service worker" },
     {
