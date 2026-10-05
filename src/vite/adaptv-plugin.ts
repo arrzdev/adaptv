@@ -27,6 +27,7 @@ import { adaptvBanServerApisPlugin } from "#adaptv/vite/ban-server-apis.ts"
 import { adaptvBuildStampPlugin } from "#adaptv/vite/build-stamp.ts"
 import { adaptvClientTargetsPlugin } from "#adaptv/vite/client-targets.ts"
 import { adaptvCssLayerOrderPlugin } from "#adaptv/vite/css-layer-order.ts"
+import { adaptvCssPatchRewritePlugin } from "#adaptv/vite/css-patch-rewrite.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
 import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
@@ -248,6 +249,11 @@ export async function adaptv(
     //113–118.
     //→ src/vite/tailwind-empty-fallback.ts
     adaptvTailwindEmptyFallbackPlugin(),
+    //Same slot, same reason: NO `enforce`. Applies the `hover:`/`active:` corrections to
+    //every `:hover`/`:active` rule in the app's CSS, however it was written — plain CSS,
+    //SCSS, CSS modules, a dependency's sheet — and prints a count per build.
+    //→ src/vite/css-patch-rewrite.ts
+    adaptvCssPatchRewritePlugin(),
     adaptvConfigLoaderPlugin(context),
     //Both lineages, no gate: the capacitor bundle is the same client build, and
     //an iOS WebView is only ever as new as the OS it ships in. → src/vite/client-targets.ts

@@ -92,8 +92,10 @@ describe("hover: — the sticky-hover + focus-ring variant", () => {
   //grouping the remainder in one `:is()` drops the variant from (0,4,0) to (0,2,0) —
   //two class-level points every consumer override used to have to out-specify.
   it("is (0,2,0): one :not(:is(…)), no redundant :focus-visible clause", async () => {
-    const selector = await hoverSelector()
-    expect(selector).toContain("&:hover:not(:is(:focus, :focus-within))")
+    const selector = (await hoverSelector()).replace(/\s+/g, " ")
+    expect(selector).toContain(
+      "&:hover:not( :is( :focus, :focus-within, [data-adaptv-no-hover], [data-adaptv-no-hover] * ) )",
+    )
     expect(selector).not.toContain(":focus-visible")
     //(0,2,0) = the `:hover` pseudo-class + the most specific `:not()` argument.
     //Count only what follows the class name, so the escaped `.hover\:bg-red-500`
@@ -103,6 +105,19 @@ describe("hover: — the sticky-hover + focus-ring variant", () => {
         .slice(selector.indexOf("&"))
         .match(/:(?!not\b|is\b)[a-z-]+/g) ?? []
     expect(pseudoClasses).toEqual([":hover", ":focus", ":focus-within"])
+  })
+
+  //`data-adaptv-no-hover` drops adaptv's half (the focus guard) and keeps Tailwind's
+  //(the media query), at the same (0,2,0) as the main branch
+  it("gives an element inside data-adaptv-no-hover plain hover, still media-guarded", async () => {
+    const css = await compileAdaptvStyles(["hover:bg-red-500"])
+    const rule = css.slice(css.indexOf(".hover\\:bg-red-500"))
+    const media = rule.indexOf("@media (hover: hover)")
+    const optedOut = rule.indexOf(
+      "&:hover:is([data-adaptv-no-hover], [data-adaptv-no-hover] *)",
+    )
+    expect(media).toBeGreaterThan(-1)
+    expect(optedOut).toBeGreaterThan(media)
   })
 
   it("names Tailwind as the owner of the media-query half", () => {
@@ -168,10 +183,18 @@ describe("active: — the press variant, patched rather than renamed", () => {
       return rule.slice(from, rule.indexOf("{", from))
     }
 
-    //(0,1,0): one attribute selector, no pseudo-class at all
-    const pressed = selectorOf("&[data-pressed]")
-    expect(pressed.match(/\[[^\]]+\]/g)).toEqual(["[data-pressed]"])
-    expect(pressed.match(/:[a-z-]+/g)).toBeNull()
+    //(0,1,0): one attribute selector; the hatch beside it is inside `:where()`,
+    //which counts zero
+    const pressed = selectorOf("&[data-pressed]").replace(/\s+/g, "")
+    expect(pressed).toBe(
+      "&[data-pressed]:not(:where([data-adaptv-no-active],[data-adaptv-no-active]*))",
+    )
+
+    //(0,2,0): the opted-out branch weighs what the plain one does
+    const optedOut = selectorOf("&:active:is(")
+    expect(optedOut).toContain(
+      "&:active:is([data-adaptv-no-active], [data-adaptv-no-active] *)",
+    )
 
     //(0,2,0): the `:active` pseudo-class + the single `:not()` argument
     const active = selectorOf("&:active")

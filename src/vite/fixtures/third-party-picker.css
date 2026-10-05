@@ -1,0 +1,33 @@
+/* A date picker's stylesheet, written the way libraries ship them: plain CSS, no
+   Tailwind, hover states for a mouse, selector lists, a pseudo-element, a negation. */
+.picker {
+  display: inline-block;
+  font: inherit;
+}
+.picker__header button:hover,
+.picker__header button:focus-visible {
+  background: #eef;
+}
+.picker__day:hover:not(.picker__day--disabled) {
+  background: #ddd;
+  border-radius: 50%;
+}
+.picker__day--selected,
+.picker__day--selected:hover {
+  background: #36c;
+  color: #fff;
+}
+.picker__nav:hover::after {
+  opacity: 1;
+}
+.picker__day--disabled:not(:hover) {
+  opacity: 0.5;
+}
+.picker__day:active {
+  transform: scale(0.95);
+}
+@media (min-width: 40rem) {
+  .picker__month:hover {
+    outline: 1px solid #ccc;
+  }
+}
