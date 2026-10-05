@@ -485,7 +485,7 @@ function Select({
           value={value ?? ""}
           onChange={onNativeChange}
           aria-label={ariaLabel}
-          data-adaptv="select"
+          data-adaptv="select-native"
           data-part="native"
           data-disabled={disabled ? "" : undefined}
           style={SELECT_NATIVE_LOCKED_STYLE}

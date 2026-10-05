@@ -34,7 +34,7 @@
   }
 
   /* thumb */
-  :where([data-adaptv="switch"][data-part="thumb"]) {
+  :where([data-adaptv="switch-thumb"][data-part="thumb"]) {
     background-color: var(--color-gray-950, oklch(13% 0.028 261.692));
   }
 }

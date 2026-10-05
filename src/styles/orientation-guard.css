@@ -9,6 +9,10 @@
  * no fallback (docs/decisions/styling.md §7). The padding is the `px-safe-offset-6` /
  * `py-safe-offset-8` utilities' values, spelled out.
  *
+ * The root alone carries `data-adaptv="orientation-guard"`; each sub-part carries its own
+ * `data-adaptv="orientation-guard-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
  * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
  */
 
@@ -33,14 +37,14 @@
   }
 
   /* icon */
-  :where([data-adaptv="orientation-guard"][data-part="icon"]) {
+  :where([data-adaptv="orientation-guard-icon"][data-part="icon"]) {
     width: calc(var(--spacing, 0.25rem) * 14);
     height: calc(var(--spacing, 0.25rem) * 14);
     color: var(--color-primary);
   }
 
   /* message */
-  :where([data-adaptv="orientation-guard"][data-part="message"]) {
+  :where([data-adaptv="orientation-guard-message"][data-part="message"]) {
     max-width: var(--container-xs, 20rem);
     font-size: var(--text-base, 1rem);
     line-height: var(--text-base--line-height, calc(1.5 / 1));

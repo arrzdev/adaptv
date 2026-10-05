@@ -276,7 +276,7 @@ function SwitchThumb({ className }: SwitchThumbProps) {
   return (
     <span
       aria-hidden
-      data-adaptv="switch"
+      data-adaptv="switch-thumb"
       data-part="thumb"
       style={thumb.style}
       className={thumb.className || undefined}
@@ -434,7 +434,7 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
           checked={isChecked}
           disabled={disabled}
           readOnly
-          data-adaptv="switch"
+          data-adaptv="switch-input"
           data-part="input"
           style={SWITCH_INPUT_LOCKED_STYLE}
         />

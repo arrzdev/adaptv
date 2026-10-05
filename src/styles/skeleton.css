@@ -55,7 +55,7 @@
   }
 
   /* the region's live status line: read, never seen */
-  :where([data-adaptv="skeleton-region"][data-part="status"]) {
+  :where([data-adaptv="skeleton-region-status"][data-part="status"]) {
     clip-path: inset(50%);
     white-space: nowrap;
     border-width: 0;

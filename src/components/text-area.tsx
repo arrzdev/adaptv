@@ -861,8 +861,11 @@ function useTextAreaAutoResize({
 }
 
 type TextAreaShellProps = {
-  /** The shell IS the component root (no label/hint/error slots): `data-part="root"`. */
-  isRoot: boolean
+  /**
+   * Set only when the shell IS the component root (no label/hint/error slots) — the
+   * props here are a closed set, so this has to be declared to reach the DOM at all.
+   */
+  "data-adaptv"?: string
   children: ReactNode
   className?: string
   fieldRef: RefObject<HTMLTextAreaElement | null>
@@ -872,7 +875,14 @@ type TextAreaShellProps = {
 
 const TextAreaShell = forwardRef<HTMLDivElement, TextAreaShellProps>(
   function TextAreaShell(
-    { children, className, fieldRef, disabled, isFillMode, isRoot },
+    {
+      children,
+      className,
+      fieldRef,
+      disabled,
+      isFillMode,
+      "data-adaptv": identity,
+    },
     ref,
   ) {
     function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
@@ -907,9 +917,11 @@ const TextAreaShell = forwardRef<HTMLDivElement, TextAreaShellProps>(
       // biome-ignore lint/a11y/noStaticElementInteractions: mirrors grouped Input shell hit target
       <div
         ref={ref}
-        data-adaptv="text-area"
-        //the root when the field stands alone; inside the slot fieldset, the shell
-        data-part={isRoot ? "root" : "shell"}
+        data-adaptv={identity}
+        //the root when the field stands alone (it then carries the identity); inside
+        //the slot fieldset, the unscoped `shell` part text-area.css reaches through
+        //the fieldset
+        data-part={identity ? "root" : "shell"}
         //presence attribute (§3.1): what text-area.css keys the disabled cursor on,
         //since a <div> has no `:disabled` of its own
         data-disabled={disabled ? "" : undefined}
@@ -1137,7 +1149,7 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
         id={fieldId}
         name={name}
         aria-describedby={describedBy}
-        data-adaptv="text-area"
+        data-adaptv="text-area-field"
         data-part="field"
         //Everything here is locked and there is no default — the inner field has no
         //look of its own by design (the shell is the visible box), and the only
@@ -1164,9 +1176,10 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
 
     const control = (
       <TextAreaShell
-        //the root only when nothing wraps it: with slots the fieldset below is the
-        //root and this is its `shell` part
-        isRoot={!hasSlots}
+        //only when it IS the root: with slots the fieldset below wraps this and
+        //carries the identity, and stamping both would make `[data-adaptv="text-area"]`
+        //match two nested elements
+        data-adaptv={hasSlots ? undefined : "text-area"}
         ref={shellRef}
         fieldRef={fieldRef}
         disabled={disabled}

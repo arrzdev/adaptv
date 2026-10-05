@@ -180,12 +180,19 @@ describe("Button — parts: attributes, no class of adaptv's", () => {
     ]) {
       expect(named, part).toContain(part)
     }
+    //the root alone carries `button`; each sub-part has its own `button-<part>` scope
     for (const el of parts(container)) {
       expect(el.getAttribute("data-adaptv"), el.dataset.part).toBe(
-        "button",
+        el.dataset.part === "root"
+          ? "button"
+          : `button-${el.dataset.part}`,
       )
       expect(el.hasAttribute("class"), el.dataset.part).toBe(false)
     }
+    //stamped once: `[data-adaptv="button"]` must not match a nested element
+    expect(
+      container.querySelectorAll('[data-adaptv="button"]'),
+    ).toHaveLength(1)
   })
 
   it("passes a slot's and the label's className through untouched", () => {

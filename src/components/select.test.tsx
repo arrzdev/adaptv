@@ -775,6 +775,11 @@ describe("Select — styling tiers (docs/decisions/styling.md §2)", () => {
     expect(root.hasAttribute("class")).toBe(false)
     const native = root.querySelector("select") as HTMLSelectElement
     expect(native.getAttribute("data-part")).toBe("native")
+    //its own scope: `[data-adaptv="select"]` names the root and nothing inside it
+    expect(native.getAttribute("data-adaptv")).toBe("select-native")
+    expect(
+      container.querySelectorAll('[data-adaptv="select"]'),
+    ).toHaveLength(1)
     expect(native.hasAttribute("class")).toBe(false)
     expect(native.style.position).toBe("absolute")
     expect(native.style.clipPath).toBe("inset(50%)")

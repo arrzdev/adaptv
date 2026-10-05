@@ -148,7 +148,8 @@ describe("FieldGroup.Row", () => {
       </FieldGroup.Row>,
     )
     expect(el.tagName).toBe("DIV")
-    expect(el.getAttribute("data-adaptv")).toBe("field-group")
+    //a row has its own scope: `[data-adaptv="field-group"]` stays the one root
+    expect(el.getAttribute("data-adaptv")).toBe("field-group-row")
     expect(el.getAttribute("data-part")).toBe("row")
     //the flex row is a lock, inline; adaptv adds no class of its own
     expect(el.style.display).toBe("flex")
@@ -164,7 +165,7 @@ describe("FieldGroup.Row", () => {
   it("stacks the title over the description inside the column", () => {
     const el = firstEl(<FieldGroup.Row label="A" description="B" />)
     const column = part(el, "label") as HTMLElement
-    expect(column.getAttribute("data-adaptv")).toBe("field-group")
+    expect(column.getAttribute("data-adaptv")).toBe("field-group-label")
     expect(column.style.display).toBe("flex")
     expect(column.style.flexDirection).toBe("column")
     expect(column.hasAttribute("class")).toBe(false)

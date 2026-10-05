@@ -35,7 +35,7 @@
    * It cancels the shift only for a 1px border and permanently shrinks the content box
    * of every checkbox. Use `outline` for a toggled checked/selected ring instead.
    */
-  :where([data-adaptv="checkbox"][data-part="box"]) {
+  :where([data-adaptv="checkbox-box"][data-part="box"]) {
     background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
   }
 }

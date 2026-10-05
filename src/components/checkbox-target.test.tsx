@@ -17,7 +17,7 @@ import { Checkbox } from "#adaptv/components/checkbox"
 
 function labelOf(container: HTMLElement): HTMLElement {
   const label = container.querySelector<HTMLElement>(
-    "[data-adaptv='checkbox'][data-part='root']",
+    "[data-adaptv='checkbox']",
   )
   if (!label) throw new Error("no checkbox label")
   //happy-dom has no Pointer Capture API; the engine claims the pointer on the

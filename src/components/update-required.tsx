@@ -60,6 +60,8 @@ export function UpdateRequired({
 
 //The look is styles/update-required.css, keyed on `data-adaptv` / `data-part`: an app
 //that wants another one replaces the whole screen (`updateRequiredScreen`).
+//`data-adaptv="update-required"` stays on the root alone; each sub-part carries its
+//own `update-required-<part>` scope, so the root's selector matches one element.
 function DefaultUpdateRequired({ days }: UpdateRequiredProps) {
   return (
     <div data-adaptv="update-required" data-part="root" role="alert">
@@ -71,7 +73,7 @@ function DefaultUpdateRequired({ days }: UpdateRequiredProps) {
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
-        data-adaptv="update-required"
+        data-adaptv="update-required-icon"
         data-part="icon"
       >
         <title>Update available</title>
@@ -79,14 +81,14 @@ function DefaultUpdateRequired({ days }: UpdateRequiredProps) {
         <path d="m8 7 4-4 4 4" />
         <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
       </svg>
-      <p data-adaptv="update-required" data-part="title">
+      <p data-adaptv="update-required-title" data-part="title">
         This version of the app is out of date.
       </p>
       {/* The age, not a promise. adaptv knows the channel moved past this
           install; it does not know the new version has cleared review, so a
           "get it now" instruction could send someone to a store page that has
           nothing newer on it yet. */}
-      <p data-adaptv="update-required" data-part="description">
+      <p data-adaptv="update-required-description" data-part="description">
         {days < 1
           ? "Update from the App Store or Google Play to continue."
           : `It has not been able to update for ${days} ${days === 1 ? "day" : "days"}. Update from the App Store or Google Play to continue.`}

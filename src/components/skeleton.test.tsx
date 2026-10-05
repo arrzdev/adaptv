@@ -196,13 +196,15 @@ describe("Skeleton.Region", () => {
     expect(status.tagName).toBe("OUTPUT")
     expect(status.textContent).toBe("Loading tasks")
     //visually hidden by the layered `sr-only` recipe keyed on this part
-    expect(status.getAttribute("data-adaptv")).toBe("skeleton-region")
+    expect(status.getAttribute("data-adaptv")).toBe(
+      "skeleton-region-status",
+    )
     expect(status.getAttribute("data-part")).toBe("status")
     expect(status.hasAttribute("class")).toBe(false)
     expect(
       readFileSync(join(process.cwd(), "src/styles/skeleton.css"), "utf8"),
     ).toMatch(
-      /:where\(\[data-adaptv="skeleton-region"\]\[data-part="status"\]\)\s*\{[^}]*clip-path: inset\(50%\);[^}]*position: absolute;/,
+      /:where\(\[data-adaptv="skeleton-region-status"\]\[data-part="status"\]\)\s*\{[^}]*clip-path: inset\(50%\);[^}]*position: absolute;/,
     )
     //one announcement for two rows: the rows themselves are aria-hidden
     expect(

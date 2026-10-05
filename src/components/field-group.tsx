@@ -66,13 +66,15 @@ import { mergeStyles } from "#adaptv/utils/styles"
  *
  * | Attribute | Where | When |
  * |-----------|-------|------|
- * | `data-adaptv="field-group"` | the root `<div>`, each row and each label column | always |
+ * | `data-adaptv="field-group"` | the root `<div>` | always |
  * | `data-part="root"` | the root `<div>` | always |
  * | `data-part="section"` | each `<section>` | always |
  * | `data-part="header"` | the section title `<div>`, id'd | a `title` or `Header` exists |
  * | `data-part="rows"` | the `<div>` whose only children are rows | always |
  * | `data-part="footer"` | the section footer `<div>` | a `footer` or `Footer` exists |
+ * | `data-adaptv="field-group-row"` | each row (or the `render` element) | always |
  * | `data-part="row"` | each row (or the `render` element) | always |
+ * | `data-adaptv="field-group-label"` | the row's leading column | a label, description or slot exists |
  * | `data-part="label"` | the row's leading column | a label, description or slot exists |
  * | `data-part="title"` | the `<span>` inside the label column | a `label` or `Label` exists |
  * | `data-part="description"` | the `<span>` inside the label column | a `description` or `Description` exists |
@@ -466,7 +468,7 @@ function FieldGroupRow({
     ref,
     className: merged.className || undefined,
     style: merged.style,
-    "data-adaptv": "field-group",
+    "data-adaptv": "field-group-row",
     "data-part": "row",
     //presence attribute (§3.1): `""`, never `true`, which React would stringify
     "data-disabled": disabled ? "" : undefined,
@@ -478,7 +480,7 @@ function FieldGroupRow({
     <>
       {hasLabelColumn ? (
         <div
-          data-adaptv="field-group"
+          data-adaptv="field-group-label"
           data-part="label"
           style={FIELD_LABEL_LOCKED_STYLE}
         >

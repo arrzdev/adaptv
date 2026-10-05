@@ -14,7 +14,7 @@
 
 @layer adaptv.components {
   /* a row: label leading, control trailing, centred on the cross axis */
-  :where([data-adaptv="field-group"][data-part="row"]) {
+  :where([data-adaptv="field-group-row"][data-part="row"]) {
     justify-content: space-between;
     align-items: center;
   }

@@ -14,9 +14,7 @@ import { GesturePriority } from "#adaptv/hooks/use-gesture-capture"
 afterEach(cleanup)
 
 const rootOf = (container: HTMLElement) => {
-  const el = container.querySelector<HTMLElement>(
-    "[data-adaptv='slider'][data-part='root']",
-  )
+  const el = container.querySelector<HTMLElement>("[data-adaptv='slider']")
   if (!el) throw new Error("no slider root")
   return el
 }
@@ -577,7 +575,7 @@ describe("Slider locked layer", () => {
     const { container } = render(<Slider aria-label="v" />)
     for (const [scope, part] of [
       ["slider", "root"],
-      ["slider", "input"],
+      ["slider-input", "input"],
       ["slider-track", "track"],
       ["slider-range", "range"],
       ["slider-thumb", "thumb"],
@@ -588,6 +586,10 @@ describe("Slider locked layer", () => {
       expect(el, `${scope} ${part}`).not.toBeNull()
       expect(el?.hasAttribute("class"), `${scope} ${part}`).toBe(false)
     }
+    //stamped once: `[data-adaptv="slider"]` names the root and nothing inside it
+    expect(
+      container.querySelectorAll('[data-adaptv="slider"]'),
+    ).toHaveLength(1)
   })
 
   it("passes each slot's className through untouched", () => {

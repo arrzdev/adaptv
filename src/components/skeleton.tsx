@@ -131,7 +131,7 @@ export interface SkeletonRegionProps extends ComponentPropsWithRef<"div"> {
  * | `data-adaptv="skeleton"` + `data-part="root"` | the box | while loading |
  * | `aria-hidden="true"` | the box | while loading |
  * | `data-adaptv="skeleton-region"` + `data-part="root"` | the region | always |
- * | `data-adaptv="skeleton-region"` + `data-part="status"` | the live region inside it | always |
+ * | `data-adaptv="skeleton-region-status"` + `data-part="status"` | the live region inside it | always |
  * | `aria-busy="true"` | the region | while loading |
  *
  * ⚠︎ **`loading={false}` renders no element.** `className`, `style`, `ref` and every
@@ -219,7 +219,7 @@ function SkeletonRegion({
     >
       {/* `<output>` IS `role="status"` (implicitly `aria-live="polite"`) — the
           semantic element, rather than a span wearing the role. */}
-      <output data-adaptv="skeleton-region" data-part="status">
+      <output data-adaptv="skeleton-region-status" data-part="status">
         {loading ? label : null}
       </output>
       {children}

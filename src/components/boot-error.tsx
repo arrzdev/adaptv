@@ -49,7 +49,7 @@ function AdaptvMark() {
       aria-hidden
       viewBox="192 192 640 640"
       fill="none"
-      data-adaptv="boot-error"
+      data-adaptv="boot-error-mark"
       data-part="mark"
     >
       <title>adaptv logo</title>
@@ -110,21 +110,22 @@ export function BootError({
       aria-live="assertive"
       //No lock of its own, matching `Offline`: the one structural thing here is the
       //safe-area padding, and that is the `safe="all"` PROP — View locks it inline.
-      //The look is styles/boot-error.css.
+      //The look is styles/boot-error.css. This is the one element with
+      //`data-adaptv="boot-error"`: every sub-part carries its own `boot-error-<part>`.
       className={className}
     >
-      <div data-adaptv="boot-error" data-part="brand">
+      <div data-adaptv="boot-error-brand" data-part="brand">
         <AdaptvMark />
-        <span data-adaptv="boot-error" data-part="wordmark">
+        <span data-adaptv="boot-error-wordmark" data-part="wordmark">
           adaptv
         </span>
       </div>
 
-      <div data-adaptv="boot-error" data-part="copy">
-        <h1 data-adaptv="boot-error" data-part="title">
+      <div data-adaptv="boot-error-copy" data-part="copy">
+        <h1 data-adaptv="boot-error-title" data-part="title">
           {title}
         </h1>
-        <p data-adaptv="boot-error" data-part="description">
+        <p data-adaptv="boot-error-description" data-part="description">
           {description}
         </p>
       </div>

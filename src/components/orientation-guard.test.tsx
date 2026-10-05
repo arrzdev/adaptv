@@ -105,4 +105,29 @@ describe("OrientationGuard", () => {
       expect(root?.getAttribute("role")).toBe("alert")
     })
   })
+
+  it('stamps `data-adaptv="orientation-guard"` on the root alone; each part has its own scope', async () => {
+    //a consumer's `[data-adaptv="orientation-guard"]` (and every spec that locates the
+    //guard by it) must match one element, not the guard and its icon and message
+    stubManifest("portrait")
+    stubOrientation({ mismatched: true })
+    const { container } = render(
+      <OrientationGuard manifestPath="/manifest.webmanifest" />,
+    )
+
+    await vi.waitFor(() => {
+      const roots = container.querySelectorAll(
+        '[data-adaptv="orientation-guard"]',
+      )
+      expect(roots).toHaveLength(1)
+      expect(roots[0].getAttribute("data-part")).toBe("root")
+      for (const part of ["icon", "message"])
+        expect(
+          container.querySelectorAll(
+            `[data-adaptv="orientation-guard-${part}"][data-part="${part}"]`,
+          ),
+          part,
+        ).toHaveLength(1)
+    })
+  })
 })

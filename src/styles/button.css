@@ -13,6 +13,11 @@
  * `flex-shrink`, `align-items`, `min-width`), which the measured width tween depends on
  * (§2.0).
  *
+ * Only the root carries `data-adaptv="button"`; each sub-part has its own scope,
+ * `button-<part>` (`button-content`, `button-content-shell`, `button-leading`,
+ * `button-trailing`, `button-label`), beside its `data-part`, so `[data-adaptv="button"]`
+ * names exactly one element.
+ *
  * A `Fab` is a Button whose root answers to `data-adaptv="fab"` (composition must not leak
  * into a styling hook), so the root rules name both scopes; `fab.css`, imported after this
  * file, layers the floating look on top at the same zero specificity.
@@ -57,7 +62,7 @@
   }
 
   /* Content row — the measured row (and, on the tween path, the row inside the shell) */
-  :where([data-adaptv="button"][data-part="content"]) {
+  :where([data-adaptv="button-content"][data-part="content"]) {
     align-items: center;
     width: max-content;
     max-width: 100%;
@@ -65,7 +70,7 @@
   }
 
   /* Content shell — the clipping box the width tween runs on */
-  :where([data-adaptv="button"][data-part="content-shell"]) {
+  :where([data-adaptv="button-content-shell"][data-part="content-shell"]) {
     align-items: center;
     max-width: 100%;
     display: inline-flex;
@@ -75,15 +80,15 @@
 
   /* Leading / trailing slots — alignment and the svg display fix; their layout is locked inline */
   :where(
-    [data-adaptv="button"][data-part="leading"],
-    [data-adaptv="button"][data-part="trailing"]
+    [data-adaptv="button-leading"][data-part="leading"],
+    [data-adaptv="button-trailing"][data-part="trailing"]
   ) {
     justify-content: center;
   }
 
   :where(
-    [data-adaptv="button"][data-part="leading"] > svg,
-    [data-adaptv="button"][data-part="trailing"] > svg
+    [data-adaptv="button-leading"][data-part="leading"] > svg,
+    [data-adaptv="button-trailing"][data-part="trailing"] > svg
   ) {
     display: block;
   }

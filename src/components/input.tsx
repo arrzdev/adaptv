@@ -238,7 +238,7 @@ function InputLeading({ children, className }: InputLeadingProps) {
 
   return (
     <div
-      data-adaptv="input"
+      data-adaptv="input-leading"
       data-part="leading"
       className={className}
       style={INPUT_LEADING_LOCKED_STYLE}
@@ -282,7 +282,7 @@ function InputTrailing({ children, className }: InputTrailingProps) {
 
   return (
     <div
-      data-adaptv="input"
+      data-adaptv="input-trailing"
       data-part="trailing"
       className={className}
       style={INPUT_TRAILING_LOCKED_STYLE}
@@ -398,8 +398,8 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
         onKeyDown={handleKeyDown}
         onBlur={onBlur}
         {...props}
-        //bare, the field IS the root; grouped, it is the `field` part of the label
-        data-adaptv="input"
+        //bare, the field IS the root (InputRoot stamps `data-adaptv="input"` on it);
+        //grouped, it is the `field` part of the label and carries no scope of its own
         data-part={grouped ? "field" : "root"}
         className={merged.className || undefined}
         style={merged.style}
@@ -525,6 +525,9 @@ const InputRoot = forwardRef<InputHandle, InputProps>(function Input(
   const chromeLessField = (
     <InputField
       ref={fieldRef}
+      //only when it IS the root: grouped, the wrapping label above carries it, and
+      //stamping both would make `[data-adaptv="input"]` match two nested elements
+      data-adaptv={isGrouped ? undefined : "input"}
       grouped={isGrouped}
       inputId={inputId}
       name={name}

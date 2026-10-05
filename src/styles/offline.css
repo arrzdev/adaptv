@@ -8,6 +8,10 @@
  * is View's `safe="all"` inline lock, which also outranks the horizontal padding below
  * on every edge it names (it did the same to the `px-6` class before).
  *
+ * The root alone carries `data-adaptv="offline"`; each sub-part carries its own
+ * `data-adaptv="offline-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
  * Layered in `adaptv.components` under `:where()` (zero specificity,
  * docs/decisions/styling.md §6.0.1); no `!important`.
  */
@@ -28,11 +32,11 @@
   }
 
   /* title, description */
-  :where([data-adaptv="offline"][data-part="title"]) {
+  :where([data-adaptv="offline-title"][data-part="title"]) {
     color: var(--color-gray-950, oklch(13% 0.028 261.692));
   }
 
-  :where([data-adaptv="offline"][data-part="description"]) {
+  :where([data-adaptv="offline-description"][data-part="description"]) {
     color: var(--color-gray-600, oklch(44.6% 0.03 256.802));
   }
 }

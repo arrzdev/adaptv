@@ -3,6 +3,11 @@
  * `<input>`, the grouped `<label>` shell, the grouped inner `<input>` and the
  * Leading / Trailing slots.
  *
+ * `[data-adaptv="input"]` is stamped once: on the bare `<input>`, or on the grouped
+ * `<label>` (both `data-part="root"`). The grouped inner `<input>` carries only
+ * `data-part="field"` and is reached through its label; the slots carry their own
+ * scopes, `input-leading` / `input-trailing`.
+ *
  * Only defaults live here. The structure a `className` must not undo is inline style
  * written by the component (docs/decisions/styling.md §2.0): the slots' `display`,
  * `flex-shrink` and `order`, the grouped field's `order`, `flex`, `min-width` and
@@ -32,8 +37,11 @@
     cursor: not-allowed;
   }
 
-  /* the `<input>` itself, bare (root) or grouped (field) */
-  :where(input[data-adaptv="input"]) {
+  /* the `<input>` itself, bare (root) or grouped (field, a child of the label root) */
+  :where(
+    input[data-adaptv="input"],
+    [data-adaptv="input"][data-part="root"] > input[data-part="field"]
+  ) {
     resize: none;
   }
 
@@ -46,7 +54,10 @@
   }
 
   /* Leading / Trailing slots: alignment only, the order and shrink are locked inline */
-  :where([data-adaptv="input"]:is([data-part="leading"], [data-part="trailing"])) {
+  :where(
+    [data-adaptv="input-leading"][data-part="leading"],
+    [data-adaptv="input-trailing"][data-part="trailing"]
+  ) {
     align-self: center;
     align-items: center;
   }

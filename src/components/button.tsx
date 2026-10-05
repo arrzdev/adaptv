@@ -134,8 +134,10 @@ const BUTTON_TEXT_FIXED_LOCKED_STYLE: CSSProperties = Object.freeze({
   alignItems: "center",
 })
 //The root's look, the content rows and the slot defaults are rules in
-//styles/button.css, keyed on `[data-adaptv="button"][data-part="…"]`; the ⚠︎ note on
-//why there is no pre-allocated transparent border lives there with the root's rule.
+//styles/button.css, keyed on `data-adaptv` + `data-part`. Only the root carries
+//`data-adaptv="button"`; each sub-part has its own `button-<part>` scope, so
+//`[data-adaptv="button"]` still names exactly one element. The ⚠︎ note on why there is
+//no pre-allocated transparent border lives there with the root's rule.
 
 /**
  * A {@link Fab}'s default width is fixed — `fab.css` sizes its root — so its width
@@ -252,7 +254,7 @@ function ButtonLeading({ children, className }: ButtonLeadingProps) {
   return (
     <span
       aria-hidden
-      data-adaptv="button"
+      data-adaptv="button-leading"
       data-part="leading"
       className={className || undefined}
       style={BUTTON_SLOT_LOCKED_STYLE}
@@ -288,7 +290,7 @@ function ButtonTrailing({ children, className }: ButtonTrailingProps) {
   return (
     <span
       aria-hidden
-      data-adaptv="button"
+      data-adaptv="button-trailing"
       data-part="trailing"
       className={className || undefined}
       style={BUTTON_SLOT_LOCKED_STYLE}
@@ -315,7 +317,7 @@ function ButtonText({ children, className }: ButtonTextProps) {
 
   return (
     <span
-      data-adaptv="button"
+      data-adaptv="button-label"
       data-part="label"
       className={className || undefined}
       //nothing neutral to override here — the label's only intrinsic styling IS the
@@ -415,15 +417,27 @@ function ButtonContentRow({
   //the width tween runs on); no class of adaptv's reaches either span
   if (hasFixedWidth || reducedMotion) {
     return (
-      <span data-adaptv="button" data-part="content" ref={measureRef}>
+      <span
+        data-adaptv="button-content"
+        data-part="content"
+        ref={measureRef}
+      >
         {children}
       </span>
     )
   }
 
   return (
-    <span ref={shellRef} data-adaptv="button" data-part="content-shell">
-      <span ref={measureRef} data-adaptv="button" data-part="content">
+    <span
+      ref={shellRef}
+      data-adaptv="button-content-shell"
+      data-part="content-shell"
+    >
+      <span
+        ref={measureRef}
+        data-adaptv="button-content"
+        data-part="content"
+      >
         {children}
       </span>
     </span>

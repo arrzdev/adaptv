@@ -26,12 +26,14 @@ export function UiNotFound({
   //(`notFoundScreen` in adaptv.config.ts). Nothing here is structural: it fills the
   //shell because that is the neutral look for a 404, not because anything depends
   //on it — so every part's look is a default rule in styles/not-found.css and
-  //nothing is locked (§2). Each `*ClassName` is the consumer's alone. The
+  //nothing is locked (§2). `data-adaptv="not-found"` stays on the root alone; each
+  //sub-part carries its own `not-found-<part>` scope, so the root's selector matches
+  //one element. Each `*ClassName` is the consumer's alone. The
   //interaction lock is not repeated on the Link either; Link locks it itself.
   return (
     <main data-adaptv="not-found" data-part="root" className={className}>
       <span
-        data-adaptv="not-found"
+        data-adaptv="not-found-code"
         data-part="code"
         className={codeClassName}
         aria-hidden
@@ -39,14 +41,14 @@ export function UiNotFound({
         404
       </span>
       <h1
-        data-adaptv="not-found"
+        data-adaptv="not-found-title"
         data-part="title"
         className={titleClassName}
       >
         Page not found
       </h1>
       <p
-        data-adaptv="not-found"
+        data-adaptv="not-found-description"
         data-part="description"
         className={descriptionClassName}
       >

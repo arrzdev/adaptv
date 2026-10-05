@@ -7,6 +7,9 @@
  * parts carry `data-part` only and are reached as CHILDREN of that root: a consumer finds
  * the gesture root with `closest('[data-adaptv="pull-to-refresh"]')` from inside its own
  * content, so the scope attribute must name the root and nothing between it and them.
+ * An idle row (`enabled={false}`, nothing in flight) is not a gesture root, so it does
+ * not answer to that scope; it carries `data-adaptv="pull-to-refresh-root"` +
+ * `data-part="root"` instead, and the root rule names both.
  * Every selector is under `:where()` (docs/decisions/styling.md §6.0.1).
  *
  * The root's `position: relative` is not here: it is the containing block the indicator is
@@ -30,7 +33,10 @@
 
 @layer adaptv.components {
   /* root: a flex-line default — a consumer may put the row in a `flex-1` column */
-  :where([data-adaptv="pull-to-refresh"][data-part="root"]) {
+  :where(
+    [data-adaptv="pull-to-refresh"][data-part="root"],
+    [data-adaptv="pull-to-refresh-root"][data-part="root"]
+  ) {
     flex-grow: 0;
     flex-shrink: 0;
   }

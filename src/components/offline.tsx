@@ -70,7 +70,9 @@ export function Offline({
 
   return (
     <View
-      //the View's own `data-part="root"` stays; its look is styles/offline.css
+      //the View's own `data-part="root"` stays; its look is styles/offline.css. This is
+      //the one element with `data-adaptv="offline"`: the title and description carry
+      //their own `offline-<part>` scope.
       data-adaptv="offline"
       safe="all"
       role="alert"
@@ -80,10 +82,10 @@ export function Offline({
       //View locks it inline, so there is nothing left here for a className to break.
       className={className}
     >
-      <h1 data-adaptv="offline" data-part="title">
+      <h1 data-adaptv="offline-title" data-part="title">
         {title}
       </h1>
-      <p data-adaptv="offline" data-part="description">
+      <p data-adaptv="offline-description" data-part="description">
         {description}
       </p>
       <Button haptic onClick={handleRetry}>

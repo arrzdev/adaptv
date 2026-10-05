@@ -113,12 +113,10 @@ describe("Input — bare vs grouped", () => {
     expect(label.getAttribute("data-part")).toBe("root")
     expect(label.htmlFor).toBe("q")
     expect(field().id).toBe("q")
-    //one root: `[data-adaptv="input"][data-part="root"]` must not match two nested
-    //elements — the field inside is a part, not a second root
+    //stamped once: `[data-adaptv="input"]` must not match two nested elements
+    expect(field().hasAttribute("data-adaptv")).toBe(false)
     expect(
-      container.querySelectorAll(
-        '[data-adaptv="input"][data-part="root"]',
-      ),
+      container.querySelectorAll('[data-adaptv="input"]'),
     ).toHaveLength(1)
     expect(field().getAttribute("data-part")).toBe("field")
     //grouped, the field gives way to the slots rather than claiming 20 characters
@@ -207,6 +205,9 @@ describe("Input.Leading / Input.Trailing — content detection", () => {
     ) as HTMLElement[]
     expect(leading?.getAttribute("data-part")).toBe("leading")
     expect(trailing?.getAttribute("data-part")).toBe("trailing")
+    //each slot has its own scope, so `[data-adaptv="input"]` stays the one shell
+    expect(leading?.getAttribute("data-adaptv")).toBe("input-leading")
+    expect(trailing?.getAttribute("data-adaptv")).toBe("input-trailing")
     //the order IS the slot contract, so it is locked inline
     expect(leading?.style.order).toBe("1")
     expect(trailing?.style.order).toBe("3")
