@@ -359,11 +359,21 @@ if (frameworkLayout() !== "dist") throw new Error("the staged package has a src/
 for (const m of CLI_MODULES) await loadAdaptvModule(m)`,
 ])
 
+// ── 4. The shipped stylesheet scans what ships ────────────────────────────────
+// `dist/styles/index.css` is a copy, so its `@source` glob resolves against `dist/`. Compile
+// it like an app's Tailwind would and check that classes adaptv's components use are there.
+const okStyles = run(
+  "stylesheet scans the built components",
+  process.execPath,
+  [path.join(repo, "scripts", "check-dist-styles.mjs"), dir],
+)
+
 summarise([
   ["dist structure", true],
   ["publint --strict", okPublint],
   ["attw (node16 profile)", okAttw],
   ["attw audit (only `#adaptv-route-tree` unresolved)", okAudit],
   ["cli modules load from dist/cli", okCli],
+  ["stylesheet scans the built components", okStyles],
 ])
-process.exit(okPublint && okAttw && okAudit && okCli ? 0 : 1)
+process.exit(okPublint && okAttw && okAudit && okCli && okStyles ? 0 : 1)
