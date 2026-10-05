@@ -42,6 +42,7 @@ When something ships, the design moves *in*. When something is only proposed, it
 | [`vite-plugin-map.md`](vite-plugin-map.md) | A map of `src/vite/` — which files are seams, which are shims, and the five places plugin order is load-bearing. |
 | [`cli-contract.md`](cli-contract.md) | **The CLI output contract** — ~50 numbered rules, each from a real regression. Read before touching `bin/`. |
 | [`cli-visual.md`](cli-visual.md) | The CLI's visual design system. `bin/ui/theme.mjs` is its executable half. |
+| [`create-adaptv.md`](create-adaptv.md) | `pnpm create adaptv`: the scaffolder package, what it emits and prints, and what a published app still needs. |
 
 ## Known gaps
 

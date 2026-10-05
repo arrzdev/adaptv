@@ -129,5 +129,5 @@ produced a checker that could not read what it was checking and therefore always
 
 Copying five lines into their own `pnpm-workspace.yaml`. That is a real adoption cost and it is
 tracked, not hidden — see [`../decisions/register.md`](../decisions/register.md) **L19**, **L21** and
-the packaging work in [`../roadmap/create-adaptv.md`](../roadmap/create-adaptv.md), where the
-scaffolder writes the block so the consumer never types it.
+[`create-adaptv.md §4`](create-adaptv.md). That section records that the block adaptv's error
+suggests cannot work on a fresh install: its files are inside the package being installed.
