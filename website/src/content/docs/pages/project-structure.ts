@@ -81,7 +81,7 @@ export default rootRoute([
     { type: "h2", text: "tsconfig.json" },
     {
       type: "p",
-      text: "adaptv adds the route-types entries to an existing file if it has an `include` array and a `paths` object. It adds nothing otherwise. Add the `virtual-adaptv-*.d.ts` entry yourself. It types `?adaptv-image` imports. If you link a checkout, use the relative path to it instead of `node_modules/@arrzdev/adaptv`.",
+      text: "adaptv adds the route-types entries to an existing file if it has an `include` array and a `paths` object. It adds nothing otherwise. The `.adaptv/**/*.ts` entry brings in all of adaptv's ambient types, `?adaptv-image` imports included.",
     },
     {
       type: "code",
@@ -89,8 +89,6 @@ export default rootRoute([
       lang: "text",
       code: `{
   "include": [
-    "node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts",
-    "node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts",
     ".adaptv/**/*.ts",
     "src"
   ],

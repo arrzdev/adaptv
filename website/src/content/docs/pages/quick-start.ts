@@ -31,10 +31,12 @@ export const page: DocPage = {
       code: `git clone https://github.com/arrzdev/adaptv.git
 cd adaptv
 pnpm install
-pnpm website:dev    # this site, http://localhost:41760
-pnpm dev:web        # playground, http://localhost:41730
-pnpm dev:ios        # playground, iOS Simulator
-pnpm dev:android    # playground, Android emulator`,
+pnpm build                  # the site reads dist/
+pnpm --dir website install  # the site is its own pnpm project
+pnpm website:dev            # this site, http://localhost:41760
+pnpm dev:web                # playground, http://localhost:41730
+pnpm dev:ios                # playground, iOS Simulator
+pnpm dev:android            # playground, Android emulator`,
     },
     {
       type: "p",
@@ -135,7 +137,7 @@ function Home() {
     { type: "h3", text: "package.json" },
     {
       type: "p",
-      text: "Link the checkout, and link its copies of `react`, `react-dom`, `vite` and `motion`. This gives one copy of each. Two copies of React crash with `Cannot read properties of null (reading 'useEffect')`. These paths fit an app one folder inside the checkout. Change them for other places.",
+      text: "Link the checkout, and link its copies of `react`, `react-dom`, `vite` and `motion`. This gives one copy of each. Two copies of React crash with `Cannot read properties of null (reading 'useEffect')`. These paths fit an app one folder inside the checkout. Change them for other places. The package resolves to the checkout's `dist/`, so run `pnpm build` there first, and again after you change the framework.",
     },
     {
       type: "code",

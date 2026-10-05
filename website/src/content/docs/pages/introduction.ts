@@ -67,7 +67,7 @@ adaptv icons --input ./mark.png --output ./public/favicons   # all icons from on
     {
       type: "note",
       tone: "warn",
-      text: "adaptv is **pre-alpha**. `@arrzdev/adaptv` is not on npm and has no install command. You link a local checkout. [Quick start](/docs/quick-start) shows how. APIs change without notice. The `create-adaptv` scaffolder does not exist yet.",
+      text: "adaptv is **pre-alpha**. `@arrzdev/adaptv` is not on npm and has no install command. You link a local checkout. [Quick start](/docs/quick-start) shows how. APIs change without notice. The `create-adaptv` scaffolder is not published yet.",
     },
     { type: "h2", text: "Where to go next" },
     {
