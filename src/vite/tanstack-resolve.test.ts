@@ -93,6 +93,18 @@ describe("adaptvTanstackResolvePlugin dedupe", () => {
     expect(options.resolve).toEqual({ dedupe: ["react", "react-dom"] })
   })
 
+  it("keeps an app's own TanStack entry", () => {
+    const { options } = dedupeAfter([
+      "react",
+      "@tanstack/react-query",
+      "@tanstack/react-start",
+      "@tanstack/react-router",
+    ])
+    expect(options.resolve).toEqual({
+      dedupe: ["react", "@tanstack/react-query"],
+    })
+  })
+
   it("leaves an environment with no dedupe as it was", () => {
     expect(dedupeAfter(undefined).options).toEqual({ resolve: undefined })
   })

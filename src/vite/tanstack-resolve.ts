@@ -2,6 +2,13 @@ import path from "node:path"
 import type { Plugin } from "vite"
 import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
 
+//The entries Start adds to `resolve.dedupe` (`@tanstack/react-start`'s `plugin/vite.js`).
+//Only these go: an app's own `@tanstack/*` entry, such as `@tanstack/react-query`, stays.
+const START_DEDUPE = new Set([
+  "@tanstack/react-start",
+  "@tanstack/react-router",
+])
+
 /**
  * Resolve the `@tanstack/*` imports TanStack writes into the APP's modules from adaptv's
  * own dependencies.
@@ -45,7 +52,7 @@ export function adaptvTanstackResolvePlugin(
         const resolve = options.resolve
         if (!resolve?.dedupe) return
         resolve.dedupe = resolve.dedupe.filter(
-          (id) => !id.startsWith("@tanstack/"),
+          (id) => !START_DEDUPE.has(id),
         )
       },
     },
