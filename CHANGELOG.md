@@ -17,6 +17,12 @@ API.
 - **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
   root and in `packages/create-adaptv`.
 
+- **Components no longer put class names of their own on their elements.** Their default look is plain
+  CSS in `@layer adaptv.components`, keyed on `data-adaptv` / `data-part`, and what they lock is
+  inline style. `className` is yours alone: an unlayered class or a Tailwind utility beats the
+  default without `!important`. A selector that targeted one of adaptv's Tailwind classes no longer
+  matches; target the `data-adaptv` / `data-part` attributes instead.
+
 ## 0.1.0-alpha.1
 
 The first public alpha. Not published to npm yet: publishing waits on approval, and until then the
