@@ -37,6 +37,16 @@
   --code-fn: #f2c78a;
   --code-tag: #7fc4f5;
 
+  /* terminal: the 8 ANSI colours the captured CLI output uses; bright ones reuse them */
+  --term-black: #6d6d7a;
+  --term-red: #ff7a8e;
+  --term-green: #4fdca0;
+  --term-yellow: #f2c78a;
+  --term-blue: #8b95ff;
+  --term-magenta: #c08bff;
+  --term-cyan: #7fc4f5;
+  --term-white: #e4e4ea;
+
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
