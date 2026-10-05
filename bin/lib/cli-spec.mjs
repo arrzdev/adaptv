@@ -204,11 +204,14 @@ export const SPEC = {
       prose: [
         "Signing is the one thing adaptv can't do for you. For TestFlight or the App Store, open .adaptv/ios/App/App.xcworkspace and use Xcode ▸ Product ▸ Archive.",
         //`build web` exists for one reason: it is the only place the update channel can be
-        //published. The two bundles are separate builds of the same app that both write
-        //dist/client, so nothing INSIDE a single vite build can produce both — and a deploy
-        //that ships the site without the channel silently strips every installed app's
-        //updates. `preview web` still exists; it serves, it does not publish.
-        "'build web' also publishes the update channel when adaptv.config.ts names a web origin: the bundle installed apps download, and the manifest pointing at it, both inside dist/client. Deploy that directory and the update is live.",
+        //published. The two bundles are separate builds of the same app, so nothing INSIDE
+        //a single vite build can produce both — and a deploy that ships the site without
+        //the channel silently strips every installed app's updates. `preview web` still
+        //exists; it serves, it does not publish.
+        //
+        //The directory is the site's, and the render mode picks it: this said dist/client
+        //for every app, which is only the 'spa' one. → src/vite/build-stamp.ts
+        "'build web' also publishes the update channel when adaptv.config.ts names a web origin: the bundle installed apps download, and the manifest pointing at it, both inside the site it builds (.output/public for render 'ssr', dist/client for 'spa'). Deploy that directory and the update is live.",
       ],
       args: [
         {

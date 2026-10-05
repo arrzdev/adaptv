@@ -2062,9 +2062,8 @@ async function previewWeb(appRoot, opts) {
  *
  * It is the only place the channel CAN be published. An app has two bundles — the
  * site (SSR, service worker) and the one a native WebView runs (SPA, no worker) —
- * and they are separate builds of the same source that both write `dist/client`.
- * Nothing inside a single `vite build` can produce both, so publishing has to be a
- * step that sequences them: build the native bundle, archive it, build the site,
+ * and they are separate builds of the same source. Nothing inside a single
+ * `vite build` can produce both, so publishing has to be a step that sequences them: build the native bundle, archive it, build the site,
  * then write the archive and its manifest into the site's own output.
  *
  * That ordering is the whole design. The archive is taken BEFORE the site build,
@@ -2074,8 +2073,9 @@ async function previewWeb(appRoot, opts) {
  *
  * ## What CI has to do
  *
- * Deploy `dist/client`. That is the entire contract — the channel rides the
- * ordinary web deploy, under `.well-known/`, so there is no second artifact, no
+ * Deploy the site's directory: `.output/public` for `render: "ssr"`, `dist/client`
+ * for `"spa"`, as the build stamp records it. That is the entire contract — the
+ * channel rides the ordinary web deploy, under `.well-known/`, so there is no second artifact, no
  * bucket to provision and no release step that can be forgotten independently of
  * the site going out. → `docs/design/ota.md §5.2`
  */
