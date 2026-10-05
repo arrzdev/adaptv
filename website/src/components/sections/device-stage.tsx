@@ -27,10 +27,6 @@ export function DeviceStage() {
           <PhoneInbox inbox={inbox} />
         </PhoneFrame>
       </View>
-
-      <p className="relative mt-8 text-left text-[14px] text-muted md:absolute md:-bottom-14 md:left-0 md:mt-0">
-        Live components. Swipe a row, pull to refresh, archive in either window.
-      </p>
     </View>
   )
 }
