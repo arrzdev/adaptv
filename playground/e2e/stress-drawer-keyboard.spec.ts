@@ -1180,6 +1180,36 @@ test.describe("AvoidKeyboard under stress", () => {
         },
       })
     })
+    await page.evaluate(() => {
+      const w = window as unknown as { __probeMark?: number }
+      w.__probeMark = performance.now()
+      const f = document.querySelector<HTMLElement>(
+        '[aria-label="Field six"]',
+      )
+      const b = f?.closest<HTMLElement>("div.h-72")
+      if (!f || !b) return
+      b.setAttribute("data-probe", "1")
+      const calls: unknown[] = []
+      ;(window as unknown as { __probeCalls: unknown[] }).__probeCalls =
+        calls
+      const orig = b.scrollTo.bind(b)
+      b.scrollTo = ((opts: ScrollToOptions) => {
+        const fr = f.getBoundingClientRect()
+        const br = b.getBoundingClientRect()
+        calls.push({
+          t: Math.round(performance.now()),
+          top: opts?.top,
+          scrollTop: b.scrollTop,
+          fieldTop: fr.top,
+          fieldBottom: fr.bottom,
+          boxTop: br.top,
+          vv:
+            (window.visualViewport?.offsetTop ?? 0) +
+            (window.visualViewport?.height ?? 0),
+        })
+        orig(opts)
+      }) as typeof b.scrollTo
+    })
     const field = page.getByLabel("Field six")
     await field.scrollIntoViewIfNeeded()
     await field.focus()
@@ -1229,6 +1259,65 @@ test.describe("AvoidKeyboard under stress", () => {
     const g = await read()
     console.log(
       `STRESS-KB ${testInfo.project.name} 8d: keyboard ${kb}px of ${innerHeight}; ${JSON.stringify(g)}`,
+    )
+    const probe = await page.evaluate(async () => {
+      const field = document.querySelector<HTMLElement>(
+        '[aria-label="Field six"]',
+      )
+      const box = field?.closest<HTMLElement>("div.h-72")
+      if (!field || !box) return { missing: true }
+      const offsetIn = () => {
+        let y = 0
+        let n: HTMLElement | null = field
+        while (n && n !== box && box.contains(n)) {
+          y += n.offsetTop
+          n = n.offsetParent as HTMLElement | null
+        }
+        return { y, reachedBox: n === box, parent: n?.tagName ?? null }
+      }
+      const rect = () => {
+        const f = field.getBoundingClientRect()
+        const b = box.getBoundingClientRect()
+        return {
+          fieldTop: f.top,
+          boxTop: b.top,
+          scrollTop: box.scrollTop,
+          contentY: f.top - b.top + box.scrollTop,
+        }
+      }
+      const frame = () =>
+        new Promise((r) => requestAnimationFrame(() => r(null)))
+      const now = rect()
+      await frame()
+      await frame()
+      const twoFrames = rect()
+      const st = box.scrollTop
+      box.scrollTop = st + 1
+      box.scrollTop = st
+      const afterWrite = rect()
+      return {
+        marker:
+          (window as unknown as { __probeMark?: number }).__probeMark ??
+          null,
+        sameBox: box.getAttribute("data-probe") === "1",
+        navs: performance.getEntriesByType("navigation").length,
+        fonts: document.fonts.status,
+        offset: offsetIn(),
+        position: getComputedStyle(box).position,
+        scrollHeight: box.scrollHeight,
+        clientHeight: box.clientHeight,
+        winScrollY: window.scrollY,
+        calls:
+          (window as unknown as { __probeCalls?: unknown[] })
+            .__probeCalls ?? null,
+        active: document.activeElement === field,
+        now,
+        twoFrames,
+        afterWrite,
+      }
+    })
+    console.log(
+      `STRESS-KB-PROBE ${testInfo.project.name} 8d: ${JSON.stringify(probe)}`,
     )
     expect(g.rootFontSize).toBe("32px")
     expect(g.fieldBottom).toBeLessThanOrEqual(g.keyboardTop)
