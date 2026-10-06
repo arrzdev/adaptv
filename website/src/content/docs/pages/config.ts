@@ -288,7 +288,7 @@ export default defineApp({
         ],
         [
           "`notFoundScreen`",
-          "router not-found props",
+          "`NotFoundScreenComponent` (props: `NotFoundScreenProps`)",
           "built-in",
           "Full-screen 404, for `notFound()` and for no match.",
         ],
@@ -432,7 +432,7 @@ export default defineApp({
     { type: "h2", text: "router" },
     {
       type: "p",
-      text: "The block is required and can be empty. Other keys go to the router as runtime options, such as `defaultPreload`. See [Routing](/docs/routing) and [Router API](/docs/router-api).",
+      text: "The block is required and can be empty. Other keys go to the router as runtime options, such as `defaultPreload`. Only plain values survive: a function or a component is dropped without a warning. See [Routing](/docs/routing) and [Router API](/docs/router-api).",
     },
     {
       type: "table",
@@ -466,7 +466,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps` and `UpdateRequiredProps`, from `@arrzdev/adaptv/config`.",
+      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps`, `NotFoundScreenComponent`, `NotFoundScreenProps` and `UpdateRequiredProps`, from `@arrzdev/adaptv/config`.",
     },
   ],
 }
