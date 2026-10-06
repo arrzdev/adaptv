@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { render } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { ScrollView } from "#adaptv/components/scroll-view"
@@ -10,36 +12,58 @@ function scrollNode(container: HTMLElement): HTMLElement {
 
 describe("ScrollView — behaviour is a prop, not a className (L6)", () => {
   //The scroll axis is owned by the `horizontal` / `scrollEnabled` PROPS. A
-  //consumer className must not be able to silently defeat them: that is the exact
-  //guarantee `mergeStyles`' `locked` layer exists to provide, and without it the
-  //component's whole contract is advisory.
+  //consumer className or style must not be able to silently defeat them: that is
+  //the guarantee the locked tier exists to provide, and without it the component's
+  //whole contract is advisory. The lock is inline style (styling.md §2.0) — the one
+  //author tier above an unlayered consumer class — so it is asserted on `style`.
   //
   //This is not hypothetical — `overflow-hidden` on a scroller is a very common
   //thing to reach for, and the failure is invisible until someone can't scroll.
-  it("keeps the scroll utility when a className fights it", () => {
+  it("keeps the scroll axis when a className or style fights it", () => {
     const { container } = render(
-      <ScrollView className="overflow-hidden">content</ScrollView>,
+      <ScrollView
+        className="overflow-hidden"
+        style={{ overflowY: "hidden", overscrollBehaviorY: "auto" }}
+      >
+        content
+      </ScrollView>,
     )
-    expect(scrollNode(container).className).toContain("overflow-y-auto")
+    const node = scrollNode(container)
+    expect(node.style.overflowY).toBe("auto")
+    expect(node.style.overflowX).toBe("hidden")
+    expect(node.style.overscrollBehaviorY).toBe("contain")
+    expect(node.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    //the consumer's class passes through untouched; it simply cannot win
+    expect(node.className).toBe("overflow-hidden")
   })
 
-  it("keeps the horizontal utility too", () => {
+  it("keeps the horizontal axis too", () => {
     const { container } = render(
       <ScrollView horizontal className="overflow-hidden">
         content
       </ScrollView>,
     )
-    expect(scrollNode(container).className).toContain("overflow-x-auto")
+    const node = scrollNode(container)
+    expect(node.style.overflowX).toBe("auto")
+    expect(node.style.overflowY).toBe("hidden")
+    expect(node.style.overscrollBehaviorX).toBe("contain")
+    expect(node.style.touchAction).toBe("pan-x pan-y pinch-zoom")
   })
 
-  it("honours scrollEnabled={false} over a scroll className", () => {
+  it("honours scrollEnabled={false} over a scroll className or style", () => {
     //the inverse direction: a consumer cannot force scrolling back on either
     const { container } = render(
-      <ScrollView scrollEnabled={false} className="overflow-y-auto">
+      <ScrollView
+        scrollEnabled={false}
+        className="overflow-y-auto"
+        style={{ overflowY: "auto" }}
+      >
         content
       </ScrollView>,
     )
-    expect(scrollNode(container).className).toContain("overflow-hidden")
+    const node = scrollNode(container)
+    expect(node.style.overflowX).toBe("hidden")
+    expect(node.style.overflowY).toBe("hidden")
   })
 
   it("applies the same guarantee with fades on", () => {
@@ -51,7 +75,65 @@ describe("ScrollView — behaviour is a prop, not a className (L6)", () => {
         content
       </ScrollView>,
     )
-    expect(scrollNode(container).className).toContain("overflow-y-auto")
+    expect(scrollNode(container).style.overflowY).toBe("auto")
+  })
+
+  it("owns the indicator in both directions, beating a consumer style", () => {
+    const hidden = scrollNode(
+      render(
+        <ScrollView style={{ scrollbarWidth: "auto" }}>
+          content
+        </ScrollView>,
+      ).container,
+    )
+    expect(hidden.style.scrollbarWidth).toBe("none")
+    expect(hidden.hasAttribute("data-scroll-view-indicator")).toBe(false)
+
+    const shown = scrollNode(
+      render(<ScrollView showsVerticalScrollIndicator>content</ScrollView>)
+        .container,
+    )
+    expect(shown.style.scrollbarWidth).toBe("auto")
+    //the `::-webkit-scrollbar` half is a layer rule keyed on this attribute
+    expect(shown.hasAttribute("data-scroll-view-indicator")).toBe(true)
+
+    //the prop names the axis: a horizontal scroller reads the horizontal one
+    const strip = scrollNode(
+      render(
+        <ScrollView horizontal showsVerticalScrollIndicator>
+          content
+        </ScrollView>,
+      ).container,
+    )
+    expect(strip.style.scrollbarWidth).toBe("none")
+  })
+
+  it("keeps the ::-webkit-scrollbar half of the indicator lock as a layer rule on the root's attributes", () => {
+    //a pseudo-element has no inline style, so this half cannot move to `style`
+    const css = readFileSync(
+      resolve(__dirname, "../styles/scroll-view.css"),
+      "utf8",
+    )
+    expect(css).toMatch(
+      /:where\(\[data-scroll-view\]\)::-webkit-scrollbar\s*\{\s*display:\s*none;/,
+    )
+    expect(css).toMatch(
+      /:where\(\[data-scroll-view\]\[data-scroll-view-indicator\]\)::-webkit-scrollbar\s*\{\s*display:\s*initial;/,
+    )
+    expect(css.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain(
+      "!important",
+    )
+  })
+
+  it("carries its identity and its props as attributes, and no class of its own", () => {
+    const node = scrollNode(
+      render(<ScrollView fill>content</ScrollView>).container,
+    )
+    expect(node.getAttribute("data-adaptv")).toBe("scroll-view")
+    expect(node.getAttribute("data-part")).toBe("root")
+    expect(node.getAttribute("data-scroll-view")).toBe("y")
+    expect(node.hasAttribute("data-scroll-view-fill")).toBe(true)
+    expect(node.hasAttribute("class")).toBe(false)
   })
 
   it("marks which ends fade, and nothing when they do not", () => {

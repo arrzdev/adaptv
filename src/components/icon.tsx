@@ -100,6 +100,12 @@ export interface IconProps
   scaleWithSystem?: boolean
 }
 
+/** The `data-part` a node already carries, which Icon keeps rather than overwrite. */
+function ownDataPart(source: object): string | undefined {
+  const part = (source as { "data-part"?: unknown })["data-part"]
+  return typeof part === "string" ? part : undefined
+}
+
 /** A React inline length as the DOM spells it — React appends `px` to a bare number. */
 function cssLength(value: CSSProperties["width"]): string {
   if (value === undefined || value === null) return ""
@@ -149,12 +155,11 @@ function cssLength(value: CSSProperties["width"]): string {
  * lands on a hidden node, which Chromium then exposes as an unnamed image) and a
  * `<title>` child under a `label` (read as a description after the name).
  *
- * **Size is `1em` on both axes**, as `w-[1em] h-[1em]` rather than `size-[1em]`:
- * tailwind-merge lets a later `size-*` replace an earlier `w-*`/`h-*` but not the other
- * way round, so a `size-[1em]` base kept a consumer's `w-6` AND itself in the DOM and
- * left the winner to stylesheet order (§5.5). A consumer `size-6` still replaces both
- * axes. `shrink-0` keeps a flex row from squeezing the glyph. Both are `base`, and
- * nothing is `locked`: size is the consumer's to change. An icon set's own `size` prop
+ * **Size is `1em` on both axes**, a default rule in `styles/icon.css` (`width` and
+ * `height`, zero specificity, in `adaptv.components`), so any consumer class — `w-6`,
+ * `size-6`, a plain-CSS rule — replaces either axis without help. `flex-shrink: 0` keeps
+ * a flex row from squeezing the glyph. Both are defaults, and nothing is locked: size is
+ * the consumer's to change. An icon set's own `size` prop
  * writes `width`/`height` ATTRIBUTES, which any CSS width beats — size an icon with
  * `className` (`size-6`) or with the font-size around it.
  *
@@ -177,6 +182,7 @@ function cssLength(value: CSSProperties["width"]): string {
  * | Attribute | When |
  * |-----------|------|
  * | `data-adaptv="icon"` | always — target every icon from global CSS with no imports |
+ * | `data-part="root"` | always, unless the node already carries a `data-part` |
  * | `data-scale-with-system` | `scaleWithSystem` (opt-in) — a marker only; the sizing is done in JS |
  *
  * @example
@@ -207,14 +213,15 @@ export function Icon({
   //The element passed to `render` carries its own className/style, written at the same
   //call site as Icon's — both are the CONSUMER tier, and Icon's own prop, the more
   //local of the two, wins the per-property tie (Text's order, §3.3).
+  //The `1em` box and `flex-shrink: 0` are a default rule in styles/icon.css, so
+  //`className` is the consumer's alone.
   const merged = mergeStyles({
-    base: "h-[1em] w-[1em] shrink-0",
     className: [own.className, className],
-    //nothing structural: the size is the consumer's, and exposure is attributes, not
-    //classes — so there is no class a consumer could strand. Explicit, so the omission
-    //reads as a decision (styling.md §2).
-    locked: undefined,
     style: { ...own.style, ...style },
+    //nothing structural: the size is the consumer's, and exposure is attributes, not
+    //style — so there is nothing a consumer could strand. Explicit, so the omission
+    //reads as a decision (styling.md §2.0).
+    lockedStyle: undefined,
   })
 
   //a blank label names nothing: it would be an image announced with no name
@@ -334,13 +341,16 @@ export function Icon({
 
   const slotProps: IconSlotProps = {
     ...props,
-    className: merged.className,
+    //no consumer class, no attribute: Icon writes no class of its own
+    className: merged.className || undefined,
     style: merged.style,
     role: named ? "img" : undefined,
     "aria-label": name,
     "aria-labelledby": undefined,
     "aria-hidden": named ? undefined : "true",
     "data-adaptv": "icon",
+    //a `data-part` already on the node (the consumer's, or the svg's own) is kept
+    "data-part": ownDataPart(props) ?? ownDataPart(own) ?? "root",
     //a PRESENCE attribute (§3.1): "" when opted in, absent otherwise
     "data-scale-with-system": scaleWithSystem ? "" : undefined,
   }

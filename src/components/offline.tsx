@@ -1,6 +1,5 @@
 import { Button } from "#adaptv/components/button"
 import { View } from "#adaptv/components/view"
-import { mergeStyles } from "#adaptv/utils/styles"
 
 /**
  * Props for the offline UI. **Every one is optional**, and that is the design:
@@ -71,21 +70,24 @@ export function Offline({
 
   return (
     <View
+      //the View's own `data-part="root"` stays; its look is styles/offline.css. This is
+      //the one element with `data-adaptv="offline"`: the title and description carry
+      //their own `offline-<part>` scope.
       data-adaptv="offline"
       safe="all"
       role="alert"
       aria-live="polite"
-      //`locked: undefined` by decision: the one structural thing on this screen is
+      //No lock of its own, by decision: the one structural thing on this screen is
       //the safe-area padding, and that is already the `safe="all"` PROP above —
-      //View locks it, so there is nothing left here for a className to break.
-      className={mergeStyles({
-        base: "flex min-h-0 flex-1 w-full flex-col items-center justify-center gap-3 px-6 text-center",
-        className,
-        locked: undefined,
-      })}
+      //View locks it inline, so there is nothing left here for a className to break.
+      className={className}
     >
-      <h1 className="text-gray-950">{title}</h1>
-      <p className="text-gray-600">{description}</p>
+      <h1 data-adaptv="offline-title" data-part="title">
+        {title}
+      </h1>
+      <p data-adaptv="offline-description" data-part="description">
+        {description}
+      </p>
       <Button haptic onClick={handleRetry}>
         <Button.Text>{retryLabel}</Button.Text>
       </Button>

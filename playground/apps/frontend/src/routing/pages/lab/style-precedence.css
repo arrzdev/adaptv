@@ -1,0 +1,106 @@
+/* The plain-CSS consumer for /lab/style-precedence: UNLAYERED rules, which is what a
+   stylesheet, an SCSS file or a CSS module gives an app. Each class sets one property to
+   a value no adaptv default uses, so the spec can tell who won. The Tailwind twin of
+   each is in style-precedence.cases.ts. */
+
+.sp-bg {
+  background-color: rgb(255, 0, 0);
+}
+
+.sp-color {
+  color: rgb(0, 0, 255);
+}
+
+.sp-border-red {
+  border-color: rgb(255, 0, 0);
+}
+
+.sp-touch-none {
+  touch-action: none;
+}
+
+.sp-static {
+  position: static;
+}
+
+.sp-relative {
+  position: relative;
+}
+
+.sp-block {
+  display: block;
+}
+
+.sp-grid {
+  display: grid;
+}
+
+.sp-flex {
+  display: flex;
+}
+
+.sp-shrink {
+  flex-shrink: 1;
+}
+
+.sp-overflow-hidden {
+  overflow: hidden;
+}
+
+.sp-overflow-visible {
+  overflow: visible;
+}
+
+.sp-pe-auto {
+  pointer-events: auto;
+}
+
+.sp-pb-0 {
+  padding-bottom: 0;
+}
+
+.sp-h-48 {
+  height: 48px;
+}
+
+.sp-size-24 {
+  width: 24px;
+  height: 24px;
+}
+
+.sp-radius-0 {
+  border-radius: 0;
+}
+
+.sp-transition-none {
+  transition-property: none;
+}
+
+.sp-select-none {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sp-justify-start {
+  justify-content: flex-start;
+}
+
+.sp-items-start {
+  align-items: flex-start;
+}
+
+.sp-self-start {
+  align-self: flex-start;
+}
+
+.sp-underline {
+  text-decoration-line: underline;
+}
+
+.sp-box-content {
+  box-sizing: content-box;
+}
+
+.sp-z-0 {
+  z-index: 0;
+}

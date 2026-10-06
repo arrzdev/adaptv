@@ -101,4 +101,27 @@ describe("BootError — the default boot failure screen", () => {
     const { container } = render(<BootError />)
     expect(container.querySelector(`[${BOOT_RETRY_ATTR}]`)).not.toBeNull()
   })
+
+  it('stamps `data-adaptv="boot-error"` on the root alone; each part has its own scope', () => {
+    //a consumer's `[data-adaptv="boot-error"]` (and every spec that locates the screen
+    //by it) must match one element, not the screen and every piece of copy inside it
+    const { container } = render(<BootError />)
+    const roots = container.querySelectorAll('[data-adaptv="boot-error"]')
+    expect(roots).toHaveLength(1)
+    expect(roots[0].getAttribute("data-part")).toBe("root")
+    for (const part of [
+      "brand",
+      "mark",
+      "wordmark",
+      "copy",
+      "title",
+      "description",
+    ])
+      expect(
+        container.querySelectorAll(
+          `[data-adaptv="boot-error-${part}"][data-part="${part}"]`,
+        ),
+        part,
+      ).toHaveLength(1)
+  })
 })

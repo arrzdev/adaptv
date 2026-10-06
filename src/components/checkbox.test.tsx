@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { cleanup, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { Checkbox } from "#adaptv/components/checkbox"
@@ -85,5 +87,112 @@ describe("Checkbox — who owns the click", () => {
     )
     fireEvent.click(getByRole("checkbox"))
     expect(onCheckedChange).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * Styling: the default look is a layered rule keyed on `data-adaptv` + `data-part`
+ * (styles/checkbox.css), the lock is inline style, and the `className` attribute is
+ * the consumer's alone (docs/decisions/styling.md §2). Real cascade resolution is the
+ * browser precedence suite's; this pins the mechanism.
+ */
+describe("Checkbox — styling tiers", () => {
+  const css = readFileSync(
+    resolve(__dirname, "../styles/checkbox.css"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "")
+
+  function parts(container: HTMLElement) {
+    const q = (part: string) =>
+      container.querySelector<HTMLElement>(
+        //the root carries `checkbox`; each sub-part its own `checkbox-<part>` scope
+        `[data-adaptv='checkbox${part === "root" ? "" : `-${part}`}'][data-part='${part}']`,
+      ) as HTMLElement
+    return {
+      root: q("root"),
+      box: q("box"),
+      icon: q("icon"),
+      input: q("input"),
+    }
+  }
+
+  it("emits no class of its own on any part", () => {
+    const { container } = render(<Checkbox aria-label="Agree" />)
+    const { root, box, icon, input } = parts(container)
+    for (const el of [root, box, icon, input]) {
+      expect(el).not.toBeNull()
+      expect(el.hasAttribute("class")).toBe(false)
+    }
+    //stamped once: `[data-adaptv="checkbox"]` names the root and nothing inside it
+    expect(
+      container.querySelectorAll('[data-adaptv="checkbox"]'),
+    ).toHaveLength(1)
+  })
+
+  it("passes the consumer's className through untouched", () => {
+    const { container } = render(
+      <Checkbox aria-label="Agree" className="w-full flex">
+        <Checkbox.Box className="rounded-md">
+          <Checkbox.Icon className="text-white" />
+        </Checkbox.Box>
+      </Checkbox>,
+    )
+    const { root, box, icon } = parts(container)
+    expect(root.className).toBe("w-full flex")
+    expect(box.className).toBe("rounded-md")
+    expect(icon.getAttribute("class")).toBe("text-white")
+  })
+
+  it("locks position and the touch pass-through inline, over the consumer's style", () => {
+    const { container } = render(
+      <Checkbox
+        aria-label="Agree"
+        style={{ position: "static", touchAction: "none", color: "red" }}
+      />,
+    )
+    const { root } = parts(container)
+    expect(root.style.position).toBe("relative")
+    expect(root.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    //an unlocked property is the consumer's
+    expect(root.style.color).toBe("red")
+    expect(root.style.userSelect).toBe("")
+  })
+
+  it("adds user-select: none when disabled, keeping the touch pass-through", () => {
+    const { container } = render(<Checkbox aria-label="Agree" disabled />)
+    const { root } = parts(container)
+    expect(root.hasAttribute("data-disabled")).toBe(true)
+    expect(root.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(root.style.userSelect).toBe("none")
+  })
+
+  it("locks the box's layout and the icon's pointer-events inline", () => {
+    const { container } = render(
+      <Checkbox aria-label="Agree">
+        <Checkbox.Box style={{ position: "static", overflow: "visible" }}>
+          <Checkbox.Icon />
+        </Checkbox.Box>
+      </Checkbox>,
+    )
+    const { box, icon } = parts(container)
+    expect(box.style.position).toBe("relative")
+    expect(box.style.display).toBe("flex")
+    expect(box.style.overflow).toBe("hidden")
+    expect(box.style.flexShrink).toBe("0")
+    expect(box.style.width).toBe("2rem")
+    expect(icon.style.pointerEvents).toBe("none")
+  })
+
+  it("puts the defaults in zero-specificity layered rules, with no border width", () => {
+    expect(css).toMatch(/@layer adaptv\.components\s*\{/)
+    expect(css).toContain(
+      ':where([data-adaptv="checkbox"][data-part="root"])',
+    )
+    expect(css).toContain(
+      ':where([data-adaptv="checkbox-box"][data-part="box"])',
+    )
+    expect(css).not.toContain("!important")
+    //⚠︎ a pre-allocated border shrinks every checkbox's content box (button.tsx)
+    expect(css).not.toMatch(/border(-width)?\s*:/)
   })
 })

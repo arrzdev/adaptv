@@ -248,6 +248,12 @@ const FRAMEWORK = [
     isNew: true,
   },
   {
+    to: "/lab/style-precedence",
+    title: "Style precedence",
+    summary: "every primitive: your class beats the default, never a lock",
+    isNew: true,
+  },
+  {
     to: "/lab/safe-area",
     title: "Safe area",
     summary: "p-safe, *-safe-offset-N, *-safe-or-N and useInsets agreeing",

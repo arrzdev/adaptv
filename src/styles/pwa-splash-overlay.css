@@ -1,0 +1,38 @@
+/*
+ * PwaSplashOverlay — the splash frame's defaults (components/pwa-splash-overlay.tsx):
+ * the coverage box's paint, the centering region's extent and layout, and the column
+ * the content sits in.
+ *
+ * The coverage box paints the app's own background token (semantic, so no fallback —
+ * docs/decisions/styling.md §7). The centering region spans the coverage box by
+ * default, and `centerClassName` may move any single edge of it (a frozen launch
+ * height, `bottom-auto`): that is why its insets are here and not locked. What IS
+ * locked is inline style the component writes — the coverage box's `position: fixed`,
+ * insets and `z-index: 100`, and the region's `position: absolute` (§2.0).
+ *
+ * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root: the coverage box */
+  :where([data-adaptv="pwa-splash-overlay"][data-part="root"]) {
+    background-color: var(--color-background);
+  }
+
+  /* the centering region */
+  :where([data-adaptv="pwa-splash-overlay"][data-part="center"]) {
+    inset: calc(var(--spacing, 0.25rem) * 0);
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+  }
+
+  /* the content column */
+  :where([data-adaptv="pwa-splash-overlay"][data-part="content"]) {
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 8);
+    flex-direction: column;
+    display: flex;
+  }
+}

@@ -25,6 +25,9 @@ describe("FieldGroup root", () => {
     const el = firstEl(<FieldGroup />)
     expect(el.tagName).toBe("DIV")
     expect(el.getAttribute("data-adaptv")).toBe("field-group")
+    expect(el.getAttribute("data-part")).toBe("root")
+    //adaptv adds no class of its own
+    expect(el.hasAttribute("class")).toBe(false)
   })
 
   it("forwards div props and the consumer className", () => {
@@ -145,8 +148,12 @@ describe("FieldGroup.Row", () => {
       </FieldGroup.Row>,
     )
     expect(el.tagName).toBe("DIV")
+    //a row has its own scope: `[data-adaptv="field-group"]` stays the one root
+    expect(el.getAttribute("data-adaptv")).toBe("field-group-row")
     expect(el.getAttribute("data-part")).toBe("row")
-    expect(hasClass(el, "flex")).toBe(true)
+    //the flex row is a lock, inline; adaptv adds no class of its own
+    expect(el.style.display).toBe("flex")
+    expect(el.hasAttribute("class")).toBe(false)
     expect(el.children).toHaveLength(2)
     const [column, control] = el.children
     expect(column?.getAttribute("data-part")).toBe("label")
@@ -158,7 +165,10 @@ describe("FieldGroup.Row", () => {
   it("stacks the title over the description inside the column", () => {
     const el = firstEl(<FieldGroup.Row label="A" description="B" />)
     const column = part(el, "label") as HTMLElement
-    expect(hasClass(column, "flex-col")).toBe(true)
+    expect(column.getAttribute("data-adaptv")).toBe("field-group-label")
+    expect(column.style.display).toBe("flex")
+    expect(column.style.flexDirection).toBe("column")
+    expect(column.hasAttribute("class")).toBe(false)
     const parts = [...column.children].map((c) =>
       c.getAttribute("data-part"),
     )
@@ -230,7 +240,7 @@ describe("FieldGroup.Row", () => {
     expect(el.getAttribute("data-part")).toBe("row")
     expect(hasClass(el, "px-4")).toBe(true)
     expect(hasClass(el, "py-3")).toBe(true)
-    expect(hasClass(el, "flex")).toBe(true)
+    expect(el.style.display).toBe("flex")
     expect(part(el, "title")?.textContent).toBe("Sounds")
     expect(el.querySelector("input")?.id).toBe("sounds")
     //the row's content replaces the render element's own children, as Text does
@@ -248,14 +258,19 @@ describe("FieldGroup.Row", () => {
     expect(hasClass(el, "px-2")).toBe(false)
   })
 
-  it("keeps the flex structure when a className fights it, but yields alignment", () => {
+  it("keeps the flex structure when a className or style fights it, but yields alignment", () => {
     const el = firstEl(
-      <FieldGroup.Row label="A" className="block items-start" />,
+      <FieldGroup.Row
+        label="A"
+        className="block items-start"
+        style={{ display: "grid", alignItems: "start" }}
+      />,
     )
-    expect(hasClass(el, "flex")).toBe(true)
-    expect(hasClass(el, "block")).toBe(false)
-    expect(hasClass(el, "items-start")).toBe(true)
-    expect(hasClass(el, "items-center")).toBe(false)
+    //the consumer's classes land untouched; the lock is inline, above any class
+    expect(el.className).toBe("block items-start")
+    expect(el.style.display).toBe("flex")
+    //alignment is a default (field-group.css), so the consumer's style keeps it
+    expect(el.style.alignItems).toBe("start")
   })
 
   it("stamps data-disabled and aria-disabled on the row and changes nothing else", () => {

@@ -1,0 +1,40 @@
+/*
+ * Switch — the default look of the track and the thumb (components/switch.tsx).
+ *
+ * Only defaults live here: the track's inline-flex layout, surface and cursor, and the
+ * thumb's surface. Everything the control's correctness depends on — the track's
+ * `position: relative`, size and touch pass-through, the thumb's absolute placement,
+ * centring, travel and `pointer-events: none`, and the invisible input laid over the
+ * track — is inline style written by the component (docs/decisions/styling.md §2.0),
+ * the one tier a consumer's `className` cannot beat.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
+ * rule or utility wins over any of it, every selector is wrapped in `:where()` so it has
+ * zero specificity (§6.0.1), and nothing here is `!important`.
+ */
+
+@layer adaptv.components {
+  /*
+   * root: the track, a label, and the hit area.
+   * ⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
+   * cancels the shift at exactly 1px and permanently shrinks the content box; use
+   * `outline` for toggled emphasis instead.
+   */
+  :where([data-adaptv="switch"][data-part="root"]) {
+    cursor: pointer;
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    flex-shrink: 0;
+    align-items: center;
+    display: inline-flex;
+  }
+
+  /* the cursor is a look, so it is the consumer's to change (press-core explains the split) */
+  :where([data-adaptv="switch"][data-part="root"][data-disabled]) {
+    cursor: not-allowed;
+  }
+
+  /* thumb */
+  :where([data-adaptv="switch-thumb"][data-part="thumb"]) {
+    background-color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+}

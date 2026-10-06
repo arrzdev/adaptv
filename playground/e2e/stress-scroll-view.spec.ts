@@ -243,8 +243,9 @@ test.describe("ScrollView under stress", () => {
       page.getByRole("button", { name: "scrollEnabled: false" }),
       "the toggle took",
     ).toBeVisible()
-    await expect(box, "the prop landed as overflow-hidden").toHaveClass(
-      /overflow-hidden/,
+    await expect(box, "the prop landed as overflow: hidden").toHaveCSS(
+      "overflow-y",
+      "hidden",
     )
     await moves(cdp, point, 6, -20, -80)
     await touch(cdp, "touchEnd")
@@ -274,7 +275,7 @@ test.describe("ScrollView under stress", () => {
     await expect(
       page.getByRole("button", { name: "scrollEnabled: true" }),
     ).toBeVisible()
-    await expect(box).toHaveClass(/overflow-y-auto/)
+    await expect(box).toHaveCSS("overflow-y", "auto")
     const enabledAim = await aim(page, box)
     const enabledBefore = await scrollTopOf(box)
     await touch(cdp, "touchStart", enabledAim.point)
