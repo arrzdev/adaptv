@@ -482,6 +482,35 @@ written into the app, and it works the same under pnpm, npm and plain `vite`. Th
   file-system adapter that rewrites the import uses only public API, but it does not cover the entry
   ids in the HTML, and it makes adaptv own more of Start's wiring for every upgrade.
 
+### 3.6 What the public types still name, and why (2026-10-06)
+
+Measured with the compiler API on `src/` and on the built `dist/*.d.mts` (TUD-242, #372); both gave
+the same result. The `capabilities`, `hooks`, `ota`, `storage`, `sw`, `utils` and `vite` barrels are
+clean. Every type an adaptv alias could name now has one (`NotFoundScreenComponent`,
+`NotFoundScreenProps`, `NotFoundOptions`, `RouteRedirect`, the `*RouteNode` DSL types,
+`AdaptvRootRoute`, `AppRouter`, `AdaptvRouter`, `AdaptvRouteTree`, `AdaptvHistory`), and
+`src/interface/public-type-names.test.ts` holds them. What `@arrzdev/adaptv/router` still shows:
+
+- **The generic hooks and functions** — `useRouter`, `useNavigate`, `useParams`, `useSearch`,
+  `useMatch`, `useMatches`, `useLoaderData`, `useLocation`, `useRouterState`, `createFileRoute`,
+  `redirect`, `createRouter`. Their signatures print `AnyRouter`, `ThrowOrOptional`, `Use*Result`,
+  `FromPathOption`, `RedirectOptions` and the like. They stay: these are the engine's own generic
+  signatures, and a wrapper type collapses their inference. The resolved results are clean
+  (`useParams` gives `{ id: string }`), so the docs describe a hook by what it returns.
+- **Augmentation anchors, exported under the engine's names** — `Register`, `FileRoutesByPath`,
+  `CreateFileRoute`, `UpdatableRouteOptionsExtensions`. The generated route tree and
+  `route-globals.d.ts` augment them by name on this module; renaming them breaks the augmentation.
+  `RegisteredRouter`, `NavigateOptions`, `ToOptions` and `ParsedLocation` could take aliases, but
+  their expansions still print engine names, so an alias buys nothing yet.
+- **Inferred types an app re-exports** — `export const Route = createFileRoute(…)(…)` prints
+  `import("@tanstack/router-core").Route<…>` in declaration emit. Only an app that emits
+  declarations sees it.
+- **Not leaks:** `Outlet`, `Link` and `LinkProps` share the engine's names but are adaptv's types.
+
+Text outside the types: devtools still show `tanstack_router_reload` and `__TSR_index`, and the
+`verify-patches` error names packages; it fires only on an adaptv fault, and the CLI filters it
+(`bin/lib/opacity.mjs`).
+
 ## 4. Where this doc sits
 
 - `docs/design/rendering.md` — *why* the boundary exists. **This doc is how it's enforced.** Its
