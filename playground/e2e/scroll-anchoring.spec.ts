@@ -224,7 +224,6 @@ function measure(page: Page, surface: Surface) {
       //at a stale -15px on the frame of the focus() call, then its real ~1029px
       await frame()
       let previous = top()
-      let movingFrames = 0
       let scrollAtInsert = -1
       const began = performance.now()
       //the drawer re-aims 420ms after the raise; 1.5s covers it and the smooth scroll after
@@ -237,15 +236,14 @@ function measure(page: Page, surface: Surface) {
         const now = top()
         steps.push(Math.round((now - previous) * 10) / 10)
         previous = now
+        //on the first frame adaptv's scroll has moved: WebKit on a loaded runner draws so
+        //few frames that its smooth scroll had arrived by the third (drawer at 871 of 871)
         if (
           scrollAtInsert < 0 &&
           Math.abs(scroller.scrollTop - start) >= 1
         ) {
-          movingFrames += 1
-          if (movingFrames === 3) {
-            scrollAtInsert = scroller.scrollTop
-            insert()
-          }
+          scrollAtInsert = scroller.scrollTop
+          insert()
         }
       }
       await settle()
