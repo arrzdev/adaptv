@@ -83,8 +83,6 @@ describe("what it emits", () => {
       "package.json",
       "patches/@capacitor__cli@8.4.3.patch",
       "patches/@capawesome__capacitor-live-update@8.3.0.patch",
-      "patches/@tanstack__router-generator@1.167.21.patch",
-      "patches/@tanstack__start-plugin-core@1.171.24.patch",
       "patches/native-run@2.0.3.patch",
       "pnpm-workspace.yaml",
       "src/routing/config.ts",
@@ -93,6 +91,13 @@ describe("what it emits", () => {
       "tsconfig.json",
       "vite.config.ts",
     ])
+  })
+
+  //L20: the engine underneath is adaptv's business. adaptv edits it as Node loads it
+  //(src/vite/engine-hooks.ts), so the app carries no patch, key or file that names it.
+  it("names the route engine in no file", () => {
+    for (const file of files(dir))
+      expect(`${file}\n${read(file)}`, file).not.toMatch(/tanstack/i)
   })
 
   it("writes a flat config named after the app", () => {
@@ -301,9 +306,28 @@ describe("a created app", () => {
       //if `src/` moved since, or this checks whatever build happens to be lying around
       expect(ensureDist(ROOT)).toBe(true)
       const { dir, link, build } = linkedApp()
+      //a page written without its import: the route generator adds it, and adaptv's
+      //edit to the engine (src/vite/engine-hooks.ts) makes it name adaptv. The repo's
+      //engine is installed unpatched, so this goes through the hook or fails.
+      const about = "src/routing/pages/about.page.tsx"
+      writeFileSync(
+        join(dir, about),
+        'export const Route = createFileRoute("/about")({ component: () => null })\n',
+      )
+      writeFileSync(
+        join(dir, "src/routing/config.ts"),
+        readFileSync(join(dir, "src/routing/config.ts"), "utf8")
+          .replace("{ index,", "{ index, route,")
+          .replace(
+            'index("pages/home.page.tsx")',
+            'index("pages/home.page.tsx"), route("/about", "pages/about.page.tsx")',
+          ),
+      )
       //before the links: a recursive walk follows them into the repo's whole dependency tree
       const before = Object.fromEntries(
-        files(dir).map((f) => [f, readFileSync(join(dir, f), "utf8")]),
+        files(dir)
+          .filter((f) => f !== about)
+          .map((f) => [f, readFileSync(join(dir, f), "utf8")]),
       )
       link("@arrzdev/adaptv", ROOT)
       for (const name of Object.keys(DEPENDENCIES))
@@ -318,6 +342,23 @@ describe("a created app", () => {
       //lacks them; a created app already has all three, so nothing it was given moved
       for (const [file, text] of Object.entries(before))
         expect(readFileSync(join(dir, file), "utf8"), file).toBe(text)
+      expect(readFileSync(join(dir, about), "utf8")).toMatch(
+        /^import \{ createFileRoute \} from ["']@arrzdev\/adaptv\/router["']$/m,
+      )
+      expect(readFileSync(join(dir, about), "utf8")).not.toMatch(
+        /tanstack/i,
+      )
+      //`module.registerHooks` is release-candidate in Node 22: it must stay silent
+      expect(result.stderr).not.toMatch(/ExperimentalWarning/)
+      const html = files(join(dir, ".output/public")).filter((f) =>
+        f.endsWith(".html"),
+      )
+      expect(html.length).toBeGreaterThan(0)
+      for (const f of html)
+        expect(
+          readFileSync(join(dir, ".output/public", f), "utf8"),
+          f,
+        ).not.toMatch(/tanstack/i)
     },
     BUILD_TIMEOUT,
   )

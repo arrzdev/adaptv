@@ -1,8 +1,11 @@
 # adaptv — the dependency patches, and why they are verified at build time
 
-**adaptv ships five `pnpm patch`es and refuses to build quietly without the first four.** This
-document covers what each one does, the two mechanisms that verify them, and what to do when one
-stops applying.
+**adaptv ships three `pnpm patch`es and refuses to build quietly without the update-core one.** This
+document covers what each one does, how they are verified, and what to do when one stops applying.
+
+The route engine is not patched this way any more. adaptv edits `@tanstack/router-generator` and
+`@tanstack/start-plugin-core` in memory as Node loads them (`src/vite/engine-hooks.ts`), so an app
+carries no patch for them. → [`../decisions/facade-and-opacity.md §3.5`](../decisions/facade-and-opacity.md)
 
 The code is [`src/vite/verify-patches.ts`](../../src/vite/verify-patches.ts); the patches are in
 `patches/`, declared in `pnpm-workspace.yaml` under `patchedDependencies`, and shipped to consumers
@@ -10,21 +13,18 @@ via `package.json` `files`.
 
 ---
 
-## 1. The five patches
+## 1. The three patches
 
 The filename **is** the pnpm key: `@scope__name@version.patch` decodes to `'@scope/name@version'`.
 
 | Patch | Edits | What it buys |
 |---|---|---|
-| `@tanstack__router-generator@1.167.21` | `generator`, `template`, `transform` (esm + cjs) | The route generator reads the `ADAPTV_ROUTER_PKG` env override instead of hardcoding `@tanstack/react-router`, so generated route files import from adaptv. |
-| `@tanstack__start-plugin-core@1.171.24` | `constants`, `route-tree-footer` | The generated route tree's `declare module` reads `ADAPTV_START_PKG` instead of hardcoding `@tanstack/*-start`. |
 | `@capawesome__capacitor-live-update@8.3.0` | `LiveUpdate.swift`, `LiveUpdate.java` | OTA rollback targets the newest bundle **this device is known to boot**, rather than whatever the store shipped. |
 | `@capacitor__cli@8.4.3` | `dist/config.js` | The native config is supplied **in memory** through `ADAPTV_CAPACITOR_CONFIG`, so no `capacitor.config.*` file exists at the project root — `adaptv.config.ts` stays the single source. Absent env var ⇒ upstream file-based behaviour, unchanged. |
 | `native-run@2.0.3` | `dist/android/utils/adb.js` | A slow or failed `adb` call **rejects** instead of running `adb kill-server` + `adb start-server` and retrying. The adb server is one process for the whole machine, so upstream's retry dropped every device's `adb reverse` mappings and every other adb client whenever one device took more than 5 s to answer. A device that does not answer `getprop` no longer fails the whole call: the run still finds it by serial and counts its emulator port as taken, and only the target listing leaves it out (it offers devices that are online and answered). A failed boot poll counts as not booted yet, polls never overlap, and 50 failures in a row reject. The launch is `am start` without `-W`, which a cold emulator could not finish inside the 5 s. |
 
-The first two serve **opacity** (L20). The third serves **OTA rollback**. The fourth serves the
-single-config-file rule — it is the reason a consumer's repo has no stray native config to drift.
-The fifth keeps `dev android` from restarting the adb server under everything else on the machine;
+The first serves **OTA rollback**. The second serves the single-config-file rule — it is the reason
+a consumer's repo has no stray native config to drift. The third keeps `dev android` from restarting the adb server under everything else on the machine;
 it is proven by `bin/lib/native-run-adb.test.mjs` against a fake `adb`, and nothing verifies it at
 build time, because its absence costs a restarted adb server, not a wrong build.
 
@@ -33,13 +33,10 @@ build time, because its absence costs a restarted adb server, not a wrong build.
 > **pnpm honours `patchedDependencies` only in the root manifest of the project being installed.**
 
 A library cannot carry its patches into a consumer's install. So in a real consumer app, without the
-same declaration copied into their own `pnpm-workspace.yaml`, **all five patches are simply absent**.
+same declaration copied into their own `pnpm-workspace.yaml`, **all three patches are simply absent**.
 
 And each absence is silent in a different, expensive way:
 
-- **Opacity** — the generator goes back to writing `@tanstack/react-router` imports into the
-  consumer's route files, the facade quietly reverts, **and the app still builds**. Someone would
-  eventually notice their opaque framework leaking vendor names everywhere with no idea why.
 - **OTA rollback** — native builds still succeed and updates still install. What changes is only the
   *failure* path, which does not show up in a passing build: a bundle that will not start rolls back
   to the store release rather than to the last known-good bundle. On a phone that has been updating
@@ -47,14 +44,15 @@ And each absence is silent in a different, expensive way:
 
 A silent revert is much worse than a hard failure, so adaptv turns each one into a hard failure.
 
-## 3. The two verification mechanisms
+## 3. The verification mechanisms
 
 Both read **files on disk**, never pnpm's metadata — a lockfile can claim a patch that a partial
 install never applied.
 
-### 3.1 The opacity patches: assert the *outcome*, not the mechanism
+### 3.1 Opacity: assert the *outcome*, not the mechanism
 
-`assertRouteTreeIsOpaque(routeTreePath)` reads the **generated route tree** and throws if it matches
+Not a patch any more (the engine edits throw on their own when they cannot apply), but the check
+stayed, on the one file the engine generates for the app. `assertRouteTreeIsOpaque(routeTreePath)` reads the **generated route tree** and throws if it matches
 `/@tanstack\/|tanstack router/i`. Called from `src/vite/route-tree-opacity.ts`.
 
 > ⚠︎ **Two earlier attempts checked the patched dependency files, and both failed silently.**
@@ -129,7 +127,8 @@ produced a checker that could not read what it was checking and therefore always
 
 ## 6. What this costs a consumer
 
-Five patch files in their own `patches/` and five lines in their `pnpm-workspace.yaml`. An app from
+Three patch files in their own `patches/` and three lines in their `pnpm-workspace.yaml`, none of
+them for the route engine. An app from
 `create-adaptv` starts with both. A hand-made app copies them, and every app copies them again when
 adaptv bumps a patch. That is a real adoption cost and it is tracked, not hidden — see
 [`../decisions/register.md`](../decisions/register.md) **L19**, **L21** and
