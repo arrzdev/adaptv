@@ -1166,10 +1166,15 @@ test.describe("ProgressBar", () => {
     log(
       `flip: ${n} frames in ${elapsed}ms → ${finalIndeterminate ? "indeterminate" : "0.5"} · ${JSON.stringify(bar)} · announcers ${await page.locator(ANNOUNCER).count()}`,
     )
+    //the premise is that the mode flipped on most frames, not a frame rate:
+    //starting and stopping the sweep every frame costs Linux WebKit on the
+    //4-vCPU runner ~95 ms a frame (56-58 frames in 5.5 s, against ~200 when only
+    //the value changes), so 30 flips still drive the bar through every mode
+    //change the assertions below read
     expect(
       n,
-      "premise: the flip ran at frame rate",
-    ).toBeGreaterThanOrEqual(60)
+      "premise: the mode flipped every frame",
+    ).toBeGreaterThanOrEqual(30)
     expect(bar.indeterminate).toBe(finalIndeterminate)
     expect(bar.valueNow).toBe(finalIndeterminate ? null : "50")
     expect(bar.progressVar).toBe(finalIndeterminate ? "" : "0.5")
