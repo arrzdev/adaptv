@@ -9,6 +9,14 @@ const START_DEDUPE = new Set([
   "@tanstack/react-router",
 ])
 
+//Every `@tanstack/router-core` entry `@tanstack/react-router` imports, reached through
+//adaptv's own dependencies (the app has neither package at its root).
+const ROUTER_CORE_PREBUNDLE = [
+  "@tanstack/router-core",
+  "@tanstack/router-core/isServer",
+  "@tanstack/router-core/scroll-restoration-script",
+].map((entry) => `@arrzdev/adaptv > @tanstack/react-router > ${entry}`)
+
 /**
  * Resolve the `@tanstack/*` imports TanStack writes into the APP's modules from adaptv's
  * own dependencies.
@@ -57,6 +65,15 @@ const START_DEDUPE = new Set([
  * serves (`virtual:adaptv-*`), which Node refuses: a dev server that handed adaptv to
  * Node answered every page with a 500. A build bundles it either way. Every app needs
  * the entry, so the plugin adds it and an app's `vite.config.ts` carries no `ssr` key.
+ *
+ * In dev the browser's copy of the router is pre-bundled up front. Start puts every
+ * package that peers on it, the router and adaptv included, in the client's
+ * `optimizeDeps.exclude`, so the router is served as source, and Vite met its
+ * `@tanstack/router-core` imports only when the first page asked for them. It then
+ * bundled them and reloaded the page: on a cold server that reload landed seconds after
+ * the page had hydrated, and whatever the user (or the first e2e spec) had done in
+ * between was gone. Listing the entries makes the optimizer bundle them before the first
+ * page loads.
  */
 export function adaptvTanstackResolvePlugin(
   appRoot: string,
@@ -67,14 +84,15 @@ export function adaptvTanstackResolvePlugin(
   return {
     name: "adaptv:tanstack-resolve",
     enforce: "pre",
-    config: (_config, { command }) => ({
-      resolve: {
-        noExternal:
-          command === "serve"
-            ? ["@arrzdev/adaptv", "@tanstack/react-router"]
-            : ["@arrzdev/adaptv", /^@tanstack\//],
-      },
-    }),
+    config: (_config, { command }) =>
+      command === "serve"
+        ? {
+            resolve: {
+              noExternal: ["@arrzdev/adaptv", "@tanstack/react-router"],
+            },
+            optimizeDeps: { include: ROUTER_CORE_PREBUNDLE },
+          }
+        : { resolve: { noExternal: ["@arrzdev/adaptv", /^@tanstack\//] } },
     //`post`: Start adds the entries in its own `configEnvironment`, merged before this
     //runs. Removing one takes a write to the merged options, not a returned partial,
     //because Vite concatenates arrays when it merges.
