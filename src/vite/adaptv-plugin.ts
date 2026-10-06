@@ -30,6 +30,7 @@ import { adaptvCssPatchRewritePlugin } from "#adaptv/vite/css-patch-rewrite.ts"
 import { adaptvDefaultIconsPlugin } from "#adaptv/vite/default-icons.ts"
 import { adaptvDeployServerPlugins } from "#adaptv/vite/deploy-server.ts"
 import { adaptvDevCssLoweringPlugin } from "#adaptv/vite/dev-css-lowering.ts"
+import { assertEngineEdited } from "#adaptv/vite/engine-hooks.ts"
 import { adaptvEngineImportsPlugin } from "#adaptv/vite/engine-imports.ts"
 import {
   adaptvManifestPlugin,
@@ -125,6 +126,9 @@ export type AdaptvOptions = {
 export async function adaptv(
   options: AdaptvOptions = {},
 ): Promise<PluginOption[]> {
+  //the engine is loaded by now (this module imports Start); unedited, it would write
+  //engine imports into the app's route files. → src/vite/engine-hooks.ts
+  assertEngineEdited()
   const appRoot = options.appRoot ?? process.cwd()
   const context = createAdaptvContext(appRoot)
   const routerEjected = existsSync(path.resolve(appRoot, "src/router.tsx"))
@@ -179,16 +183,13 @@ export async function adaptv(
     }
   }
 
-  //The route generator emits every import AND every `declare module` in
-  //routeTree.gen.ts against a single package specifier. adaptv patches it to read
-  //this env var (patches/@tanstack__router-generator@*.patch), so the generated
-  //tree points at the adaptv barrel instead of @tanstack/* — the last place
-  //`@tanstack` leaked into the consumer's tree. → docs/decisions/register.md §2.6a (L19)
+  //The specifier the route generator writes into route files: adaptv's edit to its
+  //`targetModule` reads this env var (src/vite/engine-hooks.ts), so a route file
+  //imports `createFileRoute` from the adaptv barrel, never @tanstack/*. The route
+  //tree itself is rewritten after the fact. → src/vite/route-tree-opacity.ts,
+  //docs/decisions/register.md §2.6a (L19)
   const routerPkg = options.routerSpecifier ?? DEFAULT_ROUTER_SPECIFIER
   process.env.ADAPTV_ROUTER_PKG = routerPkg
-  //same for the Start register-declaration Start injects into the route tree
-  //footer (patches/@tanstack__start-plugin-core@*.patch)
-  process.env.ADAPTV_START_PKG = routerPkg
 
   //The route generator's scratch dir defaults to `<cwd>/.tanstack/tmp`, so a
   //consumer who never installed TanStack still gets a `.tanstack/` at their app
@@ -438,11 +439,11 @@ function deriveStartOptions(
       //TanStack opacity: the generator maintains the `createFileRoute` import in
       //route files itself (upstream removed `verboseFileRoutes` and the standalone
       //autoimport plugin). adaptv redirects the specifier it writes from
-      //`@tanstack/<target>-router` to the adaptv barrel via a one-line patch on the
-      //generator's `targetModule`, driven by ADAPTV_ROUTER_PKG (set above). So route
-      //files end up importing `createFileRoute` from `@arrzdev/adaptv/router` — zero
-      //`@tanstack/*` in the consumer's source. → src/vite/router-autoimport.ts,
-      //patches/@tanstack__router-generator@*.patch
+      //`@tanstack/<target>-router` to the adaptv barrel by editing the generator's
+      //`targetModule` as Node loads it, driven by ADAPTV_ROUTER_PKG (set above). So
+      //route files end up importing `createFileRoute` from `@arrzdev/adaptv/router` —
+      //zero `@tanstack/*` in the consumer's source. → src/vite/router-autoimport.ts,
+      //src/vite/engine-hooks.ts
       virtualRouteConfig: router.routerConfig ?? DEFAULT_ROUTER_CONFIG,
       //adaptv's OWN entry module — a real file in the package, not one written
       //into the consumer's tree. It reaches the app's route tree through the

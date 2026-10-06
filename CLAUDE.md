@@ -20,7 +20,7 @@ in `playground/` or `scripts/` ships.
 
 ## Toolchain
 
-- Node from `.nvmrc` (22). `engines` says `>=22.12`; other majors make some tests fail for reasons
+- Node from `.nvmrc` (22). `engines` says `>=22.15`; other majors make some tests fail for reasons
   outside adaptv.
 - pnpm 11 (`packageManager`). `playground/` is a **second, independent pnpm project** with its own
   lockfile; `pnpm playground:setup` installs it.
