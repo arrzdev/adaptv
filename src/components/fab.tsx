@@ -28,7 +28,7 @@ export interface FabProps extends Omit<ButtonProps, "hidden"> {
    */
   avoidKeyboard?: boolean
   /**
-   * Distance from the safe edges, in Tailwind spacing units (`calc(var(--spacing) *
+   * Distance from the safe edges, in Tailwind spacing units (`calc(var(--spacing, 0.25rem) *
    * gap)`, so it follows the consumer's `--spacing` theme value). Default `4`.
    */
   gap?: number
@@ -92,7 +92,7 @@ export function fabPositionStyle({
   hidden,
   keyboardShrink = 0,
 }: FabPositionOptions): CSSProperties {
-  const gapValue = `calc(var(--spacing) * ${gap})`
+  const gapValue = `calc(var(--spacing, 0.25rem) * ${gap})`
   //the keyboard term is a VARIABLE and not a number: the value changes at the OS's
   //animation rate, and composing it in `calc()` lets the cascade move the button on
   //every keyboard frame without a render (docs/decisions/styling.md §3.2).
