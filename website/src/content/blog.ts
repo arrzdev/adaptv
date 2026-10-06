@@ -166,7 +166,7 @@ export const POSTS: Post[] = [
     date: "2026-09-20",
     kind: "Field note",
     summary:
-      "Double-tap a button in an iOS web view and a text magnifier appears over it. No CSS property turns it off. Here is what does — and why the obvious version of the fix breaks scrolling.",
+      "Double-tap a button in an iOS web view and a text magnifier appears over it. No CSS property turns it off. Here is what does — and the three versions of the fix that broke scrolling first.",
     blocks: [
       {
         type: "p",
@@ -175,7 +175,7 @@ export const POSTS: Post[] = [
       { type: "h2", text: "Nothing in CSS governs it" },
       {
         type: "p",
-        text: "The instinct is to reach for user-select: none, or -webkit-touch-callout, or touch-action. Those control selection, the long-press callout menu, and panning — three different things. The loupe is none of them. This is WebKit bug 231161: fixed once in iOS 15.2, and regressed again since.",
+        text: "The instinct is to reach for user-select: none, or -webkit-touch-callout, or touch-action. Those control selection, the long-press callout menu, and panning — three different things. The loupe is none of them. This is [WebKit bug 231161](https://bugs.webkit.org/show_bug.cgi?id=231161), “REGRESSION (iOS 15): Safari shows zoom callout even if -webkit-user-select is none”. It was marked fixed for iOS 15.2. In July 2025 someone on the bug reported that `-webkit-user-select` no longer disables the loupe, and a new bug was opened for it.",
       },
       { type: "h2", text: "What actually arms it" },
       {
@@ -186,6 +186,23 @@ export const POSTS: Post[] = [
         type: "p",
         text: "“Exactly” is the whole problem. preventDefault() on a touchstart cancels the entire gesture that touch would have started — including a scroll. A suppressor that fires on any quick second touch also kills fast scroll flicks, and chains across rapid tapping until the page feels frozen. The naive fix trades one visible bug for a worse invisible one.",
       },
+      { type: "h2", text: "Three attempts in three days" },
+      {
+        type: "p",
+        text: "The suppressor was written in June 2026, in the app adaptv was extracted from. That repository is private, so the attempts are dated rather than linked.",
+      },
+      {
+        type: "ol",
+        items: [
+          "**24 June: cancel any second touch within 500ms.** A non-passive `touchstart` listener that called `preventDefault()` on a touch that came less than 500ms after the last one, skipping editable fields. It froze list scrolling. A quick flick right after a tap counted as the second tap, and `preventDefault()` on a `touchstart` cancels the whole gesture, so the list did not move.",
+          "**24 June, the same day: add a radius and track movement.** The second touch had to land within 28px of the first, and the first had to stay within 10px of where it started. Scrolling and rapid tapping still froze. The code that replaced it names the tap-spam freeze as the thing it fixes: a cancelled touch could pair with the next one, so `preventDefault()` chained across every rapid tap.",
+          "**27 June: rework it.** The version below. It records a first tap only when the touch ends as a clean tap, and a touch the suppressor consumed never becomes one.",
+        ],
+      },
+      {
+        type: "note",
+        text: "The cause of the second failure is read from the code comments of the version that replaced it. The commit messages name only the symptoms: scroll and tap-spam still froze.",
+      },
       { type: "h2", text: "The shape that works" },
       {
         type: "p",
@@ -194,11 +211,11 @@ export const POSTS: Post[] = [
       {
         type: "ul",
         items: [
-          "It follows a completed, stationary, single-finger tap. A scroll flick moves, so it never records as a first tap — scrolling is safe by construction, not by threshold tuning.",
+          "It follows a completed, stationary, single-finger tap: it ended within 700ms and moved less than 10px. A scroll flick moves, so it never records as a first tap — scrolling is safe by construction, not by threshold tuning.",
           "It arrives inside the OS's own double-tap window, about 350ms. Past that, iOS arms no loupe, so there is nothing to suppress.",
-          "It lands within a few pixels of the first tap.",
+          "It lands within 28px of the first tap.",
           "It is one finger. A second finger is a pinch.",
-          "Its target is not editable text. Inputs keep their native loupe and double-tap-to-select-word, because there it is a feature.",
+          "Its target is not editable text, and not inside an element marked `data-adaptv-no-text-magnifier`. Inputs keep their native loupe and double-tap-to-select-word, because there it is a feature.",
         ],
       },
       {
