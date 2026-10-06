@@ -88,9 +88,25 @@ describe("adaptvTanstackResolvePlugin noExternal", () => {
   }
 
   it("inlines adaptv and the router on the server, so the app's import reaches the redirect", () => {
-    expect(configFor("serve")).toEqual({
+    expect(configFor("serve")).toMatchObject({
       resolve: {
         noExternal: ["@arrzdev/adaptv", "@tanstack/react-router"],
+      },
+    })
+  })
+
+  //Start excludes the router from the optimizer, so its router-core imports were
+  //found only when the first page asked for them, and the dev server reloaded that
+  //page seconds after it had hydrated. The end-to-end proof is the first stress spec
+  //(`stress-app-state.spec.ts`) on a cold server, which lost half its flips to it.
+  it("pre-bundles every router-core entry the router imports, from adaptv's own dependencies", () => {
+    expect(configFor("serve")).toMatchObject({
+      optimizeDeps: {
+        include: [
+          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core",
+          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core/isServer",
+          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core/scroll-restoration-script",
+        ],
       },
     })
   })
