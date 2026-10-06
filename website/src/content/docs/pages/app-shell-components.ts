@@ -61,7 +61,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: "Your screen receives these props. It is rendered as is, so it must cover the viewport itself. `UpdateRequiredProps` is not exported yet. Declare the type yourself.",
+      text: 'Your screen receives these props. It is rendered as is, so it must cover the viewport itself. Import the type with `import type { UpdateRequiredProps } from "@arrzdev/adaptv/config"`.',
     },
     {
       type: "props",

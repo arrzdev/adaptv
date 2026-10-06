@@ -39,7 +39,7 @@ adaptv preview web`,
     },
     {
       type: "p",
-      text: "`build web` prints the directory it wrote. With `origin` set, it also writes the [update channel](/docs/ota-updates) for native apps. Use it, not plain `vite build`, for deploys. `build web` ignores `-o`. `preview web` builds and serves the production site with its service worker. Arguments after `--` go to Vite, for example `adaptv preview web -- --port 4000`.",
+      text: "`build web` prints the directory it wrote. With `origin` set, it also writes the [update channel](/docs/ota-updates) for native apps. Use it, not plain `vite build`, for deploys. `build web` refuses `-o` with a usage error (exit 2): the site lands where its render mode puts it. `preview web` builds and serves the production site with its service worker. Arguments after `--` go to Vite, for example `adaptv preview web -- --port 4000`.",
     },
     { type: "h2", text: "Host an SSR build" },
     {
@@ -90,7 +90,7 @@ SERVER_PRESET=cloudflare_module adaptv build web`,
     },
     {
       type: "p",
-      text: 'To deploy under a subpath, such as a GitHub Pages project site, set `base: "/my-repo/"` in `vite.config.ts`. The worker, `start_url`, icons and `_redirects` follow it. Do not override `start_url` in `manifestExtra`.',
+      text: 'To deploy under a subpath, such as a GitHub Pages project site, set `base: "/my-repo/"` in `vite.config.ts`. The worker, `start_url`, `id`, icons and `_redirects` follow it.',
     },
     { type: "h2", text: "Set the headers" },
     {

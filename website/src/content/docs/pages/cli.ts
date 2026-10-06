@@ -114,7 +114,7 @@ adaptv --version          # or -v`,
     {
       type: "ul",
       items: [
-        '`web`: the deployable site, in `.output/` for `render: "ssr"` or `dist/client` for `render: "spa"`.',
+        '`web`: the deployable site, in `.output/` for `render: "ssr"` or `dist/client` for `render: "spa"`. `build --help` names `.output/public` (ssr) and `dist/client` (spa) as the directory that holds the update channel.',
         "`ios`: an unsigned `.ipa` for devices, at `.adaptv/builds/<appName>.ipa`.",
         "`android`: a debug `.apk`, at `.adaptv/builds/<appName>.apk`.",
         "`all`: both native files.",
@@ -122,7 +122,7 @@ adaptv --version          # or -v`,
     },
     {
       type: "p",
-      text: "`--output` is a directory when it ends in `/` or already exists as one, and a file path otherwise. With `all`, use a directory, or the `.apk` overwrites the `.ipa`. `build web` ignores `--output`.",
+      text: "`--output` is a directory when it ends in `/` or already exists as one, and a file path otherwise. With `all`, use a directory, or the `.apk` overwrites the `.ipa`. `build web` refuses `--output` (usage error, exit 2).",
     },
     {
       type: "p",
