@@ -17,6 +17,7 @@
     "preview:all": "tsx scripts/preview.ts all",
     "ota:lab": "tsx scripts/ota-lab.ts",
     "build": "vite build",
+    "build:plain": "vite build --config vite.plain.config.ts",
     "build:ios": "adaptv build ios",
     "build:android": "adaptv build android",
     "build:all": "adaptv build all",

@@ -5,6 +5,7 @@ name: E2E
 # PRs forever. Marta does not merge a labelled PR with a red `e2e`.
 #
 #   PR with label `e2e`  -> `e2e`: chromium, the PR suites in one job
+#                           (`plain`: the lab app built with no Tailwind)
 #   nightly on main      -> `e2e`: same job, skipped if main has not moved
 #                           since the last green scheduled run; red opens an issue
 #   weekly + on demand   -> `e2e-full`: every suite x chromium + webkit, with
@@ -34,6 +35,7 @@ env:
   E2E_SW_PORT: 41750
   E2E_SW_SPA_PORT: 41760
   E2E_SW_PROMPT_PORT: 41770
+  E2E_PLAIN_PORT: 41780
 
 jobs:
   e2e:
@@ -92,7 +94,7 @@ jobs:
         run: |
           set -o pipefail
           failed=()
-          for script in test:e2e test:e2e:sw test:e2e:sw:spa test:e2e:sw:prompt; do
+          for script in test:e2e test:e2e:plain test:e2e:sw test:e2e:sw:spa test:e2e:sw:prompt; do
             echo "::group::${script}"
             if ! pnpm --dir playground "$script" --project=chromium; then failed+=("$script"); fi
             echo "::endgroup::"
@@ -131,11 +133,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [main, stress, sw, sw-spa, sw-prompt]
+        suite: [main, plain, stress, sw, sw-spa, sw-prompt]
         engine: [chromium, webkit]
         include:
           - suite: main
             script: test:e2e
+          - suite: plain
+            script: test:e2e:plain
           - suite: stress
             script: test:e2e:stress
           - suite: sw

@@ -190,7 +190,7 @@ test.describe("Swipeable rows under real touch", () => {
     return { cdp }
   }
 
-  test("the row tracks the finger 1:1, then settles fully open past threshold", async ({
+  test("the row tracks the finger 1:1, then settles fully open past threshold @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)
@@ -224,7 +224,7 @@ test.describe("Swipeable rows under real touch", () => {
     await closeAll(page, cdp)
   })
 
-  test("a release below threshold snaps closed — no half-open resting state", async ({
+  test("a release below threshold snaps closed — no half-open resting state @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)
@@ -240,7 +240,7 @@ test.describe("Swipeable rows under real touch", () => {
     await closeAll(page, cdp)
   })
 
-  test("the log hears an open and a close, never a drag that changed nothing", async ({
+  test("the log hears an open and a close, never a drag that changed nothing @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)
@@ -343,7 +343,7 @@ test.describe("Swipeable rows under real touch", () => {
     expect(await count(/third opened/)).toBe(1)
   })
 
-  test("a Group closes the previously-open row when another opens", async ({
+  test("a Group closes the previously-open row when another opens @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)
@@ -413,7 +413,7 @@ test.describe("Swipeable rows under real touch", () => {
     await closeAll(page, cdp)
   })
 
-  test("the image row opens like any other (native image-drag does not steal it)", async ({
+  test("the image row opens like any other (native image-drag does not steal it) @tailwind", async ({
     page,
   }) => {
     // historically the browser's native <img> drag grabbed the pointer here and the
@@ -429,7 +429,7 @@ test.describe("Swipeable rows under real touch", () => {
     await closeAll(page, cdp)
   })
 
-  test("tapping a tray action fires it once AND closes the row (iOS Mail)", async ({
+  test("tapping a tray action fires it once AND closes the row (iOS Mail) @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)
@@ -465,7 +465,7 @@ test.describe("Swipeable rows under real touch", () => {
       .toBeLessThanOrEqual(TOLERANCE_PX)
   })
 
-  test("enabled=false makes the row inert but still readable", async ({
+  test("enabled=false makes the row inert but still readable @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)

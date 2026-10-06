@@ -25,7 +25,12 @@ export default defineConfig({
   //anchored to the file name: it is tested against the ABSOLUTE path, and an
   //unanchored `stress-.*` also matched a checkout under a directory called
   //`stress-gestures`, which ignored every spec in it.
-  testIgnore: /[\\/]stress-[^\\/]*\.spec\.ts$/,
+  //`no-tailwind.spec.ts` is the no-Tailwind build's own claim
+  //(`playwright.plain.config.ts`); this server is the Tailwind build.
+  testIgnore: [
+    /[\\/]stress-[^\\/]*\.spec\.ts$/,
+    /[\\/]no-tailwind\.spec\.ts$/,
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   //No retries, anywhere. CI used to get one, and every timing-sensitive describe

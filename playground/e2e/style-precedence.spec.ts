@@ -30,6 +30,15 @@ import { awaitClientHandover } from "./support/hydrated"
 
 const ROUTE = "/lab/style-precedence"
 
+/**
+ * The no-Tailwind build (`playwright.plain.config.ts`) has no Tailwind utility to apply,
+ * so it measures the bare and plain-CSS rows only.
+ */
+const DIALECTS: readonly Dialect[] =
+  process.env.PLAYGROUND_CSS === "plain"
+    ? ["bare", "plain"]
+    : ["bare", "plain", "tw"]
+
 /** `user-select` in both engines: WebKit only answers for the prefixed name. */
 function read(locator: Locator, property: string): Promise<string> {
   return locator.evaluate((el, prop) => {
@@ -103,14 +112,14 @@ test.describe("style precedence", () => {
     await page.goto(ROUTE)
     await awaitClientHandover(page)
     for (const c of CASES.filter((row) => !row.isolate)) {
-      for (const dialect of ["bare", "plain", "tw"] as const) {
+      for (const dialect of DIALECTS) {
         await assertRow(partIn(page, c, dialect), c, dialect)
       }
     }
   })
 
   for (const c of CASES.filter((row) => row.isolate)) {
-    for (const dialect of ["bare", "plain", "tw"] as const) {
+    for (const dialect of DIALECTS) {
       test(`${c.id} (${dialect})`, async ({ page }) => {
         await openIsolated(page, c, dialect)
         await assertRow(partIn(page, c, dialect), c, dialect)

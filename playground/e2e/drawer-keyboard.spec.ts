@@ -47,7 +47,7 @@ const KNOWN_REVERSAL = {
 }
 test.setTimeout(120_000)
 
-test("the conformance run passes every geometry check", async ({
+test("the conformance run passes every geometry check @tailwind", async ({
   page,
 }, testInfo) => {
   await page.goto("/lab/drawer-keyboard?autorun")

@@ -184,6 +184,8 @@
     {
       "includes": [
         "apps/**/vite.config.ts",
+        "apps/**/vite.plain.config.ts",
+        "apps/**/vite.shared.ts",
         "apps/**/entrypoint/**",
         "apps/**/app.config.ts",
         "apps/**/app.config.tsx",

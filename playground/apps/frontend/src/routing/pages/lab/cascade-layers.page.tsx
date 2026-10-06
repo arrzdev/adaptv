@@ -62,7 +62,7 @@ function LabCascadeLayersPage() {
 
       <LabSection
         title="1 · An unlayered app rule beats an adaptv patch"
-        description="adaptv sets `input[type=text] { line-height: 1.5 }` in @layer adaptv.reset at specificity (0,1,1). The second field adds `.lab-unlayered-line-height { line-height: 3 }` from the app's own main.css — unlayered, and LESS specific. Unlayered wins anyway; that is the whole promise."
+        description="adaptv sets `input[type=text] { line-height: 1.5 }` in @layer adaptv.reset at specificity (0,1,1). The second field adds `.lab-unlayered-line-height { line-height: 3 }` from the app's own app.css — unlayered, and LESS specific. Unlayered wins anyway; that is the whole promise."
       >
         <LineHeightProbe />
       </LabSection>
