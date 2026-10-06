@@ -1,4 +1,5 @@
 export type {
+  AdaptvRootRoute,
   CreateRootRouteConfig,
   RootHeadScript,
 } from "../shell/create-root-route"
@@ -11,4 +12,7 @@ export type { RouteTint } from "../shell/route-tints"
 //`destroyServiceWorkers` is the remediation path for a broken worker — the
 //`sw: "destroy"` kill switch vite-plugin-pwa gave us. docs/design/rendering.md §3.6
 export { destroyServiceWorkers } from "../shell/service-worker-shell"
-export { standaloneMemoryHistory } from "../shell/standalone-history"
+export {
+  type AdaptvHistory,
+  standaloneMemoryHistory,
+} from "../shell/standalone-history"

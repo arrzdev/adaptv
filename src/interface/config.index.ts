@@ -10,6 +10,8 @@ export {
 //Every screen option's props type is public, here or beside its default
 //component in the components barrel. `config.barrel.test.ts` holds that.
 export type {
+  NotFoundScreenComponent,
+  NotFoundScreenProps,
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,

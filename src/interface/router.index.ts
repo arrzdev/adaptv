@@ -34,11 +34,8 @@ export {
   //has a adaptv-shaped import rather than a @tanstack one.
   createRouter,
   type FileRoutesByPath,
-  isRedirect,
   //types the consumer annotates with
   type NavigateOptions,
-  //error / not-found signalling
-  notFound,
   //navigation + matching
   Outlet,
   type ParsedLocation,
@@ -72,12 +69,25 @@ export type { UpdatableRouteOptionsExtensions } from "@tanstack/router-core"
 //The virtual-route DSL, with adaptv's opinionated `rootRoute` (the app declares
 //children only; adaptv wires its generated root in).
 export {
+  type IndexRouteNode,
   index,
+  type LayoutRouteNode,
   layout,
+  type PathRouteNode,
+  type PhysicalRouteNode,
   physical,
+  type RootRouteNode,
+  type RouteNode,
   rootRoute,
   route,
 } from "#adaptv/routes/adaptv-routes"
+//error / not-found signalling: the router's own functions, typed with adaptv's names
+export {
+  isRedirect,
+  type NotFoundOptions,
+  notFound,
+  type RouteRedirect,
+} from "#adaptv/routes/route-signals"
 //The generated route tree's footer binds `Register` to `ReturnType<typeof getRouter>`,
 //so it needs a module path exporting `getRouter`. Upstream writes a RELATIVE path to
 //whatever file resolved as `router.entry` — which, for adaptv's own entry, is a path
@@ -93,8 +103,18 @@ export {
 //`export type` erases completely, and `typeof getRouter` still resolves through it.
 export type { getRouter } from "#adaptv/routes/router-entry"
 //the router factory the generated entry calls — framework code, not codegen
-export { createAdaptvRouter } from "#adaptv/shell/create-adaptv-router"
+export {
+  type AdaptvRouter,
+  type AdaptvRouteTree,
+  createAdaptvRouter,
+} from "#adaptv/shell/create-adaptv-router"
 //adaptv's own root route — NOT TanStack's. Generated from adaptv.config.ts.
-export { createRootRoute } from "#adaptv/shell/create-root-route"
+export {
+  type AdaptvRootRoute,
+  createRootRoute,
+} from "#adaptv/shell/create-root-route"
 //used by the generated router entry when `memoryHistoryInStandalone` is on
-export { standaloneMemoryHistory } from "#adaptv/shell/standalone-history"
+export {
+  type AdaptvHistory,
+  standaloneMemoryHistory,
+} from "#adaptv/shell/standalone-history"

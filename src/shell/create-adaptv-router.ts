@@ -1,9 +1,25 @@
 import type { AnyRoute } from "@tanstack/react-router"
 import { createRouter } from "@tanstack/react-router"
+import type { RouterCore } from "@tanstack/router-core"
 import { installUrlOpen } from "#adaptv/capabilities/url-open"
 import { standaloneMemoryHistory } from "#adaptv/shell/standalone-history"
 
-export type AdaptvRouterOptions<TRouteTree extends AnyRoute = AnyRoute> = {
+//adaptv's names for the router and the tree it routes. Interfaces over the engine's
+//types, not aliases of them: TypeScript prints an alias by the type it aliases, so
+//an alias would still show the engine's names in every hover and type error.
+//→ docs/decisions/facade-and-opacity.md §1
+
+/** Any generated route tree. */
+export interface AdaptvRouteTree extends AnyRoute {}
+
+/** The router `createAdaptvRouter` builds over `TRouteTree`. */
+export interface AdaptvRouter<
+  TRouteTree extends AdaptvRouteTree = AdaptvRouteTree,
+> extends RouterCore<TRouteTree, "never", false> {}
+
+export type AdaptvRouterOptions<
+  TRouteTree extends AdaptvRouteTree = AdaptvRouteTree,
+> = {
   /**
    * The generated route tree. The one genuinely app-specific input, and the ONLY
    * thing in this signature that is generic — deliberately.
@@ -35,11 +51,11 @@ export type AdaptvRouterOptions<TRouteTree extends AnyRoute = AnyRoute> = {
  * re-emitted into every consumer on their next build, and a consumer reading
  * their own `.adaptv/` sees a call, not a copy of adaptv's decisions.
  */
-export function createAdaptvRouter<TRouteTree extends AnyRoute>({
+export function createAdaptvRouter<TRouteTree extends AdaptvRouteTree>({
   routeTree,
   memoryHistoryInStandalone,
   options = {},
-}: AdaptvRouterOptions<TRouteTree>) {
+}: AdaptvRouterOptions<TRouteTree>): AdaptvRouter<TRouteTree> {
   const router = createRouter({
     routeTree,
     //Memory history in standalone is opt-in: overriding router history is a real
