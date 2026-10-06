@@ -24,7 +24,7 @@ import { KEYBOARD_MOCK_EVENT } from "#adaptv/hooks/use-keyboard"
  * wiring for the whole object.
  */
 
-const GAP_4 = "calc(var(--spacing) * 4)"
+const GAP_4 = "calc(var(--spacing, 0.25rem) * 4)"
 const BOTTOM_4 = `calc(max(var(--adaptv-inset-bottom), var(--adaptv-keyboard-height)) + ${GAP_4})`
 
 function fabEl(container: HTMLElement): HTMLButtonElement {
@@ -99,7 +99,7 @@ describe("fabPositionStyle — the safe-edge expressions", () => {
     expect(hidden.translate).toBe(`-50% calc(100% + ${BOTTOM_4})`)
   })
 
-  it("`gap` is spacing units, applied as calc(var(--spacing) * gap) on every edge", () => {
+  it("`gap` is spacing units, applied as calc(var(--spacing, 0.25rem) * gap) on every edge", () => {
     const s = fabPositionStyle({
       placement: "end",
       avoidKeyboard: true,
@@ -107,10 +107,10 @@ describe("fabPositionStyle — the safe-edge expressions", () => {
       hidden: false,
     })
     expect(s.bottom).toBe(
-      "calc(max(var(--adaptv-inset-bottom), var(--adaptv-keyboard-height)) + calc(var(--spacing) * 6))",
+      "calc(max(var(--adaptv-inset-bottom), var(--adaptv-keyboard-height)) + calc(var(--spacing, 0.25rem) * 6))",
     )
     expect(s.insetInlineEnd).toBe(
-      "calc(var(--adaptv-inset-right) + calc(var(--spacing) * 6))",
+      "calc(var(--adaptv-inset-right) + calc(var(--spacing, 0.25rem) * 6))",
     )
   })
 
@@ -193,7 +193,7 @@ describe("Fab — a Button fixed to a corner", () => {
       </Fab>,
     )
     expect(fabEl(container).style.insetInlineEnd).toBe(
-      "calc(var(--adaptv-inset-right) + calc(var(--spacing) * 8))",
+      "calc(var(--adaptv-inset-right) + calc(var(--spacing, 0.25rem) * 8))",
     )
   })
 
