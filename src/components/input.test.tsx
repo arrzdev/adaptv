@@ -489,6 +489,24 @@ describe("Input — onSubmitKey", () => {
     expect(onKeyDown).toHaveBeenCalledTimes(1)
   })
 
+  it("a disabled field never submits, even while it still holds focus", () => {
+    //WebKit moves focus off a field that turns disabled only at its next
+    //rendering update, so an Enter inside that frame still reaches keydown
+    const onSubmitKey = vi.fn()
+    const onKeyDown = vi.fn()
+    render(
+      <Input
+        aria-label="q"
+        disabled
+        onSubmitKey={onSubmitKey}
+        onKeyDown={onKeyDown}
+      />,
+    )
+    expect(fireEvent.keyDown(field(), { key: "Enter" })).toBe(true)
+    expect(onSubmitKey).not.toHaveBeenCalled()
+    expect(onKeyDown).toHaveBeenCalledTimes(1)
+  })
+
   it("without onSubmitKey, Enter is left to the form", () => {
     render(<Input aria-label="q" />)
     expect(fireEvent.keyDown(field(), { key: "Enter" })).toBe(true)
