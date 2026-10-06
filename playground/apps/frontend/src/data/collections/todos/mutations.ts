@@ -20,23 +20,63 @@ export type CreateTodoInput = {
 //creates run one after another. the position is a read (the current max) and
 //then a write (max+1), and two creates in flight at once both read before either
 //writes, so both land on the same slot and the custom order has two tasks in one
-//place. queueing each create behind the one before it makes the read see the
-//write. a create that fails does not hold the queue.
-let createQueue: Promise<unknown> = Promise.resolve()
+//place. so creates wait their turn, and the ones that arrive while a turn is
+//running form the next batch: one read of the max, then max+1, max+2, … in
+//arrival order. reading once per batch, not per create, keeps a burst linear —
+//a read is the whole collection and its outbox, and two hundred creates each
+//reading it ran past thirty seconds on WebKit. a create that fails does not
+//hold the queue, and the slot it would have taken goes to the next one.
+type PendingCreate = {
+  input: CreateTodoInput
+  resolve: (todo: Todo) => void
+  reject: (error: unknown) => void
+}
+let pending: PendingCreate[] = []
+let draining = false
 
 export function createTodo(input: CreateTodoInput): Promise<Todo> {
-  const created = createQueue.then(() => insertTodo(input))
-  createQueue = created.catch(() => undefined)
-  return created
+  return new Promise<Todo>((resolve, reject) => {
+    pending.push({ input, resolve, reject })
+    if (!draining) void drainCreates()
+  })
 }
 
-async function insertTodo(input: CreateTodoInput): Promise<Todo> {
-  //append to the end of the custom order; max+1 survives gaps from deletes
+async function drainCreates(): Promise<void> {
+  draining = true
+  while (pending.length > 0) {
+    const batch = pending
+    pending = []
+    let position: number
+    try {
+      position = await nextPosition()
+    } catch (error) {
+      for (const create of batch) create.reject(error)
+      continue
+    }
+    for (const create of batch) {
+      try {
+        create.resolve(await insertTodo(create.input, position))
+        position += 1
+      } catch (error) {
+        create.reject(error)
+      }
+    }
+  }
+  draining = false
+}
+
+//the end of the custom order; max+1 survives gaps from deletes
+async function nextPosition(): Promise<number> {
   const existing = (await store.todos.query()) as TodoDoc[]
-  const maxPosition = existing.reduce(
-    (max, todo) => Math.max(max, todo.position),
-    -1,
+  return (
+    existing.reduce((max, todo) => Math.max(max, todo.position), -1) + 1
   )
+}
+
+async function insertTodo(
+  input: CreateTodoInput,
+  position: number,
+): Promise<Todo> {
   const now = Date.now()
   const created = await store.todos.insert({
     title: input.title,
@@ -45,7 +85,7 @@ async function insertTodo(input: CreateTodoInput): Promise<Todo> {
     deckId: input.deckId,
     priority: input.priority,
     dueAt: input.dueAt ? input.dueAt.getTime() : undefined,
-    position: maxPosition + 1,
+    position,
     createdAt: now,
     updatedAt: now,
   })
