@@ -220,7 +220,9 @@ test.describe("the sheet's motion", () => {
     expect(Math.min(...samples)).toBeLessThan(-2)
   })
 
-  test("snaps back to rest after a short drag down", async ({ page }) => {
+  test("snaps back to rest after a short drag down @tailwind", async ({
+    page,
+  }) => {
     await openSheet(page, BUTTON, PANEL)
     const sheet = await sheetBox(page, SHEET)
     const cdp = await page.context().newCDPSession(page)

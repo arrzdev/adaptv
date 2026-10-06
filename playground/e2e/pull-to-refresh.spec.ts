@@ -159,7 +159,7 @@ test.describe("PullToRefresh under real touch", () => {
       .toBeLessThanOrEqual(2) // sprang back
   })
 
-  test("a pull is not armed unless the scroller is at the very top", async ({
+  test("a pull is not armed unless the scroller is at the very top @tailwind", async ({
     page,
   }) => {
     const { cdp } = await setup(page)

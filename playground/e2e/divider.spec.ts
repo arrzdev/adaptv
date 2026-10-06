@@ -199,7 +199,7 @@ test.describe("Divider", () => {
     )
   })
 
-  test("vertical: says so, rules on the leading edge, and stretches to the row", async ({
+  test("vertical: says so, rules on the leading edge, and stretches to the row @tailwind", async ({
     page,
   }) => {
     const rule = page.getByTestId("divider-v")
@@ -237,7 +237,7 @@ test.describe("Divider", () => {
     expect(m.borderTopWidth).toBe(horizontal.borderTopWidth)
   })
 
-  test("colour: a border-* utility on className repaints the rule", async ({
+  test("colour: a border-* utility on className repaints the rule @tailwind", async ({
     page,
   }) => {
     const plain = await measure(page.getByTestId("divider-h"))
@@ -259,7 +259,7 @@ test.describe("Divider", () => {
     expect(Math.abs(readout.drawn - m.boxHeight)).toBeLessThan(0.001)
   })
 
-  test("clip probe: both boxes are rounded; the corner pixels are read back", async ({
+  test("clip probe: both boxes are rounded; the corner pixels are read back @tailwind", async ({
     page,
   }, testInfo) => {
     const composited = page.getByTestId("clip-probe-composited")

@@ -14,7 +14,13 @@ export default defineApp({
   themeColor: { light: "#eeeeec", dark: "#0a0a0c" },
   icons: "./public/favicons",
   orientation: "portrait",
-  styles: "./src/styles/main.css",
+  //Env-driven so one lab app builds twice: with Tailwind (the default) and with none
+  //(`vite.plain.config.ts` sets PLAYGROUND_CSS=plain), which proves adaptv needs no
+  //Tailwind (docs/decisions/styling.md §0.1, §9). Same pages, same specs.
+  styles:
+    process.env.PLAYGROUND_CSS === "plain"
+      ? "./src/styles/plain.css"
+      : "./src/styles/main.css",
   // adaptv registers and owns the service worker itself — precache, navigation,
   // updates. This list is only for behaviour that is the APP's; the probe is a
   // no-op that keeps the extension path exercised.
