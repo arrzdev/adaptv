@@ -10,10 +10,10 @@
  * `tanstack-router:autoimport` plugin adaptv used to fight, folding both into the
  * generator.
  *
- * adaptv keeps that write opaque with a one-line patch on the generator's
- * `targetModule` (`transform.js`): it reads `ADAPTV_ROUTER_PKG` (set by the vite
- * plugin) so the import the generator writes points at `@arrzdev/adaptv/router`,
- * never `@tanstack/*`. So a route file ends up as:
+ * adaptv keeps that write opaque by editing the generator's `targetModule`
+ * (`transform.js`) as Node loads it (`src/vite/engine-hooks.ts`): it reads
+ * `ADAPTV_ROUTER_PKG` (set by the vite plugin) so the import the generator writes
+ * points at `@arrzdev/adaptv/router`, never `@tanstack/*`. So a route file ends up as:
  *
  * ```ts
  * import { createFileRoute } from "@arrzdev/adaptv/router"

@@ -1,4 +1,9 @@
 import { afterEach } from "vitest"
+import { installEngineEdits } from "./src/vite/engine-hooks.ts"
+
+//what `@arrzdev/adaptv/vite` does before it loads the plugin: tests import the plugin
+//directly, so the engine would otherwise load unedited. → src/vite/engine-hooks.ts
+installEngineEdits()
 
 //Testing Library's automatic cleanup only self-registers when the test framework
 //exposes a global `afterEach`, which Vitest does not without `globals: true`.
