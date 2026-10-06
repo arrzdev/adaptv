@@ -1,5 +1,6 @@
 import type {
   ComponentProps,
+  CSSProperties,
   FocusEvent,
   FormEvent,
   KeyboardEvent,
@@ -23,7 +24,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { PRESS_TARGET_DISABLED_LOCKED_CLASS } from "#adaptv/components/press-core"
+import { PRESS_TARGET_DISABLED_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
 import { mergeStyles } from "#adaptv/utils/styles"
 
@@ -131,37 +132,72 @@ export type TextAreaContextValue = {
   errorId: string | undefined
 }
 
-//LOCKED: the shell layout is chosen by the `autoResize` PROP — `box-border` is what
-//makes the auto-resize measurement agree with the painted height, and the fill
-//variant's `flex h-full min-h-0 flex-col` is the whole of how a fixed-height field
-//scrolls inside itself. Which of the two applies is not the consumer's to pick.
-const TEXT_AREA_SHELL_GROW_LAYOUT_CLASS = "box-border block w-full min-w-0"
-const TEXT_AREA_SHELL_FILL_LAYOUT_CLASS =
-  "box-border flex h-full min-h-0 w-full min-w-0 flex-col"
-const TEXT_AREA_SHELL_INTERACTION_CLASS = "cursor-text"
-const TEXT_AREA_SHELL_NON_INTERACTION_CLASS =
-  PRESS_TARGET_DISABLED_LOCKED_CLASS
-const TEXT_AREA_SHELL_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-//⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
-//cancels the shift at exactly 1px and permanently shrinks the content box; use
-//`outline` for toggled emphasis instead.
-const TEXT_AREA_SHELL_SURFACE_CLASS = "bg-gray-50 text-gray-950"
+//LOCKED: the shell layout is chosen by the `autoResize` PROP — `box-sizing:
+//border-box` is what makes the auto-resize measurement agree with the painted
+//height, and the fill variant's `flex` column at `height: 100%` + `min-height: 0` is
+//the whole of how a fixed-height field scrolls inside itself. Which of the two
+//applies is not the consumer's to pick. The surface and cursor are defaults in
+//text-area.css.
+const TEXT_AREA_SHELL_GROW_LOCKED_STYLE: CSSProperties = Object.freeze({
+  boxSizing: "border-box",
+  display: "block",
+  width: "100%",
+  minWidth: 0,
+})
+const TEXT_AREA_SHELL_FILL_LOCKED_STYLE: CSSProperties = Object.freeze({
+  boxSizing: "border-box",
+  display: "flex",
+  height: "100%",
+  minHeight: 0,
+  width: "100%",
+  minWidth: 0,
+  flexDirection: "column",
+})
+//a disabled field must stay untappable and uneditable-looking whatever `className`
+//says ({@link PRESS_TARGET_DISABLED_LOCKED_STYLE}); the enabled cursor is only a
+//cursor, so it stays a default
+const TEXT_AREA_SHELL_GROW_DISABLED_LOCKED_STYLE: CSSProperties =
+  Object.freeze({
+    ...TEXT_AREA_SHELL_GROW_LOCKED_STYLE,
+    ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  })
+const TEXT_AREA_SHELL_FILL_DISABLED_LOCKED_STYLE: CSSProperties =
+  Object.freeze({
+    ...TEXT_AREA_SHELL_FILL_LOCKED_STYLE,
+    ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  })
 //LOCKED: the inner field is chromeless BY CONSTRUCTION — the shell is the visible
 //box, and any padding/border/background here would be a second box inside it that
 //the auto-resize height computation does not account for.
-const TEXT_AREA_INNER_LAYOUT_CLASS =
-  "block w-full min-w-0 resize-none leading-normal"
-const TEXT_AREA_INNER_CHROMELESS_CLASS =
-  "border-none bg-transparent p-0 shadow-none text-inherit outline-none ring-0"
-const TEXT_AREA_INNER_FILL_CLASS = "min-h-0 w-full flex-1"
+const TEXT_AREA_INNER_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "block",
+  width: "100%",
+  minWidth: 0,
+  resize: "none",
+  lineHeight: "var(--leading-normal, 1.5)",
+  borderStyle: "none",
+  backgroundColor: "transparent",
+  padding: 0,
+  boxShadow: "none",
+  color: "inherit",
+  outlineStyle: "none",
+})
 //no layer-promotion hint here on purpose: `hardware-boosted` was deleted with the
 //gpu-boost mechanism (docs/design/performance-boost.md). A scroller is already composited on
 //every target — Chromium grants it `kOverflowScrolling` on its own merits, and WebKit
 //has accelerated all `overflow: scroll` since iOS 13 — so a promotion hint buys
 //nothing and costs cull-rect expansion plus a containing block for fixed descendants.
-const TEXT_AREA_INNER_AT_MAX_ROWS_OVERFLOW_CLASS = "overflow-y-auto"
-const TEXT_AREA_FIELDSET_LAYOUT_CLASS =
-  "flex w-full min-w-0 flex-col gap-2 border-0 p-0 m-0"
+const TEXT_AREA_INNER_AT_MAX_ROWS_LOCKED_STYLE: CSSProperties =
+  Object.freeze({
+    ...TEXT_AREA_INNER_LOCKED_STYLE,
+    overflowY: "auto",
+  })
+//fill mode always scrolls inside itself: its height is the shell's flex column
+const TEXT_AREA_INNER_FILL_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...TEXT_AREA_INNER_AT_MAX_ROWS_LOCKED_STYLE,
+  minHeight: 0,
+  flex: 1,
+})
 
 const TEXT_AREA_FIELD_CLASS_PREFIXES = ["placeholder:", "caret:"] as const
 
@@ -657,9 +693,10 @@ function syncTextAreaFillField(
   inner: HTMLTextAreaElement,
   shell: HTMLElement,
 ): boolean {
+  //only the grow-mode height this module writes itself. `min-height` and
+  //`overflow-y` are React's now — the fill lock is inline style — so removing them
+  //here would strip the lock off the node with nothing to put it back.
   inner.style.removeProperty("height")
-  inner.style.removeProperty("min-height")
-  inner.style.removeProperty("overflow")
 
   const overflows = inner.scrollHeight > inner.clientHeight
 
@@ -864,29 +901,32 @@ const TextAreaShell = forwardRef<HTMLDivElement, TextAreaShellProps>(
       e.preventDefault()
     }
 
+    const merged = mergeStyles({
+      className,
+      lockedStyle: isFillMode
+        ? disabled
+          ? TEXT_AREA_SHELL_FILL_DISABLED_LOCKED_STYLE
+          : TEXT_AREA_SHELL_FILL_LOCKED_STYLE
+        : disabled
+          ? TEXT_AREA_SHELL_GROW_DISABLED_LOCKED_STYLE
+          : TEXT_AREA_SHELL_GROW_LOCKED_STYLE,
+    })
+
     return (
       // Padding band click focuses the inner field (shell is not a <label> when TextArea.Label is used).
       // biome-ignore lint/a11y/noStaticElementInteractions: mirrors grouped Input shell hit target
       <div
         ref={ref}
         data-adaptv={identity}
-        className={mergeStyles({
-          base: [
-            TEXT_AREA_SHELL_SURFACE_CLASS,
-            !disabled && TEXT_AREA_SHELL_INTERACTION_CLASS,
-            disabled && TEXT_AREA_SHELL_DISABLED_CURSOR_CLASS,
-          ],
-          className,
-          locked: [
-            isFillMode
-              ? TEXT_AREA_SHELL_FILL_LAYOUT_CLASS
-              : TEXT_AREA_SHELL_GROW_LAYOUT_CLASS,
-            //a disabled field must stay untappable and uneditable-looking whatever
-            //`className` says; the enabled `cursor-text` is only a cursor, so it
-            //stays base
-            disabled && TEXT_AREA_SHELL_NON_INTERACTION_CLASS,
-          ],
-        })}
+        //the root when the field stands alone (it then carries the identity); inside
+        //the slot fieldset, the unscoped `shell` part text-area.css reaches through
+        //the fieldset
+        data-part={identity ? "root" : "shell"}
+        //presence attribute (§3.1): what text-area.css keys the disabled cursor on,
+        //since a <div> has no `:disabled` of its own
+        data-disabled={disabled ? "" : undefined}
+        className={merged.className || undefined}
+        style={merged.style}
         onMouseDown={handleMouseDown}
       >
         {children}
@@ -909,12 +949,8 @@ function TextAreaLabel({ children, className }: TextAreaLabelProps) {
     <label
       htmlFor={fieldId}
       //a label is text. adaptv has no neutral look to offer and nothing structural
-      //to protect — both tiers named so the omission reads as a decision (§2).
-      className={mergeStyles({
-        base: undefined,
-        className,
-        locked: undefined,
-      })}
+      //to protect, so it has no rule in text-area.css and no inline lock (§2).
+      className={mergeStyles({ className }) || undefined}
     >
       {children}
     </label>
@@ -935,11 +971,7 @@ function TextAreaHint({ children, className }: TextAreaHintProps) {
     <p
       id={hintId}
       //text, like the label: nothing neutral, nothing structural
-      className={mergeStyles({
-        base: undefined,
-        className,
-        locked: undefined,
-      })}
+      className={mergeStyles({ className }) || undefined}
     >
       {children}
     </p>
@@ -962,11 +994,7 @@ function TextAreaError({ children, className }: TextAreaErrorProps) {
       role="alert"
       //text, like the label: nothing neutral, nothing structural. The `role` — not
       //a class — is what makes this an error, which is §2's escape-hatch rule.
-      className={mergeStyles({
-        base: undefined,
-        className,
-        locked: undefined,
-      })}
+      className={mergeStyles({ className }) || undefined}
     >
       {children}
     </p>
@@ -977,7 +1005,7 @@ TextAreaError.displayName = "TextArea.Error"
 
 /**
  * Multiline field with optional auto-grow. Set `autoResize={false}` for a field that
- * fills the height of a sized parent (its shell is locked to `h-full`, so a `className`
+ * fills the height of a sized parent (its shell is locked to `height: 100%` inline, so a `className`
  * height does not size it) and scrolls inside itself; `rows` and `maxRows` do not apply there.
  *
  * **With slots** — place `TextArea.Label`, `TextArea.Hint`, and/or `TextArea.Error`
@@ -993,7 +1021,7 @@ TextAreaError.displayName = "TextArea.Error"
  *
  * **Baseline styles**: neutral gray shell surface, full width, chromeless inner field,
  * and deliberately **no pre-allocated border** (see the ⚠︎ note on
- * `BUTTON_ROOT_SURFACE_CLASS` in button.tsx). A border that appears on focus costs
+ * Button's surface). A border that appears on focus costs
  * layout — and here it also perturbs the height the auto-resize measures — so a
  * `focus-within:` ring belongs on `outline`, which never participates in layout. Border
  * colours, padding, and focus belong in Tier 2 `className` on the shell.
@@ -1027,6 +1055,7 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       onInput,
       id,
       "aria-describedby": consumerDescribedBy,
+      style,
       ...props
     },
     ref,
@@ -1104,27 +1133,30 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       onKeyDown?.(e)
     }
 
+    const fieldStyles = mergeStyles({
+      className: innerClassName,
+      style,
+      lockedStyle: isFillMode
+        ? TEXT_AREA_INNER_FILL_LOCKED_STYLE
+        : atMaxRows
+          ? TEXT_AREA_INNER_AT_MAX_ROWS_LOCKED_STYLE
+          : TEXT_AREA_INNER_LOCKED_STYLE,
+    })
+
     const field = (
       <textarea
         ref={fieldRef}
         id={fieldId}
         name={name}
         aria-describedby={describedBy}
-        //Everything here is locked and there is no `base` — the inner field has no
+        data-adaptv="text-area-field"
+        data-part="field"
+        //Everything here is locked and there is no default — the inner field has no
         //look of its own by design (the shell is the visible box), and the only
         //consumer channel that reaches it is the `placeholder:` / `caret:` half of
         //the partition, which conflicts with none of these.
-        className={mergeStyles({
-          base: undefined,
-          className: innerClassName,
-          locked: [
-            TEXT_AREA_INNER_LAYOUT_CLASS,
-            TEXT_AREA_INNER_CHROMELESS_CLASS,
-            isFillMode && TEXT_AREA_INNER_FILL_CLASS,
-            (isFillMode || atMaxRows) &&
-              TEXT_AREA_INNER_AT_MAX_ROWS_OVERFLOW_CLASS,
-          ],
-        })}
+        className={fieldStyles.className || undefined}
+        style={fieldStyles.style}
         //one row in both modes: grow mode measures the content against it and sets
         //the height itself, and fill mode's height is the shell's flex column
         rows={1}
@@ -1171,8 +1203,8 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       <TextAreaContext.Provider value={contextValue}>
         <fieldset
           data-adaptv="text-area"
+          data-part="root"
           disabled={disabled}
-          className={TEXT_AREA_FIELDSET_LAYOUT_CLASS}
         >
           {label}
           {control}

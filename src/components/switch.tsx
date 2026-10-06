@@ -18,8 +18,8 @@ import {
   useState,
 } from "react"
 import {
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
@@ -99,21 +99,22 @@ export interface SwitchThumbProps {
   className?: string
 }
 
-//LOCKED: `relative` is the positioning context the thumb's `absolute` + computed
-//`left` inset are measured against — drop it and the thumb flies to the nearest
-//positioned ancestor, usually the page.
-const SWITCH_TRACK_LOCKED_LAYOUT_CLASS = "relative"
-const SWITCH_TRACK_BASE_LAYOUT_CLASS = "inline-flex shrink-0 items-center"
-//⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
-//cancels the shift at exactly 1px and permanently shrinks the content box; use
-//`outline` for toggled emphasis instead.
-const SWITCH_TRACK_SURFACE_CLASS = "bg-gray-50"
-//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
-const SWITCH_TRACK_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
-const SWITCH_TRACK_CURSOR_CLASS = "cursor-pointer"
-const SWITCH_TRACK_NON_INTERACTION_CLASS =
-  PRESS_TARGET_DISABLED_LOCKED_CLASS
-const SWITCH_TRACK_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
+//The track's inline-flex layout, surface and cursor and the thumb's surface are
+//default rules in styles/switch.css. What is here is LOCKED, inline
+//(docs/decisions/styling.md §2.0), so no `className` can defeat it.
+//
+//LOCKED: `position: relative` is the positioning context the thumb's `absolute` +
+//computed `left` inset are measured against — drop it and the thumb flies to the
+//nearest positioned ancestor, usually the page. The touch pass-through is
+//press-core's (WebKit 240917); a disabled track keeps it and adds `user-select: none`.
+const SWITCH_TRACK_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_LOCKED_STYLE,
+})
+const SWITCH_TRACK_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+})
 //LOCKED: the input is the ONLY element assistive tech and automation see, so its
 //box is the control's frame to VoiceOver, TalkBack and every tap aimed at it. It
 //used to be `sr-only`: a clipped 1px box at the track's left edge, so the frame
@@ -122,15 +123,28 @@ const SWITCH_TRACK_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 //x=344). Covering the track exactly, invisibly, makes the accessible frame and
 //the hit area one rectangle on every engine. Pointer events now land on the
 //input and bubble to the label, where the gesture engine still owns the press.
-const SWITCH_INPUT_LOCKED_CLASS =
-  "peer absolute inset-0 m-0 size-full cursor-[inherit] appearance-none opacity-0"
+const SWITCH_INPUT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  margin: 0,
+  width: "100%",
+  height: "100%",
+  cursor: "inherit",
+  appearance: "none",
+  opacity: 0,
+})
 //LOCKED: the thumb is decorative and sits over the track's hit area — taking
 //pointer events would swallow the tap the label's gesture engine needs. The
 //absolute placement + vertical centring are what the computed inset and travel
-//assume.
-const SWITCH_THUMB_LOCKED_LAYOUT_CLASS =
-  "pointer-events-none absolute top-1/2 -translate-y-1/2 shrink-0"
-const SWITCH_THUMB_SURFACE_CLASS = "bg-gray-950"
+//assume. `translate` is the separate property, so it composes with the travel
+//`transform` in `switchThumbStyle`.
+const SWITCH_THUMB_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  pointerEvents: "none",
+  position: "absolute",
+  top: "50%",
+  translate: "0 -50%",
+  flexShrink: 0,
+})
 
 const SwitchContext = createContext<SwitchContextValue | null>(null)
 
@@ -182,8 +196,8 @@ function switchTrackStyle(size: number): CSSProperties {
 //1280x720, 1.3e-4 at 390x844) — and a toggle with no input behind it (the
 //"Dark mode" row following the OS appearance, state that syncs in) has no
 //`hadRecentInput` to excuse it, so it counted toward CLS (VISION.md §2.1). A
-//transform is not a shift. It composes with the locked `-translate-y-1/2`,
-//which Tailwind emits as the separate `translate` property.
+//transform is not a shift. It composes with the locked `translate: 0 -50%`,
+//which is a separate property.
 function switchThumbStyle(
   isChecked: boolean,
   size: number,
@@ -252,14 +266,21 @@ function SwitchThumb({ className }: SwitchThumbProps) {
   //freeze the thumb on one side while the control kept toggling. Colour and shape
   //stay `className`.
   const thumb = mergeStyles({
-    base: SWITCH_THUMB_SURFACE_CLASS,
     className,
-    locked: SWITCH_THUMB_LOCKED_LAYOUT_CLASS,
-    lockedStyle: switchThumbStyle(isChecked, size),
+    lockedStyle: {
+      ...SWITCH_THUMB_LOCKED_LAYOUT_STYLE,
+      ...switchThumbStyle(isChecked, size),
+    },
   })
 
   return (
-    <span aria-hidden style={thumb.style} className={thumb.className} />
+    <span
+      aria-hidden
+      data-adaptv="switch-thumb"
+      data-part="thumb"
+      style={thumb.style}
+      className={thumb.className || undefined}
+    />
   )
 }
 
@@ -270,7 +291,7 @@ SwitchThumb.displayName = "Switch.Thumb"
  *
  * Renders a native `<input type="checkbox" role="switch">` inside a `<label>`
  * track. The checkbox is the form control (no hidden-field sync). Visual thumb is
- * decorative (`pointer-events-none`). Tier 2 styles the track via root `className`
+ * decorative (`pointer-events: none`). Tier 2 styles the track via root `className`
  * and thumb slots via {@link useSwitch} or controlled `checked` on the wrapper.
  * ============================================================================= */
 
@@ -364,37 +385,33 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
 
   const thumbChild = resolveSwitchThumbChild(children)
 
+  //`switchTrackStyle` is LOCKED: the thumb's travel is computed from this exact
+  //track width, so an inline `width` from the consumer resizes the track and leaves
+  //the thumb parked at the old offset. `size={n}` is the supported way to change it,
+  //and it moves both. The touch pass-through is locked for the press-core reason
+  //(WebKit 240917) — see {@link PRESS_TARGET_LOCKED_STYLE}, and
+  //{@link PRESS_TARGET_DISABLED_LOCKED_STYLE} for why a disabled track keeps the same
+  //touch pass-through rather than going `touch-action: none`.
+  const trackStyles = mergeStyles({
+    className,
+    style,
+    lockedStyle: {
+      ...(isDisabled
+        ? SWITCH_TRACK_DISABLED_LOCKED_STYLE
+        : SWITCH_TRACK_LOCKED_STYLE),
+      ...switchTrackStyle(size),
+    },
+  })
+
   return (
     <SwitchContext.Provider value={switchContext}>
       <label
         data-adaptv="switch"
+        data-part="root"
+        data-disabled={isDisabled ? "" : undefined}
         htmlFor={resolvedInputId}
-        //`switchTrackStyle` moves from "consumer wins" to LOCKED: the thumb's
-        //travel is computed from this exact track width, so an inline `width` from
-        //the consumer resizes the track and leaves the thumb parked at the old
-        //offset. `size={n}` is the supported way to change it, and it moves both.
-        //The interaction class is locked for the press-core reason (WebKit 240917) —
-        //see {@link PRESS_TARGET_LOCKED_CLASS}, and
-        //{@link PRESS_TARGET_DISABLED_LOCKED_CLASS} for why a disabled track keeps the
-        //same touch pass-through rather than going `touch-none`.
-        {...mergeStyles({
-          base: [
-            SWITCH_TRACK_BASE_LAYOUT_CLASS,
-            SWITCH_TRACK_SURFACE_CLASS,
-            isDisabled
-              ? SWITCH_TRACK_DISABLED_CURSOR_CLASS
-              : SWITCH_TRACK_CURSOR_CLASS,
-          ],
-          className,
-          locked: [
-            SWITCH_TRACK_LOCKED_LAYOUT_CLASS,
-            isDisabled
-              ? SWITCH_TRACK_NON_INTERACTION_CLASS
-              : SWITCH_TRACK_INTERACTION_CLASS,
-          ],
-          style,
-          lockedStyle: switchTrackStyle(size),
-        })}
+        className={trackStyles.className || undefined}
+        style={trackStyles.style}
         {...gestureEngineHandlers}
         onPointerDown={(e: PointerEvent<HTMLLabelElement>) => {
           onPointerDownProp?.(
@@ -417,7 +434,9 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
           checked={isChecked}
           disabled={disabled}
           readOnly
-          className={SWITCH_INPUT_LOCKED_CLASS}
+          data-adaptv="switch-input"
+          data-part="input"
+          style={SWITCH_INPUT_LOCKED_STYLE}
         />
         {thumbChild}
       </label>

@@ -356,17 +356,17 @@ test.describe("press engine under pointer and keyboard stress (both engines)", (
     const button = page.getByTestId("button-label-flip")
     await button.scrollIntoViewIfNeeded()
     //reduced motion renders the measure row alone: the first child is not the
-    //overflow-hidden motion shell and carries no inline width (its own children
-    //are the slots, so "no nested element" is not the premise — "no shell" is)
+    //clipping motion shell and carries no inline width (its own children are the
+    //slots, so "no nested element" is not the premise — "no shell" is)
     expect(
       await button.evaluate((el) => {
         const first = el.firstElementChild as HTMLElement
         return {
-          shell: first.classList.contains("overflow-hidden"),
+          part: first.dataset.part,
           width: first.style.width,
         }
       }),
-    ).toEqual({ shell: false, width: "" })
+    ).toEqual({ part: "content", width: "" })
 
     await button.evaluate((el) => {
       const row = el.firstElementChild as HTMLElement

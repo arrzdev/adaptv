@@ -1,0 +1,27 @@
+/*
+ * List — the scroll surface's default layout (components/list.tsx).
+ *
+ * `List` renders a `ScrollView` but stamps `data-adaptv="list"` over it (composition is
+ * an implementation detail and must not leak into a styling hook), so ScrollView's own
+ * `[data-adaptv="scroll-view"]` defaults do not reach it: the same defaults are spelled
+ * here for the list. A List is always vertical. The scroll lock itself is the
+ * ScrollView's inline style and its `[data-scroll-view]` scrollbar rule
+ * (scroll-view.css), which a List inherits unchanged. The rows are positioned by inline
+ * style the virtualizer writes.
+ *
+ * Layered in `adaptv.components` under `:where()` (zero specificity, §6.0.1); no
+ * `!important`.
+ */
+
+@layer adaptv.components {
+  :where([data-adaptv="list"][data-part="root"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    flex-direction: column;
+    display: flex;
+  }
+
+  :where([data-adaptv="list"][data-part="root"][data-scroll-view-fill]) {
+    flex: 1;
+  }
+}

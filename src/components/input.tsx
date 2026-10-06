@@ -1,5 +1,6 @@
 import type {
   ComponentProps,
+  CSSProperties,
   FocusEvent,
   KeyboardEvent,
   MouseEvent,
@@ -15,7 +16,7 @@ import {
   useMemo,
   useRef,
 } from "react"
-import { PRESS_TARGET_DISABLED_LOCKED_CLASS } from "#adaptv/components/press-core"
+import { PRESS_TARGET_DISABLED_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
 import { mergeStyles } from "#adaptv/utils/styles"
 
@@ -88,35 +89,39 @@ interface InputGroupProps {
   disabled?: boolean
 }
 
-//LOCKED on the slots: `order-*` IS the compound contract. Children render in
-//document order and the field is injected with `order-2`, so leading → field →
-//trailing only holds while these stick; `shrink-0` keeps an icon from collapsing
-//when the label runs out of room. Alignment is a default.
-const INPUT_SLOT_LOCKED_LAYOUT_CLASS = "inline-flex shrink-0"
-const INPUT_SLOT_BASE_LAYOUT_CLASS = "items-center self-center"
-const INPUT_LEADING_LOCKED_ORDER_CLASS = "order-1"
-const INPUT_TRAILING_LOCKED_ORDER_CLASS = "order-3"
-const INPUT_GROUP_LAYOUT_CLASS = "flex items-center w-fit min-w-0"
-const INPUT_GROUP_INTERACTION_CLASS = "cursor-text"
-const INPUT_GROUP_NON_INTERACTION_CLASS =
-  PRESS_TARGET_DISABLED_LOCKED_CLASS
-const INPUT_GROUP_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-//⚠︎ No default border width — see the note in button.tsx. Pre-allocating one only
-//cancels the shift at exactly 1px and permanently shrinks the content box; use
-//`outline` for toggled emphasis instead.
-const INPUT_GROUP_SURFACE_CLASS = "bg-gray-50 text-gray-950"
-const INPUT_FIELD_RESIZE_CLASS = "resize-none"
-const INPUT_FIELD_INTERACTION_CLASS = "cursor-text"
-const INPUT_FIELD_NON_INTERACTION_CLASS =
-  PRESS_TARGET_DISABLED_LOCKED_CLASS
-const INPUT_FIELD_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-const INPUT_FIELD_SURFACE_CLASS = "bg-gray-50 text-gray-950"
+//LOCKED on the slots: `order` IS the compound contract. Children render in
+//document order and the field is injected with `order: 2`, so leading → field →
+//trailing only holds while these stick; `flex-shrink: 0` keeps an icon from
+//collapsing when the label runs out of room. Alignment is a default (input.css).
+const INPUT_LEADING_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "inline-flex",
+  flexShrink: 0,
+  order: 1,
+})
+const INPUT_TRAILING_LOCKED_STYLE: CSSProperties = Object.freeze({
+  display: "inline-flex",
+  flexShrink: 0,
+  order: 3,
+})
 //LOCKED when grouped: this is what makes the field a chromeless participant in the
-//label's flex row rather than a second visible box inside the first. `order-2` is
-//the slot contract above; `flex-1 min-w-0` is what lets it give way to the slots;
-//the chrome-strippers are why the group's own surface is the only visible one.
-const INPUT_FIELD_GROUPED_CHROMELESS_CLASS =
-  "order-2 min-w-0 flex-1 border-none bg-transparent p-0 shadow-none text-inherit"
+//label's flex row rather than a second visible box inside the first. `order: 2` is
+//the slot contract above; `flex: 1` + `min-width: 0` is what lets it give way to the
+//slots; the chrome-strippers are why the group's own surface is the only visible one.
+const INPUT_FIELD_GROUPED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  order: 2,
+  minWidth: 0,
+  flex: 1,
+  borderStyle: "none",
+  backgroundColor: "transparent",
+  padding: 0,
+  boxShadow: "none",
+  color: "inherit",
+})
+const INPUT_FIELD_GROUPED_DISABLED_LOCKED_STYLE: CSSProperties =
+  Object.freeze({
+    ...INPUT_FIELD_GROUPED_LOCKED_STYLE,
+    ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  })
 
 /** Programmatic state Tier 2 reads via {@link useInput}. */
 export type InputContextValue = {
@@ -233,14 +238,10 @@ function InputLeading({ children, className }: InputLeadingProps) {
 
   return (
     <div
-      className={mergeStyles({
-        base: INPUT_SLOT_BASE_LAYOUT_CLASS,
-        className,
-        locked: [
-          INPUT_SLOT_LOCKED_LAYOUT_CLASS,
-          INPUT_LEADING_LOCKED_ORDER_CLASS,
-        ],
-      })}
+      data-adaptv="input-leading"
+      data-part="leading"
+      className={className}
+      style={INPUT_LEADING_LOCKED_STYLE}
       onMouseDownCapture={handleMouseDownCapture}
     >
       {children}
@@ -281,14 +282,10 @@ function InputTrailing({ children, className }: InputTrailingProps) {
 
   return (
     <div
-      className={mergeStyles({
-        base: INPUT_SLOT_BASE_LAYOUT_CLASS,
-        className,
-        locked: [
-          INPUT_SLOT_LOCKED_LAYOUT_CLASS,
-          INPUT_TRAILING_LOCKED_ORDER_CLASS,
-        ],
-      })}
+      data-adaptv="input-trailing"
+      data-part="trailing"
+      className={className}
+      style={INPUT_TRAILING_LOCKED_STYLE}
       onMouseDownCapture={handleMouseDownCapture}
     >
       {children}
@@ -314,24 +311,25 @@ function InputGroup({
     e.preventDefault()
   }
 
+  const merged = mergeStyles({
+    className,
+    lockedStyle: disabled ? PRESS_TARGET_DISABLED_LOCKED_STYLE : undefined,
+  })
+
   return (
     <label
       data-adaptv="input"
+      data-part="root"
+      //presence attribute (§3.1): what input.css keys the disabled cursor on, since
+      //a <label> has no `:disabled` of its own
+      data-disabled={disabled ? "" : undefined}
       htmlFor={inputId}
-      //LOCKED when disabled: {@link PRESS_TARGET_DISABLED_LOCKED_CLASS}, so a
+      //LOCKED when disabled: {@link PRESS_TARGET_DISABLED_LOCKED_STYLE}, so a
       //`className` cannot make an inert field selectable or strand its gesture.
-      //`cursor-text` when enabled is only a cursor, so it stays base and a consumer
+      //The cursor is only a cursor, so it is a default in input.css and a consumer
       //can change it.
-      className={mergeStyles({
-        base: [
-          INPUT_GROUP_LAYOUT_CLASS,
-          INPUT_GROUP_SURFACE_CLASS,
-          !disabled && INPUT_GROUP_INTERACTION_CLASS,
-          disabled && INPUT_GROUP_DISABLED_CURSOR_CLASS,
-        ],
-        className,
-        locked: disabled && INPUT_GROUP_NON_INTERACTION_CLASS,
-      })}
+      className={merged.className || undefined}
+      style={merged.style}
       onMouseDown={handleMouseDown}
     >
       {children}
@@ -354,6 +352,7 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
       size,
       type,
       inputId,
+      style,
       ...props
     },
     ref,
@@ -372,35 +371,38 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
       onKeyDown?.(e)
     }
 
+    //Grouped, the chromeless set is LOCKED: it is what makes this field a
+    //participant in the label's flex row (`order: 2`, `flex: 1`, `min-width: 0`)
+    //instead of a second visible box inside the first, and the consumer already has
+    //the group shell for exactly the chrome it strips. Ungrouped there is no shell,
+    //so the surface is a plain default in input.css the consumer restyles freely.
+    const lockedStyle = grouped
+      ? disabled
+        ? INPUT_FIELD_GROUPED_DISABLED_LOCKED_STYLE
+        : INPUT_FIELD_GROUPED_LOCKED_STYLE
+      : disabled
+        ? PRESS_TARGET_DISABLED_LOCKED_STYLE
+        : undefined
+    const merged = mergeStyles({
+      className: grouped ? innerClassName : [className, innerClassName],
+      style,
+      lockedStyle,
+    })
+
     return (
       <input
         ref={ref}
         id={inputId}
         type={type}
         size={grouped ? size : (size ?? 20)}
-        //Grouped, the chromeless class is LOCKED: it is what makes this field a
-        //participant in the label's flex row (`order-2 flex-1 min-w-0`) instead of
-        //a second visible box inside the first, and the consumer already has the
-        //group shell for exactly the chrome it strips. Ungrouped there is no shell,
-        //so the same surface is a plain BASE the consumer restyles freely.
-        className={mergeStyles({
-          base: [
-            INPUT_FIELD_RESIZE_CLASS,
-            !grouped && INPUT_FIELD_SURFACE_CLASS,
-            !grouped && !disabled && INPUT_FIELD_INTERACTION_CLASS,
-            !grouped && disabled && INPUT_FIELD_DISABLED_CURSOR_CLASS,
-          ],
-          className: grouped
-            ? innerClassName
-            : [className, innerClassName],
-          locked: [
-            grouped && INPUT_FIELD_GROUPED_CHROMELESS_CLASS,
-            disabled && INPUT_FIELD_NON_INTERACTION_CLASS,
-          ],
-        })}
         onKeyDown={handleKeyDown}
         onBlur={onBlur}
         {...props}
+        //bare, the field IS the root (InputRoot stamps `data-adaptv="input"` on it);
+        //grouped, it is the `field` part of the label and carries no scope of its own
+        data-part={grouped ? "field" : "root"}
+        className={merged.className || undefined}
+        style={merged.style}
         disabled={disabled}
       />
     )
@@ -428,7 +430,7 @@ function clearFieldValue(field: HTMLInputElement) {
 /**
  * Text field: bare `<input>` when alone; labeled flex group when
  * {@link Input.Leading} / {@link Input.Trailing} children exist. Slot children
- * render in document order; the field is injected with `order-2` so visual order
+ * render in document order; the field is locked to `order: 2` so visual order
  * is leading → field → trailing.
  *
  * **With slots** — `className` styles the group `<label>` (`placeholder:` and
@@ -455,7 +457,7 @@ function clearFieldValue(field: HTMLInputElement) {
  * box and the text jumps, so a `focus-within:` or invalid-state ring belongs on
  * `outline`, which never participates in layout at any width — reserving a transparent
  * 1px border instead only cancels the shift for a border of exactly 1px (see the ⚠︎ note
- * on `BUTTON_ROOT_SURFACE_CLASS` in button.tsx). Bare fields use native inline-block
+ * on Button's surface). Bare fields use native inline-block
  * width (~20 characters via default `size={20}`). Pass `w-full` or another width utility
  * when the field should fill its parent. Border colours and focus rings belong in Tier 2
  * `className`.

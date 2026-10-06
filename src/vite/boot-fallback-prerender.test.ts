@@ -35,14 +35,16 @@ describe("prerenderBootFallback — React in, static HTML out", () => {
     expect(html).toContain("Something went wrong")
   }, 60_000)
 
-  it("keeps the Tailwind classes, which the app stylesheet already carries", () => {
-    //`styles/index.css` declares `@source "../**\/*.{ts,tsx}"`, so adaptv's own
-    //component classes are generated into the app's CSS — a different file from
-    //the JS that broke. That is why this path needs no CSS of its own.
+  it("keeps the attributes its styles key on, which the app stylesheet already carries", () => {
+    //adaptv's component styles (`styles/boot-error.css`, imported by
+    //`styles/index.css`) are rules in the app's CSS keyed on `data-adaptv` /
+    //`data-part` — a different file from the JS that broke. That is why this path
+    //needs no CSS of its own, and why the markup must keep those attributes.
     return defaultScreen().then((byCode) => {
       const html = byCode[BOOT_CODES.load] as string
-      expect(html).toContain("flex")
-      expect(html).toContain("text-gray-950")
+      expect(html).toContain('data-adaptv="boot-error" data-part="root"')
+      expect(html).toContain('data-part="title"')
+      expect(html).toContain('data-part="mark"')
     })
   }, 60_000)
 

@@ -1,0 +1,53 @@
+/*
+ * UiNotFound — the default 404 screen's look (components/not-found.tsx): a centred
+ * column filling the shell on a gray-50 surface, the colours of its code, title and
+ * description, and the colours of its home Link.
+ *
+ * The screen is meant to be replaced outright (`notFoundScreen`), and nothing on it is
+ * structural, so every part is a default its `*ClassName` prop beats. The Link keeps
+ * its own `data-adaptv="link"`; this screen's colours for it are keyed on the Link
+ * inside this root, and sit later in source than link.css, so they win over the Link's
+ * own defaults at the same zero specificity.
+ *
+ * The root alone carries `data-adaptv="not-found"`; each sub-part carries its own
+ * `data-adaptv="not-found-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
+ * Layered in `adaptv.components` under `:where()` (docs/decisions/styling.md §6.0.1);
+ * no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root */
+  :where([data-adaptv="not-found"][data-part="root"]) {
+    box-sizing: border-box;
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    text-align: center;
+    width: 100%;
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+    flex-direction: column;
+    flex: 1;
+    align-items: center;
+    display: flex;
+  }
+
+  /* code, title, description */
+  :where([data-adaptv="not-found-code"][data-part="code"]) {
+    color: var(--color-gray-500, oklch(55.1% 0.027 264.364));
+  }
+
+  :where([data-adaptv="not-found-title"][data-part="title"]) {
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  :where([data-adaptv="not-found-description"][data-part="description"]) {
+    color: var(--color-gray-600, oklch(44.6% 0.03 256.802));
+  }
+
+  /* the home Link */
+  :where([data-adaptv="not-found"][data-part="root"] > [data-adaptv="link"]) {
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+}

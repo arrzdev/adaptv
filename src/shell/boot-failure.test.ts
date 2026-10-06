@@ -129,13 +129,14 @@ describe("a bundle that built fine and dies on first load", () => {
 
   it("carries the app's real styling, not a framework-flavoured screen", () => {
     //the point of prerendering the COMPONENT rather than hand-writing an HTML
-    //page: what ships is the app's own markup, Tailwind classes and all, from a
-    //stylesheet that is a different file from the JS that broke
+    //page: what ships is the app's own markup, carrying the attributes its layered
+    //default rules key on (styles/boot-error.css), from a stylesheet that is a
+    //different file from the JS that broke
     breakTheEntryScript()
 
     const root = fallback()?.querySelector('[data-adaptv="boot-error"]')
     expect(root).not.toBeNull()
-    expect(root?.className).toContain("flex")
+    expect(root?.getAttribute("data-part")).toBe("root")
   })
 
   it("stands down the moment the app proves it can render", () => {

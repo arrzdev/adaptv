@@ -50,6 +50,44 @@
 }
 
 @layer adaptv.components {
+  /*
+   * The box's default look, zero specificity so any `className` sizes it. The size is
+   * the text around it, like Icon. `inline-block`, never `inline`: a CSS transform
+   * does not apply to a non-replaced inline box, so an `inline` spinner would simply
+   * not turn. The baseline nudge seats it in a line of text the way icon fonts do.
+   */
+  :where([data-adaptv="spinner"][data-part="root"]) {
+    vertical-align: -0.125em;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+  }
+
+  /* the drawing fills the box */
+  :where([data-adaptv="spinner"] > [data-part="icon"]) {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /*
+   * The shared live region (one per document, created by the first labelled
+   * indicator), visually hidden with Tailwind's own `sr-only` recipe, as
+   * PullToRefresh's and Skeleton's status lines are.
+   */
+  :where([data-adaptv="spinner-announcer"][data-part="root"]) {
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+  }
+
   [data-adaptv="spinner"] {
     animation: adaptv-spinner-spin 1s linear infinite;
   }

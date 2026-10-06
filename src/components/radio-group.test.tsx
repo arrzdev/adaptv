@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { act, fireEvent, render } from "@testing-library/react"
 import { createRef, Suspense, startTransition, use, useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -251,24 +253,23 @@ describe("RadioGroup — the accessible element is the hit area", () => {
     for (const item of items) {
       const input = item.querySelector("input")
       if (!input) throw new Error("an item with no input")
-      const classes = input.className.split(/\s+/)
       //its containing block is the item: a direct child of the positioned label
       expect(input.parentElement).toBe(item)
-      expect(item.className.split(/\s+/)).toContain("relative")
-      //and it fills that box exactly — no inset, no margin, no clip
-      for (const cls of [
-        "absolute",
-        "inset-0",
-        "size-full",
-        "m-0",
-        "opacity-0",
-        "appearance-none",
-      ]) {
-        expect(classes, `the input carries ${cls}`).toContain(cls)
-      }
-      expect(classes, "a 1px clipped box is not a frame").not.toContain(
-        "sr-only",
-      )
+      expect(item.style.position).toBe("relative")
+      //and it fills that box exactly — no inset, no margin, no clip — as inline
+      //style, the one tier no consumer class can beat
+      expect(input.style.position).toBe("absolute")
+      expect(input.style.inset).toMatch(/^0(px)?$/)
+      expect(input.style.width).toBe("100%")
+      expect(input.style.height).toBe("100%")
+      expect(input.style.margin).toMatch(/^0(px)?$/)
+      expect(input.style.opacity).toBe("0")
+      expect(input.style.appearance).toBe("none")
+      expect(input.style.cursor).toBe("inherit")
+      //a 1px clipped box is not a frame
+      expect(input.style.clipPath).toBe("")
+      expect(input.style.overflow).toBe("")
+      expect(input.hasAttribute("class")).toBe(false)
     }
   })
 
@@ -277,15 +278,126 @@ describe("RadioGroup — the accessible element is the hit area", () => {
     for (const item of itemsOf(container)) {
       const input = item.querySelector("input")
       expect(item.lastElementChild).toBe(input)
-      expect(input?.className).not.toMatch(/(^|\s)z-/)
+      expect(input?.style.zIndex).toBe("")
     }
   })
 
   it("keeps the mark from taking the pointer", () => {
     const { container } = render(<Plans defaultValue="monthly" />)
-    const mark = container.querySelector("[data-part='indicator']")
-    expect(mark?.getAttribute("class")).toContain("pointer-events-none")
+    const mark = container.querySelector<HTMLElement>(
+      "[data-part='indicator']",
+    )
+    expect(mark?.style.pointerEvents).toBe("none")
     expect(mark?.getAttribute("aria-hidden")).toBe("true")
+  })
+})
+
+/*
+ * Styling: the default look is a layered rule keyed on the group's `data-adaptv` and
+ * each part's `data-part` (styles/radio-group.css), the lock is inline style, and the
+ * `className` attribute is the consumer's alone (docs/decisions/styling.md §2). Real
+ * cascade resolution is the browser precedence suite's; this pins the mechanism.
+ */
+describe("RadioGroup — styling tiers", () => {
+  const css = readFileSync(
+    resolve(__dirname, "../styles/radio-group.css"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "")
+
+  it("emits no class of its own on any part", () => {
+    const { container } = render(<Plans defaultValue="monthly" />)
+    const root = container.querySelector(
+      "[data-adaptv='radio-group'][data-part='root']",
+    )
+    expect(root?.hasAttribute("class")).toBe(false)
+    for (const part of ["item", "box", "indicator", "input"]) {
+      const els = container.querySelectorAll(`[data-part='${part}']`)
+      expect(els.length, part).toBeGreaterThan(0)
+      for (const el of els)
+        expect(el.hasAttribute("class"), part).toBe(false)
+    }
+  })
+
+  it("passes the consumer's className through untouched", () => {
+    const { container } = render(
+      <RadioGroup className="gap-4" aria-label="r">
+        <RadioGroup.Item value="a" className="w-full">
+          <RadioGroup.Box className="ring-1">
+            <RadioGroup.Indicator className="text-white" />
+          </RadioGroup.Box>
+        </RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const q = (sel: string) =>
+      container.querySelector(sel)?.getAttribute("class")
+    expect(q("[data-adaptv='radio-group']")).toBe("gap-4")
+    expect(q("[data-part='item']")).toBe("w-full")
+    expect(q("[data-part='box']")).toBe("ring-1")
+    expect(q("[data-part='indicator']")).toBe("text-white")
+  })
+
+  it("locks the item's position and touch pass-through inline, over the consumer's style", () => {
+    const { container } = render(
+      <RadioGroup aria-label="r">
+        <RadioGroup.Item
+          value="a"
+          style={{ position: "static", touchAction: "none", color: "red" }}
+        >
+          a
+        </RadioGroup.Item>
+        <RadioGroup.Item value="b" disabled>
+          b
+        </RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const [a, b] = itemsOf(container)
+    expect(a.style.position).toBe("relative")
+    expect(a.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(a.style.color).toBe("red")
+    expect(a.style.userSelect).toBe("")
+    //disabled: the same pass-through, plus no selection
+    expect(b.style.position).toBe("relative")
+    expect(b.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(b.style.userSelect).toBe("none")
+  })
+
+  it("locks the box's layout inline, over the consumer's style", () => {
+    const { container } = render(
+      <RadioGroup aria-label="r">
+        <RadioGroup.Item value="a">
+          <RadioGroup.Box
+            style={{ position: "static", overflow: "visible" }}
+          />
+        </RadioGroup.Item>
+      </RadioGroup>,
+    )
+    const box = container.querySelector<HTMLElement>(
+      "[data-part='box']",
+    ) as HTMLElement
+    expect(box.style.position).toBe("relative")
+    expect(box.style.display).toBe("flex")
+    expect(box.style.overflow).toBe("hidden")
+    expect(box.style.flexShrink).toBe("0")
+  })
+
+  it("keeps the group's layout a default: nothing about the root is inline", () => {
+    const { container } = render(<Plans />)
+    const root = container.querySelector<HTMLElement>(
+      "[data-adaptv='radio-group']",
+    )
+    expect(root?.hasAttribute("style")).toBe(false)
+  })
+
+  it("puts the defaults in zero-specificity layered rules", () => {
+    expect(css).toMatch(/@layer adaptv\.components\s*\{/)
+    expect(css).toContain(
+      ':where([data-adaptv="radio-group"][data-part="root"])',
+    )
+    for (const part of ["item", "box"])
+      expect(css).toContain(
+        `:where([data-adaptv="radio-group"] [data-part="${part}"]:not([data-adaptv]))`,
+      )
+    expect(css).not.toContain("!important")
   })
 })
 

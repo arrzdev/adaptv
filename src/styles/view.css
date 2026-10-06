@@ -1,0 +1,35 @@
+/*
+ * View — the default layout of the base box (components/view.tsx): a flex column, and
+ * what the `row` / `center` / `fill` props change about it, keyed on the presence
+ * attributes the props stamp (`data-view-row`, `data-view-center`, `data-view-fill`).
+ *
+ * All of it is a default: `className="grid"` (or any plain-CSS class) beats it. The
+ * one structural thing on a View — the `safe` padding — is not here: it is inline
+ * style the component writes, because a lock in a layer would lose to an unlayered
+ * consumer class (docs/decisions/styling.md §2).
+ *
+ * Layered in `adaptv.components` under `:where()` (zero specificity, §6.0.1); no
+ * `!important`.
+ */
+
+@layer adaptv.components {
+  :where([data-adaptv="view"][data-part="root"]) {
+    flex-direction: column;
+    display: flex;
+  }
+
+  :where([data-adaptv="view"][data-part="root"][data-view-row]) {
+    flex-direction: row;
+  }
+
+  :where([data-adaptv="view"][data-part="root"][data-view-center]) {
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* grow into the parent flex line; `min-height: 0` so a nested scroller still scrolls */
+  :where([data-adaptv="view"][data-part="root"][data-view-fill]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    flex: 1;
+  }
+}

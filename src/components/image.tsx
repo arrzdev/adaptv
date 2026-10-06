@@ -14,7 +14,6 @@ import {
   useState,
 } from "react"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { mergeStyles } from "#adaptv/utils/styles"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
 
@@ -185,41 +184,99 @@ export interface ImageInvalidProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode
 }
 
+/*
+ * The locks, as inline style (docs/decisions/styling.md §2.0). Everything else about
+ * the look — the root's block/full-width default, the neutral grey surface, the
+ * layers' clip and the opacity fades — is a default in styles/image.css, keyed on
+ * `data-adaptv="image"` + `data-part`, which a consumer's `className` beats.
+ */
+
 //LOCKED: the root is the in-flow reserved box. `relative` is what makes every
-//layer below it a card in one stack, and `isolate` is what keeps that stack out
-//of the consumer's — without it the z-0/z-10/z-20 below participate in the
+//layer below it a card in one stack, and `isolation: isolate` is what keeps that
+//stack out of the consumer's — without it the z-indexes below participate in the
 //nearest ancestor stacking context and can interleave with their own layers.
-//`overflow-hidden` rather than `overflow: clip`, which is the better tool (no
+//`overflow: hidden` rather than `overflow: clip`, which is the better tool (no
 //scroll container, no scrollport) but is Safari 16 — not a baseline while adaptv
 //supports iOS 15. Revisit with contain-intrinsic-size at the same floor.
-const IMAGE_ROOT_LOCKED_LAYOUT_CLASS = "relative isolate overflow-hidden"
+const IMAGE_ROOT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  isolation: "isolate",
+  overflow: "hidden",
+})
 //`fill` swaps the reservation for the parent's: the root stops being in-flow and
 //stretches to a box somebody else owns. Same stack, no ratio.
-const IMAGE_ROOT_FILL_LOCKED_LAYOUT_CLASS =
-  "absolute inset-0 isolate size-full overflow-hidden"
-const IMAGE_ROOT_BASE_LAYOUT_CLASS = "block w-full"
-const IMAGE_SURFACE_CLASS = "bg-gray-50"
+const IMAGE_ROOT_FILL_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  isolation: "isolate",
+  width: "100%",
+  height: "100%",
+  overflow: "hidden",
+})
 
 //LOCKED: a slot layer is one card in a stack over the same box as the `<img>`.
-//`absolute inset-0` is what makes it that card rather than a sibling block, and the
-//z-index is WHICH card — a placeholder that outranks the loaded image never goes
-//away. `rounded-[inherit]` keeps the stack clipped to the root's own radius.
-const IMAGE_SLOT_LAYER_LOCKED_LAYOUT_CLASS =
-  "absolute inset-0 box-border size-full rounded-[inherit]"
-const IMAGE_SLOT_LAYER_BASE_LAYOUT_CLASS = "overflow-hidden"
-const IMAGE_LQIP_LAYER_CLASS = "z-0"
-const IMAGE_SLOT_LAYER_UNDER_CLASS = "z-[1]"
-const IMAGE_SLOT_LAYER_OVER_CLASS = "z-20"
-const IMAGE_SLOT_LAYER_VISIBLE_CLASS = "opacity-100"
-const IMAGE_SLOT_LAYER_HIDDEN_CLASS = "invisible"
-const IMAGE_SLOT_LAYER_TRANSITION_CLASS =
-  "transition-opacity duration-300 ease-out"
-const IMAGE_IMG_LOCKED_LAYOUT_CLASS =
-  "absolute inset-0 z-10 block size-full max-h-none max-w-none text-[0px] leading-0"
-const IMAGE_IMG_TRANSITION_CLASS =
-  "select-none transition-opacity duration-300 ease-out"
-const IMAGE_IMG_VISIBLE_CLASS = "opacity-100"
-const IMAGE_IMG_HIDDEN_CLASS = "-z-10 opacity-0"
+//`absolute` + `inset: 0` is what makes it that card rather than a sibling block, and
+//the z-index is WHICH card — a placeholder that outranks the loaded image never goes
+//away. `border-radius: inherit` keeps the stack clipped to the root's own radius.
+const IMAGE_LAYER_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  boxSizing: "border-box",
+  width: "100%",
+  height: "100%",
+  borderRadius: "inherit",
+})
+//Only the HIDDEN half of a layer's load state is locked (see ImageSlotLayer).
+const IMAGE_LAYER_HIDDEN_STYLE: CSSProperties = Object.freeze({
+  visibility: "hidden",
+})
+const IMAGE_SLOT_LAYER_LOCKED_STYLE = {
+  "under-image": {
+    visible: Object.freeze({ ...IMAGE_LAYER_LOCKED_STYLE, zIndex: 1 }),
+    hidden: Object.freeze({
+      ...IMAGE_LAYER_LOCKED_STYLE,
+      zIndex: 1,
+      ...IMAGE_LAYER_HIDDEN_STYLE,
+    }),
+  },
+  "over-image": {
+    visible: Object.freeze({ ...IMAGE_LAYER_LOCKED_STYLE, zIndex: 20 }),
+    hidden: Object.freeze({
+      ...IMAGE_LAYER_LOCKED_STYLE,
+      zIndex: 20,
+      ...IMAGE_LAYER_HIDDEN_STYLE,
+    }),
+  },
+} as const satisfies Record<
+  "under-image" | "over-image",
+  Record<"visible" | "hidden", CSSProperties>
+>
+const IMAGE_LQIP_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...IMAGE_LAYER_LOCKED_STYLE,
+  zIndex: 0,
+})
+//LOCKED: the `<img>` is the middle card of the stack, sized to the reserved box
+//whatever a global `img { max-width: 100% }` reset says, and its alt text takes no
+//line box of its own while the bytes are in flight. Hidden, it drops under the
+//stack and out of sight — a consumer could not defeat that without painting a
+//half-loaded photo.
+const IMAGE_IMG_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  zIndex: 10,
+  display: "block",
+  width: "100%",
+  height: "100%",
+  maxHeight: "none",
+  maxWidth: "none",
+  fontSize: "0px",
+  lineHeight: 0,
+})
+const IMAGE_IMG_HIDDEN_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...IMAGE_IMG_LOCKED_STYLE,
+  zIndex: -10,
+  opacity: 0,
+})
 
 /**
  * `object-fit` → `background-size`, so the LQIP occupies exactly the box the photo
@@ -313,8 +370,6 @@ export function unstable_resetImageWarnings(): void {
 type ImageSlotLayerProps = HTMLAttributes<HTMLDivElement> & {
   visible: boolean
   stack: "under-image" | "over-image"
-  /** `Image.Placeholder` is chrome over the LQIP, so it never gets a surface of its own. */
-  surface: boolean
   decorative?: boolean
   part: "placeholder" | "invalid" | "error"
   children?: ReactNode
@@ -323,7 +378,6 @@ type ImageSlotLayerProps = HTMLAttributes<HTMLDivElement> & {
 function ImageSlotLayer({
   visible,
   stack,
-  surface,
   part,
   decorative = false,
   className,
@@ -331,8 +385,6 @@ function ImageSlotLayer({
   children,
   ...props
 }: ImageSlotLayerProps) {
-  const reducedMotion = useReducedMotion()
-
   return (
     <div
       {...props}
@@ -340,31 +392,17 @@ function ImageSlotLayer({
       aria-hidden={decorative ? true : visible ? undefined : true}
       //Only the HIDDEN half of the load state is locked, and the asymmetry is the
       //point: `visible` is derived from the `<img>`'s own load/error events, so a
-      //consumer who could defeat `invisible` would leave a placeholder painted over
-      //a successfully loaded photo — branch with `useImage()` instead. Fading a
-      //layer that is legitimately showing (`opacity-70` on a scrim) is an ordinary
-      //restyle, so the visible half stays base along with the transition.
+      //consumer who could defeat `visibility: hidden` would leave a placeholder
+      //painted over a successfully loaded photo — branch with `useImage()` instead.
+      //Fading a layer that is legitimately showing (`opacity-70` on a scrim) is an
+      //ordinary restyle, so the opacity and its transition stay defaults.
       {...mergeStyles({
-        base: [
-          IMAGE_SLOT_LAYER_BASE_LAYOUT_CLASS,
-          surface && IMAGE_SURFACE_CLASS,
-          visible && IMAGE_SLOT_LAYER_VISIBLE_CLASS,
-          visible && !reducedMotion && IMAGE_SLOT_LAYER_TRANSITION_CLASS,
-        ],
         className,
-        locked: [
-          IMAGE_SLOT_LAYER_LOCKED_LAYOUT_CLASS,
-          stack === "under-image"
-            ? IMAGE_SLOT_LAYER_UNDER_CLASS
-            : IMAGE_SLOT_LAYER_OVER_CLASS,
-          !visible && IMAGE_SLOT_LAYER_HIDDEN_CLASS,
-        ],
         style,
-        //nothing about a slot layer is structural in INLINE style — the stack is
-        //classes, and the one derived inline value (the LQIP's background-size)
-        //belongs to the LQIP layer, which is not this. Named so it reads as a
-        //decision.
-        lockedStyle: undefined,
+        lockedStyle:
+          IMAGE_SLOT_LAYER_LOCKED_STYLE[stack][
+            visible ? "visible" : "hidden"
+          ],
       })}
     >
       {children}
@@ -400,35 +438,23 @@ function ImageLqipLayer({
   fit: ImageFit
   position: string
 }) {
-  const reducedMotion = useReducedMotion()
+  const { style } = mergeStyles({
+    baseStyle: {
+      backgroundImage: `url(${JSON.stringify(url)})`,
+      backgroundRepeat: "no-repeat",
+    },
+    //LOCKED for the same reason `fit` is a prop at all: these two declarations
+    //are the placeholder's half of a pair, and the `<img>` holds the other. If
+    //either side could drift the blur→image swap jumps.
+    lockedStyle: {
+      ...IMAGE_LQIP_LOCKED_STYLE,
+      ...(visible ? undefined : IMAGE_LAYER_HIDDEN_STYLE),
+      ...imageFitStyle(fit, position, true),
+    },
+  })
 
-  return (
-    <div
-      aria-hidden
-      data-part="lqip"
-      {...mergeStyles({
-        base: [
-          IMAGE_SLOT_LAYER_BASE_LAYOUT_CLASS,
-          IMAGE_SURFACE_CLASS,
-          visible && IMAGE_SLOT_LAYER_VISIBLE_CLASS,
-          visible && !reducedMotion && IMAGE_SLOT_LAYER_TRANSITION_CLASS,
-        ],
-        locked: [
-          IMAGE_SLOT_LAYER_LOCKED_LAYOUT_CLASS,
-          IMAGE_LQIP_LAYER_CLASS,
-          !visible && IMAGE_SLOT_LAYER_HIDDEN_CLASS,
-        ],
-        baseStyle: {
-          backgroundImage: `url(${JSON.stringify(url)})`,
-          backgroundRepeat: "no-repeat",
-        },
-        //LOCKED for the same reason `fit` is a prop at all: these two declarations
-        //are the placeholder's half of a pair, and the `<img>` holds the other. If
-        //either side could drift the blur→image swap jumps.
-        lockedStyle: imageFitStyle(fit, position, true),
-      })}
-    />
-  )
+  //no consumer channel at all, so no `className`: its look is image.css
+  return <div aria-hidden data-part="lqip" style={style} />
 }
 
 /**
@@ -460,7 +486,6 @@ function ImageError({ children, ...props }: ImageErrorProps) {
       part="error"
       visible={isErrorVisible}
       stack="over-image"
-      surface
     >
       {children}
     </ImageSlotLayer>
@@ -479,7 +504,6 @@ function ImageInvalid({ children, ...props }: ImageInvalidProps) {
       part="invalid"
       visible={isInvalidVisible}
       stack="over-image"
-      surface
     >
       {children}
     </ImageSlotLayer>
@@ -500,8 +524,8 @@ function ImagePlaceholder({ children, ...props }: ImagePlaceholderProps) {
       stack="under-image"
       //transparent by default so the LQIP underneath still shows through — this
       //slot is for a shimmer, a logo or a spinner ON the placeholder, not instead
-      //of it. `className="bg-…"` if you want it opaque.
-      surface={false}
+      //of it: image.css gives the grey surface to Error and Invalid only.
+      //`className="bg-…"` if you want it opaque.
       decorative
     >
       {children}
@@ -597,7 +621,6 @@ function ImageRoot(props: ImageProps) {
 
   const rootRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
-  const reducedMotion = useReducedMotion()
 
   const asset = typeof src === "object" && src !== null ? src : null
   const { trimmed, invalid } = classifyImageSrc(
@@ -736,18 +759,14 @@ function ImageRoot(props: ImageProps) {
     onError?.(event)
   }
 
+  //the "grey placeholder underneath" is the DEFAULT, not an opt-in: it is the
+  //root's own surface (image.css), so an Image with no slots and no LQIP still
+  //shows a neutral box for exactly as long as the load takes.
+  const rootLockedStyle = fill
+    ? IMAGE_ROOT_FILL_LOCKED_STYLE
+    : IMAGE_ROOT_LOCKED_STYLE
   const rootStyles = mergeStyles({
-    base: [
-      !fill && IMAGE_ROOT_BASE_LAYOUT_CLASS,
-      //the "grey placeholder underneath" is the DEFAULT, not an opt-in: it is the
-      //root's own surface, so an Image with no slots and no LQIP still shows a
-      //neutral box for exactly as long as the load takes.
-      IMAGE_SURFACE_CLASS,
-    ],
     className,
-    locked: fill
-      ? IMAGE_ROOT_FILL_LOCKED_LAYOUT_CLASS
-      : IMAGE_ROOT_LOCKED_LAYOUT_CLASS,
     style,
     //THE reservation, and therefore locked. A consumer inline `height` that
     //reached the root first would defeat the entire component. Locking costs
@@ -755,20 +774,17 @@ function ImageRoot(props: ImageProps) {
     //definite height AND a ratio the ratio simply governs the width instead, and
     //the box is still reserved. The only thing made impossible is an unreserved
     //one, and `aspectRatio={n}` is the supported way to change it.
-    lockedStyle: ratio ? { aspectRatio: ratio } : undefined,
+    lockedStyle: ratio
+      ? { ...rootLockedStyle, aspectRatio: ratio }
+      : rootLockedStyle,
   })
 
-  const imgStyles = mergeStyles({
-    base: [
-      !reducedMotion && IMAGE_IMG_TRANSITION_CLASS,
-      isImagePainted && IMAGE_IMG_VISIBLE_CLASS,
-    ],
-    locked: [
-      IMAGE_IMG_LOCKED_LAYOUT_CLASS,
-      !isImagePainted && IMAGE_IMG_HIDDEN_CLASS,
-    ],
-    lockedStyle: imageFitStyle(fit, position, false),
-  })
+  const imgStyle: CSSProperties = {
+    ...(isImagePainted
+      ? IMAGE_IMG_LOCKED_STYLE
+      : IMAGE_IMG_HIDDEN_LOCKED_STYLE),
+    ...imageFitStyle(fit, position, false),
+  }
 
   const context: ImageContextValue = {
     isLoading: state === "loading",
@@ -830,8 +846,9 @@ function ImageRoot(props: ImageProps) {
           //shape for a hint: it degrades to nothing on a known version floor.
           fetchPriority={priority ? "high" : undefined}
           aria-hidden={isImagePainted ? undefined : true}
-          className={imgStyles.className}
-          style={imgStyles.style}
+          //no consumer channel (`className` and `style` land on the root), so no
+          //`className`: the fade is image.css, the stack position is locked here
+          style={imgStyle}
           onLoad={handleLoad}
           onError={handleError}
         />
