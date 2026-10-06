@@ -14,7 +14,7 @@ export const page: DocPage = {
     {
       type: "ul",
       items: [
-        "Node 22.12 or newer, and pnpm 11.1.1.",
+        "Node 22.15 or newer, and pnpm 11.1.1.",
         "For iOS: macOS, Xcode and CocoaPods.",
         "For Android: the Android SDK, a JDK and `adb`.",
       ],
@@ -167,7 +167,7 @@ function Home() {
     { type: "h3", text: "tsconfig.json" },
     {
       type: "p",
-      text: "adaptv edits an existing `tsconfig.json` when it loads the config. It adds route types to `include`, and a `#adaptv-route-tree` entry to `paths`. Your file must already have an `include` array and a `paths` object. If not, adaptv adds nothing and `to` loses its type check.",
+      text: "adaptv edits an existing `tsconfig.json` when it loads the config. It adds `.adaptv/**/*.ts` to `include`, and a `#adaptv-route-tree` entry to `paths`. adaptv reaches its own types through `.adaptv/adaptv-env.d.ts`, so you add nothing else. Your file must already have an `include` array and a `paths` object. If not, adaptv adds nothing and `navigate` loses its route check. `.adaptv/` holds generated files and git ignores it. You can delete it. The next run rebuilds it.",
     },
     { type: "h2", text: "Common problems" },
     {
