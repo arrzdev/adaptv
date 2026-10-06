@@ -34,6 +34,7 @@ export function DeviceStage() {
           <Screen
             image={starterIos}
             alt="The adaptv starter app's home screen in an iPhone frame."
+            priority
           />
         </PhoneFrame>
       </View>
@@ -41,14 +42,24 @@ export function DeviceStage() {
   )
 }
 
-function Screen({ image, alt }: { image: typeof starterIos; alt: string }) {
+function Screen({
+  image,
+  alt,
+  priority = false,
+}: {
+  image: typeof starterIos
+  alt: string
+  /** The page's largest paint: fetched first and decoded in step with the paint. */
+  priority?: boolean
+}) {
   return (
     <img
       src={image.src}
       width={image.width}
       height={image.height}
       alt={alt}
-      decoding="async"
+      fetchPriority={priority ? "high" : undefined}
+      decoding={priority ? undefined : "async"}
       draggable={false}
       //a failed image shows its alt on the dark screen, not only the broken-image icon
       className="block h-auto w-full select-none bg-[#0a0a0c] text-white/70 text-xs"

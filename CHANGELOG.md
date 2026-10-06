@@ -16,6 +16,12 @@ API.
 
 - **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
   root and in `packages/create-adaptv`.
+- **Hovers and type errors show adaptv's type names, not the router's.** This covers `notFoundScreen`
+  and `notFoundComponent` (`NotFoundScreenComponent`, `NotFoundScreenProps`), `notFound`
+  (`NotFoundOptions`), `isRedirect` (`RouteRedirect`), the route DSL (`RouteNode`,
+  `RootRouteNode` and the other `*RouteNode` types), and `createRootRoute`, `getRouter`,
+  `createAdaptvRouter` and `standaloneMemoryHistory`. These names are exported. A not-found screen is
+  now typed as a function component, so a `React.lazy` default export no longer typechecks there.
 
 - **Components no longer put class names of their own on their elements.** Their default look is plain
   CSS in `@layer adaptv.components`, keyed on `data-adaptv` / `data-part`, and what they lock is

@@ -137,6 +137,14 @@ describe("commands and surfaces", () => {
     expect(run(["preview", "all", "--target", "x"]).fault).toBe("conflict")
   })
 
+  it("rejects --output on a web build, which has no artifact to place", () => {
+    //It was accepted and ignored, so a deploy uploading the directory it named
+    //uploaded nothing. Device builds still take it.
+    expect(run(["build", "web", "-o", "out"]).fault).toBe("conflict")
+    expect(run(["build", "web", "--output", "out"]).fault).toBe("conflict")
+    expect(run(["build", "ios", "-o", "out"]).fault).toBeUndefined()
+  })
+
   it("rejects a stray extra argument", () => {
     expect(run(["dev", "ios", "extra"]).fault).toBe("excess-args")
   })

@@ -99,8 +99,10 @@ export function buildManifest(
     //The install's identity, and the reason it is here rather than left out:
     //without it a browser identifies the installed app by its start_url, so
     //changing the landing route turns an update into a SECOND installed app.
-    //Pinned to the origin root, which start_url also is, so the two agree.
-    id: "/",
+    //Pinned to the base, which start_url also is, so the two agree. It was a
+    //literal `/`, so under `base: "/app/"` the id sat outside the app's own
+    //path and every app on that origin shared one identity.
+    id: publicPath(base, ""),
     name: config.name,
     short_name: config.shortName ?? config.name,
     description: config.description,
