@@ -155,7 +155,7 @@ function ThemeToggle() {
     },
     {
       type: "p",
-      text: "To animate the chrome, use [useChromeTint](/docs/hooks-device). It writes only the meta tag, so it works on Android Chrome and iOS 18 only.",
+      text: "To animate the chrome, use [useChromeTint](/docs/hooks-device). It writes only the meta tag, so it works on Android Chrome and iOS 18 and earlier.",
     },
     { type: "h2", text: "What goes wrong" },
     {

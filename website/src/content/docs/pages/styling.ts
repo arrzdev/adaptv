@@ -12,7 +12,7 @@ export const page: DocPage = {
     },
     {
       type: "note",
-      text: "Today adaptv still needs Tailwind v4 in your app, and `@arrzdev/adaptv/tailwind.css` does not exist yet. The rest of this page works now: `className`, data attributes, tokens and the `--adaptv-*` variables. The plain-CSS setup and `tailwind.css` are coming. Until then, use the Tailwind setup with `styles.css`.",
+      text: "Today adaptv still needs Tailwind v4 in your app, and `@arrzdev/adaptv/tailwind.css` does not exist yet. Components still merge your `className` through `cn` (tailwind-merge), so a conflicting Tailwind class replaces the default rather than joining it. The rest of this page works now: `className`, data attributes, tokens and the `--adaptv-*` variables. The plain-CSS setup and `tailwind.css` are coming. Until then, use the Tailwind setup with `styles.css`.",
     },
     { type: "h2", text: "Setup" },
     {
@@ -114,7 +114,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: "While the keyboard is up, `--adaptv-keyboard-height` holds its height and `<html>` carries `data-keyboard-open`. Both exist only while a component that calls `useKeyboard` is mounted. The attribute is on `<html>`, so a child needs the parent form: `html[data-keyboard-open] .tab-bar { display: none }`. In Tailwind, write `[html[data-keyboard-open]_&]:hidden`. See [Keyboard](/docs/keyboard).",
+      text: "`--adaptv-keyboard-height` is always defined and rests at `0px`. While the keyboard is up and a component that calls `useKeyboard` is mounted, it holds the height and `<html>` carries `data-keyboard-open`. The attribute is on `<html>`, so a child needs the parent form: `html[data-keyboard-open] .tab-bar { display: none }`. In Tailwind, write `[html[data-keyboard-open]_&]:hidden`. See [Keyboard](/docs/keyboard).",
     },
     { type: "h2", text: "Platform and press state" },
     {
