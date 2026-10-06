@@ -1,9 +1,9 @@
-import type { NotFoundRouteComponent } from "@tanstack/react-router"
 import type { ComponentType } from "react"
 import type { UiThemePreference } from "#adaptv/capabilities/native-theme"
 import type { BootErrorProps } from "#adaptv/components/boot-error"
 import type { OfflineProps } from "#adaptv/components/offline"
 import type {
+  NotFoundScreenComponent,
   OrientationGuardProps,
   OrientationLock,
   SplashScreenProps,
@@ -435,7 +435,7 @@ export type AdaptvAppConfig = {
    */
   updateRequiredScreen?: ScreenThunk<UpdateRequiredProps>
   /** Full-screen 404. */
-  notFoundScreen?: () => Promise<{ default: NotFoundRouteComponent }>
+  notFoundScreen?: () => Promise<{ default: NotFoundScreenComponent }>
   /**
    * The app's offline UI. **One component, two call sites** — adaptv renders it
    * when the app can't boot far enough for a route to exist (a route chunk fails

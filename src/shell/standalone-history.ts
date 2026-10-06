@@ -1,5 +1,13 @@
+import type { RouterHistory } from "@tanstack/react-router"
 import { createMemoryHistory } from "@tanstack/react-router"
 import { isInstalledApp } from "#adaptv/utils/platform"
+
+/**
+ * The history `standaloneMemoryHistory` returns: the router's own, under adaptv's
+ * name. An interface rather than an alias, so a hover prints this name.
+ * → docs/decisions/facade-and-opacity.md §1
+ */
+export interface AdaptvHistory extends RouterHistory {}
 
 /**
  * History for `createRouter`: in-memory when installed (standalone PWA **or** a
@@ -16,9 +24,7 @@ import { isInstalledApp } from "#adaptv/utils/platform"
  * createRouter({ routeTree, history: standaloneMemoryHistory() })
  * ```
  */
-export function standaloneMemoryHistory():
-  | ReturnType<typeof createMemoryHistory>
-  | undefined {
+export function standaloneMemoryHistory(): AdaptvHistory | undefined {
   if (!isInstalledApp()) return undefined
   return createMemoryHistory({
     initialEntries: [window.location.pathname + window.location.search],
