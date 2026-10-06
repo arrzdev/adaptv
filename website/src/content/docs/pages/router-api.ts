@@ -4,7 +4,7 @@ export const page: DocPage = {
   slug: "router-api",
   title: "Router API",
   summary:
-    "Everything @arrzdev/adaptv/router and @arrzdev/adaptv/routes export: route files, loaders, navigation hooks and the route config helpers.",
+    "What @arrzdev/adaptv/router and @arrzdev/adaptv/routes export: route files, loaders, navigation hooks and the route config helpers.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
     'import { createFileRoute, notFound, useNavigate } from "@arrzdev/adaptv/router"',
@@ -12,148 +12,63 @@ export const page: DocPage = {
   blocks: [
     {
       type: "p",
-      text: "Routing in adaptv is TanStack Router, re-exported through a curated barrel. Every symbol on this page is there because someone decided it should be, and the behaviour of each is the engine's own. This page lists what is exported, the signatures, and the places adaptv differs. For the task-shaped version, read [Routing](/docs/routing).",
+      text: 'Read [Routing](/docs/routing) first. `@arrzdev/adaptv/routes` holds the route config helpers only: use it in `src/routing/config.ts`, which runs in Node at build time. `@arrzdev/adaptv/router` re-exports them with the rest. `@arrzdev/adaptv/server-entry` is the server entry for `render: "ssr"`.',
     },
     {
-      type: "table",
-      head: ["Import path", "Holds"],
-      rows: [
-        [
-          "`@arrzdev/adaptv/router`",
-          "Route files, hooks, navigation types. Also re-exports the route config helpers.",
-        ],
-        [
-          "`@arrzdev/adaptv/routes`",
-          "The route config helpers alone: `rootRoute`, `index`, `route`, `layout`, `physical`. Use this one in `src/routing/config.ts`, which runs in Node at build time and should not pull in the React router.",
-        ],
-        [
-          "`@arrzdev/adaptv/route-globals`",
-          "Ambient types: the global `createFileRoute` and the `chromeTint` route option. Added to your tsconfig by the [Vite plugin](/docs/vite-plugin).",
-        ],
-        [
-          "`@arrzdev/adaptv/root-route`",
-          "The root route module the route generator resolves. Framework plumbing, not for app code.",
-        ],
-      ],
-    },
-    { type: "h2", text: "What is deliberately absent" },
-    {
-      type: "ul",
-      items: [
-        "**Server functions, middleware and server-only request helpers.** They need a server and the native build has none. The build refuses them, see the [Vite plugin](/docs/vite-plugin).",
-        "**`Link`.** adaptv ships its own, which sends external URLs to the system browser and carries the tap-safe press behaviour. Import it from `@arrzdev/adaptv/components`, see [Link](/docs/link).",
-        "**The engine's own `createRootRoute`.** adaptv owns the root route and builds it from `adaptv.config.ts`. The `createRootRoute` this barrel exports is adaptv's, and takes a different argument.",
-        "Anything else the engine exports that is not listed below. Import it from the engine directly at your own risk: that import is not covered by adaptv's guarantees about the six targets.",
-      ],
+      type: "note",
+      text: "Not exported: server functions and request helpers (a native app has no server), `Link` (use [Link](/docs/link)), and `createLazyFileRoute` (lazy routes are not supported).",
     },
     { type: "h2", text: "Route config" },
     {
       type: "p",
-      text: "Routes are declared in one file, `src/routing/config.ts` by default (`router.routerConfig` in the [config](/docs/config)). File paths in it are relative to the routes directory, `src/routing` by default. The file names are yours: the playground uses `*.page.tsx` and `*.layout.tsx`.",
-    },
-    {
-      type: "code",
-      label: "src/routing/config.ts",
-      lang: "ts",
-      code: `import { index, layout, rootRoute, route } from "@arrzdev/adaptv/routes"
-
-export const routes = rootRoute([
-  layout("providers", "layouts/providers.layout.tsx", [
-    index("pages/home.page.tsx"),
-    route("/settings", "pages/settings.page.tsx"),
-    route("/docs/$slug", "pages/docs/doc.page.tsx"),
-  ]),
-])
-
-export default routes`,
+      text: "Paths are relative to `src/routing`.",
     },
     {
       type: "api",
       name: "rootRoute()",
-      signature: `function rootRoute(children?: VirtualRouteNode[]): VirtualRootRoute
-function rootRoute(file: string, children?: VirtualRouteNode[]): VirtualRootRoute`,
+      signature: `function rootRoute(children?: RouteNode[]): RootRouteNode
+function rootRoute(file: string, children?: RouteNode[]): RootRouteNode`,
       description:
-        "Declares the route tree. Pass only the children: adaptv wires in its own root route, which renders the document, the head, the theme script, your splash, the orientation guard, the not-found screen and the service-worker registration. Passing a file as the first argument ejects the root: that file is then yours, and should export a `Route` built with adaptv's `createRootRoute`. It throws when evaluated outside the Vite plugin.",
-      params: [
-        {
-          name: "children",
-          type: "VirtualRouteNode[]",
-          description: "The top-level routes and layouts.",
-        },
-        {
-          name: "file",
-          type: "string",
-          description:
-            'Eject only. The root route file, relative to the routes directory, for example `"layouts/_root.tsx"`.',
-        },
-      ],
+        "Declares the route tree. Pass children only: adaptv supplies the root route. With a file first, you own the root route, and that file exports a `Route` made with `createRootRoute`.",
     },
     {
       type: "api",
       name: "index()",
-      signature: "function index(file: string): IndexRoute",
-      description:
-        "The route shown at its parent's own path: `/` at the top level, or the bare path of the `route` it sits inside.",
+      signature: "function index(file: string): IndexRouteNode",
+      description: "The page at the parent's path. At the top level, `/`.",
     },
     {
       type: "api",
       name: "route()",
-      signature: `function route(path: string, file: string): Route
-function route(path: string, file: string, children: VirtualRouteNode[]): Route
-function route(path: string, children: VirtualRouteNode[]): Route`,
+      signature: `function route(path: string, file: string): PathRouteNode
+function route(path: string, file: string, children: RouteNode[]): PathRouteNode
+function route(path: string, children: RouteNode[]): PathRouteNode`,
       description:
-        "A route at `path`. A `$name` segment is a param. With `children`, the file is a parent that must render `<Outlet />`, and the children's paths nest under it. Without a file it is a path prefix with no component. Declaring `/lab` and `/lab/list` as two flat routes keeps `/lab` a real page with no outlet.",
+        "A route at `path`. `$name` makes a param. With a file and children, the file renders `<Outlet />`. With children only, `path` is a prefix and nothing renders for it.",
     },
     {
       type: "api",
       name: "layout()",
-      signature: `function layout(file: string, children: VirtualRouteNode[]): LayoutRoute
-function layout(id: string, file: string, children: VirtualRouteNode[]): LayoutRoute`,
+      signature: `function layout(file: string, children: RouteNode[]): LayoutRouteNode
+function layout(id: string, file: string, children: RouteNode[]): LayoutRouteNode`,
       description:
-        "A pathless wrapper: the file renders around its children through `<Outlet />` and adds nothing to the URL. This is where an app-wide provider tree goes, since there is no `providers` key in the config. Give it an `id` when two layouts would otherwise derive the same one.",
+        'A wrapper that adds nothing to the URL. Its route id is `id` with a leading underscore: `layout("providers", …)` is `/_providers`. Give an `id` when two layouts share a file.',
     },
     {
       type: "api",
       name: "physical()",
-      signature: `function physical(directory: string): PhysicalSubtree
-function physical(pathPrefix: string, directory: string): PhysicalSubtree`,
+      signature: `function physical(directory: string): PhysicalRouteNode
+function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
       description:
-        "Mounts a directory of route files that follow the engine's file-based naming convention, at `pathPrefix` or at the current level. Useful for a large section you would sooner not list route by route.",
+        "Mounts a directory of file-named routes at `pathPrefix`, or at the current level.",
     },
     { type: "h2", text: "Route files" },
     {
-      type: "p",
-      text: "A route file exports `Route`. You can write it with no import at all: `createFileRoute` is declared globally for the type checker, and the route generator writes the `@arrzdev/adaptv/router` import into the file on its next pass. Importing it yourself is fine too.",
-    },
-    {
-      type: "code",
-      label: "src/routing/pages/docs/doc.page.tsx",
-      lang: "tsx",
-      code: `import { createFileRoute, notFound } from "@arrzdev/adaptv/router"
-
-export const Route = createFileRoute("/docs/$slug")({
-  loader: ({ params }) => {
-    const page = findPage(params.slug)
-    if (!page) throw notFound()
-    return { title: page.title, body: page.body }
-  },
-  head: ({ loaderData }) => ({
-    meta: [{ title: loaderData?.title ?? "Docs" }],
-  }),
-  component: DocPage,
-})
-
-function DocPage() {
-  const { title, body } = Route.useLoaderData()
-  return <Article title={title} body={body} />
-}`,
-    },
-    {
       type: "api",
       name: "createFileRoute()",
-      signature: "function createFileRoute(path)(options): Route",
+      signature: "function createFileRoute(id)(options)",
       description:
-        "Creates the route for a file. `path` must match the path the route config gives this file: the generator keeps it in sync, and it is what types `params`, `search` and the `Route.use*` hooks. The options are the engine's. The ones most apps use are below.",
+        "Makes the route for one file. `id` is the route id: the path, or `/_layout/path` inside a layout. It types `params`, `search` and the `Route.use*` hooks. The file needs no import: adaptv writes it.",
       params: [
         {
           name: "component",
@@ -162,94 +77,76 @@ function DocPage() {
         },
         {
           name: "loader",
-          type: "(ctx: { params, location, abortController, ... }) => data | Promise<data>",
+          type: "(ctx: { params, … }) => data | Promise<data>",
           description:
-            'Loads the route\'s data before it renders. It is isomorphic: under `render: "ssr"` it runs on the server for the first request and on the client for every navigation after it, and in a native app it only ever runs on the device. So fetch over the network and touch nothing that exists on one side only. Throw `notFound()` or `redirect()` from it.',
+            'Loads data before render. Under `render: "ssr"` it runs on the server for the first request, then in the browser. In a native app it runs on the device.',
         },
         {
           name: "beforeLoad",
           type: "(ctx) => context | void",
           description:
-            "Runs before the loader, parent first. The place for an auth check that throws `redirect()`.",
+            "Runs before the loader, parent first. Throw `redirect()` to guard a route. Its return value reaches the loader as `context`.",
         },
         {
           name: "head",
-          type: "(ctx: { loaderData, params, ... }) => { meta?, links?, scripts? }",
+          type: "(ctx: { loaderData, params }) => { meta?, links?, scripts? }",
           description:
-            "Per-route head tags, merged over the head adaptv builds from the config. `meta: [{ title }]` sets the document title.",
+            "Head tags for this route. `meta: [{ title }]` sets the title.",
         },
         {
           name: "validateSearch",
           type: "(search: Record<string, unknown>) => Search",
-          description:
-            "Parses and types the query string for `Route.useSearch()`.",
+          description: "Parses the query string. Types `Route.useSearch()`.",
         },
         {
           name: "pendingComponent, errorComponent, notFoundComponent",
           type: "ComponentType",
           description:
-            "Per-route states. adaptv installs no error boundary of its own, so a route that throws is caught by your `errorComponent`, or by whatever boundary you put around it.",
+            "Per-route states. adaptv adds no error boundary of its own.",
         },
         {
           name: "chromeTint",
           type: "string",
           description:
-            "adaptv's own option: the colour the browser chrome takes on this route (the toolbar above a mobile web page, the bands around an installed app). It must be a literal string, written inline or held by a top-level `const` in the same file, because adaptv reads it from the source at build time to paint it on the first frame of a cold launch. A computed value is a build error. One colour for both themes. A route that declares nothing gets `themeColor`, never a parent's tint. See [Theming](/docs/theming).",
+            "The browser chrome colour. Write a string inline, or a top-level `const` in the same file. Any other value is a build error. See [Theming](/docs/theming).",
         },
       ],
       returns:
-        "The route object. Export it as `Route`. Its bound hooks are typed to this route: `Route.useLoaderData()`, `Route.useParams()`, `Route.useSearch()`, `Route.useRouteContext()`, `Route.useNavigate()`.",
+        "The route. Export it as `Route`. Its hooks are typed to the route: `Route.useLoaderData()`, `useParams()`, `useSearch()`, `useRouteContext()`, `useNavigate()`.",
     },
     {
       type: "note",
       tone: "warn",
-      text: "A `server: { handlers }` key on these options is refused by the build. A native app has no server to run it on. Move the handler to your API, or use a `loader`.",
+      text: "The build refuses a `server: { handlers }` key. Use your own API, or a `loader`.",
     },
-    { type: "h2", text: "Signalling from a loader" },
+    { type: "h2", text: "Signals" },
     {
       type: "api",
       name: "notFound()",
       signature:
-        "function notFound(options?: { data?: unknown; routeId?: string }): NotFoundError",
+        "function notFound(options?: NotFoundOptions): NotFoundOptions",
       description:
-        'Throw it from a `loader` or `beforeLoad` when the thing the URL names does not exist. adaptv sets `notFoundMode: "root"`, so it renders the `notFoundScreen` from your config at the root, full screen, unless you override `notFoundMode` in the `router` block.',
+        "Throw it from a `loader` or `beforeLoad` when the URL names nothing. The app shows your `notFoundScreen`. `options.data` reaches it as a prop.",
     },
     {
       type: "api",
       name: "redirect()",
       signature:
-        "function redirect(options: { to, params?, search?, replace?, ... }): Redirect",
-      description:
-        "Throw it from a `loader` or `beforeLoad` to send the navigation somewhere else.",
+        "function redirect(options: { to, params?, search?, replace? })",
+      description: "Throw it to send the navigation elsewhere. Checks `to`.",
     },
     {
       type: "api",
       name: "isRedirect()",
-      signature: "function isRedirect(value: unknown): value is Redirect",
+      signature: "function isRedirect(value: unknown): value is RouteRedirect",
       description:
-        "Tells a thrown redirect from a real error inside your own `try`/`catch`, so you can rethrow it.",
+        "True for a thrown redirect. Use it in a `catch` to rethrow.",
     },
-    { type: "h2", text: "Rendering children" },
     {
       type: "api",
       name: "Outlet",
       signature: "function Outlet(): ReactNode",
-      description:
-        "Renders the matched child route. Every `layout` file and every `route` with children needs one.",
-    },
-    {
-      type: "code",
-      label: "src/routing/layouts/providers.layout.tsx",
-      lang: "tsx",
-      code: `import { createFileRoute, Outlet } from "@arrzdev/adaptv/router"
-
-export const Route = createFileRoute("/_providers")({
-  component: () => (
-    <QueryProvider>
-      <Outlet />
-    </QueryProvider>
-  ),
-})`,
+      description: "Renders the matched child route. Every layout needs one.",
     },
     { type: "h2", text: "Hooks" },
     {
@@ -258,152 +155,92 @@ export const Route = createFileRoute("/_providers")({
       rows: [
         [
           "`useNavigate()`",
-          "`navigate({ to, params?, search?, replace? })`. `to` is checked against your route tree.",
+          "`navigate({ to, params?, search?, replace? })`. Checks `to`.",
         ],
         [
           "`useRouter()`",
-          "The router: `router.navigate`, `router.history.back()`, `router.invalidate()` to re-run loaders, `router.preloadRoute()`.",
+          "The router: `navigate`, `history.back()`, `invalidate()` (re-runs loaders), `preloadRoute()`.",
         ],
         [
           "`useRouterState({ select? })`",
-          "Router state (`location`, `status`, `matches`), narrowed by `select` so the component re-renders only on what it reads.",
+          "`location`, `status` and `matches`. `select` limits re-renders.",
         ],
-        [
-          "`useLocation()`",
-          "The current `ParsedLocation`: `pathname`, `search`, `hash`, `href`.",
-        ],
-        ["`useParams({ from | strict: false })`", "Path params."],
-        [
-          "`useSearch({ from | strict: false })`",
-          "The validated query string.",
-        ],
+        ["`useLocation()`", "`pathname`, `search`, `hash`, `href`."],
+        ["`useParams({ from })`", "The path params."],
+        ["`useSearch({ from })`", "The validated query string."],
         [
           "`useLoaderData({ from })`",
-          "A route's loader data. Inside the route's own file, prefer `Route.useLoaderData()`.",
+          "One route's loader data. In the route's own file, use `Route.useLoaderData()`.",
         ],
         [
           "`useMatch({ from, shouldThrow? })`",
-          "One route's match, or `undefined` with `shouldThrow: false`.",
+          "One route's match. With `shouldThrow: false`, `undefined` when inactive.",
         ],
-        [
-          "`useMatches()`",
-          "Every active match, root first. Useful for breadcrumbs.",
-        ],
+        ["`useMatches()`", "Every active match, root first."],
         [
           "`useCanGoBack()`",
-          "`true` when there is an in-app history entry to go back to. Use it to decide between a back arrow and a home button, which matters in an installed app with no browser back button.",
+          "`true` when an earlier in-app history entry exists.",
         ],
       ],
-    },
-    {
-      type: "code",
-      label: "back-button.tsx",
-      lang: "tsx",
-      code: `import { Pressable } from "@arrzdev/adaptv/components"
-import { useCanGoBack, useNavigate, useRouter } from "@arrzdev/adaptv/router"
-
-function BackButton() {
-  const router = useRouter()
-  const navigate = useNavigate()
-  const canGoBack = useCanGoBack()
-  return (
-    <Pressable
-      onPress={() => (canGoBack ? router.history.back() : navigate({ to: "/" }))}
-    >
-      Back
-    </Pressable>
-  )
-}`,
-    },
-    {
-      type: "p",
-      text: "For the Android hardware back button and the back chain of overlays, see [Lifecycle hooks](/docs/hooks-lifecycle).",
     },
     { type: "h2", text: "Types" },
     {
       type: "table",
       head: ["Type", "Use"],
       rows: [
-        [
-          "`NavigateOptions`",
-          "The argument of `navigate()`. Annotate a helper that forwards to it.",
-        ],
-        [
-          "`ToOptions`",
-          "The `to`, `params`, `search` part alone. Annotate a prop that holds a destination.",
-        ],
+        ["`NavigateOptions`", "The argument of `navigate()`."],
+        ["`ToOptions`", "A destination alone: `to`, `params`, `search`."],
         ["`ParsedLocation`", "What `useLocation()` returns."],
-        [
-          "`RegisteredRouter`",
-          "The type of your app's router, with its route tree.",
-        ],
-        [
-          "`Register`, `FileRoutesByPath`, `CreateFileRoute`",
-          "Interfaces the generated route tree augments on this module. They are exported so that augmentation has something to attach to.",
-        ],
+        ["`RegisteredRouter`", "Your app's router, with its route tree."],
         [
           "`UpdatableRouteOptionsExtensions`",
-          "The interface to augment, on `@arrzdev/adaptv/router`, when you want to add your own typed route option. adaptv adds `chromeTint` the same way.",
-        ],
-        [
-          "`getRouter`",
-          "Type-only. The generated route tree binds `Register` to its return type.",
+          "Augment it on `@arrzdev/adaptv/router` to add your own typed route option. adaptv adds `chromeTint` this way.",
         ],
       ],
     },
     { type: "h2", text: "Router options" },
     {
       type: "p",
-      text: "You do not construct the router. adaptv builds it from the route tree and the `router` block of [adaptv.config.ts](/docs/config): every key there that is not a build path is forwarded to the router.",
+      text: "adaptv builds the router from the route tree and the `router` block of [adaptv.config.ts](/docs/config). It passes every key that is not a build path to the router. Only plain values survive. A function or component is dropped without a warning.",
     },
-    {
-      type: "code",
-      label: "adaptv.config.ts",
-      lang: "ts",
-      code: `router: {
-  memoryHistoryInStandalone: true,
-  defaultPreload: "intent",
-  defaultPreloadStaleTime: Number.POSITIVE_INFINITY,
-}`,
-    },
-    { type: "h2", text: "Framework plumbing" },
+    { type: "h2", text: "Eject" },
     {
       type: "p",
-      text: "These are exported for adaptv's own generated entry and for apps that eject it. App code does not normally call them.",
+      text: "Most apps never use these. They serve an ejected `src/router.tsx` or root route file.",
     },
     {
       type: "api",
       name: "createAdaptvRouter()",
-      signature: `function createAdaptvRouter<TRouteTree>(options: {
+      signature: `function createAdaptvRouter<TRouteTree extends AdaptvRouteTree>(options: {
   routeTree: TRouteTree
   memoryHistoryInStandalone?: boolean
   options?: Record<string, unknown>
-}): Router<TRouteTree>`,
+}): AdaptvRouter<TRouteTree>`,
       description:
-        'Builds the app router the way adaptv does: `notFoundMode: "root"` unless `options` sets it, and in-memory history when installed if `memoryHistoryInStandalone` is on. Call it from an ejected `src/router.tsx`, inside an exported `getRouter()`.',
+        'Builds the router as adaptv does. It sets `notFoundMode: "root"` and uses in-memory history when installed and `memoryHistoryInStandalone` is on. `options` overrides both, and `options.history` overrides the history. It also turns native deep links into navigations. A router built another way loses them. Call it from `getRouter()` in `src/router.tsx`.',
     },
     {
       type: "api",
       name: "standaloneMemoryHistory()",
       signature:
-        "function standaloneMemoryHistory(): RouterHistory | undefined",
+        "function standaloneMemoryHistory(): AdaptvHistory | undefined",
       description:
-        "In-memory history seeded with the current URL when the app is installed (home-screen PWA or native), and `undefined` in a browser tab, which leaves the default browser history in place. With memory history the OS edge-swipe-back has no entry to navigate, so going back stays under the app's control.",
+        "In-memory history when the app is installed (PWA or native). It starts at the current path and query. The hash is dropped. In a browser tab it returns `undefined`.",
     },
     {
       type: "api",
       name: "createRootRoute()",
       signature:
-        "function createRootRoute(config: CreateRootRouteConfig): RootRoute",
+        "function createRootRoute(config: CreateRootRouteConfig): AdaptvRootRoute",
       description:
-        "adaptv's root route factory, for an ejected root file. It takes the head config (`title`, `description`, `themeColorLight`, `themeColorDark`, `lang`, `allowZoom`, `openGraph`, `twitter`, `stylesEntryPoint`) and the shell components (`splashScreenComponent`, `orientationGuardComponent`, `notFoundComponent`, `offlineComponent`, `updateRequiredComponent`, `RootDocument`), plus `patches` and `ui`. It does not read `adaptv.config.ts`: once you eject the root, keeping those values in step with the config is on you.",
+        "The root route for an ejected root file. It does not read `adaptv.config.ts`: you keep the values in step. Required: `title`, `themeColorLight`, `themeColorDark`. Also takes `description`, `lang`, `allowZoom`, `openGraph`, `twitter`, `meta`, `links`, `manifestPath`, `headScripts`, `stylesEntryPoint`, `htmlClassName`, `htmlAttrs`, `shellClassName`, `defaultThemePreference`, `notFoundHomeTo`, `splashScreenInBrowser`, `updateRequiredAfterDays`, `patches`, `ui`, and the screens `splashScreenComponent`, `orientationGuardComponent`, `notFoundComponent`, `offlineComponent`, `updateRequiredComponent` and `RootDocument`.",
     },
     {
       type: "api",
       name: "createRouter",
       signature: "createRouter(options)",
       description:
-        "The engine's constructor, exported so generated code has an adaptv-shaped import. Prefer `createAdaptvRouter`.",
+        "The low-level constructor, exported for generated code. Use `createAdaptvRouter`.",
     },
   ],
 }
