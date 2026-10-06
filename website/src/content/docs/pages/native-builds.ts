@@ -31,7 +31,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: "`doctor` prints one row per requirement and a fix for each failure. It checks Node, the Android SDK, JDK and `adb`, and on macOS `xcodebuild` and CocoaPods. Red native rows do not matter for a web-only app. It also flags a `WKAppBoundDomains` key in the iOS `Info.plist` (remove it), an Android target SDK below 36 (run any Android command), and a missing `PrivacyInfo.xcprivacy`.",
+      text: "`doctor` prints one row per requirement and a fix for each failure. It checks Node, the Android SDK, JDK and `adb`, and on macOS `xcodebuild` and CocoaPods. Red native rows do not matter for a web-only app. It also flags an Android target SDK below 36 (run any Android command), a missing `PrivacyInfo.xcprivacy`, and a `WKAppBoundDomains` key in the iOS `Info.plist`, which blocks the native bridge. The only fix for that key is to remove it from `.adaptv/ios/App/App/Info.plist`.",
     },
     { type: "h2", text: "Turn native on" },
     {
