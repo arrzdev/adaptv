@@ -9,6 +9,15 @@ API.
 
 ### Changed
 
+- **adaptv needs Node 22.15 or newer.** It was 22.12. This breaks Node 22.12 to 22.14: adaptv now
+  edits two of its dependencies in memory as Node loads them, with `module.registerHooks`, which
+  arrived in 22.15.
+- **A created app carries no patch for the router.** `pnpm create adaptv` no longer writes
+  `patches/@tanstack__router-generator@1.167.21.patch`, `patches/@tanstack__start-plugin-core@1.171.24.patch`
+  or their two `patchedDependencies` lines; adaptv makes those changes itself. An existing app must
+  delete both files and both lines and reinstall; until it does, the build stops with an error that
+  names them.
+
 - **An app imports only what its own `package.json` lists.** Importing one of adaptv's
   dependencies (the router included) from app source fails the build and the dev server unless
   the app lists that package itself. It used to resolve: npm hoists adaptv's dependencies, and

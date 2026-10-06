@@ -153,7 +153,6 @@ describe("adaptv() — the static-host files follow the target, not the render m
 
     const envKeys = [
       "ADAPTV_ROUTER_PKG",
-      "ADAPTV_START_PKG",
       "TSR_TMP_DIR",
       "ADAPTV_ROOT_ROUTE_FILE",
     ]
