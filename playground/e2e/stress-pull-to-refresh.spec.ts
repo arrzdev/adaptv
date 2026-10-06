@@ -559,7 +559,7 @@ test.describe("PullToRefresh under stress", () => {
       .toBeLessThanOrEqual(1)
     await expect
       .poll(
-        () => page.locator(`${PTR_ROOT} > .pointer-events-none`).count(),
+        () => page.locator(`${PTR_ROOT} > [data-part="indicator"]`).count(),
         {
           message: "the spinner track must unmount once idle",
           timeout: 2000,
@@ -567,7 +567,7 @@ test.describe("PullToRefresh under stress", () => {
       )
       .toBe(0)
     expect(
-      await page.locator(`${PTR_ROOT} .animate-spin`).count(),
+      await page.locator(`${PTR_ROOT} [data-spinning]`).count(),
       "nothing may be spinning",
     ).toBe(0)
     const inline = await contentInlineTransform(page)
