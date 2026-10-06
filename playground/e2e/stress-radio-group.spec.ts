@@ -109,12 +109,33 @@ async function expectRoving(
 }
 
 /**
- * Where focus is after a CLICK on a radio: the radio on Chromium; on WebKit a
- * click focuses no radio (nor a button) — Safari's own rule, which the group does
- * not fight ("nothing is re-implemented") — so it stays where it was, the body.
+ * Whether a CLICK on a radio focuses it is the engine's rule, which the group
+ * does not fight ("nothing is re-implemented"): Chromium and Linux WebKit focus
+ * the radio, macOS WebKit (Safari) focuses no radio, so focus stays on the body.
+ * The browser name cannot tell the two WebKits apart, so the rule is read from a
+ * plain `<input type="radio">` clicked on the same page.
  */
-const focusAfterClick = (browserName: string, value: string) =>
-  browserName === "webkit" ? "BODY" : value
+const clickFocusesRadio = async (page: Page) => {
+  await page.evaluate(() => {
+    const probe = document.createElement("input")
+    probe.type = "radio"
+    probe.id = "click-focus-probe"
+    probe.style.cssText =
+      "position:fixed;left:8px;top:8px;margin:0;z-index:2147483647"
+    document.body.append(probe)
+  })
+  await page.locator("#click-focus-probe").click()
+  return page.evaluate(() => {
+    const probe = document.getElementById("click-focus-probe")
+    const focused = document.activeElement === probe
+    probe?.blur()
+    probe?.remove()
+    return focused
+  })
+}
+
+const focusAfterClick = (focuses: boolean, value: string) =>
+  focuses ? value : "BODY"
 
 test.describe("RadioGroup under stress", () => {
   test.beforeEach(async ({ page }) => {
@@ -328,8 +349,8 @@ test.describe("RadioGroup under stress", () => {
 
   test("rapid clicks: alternating radios report each, the same radio twice reports once", async ({
     page,
-    browserName,
   }) => {
+    const focuses = await clickFocusesRadio(page)
     const changes = page.getByTestId("controlled-changes")
     const yearly = radio(page, "Billing", "Yearly")
     const monthly = radio(page, "Billing", "Monthly")
@@ -342,7 +363,7 @@ test.describe("RadioGroup under stress", () => {
       "Billing",
       "monthly",
       "ten alternating clicks",
-      focusAfterClick(browserName, "monthly"),
+      focusAfterClick(focuses, "monthly"),
     )
     await expect(changes).toHaveText("10")
 
@@ -354,7 +375,7 @@ test.describe("RadioGroup under stress", () => {
       "Billing",
       "yearly",
       "a same-radio double click",
-      focusAfterClick(browserName, "yearly"),
+      focusAfterClick(focuses, "yearly"),
     )
     await expect(changes).toHaveText("11")
 
@@ -394,8 +415,8 @@ test.describe("RadioGroup under stress", () => {
 
   test("a refusing owner under a burst: the DOM stays on the owner's value after every click", async ({
     page,
-    browserName,
   }) => {
+    const focuses = await clickFocusesRadio(page)
     await page
       .getByRole("button", { name: "freeze the controlled group" })
       .click()
@@ -414,7 +435,7 @@ test.describe("RadioGroup under stress", () => {
         stamped: ["monthly"],
         tabindexed: 0,
         ariaChecked: 0,
-        focused: focusAfterClick(browserName, "yearly"),
+        focused: focusAfterClick(focuses, "yearly"),
       })
     }
     await expect(page.getByTestId("controlled-value")).toHaveText(
