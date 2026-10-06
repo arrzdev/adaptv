@@ -25,7 +25,7 @@ import type {
 } from "#adaptv/hooks/use-gesture-engine"
 import { useHapticTick } from "#adaptv/hooks/use-haptic-tick"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 // Buttons are small touch targets, so widen the reentrant press region well past
 // the engine's default margin — a normal thumb-roll on release (~35px, measured on
@@ -562,7 +562,7 @@ const Button = forwardRef<ButtonHandle, ButtonProps>(function Button(
     ),
   })
 
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: pressLockedStyle,

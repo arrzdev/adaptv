@@ -1,4 +1,3 @@
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import { LabBadge } from "@/components/lab/lab-kit"
 import type { LabTarget } from "@/components/lab/lab-target"
@@ -7,6 +6,7 @@ import {
   LAB_TARGETS,
   useLabTarget,
 } from "@/components/lab/lab-target"
+import { cn } from "@/utils/cn"
 
 /**
  * The block that turns a demo into a test.

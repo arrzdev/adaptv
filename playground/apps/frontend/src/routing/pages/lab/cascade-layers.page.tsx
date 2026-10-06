@@ -85,15 +85,15 @@ function LabCascadeLayersPage() {
 
       <LabSection
         title="3 · A utility beats a primitive's base; nothing beats its locked"
-        description="Inside a primitive the split is enforced by mergeStyles, not by the cascade: `base` is what the component would look like if you said nothing, and a consumer class in the same conflict group replaces it. `locked` is applied last and cannot be replaced, because it is structure the component's own behaviour depends on."
+        description="Inside a primitive the split is the cascade plus inline style: the default look is a rule in `@layer adaptv.components`, which any consumer class beats, and `locked` is inline style the primitive writes last, which no class can replace, because it is structure the component's own behaviour depends on."
       >
         <LockedProbe />
         <LabCaveat>
-          The `base` half of this is tailwind-merge, not layer order — the
-          conflicting default class is <em>removed</em> rather than
-          out-cascaded. Worth knowing when you debug it: if a base class
-          survives an override, the fix is a missing conflict group in{" "}
-          <code>utils/cn.ts</code>, not a layer.
+          Nothing is merged: adaptv adds no class of its own to the
+          element, so there is no class of adaptv's for yours to conflict
+          with. If a default survives an override, the default escaped its
+          layer; if a lock moves, it is not inline
+          (docs/decisions/styling.md §2).
         </LabCaveat>
       </LabSection>
     </LabPage>

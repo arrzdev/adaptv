@@ -142,16 +142,13 @@ describe("Skeleton render", () => {
     expect(el.getAttribute("aria-hidden")).toBe("true")
   })
 
-  it("merges the slot's className with Skeleton's instead of concatenating", () => {
-    //both are the CONSUMER tier; Skeleton's own prop is the more local, so it wins
-    //the per-property tie — and only ONE of the pair reaches the DOM
+  it("joins the slot's className and Skeleton's, the slot's first", () => {
+    //both are the CONSUMER tier, so both reach the DOM as written — and nothing of
+    //adaptv's joins them
     const el = firstEl(
       <Skeleton render={<span className="h-2" />} className="h-4" />,
     )
-    expect(hasClass(el, "h-4")).toBe(true)
-    expect(hasClass(el, "h-2")).toBe(false)
-    //and nothing of adaptv's joins them
-    expect(el.className).toBe("h-4")
+    expect(el.className).toBe("h-2 h-4")
   })
 
   it("loading={false} ignores the render element too", () => {

@@ -128,7 +128,7 @@ function LabPressablePage() {
 
       <LabSection
         title="render — a prop, not asChild"
-        description="Render any element and keep the engine. The element's own className merges through mergeStyles, so the structural class still wins."
+        description="Render any element and keep the engine. The element's own className is joined with yours, and the structural style stays inline, so it still wins."
       >
         <Pressable
           //no children on the Pressable: the element keeps its own

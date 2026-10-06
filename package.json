@@ -111,15 +111,13 @@
       "types": "./dist/vite.d.mts",
       "default": "./dist/vite.mjs"
     },
-    "./styles.css": "./dist/styles/index.css"
+    "./styles.css": "./dist/styles/index.css",
+    "./tailwind.css": "./dist/styles/tailwind.css"
   },
   "peerDependencies": {
-    "clsx": "2.1.1",
     "motion": "12.35.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tailwind-merge": "3.4.0",
-    "tailwindcss": "4.2.4",
     "vite": "8.0.11"
   },
   "dependencies": {
@@ -175,14 +173,12 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitest/coverage-v8": "4.1.2",
-    "clsx": "2.1.1",
     "fake-indexeddb": "6.2.5",
     "happy-dom": "20.11.2",
     "motion": "12.35.0",
     "publint": "0.3.22",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tailwind-merge": "3.4.0",
     "tailwindcss": "4.2.4",
     "tsdown": "0.22.12",
     "typescript": "5.9.3",

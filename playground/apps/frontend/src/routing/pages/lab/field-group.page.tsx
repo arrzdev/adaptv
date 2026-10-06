@@ -5,7 +5,6 @@ import {
   Switch,
 } from "@arrzdev/adaptv/components"
 import { createFileRoute } from "@arrzdev/adaptv/router"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -19,6 +18,7 @@ import {
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
 import { Checkbox } from "@/components/ui"
+import { cn } from "@/utils/cn"
 
 export const Route = createFileRoute("/_providers/lab/field-group")({
   component: LabFieldGroupPage,

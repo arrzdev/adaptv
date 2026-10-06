@@ -1,8 +1,8 @@
 import type { InputHandle } from "@arrzdev/adaptv/components"
 import { Input as BaseInput } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { KeyboardEvent } from "react"
 import { forwardRef, useId } from "react"
+import { cn } from "@/utils/cn"
 
 const TEXT_INPUT_SHELL_CLASSNAME = cn(
   "block rounded-md ring-1 ring-inset ring-border bg-surface transition-[box-shadow]",

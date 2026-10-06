@@ -5,7 +5,7 @@ import { Button } from "#adaptv/components/button"
 import { useKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useLayoutViewportShrink } from "#adaptv/hooks/use-layout-viewport-shrink"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /** Which screen corner {@link Fab} sits in. `end`/`start` are inline-relative, so RTL is right by construction. */
 export type FabPlacement = "end" | "center" | "start"
@@ -221,7 +221,7 @@ export const Fab = forwardRef<ButtonHandle, FabProps>(function Fab(
   const reducedMotion = useReducedMotion()
 
   //`className` is the consumer's alone; Fab adds no class (its look is styles/fab.css)
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: {

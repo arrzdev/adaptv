@@ -732,9 +732,9 @@ describe("Select.Option — the press-target contract", () => {
         className: "touch-none touch-manipulation",
         disabled,
       })
-      //the consumer's class lands (tailwind-merge still resolves the consumer's own
-      //two conflicting tokens to the last); the lock is inline, above any class
-      expect(el.className).toBe("touch-manipulation")
+      //the consumer's classes land as written (adaptv joins, never merges); the lock
+      //is inline, above any class
+      expect(el.className).toBe("touch-none touch-manipulation")
       expect(el.style.touchAction).toBe("pan-x pan-y pinch-zoom")
       expect(el.style.userSelect).toBe(disabled ? "none" : "")
     }

@@ -1,7 +1,7 @@
 import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { PRIORITY_LEVELS } from "@/data/collections/todos/priority"
+import { cn } from "@/utils/cn"
 
 type PriorityOption = {
   value: number | null

@@ -1,5 +1,4 @@
 import type { SwipeableGroupHandle } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { DragEndEvent, DragStartEvent, Modifier } from "@dnd-kit/core"
 import { closestCenter, DndContext, DragOverlay } from "@dnd-kit/core"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
@@ -17,6 +16,7 @@ import { AppSwipeable } from "@/components/ui"
 import type { Todo } from "@/data/collections/todos/schema"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
 import { useSortableReorder } from "@/hooks/use-sortable-reorder"
+import { cn } from "@/utils/cn"
 
 //a click landing within this window after a drop is the drag's trailing click —
 //swallow it so a reordered card doesn't also open

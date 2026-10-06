@@ -1,7 +1,7 @@
 import type { TextAreaHandle } from "@arrzdev/adaptv/components"
 import { TextArea as BaseTextArea } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { forwardRef } from "react"
+import { cn } from "@/utils/cn"
 
 //no min-h — the base primitive's `rows` floor owns the empty height
 const TEXT_AREA_CLASSNAME = cn(

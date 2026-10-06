@@ -23,7 +23,7 @@ import {
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link Switch}. Attach with `ref`.
@@ -265,7 +265,7 @@ function SwitchThumb({ className }: SwitchThumbProps) {
   //derived. It is state, not look — a consumer pinning `transform` inline would
   //freeze the thumb on one side while the control kept toggling. Colour and shape
   //stay `className`.
-  const thumb = mergeStyles({
+  const thumb = composeStyles({
     className,
     lockedStyle: {
       ...SWITCH_THUMB_LOCKED_LAYOUT_STYLE,
@@ -392,7 +392,7 @@ const Switch = forwardRef<SwitchHandle, SwitchProps>(function Switch(
   //(WebKit 240917) — see {@link PRESS_TARGET_LOCKED_STYLE}, and
   //{@link PRESS_TARGET_DISABLED_LOCKED_STYLE} for why a disabled track keeps the same
   //touch pass-through rather than going `touch-action: none`.
-  const trackStyles = mergeStyles({
+  const trackStyles = composeStyles({
     className,
     style,
     lockedStyle: {
