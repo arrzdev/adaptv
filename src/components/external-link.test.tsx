@@ -81,3 +81,30 @@ describe("ExternalLink", () => {
     expect(onClick).toHaveBeenCalledOnce()
   })
 })
+
+describe("ExternalLink — style tiers", () => {
+  it("adds no class of its own, names its part, and locks the touch pass-through inline", () => {
+    const a = render(
+      <ExternalLink
+        href="https://x.com"
+        className="touch-none text-blue-600"
+        style={{ touchAction: "none", color: "rgb(255, 0, 0)" }}
+      >
+        go
+      </ExternalLink>,
+    ).getByRole("link")
+    expect(a.getAttribute("data-adaptv")).toBe("external-link")
+    expect(a.getAttribute("data-part")).toBe("root")
+    //the consumer's className, untouched — and nothing of adaptv's beside it
+    expect(a.className).toBe("touch-none text-blue-600")
+    expect(a.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(a.style.color).toBe("rgb(255, 0, 0)")
+  })
+
+  it("writes no class attribute when the consumer passes none", () => {
+    const a = render(
+      <ExternalLink href="https://x.com">go</ExternalLink>,
+    ).getByRole("link")
+    expect(a.hasAttribute("class")).toBe(false)
+  })
+})

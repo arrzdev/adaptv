@@ -86,6 +86,7 @@ describe("Input — bare vs grouped", () => {
     const { container } = render(<Input aria-label="q" />)
     expect(container.firstElementChild?.tagName).toBe("INPUT")
     expect(field().getAttribute("data-adaptv")).toBe("input")
+    expect(field().getAttribute("data-part")).toBe("root")
     //native inline-block width: ~20 characters unless the consumer sizes it
     expect(field().getAttribute("size")).toBe("20")
   })
@@ -109,10 +110,15 @@ describe("Input — bare vs grouped", () => {
     const label = container.firstElementChild as HTMLLabelElement
     expect(label.tagName).toBe("LABEL")
     expect(label.getAttribute("data-adaptv")).toBe("input")
+    expect(label.getAttribute("data-part")).toBe("root")
     expect(label.htmlFor).toBe("q")
     expect(field().id).toBe("q")
     //stamped once: `[data-adaptv="input"]` must not match two nested elements
     expect(field().hasAttribute("data-adaptv")).toBe(false)
+    expect(
+      container.querySelectorAll('[data-adaptv="input"]'),
+    ).toHaveLength(1)
+    expect(field().getAttribute("data-part")).toBe("field")
     //grouped, the field gives way to the slots rather than claiming 20 characters
     expect(field().hasAttribute("size")).toBe(false)
   })
@@ -196,10 +202,82 @@ describe("Input.Leading / Input.Trailing — content detection", () => {
     )
     const [, trailing, leading] = Array.from(
       (container.firstElementChild as HTMLElement).children,
+    ) as HTMLElement[]
+    expect(leading?.getAttribute("data-part")).toBe("leading")
+    expect(trailing?.getAttribute("data-part")).toBe("trailing")
+    //each slot has its own scope, so `[data-adaptv="input"]` stays the one shell
+    expect(leading?.getAttribute("data-adaptv")).toBe("input-leading")
+    expect(trailing?.getAttribute("data-adaptv")).toBe("input-trailing")
+    //the order IS the slot contract, so it is locked inline
+    expect(leading?.style.order).toBe("1")
+    expect(trailing?.style.order).toBe("3")
+    expect(field().style.order).toBe("2")
+  })
+
+  it("hands a slot the consumer's class alone and locks order and shrink inline, above any class", () => {
+    const { container } = render(
+      <Input>
+        <Input.Leading className="consumer-slot">l</Input.Leading>
+      </Input>,
     )
-    expect(leading?.classList.contains("order-1")).toBe(true)
-    expect(trailing?.classList.contains("order-3")).toBe(true)
-    expect(field().classList.contains("order-2")).toBe(true)
+    const leading = (container.firstElementChild as HTMLElement)
+      .children[1] as HTMLElement
+    //the consumer's class lands untouched and alone…
+    expect(leading.className).toBe("consumer-slot")
+    //…and the slot contract is inline, where no class can reach it
+    expect(leading.style.order).toBe("1")
+    expect(leading.style.flexShrink).toBe("0")
+    expect(leading.style.display).toBe("inline-flex")
+  })
+})
+
+describe("Input — styling tiers (docs/decisions/styling.md §2)", () => {
+  it("bare, adaptv adds no class of its own and the consumer's lands untouched", () => {
+    const { rerender } = render(<Input aria-label="q" />)
+    expect(field().hasAttribute("class")).toBe(false)
+    rerender(<Input aria-label="q" className="w-full px-3" />)
+    expect(field().className).toBe("w-full px-3")
+  })
+
+  it("grouped, the chromeless set is locked inline over a consumer style", () => {
+    render(
+      <Input
+        aria-label="q"
+        style={{ order: 7, padding: "9px", letterSpacing: "1px" }}
+      >
+        <Input.Leading>l</Input.Leading>
+      </Input>,
+    )
+    const style = field().style
+    expect(style.order).toBe("2")
+    expect(style.padding).toMatch(/^0(px)?$/)
+    expect(style.borderStyle).toBe("none")
+    expect(style.backgroundColor).toBe("transparent")
+    expect(style.color).toBe("inherit")
+    expect(style.minWidth).toMatch(/^0(px)?$/)
+    //a property adaptv does not lock is the consumer's
+    expect(style.letterSpacing).toBe("1px")
+  })
+
+  it("bare, the field carries no lock while enabled, so a consumer style is the whole style", () => {
+    render(<Input aria-label="q" style={{ padding: "9px" }} />)
+    expect(field().style.padding).toBe("9px")
+    expect(field().style.touchAction).toBe("")
+  })
+
+  it("disabled, the field and its shell lock user-select and the touch pass-through", () => {
+    const { container } = render(
+      <Input aria-label="q" disabled style={{ userSelect: "text" }}>
+        <Input.Leading>l</Input.Leading>
+      </Input>,
+    )
+    const label = container.firstElementChild as HTMLElement
+    for (const el of [label, field()]) {
+      expect(el.style.userSelect).toBe("none")
+      expect(el.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    }
+    //the shell's disabled cursor (input.css) keys on this
+    expect(label.hasAttribute("data-disabled")).toBe(true)
   })
 })
 

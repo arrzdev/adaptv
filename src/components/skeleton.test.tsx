@@ -52,23 +52,29 @@ describe("Skeleton while loading", () => {
     expect(el.childElementCount).toBe(0)
   })
 
-  it("ships the neutral base look", () => {
+  it("ships the neutral look as a layered default, not a class", () => {
     const el = firstEl(<Skeleton />)
-    expect(hasClass(el, "bg-gray-200")).toBe(true)
-    expect(hasClass(el, "rounded-md")).toBe(true)
+    expect(el.getAttribute("data-part")).toBe("root")
+    expect(el.hasAttribute("class")).toBe(false)
+    const rule = readFileSync(
+      join(process.cwd(), "src/styles/skeleton.css"),
+      "utf8",
+    ).match(
+      /:where\(\[data-adaptv="skeleton"\]\[data-part="root"\]\)\s*\{([^}]*)\}/,
+    )?.[1]
+    expect(rule).toContain("border-radius: var(--radius-md, 0.375rem);")
+    expect(rule).toContain(
+      "background-color: var(--color-gray-200, oklch(92.8% 0.006 264.531));",
+    )
   })
 
-  it("the consumer className is the shape and the size, and beats base", () => {
-    //§5.4.1: no shape prop — `rounded-full` IS the circle, and only ONE of the
-    //`rounded` pair reaches the DOM
+  it("the consumer className is the shape and the size, and passes through untouched", () => {
+    //§5.4.1: no shape prop — `rounded-full` IS the circle; with no adaptv class on the
+    //element there is nothing for it to conflict with, and the layer order makes it win
     const el = firstEl(
       <Skeleton className="size-12 rounded-full bg-red-500" />,
     )
-    expect(hasClass(el, "size-12")).toBe(true)
-    expect(hasClass(el, "rounded-full")).toBe(true)
-    expect(hasClass(el, "rounded-md")).toBe(false)
-    expect(hasClass(el, "bg-red-500")).toBe(true)
-    expect(hasClass(el, "bg-gray-200")).toBe(false)
+    expect(el.className).toBe("size-12 rounded-full bg-red-500")
   })
 
   it("locks no class, so a consumer's `animate-none` is theirs to keep", () => {
@@ -144,7 +150,8 @@ describe("Skeleton render", () => {
     )
     expect(hasClass(el, "h-4")).toBe(true)
     expect(hasClass(el, "h-2")).toBe(false)
-    expect(hasClass(el, "bg-gray-200")).toBe(true)
+    //and nothing of adaptv's joins them
+    expect(el.className).toBe("h-4")
   })
 
   it("loading={false} ignores the render element too", () => {
@@ -188,7 +195,17 @@ describe("Skeleton.Region", () => {
     //`<output>` carries the role and the polite live-ness natively
     expect(status.tagName).toBe("OUTPUT")
     expect(status.textContent).toBe("Loading tasks")
-    expect(status.className).toContain("sr-only")
+    //visually hidden by the layered `sr-only` recipe keyed on this part
+    expect(status.getAttribute("data-adaptv")).toBe(
+      "skeleton-region-status",
+    )
+    expect(status.getAttribute("data-part")).toBe("status")
+    expect(status.hasAttribute("class")).toBe(false)
+    expect(
+      readFileSync(join(process.cwd(), "src/styles/skeleton.css"), "utf8"),
+    ).toMatch(
+      /:where\(\[data-adaptv="skeleton-region-status"\]\[data-part="status"\]\)\s*\{[^}]*clip-path: inset\(50%\);[^}]*position: absolute;/,
+    )
     //one announcement for two rows: the rows themselves are aria-hidden
     expect(
       status.parentElement?.querySelectorAll("[aria-hidden]").length,

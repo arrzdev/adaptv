@@ -92,4 +92,20 @@ describe("Offline — one component, two call sites", () => {
     )
     expect(container.textContent).not.toContain("secret-host")
   })
+
+  it('stamps `data-adaptv="offline"` on the root alone; each part has its own scope', () => {
+    //a consumer's `[data-adaptv="offline"]` (and every spec that locates the screen
+    //by it) must match one element, not the screen and every piece of copy inside it
+    const { container } = render(<Offline />)
+    const roots = container.querySelectorAll('[data-adaptv="offline"]')
+    expect(roots).toHaveLength(1)
+    expect(roots[0].getAttribute("data-part")).toBe("root")
+    for (const part of ["title", "description"])
+      expect(
+        container.querySelectorAll(
+          `[data-adaptv="offline-${part}"][data-part="${part}"]`,
+        ),
+        part,
+      ).toHaveLength(1)
+  })
 })

@@ -24,8 +24,8 @@ import {
   useState,
 } from "react"
 import {
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
@@ -206,25 +206,23 @@ export interface RadioGroupIndicatorProps {
   children?: ReactNode
 }
 
-const RADIO_GROUP_ROOT_BASE_CLASS = "flex gap-2"
-const RADIO_GROUP_ROOT_VERTICAL_CLASS = "flex-col"
-const RADIO_GROUP_ROOT_HORIZONTAL_CLASS = "flex-row flex-wrap"
-
-const RADIO_ITEM_BASE_LAYOUT_CLASS = "inline-flex items-center gap-2"
-//BASE: the keyboard focus ring. The native input is `opacity-0`, so the patches.css
-//`:focus-visible` outline it would draw is invisible; the label draws it instead,
-//in the same colour chain (`--adaptv-ring`, then `currentColor`).
-const RADIO_ITEM_FOCUS_RING_CLASS =
-  "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--adaptv-ring,currentColor)]"
+//The group's flex layout, the item's inline-flex layout, focus ring and cursor, and
+//the box's round surface are default rules in styles/radio-group.css. What is here is
+//LOCKED, inline (docs/decisions/styling.md §2.0), so no `className` can defeat it.
+//
 //LOCKED: the input is laid over the whole label, so the label is its containing
 //block; a consumer `static` here would send the input to the nearest positioned
-//ancestor and make the radio's accessible frame some other element's box.
-const RADIO_ITEM_LOCKED_LAYOUT_CLASS = "relative"
-//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
-const RADIO_ITEM_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
-const RADIO_ITEM_CURSOR_CLASS = "cursor-pointer"
-const RADIO_ITEM_NON_INTERACTION_CLASS = PRESS_TARGET_DISABLED_LOCKED_CLASS
-const RADIO_ITEM_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
+//ancestor and make the radio's accessible frame some other element's box. The touch
+//pass-through is press-core's (WebKit 240917); a disabled item keeps it and adds
+//`user-select: none`.
+const RADIO_ITEM_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_LOCKED_STYLE,
+})
+const RADIO_ITEM_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+})
 //LOCKED: the input is the ONLY element assistive tech and automation see, so its
 //box is the radio's frame to VoiceOver, TalkBack and every tap aimed at it. A
 //clipped `sr-only` input is a speck: on the iOS 18.0 and 26.1 simulators the
@@ -232,20 +230,31 @@ const RADIO_ITEM_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 //it; this is the same fix). Covering the label exactly, invisibly, makes the
 //accessible frame and the hit area one rectangle. It is rendered LAST so it paints
 //over the positioned box by order, with no z-index to lift it over overlays.
-const RADIO_ITEM_INPUT_LOCKED_CLASS =
-  "absolute inset-0 m-0 size-full cursor-[inherit] appearance-none opacity-0"
+const RADIO_ITEM_INPUT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  margin: 0,
+  width: "100%",
+  height: "100%",
+  cursor: "inherit",
+  appearance: "none",
+  opacity: 0,
+})
 //LOCKED: the box is the positioning and clipping context for the mark, and
-//`shrink-0` keeps the circle round inside a flex label.
-const RADIO_BOX_LOCKED_LAYOUT_CLASS =
-  "relative flex shrink-0 items-center justify-center overflow-hidden"
-//BASE: under forced colors the background is replaced by Canvas and a fill-only
-//box vanishes, so it gets an outline there, which the UA paints in a system colour
-//(`outline-1` carries the solid style with it).
-const RADIO_BOX_SURFACE_CLASS =
-  "rounded-full bg-gray-50 forced-colors:outline-1 forced-colors:-outline-offset-1"
+//`flex-shrink: 0` keeps the circle round inside a flex label.
+const RADIO_BOX_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  display: "flex",
+  flexShrink: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+})
 //LOCKED: the mark sits over the box; if it took pointer events a tap on it would
 //land on the mark instead of the input laid over the item.
-const RADIO_INDICATOR_LOCKED_LAYOUT_CLASS = "pointer-events-none"
+const RADIO_INDICATOR_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  pointerEvents: "none",
+})
 
 //How long after a release its click may still arrive: iOS holds a tap's click for
 //its double-tap wait (~350 ms); everything else fires it with the release.
@@ -329,15 +338,21 @@ function RadioGroupBox({
   //the edge is `lockedStyle` for Checkbox.Box's reason: the mark is derived from
   //the SAME `size`, so an inline width would resize the circle and not the dot
   const { className: boxClassName, style: boxStyle } = mergeStyles({
-    base: RADIO_BOX_SURFACE_CLASS,
     className,
-    locked: RADIO_BOX_LOCKED_LAYOUT_CLASS,
     style,
-    lockedStyle: { width: `${boxRem}rem`, height: `${boxRem}rem` },
+    lockedStyle: {
+      ...RADIO_BOX_LOCKED_LAYOUT_STYLE,
+      width: `${boxRem}rem`,
+      height: `${boxRem}rem`,
+    },
   })
 
   return (
-    <span data-part="box" style={boxStyle} className={boxClassName}>
+    <span
+      data-part="box"
+      style={boxStyle}
+      className={boxClassName || undefined}
+    >
       {children ?? <RadioGroupIndicator />}
     </span>
   )
@@ -358,10 +373,9 @@ function RadioGroupIndicator({
   //opacity IS the mark's visibility, so it is locked with the size: a consumer who
   //pins it to 1 would draw a dot on an unselected item. Branch with the hook.
   const { className: markClassName, style: markStyle } = mergeStyles({
-    base: undefined,
     className,
-    locked: RADIO_INDICATOR_LOCKED_LAYOUT_CLASS,
     lockedStyle: {
+      ...RADIO_INDICATOR_LOCKED_LAYOUT_STYLE,
       width: `${indicatorRem}rem`,
       height: `${indicatorRem}rem`,
       opacity: isChecked ? 1 : 0,
@@ -373,7 +387,7 @@ function RadioGroupIndicator({
       <span
         data-part="indicator"
         style={markStyle}
-        className={markClassName}
+        className={markClassName || undefined}
       >
         {children}
       </span>
@@ -385,7 +399,7 @@ function RadioGroupIndicator({
       data-part="indicator"
       aria-hidden
       style={markStyle}
-      className={markClassName}
+      className={markClassName || undefined}
       viewBox="0 0 16 16"
     >
       <title>Selected</title>
@@ -490,6 +504,16 @@ const RadioGroupItem = forwardRef<
     size: group.size,
   }
 
+  //the look (layout, focus ring, cursor) is a default rule in the stylesheet; the
+  //geometry lives on the box, so the inline lock here is only position and touch
+  const itemStyles = mergeStyles({
+    className,
+    style,
+    lockedStyle: isDisabled
+      ? RADIO_ITEM_DISABLED_LOCKED_STYLE
+      : RADIO_ITEM_LOCKED_STYLE,
+  })
+
   const content = Children.toArray(children).some(isRadioBoxElement) ? (
     children
   ) : (
@@ -506,25 +530,8 @@ const RadioGroupItem = forwardRef<
         data-checked={isChecked ? "" : undefined}
         data-disabled={isDisabled ? "" : undefined}
         htmlFor={resolvedInputId}
-        {...mergeStyles({
-          base: [
-            RADIO_ITEM_BASE_LAYOUT_CLASS,
-            RADIO_ITEM_FOCUS_RING_CLASS,
-            isDisabled
-              ? RADIO_ITEM_DISABLED_CURSOR_CLASS
-              : RADIO_ITEM_CURSOR_CLASS,
-          ],
-          className,
-          locked: [
-            RADIO_ITEM_LOCKED_LAYOUT_CLASS,
-            isDisabled
-              ? RADIO_ITEM_NON_INTERACTION_CLASS
-              : RADIO_ITEM_INTERACTION_CLASS,
-          ],
-          style,
-          //the geometry lives on the box; nothing about the label is inline
-          lockedStyle: undefined,
-        })}
+        className={itemStyles.className || undefined}
+        style={itemStyles.style}
         data-press-engine={engine["data-press-engine"]}
         onPointerDown={(e: PointerEvent<HTMLLabelElement>) => {
           pressOwnsClick.current =
@@ -569,7 +576,8 @@ const RadioGroupItem = forwardRef<
           onChange={(e: ChangeEvent<HTMLInputElement>) => {
             if (e.currentTarget.checked) group.select(value)
           }}
-          className={RADIO_ITEM_INPUT_LOCKED_CLASS}
+          data-part="input"
+          style={RADIO_ITEM_INPUT_LOCKED_STYLE}
         />
       </label>
     </RadioGroupItemContext.Provider>
@@ -739,6 +747,8 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
       [isControlled, isDisabled, onValueChange],
     )
 
+    const rootStyles = mergeStyles({ className, style })
+
     return (
       <RadioGroupContext.Provider
         value={{
@@ -762,19 +772,10 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
           data-adaptv="radio-group"
           data-part="root"
           data-disabled={isDisabled ? "" : undefined}
-          {...mergeStyles({
-            base: [
-              RADIO_GROUP_ROOT_BASE_CLASS,
-              orientation === "horizontal"
-                ? RADIO_GROUP_ROOT_HORIZONTAL_CLASS
-                : RADIO_GROUP_ROOT_VERTICAL_CLASS,
-            ],
-            className,
-            //the group positions nothing and clips nothing: its layout is a default
-            locked: undefined,
-            style,
-            lockedStyle: undefined,
-          })}
+          //the group positions nothing and clips nothing: its whole layout is a
+          //default rule, keyed on `aria-orientation` for the direction
+          className={rootStyles.className || undefined}
+          style={rootStyles.style}
         >
           {children}
         </div>

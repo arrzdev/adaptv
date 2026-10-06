@@ -1,0 +1,24 @@
+/*
+ * Icon — the default box of the glyph (components/icon.tsx).
+ *
+ * `1em` on both axes, so an icon sizes with the text around it, and `flex-shrink: 0`, so
+ * a flex row does not squeeze the glyph. Two longhands rather than one size, so a
+ * consumer width replaces only the width. Every declaration is a default: any consumer
+ * class (`size-6`, `w-6`, a plain-CSS rule) beats it, and nothing about an icon is
+ * locked — exposure is attributes, and the `scaleWithSystem` multiply is inline px the
+ * component measures from this box.
+ *
+ * Keyed on the scope alone, not `[data-part="root"]`: the svg is the only element, and a
+ * `data-part` it already carries is kept.
+ *
+ * Layered in `adaptv.components` under `:where()` (docs/decisions/styling.md §2, §6), and
+ * nothing here is `!important` (§6.0.1).
+ */
+
+@layer adaptv.components {
+  :where([data-adaptv="icon"]) {
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+  }
+}

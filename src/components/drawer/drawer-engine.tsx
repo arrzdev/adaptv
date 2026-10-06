@@ -67,7 +67,6 @@ import {
 } from "#adaptv/hooks/use-keyboard"
 import { useLayoutViewportShrink } from "#adaptv/hooks/use-layout-viewport-shrink"
 import { clamp } from "#adaptv/utils/clamp"
-import { cn } from "#adaptv/utils/cn"
 import { isIOS } from "#adaptv/utils/platform"
 
 //Unmount as soon as the close settles (the snappy close ends with the panel off-screen, so
@@ -94,9 +93,19 @@ const KEYBOARD_COVERAGE_PX = 120
 // remainder becomes `shortfall`, which the keyboard-scroll-space path already absorbs.
 const DRAWER_EXCESS_HEIGHT_CAP_FRACTION = 0.55
 
-//shell stacking: edge fades z-20, drawer z-50/51, splash z-100
-const DRAWER_BACKDROP_Z = "z-[50]"
-const DRAWER_PANEL_Z = "z-[51]"
+//shell stacking: edge fades z-20, drawer z-50/51, splash z-100. The engine's position and
+//z-index go on as LOCKED inline style (docs/decisions/styling.md §2.0): a consumer class must
+//not be able to move the backdrop or the sheet out of the stack.
+const DRAWER_BACKDROP_STYLE: CSSProperties = Object.freeze({
+  position: "fixed",
+  zIndex: 50,
+})
+//the panel sits ON the fold; the tail below it is a child outside its box (Drawer.Content)
+const DRAWER_PANEL_STYLE: CSSProperties = Object.freeze({
+  position: "fixed",
+  zIndex: 51,
+  bottom: 0,
+})
 
 /**
  * The consumer's visible-height cap, as a custom property rather than a `max-height`.
@@ -107,8 +116,8 @@ const DRAWER_PANEL_Z = "z-[51]"
  * cap currently mine?". A consumer value sitting there inline answers that question wrong
  * forever: the stylesheet cap is never read (`cssCapRef` stays `Infinity`, so keyboard growth
  * is uncapped), `shouldPrimeKeyboardFloor` sees `capHeld` and never primes, and the first
- * release deletes the consumer's cap with nothing to restore it. Through a variable the CLASS
- * stays the cap, `getComputedStyle(content).maxHeight` resolves it, and the keyboard grows into
+ * release deletes the consumer's cap with nothing to restore it. Through a variable the
+ * stylesheet rule stays the cap, `getComputedStyle(content).maxHeight` resolves it, and the keyboard grows into
  * the consumer's own ceiling for free. (`styles.ts` limit 2 — a per-frame-written property is
  * won by a race, not by a precedence tier, so the clean channel is a variable.)
  *
@@ -136,14 +145,9 @@ export const DRAWER_CONTENT_MAX_HEIGHT_VAR = "--pwa-drawer-max-height"
 // effect), which is the same geometry with a far better motion than shrinking the cap and
 // translating the panel up to compensate. While that room is held the engine owns `max-height`
 // inline and this is the ceiling it grows toward.
-// (exported for drawer-keyboard.test.ts — the cap only holds if Tailwind parses these
-// `min()`/`calc()` values, which fails soft. Not in any barrel.)
-export const DRAWER_CONTENT_LAYOUT_CLASS = cn(
-  "flex min-h-0 shrink-0 flex-col",
-  "[:where(html[data-adaptv-platform=native])_&]:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)))]",
-  "[:where(html[data-adaptv-platform=standalone])_&]:max-h-[min(var(--pwa-drawer-max-height,100vh),calc(100vh-var(--adaptv-inset-top)),100dvh)]",
-  "web:max-h-[min(var(--pwa-drawer-max-height,100vh),97dvh)]",
-)
+//
+// The cap itself is the `[data-adaptv="drawer"][data-part="body"]` rules in styles/drawer.css,
+// which point back here; drawer-keyboard.test.ts resolves them per surface.
 
 const OVERLAY_DURATION = DEFAULT_DRAWER_TRANSITION.duration
 
@@ -233,12 +237,10 @@ export type DrawerEngineContextValue = {
   panelRef: RefObject<HTMLDivElement | null>
   contentRef: RefObject<HTMLDivElement | null>
   scrollerRef: RefObject<HTMLDivElement | null>
-  backdropPosition: string
-  backdropZ: string
-  panelPosition: string
-  panelZ: string
+  /** The backdrop's LOCKED inline position and z-index. */
+  backdropStyle: CSSProperties
+  /** The panel's LOCKED inline position, z-index and fold anchor. */
   panelStyle: CSSProperties
-  contentLayoutClass: string
   backdropState: "open" | "closed"
   overlayDuration: number
   /** `true` while a programmatic panel animation (open / close / keyboard lift) is in flight.
@@ -1884,13 +1886,8 @@ export function DrawerEngine({
       panelRef,
       contentRef,
       scrollerRef,
-      backdropPosition: "fixed",
-      backdropZ: DRAWER_BACKDROP_Z,
-      panelPosition: "fixed",
-      panelZ: DRAWER_PANEL_Z,
-      //the panel sits ON the fold; the tail below it is a child outside its box (Drawer.Content)
-      panelStyle: { bottom: 0 },
-      contentLayoutClass: DRAWER_CONTENT_LAYOUT_CLASS,
+      backdropStyle: DRAWER_BACKDROP_STYLE,
+      panelStyle: DRAWER_PANEL_STYLE,
       backdropState,
       overlayDuration: OVERLAY_DURATION,
       contentPaddingTransition: open ? CONTENT_PADDING_TRANSITION : "none",

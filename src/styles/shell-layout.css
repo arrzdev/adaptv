@@ -1,0 +1,49 @@
+/*
+ * Shell layout — the default layout of the document adaptv renders and of the app
+ * shell inside it (shell/shell-layout.tsx).
+ *
+ * - The document (`<html>` and `<body>` of the default root document): no margin,
+ *   exactly the dynamic viewport tall, and inert to touch panning and overscroll — the
+ *   document never scrolls, panes do (ScrollView).
+ * - The app shell (`[data-app-shell]`): a full-width flex column that clips. Its HEIGHT
+ *   is deliberately not here: it is the per-surface rule in screen.css, so a consumer's
+ *   height in `shellClassName` wins on every surface.
+ * - The screen frame (`[data-adaptv-screen]`): fills the shell and clips; screen.css
+ *   stretches a page's only root element to it.
+ *
+ * All of it is a default the matching `htmlClassName` / `shellClassName` /
+ * `frameClassName` beats. Layered in `adaptv.components` under `:where()`
+ * (docs/decisions/styling.md §6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* document: html, body */
+  :where([data-adaptv="document"][data-part="html"]),
+  :where([data-adaptv="document"][data-part="body"]) {
+    margin: calc(var(--spacing, 0.25rem) * 0);
+    touch-action: none;
+    overscroll-behavior: none;
+    height: 100dvh;
+  }
+
+  /* the app shell — no height, see above */
+  :where([data-adaptv="app-shell"][data-part="root"]) {
+    box-sizing: border-box;
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    width: 100%;
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    flex-direction: column;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* the screen frame */
+  :where([data-adaptv="app-shell"][data-part="screen"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    flex-direction: column;
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+}

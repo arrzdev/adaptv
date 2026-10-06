@@ -55,6 +55,25 @@ describe("when it takes the screen", () => {
     expect(screen.getByRole("alert")).toBeTruthy()
   })
 
+  it('stamps `data-adaptv="update-required"` on the root alone; each part has its own scope', () => {
+    //a consumer's `[data-adaptv="update-required"]` (and every spec that locates the screen
+    //by it) must match one element, not the screen and every piece of copy inside it
+    strandedFor(14)
+    const { container } = render(<UpdateRequired afterDays={14} />)
+    const roots = container.querySelectorAll(
+      '[data-adaptv="update-required"]',
+    )
+    expect(roots).toHaveLength(1)
+    expect(roots[0].getAttribute("data-part")).toBe("root")
+    for (const part of ["icon", "title", "description"])
+      expect(
+        container.querySelectorAll(
+          `[data-adaptv="update-required-${part}"][data-part="${part}"]`,
+        ),
+        part,
+      ).toHaveLength(1)
+  })
+
   it("honours `0` — block as soon as the channel moves past this install", () => {
     //A truthiness check on the threshold would silently turn the strictest
     //setting into no setting at all.

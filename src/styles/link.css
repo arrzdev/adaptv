@@ -1,0 +1,49 @@
+/*
+ * Link and ExternalLink — the default look of the two anchors (components/link.tsx,
+ * components/external-link.tsx).
+ *
+ * Both are left-aligned, un-underlined and show a pointer. The in-app `Link` also paints
+ * gray-950 and shows `not-allowed` when disabled; `ExternalLink` keeps the inherited
+ * colour and has no disabled state. A `Link` whose `to` is external renders the
+ * ExternalLink anchor under its own scope (`data-adaptv="link"`) and keeps ExternalLink's
+ * look, so the in-app rules are keyed on the press engine only the in-app anchor carries
+ * (`[data-press-engine]`).
+ *
+ * The rules key on the scope alone, not `[data-part="root"]`: each primitive is a single
+ * element, and a wrapper may stamp its own part on it (`FieldGroup.Row render={<Link />}`
+ * is `data-part="row"`) — the anchor keeps its look either way, and the row's rules,
+ * imported later at the same zero specificity, layer on top.
+ *
+ * What a consumer must not undo — the press-core `touch-action` longhand, plus
+ * `user-select: none` on a disabled `Link` — is inline style the component writes, never a
+ * rule here (docs/decisions/styling.md §2.0).
+ *
+ * Layered in `adaptv.components` under `:where()` (§2, §6), so any consumer `className`
+ * wins; nothing here is `!important` (§6.0.1).
+ */
+
+@layer adaptv.components {
+  /* Both anchors */
+  :where([data-adaptv="link"], [data-adaptv="external-link"]) {
+    cursor: pointer;
+    text-align: left;
+    text-decoration-line: none;
+  }
+
+  /* The in-app Link: the neutral colour, and the disabled cursor */
+  :where([data-adaptv="link"][data-press-engine]) {
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  /*
+   * `disabled` is the only thing that puts `tabindex="-1"` on the in-app anchor (Link
+   * writes it after the consumer's props), so the pair is exactly the prop: a wrapper's
+   * own `aria-disabled` (a disabled FieldGroup row) never changed this cursor and still
+   * does not.
+   */
+  :where(
+    [data-adaptv="link"][data-press-engine][aria-disabled="true"][tabindex="-1"]
+  ) {
+    cursor: not-allowed;
+  }
+}

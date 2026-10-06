@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import {
-  DRAWER_CONTENT_LAYOUT_CLASS,
-  DRAWER_CONTENT_MAX_HEIGHT_VAR,
-} from "#adaptv/components/drawer/drawer-engine"
+import { DRAWER_CONTENT_MAX_HEIGHT_VAR } from "#adaptv/components/drawer/drawer-engine"
 import {
   readDrawerStylesheetCap,
   resolveDrawerKeyboardRoom,
@@ -13,7 +10,43 @@ import {
   viewportShrinksUnderKeyboard,
 } from "#adaptv/components/drawer/drawer-keyboard"
 import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
-import { resolveCompiledLength } from "#adaptv/styles/viewport-units.test-helper"
+import type { ViewportSurface } from "#adaptv/styles/viewport-units.test-helper"
+import { evaluateLength } from "#adaptv/styles/viewport-units.test-helper"
+
+/*
+ * The content box's cap, as the shipped bundle declares it: every `max-height` on a rule
+ * selecting `[data-adaptv="drawer"][data-part="body"]`, with the selector it sits under.
+ * The rules are flat (`:where(html[data-adaptv-platform="…"] <body>)`), one per surface.
+ */
+const DRAWER_BODY = '[data-adaptv="drawer"][data-part="body"]'
+
+async function drawerBodyCapRules(): Promise<
+  { selector: string; value: string }[]
+> {
+  const css = await compileAdaptvStyles([])
+  const rules: { selector: string; value: string }[] = []
+  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = (match[1] as string).trim()
+    if (!selector.includes(DRAWER_BODY)) continue
+    const decl = /(?:^|;)\s*max-height:\s*([^;]+);/.exec(
+      match[2] as string,
+    )
+    if (decl) rules.push({ selector, value: (decl[1] as string).trim() })
+  }
+  return rules
+}
+
+async function resolveDrawerBodyCap(
+  surface: ViewportSurface,
+): Promise<number> {
+  const applying = (await drawerBodyCapRules()).filter((rule) =>
+    rule.selector.includes(
+      `html[data-adaptv-platform="${surface.platform}"]`,
+    ),
+  )
+  expect(applying, `one cap rule on ${surface.platform}`).toHaveLength(1)
+  return evaluateLength((applying[0] as { value: string }).value, surface)
+}
 
 //the caret repaint is a real DOM side effect irrelevant to the scroll maths under test
 vi.mock("#adaptv/hooks/use-caret-repaint", () => ({
@@ -134,13 +167,13 @@ describe("the cap the box grows into", () => {
     //the keyboard is answered by growing + holding room, NOT by shrinking this. An earlier pass
     //subtracted the keyboard height here; it produced the same resting geometry and a much worse
     //motion, because the box then had to shrink while the panel translated up to compensate.
-    const css = await compileAdaptvStyles(
-      DRAWER_CONTENT_LAYOUT_CLASS.split(" "),
+    const caps = (await drawerBodyCapRules()).map((rule) => rule.value)
+    expect(caps.join("\n")).toContain(
+      "calc(100vh - var(--adaptv-inset-top))",
     )
-    expect(css).toContain("calc(100vh - var(--adaptv-inset-top))")
-    expect(css).toContain("97dvh")
+    expect(caps.join("\n")).toContain("97dvh")
     //no keyboard term anywhere in the cap — the room effect owns that, inline and imperatively
-    expect(css).not.toContain("--adaptv-drawer-keyboard")
+    expect(caps.join("\n")).not.toContain("keyboard")
   })
 
   /*
@@ -148,34 +181,31 @@ describe("the cap the box grows into", () => {
    * only ever ask the sheet to stop HIGHER. That ordering is the whole guarantee: a drawer that
    * reaches the screen edge stops being a drawer, so the platform ceiling is adaptv's to keep.
    *
-   * Tailwind is the failure mode worth a test here rather than a comment. An arbitrary value it
-   * cannot parse emits NOTHING — no error, no rule, just a class that never matches — so the cap
-   * would silently become "whatever the content is" and the sheet would grow to the full viewport
-   * on a device nobody re-measured.
+   * The compiled bundle is the thing worth testing rather than the source text: a value the
+   * compiler cannot parse is dropped silently, so the cap would become "whatever the content
+   * is" and the sheet would grow to the full viewport on a device nobody re-measured.
    */
   it("lets the consumer's variable lower it, never raise it", async () => {
-    const css = await compileAdaptvStyles(
-      DRAWER_CONTENT_LAYOUT_CLASS.split(" "),
-    )
-    //both platform caps went through Tailwind intact, each behind the consumer's term
-    expect(css).toContain(
-      "max-height: min(var(--pwa-drawer-max-height,100vh), calc(100vh - var(--adaptv-inset-top)))",
-    )
-    expect(css).toContain(
-      "max-height: min(var(--pwa-drawer-max-height,100vh), 97dvh)",
-    )
+    const caps = await drawerBodyCapRules()
+    //one cap per surface, each one platform-scoped, none bare
+    expect(caps).toHaveLength(3)
+    for (const platform of ["web", "native", "standalone"]) {
+      const rule = caps.find((cap) =>
+        cap.selector.includes(`html[data-adaptv-platform="${platform}"]`),
+      )
+      //every platform cap made it into the bundle intact, behind the consumer's term
+      expect(rule?.value, platform).toMatch(
+        /^min\(var\(--pwa-drawer-max-height,\s*100vh\),/,
+      )
+    }
     //`100vh` is `lvh` and both ceilings are strictly under it, so an unset variable resolves
     //the `min()` to the platform cap unchanged — the default is not a behaviour change
-    expect(css).not.toContain("max-height: var(--pwa-drawer-max-height)")
+    for (const cap of caps)
+      expect(cap.value).not.toMatch(/^var\(--pwa-drawer-max-height\)$/)
   })
 
   it("is the box an installed app can show, on iOS 26 as on iOS 18", async () => {
-    const cap = (surface: Parameters<typeof resolveCompiledLength>[2]) =>
-      resolveCompiledLength(
-        DRAWER_CONTENT_LAYOUT_CLASS,
-        "max-height",
-        surface,
-      )
+    const cap = (surface: ViewportSurface) => resolveDrawerBodyCap(surface)
     //iOS 26.1 installed: the page starts 62pt down the 874pt screen, below the status bar, with
     //a top inset of 0, and 100dvh is 812 while 100vh is still 874. A 100vh cap made a tall sheet
     //874pt tall, so its handle and title slid 62pt up under the status bar.
@@ -224,13 +254,19 @@ describe("the cap the box grows into", () => {
     ).toBeCloseTo(692.58)
   })
 
-  it("keeps the cap on the content box — never on the panel, which carries the tail", () => {
+  it("keeps the cap on the content box — never on the panel, which carries the tail", async () => {
     //the cap is primed and animated on the content box (the panel is what the drag and the FLIP
-    //translate, and its height utilities are locked). This constant is the one that must own it.
-    expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain("max-h-")
-    expect(DRAWER_CONTENT_LAYOUT_CLASS).toContain(
-      DRAWER_CONTENT_MAX_HEIGHT_VAR,
-    )
+    //translate, and its heights are locked inline). The body rules are the ones that own it.
+    const caps = await drawerBodyCapRules()
+    for (const cap of caps)
+      expect(cap.value).toContain(DRAWER_CONTENT_MAX_HEIGHT_VAR)
+    const css = await compileAdaptvStyles([])
+    for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!(match[1] as string).includes('[data-part="content"]')) continue
+      if (!(match[1] as string).includes('[data-adaptv="drawer"]'))
+        continue
+      expect(match[2]).not.toMatch(/(?:^|;)\s*(?:max-)?height:/)
+    }
   })
 })
 

@@ -24,10 +24,8 @@ import type {
 import { resolveDropdownPosition } from "#adaptv/components/dropdown/dropdown-position"
 import { subscribeOutsidePress } from "#adaptv/components/dropdown/outside-press"
 import {
-  PRESS_TARGET_CURSOR_CLASS,
-  PRESS_TARGET_DISABLED_CURSOR_CLASS,
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { useInsets } from "#adaptv/hooks/use-insets"
@@ -67,7 +65,7 @@ import { mergeStyles } from "#adaptv/utils/styles"
  *    an option highlights it.
  *
  * Dropdown's ENGINE is reused (the position resolver, the back chain, the
- * insets, the press-core classes, the locked panel structure) but not Dropdown
+ * insets, the press-core locks, the locked panel structure) but not Dropdown
  * itself: a menu has no value, no selected row, no highlight and no form
  * presence, and bolting those onto `role="menu"` would leave the consumer with
  * the wrong ARIA on every element.
@@ -151,27 +149,41 @@ const SELECT_TYPEAHEAD_MS = 500
 
 //LOCKED structure, identical to Dropdown's panel and for the same reasons: the
 //engine caps the height so the rows must scroll inside, it sits above app chrome,
-//and a fling that reaches the end must not scroll the page behind it.
-const SELECT_CONTENT_LOCKED_CLASS =
-  "z-50 overflow-y-auto overscroll-contain"
-//BASE neutral look — the same menu surface as Dropdown, fully overridable.
-const SELECT_CONTENT_BASE_CLASS =
-  "min-w-[8rem] rounded-md bg-surface p-1 shadow-lg ring-1 ring-border"
-//BASE neutral look for the trigger: a field, not a button. `justify-between`
-//leaves room for a caret a consumer adds after `Select.Value`.
-const SELECT_TRIGGER_BASE_CLASS =
-  "inline-flex items-center justify-between gap-2 rounded-md bg-surface px-3 py-2 text-sm text-foreground ring-1 ring-border disabled:opacity-40"
-const SELECT_OPTION_BASE_CLASS =
-  "flex w-full items-center rounded-sm px-3 py-2 text-sm text-foreground"
-//LOCKED, same split as Dropdown.Item: `text-start` is structure (a row reads from
-//the inline start), and beside it rides the press-target `touch-action` longhand
-//because a row lives inside the panel's own scroller (quirk 5). The cursor is
-//BASE so `cursor-wait` on a pending row still wins.
-const SELECT_OPTION_LOCKED_CLASS = `${PRESS_TARGET_LOCKED_CLASS} text-start`
-const SELECT_OPTION_DISABLED_LOCKED_CLASS = `${PRESS_TARGET_DISABLED_LOCKED_CLASS} text-start`
-//The native select is for the form and for autofill only (quirk 1): off-screen
-//in the standard way, never focusable, never announced.
-const SELECT_NATIVE_CLASS = "sr-only"
+//and a fling that reaches the end must not scroll the page behind it. Joined by the
+//engine's placement below. The neutral menu surface is a default in select.css.
+const SELECT_CONTENT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  zIndex: 50,
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+})
+//LOCKED, same split as Dropdown.Item: `text-align: start` is structure (a row reads
+//from the inline start), and beside it rides the press-target `touch-action`
+//longhand because a row lives inside the panel's own scroller (quirk 5). The cursor
+//is a default in select.css so `cursor-wait` on a pending row still wins.
+const SELECT_OPTION_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...PRESS_TARGET_LOCKED_STYLE,
+  textAlign: "start",
+})
+const SELECT_OPTION_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  textAlign: "start",
+})
+//The native select is for the form and for autofill only (quirk 1): off-screen in
+//the standard visually-hidden way, never focusable, never announced. Locked inline
+//rather than a default: it is not a look, no consumer channel reaches the element,
+//and a page that has not loaded adaptv's stylesheet must still not paint a second
+//control.
+const SELECT_NATIVE_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clipPath: "inset(50%)",
+  whiteSpace: "nowrap",
+  borderWidth: 0,
+})
 
 /** An enabled option's index nearest `from` in `dir`, or `-1` when there is none. No wrap. */
 function stepEnabled(
@@ -424,6 +436,10 @@ function Select({
 
   const isPlaceholder = selected === undefined
 
+  //the root has a default look (select.css) and nothing locked; the consumer's
+  //`style` still goes through the one place precedence is decided
+  const rootStyles = mergeStyles({ className, style })
+
   return (
     <SelectContext.Provider
       value={{
@@ -451,17 +467,13 @@ function Select({
     >
       <div
         data-adaptv="select"
+        data-part="root"
         data-select-open={open ? "" : undefined}
         data-disabled={disabled ? "" : undefined}
         data-placeholder={isPlaceholder ? "" : undefined}
         data-required={required ? "" : undefined}
-        {...mergeStyles({
-          base: "relative inline-block",
-          className,
-          locked: undefined,
-          style,
-          lockedStyle: undefined,
-        })}
+        className={rootStyles.className || undefined}
+        style={rootStyles.style}
       >
         {children}
         <select
@@ -473,8 +485,10 @@ function Select({
           value={value ?? ""}
           onChange={onNativeChange}
           aria-label={ariaLabel}
+          data-adaptv="select-native"
+          data-part="native"
           data-disabled={disabled ? "" : undefined}
-          className={SELECT_NATIVE_CLASS}
+          style={SELECT_NATIVE_LOCKED_STYLE}
         >
           {/* the placeholder option: it is what `required` validates against */}
           <option value="">{placeholder ?? ""}</option>
@@ -540,6 +554,13 @@ function SelectTrigger({
     }
   }
 
+  const triggerStyles = mergeStyles({
+    className,
+    lockedStyle: disabled
+      ? PRESS_TARGET_DISABLED_LOCKED_STYLE
+      : PRESS_TARGET_LOCKED_STYLE,
+  })
+
   return (
     <button
       ref={triggerRef}
@@ -551,22 +572,14 @@ function SelectTrigger({
       aria-label={ariaLabel ?? rootAriaLabel}
       disabled={disabled}
       data-adaptv="select-trigger"
+      data-part="trigger"
       data-placeholder={selected === undefined ? "" : undefined}
       data-disabled={disabled ? "" : undefined}
       //the trigger is a press target inside whatever scroller the form lives in,
-      //so its touch-action is locked for the reason press-core.ts gives
-      className={mergeStyles({
-        base: [
-          SELECT_TRIGGER_BASE_CLASS,
-          disabled
-            ? PRESS_TARGET_DISABLED_CURSOR_CLASS
-            : PRESS_TARGET_CURSOR_CLASS,
-        ],
-        className,
-        locked: disabled
-          ? PRESS_TARGET_DISABLED_LOCKED_CLASS
-          : PRESS_TARGET_LOCKED_CLASS,
-      })}
+      //so its touch-action is locked inline for the reason press-core.ts gives; its
+      //look and cursor are defaults in select.css
+      className={triggerStyles.className || undefined}
+      style={triggerStyles.style}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented || disabled) return
@@ -594,12 +607,10 @@ function SelectValue({ placeholder, className }: SelectValueProps) {
   return (
     <span
       data-adaptv="select-value"
+      data-part="value"
       data-placeholder={isPlaceholder ? "" : undefined}
-      className={mergeStyles({
-        base: undefined,
-        className,
-        locked: undefined,
-      })}
+      //text: no default look, nothing locked
+      className={mergeStyles({ className }) || undefined}
     >
       {isPlaceholder ? (placeholder ?? rootPlaceholder) : selected.label}
     </span>
@@ -743,11 +754,10 @@ function SelectContent({
   if (!open) return <>{children}</>
 
   const merged = mergeStyles({
-    base: SELECT_CONTENT_BASE_CLASS,
     className,
-    locked: SELECT_CONTENT_LOCKED_CLASS,
     style,
     lockedStyle: {
+      ...SELECT_CONTENT_LOCKED_STYLE,
       position: "fixed",
       left: pos?.left ?? 0,
       top: pos?.top ?? 0,
@@ -768,9 +778,10 @@ function SelectContent({
       aria-label={ariaLabel ?? rootAriaLabel}
       aria-activedescendant={active?.id}
       data-adaptv="select-content"
+      data-part="content"
       data-side={pos?.side}
       data-align={pos?.align}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
       onKeyDown={onListKeyDown}
     >
@@ -820,6 +831,12 @@ function SelectOption({
 
   const isSelected = selectedValue === value
   const isHighlighted = highlighted === value
+  const optionStyles = mergeStyles({
+    className,
+    lockedStyle: disabled
+      ? SELECT_OPTION_DISABLED_LOCKED_STYLE
+      : SELECT_OPTION_LOCKED_STYLE,
+  })
   //A row is never focused and handles no keys of its own: focus stays on the
   //listbox, which owns the keyboard (quirk 4) and names the row through
   //`aria-activedescendant`. That is the listbox pattern, not a gap.
@@ -832,22 +849,13 @@ function SelectOption({
       aria-selected={isSelected}
       aria-disabled={disabled || undefined}
       data-adaptv="select-option"
+      data-part="option"
       data-value={value}
       data-selected={isSelected ? "" : undefined}
       data-highlighted={isHighlighted ? "" : undefined}
       data-disabled={disabled ? "" : undefined}
-      className={mergeStyles({
-        base: [
-          SELECT_OPTION_BASE_CLASS,
-          disabled
-            ? PRESS_TARGET_DISABLED_CURSOR_CLASS
-            : PRESS_TARGET_CURSOR_CLASS,
-        ],
-        className,
-        locked: disabled
-          ? SELECT_OPTION_DISABLED_LOCKED_CLASS
-          : SELECT_OPTION_LOCKED_CLASS,
-      })}
+      className={optionStyles.className || undefined}
+      style={optionStyles.style}
       onPointerMove={() => {
         if (disabled || isHighlighted) return
         highlightByKeyboard.current = false

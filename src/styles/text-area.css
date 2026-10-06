@@ -1,0 +1,53 @@
+/*
+ * TextArea — the default look of the multiline field (components/text-area.tsx): the
+ * shell (the visible box) and the `<fieldset>` that lays out Label / Hint / Error.
+ *
+ * `[data-adaptv="text-area"]` is stamped once: on the shell when the field stands alone
+ * (`div[data-part="root"]`), or on the slot `<fieldset>` (`data-part="root"`), whose
+ * shell child then carries only `data-part="shell"`; both shells get the same
+ * surface. The inner `<textarea>` (`data-adaptv="text-area-field"`,
+ * `data-part="field"`) has no rule here on purpose: it is chromeless by
+ * construction, and that whole set is inline style the component writes (§2.0), as
+ * are the shell's box sizing and grow / fill layout and the disabled `user-select` +
+ * touch pass-through. Label, Hint and Error are text and have no default look.
+ *
+ * ⚠︎ No default border width — do NOT re-add one (Button's surface carries the same
+ * note). A border that appears on focus costs layout — and here it also perturbs the
+ * height the auto-resize measures — so a focus ring belongs on `outline`.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) and wrapped in
+ * `:where()` (§6.0.1), so any consumer rule or utility wins over all of it. No
+ * `!important` anywhere.
+ */
+
+@layer adaptv.components {
+  /* the shell: neutral surface and a text cursor */
+  :where(
+    div[data-adaptv="text-area"][data-part="root"],
+    fieldset[data-adaptv="text-area"][data-part="root"] > [data-part="shell"]
+  ) {
+    cursor: text;
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  :where(
+    div[data-adaptv="text-area"][data-part="root"][data-disabled],
+    fieldset[data-adaptv="text-area"][data-part="root"] > [data-part="shell"][data-disabled]
+  ) {
+    cursor: not-allowed;
+  }
+
+  /* the slot fieldset: label → shell → hint → error in a column, UA chrome removed */
+  :where(fieldset[data-adaptv="text-area"][data-part="root"]) {
+    margin: calc(var(--spacing, 0.25rem) * 0);
+    width: 100%;
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    border-style: solid;
+    padding: calc(var(--spacing, 0.25rem) * 0);
+    border-width: 0;
+    flex-direction: column;
+    display: flex;
+  }
+}

@@ -1,0 +1,30 @@
+/*
+ * Fab — the floating look of the floating action button (components/fab.tsx).
+ *
+ * A Fab is a Button whose root answers to `data-adaptv="fab"`: `button.css` gives it the
+ * Button root's neutral surface, and this rule — imported after it, at the same zero
+ * specificity — layers the floating look on top. Every property is a default: the
+ * extended form is `className="w-auto px-5"`, and any consumer class beats this rule.
+ *
+ * `width` and `height` are separate longhands, not one `size`, so a consumer width alone
+ * replaces the width and leaves the 56px height.
+ *
+ * What a consumer must not undo — the fixed position, the safe-edge insets, the
+ * hide/show `translate`, its transition (none under reduced motion) and the inert
+ * `pointer-events` — is inline style the component writes, never a rule here (§2.0).
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6), and nothing here is
+ * `!important` (§6.0.1).
+ */
+
+@layer adaptv.components {
+  :where([data-adaptv="fab"][data-part="root"]) {
+    z-index: 40;
+    height: calc(var(--spacing, 0.25rem) * 14);
+    width: calc(var(--spacing, 0.25rem) * 14);
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+    border-radius: calc(infinity * 1px);
+  }
+}

@@ -1,0 +1,95 @@
+/*
+ * Button — the default look of the button, its content rows and its slots
+ * (components/button.tsx).
+ *
+ * Every rule is a default: neutral gray, `width: fit-content`, an inline flex row, a
+ * pointer cursor. Layered in `adaptv.components` under `:where()` (docs/decisions/
+ * styling.md §2, §6), so any consumer `className` — a plain-CSS class or a Tailwind
+ * utility — beats it without help, and nothing here is `!important` (§6.0.1).
+ *
+ * What a consumer must not undo is inline style the component writes, never a rule here:
+ * the press core's `touch-action` longhand on the root (`user-select: none` too when
+ * disabled), and the width-mode layout of the slots and the label (`display`,
+ * `flex-shrink`, `align-items`, `min-width`), which the measured width tween depends on
+ * (§2.0).
+ *
+ * Only the root carries `data-adaptv="button"`; each sub-part has its own scope,
+ * `button-<part>` (`button-content`, `button-content-shell`, `button-leading`,
+ * `button-trailing`, `button-label`), beside its `data-part`, so `[data-adaptv="button"]`
+ * names exactly one element.
+ *
+ * A `Fab` is a Button whose root answers to `data-adaptv="fab"` (composition must not leak
+ * into a styling hook), so the root rules name both scopes; `fab.css`, imported after this
+ * file, layers the floating look on top at the same zero specificity.
+ */
+
+@layer adaptv.components {
+  /*
+   * Root. ⚠︎ Do NOT re-add `border: 1px solid transparent` here to pre-allocate a toggled
+   * border. It was tried and reverted: it only cancels the shift for a border of exactly
+   * 1px (a consumer writing `border-2` shifts again), while permanently and invisibly
+   * costing 2px of content box on EVERY button — a fixed-height control silently stops
+   * matching its design spec. A mitigation that works in one case and fails silently in
+   * the rest manufactures false confidence, which is worse than none (VISION.md, layout
+   * shift). For toggled emphasis the correct primitive is `outline`, which never
+   * participates in layout at any width and follows `border-radius`.
+   *
+   * The cursor is a look, not a lock — it rides the default tier so `cursor-wait` on a
+   * pending button lands.
+   */
+  :where(
+    [data-adaptv="button"][data-part="root"],
+    [data-adaptv="fab"][data-part="root"]
+  ) {
+    width: fit-content;
+    max-width: 100%;
+    min-width: calc(var(--spacing, 0.25rem) * 0);
+    cursor: pointer;
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+    -webkit-user-select: none;
+    user-select: none;
+    justify-content: center;
+    align-items: center;
+    display: inline-flex;
+  }
+
+  :where(
+    [data-adaptv="button"][data-part="root"]:disabled,
+    [data-adaptv="fab"][data-part="root"]:disabled
+  ) {
+    cursor: not-allowed;
+  }
+
+  /* Content row — the measured row (and, on the tween path, the row inside the shell) */
+  :where([data-adaptv="button-content"][data-part="content"]) {
+    align-items: center;
+    width: max-content;
+    max-width: 100%;
+    display: inline-flex;
+  }
+
+  /* Content shell — the clipping box the width tween runs on */
+  :where([data-adaptv="button-content-shell"][data-part="content-shell"]) {
+    align-items: center;
+    max-width: 100%;
+    display: inline-flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Leading / trailing slots — alignment and the svg display fix; their layout is locked inline */
+  :where(
+    [data-adaptv="button-leading"][data-part="leading"],
+    [data-adaptv="button-trailing"][data-part="trailing"]
+  ) {
+    justify-content: center;
+  }
+
+  :where(
+    [data-adaptv="button-leading"][data-part="leading"] > svg,
+    [data-adaptv="button-trailing"][data-part="trailing"] > svg
+  ) {
+    display: block;
+  }
+}

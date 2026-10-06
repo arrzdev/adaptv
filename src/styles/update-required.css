@@ -1,0 +1,63 @@
+/*
+ * UpdateRequired — the built-in "update from the store" screen's look
+ * (components/update-required.tsx): a fixed full-screen layer above the orientation
+ * guard (z-index 120 over 110), padded by the safe-area insets plus a gap, with an
+ * icon, a title and a description.
+ *
+ * The component takes no `className`: an app that wants another look replaces the
+ * screen (`updateRequiredScreen`). The colours read the app's semantic tokens with no
+ * fallback (docs/decisions/styling.md §7). The padding is the `px-safe-offset-6` /
+ * `py-safe-offset-8` utilities' values, spelled out.
+ *
+ * The root alone carries `data-adaptv="update-required"`; each sub-part carries its own
+ * `data-adaptv="update-required-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
+ * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root: a full-screen takeover above the app and the orientation guard */
+  :where([data-adaptv="update-required"][data-part="root"]) {
+    inset: calc(var(--spacing, 0.25rem) * 0);
+    z-index: 120;
+    justify-content: center;
+    align-items: center;
+    row-gap: calc(var(--spacing, 0.25rem) * 6);
+    background-color: var(--color-background);
+    padding-top: calc(var(--spacing, 0.25rem) * 8 + var(--adaptv-inset-top, 0px));
+    padding-bottom: calc(var(--spacing, 0.25rem) * 8 + var(--adaptv-inset-bottom, 0px));
+    padding-right: calc(var(--spacing, 0.25rem) * 6 + var(--adaptv-inset-right, 0px));
+    padding-left: calc(var(--spacing, 0.25rem) * 6 + var(--adaptv-inset-left, 0px));
+    text-align: center;
+    color: var(--color-foreground);
+    flex-direction: column;
+    display: flex;
+    position: fixed;
+  }
+
+  /* icon */
+  :where([data-adaptv="update-required-icon"][data-part="icon"]) {
+    width: calc(var(--spacing, 0.25rem) * 14);
+    height: calc(var(--spacing, 0.25rem) * 14);
+    color: var(--color-primary);
+  }
+
+  /* title, description */
+  :where([data-adaptv="update-required-title"][data-part="title"]) {
+    max-width: var(--container-xs, 20rem);
+    font-size: var(--text-base, 1rem);
+    line-height: var(--text-base--line-height, calc(1.5 / 1));
+    font-weight: var(--font-weight-medium, 500);
+    text-wrap: balance;
+    color: var(--color-foreground);
+  }
+
+  :where([data-adaptv="update-required-description"][data-part="description"]) {
+    max-width: var(--container-xs, 20rem);
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
+    text-wrap: balance;
+    color: var(--color-muted);
+  }
+}

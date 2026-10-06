@@ -1,0 +1,109 @@
+/*
+ * PullToRefresh — the default look of the row (components/pull-to-refresh.tsx): the root's
+ * flex-line defaults, the visually hidden status line, the indicator track, rotator and
+ * arc, and the content wrapper.
+ *
+ * The root is keyed on `data-adaptv="pull-to-refresh"` + `data-part="root"`. The inner
+ * parts carry `data-part` only and are reached as CHILDREN of that root: a consumer finds
+ * the gesture root with `closest('[data-adaptv="pull-to-refresh"]')` from inside its own
+ * content, so the scope attribute must name the root and nothing between it and them.
+ * An idle row (`enabled={false}`, nothing in flight) is not a gesture root, so it does
+ * not answer to that scope; it carries `data-adaptv="pull-to-refresh-root"` +
+ * `data-part="root"` instead, and the root rule names both.
+ * Every selector is under `:where()` (docs/decisions/styling.md §6.0.1).
+ *
+ * The root's `position: relative` is not here: it is the containing block the indicator is
+ * positioned against, a lock, written inline by the component (§2.0). The indicator's
+ * live `top`/`opacity`/`scale`/`rotate` and the content's lift are written by the motion
+ * engine, not by this file.
+ *
+ * Layered in `adaptv.components` (§6) so a consumer's unlayered rule or utility wins over any
+ * of it, and nothing here is `!important`. `@keyframes` stay outside the layer for
+ * drawer.css's reason: keyframe names resolve from one flat namespace where the last
+ * definition wins regardless of layer. It is adaptv's own name, not Tailwind's `spin`,
+ * because a plain-CSS app has no `@keyframes spin` and a Tailwind one only emits it when
+ * `animate-spin` is used somewhere.
+ */
+
+@keyframes adaptv-pull-to-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@layer adaptv.components {
+  /* root: a flex-line default — a consumer may put the row in a `flex-1` column */
+  :where(
+    [data-adaptv="pull-to-refresh"][data-part="root"],
+    [data-adaptv="pull-to-refresh-root"][data-part="root"]
+  ) {
+    flex-grow: 0;
+    flex-shrink: 0;
+  }
+
+  /* status: the polite live region, visually hidden */
+  :where([data-adaptv="pull-to-refresh"] > [data-part="status"]) {
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    position: absolute;
+    overflow: hidden;
+  }
+
+  /* indicator: the track the spinner rides down, centred across the row and inert to taps */
+  :where([data-adaptv="pull-to-refresh"] > [data-part="indicator"]) {
+    pointer-events: none;
+    inset-inline: calc(var(--spacing, 0.25rem) * 0);
+    z-index: 0;
+    justify-content: center;
+    display: flex;
+    position: absolute;
+  }
+
+  /* indicator-rotator: turns about its own centre */
+  :where(
+    [data-adaptv="pull-to-refresh"] > [data-part="indicator"] > [data-part="indicator-rotator"]
+  ) {
+    transform-origin: center;
+  }
+
+  /* indicator-arc: the neutral ink, and the spin while a refresh runs (the component sets
+   * `data-spinning` only outside reduced motion, and writes the duration inline) */
+  :where(
+    [data-adaptv="pull-to-refresh"]
+      > [data-part="indicator"]
+      > [data-part="indicator-rotator"]
+      > [data-part="indicator-arc"]
+  ) {
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  :where(
+    [data-adaptv="pull-to-refresh"]
+      > [data-part="indicator"]
+      > [data-part="indicator-rotator"]
+      > [data-part="indicator-arc"][data-spinning]
+  ) {
+    animation: adaptv-pull-to-refresh-spin 1s linear infinite;
+  }
+
+  /* content: its own stacking layer above the indicator track */
+  :where([data-adaptv="pull-to-refresh"] > [data-part="content"]) {
+    z-index: 0;
+    position: relative;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-adaptv="pull-to-refresh"] > [data-part="indicator"]),
+    :where(
+      [data-adaptv="pull-to-refresh"] > [data-part="indicator"] > [data-part="indicator-rotator"]
+    ),
+    :where([data-adaptv="pull-to-refresh"] > [data-part="content"]) {
+      transition-property: none;
+    }
+  }
+}

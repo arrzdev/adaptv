@@ -23,6 +23,12 @@ API.
   `createAdaptvRouter` and `standaloneMemoryHistory`. These names are exported. A not-found screen is
   now typed as a function component, so a `React.lazy` default export no longer typechecks there.
 
+- **Components no longer put class names of their own on their elements.** Their default look is plain
+  CSS in `@layer adaptv.components`, keyed on `data-adaptv` / `data-part`, and what they lock is
+  inline style. `className` is yours alone: an unlayered class or a Tailwind utility beats the
+  default without `!important`. A selector that targeted one of adaptv's Tailwind classes no longer
+  matches; target the `data-adaptv` / `data-part` attributes instead.
+
 ## 0.1.0-alpha.1
 
 The first public alpha. Not published to npm yet: publishing waits on approval, and until then the

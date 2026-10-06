@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { act, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { HAPTIC_TICK_ATTR } from "#adaptv/capabilities/haptic-tick"
@@ -221,26 +223,69 @@ describe("Fab — a Button fixed to a corner", () => {
     expect(el.style.insetInlineEnd).toBe("")
   })
 
-  it("wears the neutral look as base, the motion as locked, on top of Button's own", () => {
+  it("adds no class of its own: the look is a layer rule, the motion is locked inline", () => {
     const { container } = render(<Fab aria-label="New">+</Fab>)
-    const classes = fabEl(container).className.split(/\s+/)
-    for (const token of [
-      "h-14",
-      "w-14",
-      "rounded-full",
-      "shadow-lg",
-      "z-40",
-      "transition-[translate]",
-      "duration-200",
-      "ease-out",
-      "motion-reduce:transition-none",
-    ]) {
-      expect(classes, token).toContain(token)
+    const el = fabEl(container)
+    expect(el.hasAttribute("class")).toBe(false)
+    expect(el.getAttribute("data-part")).toBe("root")
+    expect(el.style.transitionProperty).toBe("translate")
+    expect(el.style.transitionDuration).toBe("200ms")
+    //Tailwind's `ease-out` token, not the CSS keyword of the same name
+    expect(el.style.transitionTimingFunction).toBe(
+      "var(--ease-out, cubic-bezier(0, 0, 0.2, 1))",
+    )
+    //the look lives in styles/fab.css, on top of Button's root rule
+    const css = readFileSync(
+      resolve(__dirname, "../styles/fab.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(css).toContain("@layer adaptv.components")
+    expect(css).toContain(':where([data-adaptv="fab"][data-part="root"])')
+    expect(css).not.toContain("!important")
+    expect(css).not.toMatch(/\bposition\s*:/)
+  })
+
+  it("the motion lock holds against a consumer style, and retires under reduced motion", () => {
+    const { container, unmount } = render(
+      <Fab aria-label="New" style={{ transitionProperty: "all" }}>
+        +
+      </Fab>,
+    )
+    expect(fabEl(container).style.transitionProperty).toBe("translate")
+    unmount()
+
+    const matchMedia = window.matchMedia
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList) as typeof window.matchMedia
+    try {
+      const reduced = render(<Fab aria-label="New">+</Fab>).container
+      //the button still hides — it just does not slide
+      expect(fabEl(reduced).style.transitionProperty).toBe("none")
+    } finally {
+      window.matchMedia = matchMedia
     }
-    //`w-14` is the width now; Button's intrinsic `w-fit` yields to it
-    expect(classes).not.toContain("w-fit")
-    //and `fixed` is inline, never a class the consumer could fight
-    expect(classes).not.toContain("fixed")
+  })
+
+  it("keeps the fixed width mode its default 56px width implies", () => {
+    //the label is truncatable (min-width: 0) and there is no width tween shell, as when
+    //the width was the `w-14` class — until the consumer's className replaces the width
+    const { container } = render(
+      <Fab aria-label="New">
+        <Button.Text>+</Button.Text>
+      </Fab>,
+    )
+    expect(
+      container.querySelector("[data-part='content-shell']"),
+    ).toBeNull()
+    expect(
+      container.querySelector<HTMLElement>("[data-part='label']")?.style
+        .minWidth,
+    ).toMatch(/^0(px)?$/)
   })
 
   it("hidden: the attribute, the a11y exit, the tab order, the inert pointer", () => {
@@ -313,13 +358,17 @@ describe("Fab — a Button fixed to a corner", () => {
     )
     const el = fabEl(container)
     expect(el.textContent).toContain("New task")
-    const classes = el.className.split(/\s+/)
-    expect(classes).toContain("w-auto")
-    expect(classes).toContain("px-5")
-    //resolved by tailwind-merge, not by print order — which is why the base is
-    //`h-14 w-14` and not `size-14` (a later `w-auto` never removes a `size-*`)
-    expect(classes).not.toContain("w-14")
-    expect(classes).toContain("h-14")
+    //the consumer's className, untouched: it beats fab.css's width without help
+    expect(el.className).toBe("w-auto px-5")
+    //…and the width it replaced no longer makes the width mode fixed: the content
+    //row tweens and the label sizes to its text
+    expect(
+      container.querySelector("[data-part='content-shell']"),
+    ).not.toBeNull()
+    expect(
+      container.querySelector<HTMLElement>("[data-part='label']")?.style
+        .flexShrink,
+    ).toBe("0")
   })
 
   it("exposes the Button handle through ref", () => {

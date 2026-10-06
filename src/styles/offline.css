@@ -1,0 +1,42 @@
+/*
+ * Offline — the default offline screen's look (components/offline.tsx): a centred
+ * column filling the shell, and the colours of its title and description.
+ *
+ * All of it is a default the consumer's `className` beats. The screen renders a `View`
+ * with `data-adaptv="offline"`, so View's own defaults (view.css) do not reach it — the
+ * flex column is spelled here. The one structural thing on it, the safe-area padding,
+ * is View's `safe="all"` inline lock, which also outranks the horizontal padding below
+ * on every edge it names (it did the same to the `px-6` class before).
+ *
+ * The root alone carries `data-adaptv="offline"`; each sub-part carries its own
+ * `data-adaptv="offline-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
+ * Layered in `adaptv.components` under `:where()` (zero specificity,
+ * docs/decisions/styling.md §6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root */
+  :where([data-adaptv="offline"][data-part="root"]) {
+    min-height: calc(var(--spacing, 0.25rem) * 0);
+    justify-content: center;
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 3);
+    width: 100%;
+    padding-inline: calc(var(--spacing, 0.25rem) * 6);
+    text-align: center;
+    flex-direction: column;
+    flex: 1;
+    display: flex;
+  }
+
+  /* title, description */
+  :where([data-adaptv="offline-title"][data-part="title"]) {
+    color: var(--color-gray-950, oklch(13% 0.028 261.692));
+  }
+
+  :where([data-adaptv="offline-description"][data-part="description"]) {
+    color: var(--color-gray-600, oklch(44.6% 0.03 256.802));
+  }
+}

@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef } from "react"
+import type { ComponentPropsWithRef, CSSProperties } from "react"
 import { cn } from "#adaptv/utils/cn"
 import { mergeStyles } from "#adaptv/utils/styles"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
@@ -8,6 +8,34 @@ const viewWarnings = createWarnOnce("View")
 /** Which safe-area edge(s) to pad. Resolves to 0 in a browser tab, the real inset in standalone/native. */
 type SafeEdges = "top" | "bottom" | "x" | "y" | "all"
 
+/*
+ * LOCKED, as inline style (docs/decisions/styling.md §2.0): the padding on the edges
+ * `safe` names. Inline style is the one author tier above an unlayered consumer class,
+ * so a `className="pb-0"` (or a plain-CSS `padding`) cannot un-pad the inset. The
+ * values are the `p-safe` family's (styles/safe-area.css), written once per edge set.
+ */
+const SAFE_TOP = "var(--adaptv-inset-top, 0px)"
+const SAFE_RIGHT = "var(--adaptv-inset-right, 0px)"
+const SAFE_BOTTOM = "var(--adaptv-inset-bottom, 0px)"
+const SAFE_LEFT = "var(--adaptv-inset-left, 0px)"
+const SAFE_STYLE: Record<SafeEdges, CSSProperties> = {
+  top: Object.freeze({ paddingTop: SAFE_TOP }),
+  bottom: Object.freeze({ paddingBottom: SAFE_BOTTOM }),
+  x: Object.freeze({ paddingRight: SAFE_RIGHT, paddingLeft: SAFE_LEFT }),
+  y: Object.freeze({ paddingTop: SAFE_TOP, paddingBottom: SAFE_BOTTOM }),
+  all: Object.freeze({
+    paddingTop: SAFE_TOP,
+    paddingRight: SAFE_RIGHT,
+    paddingBottom: SAFE_BOTTOM,
+    paddingLeft: SAFE_LEFT,
+  }),
+}
+
+/*
+ * The same edges as the `p-safe` utility family, kept ONLY so {@link droppedBySafe} can
+ * ask tailwind-merge which consumer padding classes the inline lock above overrides.
+ * Nothing renders these classes.
+ */
 const SAFE_CLASS: Record<SafeEdges, string> = {
   top: "pt-safe",
   bottom: "pb-safe",
@@ -34,8 +62,9 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
    */
   fill?: boolean
   /**
-   * Pad the given safe-area edge(s). Wins over `className` (structural): a padding class
-   * on the same edges is dropped, so `safe="all" className="p-6"` pads the inset alone.
+   * Pad the given safe-area edge(s). Wins over `className` and `style` (structural, an
+   * inline lock): a padding class on the same edges pads nothing there, so
+   * `safe="all" className="p-6"` pads the inset alone.
    * For the inset plus your own spacing, leave `safe` off and write
    * `className="p-safe-offset-6"` (or `px-`/`pt-`/`pb-safe-offset-*`).
    */
@@ -43,8 +72,9 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
 }
 
 /**
- * The consumer classes `safe` drops: present when `className` is merged on its own,
- * gone once the safe class is merged after it. `safe="all"` with `p-6` loses the `p-6`;
+ * The consumer classes `safe` overrides: present when `className` is merged on its own,
+ * gone once the matching safe class is merged after it — the same edges the inline lock
+ * covers, so the class still sits on the element but pads nothing there. `safe="all"` with `p-6` loses the `p-6`;
  * `safe="bottom"` with `p-6` keeps it, because a later `pb-safe` overrides one edge.
  */
 export function droppedBySafe(
@@ -64,8 +94,9 @@ export function droppedBySafe(
  * surface use `ScrollView`; for a long list use `List` (virtualized).
  *
  * Behaviour is props (`row` / `center` / `fill` / `safe`); look is `className`. The
- * safe-area padding is structural — it wins over a conflicting `className` — while
- * the default `flex flex-col` is an overridable base (set `className="grid"` etc.).
+ * safe-area padding is structural — inline style, so it wins over a conflicting
+ * `className` — while the default flex column is a layered rule (styles/view.css) any
+ * `className` beats (set `className="grid"` etc.).
  *
  * @example
  * ```tsx
@@ -80,6 +111,7 @@ export function View({
   fill = false,
   safe,
   className,
+  style,
   children,
   ...props
 }: ViewProps) {
@@ -97,19 +129,22 @@ export function View({
       )
     }
   }
+  const merged = mergeStyles({
+    className,
+    style,
+    lockedStyle: safe && SAFE_STYLE[safe],
+  })
   return (
     <div
       data-adaptv="view"
-      className={mergeStyles({
-        base: [
-          "flex",
-          row ? "flex-row" : "flex-col",
-          center && "items-center justify-center",
-          fill && "min-h-0 flex-1",
-        ],
-        className,
-        locked: safe && SAFE_CLASS[safe],
-      })}
+      data-part="root"
+      //the props as presence attributes: the layout they pick is a default rule
+      //keyed on them (styles/view.css), so any `className` still beats it
+      data-view-row={row ? "" : undefined}
+      data-view-center={center ? "" : undefined}
+      data-view-fill={fill ? "" : undefined}
+      className={merged.className || undefined}
+      style={merged.style}
       {...props}
     >
       {children}

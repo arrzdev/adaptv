@@ -64,10 +64,6 @@ function firstEl(ui: ReactElement): HTMLElement {
   return container.firstElementChild as HTMLElement
 }
 
-function hasClass(el: Element, token: string): boolean {
-  return (el.getAttribute("class") ?? "").split(/\s+/).includes(token)
-}
-
 /** Every `@media <query>` block in compiled CSS, braces balanced. */
 function mediaBlocks(css: string, query: string): string[] {
   const blocks: string[] = []
@@ -125,10 +121,26 @@ describe("Spinner renders", () => {
 
   it("sits in a line of text: 1em on both axes, and a box a transform applies to", () => {
     const el = firstEl(<Spinner />)
-    expect(hasClass(el, "w-[1em]")).toBe(true)
-    expect(hasClass(el, "h-[1em]")).toBe(true)
+    //the look is a layered default keyed on the part, not a class (styling.md §2)
+    expect(el.getAttribute("data-part")).toBe("root")
+    expect(el.hasAttribute("class")).toBe(false)
+    expect(el.querySelector("svg")?.getAttribute("data-part")).toBe("icon")
+    const rule = readFileSync(
+      join(process.cwd(), "src/styles/spinner.css"),
+      "utf8",
+    ).match(
+      /:where\(\[data-adaptv="spinner"\]\[data-part="root"\]\)\s*\{([^}]*)\}/,
+    )?.[1]
+    expect(rule).toContain("width: 1em;")
+    expect(rule).toContain("height: 1em;")
     //`inline` would silently stop the rotation — a transform skips inline boxes
-    expect(hasClass(el, "inline-block")).toBe(true)
+    expect(rule).toContain("display: inline-block;")
+  })
+
+  it("passes a consumer className through untouched", () => {
+    expect(firstEl(<Spinner className="size-8 block" />).className).toBe(
+      "size-8 block",
+    )
   })
 
   it("forwards native span props and the ref", () => {
@@ -226,6 +238,14 @@ describe("the motion is a transform keyframe on the HTML box", () => {
     expect(rules.length).toBeGreaterThan(0)
     for (const { selectors, body } of rules) {
       for (const selector of selectors) {
+        //the zero-specificity default LOOK of the box and its drawing (size, display)
+        //is no motion at all
+        if (selector.startsWith(":where(")) {
+          expect(body).not.toMatch(
+            /animation|transform|rotate|scale|translate/,
+          )
+          continue
+        }
         //the box, the box with one attribute, or its DIRECT svg child — never a
         //descendant, never anything drawn inside the svg
         expect(selector).toMatch(
@@ -414,7 +434,14 @@ describe("a labelled spinner is announced once", () => {
     })
     expect(region?.getAttribute("role")).toBe("status")
     expect(region?.getAttribute("aria-live")).toBe("polite")
-    expect(hasClass(region as Element, "sr-only")).toBe(true)
+    //visually hidden by the layered `sr-only` recipe keyed on its part
+    expect(region?.getAttribute("data-part")).toBe("root")
+    expect(region?.hasAttribute("class")).toBe(false)
+    expect(
+      readFileSync(join(process.cwd(), "src/styles/spinner.css"), "utf8"),
+    ).toMatch(
+      /:where\(\[data-adaptv="spinner-announcer"\]\[data-part="root"\]\)\s*\{[^}]*clip-path: inset\(50%\);[^}]*position: absolute;/,
+    )
     expect(announcerLines()).toEqual(["Loading tasks"])
     unmount()
   })

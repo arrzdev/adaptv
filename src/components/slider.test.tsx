@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { act, cleanup, fireEvent, render } from "@testing-library/react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -469,7 +471,7 @@ describe("Slider disabled", () => {
     expect(root.getAttribute("data-disabled")).toBe("")
     expect(input.disabled).toBe(true)
     //every axis goes back to the browser on an inert control
-    expect(root.className).toContain("touch-pan-x")
+    expect(root.style.touchAction).toBe("pan-x pan-y pinch-zoom")
   })
 })
 
@@ -554,18 +556,99 @@ describe("Slider locked layer", () => {
     const { container } = render(
       <Slider
         aria-label="v"
-        className="touch-none touch-manipulation p-2"
+        className="touch-manipulation static p-2"
+        style={{ touchAction: "none", position: "static" }}
       />,
     )
     const root = rootOf(container)
     //`manipulation` kills pointercancel on iOS (WebKit 240917); `none` would
-    //swallow the vertical pan the longhand hands back to the page
-    expect(root.className).toContain("touch-pan-y")
-    expect(root.className).toContain("touch-pinch-zoom")
-    expect(root.className).not.toContain("touch-none")
-    expect(root.className).not.toContain("touch-manipulation")
-    expect(root.className).toContain("relative")
-    expect(root.className).toContain("p-2")
+    //swallow the vertical pan the longhand hands back to the page. The lock is
+    //inline, the one tier above any consumer class, and it beats the consumer's
+    //own inline style for the same property
+    expect(root.style.touchAction).toBe("pan-y pinch-zoom")
+    expect(root.style.position).toBe("relative")
+    //the consumer's className passes through untouched, and adaptv adds none
+    expect(root.className).toBe("touch-manipulation static p-2")
+  })
+
+  it("emits no class of its own, and names every part", () => {
+    const { container } = render(<Slider aria-label="v" />)
+    for (const [scope, part] of [
+      ["slider", "root"],
+      ["slider-input", "input"],
+      ["slider-track", "track"],
+      ["slider-range", "range"],
+      ["slider-thumb", "thumb"],
+    ]) {
+      const el = container.querySelector(
+        `[data-adaptv='${scope}'][data-part='${part}']`,
+      )
+      expect(el, `${scope} ${part}`).not.toBeNull()
+      expect(el?.hasAttribute("class"), `${scope} ${part}`).toBe(false)
+    }
+    //stamped once: `[data-adaptv="slider"]` names the root and nothing inside it
+    expect(
+      container.querySelectorAll('[data-adaptv="slider"]'),
+    ).toHaveLength(1)
+  })
+
+  it("passes each slot's className through untouched", () => {
+    const { container } = render(
+      <Slider aria-label="v">
+        <Slider.Track className="bg-brand-100">
+          <Slider.Range className="bg-brand-600" />
+        </Slider.Track>
+        <Slider.Thumb className="h-6 w-6" />
+      </Slider>,
+    )
+    const cls = (scope: string) =>
+      container
+        .querySelector(`[data-adaptv='${scope}']`)
+        ?.getAttribute("class")
+    expect(cls("slider-track")).toBe("bg-brand-100")
+    expect(cls("slider-range")).toBe("bg-brand-600")
+    expect(cls("slider-thumb")).toBe("h-6 w-6")
+  })
+
+  it("locks the parts' structure inline", () => {
+    const { container } = render(<Slider aria-label="v" />)
+    const el = (scope: string) =>
+      container.querySelector<HTMLElement>(
+        `[data-adaptv='${scope}']`,
+      ) as HTMLElement
+    expect(el("slider-track").style.position).toBe("relative")
+    const range = el("slider-range")
+    expect(range.style.position).toBe("absolute")
+    expect(range.style.top).toMatch(/^0(px)?$/)
+    expect(range.style.bottom).toMatch(/^0(px)?$/)
+    expect(range.style.left).toMatch(/^0(px)?$/)
+    const thumb = el("slider-thumb")
+    expect(thumb.style.position).toBe("absolute")
+    expect(thumb.style.top).toBe("50%")
+    expect(thumb.style.pointerEvents).toBe("none")
+    //the native input stays visually hidden and out of the pointer's way (quirk 1)
+    const input = inputOf(container)
+    expect(input.style.position).toBe("absolute")
+    expect(input.style.width).toBe("1px")
+    expect(input.style.height).toBe("1px")
+    expect(input.style.overflow).toBe("hidden")
+    expect(input.style.clipPath).toBe("inset(50%)")
+  })
+
+  it("puts the defaults in zero-specificity layered rules", () => {
+    const css = readFileSync(
+      resolve(__dirname, "../styles/slider.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(css).toMatch(/@layer adaptv\.components\s*\{/)
+    for (const sel of [
+      '[data-adaptv="slider"][data-part="root"]',
+      '[data-adaptv="slider-track"][data-part="track"]',
+      '[data-adaptv="slider-range"][data-part="range"]',
+      '[data-adaptv="slider-thumb"][data-part="thumb"]',
+    ])
+      expect(css).toContain(`:where(${sel})`)
+    expect(css).not.toContain("!important")
   })
 
   it("forwards the consumer's inline style without losing the fill", () => {
