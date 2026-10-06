@@ -146,7 +146,10 @@ type ImageOwnProps = Omit<
    * than web placeholders. → `docs/design/image.md` §3.
    */
   placeholder?: string | false
-  /** LCP intent: `loading="eager"` + `fetchpriority="high"`. */
+  /**
+   * LCP intent: `loading="eager"` + `fetchpriority="high"`, and the `<img>` is
+   * painted from the server HTML on instead of fading in after hydration.
+   */
   priority?: boolean
   /** Escape hatch under `priority`. Lazy is safe from iOS 15.4. */
   loading?: "lazy" | "eager"
@@ -666,6 +669,14 @@ function ImageRoot(props: ImageProps) {
   const isImageVisible = state === "loaded"
   const isInvalidVisible = state === "invalid"
   const isErrorVisible = state === "error"
+  //A `priority` image is painted from the server HTML on, not from `loaded`.
+  //`loaded` is React state, so it cannot turn true before hydration, and an LCP
+  //image kept at `opacity-0` until the bundle runs is an LCP that waits for JS.
+  //Painted while loading, the `<img>` is transparent until its bytes arrive and
+  //then draws over the LQIP progressively — the browser's own reveal instead of
+  //the fade. `state` (and so the data attributes and `useImage()`) is unchanged.
+  const isImagePainted =
+    isImageVisible || (priority && state === "loading")
 
   const placeholderUrl =
     placeholder === false
@@ -769,7 +780,7 @@ function ImageRoot(props: ImageProps) {
   })
 
   const imgStyle: CSSProperties = {
-    ...(isImageVisible
+    ...(isImagePainted
       ? IMAGE_IMG_LOCKED_STYLE
       : IMAGE_IMG_HIDDEN_LOCKED_STYLE),
     ...imageFitStyle(fit, position, false),
@@ -821,7 +832,7 @@ function ImageRoot(props: ImageProps) {
           data-part="image"
           draggable={false}
           src={trimmed}
-          alt={isImageVisible ? alt : ""}
+          alt={isImagePainted ? alt : ""}
           //Emitted alongside the wrapper's `aspect-ratio`, not instead of it. The
           //attributes are free and survive a stylesheet that fails to load; the
           //wrapper ratio is author-origin on an element adaptv owns outright, so
@@ -834,7 +845,7 @@ function ImageRoot(props: ImageProps) {
           //Honoured from iOS 17.2, an inert unknown attribute below it — the right
           //shape for a hint: it degrades to nothing on a known version floor.
           fetchPriority={priority ? "high" : undefined}
-          aria-hidden={isImageVisible ? undefined : true}
+          aria-hidden={isImagePainted ? undefined : true}
           //no consumer channel (`className` and `style` land on the root), so no
           //`className`: the fade is image.css, the stack position is locked here
           style={imgStyle}

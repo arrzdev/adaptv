@@ -141,6 +141,9 @@ describe("buildManifest — under a subpath base", () => {
         base,
       )
       expect(manifest.start_url).toBe("/app/")
+      //the id follows the base with start_url: pinned to `/`, two apps on one
+      //origin (`/app/` and `/admin/`) claimed the same install identity
+      expect(manifest.id).toBe("/app/")
       expect(manifest.icons.map((icon) => icon.src)).toEqual([
         "/app/favicons/icon-512.png",
       ])

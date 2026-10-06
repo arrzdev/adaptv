@@ -3,7 +3,7 @@
 //colour on the FIRST frame, and by the time this route's component runs the
 //frame that mattered is already on screen. → `src/shell/route-tints.ts`
 import { ROUTE_TINTS } from "virtual:adaptv/route-tints"
-import type { NotFoundRouteComponent } from "@tanstack/react-router"
+import type { Register } from "@tanstack/react-router"
 import {
   createRootRoute as createTanStackRootRoute,
   Outlet,
@@ -16,6 +16,7 @@ import type {
   AdaptvUiConfig,
 } from "#adaptv/config/app-config"
 import type {
+  NotFoundScreenComponent,
   OrientationGuardProps,
   SplashScreenProps,
   UpdateRequiredProps,
@@ -56,7 +57,7 @@ export type CreateRootRouteConfig = Omit<PwaHeadConfig, "manifestPath"> & {
    * `<HeadContent/>` only apply to the built-in document).
    */
   RootDocument?: ComponentType<RootDocumentProps>
-  notFoundComponent?: NotFoundRouteComponent
+  notFoundComponent?: NotFoundScreenComponent
   /**
    * The app's offline UI. Rendered by adaptv when the app cannot boot far enough
    * for a route to exist — a route chunk fails to load (`vite:preloadError` with
@@ -131,6 +132,15 @@ function buildRootRouteHead({
   }
 }
 
+/**
+ * adaptv's root route: what `createRootRoute` returns, and the `Route` the root
+ * module exports. The router's own root route under adaptv's name: an interface,
+ * because TypeScript prints an alias by the type it aliases, and that type's
+ * printed name is the engine's. → docs/decisions/facade-and-opacity.md §1
+ */
+export interface AdaptvRootRoute
+  extends ReturnType<typeof createTanStackRootRoute<Register>> {}
+
 //NOTE: this used to take a second `shellChildren?: (outlet) => ReactNode` param,
 //which existed only so the removed `providers` config thunk could wrap the
 //outlet. Nothing has passed it since; an app-wide provider tree is a layout
@@ -138,7 +148,9 @@ function buildRootRouteHead({
 //be a second, weaker way to express the same thing. Removed rather than left
 //dead — an ejected caller still passing one now gets a loud arity error instead
 //of a silently-dropped provider tree.
-export function createRootRoute(config: CreateRootRouteConfig) {
+export function createRootRoute(
+  config: CreateRootRouteConfig,
+): AdaptvRootRoute {
   const {
     RootDocument: RootDocumentOverride,
     notFoundComponent,
@@ -203,7 +215,7 @@ export function createRootRoute(config: CreateRootRouteConfig) {
         (import.meta.env.DEV ? getNativeDevBootWatchdogScript() : ""),
     })
 
-  const NotFound: NotFoundRouteComponent =
+  const NotFound: NotFoundScreenComponent =
     notFoundComponent ??
     function DefaultNotFound() {
       return <UiNotFound homeTo={notFoundHomeTo} />

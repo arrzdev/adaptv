@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fireEvent, render } from "@testing-library/react"
+import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AdaptvImageAsset } from "#adaptv/components/image"
 import {
@@ -367,6 +368,30 @@ describe("Image — the <img> attributes", () => {
       expect(img.getAttribute("loading")).toBe("eager")
       expect(img.getAttribute("fetchpriority")).toBe("high")
     })
+  })
+
+  //The server HTML is what paints before hydration, so the assertion is on
+  //`renderToString`, where no effect and no load event can run.
+  it("paints a `priority` image from the server HTML, before hydration", () => {
+    function serverImg(ui: React.ReactElement): HTMLImageElement {
+      const host = document.createElement("div")
+      host.innerHTML = renderToString(ui)
+      return host.querySelector("img") as HTMLImageElement
+    }
+
+    const priority = serverImg(<Image src={ASSET} alt="Hero" priority />)
+    expect(priority.style.opacity).not.toBe("0")
+    expect(priority.style.zIndex).not.toBe("-10")
+    expect(priority.getAttribute("alt")).toBe("Hero")
+    expect(priority.hasAttribute("aria-hidden")).toBe(false)
+    //the LQIP still sits under it until the bytes arrive
+    const root = priority.parentElement as HTMLElement
+    expect(root.hasAttribute("data-image-loading")).toBe(true)
+
+    //…and nothing changes for an image without `priority`
+    const lazy = serverImg(<Image src={ASSET} alt="Hero" />)
+    expect(lazy.style.opacity).toBe("0")
+    expect(lazy.getAttribute("alt")).toBe("")
   })
 
   it("emits no `decoding` — it is a verified no-op in WebKit", () => {

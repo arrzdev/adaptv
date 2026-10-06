@@ -192,6 +192,17 @@ describe("the pages are built from the spec, not written out", () => {
       expect(out).toContain(cmd.path.join(" "))
   })
 
+  it("names the directory 'build web' publishes into for both render modes", () => {
+    //It said dist/client, where only a 'spa' app lands; an 'ssr' one is assembled
+    //into .output/public, and a deploy of dist/client then ships no channel.
+    const build = SPEC.commands.find(
+      (cmd) => cmd.path.join(" ") === "build",
+    )
+    const prose = build.prose.join("\n")
+    expect(prose).toContain(".output/public for render 'ssr'")
+    expect(prose).toContain("dist/client for 'spa'")
+  })
+
   it("puts every flag the spec declares on its command's page", () => {
     for (const cmd of SPEC.commands) {
       const out = captured(() => renderHelp(cmd.path))
