@@ -462,6 +462,24 @@ describe("TextArea — onSubmitKey", () => {
     )
   })
 
+  it("a disabled textarea never submits, even while it still holds focus", () => {
+    //WebKit moves focus off a field that turns disabled only at its next
+    //rendering update, so an Enter inside that frame still reaches keydown
+    const onSubmitKey = vi.fn()
+    const onKeyDown = vi.fn()
+    render(
+      <TextArea
+        aria-label="notes"
+        disabled
+        onSubmitKey={onSubmitKey}
+        onKeyDown={onKeyDown}
+      />,
+    )
+    expect(fireEvent.keyDown(textarea(), { key: "Enter" })).toBe(true)
+    expect(onSubmitKey).not.toHaveBeenCalled()
+    expect(onKeyDown).toHaveBeenCalledTimes(1)
+  })
+
   it("Shift+Enter is a newline, not a submit", () => {
     const onSubmitKey = vi.fn()
     const onParentKeyDown = vi.fn()
