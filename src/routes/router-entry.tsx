@@ -1,4 +1,5 @@
 import { routerOptions } from "virtual:adaptv/router-config"
+import type { AdaptvRouter } from "#adaptv/shell/create-adaptv-router"
 import { createAdaptvRouter } from "#adaptv/shell/create-adaptv-router"
 import { routeTree } from "#adaptv-route-tree"
 
@@ -32,13 +33,13 @@ import { routeTree } from "#adaptv-route-tree"
  *
  * Written as a named type, the emitter keeps `#adaptv-route-tree` as a live import in
  * the declaration file, so the app's stamped `tsconfig.paths` still decides what it
- * means — the same indirection that works from source, preserved into dist.
- * → tsdown.config.ts (`deps.neverBundle`), src/routes/route-tree-stub.d.ts
+ * means — the same indirection that works from source, preserved into dist. An
+ * interface rather than an alias, so a hover on `getRouter` prints this name instead
+ * of the engine's router type. → docs/decisions/facade-and-opacity.md §1,
+ * tsdown.config.ts (`deps.neverBundle`), src/routes/route-tree-stub.d.ts
  */
-export type AdaptvRouter = ReturnType<
-  typeof createAdaptvRouter<typeof routeTree>
->
+export interface AppRouter extends AdaptvRouter<typeof routeTree> {}
 
-export function getRouter(): AdaptvRouter {
+export function getRouter(): AppRouter {
   return createAdaptvRouter({ routeTree, ...routerOptions })
 }
