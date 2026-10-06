@@ -137,7 +137,7 @@ describe("Pressable — the locked tier", () => {
   })
 
   //inline style is its own cascade origin, so a forwarded `style` would otherwise
-  //beat every lock — it goes through mergeStyles' inline tier instead
+  //beat every lock — it goes through composeStyles' inline tier instead
   it("forwards the consumer's inline style through the style tier", () => {
     const { container } = render(
       <Pressable style={{ color: "rgb(255, 0, 0)" }} />,
@@ -176,9 +176,9 @@ describe("Pressable — render (a prop, not asChild)", () => {
   })
 
   //§3.3's trap: no library resolves Tailwind conflicts on composition, and the two
-  //that do it at all concatenate in opposite orders. adaptv routes composition
-  //through mergeStyles, so the lock still wins and the two consumer sources merge.
-  it("merges the element's className through mergeStyles, not concatenation", () => {
+  //that do it at all concatenate in opposite orders. adaptv joins the two consumer
+  //sources in one fixed order and keeps the lock inline, where no class reaches it.
+  it("joins the element's className before the prop's, and the lock stays inline", () => {
     const { container } = render(
       <Pressable
         className="p-4 touch-none"
@@ -186,11 +186,8 @@ describe("Pressable — render (a prop, not asChild)", () => {
       />,
     )
     const el = host(container)
-    //the element's own class survives where it doesn't conflict…
-    expect(el?.className).toContain("rounded")
-    //…the more local `className` prop wins where it does…
-    expect(el?.className).toContain("p-4")
-    expect(el?.className).not.toContain("p-2")
+    //both consumer sources land, the element's first, nothing merged…
+    expect(el?.className).toBe("p-2 rounded p-4 touch-none")
     //…and the lock, inline, still beats both
     expect(el?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
     expect(el?.className).not.toContain("touch-pan-x")

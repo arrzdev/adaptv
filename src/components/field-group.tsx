@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react"
 import { Children, cloneElement, isValidElement, useId } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * FieldGroup — the grouped settings form.
@@ -182,7 +182,7 @@ function FieldGroupRoot({
   ref,
   ...props
 }: FieldGroupProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
   return (
     <div
       {...props}
@@ -214,7 +214,7 @@ function FieldGroupHeader({
   ref,
   ...props
 }: FieldGroupHeaderProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
   return (
     <div
       {...props}
@@ -241,7 +241,7 @@ function FieldGroupFooter({
   ref,
   ...props
 }: FieldGroupFooterProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
   return (
     <div
       {...props}
@@ -307,7 +307,7 @@ function FieldGroupSection({
       <FieldGroupFooter>{footer}</FieldGroupFooter>
     ) : null)
 
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
 
   return (
     <section
@@ -342,7 +342,7 @@ function FieldGroupLabel({
   ref,
   ...props
 }: FieldGroupLabelProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
   return (
     <span
       {...props}
@@ -369,7 +369,7 @@ function FieldGroupDescription({
   ref,
   ...props
 }: FieldGroupDescriptionProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
   return (
     <span
       {...props}
@@ -457,7 +457,7 @@ function FieldGroupRow({
   //Text's composition rule: the render element's className/style and the row's
   //own are both the CONSUMER tier, merged rather than concatenated, the row's
   //last so it wins the per-property tie (§3.3).
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [render?.props.className, className],
     style: { ...render?.props.style, ...style },
     lockedStyle: FIELD_ROW_LOCKED_STYLE,

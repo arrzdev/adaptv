@@ -14,7 +14,7 @@ import {
   useState,
 } from "react"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
 
 /**
@@ -396,7 +396,7 @@ function ImageSlotLayer({
       //painted over a successfully loaded photo — branch with `useImage()` instead.
       //Fading a layer that is legitimately showing (`opacity-70` on a scrim) is an
       //ordinary restyle, so the opacity and its transition stay defaults.
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
         lockedStyle:
@@ -438,7 +438,7 @@ function ImageLqipLayer({
   fit: ImageFit
   position: string
 }) {
-  const { style } = mergeStyles({
+  const { style } = composeStyles({
     baseStyle: {
       backgroundImage: `url(${JSON.stringify(url)})`,
       backgroundRepeat: "no-repeat",
@@ -765,7 +765,7 @@ function ImageRoot(props: ImageProps) {
   const rootLockedStyle = fill
     ? IMAGE_ROOT_FILL_LOCKED_STYLE
     : IMAGE_ROOT_LOCKED_STYLE
-  const rootStyles = mergeStyles({
+  const rootStyles = composeStyles({
     className,
     style,
     //THE reservation, and therefore locked. A consumer inline `height` that

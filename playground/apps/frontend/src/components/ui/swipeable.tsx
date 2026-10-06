@@ -2,8 +2,8 @@ import {
   Swipeable as BaseSwipeable,
   View,
 } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentProps, ReactNode } from "react"
+import { cn } from "@/utils/cn"
 
 const SWIPEABLE_ROOT_CLASSNAME = cn("rounded-md")
 

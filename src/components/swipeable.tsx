@@ -24,7 +24,7 @@ import {
 } from "#adaptv/hooks/use-gesture-capture"
 import { willOpenVirtualKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 type SwipeableConfig = {
   /** Fraction of natural width the row must pass to open on release. */
@@ -1234,7 +1234,7 @@ const SwipeableRoot = forwardRef<SwipeableHandle, SwipeableRootProps>(
           //there is no class for a consumer to fight and nothing to lock. The
           //engine writes its transforms to the CONTENT node, not this one, so the
           //consumer's inline `style` here has no per-frame writer to race either.
-          {...mergeStyles({
+          {...composeStyles({
             className,
             style,
             lockedStyle: undefined,

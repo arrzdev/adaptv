@@ -207,8 +207,13 @@ describe("adaptvCssLayerOrderPlugin", () => {
       id: string,
     ) => { code: string; map: null } | null
     const buildEnd = p.buildEnd as (this: unknown) => void
+    const configResolved = p.configResolved as unknown as (config: {
+      plugins: { name: string }[]
+    }) => void
     return {
       plugin: p,
+      configResolved: (pluginNames: string[]) =>
+        configResolved({ plugins: pluginNames.map((name) => ({ name })) }),
       transform: (code: string, id: string) =>
         transform.call({}, code, id),
       buildEnd: (environment?: string) =>
@@ -285,6 +290,26 @@ describe("adaptvCssLayerOrderPlugin", () => {
       transform(ENTRY, "/app/src/styles/main.css")
       buildEnd("client")
       expect(warnings).toEqual([])
+    })
+
+    it("stays quiet in a plain-CSS app, whose config runs no Tailwind plugin", () => {
+      //Tailwind is optional: no `utilities` layer means no order to get wrong
+      const { configResolved, transform, buildEnd } = plugin()
+      configResolved(["vite:css", "adaptv:css-layer-order"])
+      transform(`.card{color:red}`, "/app/src/styles/main.css")
+      buildEnd("client")
+      expect(warnings).toEqual([])
+    })
+
+    it("still warns when the Tailwind plugin is in the config but ran first", () => {
+      const { configResolved, transform, buildEnd } = plugin()
+      configResolved([
+        "@tailwindcss/vite:scan",
+        "@tailwindcss/vite:generate:build",
+      ])
+      transform(COMPILED, "/app/src/styles/main.css")
+      buildEnd("client")
+      expect(warnings).toHaveLength(1)
     })
 
     it("still gives a verdict where the bundler names no environment", () => {

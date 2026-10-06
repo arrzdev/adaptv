@@ -1,6 +1,6 @@
 @import "@fontsource-variable/inter/wght.css";
 @import "tailwindcss";
-@import "@arrzdev/adaptv/styles.css";
+@import "@arrzdev/adaptv/tailwind.css";
 @import "./animations.css";
 
 /* Autofill text color — the pwa patch uses `currentColor`, which Safari/WebKit
@@ -121,6 +121,11 @@ textarea:-webkit-autofill:active {
   --priority-medium: oklch(0.83 0.13 90);
   --priority-low: oklch(0.74 0.12 235);
 }
+
+/* Classes e2e/cascade.spec.ts injects into a live page. Tailwind emits only what it scans,
+   and adaptv's own source is no longer scanned (docs/decisions/styling.md §0.1), so the
+   probes nothing in this app writes are named here. */
+@source inline("pb-safe-or-4");
 
 @theme inline {
   --color-background: var(--background);

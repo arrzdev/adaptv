@@ -16,7 +16,7 @@ import {
 } from "react"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * Collapsible — a disclosure whose panel animates to a MEASURED height and stays
@@ -213,7 +213,7 @@ function Collapsible({
         //No default rule and no lock, by decision: the root is a plain grouping
         //element with no neutral look of its own, so the consumer's classes are the
         //whole story (docs/decisions/styling.md §2).
-        {...mergeStyles({
+        {...composeStyles({
           className,
           style,
         })}
@@ -276,7 +276,7 @@ function CollapsibleTrigger({
       disabled={isTriggerDisabled || undefined}
       //No default rule and no lock, by decision (like Dropdown.Trigger): a trigger is
       //a plain button adaptv wires open/close onto, with no neutral look of its own.
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
       })}
@@ -486,7 +486,7 @@ function CollapsiblePanel({
       //No lock, by decision: overflow and the transition live in collapsible.css
       //keyed on the opening/closing attributes, and the panel has no neutral look
       //beyond that.
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
       })}

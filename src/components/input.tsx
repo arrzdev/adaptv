@@ -18,7 +18,7 @@ import {
 } from "react"
 import { PRESS_TARGET_DISABLED_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link Input}. Attach with `ref`.
@@ -311,7 +311,7 @@ function InputGroup({
     e.preventDefault()
   }
 
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     lockedStyle: disabled ? PRESS_TARGET_DISABLED_LOCKED_STYLE : undefined,
   })
@@ -386,7 +386,7 @@ const InputField = forwardRef<HTMLInputElement, InputFieldProps>(
       : disabled
         ? PRESS_TARGET_DISABLED_LOCKED_STYLE
         : undefined
-    const merged = mergeStyles({
+    const merged = composeStyles({
       className: grouped ? innerClassName : [className, innerClassName],
       style,
       lockedStyle,
@@ -536,7 +536,7 @@ const InputRoot = forwardRef<InputHandle, InputProps>(function Input(
       name={name}
       //both halves of the partition are the CONSUMER tier, so they are handed over
       //separately and merged there rather than pre-joined here — that keeps one
-      //mergeStyles call as the single place precedence is decided (§2)
+      //composeStyles call as the single place precedence is decided (§2)
       className={isGrouped ? undefined : shellClassName}
       innerClassName={innerClassName}
       value={value}

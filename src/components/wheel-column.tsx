@@ -14,7 +14,7 @@ import {
   WHEEL_PAD,
   wheelRowTransform,
 } from "#adaptv/components/wheel-column-geometry"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * CONSTANTS — the item height, layout box and drum projection now live in
@@ -378,7 +378,7 @@ export function WheelColumn({
       //never a drawer drag
       data-drawer-no-drag=""
       //`lockedStyle`, not a bare `style=`: see WHEEL_FIELDSET_LOCKED_STYLE
-      {...mergeStyles({
+      {...composeStyles({
         className,
         lockedStyle: WHEEL_FIELDSET_LOCKED_STYLE,
       })}
@@ -402,7 +402,7 @@ export function WheelColumn({
                 data-part="item"
                 data-active={isActive}
                 onClick={() => handleRowTap(index)}
-                {...mergeStyles({
+                {...composeStyles({
                   className: itemClassName,
                   lockedStyle: WHEEL_ITEM_LOCKED_STYLE,
                 })}

@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react"
 import { cloneElement } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * The element {@link Skeleton} should render instead of its default `<div>` — a
@@ -68,7 +68,7 @@ export interface SkeletonRegionProps extends ComponentPropsWithRef<"div"> {
 //The neutral placeholder look (`border-radius: var(--radius-md)`, a gray-200 fill) and
 //the region's visually-hidden status line are default rules in styles/skeleton.css,
 //keyed on `data-adaptv` / `data-part` — the "why" of each value is recorded there.
-//Nothing is locked, and that is a decision — see the note at the `mergeStyles` call.
+//Nothing is locked, and that is a decision — see the note at the `composeStyles` call.
 
 /**
  * A placeholder box for content that has not arrived — and the three platform rules
@@ -163,7 +163,7 @@ function SkeletonRoot({
   //styling — the pulse, its reduced-motion stop, the forced-colors outline — lives in
   //styles/skeleton.css keyed on `data-adaptv`, so there is nothing here that a
   //consumer's className could accidentally cancel.
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [render?.props.className, className],
     style: { ...render?.props.style, ...style },
   })

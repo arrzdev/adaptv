@@ -1,6 +1,6 @@
 import { ScrollView, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
+import { cn } from "@/utils/cn"
 
 export type PageProps = {
   children: ReactNode

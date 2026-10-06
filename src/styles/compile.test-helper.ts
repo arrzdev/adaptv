@@ -37,9 +37,7 @@ export async function compileCss(
  * Every utility Tailwind can generate — its whole class list, ~22k candidates — compiled
  * into one sheet (~5 MB, a few hundred ms).
  *
- * For claims about what Tailwind CAN emit rather than about one utility, and for tests that
- * must not spell utility names: adaptv's `@source` scans `src/`, test files included, so a
- * name written in a test ships in every consumer's stylesheet.
+ * For claims about what Tailwind CAN emit rather than about one utility.
  */
 export async function compileEveryUtility(): Promise<string> {
   const source = withTailwind("")
@@ -72,11 +70,15 @@ const COMPILE_OPTIONS = {
   },
 }
 
-/** Compile the whole shipped bundle (`src/styles/index.css`) for `candidates`. */
+/**
+ * Compile the Tailwind entry (`src/styles/tailwind.css`, which imports all of
+ * `styles.css`) for `candidates` — every adaptv rule, plus the utilities and variants
+ * only a Tailwind app gets.
+ */
 export function compileAdaptvStyles(
   candidates: string[],
 ): Promise<string> {
-  return compileCss(`@import "./index.css";`, candidates)
+  return compileCss(`@import "./tailwind.css";`, candidates)
 }
 
 /** The body of one compiled rule, whitespace-collapsed, or `null` when it never emitted. */

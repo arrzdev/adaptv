@@ -29,7 +29,7 @@ import {
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link RadioGroup}. Attach with `ref`.
@@ -337,7 +337,7 @@ function RadioGroupBox({
   const { boxRem } = radioLayout(size)
   //the edge is `lockedStyle` for Checkbox.Box's reason: the mark is derived from
   //the SAME `size`, so an inline width would resize the circle and not the dot
-  const { className: boxClassName, style: boxStyle } = mergeStyles({
+  const { className: boxClassName, style: boxStyle } = composeStyles({
     className,
     style,
     lockedStyle: {
@@ -372,7 +372,7 @@ function RadioGroupIndicator({
   const { indicatorRem } = radioLayout(size)
   //opacity IS the mark's visibility, so it is locked with the size: a consumer who
   //pins it to 1 would draw a dot on an unselected item. Branch with the hook.
-  const { className: markClassName, style: markStyle } = mergeStyles({
+  const { className: markClassName, style: markStyle } = composeStyles({
     className,
     lockedStyle: {
       ...RADIO_INDICATOR_LOCKED_LAYOUT_STYLE,
@@ -506,7 +506,7 @@ const RadioGroupItem = forwardRef<
 
   //the look (layout, focus ring, cursor) is a default rule in the stylesheet; the
   //geometry lives on the box, so the inline lock here is only position and touch
-  const itemStyles = mergeStyles({
+  const itemStyles = composeStyles({
     className,
     style,
     lockedStyle: isDisabled
@@ -747,7 +747,7 @@ const RadioGroup = forwardRef<RadioGroupHandle, RadioGroupProps>(
       [isControlled, isDisabled, onValueChange],
     )
 
-    const rootStyles = mergeStyles({ className, style })
+    const rootStyles = composeStyles({ className, style })
 
     return (
       <RadioGroupContext.Provider
