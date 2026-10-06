@@ -1124,6 +1124,9 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
         onSubmitKey &&
         e.key === "Enter" &&
         !e.shiftKey &&
+        //WebKit leaves focus on a field that turns disabled until its next
+        //rendering update, and keydown still lands here in that window
+        !e.currentTarget.disabled &&
         !isTouchDevice()
       ) {
         e.preventDefault()
