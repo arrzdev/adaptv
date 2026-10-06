@@ -83,13 +83,13 @@ export const page: DocPage = {
     {
       type: "ul",
       items: [
-        "**Imports.** Your source may not import the `react-start` package or its `/server` subpath. These hold server functions, middleware and request helpers.",
+        "**Imports.** Your source may not import the server-function package the router ships with (the one that exports `createServerFn`) or its `/server` subpath (`getRequest`, `setCookie`, …). These hold server functions, middleware and request helpers.",
         "**Route handlers.** A `server:` key at the top level of the options in `createFileRoute(...)({ ... })` is refused. adaptv does not see options built in a variable first.",
       ],
     },
     {
       type: "p",
-      text: 'The error names the file. In `dev` it shows in the overlay. A build fails. The shared Biome config (`@arrzdev/adaptv/biome-shared.json`) flags `createServerFn` and `createMiddleware` in your editor. Any other import from `react-start` passes the editor and fails the build. A web-only app with `render: "ssr"` is refused too. Put server logic in your own API and call it over the network.',
+      text: 'The error names the file. In `dev` it shows in the overlay. A build fails. The shared Biome config (`@arrzdev/adaptv/biome-shared.json`) flags `createServerFn`, `createMiddleware` and any `/server` import in your editor. Any other import from the package root passes the editor and fails the build. A web-only app with `render: "ssr"` is refused too. Put server logic in your own API and call it over the network.',
     },
     {
       type: "code",

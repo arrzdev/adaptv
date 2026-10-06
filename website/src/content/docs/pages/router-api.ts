@@ -183,6 +183,21 @@ function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
         ],
       ],
     },
+    { type: "h2", text: "Types" },
+    {
+      type: "table",
+      head: ["Type", "Use"],
+      rows: [
+        ["`NavigateOptions`", "The argument of `navigate()`."],
+        ["`ToOptions`", "A destination alone: `to`, `params`, `search`."],
+        ["`ParsedLocation`", "What `useLocation()` returns."],
+        ["`RegisteredRouter`", "Your app's router, with its route tree."],
+        [
+          "`UpdatableRouteOptionsExtensions`",
+          "Augment it on `@arrzdev/adaptv/router` to add your own typed route option. adaptv adds `chromeTint` this way.",
+        ],
+      ],
+    },
     { type: "h2", text: "Router options" },
     {
       type: "p",

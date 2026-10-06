@@ -150,7 +150,7 @@ export default defineConfig({
     {
       type: "ul",
       items: [
-        "An import of the `react-start` package or its `/server` subpath. Use your own API over the network.",
+        "An import of the server-function package (`createServerFn`, `createMiddleware`) or its `/server` subpath. Use your own API over the network.",
         "A `server: { ... }` key in the options of `createFileRoute(...)({ ... })`. Use a `loader`. adaptv misses a key in options built in a variable first.",
       ],
     },
