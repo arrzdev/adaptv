@@ -83,6 +83,6 @@ describe("the app shell is as tall as the screen the app can show", () => {
       resolve(__dirname, "shell-layout.tsx"),
       "utf8",
     )
-    expect(source).not.toMatch(/\bcn\(|mergeStyles\(/)
+    expect(source).not.toMatch(/\bcn\(|composeStyles\(/)
   })
 })

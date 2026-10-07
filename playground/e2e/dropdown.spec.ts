@@ -73,7 +73,7 @@ test.describe("Dropdown positioning", () => {
     await triggerFor(page, "Actions").waitFor()
   })
 
-  test("opens below and start-aligned when there is room", async ({
+  test("opens below and start-aligned when there is room @tailwind", async ({
     page,
   }) => {
     await openMenu(page, "Actions")
@@ -113,7 +113,7 @@ test.describe("Dropdown positioning", () => {
     ).toBeLessThanOrEqual((tb?.y ?? 0) + 1)
   })
 
-  test("shifts IN so a right-edge menu never spills off screen", async ({
+  test("shifts IN so a right-edge menu never spills off screen @tailwind", async ({
     page,
   }) => {
     await openMenu(page, "Right-edge menu")

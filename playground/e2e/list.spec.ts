@@ -76,7 +76,7 @@ test.describe("List virtualisation", () => {
     await page.waitForTimeout(150)
   })
 
-  test("2 000 rows render as only a windowful of DOM nodes", async ({
+  test("2 000 rows render as only a windowful of DOM nodes @tailwind", async ({
     page,
   }) => {
     const idx = await rowIndices(page)
@@ -93,7 +93,7 @@ test.describe("List virtualisation", () => {
     ).toBeLessThan(200)
   })
 
-  test("scrolling recycles the window — DOM stays small, indices move", async ({
+  test("scrolling recycles the window — DOM stays small, indices move @tailwind", async ({
     page,
     browserName,
   }) => {
@@ -124,7 +124,7 @@ test.describe("List virtualisation", () => {
     ).toBe(false)
   })
 
-  test("the window keeps recycling deeper in, never accumulating", async ({
+  test("the window keeps recycling deeper in, never accumulating @tailwind", async ({
     page,
     browserName,
   }) => {

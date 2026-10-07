@@ -1,7 +1,7 @@
 import type { ComponentPropsWithRef, CSSProperties } from "react"
 import { useEffect, useRef } from "react"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Props for {@link Spinner}. Native `<span>` props pass through, except the exposure
@@ -239,7 +239,7 @@ export function Spinner({
   ref,
   ...props
 }: SpinnerProps) {
-  const merged = mergeStyles({ className, style })
+  const merged = composeStyles({ className, style })
 
   //a blank label names nothing: it would be a progressbar announced with no name
   const name = label?.trim() || undefined
@@ -428,7 +428,7 @@ export function ProgressBar({
   const progress = progressOf(value)
   const indeterminate = progress === undefined
 
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     //the fill reads `--progress-value`; locked so a consumer `style` cannot

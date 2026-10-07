@@ -1,6 +1,6 @@
 import { Checkbox, useCheckbox, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useState } from "react"
+import { cn } from "@/utils/cn"
 
 function Box() {
   const { isChecked, isIndeterminate } = useCheckbox()

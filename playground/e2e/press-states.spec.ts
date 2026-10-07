@@ -38,7 +38,7 @@ test.describe("active: variant", () => {
     ).toBeNull()
   })
 
-  test("active: reaches the engine's [data-pressed] branch", async ({
+  test("active: reaches the engine's [data-pressed] branch @tailwind", async ({
     page,
   }) => {
     const button = page.getByRole("button", { name: ENGINE })

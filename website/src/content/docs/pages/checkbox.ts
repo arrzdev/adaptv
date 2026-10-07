@@ -15,17 +15,15 @@ export const page: DocPage = {
       type: "demo",
       component: CheckboxDemo,
       code: `import { Checkbox, useCheckbox } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 
 function Box() {
   const { isChecked, isIndeterminate } = useCheckbox()
   const filled = isChecked || isIndeterminate
   return (
     <Checkbox.Box
-      className={cn(
-        "rounded-md transition-colors",
-        filled ? "bg-blue-600" : "bg-white outline outline-1 -outline-offset-1 outline-gray-300",
-      )}
+      className={\`rounded-md transition-colors \${
+        filled ? "bg-blue-600" : "bg-white outline outline-1 -outline-offset-1 outline-gray-300"
+      }\`}
     >
       <Checkbox.Icon className="text-white" />
       {isIndeterminate && <span className="absolute h-0.5 w-2.5 rounded-full bg-white" />}

@@ -1,6 +1,6 @@
 import { Text } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { Deck } from "@/data/collections/decks/schema"
+import { cn } from "@/utils/cn"
 
 type TasksTitleProps = {
   as: "h1" | "span"

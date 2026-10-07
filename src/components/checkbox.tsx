@@ -24,7 +24,7 @@ import {
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link Checkbox}. Attach with `ref`.
@@ -295,7 +295,7 @@ function CheckboxBox({ className, style, children }: CheckboxBoxProps) {
   //the SAME number. A consumer inline `width` would resize the square without
   //resizing the checkmark, which is a silently broken control rather than a
   //restyled one — `size={n}` is the supported way to change it.
-  const { className: boxClassName, style: boxStyle } = mergeStyles({
+  const { className: boxClassName, style: boxStyle } = composeStyles({
     className,
     style,
     lockedStyle: {
@@ -338,7 +338,7 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
   //`Checkbox.Icon` takes no `style` prop, so the inline tier has only the locked
   //layer — named explicitly rather than passed as a bare `style=` so it reads as
   //the same decision the box makes.
-  const iconStyles = mergeStyles({
+  const iconStyles = composeStyles({
     className,
     lockedStyle: markStyle,
   })
@@ -507,7 +507,7 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
     //a DEFAULT (styles/checkbox.css), so `inline-flex` / `shrink-0` are overridable,
     //and a consumer turning this into a full-width `flex` row hit target is a
     //legitimate restyle, not a break: the accessible frame grows with it.
-    const rootStyles = mergeStyles({
+    const rootStyles = composeStyles({
       className,
       style,
       lockedStyle: isDisabled

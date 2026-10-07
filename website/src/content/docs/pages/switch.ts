@@ -21,7 +21,7 @@ const [checked, setChecked] = useState(true)
   aria-label="Notifications"
   checked={checked}
   onCheckedChange={setChecked}
-  className={cn("rounded-full bg-gray-300 transition-colors", checked && "bg-green-500")}
+  className={checked ? "rounded-full bg-green-500" : "rounded-full bg-gray-300"}
 >
   <Switch.Thumb className="rounded-full bg-white shadow-sm" />
 </Switch>`,

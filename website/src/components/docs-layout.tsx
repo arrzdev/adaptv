@@ -5,7 +5,6 @@ import {
   ScrollView,
   View,
 } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,6 +19,7 @@ import { headingIds, Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
 import { GITHUB_URL } from "@/content/site"
+import { cn } from "@/utils/cn"
 
 function matches(page: DocPage, query: string) {
   const haystack = [

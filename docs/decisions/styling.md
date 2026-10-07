@@ -87,6 +87,18 @@ that a developer does not need Tailwind; the correctness argument no longer supp
 - **Emitted CSS may grow.** A utility rule was shared with the app (one `.flex` served both); a
   per-component rule is not. Client JS shrinks — `tailwind-merge` and `clsx` leave the bundle.
   Both are measured before/after in the PR that removes the peers, and recorded here.
+  **Measured 2026-10-06** (the playground's client build, `.output/public`, gzip -9; before =
+  `a05dc7b`, the last `main` before the component restyle):
+
+  | Build | Client JS (gzip) | Emitted CSS (raw / gzip) |
+  |---|---|---|
+  | Tailwind playground, before | 608.3 KB | 87.1 KB / 14.7 KB |
+  | Tailwind playground, after | 611.1 KB | 104.0 KB / 16.8 KB |
+  | Same app, no Tailwind (`vite.plain.config.ts`) | 602.9 KB | 44.8 KB / 7.6 KB |
+
+  The Tailwind playground keeps its own `tailwind-merge` + `clsx` (its pages call `cn()`), so its
+  JS does not shrink; leaving them out is the 8.2 KB the no-Tailwind build saves. Its CSS grows
+  by 2.1 KB gzip: the per-component rules that replaced shared utilities.
 - **Inline style on locked elements.** Server-rendered HTML carries a `style` attribute where a class
   used to be (§2). Measured in the same PR.
 
@@ -839,8 +851,8 @@ maintain.** If the app wants two of its own Tailwind classes merged, it brings i
 - [x] adaptv owns its safe-area utilities; `tailwindcss-safe-area` is not a dependency.
 - [ ] `styles.css` contains no Tailwind at-rule, and a playground route built **without Tailwind**
       passes the component and precedence e2e suites (Chromium touch + WebKit).
-- [ ] `tailwindcss`, `tailwind-merge` and `clsx` are not in `peerDependencies`; `./utils` exports
-      neither `cn` nor `mergeStyles`.
+- [x] `tailwindcss`, `tailwind-merge` and `clsx` are not in `peerDependencies`; `./utils` exports
+      neither `cn` nor `mergeStyles` (`src/tailwind-optional.test.ts`).
 - [ ] adaptv defines **zero** colour/spacing/radius tokens; every Tailwind token it reads has
       Tailwind's default as a literal fallback (§7).
 - [x] No `::part()`, no shadow DOM, no `--adaptv-color-*` anywhere in the codebase.

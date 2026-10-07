@@ -3,7 +3,14 @@ import { clsx } from "clsx"
 import { extendTailwindMerge } from "tailwind-merge"
 
 /*
- * Matches every suffix adaptv's safe-area utilities accept (styles/safe-area.css):
+ * The playground's own class merge. adaptv stopped exporting `cn` when Tailwind became
+ * optional (docs/decisions/styling.md §0.1): an app that wants Tailwind classes merged
+ * brings `tailwind-merge` and `clsx` itself, as this one does. This is the helper adaptv
+ * shipped until then, kept so the playground's call sites resolve exactly as before.
+ */
+
+/*
+ * Matches every suffix adaptv's safe-area utilities accept (`@arrzdev/adaptv/tailwind.css`):
  * the bare inset, the inset plus N spacing units, and the inset floored at N.
  * `[7]` is Tailwind's arbitrary-integer form, which the `--value(integer, [integer])`
  * in the `@utility` rules also accepts — keep the two in step.

@@ -108,7 +108,7 @@ test.describe("FieldGroup structure", () => {
     await expect(box.locator('[data-part="footer"]')).toHaveCount(0)
   })
 
-  test("first:/last:/only: paint the grouped corners with no data-position", async ({
+  test("first:/last:/only: paint the grouped corners with no data-position @tailwind", async ({
     page,
   }) => {
     const { row } = driver(page)

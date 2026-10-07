@@ -78,7 +78,7 @@ export type UsePressCoreOptions = {
 export type PressCore = {
   /** Spread onto the host node. Owns activation; do not add an `onClick` beside it. */
   handlers: GestureHandlers
-  /** The `lockedStyle` tier for {@link mergeStyles} — inline, wins over `className` and `style`. */
+  /** The `lockedStyle` tier for {@link composeStyles} — inline, wins over `className` and `style`. */
   lockedStyle: CSSProperties
 }
 

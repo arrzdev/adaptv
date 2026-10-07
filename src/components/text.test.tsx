@@ -65,14 +65,12 @@ describe("Text render", () => {
     ).toBe("from Text")
   })
 
-  it("merges the slot's className with Text's instead of concatenating", () => {
-    //both are the CONSUMER tier; Text's own prop is the more local, so it wins the
-    //per-property tie — and only ONE of the pair reaches the DOM
+  it("joins the slot's className and Text's, the slot's first", () => {
+    //both are the CONSUMER tier, so both reach the DOM as written
     const el = firstEl(
       <Text render={<p className="text-sm" />} className="text-lg" />,
     )
-    expect(hasClass(el, "text-lg")).toBe(true)
-    expect(hasClass(el, "text-sm")).toBe(false)
+    expect(el.className).toBe("text-sm text-lg")
   })
 
   it("still stamps its attributes on the rendered element", () => {

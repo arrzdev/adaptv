@@ -3,7 +3,6 @@ import {
   compileAdaptvStyles,
   ruleFor,
 } from "#adaptv/styles/compile.test-helper"
-import { cn } from "#adaptv/utils/cn"
 
 /*
  * The edge-fade mask, asserted against COMPILED CSS.
@@ -30,13 +29,6 @@ describe("depth is a prop, so there is no utility to collide with it", () => {
     //`fadeSize` cannot express `md:`, so the one-line arbitrary property has to work
     const css = await compileAdaptvStyles(["[--fade-length:3rem]"])
     expect(ruleFor(css, ".\\[--fade-length\\:3rem\\]")).toContain("3rem")
-  })
-
-  it("keeps the depth out of tailwind-merge's way", () => {
-    //an arbitrary property is a group tailwind-merge already knows; the LAST one wins
-    expect(cn("[--fade-length:1rem]", "[--fade-length:3rem]")).toBe(
-      "[--fade-length:3rem]",
-    )
   })
 })
 

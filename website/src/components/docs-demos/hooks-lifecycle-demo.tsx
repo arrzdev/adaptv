@@ -1,7 +1,7 @@
 import { View } from "@arrzdev/adaptv/components"
 import { useAppState, useOnPause, useOnResume } from "@arrzdev/adaptv/hooks"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useState } from "react"
+import { cn } from "@/utils/cn"
 
 export function HooksLifecycleDemo() {
   const state = useAppState()

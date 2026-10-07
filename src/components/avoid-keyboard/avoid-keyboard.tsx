@@ -3,7 +3,7 @@ import { forwardRef, useRef } from "react"
 import type { AvoidKeyboardBehavior } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 export interface AvoidKeyboardProps
   extends HTMLAttributes<HTMLDivElement> {
@@ -117,7 +117,7 @@ export const AvoidKeyboard = forwardRef<
 
   //no default look, so no `data-adaptv` and no layer rule: the avoidance is entirely
   //inline + an attribute, and `className` is the consumer's alone
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: keyboardLockedStyle,
