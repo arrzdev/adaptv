@@ -169,7 +169,7 @@ jobs:
 
       - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
         id: e2e
-        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} e2e/icon.spec.ts -g StrictMode --repeat-each 16
+        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} e2e/icon.spec.ts -g StrictMode --repeat-each 32
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
