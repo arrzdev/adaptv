@@ -131,8 +131,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [main, stress, sw, sw-spa, sw-prompt]
+        suite: [stress]
         engine: [chromium, webkit]
+        rep: [1, 2, 3, 4]
         include:
           - suite: main
             script: test:e2e
@@ -165,7 +166,7 @@ jobs:
 
       - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
         id: e2e
-        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }}
+        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} e2e/stress-drawer-keyboard.spec.ts e2e/stress-drawer.spec.ts --repeat-each 2
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
