@@ -13,6 +13,119 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ios-ghost-caret",
+    title:
+      "The ghost caret: a text cursor that stays where the field used to be",
+    date: "2026-10-07",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "Slide a drawer or lift a keyboard under a focused input on iOS and the blinking caret stays behind at the old position. Five versions of the fix, and the one trick that makes WebKit redraw it.",
+    blocks: [
+      {
+        type: "p",
+        text: "Focus a text field inside a bottom sheet. As the sheet slides up, or as the keyboard lifts it, the text caret keeps blinking where the field used to be. A second caret seems to float in empty space above the keyboard. In the other version of the bug the caret never appears: you switch from one field to another and nothing blinks until you tap again.",
+      },
+      {
+        type: "p",
+        text: "Both happen when a focused field is moved by something that is not a layout change: a CSS transform, a drawer tween, a keyboard lift, a scroll. There is no CSS property or attribute that fixes it, and we found no WebKit bug number for it.",
+      },
+      { type: "h2", text: "Why it detaches" },
+      {
+        type: "p",
+        text: "The explanation in adaptv's source is that on iOS the caret is painted by the system on a separate overlay layer. That layer does not follow a transform in real time. It re-syncs on a layout, selection or scroll event. A field translated by a transform emits none of those, so the caret stays put. This is our reading of the behaviour, built from what the fix needs, not something WebKit documents.",
+      },
+      { type: "h2", text: "Five versions that came before the one that holds" },
+      {
+        type: "p",
+        text: "The first four are from June and July 2026, in the app adaptv was extracted from. That repository is private, so they are dated and not linked. The last is in the adaptv history.",
+      },
+      {
+        type: "ol",
+        items: [
+          "**18 June: hide every caret while the drawer is unsettled.** Attributes on `<body>` hid all carets during the slide, and `revert-layer` restored them afterwards.",
+          "**19 June: mute only the focused field.** WebKit did not honour `revert-layer` or the `caret-color` transition used to restore the caret. The caret stayed blank until a second tap. The replacement muted only the focused field and repainted once it had settled.",
+          "**24 June: one controller for the whole app.** Settling became a quiet window of 120ms after the last movement, because counting still frames made the caret flicker on and off during a momentum scroll. The restore also had to change the selection: removing `caret-color` and asserting the same selection range again does nothing, and WebKit ignores it.",
+          "**3 July: mute before the move, not after.** Reacting to movement always leaks a few ghost frames, because the mute needs a paint and a trip to the system's caret view before it takes effect. Things known to move a field, such as drawer tweens and keyboard lifts, now announce it first. A `touchstart` mutes ahead of a finger scroll, the one mover with no advance signal.",
+          "**13 August: restore at the end of a known move, not 120ms later.** The quiet window is for movers that cannot say when they finish. A drawer tween can. Waiting the window out after the sheet stopped put a full-viewport paint and a raster pass 120ms late on the profiler timeline, so everything in the sheet was drawn twice. A released hold now restores at once ([9cd1277](https://github.com/arrzdev/adaptv/commit/9cd1277)).",
+        ],
+      },
+      { type: "h2", text: "Mute while it moves, then nudge the selection" },
+      {
+        type: "p",
+        text: "The version that holds does two things. While the field moves, it sets `caret-color: transparent`, so no ghost is visible. When the field has been still, it restores the colour and forces WebKit to recompute where the caret is, by changing the selection to a different offset and back, all in one synchronous step that never paints.",
+      },
+      {
+        type: "code",
+        label: "caret repaint, simplified",
+        lang: "ts",
+        code: `function mute(field: HTMLElement) {
+  field.setAttribute("data-caret-muted", "true")
+  // Inline and important: it has to beat any caret-* utility class on the field.
+  field.style.setProperty("caret-color", "transparent", "important")
+}
+
+function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) {
+  field.removeAttribute("data-caret-muted")
+  field.style.removeProperty("caret-color")
+
+  // Both reads matter: the reflow, then the rect.
+  void field.offsetHeight
+  field.getBoundingClientRect()
+
+  // A caret at offset 0 is fixed by the reflow. Once there is text, only a
+  // real selection change makes WebKit recompute where the caret is.
+  if (!moved || field.selectionStart === null) return
+  const { selectionStart, selectionEnd, selectionDirection } = field
+  const probe = selectionStart > 0 ? 0 : Math.min(1, field.value.length)
+  field.setSelectionRange(probe, probe)
+  void field.offsetHeight
+  field.setSelectionRange(selectionStart, selectionEnd, selectionDirection ?? undefined)
+}`,
+      },
+      {
+        type: "p",
+        text: "Around that sit three decisions. Movers that know their end, such as the drawer, bracket the move so the caret is muted before the first moved frame and restored when it ends. Movers that do not, such as a scroll, hand the field to the 120ms quiet window, which every observed movement pushes out. And the frame-by-frame poll that watches the field's rectangle runs only while something might be moving, because each read forces a layout, and polling for as long as a field has focus kept the page busy through the whole time someone filled in a form.",
+      },
+      {
+        type: "p",
+        text: "The nudge is skipped during text composition, for input types that cannot report a selection, and when the field has not actually moved, so a plain focus or typing never touches the caret.",
+      },
+      { type: "h2", text: "In your app" },
+      {
+        type: "code",
+        label: "adaptv.config.ts",
+        lang: "ts",
+        code: `export default defineApp({
+  // On by default.
+  patches: { caretRepaint: true },
+})`,
+      },
+      {
+        type: "p",
+        text: "One field or a whole region can opt out with `data-adaptv-no-caret-repaint` on the element or an ancestor. The `data-caret-muted` attribute is on the field while it is muted, so you can style that state.",
+      },
+      { type: "h2", text: "What it does not fix" },
+      {
+        type: "p",
+        text: 'The caret is the only iOS text overlay that can be controlled from the web, through `caret-color`. The autocorrect and spelling suggestion popover, the misspelled-word underline, the selection handles, the magnifier and the Cut/Copy/Paste callout are all drawn by the system. They detach on scroll in the same way, and there is no web hook to move, mute or redraw them. The only mitigation is to stop them appearing, with `autocorrect="off"` and `spellcheck={false}` on the field. That costs inline corrections, and setting them after the overlay is already on screen does not dismiss it.',
+      },
+      { type: "h2", text: "What is still open" },
+      {
+        type: "ul",
+        items: [
+          "We did not record which iOS versions show the bug, and we have no WebKit bug to link.",
+          "A translation that neither declares itself nor rides a scroll is invisible to the patch, because the poll is off when nothing is expected to move. The contract is stated in the source.",
+          "The explanation of why the caret detaches is the authors' reading of the behaviour. It has not been checked against WebKit's source.",
+        ],
+      },
+      {
+        type: "note",
+        text: "This is a workaround for a platform bug. Re-test it on each major iOS release, on a real device, and remove it once WebKit moves the caret with the field.",
+      },
+    ],
+  },
+  {
     slug: "ios-cold-start-launch-height",
     title: "The installed iOS app that launches at the wrong height",
     date: "2026-10-07",
