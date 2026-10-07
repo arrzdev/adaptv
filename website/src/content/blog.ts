@@ -15,7 +15,7 @@ export const POSTS: Post[] = [
   {
     slug: "ios-cold-start-launch-height",
     title: "The installed iOS app that launches at the wrong height",
-    date: "2026-10-06",
+    date: "2026-10-07",
     kind: "Field note",
     author: "adaptv team",
     summary:
