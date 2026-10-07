@@ -17,6 +17,7 @@ export const POSTS: Post[] = [
     title: "The installed iOS app that launches at the wrong height",
     date: "2026-10-06",
     kind: "Field note",
+    author: "adaptv team",
     summary:
       "On a cold launch from the Home Screen, iOS lays the page out against one height, then another. A centred splash jumps, or sits 31pt off. Seven fixes that did not hold, and the head script that does.",
     blocks: [
