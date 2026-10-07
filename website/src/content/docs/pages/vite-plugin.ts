@@ -19,7 +19,6 @@ export const page: DocPage = {
       label: "vite.config.ts",
       lang: "ts",
       code: `import { adaptv } from "@arrzdev/adaptv/vite"
-import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
@@ -29,13 +28,13 @@ export default defineConfig({
     tsconfigPaths: true,
     dedupe: ["react", "react-dom"],
   },
-  plugins: [adaptv(), tailwindcss()],
+  plugins: [adaptv()],
 })`,
     },
     {
       type: "ul",
       items: [
-        "Put `adaptv()` before `tailwindcss()`. In the other order, adaptv's base styles beat your utilities.",
+        "With Tailwind, add `tailwindcss()` from `@tailwindcss/vite` after `adaptv()`.",
         "Do not add `@vitejs/plugin-react`, a router plugin, a PWA plugin or a deploy plugin. adaptv adds what it needs. A second copy fails the build.",
         "Use one port for `server` and `preview`. The [CLI](/docs/cli) starts Vite with `--strictPort`.",
       ],
