@@ -450,9 +450,12 @@ test.describe("WheelColumn's settle", () => {
  * ahead of React's. Every scroll event is the engine's own, one scrollTop write per
  * animation frame.
  *
- * WebKit only. Chromium runs React's render task before the next frame in the same
- * setup, so no scroll event ever reads a stale value there and the test would be
- * vacuous: 0 of 10 runs raced, against 10 of 10 on WebKit.
+ * WebKit on macOS only. Chromium runs React's render task before the next frame in
+ * the same setup, so no scroll event ever reads a stale value there and the test would
+ * be vacuous: 0 of 10 runs raced, against 10 of 10 on WebKit. Playwright's WebKit on
+ * Linux, where CI runs, schedules like Chromium here: 1 of 30 runs raced on the CI
+ * runner across a 30-120ms busy task and a 3-7px step (2026-10-06), so it is skipped
+ * there for the same reason.
  */
 test.describe("WheelColumn's live report", () => {
   test("a busy main thread does not report a stored row twice", async ({
@@ -460,8 +463,8 @@ test.describe("WheelColumn's live report", () => {
     browserName,
   }) => {
     test.skip(
-      browserName !== "webkit",
-      "Chromium renders before the next frame here, so nothing races",
+      browserName !== "webkit" || process.platform !== "darwin",
+      "only macOS WebKit runs the next frame ahead of React's render here; Chromium raced 0 of 10, Linux WebKit 1 of 30",
     )
     await page.goto("/lab/wheel-column")
     await awaitClientHandover(page)
