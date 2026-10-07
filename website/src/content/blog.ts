@@ -176,7 +176,7 @@ export const POSTS: Post[] = [
       { type: "h2", text: "Nothing in CSS governs it" },
       {
         type: "p",
-        text: "The instinct is to reach for user-select: none, or -webkit-touch-callout, or touch-action. Those control selection, the long-press callout menu, and panning — three different things. The loupe is none of them. This is [WebKit bug 231161](https://bugs.webkit.org/show_bug.cgi?id=231161), “REGRESSION (iOS 15): Safari shows zoom callout even if -webkit-user-select is none”. It was marked fixed for iOS 15.2. In July 2025 someone on the bug reported that `-webkit-user-select` no longer disables the loupe, and a new bug was opened for it: [bug 296492](https://bugs.webkit.org/show_bug.cgi?id=296492), \"REGRESSION: Safari loupe can't be disabled with CSS\".",
+        text: 'The instinct is to reach for user-select: none, or -webkit-touch-callout, or touch-action. Those control selection, the long-press callout menu, and panning — three different things. The loupe is none of them. This is [WebKit bug 231161](https://bugs.webkit.org/show_bug.cgi?id=231161), “REGRESSION (iOS 15): Safari shows zoom callout even if -webkit-user-select is none”. It was marked fixed for iOS 15.2. In July 2025 someone on the bug reported that `-webkit-user-select` no longer disables the loupe, and a new bug was opened for it: [bug 296492](https://bugs.webkit.org/show_bug.cgi?id=296492), "REGRESSION: Safari loupe can\'t be disabled with CSS".',
       },
       { type: "h2", text: "What actually arms it" },
       {
