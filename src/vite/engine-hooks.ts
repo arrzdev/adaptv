@@ -53,7 +53,7 @@ export const ENGINE_EDITS: readonly EngineEdit[] = [
     //the import the generator writes into route files names the framework barrel
     //(ADAPTV_ROUTER_PKG, set by adaptv's vite plugin). → src/vite/router-autoimport.ts
     pkg: "@tanstack/router-generator",
-    version: "1.167.21",
+    version: "1.167.22",
     file: "dist/esm/transform/transform.js",
     replace: [
       [
@@ -67,7 +67,7 @@ export const ENGINE_EDITS: readonly EngineEdit[] = [
     //`#tanstack-router-entry` stay: they are subpath imports declared in
     //start-server-core's own `imports` map, and never reach the HTML.
     pkg: "@tanstack/start-plugin-core",
-    version: "1.171.24",
+    version: "1.171.27",
     file: "dist/esm/constants.js",
     replace: [
       [
