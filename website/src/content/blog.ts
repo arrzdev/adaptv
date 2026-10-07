@@ -13,6 +13,140 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ios-keyboard-viewport-freeze",
+    title: "Freezing the iOS viewport when the keyboard opens",
+    date: "2026-10-07",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "Focus a field in a bottom sheet on iOS and WebKit scrolls the document and shrinks the viewport under your fixed UI. Six attempts, the scroll lock with its two carve-outs, and the offscreen trick that raises the keyboard without a jump.",
+    blocks: [
+      {
+        type: "p",
+        text: "Focus a text field inside a bottom sheet or a chat composer on iOS. WebKit scrolls the document to bring the field into view and shrinks the visible viewport to make room for the keyboard. Fixed UI jumps up. When the keyboard closes, a gap or a shoved page can be left behind. If you stop it with a prevented tap and a script that calls `focus()`, the keyboard may not rise at all.",
+      },
+      {
+        type: "p",
+        text: "adaptv wants the opposite: the page holds still, and only the sheet's own scroller makes room for the keyboard. That is a viewport freeze, and it has two halves. One keeps the document from moving. The other gets the keyboard up without the move that normally comes with it.",
+      },
+      { type: "h2", text: "What each platform does" },
+      {
+        type: "table",
+        head: ["Browser", "How the viewport is held"],
+        rows: [
+          [
+            "iOS Safari and installed iOS app",
+            "A scroll pin on the document, described below.",
+          ],
+          [
+            "Chromium, in a secure context",
+            "`navigator.virtualKeyboard.overlaysContent = true`, so the keyboard overlays the page and the layout height does not change.",
+          ],
+          [
+            "Everything else",
+            "`overflow: hidden` on the root element, with padding for the scrollbar width.",
+          ],
+        ],
+      },
+      {
+        type: "p",
+        text: "The scroll lock and the keyboard overlay are both reference counted. An app can hold the freeze for the whole session, an opening drawer reinforces the same lock, and a drawer in an app that never froze globally holds it alone.",
+      },
+      { type: "h2", text: "Six attempts that did not hold" },
+      {
+        type: "p",
+        text: "Five of these are from June 2026, in the app adaptv was extracted from. That repository is private, so they are dated and not linked. The last is in the adaptv history.",
+      },
+      {
+        type: "ol",
+        items: [
+          "**9 June: size the shell from the visual viewport.** A head script wrote the visual viewport's height to a custom property and the shell used it. It was reverted soon after, and the commit gives no reason. A height that follows the viewport also follows it when the keyboard opens, which is the movement a frozen shell is meant to ignore. That second part is our inference.",
+          "**9 June: lift fixed elements by the keyboard's height.** The offset was `innerHeight` minus the visual viewport's height, applied as a translate to every fixed bottom element, together with the drawer library's own input repositioning. It was gone by the shell rewrite a week later. The shortfall was never written down.",
+          "**18 June: pad the sheet's scroller.** Padding on the inner scroller, plus a lift for the hidden excess. Removed on 22 June. A note from the same week says `overflow: hidden` on the body is not enough, because WebKit scrolls the focused field into view on its own.",
+          "**A fixed offscreen nudge.** The focus trick below first moved the field up by a constant 2000px, which fell short on a tall viewport. On 19 June it became the viewport height plus 200px.",
+          "**Cancel touches at the scroller's edges.** Calling `preventDefault()` when a touch reached the end of an inner scroller killed pull-to-overscroll, caused flicker from layout reads on every `touchmove`, and swallowed the system's edge swipe. The fix on 27 June was `overscroll-behavior: contain` on scrollers and a 24px strip at each screen edge that the lock leaves alone.",
+          "**Taps that were scrolls.** A drag that ended over a field focused it and raised the keyboard. On 23 June a 10px travel limit separated taps from drags. In September, [472926b](https://github.com/arrzdev/adaptv/commit/472926b) fixed the other half: the walk that finds the scroller a touch would move skipped the scroller's own box, so a drag that began on its padding was treated as a drag on the document and cancelled. It was checked in Playwright's WebKit with the iPad Pro 11 profile, over 3,383 grid points on each of six test pages.",
+        ],
+      },
+      { type: "h2", text: "Half one: pin the document" },
+      {
+        type: "p",
+        text: "On iOS the lock sets `overflow: hidden` on `<html>`, gives `<body>` a negative top margin equal to the current scroll position, scrolls the window to the top, and scrolls it back to the top on every `scroll` event. It also cancels `touchmove` with `preventDefault()`, but only for touches that would move the document itself. A touch that lands on an inner scroller is left alone, so the scroller still scrolls and bounces.",
+      },
+      {
+        type: "p",
+        text: "Two carve-outs came from the failed attempts. A touch that starts within 24px of the left or right screen edge is never cancelled, so the system's back and forward swipe survives. And the scroller a touch would move is found starting from the touched element itself, not its parent, so a finger on a scroller's padding or between its rows is not mistaken for a finger on the page. Bounce is contained by `overscroll-behavior: contain` on the scroller itself. WebKit has a [bug open since 2022](https://bugs.webkit.org/show_bug.cgi?id=243452) where that property does nothing on a box that does not overflow, and Chrome 144 and Firefox 150 have fixed it for themselves.",
+      },
+      { type: "h2", text: "Half two: raise the keyboard from offscreen" },
+      {
+        type: "p",
+        text: "The lock stops the page from scrolling, but WebKit still runs its own scroll-into-view when a field takes focus. So adaptv takes the focus away from the tap. On `touchend` over a field that would open the keyboard, it cancels the tap, moves the field a viewport height and 200px up with a transform, calls `focus()`, and clears the transform on the next frame. WebKit does its scroll-into-view against the offscreen position and has nothing to scroll. Our reading is that this is why the page then stays put; we have not confirmed it in WebKit's source.",
+      },
+      {
+        type: "code",
+        label: "keyboard without a jump, simplified",
+        lang: "ts",
+        code: `const MARGIN = 200
+const offscreen = () =>
+  \`translateY(-\${Math.ceil(visualViewport?.height ?? innerHeight) + MARGIN}px)\`
+
+document.addEventListener("touchend", (event) => {
+  if (touchMoved) return // a scroll that ends over a field must not focus it
+
+  const field = event.composedPath()[0]
+  if (field instanceof HTMLElement && willOpenKeyboard(field) && field !== document.activeElement) {
+    event.preventDefault()
+    field.style.transform = offscreen()
+    field.focus()
+    requestAnimationFrame(() => { field.style.transform = "" })
+  }
+}, { passive: false, capture: true })
+
+// A field focused some other way gets the same nudge.
+document.addEventListener("focus", (event) => {
+  const field = event.composedPath()[0]
+  if (field instanceof HTMLElement && willOpenKeyboard(field)) {
+    field.style.transform = offscreen()
+    requestAnimationFrame(() => { field.style.transform = "" })
+  }
+}, true)`,
+      },
+      { type: "h2", text: "In your app" },
+      {
+        type: "code",
+        label: "adaptv.config.ts",
+        lang: "ts",
+        code: `export default defineApp({
+  // On by default.
+  patches: { viewportFreeze: true },
+})`,
+      },
+      {
+        type: "p",
+        text: "A subtree can opt out with `data-adaptv-no-viewport-freeze`. A touch that begins inside it is neither pinned nor nudged. The freeze is also a hook, `useFreezeViewport`, that drawers call while they are open.",
+      },
+      { type: "h2", text: "Why not something declarative" },
+      {
+        type: "p",
+        text: "adaptv looked for a way to drop the script. The `<dialog>` element's `showModal()` does not stop the page scrolling: the HTML spec's blocking covers hit-testing and focus, and the proposal to block scroll, [whatwg/html#7732](https://github.com/whatwg/html/issues/7732), is still open. And there is a WebKit regression, [bug 299084](https://bugs.webkit.org/show_bug.cgi?id=299084), reported in September 2025: in Safari 26, `overflow: hidden` on the body or the root stopped disabling scroll. A commenter reproduced it on iOS 26.0 and found it apparently fixed in 26.1, though a WebKit engineer replied that there are still plenty of bugs here. adaptv does not rely on `overflow: hidden` alone on iOS.",
+      },
+      { type: "h2", text: "What is still open" },
+      {
+        type: "ul",
+        items: [
+          "We did not record which iOS versions show each symptom.",
+          "The reason the offscreen move prevents the scroll is the authors' reading of the behaviour.",
+          "The commits for five of the six failed attempts are in a private repository, so only the sixth links.",
+          "Both WebKit bugs above were still NEW when this was written.",
+        ],
+      },
+      {
+        type: "note",
+        text: "This is a workaround for platform behaviour. Re-test it on each major iOS release, on a real device, with a sheet that has a text field in it, and remove the parts WebKit makes unnecessary.",
+      },
+    ],
+  },
+  {
     slug: "ios-ghost-caret",
     title:
       "The ghost caret: a text cursor that stays where the field used to be",
