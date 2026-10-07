@@ -13,6 +13,164 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "ios-26-browser-bar-tint",
+    title: "iOS 26 stopped reading theme-color. Here is what it reads instead",
+    date: "2026-10-07",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "In Safari on iOS 26 the meta tag does nothing, and each browser bar takes its colour from whatever fixed element touches its edge. Six attempts to tint it, the WebKit rules behind them, and the 12px strip that makes it work.",
+    blocks: [
+      {
+        type: "p",
+        text: "On iOS 26 the colour of Safari's top bar and bottom toolbar no longer follows `<meta name=\"theme-color\">`. A route that asks for a green bar gets none. A theme switch tints nothing. A drawer that dims the page reaches the top bar as a single step instead of a fade, and a tall bottom sheet leaves the bottom toolbar in the page colour instead of the sheet's.",
+      },
+      {
+        type: "p",
+        text: "iOS 18 Safari and Android Chrome still read the meta tag. So an app has to drive two mechanisms at once, and the new one is not documented. The rules below come from reading WebKit's source, then checking them against recordings.",
+      },
+      { type: "h2", text: "What the tag does now" },
+      {
+        type: "p",
+        text: "caniuse lists `theme-color` in iOS 26 as supported but not used for any colour. A WebKit engineer confirmed the new model in [bug 301756](https://bugs.webkit.org/show_bug.cgi?id=301756): a solid tint extension is only needed where a fixed or sticky element sits near an edge of the viewport. The bug is a question from a developer whose bar matched their page background, and the answer is that this is intended.",
+      },
+      {
+        type: "p",
+        text: "adaptv checked it on an iOS 26.1 simulator (build 23B86) with a probe page painting three different colours, on `html`, on `body` and on the app's content, and the meta tag set to a fourth that appeared nowhere else.",
+      },
+      {
+        type: "table",
+        head: ["Surface", "iOS 18", "iOS 26.1"],
+        rows: [
+          [
+            "meta `theme-color`",
+            "Drives the top bar",
+            "Inert. The colour never appears on screen",
+          ],
+          [
+            "`html` and `body` background",
+            "Anti-flash only",
+            "Drives both the status bar band and the bottom band",
+          ],
+          [
+            "Content painted to the edge",
+            "Covered by the solid bar",
+            "Wins. The bars take the content's own edge pixels",
+          ],
+        ],
+      },
+      {
+        type: "p",
+        text: "One more trap: Safari 26 reports `CPU iPhone OS 18_7` in its user agent. A check for iOS 26 or later is always false on the web. The first version of the fix gated on it and produced nothing anywhere.",
+      },
+      { type: "h2", text: "Six attempts that did not hold" },
+      {
+        type: "ol",
+        items: [
+          "**Write the meta tag.** The original approach, in place since June. It is inert on iOS 26 and was found out in July ([da4ced8](https://github.com/arrzdev/adaptv/commit/da4ced8)).",
+          "**Paint only the root element.** Added on 29 August ([6502482](https://github.com/arrzdev/adaptv/commit/6502482)). It loses to a `body` that paints its own background. A static probe with `html` green under a light `body` left both bands light, and with a transparent `body` both turned green. The first frame of a cold launch in iOS 26.1 Safari still showed the theme colour. The cause is probable, not proven.",
+          "**Animate the tint through the page background.** Declined. Writing a background colour on `html` or `body` every frame repaints the whole page, which is held to 60 Hz on iOS.",
+          "**Animate the backdrop's colour alpha instead of its opacity,** in case Safari reads the declared colour each frame. On a static probe the top band froze at the colour of the layer's first painted frame, 1 to 16% of the page's dim, for the whole 2.5 seconds the layer was open. That is worse than the step.",
+          "**Twelve static variants.** A CSS `opacity` transition on the scrim is read only at its end. A per-frame `background-color`, `transform`, layout change or re-append on the dimming layer all latch at the first read. A bisect of the tree from 2 September against main showed the two frame for frame the same, so this was never a regression.",
+          "**Let the sheet's panel include its hidden tail.** The drawer answered the keyboard by growing ([79319ef](https://github.com/arrzdev/adaptv/commit/79319ef), reworked in [35706cd](https://github.com/arrzdev/adaptv/commit/35706cd)) with `bottom: -excess` and a spacer of 55% of the viewport. A form-sized sheet then measured about 1.3 viewports, and Safari's bottom bar fell back to the page colour.",
+        ],
+      },
+      { type: "h2", text: "How iOS 26 picks a band's colour" },
+      {
+        type: "p",
+        text: "These rules were read from `LocalFrameView::fixedContainerEdges` and `Page::updateFixedContainerEdges` in WebKit's main branch on 21 September. We have not seen WebKit document them.",
+      },
+      {
+        type: "ul",
+        items: [
+          "For each edge, WebKit hit-tests the midpoint of that edge, 4px in, and walks up from the element it hits to the first ancestor that is `position: fixed` or `sticky` and has a layer.",
+          "That ancestor is skipped if it is narrower than 90% of the viewport, or taller than 1.05 viewports unless it is a dimming layer.",
+          "A viewport-sized box with no children and a transparent or translucent background is a dimming layer. A viewport-sized or dimming container keeps the colour already recorded for that edge, so a backdrop's colour is read once, on its first visible frame.",
+          "The colour is the first visible `background-color` found on the way up, and a box with alpha under 0.1 is skipped as nearly transparent. Alpha under 0.75, or a dimming layer's colour, is blended over the page background.",
+          "With no fixed container at an edge, Safari shows the page background colour, live.",
+        ],
+      },
+      {
+        type: "p",
+        text: "Those rules explain both failures. The backdrop is read once, so the top band steps. The sheet was too tall, so WebKit walked past it to `body`.",
+      },
+      { type: "h2", text: "Fix one: a strip at the top that is read live" },
+      {
+        type: "p",
+        text: 'A full-width fixed strip at the top edge is not viewport-sized on the other axis, so it counts as an ordinary candidate and its colour is re-read. A repaint of a fixed, composited layer also schedules a re-read. So adaptv keeps a 12px strip, fixed at `top: 0`, full width, with `pointer-events: none`, at the top of the stacking order, and writes its `background-color` every frame next to the meta tag. It is a "band donor" ([e6b561f](https://github.com/arrzdev/adaptv/commit/e6b561f)).',
+      },
+      {
+        type: "p",
+        text: "It is invisible on the page because it is set to 12% opacity. WebKit reads the element's `background-color`, not its composited pixels, and skips a box only when the alpha is under 0.1. The strip does not move the layout viewport: `innerHeight`, `visualViewport.height`, `clientHeight`, `svh`, `lvh`, `dvh` and `scrollY` read the same with and without it. With the real drawer on the iOS 26.1 simulator the top band follows the scrim across the whole 297 ms open with no dropped frames, and trails the close by at most 48 ms, where it used to hold for about 140 ms.",
+      },
+      {
+        type: "code",
+        label: "band donor, simplified",
+        lang: "ts",
+        code: `// Every tint write goes to the meta tag and to the donor.
+function paintTint(color: string) {
+  meta.setAttribute("content", color)
+  const strip = bandDonor() // created on the first paint that has an audience
+  if (strip) strip.style.backgroundColor = color
+}
+
+function bandDonor(): HTMLElement | null {
+  if (donor?.isConnected) return donor
+  if (!(isIOS() && !isInstalledApp())) return null // Safari tab only
+  donor = document.createElement("div")
+  donor.setAttribute("data-adaptv-band-donor", "")
+  donor.setAttribute("aria-hidden", "true")
+  donor.style.cssText =
+    "position:fixed;top:0;left:0;right:0;height:12px;" +
+    "pointer-events:none;opacity:.12;z-index:2147483647"
+  document.body.appendChild(donor)
+  return donor
+}`,
+      },
+      {
+        type: "p",
+        text: "The strip is created only in a Safari tab. An installed web app or a Capacitor shell has no browser bar to feed, and Android reads the meta tag. It is not gated on the iOS version, for the reason above, so iOS 18 Safari gets it too, harmlessly.",
+      },
+      { type: "h2", text: "Fix two: keep the panel under 1.05 viewports" },
+      {
+        type: "p",
+        text: "The bottom bar needed the sheet to stay inside WebKit's size limit. The panel now sits at `bottom: 0`, and the hidden tail below the fold is an absolutely positioned child at `top: 100%` that inherits the panel's background ([38addca](https://github.com/arrzdev/adaptv/commit/38addca)). The panel's own box stays under 1.05 viewports. A static probe reproduced it exactly: a 571px fixed sheet with `bottom: -314px` gave a white band, and the same sheet with the tail as a child gave the sheet's colour. After the change the Create-task drawer's band read the sheet's colour at both edges.",
+      },
+      {
+        type: "h2",
+        text: "Fix three: a scrim that stays after the OS switches theme",
+      },
+      {
+        type: "p",
+        text: "In an installed iOS 26.1 app, switching the OS from light to dark while the app is open left the top band at `#010101` instead of the dark theme's `#0a0a0c`, 13 seconds later and still there. It is the right page colour under a scrim of about 90% black. It appeared whenever the page was light at the moment of the switch, and not when it was already dark. A probe page with none of adaptv's code reproduces it. When the page follows the OS, a same-document navigation clears it, and so does painting the whole page dark for 300 ms, but that is a 600 ms black flash and was rejected.",
+      },
+      {
+        type: "p",
+        text: "The fix runs inside the `prefers-color-scheme` change handler: it calls `replaceState` to a new hash and straight back, in the same task ([b98efce](https://github.com/arrzdev/adaptv/commit/b98efce)). That was clean in 3 of 3 live switches and 3 of 3 switches while the app was in the background, against 2 of 2 banded without it. Why it works is inferred; it has not been traced in WebKit.",
+      },
+      { type: "h2", text: "The meta tag still matters elsewhere" },
+      {
+        type: "p",
+        text: "On iOS 18 Safari and Android Chrome the bar follows the meta tag, but the tag is read one process hop after it is written. adaptv samples the tint half a measured frame ahead of its curve ([0f6d426](https://github.com/arrzdev/adaptv/commit/0f6d426)), which brought the bar within −5 to +1.3 ms of the scrim. A stack of scrims keeps stacked drawers from handing the bar back early ([3aa99f9](https://github.com/arrzdev/adaptv/commit/3aa99f9)).",
+      },
+      { type: "h2", text: "What is still open" },
+      {
+        type: "ul",
+        items: [
+          "All of this was measured on iOS simulators, from 60 fps recordings. The installed app and a physical iPhone were not measured for the donor strip.",
+          "On a route whose tint differs from the page background, the 12% strip leaves a faint 12px of that colour over the first rows. That was not measured.",
+          "The cause of the latched scrim is inferred. The replaceState fix is empirical.",
+          "The WebKit rules are from one reading of the source on one date. They can change.",
+          "[WebKit bug 301756](https://bugs.webkit.org/show_bug.cgi?id=301756) is the only bug we cite, and it is a clarification, not a defect.",
+        ],
+      },
+      {
+        type: "note",
+        text: "This is a workaround for undocumented platform behaviour. Re-test it on every iOS release with a recording, because the rules above are not a contract.",
+      },
+    ],
+  },
+  {
     slug: "ios-keyboard-viewport-freeze",
     title: "Freezing the iOS viewport when the keyboard opens",
     date: "2026-10-07",
