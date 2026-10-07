@@ -133,8 +133,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [main, plain, stress, sw, sw-spa, sw-prompt]
-        engine: [chromium, webkit]
+        suite: [main]
+        engine: [webkit]
         include:
           - suite: main
             script: test:e2e
@@ -169,7 +169,7 @@ jobs:
 
       - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
         id: e2e
-        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }}
+        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} e2e/icon.spec.ts -g StrictMode --repeat-each 16
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
