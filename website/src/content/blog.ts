@@ -67,12 +67,12 @@ export const POSTS: Post[] = [
       {
         type: "ol",
         items: [
-          "**Write the meta tag.** The original approach, in place since June. It is inert on iOS 26 and was found out in July ([da4ced8](https://github.com/arrzdev/adaptv/commit/da4ced8)).",
-          "**Paint only the root element.** Added on 29 August ([6502482](https://github.com/arrzdev/adaptv/commit/6502482)). It loses to a `body` that paints its own background. A static probe with `html` green under a light `body` left both bands light, and with a transparent `body` both turned green. The first frame of a cold launch in iOS 26.1 Safari still showed the theme colour. The cause is probable, not proven.",
+          "**Write the meta tag.** The original approach, in place since June. It is inert on iOS 26 and was found out in July ([60cbf63](https://github.com/arrzdev/adaptv/commit/60cbf63)).",
+          "**Paint only the root element.** Added on 29 August ([1155586](https://github.com/arrzdev/adaptv/commit/1155586)). It loses to a `body` that paints its own background. A static probe with `html` green under a light `body` left both bands light, and with a transparent `body` both turned green. The first frame of a cold launch in iOS 26.1 Safari still showed the theme colour. The cause is probable, not proven.",
           "**Animate the tint through the page background.** Declined. Writing a background colour on `html` or `body` every frame repaints the whole page, which is held to 60 Hz on iOS.",
-          "**Animate the backdrop's colour alpha instead of its opacity,** in case Safari reads the declared colour each frame. On a static probe the top band froze at the colour of the layer's first painted frame, 1 to 16% of the page's dim, for the whole 2.5 seconds the layer was open. That is worse than the step.",
-          "**Twelve static variants.** A CSS `opacity` transition on the scrim is read only at its end. A per-frame `background-color`, `transform`, layout change or re-append on the dimming layer all latch at the first read. A bisect of the tree from 2 September against main showed the two frame for frame the same, so this was never a regression.",
-          "**Let the sheet's panel include its hidden tail.** The drawer answered the keyboard by growing ([79319ef](https://github.com/arrzdev/adaptv/commit/79319ef), reworked in [35706cd](https://github.com/arrzdev/adaptv/commit/35706cd)) with `bottom: -excess` and a spacer of 55% of the viewport. A form-sized sheet then measured about 1.3 viewports, and Safari's bottom bar fell back to the page colour.",
+          "**Animate the backdrop's colour alpha instead of its opacity,** in case Safari reads the declared colour each frame. On a static probe the top band froze at the colour of the layer's first painted frame, between 1 and 16% of the full dim, for the whole 2.5 seconds the layer was open. That is worse than the step.",
+          "**Twelve static variants.** A CSS `opacity` transition on the scrim is read only at its end. A per-frame `background-color`, `transform`, layout change or re-append on the dimming layer all latch at the first read. A recording of the tree as of 2 September matched main frame for frame, so this was never a regression.",
+          "**Let the sheet's panel include its hidden tail.** The drawer answered the keyboard by growing ([c031177](https://github.com/arrzdev/adaptv/commit/c031177), reworked in [9cd1277](https://github.com/arrzdev/adaptv/commit/9cd1277)) with `bottom: -excess` and a spacer of 55% of the viewport. A form-sized sheet then measured about 1.3 viewports, and Safari's bottom bar fell back to the page colour.",
         ],
       },
       { type: "h2", text: "How iOS 26 picks a band's colour" },
@@ -97,7 +97,7 @@ export const POSTS: Post[] = [
       { type: "h2", text: "Fix one: a strip at the top that is read live" },
       {
         type: "p",
-        text: 'A full-width fixed strip at the top edge is not viewport-sized on the other axis, so it counts as an ordinary candidate and its colour is re-read. A repaint of a fixed, composited layer also schedules a re-read. So adaptv keeps a 12px strip, fixed at `top: 0`, full width, with `pointer-events: none`, at the top of the stacking order, and writes its `background-color` every frame next to the meta tag. It is a "band donor" ([e6b561f](https://github.com/arrzdev/adaptv/commit/e6b561f)).',
+        text: 'A full-width fixed strip at the top edge is not viewport-sized on the other axis, so it counts as an ordinary candidate and its colour is re-read. A repaint of a fixed, composited layer also schedules a re-read. So adaptv keeps a 12px strip, fixed at `top: 0`, full width, with `pointer-events: none`, at the top of the stacking order, and writes its `background-color` every frame next to the meta tag. It is a "band donor" ([836e13c](https://github.com/arrzdev/adaptv/commit/836e13c)).',
       },
       {
         type: "p",
@@ -134,7 +134,7 @@ function bandDonor(): HTMLElement | null {
       { type: "h2", text: "Fix two: keep the panel under 1.05 viewports" },
       {
         type: "p",
-        text: "The bottom bar needed the sheet to stay inside WebKit's size limit. The panel now sits at `bottom: 0`, and the hidden tail below the fold is an absolutely positioned child at `top: 100%` that inherits the panel's background ([38addca](https://github.com/arrzdev/adaptv/commit/38addca)). The panel's own box stays under 1.05 viewports. A static probe reproduced it exactly: a 571px fixed sheet with `bottom: -314px` gave a white band, and the same sheet with the tail as a child gave the sheet's colour. After the change the Create-task drawer's band read the sheet's colour at both edges.",
+        text: "The bottom bar needed the sheet to stay inside WebKit's size limit. The panel now sits at `bottom: 0`, and the hidden tail below the fold is an absolutely positioned child at `top: 100%` that inherits the panel's background ([e02415c](https://github.com/arrzdev/adaptv/commit/e02415c)). The panel's own box stays under 1.05 viewports. A static probe reproduced it exactly: a 571px fixed sheet with `bottom: -314px` gave a white band, and the same sheet with the tail as a child gave the sheet's colour. After the change the Create-task drawer's band read the sheet's colour at both edges.",
       },
       {
         type: "h2",
@@ -146,12 +146,12 @@ function bandDonor(): HTMLElement | null {
       },
       {
         type: "p",
-        text: "The fix runs inside the `prefers-color-scheme` change handler: it calls `replaceState` to a new hash and straight back, in the same task ([b98efce](https://github.com/arrzdev/adaptv/commit/b98efce)). That was clean in 3 of 3 live switches and 3 of 3 switches while the app was in the background, against 2 of 2 banded without it. Why it works is inferred; it has not been traced in WebKit.",
+        text: "The fix runs inside the `prefers-color-scheme` change handler: it calls `replaceState` to a new hash and straight back, in the same task ([7b6d6c3](https://github.com/arrzdev/adaptv/commit/7b6d6c3)). That was clean in 3 of 3 live switches and 3 of 3 switches while the app was in the background, against 2 of 2 banded without it. Why it works is inferred; it has not been traced in WebKit.",
       },
       { type: "h2", text: "The meta tag still matters elsewhere" },
       {
         type: "p",
-        text: "On iOS 18 Safari and Android Chrome the bar follows the meta tag, but the tag is read one process hop after it is written. adaptv samples the tint half a measured frame ahead of its curve ([0f6d426](https://github.com/arrzdev/adaptv/commit/0f6d426)), which brought the bar within −5 to +1.3 ms of the scrim. A stack of scrims keeps stacked drawers from handing the bar back early ([3aa99f9](https://github.com/arrzdev/adaptv/commit/3aa99f9)).",
+        text: "On iOS 18 Safari and Android Chrome the bar follows the meta tag, but the tag is read one process hop after it is written. adaptv samples the tint half a measured frame ahead of its curve ([1155586](https://github.com/arrzdev/adaptv/commit/1155586)), which brought the bar within −5 to +1.3 ms of the scrim. A stack of scrims keeps stacked drawers from handing the bar back early ([5c5e2cf](https://github.com/arrzdev/adaptv/commit/5c5e2cf)).",
       },
       { type: "h2", text: "What is still open" },
       {
