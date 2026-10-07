@@ -8,6 +8,7 @@ import { page as configPage } from "./pages/config"
 import { page as deployingPage } from "./pages/deploying"
 import { page as drawerPage } from "./pages/drawer"
 import { page as dropdownPage } from "./pages/dropdown"
+import { page as filesystemPage } from "./pages/filesystem"
 import { page as hooksDataPage } from "./pages/hooks-data"
 import { page as hooksDevicePage } from "./pages/hooks-device"
 import { page as hooksFeedbackPage } from "./pages/hooks-feedback"
@@ -127,7 +128,13 @@ export const DOCS: DocGroup[] = [
   {
     section: "Reference",
     title: "APIs",
-    pages: [capabilitiesPage, storagePage, routerApiPage, utilsPage],
+    pages: [
+      capabilitiesPage,
+      filesystemPage,
+      storagePage,
+      routerApiPage,
+      utilsPage,
+    ],
   },
   {
     section: "Reference",
