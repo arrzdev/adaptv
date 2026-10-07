@@ -12,7 +12,7 @@ import { Switch } from "#adaptv/components/switch"
  * the track's left edge: on the iOS simulators the Settings row's switch read
  * as a frame under a point wide and a tap at its centre toggled nothing. Real
  * layout is measured in `playground/e2e/toggles.spec.ts`; happy-dom computes
- * none, so this file pins the class contract that produces it, and that a press
+ * none, so this file pins the inline-style contract that produces it, and that a press
  * which now LANDS on the input still toggles exactly once through the track's
  * gesture engine.
  */
@@ -85,33 +85,33 @@ describe("Switch — the accessible element is the hit area", () => {
     )
     const track = trackOf(container)
     const input = getByRole("switch")
-    const classes = input.className.split(/\s+/)
 
     //its containing block is the track: a direct child of the positioned label
     expect(input.parentElement).toBe(track)
-    expect(track.className.split(/\s+/)).toContain("relative")
-    //and it fills that box exactly — no inset, no margin, no clip
-    for (const cls of [
-      "absolute",
-      "inset-0",
-      "size-full",
-      "m-0",
-      "opacity-0",
-      "appearance-none",
-    ]) {
-      expect(classes, `the input carries ${cls}`).toContain(cls)
-    }
-    expect(classes, "a 1px clipped box is not a frame").not.toContain(
-      "sr-only",
-    )
+    expect(track.style.position).toBe("relative")
+    //and it fills that box exactly — no inset, no margin, no clip — as inline
+    //style, the one tier no consumer class can beat
+    expect(input.style.position).toBe("absolute")
+    expect(input.style.inset).toMatch(/^0(px)?$/)
+    expect(input.style.width).toBe("100%")
+    expect(input.style.height).toBe("100%")
+    expect(input.style.margin).toMatch(/^0(px)?$/)
+    expect(input.style.opacity).toBe("0")
+    expect(input.style.appearance).toBe("none")
+    expect(input.style.cursor).toBe("inherit")
+    //a 1px clipped box is not a frame
+    expect(input.style.clipPath).toBe("")
+    expect(input.style.overflow).toBe("")
+    //and the input carries no class of adaptv's at all
+    expect(input.hasAttribute("class")).toBe(false)
   })
 
   it("keeps the input the only accessible element: the thumb stays hidden and passes pointers through", () => {
     const { container } = render(<Switch aria-label="Dark mode" />)
     const track = trackOf(container)
-    const thumb = track.querySelector("span")
+    const thumb = track.querySelector<HTMLElement>("[data-part='thumb']")
     expect(thumb?.getAttribute("aria-hidden")).toBe("true")
-    expect(thumb?.className.split(/\s+/)).toContain("pointer-events-none")
+    expect(thumb?.style.pointerEvents).toBe("none")
   })
 
   it("renders its controlled input without React's read-only-field warning", () => {

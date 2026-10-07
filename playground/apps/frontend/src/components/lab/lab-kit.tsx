@@ -1,6 +1,6 @@
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import { useSyncExternalStore } from "react"
+import { cn } from "@/utils/cn"
 
 /**
  * The lab's shared vocabulary.

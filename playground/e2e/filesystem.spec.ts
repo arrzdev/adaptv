@@ -6,14 +6,21 @@ import { awaitClientHandover } from "./support/hydrated"
  * WebKit 26.5 exposes both entry points and then rejects `getDirectory()`
  * itself (`UnknownError: The operation failed for an unknown transient
  * reason`), on a real http origin, before any file is touched — measured
- * 2026-09-02 with a step-by-step probe. So the two engines pin two different
- * truths: chromium the round trip, webkit that the capability reports the
- * refusal as unsupported with the error named, and that every call after it
- * answers unsupported rather than failing one by one. The real WebKit on the
- * iOS simulator is a device row, not this spec.
+ * 2026-09-02 with a step-by-step probe on macOS. The same WebKit 26.5 build on
+ * Linux, where CI runs, has no `navigator.storage.getDirectory` at all
+ * (measured 2026-10-06), so there the capability names the missing API rather
+ * than a refusal. So the engines pin different truths: chromium the round trip,
+ * webkit that the capability reports unsupported with the host's reason named,
+ * and that every call after it answers unsupported rather than failing one by
+ * one. The real WebKit on the iOS simulator is a device row, not this spec.
  */
 
-test.describe("Filesystem where WebKit refuses its root", () => {
+const WEBKIT_CAVEAT =
+  process.platform === "darwin"
+    ? "refused to open it: UnknownError"
+    : "This browser has no origin-private file system."
+
+test.describe("Filesystem where WebKit refuses or lacks its root", () => {
   test.beforeEach(async ({ page, browserName }) => {
     test.skip(
       browserName !== "webkit",
@@ -23,12 +30,12 @@ test.describe("Filesystem where WebKit refuses its root", () => {
     await awaitClientHandover(page)
   })
 
-  test("reports unsupported with the error named, and every call answers unsupported", async ({
+  test("reports unsupported with the reason named, and every call answers unsupported", async ({
     page,
   }) => {
     await expect(page.getByTestId("fs-backend")).toHaveText("none")
     await expect(page.getByTestId("fs-caveat")).toContainText(
-      "refused to open it: UnknownError",
+      WEBKIT_CAVEAT,
     )
     await page.getByRole("button", { name: "Run round trip" }).click()
     await expect(page.getByTestId("fs-readout")).toHaveText(

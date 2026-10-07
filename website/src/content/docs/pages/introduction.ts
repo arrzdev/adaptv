@@ -8,7 +8,7 @@ export const page: DocPage = {
   blocks: [
     {
       type: "p",
-      text: "adaptv is a React framework. One codebase ships to desktop web, mobile web, an installed home-screen app, and native iOS and Android apps. You write React and Tailwind. adaptv handles the differences between targets. The native apps are web views in a native shell. See [the six targets](/docs/six-targets).",
+      text: "adaptv is a React framework. One codebase ships to desktop web, mobile web, an installed home-screen app, and native iOS and Android apps. You write React and any CSS. Tailwind is optional. adaptv handles the differences between targets. The native apps are web views in a native shell. See [the six targets](/docs/six-targets).",
     },
     { type: "h2", text: "What adaptv does, and what you write" },
     {

@@ -1,5 +1,4 @@
 import { Text, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type {
   DragEndEvent,
   DragOverEvent,
@@ -25,6 +24,7 @@ import type { Deck } from "@/data/collections/decks/schema"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
 import { useHaptics } from "@/hooks/use-haptics"
 import { useSortableReorder } from "@/hooks/use-sortable-reorder"
+import { cn } from "@/utils/cn"
 
 export type SettingsDeckListProps = {
   decks: Deck[]

@@ -1,0 +1,80 @@
+/*
+ * RadioGroup — the default look of the group, its items and the painted circle
+ * (components/radio-group.tsx).
+ *
+ * Only defaults live here: the group's flex layout, the item's layout, focus ring and
+ * cursor, and the box's round surface. Everything the control's correctness depends
+ * on — the item's `position: relative` and touch pass-through, the box's positioning
+ * and clip, the indicator's `pointer-events: none`, and the invisible input laid over
+ * the item — is inline style written by the component (docs/decisions/styling.md §2.0),
+ * the one tier a consumer's `className` cannot beat.
+ *
+ * ## Why the part selectors are scoped by the group, not by their own identity
+ *
+ * `data-adaptv="radio-group"` is on the group ALONE, so a selector for every radio group
+ * does not also match every option in it (data-adaptv.test.tsx guards that). The item,
+ * box and indicator carry only `data-part`, so they are reached as descendants of the
+ * group. `:not([data-adaptv])` keeps the rules off another primitive's same-named part
+ * nested inside an item's content (a Checkbox's `data-part="box"` carries its own
+ * `data-adaptv`).
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
+ * rule or utility wins over any of it, every selector is wrapped in `:where()` so it has
+ * zero specificity (§6.0.1), and nothing here is `!important`.
+ */
+
+@layer adaptv.components {
+  /* root: the group */
+  :where([data-adaptv="radio-group"][data-part="root"]) {
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    flex-direction: column;
+    display: flex;
+  }
+
+  :where([data-adaptv="radio-group"][data-part="root"][aria-orientation="horizontal"]) {
+    flex-flow: wrap;
+  }
+
+  /* item: the label, and the whole hit area */
+  :where([data-adaptv="radio-group"] [data-part="item"]:not([data-adaptv])) {
+    cursor: pointer;
+    align-items: center;
+    gap: calc(var(--spacing, 0.25rem) * 2);
+    display: inline-flex;
+  }
+
+  /*
+   * The keyboard focus ring. The native input is `opacity: 0`, so the patches.css
+   * `:focus-visible` outline it would draw is invisible; the label draws it instead,
+   * in the same colour chain (`--adaptv-ring`, then `currentColor`).
+   */
+  :where([data-adaptv="radio-group"] [data-part="item"]:not([data-adaptv]):has(:focus-visible)) {
+    outline-style: solid;
+    outline-width: 2px;
+    outline-offset: 2px;
+    outline-color: var(--adaptv-ring, currentColor);
+  }
+
+  /* the cursor is a look, so it is the consumer's to change (press-core explains the split) */
+  :where([data-adaptv="radio-group"] [data-part="item"][data-disabled]:not([data-adaptv])) {
+    cursor: not-allowed;
+  }
+
+  /* box: the painted circle */
+  :where([data-adaptv="radio-group"] [data-part="box"]:not([data-adaptv])) {
+    background-color: var(--color-gray-50, oklch(98.5% 0.002 247.839));
+    border-radius: calc(infinity * 1px);
+  }
+
+  /*
+   * Under forced colors the background is replaced by Canvas and a fill-only box
+   * vanishes, so it gets an outline there, which the UA paints in a system colour.
+   */
+  @media (forced-colors: active) {
+    :where([data-adaptv="radio-group"] [data-part="box"]:not([data-adaptv])) {
+      outline-style: solid;
+      outline-width: 1px;
+      outline-offset: calc(1px * -1);
+    }
+  }
+}

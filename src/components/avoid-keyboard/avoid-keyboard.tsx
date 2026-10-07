@@ -3,7 +3,7 @@ import { forwardRef, useRef } from "react"
 import type { AvoidKeyboardBehavior } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useKeyboardAvoidance } from "#adaptv/components/avoid-keyboard/use-keyboard-avoidance"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 export interface AvoidKeyboardProps
   extends HTMLAttributes<HTMLDivElement> {
@@ -115,12 +115,10 @@ export const AvoidKeyboard = forwardRef<
     "--adaptv-keyboard-height": `${keyboardHeight}px`,
   } as CSSProperties
 
-  const merged = mergeStyles({
-    //no neutral look and nothing structural in the class tier — the avoidance is
-    //entirely inline + an attribute, so `base`/`locked` are undefined by decision
-    base: undefined,
+  //no default look, so no `data-adaptv` and no layer rule: the avoidance is entirely
+  //inline + an attribute, and `className` is the consumer's alone
+  const merged = composeStyles({
     className,
-    locked: undefined,
     style,
     lockedStyle: keyboardLockedStyle,
   })
@@ -128,7 +126,7 @@ export const AvoidKeyboard = forwardRef<
   return (
     <div
       ref={setRefs}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
       //boolean-PRESENCE, never `="false"` (§3.1) — that is what makes v4's bare
       //`data-keyboard-open:pb-4` work instead of `data-[keyboard-open=true]:pb-4`

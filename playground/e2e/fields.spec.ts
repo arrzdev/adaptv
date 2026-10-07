@@ -137,7 +137,7 @@ test.describe("Input & TextArea (no keyboard needed)", () => {
     ).toBeGreaterThan(20)
   })
 
-  test("the fixed-height wrapper keeps its box while the autoResize field grows and caps", async ({
+  test("the fixed-height wrapper keeps its box while the autoResize field grows and caps @tailwind", async ({
     page,
   }) => {
     const fixed = page.getByRole("textbox", {

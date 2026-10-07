@@ -177,13 +177,12 @@ reader would trip on it. None is verified beyond what is stated.
   key for permission text (adaptv's own geolocation plugin included), the manifest hardcodes
   `start_url: "/"`, and `notFoundHomeTo` is unreachable from config.
 - **Stale text:** `app-config.ts` says `adaptv gen icons`; `secure.ts` says `adaptv sync`;
-  `types.ts` says `orientationGuardComponent` / `updateRequiredComponent` (the keys end in
-  `Screen`); `cli-spec.mjs` says the channel lands in `dist/client` (SSR writes `.output/public`)
-  and `-o` is ignored by `build web`; `patches.css` says scrollbar hiding is installed-only (the
+  `types.ts` says `orientationGuardComponent` (the key is `orientationGuardScreen`);
+  `patches.css` says scrollbar hiding is installed-only (the
   default is `"all"`); `docs/design/lifecycle.md` §7, `rendering.md` §2, `architecture.md` §3.2
   and `decisions/browser-chrome-autohide.md` (`View scroll="y"`) describe things that no longer
-  exist; `styling.md` §3's `data-part` contract is set by `Image` alone; `UpdateRequiredProps` and
-  the `Swipeable` root props are not exported; the public not-found export is `UiNotFound`.
+  exist; `styling.md` §3's `data-part` contract is set by `Image` alone; the `Swipeable` root props
+  are not exported; the public not-found export is `UiNotFound`.
 
 ### 3.2 Landing page
 

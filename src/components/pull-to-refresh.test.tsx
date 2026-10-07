@@ -427,3 +427,53 @@ describe("a pull that starts on a swipeable row", () => {
     }
   })
 })
+
+describe("PullToRefresh — default rules in the layer, locks inline (styling.md §2)", () => {
+  it("names its root, reaches its inner parts as children, and emits no class of its own", () => {
+    const { container } = render(
+      <PullToRefresh onRefresh={async () => {}}>
+        <i data-testid="inside" />
+      </PullToRefresh>,
+    )
+    const root = container.querySelector<HTMLElement>(
+      '[data-adaptv="pull-to-refresh"]',
+    )
+    if (!root) throw new Error("no gesture root")
+    expect(root.getAttribute("data-part")).toBe("root")
+    expect(root.getAttribute("class") ?? "").toBe("")
+    //one scope element: the consumer's content finds the gesture root with `closest()`
+    expect(
+      container.querySelectorAll('[data-adaptv="pull-to-refresh"]'),
+    ).toHaveLength(1)
+    const status = root.querySelector(':scope > [data-part="status"]')
+    const content = root.querySelector(':scope > [data-part="content"]')
+    expect(status?.getAttribute("aria-live")).toBe("polite")
+    expect(status?.hasAttribute("class")).toBe(false)
+    expect(content?.hasAttribute("class")).toBe(false)
+    expect(content?.querySelector('[data-testid="inside"]')).not.toBeNull()
+  })
+
+  it("passes a consumer className through and holds the containing block inline", () => {
+    for (const enabled of [true, false]) {
+      const { container, unmount } = render(
+        <PullToRefresh
+          onRefresh={async () => {}}
+          enabled={enabled}
+          className="flex-1 static"
+        >
+          p
+        </PullToRefresh>,
+      )
+      const root = container.firstElementChild as HTMLElement
+      //only a live gesture root answers to `pull-to-refresh`; an idle row has its own
+      expect(root.getAttribute("data-adaptv")).toBe(
+        enabled ? "pull-to-refresh" : "pull-to-refresh-root",
+      )
+      expect(root.getAttribute("data-part")).toBe("root")
+      expect(root.className).toBe("flex-1 static")
+      //`static` cannot unseat it: the indicator is positioned against this box
+      expect(root.style.position).toBe("relative")
+      unmount()
+    }
+  })
+})

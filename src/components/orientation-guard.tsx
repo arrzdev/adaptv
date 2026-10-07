@@ -41,13 +41,13 @@ export function OrientationGuard({
   return <Guard orientation={orientation} />
 }
 
+//The look is styles/orientation-guard.css, keyed on `data-adaptv` / `data-part`: an
+//app that wants another one replaces the whole guard (`orientationGuardComponent`).
+//`data-adaptv="orientation-guard"` stays on the root alone; each sub-part carries its
+//own `orientation-guard-<part>` scope, so the root's selector matches one element.
 function DefaultOrientationGuard({ orientation }: OrientationGuardProps) {
   return (
-    <div
-      data-adaptv="orientation-guard"
-      role="alert"
-      className="fixed inset-0 z-[110] flex flex-col items-center justify-center gap-y-6 bg-background px-safe-offset-6 py-safe-offset-8 text-center text-foreground"
-    >
+    <div data-adaptv="orientation-guard" data-part="root" role="alert">
       <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -56,13 +56,14 @@ function DefaultOrientationGuard({ orientation }: OrientationGuardProps) {
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
-        className="size-14 text-primary"
+        data-adaptv="orientation-guard-icon"
+        data-part="icon"
       >
         <title>Rotate device</title>
         <rect x="7" y="2" width="10" height="20" rx="2" />
         <path d="M11 18h2" />
       </svg>
-      <p className="max-w-xs text-balance text-base font-medium text-muted">
+      <p data-adaptv="orientation-guard-message" data-part="message">
         Rotate your device to {orientation} to continue.
       </p>
     </div>

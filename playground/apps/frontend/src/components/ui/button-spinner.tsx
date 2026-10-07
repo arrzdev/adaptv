@@ -1,6 +1,6 @@
-import { cn } from "@arrzdev/adaptv/utils"
 import { Loader2 } from "lucide-react"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
+import { cn } from "@/utils/cn"
 
 type ButtonSpinnerProps = {
   className?: string

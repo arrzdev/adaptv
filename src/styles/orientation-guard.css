@@ -1,0 +1,55 @@
+/*
+ * OrientationGuard — the built-in rotate prompt's look
+ * (components/orientation-guard.tsx): a fixed full-screen layer (z-index 110, under
+ * UpdateRequired's 120), padded by the safe-area insets plus a gap, with an icon and
+ * one line of text.
+ *
+ * The component takes no `className`: an app that wants another look replaces the
+ * guard (`orientationGuardComponent`). The colours read the app's semantic tokens with
+ * no fallback (docs/decisions/styling.md §7). The padding is the `px-safe-offset-6` /
+ * `py-safe-offset-8` utilities' values, spelled out.
+ *
+ * The root alone carries `data-adaptv="orientation-guard"`; each sub-part carries its own
+ * `data-adaptv="orientation-guard-<part>"` next to its `data-part`, so the root's scope matches one
+ * element.
+ *
+ * Layered in `adaptv.components` under `:where()` (§6.0.1); no `!important`.
+ */
+
+@layer adaptv.components {
+  /* root: a full-screen takeover above the app */
+  :where([data-adaptv="orientation-guard"][data-part="root"]) {
+    inset: calc(var(--spacing, 0.25rem) * 0);
+    z-index: 110;
+    justify-content: center;
+    align-items: center;
+    row-gap: calc(var(--spacing, 0.25rem) * 6);
+    background-color: var(--color-background);
+    padding-top: calc(var(--spacing, 0.25rem) * 8 + var(--adaptv-inset-top, 0px));
+    padding-bottom: calc(var(--spacing, 0.25rem) * 8 + var(--adaptv-inset-bottom, 0px));
+    padding-right: calc(var(--spacing, 0.25rem) * 6 + var(--adaptv-inset-right, 0px));
+    padding-left: calc(var(--spacing, 0.25rem) * 6 + var(--adaptv-inset-left, 0px));
+    text-align: center;
+    color: var(--color-foreground);
+    flex-direction: column;
+    display: flex;
+    position: fixed;
+  }
+
+  /* icon */
+  :where([data-adaptv="orientation-guard-icon"][data-part="icon"]) {
+    width: calc(var(--spacing, 0.25rem) * 14);
+    height: calc(var(--spacing, 0.25rem) * 14);
+    color: var(--color-primary);
+  }
+
+  /* message */
+  :where([data-adaptv="orientation-guard-message"][data-part="message"]) {
+    max-width: var(--container-xs, 20rem);
+    font-size: var(--text-base, 1rem);
+    line-height: var(--text-base--line-height, calc(1.5 / 1));
+    font-weight: var(--font-weight-medium, 500);
+    text-wrap: balance;
+    color: var(--color-muted);
+  }
+}

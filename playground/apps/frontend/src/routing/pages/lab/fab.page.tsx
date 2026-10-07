@@ -1,7 +1,6 @@
 import { Fab, Input } from "@arrzdev/adaptv/components"
 import { useKeyboard } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Plus } from "lucide-react"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
@@ -14,6 +13,7 @@ import {
   LabSection,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
+import { cn } from "@/utils/cn"
 
 export const Route = createFileRoute("/_providers/lab/fab")({
   component: LabFabPage,

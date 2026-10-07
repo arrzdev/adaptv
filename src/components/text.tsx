@@ -7,7 +7,7 @@ import type {
 import { cloneElement, useRef } from "react"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
 
 /**
@@ -51,8 +51,8 @@ export interface TextProps extends ComponentPropsWithRef<"span"> {
   /**
    * Let the user select this text even where adaptv's app-wide `user-select: none` is
    * live (`ui.noSelect`, default installed-PWA-and-native). Same prop name as React
-   * Native's, and it drives the same `selectable` utility a consumer would write by
-   * hand — not a second mechanism.
+   * Native's, and it writes the same declarations as the `selectable` utility a
+   * consumer would write by hand — locked inline, so no class can cancel it.
    */
   selectable?: boolean
   /**
@@ -116,6 +116,40 @@ export function textClampStyle(
 }
 
 /**
+ * LOCKED, inline: `selectable` is per-instance selection over adaptv's app-wide
+ * `user-select: none` reset (stamped on `<html>` from `ui.noSelect`, in
+ * `adaptv.reset`). It is locked because the consumer ASKED for it via a prop — their own
+ * stray `select-none` in the same className, or a `userSelect` in `style`, must not
+ * cancel it — and inline style is the one tier no class reaches
+ * (docs/decisions/styling.md §2.0). Same declarations as the `selectable` utility in
+ * styles/utils.css, which a consumer can still write by hand.
+ */
+const TEXT_SELECTABLE_LOCKED_STYLE: CSSProperties = Object.freeze({
+  WebkitUserSelect: "text",
+  userSelect: "text",
+})
+
+/** The `data-part` a node already carries, which Text keeps rather than overwrite. */
+function ownDataPart(source: object | undefined): string | undefined {
+  const part = (source as { "data-part"?: unknown } | undefined)?.[
+    "data-part"
+  ]
+  return typeof part === "string" ? part : undefined
+}
+
+/** The whole inline lock: the clamp and the selection opt-in, both prop-driven. */
+function textLockedStyle(
+  numberOfLines: number | undefined,
+  selectable: boolean,
+): CSSProperties | undefined {
+  const clamp = textClampStyle(numberOfLines)
+  if (!selectable) return clamp
+  return clamp
+    ? { ...clamp, ...TEXT_SELECTABLE_LOCKED_STYLE }
+    : TEXT_SELECTABLE_LOCKED_STYLE
+}
+
+/**
  * A run of text, with the platform quirks a `<p>` does not get.
  *
  * The bar a primitive has to clear here is **two platform quirks it would own**
@@ -126,7 +160,7 @@ export function textClampStyle(
  * |-------|----------------|
  * | **iOS Dynamic Type**, measured as a scalar and multiplied into the element's built font-size so a rem-based layout is left untouched | {@link measureDynamicTypeScale} + a layout effect |
  * | **Line clamping**, whose standard property is still unavailable in both target webviews and whose WebKit fallback hides in `display` | {@link textClampStyle}, inline |
- * | **Per-instance selection** over the app-wide `ui.noSelect` reset | the `selectable` utility |
+ * | **Per-instance selection** over the app-wide `ui.noSelect` reset | `user-select: text`, locked inline |
  *
  * **It renders a `<span>` by default**, not a `<p>`: a `<span>` nests inside another
  * `<Text>` without producing invalid markup (the parser auto-closes a `<p>` the moment
@@ -136,6 +170,7 @@ export function textClampStyle(
  * | Attribute | When |
  * |-----------|------|
  * | `data-adaptv="text"` | always — target every run of text from global CSS with no imports |
+ * | `data-part="root"` | always, unless the node already carries a `data-part` |
  * | `data-scale-with-system` | `scaleWithSystem` (opt-in) — a marker only; the sizing is done in JS |
  *
  * ⚠︎ **It does not own the iOS text magnifier.** `useSuppressTextMagnifier` is mounted
@@ -170,29 +205,17 @@ export function Text({
 }: TextProps) {
   //An element passed to `render` carries its own className/style, written at the same
   //call site as Text's own — so both are the CONSUMER tier, and neither may outrank
-  //`locked`. §3.3: the composition path routes through mergeStyles instead of
+  //`locked`. §3.3: the composition path routes through composeStyles instead of
   //concatenating and letting stylesheet source order decide. Text's own props go last,
   //so they win the per-property tie — Base UI's order, and the more local of the two.
   //
-  //No `base`: a run of text has no default look to override. Size, colour, weight and
-  //leading are className, all of them (VISION.md principle 2) — a `size` prop here
-  //would be pure presentation wearing a prop's clothes.
-  const merged = mergeStyles({
+  //No default look: a run of text has nothing to override, so adaptv ships no rule for
+  //it. Size, colour, weight and leading are className, all of them (VISION.md
+  //principle 2) — a `size` prop here would be pure presentation wearing a prop's clothes.
+  const merged = composeStyles({
     className: [render?.props.className, className],
-    //`selectable` is the EXISTING opt-in from styles/utils.css, deliberately not a
-    //second mechanism: the reset is `user-select: none` stamped on <html> from
-    //`ui.noSelect`, and the utility beats it on layer order alone (`utilities` is
-    //later than `adaptv.reset`). It is `locked` because the consumer ASKED for it via
-    //a prop — their own stray `select-none` in the same className must not cancel it.
-    //
-    //That guarantee is real rather than incidental: `selectable` is registered in
-    //`utils/cn.ts` as `pwa-select-behavior`, conflicting with Tailwind's `select`
-    //group. Before it was, `cn("select-none", "selectable")` emitted BOTH and the
-    //compiled source order silently decided the winner — the same failure the
-    //`scrollable-y` comment in that file documents.
-    locked: selectable && "selectable",
     style: { ...render?.props.style, ...style },
-    lockedStyle: textClampStyle(numberOfLines),
+    lockedStyle: textLockedStyle(numberOfLines, selectable),
   })
 
   //One ref, whichever element ships. `measureRef` is what the layout effect reads to
@@ -246,9 +269,13 @@ export function Text({
     //Only wire the measurement ref when the opt-in is on, so a plain `<Text>` forwards
     //the consumer's ref exactly as before and carries zero scaling machinery.
     ref: scaleWithSystem ? mergedRef : ref,
-    className: merged.className,
+    //no consumer class, no attribute: Text writes no class of its own
+    className: merged.className || undefined,
     style: merged.style,
     "data-adaptv": "text",
+    //a `data-part` already on the node (the consumer's, or the render element's) is kept
+    "data-part":
+      ownDataPart(props) ?? ownDataPart(render?.props) ?? "root",
     //`""`, not `true`: React stringifies a boolean data-* value to "true", and this is
     //a PRESENCE attribute (§3.1) — a marker the opt-out has to REMOVE, not set to "false".
     "data-scale-with-system": scaleWithSystem ? "" : undefined,

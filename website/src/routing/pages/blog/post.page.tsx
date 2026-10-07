@@ -38,6 +38,7 @@ function PostRoute() {
           </Link>
           <span className="font-mono text-[12px] text-muted uppercase tracking-wider">
             {post.kind} · {post.date}
+            {post.author ? ` · ${post.author}` : ""}
           </span>
           <h1 className="text-balance font-semibold text-[40px] text-foreground leading-[1.06] tracking-[-0.035em]">
             {post.title}

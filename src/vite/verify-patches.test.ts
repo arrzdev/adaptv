@@ -104,7 +104,7 @@ describe("patch instructions — derived from what actually shipped", () => {
     const advertised = patchInstructions(readdirSync(patchesDir))
       .map((l) => l.trim().split("':")[0].slice(1))
       .sort()
-    expect(declared.length).toBe(5)
+    expect(declared.length).toBe(3)
     expect(advertised).toEqual(declared)
   })
 })
@@ -181,7 +181,9 @@ describe("assertRouteTreeIsOpaque — the outcome-based check", () => {
   it("throws when the tree still references @tanstack", () => {
     const file = join(tmpdir(), `adaptv-opaque-bad-${process.pid}.ts`)
     writeFileSync(file, 'import type { X } from "@tanstack/react-router"')
-    expect(() => assertRouteTreeIsOpaque(file)).toThrow(/@tanstack/)
+    expect(() => assertRouteTreeIsOpaque(file)).toThrow(
+      /still names the route engine/,
+    )
     rmSync(file, { force: true })
   })
 
@@ -189,7 +191,7 @@ describe("assertRouteTreeIsOpaque — the outcome-based check", () => {
     const file = join(tmpdir(), `adaptv-opaque-fix-${process.pid}.ts`)
     writeFileSync(file, 'import "@tanstack/react-start"')
     expect(() => assertRouteTreeIsOpaque(file)).toThrow(
-      /patchedDependencies/,
+      /Delete `\.adaptv\/`/,
     )
     rmSync(file, { force: true })
   })

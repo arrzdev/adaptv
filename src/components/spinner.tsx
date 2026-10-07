@@ -1,7 +1,7 @@
 import type { ComponentPropsWithRef, CSSProperties } from "react"
 import { useEffect, useRef } from "react"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Props for {@link Spinner}. Native `<span>` props pass through, except the exposure
@@ -43,21 +43,12 @@ const SPINNER_ANNOUNCE_DELAY_MS = 150
  */
 const SPINNER_ANNOUNCE_CLEAR_MS = 7000
 
-//BASE: the box is the size of the text around it, like Icon — `w-[1em] h-[1em]`
-//rather than `size-[1em]` for the same tailwind-merge reason Icon documents (a later
-//`size-*` replaces `w-*`/`h-*`, not the other way round). `inline-block`, never
-//`inline`: a CSS transform does not apply to a non-replaced inline box, so an
-//`inline` spinner would simply not turn. The baseline nudge seats it in a line of
-//text the way icon fonts do.
-const SPINNER_BASE_CLASS =
-  "inline-block h-[1em] w-[1em] shrink-0 align-[-0.125em]"
-//LOCKED: nothing on the class tier. The motion, its pause and its reduced-motion
-//form are CSS on `data-adaptv` (styles/spinner.css) — styling.md §2's escape hatch —
-//so there is no class a consumer's className could strand.
-const SPINNER_LOCKED_CLASS = undefined
-//The shared announcer is visually hidden with Tailwind's own recipe, as
-//PullToRefresh's and Skeleton's status lines are.
-const SPINNER_ANNOUNCER_CLASS = "sr-only"
+//The look — a text-sized `inline-block` box (never `inline`: a CSS transform does not
+//apply to a non-replaced inline box, so an `inline` spinner would simply not turn),
+//the drawing filling it, and the visually-hidden announcer — is default rules in
+//styles/spinner.css keyed on `data-adaptv` / `data-part`. Nothing is locked: the
+//motion, its pause and its reduced-motion form are CSS on `data-adaptv` too —
+//styling.md §2's escape hatch — so there is nothing a consumer's className could strand.
 
 /* =============================================================================
  * Q1 — one IntersectionObserver for every indicator on the page
@@ -117,7 +108,9 @@ function ensureAnnouncer(): HTMLElement {
   //pairings that only honour the attribute
   region.setAttribute("role", "status")
   region.setAttribute("aria-live", "polite")
-  region.className = SPINNER_ANNOUNCER_CLASS
+  //visually hidden by a default rule on this attribute pair (styles/spinner.css),
+  //Tailwind's `sr-only` recipe spelled out
+  region.setAttribute("data-part", "root")
   document.body.appendChild(region)
   announcer = region
   return region
@@ -219,11 +212,11 @@ function holdLabel(label: string): () => void {
  * **Forced colors:** the arc is `stroke="currentColor"`, and forced colors rewrite
  * `color`, so it paints in the system text colour of whatever it sits in.
  *
- * | Tier | Classes | Why |
- * |------|---------|-----|
- * | base | `inline-block h-[1em] w-[1em] shrink-0 align-[-0.125em]` | text-sized, and a box a transform applies to |
+ * | Tier | Where | What |
+ * |------|-------|------|
+ * | default | styles/spinner.css | `display: inline-block`, `1em` square, `flex-shrink: 0`, `vertical-align: -0.125em` — text-sized, and a box a transform applies to |
  * | className | yours | size (`size-8`), colour (`text-primary`) |
- * | locked | — | the motion is CSS on the identity attribute, not a class |
+ * | locked | — | the motion is CSS on the identity attribute, not inline style |
  *
  * ⚠︎ `inline` (or `contents`) in `className` stops the rotation: a transform does not
  * apply to an inline box.
@@ -246,12 +239,7 @@ export function Spinner({
   ref,
   ...props
 }: SpinnerProps) {
-  const merged = mergeStyles({
-    base: SPINNER_BASE_CLASS,
-    className,
-    locked: SPINNER_LOCKED_CLASS,
-    style,
-  })
+  const merged = composeStyles({ className, style })
 
   //a blank label names nothing: it would be a progressbar announced with no name
   const name = label?.trim() || undefined
@@ -275,9 +263,10 @@ export function Spinner({
     <span
       {...props}
       ref={setRef}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
       data-adaptv="spinner"
+      data-part="root"
       role={name ? "progressbar" : undefined}
       aria-label={name}
       aria-hidden={name ? undefined : "true"}
@@ -290,7 +279,9 @@ export function Spinner({
         stroke="currentColor"
         strokeWidth={2.5}
         strokeLinecap="round"
-        className="block h-full w-full"
+        //a part, not a second `data-adaptv="spinner"`: the turn is keyed on that
+        //attribute alone, and the drawing must not turn inside the turning box
+        data-part="icon"
         aria-hidden="true"
         focusable="false"
       >
@@ -347,13 +338,16 @@ export interface ProgressBarProps
 /** The presence attribute the shared observer writes while an indeterminate bar is off screen. */
 const PROGRESS_BAR_OFFSCREEN_ATTRIBUTE = "data-progress-bar-offscreen"
 
-//BASE: a full-width, 4px, rounded track in the text colour — the height, the radius
-//and the colour (`text-primary`) are the consumer's.
-const PROGRESS_BAR_BASE_CLASS = "block h-1 w-full rounded-full"
-//LOCKED: the track and the indicator are absolutely positioned children, and the
-//indeterminate sweep travels outside the box on both ends — `overflow-visible` or
+//The look — a full-width, 4px, rounded block — is a default rule in
+//styles/progress-bar.css; the height, the radius and the colour (`text-primary`) are
+//the consumer's.
+//LOCKED, inline: the track and the indicator are absolutely positioned children, and
+//the indeterminate sweep travels outside the box on both ends — `overflow-visible` or
 //`static` in className would draw it across the page.
-const PROGRESS_BAR_LOCKED_CLASS = "relative overflow-hidden"
+const PROGRESS_BAR_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  overflow: "hidden",
+})
 
 /** `value` as a fraction in [0, 1], or `undefined` when there is no known amount. */
 function progressOf(value: number | undefined): number | undefined {
@@ -409,11 +403,11 @@ function progressOf(value: number | undefined): number | undefined {
  * a pseudo-element no transform or transition reaches the same way on every engine,
  * its indeterminate look is the engine's own, and it cannot be decorative.
  *
- * | Tier | Classes | Why |
- * |------|---------|-----|
- * | base | `block h-1 w-full rounded-full` | the look — height, radius, colour are yours |
+ * | Tier | Where | What |
+ * |------|-------|------|
+ * | default | styles/progress-bar.css | `display: block`, 4px high, full width, fully rounded — height, radius, colour are yours |
  * | className | yours | `h-2`, `text-primary`, `rounded-none` |
- * | locked | `relative overflow-hidden` | positioned parts; the sweep must be clipped |
+ * | locked | inline style | `position: relative`, `overflow: hidden` — positioned parts; the sweep must be clipped |
  *
  * | Attribute | When |
  * |-----------|------|
@@ -434,16 +428,17 @@ export function ProgressBar({
   const progress = progressOf(value)
   const indeterminate = progress === undefined
 
-  const merged = mergeStyles({
-    base: PROGRESS_BAR_BASE_CLASS,
+  const merged = composeStyles({
     className,
-    locked: PROGRESS_BAR_LOCKED_CLASS,
     style,
-    //the fill reads it; locked so a consumer `style` cannot desynchronise the bar
-    //from its own aria-valuenow
+    //the fill reads `--progress-value`; locked so a consumer `style` cannot
+    //desynchronise the bar from its own aria-valuenow
     lockedStyle: indeterminate
-      ? undefined
-      : ({ "--progress-value": progress } as CSSProperties),
+      ? PROGRESS_BAR_LOCKED_STYLE
+      : ({
+          ...PROGRESS_BAR_LOCKED_STYLE,
+          "--progress-value": progress,
+        } as CSSProperties),
   })
 
   //a blank label names nothing, as for Spinner
@@ -473,9 +468,10 @@ export function ProgressBar({
     <span
       {...props}
       ref={setRef}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
       data-adaptv="progress-bar"
+      data-part="root"
       data-progress-bar-indeterminate={indeterminate ? "" : undefined}
       role={name ? "progressbar" : undefined}
       aria-label={name}

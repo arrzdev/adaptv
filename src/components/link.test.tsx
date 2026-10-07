@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { cleanup, fireEvent, render } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -77,5 +79,87 @@ describe("Link", () => {
     //on web the anchor opens the tab itself — nothing intercepts the click
     expect(fireEvent.click(a, { button: 0 })).toBe(true)
     expect(open).not.toHaveBeenCalled()
+  })
+})
+
+describe("Link — style tiers", () => {
+  it("adds no class of its own and names its part, keeping a wrapper's", () => {
+    const own = render(<Link to="/a">A</Link>).getByRole("link")
+    expect(own.hasAttribute("class")).toBe(false)
+    expect(own.getAttribute("data-part")).toBe("root")
+    expect(own.getAttribute("data-adaptv")).toBe("link")
+    //the press engine's attribute is what link.css keys the in-app look on
+    expect(own.hasAttribute("data-press-engine")).toBe(true)
+    cleanup()
+    const row = render(
+      <Link to="/a" data-part="row">
+        A
+      </Link>,
+    ).getByRole("link")
+    expect(row.getAttribute("data-part")).toBe("row")
+  })
+
+  it("passes the consumer's className through untouched", () => {
+    const a = render(
+      <Link to="/a" className="text-blue-600 underline">
+        A
+      </Link>,
+    ).getByRole("link")
+    expect(a.className).toBe("text-blue-600 underline")
+  })
+
+  //the press-core reason: the `touch-action` longhand keeps `pointercancel` alive on
+  //iOS (WebKit 240917), which is how the engine learns a scroll took over
+  it("locks the touch pass-through inline, against a consumer class and style", () => {
+    const a = render(
+      <Link
+        to="/a"
+        className="touch-none"
+        style={{ touchAction: "none", color: "rgb(255, 0, 0)" }}
+      >
+        A
+      </Link>,
+    ).getByRole("link")
+    expect(a.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(a.style.color).toBe("rgb(255, 0, 0)")
+    expect(a.style.userSelect).toBe("")
+  })
+
+  it("disabled: the same pass-through, and its label is not selectable", () => {
+    const a = render(
+      <Link to="/a" disabled style={{ userSelect: "text" }}>
+        A
+      </Link>,
+    ).getByRole("link")
+    expect(a.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(a.style.userSelect).toBe("none")
+    expect(a.getAttribute("aria-disabled")).toBe("true")
+  })
+
+  it("an external `to` keeps ExternalLink's look and lock, under the link scope", () => {
+    const a = render(
+      <Link to="https://x.com" className="p-2">
+        Docs
+      </Link>,
+    ).getByRole("link")
+    expect(a.getAttribute("data-adaptv")).toBe("link")
+    expect(a.getAttribute("data-part")).toBe("root")
+    expect(a.hasAttribute("data-press-engine")).toBe(false)
+    expect(a.className).toBe("p-2")
+    expect(a.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+  })
+
+  it("link.css is layered, zero-specificity and never !important", () => {
+    const css = readFileSync(
+      resolve(__dirname, "../styles/link.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(css).toContain("@layer adaptv.components")
+    expect(css).toContain(
+      ':where([data-adaptv="link"], [data-adaptv="external-link"])',
+    )
+    expect(css).not.toContain("!important")
+    //the lock is inline only — a layer rule would lose to an unlayered consumer class
+    expect(css).not.toContain("touch-action")
   })
 })

@@ -44,11 +44,17 @@ async function setKeyboard(page: Page, isOpen: boolean, height: number) {
  * component ignoring its prop.
  */
 
-/** The default gap, 4 spacing units, resolved to px off `--spacing` on <html>. */
+/**
+ * The default gap, 4 spacing units, resolved to px off `--spacing` on <html> — or off
+ * Tailwind's `0.25rem`, the fallback adaptv writes, in an app that sets no `--spacing`
+ * (the no-Tailwind build).
+ */
 async function restingGapPx(page: Page) {
   return page.evaluate(() => {
     const root = document.documentElement
-    const raw = getComputedStyle(root).getPropertyValue("--spacing").trim()
+    const raw =
+      getComputedStyle(root).getPropertyValue("--spacing").trim() ||
+      "0.25rem"
     const value = Number.parseFloat(raw)
     const unit = raw.replace(/[\d.-]/g, "")
     const px =

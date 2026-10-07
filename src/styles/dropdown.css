@@ -1,0 +1,53 @@
+/*
+ * Dropdown — the default look of the anchored menu (components/dropdown/dropdown.tsx):
+ * the panel and its items. The trigger is a plain button with no look of its own.
+ *
+ * Only defaults live here. What a `className` must not undo is inline style the
+ * component writes (docs/decisions/styling.md §2.0): the panel's `z-index`,
+ * `overflow-y` and `overscroll-behavior` beside the engine's placement, and the
+ * items' press-target `touch-action` (+ `user-select: none` when disabled) and
+ * `text-align: start`.
+ *
+ * The paint reads the semantic tokens `--color-surface`, `--color-foreground` and
+ * `--color-border` with no fallback (§7): undefined, the declaration is unset, exactly
+ * as an undefined token made `bg-surface` emit nothing. The ring's `currentcolor`
+ * fallback is not a palette value: it is what Tailwind's `ring-1` paints when
+ * `ring-border` emits nothing.
+ *
+ * Layered in `adaptv.components` (docs/decisions/styling.md §6) and wrapped in
+ * `:where()` (§6.0.1), so any consumer rule or utility wins over all of it. No
+ * `!important` anywhere.
+ */
+
+@layer adaptv.components {
+  /* content: the menu surface, shared with Select's panel */
+  :where([data-adaptv="dropdown"][data-part="content"]) {
+    border-radius: var(--radius-md, 0.375rem);
+    background-color: var(--color-surface);
+    min-width: 8rem;
+    padding: calc(var(--spacing, 0.25rem) * 1);
+    box-shadow:
+      0 0 0 1px var(--color-border, currentcolor),
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  /* item: a full-width row */
+  :where([data-adaptv="dropdown-item"][data-part="item"]) {
+    cursor: pointer;
+    border-radius: var(--radius-sm, 0.25rem);
+    width: 100%;
+    padding-inline: calc(var(--spacing, 0.25rem) * 3);
+    padding-block: calc(var(--spacing, 0.25rem) * 2);
+    font-size: var(--text-sm, 0.875rem);
+    line-height: var(--text-sm--line-height, calc(1.25 / 0.875));
+    color: var(--color-foreground);
+    align-items: center;
+    display: flex;
+  }
+
+  :where([data-adaptv="dropdown-item"][data-part="item"]:disabled) {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+}

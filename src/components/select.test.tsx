@@ -8,7 +8,10 @@ import {
 } from "#adaptv/capabilities/back-chain"
 import { gestureController } from "#adaptv/capabilities/gesture-controller"
 import { Select, useSelect } from "#adaptv/components/select"
-import { compileAdaptvStyles } from "#adaptv/styles/compile.test-helper"
+import {
+  compileAdaptvStyles,
+  ruleFor,
+} from "#adaptv/styles/compile.test-helper"
 
 /*
  * Select — the menu-on-every-target picker. Every quirk the header of select.tsx
@@ -700,34 +703,116 @@ describe("Select.Option — the press-target contract", () => {
     if (!el) throw new Error("Select.Option did not render")
     return el
   }
-  const classList = (el: Element) =>
-    el.className.split(/\s+/).filter(Boolean)
 
-  it("carries the touch-action longhand the stylesheet emits, never touch-manipulation", async () => {
-    const classes = classList(optionEl({}))
-    expect(classes).toContain("touch-pan-x")
-    expect(classes).toContain("touch-pan-y")
-    expect(classes).toContain("touch-pinch-zoom")
-    expect(classes).not.toContain("touch-manipulation")
-    const css = await compileAdaptvStyles(classes)
-    expect(css).toContain("touch-action:")
-    expect(css).toContain("cursor: pointer")
+  it("carries the touch-action longhand inline, never touch-manipulation, and ships the cursor as a default", async () => {
+    const el = optionEl({})
+    expect(el.getAttribute("data-part")).toBe("option")
+    //adaptv adds no class of its own
+    expect(el.hasAttribute("class")).toBe(false)
+    expect(el.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(el.style.textAlign).toBe("start")
+    const css = await compileAdaptvStyles([])
+    expect(
+      ruleFor(
+        css,
+        ':where([data-adaptv="select-option"][data-part="option"])',
+      ),
+    ).toContain("cursor: pointer;")
+    expect(
+      ruleFor(
+        css,
+        ':where([data-adaptv="select-option"][data-part="option"][data-disabled])',
+      ),
+    ).toContain("cursor: not-allowed;")
   })
 
   it("keeps the touch pass-through when a className fights it, on a live and a disabled row", () => {
     for (const disabled of [false, true]) {
-      const classes = classList(
-        optionEl({ className: "touch-none touch-manipulation", disabled }),
-      )
-      expect(classes).toContain("touch-pan-x")
-      expect(classes).not.toContain("touch-none")
-      expect(classes).not.toContain("touch-manipulation")
+      const el = optionEl({
+        className: "touch-none touch-manipulation",
+        disabled,
+      })
+      //the consumer's classes land as written (adaptv joins, never merges); the lock
+      //is inline, above any class
+      expect(el.className).toBe("touch-none touch-manipulation")
+      expect(el.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+      expect(el.style.userSelect).toBe(disabled ? "none" : "")
     }
   })
 
   it("lets a consumer's cursor win", () => {
-    const classes = classList(optionEl({ className: "cursor-wait" }))
-    expect(classes).toContain("cursor-wait")
-    expect(classes).not.toContain("cursor-pointer")
+    //the cursor is a `:where()` default in a layer, so the class reaches it and
+    //nothing inline competes
+    const el = optionEl({ className: "cursor-wait" })
+    expect(el.className).toBe("cursor-wait")
+    expect(el.style.cursor).toBe("")
+  })
+})
+
+describe("Select — styling tiers (docs/decisions/styling.md §2)", () => {
+  it("the trigger takes the consumer's class alone and locks the touch pass-through inline", () => {
+    const { container } = render(
+      <Select disabled>
+        <Select.Trigger className="consumer-trigger" />
+      </Select>,
+    )
+    const trigger = container.querySelector<HTMLElement>(
+      '[data-adaptv="select-trigger"][data-part="trigger"]',
+    )
+    expect(trigger?.className).toBe("consumer-trigger")
+    expect(trigger?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(trigger?.style.userSelect).toBe("none")
+  })
+
+  it("the root and the native proxy are parts, and the proxy is hidden inline with no class", () => {
+    const { container } = render(
+      <Select>
+        <Select.Trigger />
+      </Select>,
+    )
+    const root = container.firstElementChild as HTMLElement
+    expect(root.getAttribute("data-part")).toBe("root")
+    expect(root.hasAttribute("class")).toBe(false)
+    const native = root.querySelector("select") as HTMLSelectElement
+    expect(native.getAttribute("data-part")).toBe("native")
+    //its own scope: `[data-adaptv="select"]` names the root and nothing inside it
+    expect(native.getAttribute("data-adaptv")).toBe("select-native")
+    expect(
+      container.querySelectorAll('[data-adaptv="select"]'),
+    ).toHaveLength(1)
+    expect(native.hasAttribute("class")).toBe(false)
+    expect(native.style.position).toBe("absolute")
+    expect(native.style.clipPath).toBe("inset(50%)")
+  })
+
+  it("the panel holds its locked structure over a consumer style, beside the engine's placement", () => {
+    const { container } = render(
+      <Select>
+        <Select.Trigger />
+        <Select.Content style={{ zIndex: 1, overscrollBehavior: "auto" }}>
+          <Select.Option value="a">A</Select.Option>
+        </Select.Content>
+      </Select>,
+    )
+    fireEvent.click(
+      container.querySelector('[data-adaptv="select-trigger"]') as Element,
+    )
+    const panel = container.querySelector<HTMLElement>(
+      '[data-adaptv="select-content"][data-part="content"]',
+    )
+    expect(panel?.style.zIndex).toBe("50")
+    expect(panel?.style.overflowY).toBe("auto")
+    expect(panel?.style.overscrollBehavior).toBe("contain")
+    expect(panel?.style.position).toBe("fixed")
+  })
+
+  it("paints the menu surface from the semantic token, with no fallback", async () => {
+    const css = await compileAdaptvStyles([])
+    expect(
+      ruleFor(
+        css,
+        ':where([data-adaptv="select-content"][data-part="content"])',
+      ),
+    ).toContain("background-color: var(--color-surface);")
   })
 })

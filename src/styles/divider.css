@@ -27,9 +27,10 @@
  *
  * Under `forced-colors: active` the engine drops every author background to `Canvas`, so a
  * `bg-*` rule disappears; a border is recoloured to `CanvasText` and stays. The colour
- * itself is the consumer's (`border-border` on the base tier, any `border-*` utility on
- * theirs): `border: 0 solid` below resets width and style only, and the colour utility in
- * the later `utilities` layer sets the colour.
+ * itself is a default (`var(--color-border)`, the zero-specificity `:where()` rule below)
+ * the consumer repaints with any `border-*` utility or class: the hairline rule resets
+ * width and style only — as longhands, because the `border` shorthand would also reset
+ * the colour, and at its higher specificity it would beat the colour default.
  *
  * Layered in `adaptv.components` (docs/decisions/styling.md §6): a consumer's unlayered
  * rule or utility wins over any of it, and nothing here is `!important` (§6.0.1). A
@@ -38,9 +39,15 @@
  */
 
 @layer adaptv.components {
+  /* the colour: the theme's border token (semantic, so no fallback — §7) */
+  :where([data-adaptv="divider"][data-part="root"]) {
+    border-color: var(--color-border);
+  }
+
   [data-adaptv="divider"] {
     --adaptv-hairline-scale: 1;
-    border: 0 solid;
+    border-width: 0;
+    border-style: solid;
     border-block-start-width: 1px;
     /* a flex column must not squeeze the rule away, and a stray height must not thicken it */
     flex-shrink: 0;

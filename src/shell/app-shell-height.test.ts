@@ -1,8 +1,8 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
-import { APP_SHELL_CLASS } from "#adaptv/shell/shell-layout"
 import type { ViewportSurface } from "#adaptv/styles/viewport-units.test-helper"
 import { resolveLayeredLength } from "#adaptv/styles/viewport-units.test-helper"
-import { cn } from "#adaptv/utils/cn"
 
 //The shell's height is a viewport-unit expression that no DOM we can test in resolves the way
 //an iPhone does, so it is resolved from the compiled CSS against numbers read off simulators.
@@ -65,16 +65,24 @@ describe("the app shell is as tall as the screen the app can show", () => {
     ).toBe(714)
   })
 
-  it("leaves nothing in the shell's classes for a consumer's height to lose to", () => {
-    //The height is a layered rule, which every utility beats. A height class here would
-    //either survive tailwind-merge beside the consumer's (a platform variant) or outrank it.
-    for (const consumer of ["h-full", "app:h-full", "web:h-[50vh]"]) {
-      expect(cn(APP_SHELL_CLASS, consumer)).toBe(
-        `${APP_SHELL_CLASS} ${consumer}`,
-      )
-    }
-    expect(
-      APP_SHELL_CLASS.split(" ").filter((c) => /(^|:)h-/.test(c)),
-    ).toEqual([])
+  it("leaves nothing in the shell's own styling for a consumer's height to lose to", () => {
+    //The height is a layered rule, which every utility beats. AppShell renders no class
+    //of its own (its `className` is the consumer's alone), and its default rule in
+    //shell-layout.css declares no height that could compete with screen.css or the
+    //consumer's `shellClassName`.
+    const css = readFileSync(
+      resolve(__dirname, "../styles/shell-layout.css"),
+      "utf8",
+    )
+    const shellRule = css.match(
+      /:where\(\[data-adaptv="app-shell"\]\[data-part="root"\]\)\s*\{([^}]*)\}/,
+    )
+    expect(shellRule, "the app shell's default rule").not.toBeNull()
+    expect(shellRule?.[1]).not.toMatch(/(^|[\s;])height\s*:/)
+    const source = readFileSync(
+      resolve(__dirname, "shell-layout.tsx"),
+      "utf8",
+    )
+    expect(source).not.toMatch(/\bcn\(|composeStyles\(/)
   })
 })

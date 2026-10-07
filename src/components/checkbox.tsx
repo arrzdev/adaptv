@@ -19,12 +19,12 @@ import {
   useState,
 } from "react"
 import {
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
 import { dynamicValues } from "#adaptv/utils/dynamic-values"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link Checkbox}. Attach with `ref`.
@@ -112,18 +112,23 @@ export interface CheckboxIconProps {
   children?: ReactNode
 }
 
-const CHECKBOX_ROOT_LAYOUT_CLASS =
-  "inline-flex shrink-0 items-center justify-center"
+//The root's look (`inline-flex`, `shrink-0`, centring, the cursor) is a default rule
+//in styles/checkbox.css. What is here is LOCKED, inline (docs/decisions/styling.md
+//§2.0), so no `className` of any dialect can defeat it.
+//
 //LOCKED: the input is laid over the whole label, so the label is its containing
 //block; a consumer `static` here would send the input to the nearest positioned
-//ancestor and make the checkbox's accessible frame some other element's box
-const CHECKBOX_ROOT_LOCKED_LAYOUT_CLASS = "relative"
-//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
-const CHECKBOX_ROOT_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
-const CHECKBOX_ROOT_CURSOR_CLASS = "cursor-pointer"
-const CHECKBOX_ROOT_NON_INTERACTION_CLASS =
-  PRESS_TARGET_DISABLED_LOCKED_CLASS
-const CHECKBOX_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
+//ancestor and make the checkbox's accessible frame some other element's box.
+//The touch pass-through is press-core's (WebKit 240917), and a disabled root keeps
+//it and adds `user-select: none` — press-core explains why it is not `none`.
+const CHECKBOX_ROOT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_LOCKED_STYLE,
+})
+const CHECKBOX_ROOT_DISABLED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  ...PRESS_TARGET_DISABLED_LOCKED_STYLE,
+})
 //LOCKED: the input is the ONLY element assistive tech and automation see, so its
 //box is the control's frame to VoiceOver, TalkBack and every tap aimed at it. It
 //used to be `sr-only`, a clipped 1px box in the middle of a 32x32 label
@@ -136,19 +141,32 @@ const CHECKBOX_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
 //`peer`: the input is rendered AFTER the box so it paints over it without a
 //z-index (the box is positioned, and a z-index would lift an invisible input over
 //unrelated overlays), and a `peer-*` variant only reaches later siblings.
-const CHECKBOX_INPUT_LOCKED_CLASS =
-  "absolute inset-0 m-0 size-full cursor-[inherit] appearance-none opacity-0"
+const CHECKBOX_INPUT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+  inset: 0,
+  margin: 0,
+  width: "100%",
+  height: "100%",
+  cursor: "inherit",
+  appearance: "none",
+  opacity: 0,
+})
 //LOCKED: the box is the positioning context for the absolutely-centred mark and
-//the clip for a custom one; `shrink-0` keeps the square square inside a flex label.
-const CHECKBOX_BOX_LOCKED_LAYOUT_CLASS =
-  "relative flex shrink-0 items-center justify-center overflow-hidden"
-//⚠︎ Do NOT re-add `border border-transparent` here — see the note in button.tsx.
-//It cancels the shift only for a 1px border and permanently shrinks the content box
-//of every checkbox. Use `outline` for a toggled checked/selected ring instead.
-const CHECKBOX_BOX_SURFACE_CLASS = "bg-gray-50"
+//the clip for a custom one; `flex-shrink: 0` keeps the square square inside a flex
+//label. Its surface colour is a default rule in styles/checkbox.css.
+const CHECKBOX_BOX_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+  display: "flex",
+  flexShrink: 0,
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+})
 //LOCKED: the mark sits over the box; if it took pointer events it would swallow the
 //tap the label's gesture engine is waiting for and the checkbox would stop toggling.
-const CHECKBOX_ICON_LOCKED_LAYOUT_CLASS = "pointer-events-none"
+const CHECKBOX_ICON_LOCKED_LAYOUT_STYLE: CSSProperties = Object.freeze({
+  pointerEvents: "none",
+})
 
 const CheckboxContext = createContext<CheckboxContextValue | null>(null)
 
@@ -277,16 +295,22 @@ function CheckboxBox({ className, style, children }: CheckboxBoxProps) {
   //the SAME number. A consumer inline `width` would resize the square without
   //resizing the checkmark, which is a silently broken control rather than a
   //restyled one — `size={n}` is the supported way to change it.
-  const { className: boxClassName, style: boxStyle } = mergeStyles({
-    base: CHECKBOX_BOX_SURFACE_CLASS,
+  const { className: boxClassName, style: boxStyle } = composeStyles({
     className,
-    locked: CHECKBOX_BOX_LOCKED_LAYOUT_CLASS,
     style,
-    lockedStyle: checkboxBoxStyle(size),
+    lockedStyle: {
+      ...CHECKBOX_BOX_LOCKED_LAYOUT_STYLE,
+      ...checkboxBoxStyle(size),
+    },
   })
 
   return (
-    <span style={boxStyle} className={boxClassName}>
+    <span
+      data-adaptv="checkbox-box"
+      data-part="box"
+      style={boxStyle}
+      className={boxClassName || undefined}
+    >
       {children}
     </span>
   )
@@ -306,6 +330,7 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
   //the size for the same reason: it IS the mark's visibility, and a consumer who
   //pins it to 1 gets a checkmark on an unchecked box. Branch with `useCheckbox()`.
   const markStyle: CSSProperties = {
+    ...CHECKBOX_ICON_LOCKED_LAYOUT_STYLE,
     ...checkboxIconStyle(size),
     opacity: checkboxIconMarkOpacity(isChecked, isIndeterminate),
   }
@@ -313,16 +338,19 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
   //`Checkbox.Icon` takes no `style` prop, so the inline tier has only the locked
   //layer — named explicitly rather than passed as a bare `style=` so it reads as
   //the same decision the box makes.
-  const iconStyles = mergeStyles({
-    base: undefined,
+  const iconStyles = composeStyles({
     className,
-    locked: CHECKBOX_ICON_LOCKED_LAYOUT_CLASS,
     lockedStyle: markStyle,
   })
 
   if (children) {
     return (
-      <span style={iconStyles.style} className={iconStyles.className}>
+      <span
+        data-adaptv="checkbox-icon"
+        data-part="icon"
+        style={iconStyles.style}
+        className={iconStyles.className || undefined}
+      >
         {children}
       </span>
     )
@@ -330,9 +358,11 @@ function CheckboxIcon({ className, children }: CheckboxIconProps) {
 
   return (
     <svg
+      data-adaptv="checkbox-icon"
+      data-part="icon"
       aria-hidden
       style={iconStyles.style}
-      className={iconStyles.className}
+      className={iconStyles.className || undefined}
       fill="none"
       viewBox="0 0 16 16"
     >
@@ -469,38 +499,31 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
 
     const boxChild = resolveCheckboxBoxChild(children)
 
+    //Two things are locked, inline. The touch pass-through, for the reason
+    //press-core gives: {@link PRESS_TARGET_LOCKED_STYLE} carries the `touch-action`
+    //longhand that keeps `pointercancel` alive on iOS (WebKit 240917), and no
+    //`className` may defeat it. And `position: relative`, because the input is laid
+    //over the label and measured against it. The rest of the layout is deliberately
+    //a DEFAULT (styles/checkbox.css), so `inline-flex` / `shrink-0` are overridable,
+    //and a consumer turning this into a full-width `flex` row hit target is a
+    //legitimate restyle, not a break: the accessible frame grows with it.
+    const rootStyles = composeStyles({
+      className,
+      style,
+      lockedStyle: isDisabled
+        ? CHECKBOX_ROOT_DISABLED_LOCKED_STYLE
+        : CHECKBOX_ROOT_LOCKED_STYLE,
+    })
+
     return (
       <CheckboxContext.Provider value={checkboxContext}>
         <label
           data-adaptv="checkbox"
+          data-part="root"
+          data-disabled={isDisabled ? "" : undefined}
           htmlFor={resolvedInputId}
-          //Two things are locked. The interaction utility, for the reason press-core
-          //gives: {@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action`
-          //longhand that keeps `pointercancel` alive on iOS (WebKit 240917), and no
-          //`className` may defeat it. And `relative`, because the input is laid
-          //over the label and measured against it. The rest of the layout is
-          //deliberately BASE, so `inline-flex` / `shrink-0` are a default, and a
-          //consumer turning this into a full-width `flex` row hit target is a
-          //legitimate restyle, not a break: the accessible frame grows with it.
-          {...mergeStyles({
-            base: [
-              CHECKBOX_ROOT_LAYOUT_CLASS,
-              isDisabled
-                ? CHECKBOX_ROOT_DISABLED_CURSOR_CLASS
-                : CHECKBOX_ROOT_CURSOR_CLASS,
-            ],
-            className,
-            locked: [
-              CHECKBOX_ROOT_LOCKED_LAYOUT_CLASS,
-              isDisabled
-                ? CHECKBOX_ROOT_NON_INTERACTION_CLASS
-                : CHECKBOX_ROOT_INTERACTION_CLASS,
-            ],
-            style,
-            //nothing about the root is structural in INLINE style: the geometry
-            //lives on the box, and the press state is a class + an attribute
-            lockedStyle: undefined,
-          })}
+          className={rootStyles.className || undefined}
+          style={rootStyles.style}
           {...gestureEngineHandlers}
           onPointerDown={(e: PointerEvent<HTMLLabelElement>) => {
             onPointerDownProp?.(
@@ -528,7 +551,9 @@ const Checkbox = forwardRef<CheckboxHandle, CheckboxProps>(
             //what tells React this controlled `checked` has no `onChange` on
             //purpose, and Chromium's accessibility tree does not expose it
             readOnly
-            className={CHECKBOX_INPUT_LOCKED_CLASS}
+            data-adaptv="checkbox-input"
+            data-part="input"
+            style={CHECKBOX_INPUT_LOCKED_STYLE}
           />
         </label>
       </CheckboxContext.Provider>

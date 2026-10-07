@@ -39,7 +39,7 @@ const pkg = JSON.parse(
  * not one of the available outcomes.
  */
 const rootFile = {
-  //Copied verbatim into the tarball; `staged.files` below is what puts them there.
+  //Copied verbatim into the tarball; `packed` below is what puts them there.
   "./package.json": "package.json",
   "./biome-shared.json": "biome-shared.json",
 }
@@ -47,8 +47,11 @@ const rootFile = {
 const typesOnly = {
   "./route-globals": "dist/interface/route-globals.d.ts",
 }
-/** Plain CSS, consumed via `@import`; attw can't model it, so it's excluded below. */
-const stylesheet = { "./styles.css": "dist/styles/index.css" }
+/** CSS, consumed via `@import`; attw can't model it, so it's excluded below. */
+const stylesheet = {
+  "./styles.css": "dist/styles/index.css",
+  "./tailwind.css": "dist/styles/tailwind.css",
+}
 
 /**
  * Every JS/TS subpath, `.mjs` + `.d.mts` (types first, per Node's own advice) — read
@@ -187,6 +190,25 @@ for (const css of ["index", "patches", "drawer", "swipeable", "utils"]) {
     problems.push(`missing dist/styles/${css}.css`)
   }
 }
+// The file list npm itself would pack, `!` entries in `files` applied. `bin/` keeps its tests
+// and their fixtures next to the code they test, so shipping `bin` shipped them too until
+// `files` excluded them; this is what keeps them out.
+const packed = JSON.parse(
+  execFileSync(
+    "npm",
+    ["pack", "--dry-run", "--json", "--ignore-scripts"],
+    {
+      cwd: repo,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  ),
+)[0].files.map((f) => f.path)
+for (const f of packed)
+  if (/\.test\.mjs$|(^|\/)fixtures\//.test(f))
+    problems.push(
+      `the tarball ships ${f} — exclude it with a "!" entry in package.json files`,
+    )
 
 /**
  * One row per check in the CI job summary, so publint and attw read as their own lines next to
@@ -226,8 +248,8 @@ const staged = { ...pkg, scripts: undefined, devDependencies: undefined }
 const work = mkdtempSync(path.join(tmpdir(), "adaptv-publish-"))
 process.on("exit", () => rmSync(work, { recursive: true, force: true }))
 const dir = path.join(work, "package")
-for (const f of staged.files)
-  cpSync(path.join(repo, f), path.join(dir, f), { recursive: true })
+//File by file from npm's own list: `files` holds `!` exclusions, which are not paths to copy.
+for (const f of packed) cpSync(path.join(repo, f), path.join(dir, f))
 writeFileSync(
   path.join(dir, "package.json"),
   JSON.stringify(staged, null, 2),
@@ -281,6 +303,7 @@ const attwArgs = (...extraIgnoreRules) => [
   ...extraIgnoreRules,
   "--exclude-entrypoints",
   "styles.css",
+  "tailwind.css",
 ]
 
 /**
@@ -359,11 +382,11 @@ if (frameworkLayout() !== "dist") throw new Error("the staged package has a src/
 for (const m of CLI_MODULES) await loadAdaptvModule(m)`,
 ])
 
-// ── 4. The shipped stylesheet scans what ships ────────────────────────────────
-// `dist/styles/index.css` is a copy, so its `@source` glob resolves against `dist/`. Compile
-// it like an app's Tailwind would and check that classes adaptv's components use are there.
+// ── 4. The shipped stylesheets ───────────────────────────────────────────────
+// `styles.css` bundles with no Tailwind and holds no Tailwind at-rule; `tailwind.css`
+// compiles with Tailwind and emits adaptv's utilities and variants.
 const okStyles = run(
-  "stylesheet scans the built components",
+  "styles.css is plain CSS; tailwind.css compiles",
   process.execPath,
   [path.join(repo, "scripts", "check-dist-styles.mjs"), dir],
 )
@@ -374,6 +397,6 @@ summarise([
   ["attw (node16 profile)", okAttw],
   ["attw audit (only `#adaptv-route-tree` unresolved)", okAudit],
   ["cli modules load from dist/cli", okCli],
-  ["stylesheet scans the built components", okStyles],
+  ["styles.css is plain CSS; tailwind.css compiles", okStyles],
 ])
 process.exit(okPublint && okAttw && okAudit && okCli && okStyles ? 0 : 1)

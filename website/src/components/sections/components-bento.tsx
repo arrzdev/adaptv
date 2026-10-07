@@ -7,12 +7,12 @@ import {
   View,
   WheelColumn,
 } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { BellOff, Moon, Pin, Plane, Trash2, Wifi } from "lucide-react"
 import type { ReactNode } from "react"
 import { useMemo, useState } from "react"
 import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
+import { cn } from "@/utils/cn"
 
 function Card({
   title,

@@ -1,7 +1,17 @@
 /*
- * Drawer engine styles. The panel/backdrop opacity is JS-driven (see drawer-motion.ts);
- * these rules cover the keyframe fallback for the overlay fade. The iOS caret-repaint patch
- * is now app-wide — see hooks/use-caret-repaint.ts + styles/patches.css.
+ * Drawer styles (components/drawer/drawer.tsx). The panel/backdrop opacity is JS-driven (see
+ * drawer-motion.ts); these rules cover the keyframe fallback for the overlay fade, the hidden
+ * tail, and the neutral default look of every part. The iOS caret-repaint patch is now
+ * app-wide — see hooks/use-caret-repaint.ts + styles/patches.css.
+ *
+ * Every part carries `data-adaptv="drawer"` + `data-part` (`overlay`, `content` — the panel,
+ * `body`, `header`, `handle`, `scroller`, `shell`, `footer`), and its default rule is keyed on
+ * that pair under `:where()` (docs/decisions/styling.md §2, §6.0.1): zero specificity, so a
+ * consumer's `className` wins in any dialect. What the engine and the scroll model depend on —
+ * the backdrop's and panel's position, z-index and inset, the panel's flex column and its
+ * locked heights, the scroller's overflow and overscroll, the shell/header/footer flex
+ * structure — is NOT here: those are locks, written inline by the component (§2.0), because a
+ * rule in a layer would lose to any unlayered consumer class.
  *
  * Layered in `adaptv.components` (STYLING.md §6) so a consumer restyles the overlay with an
  * ordinary unlayered rule. `@keyframes` stays outside the layer: keyframe names are resolved
@@ -68,6 +78,128 @@
 }
 
 @layer adaptv.components {
+  /*
+   * overlay: the dim. `will-change` keeps the full-screen dim promoted while mounted, so it
+   * doesn't demote and repaint at every fade end. This half landed first; the panel below
+   * carries the other half of the same demote-on-transition-end repaint, and the two used to
+   * stack. A default, not a lock: a consumer may turn it off.
+   */
+  :where([data-adaptv="drawer"][data-part="overlay"]) {
+    background-color: #0006;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    :where([data-adaptv="drawer"][data-part="overlay"]) {
+      background-color: color-mix(in oklab, var(--color-black, #000) 40%, transparent);
+    }
+  }
+
+  :where([data-adaptv="drawer"][data-part="overlay"]) {
+    will-change: opacity;
+  }
+
+  /*
+   * content (the panel): the sheet's neutral look. `will-change` keeps the sheet on its own
+   * compositor layer for as long as it is mounted. Without it WebKit promotes the panel when
+   * the transition starts and DEMOTES it when the transition ends, re-rasterising the text at
+   * the exact moment the sheet arrives — the settle tremor, which does not show up in rAF
+   * deltas because no frame is late; the pixels just change. It buys no new containing block
+   * for fixed/absolute descendants: the engine writes a transform here from mount onwards and
+   * any non-`none` transform already makes this element one (css-transforms-2 §8), so the hint
+   * only declares what the panel is about to do. Static and component-scoped — the form
+   * docs/design/performance-boost.md §5 permits, and the one `will-change` vaul's whole
+   * stylesheet carries.
+   */
+  :where([data-adaptv="drawer"][data-part="content"]) {
+    border-top-left-radius: var(--radius-xl, 0.75rem);
+    border-top-right-radius: var(--radius-xl, 0.75rem);
+    background-color: var(--color-white, #fff);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    will-change: transform;
+    outline-style: none;
+  }
+
+  /*
+   * body: the content box inside the panel, and the visible-height cap (the reasoning is on
+   * DRAWER_CONTENT_MAX_HEIGHT_VAR in drawer-engine.tsx). Native: the full viewport minus the
+   * top safe area. Installed PWA: the same, and never more than the dynamic viewport. Browser
+   * tab: 97dvh. The consumer's `--pwa-drawer-max-height` is the FIRST term of each `min()`, so
+   * it can only ever ask the sheet to stop higher. Not inline: the engine writes
+   * `max-height` / `min-height` / padding on this node itself and reads this cap back with its
+   * own inline value cleared. It has no consumer `className`.
+   */
+  :where([data-adaptv="drawer"][data-part="body"]) {
+    min-height: 0;
+    flex-direction: column;
+    flex-shrink: 0;
+    display: flex;
+  }
+
+  :where(html[data-adaptv-platform="web"] [data-adaptv="drawer"][data-part="body"]) {
+    max-height: min(var(--pwa-drawer-max-height, 100vh), 97dvh);
+  }
+
+  :where(html[data-adaptv-platform="native"] [data-adaptv="drawer"][data-part="body"]) {
+    max-height: min(var(--pwa-drawer-max-height, 100vh), calc(100vh - var(--adaptv-inset-top)));
+  }
+
+  :where(html[data-adaptv-platform="standalone"] [data-adaptv="drawer"][data-part="body"]) {
+    max-height: min(var(--pwa-drawer-max-height, 100vh), calc(100vh - var(--adaptv-inset-top)), 100dvh);
+  }
+
+  /* header: the drag region around the grabber; the grab cursor only while drag is live */
+  :where([data-adaptv="drawer"][data-part="header"]) {
+    padding-top: calc(var(--spacing, 0.25rem) * 3);
+    padding-bottom: calc(var(--spacing, 0.25rem) * 2);
+    align-items: center;
+  }
+
+  :where([data-adaptv="drawer"][data-part="header"][data-draggable]) {
+    cursor: grab;
+  }
+
+  :where(
+      [data-adaptv="drawer"][data-part="header"][data-draggable][data-pressed]:not(
+          :where([data-adaptv-no-active], [data-adaptv-no-active] *)
+        )
+    ),
+  :where([data-adaptv="drawer"][data-part="header"][data-draggable]:active:not([data-press-engine])),
+  :where(
+    [data-adaptv="drawer"][data-part="header"][data-draggable]:active:is(
+        [data-adaptv-no-active],
+        [data-adaptv-no-active] *
+      )
+  ) {
+    cursor: grabbing;
+  }
+
+  /* handle: the grabber pill (the default one and `Drawer.Handle`) */
+  :where([data-adaptv="drawer"][data-part="handle"]) {
+    height: calc(var(--spacing, 0.25rem) * 1);
+    width: calc(var(--spacing, 0.25rem) * 12);
+    background-color: var(--color-gray-600, oklch(44.6% 0.03 256.802));
+    border-radius: calc(infinity * 1px);
+    flex-shrink: 0;
+    margin-inline: auto;
+  }
+
+  /*
+   * scroller: a column, and `contain` scopes content invalidations to the scroller, keeping
+   * them off the panel's animated layer; the scroller already clips, so paint containment
+   * changes nothing visually.
+   */
+  :where([data-adaptv="drawer"][data-part="scroller"]) {
+    contain: layout paint style;
+    flex-direction: column;
+    display: flex;
+  }
+
+  /* footer: its column direction (its `flex-shrink: 0` is a lock, inline) */
+  :where([data-adaptv="drawer"][data-part="footer"]) {
+    flex-direction: column;
+    display: flex;
+  }
+
   [data-pwa-drawer-overlay] {
     animation-duration: var(--pwa-drawer-overlay-duration, 0.5s);
     animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);

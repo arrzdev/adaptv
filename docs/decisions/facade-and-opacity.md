@@ -416,9 +416,9 @@ an isolated worktree.
 > exactly Path X from §3.2: `src/vite/route-tree-opacity.ts` post-processes `routeTree.gen.ts`,
 > `src/vite/router-autoimport.ts` replaces TanStack's autoimport plugin, `src/vite/thunk-specifiers.ts`
 > repoints the generated specifiers, and `bin/lib/opacity.mjs` holds every byte the CLI prints to the
-> same line. The recurring cost predicted below is real and is paid: two version-keyed patches under
-> `patches/` (L21) and `assertRouteTreeIsOpaque`, which fails the build the day the rewrite stops
-> reaching the file. → `register.md` §3.2 (resolved), L20.
+> same line. The recurring cost predicted below is real and is paid: two in-memory edits to the engine,
+> each pinned to one version (§3.5, L21), and `assertRouteTreeIsOpaque`, which fails the build the day
+> the rewrite stops reaching the file. → `register.md` §3.2 (resolved), L20.
 
 | | Scope | Cost | Status |
 |---|---|---|---|
@@ -444,6 +444,72 @@ a Vite alias. Consumers stop seeing `*.gen` files at the app root. **Do this; it
 independent.**
 
 ---
+
+### 3.5 🔒 How adaptv edits the engine: a Node load hook, not a `pnpm patch` (2026-10-06)
+
+Two edits to the engine are still needed after the route-tree rewrite, and both reach the app:
+
+- **`@tanstack/router-generator` `dist/esm/transform/transform.js`, `targetModule`.** The generator
+  writes the `createFileRoute` import into every route file, on disk, and names
+  `@tanstack/react-router` there. No generator option changes it. Edited to read `ADAPTV_ROUTER_PKG`
+  (set by the plugin), so the import names `@arrzdev/adaptv/router`.
+- **`@tanstack/start-plugin-core` `dist/esm/constants.js`.** Start's entry ids
+  (`virtual:tanstack-start-client-entry`, `-server-entry`, `-dev-client-entry`) are emitted into the
+  HTML the app serves. Renamed to `virtual:adaptv/*`. `#tanstack-start-entry` and
+  `#tanstack-router-entry` stay: they are subpath imports from start-server-core's own `imports` map,
+  and never reach the HTML.
+
+These were `pnpm patch`es, which pnpm applies only from the root of the project it installs, so every
+created app carried them in `patches/` and `pnpm-workspace.yaml` — the consumer patching a dependency,
+which L20 forbids. **adaptv now makes the same edits in memory**, in a load hook registered with
+`module.registerHooks` (`src/vite/engine-hooks.ts`): the files on disk stay as published, nothing is
+written into the app, and it works the same under pnpm, npm and plain `vite`. The same pattern as
+`bin/lib/cap.mjs`.
+
+- **Ordering.** A load hook sees only modules loaded after it is registered, and Node loads a static
+  import graph whole before it runs any of it. So `@arrzdev/adaptv/vite` (`src/interface/vite.index.ts`)
+  installs the hook, then imports the plugin with a dynamic `import()`; nothing it imports statically
+  reaches the engine. The CLI runs Vite in a child process, so its only route to the engine is that
+  same entry. `assertEngineEdited`, called first thing in the plugin factory, throws if the engine
+  loaded unedited anyway (an app that imports it in `vite.config.ts` before adaptv).
+- **Drift is loud (L21).** Each edit names the exact version it was written against and the exact
+  text it replaces. Any file of either package at another version, or a file where that text is not
+  there exactly once, throws an error that names the file and the version. `engine-hooks.test.ts`
+  applies every edit to the installed engine, so a bump fails in the test suite first.
+- **Cost: Node 22.15.** `module.registerHooks` arrived in 22.15 (release candidate in 22.x; it
+  prints no `ExperimentalWarning`). `engines` moved from `>=22.12` to `>=22.15`.
+- **Rejected: run adaptv's own route generator.** Turning Start's generator off and running one with a
+  file-system adapter that rewrites the import uses only public API, but it does not cover the entry
+  ids in the HTML, and it makes adaptv own more of Start's wiring for every upgrade.
+
+### 3.6 What the public types still name, and why (2026-10-06)
+
+Measured with the compiler API on `src/` and on the built `dist/*.d.mts` (TUD-242, #372); both gave
+the same result. The `capabilities`, `hooks`, `ota`, `storage`, `sw`, `utils` and `vite` barrels are
+clean. Every type an adaptv alias could name now has one (`NotFoundScreenComponent`,
+`NotFoundScreenProps`, `NotFoundOptions`, `RouteRedirect`, the `*RouteNode` DSL types,
+`AdaptvRootRoute`, `AppRouter`, `AdaptvRouter`, `AdaptvRouteTree`, `AdaptvHistory`), and
+`src/interface/public-type-names.test.ts` holds them. What `@arrzdev/adaptv/router` still shows:
+
+- **The generic hooks and functions** — `useRouter`, `useNavigate`, `useParams`, `useSearch`,
+  `useMatch`, `useMatches`, `useLoaderData`, `useLocation`, `useRouterState`, `createFileRoute`,
+  `redirect`, `createRouter`. Their signatures print `AnyRouter`, `ThrowOrOptional`, `Use*Result`,
+  `FromPathOption`, `RedirectOptions` and the like. They stay: these are the engine's own generic
+  signatures, and a wrapper type collapses their inference. The resolved results are clean
+  (`useParams` gives `{ id: string }`), so the docs describe a hook by what it returns.
+- **Augmentation anchors, exported under the engine's names** — `Register`, `FileRoutesByPath`,
+  `CreateFileRoute`, `UpdatableRouteOptionsExtensions`. The generated route tree and
+  `route-globals.d.ts` augment them by name on this module; renaming them breaks the augmentation.
+  `RegisteredRouter`, `NavigateOptions`, `ToOptions` and `ParsedLocation` could take aliases, but
+  their expansions still print engine names, so an alias buys nothing yet.
+- **Inferred types an app re-exports** — `export const Route = createFileRoute(…)(…)` prints
+  `import("@tanstack/router-core").Route<…>` in declaration emit. Only an app that emits
+  declarations sees it.
+- **Not leaks:** `Outlet`, `Link` and `LinkProps` share the engine's names but are adaptv's types.
+
+Text outside the types: devtools still show `tanstack_router_reload` and `__TSR_index`, and the
+`verify-patches` error names packages; it fires only on an adaptv fault, and the CLI filters it
+(`bin/lib/opacity.mjs`).
 
 ## 4. Where this doc sits
 
