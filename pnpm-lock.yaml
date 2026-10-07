@@ -7,8 +7,6 @@ settings:
 patchedDependencies:
   '@capacitor/cli@8.4.3': d205ba8093a05871f0c75b5a16fda564dcc42f5a4808d14a05f6b066488187fe
   '@capawesome/capacitor-live-update@8.3.0': bde38c758771ca4a578a76b47f58ad30ebfec7c01dd91fd24390b86efab706fc
-  '@tanstack/router-generator@1.167.21': f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454
-  '@tanstack/start-plugin-core@1.171.24': 41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064
   native-run@2.0.3: 119b3c6269dd6a6ca420126ee2aaf667fd7d49f9f6f36784df068aa0038fcd28
 
 importers:
@@ -166,9 +164,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@types/node@26.1.1)(happy-dom@20.11.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0)))
-      clsx:
-        specifier: 2.1.1
-        version: 2.1.1
       fake-indexeddb:
         specifier: 6.2.5
         version: 6.2.5
@@ -187,9 +182,6 @@ importers:
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
-      tailwind-merge:
-        specifier: 3.4.0
-        version: 3.4.0
       tailwindcss:
         specifier: 4.2.4
         version: 4.2.4
@@ -2481,10 +2473,6 @@ packages:
   cliui@7.0.4:
     resolution: {integrity: sha512-OcRE68cOsVMXp1Yvonl/fzkQOyjLSu/8bhPDfQt0e0/Eb283TKP20Fs2MqoPsr9SwA595rRCA+QMzYc9nBP+JQ==}
 
-  clsx@2.1.1:
-    resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
-    engines: {node: '>=6'}
-
   code-excerpt@4.0.0:
     resolution: {integrity: sha512-xxodCmBen3iy2i0WtAK8FlFNrRzjUqjRsMfho58xT/wvZU1YTM3fCnRjcy1gJPMepaRlgm/0e6w8SpWHpn3/cA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
@@ -3907,9 +3895,6 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
-
-  tailwind-merge@3.4.0:
-    resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
 
   tailwindcss@4.2.4:
     resolution: {integrity: sha512-HhKppgO81FQof5m6TEnuBWCZGgfRAWbaeOaGT00KOy/Pf/j6oUihdvBpA7ltCeAvZpFhW3j0PTclkxsd4IXYDA==}
@@ -6031,7 +6016,7 @@ snapshots:
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-client-core': 1.170.14
       '@tanstack/start-fn-stubs': 1.162.0
-      '@tanstack/start-plugin-core': 1.171.24(patch_hash=41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064)(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
+      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
       '@tanstack/start-server-core': 1.169.17(crossws@0.4.10(srvx@0.11.22))
       '@tanstack/start-storage-context': 1.167.17
       pathe: 2.0.3
@@ -6069,7 +6054,7 @@ snapshots:
       '@tanstack/react-start-server': 1.167.22(crossws@0.4.10(srvx@0.11.22))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-client-core': 1.170.14
-      '@tanstack/start-plugin-core': 1.171.24(patch_hash=41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064)(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
+      '@tanstack/start-plugin-core': 1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
       '@tanstack/start-server-core': 1.169.17(crossws@0.4.10(srvx@0.11.22))
       pathe: 2.0.3
       react: 19.2.3
@@ -6110,7 +6095,7 @@ snapshots:
       seroval: 1.5.5
       seroval-plugins: 1.5.5(seroval@1.5.5)
 
-  '@tanstack/router-generator@1.167.21(patch_hash=f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454)':
+  '@tanstack/router-generator@1.167.21':
     dependencies:
       '@babel/types': 7.29.7
       '@tanstack/router-core': 1.171.15
@@ -6129,7 +6114,7 @@ snapshots:
       '@babel/template': 7.29.7
       '@babel/types': 7.29.7
       '@tanstack/router-core': 1.171.15
-      '@tanstack/router-generator': 1.167.21(patch_hash=f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454)
+      '@tanstack/router-generator': 1.167.21
       '@tanstack/router-utils': 1.162.2
       chokidar: 5.0.0
       unplugin: 3.3.0(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
@@ -6169,13 +6154,13 @@ snapshots:
 
   '@tanstack/start-fn-stubs@1.162.0': {}
 
-  '@tanstack/start-plugin-core@1.171.24(patch_hash=41afca04db7a339a637dabfd534fd06053db0b6784d143e34b7bdb4c6a476064)(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))':
+  '@tanstack/start-plugin-core@1.171.24(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))':
     dependencies:
       '@babel/code-frame': 7.27.1
       '@babel/core': 7.29.7
       '@babel/types': 7.29.7
       '@tanstack/router-core': 1.171.15
-      '@tanstack/router-generator': 1.167.21(patch_hash=f4aa292f8640f119c05b0190176a8097b69e44b81c0cc14dcf1f956932e12454)
+      '@tanstack/router-generator': 1.167.21
       '@tanstack/router-plugin': 1.168.23(@tanstack/react-router@1.170.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(esbuild@0.28.0)(rolldown@1.2.0)(rollup@4.62.2)(vite@8.0.11(@types/node@26.1.1)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.49.0))
       '@tanstack/router-utils': 1.162.2
       '@tanstack/start-server-core': 1.169.17(crossws@0.4.10(srvx@0.11.22))
@@ -6673,8 +6658,6 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
-
-  clsx@2.1.1: {}
 
   code-excerpt@4.0.0:
     dependencies:
@@ -8164,8 +8147,6 @@ snapshots:
       supports-color: 7.2.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
-
-  tailwind-merge@3.4.0: {}
 
   tailwindcss@4.2.4: {}
 

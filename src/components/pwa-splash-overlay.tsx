@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 export type PwaSplashOverlayProps = {
   /** Classes for the full-viewport coverage box (the painted backdrop). */
@@ -14,6 +14,35 @@ export type PwaSplashOverlayProps = {
   centerStyle?: CSSProperties
   children?: ReactNode
 }
+
+/*
+ * LOCKED on the coverage box, inline (docs/decisions/styling.md §2.0): `position: fixed`,
+ * all four insets at 0 and the z-index ARE the coverage guarantee — this element exists
+ * to make it impossible for app content to be visible during boot, and a consumer's
+ * `relative` or `z-0` would silently let the un-hydrated app show through, which is the
+ * exact flash the splash prevents. The background stays a default (styles/
+ * pwa-splash-overlay.css) — the point is to paint the app's own colour (§7).
+ */
+const COVER_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "fixed",
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  zIndex: 100,
+})
+
+/*
+ * Only `position: absolute` is locked on the centering region, and the distinction
+ * matters: taking this region out of flow is what lets `centerClassName` constrain it
+ * (a frozen launch height, `bottom-auto`) WITHOUT shrinking the coverage box — which is
+ * the region's entire reason to exist. The insets are the default extent, so they are a
+ * layered default and a consumer can move any single edge; locking them would silently
+ * delete exactly the override the prop is documented to accept.
+ */
+const CENTER_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "absolute",
+})
 
 /**
  * Full-viewport splash frame with centered content.
@@ -31,43 +60,34 @@ export function PwaSplashOverlay({
   centerStyle,
   children,
 }: PwaSplashOverlayProps) {
-  //LOCKED on the coverage box: `fixed inset-0` and the z-index ARE the coverage
-  //guarantee — this element exists to make it impossible for app content to be
-  //visible during boot, and a consumer's `relative` or `z-0` would silently let the
-  //un-hydrated app show through, which is the exact flash the splash prevents.
-  //Background stays base — the point is to paint the app's own colour (§7:
-  //`bg-background` resolves against the consumer's theme).
-  const cover = mergeStyles({
-    base: "bg-background",
+  const cover = composeStyles({
     className,
-    locked: "fixed inset-0 z-[100]",
     style,
-    lockedStyle: undefined,
+    lockedStyle: COVER_LOCKED_STYLE,
   })
 
-  //Only `absolute` is locked here, and the distinction matters: taking this region
-  //out of flow is what lets `centerClassName` constrain it (a frozen launch height,
-  //`bottom-auto`) WITHOUT shrinking the coverage box — which is the region's entire
-  //reason to exist. The insets are the default extent, so they stay `base` and a
-  //consumer can move any single edge; locking them would silently delete exactly
-  //the override the prop is documented to accept.
-  const center = mergeStyles({
-    base: "inset-0 flex flex-col items-center justify-center",
+  const center = composeStyles({
     className: centerClassName,
-    locked: "absolute",
     style: centerStyle,
-    lockedStyle: undefined,
+    lockedStyle: CENTER_LOCKED_STYLE,
   })
 
   return (
     <div
       data-adaptv-splash
-      className={cover.className}
+      data-adaptv="pwa-splash-overlay"
+      data-part="root"
+      className={cover.className || undefined}
       style={cover.style}
     >
-      <div className={center.className} style={center.style}>
+      <div
+        data-adaptv="pwa-splash-overlay"
+        data-part="center"
+        className={center.className || undefined}
+        style={center.style}
+      >
         {children && (
-          <div className="flex flex-col items-center gap-8">
+          <div data-adaptv="pwa-splash-overlay" data-part="content">
             {children}
           </div>
         )}

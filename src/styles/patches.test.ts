@@ -56,12 +56,18 @@ describe("ui.noSelect — the selection reset is stamped, not universal", () => 
     for (const selector of selectors) {
       expect(selector).not.toBe("*")
     }
-    //`.selectable` leads because it is an `@utility`, emitted into Tailwind's own
-    //`utilities` layer ahead of everything adaptv writes into `adaptv.*`
+    //`.selectable` comes twice: first as tailwind.css's `@utility`, emitted into
+    //Tailwind's own `utilities` layer ahead of everything adaptv writes into `adaptv.*`,
+    //last as styles.css's plain class in `adaptv.utilities`
+    //the Button/Fab root's `user-select: none` is a component default in the layer, the
+    //rule its old `select-none` class became (docs/decisions/styling.md §2) — scoped to
+    //the primitive and overridable by any consumer class
     expect(selectors).toEqual([
       ".selectable",
       "img, svg, video, canvas",
+      ':where( [data-adaptv="button"][data-part="root"], [data-adaptv="fab"][data-part="root"] )',
       "[data-swipeable-content]",
+      ".selectable",
     ])
   })
 
@@ -123,9 +129,14 @@ describe("ui.hideScrollbars — the scrollbar reset is stamped, not universal", 
     )
   })
 
-  it("ships NO unstamped `scrollbar-width`", async () => {
+  it("ships NO unstamped `scrollbar-width` but the two opt-in classes", async () => {
     const css = await compileAdaptvStyles([])
     for (const selector of selectorsDeclaring(css, "scrollbar-width")) {
+      if (
+        selector === ".scrollbar-hidden" ||
+        selector === ".scrollbar-visible"
+      )
+        continue
       expect(selector).toContain("data-adaptv-hide-scrollbars")
     }
   })

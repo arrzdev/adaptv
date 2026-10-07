@@ -9,7 +9,7 @@ function first(ui: Parameters<typeof render>[0]) {
 }
 
 describe("Divider", () => {
-  it("is a separator across by default, with the theme's border colour on the base tier", () => {
+  it("is a separator across by default, with the theme's border colour as a layered default", () => {
     const el = first(<Divider />)
     expect(el.tagName).toBe("DIV")
     expect(el.getAttribute("data-adaptv")).toBe("divider")
@@ -17,7 +17,20 @@ describe("Divider", () => {
     //horizontal is ARIA's default and is left unsaid, so nothing to parse
     expect(el.hasAttribute("aria-orientation")).toBe(false)
     expect(el.hasAttribute("data-orientation")).toBe(false)
-    expect(el.className).toBe("border-border")
+    //the colour is a default rule keyed on the part (styles/divider.css), not a class
+    expect(el.getAttribute("data-part")).toBe("root")
+    expect(el.hasAttribute("class")).toBe(false)
+  })
+
+  it("passes a consumer className through untouched, and its style beside it", () => {
+    const el = first(
+      <Divider
+        className="border-red-500 ms-4"
+        style={{ marginBlock: "4px" }}
+      />,
+    )
+    expect(el.className).toBe("border-red-500 ms-4")
+    expect(el.style.marginBlock).toBe("4px")
   })
 
   it("vertical says so twice: to the stylesheet and to assistive technology", () => {
@@ -35,16 +48,15 @@ describe("Divider", () => {
     expect(vertical.getAttribute("data-orientation")).toBe("vertical")
   })
 
-  it("render swaps the element and merges both call sites' classes, Divider's own last", () => {
+  it("render swaps the element and joins both call sites' classes, adding none of its own", () => {
     const el = first(
       <Divider render={<li className="my-2" />} className="ms-4" />,
     )
     expect(el.tagName).toBe("LI")
     expect(el.getAttribute("data-adaptv")).toBe("divider")
     expect(el.getAttribute("role")).toBe("separator")
-    expect(el.className.split(" ").sort()).toEqual(
-      ["border-border", "ms-4", "my-2"].sort(),
-    )
+    //the render element's first, then the prop's (styling.md §3.3)
+    expect(el.className).toBe("my-2 ms-4")
   })
 
   it("drops its children, so a stray child cannot give the hairline a height", () => {

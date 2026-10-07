@@ -12,9 +12,9 @@ import {
   Drawer as BaseDrawer,
   useDrawer,
 } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef } from "react"
 import { forwardRef } from "react"
+import { cn } from "@/utils/cn"
 
 const DRAWER_OVERLAY_CLASSNAME = cn("bg-overlay")
 

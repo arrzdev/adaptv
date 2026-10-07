@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react"
 import { cloneElement } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /** Which way the rule runs — and therefore which edge carries the hairline. */
 export type DividerOrientation = "horizontal" | "vertical"
@@ -42,15 +42,12 @@ export interface DividerProps extends ComponentPropsWithRef<"div"> {
   render?: DividerRender
 }
 
-//BASE: the theme's border colour, fully the consumer's to repaint. The rule is a BORDER,
-//never a background — see the second quirk below — so `border-*` colour utilities are
-//the vocabulary that repaints it and tailwind-merge's `border-color` group is what
-//`border-red-500` beats this through.
-const DIVIDER_BASE_CLASS = "border-border"
-//LOCKED: nothing on the class tier, and that is a decision — the hairline's width, its
-//edge and the vertical stretch live in styles/divider.css keyed on the identity attribute,
-//where a consumer's className has no class to drop them against.
-const DIVIDER_LOCKED_CLASS = undefined
+//The colour is a default rule in styles/divider.css (`border-color:
+//var(--color-border)`), fully the consumer's to repaint. The rule is a BORDER, never a
+//background — see the second quirk below — so `border-*` colour utilities are the
+//vocabulary that repaints it. Nothing is locked, and that is a decision — the
+//hairline's width, its edge and the vertical stretch live in styles/divider.css keyed
+//on the identity attribute, where a consumer's className has nothing to defeat.
 
 /**
  * A hairline rule between things — and the three platform rules every hand-rolled
@@ -86,18 +83,18 @@ const DIVIDER_LOCKED_CLASS = undefined
  *
  * ## Tiers
  *
- * | Tier | Classes | Why |
- * |------|---------|-----|
- * | base | `border-border` | the colour; repaint it with any `border-*` colour |
+ * | Tier | Where | What |
+ * |------|-------|------|
+ * | default | styles/divider.css | `border-color: var(--color-border)`; repaint it with any `border-*` colour |
  * | className | yours | inset (`ms-4`), spacing (`my-2`), colour |
- * | locked | — | width, edge and stretch are CSS on `data-adaptv`, not classes |
+ * | locked | — | width, edge and stretch are CSS on `data-adaptv`, not inline style |
  *
  * There is no `inset` prop and no `thickness` prop (`docs/decisions/styling.md §5.4.1`):
  * an inset is `ms-4`, and a thicker rule is not a hairline.
  *
  * | Attribute | When |
  * |-----------|------|
- * | `data-adaptv="divider"` | always |
+ * | `data-adaptv="divider"` + `data-part="root"` | always |
  * | `data-orientation="vertical"` | vertical |
  * | `role="separator"` / `aria-orientation="vertical"` | unless `decorative` |
  * | `role="none"` | `decorative` |
@@ -112,10 +109,9 @@ export function Divider({
   ref,
   ...props
 }: DividerProps) {
-  const merged = mergeStyles({
-    base: DIVIDER_BASE_CLASS,
+  //§3.3: the render element's classes, then the prop's, joined; adaptv adds none
+  const merged = composeStyles({
     className: [render?.props.className, className],
-    locked: DIVIDER_LOCKED_CLASS,
     style: { ...render?.props.style, ...style },
   })
 
@@ -123,9 +119,10 @@ export function Divider({
   const slotProps: DividerSlotProps = {
     ...props,
     ref,
-    className: merged.className,
+    className: merged.className || undefined,
     style: merged.style,
     "data-adaptv": "divider",
+    "data-part": "root",
     "data-orientation": vertical ? "vertical" : undefined,
     role: decorative ? "none" : "separator",
     "aria-orientation": !decorative && vertical ? "vertical" : undefined,

@@ -52,7 +52,6 @@ type StartOptions = {
 //test restores them, so no suite later in the worker inherits a temp dir's paths.
 const ENV_KEYS = [
   "ADAPTV_ROUTER_PKG",
-  "ADAPTV_START_PKG",
   "TSR_TMP_DIR",
   "ADAPTV_ROOT_ROUTE_FILE",
   "ADAPTV_TARGET",

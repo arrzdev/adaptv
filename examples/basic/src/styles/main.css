@@ -1,9 +1,27 @@
-@layer theme, base, adaptv, components, utilities;
-@import "tailwindcss";
 @import "@arrzdev/adaptv/styles.css";
 
 :root {
   color-scheme: light dark;
   background: light-dark(#ffffff, #0a0a0c);
   color: light-dark(#0a0a0c, #f4f4f5);
+}
+
+/* A class beats adaptv's defaults: they sit in a cascade layer, this rule does not. */
+.home {
+  gap: 0.5rem;
+  /* the safe area, plus 1.5rem: adaptv keeps the inset in a variable */
+  padding: calc(var(--adaptv-inset-top) + 1.5rem)
+    calc(var(--adaptv-inset-right) + 1.5rem)
+    calc(var(--adaptv-inset-bottom) + 1.5rem)
+    calc(var(--adaptv-inset-left) + 1.5rem);
+  text-align: center;
+}
+
+.home h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.home p {
+  opacity: 0.6;
 }

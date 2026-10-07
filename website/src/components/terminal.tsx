@@ -1,9 +1,9 @@
 import { View } from "@arrzdev/adaptv/components"
 import { useReducedMotion } from "@arrzdev/adaptv/hooks"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useInView } from "motion/react"
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react"
 import { type Frame, parseAnsi, replayFrames } from "@/components/ansi"
+import { cn } from "@/utils/cn"
 
 const COLOURS = [
   "black",

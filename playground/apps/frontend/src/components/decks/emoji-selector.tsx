@@ -1,10 +1,10 @@
 import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import {
   DECK_EMOJI_OPTIONS,
   DEFAULT_DECK_EMOJI,
 } from "@/data/collections/decks/constants"
+import { cn } from "@/utils/cn"
 
 type EmojiSelectorProps = {
   value: string | null

@@ -121,11 +121,11 @@ describe("hover: — the sticky-hover + focus-ring variant", () => {
   })
 
   it("names Tailwind as the owner of the media-query half", () => {
-    const patchesCss = readFileSync(
-      join(process.cwd(), "src/styles/patches.css"),
+    const tailwindCss = readFileSync(
+      join(process.cwd(), "src/styles/tailwind.css"),
       "utf8",
     )
-    expect(patchesCss).toContain("4.2.4")
+    expect(tailwindCss).toContain("4.2.4")
   })
 })
 
@@ -268,11 +268,31 @@ describe("the gpu boost is gone and cannot be reintroduced by accident", () => {
      * elements and buys nothing, and it is the kind of thing that gets pasted back in
      * because it "feels faster".
      */
-    const css = await compileAdaptvStyles([
+    const compiled = await compileAdaptvStyles([
       "selectable",
       "scrollbar-hidden",
       "scrollbar-visible",
     ])
+    //The ONE exception, by name: the drawer's dim and panel. They are static and
+    //component-scoped, grant no new containing block (the engine's transform already
+    //does), and are measured in drawer.css — performance-boost.md §5's permitted form.
+    //They used to be class strings and so never reached this sheet; since TUD-225 they
+    //are layer defaults a consumer turns off with a class. Anything else is a regression.
+    const DRAWER_HINTS = [
+      ':where([data-adaptv="drawer"][data-part="overlay"]) {\n    will-change: opacity;\n  }',
+      "will-change: transform;",
+    ]
+    for (const hint of DRAWER_HINTS) expect(compiled).toContain(hint)
+    expect(compiled.split("will-change").length - 1).toBe(2)
+    const drawerPanel = ruleFor(
+      compiled,
+      ':where([data-adaptv="drawer"][data-part="content"])',
+    )
+    expect(drawerPanel).toContain("will-change: transform;")
+    const css = DRAWER_HINTS.reduce(
+      (sheet, hint) => sheet.replace(hint, ""),
+      compiled,
+    )
     for (const hint of [
       "will-change",
       "translateZ",

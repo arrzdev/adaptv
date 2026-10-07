@@ -4,7 +4,8 @@ import type { ButtonHandle, ButtonProps } from "#adaptv/components/button"
 import { Button } from "#adaptv/components/button"
 import { useKeyboard } from "#adaptv/hooks/use-keyboard"
 import { useLayoutViewportShrink } from "#adaptv/hooks/use-layout-viewport-shrink"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /** Which screen corner {@link Fab} sits in. `end`/`start` are inline-relative, so RTL is right by construction. */
 export type FabPlacement = "end" | "center" | "start"
@@ -27,7 +28,7 @@ export interface FabProps extends Omit<ButtonProps, "hidden"> {
    */
   avoidKeyboard?: boolean
   /**
-   * Distance from the safe edges, in Tailwind spacing units (`calc(var(--spacing) *
+   * Distance from the safe edges, in Tailwind spacing units (`calc(var(--spacing, 0.25rem) *
    * gap)`, so it follows the consumer's `--spacing` theme value). Default `4`.
    */
   gap?: number
@@ -39,18 +40,25 @@ export interface FabProps extends Omit<ButtonProps, "hidden"> {
   hidden?: boolean
 }
 
-//the neutral look of a floating button; every token is a consumer's to override.
-//`h-14 w-14`, NOT `size-14`: tailwind-merge's `size` group beats `w`/`h`, but a later
-//`w-auto` does not remove an earlier `size-14` — both reach the DOM and Tailwind's
-//print order decides (docs/decisions/styling.md §5.5). Splitting the two longhands
-//is what lets the extended form's `w-auto` win through the `w` group it already owns.
-const FAB_BASE_CLASS = "h-14 w-14 rounded-full shadow-lg z-40"
+//The neutral look of a floating button — 56px square, fully rounded, `shadow-lg`,
+//`z-index: 40` on top of Button's own surface — is a default rule in styles/fab.css;
+//every property of it is the consumer's to override.
 
-//LOCKED: the hide/show motion IS the behaviour, not a look. `translate` is the only
-//property that moves, and `motion-reduce:` retires the transition for a user who
-//asked for no motion — the button still hides, it just does not slide.
-const FAB_LOCKED_CLASS =
-  "transition-[translate] duration-200 ease-out motion-reduce:transition-none"
+//LOCKED, inline (docs/decisions/styling.md §2.0): the hide/show motion IS the behaviour,
+//not a look. `translate` is the only property that moves, and a user who asked for no
+//motion gets `transition-property: none` — the button still hides, it just does not
+//slide. Longhands, not the `transition` shorthand, so a consumer `style` longhand merges
+//per property without React mixing the two. The timing is Tailwind's `ease-out` token
+//with its own default, not the CSS `ease-out` keyword (a different curve).
+const FAB_MOTION_LOCKED_STYLE: CSSProperties = Object.freeze({
+  transitionProperty: "translate",
+  transitionDuration: "200ms",
+  transitionTimingFunction: "var(--ease-out, cubic-bezier(0, 0, 0.2, 1))",
+})
+const FAB_MOTION_REDUCED_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...FAB_MOTION_LOCKED_STYLE,
+  transitionProperty: "none",
+})
 
 export type FabPositionOptions = {
   placement: FabPlacement
@@ -84,7 +92,7 @@ export function fabPositionStyle({
   hidden,
   keyboardShrink = 0,
 }: FabPositionOptions): CSSProperties {
-  const gapValue = `calc(var(--spacing) * ${gap})`
+  const gapValue = `calc(var(--spacing, 0.25rem) * ${gap})`
   //the keyboard term is a VARIABLE and not a number: the value changes at the OS's
   //animation rate, and composing it in `calc()` lets the cascade move the button on
   //every keyboard frame without a render (docs/decisions/styling.md §3.2).
@@ -157,15 +165,17 @@ export function fabPositionStyle({
  * it is the component's: `position`, `bottom`, the inline inset, `translate` and the
  * inert `pointer-events` are `lockedStyle`, so a consumer `style` is forwarded but cannot
  * un-anchor the button. A different anchor is a different component — write your own
- * fixed element (`fabPositionStyle` gives the safe-edge expressions). The look is base
- * and fully overridable: `h-14 w-14 rounded-full shadow-lg z-40` on top of `Button`'s
- * neutral surface. The extended form is the same component with `Button.Text` children
- * and `className="w-auto px-5"` — there is no variant prop. The motion classes are
- * `locked`.
+ * fixed element (`fabPositionStyle` gives the safe-edge expressions). The look is a
+ * default rule (`styles/fab.css`) and fully overridable: 56px square, fully rounded,
+ * `shadow-lg`, `z-index: 40`, on top of `Button`'s neutral surface. The extended form is
+ * the same component with `Button.Text` children and `className="w-auto px-5"` — there
+ * is no variant prop. The hide/show transition is locked inline too, retired under
+ * `prefers-reduced-motion`.
  *
  * | Attribute | When |
  * |-----------|------|
  * | `data-adaptv="fab"` | always — target every FAB from global CSS with no imports |
+ * | `data-part="root"` | always (Button's) |
  * | `data-placement="end\|center\|start"` | always |
  * | `data-hidden` | `hidden` (boolean presence) |
  * | `data-keyboard-open` | the keyboard is up and `avoidKeyboard` is on (boolean presence) |
@@ -205,18 +215,27 @@ export const Fab = forwardRef<ButtonHandle, FabProps>(function Fab(
     avoidKeyboard && isKeyboardOpen,
   )
 
-  const merged = mergeStyles({
-    base: FAB_BASE_CLASS,
+  //`prefers-reduced-motion` read in JS, the way Image reads it: a media query cannot be
+  //inline style, and the lock has to be (§2). `false` on the server and during
+  //hydration, so the first client render after it settles.
+  const reducedMotion = useReducedMotion()
+
+  //`className` is the consumer's alone; Fab adds no class (its look is styles/fab.css)
+  const merged = composeStyles({
     className,
-    locked: FAB_LOCKED_CLASS,
     style,
-    lockedStyle: fabPositionStyle({
-      placement,
-      avoidKeyboard,
-      gap,
-      hidden,
-      keyboardShrink,
-    }),
+    lockedStyle: {
+      ...fabPositionStyle({
+        placement,
+        avoidKeyboard,
+        gap,
+        hidden,
+        keyboardShrink,
+      }),
+      ...(reducedMotion
+        ? FAB_MOTION_REDUCED_LOCKED_STYLE
+        : FAB_MOTION_LOCKED_STYLE),
+    },
   })
 
   return (
@@ -234,7 +253,7 @@ export const Fab = forwardRef<ButtonHandle, FabProps>(function Fab(
       //inline `pointer-events: none` above keeps a tap on the empty corner from landing
       aria-hidden={hidden ? true : ariaHidden}
       tabIndex={hidden ? -1 : tabIndex}
-      className={merged.className}
+      className={merged.className || undefined}
       style={merged.style}
     />
   )

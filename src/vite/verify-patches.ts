@@ -4,18 +4,18 @@
  *
  * ## Why this exists
  *
- * adaptv's TanStack opacity rests on two `pnpm patch`es. They are declared in
+ * adaptv's native layer rests on `pnpm patch`es. They are declared in
  * `pnpm-workspace.yaml` under `patchedDependencies` — and pnpm honours that key
  * **only in the root manifest of the project being installed**. A library cannot
  * carry its own patches into a consumer's install.
  *
- * So in a real consumer app, without the same declaration, both patches are
- * simply absent. And the failure is **silent**: the generator goes back to
- * writing `@tanstack/react-router` imports into route files, the facade quietly
- * reverts, and the app still builds. Someone would eventually notice their
- * "opaque" framework leaking TanStack everywhere and have no idea why.
+ * So in a real consumer app, without the same declaration, the patches are
+ * simply absent, and the failure is **silent**: the app still builds. A silent
+ * revert is much worse than a hard failure, so this turns it into one.
  *
- * A silent revert is much worse than a hard failure, so this turns it into one.
+ * The route engine is no longer patched this way: adaptv edits it in memory as Node
+ * loads it (`src/vite/engine-hooks.ts`), so its failures are loud there. What is left
+ * here for it is `assertRouteTreeIsOpaque`, the check on the one file it generates.
  */
 
 import { readdirSync, readFileSync } from "node:fs"
@@ -33,8 +33,8 @@ export type PatchStatus = {
  * The `patchedDependencies` filename convention, decoded.
  *
  * The filename IS the pnpm key: `@scope__name@version.patch` means
- * `'@scope/name@version'` — today `@tanstack__router-generator@1.167.21.patch`
- * decodes to `'@tanstack/router-generator@1.167.21'`. Keeping one encoding is what
+ * `'@scope/name@version'` — today `@capacitor__cli@8.4.3.patch` decodes
+ * to `'@capacitor/cli@8.4.3'`. Keeping one encoding is what
  * makes the instructions below trustworthy — they are derived from the patches
  * that actually shipped, so a version bump (which renames the file, per L21)
  * updates the message on its own. They used to be hardcoded, and version-keying
@@ -154,22 +154,13 @@ export function assertRouteTreeIsOpaque(routeTreePath: string): void {
 
   throw new Error(
     [
-      "[adaptv] The generated route tree still imports from `@tanstack/*`.",
+      "[adaptv] The generated route tree still names the route engine.",
       `  ${routeTreePath}`,
       "",
-      "That means adaptv's dependency patches are not applied to this install. The build",
-      "would otherwise SUCCEED with the framework facade silently disabled — your route",
-      "files would carry `@tanstack/react-router` imports again — which is why this is an",
-      "error rather than a warning.",
-      "",
-      describeMissingPatches(
-        ["@tanstack/start-plugin-core", "@tanstack/router-generator"],
-        [
-          "Without them the route generator writes `@tanstack/react-router` imports into your",
-          "route files and adaptv's framework facade silently stops working — the build still",
-          "succeeds, which is why this is an error rather than a warning.",
-        ],
-      ),
+      "adaptv rewrites this file as the generator writes it (src/vite/route-tree-opacity.ts),",
+      "so a mention left here is a bug in adaptv, not in your app. Delete `.adaptv/` and run",
+      "again; if it stays, report it with this file attached. The build stops here because it",
+      "would otherwise SUCCEED with the engine's names in your app's types.",
     ].join("\n"),
   )
 }

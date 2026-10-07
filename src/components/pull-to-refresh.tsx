@@ -1,4 +1,5 @@
 import type {
+  CSSProperties,
   MutableRefObject,
   PointerEvent,
   ReactNode,
@@ -30,8 +31,7 @@ import {
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { clamp } from "#adaptv/utils/clamp"
-import { cn } from "#adaptv/utils/cn"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 type RefreshPhase = "idle" | "pulling" | "refreshing" | "closing"
 
@@ -92,23 +92,16 @@ export interface PullToRefreshProps {
   scrollContainerRef?: RefObject<HTMLElement | null>
 }
 
-//LOCKED: `relative` is the containing block the indicator track is absolutely
-//positioned against — without it the spinner escapes to the nearest positioned
-//ancestor and animates somewhere else entirely. `shrink-0 grow-0` is BASE: it is a
+//LOCKED (inline, docs/decisions/styling.md §2.0): `relative` is the containing block
+//the indicator track is absolutely positioned against — without it the spinner
+//escapes to the nearest positioned ancestor and animates somewhere else entirely.
+//`flex-shrink: 0; flex-grow: 0` is a DEFAULT (styles/pull-to-refresh.css): it is a
 //flex-line default, and a consumer putting this in a `flex-1` column is a legitimate
-//layout choice that does not break the gesture.
-const PULL_TO_REFRESH_ROOT_LOCKED_CLASS = "relative"
-const PULL_TO_REFRESH_ROOT_BASE_CLASS = "shrink-0 grow-0"
-const PULL_TO_REFRESH_STATUS_LAYOUT_CLASS = "sr-only"
-const PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS =
-  "pointer-events-none absolute inset-x-0 z-0 flex justify-center motion-reduce:transition-none"
-const PULL_TO_REFRESH_INDICATOR_ROTATOR_LAYOUT_CLASS =
-  "origin-center motion-reduce:transition-none"
-const PULL_TO_REFRESH_INDICATOR_SURFACE_CLASS = "text-gray-950"
-const PULL_TO_REFRESH_INDICATOR_SPIN_CLASS = "animate-spin"
-const PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS =
-  "relative z-0 motion-reduce:transition-none"
-const PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS = "relative z-0"
+//layout choice that does not break the gesture. The status line, the indicator and
+//the content wrapper have no consumer channel; their look is in the same file.
+const PULL_TO_REFRESH_ROOT_LOCKED_STYLE: CSSProperties = Object.freeze({
+  position: "relative",
+})
 
 /** A rejected `onRefresh`, reported the way a throwing event listener's error is. */
 function reportRefreshError(error: unknown) {
@@ -270,10 +263,10 @@ function PullIndicatorArc({
       width={ICON_SIZE}
       height={ICON_SIZE}
       viewBox={`0 0 ${ICON_SIZE} ${ICON_SIZE}`}
-      className={cn(
-        PULL_TO_REFRESH_INDICATOR_SURFACE_CLASS,
-        spinning && !reducedMotion && PULL_TO_REFRESH_INDICATOR_SPIN_CLASS,
-      )}
+      data-part="indicator-arc"
+      //presence attribute (styling.md §3.1): the spin rule in pull-to-refresh.css
+      //keys on it, and it is only ever set while the arc is actually turning
+      data-spinning={spinning && !reducedMotion ? "" : undefined}
       style={
         spinning && !reducedMotion
           ? { animationDuration: `${SPIN_DURATION}s` }
@@ -816,12 +809,16 @@ export const PullToRefresh = forwardRef<
   if (!attached) {
     return (
       <PullToRefreshContext.Provider value={contextValue}>
+        {/* Not the gesture root, so not `pull-to-refresh`: a consumer finds the live
+            gesture root with `closest('[data-adaptv="pull-to-refresh"]')`, and an
+            idle row has none. Its own scope carries the same default look. */}
         <div
+          data-adaptv="pull-to-refresh-root"
+          data-part="root"
           ref={setScrollRef}
-          className={mergeStyles({
-            base: PULL_TO_REFRESH_ROOT_BASE_CLASS,
+          {...composeStyles({
             className,
-            locked: PULL_TO_REFRESH_ROOT_LOCKED_CLASS,
+            lockedStyle: PULL_TO_REFRESH_ROOT_LOCKED_STYLE,
           })}
         >
           {children}
@@ -834,32 +831,23 @@ export const PullToRefresh = forwardRef<
     <PullToRefreshContext.Provider value={contextValue}>
       <div
         data-adaptv="pull-to-refresh"
+        data-part="root"
         ref={setScrollRef}
-        className={mergeStyles({
-          base: PULL_TO_REFRESH_ROOT_BASE_CLASS,
+        {...composeStyles({
           className,
-          locked: PULL_TO_REFRESH_ROOT_LOCKED_CLASS,
+          lockedStyle: PULL_TO_REFRESH_ROOT_LOCKED_STYLE,
         })}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
       >
-        <div
-          aria-live="polite"
-          className={PULL_TO_REFRESH_STATUS_LAYOUT_CLASS}
-        >
+        <div aria-live="polite" data-part="status">
           {liveStatus}
         </div>
         {showSpinner && (
-          <div
-            ref={spinnerTrackRef}
-            className={PULL_TO_REFRESH_INDICATOR_TRACK_LAYOUT_CLASS}
-          >
-            <div
-              ref={spinnerRotatorRef}
-              className={PULL_TO_REFRESH_INDICATOR_ROTATOR_LAYOUT_CLASS}
-            >
+          <div ref={spinnerTrackRef} data-part="indicator">
+            <div ref={spinnerRotatorRef} data-part="indicator-rotator">
               <PullIndicatorArc
                 arcProgress={isDragging ? pulling.arcProgress : 1}
                 spinning={isRefreshing}
@@ -870,14 +858,7 @@ export const PullToRefresh = forwardRef<
         )}
         {/* One element whether lifted or not, so a pull never remounts the
             app's content; idle, it carries no transform at all. */}
-        <div
-          ref={contentRef}
-          className={
-            liftContent
-              ? PULL_TO_REFRESH_CONTENT_MOTION_LAYOUT_CLASS
-              : PULL_TO_REFRESH_CONTENT_STATIC_LAYOUT_CLASS
-          }
-        >
+        <div ref={contentRef} data-part="content">
           {children}
         </div>
       </div>

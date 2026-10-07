@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react"
+import type { CSSProperties, KeyboardEvent } from "react"
 import {
   useEffect,
   useLayoutEffect,
@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { TOUCH_PASSTHROUGH_CLASS } from "#adaptv/components/press-core"
+import { TOUCH_PASSTHROUGH_STYLE } from "#adaptv/components/press-core"
 import {
   snapIndex,
   WHEEL_HEIGHT,
@@ -14,7 +14,7 @@ import {
   WHEEL_PAD,
   wheelRowTransform,
 } from "#adaptv/components/wheel-column-geometry"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * CONSTANTS — the item height, layout box and drum projection now live in
@@ -32,37 +32,50 @@ const WHEEL_MASK =
   "linear-gradient(to bottom, transparent, #000 34%, #000 66%, transparent)"
 
 /*
- * LOCKED: the wheel IS the scroller — every index this component reports is
- * `scrollTop / WHEEL_ITEM_HEIGHT`, so a consumer's `overflow-hidden` would not restyle
- * it, it would make it report 0 forever.
+ * LOCKED (inline, docs/decisions/styling.md §2.0): the wheel IS the scroller — every
+ * index this component reports is `scrollTop / WHEEL_ITEM_HEIGHT`, so a consumer's
+ * `overflow-hidden` would not restyle it, it would make it report 0 forever.
  *
  * ⚠︎ This once read `"scrollable-y overscroll-contain"`, and the second class SILENTLY
  * won the whole shorthand — `overscroll-behavior: contain` overrode the axis rule, and
- * the wheel stopped scrolling. Spelled as separate Tailwind utilities that trap is
- * gone: tailwind-merge owns `overflow`, `overscroll` and `touch` natively, so a
- * conflicting class is DROPPED rather than silently layered on top.
+ * the wheel stopped scrolling. As inline longhands there is no shorthand to collide
+ * with and no conflict table to keep in step: each property is its own key.
+ *
+ * The height is `VISIBLE_ROWS * WHEEL_ITEM_HEIGHT` and the list is padded by exactly
+ * two rows top and bottom so that scrollTop 0 centres index 0. Change the height and
+ * the centre line moves off the selected row — the column keeps working and reports
+ * the wrong value. The mask is what fades the unselected rows onto the drum.
+ *
+ * The fieldset's UA margin/padding/border reset is a default, not a lock: it lives in
+ * styles/wheel-column.css, and a consumer who wants a bordered column may say so.
  */
-const WHEEL_FIELDSET_LOCKED_CLASS = [
-  "overflow-y-auto",
-  "overflow-x-hidden",
-  "overscroll-y-contain",
-  TOUCH_PASSTHROUGH_CLASS,
-].join(" ")
-//BASE: a `<fieldset>` arrives with UA margin/padding/border. Zeroing them is a
-//reset, not a structure — a consumer who wants a bordered column may say so.
-const WHEEL_FIELDSET_BASE_CLASS = "m-0 min-w-0 border-0 p-0"
-
-// neutral Tier-1 row paint: iOS keeps size and weight UNIFORM across rows —
-// the centered row is emphasized by color only (plus the consumer's selection
-// lens), so never add a data-active size/weight jump here. Tier-2 recolors via
-// `itemClassName` + `data-[active=true]:`. JS owns the row transform (drum
-// projection) — never add transform utilities or a transform transition.
-const WHEEL_ITEM_NEUTRAL_CLASS =
-  "flex items-center justify-center text-lg font-medium text-gray-400 tabular-nums transition-colors duration-150 data-[active=true]:text-gray-900"
-//LOCKED on a row: `h-full w-full` is what makes the whole 30px slot the tap target
-//the drum projection is computed against — a shrunk row leaves dead gaps between
-//selections. The touch-action longhand is the press-target contract (WebKit 240917).
-const WHEEL_ITEM_LOCKED_CLASS = `${TOUCH_PASSTHROUGH_CLASS} h-full w-full`
+const WHEEL_FIELDSET_LOCKED_STYLE: CSSProperties = Object.freeze({
+  overflowY: "auto",
+  overflowX: "hidden",
+  overscrollBehaviorY: "contain",
+  ...TOUCH_PASSTHROUGH_STYLE,
+  height: WHEEL_HEIGHT,
+  maskImage: WHEEL_MASK,
+  WebkitMaskImage: WHEEL_MASK,
+})
+//the two-row pad that centres index 0 at scrollTop 0 (see above)
+const WHEEL_LIST_STYLE: CSSProperties = Object.freeze({
+  paddingTop: WHEEL_PAD,
+  paddingBottom: WHEEL_PAD,
+})
+const WHEEL_ROW_STYLE: CSSProperties = Object.freeze({
+  height: WHEEL_ITEM_HEIGHT,
+})
+//LOCKED on a row: full width and height is what makes the whole 30px slot the tap
+//target the drum projection is computed against — a shrunk row leaves dead gaps
+//between selections. The touch-action longhand is the press-target contract (WebKit
+//240917). The row's paint (size, weight, the active colour) is a default in
+//styles/wheel-column.css.
+const WHEEL_ITEM_LOCKED_STYLE: CSSProperties = Object.freeze({
+  ...TOUCH_PASSTHROUGH_STYLE,
+  height: "100%",
+  width: "100%",
+})
 
 export type WheelItem = { value: number; label: string }
 
@@ -346,6 +359,7 @@ export function WheelColumn({
   return (
     <fieldset
       data-adaptv="wheel-column"
+      data-part="root"
       ref={scrollRef}
       onScroll={handleScroll}
       onTouchStart={handleTouchStart}
@@ -363,42 +377,34 @@ export function WheelColumn({
       //sheet drag (free scroll hits scrollTop 0 mid-spin) — a wheel touch is
       //never a drawer drag
       data-drawer-no-drag=""
-      //`lockedStyle`, not a bare `style=`: the height is `VISIBLE_ROWS *
-      //WHEEL_ITEM_HEIGHT` and the list is padded by exactly two rows top and bottom
-      //so that scrollTop 0 centres index 0. Change the height and the centre line
-      //moves off the selected row — the column keeps working and reports the wrong
-      //value. The mask is what fades the unselected rows onto the drum.
-      {...mergeStyles({
-        base: WHEEL_FIELDSET_BASE_CLASS,
+      //`lockedStyle`, not a bare `style=`: see WHEEL_FIELDSET_LOCKED_STYLE
+      {...composeStyles({
         className,
-        locked: WHEEL_FIELDSET_LOCKED_CLASS,
-        lockedStyle: {
-          height: WHEEL_HEIGHT,
-          maskImage: WHEEL_MASK,
-          WebkitMaskImage: WHEEL_MASK,
-        },
+        lockedStyle: WHEEL_FIELDSET_LOCKED_STYLE,
       })}
     >
       <ul
         ref={listRef}
-        className="m-0 list-none p-0"
-        style={{ paddingTop: WHEEL_PAD, paddingBottom: WHEEL_PAD }}
+        data-adaptv="wheel-column-list"
+        data-part="list"
+        style={WHEEL_LIST_STYLE}
       >
         {items.map((item, index) => {
           const isActive = index === activeIndex
           return (
-            <li key={item.value} style={{ height: WHEEL_ITEM_HEIGHT }}>
+            <li key={item.value} style={WHEEL_ROW_STYLE}>
               <button
                 type="button"
                 //pointer-first control inside a scroll wheel — the fieldset is
                 //the one tab stop and owns the keys, so keep rows out of tab order
                 tabIndex={-1}
+                data-adaptv="wheel-column-item"
+                data-part="item"
                 data-active={isActive}
                 onClick={() => handleRowTap(index)}
-                className={mergeStyles({
-                  base: WHEEL_ITEM_NEUTRAL_CLASS,
+                {...composeStyles({
                   className: itemClassName,
-                  locked: WHEEL_ITEM_LOCKED_CLASS,
+                  lockedStyle: WHEEL_ITEM_LOCKED_STYLE,
                 })}
               >
                 {item.label}

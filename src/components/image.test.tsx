@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { fireEvent, render } from "@testing-library/react"
+import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AdaptvImageAsset } from "#adaptv/components/image"
 import {
@@ -12,7 +15,7 @@ import {
  * `<Image>` reserves a box, in every state, or it does not compile.
  *
  * happy-dom does no layout, so the reservation is asserted as the DECLARATION
- * that produces it (`aspect-ratio` in the root's inline style, which `mergeStyles`
+ * that produces it (`aspect-ratio` in the root's inline style, which `composeStyles`
  * puts in the `lockedStyle` tier) rather than as a measured rect. The pixel-level
  * "the rect is identical before and after load" assertion needs a real engine and
  * belongs on the playground — flagged in docs/design/image.md §10.2.
@@ -38,6 +41,11 @@ const ASSET: AdaptvImageAsset = {
   height: 1080,
   lqip: "data:image/webp;base64,UklGRg==",
 }
+
+const IMAGE_CSS = readFileSync(
+  join(process.cwd(), "src/styles/image.css"),
+  "utf8",
+)
 
 function root(ui: React.ReactElement): HTMLElement {
   const { container } = render(ui)
@@ -102,7 +110,8 @@ describe("Image — the box is reserved in every admitted form", () => {
     withPendingImages(() => {
       const el = root(<Image src="/a.png" alt="a" fill />)
       expect(el.style.aspectRatio).toBe("")
-      expect(el.className).toContain("absolute")
+      //the parent's box, as the locked inline tier (styling.md §2.0)
+      expect(el.style.position).toBe("absolute")
       expect(el.hasAttribute("data-image-unreserved")).toBe(false)
     })
   })
@@ -189,8 +198,10 @@ describe("Image — the state machine", () => {
       const el = container.firstElementChild as HTMLElement
       expect(el.hasAttribute("data-image-loading")).toBe(true)
       expect(el.getAttribute("aria-busy")).toBe("true")
-      const slot = container.querySelector("[data-part='placeholder']")
-      expect(slot?.className).not.toContain("invisible")
+      const slot = container.querySelector<HTMLElement>(
+        "[data-part='placeholder']",
+      )
+      expect(slot?.style.visibility).toBe("")
     })
   })
 
@@ -207,8 +218,9 @@ describe("Image — the state machine", () => {
     expect(el.hasAttribute("data-image-loaded")).toBe(true)
     expect(el.hasAttribute("data-image-loading")).toBe(false)
     expect(
-      container.querySelector("[data-part='placeholder']")?.className,
-    ).toContain("invisible")
+      container.querySelector<HTMLElement>("[data-part='placeholder']")
+        ?.style.visibility,
+    ).toBe("hidden")
   })
 
   it("a failed load goes to Error, not Invalid, and unmounts the <img>", () => {
@@ -226,8 +238,9 @@ describe("Image — the state machine", () => {
     expect(el.hasAttribute("data-image-invalid")).toBe(false)
     expect(container.querySelector("img")).toBeNull()
     expect(
-      container.querySelector("[data-part='error']")?.className,
-    ).not.toContain("invisible")
+      container.querySelector<HTMLElement>("[data-part='error']")?.style
+        .visibility,
+    ).toBe("")
   })
 
   it("no src goes to Invalid, not Error", () => {
@@ -355,6 +368,30 @@ describe("Image — the <img> attributes", () => {
       expect(img.getAttribute("loading")).toBe("eager")
       expect(img.getAttribute("fetchpriority")).toBe("high")
     })
+  })
+
+  //The server HTML is what paints before hydration, so the assertion is on
+  //`renderToString`, where no effect and no load event can run.
+  it("paints a `priority` image from the server HTML, before hydration", () => {
+    function serverImg(ui: React.ReactElement): HTMLImageElement {
+      const host = document.createElement("div")
+      host.innerHTML = renderToString(ui)
+      return host.querySelector("img") as HTMLImageElement
+    }
+
+    const priority = serverImg(<Image src={ASSET} alt="Hero" priority />)
+    expect(priority.style.opacity).not.toBe("0")
+    expect(priority.style.zIndex).not.toBe("-10")
+    expect(priority.getAttribute("alt")).toBe("Hero")
+    expect(priority.hasAttribute("aria-hidden")).toBe(false)
+    //the LQIP still sits under it until the bytes arrive
+    const root = priority.parentElement as HTMLElement
+    expect(root.hasAttribute("data-image-loading")).toBe(true)
+
+    //…and nothing changes for an image without `priority`
+    const lazy = serverImg(<Image src={ASSET} alt="Hero" />)
+    expect(lazy.style.opacity).toBe("0")
+    expect(lazy.getAttribute("alt")).toBe("")
   })
 
   it("emits no `decoding` — it is a verified no-op in WebKit", () => {
@@ -494,7 +531,12 @@ describe("Image — the placeholder prop", () => {
   it("shows the neutral surface when there is nothing to paint", () => {
     withPendingImages(() => {
       const el = root(<Image src="/a.png" alt="a" aspectRatio={1} />)
-      expect(el.className).toContain("bg-gray-50")
+      //the surface is the root's default rule in image.css, keyed on these two
+      expect(el.getAttribute("data-adaptv")).toBe("image")
+      expect(el.getAttribute("data-part")).toBe("root")
+      expect(IMAGE_CSS).toMatch(
+        /:where\(\[data-adaptv="image"\]\[data-part="root"\]\) \{\s*background-color: var\(--color-gray-50,/,
+      )
     })
   })
 })
@@ -675,5 +717,88 @@ describe("Image — the consumer's ref", () => {
     expect(ref.current).toBe(container.querySelector("img"))
     unmount()
     expect(ref.current).toBe(null)
+  })
+})
+
+describe("Image — default rules in the layer, locks inline (styling.md §2)", () => {
+  it("emits no class of its own, on the root or on any layer", () => {
+    const { container } = withPendingImages(() =>
+      render(
+        <Image src={ASSET} alt="a">
+          <Image.Placeholder>wait</Image.Placeholder>
+          <Image.Error>broken</Image.Error>
+        </Image>,
+      ),
+    )
+    const el = container.firstElementChild as HTMLElement
+    expect(el.className).toBe("")
+    for (const part of ["lqip", "placeholder", "error", "image"]) {
+      const layer = container.querySelector(`[data-part='${part}']`)
+      expect(layer, part).not.toBeNull()
+      expect(layer?.getAttribute("class") ?? "", part).toBe("")
+    }
+    //one scope element per image — the layers are reached as its children
+    expect(
+      container.querySelectorAll("[data-adaptv='image']"),
+    ).toHaveLength(1)
+  })
+
+  it("passes a consumer className through untouched", () => {
+    withPendingImages(() => {
+      const el = root(
+        <Image
+          src="/a.png"
+          alt="a"
+          aspectRatio={1}
+          className="h-48 rounded"
+        />,
+      )
+      expect(el.className).toBe("h-48 rounded")
+    })
+  })
+
+  it("holds the locked stack against a consumer style for the same property", () => {
+    const { container } = withPendingImages(() =>
+      render(
+        <Image
+          src="/a.png"
+          alt="a"
+          aspectRatio={1}
+          style={{
+            position: "static",
+            overflow: "visible",
+            aspectRatio: "3",
+          }}
+        >
+          <Image.Placeholder style={{ position: "static", zIndex: 99 }}>
+            wait
+          </Image.Placeholder>
+        </Image>,
+      ),
+    )
+    const el = container.firstElementChild as HTMLElement
+    expect(el.style.position).toBe("relative")
+    expect(el.style.overflow).toBe("hidden")
+    expect(el.style.isolation).toBe("isolate")
+    expect(el.style.aspectRatio).toBe("1 / 1")
+    const slot = container.querySelector<HTMLElement>(
+      "[data-part='placeholder']",
+    )
+    expect(slot?.style.position).toBe("absolute")
+    expect(slot?.style.zIndex).toBe("1")
+    const img = container.querySelector("img") as HTMLImageElement
+    expect(img.style.position).toBe("absolute")
+    //loading: the `<img>` is under the stack and transparent until it loads
+    expect(img.style.zIndex).toBe("-10")
+    expect(img.style.opacity).toBe("0")
+  })
+
+  it("keeps the fades out from under a reduced-motion preference", () => {
+    expect(IMAGE_CSS).toMatch(
+      /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*transition-property: opacity;/,
+    )
+    expect(IMAGE_CSS.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain(
+      "!important",
+    )
   })
 })

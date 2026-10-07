@@ -16,7 +16,7 @@ import {
 } from "react"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * Collapsible — a disclosure whose panel animates to a MEASURED height and stays
@@ -203,18 +203,18 @@ function Collapsible({
     <CollapsibleContext.Provider value={contextValue}>
       <div
         data-adaptv="collapsible"
+        data-part="root"
         //Presence attributes, not a `state="open|closed"` value
         //(docs/decisions/styling.md §3.1): namespaced per component so a second
         //adaptv trigger on the same element cannot overwrite it, and valueless so
         //Tailwind v4's bare `data-collapsible-open:` variant matches it.
         data-collapsible-open={isOpen ? "" : undefined}
         data-disabled={isDisabled ? "" : undefined}
-        //Both tiers undefined by decision: the root is a plain grouping element with
-        //no neutral look of its own, so the consumer's classes are the whole story.
-        {...mergeStyles({
-          base: undefined,
+        //No default rule and no lock, by decision: the root is a plain grouping
+        //element with no neutral look of its own, so the consumer's classes are the
+        //whole story (docs/decisions/styling.md §2).
+        {...composeStyles({
           className,
-          locked: undefined,
           style,
         })}
         {...divProps}
@@ -266,6 +266,7 @@ function CollapsibleTrigger({
       type="button"
       id={idProp ?? triggerId}
       data-adaptv="collapsible-trigger"
+      data-part="trigger"
       data-collapsible-open={isOpen ? "" : undefined}
       //`data-disabled` verbatim (styling.md §3.1) beside the native attribute, so
       //a parent can style the disabled trigger without a `:disabled` reach-in.
@@ -273,12 +274,10 @@ function CollapsibleTrigger({
       aria-expanded={isOpen}
       aria-controls={panelId}
       disabled={isTriggerDisabled || undefined}
-      //Both tiers undefined by decision (like Dropdown.Trigger): a trigger is a plain
-      //button adaptv wires open/close onto, with no neutral look of its own.
-      {...mergeStyles({
-        base: undefined,
+      //No default rule and no lock, by decision (like Dropdown.Trigger): a trigger is
+      //a plain button adaptv wires open/close onto, with no neutral look of its own.
+      {...composeStyles({
         className,
-        locked: undefined,
         style,
       })}
       onClick={(event) => {
@@ -475,6 +474,7 @@ function CollapsiblePanel({
       ref={panelRef}
       id={idProp ?? panelId}
       data-adaptv="collapsible-panel"
+      data-part="panel"
       data-collapsible-open={isOpen ? "" : undefined}
       //The phase is two presence attributes, never both and neither at rest,
       //rather than one attribute carrying an `open|close` value (styling.md §3.1).
@@ -483,13 +483,11 @@ function CollapsiblePanel({
       role="region"
       aria-labelledby={triggerId}
       hidden={isClosedAtRest || undefined}
-      //Both tiers undefined by decision: overflow and the transition live in
-      //collapsible.css keyed on the opening/closing attributes, where a consumer
-      //class cannot reach them, and the panel has no neutral look beyond that.
-      {...mergeStyles({
-        base: undefined,
+      //No lock, by decision: overflow and the transition live in collapsible.css
+      //keyed on the opening/closing attributes, and the panel has no neutral look
+      //beyond that.
+      {...composeStyles({
         className,
-        locked: undefined,
         style,
       })}
     >

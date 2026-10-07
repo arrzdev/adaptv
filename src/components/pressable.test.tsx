@@ -83,34 +83,61 @@ describe("Pressable — the press engine, made obvious", () => {
   })
 })
 
-describe("Pressable — the locked layer", () => {
-  //`clickable` carries `touch-action: pan-x pan-y pinch-zoom`, the WebKit 240917
-  //workaround that keeps `pointercancel` alive on iOS. A consumer `touch-none`
-  //would strand the engine's state machine, so it must not survive the merge.
-  it("keeps `clickable` against a consumer touch utility", () => {
-    const { container } = render(<Pressable className="touch-none p-4" />)
+describe("Pressable — the locked tier", () => {
+  //`touch-action: pan-x pan-y pinch-zoom` is the WebKit 240917 workaround that keeps
+  //`pointercancel` alive on iOS. A consumer `touch-none` would strand the engine's
+  //state machine, so the lock is inline style, which no class reaches.
+  it("locks the touch pass-through inline, against a consumer class and style", () => {
+    const { container } = render(
+      <Pressable
+        className="touch-none p-4"
+        style={{ touchAction: "none", color: "rgb(255, 0, 0)" }}
+      />,
+    )
     const el = host(container)
-    expect(el?.className).toContain("touch-pan-x")
-    expect(el?.className).not.toContain("touch-none")
-    //everything that isn't structural stays the consumer's
-    expect(el?.className).toContain("p-4")
+    expect(el?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    //the rest of the consumer's style is untouched
+    expect(el?.style.color).toBe("rgb(255, 0, 0)")
+    //the consumer's className passes through untouched, and Pressable adds none
+    expect(el?.className).toBe("touch-none p-4")
+  })
+
+  it("emits no class of its own, and says what it is with data-adaptv + data-part", () => {
+    const el = host(render(<Pressable />).container)
+    expect(el?.hasAttribute("class")).toBe(false)
+    expect(el?.getAttribute("data-part")).toBe("root")
+  })
+
+  it("keeps a data-part the node already carries", () => {
+    const fromProp = host(render(<Pressable data-part="row" />).container)
+    expect(fromProp?.getAttribute("data-part")).toBe("row")
+    const fromElement = host(
+      render(<Pressable render={<li data-part="tile" />} />).container,
+    )
+    expect(fromElement?.getAttribute("data-part")).toBe("tile")
   })
 
   it("stays scrollable-through when disabled, and says it is disabled", () => {
     //Pressable has no native `disabled` attribute to lean on (its host is a div), so
-    //the inert-ness lives in the engine and in `aria-disabled`. `touch-none` would only
-    //have cost the page its scroll — see button.test.tsx for the measurement.
+    //the inert-ness lives in the engine and in `aria-disabled`. `touch-action: none`
+    //would only have cost the page its scroll — see button.test.tsx for the measurement.
     const el = host(
       render(<Pressable disabled className="p-4" />).container,
     )
-    expect(el?.className).not.toContain("touch-none")
-    expect(el?.className).toContain("touch-pan-x")
+    expect(el?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    //an inert target's label is not selectable, whatever the consumer's style says
+    expect(el?.style.userSelect).toBe("none")
     expect(el?.getAttribute("aria-disabled")).toBe("true")
     expect(el?.hasAttribute("data-disabled")).toBe(true)
   })
 
+  it("locks user-select only while disabled", () => {
+    const el = host(render(<Pressable />).container)
+    expect(el?.style.userSelect).toBe("")
+  })
+
   //inline style is its own cascade origin, so a forwarded `style` would otherwise
-  //beat every class layer — it goes through mergeStyles' inline tier instead
+  //beat every lock — it goes through composeStyles' inline tier instead
   it("forwards the consumer's inline style through the style tier", () => {
     const { container } = render(
       <Pressable style={{ color: "rgb(255, 0, 0)" }} />,
@@ -149,9 +176,9 @@ describe("Pressable — render (a prop, not asChild)", () => {
   })
 
   //§3.3's trap: no library resolves Tailwind conflicts on composition, and the two
-  //that do it at all concatenate in opposite orders. adaptv routes composition
-  //through mergeStyles, so `locked` still wins and the two consumer sources merge.
-  it("merges the element's className through mergeStyles, not concatenation", () => {
+  //that do it at all concatenate in opposite orders. adaptv joins the two consumer
+  //sources in one fixed order and keeps the lock inline, where no class reaches it.
+  it("joins the element's className before the prop's, and the lock stays inline", () => {
     const { container } = render(
       <Pressable
         className="p-4 touch-none"
@@ -159,14 +186,11 @@ describe("Pressable — render (a prop, not asChild)", () => {
       />,
     )
     const el = host(container)
-    //the element's own class survives where it doesn't conflict…
-    expect(el?.className).toContain("rounded")
-    //…the more local `className` prop wins where it does…
-    expect(el?.className).toContain("p-4")
-    expect(el?.className).not.toContain("p-2")
-    //…and `locked` still beats both
-    expect(el?.className).toContain("touch-pan-x")
-    expect(el?.className).not.toContain("touch-none")
+    //both consumer sources land, the element's first, nothing merged…
+    expect(el?.className).toBe("p-2 rounded p-4 touch-none")
+    //…and the lock, inline, still beats both
+    expect(el?.style.touchAction).toBe("pan-x pan-y pinch-zoom")
+    expect(el?.className).not.toContain("touch-pan-x")
   })
 
   it("merges the element's inline style per property", () => {

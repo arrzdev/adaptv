@@ -7,7 +7,8 @@ import { awaitClientHandover } from "./support/hydrated"
  * an outcome rather than an error.
  *
  * The two engines differ, and the spec asserts the difference instead of skipping
- * one of them: desktop Chromium has no `navigator.share`, Playwright's WebKit does.
+ * one of them: desktop Chromium has no `navigator.share`, Playwright's WebKit has it
+ * on macOS and not on Linux, where CI runs (WebKit 26.5, measured 2026-10-06).
  * So the premise is read from the page and pinned per engine first — if either
  * engine ever changes, that line fails and names it, rather than the support badge
  * silently agreeing with a different world.
@@ -21,7 +22,7 @@ import { awaitClientHandover } from "./support/hydrated"
 
 const ENGINE_HAS_WEB_SHARE: Record<string, boolean> = {
   chromium: false,
-  webkit: true,
+  webkit: process.platform === "darwin",
 }
 
 const row = (page: Page, label: string) =>

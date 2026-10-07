@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { act, render } from "@testing-library/react"
 import type { ReactElement, ReactNode, Ref, SVGProps } from "react"
 import {
@@ -66,11 +68,6 @@ const OtherGlyph = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(
 function firstEl(ui: ReactElement): SVGSVGElement {
   const { container } = render(ui)
   return container.firstElementChild as SVGSVGElement
-}
-
-/** Class-attribute membership by TOKEN — `w-6` must not read as `w-[1em]`. */
-function hasClass(el: Element, token: string): boolean {
-  return (el.getAttribute("class") ?? "").split(/\s+/).includes(token)
 }
 
 describe("Icon renders the element it is given", () => {
@@ -352,43 +349,60 @@ describe("Icon with a label is meaningful", () => {
  * ============================================================================= */
 
 describe("Icon style precedence", () => {
-  it("sizes to the font by default (1em, both axes) and never shrinks in a row", () => {
+  const css = readFileSync(
+    resolve(__dirname, "../styles/icon.css"),
+    "utf8",
+  ).replace(/\/\*[\s\S]*?\*\//g, "")
+
+  it("sizes to the font by default (1em, both axes) and never shrinks in a row — as a layer rule", () => {
+    expect(css).toContain("@layer adaptv.components")
+    const rule = css.slice(css.indexOf(':where([data-adaptv="icon"])'))
+    expect(rule).toMatch(/width:\s*1em;/)
+    expect(rule).toMatch(/height:\s*1em;/)
+    expect(rule).toMatch(/flex-shrink:\s*0;/)
+    expect(css).not.toContain("!important")
+    //longhands, never a shorthand that would tie both axes together
+    expect(css).not.toMatch(/\binline-size|block-size|\bsize\s*:/)
+  })
+
+  it("writes no class of its own, and names its part", () => {
     const el = firstEl(<Icon render={<Glyph />} />)
-    expect(hasClass(el, "w-[1em]")).toBe(true)
-    expect(hasClass(el, "h-[1em]")).toBe(true)
-    expect(hasClass(el, "shrink-0")).toBe(true)
+    expect(el.hasAttribute("class")).toBe(false)
+    expect(el.getAttribute("data-part")).toBe("root")
+    //and no inline size: the 1em default must stay beatable by any class
+    expect(el.getAttribute("style")).toBeNull()
   })
 
-  it("a consumer size-* replaces BOTH default axes", () => {
+  it("keeps a data-part the svg already carries", () => {
+    const el = firstEl(<Icon render={<Glyph data-part="glyph" />} />)
+    expect(el.getAttribute("data-part")).toBe("glyph")
+  })
+
+  it("a consumer size-* reaches the DOM untouched, with nothing of Icon's beside it", () => {
     const el = firstEl(<Icon render={<Glyph />} className="size-6" />)
-    expect(hasClass(el, "size-6")).toBe(true)
-    expect(hasClass(el, "w-[1em]")).toBe(false)
-    expect(hasClass(el, "h-[1em]")).toBe(false)
+    expect(el.getAttribute("class")).toBe("size-6")
   })
 
-  it("a consumer w-* replaces only the width it names", () => {
+  it("a consumer w-* reaches the DOM untouched", () => {
     const el = firstEl(<Icon render={<Glyph />} className="w-6" />)
-    expect(hasClass(el, "w-6")).toBe(true)
-    expect(hasClass(el, "w-[1em]")).toBe(false)
-    expect(hasClass(el, "h-[1em]")).toBe(true)
+    expect(el.getAttribute("class")).toBe("w-6")
   })
 
-  it("merges the element's className with Icon's; Icon's own prop wins the tie", () => {
+  it("joins the element's className and Icon's, the element's first, merging none", () => {
+    //both are consumer classes; resolving a conflict between them is the consumer's
+    //tool's job, not adaptv's (docs/decisions/styling.md §0.1)
     const el = firstEl(
       <Icon
         render={<Glyph className="size-4 text-red-500" />}
         className="size-8"
       />,
     )
-    expect(hasClass(el, "size-8")).toBe(true)
-    expect(hasClass(el, "size-4")).toBe(false)
-    expect(hasClass(el, "text-red-500")).toBe(true)
+    expect(el.getAttribute("class")).toBe("size-4 text-red-500 size-8")
   })
 
-  it("the element's className alone still beats the base", () => {
+  it("the element's className alone reaches the DOM", () => {
     const el = firstEl(<Icon render={<Glyph className="size-4" />} />)
-    expect(hasClass(el, "size-4")).toBe(true)
-    expect(hasClass(el, "w-[1em]")).toBe(false)
+    expect(el.getAttribute("class")).toBe("size-4")
   })
 
   it("merges the element's style with Icon's, Icon's winning per property", () => {

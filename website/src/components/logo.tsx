@@ -1,4 +1,4 @@
-import { cn } from "@arrzdev/adaptv/utils"
+import { cn } from "@/utils/cn"
 
 /**
  * The adaptv mark: two opposite corners of a frame that is never drawn, and a disc

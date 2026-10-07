@@ -8,11 +8,11 @@ import { forwardRef, useEffect } from "react"
 import { isExternalUrl } from "#adaptv/capabilities/browser"
 import { ExternalLink } from "#adaptv/components/external-link"
 import {
-  PRESS_TARGET_DISABLED_LOCKED_CLASS,
-  PRESS_TARGET_LOCKED_CLASS,
+  PRESS_TARGET_DISABLED_LOCKED_STYLE,
+  PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 //a press held past this is read as a hold, not a tap, and does not navigate
 const HOLD_THRESHOLD_MS = 300
@@ -43,13 +43,9 @@ export interface LinkProps
   smartBack?: boolean
 }
 
-const LINK_ROOT_SURFACE_CLASS = "text-gray-950 no-underline"
-//LOCKED (touch) and BASE (cursor) are separate tiers — press-core explains why
-const LINK_ROOT_INTERACTION_CLASS = PRESS_TARGET_LOCKED_CLASS
-const LINK_ROOT_CURSOR_CLASS = "cursor-pointer"
-const LINK_ROOT_NON_INTERACTION_CLASS = PRESS_TARGET_DISABLED_LOCKED_CLASS
-const LINK_ROOT_DISABLED_CURSOR_CLASS = "cursor-not-allowed"
-const LINK_ROOT_LAYOUT_CLASS = "text-left"
+//The look — left-aligned, gray-950, no underline, a pointer cursor (`not-allowed` when
+//disabled) — is a default rule in styles/link.css; only the press-core touch longhand
+//is locked, inline (docs/decisions/styling.md §2.0).
 
 type AppRouter = ReturnType<typeof useRouter>
 
@@ -112,6 +108,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     disabled = false,
     smartBack = false,
     "aria-disabled": ariaDisabled,
+    style,
     ...rest
   },
   ref,
@@ -170,6 +167,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
         ref={ref}
         href={to}
         className={className}
+        style={style}
         aria-disabled={disabled || ariaDisabled}
       >
         {children}
@@ -177,8 +175,24 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     )
   }
 
+  //LOCKED: the interaction style, for the press-core reason —
+  //{@link PRESS_TARGET_LOCKED_STYLE} carries the `touch-action` longhand that keeps
+  //`pointercancel` alive on iOS (WebKit 240917), which is how this link's engine learns
+  //a scroll took over and cancels the tap, so no `className` or `style` may defeat it.
+  //Alignment, colour and cursor are a neutral default in styles/link.css.
+  const merged = composeStyles({
+    className,
+    style,
+    lockedStyle: disabled
+      ? PRESS_TARGET_DISABLED_LOCKED_STYLE
+      : PRESS_TARGET_LOCKED_STYLE,
+  })
+
   return (
     <RouterLink
+      //`root` sits ahead of the spread: a wrapper's own `data-part` (a settings row
+      //rendering as this link is `row`) reaches the element
+      data-part="root"
       //the anchor's own attributes come first so a `data-part`, an `aria-*` or an
       //`id` from a wrapper (a settings row rendering as this link) reaches the
       //element, and nothing below can be overridden by them
@@ -193,24 +207,8 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       onClick={handleClick}
       aria-disabled={disabled || ariaDisabled}
       tabIndex={disabled ? -1 : undefined}
-      //LOCKED: the interaction utility, for the press-core reason —
-      //{@link PRESS_TARGET_LOCKED_CLASS} carries the `touch-action` longhand that
-      //keeps `pointercancel` alive on iOS (WebKit 240917), which is how this link's
-      //engine learns a scroll took over and cancels the tap, so no `className` may
-      //defeat it. Alignment and colour are a neutral default.
-      className={mergeStyles({
-        base: [
-          LINK_ROOT_LAYOUT_CLASS,
-          LINK_ROOT_SURFACE_CLASS,
-          disabled
-            ? LINK_ROOT_DISABLED_CURSOR_CLASS
-            : LINK_ROOT_CURSOR_CLASS,
-        ],
-        className,
-        locked: disabled
-          ? LINK_ROOT_NON_INTERACTION_CLASS
-          : LINK_ROOT_INTERACTION_CLASS,
-      })}
+      className={merged.className || undefined}
+      style={merged.style}
     >
       {children}
     </RouterLink>

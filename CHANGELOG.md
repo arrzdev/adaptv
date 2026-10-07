@@ -9,6 +9,15 @@ API.
 
 ### Changed
 
+- **adaptv needs Node 22.15 or newer.** It was 22.12. This breaks Node 22.12 to 22.14: adaptv now
+  edits two of its dependencies in memory as Node loads them, with `module.registerHooks`, which
+  arrived in 22.15.
+- **A created app carries no patch for the router.** `pnpm create adaptv` no longer writes
+  `patches/@tanstack__router-generator@1.167.21.patch`, `patches/@tanstack__start-plugin-core@1.171.24.patch`
+  or their two `patchedDependencies` lines; adaptv makes those changes itself. An existing app must
+  delete both files and both lines and reinstall; until it does, the build stops with an error that
+  names them.
+
 - **An app imports only what its own `package.json` lists.** Importing one of adaptv's
   dependencies (the router included) from app source fails the build and the dev server unless
   the app lists that package itself. It used to resolve: npm hoists adaptv's dependencies, and
@@ -16,6 +25,18 @@ API.
 
 - **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
   root and in `packages/create-adaptv`.
+- **Hovers and type errors show adaptv's type names, not the router's.** This covers `notFoundScreen`
+  and `notFoundComponent` (`NotFoundScreenComponent`, `NotFoundScreenProps`), `notFound`
+  (`NotFoundOptions`), `isRedirect` (`RouteRedirect`), the route DSL (`RouteNode`,
+  `RootRouteNode` and the other `*RouteNode` types), and `createRootRoute`, `getRouter`,
+  `createAdaptvRouter` and `standaloneMemoryHistory`. These names are exported. A not-found screen is
+  now typed as a function component, so a `React.lazy` default export no longer typechecks there.
+
+- **Components no longer put class names of their own on their elements.** Their default look is plain
+  CSS in `@layer adaptv.components`, keyed on `data-adaptv` / `data-part`, and what they lock is
+  inline style. `className` is yours alone: an unlayered class or a Tailwind utility beats the
+  default without `!important`. A selector that targeted one of adaptv's Tailwind classes no longer
+  matches; target the `data-adaptv` / `data-part` attributes instead.
 
 ## 0.1.0-alpha.1
 
