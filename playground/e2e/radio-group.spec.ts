@@ -231,12 +231,14 @@ test.describe("RadioGroup", () => {
     //start on the right size group's selected radio, the control before Billing
     await radio(page, "Right size", "Medium").focus()
     await page.keyboard.press("Tab")
-    if (browserName === "webkit") {
-      //WebKit's default keyboard-focus model (Safari's, with "Press Tab to
+    if (browserName === "webkit" && process.platform === "darwin") {
+      //WebKit's default keyboard-focus model on macOS (Safari's, with "Press Tab to
       //highlight each item" off) keeps radios and buttons out of the Tab order
       //altogether: from a focused radio, Tab goes to the document. The group adds
       //nothing to the order and takes nothing out, so what is pinned here is that
-      //it leaves the group; entering by Tab is a Safari setting, walked on the sim
+      //it leaves the group; entering by Tab is a Safari setting, walked on the sim.
+      //WebKit on Linux, where CI runs, puts every control in the Tab order (measured
+      //2026-10-06), so there it walks the full round trip below, as chromium does
       expect(await focused(page), "Tab left the group").toBe("BODY")
       return
     }
