@@ -1195,26 +1195,48 @@ test.describe("AvoidKeyboard under stress", () => {
       ),
     ).toBe(innerHeight - kb)
 
+    //Two reads two frames apart; `settled` only when the field, the box and its scrollTop
+    //agree across them. The aim is a smooth scroll, and WebKit on the Linux runner can
+    //return one transient rect mid-flight that disagrees with `scrollTop` (measured on
+    //TUD-275: fieldTop -324.33 at scrollTop 48, then 539.67 at scrollTop 48 two frames
+    //later). A single read can pass the keyboard-line check on that rect while the field
+    //still sits under the keyboard, so the rest-poll waits for a self-consistent rest.
     const read = () =>
       page.evaluate(
-        ({ kb }) => {
+        async ({ kb }) => {
           const field = document.querySelector<HTMLElement>(
             '[aria-label="Field six"]',
           )
           const box = field?.closest<HTMLElement>("div.h-72")
           if (!field || !box) throw new Error("no field")
-          const f = field.getBoundingClientRect()
-          const b = box.getBoundingClientRect()
+          const once = () => {
+            const f = field.getBoundingClientRect()
+            const b = box.getBoundingClientRect()
+            return {
+              fieldTop: f.top,
+              fieldBottom: f.bottom,
+              boxTop: b.top,
+              boxBottom: b.bottom,
+              boxHeight: b.height,
+              scrollTop: box.scrollTop,
+            }
+          }
+          const frame = () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => resolve()),
+            )
+          const first = once()
+          await frame()
+          await frame()
+          const g = once()
           return {
+            ...g,
+            settled: (["fieldTop", "boxTop", "scrollTop"] as const).every(
+              (k) => Math.abs(g[k] - first[k]) <= 0.5,
+            ),
             rootFontSize: getComputedStyle(document.documentElement)
               .fontSize,
-            fieldTop: f.top,
-            fieldBottom: f.bottom,
-            boxTop: b.top,
-            boxBottom: b.bottom,
-            boxHeight: b.height,
             keyboardTop: window.innerHeight - kb,
-            scrollTop: box.scrollTop,
             reserved: Number.parseFloat(
               getComputedStyle(box).paddingBottom,
             ),
@@ -1222,11 +1244,20 @@ test.describe("AvoidKeyboard under stress", () => {
         },
         { kb },
       )
-    //the aim is a smooth scroll: wait for the field to come to rest clear of the keyboard
+    //wait for the field to come to rest, on a settled rect, clear of the keyboard
+    let g = await read()
     await expect
-      .poll(async () => (await read()).fieldBottom, { timeout: 5000 })
-      .toBeLessThanOrEqual(innerHeight - kb)
-    const g = await read()
+      .poll(
+        async () => {
+          g = await read()
+          //the last read is what a timeout reports
+          return g.settled && g.fieldBottom <= innerHeight - kb
+            ? true
+            : JSON.stringify(g)
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true)
     console.log(
       `STRESS-KB ${testInfo.project.name} 8d: keyboard ${kb}px of ${innerHeight}; ${JSON.stringify(g)}`,
     )
