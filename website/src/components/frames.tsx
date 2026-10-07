@@ -1,6 +1,6 @@
 import { View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
+import { cn } from "@/utils/cn"
 
 /*
  * Phone frames drawn in CSS. Generic on purpose — a rounded slab and the camera cut-out —

@@ -26,7 +26,7 @@ import {
 } from "react"
 import { PRESS_TARGET_DISABLED_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isTouchDevice } from "#adaptv/utils/is-touch-device"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Imperative API for {@link TextArea}. Attach with `ref`.
@@ -901,7 +901,7 @@ const TextAreaShell = forwardRef<HTMLDivElement, TextAreaShellProps>(
       e.preventDefault()
     }
 
-    const merged = mergeStyles({
+    const merged = composeStyles({
       className,
       lockedStyle: isFillMode
         ? disabled
@@ -950,7 +950,7 @@ function TextAreaLabel({ children, className }: TextAreaLabelProps) {
       htmlFor={fieldId}
       //a label is text. adaptv has no neutral look to offer and nothing structural
       //to protect, so it has no rule in text-area.css and no inline lock (§2).
-      className={mergeStyles({ className }) || undefined}
+      className={composeStyles({ className }) || undefined}
     >
       {children}
     </label>
@@ -971,7 +971,7 @@ function TextAreaHint({ children, className }: TextAreaHintProps) {
     <p
       id={hintId}
       //text, like the label: nothing neutral, nothing structural
-      className={mergeStyles({ className }) || undefined}
+      className={composeStyles({ className }) || undefined}
     >
       {children}
     </p>
@@ -994,7 +994,7 @@ function TextAreaError({ children, className }: TextAreaErrorProps) {
       role="alert"
       //text, like the label: nothing neutral, nothing structural. The `role` — not
       //a class — is what makes this an error, which is §2's escape-hatch rule.
-      className={mergeStyles({ className }) || undefined}
+      className={composeStyles({ className }) || undefined}
     >
       {children}
     </p>
@@ -1136,7 +1136,7 @@ const TextAreaRoot = forwardRef<TextAreaHandle, TextAreaProps>(
       onKeyDown?.(e)
     }
 
-    const fieldStyles = mergeStyles({
+    const fieldStyles = composeStyles({
       className: innerClassName,
       style,
       lockedStyle: isFillMode

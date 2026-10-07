@@ -1,39 +1,23 @@
 /*
- * adaptv styles — `@import "@arrzdev/adaptv/styles.css"` from the app's main.css,
- * AFTER `@import "tailwindcss"`.
+ * adaptv styles — `@arrzdev/adaptv/styles.css`. Plain CSS, no Tailwind at-rule
+ * (docs/decisions/styling.md §0.1): import it from the app's stylesheet through any
+ * bundler. A Tailwind v4 app imports `@arrzdev/adaptv/tailwind.css` instead, which
+ * imports this file and adds the variants and the safe-area utilities.
  *
- * ⚠︎ The app's entry stylesheet MUST open with this line, BEFORE every `@import`
- * (STYLING.md §6.0):
+ * Every rule below is in an `adaptv.*` layer, so the app's own unlayered CSS beats all
+ * of it at any specificity. The statement fixes the sub-layers' order; a Tailwind app
+ * also places `adaptv` itself (tailwind.css explains why and how).
  *
- *     @layer theme, base, adaptv, components, utilities;
- *
- * The `adaptv()` vite plugin now WRITES that line into the app's Tailwind entry
- * stylesheet for you (`adaptv:css-layer-order`, idempotent — a hand-written one is
- * left alone), and warns if it cannot find one. The rest of this note stands because
- * the CSS reason is unchanged, and because a build without that plugin still needs it.
- *
- * CSS fixes layer order by FIRST MENTION, and a name first mentioned in a later
- * statement is APPENDED, not inserted. Without that line `adaptv` registers here —
- * after `utilities` — and every rule below starts beating the app's Tailwind
- * utilities, which looks exactly like a adaptv bug. The statement is the only
- * rule (besides `@charset`) the spec allows before `@import`, which is why it
- * has to live in the app and cannot be shipped from inside this file.
+ * Tokens adaptv READS, by Tailwind's names (§7): Tailwind's own (`--spacing`,
+ * `--radius-*`, `--text-*`, `--color-*` palette) with Tailwind's value as a literal
+ * fallback, and the semantic ones Tailwind does not define (`--color-surface`,
+ * `--color-background`, `--color-foreground`, `--color-border`, `--color-muted`,
+ * `--color-primary`, `--color-primary-fg`) with none. Set them in `:root` or `@theme`.
  */
 @layer adaptv.reset, adaptv.patches, adaptv.components, adaptv.utilities;
 
-/* The app's Tailwind scans adaptv's components for the classes they use. One file, two
- * trees: in a checkout `..` is `src/` (`.ts`/`.tsx`); in the package it is `dist/`
- * (`.mjs`), where `cli/` is Node code no browser loads. A glob that matches nothing
- * fails silently: every component renders unstyled. `pnpm build:check` compiles the
- * shipped copy to catch that. → docs/decisions/styling.md §0.1 */
-@source "../**/*.{ts,tsx,mjs}";
-@source not "../cli";
-
-@custom-variant dark (&:where(.dark, .dark *));
-@custom-variant light (&:where(.light, .light *));
-
 /* 1. Runtime-value contracts (STYLING.md §4) — the safe-area insets and the
- *    keyboard height, plus the safe-area utility families built on them. */
+ *    keyboard height. */
 @import "./safe-area.css";
 @import "./keyboard.css";
 
@@ -80,5 +64,5 @@
 @import "./collapsible.css";
 @import "./wheel-column.css";
 
-/* 4. Atomic utility definitions go last to win the cascade */
+/* 4. The three utility classes, in the last sub-layer so they beat the resets */
 @import "./utils.css";

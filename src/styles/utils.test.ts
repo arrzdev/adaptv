@@ -121,11 +121,11 @@ describe("hover: — the sticky-hover + focus-ring variant", () => {
   })
 
   it("names Tailwind as the owner of the media-query half", () => {
-    const patchesCss = readFileSync(
-      join(process.cwd(), "src/styles/patches.css"),
+    const tailwindCss = readFileSync(
+      join(process.cwd(), "src/styles/tailwind.css"),
       "utf8",
     )
-    expect(patchesCss).toContain("4.2.4")
+    expect(tailwindCss).toContain("4.2.4")
   })
 })
 

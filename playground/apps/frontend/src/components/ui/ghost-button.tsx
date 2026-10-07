@@ -1,9 +1,9 @@
 import type { ButtonHandle } from "@arrzdev/adaptv/components"
 import { Button as BaseButton } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { forwardRef } from "react"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 const GHOST_BUTTON_CLASSNAME = cn(
   "rounded-full border-0 bg-transparent px-4 py-2 text-sm font-medium text-muted",

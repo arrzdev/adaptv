@@ -1,0 +1,92 @@
+/*
+ * The playground built with NO Tailwind (`vite.plain.config.ts`): what a plain-CSS app
+ * imports (docs/decisions/styling.md §8). The pages keep their Tailwind class names,
+ * which here style nothing; what this build proves is that adaptv's own components
+ * look and behave the same without them.
+ *
+ * `base` is ordered before `adaptv`, as the Tailwind build's layer statement orders it,
+ * so the two `base` rules below lose to adaptv's defaults in both builds.
+ */
+@layer base, adaptv;
+
+@import "@fontsource-variable/inter/wght.css";
+@import "@arrzdev/adaptv/styles.css";
+@import "./animations.css";
+@import "./app.css";
+
+/* What `@theme inline` gives the Tailwind build: the semantic tokens under Tailwind's
+   names, which adaptv's components read (§7). Set on `.dark` too, so the dark values
+   are the ones substituted wherever the class sits. */
+:root,
+.dark {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-secondary: var(--secondary);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-overlay: var(--overlay);
+  --color-ring: var(--ring);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+}
+
+/* The app's own reset. The Tailwind build gets Tailwind's preflight; a plain app brings
+   one of its own, and this is the common shape of it. Deliberately NOT preflight's
+   `border: 0 solid` or its button/list resets: a primitive that only looks right with
+   those depends on Tailwind, and this build exists to catch that. */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+  }
+
+  * {
+    margin: 0;
+  }
+
+  html {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  img,
+  picture,
+  video,
+  canvas,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+/* main.css's `@apply` lines, spelled out */
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+
+  body {
+    background-color: var(--background);
+    font-family: var(--font-sans);
+    color: var(--foreground);
+  }
+}

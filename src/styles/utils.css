@@ -1,66 +1,25 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * utils — custom variants + scroll / tap / selection helpers
+ * utils — the three classes a consumer types: `selectable`, `scrollbar-hidden`,
+ * `scrollbar-visible` (docs/decisions/styling.md §5.4.1)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * `@utility` and `@custom-variant` cannot be nested in `@layer` (Tailwind
- * rejects it), and they don't need to be: everything here compiles into
- * Tailwind's own `utilities` layer, which the consumer's
- * `@layer theme, base, adaptv, components, utilities;` statement places AFTER
- * `adaptv` — so these utilities beat the resets in patches.css on layer order
- * alone, and unlayered consumer CSS still beats them. That is what let the
- * cascade-only `!important`s go (STYLING.md §6.0.1).
+ * Each is the per-element escape from an app-wide reset in patches.css
+ * (`ui.noSelect`, `ui.hideScrollbars`). The resets sit in `adaptv.reset`, which is
+ * ordered BEFORE `adaptv.utilities`, so these classes win on layer order alone, at
+ * any selector cost, with no `!important` — in every dialect. Unlayered consumer CSS
+ * still beats them. That is what let the cascade-only `!important`s go (§6.0.1).
  *
- * `app:` / `web:` below are the COMPLETE set of variants adaptv INVENTS,
- * deliberately. They earn their keep because the CSS path costs zero re-renders;
- * they are not a pattern to grow. Per-OS styling stays a hand-written
- * `[data-adaptv-os="ios"] &` selector, and `not-data-keyboard-open:` already
- * composes in v4 — neither needs a variant of its own.
+ * Plain classes, so they work with no Tailwind. tailwind.css registers the same three
+ * names as `@utility`, so variants compose there (`md:scrollbar-hidden`).
  *
- * Press feedback is deliberately NOT here: it is a correction to the built-in
- * `active:` (patches.css), not a new name. A variant the consumer has to learn is
- * a worse fix than one that reaches the code they already write.
- */
-
-/*
- * "installed app" vs "browser tab" styling.
+ * The variants (`app:`, `web:`, `dark:`, `light:`, the corrected `hover:` / `active:`)
+ * are Tailwind syntax and live in tailwind.css. Each has a plain-CSS spelling (§5).
  *
- * `app:`  → installed PWA (display-mode: standalone) OR a native Capacitor build
- *           (stamped `html[data-adaptv-platform="native"]` pre-paint by
- *           getPlatformInitScript). A native WebView reports display-mode:browser,
- *           so the attribute branch is what catches it.
- * `web:`  → a real browser tab only. Attribute-scoped (not `@media browser`) so a
- *           native WebView — which also reports display-mode:browser — is excluded.
- */
-@custom-variant app {
-  @media (display-mode: standalone) {
-    @slot;
-  }
-  &:where(html[data-adaptv-platform="native"] *) {
-    @slot;
-  }
-}
-
-@custom-variant web {
-  &:where(html[data-adaptv-platform="web"] *) {
-    @slot;
-  }
-}
-
-/* opt back into text selection over the `ui.noSelect` reset in patches.css (which
- * is stamped on <html> and therefore only live where the app asked for it). No
- * `!important`: `utilities` is a later cascade layer than `adaptv.reset`, so this
- * wins on layer order at zero specificity, whatever the reset's selector costs. */
-@utility selectable {
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-/*
- * There is no tap-target utility here, and NO utility in this file may ever set
- * `touch-action: manipulation`. The tap-target value now lives as three composable
- * Tailwind classes in `components/press-core.ts` (`TOUCH_PASSTHROUGH_CLASS`); this
- * note stays behind only to keep the bug reference in the file where the shorthand
- * is the tempting "simplification" — src/styles/utils.test.ts asserts both.
+ * There is no tap-target class here, and NO rule in this file may ever set
+ * `touch-action: manipulation`. The tap-target value is inline style on each press
+ * target (`components/press-core.ts`); this note stays behind only to keep the bug
+ * reference in the file where the shorthand is the tempting "simplification" —
+ * src/styles/utils.test.ts asserts both.
  *
  * WebKit 240917 (NEW, filed 2022): `pointercancel` is not dispatched on an element
  * with `touch-action: manipulation`. The longhand `pan-x pan-y pinch-zoom` is
@@ -73,38 +32,30 @@
  * handle — strands its gesture state machine on iOS under the shorthand.
  */
 
-/*
- * There are no scroll utilities here any more. `scrollable`, `scrollable-x` and
- * `scrollable-y` are gone; scroll surfaces spell raw Tailwind at the call site, so
- * tailwind-merge resolves a consumer's `overflow-*` against them natively instead of
- * through a hand-maintained conflict table. The reasoning those utilities carried —
- * why the cross axis is pinned `hidden`, why `touch-action` allows BOTH pan axes, and
- * why there is deliberately no layer-promotion hint — moved with them, to the
- * `scrollClass` comment in `components/scroll-view.tsx`.
- */
+@layer adaptv.utilities {
+  /* opt back into text selection over the `ui.noSelect` reset (stamped on <html>,
+   * so only live where the app asked for it) */
+  .selectable {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 
-/*
- * The per-scroller ESCAPE from the app-wide `ui.hideScrollbars` reset — the one
- * scroll-related thing that still has to be a utility of ours. Hides the scrollbar
- * without disabling scroll (RN `shows*ScrollIndicator={false}`), or shows it again.
- *
- * The reset lives in `adaptv.reset`; both of these are `@utility`, so they compile
- * into Tailwind's `utilities` layer, which is ordered AFTER `adaptv`. That ordering
- * is the entire mechanism: without `scrollbar-visible` a `ScrollView` could hide its
- * indicator but never show one, because the global rule had already won and the
- * component had nothing louder to say. The symptom was a prop that worked in a
- * browser tab and silently did nothing in an installed PWA.
- */
-@utility scrollbar-visible {
-  scrollbar-width: auto;
-  &::-webkit-scrollbar {
+  /* Hide the scrollbar without disabling scroll (RN `shows*ScrollIndicator={false}`),
+   * or show it again over `ui.hideScrollbars`. Without `scrollbar-visible` a scroller
+   * could hide its indicator but never show one, because the global rule had already
+   * won — a prop that worked in a browser tab and silently did nothing in an
+   * installed PWA. */
+  .scrollbar-visible {
+    scrollbar-width: auto;
+  }
+  .scrollbar-visible::-webkit-scrollbar {
     display: initial;
   }
-}
 
-@utility scrollbar-hidden {
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
     display: none;
   }
 }

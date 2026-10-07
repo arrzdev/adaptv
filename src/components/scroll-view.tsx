@@ -2,7 +2,7 @@ import type { ComponentPropsWithRef, CSSProperties, Ref } from "react"
 import { useCallback, useRef } from "react"
 import { TOUCH_PASSTHROUGH_STYLE } from "#adaptv/components/press-core"
 import { useScrollEdgeFade } from "#adaptv/hooks/use-scroll-edge-fade"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * Props for {@link ScrollView}. Extends native `<div>` props (`className`,
@@ -232,7 +232,7 @@ export function ScrollView({
     : showsVerticalScrollIndicator
   const mode: ScrollMode = !scrollEnabled ? "off" : axis
 
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     //the depth is a default the consumer's own `style` still wins over, because a
     //caller who writes the variable by hand has been more specific than one who

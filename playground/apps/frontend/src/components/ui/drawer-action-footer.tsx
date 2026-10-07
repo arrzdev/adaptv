@@ -1,7 +1,7 @@
 import { Text, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import { secondaryButtonClassName } from "@/components/ui/secondary-button"
+import { cn } from "@/utils/cn"
 
 //the identical full-width secondary-button sizing every drawer's Cancel carries.
 //exported so callers can style their own Close/button node (AppDrawer.Close vs a

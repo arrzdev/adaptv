@@ -14,7 +14,7 @@ import {
 } from "react"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
 
@@ -215,7 +215,7 @@ export function Icon({
   //local of the two, wins the per-property tie (Text's order, §3.3).
   //The `1em` box and `flex-shrink: 0` are a default rule in styles/icon.css, so
   //`className` is the consumer's alone.
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [own.className, className],
     style: { ...own.style, ...style },
     //nothing structural: the size is the consumer's, and exposure is attributes, not

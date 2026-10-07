@@ -1,9 +1,9 @@
 import { ExternalLink, Link, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Check, Minus, TriangleAlert, X } from "lucide-react"
 import type { ReactNode } from "react"
 import { CodePanel } from "@/components/code"
 import type { Block, TargetRow } from "@/content/blocks"
+import { cn } from "@/utils/cn"
 
 /** "Drag to dismiss" → "drag-to-dismiss". Headings and the table of contents share it. */
 function headingId(text: string) {

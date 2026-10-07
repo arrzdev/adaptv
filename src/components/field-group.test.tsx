@@ -247,15 +247,14 @@ describe("FieldGroup.Row", () => {
     expect(el.textContent).not.toContain("replaced")
   })
 
-  it("merges the render element's className with the row's instead of concatenating", () => {
+  it("joins the render element's className and the row's, the element's first", () => {
     const el = firstEl(
       <FieldGroup.Row
         render={<div className="px-2" />}
         className="px-4"
       />,
     )
-    expect(hasClass(el, "px-4")).toBe(true)
-    expect(hasClass(el, "px-2")).toBe(false)
+    expect(el.className).toBe("px-2 px-4")
   })
 
   it("keeps the flex structure when a className or style fights it, but yields alignment", () => {

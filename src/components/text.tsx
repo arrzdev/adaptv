@@ -7,7 +7,7 @@ import type {
 import { cloneElement, useRef } from "react"
 import { useIsomorphicLayoutEffect } from "#adaptv/hooks/use-isomorphic-layout-effect"
 import { useMergedRef } from "#adaptv/hooks/use-merged-ref"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 import { measureDynamicTypeScale } from "#adaptv/utils/text-scale"
 
 /**
@@ -205,14 +205,14 @@ export function Text({
 }: TextProps) {
   //An element passed to `render` carries its own className/style, written at the same
   //call site as Text's own — so both are the CONSUMER tier, and neither may outrank
-  //`locked`. §3.3: the composition path routes through mergeStyles instead of
+  //`locked`. §3.3: the composition path routes through composeStyles instead of
   //concatenating and letting stylesheet source order decide. Text's own props go last,
   //so they win the per-property tie — Base UI's order, and the more local of the two.
   //
   //No default look: a run of text has nothing to override, so adaptv ships no rule for
   //it. Size, colour, weight and leading are className, all of them (VISION.md
   //principle 2) — a `size` prop here would be pure presentation wearing a prop's clothes.
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [render?.props.className, className],
     style: { ...render?.props.style, ...style },
     lockedStyle: textLockedStyle(numberOfLines, selectable),

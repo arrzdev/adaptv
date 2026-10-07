@@ -10,10 +10,6 @@ export const page: DocPage = {
       type: "p",
       text: "adaptv ships no palette and no theme object. The default look of a component is plain CSS in the cascade layer `adaptv.components`. It is keyed on the `data-adaptv` and `data-part` attributes that the component renders. Your CSS can be plain CSS, SCSS, CSS modules or Tailwind.",
     },
-    {
-      type: "note",
-      text: "Today adaptv still needs Tailwind v4 in your app, and `@arrzdev/adaptv/tailwind.css` does not exist yet. Components still merge your `className` through `cn` (tailwind-merge), so a conflicting Tailwind class replaces the default rather than joining it. The rest of this page works now: `className`, data attributes, tokens and the `--adaptv-*` variables. The plain-CSS setup and `tailwind.css` are coming. Until then, use the Tailwind setup with `styles.css`.",
-    },
     { type: "h2", text: "Setup" },
     {
       type: "code",

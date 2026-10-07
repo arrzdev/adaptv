@@ -15,7 +15,7 @@ import {
  * `<Image>` reserves a box, in every state, or it does not compile.
  *
  * happy-dom does no layout, so the reservation is asserted as the DECLARATION
- * that produces it (`aspect-ratio` in the root's inline style, which `mergeStyles`
+ * that produces it (`aspect-ratio` in the root's inline style, which `composeStyles`
  * puts in the `lockedStyle` tier) rather than as a measured rect. The pixel-level
  * "the rect is identical before and after load" assertion needs a real engine and
  * belongs on the playground — flagged in docs/design/image.md §10.2.

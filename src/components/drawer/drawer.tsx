@@ -29,7 +29,7 @@ import {
   DrawerEngine,
   useDrawerEngineContext,
 } from "#adaptv/components/drawer/drawer-engine"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 export type DrawerRootHandle = {
   readonly open: boolean
@@ -353,7 +353,7 @@ function DrawerOverlay({
       //`open` let a tap during the close animation fall through to the trigger and reopen
       //(the open/close flash). A backdrop tap while closing is harmless: onBackdropClick ->
       //requestClose no-ops when already closing.
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
         lockedStyle: {
@@ -474,7 +474,7 @@ function DrawerContent({
       //tier at least makes the outcome the one adaptv declared. The engine's
       //position and z-index and the panel geometry (DRAWER_PANEL_LOCKED_STYLE) join
       //it. The look is a default in drawer.css.
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
         lockedStyle: {
@@ -529,7 +529,7 @@ function DrawerContent({
           //keyboard-lift timing; the scroll model joins them (DRAWER_SCROLLER_LOCKED_STYLE).
           //`scrollClassName` is a paint channel and takes no `style` of its own, so
           //the tier here only ever holds adaptv's values.
-          {...mergeStyles({
+          {...composeStyles({
             className: scrollClassName,
             lockedStyle: {
               ...DRAWER_SCROLLER_LOCKED_STYLE,
@@ -580,7 +580,7 @@ function DrawerTrigger({
       data-drawer-trigger
       //a trigger is a plain <button> adaptv attaches `show()` to — no neutral look
       //and nothing structural, so no default rule and no lock, by decision (§2)
-      className={mergeStyles({ className })}
+      className={composeStyles({ className })}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -604,7 +604,7 @@ function DrawerShell({
       {...props}
       data-adaptv="drawer"
       data-part="shell"
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
         lockedStyle: DRAWER_SHELL_LOCKED_STYLE,
@@ -632,7 +632,7 @@ function DrawerDragHandle({
       data-part="handle"
       //a grabber is pure decoration — the drag lives on the region around it, so
       //there is nothing here a className could break: its look is drawer.css, no lock
-      className={mergeStyles({ className })}
+      className={composeStyles({ className })}
       {...props}
     />
   )
@@ -658,7 +658,7 @@ function DrawerFooter({
       {...props}
       data-adaptv="drawer"
       data-part="footer"
-      {...mergeStyles({
+      {...composeStyles({
         className,
         style,
         lockedStyle: DRAWER_FOOTER_LOCKED_STYLE,
@@ -683,7 +683,7 @@ function DrawerClose({
       type={type}
       //a plain <button> adaptv attaches `hide()` to — no neutral look, nothing
       //structural: no default rule and no lock, by decision (§2)
-      className={mergeStyles({ className })}
+      className={composeStyles({ className })}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -697,7 +697,7 @@ DrawerClose.displayName = "Drawer.Close"
 
 function DrawerTitle({ className, ...props }: DrawerTitleProps) {
   //heading text: nothing neutral to offer, nothing structural to protect
-  return <h2 className={mergeStyles({ className })} {...props} />
+  return <h2 className={composeStyles({ className })} {...props} />
 }
 DrawerTitle.displayName = "Drawer.Title"
 
@@ -706,7 +706,7 @@ function DrawerDescription({
   ...props
 }: DrawerDescriptionProps) {
   //body text: nothing neutral to offer, nothing structural to protect
-  return <p className={mergeStyles({ className })} {...props} />
+  return <p className={composeStyles({ className })} {...props} />
 }
 DrawerDescription.displayName = "Drawer.Description"
 

@@ -1,10 +1,14 @@
 /**
- * Compile the shipped stylesheet the way an app's Tailwind does, from a package with no
- * `src/`, and fail when a class only an adaptv component uses is missing from the output.
+ * Check the two shipped stylesheets from a package with no `src/`
+ * (docs/decisions/styling.md §0.1, "What follows").
  *
- * `dist/styles/index.css` is a copy of `src/styles/index.css`, so its `@source` glob has to
- * match what ships, not what the checkout holds. When it doesn't, nothing errors: the app's
- * CSS just lacks every class adaptv's components use. Typecheck and publint can't see that.
+ * 1. `styles.css` (`dist/styles/index.css`) is plain CSS: it bundles with lightningcss —
+ *    no Tailwind anywhere — and contains no Tailwind at-rule or function. Tailwind fails
+ *    soft on its own syntax and a plain-CSS bundler passes an unknown at-rule through, so
+ *    an `@utility` left in `styles.css` would ship and silently do nothing in a plain-CSS
+ *    app. Only a scan of the bundle catches that.
+ * 2. `tailwind.css` compiles with Tailwind and emits adaptv's utilities and its variants
+ *    for classes found in an app's markup.
  *
  * Usage: `node scripts/check-dist-styles.mjs <package dir>` (run by `verify-dist.mjs` on the
  * staged package, whose `node_modules` links the repo's).
@@ -15,50 +19,93 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 const dir = path.resolve(process.argv[2] ?? ".")
-// `@tailwindcss/node` and `@tailwindcss/oxide` are `@tailwindcss/vite`'s own deps, not
-// the repo's, so resolve them from where pnpm put the plugin.
+const fromPackage = createRequire(path.join(dir, "package.json"))
+const problems = []
+
+// ── 1. styles.css, with no Tailwind ──────────────────────────────────────────
+/** Tailwind syntax a plain-CSS pipeline does not understand. */
+const TAILWIND_SYNTAX = [
+  /@utility\b/,
+  /@custom-variant\b/,
+  /@variant\b/,
+  /@theme\b/,
+  /@source\b/,
+  /@apply\b/,
+  /@plugin\b/,
+  /@config\b/,
+  /@reference\b/,
+  /@tailwind\b/,
+  /--spacing\(/,
+  /--value\(/,
+  /--modifier\(/,
+  /\btheme\(/,
+]
+
+const { bundle } = await import(
+  pathToFileURL(fromPackage.resolve("lightningcss")).href
+)
+let plain = ""
+try {
+  plain = bundle({
+    filename: path.join(dir, "dist/styles/index.css"),
+    errorRecovery: false,
+  }).code.toString()
+} catch (error) {
+  problems.push(
+    `styles.css does not bundle as plain CSS: ${error.message}`,
+  )
+}
+//comments may name the syntax (they explain where it moved); rules may not
+const rules = plain.replace(/\/\*[\s\S]*?\*\//g, "")
+for (const pattern of TAILWIND_SYNTAX) {
+  const at = rules.search(pattern)
+  if (at !== -1)
+    problems.push(
+      `styles.css contains Tailwind syntax: ${rules.slice(at, at + 60).split("\n")[0]}`,
+    )
+}
+for (const name of ["selectable", "scrollbar-hidden", "scrollbar-visible"])
+  if (!rules.includes(`.${name}`))
+    problems.push(`styles.css lost the plain \`.${name}\` class`)
+
+// ── 2. tailwind.css, with Tailwind ───────────────────────────────────────────
+// `@tailwindcss/node` is `@tailwindcss/vite`'s own dep, not the repo's, so resolve it
+// from where pnpm put the plugin.
 const fromPlugin = createRequire(
   realpathSync(
     path.join(dir, "node_modules/@tailwindcss/vite/package.json"),
   ),
 )
-const load = (name) => import(pathToFileURL(fromPlugin.resolve(name)).href)
-const { compile } = await load("@tailwindcss/node")
-const { Scanner } = await load("@tailwindcss/oxide")
+const { compile } = await import(
+  pathToFileURL(fromPlugin.resolve("@tailwindcss/node")).href
+)
 
-/**
- * Utilities that reach an app's CSS only through adaptv's `@source`: each one appears in a
- * component, not in the stylesheet itself.
- */
+/** A class an app would write, and a fragment of the rule Tailwind must emit for it. */
 const PROBES = [
-  "active:scale-95", // components/button.tsx
-  "pb-safe-or-4", // an adaptv `@utility`, named in hooks/use-insets.ts
+  ["pb-safe-or-4", "max(var(--adaptv-inset-bottom"],
+  ["md:scrollbar-hidden", "scrollbar-width: none"],
+  ["app:p-safe", "display-mode: standalone"],
+  ["web:selectable", 'data-adaptv-platform="web"'],
+  ["dark:block", ".dark"],
+  ["hover:underline", ":hover:not("],
+  ["active:scale-95", "[data-pressed]"],
 ]
 
-// `source(none)` turns off Tailwind's own detection, which would otherwise scan this
-// whole directory and hide a broken `@source`.
-const entry = `@import "tailwindcss" source(none);
-@import "./dist/styles/index.css";
-`
-const compiler = await compile(entry, {
-  base: dir,
-  onDependency: () => {},
-})
-const scanner = new Scanner({ sources: compiler.sources })
-const css = compiler.build(scanner.scan())
-
-const scanned = scanner.files.map((f) => path.relative(dir, f))
-const missing = PROBES.filter(
-  (c) => !css.includes(`.${c.replaceAll(":", "\\:")}`),
+const compiler = await compile(
+  `@import "tailwindcss" source(none);\n@import "./dist/styles/tailwind.css";\n`,
+  { base: dir, onDependency: () => {} },
 )
-const fromCli = scanned.filter((f) =>
-  f.startsWith(path.join("dist", "cli") + path.sep),
-)
+const css = compiler.build(PROBES.map(([candidate]) => candidate))
+for (const [candidate, fragment] of PROBES) {
+  const selector = `.${candidate.replaceAll(":", "\\:")}`
+  if (!css.includes(selector))
+    problems.push(`tailwind.css: \`${candidate}\` emits no rule`)
+  else if (!css.includes(fragment))
+    problems.push(`tailwind.css: \`${candidate}\` lacks \`${fragment}\``)
+}
+//tailwind.css carries all of styles.css: one adaptv rule proves the import resolved
+if (!css.includes("--adaptv-inset-top:"))
+  problems.push("tailwind.css does not import styles.css")
 
-if (scanned.length === 0)
-  console.error("✘ the stylesheet's @source scans no file")
-for (const c of missing)
-  console.error(`✘ \`${c}\` is not in the compiled CSS`)
-if (fromCli.length)
-  console.error("✘ the stylesheet scans dist/cli:", fromCli[0])
-process.exit(scanned.length && !missing.length && !fromCli.length ? 0 : 1)
+for (const p of problems) console.error(`✘ ${p}`)
+process.exit(problems.length ? 1 : 0)

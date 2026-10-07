@@ -47,7 +47,7 @@ export function Settings() {
     { type: "h2", text: "The utilities" },
     {
       type: "p",
-      text: "Each family has three forms: `-safe` (the inset), `-safe-offset-N` (the inset plus N) and `-safe-or-N` (at least N). `N` is a Tailwind spacing number, so `pt-safe-offset-4` is the inset plus 16px.",
+      text: "The utilities are Tailwind classes from `@arrzdev/adaptv/tailwind.css`. In plain CSS, add the `--adaptv-inset-top`, `-right`, `-bottom` and `-left` variables yourself: `padding-top: calc(var(--adaptv-inset-top) + 1rem)`. Each family has three forms: `-safe` (the inset), `-safe-offset-N` (the inset plus N) and `-safe-or-N` (at least N). `N` is a Tailwind spacing number, so `pt-safe-offset-4` is the inset plus 16px.",
     },
     {
       type: "table",
@@ -63,7 +63,7 @@ export function Settings() {
     },
     {
       type: "p",
-      text: "`ps-safe`, `pe-safe`, `start-safe` and `end-safe` use the left and right insets, also in right-to-left layouts. There are no negative forms. Do not write `env(safe-area-inset-*)` yourself: Android WebView before version 140 reads it as `0`, and the utilities already handle that. `cn` keeps only the last of `pb-4` and `pb-safe`.",
+      text: "`ps-safe`, `pe-safe`, `start-safe` and `end-safe` use the left and right insets, also in right-to-left layouts. There are no negative forms. Do not write `env(safe-area-inset-*)` yourself: Android WebView before version 140 reads it as `0`, and the utilities already handle that.",
     },
     {
       type: "code",

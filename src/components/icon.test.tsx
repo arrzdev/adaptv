@@ -70,11 +70,6 @@ function firstEl(ui: ReactElement): SVGSVGElement {
   return container.firstElementChild as SVGSVGElement
 }
 
-/** Class-attribute membership by TOKEN — `w-6` must not read as `w-[1em]`. */
-function hasClass(el: Element, token: string): boolean {
-  return (el.getAttribute("class") ?? "").split(/\s+/).includes(token)
-}
-
 describe("Icon renders the element it is given", () => {
   it("adds no wrapper node — the svg IS the root", () => {
     const { container } = render(<Icon render={<Glyph />} />)
@@ -393,16 +388,16 @@ describe("Icon style precedence", () => {
     expect(el.getAttribute("class")).toBe("w-6")
   })
 
-  it("merges the element's className with Icon's; Icon's own prop wins the tie", () => {
+  it("joins the element's className and Icon's, the element's first, merging none", () => {
+    //both are consumer classes; resolving a conflict between them is the consumer's
+    //tool's job, not adaptv's (docs/decisions/styling.md §0.1)
     const el = firstEl(
       <Icon
         render={<Glyph className="size-4 text-red-500" />}
         className="size-8"
       />,
     )
-    expect(hasClass(el, "size-8")).toBe(true)
-    expect(hasClass(el, "size-4")).toBe(false)
-    expect(hasClass(el, "text-red-500")).toBe(true)
+    expect(el.getAttribute("class")).toBe("size-4 text-red-500 size-8")
   })
 
   it("the element's className alone reaches the DOM", () => {

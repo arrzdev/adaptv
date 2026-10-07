@@ -1,8 +1,8 @@
 import { ScrollView } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { GhostButton } from "@/components/ui"
 import { formatDeckLabel } from "@/data/collections/decks/constants"
 import type { Deck } from "@/data/collections/decks/schema"
+import { cn } from "@/utils/cn"
 
 type DeckTabsProps = {
   decks: Deck[]

@@ -1,7 +1,6 @@
 import { Text } from "@arrzdev/adaptv/components"
 import type { GestureState } from "@arrzdev/adaptv/hooks"
 import { useGestureEngine } from "@arrzdev/adaptv/hooks"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import {
   useCallback,
@@ -11,6 +10,7 @@ import {
   useState,
 } from "react"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 const DEFAULT_HOLD_DURATION_MS = 3000
 

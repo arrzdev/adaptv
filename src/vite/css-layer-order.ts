@@ -152,6 +152,11 @@ export function adaptvCssLayerOrderPlugin(): PluginOption {
   let sawTailwindEntry = false
   let sawStylesheet = false
   let warned = false
+  //Tailwind is optional (docs/decisions/styling.md §0.1). A plain-CSS app has no
+  //`utilities` layer to order against, so there is nothing to inject and nothing to warn
+  //about. Known once the config resolves; until then (a bare call, as in the tests),
+  //assume Tailwind is there, which only ever errs toward the warning.
+  let appUsesTailwind = true
   let devVerdict: (ReturnType<typeof setTimeout> & Unrefable) | null = null
 
   const cancelDevVerdict = () => {
@@ -162,7 +167,8 @@ export function adaptvCssLayerOrderPlugin(): PluginOption {
 
   const verdict = () => {
     cancelDevVerdict()
-    if (warned || sawTailwindEntry || !sawStylesheet) return
+    if (warned || sawTailwindEntry || !sawStylesheet || !appUsesTailwind)
+      return
     warned = true
     //the channel every other adaptv vite plugin warns through (sw-build.ts)
     console.warn(`[adaptv] ${NO_TAILWIND_ENTRY_MESSAGE}`)
@@ -172,6 +178,9 @@ export function adaptvCssLayerOrderPlugin(): PluginOption {
     name: "adaptv:css-layer-order",
     //MUST be earlier than @tailwindcss/vite's own `pre` transform — see the header.
     enforce: "pre",
+    configResolved(config) {
+      appUsesTailwind = usesTailwindPlugin(config.plugins)
+    },
     transform(code, id) {
       if (!isTransformableCssId(id)) return null
       sawStylesheet = true
@@ -202,6 +211,18 @@ export function adaptvCssLayerOrderPlugin(): PluginOption {
       verdict()
     },
   }
+}
+
+/**
+ * Whether the app's Vite config runs `@tailwindcss/vite`, whose plugins are all named
+ * `@tailwindcss/vite:<phase>` in 4.2.4.
+ */
+export function usesTailwindPlugin(
+  plugins: readonly { name?: string }[],
+): boolean {
+  return plugins.some(
+    (p) => p.name?.startsWith("@tailwindcss/vite") === true,
+  )
 }
 
 /** `setTimeout` returns a Node `Timeout` at runtime; the DOM lib types it as a number. */

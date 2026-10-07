@@ -1,5 +1,4 @@
 import { View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Check } from "lucide-react"
 import {
   type KeyboardEvent,
@@ -13,9 +12,9 @@ import { Reveal } from "@/components/reveal"
 import { Section } from "@/components/section"
 import { Terminal } from "@/components/terminal"
 import buildWeb from "@/content/captures/build-web.ansi?raw"
-
 //raw ANSI recorded by scripts/capture-cli.ts; re-capture when the CLI's output changes
 import devWeb from "@/content/captures/dev-web.ansi?raw"
+import { cn } from "@/utils/cn"
 //the file itself, not a copy: the playground's typecheck is what keeps it compiling
 import pickerSource from "../../../../playground/apps/frontend/src/components/todos/priority-picker.tsx?raw"
 

@@ -3,9 +3,9 @@ import {
   Switch as BaseSwitch,
   useSwitch,
 } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { forwardRef } from "react"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 function SwitchThumb() {
   const { isDisabled } = useSwitch()

@@ -64,10 +64,6 @@ export const page: DocPage = {
       type: "p",
       text: "Rules follow the class, not the OS media query. For a rule in one theme, use `:where(.dark, .dark *)`. In Tailwind, use `dark:` and `light:`.",
     },
-    {
-      type: "note",
-      text: "Today adaptv still needs Tailwind v4, and `styles.css` carries `dark:` and `light:`. The plain-CSS setup and `@arrzdev/adaptv/tailwind.css` are coming.",
-    },
     { type: "h2", text: "How the theme is resolved" },
     {
       type: "p",

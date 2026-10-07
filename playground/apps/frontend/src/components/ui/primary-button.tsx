@@ -1,10 +1,10 @@
 import type { ButtonHandle } from "@arrzdev/adaptv/components"
 import { Button as BaseButton } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { Children, forwardRef, isValidElement } from "react"
 import { ButtonSpinner } from "@/components/ui/button-spinner"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 const PRIMARY_BUTTON_CLASSNAME = cn(
   "rounded-md border-0 bg-primary px-4 py-2 text-sm font-medium leading-none text-primary-foreground",

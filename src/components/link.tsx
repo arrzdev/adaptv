@@ -12,7 +12,7 @@ import {
   PRESS_TARGET_LOCKED_STYLE,
 } from "#adaptv/components/press-core"
 import { useGestureEngine } from "#adaptv/hooks/use-gesture-engine"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 //a press held past this is read as a hold, not a tap, and does not navigate
 const HOLD_THRESHOLD_MS = 300
@@ -180,7 +180,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   //`pointercancel` alive on iOS (WebKit 240917), which is how this link's engine learns
   //a scroll took over and cancels the tap, so no `className` or `style` may defeat it.
   //Alignment, colour and cursor are a neutral default in styles/link.css.
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: disabled

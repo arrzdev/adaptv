@@ -5,7 +5,7 @@ import type {
   ReactNode,
 } from "react"
 import { cloneElement } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /** Which way the rule runs — and therefore which edge carries the hairline. */
 export type DividerOrientation = "horizontal" | "vertical"
@@ -110,7 +110,7 @@ export function Divider({
   ...props
 }: DividerProps) {
   //§3.3: the render element's classes, then the prop's, joined; adaptv adds none
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [render?.props.className, className],
     style: { ...render?.props.style, ...style },
   })

@@ -1,6 +1,5 @@
 import type { ComponentPropsWithRef, CSSProperties } from "react"
-import { cn } from "#adaptv/utils/cn"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 import { createWarnOnce } from "#adaptv/utils/warn-once"
 
 const viewWarnings = createWarnOnce("View")
@@ -31,18 +30,36 @@ const SAFE_STYLE: Record<SafeEdges, CSSProperties> = {
   }),
 }
 
-/*
- * The same edges as the `p-safe` utility family, kept ONLY so {@link droppedBySafe} can
- * ask tailwind-merge which consumer padding classes the inline lock above overrides.
- * Nothing renders these classes.
- */
-const SAFE_CLASS: Record<SafeEdges, string> = {
-  top: "pt-safe",
-  bottom: "pb-safe",
-  x: "px-safe",
-  y: "py-safe",
-  all: "p-safe",
+type Edge = "top" | "right" | "bottom" | "left"
+
+/** The physical edges each `safe` value locks — the keys of {@link SAFE_STYLE}. */
+const SAFE_EDGES: Record<SafeEdges, readonly Edge[]> = {
+  top: ["top"],
+  bottom: ["bottom"],
+  x: ["right", "left"],
+  y: ["top", "bottom"],
+  all: ["top", "right", "bottom", "left"],
 }
+
+/*
+ * The edges a Tailwind padding utility pads, for {@link droppedBySafe}. `ps`/`pe` pad one
+ * inline edge whose side depends on direction, so they count as both: only a lock on the
+ * whole inline axis is sure to cover them.
+ */
+const PADDING_UTILITY_EDGES: Record<string, readonly Edge[]> = {
+  p: ["top", "right", "bottom", "left"],
+  px: ["right", "left"],
+  py: ["top", "bottom"],
+  ps: ["right", "left"],
+  pe: ["right", "left"],
+  pt: ["top"],
+  pr: ["right"],
+  pb: ["bottom"],
+  pl: ["left"],
+}
+
+/** An unprefixed padding utility: no variant (`md:`), no important marker (`!`). */
+const PADDING_UTILITY = /^(p|px|py|ps|pe|pt|pr|pb|pl)-[^:!\s]+$/
 
 /**
  * Props for {@link View}. Extends native `<div>` props so it drops in anywhere a
@@ -72,20 +89,25 @@ export interface ViewProps extends ComponentPropsWithRef<"div"> {
 }
 
 /**
- * The consumer classes `safe` overrides: present when `className` is merged on its own,
- * gone once the matching safe class is merged after it — the same edges the inline lock
- * covers, so the class still sits on the element but pads nothing there. `safe="all"` with `p-6` loses the `p-6`;
- * `safe="bottom"` with `p-6` keeps it, because a later `pb-safe` overrides one edge.
+ * The consumer padding classes `safe` overrides: a Tailwind padding utility every edge of
+ * which the inline lock covers, so the class still sits on the element but pads nothing.
+ * `safe="all"` with `p-6` loses the `p-6`; `safe="bottom"` with `p-6` keeps it, because
+ * the lock covers one edge of four. A plain-CSS class is never reported: which properties
+ * it sets is not knowable from its name.
  */
 export function droppedBySafe(
   safe: SafeEdges | undefined,
   className: string | undefined,
 ): string[] {
   if (!safe || !className) return []
-  const merged = new Set(cn(className, SAFE_CLASS[safe]).split(" "))
-  return cn(className)
-    .split(" ")
-    .filter((name) => name !== "" && !merged.has(name))
+  const locked = SAFE_EDGES[safe]
+  return className.split(/\s+/).filter((name) => {
+    const utility = PADDING_UTILITY.exec(name)?.[1]
+    if (utility === undefined) return false
+    return PADDING_UTILITY_EDGES[utility].every((edge) =>
+      locked.includes(edge),
+    )
+  })
 }
 
 /**
@@ -129,7 +151,7 @@ export function View({
       )
     }
   }
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: safe && SAFE_STYLE[safe],

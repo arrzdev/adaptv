@@ -1,5 +1,4 @@
 import { Pressable, Text, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Archive, ArchiveRestore, Clock, Flag, Trash2 } from "lucide-react"
 import { AppSwipeable, Checkbox, IconButton } from "@/components/ui"
 import { dueRelativeLabel, dueTone } from "@/data/collections/todos/dates"
@@ -8,6 +7,7 @@ import {
   priorityTextClassName,
 } from "@/data/collections/todos/priority"
 import type { Todo } from "@/data/collections/todos/schema"
+import { cn } from "@/utils/cn"
 
 //keeps a press on the checkbox to itself, so it never reaches the row's drag
 function stopPropagation(event: { stopPropagation: () => void }) {

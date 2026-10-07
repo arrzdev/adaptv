@@ -147,7 +147,7 @@ test.describe("Icon", () => {
     expect(offline.name).toBe("Offline")
   })
 
-  test("the default 1em box is the font-size of the text around it", async ({
+  test("the default 1em box is the font-size of the text around it @tailwind", async ({
     page,
   }) => {
     const sizes: number[] = []
@@ -176,7 +176,7 @@ test.describe("Icon", () => {
     )
   })
 
-  test("scaleWithSystem is inert off iOS: the opted-in icon keeps its built box", async ({
+  test("scaleWithSystem is inert off iOS: the opted-in icon keeps its built box @tailwind", async ({
     page,
   }) => {
     const plain = page.getByTestId("dt-icon-plain")
@@ -208,7 +208,7 @@ test.describe("Icon", () => {
     await expect(page.getByText("1.00×", { exact: true })).toHaveCount(1)
   })
 
-  test("rtl:-scale-x-100 flips a glyph under dir=rtl, and only there", async ({
+  test("rtl:-scale-x-100 flips a glyph under dir=rtl, and only there @tailwind", async ({
     page,
   }) => {
     const scaleOf = (id: string) =>
@@ -299,7 +299,7 @@ test.describe("Icon scaleWithSystem with the iOS gate forced open", () => {
     expect(Math.abs(box - want)).toBeLessThan(0.02)
   }
 
-  test("multiplies the bell once by a factor that is not a whole number, through a resize and an opt-out", async ({
+  test("multiplies the bell once by a factor that is not a whole number, through a resize and an opt-out @tailwind", async ({
     page,
   }) => {
     await openIcon(page)
@@ -336,7 +336,7 @@ test.describe("Icon scaleWithSystem with the iOS gate forced open", () => {
     expect((await bell(page)).box).toBe(20)
   })
 
-  test("a client-side navigation mounts it under StrictMode at the factor once", async ({
+  test("a client-side navigation mounts it under StrictMode at the factor once @tailwind", async ({
     page,
   }) => {
     //A document load HYDRATES the page, and React 19 does not replay the effects of a

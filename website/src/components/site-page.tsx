@@ -5,11 +5,11 @@ import {
   View,
 } from "@arrzdev/adaptv/components"
 import { useTheme } from "@arrzdev/adaptv/hooks"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Github, Moon, Sun } from "lucide-react"
 import type { ReactNode } from "react"
 import { Wordmark } from "@/components/logo"
 import { GITHUB_URL } from "@/content/site"
+import { cn } from "@/utils/cn"
 
 const NAV = [
   { to: "/docs", label: "Docs" },
