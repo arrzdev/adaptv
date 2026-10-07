@@ -223,7 +223,7 @@ function bandDonor(): HTMLElement | null {
           "**18 June: pad the sheet's scroller.** Padding on the inner scroller, plus a lift for the hidden excess. Removed on 22 June. A note from the same week says `overflow: hidden` on the body is not enough, because WebKit scrolls the focused field into view on its own.",
           "**A fixed offscreen nudge.** The focus trick below first moved the field up by a constant 2000px, which fell short on a tall viewport. On 19 June it became the viewport height plus 200px.",
           "**Cancel touches at the scroller's edges.** Calling `preventDefault()` when a touch reached the end of an inner scroller killed pull-to-overscroll, caused flicker from layout reads on every `touchmove`, and swallowed the system's edge swipe. The fix on 27 June was `overscroll-behavior: contain` on scrollers and a 24px strip at each screen edge that the lock leaves alone.",
-          "**Taps that were scrolls.** A drag that ended over a field focused it and raised the keyboard. On 23 June a 10px travel limit separated taps from drags. In September, [472926b](https://github.com/arrzdev/adaptv/commit/472926b) fixed the other half: the walk that finds the scroller a touch would move skipped the scroller's own box, so a drag that began on its padding was treated as a drag on the document and cancelled. It was checked in Playwright's WebKit with the iPad Pro 11 profile, over 3,383 grid points on each of six test pages.",
+          "**Taps that were scrolls.** A drag that ended over a field focused it and raised the keyboard. On 23 June a 10px travel limit separated taps from drags. In September, [cd3e1b6](https://github.com/arrzdev/adaptv/commit/cd3e1b6) fixed the other half: the walk that finds the scroller a touch would move skipped the scroller's own box, so a drag that began on its padding was treated as a drag on the document and cancelled. It was checked in Playwright's WebKit with the iPad Pro 11 profile, over 3,383 grid points on each of six test pages.",
         ],
       },
       { type: "h2", text: "Half one: pin the document" },
@@ -469,8 +469,8 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
           "**Render the splash only on the client.** It hides the jump in development, where the page is a browser tab or a client navigation. In production the server-rendered HTML has already painted before React runs, so the jump is on screen first. The notes call it too late, after paint.",
           "**Measure the visual viewport in a head script and size the shell with a custom property.** The property was `--app-height`, and the change was reverted soon after. The commit says only that it was a test of a variation, so the reason is not recorded.",
           "**Give the splash a height of 100lvh.** In a Safari tab `lvh` is taller than what is visible, so it was scoped to the installed app. It did not end the problem.",
-          "**Freeze the launch height, as first written for iOS 18.** It held off growth and never followed a shrink, so on iOS 26.1 the frozen value stayed 874 while the view shrank to 812. [ea8828b](https://github.com/arrzdev/adaptv/commit/ea8828b) lets it follow the view down; details below.",
-          "**Cover the launches the resize never reaches.** A page reloaded after it had already shrunk gets no resize event ([1b253f5](https://github.com/arrzdev/adaptv/commit/1b253f5)). React then clears the attributes on `<html>` when a client root takes over, and an offline launch lost the height ([b4fa381](https://github.com/arrzdev/adaptv/commit/b4fa381)).",
+          "**Freeze the launch height, as first written for iOS 18.** It held off growth and never followed a shrink, so on iOS 26.1 the frozen value stayed 874 while the view shrank to 812. [dfd7f54](https://github.com/arrzdev/adaptv/commit/dfd7f54) lets it follow the view down; details below.",
+          "**Cover the launches the resize never reaches.** A page reloaded after it had already shrunk gets no resize event ([5addaf0](https://github.com/arrzdev/adaptv/commit/5addaf0)). React then clears the attributes on `<html>` when a client root takes over, and an offline launch lost the height ([cd09067](https://github.com/arrzdev/adaptv/commit/cd09067)).",
         ],
       },
       { type: "h2", text: "Freeze the number the splash is centred against" },
@@ -547,7 +547,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
       },
       {
         type: "p",
-        text: "A static page with no adaptv in it reads the same way on iOS 26.1. The installed app also could not scroll to the last 62pt of a page: the shell was `h-screen`, 874, inside an 812 viewport. The shell is now `min(100vh, 100dvh + the top inset)` ([c9366b2](https://github.com/arrzdev/adaptv/commit/c9366b2)), which is 812 on 26.1 and the whole screen on 18.0.",
+        text: "A static page with no adaptv in it reads the same way on iOS 26.1. The installed app also could not scroll to the last 62pt of a page: the shell was `h-screen`, 874, inside an 812 viewport. The shell is now `min(100vh, 100dvh + the top inset)` ([2b15810](https://github.com/arrzdev/adaptv/commit/2b15810)), which is 812 on 26.1 and the whole screen on 18.0.",
       },
       { type: "h2", text: "What is still open" },
       {
