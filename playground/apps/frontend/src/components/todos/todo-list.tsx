@@ -5,7 +5,6 @@ import {
   View,
 } from "@arrzdev/adaptv/components"
 import { useAppState } from "@arrzdev/adaptv/hooks"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { Transition } from "motion/react"
 import { motion } from "motion/react"
 import type { ReactNode } from "react"
@@ -22,6 +21,7 @@ import type { Todo } from "@/data/collections/todos/schema"
 import type { TodoSection } from "@/data/collections/todos/sort"
 import { useAppReducedMotion } from "@/hooks/use-app-reduced-motion"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 type EmptyCreature = "sleeping" | "chilling" | "stressed"
 

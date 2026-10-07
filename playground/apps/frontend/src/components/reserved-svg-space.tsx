@@ -1,6 +1,6 @@
 import { View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { CSSProperties, ReactNode } from "react"
+import { cn } from "@/utils/cn"
 
 export type ReservedSvgSpaceProps = {
   /** Width:height ratio used to reserve layout before the SVG loads (default 1). */

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 export type PwaSplashOverlayProps = {
   /** Classes for the full-viewport coverage box (the painted backdrop). */
@@ -60,13 +60,13 @@ export function PwaSplashOverlay({
   centerStyle,
   children,
 }: PwaSplashOverlayProps) {
-  const cover = mergeStyles({
+  const cover = composeStyles({
     className,
     style,
     lockedStyle: COVER_LOCKED_STYLE,
   })
 
-  const center = mergeStyles({
+  const center = composeStyles({
     className: centerClassName,
     style: centerStyle,
     lockedStyle: CENTER_LOCKED_STYLE,

@@ -29,17 +29,14 @@ export const GLYPH = { ok: "✓", fail: "✖" }
 export const ADAPTV_VERSION = "0.1.0-alpha.1"
 
 /**
- * The framework's peers, at the versions it pins them to, plus what the template itself
- * imports. `create.test.mjs` holds the peers to the root `peerDependencies`.
+ * The framework's peers, at the versions it pins them to. The template is plain CSS, so
+ * it imports nothing else (docs/decisions/styling.md §0.1). `create.test.mjs` holds the
+ * peers to the root `peerDependencies`.
  */
 export const DEPENDENCIES = {
-  "@tailwindcss/vite": "4.2.4",
-  clsx: "2.1.1",
   motion: "12.35.0",
   react: "19.2.3",
   "react-dom": "19.2.3",
-  "tailwind-merge": "3.4.0",
-  tailwindcss: "4.2.4",
   vite: "8.0.11",
 }
 export const DEV_DEPENDENCIES = {

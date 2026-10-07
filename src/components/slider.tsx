@@ -57,7 +57,7 @@ import {
   GesturePriority,
   useGestureCapture,
 } from "#adaptv/hooks/use-gesture-capture"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /** Props for the root {@link Slider}. */
 export interface SliderProps {
@@ -291,7 +291,7 @@ SliderTrack.displayName = "Slider.Track"
  */
 function SliderRange({ className }: SliderRangeProps) {
   useSlider()
-  const range = mergeStyles({
+  const range = composeStyles({
     className,
     lockedStyle: {
       ...SLIDER_RANGE_LOCKED_LAYOUT_STYLE,
@@ -321,7 +321,7 @@ SliderRange.displayName = "Slider.Range"
 function SliderThumb({ className }: SliderThumbProps) {
   useSlider()
   const { thumbRef } = useContext(SliderInternalsContext) ?? {}
-  const thumb = mergeStyles({
+  const thumb = composeStyles({
     className,
     lockedStyle: {
       ...SLIDER_THUMB_LOCKED_LAYOUT_STYLE,
@@ -638,7 +638,7 @@ function SliderRoot({
     isDisabled,
   }
 
-  const root = mergeStyles({
+  const root = composeStyles({
     className,
     style,
     lockedStyle: {

@@ -11,7 +11,7 @@ import type {
   GestureEvent,
   OmitGestureEngineHandlers,
 } from "#adaptv/hooks/use-gesture-engine"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /**
  * The props {@link Pressable} hands to a `render` function — spread them onto whatever
@@ -158,7 +158,7 @@ export function Pressable({
   //Pressable emits no class of its own and has no default rule: it adds mechanics,
   //not a look, so `className` is the consumer's alone.
   const slot = typeof render === "function" ? null : render
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className: [slot?.props.className, className],
     style: { ...slot?.props.style, ...style },
     //structural, not styling — the press core's inline `touch-action` longhand

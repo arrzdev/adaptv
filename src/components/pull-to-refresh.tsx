@@ -31,7 +31,7 @@ import {
 import { useAnimatedStyle } from "#adaptv/hooks/use-animated-style"
 import { useReducedMotion } from "#adaptv/hooks/use-reduced-motion"
 import { clamp } from "#adaptv/utils/clamp"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 type RefreshPhase = "idle" | "pulling" | "refreshing" | "closing"
 
@@ -816,7 +816,7 @@ export const PullToRefresh = forwardRef<
           data-adaptv="pull-to-refresh-root"
           data-part="root"
           ref={setScrollRef}
-          {...mergeStyles({
+          {...composeStyles({
             className,
             lockedStyle: PULL_TO_REFRESH_ROOT_LOCKED_STYLE,
           })}
@@ -833,7 +833,7 @@ export const PullToRefresh = forwardRef<
         data-adaptv="pull-to-refresh"
         data-part="root"
         ref={setScrollRef}
-        {...mergeStyles({
+        {...composeStyles({
           className,
           lockedStyle: PULL_TO_REFRESH_ROOT_LOCKED_STYLE,
         })}

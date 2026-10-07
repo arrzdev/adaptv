@@ -1,7 +1,6 @@
 import type { ComposeSupport } from "@arrzdev/adaptv/capabilities"
 import { useCompose } from "@arrzdev/adaptv/hooks"
 import { createFileRoute } from "@arrzdev/adaptv/router"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"
@@ -15,6 +14,7 @@ import {
   labLogEntry,
 } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"
+import { cn } from "@/utils/cn"
 
 export const Route = createFileRoute("/_providers/lab/compose")({
   component: LabComposePage,

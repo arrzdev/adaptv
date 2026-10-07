@@ -43,7 +43,12 @@ const PLACEHOLDER = '[data-adaptv="skeleton"]'
 async function openLab(page: Page) {
   await page.goto("/lab/skeleton")
   await awaitClientHandover(page)
-  await page.getByTestId("skeleton-row").first().waitFor()
+  //attached, not visible: every shape is the page's own className, so in an app whose
+  //classes paint nothing (the no-Tailwind build) a row is a 0×0 box and never "visible"
+  await page
+    .getByTestId("skeleton-row")
+    .first()
+    .waitFor({ state: "attached" })
 }
 
 /** The shimmer's own word on whether it runs: the computed animation name. */
@@ -73,7 +78,7 @@ test.describe("Skeleton", () => {
     }
   })
 
-  test("the region is busy and announces once while loading, then hands over", async ({
+  test("the region is busy and announces once while loading, then hands over @tailwind", async ({
     page,
   }) => {
     const region = page.getByTestId("skeleton-region")
@@ -136,7 +141,7 @@ test.describe("Skeleton under prefers-reduced-motion", () => {
     await openLab(page)
   })
 
-  test("the shimmer stops — the computed animation-name is none", async ({
+  test("the shimmer stops — the computed animation-name is none @tailwind", async ({
     page,
   }) => {
     await expect(page.getByTestId("skeleton-readout")).toContainText(

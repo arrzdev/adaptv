@@ -29,7 +29,7 @@ import {
 } from "#adaptv/components/press-core"
 import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { useInsets } from "#adaptv/hooks/use-insets"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * Select — a single-value picker that opens a menu on every target.
@@ -438,7 +438,7 @@ function Select({
 
   //the root has a default look (select.css) and nothing locked; the consumer's
   //`style` still goes through the one place precedence is decided
-  const rootStyles = mergeStyles({ className, style })
+  const rootStyles = composeStyles({ className, style })
 
   return (
     <SelectContext.Provider
@@ -554,7 +554,7 @@ function SelectTrigger({
     }
   }
 
-  const triggerStyles = mergeStyles({
+  const triggerStyles = composeStyles({
     className,
     lockedStyle: disabled
       ? PRESS_TARGET_DISABLED_LOCKED_STYLE
@@ -610,7 +610,7 @@ function SelectValue({ placeholder, className }: SelectValueProps) {
       data-part="value"
       data-placeholder={isPlaceholder ? "" : undefined}
       //text: no default look, nothing locked
-      className={mergeStyles({ className }) || undefined}
+      className={composeStyles({ className }) || undefined}
     >
       {isPlaceholder ? (placeholder ?? rootPlaceholder) : selected.label}
     </span>
@@ -753,7 +753,7 @@ function SelectContent({
   //closed: the options still mount (and register), the panel does not
   if (!open) return <>{children}</>
 
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: {
@@ -831,7 +831,7 @@ function SelectOption({
 
   const isSelected = selectedValue === value
   const isHighlighted = highlighted === value
-  const optionStyles = mergeStyles({
+  const optionStyles = composeStyles({
     className,
     lockedStyle: disabled
       ? SELECT_OPTION_DISABLED_LOCKED_STYLE

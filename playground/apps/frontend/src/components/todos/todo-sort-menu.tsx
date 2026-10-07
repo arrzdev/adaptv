@@ -1,5 +1,4 @@
 import { Pressable, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowUpDown,
@@ -13,6 +12,7 @@ import {
 import { AppDrawer } from "@/components/ui"
 import type { TodoSort } from "@/data/collections/todos/sort"
 import { useHaptics } from "@/hooks/use-haptics"
+import { cn } from "@/utils/cn"
 
 type SortOption = {
   value: TodoSort

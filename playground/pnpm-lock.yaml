@@ -81,6 +81,9 @@ importers:
       canvas-confetti:
         specifier: 1.9.4
         version: 1.9.4
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
       dexie:
         specifier: 4.4.2
         version: 4.4.2
@@ -99,6 +102,9 @@ importers:
       react-dom:
         specifier: link:../../../node_modules/react-dom
         version: link:../../../node_modules/react-dom
+      tailwind-merge:
+        specifier: 3.4.0
+        version: 3.4.0
       tailwindcss:
         specifier: 4.2.4
         version: 4.2.4
@@ -1412,6 +1418,10 @@ packages:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
 
+  clsx@2.1.1:
+    resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
+    engines: {node: '>=6'}
+
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
 
@@ -1735,6 +1745,9 @@ packages:
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
+
+  tailwind-merge@3.4.0:
+    resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
 
   tailwindcss@4.2.4:
     resolution: {integrity: sha512-HhKppgO81FQof5m6TEnuBWCZGgfRAWbaeOaGT00KOy/Pf/j6oUihdvBpA7ltCeAvZpFhW3j0PTclkxsd4IXYDA==}
@@ -2866,6 +2879,8 @@ snapshots:
 
   chai@6.2.2: {}
 
+  clsx@2.1.1: {}
+
   commander@2.20.3:
     optional: true
 
@@ -3229,6 +3244,8 @@ snapshots:
   std-env@4.1.0: {}
 
   supports-color@10.2.2: {}
+
+  tailwind-merge@3.4.0: {}
 
   tailwindcss@4.2.4: {}
 

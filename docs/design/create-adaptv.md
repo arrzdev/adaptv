@@ -38,9 +38,9 @@ my-app/
   pnpm-workspace.yaml         allowBuilds for esbuild and sharp; patchedDependencies → patches/
   src/routing/config.ts       rootRoute([index(...)])
   src/routing/pages/home.page.tsx   one route, rooted in a View
-  src/styles/main.css         the layer order, tailwindcss, adaptv's styles
+  src/styles/main.css         adaptv's styles, then the app's plain CSS
   tsconfig.json
-  vite.config.ts              adaptv() once, plus tailwindcss()
+  vite.config.ts              adaptv() once
 ```
 
 What it does **not** emit, on purpose:

@@ -26,7 +26,7 @@ import {
 } from "#adaptv/components/press-core"
 import { useBackHandler } from "#adaptv/hooks/use-back-handler"
 import { useInsets } from "#adaptv/hooks/use-insets"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 /* =============================================================================
  * Dropdown — an anchored menu.
@@ -154,7 +154,7 @@ function DropdownTrigger({
       aria-expanded={open}
       //No default and no lock, by decision (like Drawer.Trigger): a trigger is a
       //plain button adaptv wires open/close onto, with no neutral look of its own.
-      className={mergeStyles({ className }) || undefined}
+      className={composeStyles({ className }) || undefined}
       onClick={(event) => {
         onClick?.(event)
         if (event.defaultPrevented) return
@@ -261,7 +261,7 @@ function DropdownContent({
   if (!open) return null
 
   const positioned = pos !== null
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: {
@@ -314,7 +314,7 @@ function DropdownItem({
   ...props
 }: DropdownItemProps) {
   const { setOpen } = useDropdownContext()
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     lockedStyle: disabled
       ? DROPDOWN_ITEM_DISABLED_LOCKED_STYLE

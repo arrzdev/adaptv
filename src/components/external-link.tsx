@@ -2,7 +2,7 @@ import type { ComponentPropsWithRef, MouseEvent } from "react"
 import { openExternal } from "#adaptv/capabilities/browser"
 import { PRESS_TARGET_LOCKED_STYLE } from "#adaptv/components/press-core"
 import { isNativePlatform } from "#adaptv/utils/platform"
-import { mergeStyles } from "#adaptv/utils/styles"
+import { composeStyles } from "#adaptv/utils/styles"
 
 //The look — left-aligned, no underline, a pointer cursor — is a default rule in
 //styles/link.css; the press-core touch longhand is locked, inline
@@ -37,7 +37,7 @@ export function ExternalLink({
   children,
   ...props
 }: ExternalLinkProps) {
-  const merged = mergeStyles({
+  const merged = composeStyles({
     className,
     style,
     lockedStyle: PRESS_TARGET_LOCKED_STYLE,

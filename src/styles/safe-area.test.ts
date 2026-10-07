@@ -6,7 +6,6 @@ import {
   compileCss,
   ruleFor,
 } from "#adaptv/styles/compile.test-helper"
-import { cn } from "#adaptv/utils/cn"
 
 //The safe-area inset contract, guarded as text — docs/decisions/register.md §6.0 (B18). The rule
 //is a source-ordering rule (`var(--safe-area-inset-*)` FIRST, `env()` only as
@@ -161,31 +160,6 @@ describe("safe-area utilities — the compiled CSS", () => {
     expect(ruleFor(css, ".safe")).toBeNull()
     expect(ruleFor(css, ".safe-t")).toBeNull()
     expect(ruleFor(css, ".safe-none")).toBeNull()
-  })
-})
-
-/*
- * docs/decisions/styling.md §5.5 is absolute: a utility tailwind-merge has never heard of conflicts
- * with nothing, so an unregistered family silently drops out of `mergeStyles`'
- * precedence contract — `View safe="bottom"` would stop beating a stray `pb-0`.
- */
-describe("safe-area utilities — registered with tailwind-merge", () => {
-  it.each([
-    ["pb-0", "pb-safe"],
-    ["pb-safe", "pb-4"],
-    ["p-4", "p-safe-offset-2"],
-    ["pb-safe", "pb-safe-or-4"],
-    ["pt-safe-offset-2", "pt-safe-or-2"],
-    ["mb-2", "mb-safe"],
-    ["bottom-0", "bottom-safe"],
-    ["inset-0", "inset-safe"],
-  ])("`%s` then `%s` keeps only the last", (first, second) => {
-    expect(cn(first, second)).toBe(second)
-  })
-
-  it("lets a whole-box utility clear the per-side one, as the standard groups do", () => {
-    expect(cn("pb-safe", "p-4")).toBe("p-4")
-    expect(cn("top-safe", "inset-safe")).toBe("inset-safe")
   })
 })
 
