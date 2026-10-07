@@ -1,7 +1,7 @@
 import { View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { Check, Copy } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { cn } from "@/utils/cn"
 
 /*
  * A deliberately small highlighter. It knows comments, strings, a keyword list, JSX

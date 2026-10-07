@@ -1,6 +1,6 @@
-import { cn } from "@arrzdev/adaptv/utils"
 import { motion } from "motion/react"
 import type { ReactNode } from "react"
+import { cn } from "@/utils/cn"
 
 /**
  * Fades a block up as it enters the viewport. The observer's root is the viewport, which
