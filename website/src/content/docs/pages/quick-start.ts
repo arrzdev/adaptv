@@ -69,20 +69,15 @@ export default defineApp({
     },
     { type: "h3", text: "vite.config.ts" },
     {
-      type: "p",
-      text: "List `adaptv()` before `tailwindcss()`.",
-    },
-    {
       type: "code",
       label: "vite.config.ts",
       lang: "ts",
       code: `import { adaptv } from "@arrzdev/adaptv/vite"
-import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
   resolve: { tsconfigPaths: true, dedupe: ["react", "react-dom"] },
-  plugins: [adaptv(), tailwindcss()],
+  plugins: [adaptv()],
 })`,
     },
     { type: "h3", text: "src/routing/config.ts" },
@@ -115,8 +110,8 @@ export const Route = createFileRoute("/")({ component: Home })
 function Home() {
   return (
     <ScrollView>
-      <View className="gap-4 p-6 py-safe-offset-8">
-        <h1 className="font-semibold text-3xl">Hello</h1>
+      <View className="home">
+        <h1>Hello</h1>
       </View>
     </ScrollView>
   )
@@ -125,14 +120,22 @@ function Home() {
     { type: "h3", text: "src/styles/main.css" },
     {
       type: "p",
-      text: "Import Tailwind first, then adaptv.",
+      text: "Plain CSS. adaptv's rules sit in a cascade layer, so any class of yours beats them. The safe-area insets are variables.",
     },
     {
       type: "code",
       label: "src/styles/main.css",
       lang: "text",
-      code: `@import "tailwindcss";
-@import "@arrzdev/adaptv/styles.css";`,
+      code: `@import "@arrzdev/adaptv/styles.css";
+
+.home {
+  gap: 1rem;
+  padding: calc(var(--adaptv-inset-top) + 2rem) 1.5rem calc(var(--adaptv-inset-bottom) + 2rem);
+}`,
+    },
+    {
+      type: "p",
+      text: "Tailwind is optional. To use it, add `tailwindcss` and `@tailwindcss/vite`, list `adaptv()` before `tailwindcss()`, and import `@arrzdev/adaptv/tailwind.css` after Tailwind instead of `styles.css`. See [Styling](/docs/styling).",
     },
     { type: "h3", text: "package.json" },
     {
@@ -151,11 +154,9 @@ function Home() {
   },
   "dependencies": {
     "@arrzdev/adaptv": "link:..",
-    "@tailwindcss/vite": "4.2.4",
     "motion": "link:../node_modules/motion",
     "react": "link:../node_modules/react",
     "react-dom": "link:../node_modules/react-dom",
-    "tailwindcss": "4.2.4",
     "vite": "link:../node_modules/vite"
   }
 }`,
@@ -176,7 +177,7 @@ function Home() {
         "**`no adaptv.config.ts here`.** Run the CLI from the app folder.",
         "**`missing 'appId'`.** Add `appId` to the config.",
         "**A page does not scroll.** Its component returns more than one root element. Use one `ScrollView`.",
-        "**Tailwind classes lose to adaptv resets.** Put `adaptv()` before `tailwindcss()`.",
+        "**With Tailwind, your classes lose to adaptv resets.** Put `adaptv()` before `tailwindcss()`.",
         "**A framework edit has no effect on `preview` or `build`.** The build is cached and says nothing. Pass `--force`.",
       ],
     },

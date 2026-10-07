@@ -4,106 +4,15 @@ export const page: DocPage = {
   slug: "utils",
   title: "Utils",
   summary:
-    "Class merging that knows adaptv utilities, layered style merging for your own primitives, and synchronous platform detection.",
+    "Synchronous platform detection, and the helpers the shell uses to stamp the page.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { cn, mergeStyles, isNativePlatform, isInstalledApp, getOS } from "@arrzdev/adaptv/utils"',
+    'import { isNativePlatform, isInstalledApp, getOS } from "@arrzdev/adaptv/utils"',
   source: "src/utils",
   blocks: [
-    { type: "h2", text: "cn" },
-    {
-      type: "api",
-      name: "cn()",
-      signature: "function cn(...inputs: ClassValue[]): string",
-      description:
-        "Join class names. When two classes set the same property, the last one wins. A generic merge does not know that `pb-safe` and `pb-4` conflict. This one does.",
-      params: [
-        {
-          name: "inputs",
-          type: "ClassValue[]",
-          required: true,
-          description:
-            "Strings, arrays, `{ className: condition }` objects. Falsy values are skipped.",
-        },
-      ],
-      returns: "One class string.",
-    },
-    {
-      type: "code",
-      label: "card.tsx",
-      lang: "tsx",
-      code: `import { cn } from "@arrzdev/adaptv/utils"
-
-cn("rounded-xl p-4", isActive && "bg-blue-500", className)
-
-cn("pb-4", "pb-safe")            // "pb-safe"
-cn("p-4", "pt-safe-offset-2")    // "p-4 pt-safe-offset-2"
-cn("select-none", "selectable")  // "selectable"`,
-    },
-    {
-      type: "ul",
-      items: [
-        "Safe-area values (`safe`, `safe-offset-N`, `safe-or-N`) conflict with number values. See [safe areas](/docs/safe-areas).",
-        "`selectable` conflicts with `select-*`.",
-        "`scrollbar-hidden` and `scrollbar-visible` conflict.",
-        "`overflow-x-*` and `overflow-y-*` remove an earlier `overflow-*`.",
-      ],
-    },
-
-    { type: "h2", text: "mergeStyles" },
-    {
-      type: "api",
-      name: "mergeStyles()",
-      signature:
-        "function mergeStyles(layers: StyleLayers & InlineStyleLayers): string | { className: string; style: CSSProperties | undefined }",
-      description:
-        "Compose the classes and inline styles of a primitive in three tiers. Later tiers win.",
-      params: [
-        {
-          name: "base",
-          type: "ClassValue",
-          description: "The default look.",
-        },
-        {
-          name: "className",
-          type: "ClassValue",
-          description:
-            "The consumer's classes. They beat `base`, not `locked`.",
-        },
-        {
-          name: "locked",
-          type: "ClassValue",
-          description: "Structural classes. They win over both.",
-        },
-        {
-          name: "baseStyle / style / lockedStyle",
-          type: "CSSProperties",
-          description: "The inline twins of the three class tiers.",
-        },
-      ],
-      returns:
-        "A class string if you passed only class tiers. `{ className, style }` if any inline key is present. `style` is `undefined` if empty.",
-    },
-    {
-      type: "code",
-      label: "scroll-area.tsx",
-      lang: "tsx",
-      code: `import { mergeStyles } from "@arrzdev/adaptv/utils"
-
-function ScrollArea({ className, style, ...rest }: ScrollAreaProps) {
-  const merged = mergeStyles({
-    base: "flex flex-col gap-2",
-    className,
-    locked: "overflow-y-auto overscroll-contain",
-    style,
-    lockedStyle: { WebkitOverflowScrolling: "touch" },
-  })
-  return <div {...rest} className={merged.className} style={merged.style} />
-}`,
-    },
     {
       type: "p",
-      text: "An inline `style` beats every class. Pass it through `mergeStyles`, or the `locked` classes lose. The types are `StyleLayers`, `InlineStyleLayers` and `MergedStyles`.",
+      text: "adaptv exports no class merge. It joins class lists and does not merge them. To merge conflicting Tailwind classes of your own, bring `clsx` and `tailwind-merge`. See [Styling](/docs/styling).",
     },
 
     { type: "h2", text: "Platform detection" },

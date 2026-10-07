@@ -44,7 +44,7 @@ export const page: DocPage = {
     { type: "h2", text: "vite.config.ts" },
     {
       type: "p",
-      text: "Add `adaptv()` before `tailwindcss()`. You add no React, router, PWA or deploy plugin. See the [Vite plugin](/docs/vite-plugin).",
+      text: "Add `adaptv()`, and with Tailwind put it before `tailwindcss()`. You add no React, router, PWA or deploy plugin. See the [Vite plugin](/docs/vite-plugin).",
     },
     { type: "h2", text: "src/routing" },
     {
@@ -66,7 +66,7 @@ export default rootRoute([
     { type: "h2", text: "src/styles/main.css" },
     {
       type: "p",
-      text: "The file named by `styles`. Import Tailwind, then `@arrzdev/adaptv/styles.css`, then your tokens. See [Styling](/docs/styling) and [Theming](/docs/theming).",
+      text: "The file named by `styles`. Import `@arrzdev/adaptv/styles.css`, then your tokens. With Tailwind, import Tailwind, then `@arrzdev/adaptv/tailwind.css`. See [Styling](/docs/styling) and [Theming](/docs/theming).",
     },
     { type: "h2", text: "public/" },
     {
@@ -108,7 +108,7 @@ export default rootRoute([
     {
       type: "ul",
       items: [
-        "Depend on `@arrzdev/adaptv`. Install its peers yourself: `react`, `react-dom`, `vite`, `tailwindcss`, `motion`, `clsx` and `tailwind-merge`. Add `@tailwindcss/vite`.",
+        "Depend on `@arrzdev/adaptv`. Install its peers yourself: `react`, `react-dom`, `vite` and `motion`. Tailwind is optional: add `tailwindcss` and `@tailwindcss/vite` to use it.",
         "Scripts call `adaptv` by name, for example `adaptv dev ios`. See the [CLI](/docs/cli).",
         'A task runner must pass the terminal through. In Turborepo, set `"interactive": true` on the task.',
       ],
