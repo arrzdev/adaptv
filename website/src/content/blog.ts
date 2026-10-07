@@ -163,7 +163,7 @@ export const POSTS: Post[] = [
   {
     slug: "the-loupe",
     title: "The loupe: a bug CSS cannot reach",
-    date: "2026-09-20",
+    date: "2026-10-07",
     kind: "Field note",
     author: "adaptv team",
     summary:
