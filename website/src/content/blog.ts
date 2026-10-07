@@ -6,7 +6,7 @@ export type Post = {
   date: string
   kind: "Field note" | "Release"
   summary: string
-  /** The byline. Omitted until the founder's name is confirmed. */
+  /** The byline. */
   author?: string
   blocks: Block[]
 }
@@ -45,7 +45,7 @@ export const POSTS: Post[] = [
       },
       {
         type: "p",
-        text: "A shell sized with `100dvh` or `100vh` is 812 tall for the first two rows and 874 tall for the third. Anything centred in it moves by half the difference, 31pt, which is the jump. The notes read the dark-mode flash as the same event: a shell 812pt tall does not cover the 874pt canvas, and the web view's own background shows through the gap.",
+        text: "A shell sized with `100dvh` or `100vh` is 812 tall for the first two rows and 874 tall for the third. Anything centred in it moves by half the difference, 31pt, which is the jump. The notes read the dark-mode flash as the same event: a shell 812pt tall does not cover the 874pt canvas, and the web view's own background shows through the gap. Our reading is that the initial containing block grows after first paint, and `100vh` follows it.",
       },
       {
         type: "p",
@@ -64,7 +64,7 @@ export const POSTS: Post[] = [
           "**Render the splash only on the client.** It hides the jump in development, where the page is a browser tab or a client navigation. In production the server-rendered HTML has already painted before React runs, so the jump is on screen first. The notes call it too late, after paint.",
           "**Measure the visual viewport in a head script and size the shell with a custom property.** The property was `--app-height`, and the change was reverted soon after. The commit says only that it was a test of a variation, so the reason is not recorded.",
           "**Give the splash a height of 100lvh.** In a Safari tab `lvh` is taller than what is visible, so it was scoped to the installed app. It did not end the problem.",
-          "**Freeze the launch height, then follow iOS 26.1 down.** The frozen value held 874 on iOS 26.1, where the view later shrinks to 812. Fixed in [ea8828b](https://github.com/arrzdev/adaptv/commit/ea8828b), described below.",
+          "**Freeze the launch height, as first written for iOS 18.** It held off growth and never followed a shrink, so on iOS 26.1 the frozen value stayed 874 while the view shrank to 812. [ea8828b](https://github.com/arrzdev/adaptv/commit/ea8828b) lets it follow the view down; details below.",
           "**Cover the launches the resize never reaches.** A page reloaded after it had already shrunk gets no resize event ([1b253f5](https://github.com/arrzdev/adaptv/commit/1b253f5)). React then clears the attributes on `<html>` when a client root takes over, and an offline launch lost the height ([b4fa381](https://github.com/arrzdev/adaptv/commit/b4fa381)).",
         ],
       },
@@ -151,7 +151,7 @@ export const POSTS: Post[] = [
           "A rotation before the splash is revealed lowers the height and does not raise it back.",
           "The 44-of-54 figure is from a simulator. The offline-launch check (the splash mascot at 368pt without the script, 337pt online, a 31pt gap) was recorded on 2026-09-14 on the same iPhone 17 and iOS 26.1 build, and the record does not say if it was a device or the simulator. The Safari-tab and deploy rows were not re-run on 26.1.",
           "The explanation that the initial containing block expands after first paint is the authors' reading of the behaviour. We have not confirmed it in WebKit's source.",
-          "All three WebKit bugs above were still NEW when this was written.",
+          "Both WebKit bugs above were still NEW when this was written.",
         ],
       },
       {
