@@ -165,6 +165,7 @@ export const POSTS: Post[] = [
     title: "The loupe: a bug CSS cannot reach",
     date: "2026-09-20",
     kind: "Field note",
+    author: "adaptv team",
     summary:
       "Double-tap a button in an iOS web view and a text magnifier appears over it. No CSS property turns it off. Here is what does — and the three versions of the fix that broke scrolling first.",
     blocks: [
