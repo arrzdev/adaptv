@@ -1,6 +1,6 @@
 import { Switch, View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import { useState } from "react"
+import { cn } from "@/utils/cn"
 
 export function SwitchDemo() {
   const [checked, setChecked] = useState(true)

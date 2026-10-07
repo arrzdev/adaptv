@@ -1,7 +1,7 @@
 import { View } from "@arrzdev/adaptv/components"
-import { cn } from "@arrzdev/adaptv/utils"
 import type { ReactNode } from "react"
 import { Reveal } from "@/components/reveal"
+import { cn } from "@/utils/cn"
 
 /**
  * A band of the ruled sheet. The head is two columns — the claim on the left, the one
