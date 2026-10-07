@@ -17,9 +17,7 @@ import { awaitClientHandover } from "./support/hydrated"
  * pop-vs-push. Those fire through the shared gesture engine, which — exactly like
  * Checkbox/Switch — does not respond to Playwright's synthetic mouse/keyboard/
  * dispatched input; only a real finger or the OS drives it, so they are walked on
- * the simulator. (Separately: TanStack Router's PRELOAD path logs `_nonReactive`
- * here from a react-router/router-core version skew. It is caught and non-fatal,
- * orthogonal to these two components, and flagged for its own cleanup.)
+ * the simulator.
  */
 
 test.describe("Link & ExternalLink", () => {
