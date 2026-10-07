@@ -30,7 +30,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: 'Under `"ssr"`, adaptv adds the server build. It detects AWS Amplify, Azure, Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel and Zeabur from the build environment. On another host, set `NITRO_PRESET` (or `SERVER_PRESET`). `vite.config.ts` stays `[adaptv(), tailwindcss()]`. See [Deploying](/docs/deploying). For build-time pages, see `prerender` in the [config](/docs/config). Server rendering improves the first paint only.',
+      text: 'Under `"ssr"`, adaptv adds the server build. It detects AWS Amplify, Azure, Cloudflare, Firebase App Hosting, Netlify, Stormkit, Vercel and Zeabur from the build environment. On another host, set `NITRO_PRESET` (or `SERVER_PRESET`). `vite.config.ts` stays `[adaptv()]`. See [Deploying](/docs/deploying). For build-time pages, see `prerender` in the [config](/docs/config). Server rendering improves the first paint only.',
     },
     { type: "h2", text: "What each target gets" },
     {
