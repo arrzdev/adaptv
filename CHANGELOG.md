@@ -25,6 +25,9 @@ API.
 
 - **adaptv and `create-adaptv` are MIT-licensed.** They were `UNLICENSED`. `LICENSE` is at the repo
   root and in `packages/create-adaptv`.
+- **The router moves to its release with the preload fix** (TanStack Router 1.170.19, router core
+  1.171.16, Start 1.168.36), and adaptv's two in-memory engine edits are pinned to the matching
+  versions. See Fixed.
 - **Hovers and type errors show adaptv's type names, not the router's.** This covers `notFoundScreen`
   and `notFoundComponent` (`NotFoundScreenComponent`, `NotFoundScreenProps`), `notFound`
   (`NotFoundOptions`), `isRedirect` (`RouteRedirect`), the route DSL (`RouteNode`,
@@ -37,6 +40,12 @@ API.
   inline style. `className` is yours alone: an unlayered class or a Tailwind utility beats the
   default without `!important`. A selector that targeted one of adaptv's Tailwind classes no longer
   matches; target the `data-adaptv` / `data-part` attributes instead.
+
+### Fixed
+
+- **Tapping a link while its route is still preloading no longer logs a `TypeError`.** The tap
+  navigated mid-preload; the navigation evicted the preloaded route from the cache, and the preload
+  then read the evicted entry (`match._nonReactive`). The navigation itself always worked.
 
 ## 0.1.0-alpha.1
 

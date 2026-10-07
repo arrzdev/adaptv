@@ -173,12 +173,12 @@ type RoutingShellProps = {
  */
 function useNotFoundBoundary() {
   return useRouterState({
-    //`globalNotFound` marks the boundary that renders the not-found; `notFound`
+    //`_notFound` marks the boundary that renders the not-found; `notFound`
     //status is the nested (`notFoundMode: "fuzzy"`) form of the same thing. Both
     //cut the tree off below that point.
     select: (state) =>
       state.matches.some(
-        (match) => match.globalNotFound || match.status === "notFound",
+        (match) => match._notFound || match.status === "notFound",
       ),
   })
 }
@@ -287,7 +287,7 @@ export function RoutingShell({
   //
   //adaptv mounts the splash, so adaptv retires it — there is no boot left to cover
   //when the app tree is never going to mount. During render, not in an effect, so
-  //the SSR pass and hydration agree (`globalNotFound` is dehydrated) and a native
+  //the SSR pass and hydration agree (`_notFound` is dehydrated) and a native
   //cold start never paints the splash even for a frame. Latched, because retiring
   //is one-way: re-mounting on the navigation *out* of a 404 would hand a fresh
   //splash an already-set ready gate and replay it over a booted app.
