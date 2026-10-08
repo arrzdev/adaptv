@@ -6,8 +6,7 @@ export const page: DocPage = {
   title: "Swipeable",
   summary: "A row that slides sideways to show actions.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine:
-    'import { Swipeable, useSwipeable } from "adaptv/components"',
+  importLine: 'import { Swipeable, useSwipeable } from "adaptv/components"',
   source: "src/components/swipeable.tsx",
   blocks: [
     {

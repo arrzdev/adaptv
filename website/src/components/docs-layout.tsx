@@ -1,10 +1,4 @@
-import {
-  Drawer,
-  ExternalLink,
-  Link,
-  ScrollView,
-  View,
-} from "adaptv/components"
+import { Drawer, ExternalLink, Link, ScrollView, View } from "adaptv/components"
 import {
   ArrowLeft,
   ArrowRight,

@@ -1,9 +1,4 @@
-import {
-  ExternalLink,
-  Link,
-  ScrollView,
-  View,
-} from "adaptv/components"
+import { ExternalLink, Link, ScrollView, View } from "adaptv/components"
 import { useTheme } from "adaptv/hooks"
 import { Github, Moon, Sun } from "lucide-react"
 import type { ReactNode } from "react"

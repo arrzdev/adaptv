@@ -1,5 +1,5 @@
-import { adaptv } from "adaptv/vite"
 import tailwindcss from "@tailwindcss/vite"
+import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
 
 //41760 sits clear of the playground's blocks (41730/41740, 41830/41840), so the site

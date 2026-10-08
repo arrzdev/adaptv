@@ -7,8 +7,7 @@ export const page: DocPage = {
   summary:
     "A checkbox with an indeterminate state and a box you paint yourself.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine:
-    'import { Checkbox, useCheckbox } from "adaptv/components"',
+  importLine: 'import { Checkbox, useCheckbox } from "adaptv/components"',
   source: "src/components/checkbox.tsx",
   blocks: [
     {
