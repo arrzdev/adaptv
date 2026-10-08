@@ -63,7 +63,9 @@ export function Examples() {
                   width={example.image.width}
                   height={example.image.height}
                   alt={example.alt}
+                  //below the fold: never ahead of the hero's iPhone, the page's largest paint
                   loading="lazy"
+                  fetchPriority="low"
                   decoding="async"
                   draggable={false}
                   //a failed image shows its alt on the dark screen, not only the broken-image icon
