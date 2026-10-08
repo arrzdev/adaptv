@@ -55,7 +55,7 @@ describe("importsRouteFactory", () => {
     //invisible to it and it adds a duplicate binding
     expect(
       importsRouteFactory(
-        'import { createFileRoute } from "@arrzdev/adaptv/router"',
+        'import { createFileRoute } from "adaptv/router"',
         "createFileRoute",
       ),
     ).toBe(true)
@@ -72,7 +72,7 @@ describe("importsRouteFactory", () => {
   })
 
   it("sees it in a multi-symbol, multiline import", () => {
-    const code = `import {\n  Outlet,\n  createFileRoute,\n} from "@arrzdev/adaptv/router"`
+    const code = `import {\n  Outlet,\n  createFileRoute,\n} from "adaptv/router"`
     expect(importsRouteFactory(code, "createFileRoute")).toBe(true)
   })
 
@@ -106,13 +106,13 @@ describe("resolveAutoImport", () => {
     const statement = resolveAutoImport(
       'export const R = createFileRoute("/x")({})',
     )
-    expect(statement).toContain("@arrzdev/adaptv/router")
+    expect(statement).toContain("adaptv/router")
     expect(statement).toContain("createFileRoute")
   })
 
   it("adds NOTHING when already imported — this is the duplicate-binding bug", () => {
     const code =
-      'import { createFileRoute } from "@arrzdev/adaptv/router"\nconst R = createFileRoute("/x")({})'
+      'import { createFileRoute } from "adaptv/router"\nconst R = createFileRoute("/x")({})'
     expect(resolveAutoImport(code)).toBeNull()
   })
 
@@ -178,7 +178,7 @@ describe("adaptvRouteAutoImportPlugin", () => {
         'export const R = createFileRoute("/x")({})',
         "C:\\app\\src\\routing\\x.tsx",
       )
-      expect(result?.code).toContain("@arrzdev/adaptv/router")
+      expect(result?.code).toContain("adaptv/router")
     })
   })
 
@@ -187,13 +187,13 @@ describe("adaptvRouteAutoImportPlugin", () => {
       const result = transform(
         'export const R = createFileRoute("/x")({})',
       )
-      expect(result?.code).toContain('from "@arrzdev/adaptv/router"')
+      expect(result?.code).toContain('from "adaptv/router"')
     })
   })
 
   it("leaves an already-correct route file untouched", () => {
     const code =
-      'import { createFileRoute } from "@arrzdev/adaptv/router"\nconst R = createFileRoute("/x")({})'
+      'import { createFileRoute } from "adaptv/router"\nconst R = createFileRoute("/x")({})'
     expect(transform(code)).toBeNull()
   })
 

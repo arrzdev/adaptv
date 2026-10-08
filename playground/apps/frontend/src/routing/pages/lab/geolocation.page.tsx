@@ -1,5 +1,5 @@
-import { useGeolocation } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useGeolocation } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

@@ -101,7 +101,7 @@ describe("the installed engine", () => {
     expect(() => editEngineSource(edit, version, source)).not.toThrow()
   })
 
-  //vitest.setup.ts installs the hook, as `@arrzdev/adaptv/vite` does before it loads
+  //vitest.setup.ts installs the hook, as `adaptv/vite` does before it loads
   //the plugin; so what Node loads here is the edited engine
   it("is loaded edited", async () => {
     await import("@tanstack/react-start/plugin/vite")

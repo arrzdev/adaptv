@@ -6,13 +6,13 @@ export const page: DocPage = {
   title: "Link and ExternalLink",
   summary: "`Link` goes to a route in the app. `ExternalLink` leaves the app.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Link, ExternalLink } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Link, ExternalLink } from "adaptv/components"',
   source: "src/components/link.tsx",
   blocks: [
     {
       type: "demo",
       component: LinkDemo,
-      code: `import { ExternalLink, Link } from "@arrzdev/adaptv/components"
+      code: `import { ExternalLink, Link } from "adaptv/components"
 
 <Link to="/docs/$slug" params={{ slug: "pressable" }} className="rounded-xl bg-white px-4 py-3 active:bg-gray-100">
   Pressable

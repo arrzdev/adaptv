@@ -1,5 +1,5 @@
-import { Text, View } from "@arrzdev/adaptv/components"
-import { useRouter } from "@arrzdev/adaptv/router"
+import { Text, View } from "adaptv/components"
+import { useRouter } from "adaptv/router"
 import { ChevronLeft } from "lucide-react"
 import { IconButton } from "@/components/ui"
 

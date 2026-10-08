@@ -1,4 +1,4 @@
-import { useReducedMotion as useSystemReducedMotion } from "@arrzdev/adaptv/hooks"
+import { useReducedMotion as useSystemReducedMotion } from "adaptv/hooks"
 import { useSettings } from "@/data/collections/preferences/settings"
 
 export function useAppReducedMotion(): boolean {

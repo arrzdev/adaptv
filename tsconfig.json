@@ -21,7 +21,7 @@
       // The ambient declarations name the package by its public specifiers, which
       // `exports` resolves to `dist/`. The framework typechecks its own source, built
       // or not. → src/interface/route-globals.d.ts
-      "@arrzdev/adaptv/*": ["./src/interface/*.index.ts"]
+      "adaptv/*": ["./src/interface/*.index.ts"]
     },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",

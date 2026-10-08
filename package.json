@@ -1,5 +1,5 @@
 {
-  "name": "@arrzdev/adaptv",
+  "name": "adaptv",
   "version": "0.1.0-alpha.1",
   "private": true,
   "description": "One React codebase, shipped as desktop web, mobile web, an installable home-screen app, and real iOS and Android apps that don't feel like a website in a box.",
@@ -17,7 +17,8 @@
     "adaptv": "./bin/adaptv.mjs"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "sideEffects": [
     "**/*.css"
@@ -144,10 +145,10 @@
     "@capacitor/splash-screen": "8.0.2",
     "@capacitor/status-bar": "8.0.2",
     "@capawesome/capacitor-live-update": "8.3.0",
-    "@tanstack/react-router": "1.170.18",
-    "@tanstack/react-start": "1.168.32",
+    "@tanstack/react-router": "1.170.19",
+    "@tanstack/react-start": "1.168.36",
     "@tanstack/react-virtual": "3.14.6",
-    "@tanstack/router-core": "1.171.15",
+    "@tanstack/router-core": "1.171.16",
     "@tanstack/virtual-file-routes": "1.162.0",
     "@vitejs/plugin-react": "5.2.0",
     "commander": "15.0.0",

@@ -1,4 +1,4 @@
-import { Drawer, View } from "@arrzdev/adaptv/components"
+import { Drawer, View } from "adaptv/components"
 import { useState } from "react"
 
 export function DrawerDemo() {

@@ -1,4 +1,4 @@
-import { Text, View } from "@arrzdev/adaptv/components"
+import { Text, View } from "adaptv/components"
 import type { ReactNode } from "react"
 import { secondaryButtonClassName } from "@/components/ui/secondary-button"
 import { cn } from "@/utils/cn"

@@ -8,14 +8,14 @@ export const page: DocPage = {
   blocks: [
     {
       type: "p",
-      text: "You list routes in `src/routing/config.ts` with helpers from `@arrzdev/adaptv/routes`. Each entry names a page file. The page file exports a `Route`. adaptv builds the router from `adaptv.config.ts` and owns the root route: the document, the [frame](/docs/the-frame), the splash and the not-found screen. See the [router API](/docs/router-api).",
+      text: "You list routes in `src/routing/config.ts` with helpers from `adaptv/routes`. Each entry names a page file. The page file exports a `Route`. adaptv builds the router from `adaptv.config.ts` and owns the root route: the document, the [frame](/docs/the-frame), the splash and the not-found screen. See the [router API](/docs/router-api).",
     },
     { type: "h2", text: "Declare the routes" },
     {
       type: "code",
       label: "src/routing/config.ts",
       lang: "ts",
-      code: `import { index, layout, rootRoute, route } from "@arrzdev/adaptv/routes"
+      code: `import { index, layout, rootRoute, route } from "adaptv/routes"
 
 export default rootRoute([
   layout("providers", "layouts/providers.layout.tsx", [
@@ -33,7 +33,7 @@ export default rootRoute([
       type: "code",
       label: "src/routing/pages/docs/doc.page.tsx",
       lang: "tsx",
-      code: `import { createFileRoute, notFound } from "@arrzdev/adaptv/router"
+      code: `import { createFileRoute, notFound } from "adaptv/router"
 
 export const Route = createFileRoute("/_providers/docs/$slug")({
   loader: ({ params }) => {
@@ -76,7 +76,7 @@ function DocRoute() {
       type: "code",
       label: "src/routing/layouts/providers.layout.tsx",
       lang: "tsx",
-      code: `import { createFileRoute, Outlet } from "@arrzdev/adaptv/router"
+      code: `import { createFileRoute, Outlet } from "adaptv/router"
 import AppProviders from "@/providers/app-providers"
 
 export const Route = createFileRoute("/_providers")({
@@ -100,7 +100,7 @@ export const Route = createFileRoute("/_providers")({
       type: "code",
       label: "nav.tsx",
       lang: "tsx",
-      code: `import { Link } from "@arrzdev/adaptv/components"
+      code: `import { Link } from "adaptv/components"
 
 export const Nav = () => (
   <Link to="/docs/$slug" params={{ slug: "routing" }}>
@@ -143,7 +143,7 @@ export const Nav = () => (
     {
       type: "ul",
       items: [
-        "**`createLazyFileRoute` fails to import.** `@arrzdev/adaptv/router` does not export it. Lazy routes are not supported.",
+        "**`createLazyFileRoute` fails to import.** `adaptv/router` does not export it. Lazy routes are not supported.",
         "**A loader fetches `/api/me`.** It works on the web. In a native app the origin is the device. Use an absolute URL.",
         "**A `server: { handlers }` key on a route.** The build refuses it.",
         "**Screen enter and leave.** A mount is the enter and an unmount is the leave. Use [useScreenLifecycle](/docs/hooks-lifecycle). Backgrounding the app unmounts nothing: use `useOnResume`.",

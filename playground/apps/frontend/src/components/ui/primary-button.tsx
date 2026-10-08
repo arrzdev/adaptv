@@ -1,5 +1,5 @@
-import type { ButtonHandle } from "@arrzdev/adaptv/components"
-import { Button as BaseButton } from "@arrzdev/adaptv/components"
+import type { ButtonHandle } from "adaptv/components"
+import { Button as BaseButton } from "adaptv/components"
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { Children, forwardRef, isValidElement } from "react"
 import { ButtonSpinner } from "@/components/ui/button-spinner"

@@ -6,13 +6,13 @@ export const page: DocPage = {
   title: "Dropdown",
   summary: "A menu attached to a button.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Dropdown } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Dropdown } from "adaptv/components"',
   source: "src/components/dropdown/dropdown.tsx",
   blocks: [
     {
       type: "demo",
       component: DropdownDemo,
-      code: `import { Dropdown } from "@arrzdev/adaptv/components"
+      code: `import { Dropdown } from "adaptv/components"
 
 <Dropdown placement="bottom-start">
   <Dropdown.Trigger

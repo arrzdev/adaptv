@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary: "Pull down from the top of a scroller to refresh.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { PullToRefresh, usePullToRefresh } from "@arrzdev/adaptv/components"',
+    'import { PullToRefresh, usePullToRefresh } from "adaptv/components"',
   source: "src/components/pull-to-refresh.tsx",
   blocks: [
     {
       type: "demo",
       component: PullToRefreshDemo,
-      code: `import { PullToRefresh, ScrollView } from "@arrzdev/adaptv/components"
+      code: `import { PullToRefresh, ScrollView } from "adaptv/components"
 
 const scrollRef = useRef<HTMLDivElement>(null)
 

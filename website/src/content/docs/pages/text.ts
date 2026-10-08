@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary:
     "A run of text that can clamp to a number of lines, stay selectable and follow the iOS text size.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Text } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Text } from "adaptv/components"',
   source: "src/components/text.tsx",
   blocks: [
     {
       type: "demo",
       component: TextDemo,
-      code: `import { Text, View } from "@arrzdev/adaptv/components"
+      code: `import { Text, View } from "adaptv/components"
 
 <View className="rounded-xl bg-white p-4">
   <Text
@@ -87,7 +87,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: "To clamp an element that is not a `Text`, use `textClampStyle(n)` from `@arrzdev/adaptv/components`. It returns the clamp style, or `undefined` when `n` is 0, negative or missing.",
+      text: "To clamp an element that is not a `Text`, use `textClampStyle(n)` from `adaptv/components`. It returns the clamp style, or `undefined` when `n` is 0, negative or missing.",
     },
     { type: "h2", text: "Styling" },
     {

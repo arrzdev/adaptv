@@ -1,4 +1,4 @@
-import { defineApp } from "@arrzdev/adaptv/config"
+import { defineApp } from "adaptv/config"
 
 export default defineApp({
   appId: "dev.arrz.projectzero",

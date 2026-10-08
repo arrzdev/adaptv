@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      '@arrzdev/adaptv':
-        specifier: link:..
-        version: link:..
       '@tailwindcss/vite':
         specifier: 4.2.4
         version: 4.2.4(vite@node_modules+vite)
+      adaptv:
+        specifier: link:..
+        version: link:..
       clsx:
         specifier: 2.1.1
         version: 2.1.1

@@ -1,6 +1,6 @@
-import { useChromeTint } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { isInstalledApp } from "@arrzdev/adaptv/utils"
+import { useChromeTint } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
+import { isInstalledApp } from "adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

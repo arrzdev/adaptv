@@ -1,7 +1,7 @@
-import type { LocaleInfo } from "@arrzdev/adaptv/capabilities"
-import { getLocale } from "@arrzdev/adaptv/capabilities"
-import { useLocale } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import type { LocaleInfo } from "adaptv/capabilities"
+import { getLocale } from "adaptv/capabilities"
+import { useLocale } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

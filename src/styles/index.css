@@ -1,7 +1,7 @@
 /*
- * adaptv styles — `@arrzdev/adaptv/styles.css`. Plain CSS, no Tailwind at-rule
+ * adaptv styles — `adaptv/styles.css`. Plain CSS, no Tailwind at-rule
  * (docs/decisions/styling.md §0.1): import it from the app's stylesheet through any
- * bundler. A Tailwind v4 app imports `@arrzdev/adaptv/tailwind.css` instead, which
+ * bundler. A Tailwind v4 app imports `adaptv/tailwind.css` instead, which
  * imports this file and adds the variants and the safe-area utilities.
  *
  * Every rule below is in an `adaptv.*` layer, so the app's own unlayered CSS beats all

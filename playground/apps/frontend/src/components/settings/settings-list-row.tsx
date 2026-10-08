@@ -1,4 +1,4 @@
-import { Divider, Pressable, Text, View } from "@arrzdev/adaptv/components"
+import { Divider, Pressable, Text, View } from "adaptv/components"
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 

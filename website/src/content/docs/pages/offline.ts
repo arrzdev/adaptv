@@ -53,7 +53,7 @@ export const page: DocPage = {
       type: "code",
       label: "product.tsx",
       lang: "tsx",
-      code: `import { Offline } from "@arrzdev/adaptv/components"
+      code: `import { Offline } from "adaptv/components"
 
 // useProduct is your data hook: it returns { data, isPaused, retry }.
 function Product({ id }: { id: string }) {
@@ -67,7 +67,7 @@ function Product({ id }: { id: string }) {
     },
     {
       type: "p",
-      text: "`useIsOffline()` from `@arrzdev/adaptv/hooks` returns `true` while the device has no connection. It is `false` on the server and before hydration. Use it for a banner or a disabled button. Do not use it alone to pick the offline screen.",
+      text: "`useIsOffline()` from `adaptv/hooks` returns `true` while the device has no connection. It is `false` on the server and before hydration. Use it for a banner or a disabled button. Do not use it alone to pick the offline screen.",
     },
     {
       type: "p",
@@ -86,8 +86,8 @@ function Product({ id }: { id: string }) {
       type: "code",
       label: "update-banner.tsx",
       lang: "tsx",
-      code: `import { Button, Text, View } from "@arrzdev/adaptv/components"
-import { useServiceWorkerUpdate } from "@arrzdev/adaptv/hooks"
+      code: `import { Button, Text, View } from "adaptv/components"
+import { useServiceWorkerUpdate } from "adaptv/hooks"
 
 export function UpdateBanner() {
   const { updateAvailable, applyUpdate } = useServiceWorkerUpdate()
@@ -117,7 +117,7 @@ export function UpdateBanner() {
       label: "src/sw/push.ts",
       lang: "ts",
       code: `/// <reference lib="webworker" />
-import { cacheRoute, sendToApp } from "@arrzdev/adaptv/sw"
+import { cacheRoute, sendToApp } from "adaptv/sw"
 
 declare const self: ServiceWorkerGlobalScope
 
@@ -187,7 +187,7 @@ cacheRoute({
     },
     {
       type: "p",
-      text: "In the app, `useServiceWorkerMessage(handler)` receives what `sendToApp` sends. `sendToServiceWorker(message)` sends the other way and does nothing without a worker. Both come from `@arrzdev/adaptv/hooks`. Messages need a string `type`. In the worker, `onAppMessage` receives them.",
+      text: "In the app, `useServiceWorkerMessage(handler)` receives what `sendToApp` sends. `sendToServiceWorker(message)` sends the other way and does nothing without a worker. Both come from `adaptv/hooks`. Messages need a string `type`. In the worker, `onAppMessage` receives them.",
     },
     { type: "h2", text: "What goes wrong" },
     {

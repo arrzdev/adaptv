@@ -1,11 +1,11 @@
 import {
   NATIVE_THEME_PREF_KEY,
   persistNativeThemePreference,
-} from "@arrzdev/adaptv/capabilities"
-import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
-import { useTheme } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { isNativePlatform } from "@arrzdev/adaptv/utils"
+} from "adaptv/capabilities"
+import type { UiThemePreference } from "adaptv/hooks"
+import { useTheme } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
+import { isNativePlatform } from "adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

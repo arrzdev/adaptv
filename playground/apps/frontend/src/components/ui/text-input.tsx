@@ -1,5 +1,5 @@
-import type { InputHandle } from "@arrzdev/adaptv/components"
-import { Input as BaseInput } from "@arrzdev/adaptv/components"
+import type { InputHandle } from "adaptv/components"
+import { Input as BaseInput } from "adaptv/components"
 import type { KeyboardEvent } from "react"
 import { forwardRef, useId } from "react"
 import { cn } from "@/utils/cn"

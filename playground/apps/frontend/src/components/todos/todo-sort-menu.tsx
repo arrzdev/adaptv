@@ -1,4 +1,4 @@
-import { Pressable, View } from "@arrzdev/adaptv/components"
+import { Pressable, View } from "adaptv/components"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowUpDown,

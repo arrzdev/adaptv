@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import type { CSSProperties, ReactNode } from "react"
 import { cn } from "@/utils/cn"
 

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import { onAppMessage, sendToApp } from "@arrzdev/adaptv/sw"
+import { onAppMessage, sendToApp } from "adaptv/sw"
 
 /**
  * The lab's app-owned service-worker module — deliberately does nothing real.

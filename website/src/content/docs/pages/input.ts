@@ -8,13 +8,13 @@ export const page: DocPage = {
     "A single-line field with icon slots and a multiline field that grows with its text.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { Input, TextArea, useInput, useTextArea } from "@arrzdev/adaptv/components"',
+    'import { Input, TextArea, useInput, useTextArea } from "adaptv/components"',
   source: "src/components/input.tsx",
   blocks: [
     {
       type: "demo",
       component: InputDemo,
-      code: `import { Input, TextArea } from "@arrzdev/adaptv/components"
+      code: `import { Input, TextArea } from "adaptv/components"
 import { Search, X } from "lucide-react"
 
 const field =

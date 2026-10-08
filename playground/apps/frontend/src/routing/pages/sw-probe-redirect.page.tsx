@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@arrzdev/adaptv/router"
+import { createFileRoute, redirect } from "adaptv/router"
 
 /*
  * A route that never renders: it redirects, the way a protected page does.

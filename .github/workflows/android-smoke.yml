@@ -59,7 +59,7 @@ jobs:
           app="$RUNNER_TEMP/app"
           mkdir -p "$app/examples"
           cp -R examples/basic "$app/examples/basic"
-          cp -R patches arrzdev-adaptv-*.tgz "$app/"
+          cp -R patches adaptv-*.tgz "$app/"
           rm -rf "$app/examples/basic/src/routing"
           cp -R .github/android-smoke/routing "$app/examples/basic/src/routing"
           echo "APP_DIR=$app/examples/basic" >> "$GITHUB_ENV"

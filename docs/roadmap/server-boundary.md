@@ -23,7 +23,7 @@
    any app, on any target, web-only apps included. Server logic lives in an API the app calls over
    the network.
 2. **An adaptv developer never imports TanStack Start (or Router) directly (L20).** Everything comes
-   from an `@arrzdev/adaptv/*` subpath. A direct import of any engine package is refused, whatever
+   from an `adaptv/*` subpath. A direct import of any engine package is refused, whatever
    it imports, with a message that names the subpath to use instead (L7: guardrails teach).
 3. **The refusal reads what the compiler decided, not a list of names.** It catches a server
    function however it was imported.

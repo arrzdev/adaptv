@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary:
     "A scrolling pane with one axis, contained overscroll and an optional edge fade.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { ScrollView } from "@arrzdev/adaptv/components"',
+  importLine: 'import { ScrollView } from "adaptv/components"',
   source: "src/components/scroll-view.tsx",
   blocks: [
     {
       type: "demo",
       component: ScrollViewDemo,
-      code: `import { ScrollView } from "@arrzdev/adaptv/components"
+      code: `import { ScrollView } from "adaptv/components"
 
 <ScrollView fade fadeSize="2.5rem" className="h-44 gap-2 rounded-xl p-3">
   {rows.map((row) => (

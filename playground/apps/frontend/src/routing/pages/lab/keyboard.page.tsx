@@ -1,12 +1,12 @@
-import { hasNativeKeyboard } from "@arrzdev/adaptv/capabilities"
+import { hasNativeKeyboard } from "adaptv/capabilities"
 import {
   dismissVirtualKeyboard,
   getVirtualKeyboardApi,
   isSecureContext,
   useKeyboard,
   willOpenVirtualKeyboard,
-} from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

@@ -1,5 +1,5 @@
-import { useMotion } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useMotion } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

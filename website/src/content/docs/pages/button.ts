@@ -8,13 +8,13 @@ export const page: DocPage = {
     "A real `<button>` with the press engine, optional haptics and icon slots.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { Button, useButton, type ButtonHandle } from "@arrzdev/adaptv/components"',
+    'import { Button, useButton, type ButtonHandle } from "adaptv/components"',
   source: "src/components/button.tsx",
   blocks: [
     {
       type: "demo",
       component: ButtonDemo,
-      code: `import { Button } from "@arrzdev/adaptv/components"
+      code: `import { Button } from "adaptv/components"
 
 <Button
   haptic

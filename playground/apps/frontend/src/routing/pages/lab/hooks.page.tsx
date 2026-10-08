@@ -1,4 +1,4 @@
-import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
+import type { UiThemePreference } from "adaptv/hooks"
 import {
   adaptvBack,
   createBootstrapGate,
@@ -7,8 +7,8 @@ import {
   useStatusBar,
   useTheme,
   useVibrate,
-} from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
   LabActions,

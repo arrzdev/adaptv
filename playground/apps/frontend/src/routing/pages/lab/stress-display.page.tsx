@@ -15,8 +15,8 @@ import {
   UiNotFound,
   UpdateRequired,
   View,
-} from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { Star } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"

@@ -1,4 +1,4 @@
-import { Link, View } from "@arrzdev/adaptv/components"
+import { Link, View } from "adaptv/components"
 import {
   ArrowRight,
   Blocks,

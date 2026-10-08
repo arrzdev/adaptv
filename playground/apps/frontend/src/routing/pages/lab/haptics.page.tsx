@@ -1,9 +1,6 @@
-import type {
-  ImpactWeight,
-  NotifyType,
-} from "@arrzdev/adaptv/capabilities"
-import { useHaptics } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import type { ImpactWeight, NotifyType } from "adaptv/capabilities"
+import { useHaptics } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

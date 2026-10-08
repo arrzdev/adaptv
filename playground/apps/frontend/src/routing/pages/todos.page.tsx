@@ -1,5 +1,5 @@
-import { Text } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Text } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useMemo, useState } from "react"
 import { DeckTabs } from "@/components/decks/deck-tabs"
 import { PageWithSmoothEdges } from "@/components/page"

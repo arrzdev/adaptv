@@ -1,5 +1,5 @@
-import { Button } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Button } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { Check, Loader2, Search } from "lucide-react"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
