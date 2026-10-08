@@ -19,11 +19,14 @@ if (!url) {
   process.exit(1)
 }
 
+/* Shown at most 280 px wide, so 1.5x is sharp on a 2x screen at a quarter of the phone's bytes. */
+const SCALE = 1.5
+
 const TASKS = [
   ["Water the plants", null],
-  ["Buy oat milk", "Low"],
+  ["Buy oat milk", "Medium"],
   ["Call the dentist", "High"],
-  ["Book train to Porto", "Medium"],
+  ["Book train to Porto", "Low"],
   ["Return the library books", null],
 ] as const
 
@@ -58,7 +61,8 @@ const SCREENS: Record<string, [Phone, (page: Page) => Promise<void>]> = {
     async (page) => {
       await addTasks(page, TASKS.slice(0, 3))
       await page.getByLabel("Create task").click()
-      await fill(page, "Book train to Porto", "Medium")
+      //Low: picking a later chip scrolls the row and cuts off None
+      await fill(page, "Book train to Porto", "Low")
       //a blinking caret is either in the shot or not; keep it out
       await page.addStyleTag({ content: "* { caret-color: transparent }" })
       await settle(page)
@@ -80,5 +84,6 @@ for (const [name, [phone, setup]] of Object.entries(SCREENS)) {
     url,
     join(root, `website/src/assets/examples/${name}.png`),
     setup,
+    SCALE,
   )
 }

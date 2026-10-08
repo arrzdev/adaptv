@@ -53,35 +53,48 @@ export async function capture(
   url: string,
   out: string,
   setup: (page: Page) => Promise<void> = async () => {},
+  //the phone's own scale by default; lower for a screen shown small, where weight matters more
+  scale: number = DEVICES[phone].deviceScaleFactor,
 ) {
   const device = DEVICES[phone]
   const browser = await chromium.launch()
   const context = await browser.newContext({
     viewport: device.viewport,
-    deviceScaleFactor: device.deviceScaleFactor,
+    deviceScaleFactor: scale,
     isMobile: true,
     hasTouch: true,
     colorScheme: "dark",
   })
   const page = await context.newPage()
   await page.goto(url, { waitUntil: "networkidle" })
-  /*
-   * The app as installed on the phone, not in a browser tab: the `app:` styles and the
-   * insets a native shell stamps. Chromium can't emulate display-mode: standalone, and
-   * adaptv drops an inset injected before boot on the web, so both go on after load.
-   * Only CSS reads them by then; the app's code booted as the web build.
-   */
-  await page.evaluate((inset: { top: number; bottom: number }) => {
-    const root = document.documentElement
-    root.dataset.adaptvPlatform = "native"
-    root.style.setProperty("--safe-area-inset-top", `${inset.top}px`)
-    root.style.setProperty("--safe-area-inset-bottom", `${inset.bottom}px`)
-  }, device.inset)
   await page.addStyleTag({
     content: `@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=block");
       html, body { font-family: Inter, sans-serif; }`,
   })
   await setup(page)
+  /*
+   * The app as installed on the phone, not in a browser tab: the `app:` styles and the
+   * insets a native shell stamps. Chromium can't emulate display-mode: standalone, and
+   * adaptv resets both on the web while it boots, so they go on once the app is on the
+   * screen to capture. Only CSS reads them by then; the app's code ran as the web build.
+   */
+  const installed = await page.evaluate(
+    async (inset: { top: number; bottom: number }) => {
+      const root = document.documentElement
+      root.dataset.adaptvPlatform = "native"
+      root.style.setProperty("--safe-area-inset-top", `${inset.top}px`)
+      root.style.setProperty("--safe-area-inset-bottom", `${inset.bottom}px`)
+      await new Promise((done) => setTimeout(done, 500))
+      return (
+        root.dataset.adaptvPlatform === "native" &&
+        root.style.getPropertyValue("--safe-area-inset-top") ===
+          `${inset.top}px`
+      )
+    },
+    device.inset,
+  )
+  if (!installed)
+    throw new Error(`${out}: the app reset the installed-app stamp`)
   await page.evaluate((bar: string) => {
     const el = document.createElement("div")
     el.style.cssText =
