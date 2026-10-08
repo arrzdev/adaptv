@@ -117,73 +117,46 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <View fill center className="home">
-      <h1>basic</h1>
-      <p>Edit src/routing/pages/home.page.tsx and save.</p>
+    <View fill center className="gap-2 p-safe-offset-6 text-center">
+      <h1 className="font-semibold text-2xl">basic</h1>
+      <p className="opacity-60">
+        Edit src/routing/pages/home.page.tsx and save.
+      </p>
     </View>
   )
 }
 ```
 
-`vite.config.ts` adds `adaptv()`:
+`vite.config.ts` adds `adaptv()` and Tailwind:
 
 ```ts
 import { adaptv } from "@arrzdev/adaptv/vite"
+import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },          // `@/` is `src/`; adaptv imports your stylesheet through it
   ssr: { noExternal: ["@arrzdev/adaptv"] },  // the dev server runs adaptv through Vite, not Node
-  plugins: [adaptv()],
+  plugins: [adaptv(), tailwindcss()],
 })
 ```
 
-and `src/styles/main.css` is plain CSS. adaptv's own rules sit in a cascade layer, so any class of
-yours beats them, and the safe-area insets are variables:
+and `src/styles/main.css` imports `@arrzdev/adaptv/tailwind.css` after Tailwind:
 
 ```css
-@import "@arrzdev/adaptv/styles.css";
-
-.home {
-  gap: 0.5rem;
-  padding: calc(var(--adaptv-inset-top) + 1.5rem) calc(var(--adaptv-inset-right) + 1.5rem)
-    calc(var(--adaptv-inset-bottom) + 1.5rem) calc(var(--adaptv-inset-left) + 1.5rem);
-  text-align: center;
-}
-```
-
-SCSS and CSS modules work the same way. → [`docs/decisions/styling.md`](docs/decisions/styling.md) §8
-
-#### With Tailwind
-
-Tailwind is optional. A Tailwind v4 app adds `@tailwindcss/vite` and imports
-`@arrzdev/adaptv/tailwind.css` instead of `styles.css`, after Tailwind. That file adds adaptv's
-variants (`app:`, `web:`, `dark:`, `light:`, and the touch-safe `hover:` / `active:`) and the
-safe-area utilities (`p-safe`, `pb-safe-offset-4`, …):
-
-```bash
-pnpm add -D tailwindcss @tailwindcss/vite
-```
-
-```ts
-// vite.config.ts
-import tailwindcss from "@tailwindcss/vite"
-// …
-  plugins: [adaptv(), tailwindcss()],
-```
-
-```css
-/* src/styles/main.css */
+@layer theme, base, adaptv, components, utilities;
 @import "tailwindcss";
 @import "@arrzdev/adaptv/tailwind.css";
 ```
 
-```tsx
-<View fill center className="gap-2 p-safe-offset-6 text-center">
-```
-
-adaptv merges no classes. If you want two of your own Tailwind classes merged, bring
+`tailwind.css` is adaptv's styles plus its variants (`app:`, `web:`, `dark:`, `light:`, and the
+touch-safe `hover:` / `active:`) and the safe-area utilities (`p-safe`, `pb-safe-offset-4`, …).
+adaptv merges no classes; if you want two of your own Tailwind classes merged, bring
 `tailwind-merge` yourself.
+
+Tailwind is the default, not a requirement: plain CSS, SCSS, CSS modules or any other engine work
+too. Import `@arrzdev/adaptv/styles.css` instead, and the safe-area insets are variables
+(`--adaptv-inset-top`, …). → [`docs/decisions/styling.md`](docs/decisions/styling.md) §8
 
 ### Your own app
 
