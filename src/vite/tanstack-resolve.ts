@@ -1,6 +1,9 @@
 import path from "node:path"
 import type { Plugin } from "vite"
-import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
+import {
+  adaptvPackageRoot,
+  adaptvShippedFile,
+} from "#adaptv/vite/package-files.ts"
 
 //The entries Start adds to `resolve.dedupe` (`@tanstack/react-start`'s `plugin/vite.js`).
 //Only these go: an app's own `@tanstack/*` entry, such as `@tanstack/react-query`, stays.
@@ -16,6 +19,10 @@ const ROUTER_CORE_PREBUNDLE = [
   "@tanstack/router-core/isServer",
   "@tanstack/router-core/scroll-restoration-script",
 ].map((entry) => `@arrzdev/adaptv > @tanstack/react-router > ${entry}`)
+
+const ROUTER = "@tanstack/react-router"
+//The router the app's modules get: TanStack's, with adaptv's `lazyRouteComponent`.
+const APP_ROUTER_ID = "\0virtual:adaptv/react-router"
 
 /**
  * Resolve the `@tanstack/*` imports TanStack writes into the APP's modules from adaptv's
@@ -66,6 +73,11 @@ const ROUTER_CORE_PREBUNDLE = [
  * Node answered every page with a 500. A build bundles it either way. Every app needs
  * the entry, so the plugin adds it and an app's `vite.config.ts` carries no `ssr` key.
  *
+ * The app's `@tanstack/react-router` is not the router itself but a module that re-exports
+ * it with adaptv's own `lazyRouteComponent` in place of TanStack's. The split routes are
+ * the only importers of that function, and react-router 1.170.19 broke the stale-chunk
+ * reload it does. → src/routes/lazy-route-component.ts
+ *
  * In dev the browser's copy of the router is pre-bundled up front. Start puts every
  * package that peers on it, the router and adaptv included, in the client's
  * `optimizeDeps.exclude`, so the router is served as source, and Vite met its
@@ -78,6 +90,7 @@ const ROUTER_CORE_PREBUNDLE = [
 export function adaptvTanstackResolvePlugin(
   appRoot: string,
   packageRoot = adaptvPackageRoot(),
+  lazyRouteFile?: string,
 ): Plugin {
   const from = path.join(packageRoot, "package.json")
   const appDir = `${path.resolve(appRoot)}${path.sep}`
@@ -108,13 +121,26 @@ export function adaptvTanstackResolvePlugin(
     },
     resolveId(source, importer, options) {
       if (!source.startsWith("@tanstack/") || !importer) return null
+      if (importer === APP_ROUTER_ID)
+        return this.resolve(source, from, { ...options, skipSelf: true })
       const file = importer.split("?")[0] ?? importer
       if (
         !file.startsWith(appDir) ||
         file.includes(`${path.sep}node_modules${path.sep}`)
       )
         return null
+      if (source === ROUTER) return APP_ROUTER_ID
       return this.resolve(source, from, { ...options, skipSelf: true })
+    },
+    load(id) {
+      if (id !== APP_ROUTER_ID) return null
+      const lazy =
+        lazyRouteFile ?? adaptvShippedFile("lazy-route-component")
+      return [
+        `export * from ${JSON.stringify(ROUTER)}`,
+        `export { lazyRouteComponent } from ${JSON.stringify(lazy)}`,
+        "",
+      ].join("\n")
     },
   }
 }

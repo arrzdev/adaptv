@@ -22,9 +22,10 @@ const PACKAGE_NAME = "@arrzdev/adaptv"
 /**
  * The modules adaptv hands to the consumer's own build, which compiles them as part of the
  * app: Start's client and router entries, the root route the route DSL points at, the
- * service worker esbuild bundles, and the boot screen prerendered into the shell. In a
- * checkout they are source; in a published package each is its own tsdown entry, so the
- * consumer gets the same file the framework's own entries share chunks with.
+ * service worker esbuild bundles, the boot screen prerendered into the shell, and the
+ * `lazyRouteComponent` the app's split routes import. In a checkout they are source; in a
+ * published package each is its own tsdown entry, so the consumer gets the same file the
+ * framework's own entries share chunks with.
  * → tsdown.config.ts
  */
 export const SHIPPED_FILES = {
@@ -47,6 +48,10 @@ export const SHIPPED_FILES = {
   "boot-error": {
     src: "src/components/boot-error.tsx",
     dist: "dist/boot-error.mjs",
+  },
+  "lazy-route-component": {
+    src: "src/routes/lazy-route-component.ts",
+    dist: "dist/lazy-route-component.mjs",
   },
 } as const
 

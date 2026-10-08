@@ -57,6 +57,7 @@ const browserEntry = {
   "client-entry": "src/routes/client-entry.tsx",
   "router-entry": "src/routes/router-entry.tsx",
   "boot-error": "src/components/boot-error.tsx",
+  "lazy-route-component": "src/routes/lazy-route-component.ts",
 }
 
 /**
