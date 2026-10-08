@@ -133,5 +133,5 @@ them for the route engine. An app from
 adaptv bumps a patch. That is a real adoption cost and it is tracked, not hidden — see
 [`../decisions/register.md`](../decisions/register.md) **L19**, **L21** and
 [`create-adaptv.md §4`](create-adaptv.md). The block points at the app's own `patches/` because a
-path into `node_modules/@arrzdev/adaptv/` cannot work on a fresh install: the files are inside the
+path into `node_modules/adaptv/` cannot work on a fresh install: the files are inside the
 package being installed.

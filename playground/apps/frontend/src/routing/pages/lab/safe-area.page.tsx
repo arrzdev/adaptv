@@ -1,6 +1,6 @@
-import { View } from "@arrzdev/adaptv/components"
-import { useInsets } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { View } from "adaptv/components"
+import { useInsets } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

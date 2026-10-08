@@ -1,11 +1,5 @@
-import type {
-  CheckboxHandle,
-  CheckboxProps,
-} from "@arrzdev/adaptv/components"
-import {
-  Checkbox as BaseCheckbox,
-  useCheckbox,
-} from "@arrzdev/adaptv/components"
+import type { CheckboxHandle, CheckboxProps } from "adaptv/components"
+import { Checkbox as BaseCheckbox, useCheckbox } from "adaptv/components"
 import { forwardRef } from "react"
 import { useHaptics } from "@/hooks/use-haptics"
 import { cn } from "@/utils/cn"

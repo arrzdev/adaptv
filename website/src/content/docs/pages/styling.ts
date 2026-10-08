@@ -15,7 +15,7 @@ export const page: DocPage = {
       type: "code",
       label: "Plain CSS: src/styles/main.css",
       lang: "text",
-      code: `@import "@arrzdev/adaptv/styles.css";
+      code: `@import "adaptv/styles.css";
 
 :root {
   --color-primary: oklch(0.55 0.22 264);
@@ -26,7 +26,7 @@ export const page: DocPage = {
       label: "Tailwind: src/styles/main.css",
       lang: "text",
       code: `@import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 
 @theme {
   --color-primary: oklch(0.55 0.22 264);
@@ -132,7 +132,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: "To branch in JavaScript, use `isInstalledApp()`, `isNativePlatform()` and `getOS()` from `@arrzdev/adaptv/utils`. Do not use `matchMedia`.",
+      text: "To branch in JavaScript, use `isInstalledApp()`, `isNativePlatform()` and `getOS()` from `adaptv/utils`. Do not use `matchMedia`.",
     },
     {
       type: "p",

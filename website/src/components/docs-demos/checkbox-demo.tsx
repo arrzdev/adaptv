@@ -1,4 +1,4 @@
-import { Checkbox, useCheckbox, View } from "@arrzdev/adaptv/components"
+import { Checkbox, useCheckbox, View } from "adaptv/components"
 import { useState } from "react"
 import { cn } from "@/utils/cn"
 

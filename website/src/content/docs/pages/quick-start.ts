@@ -8,7 +8,7 @@ export const page: DocPage = {
     {
       type: "note",
       tone: "warn",
-      text: "There is no install command yet. `@arrzdev/adaptv` is private and not on npm. An app links a local checkout with pnpm's `link:` protocol. The `website/` and `playground/` folders in the repository do this.",
+      text: "There is no install command yet. `adaptv` is private and not on npm. An app links a local checkout with pnpm's `link:` protocol. The `website/` and `playground/` folders in the repository do this.",
     },
     { type: "h2", text: "Requirements" },
     {
@@ -56,7 +56,7 @@ pnpm dev:android            # playground, Android emulator`,
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   appId: "com.acme.app",
@@ -72,7 +72,7 @@ export default defineApp({
       type: "code",
       label: "vite.config.ts",
       lang: "ts",
-      code: `import { adaptv } from "@arrzdev/adaptv/vite"
+      code: `import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
@@ -89,7 +89,7 @@ export default defineConfig({
       type: "code",
       label: "src/routing/config.ts",
       lang: "ts",
-      code: `import { index, rootRoute } from "@arrzdev/adaptv/routes"
+      code: `import { index, rootRoute } from "adaptv/routes"
 
 export default rootRoute([index("pages/home.page.tsx")])`,
     },
@@ -102,8 +102,8 @@ export default rootRoute([index("pages/home.page.tsx")])`,
       type: "code",
       label: "home.page.tsx",
       lang: "tsx",
-      code: `import { ScrollView, View } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+      code: `import { ScrollView, View } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 
 export const Route = createFileRoute("/")({ component: Home })
 
@@ -126,7 +126,7 @@ function Home() {
       type: "code",
       label: "src/styles/main.css",
       lang: "text",
-      code: `@import "@arrzdev/adaptv/styles.css";
+      code: `@import "adaptv/styles.css";
 
 .home {
   gap: 1rem;
@@ -135,7 +135,7 @@ function Home() {
     },
     {
       type: "p",
-      text: "Tailwind is optional. To use it, add `tailwindcss` and `@tailwindcss/vite`, list `adaptv()` before `tailwindcss()`, and import `@arrzdev/adaptv/tailwind.css` after Tailwind instead of `styles.css`. See [Styling](/docs/styling).",
+      text: "Tailwind is optional. To use it, add `tailwindcss` and `@tailwindcss/vite`, list `adaptv()` before `tailwindcss()`, and import `adaptv/tailwind.css` after Tailwind instead of `styles.css`. See [Styling](/docs/styling).",
     },
     { type: "h3", text: "package.json" },
     {
@@ -153,7 +153,7 @@ function Home() {
     "build": "adaptv build web"
   },
   "dependencies": {
-    "@arrzdev/adaptv": "link:..",
+    "adaptv": "link:..",
     "motion": "link:../node_modules/motion",
     "react": "link:../node_modules/react",
     "react-dom": "link:../node_modules/react-dom",

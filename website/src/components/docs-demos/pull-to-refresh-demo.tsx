@@ -1,4 +1,4 @@
-import { PullToRefresh, ScrollView, View } from "@arrzdev/adaptv/components"
+import { PullToRefresh, ScrollView, View } from "adaptv/components"
 import { useRef, useState } from "react"
 
 const ROWS = Array.from({ length: 12 }, (_, i) => `Message ${i + 1}`)

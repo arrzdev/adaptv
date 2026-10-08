@@ -5,7 +5,7 @@ export const page: DocPage = {
   title: "adaptv.config.ts",
   summary: "Every key of defineApp, with its type, default and effect.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { defineApp } from "@arrzdev/adaptv/config"',
+  importLine: 'import { defineApp } from "adaptv/config"',
   source: "src/config/app-config.ts",
   blocks: [
     {
@@ -25,7 +25,7 @@ export const page: DocPage = {
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   appId: "com.acme.notes",
@@ -178,7 +178,7 @@ export default defineApp({
           "`serviceWorkers`",
           "`string[]`",
           "none",
-          "Your worker modules, for push or sync. Use `@arrzdev/adaptv/sw`. Web.",
+          "Your worker modules, for push or sync. Use `adaptv/sw`. Web.",
         ],
         [
           "`serviceWorkerUpdate`",
@@ -314,7 +314,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "Import `OfflineProps` and `BootErrorProps` from `@arrzdev/adaptv/components`. `UpdateRequiredProps` comes from `@arrzdev/adaptv/config`. There is no `providers` key: use a layout route that wraps `<Outlet />`. See [Routing](/docs/routing).",
+      text: "Import `OfflineProps` and `BootErrorProps` from `adaptv/components`. `UpdateRequiredProps` comes from `adaptv/config`. There is no `providers` key: use a layout route that wraps `<Outlet />`. See [Routing](/docs/routing).",
     },
     { type: "h2", text: "Native app" },
     {
@@ -344,7 +344,7 @@ export default defineApp({
           "`deepLinks`",
           "`{ scheme: string }`",
           "none",
-          "Registers a URL scheme. With `myapp`, `myapp://settings/profile?tab=2` opens `/settings/profile?tab=2`. Listen with `onUrlOpened` from `@arrzdev/adaptv/capabilities`. Universal links are not built.",
+          "Registers a URL scheme. With `myapp`, `myapp://settings/profile?tab=2` opens `/settings/profile?tab=2`. Listen with `onUrlOpened` from `adaptv/capabilities`. Universal links are not built.",
         ],
         [
           "`privacy`",
@@ -466,7 +466,7 @@ export default defineApp({
     },
     {
       type: "p",
-      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps`, `NotFoundScreenComponent`, `NotFoundScreenProps` and `UpdateRequiredProps`, from `@arrzdev/adaptv/config`.",
+      text: "Types: `AdaptvAppConfig`, `AdaptvRouterConfig`, `ScreenThunk`, `SplashScreenProps`, `OrientationGuardProps`, `NotFoundScreenComponent`, `NotFoundScreenProps` and `UpdateRequiredProps`, from `adaptv/config`.",
     },
   ],
 }

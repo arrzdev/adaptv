@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url"
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SCRIPT = path.join(HERE, "ota-lab.ts")
 const TSX = fileURLToPath(import.meta.resolve("tsx/cli"))
-const ADAPTV = path.join(HERE, "../node_modules/@arrzdev/adaptv")
+const ADAPTV = path.join(HERE, "../node_modules/adaptv")
 
 const root = mkdtempSync(path.join(tmpdir(), "ota-lab-test-"))
 after(() => rmSync(root, { recursive: true, force: true }))
@@ -114,8 +114,8 @@ function lab(
   const bin = path.join(dir, "bin")
   const app = path.join(dir, "app")
   fakeBin(bin, devices)
-  mkdirSync(path.join(app, "node_modules/@arrzdev"), { recursive: true })
-  symlinkSync(ADAPTV, path.join(app, "node_modules/@arrzdev/adaptv"))
+  mkdirSync(path.join(app, "node_modules"), { recursive: true })
+  symlinkSync(ADAPTV, path.join(app, "node_modules/adaptv"))
   writeFileSync(
     path.join(app, "adaptv.config.ts"),
     'export default { themeColor: { light: "#eeeeec", dark: "#0a0a0c" } }\n',

@@ -1,5 +1,5 @@
-import { PullToRefresh, ScrollView } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { PullToRefresh, ScrollView } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { Trash2 } from "lucide-react"
 import { useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"

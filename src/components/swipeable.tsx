@@ -225,13 +225,13 @@ function findScrollAncestor(el: HTMLElement): HTMLElement | null {
 }
 
 export const SWIPEABLE_LEFT_ACTIONS_SLOT = Symbol.for(
-  "@arrzdev/adaptv:swipeable.left-actions",
+  "adaptv:swipeable.left-actions",
 )
 export const SWIPEABLE_RIGHT_ACTIONS_SLOT = Symbol.for(
-  "@arrzdev/adaptv:swipeable.right-actions",
+  "adaptv:swipeable.right-actions",
 )
 export const SWIPEABLE_CONTENT_SLOT = Symbol.for(
-  "@arrzdev/adaptv:swipeable.content",
+  "adaptv:swipeable.content",
 )
 
 type SwipeableSlotProps = {

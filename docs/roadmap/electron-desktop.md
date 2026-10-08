@@ -27,8 +27,8 @@ Capacitor outside those interfaces, and (c) a build and packaging target.
 
 ### 2a. Wrapped — the app reaches these only through adaptv
 
-Each row is a module in `src/capabilities/`, exported from `@arrzdev/adaptv/capabilities` (and
-mostly through a hook in `@arrzdev/adaptv/hooks`). The module imports the Capacitor plugin and
+Each row is a module in `src/capabilities/`, exported from `adaptv/capabilities` (and
+mostly through a hook in `adaptv/hooks`). The module imports the Capacitor plugin and
 branches on `isNativePlatform()` / `hasNativePlugin()`; the consumer never sees the plugin.
 
 | Module | Capacitor plugin | Public surface (abridged) |

@@ -58,7 +58,7 @@ server.
 - **Next-only APIs have no counterpart** to keep: `next/image`, `next/font`, `next/head`, middleware,
   ISR. `next/image` maps to adaptv's `Image`; for each of the others the skill names the adaptv
   piece that replaces it or says it is dropped. Which piece that is has not been worked out yet.
-- **Never import the engine (L20).** Router APIs come from `@arrzdev/adaptv/router`.
+- **Never import the engine (L20).** Router APIs come from `adaptv/router`.
 - **Never name or patch an underlying package in the consumer's project (L20).**
 
 ## 4. Open questions

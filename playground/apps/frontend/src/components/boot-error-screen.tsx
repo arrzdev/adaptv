@@ -1,5 +1,5 @@
-import type { BootErrorProps } from "@arrzdev/adaptv/components"
-import { View } from "@arrzdev/adaptv/components"
+import type { BootErrorProps } from "adaptv/components"
+import { View } from "adaptv/components"
 
 /**
  * The app's own boot failure screen, replacing adaptv's default.

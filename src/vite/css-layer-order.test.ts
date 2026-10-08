@@ -83,13 +83,13 @@ describe("declaresLayerOrder", () => {
 describe("injectLayerOrder", () => {
   it("prepends the statement to a Tailwind entry stylesheet", () => {
     const out = injectLayerOrder(
-      `@import "tailwindcss";\n@import "@arrzdev/adaptv/styles.css";\n`,
+      `@import "tailwindcss";\n@import "adaptv/styles.css";\n`,
     )
     expect(out).not.toBeNull()
     expect(firstRule(out as string)).toBe(ADAPTV_LAYER_ORDER)
     //the original source survives underneath, unedited
     expect(out).toContain(`@import "tailwindcss";`)
-    expect(out).toContain(`@import "@arrzdev/adaptv/styles.css";`)
+    expect(out).toContain(`@import "adaptv/styles.css";`)
   })
 
   it("works with single quotes too", () => {
@@ -119,9 +119,7 @@ describe("injectLayerOrder", () => {
 
   it("leaves a stylesheet with no Tailwind entry alone", () => {
     expect(injectLayerOrder(`.card { color: red }\n`)).toBeNull()
-    expect(
-      injectLayerOrder(`@import "@arrzdev/adaptv/styles.css";\n`),
-    ).toBeNull()
+    expect(injectLayerOrder(`@import "adaptv/styles.css";\n`)).toBeNull()
   })
 
   it("leaves a hand-written statement alone", () => {
@@ -185,7 +183,7 @@ describe("isTransformableCssId", () => {
  * and never fire for an app that is fine.
  */
 describe("adaptvCssLayerOrderPlugin", () => {
-  const ENTRY = `@import "tailwindcss";\n@import "@arrzdev/adaptv/styles.css";\n`
+  const ENTRY = `@import "tailwindcss";\n@import "adaptv/styles.css";\n`
   const COMPILED = `@layer theme, base, components, utilities;\n.card{color:red}\n`
 
   let warnings: string[]

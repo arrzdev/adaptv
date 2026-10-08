@@ -1,6 +1,6 @@
 //The ambient declarations for the modules adaptv's Vite plugin serves. This file is the one
 //an app reaches (`src/vite/stamp.ts` generates `.adaptv/adaptv-env.d.ts`, a type reference
-//to `@arrzdev/adaptv/route-globals`), so it carries the rest. Relative, and `dist/` keeps `src/`'s layout for them, so the same paths hold in the
+//to `adaptv/route-globals`), so it carries the rest. Relative, and `dist/` keeps `src/`'s layout for them, so the same paths hold in the
 //checkout and in the published package. → tsdown.config.ts
 /// <reference path="../virtual-adaptv-image-asset.d.ts" />
 /// <reference path="../virtual-adaptv-pwa-register.d.ts" />
@@ -9,7 +9,7 @@
 /// <reference path="../virtual-adaptv-router-config.d.ts" />
 /// <reference path="../virtual-adaptv-secure-storage.d.ts" />
 /// <reference path="../ota/virtual-adaptv-ota-config.d.ts" />
-import type { CreateFileRoute } from "@arrzdev/adaptv/router"
+import type { CreateFileRoute } from "adaptv/router"
 
 /**
  * Ambient route factories.
@@ -17,7 +17,7 @@ import type { CreateFileRoute } from "@arrzdev/adaptv/router"
  * These really are globals at type level, and that is not a workaround: a consumer
  * authors a route file with no import at all —
  * `export const Route = createFileRoute("/x")({ … })` — and the route generator
- * writes the concrete `@arrzdev/adaptv/router` import in on its next pass (adaptv
+ * writes the concrete `adaptv/router` import in on its next pass (adaptv
  * edits the specifier it writes, `src/vite/engine-hooks.ts`, so it is never
  * `@tanstack/*`). This ambient declaration is what lets that file typecheck
  * in the meantime, so the "no hand-written import" DX holds in the editor too.
@@ -40,7 +40,7 @@ declare global {
  * file that imports nothing. It merges into the options every route already
  * takes, so the editor completes it alongside `component` and `loader`.
  */
-declare module "@arrzdev/adaptv/router" {
+declare module "adaptv/router" {
   interface UpdatableRouteOptionsExtensions {
     /**
      * The colour the browser's chrome takes on this route — the toolbar above a

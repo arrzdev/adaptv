@@ -1,5 +1,5 @@
-import { Button, Spinner, Text } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Button, Spinner, Text } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

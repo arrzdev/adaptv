@@ -1,9 +1,6 @@
-import type {
-  AdaptvImageAsset,
-  ImageFit,
-} from "@arrzdev/adaptv/components"
-import { Image } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import type { AdaptvImageAsset, ImageFit } from "adaptv/components"
+import { Image } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import type { ReactNode } from "react"
 import { useLayoutEffect, useRef, useState } from "react"
 import labPhoto from "@/assets/lab-photo.jpg?adaptv-image"

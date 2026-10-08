@@ -1,21 +1,13 @@
-import type { AppState, UrlOpened } from "@arrzdev/adaptv/capabilities"
+import type { AppState, UrlOpened } from "adaptv/capabilities"
 import {
   getAppState,
   onPause,
   onResume,
   onUrlOpened,
   subscribeAppState,
-} from "@arrzdev/adaptv/capabilities"
-import {
-  useAppState,
-  useOnPause,
-  useOnResume,
-} from "@arrzdev/adaptv/hooks"
-import {
-  createFileRoute,
-  useLocation,
-  useRouter,
-} from "@arrzdev/adaptv/router"
+} from "adaptv/capabilities"
+import { useAppState, useOnPause, useOnResume } from "adaptv/hooks"
+import { createFileRoute, useLocation, useRouter } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

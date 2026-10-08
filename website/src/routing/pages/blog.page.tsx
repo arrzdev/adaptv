@@ -1,5 +1,5 @@
-import { Link, View } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Link, View } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { SitePage } from "@/components/site-page"
 import { POSTS } from "@/content/blog"
 

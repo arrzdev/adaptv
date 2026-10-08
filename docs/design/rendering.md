@@ -481,7 +481,7 @@ for variants they did not ask for.
 **A custom `bootErrorScreen` is written the obvious way, and its button works.**
 
 ```tsx
-import type { BootErrorProps } from "@arrzdev/adaptv/components"
+import type { BootErrorProps } from "adaptv/components"
 
 export default function BootScreen({ code }: BootErrorProps) {
   const copy = code === "BOOT-LOAD"

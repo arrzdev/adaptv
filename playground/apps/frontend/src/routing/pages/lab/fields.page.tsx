@@ -1,9 +1,6 @@
-import {
-  TextArea as BaseTextArea,
-  Input,
-} from "@arrzdev/adaptv/components"
-import { useKeyboard } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { TextArea as BaseTextArea, Input } from "adaptv/components"
+import { useKeyboard } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { Search, X } from "lucide-react"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"

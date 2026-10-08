@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary:
     "Press handling for any element: a card, row or tile that reacts like a native control.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Pressable } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Pressable } from "adaptv/components"',
   source: "src/components/pressable.tsx",
   blocks: [
     {
       type: "demo",
       component: PressableDemo,
-      code: `import { Pressable } from "@arrzdev/adaptv/components"
+      code: `import { Pressable } from "adaptv/components"
 
 const [presses, setPresses] = useState(0)
 

@@ -1,6 +1,6 @@
-import type { ScreenOrientationLock } from "@arrzdev/adaptv/capabilities"
-import { useOrientation } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import type { ScreenOrientationLock } from "adaptv/capabilities"
+import { useOrientation } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {
   LabActions,

@@ -1,8 +1,8 @@
-import { Pressable, Text, View } from "@arrzdev/adaptv/components"
+import { Pressable, Text, View } from "adaptv/components"
 import {
   dismissVirtualKeyboard,
   willOpenVirtualKeyboard,
-} from "@arrzdev/adaptv/hooks"
+} from "adaptv/hooks"
 import { Calendar, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { DateWheelPicker } from "@/components/todos/date-wheel-picker"

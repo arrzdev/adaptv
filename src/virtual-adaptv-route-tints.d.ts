@@ -1,5 +1,5 @@
 declare module "virtual:adaptv/route-tints" {
-  import type { RouteTint } from "@arrzdev/adaptv/shell"
+  import type { RouteTint } from "adaptv/shell"
 
   /**
    * Every route that declares a `chromeTint`, most specific first. Computed at

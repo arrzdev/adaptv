@@ -1,6 +1,6 @@
 @import "@fontsource-variable/inter/wght.css";
 @import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 @import "./animations.css";
 @import "./app.css";
 

@@ -1,4 +1,4 @@
-import { Text } from "@arrzdev/adaptv/components"
+import { Text } from "adaptv/components"
 import type { Deck } from "@/data/collections/decks/schema"
 import { cn } from "@/utils/cn"
 

@@ -1,5 +1,5 @@
 declare module "virtual:adaptv/root-route" {
-  import type { createRootRoute } from "@arrzdev/adaptv/router"
+  import type { createRootRoute } from "adaptv/router"
   /**
    * The app's root route, served by adaptv's Vite plugin from `adaptv.config.ts`.
    *

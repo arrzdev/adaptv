@@ -23,7 +23,7 @@ export const page: DocPage = {
       type: "code",
       label: "edit-profile.tsx",
       lang: "tsx",
-      code: `import { AvoidKeyboard, Input, View } from "@arrzdev/adaptv/components"
+      code: `import { AvoidKeyboard, Input, View } from "adaptv/components"
 
 export function EditProfile() {
   return (
@@ -93,8 +93,8 @@ export function EditProfile() {
       type: "code",
       label: "composer.tsx",
       lang: "tsx",
-      code: `import { Input, View } from "@arrzdev/adaptv/components"
-import { useKeyboard } from "@arrzdev/adaptv/hooks"
+      code: `import { Input, View } from "adaptv/components"
+import { useKeyboard } from "adaptv/hooks"
 
 // SendButton is your own component.
 function Composer() {
@@ -135,7 +135,7 @@ function Composer() {
     },
     {
       type: "p",
-      text: "`dismissVirtualKeyboard()` blurs the focused field. `willOpenVirtualKeyboard(element)` returns `true` for text inputs, textareas and editable elements. Both come from `@arrzdev/adaptv/hooks`.",
+      text: "`dismissVirtualKeyboard()` blurs the focused field. `willOpenVirtualKeyboard(element)` returns `true` for text inputs, textareas and editable elements. Both come from `adaptv/hooks`.",
     },
     { type: "h2", text: "Where the height comes from" },
     {

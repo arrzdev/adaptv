@@ -1,11 +1,7 @@
-import { EdgeSwipeGestures } from "@arrzdev/adaptv/components"
-import { adaptvBack } from "@arrzdev/adaptv/hooks"
-import { useRouter } from "@arrzdev/adaptv/router"
-import {
-  getOS,
-  isNativePlatform,
-  isStandaloneDisplay,
-} from "@arrzdev/adaptv/utils"
+import { EdgeSwipeGestures } from "adaptv/components"
+import { adaptvBack } from "adaptv/hooks"
+import { useRouter } from "adaptv/router"
+import { getOS, isNativePlatform, isStandaloneDisplay } from "adaptv/utils"
 import { ChevronLeft } from "lucide-react"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"

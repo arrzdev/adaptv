@@ -26,7 +26,7 @@ adaptv ships one app to **six** runtime targets. A change to a shell, primitive,
 | 6 | **Native — iOS `.ipa` & Android `.apk`** | Capacitor WebView | rebuild (`pnpm preview:ios` / `preview:android`) |
 
 `app:` = installed (standalone **or** native) · `web:` = browser tab. Detect in JS with
-`isNativePlatform()` / `isInstalledApp()` / `getOS()` from **`@arrzdev/adaptv/utils`** — never
+`isNativePlatform()` / `isInstalledApp()` / `getOS()` from **`adaptv/utils`** — never
 `display-mode`, which a native WebView lies about.
 
 ---

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 import { Archive, Trash2 } from "lucide-react"
 import { useState } from "react"
 import labPhotoUrl from "@/assets/lab-photo.jpg?url"

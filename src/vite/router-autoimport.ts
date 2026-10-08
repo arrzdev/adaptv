@@ -13,15 +13,15 @@
  * adaptv keeps that write opaque by editing the generator's `targetModule`
  * (`transform.js`) as Node loads it (`src/vite/engine-hooks.ts`): it reads
  * `ADAPTV_ROUTER_PKG` (set by the vite plugin) so the import the generator writes
- * points at `@arrzdev/adaptv/router`, never `@tanstack/*`. So a route file ends up as:
+ * points at `adaptv/router`, never `@tanstack/*`. So a route file ends up as:
  *
  * ```ts
- * import { createFileRoute } from "@arrzdev/adaptv/router"
+ * import { createFileRoute } from "adaptv/router"
  * export const Route = createFileRoute("/settings")({ … })
  * ```
  *
  * with zero `@tanstack/*` in the consumer's source — and the import merges into an
- * existing `@arrzdev/adaptv/router` import if the file already has one.
+ * existing `adaptv/router` import if the file already has one.
  *
  * ## What this plugin is for
  *
@@ -50,7 +50,7 @@ import type { Plugin, PluginOption } from "vite"
 export const TANSTACK_AUTOIMPORT_PLUGIN = "tanstack-router:autoimport"
 
 /** The specifier adaptv's route files import the route factory from. */
-const ADAPTV_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
+const ADAPTV_ROUTER_SPECIFIER = "adaptv/router"
 
 const ROUTE_FACTORIES = ["createFileRoute", "createLazyFileRoute"] as const
 

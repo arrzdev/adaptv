@@ -1,4 +1,4 @@
-import { ScrollView, View } from "@arrzdev/adaptv/components"
+import { ScrollView, View } from "adaptv/components"
 import type { ReactNode } from "react"
 import { cn } from "@/utils/cn"
 

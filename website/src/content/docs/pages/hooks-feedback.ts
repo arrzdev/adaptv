@@ -8,13 +8,13 @@ export const page: DocPage = {
     "The on-screen keyboard, haptics, the press engine, taps on canvas surfaces, and freezing the viewport under an overlay.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useKeyboard, useHaptics, useHapticTick, useVibrate, useGestureEngine, useClickFix, useFreezeViewport } from "@arrzdev/adaptv/hooks"',
+    'import { useKeyboard, useHaptics, useHapticTick, useVibrate, useGestureEngine, useClickFix, useFreezeViewport } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
       type: "demo",
       component: HooksFeedbackDemo,
-      code: `import { useGestureEngine } from "@arrzdev/adaptv/hooks"
+      code: `import { useGestureEngine } from "adaptv/hooks"
 
 const [state, setState] = useState("idle")
 

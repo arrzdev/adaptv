@@ -32,9 +32,9 @@
 </p>
 
 > [!WARNING]
-> **Pre-alpha and unpublished — there is no install command yet.** The package is `private: true`.
-> You build it and install the tarball, which is what the [Quick start](#-quick-start) does. See
-> [Status](#-status).
+> **Pre-alpha and unpublished.** Once it ships to npm, the install is `npm i adaptv`. Until then the
+> package is `private: true`: you build it and install the tarball, which is what the
+> [Quick start](#-quick-start) does. See [Status](#-status).
 
 ---
 
@@ -70,7 +70,7 @@ tarball, not from this checkout:
 ```bash
 git clone https://github.com/arrzdev/adaptv.git && cd adaptv
 pnpm install
-pnpm build && pnpm pack   # writes arrzdev-adaptv-0.1.0-alpha.1.tgz, which examples/basic installs
+pnpm build && pnpm pack   # writes adaptv-0.1.0-alpha.1.tgz, which examples/basic installs
 
 cd examples/basic
 pnpm install
@@ -86,7 +86,7 @@ run `pnpm exec adaptv icons --input ./mark.png` (one png or svg, 1024px or large
 projects, icons and theme all come from it:
 
 ```ts
-import { defineApp } from "@arrzdev/adaptv/config"
+import { defineApp } from "adaptv/config"
 
 export default defineApp({
   appId: "com.example.basic",
@@ -102,14 +102,14 @@ export default defineApp({
 
 ```tsx
 // src/routing/config.ts
-import { index, rootRoute } from "@arrzdev/adaptv/routes"
+import { index, rootRoute } from "adaptv/routes"
 
 export const routes = rootRoute([index("pages/home.page.tsx")])
 export default routes
 
 // src/routing/pages/home.page.tsx
-import { View } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { View } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -130,23 +130,23 @@ function Home() {
 `vite.config.ts` adds `adaptv()` and Tailwind:
 
 ```ts
-import { adaptv } from "@arrzdev/adaptv/vite"
+import { adaptv } from "adaptv/vite"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },          // `@/` is `src/`; adaptv imports your stylesheet through it
-  ssr: { noExternal: ["@arrzdev/adaptv"] },  // the dev server runs adaptv through Vite, not Node
+  ssr: { noExternal: ["adaptv"] },  // the dev server runs adaptv through Vite, not Node
   plugins: [adaptv(), tailwindcss()],
 })
 ```
 
-and `src/styles/main.css` imports `@arrzdev/adaptv/tailwind.css` after Tailwind:
+and `src/styles/main.css` imports `adaptv/tailwind.css` after Tailwind:
 
 ```css
 @layer theme, base, adaptv, components, utilities;
 @import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 ```
 
 `tailwind.css` is adaptv's styles plus its variants (`app:`, `web:`, `dark:`, `light:`, and the
@@ -155,7 +155,7 @@ adaptv merges no classes; if you want two of your own Tailwind classes merged, b
 `tailwind-merge` yourself.
 
 Tailwind is the default, not a requirement: plain CSS, SCSS, CSS modules or any other engine work
-too. Import `@arrzdev/adaptv/styles.css` instead, and the safe-area insets are variables
+too. Import `adaptv/styles.css` instead, and the safe-area insets are variables
 (`--adaptv-inset-top`, …). → [`docs/decisions/styling.md`](docs/decisions/styling.md) §8
 
 ### Your own app
@@ -164,14 +164,14 @@ Start from a copy of `examples/basic`. Run this from the adaptv checkout, after 
 
 ```bash
 cp -r examples/basic ../my-app
-cp arrzdev-adaptv-0.1.0-alpha.1.tgz ../my-app/
+cp adaptv-0.1.0-alpha.1.tgz ../my-app/
 cd ../my-app
-npm pkg set "dependencies.@arrzdev/adaptv=file:arrzdev-adaptv-0.1.0-alpha.1.tgz"
+npm pkg set "dependencies.adaptv=file:adaptv-0.1.0-alpha.1.tgz"
 pnpm install
 pnpm dev
 ```
 
-The example's `package.json` points at `../../arrzdev-adaptv-0.1.0-alpha.1.tgz`, the tarball at the root
+The example's `package.json` points at `../../adaptv-0.1.0-alpha.1.tgz`, the tarball at the root
 of the checkout. The `npm pkg set` line points it at the copy next to your app instead. Keep the
 tarball there: `pnpm install` reads it on every install. The example's `packageManager` pins
 pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
@@ -190,7 +190,7 @@ pnpm 11.1.1, so a newer global pnpm switches to that version for this app.
 > [`examples/basic/pnpm-workspace.yaml`](examples/basic/pnpm-workspace.yaml):
 >
 > ```bash
-> tar -xzf arrzdev-adaptv-0.1.0-alpha.1.tgz --strip-components=1 package/patches   # writes ./patches/
+> tar -xzf adaptv-0.1.0-alpha.1.tgz --strip-components=1 package/patches   # writes ./patches/
 > ```
 >
 > After you upgrade adaptv, extract them again and update the keys to the new versions.
@@ -226,7 +226,7 @@ shipped mobile bundle, so adaptv turns it into a build error with a caret on the
 | The question | Where it stands |
 |---|---|
 | 📦 **Published?** | **No.** `private: true` — there is no registry install to give you. |
-| 🔗 **How it's consumed** | A `pnpm pack` tarball installed into the app, as [`examples/basic/`](examples/basic) does, or a local checkout linked into it (`"@arrzdev/adaptv": "link:../../.."`), as [`playground/`](playground/) does. |
+| 🔗 **How it's consumed** | A `pnpm pack` tarball installed into the app, as [`examples/basic/`](examples/basic) does, or a local checkout linked into it (`"adaptv": "link:../../.."`), as [`playground/`](playground/) does. |
 | 🏗️ **Dist build** | `exports` and `files` point at `dist/` (`pnpm build:check`), and an app installed from the tarball runs `adaptv dev web` and `adaptv build web` → [`dist-cutover.md`](docs/roadmap/dist-cutover.md) |
 | ✅ **Green today** | typecheck · lint · **2,618 unit tests across 167 files** — all gated in CI on every pull request |
 | 📱 **Verified on device** | iOS Simulator and Android emulator, driven from this repo, plus a browser e2e suite in the playground |

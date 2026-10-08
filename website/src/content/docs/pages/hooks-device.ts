@@ -8,7 +8,7 @@ export const page: DocPage = {
     "Read the device, the safe area, media queries, orientation, motion preference and theme. Set the browser toolbar and the native status bar.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useDevice, useInsets, useMediaQuery, useOrientation, useReducedMotion, useTheme, useChromeTint, useStatusBar } from "@arrzdev/adaptv/hooks"',
+    'import { useDevice, useInsets, useMediaQuery, useOrientation, useReducedMotion, useTheme, useChromeTint, useStatusBar } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
@@ -19,7 +19,7 @@ export const page: DocPage = {
   useMediaQuery,
   useOrientation,
   useReducedMotion,
-} from "@arrzdev/adaptv/hooks"
+} from "adaptv/hooks"
 
 function DeviceReadout() {
   const isWide = useMediaQuery("(min-width: 768px)")
@@ -386,7 +386,7 @@ const toggleTheme = () => setPreference(resolved === "dark" ? "light" : "dark")
       type: "code",
       label: "appearance-setting.tsx",
       lang: "tsx",
-      code: `import { applyUiThemePreference, readPreference } from "@arrzdev/adaptv/hooks"
+      code: `import { applyUiThemePreference, readPreference } from "adaptv/hooks"
 
 const [preference, setPreference] = useState(readPreference)
 

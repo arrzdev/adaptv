@@ -32,7 +32,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
 const EXAMPLE = join(ROOT, "examples/basic")
 const read = (dir, file) => readFileSync(join(dir, file), "utf8")
 const rootPkg = JSON.parse(read(ROOT, "package.json"))
-const TARBALL = `file:../../arrzdev-adaptv-${rootPkg.version}.tgz`
+const TARBALL = `file:../../adaptv-${rootPkg.version}.tgz`
 
 /** `package.json` as create-adaptv writes it: the example's, without its pnpm pin. */
 function unpinned(text) {
@@ -60,7 +60,7 @@ afterAll(() => rmSync(temp, { recursive: true, force: true }))
 describe("examples/basic", () => {
   it("installs the tarball `pnpm pack` writes for this version", () => {
     const pkg = JSON.parse(read(EXAMPLE, "package.json"))
-    expect(pkg.dependencies["@arrzdev/adaptv"]).toBe(TARBALL)
+    expect(pkg.dependencies["adaptv"]).toBe(TARBALL)
   })
 
   it("pins the pnpm this repo uses", () => {
@@ -136,9 +136,7 @@ describe("examples/basic outside this repo", () => {
       for (const name of Object.keys(pkg.dependencies))
         link(
           name,
-          name === "@arrzdev/adaptv"
-            ? ROOT
-            : join(ROOT, "node_modules", name),
+          name === "adaptv" ? ROOT : join(ROOT, "node_modules", name),
         )
 
       const port = await freePort()

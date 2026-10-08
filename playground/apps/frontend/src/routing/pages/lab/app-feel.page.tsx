@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabBadge, LabRow, LabSection } from "@/components/lab/lab-kit"
