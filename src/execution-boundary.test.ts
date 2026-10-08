@@ -83,6 +83,7 @@ const CONSUMER_BUILD_ENTRIES = [
   "src/routes/client-entry.tsx",
   "src/routes/router-entry.tsx",
   "src/components/boot-error.tsx",
+  "src/routes/lazy-route-component.ts",
   "src/sw/default-worker.ts",
 ]
 

@@ -13,6 +13,7 @@ import { adaptvTanstackResolvePlugin } from "#adaptv/vite/tanstack-resolve.ts"
 
 const APP = path.resolve("/work/my-app")
 const ADAPTV = path.resolve("/pkgs/adaptv")
+const LAZY = path.join(ADAPTV, "dist/lazy-route-component.mjs")
 
 function resolveFrom(source: string, importer: string | undefined) {
   const plugin = adaptvTanstackResolvePlugin(APP, ADAPTV)
@@ -28,13 +29,47 @@ function resolveFrom(source: string, importer: string | undefined) {
 }
 
 describe("adaptvTanstackResolvePlugin", () => {
-  it("resolves a TanStack import in an app route module from adaptv's package", () => {
+  it("resolves a TanStack import in an app module from adaptv's package", () => {
     const { resolve } = resolveFrom(
+      "@tanstack/react-start",
+      path.join(APP, "src/app.tsx"),
+    )
+    expect(resolve).toHaveBeenCalledWith(
+      "@tanstack/react-start",
+      path.join(ADAPTV, "package.json"),
+      { ssr: false, skipSelf: true },
+    )
+  })
+
+  //react-router 1.170.19 checks the stale-chunk reload key at render time, so the
+  //second render of a route whose chunk was gone threw to the error screen while the
+  //reload was in flight. The end-to-end proof is `e2e-sw/stale-chunk.spec.ts`.
+  it("gives an app route module the router with adaptv's lazyRouteComponent", async () => {
+    const { result } = resolveFrom(
       "@tanstack/react-router",
       path.join(
         APP,
         "src/routing/pages/home.page.tsx?tsr-split=component",
       ),
+    )
+    const id = await result
+    expect(id).toBe("\0virtual:adaptv/react-router")
+
+    const plugin = adaptvTanstackResolvePlugin(APP, ADAPTV, LAZY)
+    const load = plugin.load as (id: string) => string | null
+    expect(load(id as string)).toBe(
+      [
+        'export * from "@tanstack/react-router"',
+        `export { lazyRouteComponent } from ${JSON.stringify(LAZY)}`,
+        "",
+      ].join("\n"),
+    )
+  })
+
+  it("resolves that module's own router import from adaptv's package", () => {
+    const { resolve } = resolveFrom(
+      "@tanstack/react-router",
+      "\0virtual:adaptv/react-router",
     )
     expect(resolve).toHaveBeenCalledWith(
       "@tanstack/react-router",
