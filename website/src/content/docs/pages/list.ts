@@ -6,13 +6,13 @@ export const page: DocPage = {
   title: "List",
   summary: "A long vertical list that mounts only the visible rows.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { List } from "@arrzdev/adaptv/components"',
+  importLine: 'import { List } from "adaptv/components"',
   source: "src/components/list.tsx",
   blocks: [
     {
       type: "demo",
       component: ListDemo,
-      code: `import { List } from "@arrzdev/adaptv/components"
+      code: `import { List } from "adaptv/components"
 
 type Row = { id: string; index: number }
 

@@ -1,5 +1,5 @@
-import { Image } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Image } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import labPhotoTallUrl from "@/assets/lab-photo-tall.jpg?url"
 import { LabBrief } from "@/components/lab/lab-brief"

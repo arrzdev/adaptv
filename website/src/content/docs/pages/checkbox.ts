@@ -8,13 +8,13 @@ export const page: DocPage = {
     "A checkbox with an indeterminate state and a box you paint yourself.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { Checkbox, useCheckbox } from "@arrzdev/adaptv/components"',
+    'import { Checkbox, useCheckbox } from "adaptv/components"',
   source: "src/components/checkbox.tsx",
   blocks: [
     {
       type: "demo",
       component: CheckboxDemo,
-      code: `import { Checkbox, useCheckbox } from "@arrzdev/adaptv/components"
+      code: `import { Checkbox, useCheckbox } from "adaptv/components"
 
 function Box() {
   const { isChecked, isIndeterminate } = useCheckbox()

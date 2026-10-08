@@ -25,7 +25,7 @@ export const page: DocPage = {
       type: "code",
       label: "header.tsx",
       lang: "tsx",
-      code: `import { View } from "@arrzdev/adaptv/components"
+      code: `import { View } from "adaptv/components"
 
 <View row className="web:py-4 app:pt-safe-offset-2 app:pb-2">
   <BackButton className="web:hidden app:flex" />
@@ -41,7 +41,7 @@ export const page: DocPage = {
       type: "code",
       label: "platform.ts",
       lang: "ts",
-      code: `import { getOS, isInstalledApp, isNativePlatform } from "@arrzdev/adaptv/utils"
+      code: `import { getOS, isInstalledApp, isNativePlatform } from "adaptv/utils"
 
 isInstalledApp() // PWA or native
 isNativePlatform() // native only

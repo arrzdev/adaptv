@@ -22,7 +22,7 @@ import { errorTail } from "./tool-log.mjs"
 /**
  * The opacity boundary, enforced on the only path that ever crossed it.
  *
- * A consumer writes `adaptv.config.ts` and imports from `@arrzdev/adaptv`. They are never told
+ * A consumer writes `adaptv.config.ts` and imports from `adaptv`. They are never told
  * that TanStack Router, TanStack Start or Capacitor are underneath (`docs/design/cli-contract.md` R8, `docs/decisions/register.md` L20).
  * That held for as long as failures were worded by hand, and broke the moment one was taught
  * to lift the real cause out of captured tool output onto the `✖` line: the real cause was
@@ -164,7 +164,7 @@ const VITE_PLUGIN_REFUSED = [
   "error during build:",
   "Build failed with 1 error:",
   "[plugin adaptv:engine-imports] /w/my-app/src/routing/pages/home.page.tsx:1:26",
-  "RolldownError: src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.",
+  "RolldownError: src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an adaptv subpath.",
   'The import is "@tanstack/react-router". adaptv\'s own dependencies are not part of the app.',
   '1: import { useRouter } from "@tanstack/react-router"',
 ]
@@ -176,7 +176,7 @@ describe("a plugin's refusal of a web build names itself on the ✖ line", () =>
       "/w/my-app",
     )(buildFailure(VITE_PLUGIN_REFUSED))
     expect(reason).toBe(
-      "src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.",
+      "src/routing/pages/home.page.tsx imports a package missing from the app's package.json — add it there, or import from an adaptv subpath.",
     )
   })
 })

@@ -11,7 +11,7 @@ export type DocPage = {
   summary: string
   /** Reference pages: where the thing runs. Omit on guides. */
   platforms?: Platform[]
-  /** Reference pages: the import line, e.g. `import { Switch } from "@arrzdev/adaptv/components"`. */
+  /** Reference pages: the import line, e.g. `import { Switch } from "adaptv/components"`. */
   importLine?: string
   /** Repo-relative path of the implementation, e.g. "src/components/switch.tsx". */
   source?: string

@@ -1,5 +1,5 @@
-import { List } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { List } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

@@ -89,13 +89,13 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: 'The error names the file. In `dev` it shows in the overlay. A build fails. The shared Biome config (`@arrzdev/adaptv/biome-shared.json`) flags `createServerFn`, `createMiddleware` and any `/server` import in your editor. Any other import from the package root passes the editor and fails the build. A web-only app with `render: "ssr"` is refused too. Put server logic in your own API and call it over the network.',
+      text: 'The error names the file. In `dev` it shows in the overlay. A build fails. The shared Biome config (`adaptv/biome-shared.json`) flags `createServerFn`, `createMiddleware` and any `/server` import in your editor. Any other import from the package root passes the editor and fails the build. A web-only app with `render: "ssr"` is refused too. Put server logic in your own API and call it over the network.',
     },
     {
       type: "code",
       label: "src/routing/pages/orders.page.tsx",
       lang: "tsx",
-      code: `import { createFileRoute } from "@arrzdev/adaptv/router"
+      code: `import { createFileRoute } from "adaptv/router"
 
 export const Route = createFileRoute("/orders")({
   // An absolute URL: the same request from a server, a tab and a web view.
@@ -108,7 +108,7 @@ export const Route = createFileRoute("/orders")({
     },
     {
       type: "p",
-      text: "To use your own server entry, set `router.serverEntry` and re-export `@arrzdev/adaptv/server-entry` from it. That file counts as app source, so the ban applies to it.",
+      text: "To use your own server entry, set `router.serverEntry` and re-export `adaptv/server-entry` from it. That file counts as app source, so the ban applies to it.",
     },
     { type: "h2", text: "Common problems" },
     {

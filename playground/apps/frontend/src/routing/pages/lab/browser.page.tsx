@@ -1,8 +1,8 @@
-import type { OpenExternalOutcome } from "@arrzdev/adaptv/capabilities"
-import { isExternalUrl, openExternal } from "@arrzdev/adaptv/capabilities"
-import { ExternalLink } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { isNativePlatform } from "@arrzdev/adaptv/utils"
+import type { OpenExternalOutcome } from "adaptv/capabilities"
+import { isExternalUrl, openExternal } from "adaptv/capabilities"
+import { ExternalLink } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
+import { isNativePlatform } from "adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

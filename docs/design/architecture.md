@@ -335,7 +335,7 @@ export const Route = createFileRoute("/settings")({ component: Settings })
 > | `router.gen.tsx` | the whole `createRouter` call, including framework opinions (`notFoundMode`, history) | **thinned to a call** into `createAdaptvRouter` |
 | `root.gen.tsx` | `createRootRoute(<config>)` + static imports of the app's screens — almost entirely framework code | **deleted** → `src/routes/root-route.tsx` in the package, with the app-specific half served as `virtual:adaptv/root-route` |
 > | `sw.gen.ts` | 38 lines of **pure framework code**, byte-identical per app | **deleted** → `src/sw/default-worker.ts`, a real module |
-> | `register.d.ts` | 9 lines, **zero** app-specific content | **deleted** → shipped as `@arrzdev/adaptv/route-globals` |
+> | `register.d.ts` | 9 lines, **zero** app-specific content | **deleted** → shipped as `adaptv/route-globals` |
 >
 > **The principle that was being violated:** emitting a framework opinion into every consumer means
 > changing it requires every app to rebuild before the change takes effect. That is not a generated
@@ -501,7 +501,7 @@ Wiring (both adaptv-generated, so the consumer writes neither):
 > `import type { getRouter } from "../../../../src/routes/router-entry.tsx"`, which looks like it only
 > works because the playground shares this repo. It is not repo-special — the playground installs adaptv
 > like any consumer, and Node realpaths the link, so that path IS what a consumer gets, just pointed
-> somewhere else: `../node_modules/.pnpm/@arrzdev+adaptv@0.1.0_<peerhash>/node_modules/@arrzdev/adaptv/…`.
+> somewhere else: `../node_modules/.pnpm/adaptv@0.1.0_<peerhash>/node_modules/adaptv/…`.
 > The file is regenerated every run, so it is never stale. It is worse than stale: it encodes one
 > machine's node_modules layout, resolves to nothing under an install that keeps none on disk, and dies
 > on the dist cutover, where `src/` is gone and `resolveEntry` is `required: true`.
@@ -519,7 +519,7 @@ Wiring (both adaptv-generated, so the consumer writes neither):
 > **A second one existed and nobody knew.** The net (`assertRouteTreeIsPortable`) failed the first real
 > build on `./../../../../src/routes/root-route` — adaptv's root route, a **value** import, so unlike the
 > type-only footer it is a runtime edge. Both are now named through `exports`
-> (`@arrzdev/adaptv/router`, `@arrzdev/adaptv/root-route`); `import.meta.resolve` confirms the specifier
+> (`adaptv/router`, `adaptv/root-route`); `import.meta.resolve` confirms the specifier
 > and the old relative path are the same file, and the built bundles carry one copy.
 >
 > **The invariant is checked, not the fix.** "No relative import may reach an install directory" — which

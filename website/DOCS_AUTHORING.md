@@ -16,7 +16,7 @@ from memory or from what a similar library does. If the source and an internal d
 source wins. If something is unbuilt or half-built, say so in a `note` block; adaptv is pre-alpha
 and the docs say what is true today.
 
-- Public import paths are the `exports` of `../package.json`: `@arrzdev/adaptv/components`,
+- Public import paths are the `exports` of `../package.json`: `adaptv/components`,
   `/hooks`, `/capabilities`, `/storage`, `/config`, `/router`, `/routes`, `/utils`, `/ota`,
   `/vite`, `/sw`, `/styles.css`. Only document what those barrels (`../src/interface/*.index.ts`) export.
 - JSDoc in the source is the best starting text. Rewrite it for a reader who has never seen the

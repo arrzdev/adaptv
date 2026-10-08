@@ -1,5 +1,5 @@
-import { Slider } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Slider } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import type { RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"

@@ -1,5 +1,5 @@
-import { View } from "@arrzdev/adaptv/components"
-import { useAppState, useOnPause, useOnResume } from "@arrzdev/adaptv/hooks"
+import { View } from "adaptv/components"
+import { useAppState, useOnPause, useOnResume } from "adaptv/hooks"
 import { useState } from "react"
 import { cn } from "@/utils/cn"
 

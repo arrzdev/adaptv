@@ -1,4 +1,4 @@
-import { defineApp } from "@arrzdev/adaptv/config"
+import { defineApp } from "adaptv/config"
 
 //The one config file: the web manifest, the native projects, icons and theme all come
 //from here. Every key is documented on its type — hover it.

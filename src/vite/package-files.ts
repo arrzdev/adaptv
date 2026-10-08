@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url"
  * module scope; callers that run under either keep their own fallback.
  */
 
-const PACKAGE_NAME = "@arrzdev/adaptv"
+const PACKAGE_NAME = "adaptv"
 
 /**
  * The modules adaptv hands to the consumer's own build, which compiles them as part of the

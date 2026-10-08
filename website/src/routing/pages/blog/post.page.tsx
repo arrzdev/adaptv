@@ -1,5 +1,5 @@
-import { Link, View } from "@arrzdev/adaptv/components"
-import { createFileRoute, notFound } from "@arrzdev/adaptv/router"
+import { Link, View } from "adaptv/components"
+import { createFileRoute, notFound } from "adaptv/router"
 import { ArrowLeft } from "lucide-react"
 import { Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"

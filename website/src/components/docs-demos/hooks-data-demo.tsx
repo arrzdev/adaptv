@@ -1,5 +1,5 @@
-import { Button, View } from "@arrzdev/adaptv/components"
-import { useClipboard, useIsOffline } from "@arrzdev/adaptv/hooks"
+import { Button, View } from "adaptv/components"
+import { useClipboard, useIsOffline } from "adaptv/hooks"
 import { cn } from "@/utils/cn"
 
 const SAMPLE = "npm create adaptv@latest"

@@ -1,5 +1,5 @@
-import { useAppInfo } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useAppInfo } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabBadge, LabRow, LabSection } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"

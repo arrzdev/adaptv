@@ -1,5 +1,5 @@
-import { useClipboard } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useClipboard } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

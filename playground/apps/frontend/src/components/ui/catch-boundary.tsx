@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "adaptv/components"
 import { AlertCircle, Check, Copy } from "lucide-react"
 import type { ErrorInfo } from "react"
 import { Component, useState } from "react"

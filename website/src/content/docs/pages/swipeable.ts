@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary: "A row that slides sideways to show actions.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { Swipeable, useSwipeable } from "@arrzdev/adaptv/components"',
+    'import { Swipeable, useSwipeable } from "adaptv/components"',
   source: "src/components/swipeable.tsx",
   blocks: [
     {
       type: "demo",
       component: SwipeableDemo,
-      code: `import { Pressable, Swipeable, View } from "@arrzdev/adaptv/components"
+      code: `import { Pressable, Swipeable, View } from "adaptv/components"
 
 <Swipeable.Group>
   {notes.map((note) => (

@@ -1,7 +1,7 @@
 # Development loop — the playground
 
 **Framework-development only.** None of this ships: `playground/` and `scripts/` are not in
-`package.json#files`, no source imports them, and a consumer of `@arrzdev/adaptv` never sees them.
+`package.json#files`, no source imports them, and a consumer of `adaptv` never sees them.
 
 ## The commands
 
@@ -57,7 +57,7 @@ Vendoring it is what makes worktrees work, and it removes every moving part the 
 
 - **A worktree gets its own playground for free** — checked out with the branch, `node_modules` and
   `.adaptv/` state and all. Two worktrees migrating the same interface differently never meet.
-- **The link needs no maintenance.** The app's committed `"@arrzdev/adaptv": "link:../../.."`
+- **The link needs no maintenance.** The app's committed `"adaptv": "link:../../.."`
   resolves to the checkout it sits in, whichever worktree that is. Nothing repoints anything.
 - **A framework change and the consumer change it forces land in one commit**, one diff, one review.
   Rename a prop and migrate the app in the same breath.
@@ -147,7 +147,7 @@ re-stamp on every setup); neither guard exists now, because neither problem does
   repo's gates deliberately exclude it: `biome.json` ignores `**/playground`, `vitest.config.ts`
   excludes `playground/**`, and `tsconfig.json` only includes `src/`.
 - **The playground runs the built framework.** `exports` point at `dist/`, so the app gets
-  `@arrzdev/adaptv/*` the way an install does. `pnpm dev:*` / `preview:*` / `build:*` (and
+  `adaptv/*` the way an install does. `pnpm dev:*` / `preview:*` / `build:*` (and
   `pnpm playground:setup`) run `pnpm build` first whenever anything under `src/` is newer than the
   last build, about 25 s. A dev server that is already up keeps the old build: restart it, or run
   `pnpm build` and reload. The CLI is the exception, since it still loads `src/` in a checkout
@@ -165,7 +165,7 @@ re-stamp on every setup); neither guard exists now, because neither problem does
     copies of the same version.
 
   The ambient declarations for the modules adaptv's Vite plugin serves need no line of their own.
-  adaptv generates `.adaptv/adaptv-env.d.ts`, a type reference to `@arrzdev/adaptv/route-globals`,
+  adaptv generates `.adaptv/adaptv-env.d.ts`, a type reference to `adaptv/route-globals`,
   and that file references all seven.
 - **Adding a command** means adding it in `playground/package.json` (plus a `turbo.json` task if it
   needs the API), then mirroring the one-line passthrough in this repo's `package.json`. The

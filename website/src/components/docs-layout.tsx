@@ -4,7 +4,7 @@ import {
   Link,
   ScrollView,
   View,
-} from "@arrzdev/adaptv/components"
+} from "adaptv/components"
 import {
   ArrowLeft,
   ArrowRight,

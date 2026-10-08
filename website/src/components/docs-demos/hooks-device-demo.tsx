@@ -1,10 +1,10 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import {
   useInsets,
   useMediaQuery,
   useOrientation,
   useReducedMotion,
-} from "@arrzdev/adaptv/hooks"
+} from "adaptv/hooks"
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

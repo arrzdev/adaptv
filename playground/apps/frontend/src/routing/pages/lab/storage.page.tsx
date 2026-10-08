@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 import {
   KV_PREFIX,
   kv,
@@ -8,7 +8,7 @@ import {
   subscribeStore,
   useKv,
   useStore,
-} from "@arrzdev/adaptv/storage"
+} from "adaptv/storage"
 import { useCallback, useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

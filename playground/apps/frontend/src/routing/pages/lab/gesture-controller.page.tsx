@@ -1,5 +1,5 @@
-import { gestureController } from "@arrzdev/adaptv/capabilities"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { gestureController } from "adaptv/capabilities"
+import { createFileRoute } from "adaptv/router"
 import { useCallback, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

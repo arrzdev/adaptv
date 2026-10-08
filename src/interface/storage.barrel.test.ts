@@ -11,7 +11,7 @@ import {
 } from "#adaptv/test-utils/barrel-guard"
 
 /*
- * `@arrzdev/adaptv/storage` is the one published subpath whose barrel does not
+ * `adaptv/storage` is the one published subpath whose barrel does not
  * live in `src/interface/`.
  *
  * `src/interface/storage.index.ts` is a single `export *` line pointing at

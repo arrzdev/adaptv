@@ -7,13 +7,13 @@ export const page: DocPage = {
     "The device APIs as plain functions with no React. The same calls on every target.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { haptics, openExternal, getOnline, subscribeOnline, onResume, BackPriority } from "@arrzdev/adaptv/capabilities"',
+    'import { haptics, openExternal, getOnline, subscribeOnline, onResume, BackPriority } from "adaptv/capabilities"',
   source: "src/capabilities",
   blocks: [
     { type: "h2", text: "Capability or hook" },
     {
       type: "p",
-      text: "Each device feature is a module of plain functions. A native build uses the native plugin. Everywhere else uses the web API. The hooks in `@arrzdev/adaptv/hooks` wrap them. In a component that renders a value, use the hook. Outside React, use the capability. For a call that holds no state, such as `haptics.impact()`, use the capability anywhere.",
+      text: "Each device feature is a module of plain functions. A native build uses the native plugin. Everywhere else uses the web API. The hooks in `adaptv/hooks` wrap them. In a component that renders a value, use the hook. Outside React, use the capability. For a call that holds no state, such as `haptics.impact()`, use the capability anywhere.",
     },
     {
       type: "p",
@@ -23,7 +23,7 @@ export const page: DocPage = {
       type: "code",
       label: "data-client.ts",
       lang: "ts",
-      code: `import { getOnline, subscribeOnline, subscribeAppState } from "@arrzdev/adaptv/capabilities"
+      code: `import { getOnline, subscribeOnline, subscribeAppState } from "adaptv/capabilities"
 
 // Feed connectivity and focus to a data library
 subscribeOnline(() => dataClient.setOnline(getOnline()))
@@ -242,7 +242,7 @@ subscribeAppState((state) => dataClient.setFocused(state === "active"))`,
       type: "code",
       label: "use-card-drag.ts",
       lang: "ts",
-      code: `import { gestureController } from "@arrzdev/adaptv/capabilities"
+      code: `import { gestureController } from "adaptv/capabilities"
 
 const id = useId()
 

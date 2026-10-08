@@ -1,4 +1,4 @@
-import { Link, View } from "@arrzdev/adaptv/components"
+import { Link, View } from "adaptv/components"
 import stressedMascotUrl from "@/components/illustrations/stressed-mascot.svg?url"
 import { ReservedSvgSpace } from "@/components/reserved-svg-space"
 

@@ -1,9 +1,9 @@
-import type { WheelItem } from "@arrzdev/adaptv/components"
+import type { WheelItem } from "adaptv/components"
 import {
   View,
   WHEEL_ITEM_HEIGHT,
   WheelColumn,
-} from "@arrzdev/adaptv/components"
+} from "adaptv/components"
 import { useState } from "react"
 
 function range(count: number): WheelItem[] {

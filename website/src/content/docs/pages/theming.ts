@@ -46,7 +46,7 @@ export const page: DocPage = {
       type: "code",
       label: "src/styles/main.css",
       lang: "text",
-      code: `@import "@arrzdev/adaptv/styles.css";
+      code: `@import "adaptv/styles.css";
 
 :root {
   color-scheme: light;
@@ -74,7 +74,7 @@ export const page: DocPage = {
       type: "code",
       label: "theme-toggle.tsx",
       lang: "tsx",
-      code: `import { useTheme } from "@arrzdev/adaptv/hooks"
+      code: `import { useTheme } from "adaptv/hooks"
 
 function ThemeToggle() {
   const { resolved, setPreference } = useTheme()

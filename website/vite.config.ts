@@ -1,4 +1,4 @@
-import { adaptv } from "@arrzdev/adaptv/vite"
+import { adaptv } from "adaptv/vite"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "vite"
 

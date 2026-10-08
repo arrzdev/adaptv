@@ -1,9 +1,6 @@
-import {
-  BackPriority,
-  registerBackHandler,
-} from "@arrzdev/adaptv/capabilities"
-import { adaptvBack } from "@arrzdev/adaptv/hooks"
-import { useRouter } from "@arrzdev/adaptv/router"
+import { BackPriority, registerBackHandler } from "adaptv/capabilities"
+import { adaptvBack } from "adaptv/hooks"
+import { useRouter } from "adaptv/router"
 import { useCallback } from "react"
 
 /**

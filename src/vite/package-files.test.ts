@@ -27,11 +27,11 @@ function fixture(): string {
     path.join(outer, "package.json"),
     JSON.stringify({ name: "my-app" }),
   )
-  const root = path.join(outer, "node_modules", "@arrzdev", "adaptv")
+  const root = path.join(outer, "node_modules", "adaptv")
   mkdirSync(root, { recursive: true })
   writeFileSync(
     path.join(root, "package.json"),
-    JSON.stringify({ name: "@arrzdev/adaptv" }),
+    JSON.stringify({ name: "adaptv" }),
   )
   return root
 }
@@ -62,7 +62,7 @@ describe("adaptvPackage", () => {
   it("throws when no package.json above names adaptv", () => {
     const outer = mkdtempSync(path.join(tmpdir(), "adaptv-package-files-"))
     expect(() => adaptvPackage(path.join(outer, "dist/vite.mjs"))).toThrow(
-      /no @arrzdev\/adaptv package\.json/,
+      /no adaptv package\.json/,
     )
   })
 

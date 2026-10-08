@@ -6,7 +6,7 @@ import {
   Switch,
   View,
   WheelColumn,
-} from "@arrzdev/adaptv/components"
+} from "adaptv/components"
 import { BellOff, Moon, Pin, Plane, Trash2, Wifi } from "lucide-react"
 import type { ReactNode } from "react"
 import { useMemo, useState } from "react"

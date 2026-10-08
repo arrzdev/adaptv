@@ -7,14 +7,14 @@ export const page: DocPage = {
   summary: "One column of a picker wheel.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { WheelColumn, WHEEL_ITEM_HEIGHT, WHEEL_HEIGHT } from "@arrzdev/adaptv/components"',
+    'import { WheelColumn, WHEEL_ITEM_HEIGHT, WHEEL_HEIGHT } from "adaptv/components"',
   source: "src/components/wheel-column.tsx",
   blocks: [
     {
       type: "demo",
       component: WheelColumnDemo,
-      code: `import type { WheelItem } from "@arrzdev/adaptv/components"
-import { View, WHEEL_ITEM_HEIGHT, WheelColumn } from "@arrzdev/adaptv/components"
+      code: `import type { WheelItem } from "adaptv/components"
+import { View, WHEEL_ITEM_HEIGHT, WheelColumn } from "adaptv/components"
 
 function range(count: number): WheelItem[] {
   return Array.from({ length: count }, (_, value) => ({

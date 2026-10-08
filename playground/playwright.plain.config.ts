@@ -5,7 +5,7 @@ import { defineConfig, devices } from "@playwright/test"
  * (`apps/frontend/vite.plain.config.ts`; docs/decisions/styling.md §0.1, §9).
  *
  * The same app and the same specs as `playwright.config.ts`, a different build: no
- * `@tailwindcss/vite`, and `@arrzdev/adaptv/styles.css` in place of `tailwind.css`. A
+ * `@tailwindcss/vite`, and `adaptv/styles.css` in place of `tailwind.css`. A
  * separate config rather than a project, because the two builds are two dev servers of
  * the same app directory. `no-tailwind.spec.ts` asserts the build really has no
  * Tailwind in it, and runs only here.

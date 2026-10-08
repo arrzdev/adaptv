@@ -1,4 +1,4 @@
-import { List, View } from "@arrzdev/adaptv/components"
+import { List, View } from "adaptv/components"
 import { useEffect, useRef, useState } from "react"
 
 type Row = { id: string; index: number }

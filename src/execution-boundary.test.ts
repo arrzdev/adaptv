@@ -411,7 +411,7 @@ describe("execution boundary", () => {
 
   /*
    * The Node face is RUN AS SOURCE, not bundled: a consumer's `vite.config.ts`
-   * imports `@arrzdev/adaptv/vite`, Node strips the types and resolves every
+   * imports `adaptv/vite`, Node strips the types and resolves every
    * `#adaptv/*` through `package.json` `imports` — whose first target is the
    * bare `./src/*`, and Node does not fall through to the `.ts` pattern when
    * that file does not exist. So a value import written without its extension

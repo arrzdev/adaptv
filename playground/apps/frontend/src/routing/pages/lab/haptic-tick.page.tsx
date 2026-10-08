@@ -2,10 +2,10 @@ import {
   attachHapticTick,
   HAPTIC_TICK_ATTR,
   supportsHapticTick,
-} from "@arrzdev/adaptv/capabilities"
-import { Button } from "@arrzdev/adaptv/components"
-import { useHapticTick } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/capabilities"
+import { Button } from "adaptv/components"
+import { useHapticTick } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

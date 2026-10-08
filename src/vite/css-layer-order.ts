@@ -9,7 +9,7 @@
  *
  * ```
  * @import "tailwindcss";              → @layer theme, base, components, utilities;
- * @import "@arrzdev/adaptv/styles.css";  → adaptv first mentioned HERE, so it lands
+ * @import "adaptv/styles.css";  → adaptv first mentioned HERE, so it lands
  *                                          AFTER utilities
  * ```
  *

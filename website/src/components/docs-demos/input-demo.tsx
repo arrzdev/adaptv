@@ -1,4 +1,4 @@
-import { Input, TextArea, View } from "@arrzdev/adaptv/components"
+import { Input, TextArea, View } from "adaptv/components"
 import { Search, X } from "lucide-react"
 import { useState } from "react"
 

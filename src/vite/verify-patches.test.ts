@@ -32,13 +32,13 @@ describe("describeMissingPatches", () => {
       WHY,
     )
     expect(message).toContain("patchedDependencies:")
-    expect(message).toContain("@arrzdev/adaptv/patches/")
+    expect(message).toContain("adaptv/patches/")
     expect(message).toContain("pnpm install")
   })
 
   it("declares the patches from the app's own patches/, which a fresh install can read", () => {
     //pnpm reads a patch before it installs the package holding it: a row pointing into
-    //`node_modules/@arrzdev/adaptv/` failed a fresh install with ERR_PNPM_PATCH_NOT_FOUND
+    //`node_modules/adaptv/` failed a fresh install with ERR_PNPM_PATCH_NOT_FOUND
     const rows = patchInstructions([
       "@tanstack__router-generator@1.167.21.patch",
     ])
@@ -172,7 +172,7 @@ describe("assertRouteTreeIsOpaque — the outcome-based check", () => {
     const file = join(tmpdir(), `adaptv-opaque-ok-${process.pid}.ts`)
     writeFileSync(
       file,
-      'import type { CreateFileRoute } from "@arrzdev/adaptv/router"',
+      'import type { CreateFileRoute } from "adaptv/router"',
     )
     expect(() => assertRouteTreeIsOpaque(file)).not.toThrow()
     rmSync(file, { force: true })

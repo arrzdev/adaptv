@@ -60,7 +60,7 @@ export function parsePatchFilename(
  *
  * Each row names the app's own `patches/`, not the copy under `node_modules`: pnpm reads
  * the patch before it installs the package that holds it, so on a fresh install a path
- * into `node_modules/@arrzdev/adaptv/` fails with `ERR_PNPM_PATCH_NOT_FOUND`.
+ * into `node_modules/adaptv/` fails with `ERR_PNPM_PATCH_NOT_FOUND`.
  */
 export function patchInstructions(filenames: string[]): string[] {
   return filenames
@@ -110,7 +110,7 @@ export function describeMissingPatches(
     "",
     "pnpm only applies `patchedDependencies` from the root manifest of the project being",
     "installed, so a library cannot carry its patches to you. Copy",
-    "`node_modules/@arrzdev/adaptv/patches/` into your app's `patches/`, then add this to",
+    "`node_modules/adaptv/patches/` into your app's `patches/`, then add this to",
     "your `pnpm-workspace.yaml` (or the `pnpm` key of your root `package.json` on pnpm < 11):",
     "",
     "  patchedDependencies:",

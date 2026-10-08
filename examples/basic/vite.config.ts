@@ -1,5 +1,5 @@
-import { adaptv } from "@arrzdev/adaptv/vite"
 import tailwindcss from "@tailwindcss/vite"
+import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({

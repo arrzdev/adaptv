@@ -1,5 +1,5 @@
-import type { TextAreaHandle } from "@arrzdev/adaptv/components"
-import { TextArea as BaseTextArea } from "@arrzdev/adaptv/components"
+import type { TextAreaHandle } from "adaptv/components"
+import { TextArea as BaseTextArea } from "adaptv/components"
 import { forwardRef } from "react"
 import { cn } from "@/utils/cn"
 

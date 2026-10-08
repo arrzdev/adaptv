@@ -40,7 +40,7 @@ describe("runDoctor — WKAppBoundDomains (B22)", () => {
     })
     expect(d?.detail).toContain("silently")
     //`isNativePlatform()`, not the bridge's own `getPlatform()`: it is adaptv's answer to
-    //the same question, exported to consumers from `@arrzdev/adaptv/utils`, and it degrades
+    //the same question, exported to consumers from `adaptv/utils`, and it degrades
     //identically here because it wraps the bridge. Naming a symbol the dev cannot import
     //from adaptv would send them somewhere adaptv does not go.
     expect(d?.detail).toContain("isNativePlatform()")

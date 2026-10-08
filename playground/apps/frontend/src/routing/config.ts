@@ -1,4 +1,4 @@
-import { index, layout, rootRoute, route } from "@arrzdev/adaptv/routes"
+import { index, layout, rootRoute, route } from "adaptv/routes"
 
 //nativ owns the root route (stamped __root.gen.tsx) — declare only the children.
 //routing files follow the repo's {domain}.{role} convention: `*.page.tsx` for

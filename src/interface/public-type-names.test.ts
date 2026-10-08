@@ -30,16 +30,16 @@ const treeFile = path.join(fixtures, "routeTree.gen.ts")
 //specifiers. → src/vite/route-tree-opacity.ts
 const files: Record<string, string> = {
   [path.join(fixtures, "home.page.ts")]: `
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 export const Route = createFileRoute("/")({ component: () => null })
 `,
   [path.join(fixtures, "post.page.ts")]: `
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 export const Route = createFileRoute("/posts/$id")({ component: () => null })
 `,
   [treeFile]: `
 // @ts-nocheck
-import { Route as rootRouteImport } from "@arrzdev/adaptv/root-route"
+import { Route as rootRouteImport } from "adaptv/root-route"
 import { Route as homeRouteImport } from "./home.page"
 import { Route as postRouteImport } from "./post.page"
 const homeRoute = homeRouteImport.update({ id: "/", path: "/", getParentRoute: () => rootRouteImport } as any)
@@ -56,7 +56,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren { homeRoute: typeof homeRoute; postRoute: typeof postRoute }
-declare module "@arrzdev/adaptv/router" {
+declare module "adaptv/router" {
   interface FileRoutesByPath {
     "/": { id: "/"; path: "/"; fullPath: "/"; preLoaderRoute: typeof homeRouteImport; parentRoute: typeof rootRouteImport }
     "/posts/$id": { id: "/posts/$id"; path: "/posts/$id"; fullPath: "/posts/$id"; preLoaderRoute: typeof postRouteImport; parentRoute: typeof rootRouteImport }
@@ -64,15 +64,15 @@ declare module "@arrzdev/adaptv/router" {
 }
 const rootRouteChildren: RootRouteChildren = { homeRoute, postRoute }
 export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
-import type { getRouter } from "@arrzdev/adaptv/router"
-declare module "@arrzdev/adaptv/router" {
+import type { getRouter } from "adaptv/router"
+declare module "adaptv/router" {
   interface Register {
     router: Awaited<ReturnType<typeof getRouter>>
   }
 }
 `,
   [probeFile]: `
-import type { AdaptvAppConfig } from "@arrzdev/adaptv/config"
+import type { AdaptvAppConfig } from "adaptv/config"
 import {
   createAdaptvRouter,
   createRootRoute,
@@ -86,15 +86,15 @@ import {
   route,
   standaloneMemoryHistory,
   useNavigate,
-} from "@arrzdev/adaptv/router"
+} from "adaptv/router"
 import {
   index as routesIndex,
   layout as routesLayout,
   physical as routesPhysical,
   rootRoute as routesRootRoute,
   route as routesRoute,
-} from "@arrzdev/adaptv/routes"
-import type { CreateRootRouteConfig } from "@arrzdev/adaptv/shell"
+} from "adaptv/routes"
+import type { CreateRootRouteConfig } from "adaptv/shell"
 //The engine's packages, for their export lists. \`@tanstack/history\` is not one of
 //adaptv's dependencies; react-router re-exports its types (\`RouterHistory\`).
 import "@tanstack/react-router"
@@ -145,7 +145,7 @@ function compile() {
     paths: {
       ...config.options.paths,
       "#adaptv-route-tree": [treeFile],
-      "@arrzdev/adaptv/root-route": ["./src/routes/root-route.tsx"],
+      "adaptv/root-route": ["./src/routes/root-route.tsx"],
     },
   }
   const host = ts.createCompilerHost(options)
