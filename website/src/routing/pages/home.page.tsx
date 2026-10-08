@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
 import { Hero } from "@/components/sections/hero"

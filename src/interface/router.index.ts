@@ -19,7 +19,7 @@
  *   splash policy, the head, and the service-worker registration.
  * - `Link` — adaptv ships its own, which routes external URLs to the system
  *   browser and carries the tap-safe gesture behaviour. Exported from
- *   `@arrzdev/adaptv/components`.
+ *   `adaptv/components`.
  */
 
 //Routing primitives the consumer writes by hand.
@@ -91,7 +91,7 @@ export {
 //The generated route tree's footer binds `Register` to `ReturnType<typeof getRouter>`,
 //so it needs a module path exporting `getRouter`. Upstream writes a RELATIVE path to
 //whatever file resolved as `router.entry` — which, for adaptv's own entry, is a path
-//into the framework's install directory (`../../../node_modules/.pnpm/@arrzdev+adaptv@…`
+//into the framework's install directory (`../../../node_modules/.pnpm/adaptv@…`
 //under pnpm, since the specifier is computed from a realpath). That is machine-shaped,
 //install-layout-shaped, and gone entirely under Yarn PnP or a dist-only publish. So
 //adaptv rewrites the footer to point here instead — one stable specifier, the same one

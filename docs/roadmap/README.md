@@ -71,7 +71,7 @@ being surprising.
 
 | Was | Shipped as |
 |---|---|
-| Route / screen lifecycle | `src/hooks/use-screen-lifecycle.ts`, exported from `@arrzdev/adaptv/hooks` |
+| Route / screen lifecycle | `src/hooks/use-screen-lifecycle.ts`, exported from `adaptv/hooks` |
 | `useAppState` | `src/capabilities/app-state.ts`, `src/hooks/use-app-state.ts` |
 | Back-button priority chain | `src/capabilities/back-chain.ts`, `src/hooks/use-back-handler.ts` |
 | Gesture arbitration | `src/capabilities/gesture-controller.ts` + three consumers |
@@ -88,5 +88,5 @@ being surprising.
 | `Slider` (component-gaps Tier 1) | `src/components/slider.tsx`; lab `/lab/slider` |
 | `Select` / `Picker` menu appearance (component-gaps Tier 1) | `src/components/select.tsx` (2026-09-02); `WheelColumn` remains the wheel appearance |
 | Grouped-settings form / `FieldGroup` (component-gaps Tier 1) | `src/components/field-group.tsx` (2026-09-02); the grouped corners are `first:` / `last:` / `only:` in the consumer's `className`, not a `data-position` |
-| Component gaps Tier 4 `FAB` | `src/components/fab.tsx`, exported from `@arrzdev/adaptv/components` → [`component-gaps.md`](component-gaps.md) |
+| Component gaps Tier 4 `FAB` | `src/components/fab.tsx`, exported from `adaptv/components` → [`component-gaps.md`](component-gaps.md) |
 | **`create-adaptv` scaffolder** (was #3; the numbers below it are kept so references hold) | `packages/create-adaptv/` → [`../design/create-adaptv.md`](../design/create-adaptv.md); a published install waits on #2 |

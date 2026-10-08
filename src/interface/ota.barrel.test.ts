@@ -37,7 +37,7 @@ import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
  * ## Two barrels, on purpose
  *
  * `use-store-release` is exported from `hooks.index.ts`, not from `ota.index.ts`:
- * `@arrzdev/adaptv/hooks` is the subpath an app already imports its hooks from,
+ * `adaptv/hooks` is the subpath an app already imports its hooks from,
  * and a React hook does not move to a second subpath because its state lives in
  * `src/ota/`. So "exported" here means "reachable from either published barrel",
  * and the placement itself is pinned by its own test rather than left to drift.
@@ -227,7 +227,7 @@ describe("the OTA barrel", () => {
   })
 
   /*
-   * The placement `use-store-release` already has, pinned. `@arrzdev/adaptv/hooks`
+   * The placement `use-store-release` already has, pinned. `adaptv/hooks`
    * is the subpath consumers import it from; moving it to `./ota` because its
    * state lives in `src/ota/` would break every app using it, for tidiness.
    */

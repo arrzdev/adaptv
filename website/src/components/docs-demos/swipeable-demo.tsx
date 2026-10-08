@@ -1,4 +1,4 @@
-import { Pressable, Swipeable, View } from "@arrzdev/adaptv/components"
+import { Pressable, Swipeable, View } from "adaptv/components"
 import { useState } from "react"
 
 const NOTES = ["Groceries", "Call the landlord", "Book flights"]

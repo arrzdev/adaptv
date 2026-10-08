@@ -1,5 +1,5 @@
-import { Pressable } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Pressable } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabCaveat, LabSection } from "@/components/lab/lab-kit"
 import { LabPage } from "@/components/lab/lab-page"

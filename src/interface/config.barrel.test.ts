@@ -11,10 +11,10 @@ import {
  * writes the component it loads. If `Props` is public from no entry, the app can
  * only type that component by copying the shape. `UpdateRequiredProps` shipped
  * that way while `SplashScreenProps` and `OrientationGuardProps` sat exported
- * beside it in `@arrzdev/adaptv/config`.
+ * beside it in `adaptv/config`.
  *
  * The props of an option whose default screen is a component (`OfflineProps`,
- * `BootErrorProps`) are public from `@arrzdev/adaptv/components`, next to that
+ * `BootErrorProps`) are public from `adaptv/components`, next to that
  * component, so either barrel counts.
  */
 const APP_CONFIG = resolve(process.cwd(), "src/config/app-config.ts")

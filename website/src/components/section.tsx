@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import type { ReactNode } from "react"
 import { Reveal } from "@/components/reveal"
 import { cn } from "@/utils/cn"

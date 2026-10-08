@@ -1,4 +1,4 @@
-import { isInstalledApp } from "@arrzdev/adaptv/utils"
+import { isInstalledApp } from "adaptv/utils"
 import { useEffect, useState } from "react"
 
 /**

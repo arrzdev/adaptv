@@ -24,7 +24,7 @@ import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
  * ## One hook from another directory, on purpose
  *
  * `use-store-release` lives in `src/ota/` and is exported from THIS barrel:
- * `@arrzdev/adaptv/hooks` is the subpath an app already imports its hooks from,
+ * `adaptv/hooks` is the subpath an app already imports its hooks from,
  * and a hook does not move to a second subpath because its state lives elsewhere.
  * `ota.barrel.test.ts` pins the same placement from its side.
  */

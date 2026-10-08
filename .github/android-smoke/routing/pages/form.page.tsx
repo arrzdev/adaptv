@@ -1,5 +1,5 @@
-import { View } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { View } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useState } from "react"
 
 export const Route = createFileRoute("/form")({

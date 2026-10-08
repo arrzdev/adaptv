@@ -1,9 +1,5 @@
-import type { WheelItem } from "@arrzdev/adaptv/components"
-import {
-  View,
-  WHEEL_ITEM_HEIGHT,
-  WheelColumn,
-} from "@arrzdev/adaptv/components"
+import type { WheelItem } from "adaptv/components"
+import { View, WHEEL_ITEM_HEIGHT, WheelColumn } from "adaptv/components"
 import { useMemo, useRef } from "react"
 
 const MONTH_LABELS = [

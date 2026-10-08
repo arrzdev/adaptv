@@ -1,5 +1,5 @@
-import { Divider } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Divider } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabCaveat, LabRow, LabSection } from "@/components/lab/lab-kit"

@@ -1,5 +1,5 @@
-import { Pressable, Text, View } from "@arrzdev/adaptv/components"
-import { useNavigate } from "@arrzdev/adaptv/router"
+import { Pressable, Text, View } from "adaptv/components"
+import { useNavigate } from "adaptv/router"
 import { Plus, Settings } from "lucide-react"
 import { TasksTitle } from "@/components/navigation/tasks-title"
 import type { TodoFilter } from "@/components/todos/todo-filter"

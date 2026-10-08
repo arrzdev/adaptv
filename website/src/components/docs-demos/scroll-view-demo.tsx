@@ -1,4 +1,4 @@
-import { ScrollView, View } from "@arrzdev/adaptv/components"
+import { ScrollView, View } from "adaptv/components"
 
 const ROWS = Array.from({ length: 14 }, (_, i) => `Row ${i + 1}`)
 const CHIPS = [

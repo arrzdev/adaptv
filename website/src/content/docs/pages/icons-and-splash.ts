@@ -20,7 +20,7 @@ export const page: DocPage = {
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   // ...
@@ -177,8 +177,8 @@ adaptv icons --input ./mark.svg --dark ./mark-dark.png --yes`,
       type: "code",
       label: "src/components/splash-screen.tsx",
       lang: "tsx",
-      code: `import { PwaSplashOverlay } from "@arrzdev/adaptv/components"
-import type { SplashScreenProps } from "@arrzdev/adaptv/config"
+      code: `import { PwaSplashOverlay } from "adaptv/components"
+import type { SplashScreenProps } from "adaptv/config"
 import { useEffect, useState } from "react"
 
 const MIN_VISIBLE_MS = 1000
@@ -242,7 +242,7 @@ export default function SplashScreen({ revealedAt }: SplashScreenProps) {
     },
     {
       type: "p",
-      text: "The native launch screen is a flat colour. Your component draws the logo. `hideNativeSplash()` from `@arrzdev/adaptv/capabilities` hides the OS screen. The shell calls it for you. You need it only for your own launch sequence.",
+      text: "The native launch screen is a flat colour. Your component draws the logo. `hideNativeSplash()` from `adaptv/capabilities` hides the OS screen. The shell calls it for you. You need it only for your own launch sequence.",
     },
     { type: "h2", text: "What goes wrong" },
     {

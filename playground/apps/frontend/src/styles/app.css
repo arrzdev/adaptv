@@ -26,7 +26,7 @@ textarea:-webkit-autofill:active {
    These two rules are UNLAYERED on purpose: they are the demonstration itself,
    and moving them into a @layer would delete the thing being demonstrated.
 
-   `@arrzdev/adaptv/styles.css` sets `input[type="text"] { line-height: 1.5 }`
+   `adaptv/styles.css` sets `input[type="text"] { line-height: 1.5 }`
    inside `@layer adaptv.reset`, at specificity (0,1,1). The rule below is LESS
    specific (0,1,0) and carries no `!important`, and it must still win, because
    an unlayered author rule outranks every layered one whatever the specificity.

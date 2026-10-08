@@ -7,11 +7,8 @@ import type {
   DrawerRootProps,
   DrawerShellProps,
   DrawerTitleProps,
-} from "@arrzdev/adaptv/components"
-import {
-  Drawer as BaseDrawer,
-  useDrawer,
-} from "@arrzdev/adaptv/components"
+} from "adaptv/components"
+import { Drawer as BaseDrawer, useDrawer } from "adaptv/components"
 import type { ComponentPropsWithRef } from "react"
 import { forwardRef } from "react"
 import { cn } from "@/utils/cn"

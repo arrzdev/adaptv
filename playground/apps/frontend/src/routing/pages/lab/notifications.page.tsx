@@ -2,12 +2,9 @@ import type {
   NotifyOutcome,
   NotifyPermission,
   ScheduleOutcome,
-} from "@arrzdev/adaptv/capabilities"
-import {
-  useNotificationOpened,
-  useNotifications,
-} from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/capabilities"
+import { useNotificationOpened, useNotifications } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

@@ -1,4 +1,3 @@
-import type { SwipeableGroupHandle } from "@arrzdev/adaptv/components"
 import type { DragEndEvent, DragStartEvent, Modifier } from "@dnd-kit/core"
 import { closestCenter, DndContext, DragOverlay } from "@dnd-kit/core"
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
@@ -8,6 +7,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import type { SwipeableGroupHandle } from "adaptv/components"
 import type { Transition } from "motion/react"
 import { motion } from "motion/react"
 import { useCallback, useRef, useState } from "react"

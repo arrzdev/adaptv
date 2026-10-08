@@ -53,7 +53,7 @@ export const ENGINE_EDITS: readonly EngineEdit[] = [
     //the import the generator writes into route files names the framework barrel
     //(ADAPTV_ROUTER_PKG, set by adaptv's vite plugin). → src/vite/router-autoimport.ts
     pkg: "@tanstack/router-generator",
-    version: "1.167.21",
+    version: "1.167.22",
     file: "dist/esm/transform/transform.js",
     replace: [
       [
@@ -67,7 +67,7 @@ export const ENGINE_EDITS: readonly EngineEdit[] = [
     //`#tanstack-router-entry` stay: they are subpath imports declared in
     //start-server-core's own `imports` map, and never reach the HTML.
     pkg: "@tanstack/start-plugin-core",
-    version: "1.171.24",
+    version: "1.171.27",
     file: "dist/esm/constants.js",
     replace: [
       [
@@ -98,7 +98,7 @@ export function editEngineSource(
   const where = `${edit.pkg}@${version} ${edit.file}`
   if (version !== edit.version)
     throw new Error(
-      `[adaptv] ${where}: adaptv edits ${edit.pkg}@${edit.version} only. Reinstall @arrzdev/adaptv so it resolves the version it pins.`,
+      `[adaptv] ${where}: adaptv edits ${edit.pkg}@${edit.version} only. Reinstall adaptv so it resolves the version it pins.`,
     )
   let out = source
   for (const [from, to] of edit.replace) {
@@ -204,8 +204,8 @@ export function assertEngineEdited(): void {
   throw new Error(
     [
       `[adaptv] ${missing.map((e) => `${e.pkg}/${e.file}`).join(", ")} loaded without adaptv's edits.`,
-      "Something loaded the route engine before `@arrzdev/adaptv/vite`. Import adaptv's",
-      "plugin from `@arrzdev/adaptv/vite`, and do not import the engine in vite.config.ts.",
+      "Something loaded the route engine before `adaptv/vite`. Import adaptv's",
+      "plugin from `adaptv/vite`, and do not import the engine in vite.config.ts.",
     ].join("\n"),
   )
 }

@@ -7,7 +7,7 @@ export const page: DocPage = {
     "Offer a waiting web update, talk to your service-worker modules, and find out when a native install is behind.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useServiceWorkerUpdate, useServiceWorkerMessage, sendToServiceWorker, useStoreRelease } from "@arrzdev/adaptv/hooks"',
+    'import { useServiceWorkerUpdate, useServiceWorkerMessage, sendToServiceWorker, useStoreRelease } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
@@ -30,7 +30,7 @@ export const page: DocPage = {
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   // ...
@@ -91,7 +91,7 @@ export default defineApp({
     { type: "h2", text: "useServiceWorkerMessage" },
     {
       type: "p",
-      text: "Add your own worker modules with `serviceWorkers` in [config](/docs/config). They import from `@arrzdev/adaptv/sw`.",
+      text: "Add your own worker modules with `serviceWorkers` in [config](/docs/config). They import from `adaptv/sw`.",
     },
     {
       type: "api",
@@ -130,7 +130,7 @@ export default defineApp({
       type: "code",
       label: "src/sw/push.ts",
       lang: "ts",
-      code: `import { onAppMessage, sendToApp } from "@arrzdev/adaptv/sw"
+      code: `import { onAppMessage, sendToApp } from "adaptv/sw"
 
 self.addEventListener("push", (event) => {
   event.waitUntil(sendToApp({ type: "push", body: event.data?.text() }))
@@ -154,7 +154,7 @@ useScreenLifecycle({
     },
     {
       type: "p",
-      text: "`@arrzdev/adaptv/sw` exports `sendToApp(message)`, `onAppMessage(handler)` and `cacheRoute`. `sendToApp` sends to every open window and resolves to the number that got it. `cacheRoute` caches your own requests.",
+      text: "`adaptv/sw` exports `sendToApp(message)`, `onAppMessage(handler)` and `cacheRoute`. `sendToApp` sends to every open window and resolves to the number that got it. `cacheRoute` caches your own requests.",
     },
     {
       type: "targets",

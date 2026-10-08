@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary:
     "A `<div>` that is a flex column by default. It never scrolls and can pad for safe areas.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { View } from "@arrzdev/adaptv/components"',
+  importLine: 'import { View } from "adaptv/components"',
   source: "src/components/view.tsx",
   blocks: [
     {
       type: "demo",
       component: ViewDemo,
-      code: `import { View } from "@arrzdev/adaptv/components"
+      code: `import { View } from "adaptv/components"
 
 <View className="gap-2">
   <Tile>column</Tile>

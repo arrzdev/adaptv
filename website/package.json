@@ -14,7 +14,7 @@
     "lint": "../node_modules/.bin/biome check ."
   },
   "dependencies": {
-    "@arrzdev/adaptv": "link:..",
+    "adaptv": "link:..",
     "@tailwindcss/vite": "4.2.4",
     "clsx": "2.1.1",
     "lucide-react": "0.544.0",

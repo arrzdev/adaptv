@@ -6,20 +6,20 @@ export const page: DocPage = {
   title: "Offline",
   summary: "A screen with a title, a line of text and a retry button.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Offline } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Offline } from "adaptv/components"',
   source: "src/components/offline.tsx",
   blocks: [
     {
       type: "demo",
       component: OfflineBoundaryDemo,
-      code: `import { Offline } from "@arrzdev/adaptv/components"
+      code: `import { Offline } from "adaptv/components"
 
 <Offline onRetry={() => query.refetch()} />`,
     },
     { type: "h2", text: "Usage" },
     {
       type: "p",
-      text: "`Offline` does not watch the network and does not wrap children. Render it in a route that has no data to show. Pass `onRetry` to fetch again. Keep the URL, and do not redirect to an `/offline` route. Test whether you have data to show, not only whether the device is offline. `useIsOffline()` from `@arrzdev/adaptv/hooks` gives the connectivity signal. See the [offline guide](/docs/offline). adaptv also renders `Offline` itself when a route chunk fails to load after one automatic reload. It passes no props, so the button reloads the page.",
+      text: "`Offline` does not watch the network and does not wrap children. Render it in a route that has no data to show. Pass `onRetry` to fetch again. Keep the URL, and do not redirect to an `/offline` route. Test whether you have data to show, not only whether the device is offline. `useIsOffline()` from `adaptv/hooks` gives the connectivity signal. See the [offline guide](/docs/offline). adaptv also renders `Offline` itself when a route chunk fails to load after one automatic reload. It passes no props, so the button reloads the page.",
     },
     {
       type: "code",

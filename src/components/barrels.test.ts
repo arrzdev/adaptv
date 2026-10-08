@@ -9,7 +9,7 @@ import { callSitesOf, exportsOf } from "#adaptv/test-utils/barrel-guard"
  * This exists because a barrel drifted from the directory in silence.
  * `src/components/index.ts` was missing `text`, `view`, `list` and `external-link`;
  * the interface barrel was missing `text`, `not-found` and `orientation-guard`. The
- * visible symptom was that `import { Text } from "@arrzdev/adaptv/components"` did
+ * visible symptom was that `import { Text } from "adaptv/components"` did
  * not resolve — a component that was fully built, fully tested and completely
  * unreachable.
  *

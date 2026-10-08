@@ -29,14 +29,17 @@ export const GLYPH = { ok: "✓", fail: "✖" }
 export const ADAPTV_VERSION = "0.1.0-alpha.1"
 
 /**
- * The framework's peers, at the versions it pins them to. The template is plain CSS, so
- * it imports nothing else (docs/decisions/styling.md §0.1). `create.test.mjs` holds the
- * peers to the root `peerDependencies`.
+ * The framework's peers, at the versions it pins them to, plus what the template itself
+ * imports: Tailwind is the template's choice, not a framework peer
+ * (docs/decisions/styling.md §0.1). `create.test.mjs` holds the peers to the root
+ * `peerDependencies`.
  */
 export const DEPENDENCIES = {
+  "@tailwindcss/vite": "4.2.4",
   motion: "12.35.0",
   react: "19.2.3",
   "react-dom": "19.2.3",
+  tailwindcss: "4.2.4",
   vite: "8.0.11",
 }
 export const DEV_DEPENDENCIES = {
@@ -112,7 +115,7 @@ export function create({ dir, name, adaptv = ADAPTV_VERSION }) {
     private: true,
     type: "module",
     scripts: SCRIPTS,
-    dependencies: { "@arrzdev/adaptv": adaptv, ...DEPENDENCIES },
+    dependencies: { adaptv, ...DEPENDENCIES },
     devDependencies: DEV_DEPENDENCIES,
   }
   writeFileSync(

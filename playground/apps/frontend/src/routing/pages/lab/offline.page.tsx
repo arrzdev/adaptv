@@ -1,6 +1,6 @@
-import { Offline } from "@arrzdev/adaptv/components"
-import { useIsOffline } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Offline } from "adaptv/components"
+import { useIsOffline } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

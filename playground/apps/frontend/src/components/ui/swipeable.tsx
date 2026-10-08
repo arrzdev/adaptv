@@ -1,7 +1,4 @@
-import {
-  Swipeable as BaseSwipeable,
-  View,
-} from "@arrzdev/adaptv/components"
+import { Swipeable as BaseSwipeable, View } from "adaptv/components"
 import type { ComponentProps, ReactNode } from "react"
 import { cn } from "@/utils/cn"
 

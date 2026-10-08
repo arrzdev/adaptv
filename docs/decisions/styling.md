@@ -11,7 +11,7 @@
 > **Revised 2026-10-05 (O24, register L24): Tailwind is no longer required.** §0, §0.1, §2, §3.3, §5,
 > §5.4.1, §6, §7, §8 and §9 describe the new contract. ⏳ **The code catches up in two PRs** (TUD-221):
 > the components move to layered CSS first, then `cn`, `mergeStyles` and the Tailwind peers leave and
-> `@arrzdev/adaptv/tailwind.css` ships. Until both merge, `src/` still follows the 2026-07-28 contract,
+> `adaptv/tailwind.css` ships. Until both merge, `src/` still follows the 2026-07-28 contract,
 > which is in this file's git history.
 
 ---
@@ -27,7 +27,7 @@ attributes, so a consumer can restyle globally from plain CSS without importing 
 Custom properties are reserved for values that cross the JS→CSS boundary at runtime (insets, keyboard
 height) and for the design tokens, which keep Tailwind's names so a plain-CSS app sets them in `:root`
 and a Tailwind app in `@theme`. **adaptv ships no palette.** Tailwind is an optional convenience:
-`@arrzdev/adaptv/tailwind.css` adds the safe-area utilities and the variants.
+`adaptv/tailwind.css` adds the safe-area utilities and the variants.
 
 ---
 
@@ -59,10 +59,10 @@ users.
 
 **Two entry stylesheets.**
 
-- **`@arrzdev/adaptv/styles.css`** — every consumer. Plain CSS: the layer statement, the safe-area and
+- **`adaptv/styles.css`** — every consumer. Plain CSS: the layer statement, the safe-area and
   keyboard variables, the resets and patches, the component rules, and three plain utility classes
   (`selectable`, `scrollbar-hidden`, `scrollbar-visible`, §5.4.1). It works through any bundler.
-- **`@arrzdev/adaptv/tailwind.css`** — optional, for Tailwind v4 apps. It imports `styles.css` and adds
+- **`adaptv/tailwind.css`** — optional, for Tailwind v4 apps. It imports `styles.css` and adds
   the 81 safe-area `@utility` names unchanged (`p-safe`, `pt-safe-offset-*`, `mb-safe-or-*`, …), the
   `app:` / `web:` / `dark:` / `light:` variants, the `hover:` / `active:` custom variants (§5), and
   the three utility classes again as `@utility`, so `md:scrollbar-hidden` works. A Tailwind app imports
@@ -448,7 +448,7 @@ autocomplete, a variant appears nowhere. That is only acceptable with a single c
 this is it. **Six, and the set is closed.**
 
 **Revised 2026-10-05:** variants are Tailwind syntax, so all six ship in the optional
-`@arrzdev/adaptv/tailwind.css`, never in `styles.css`. Each has a plain-CSS spelling, given below; that
+`adaptv/tailwind.css`, never in `styles.css`. Each has a plain-CSS spelling, given below; that
 spelling is the contract, the variant is a shorthand for it.
 
 They split into two categories, and the split is the rule for whether a seventh ever gets added:
@@ -637,7 +637,7 @@ The fix is spec-sanctioned: `@layer` statements are among the only rules allowed
 ```css
 @layer theme, base, adaptv, components, utilities;   /* MUST precede every @import */
 @import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 ```
 
 This is also the pattern MUI documents for its own Tailwind integration
@@ -740,14 +740,14 @@ So one stylesheet serves both kinds of app, and neither maintains a second sourc
 
 ```css
 /* plain CSS — the app's main.css */
-@import "@arrzdev/adaptv/styles.css";
+@import "adaptv/styles.css";
 :root { --color-surface: oklch(0.99 0 0); --radius-md: 0.5rem; }
 ```
 
 ```css
 /* Tailwind — the app's main.css */
 @import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 @theme { --color-surface: oklch(0.99 0 0); --radius-md: 0.5rem; }
 ```
 
@@ -766,11 +766,12 @@ So one stylesheet serves both kinds of app, and neither maintains a second sourc
   be shipping a palette by the back door (§4.1); whether the defaults should reference them at all is
   out of scope here.
 - **The set is listed** in `styles.css`'s header, so the theming surface is countable.
-- ⚠︎ **To verify in the implementation, not to assume:** Tailwind v4 emits a theme variable only when
-  something uses it. If a token set in `@theme` does not reach a component whose app never uses the
-  matching utility, `tailwind.css` must make Tailwind keep it. The precedence e2e suite carries the
-  case: a Tailwind app sets `--color-surface` in `@theme`, never writes `bg-surface`, and the menu
-  still paints it.
+- **A token set only in `@theme` still reaches the components** (closed 2026-10-08, TUD-355).
+  Tailwind v4 emits a theme variable only when something uses it, and adaptv's own layer rule is
+  such a use: a `var(--color-surface)` read anywhere in the same build keeps the variable, under
+  `@theme inline` too (measured on Tailwind 4.2.4). So `tailwind.css` needs nothing to keep it. The
+  case stays tested: `playground/e2e/style-precedence.spec.ts` compiles an app that sets
+  `--color-surface` in `@theme`, never writes `bg-surface`, and the menu still paints it.
 
 **Modern-CSS bonus adaptv should take, which Ionic cannot:** with no IE11/legacy constraint,
 `color-mix()` and OKLCH **eliminate the `-rgb` twin-variable tax entirely**. A shade/tint is

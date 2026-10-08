@@ -1,4 +1,4 @@
-import { ExternalLink, Link, View } from "@arrzdev/adaptv/components"
+import { ExternalLink, Link, View } from "adaptv/components"
 
 const ROW =
   "flex items-center justify-between rounded-xl border border-border bg-raised px-4 py-3 text-[14px] text-foreground active:bg-sunken"

@@ -6,13 +6,13 @@ export const page: DocPage = {
   title: "Drawer",
   summary: "A bottom sheet you can drag down to close.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Drawer, useDrawer } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Drawer, useDrawer } from "adaptv/components"',
   source: "src/components/drawer/drawer.tsx",
   blocks: [
     {
       type: "demo",
       component: DrawerDemo,
-      code: `import { Drawer } from "@arrzdev/adaptv/components"
+      code: `import { Drawer } from "adaptv/components"
 
 const [open, setOpen] = useState(false)
 

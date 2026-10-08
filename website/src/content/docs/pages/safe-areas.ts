@@ -23,7 +23,7 @@ export const page: DocPage = {
       type: "code",
       label: "settings.tsx",
       lang: "tsx",
-      code: `import { ScrollView, View } from "@arrzdev/adaptv/components"
+      code: `import { ScrollView, View } from "adaptv/components"
 
 // Title, rows and SaveButton are your own.
 export function Settings() {
@@ -47,7 +47,7 @@ export function Settings() {
     { type: "h2", text: "The utilities" },
     {
       type: "p",
-      text: "The utilities are Tailwind classes from `@arrzdev/adaptv/tailwind.css`. In plain CSS, add the `--adaptv-inset-top`, `-right`, `-bottom` and `-left` variables yourself: `padding-top: calc(var(--adaptv-inset-top) + 1rem)`. Each family has three forms: `-safe` (the inset), `-safe-offset-N` (the inset plus N) and `-safe-or-N` (at least N). `N` is a Tailwind spacing number, so `pt-safe-offset-4` is the inset plus 16px.",
+      text: "The utilities are Tailwind classes from `adaptv/tailwind.css`. In plain CSS, add the `--adaptv-inset-top`, `-right`, `-bottom` and `-left` variables yourself: `padding-top: calc(var(--adaptv-inset-top) + 1rem)`. Each family has three forms: `-safe` (the inset), `-safe-offset-N` (the inset plus N) and `-safe-or-N` (at least N). `N` is a Tailwind spacing number, so `pt-safe-offset-4` is the inset plus 16px.",
     },
     {
       type: "table",
@@ -69,7 +69,7 @@ export function Settings() {
       type: "code",
       label: "fab.tsx",
       lang: "tsx",
-      code: `import { Pressable } from "@arrzdev/adaptv/components"
+      code: `import { Pressable } from "adaptv/components"
 
 // 16px above the home indicator and 16px from the right edge.
 <Pressable
@@ -88,7 +88,7 @@ export function Settings() {
       type: "code",
       label: "sheet.ts",
       lang: "ts",
-      code: `import { useInsets } from "@arrzdev/adaptv/hooks"
+      code: `import { useInsets } from "adaptv/hooks"
 
 function usePeekSnapPoint() {
   const insets = useInsets()
@@ -97,7 +97,7 @@ function usePeekSnapPoint() {
     },
     {
       type: "p",
-      text: "Import `readSafeAreaInsets` from `@arrzdev/adaptv/hooks` too.",
+      text: "Import `readSafeAreaInsets` from `adaptv/hooks` too.",
     },
     { type: "h2", text: "What each target reports" },
     {

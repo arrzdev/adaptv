@@ -59,7 +59,7 @@ const MODULE_EXT = /\.(?:tsx?|jsx?|m[tj]s)$/
  *
  * For a module inside the package that path is computed from a realpath, so it comes out
  * install-shaped: `../../../../src/routes/root-route` against a workspace link, and
- * `../node_modules/.pnpm/@arrzdev+adaptv@0.1.0_<peerhash>/node_modules/@arrzdev/adaptv/…`
+ * `../node_modules/.pnpm/adaptv@0.1.0_<peerhash>/node_modules/adaptv/…`
  * in a real install. It is regenerated per run, so it is never *stale* — but it encodes
  * the machine's node_modules layout, has no answer under an install that keeps nothing
  * on disk (Yarn PnP), and dies on a dist-only publish, where `src/` is gone and
@@ -156,7 +156,7 @@ export function rewriteRouteTree(
  * - **Outside the app root.** A workspace link or `pnpm link` realpaths to wherever the
  *   framework is checked out — `../../../../src/routes/router-entry.tsx` in this repo.
  * - **Through `node_modules`.** A normal install resolves INSIDE the app —
- *   `../node_modules/.pnpm/@arrzdev+adaptv@0.1.0_<peerhash>/…` — so a root check alone
+ *   `../node_modules/.pnpm/adaptv@0.1.0_<peerhash>/…` — so a root check alone
  *   would wave through the exact case every consumer actually has. (Found by a test
  *   written against the first rule; it is the more important of the two.)
  *

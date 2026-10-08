@@ -5,10 +5,10 @@ import {
   Pressable,
   Text,
   View,
-} from "@arrzdev/adaptv/components"
-import type { UiThemePreference } from "@arrzdev/adaptv/hooks"
-import { useTheme } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/components"
+import type { UiThemePreference } from "adaptv/hooks"
+import { useTheme } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import {
   ChevronRight,
   FlaskConical,

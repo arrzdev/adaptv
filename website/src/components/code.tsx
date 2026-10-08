@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import { Check, Copy } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { cn } from "@/utils/cn"

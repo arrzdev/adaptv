@@ -285,7 +285,7 @@ describe("adaptv() — the plugins it defines inline", () => {
     const packageJson = JSON.parse(
       readFileSync(path.join(allow[1], "package.json"), "utf8"),
     )
-    expect(packageJson.name).toBe("@arrzdev/adaptv")
+    expect(packageJson.name).toBe("adaptv")
   })
 
   it("re-loads an edited adaptv.config.ts, re-stamps, and full-reloads the page", async () => {

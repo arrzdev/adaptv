@@ -1,4 +1,4 @@
-import { useHaptics as useBaseHaptics } from "@arrzdev/adaptv/hooks"
+import { useHaptics as useBaseHaptics } from "adaptv/hooks"
 import { useMemo } from "react"
 import { useSettings } from "@/data/collections/preferences/settings"
 

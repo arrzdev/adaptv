@@ -1,10 +1,5 @@
-import {
-  Pressable,
-  Skeleton,
-  Text,
-  View,
-} from "@arrzdev/adaptv/components"
-import { useAppState } from "@arrzdev/adaptv/hooks"
+import { Pressable, Skeleton, Text, View } from "adaptv/components"
+import { useAppState } from "adaptv/hooks"
 import type { Transition } from "motion/react"
 import { motion } from "motion/react"
 import type { ReactNode } from "react"

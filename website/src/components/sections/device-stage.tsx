@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import starterAndroid from "@/assets/hero/starter-android.png?adaptv-image"
 import starterIos from "@/assets/hero/starter-ios.png?adaptv-image"
 import { PhoneFrame } from "@/components/frames"

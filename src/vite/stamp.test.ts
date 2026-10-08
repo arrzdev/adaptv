@@ -357,14 +357,12 @@ describe("stampGeneratedFiles — the consumer's .gitignore and tsconfig", () =>
     const appRoot = app({ "tsconfig.json": VITE_TSCONFIG })
     stampGeneratedFiles(loaded(appRoot))
     const env = read(appRoot, ".adaptv/adaptv-env.d.ts")
-    expect(env).toContain(
-      '/// <reference types="@arrzdev/adaptv/route-globals" />',
-    )
+    expect(env).toContain('/// <reference types="adaptv/route-globals" />')
     expect(
       ts
         .preProcessFile(env)
         .typeReferenceDirectives.map((d) => d.fileName),
-    ).toEqual(["@arrzdev/adaptv/route-globals"])
+    ).toEqual(["adaptv/route-globals"])
     expect(read(appRoot, "tsconfig.json")).not.toContain("node_modules/")
 
     const mtime = backdate(appRoot, ".adaptv/adaptv-env.d.ts")

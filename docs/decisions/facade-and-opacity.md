@@ -42,7 +42,7 @@ adaptv re-exports **only what it endorses.** Three rules:
    decided it should be.
 2. ~~**`@tanstack/react-router` stays a named engine dependency** (the Expo↔react-native model). The
    consumer's `package.json` lists it; route files import `createFileRoute` from it.~~ **Superseded
-   by L20 (2026-07-25).** Route files import `createFileRoute` from `@arrzdev/adaptv/router`
+   by L20 (2026-07-25).** Route files import `createFileRoute` from `adaptv/router`
    (`src/interface/router.index.ts`, injected by `src/vite/router-autoimport.ts`), and the consumer's
    `package.json` names no `@tanstack/*` at all — the playground's lists only its own
    `@tanstack/react-query`. The 07-05 evidence against barrel-based type hiding (§3.1) is still real;
@@ -54,7 +54,7 @@ adaptv re-exports **only what it endorses.** Three rules:
    always import the package directly.
 
 4. **🔒 adaptv's dependencies are not the app's.** *Decided 2026-10-05 (TUD-236).* An app imports
-   what its own `package.json` lists and what `@arrzdev/adaptv/*` exports. Every package in
+   what its own `package.json` lists and what `adaptv/*` exports. Every package in
    adaptv's `dependencies`, and the whole `@tanstack/` scope (the engine's transitive packages
    reach the app's `node_modules` the same way), is refused in app source **unless the app lists
    that package itself**, in which case it is the app's own and imports like any other. A dev who
@@ -80,7 +80,7 @@ adaptv re-exports **only what it endorses.** Three rules:
    **What the dev sees:** the first line of the message is the whole of it (file, problem, the
    two ways out) and names no engine, because the CLI drops any line that does
    (`bin/lib/opacity.mjs`): `✖ web  src/routing/pages/home.page.tsx imports a package missing
-   from the app's package.json — add it there, or import from an @arrzdev/adaptv subpath.` The
+   from the app's package.json — add it there, or import from an adaptv subpath.` The
    second line quotes the import the dev wrote, for the dev overlay and a plain `vite build`.
 
    **Not covered:** the type checker. Under a hoisted install `tsc` and the editor still resolve
@@ -136,12 +136,12 @@ was never the thing stopping anyone.*
 > shape that would otherwise be completely invisible.
 >
 > **Linter surface shipped** as `biome-shared.json` at the package root, reachable as
-> `"extends": ["@arrzdev/adaptv/biome-shared.json"]` (Biome's `extends` resolves bare npm specifiers).
+> `"extends": ["adaptv/biome-shared.json"]` (Biome's `extends` resolves bare npm specifiers).
 > §2.6b's Biome-vs-oxlint call remains open — but it is a question about *which linter*, and the
 > backstop no longer depends on the answer.
 >
 > **Latent break fixed in passing:** the `exports` map did not expose `./package.json`, which
-> `docs/decisions/register.md §5.0.3` flagged as blocking `require.resolve("@arrzdev/adaptv/package.json")` — the exact
+> `docs/decisions/register.md §5.0.3` flagged as blocking `require.resolve("adaptv/package.json")` — the exact
 > call Capacitor makes when detecting a plugin. Added alongside the lint config.
 
 ### 2.1 What must be banned (corrected inventory)
@@ -235,7 +235,7 @@ supports per-symbol banning today on the pinned Biome 2.3.2:
 non-banned names on the same import line are untouched; `biome check` exits 1.
 
 **Distribution — the useful detail:** Biome's `extends` **does** resolve bare npm package
-specifiers. Verified: `"extends": ["@arrzdev/adaptv/biome-shared.json"]` resolves from
+specifiers. Verified: `"extends": ["adaptv/biome-shared.json"]` resolves from
 `node_modules` with no relative path. So adaptv ships `biome-shared.json` in its package and the
 consumer adds one line. (`plugins` does **not** get this — see §2.4.)
 
@@ -261,7 +261,7 @@ rules structurally cannot see. Two documented limits, both reproduced:
   still fires the rule. GritQL matches syntax, not resolved bindings. Write patterns that also match
   the sibling import to cut false positives.
 - **No package-name resolution for `plugins`.** A bare specifier fails with `Cannot read file`; an
-  explicit `./node_modules/@arrzdev/adaptv/plugins/ban-server-apis.grit` works. So adaptv can ship the
+  explicit `./node_modules/adaptv/plugins/ban-server-apis.grit` works. So adaptv can ship the
   file, but the consumer's `biome.json` must reference it by an explicit `node_modules/`-qualified path.
 
 ### 2.5 Layer 4 — `never`-typed barrel entries, as free DX polish only
@@ -452,7 +452,7 @@ Two edits to the engine are still needed after the route-tree rewrite, and both 
 - **`@tanstack/router-generator` `dist/esm/transform/transform.js`, `targetModule`.** The generator
   writes the `createFileRoute` import into every route file, on disk, and names
   `@tanstack/react-router` there. No generator option changes it. Edited to read `ADAPTV_ROUTER_PKG`
-  (set by the plugin), so the import names `@arrzdev/adaptv/router`.
+  (set by the plugin), so the import names `adaptv/router`.
 - **`@tanstack/start-plugin-core` `dist/esm/constants.js`.** Start's entry ids
   (`virtual:tanstack-start-client-entry`, `-server-entry`, `-dev-client-entry`) are emitted into the
   HTML the app serves. Renamed to `virtual:adaptv/*`. `#tanstack-start-entry` and
@@ -467,7 +467,7 @@ written into the app, and it works the same under pnpm, npm and plain `vite`. Th
 `bin/lib/cap.mjs`.
 
 - **Ordering.** A load hook sees only modules loaded after it is registered, and Node loads a static
-  import graph whole before it runs any of it. So `@arrzdev/adaptv/vite` (`src/interface/vite.index.ts`)
+  import graph whole before it runs any of it. So `adaptv/vite` (`src/interface/vite.index.ts`)
   installs the hook, then imports the plugin with a dynamic `import()`; nothing it imports statically
   reaches the engine. The CLI runs Vite in a child process, so its only route to the engine is that
   same entry. `assertEngineEdited`, called first thing in the plugin factory, throws if the engine
@@ -489,7 +489,7 @@ the same result. The `capabilities`, `hooks`, `ota`, `storage`, `sw`, `utils` an
 clean. Every type an adaptv alias could name now has one (`NotFoundScreenComponent`,
 `NotFoundScreenProps`, `NotFoundOptions`, `RouteRedirect`, the `*RouteNode` DSL types,
 `AdaptvRootRoute`, `AppRouter`, `AdaptvRouter`, `AdaptvRouteTree`, `AdaptvHistory`), and
-`src/interface/public-type-names.test.ts` holds them. What `@arrzdev/adaptv/router` still shows:
+`src/interface/public-type-names.test.ts` holds them. What `adaptv/router` still shows:
 
 - **The generic hooks and functions** — `useRouter`, `useNavigate`, `useParams`, `useSearch`,
   `useMatch`, `useMatches`, `useLoaderData`, `useLocation`, `useRouterState`, `createFileRoute`,
