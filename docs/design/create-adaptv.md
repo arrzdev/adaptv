@@ -38,10 +38,14 @@ my-app/
   pnpm-workspace.yaml         allowBuilds for esbuild and sharp; patchedDependencies → patches/
   src/routing/config.ts       rootRoute([index(...)])
   src/routing/pages/home.page.tsx   one route, rooted in a View
-  src/styles/main.css         adaptv's styles, then the app's plain CSS
+  src/styles/main.css         the layer order, tailwindcss, adaptv's tailwind.css
   tsconfig.json
-  vite.config.ts              adaptv() once
+  vite.config.ts              adaptv() once, plus tailwindcss()
 ```
+
+The template styles with Tailwind 4: it is the default path, not a requirement of the framework, whose
+peers do not include Tailwind. An app that drops it imports `@arrzdev/adaptv/styles.css` and writes plain
+CSS or any other engine → [`../decisions/styling.md §8`](../decisions/styling.md).
 
 What it does **not** emit, on purpose:
 
@@ -73,7 +77,8 @@ Three details are there because the framework expects them:
   copying it here too.
 
 The app's `@arrzdev/adaptv` dependency is the framework's version (`ADAPTV_VERSION`). Its peers are
-pinned to the versions the framework pins. **`ADAPTV_SPEC`** overrides the framework spec, so you can
+pinned to the versions the framework pins; `tailwindcss` and `@tailwindcss/vite` are the template's
+own dependencies, at the versions the framework's tests use. **`ADAPTV_SPEC`** overrides the framework spec, so you can
 try the template against a checkout:
 
 ```bash

@@ -766,11 +766,12 @@ So one stylesheet serves both kinds of app, and neither maintains a second sourc
   be shipping a palette by the back door (§4.1); whether the defaults should reference them at all is
   out of scope here.
 - **The set is listed** in `styles.css`'s header, so the theming surface is countable.
-- ⚠︎ **To verify in the implementation, not to assume:** Tailwind v4 emits a theme variable only when
-  something uses it. If a token set in `@theme` does not reach a component whose app never uses the
-  matching utility, `tailwind.css` must make Tailwind keep it. The precedence e2e suite carries the
-  case: a Tailwind app sets `--color-surface` in `@theme`, never writes `bg-surface`, and the menu
-  still paints it.
+- **A token set only in `@theme` still reaches the components** (closed 2026-10-08, TUD-355).
+  Tailwind v4 emits a theme variable only when something uses it, and adaptv's own layer rule is
+  such a use: a `var(--color-surface)` read anywhere in the same build keeps the variable, under
+  `@theme inline` too (measured on Tailwind 4.2.4). So `tailwind.css` needs nothing to keep it. The
+  case stays tested: `playground/e2e/style-precedence.spec.ts` compiles an app that sets
+  `--color-surface` in `@theme`, never writes `bg-surface`, and the menu still paints it.
 
 **Modern-CSS bonus adaptv should take, which Ionic cannot:** with no IE11/legacy constraint,
 `color-mix()` and OKLCH **eliminate the `-rgb` twin-variable tax entirely**. A shade/tint is
