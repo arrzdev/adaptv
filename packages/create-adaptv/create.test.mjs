@@ -116,6 +116,32 @@ describe("what it emits", () => {
     expect(read("vite.config.ts").match(/adaptv\(\)/g)).toHaveLength(1)
   })
 
+  //styling.md §0.1: Tailwind left the framework's peers, not the template. A new app
+  //styles with Tailwind 4 and adaptv's tailwind.css, and lists Tailwind as its own.
+  it("styles with tailwind, which the app depends on and the framework does not", () => {
+    expect(read("vite.config.ts")).toMatch(
+      /^import tailwindcss from "@tailwindcss\/vite"$/m,
+    )
+    expect(read("vite.config.ts")).toContain(
+      "plugins: [adaptv(), tailwindcss()]",
+    )
+    expect(read("src/styles/main.css").split("\n").slice(0, 3)).toEqual([
+      "@layer theme, base, adaptv, components, utilities;",
+      '@import "tailwindcss";',
+      '@import "@arrzdev/adaptv/tailwind.css";',
+    ])
+    expect(read("src/routing/pages/home.page.tsx")).toContain(
+      "p-safe-offset-6",
+    )
+    const pkg = JSON.parse(read("package.json"))
+    for (const name of ["tailwindcss", "@tailwindcss/vite"]) {
+      expect(pkg.dependencies[name], name).toBe(
+        rootPkg.devDependencies[name],
+      )
+      expect(rootPkg.peerDependencies[name], name).toBeUndefined()
+    }
+  })
+
   it("wires the scripts to the real CLI surface and depends on this release", () => {
     const pkg = JSON.parse(read("package.json"))
     expect(Object.keys(pkg.scripts)).toEqual([
