@@ -213,7 +213,7 @@ function bandDonor(): HTMLElement | null {
       { type: "h2", text: "Six attempts that did not hold" },
       {
         type: "p",
-        text: "Five of these are from June 2026, in the app adaptv was extracted from. That repository is private, so they are dated and not linked. The last is in the adaptv history.",
+        text: "Five of these are from June 2026, in the app adaptv was extracted from. These attempts predate the adaptv repository, so they are dated, not linked. The last is in the adaptv history.",
       },
       {
         type: "ol",
@@ -294,7 +294,7 @@ document.addEventListener("focus", (event) => {
         items: [
           "We did not record which iOS versions show each symptom.",
           "The reason the offscreen move prevents the scroll is the authors' reading of the behaviour.",
-          "The commits for five of the six failed attempts are in a private repository, so only the sixth links.",
+          "The commits for five of the six failed attempts predate the adaptv repository, so only the sixth links.",
           "Both WebKit bugs above were still NEW when this was written.",
         ],
       },
@@ -330,7 +330,7 @@ document.addEventListener("focus", (event) => {
       { type: "h2", text: "Five versions that came before the one that holds" },
       {
         type: "p",
-        text: "The first four are from June and July 2026, in the app adaptv was extracted from. That repository is private, so they are dated and not linked. The last is in the adaptv history.",
+        text: "The first four are from June and July 2026, in the app adaptv was extracted from. These attempts predate the adaptv repository, so they are dated, not linked. The last is in the adaptv history.",
       },
       {
         type: "ol",
@@ -459,7 +459,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
       { type: "h2", text: "Seven things that did not hold" },
       {
         type: "p",
-        text: "The first five are from June 2026, in the app this framework was extracted from, and that repository is private, so they have no links. The last two are in the adaptv history.",
+        text: "The first five are from June 2026, in the app this framework was extracted from, and they predate the adaptv repository, so they have no links. The last two are in the adaptv history.",
       },
       {
         type: "ol",
@@ -595,7 +595,7 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
       { type: "h2", text: "Three attempts in three days" },
       {
         type: "p",
-        text: "The suppressor was written in June 2026, in the app adaptv was extracted from. That repository is private, so the attempts are dated rather than linked.",
+        text: "The suppressor was written in June 2026, in the app adaptv was extracted from. These attempts predate the adaptv repository, so they are dated, not linked.",
       },
       {
         type: "ol",
