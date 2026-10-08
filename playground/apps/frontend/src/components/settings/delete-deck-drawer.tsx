@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 import { useState } from "react"
 import {
   AppDrawer,

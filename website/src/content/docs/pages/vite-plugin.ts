@@ -6,7 +6,7 @@ export const page: DocPage = {
   summary:
     "adaptv() is the one plugin in vite.config.ts. It reads adaptv.config.ts and sets up routing, rendering, the manifest, the service worker and images.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { adaptv } from "@arrzdev/adaptv/vite"',
+  importLine: 'import { adaptv } from "adaptv/vite"',
   source: "src/vite/adaptv-plugin.ts",
   blocks: [
     {
@@ -18,7 +18,7 @@ export const page: DocPage = {
       type: "code",
       label: "vite.config.ts",
       lang: "ts",
-      code: `import { adaptv } from "@arrzdev/adaptv/vite"
+      code: `import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
 
 export default defineConfig({
@@ -63,7 +63,7 @@ export default defineConfig({
         {
           name: "routerSpecifier",
           type: "string",
-          default: '"@arrzdev/adaptv/router"',
+          default: '"adaptv/router"',
           description:
             "Where route files import `createFileRoute` from. Change it only if your project aliases the package.",
         },
@@ -82,7 +82,7 @@ export default defineConfig({
         "`.gitignore` gains `.adaptv/` and `capacitor.config.json`.",
         "`tsconfig.json` `include` gains `.adaptv/**/*.ts`, if it has an `include` array.",
         '`tsconfig.json` `paths` gains `"#adaptv-route-tree": ["./.adaptv/routeTree.gen.ts"]`, if it has a `paths` object. Without it, `navigate` and `redirect` accept any `to`. Add it by hand if you have no `paths`.',
-        "`.adaptv/adaptv-env.d.ts` is written. It points the type checker at adaptv's types, so `include` needs no `node_modules/@arrzdev/adaptv/...` entry.",
+        "`.adaptv/adaptv-env.d.ts` is written. It points the type checker at adaptv's types, so `include` needs no `node_modules/adaptv/...` entry.",
       ],
     },
     {
@@ -166,7 +166,7 @@ export default defineConfig({
       type: "code",
       label: "hero.tsx",
       lang: "tsx",
-      code: `import { Image } from "@arrzdev/adaptv/components"
+      code: `import { Image } from "adaptv/components"
 import hero from "./hero.jpg?adaptv-image"
 
 // hero: { src: string; width: number; height: number; lqip?: string }

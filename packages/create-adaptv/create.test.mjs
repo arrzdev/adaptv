@@ -128,7 +128,7 @@ describe("what it emits", () => {
     expect(read("src/styles/main.css").split("\n").slice(0, 3)).toEqual([
       "@layer theme, base, adaptv, components, utilities;",
       '@import "tailwindcss";',
-      '@import "@arrzdev/adaptv/tailwind.css";',
+      '@import "adaptv/tailwind.css";',
     ])
     expect(read("src/routing/pages/home.page.tsx")).toContain(
       "p-safe-offset-6",
@@ -151,7 +151,7 @@ describe("what it emits", () => {
       "build",
     ])
     expect(pkg.scripts).toEqual(SCRIPTS)
-    expect(pkg.dependencies["@arrzdev/adaptv"]).toBe(rootPkg.version)
+    expect(pkg.dependencies["adaptv"]).toBe(rootPkg.version)
   })
 
   it("refuses a directory that already holds something", () => {
@@ -355,7 +355,7 @@ describe("a created app", () => {
           .filter((f) => f !== about)
           .map((f) => [f, readFileSync(join(dir, f), "utf8")]),
       )
-      link("@arrzdev/adaptv", ROOT)
+      link("adaptv", ROOT)
       for (const name of Object.keys(DEPENDENCIES))
         link(name, join(ROOT, "node_modules", name))
 
@@ -369,7 +369,7 @@ describe("a created app", () => {
       for (const [file, text] of Object.entries(before))
         expect(readFileSync(join(dir, file), "utf8"), file).toBe(text)
       expect(readFileSync(join(dir, about), "utf8")).toMatch(
-        /^import \{ createFileRoute \} from ["']@arrzdev\/adaptv\/router["']$/m,
+        /^import \{ createFileRoute \} from ["']adaptv\/router["']$/m,
       )
       expect(readFileSync(join(dir, about), "utf8")).not.toMatch(
         /tanstack/i,
@@ -400,7 +400,7 @@ describe("a created app", () => {
     () => {
       expect(ensureDist(ROOT)).toBe(true)
       const { dir, link, build } = linkedApp()
-      link("@arrzdev/adaptv", ROOT)
+      link("adaptv", ROOT)
       for (const name of Object.keys(DEPENDENCIES))
         link(name, join(ROOT, "node_modules", name))
       const page = join(dir, "src/routing/pages/home.page.tsx")

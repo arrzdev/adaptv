@@ -6,8 +6,8 @@ import {
   readTextFile,
   statFile,
   writeFile,
-} from "@arrzdev/adaptv/capabilities"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/capabilities"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

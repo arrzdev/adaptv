@@ -1,4 +1,4 @@
-import { ExternalLink, Link, View } from "@arrzdev/adaptv/components"
+import { ExternalLink, Link, View } from "adaptv/components"
 import { Check, Minus, TriangleAlert, X } from "lucide-react"
 import type { ReactNode } from "react"
 import { CodePanel } from "@/components/code"

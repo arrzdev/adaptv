@@ -1,6 +1,6 @@
 @layer theme, base, adaptv, components, utilities;
 @import "tailwindcss";
-@import "@arrzdev/adaptv/tailwind.css";
+@import "adaptv/tailwind.css";
 
 :root {
   color-scheme: light dark;

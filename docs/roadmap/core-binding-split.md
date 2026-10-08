@@ -243,10 +243,9 @@ The gate matters more than the layout. B with the gate beats A without it.
 
 ### 4.1 Not a second package
 
-**L1** is single-package, and register §5.0.0 records why the scope cannot move: GitHub Packages
-requires the npm scope to match the repo owner, so `@adaptv/vue` does not exist as an option without
-going public and re-scoping. If a second binding is ever built, its shape is a **subpath export** —
-`@arrzdev/adaptv/vue` beside `/router` and `/components` — and the peer dependency on `react` becomes
+**L1** is single-package, and the package is the unscoped `adaptv` on public npm (register
+§5.0.0), so a second binding would not be `@adaptv/vue`. If a second binding is ever built, its shape is a **subpath export** —
+`adaptv/vue` beside `/router` and `/components` — and the peer dependency on `react` becomes
 optional per subpath. Nothing in this work should assume otherwise, and nothing in it requires a
 package split to be worth doing.
 

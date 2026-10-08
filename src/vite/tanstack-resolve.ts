@@ -18,7 +18,7 @@ const ROUTER_CORE_PREBUNDLE = [
   "@tanstack/router-core",
   "@tanstack/router-core/isServer",
   "@tanstack/router-core/scroll-restoration-script",
-].map((entry) => `@arrzdev/adaptv > @tanstack/react-router > ${entry}`)
+].map((entry) => `adaptv > @tanstack/react-router > ${entry}`)
 
 const ROUTER = "@tanstack/react-router"
 //The router the app's modules get: TanStack's, with adaptv's `lazyRouteComponent`.
@@ -101,11 +101,11 @@ export function adaptvTanstackResolvePlugin(
       command === "serve"
         ? {
             resolve: {
-              noExternal: ["@arrzdev/adaptv", "@tanstack/react-router"],
+              noExternal: ["adaptv", "@tanstack/react-router"],
             },
             optimizeDeps: { include: ROUTER_CORE_PREBUNDLE },
           }
-        : { resolve: { noExternal: ["@arrzdev/adaptv", /^@tanstack\//] } },
+        : { resolve: { noExternal: ["adaptv", /^@tanstack\//] } },
     //`post`: Start adds the entries in its own `configEnvironment`, merged before this
     //runs. Removing one takes a write to the merged options, not a returned partial,
     //because Vite concatenates arrays when it merges.

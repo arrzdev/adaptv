@@ -2,7 +2,7 @@
  * The opacity boundary, as code.
  *
  * adaptv is a framework, not a wrapper: a consumer writes `adaptv.config.ts`, imports from
- * `@arrzdev/adaptv`, and is never told that TanStack Router, TanStack Start or Capacitor are
+ * `adaptv`, and is never told that TanStack Router, TanStack Start or Capacitor are
  * underneath (`docs/design/cli-contract.md` R8, `docs/decisions/register.md` L20 / O2). That is a
  * promise about the WHOLE surface,
  * and output is part of the surface — a `✖` naming `@tanstack/start-server-core` teaches the

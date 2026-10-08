@@ -1,8 +1,5 @@
-import type { SwitchHandle, SwitchProps } from "@arrzdev/adaptv/components"
-import {
-  Switch as BaseSwitch,
-  useSwitch,
-} from "@arrzdev/adaptv/components"
+import type { SwitchHandle, SwitchProps } from "adaptv/components"
+import { Switch as BaseSwitch, useSwitch } from "adaptv/components"
 import { forwardRef } from "react"
 import { useHaptics } from "@/hooks/use-haptics"
 import { cn } from "@/utils/cn"

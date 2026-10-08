@@ -44,7 +44,7 @@ adaptv decides **nothing** about when your data is missing. That's yours.
 One component, two call sites. All props optional, which is what lets it serve both.
 
 > ⚠︎ **You probably do not need to write this component.** adaptv **ships and exports `Offline`**
-> (`@arrzdev/adaptv/components`) — themed, safe-area-aware, and already the default for
+> (`adaptv/components`) — themed, safe-area-aware, and already the default for
 > `offlineComponent`. Reach for the props first; write your own only when you want different
 > *structure*, not different words or colours.
 >
@@ -67,7 +67,7 @@ If you do want your own, the shape is small:
 
 ```tsx
 // src/components/offline.tsx
-import { View, Button } from "@arrzdev/adaptv/components"
+import { View, Button } from "adaptv/components"
 
 export type OfflineProps = {
   /** Absent when adaptv renders this; you pass `refetch` / a router invalidate. */
@@ -139,7 +139,7 @@ use Query:
 
 ```ts
 import { onlineManager } from "@tanstack/react-query"
-import { getOnline, subscribeOnline } from "@arrzdev/adaptv/capabilities"
+import { getOnline, subscribeOnline } from "adaptv/capabilities"
 
 onlineManager.setEventListener((setOnline) =>
   subscribeOnline(() => setOnline(getOnline())),
@@ -252,7 +252,7 @@ Each of these has a decision recorded elsewhere and wants a worked example befor
   A link that launches the app reaches it by two routes at once, and adaptv reads only one of them,
   so each link routes exactly once and runs its route's `beforeLoad` and loader once. Android is
   unverified: recreating the app's activity (reopening it from Recents after it finished, or after
-  the system killed it) replays its launch link. `onUrlOpened(({ url, path }) => …)` from `@arrzdev/adaptv/capabilities` hears links
+  the system killed it) replays its launch link. `onUrlOpened(({ url, path }) => …)` from `adaptv/capabilities` hears links
   after they are routed — for analytics or finishing a sign-in callback, not for navigating — and
   only while subscribed, so read the launching link from the route it landed on. Nothing happens on
   the web, where a link is simply the page's URL. **Not built:** universal links and Android app

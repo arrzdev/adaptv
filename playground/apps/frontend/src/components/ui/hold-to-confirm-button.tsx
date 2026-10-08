@@ -1,6 +1,6 @@
-import { Text } from "@arrzdev/adaptv/components"
-import type { GestureState } from "@arrzdev/adaptv/hooks"
-import { useGestureEngine } from "@arrzdev/adaptv/hooks"
+import { Text } from "adaptv/components"
+import type { GestureState } from "adaptv/hooks"
+import { useGestureEngine } from "adaptv/hooks"
 import type { ReactNode } from "react"
 import {
   useCallback,

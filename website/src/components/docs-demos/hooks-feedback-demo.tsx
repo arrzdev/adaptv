@@ -1,6 +1,6 @@
-import { View } from "@arrzdev/adaptv/components"
-import type { GestureState } from "@arrzdev/adaptv/hooks"
-import { useGestureEngine } from "@arrzdev/adaptv/hooks"
+import { View } from "adaptv/components"
+import type { GestureState } from "adaptv/hooks"
+import { useGestureEngine } from "adaptv/hooks"
 import { useState } from "react"
 
 export function HooksFeedbackDemo() {

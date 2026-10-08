@@ -10,7 +10,7 @@
  *
  *   · a worktree gets its own playground for free, checked out with the branch, so two
  *     worktrees can take the framework in different directions without meeting;
- *   · the app's committed `"@arrzdev/adaptv": "link:../../.."` resolves to the checkout it
+ *   · the app's committed `"adaptv": "link:../../.."` resolves to the checkout it
  *     sits in — whichever worktree that is — so nothing repoints anything, ever;
  *   · a framework change and the consumer change it forces land in ONE commit, one diff,
  *     one review. No second repo, no branch pairing, no syncing.
@@ -131,14 +131,7 @@ function installStale() {
 // another checkout, and every symptom after that reads as "my change did nothing".
 try {
   const linked = realpathSync(
-    path.join(
-      PLAYGROUND,
-      "apps",
-      "frontend",
-      "node_modules",
-      "@arrzdev",
-      "adaptv",
-    ),
+    path.join(PLAYGROUND, "apps", "frontend", "node_modules", "adaptv"),
   )
   if (linked !== realpathSync(WORKTREE)) {
     log.warn(
@@ -149,7 +142,7 @@ try {
   // no link yet (a package that doesn't declare it, or a partial install) — the run will say so
 }
 
-// The app resolves `@arrzdev/adaptv/*` to `dist/` like any install, so an edit under `src/`
+// The app resolves `adaptv/*` to `dist/` like any install, so an edit under `src/`
 // reaches it only through a build. Skipped when nothing changed since the last one, and for
 // the commands that never run the app (`biome:check`).
 if (

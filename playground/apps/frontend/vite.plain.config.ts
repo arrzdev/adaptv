@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url"
-import { adaptv } from "@arrzdev/adaptv/vite"
+import { adaptv } from "adaptv/vite"
 import type { Plugin } from "vite"
 import { defineConfig } from "vite"
 import { shared } from "./vite.shared"
@@ -14,7 +14,7 @@ import { shared } from "./vite.shared"
  *
  * Two switches make it plain, and the guard below fails the build if either leaks:
  * - the stylesheet: adaptv.config.ts reads PLAYGROUND_CSS and picks `plain.css`,
- *   which imports `@arrzdev/adaptv/styles.css` and no Tailwind;
+ *   which imports `adaptv/styles.css` and no Tailwind;
  * - the page helper: `@/utils/cn` is clsx + tailwind-merge, so it is swapped for a
  *   plain join.
  */

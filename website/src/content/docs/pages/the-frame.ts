@@ -23,7 +23,7 @@ export const page: DocPage = {
       type: "code",
       label: "inbox.tsx",
       lang: "tsx",
-      code: `import { ScrollView, View } from "@arrzdev/adaptv/components"
+      code: `import { ScrollView, View } from "adaptv/components"
 
 // Header and tab bar stay. The middle scrolls.
 // Header, Messages and TabBar are your own components.

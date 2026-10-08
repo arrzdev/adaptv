@@ -33,6 +33,6 @@ export const shared = {
     dedupe: ["react", "react-dom"],
   },
   ssr: {
-    noExternal: ["@arrzdev/adaptv", "@repo/shared"],
+    noExternal: ["adaptv", "@repo/shared"],
   },
 } satisfies UserConfig

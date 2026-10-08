@@ -1,5 +1,5 @@
-import { useDevice, useLocale } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useDevice, useLocale } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import {
   getOS,
   isInstalledApp,
@@ -8,7 +8,7 @@ import {
   isOSVersionAtLeast,
   isStandaloneDisplay,
   resolvePlatformTag,
-} from "@arrzdev/adaptv/utils"
+} from "adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import { LabBadge, LabRow, LabSection } from "@/components/lab/lab-kit"

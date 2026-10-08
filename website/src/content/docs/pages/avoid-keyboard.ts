@@ -7,14 +7,14 @@ export const page: DocPage = {
     "A scroller that keeps the focused field above the on-screen keyboard.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { AvoidKeyboard, useKeyboardAvoidance } from "@arrzdev/adaptv/components"',
+    'import { AvoidKeyboard, useKeyboardAvoidance } from "adaptv/components"',
   source: "src/components/avoid-keyboard/avoid-keyboard.tsx",
   blocks: [
     {
       type: "code",
       label: "edit-profile.page.tsx",
       lang: "tsx",
-      code: `import { AvoidKeyboard, Input, TextArea } from "@arrzdev/adaptv/components"
+      code: `import { AvoidKeyboard, Input, TextArea } from "adaptv/components"
 
 <AvoidKeyboard className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden overscroll-y-contain touch-pan-x touch-pan-y touch-pinch-zoom px-6 pt-safe-offset-2 pb-2">
   <Input name="name" placeholder="Name" />

@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from "@arrzdev/adaptv/components"
+import { ScrollView, Text, View } from "adaptv/components"
 import { GhostButton } from "@/components/ui"
 import { PRIORITY_LEVELS } from "@/data/collections/todos/priority"
 import { cn } from "@/utils/cn"

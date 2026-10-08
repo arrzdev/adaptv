@@ -1,9 +1,9 @@
 /*
- * adaptv for Tailwind v4 apps — `@arrzdev/adaptv/tailwind.css`, OPTIONAL
+ * adaptv for Tailwind v4 apps — `adaptv/tailwind.css`, OPTIONAL
  * (docs/decisions/styling.md §0.1). Import it INSTEAD of `styles.css`, after Tailwind:
  *
  *     @import "tailwindcss";
- *     @import "@arrzdev/adaptv/tailwind.css";
+ *     @import "adaptv/tailwind.css";
  *
  * It is `styles.css` plus the Tailwind spellings of what `styles.css` offers as plain
  * CSS: the six variants (§5), the three utility classes as `@utility` so variants

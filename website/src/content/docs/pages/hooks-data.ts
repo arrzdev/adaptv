@@ -8,13 +8,13 @@ export const page: DocPage = {
     "Copy and paste, the share sheet, the device position and the connection state.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useClipboard, useShare, useGeolocation, useIsOffline } from "@arrzdev/adaptv/hooks"',
+    'import { useClipboard, useShare, useGeolocation, useIsOffline } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
       type: "demo",
       component: HooksDataDemo,
-      code: `import { useClipboard, useIsOffline } from "@arrzdev/adaptv/hooks"
+      code: `import { useClipboard, useIsOffline } from "adaptv/hooks"
 
 const { copy, paste, canRead, readPermission, status, text } = useClipboard()
 const isOffline = useIsOffline()

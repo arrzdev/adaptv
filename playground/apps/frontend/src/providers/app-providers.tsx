@@ -1,5 +1,5 @@
-import { useLocation } from "@arrzdev/adaptv/router"
 import { QueryClientProvider } from "@tanstack/react-query"
+import { useLocation } from "adaptv/router"
 import type { ReactNode } from "react"
 import { CatchBoundary } from "@/components/ui/catch-boundary"
 import { AppDbProvider } from "@/providers/app-db-provider"

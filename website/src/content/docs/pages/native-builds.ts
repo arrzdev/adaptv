@@ -42,7 +42,7 @@ export const page: DocPage = {
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   name: "Chop Chop",

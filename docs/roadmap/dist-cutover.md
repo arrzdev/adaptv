@@ -52,14 +52,14 @@ included).
 
 ### The playground shims: one is gone, two come from `link:`
 
-The third shim, the `node_modules/@arrzdev/adaptv/src/**/virtual-adaptv-*.d.ts` include, is gone.
+The third shim, the `node_modules/adaptv/src/**/virtual-adaptv-*.d.ts` include, is gone.
 `src/interface/route-globals.d.ts` references all seven declarations by relative path, and tsdown
 copies them into `dist/` with `src/`'s layout. `src/vite/stamp.ts` used to put
-`node_modules/@arrzdev/adaptv/src/interface/route-globals.d.ts` in the app's `include`, but an
+`node_modules/adaptv/src/interface/route-globals.d.ts` in the app's `include`, but an
 `exclude` of `node_modules` (the website's, and `create-adaptv`'s template) silently drops such an
 entry. It now generates `.adaptv/adaptv-env.d.ts`, a `/// <reference types>` to
-`@arrzdev/adaptv/route-globals` that resolves through `exports`. The two declarations that
-imported `#adaptv/*` now import `@arrzdev/adaptv/router`, which resolves in a published package.
+`adaptv/route-globals` that resolves through `exports`. The two declarations that
+imported `#adaptv/*` now import `adaptv/router`, which resolves in a published package.
 Checked in the playground and the website: the typecheck passes without the glob or the include
 line, and fails on an `?adaptv-image` import when the generated reference or the
 `/// <reference path>`s are removed.
@@ -91,7 +91,7 @@ Removing them would mean `injected` installs, which need a reinstall after every
 The recorded reason was that shipping raw source means no build step, therefore no `prepare` script,
 therefore no pnpm-11 `allowBuilds` entry — which is a git-dependency's main friction. That argument
 was written when the answer was *"stay on raw source until there is a second consumer"*, and the repo
-has since gone the other way: the build exists, `publishConfig` names GitHub Packages, and
+has since gone the other way: the build exists, `publishConfig` names the public npm registry, and
 [`../decisions/dist-build.md`](../decisions/dist-build.md) settles the question. **The deferral is now
 about sequencing, not about the decision.**
 
@@ -104,10 +104,10 @@ about sequencing, not about the decision.**
    longer the shipped path — see the trap above.
 4. An app from `create-adaptv`, installed from a `pnpm pack` tarball of the framework outside the
    repo, passes `adaptv build web`. ✅ Done 2026-10-05. The template carries the patches in the
-   app's own `patches/`, because a `node_modules/@arrzdev/adaptv/patches/` block fails a fresh
+   app's own `patches/`, because a `node_modules/adaptv/patches/` block fails a fresh
    install with `ERR_PNPM_PATCH_NOT_FOUND`. An app created against the tarball, outside the repo,
    ran `pnpm install`, `adaptv build web` (exit 0) and `adaptv dev web` (200) with nothing copied
    by hand. `examples/basic` is that app, run by the README quick start.
-   [`../design/create-adaptv.md §4`](../design/create-adaptv.md). `adaptv()` adds `@arrzdev/adaptv` to
+   [`../design/create-adaptv.md §4`](../design/create-adaptv.md). `adaptv()` adds `adaptv` to
    `noExternal` (dist imports `virtual:adaptv-*` modules, which Node cannot load in dev), so the
    template's `vite.config.ts` has no `ssr` key.

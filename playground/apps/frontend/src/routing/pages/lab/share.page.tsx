@@ -1,7 +1,7 @@
-import type { ShareTarget } from "@arrzdev/adaptv/capabilities"
-import { writeFile } from "@arrzdev/adaptv/capabilities"
-import { useShare } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import type { ShareTarget } from "adaptv/capabilities"
+import { writeFile } from "adaptv/capabilities"
+import { useShare } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

@@ -1,4 +1,4 @@
-import { Button, Text, View } from "@arrzdev/adaptv/components"
+import { Button, Text, View } from "adaptv/components"
 import { useState } from "react"
 
 const BODY =

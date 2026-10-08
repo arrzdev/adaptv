@@ -1,7 +1,7 @@
 import { afterEach } from "vitest"
 import { installEngineEdits } from "./src/vite/engine-hooks.ts"
 
-//what `@arrzdev/adaptv/vite` does before it loads the plugin: tests import the plugin
+//what `adaptv/vite` does before it loads the plugin: tests import the plugin
 //directly, so the engine would otherwise load unedited. → src/vite/engine-hooks.ts
 installEngineEdits()
 

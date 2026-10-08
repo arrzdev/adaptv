@@ -1,5 +1,5 @@
-import { View } from "@arrzdev/adaptv/components"
-import { useReducedMotion } from "@arrzdev/adaptv/hooks"
+import { View } from "adaptv/components"
+import { useReducedMotion } from "adaptv/hooks"
 import { useInView } from "motion/react"
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react"
 import { type Frame, parseAnsi, replayFrames } from "@/components/ansi"

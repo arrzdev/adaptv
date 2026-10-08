@@ -29,8 +29,8 @@ import {
   UiNotFound,
   View,
   WheelColumn,
-} from "@arrzdev/adaptv/components"
-import { createFileRoute, useLocation } from "@arrzdev/adaptv/router"
+} from "adaptv/components"
+import { createFileRoute, useLocation } from "adaptv/router"
 import type { CSSProperties, ReactNode } from "react"
 import labPhotoTallUrl from "@/assets/lab-photo-tall.jpg?url"
 import { LabBrief } from "@/components/lab/lab-brief"

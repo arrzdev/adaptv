@@ -1,4 +1,4 @@
-import { defineApp } from "@arrzdev/adaptv/config"
+import { defineApp } from "adaptv/config"
 
 //The adaptv website is an adaptv app. It is server-rendered (the default) because it
 //is exactly the case that default exists for: a public surface that has to be indexed

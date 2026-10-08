@@ -1,4 +1,4 @@
-import { Button, View } from "@arrzdev/adaptv/components"
+import { Button, View } from "adaptv/components"
 import { useEffect, useState } from "react"
 
 function Spinner() {

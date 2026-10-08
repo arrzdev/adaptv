@@ -1,5 +1,5 @@
-import type { InputHandle } from "@arrzdev/adaptv/components"
-import { Text, View } from "@arrzdev/adaptv/components"
+import type { InputHandle } from "adaptv/components"
+import { Text, View } from "adaptv/components"
 import { useRef, useState } from "react"
 import { PasswordField } from "@/components/auth/password-field"
 import { AppDrawer, PrimaryButton, TextInput } from "@/components/ui"

@@ -7,13 +7,13 @@ export const page: DocPage = {
   summary:
     "An `<img>` that reserves its box before the file loads, so nothing moves.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Image, useImage } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Image, useImage } from "adaptv/components"',
   source: "src/components/image.tsx",
   blocks: [
     {
       type: "demo",
       component: ImageDemo,
-      code: `import { Image } from "@arrzdev/adaptv/components"
+      code: `import { Image } from "adaptv/components"
 import capture from "./ios-list.png?adaptv-image"
 
 // capture = { src, width: 660, height: 1431, lqip }

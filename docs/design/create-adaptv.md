@@ -44,7 +44,7 @@ my-app/
 ```
 
 The template styles with Tailwind 4: it is the default path, not a requirement of the framework, whose
-peers do not include Tailwind. An app that drops it imports `@arrzdev/adaptv/styles.css` and writes plain
+peers do not include Tailwind. An app that drops it imports `adaptv/styles.css` and writes plain
 CSS or any other engine → [`../decisions/styling.md §8`](../decisions/styling.md).
 
 What it does **not** emit, on purpose:
@@ -59,7 +59,7 @@ What it does **not** emit, on purpose:
 - **No `adaptv run`.** That command does not exist; `adaptv build` does what it was imagined to do.
 - **No `ssr` key in `vite.config.ts`.** `dist/` imports the modules adaptv's Vite plugin serves
   (`virtual:adaptv-*`), which Node refuses: a dev server that hands the package to Node answers every
-  page with a 500. Every app needs `@arrzdev/adaptv` in `noExternal`, so `adaptv()` adds it, in serve
+  page with a 500. Every app needs `adaptv` in `noExternal`, so `adaptv()` adds it, in serve
   and build (`src/vite/tanstack-resolve.ts`). A build bundles everything, so it passes either way.
 
 Three details are there because the framework expects them:
@@ -76,7 +76,7 @@ Three details are there because the framework expects them:
   copy is the framework's `patches/`, held byte for byte by `create.test.mjs`. Bumping a patch means
   copying it here too.
 
-The app's `@arrzdev/adaptv` dependency is the framework's version (`ADAPTV_VERSION`). Its peers are
+The app's `adaptv` dependency is the framework's version (`ADAPTV_VERSION`). Its peers are
 pinned to the versions the framework pins; `tailwindcss` and `@tailwindcss/vite` are the template's
 own dependencies, at the versions the framework's tests use. **`ADAPTV_SPEC`** overrides the framework spec, so you can
 try the template against a checkout:
@@ -115,7 +115,7 @@ Measured by installing a `pnpm pack` tarball of the framework into a created app
   tarball, runs `adaptv dev web` and `adaptv build web`.
   → [`../roadmap/dist-cutover.md`](../roadmap/dist-cutover.md)
 - **The patches, inside the app.** pnpm applies `patchedDependencies` only from the root project
-  ([`patches.md §2`](patches.md)). A block that points at `node_modules/@arrzdev/adaptv/patches/`
+  ([`patches.md §2`](patches.md)). A block that points at `node_modules/adaptv/patches/`
   fails a fresh install with `ERR_PNPM_PATCH_NOT_FOUND`, because the files are inside the package
   being installed. The template now carries them in the app's `patches/` (§2), and adaptv's
   missing-patch error tells a hand-made app to copy them there.

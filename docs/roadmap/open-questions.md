@@ -298,7 +298,7 @@ is why none of them is current. Also unresolved: the second half of adaptv's sta
 inventory of what to forbid, and that inventory *is* the product.
 
 Note the shape is already constrained if the answer is ever yes: **L1** (single package) and register
-§5.0.0 (the npm scope must match the repo owner) mean a subpath export, `@arrzdev/adaptv/vue`, never a
+§5.0.0 (the npm scope must match the repo owner) mean a subpath export, `adaptv/vue`, never a
 separate `@adaptv/*` package.
 
 Decided by: whether adaptv ever has a second consumer asking, and by one person's maintenance budget.
@@ -310,7 +310,7 @@ this question `no` does not undo it.
 **Answered 2026-10-05 by the owner: no.** adaptv's own styles become plain CSS in
 `@layer adaptv.components`; `tailwindcss`, `tailwind-merge` and `clsx` leave `peerDependencies`;
 `cn()` and `mergeStyles` stop being exported; the safe-area utilities and the variants move to an
-optional `@arrzdev/adaptv/tailwind.css`. The decision, and what it rejected, is
+optional `adaptv/tailwind.css`. The decision, and what it rejected, is
 [`../decisions/register.md`](../decisions/register.md) **L24**; the contract is
 [`../decisions/styling.md`](../decisions/styling.md) §0.1 and §2. Both preconditions below held:
 [`patch-delivery.md`](patch-delivery.md) §4 shipped first, and the bundle is measured in the PR that

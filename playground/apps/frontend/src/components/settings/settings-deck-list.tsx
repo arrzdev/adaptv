@@ -1,4 +1,3 @@
-import { Text, View } from "@arrzdev/adaptv/components"
 import type {
   DragEndEvent,
   DragOverEvent,
@@ -15,6 +14,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { Text, View } from "adaptv/components"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { useCallback, useRef } from "react"
 import { SettingsAddRow } from "@/components/settings/settings-list-row"

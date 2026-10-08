@@ -1,5 +1,5 @@
-import { Button, View } from "@arrzdev/adaptv/components"
-import { useKv } from "@arrzdev/adaptv/storage"
+import { Button, View } from "adaptv/components"
+import { useKv } from "adaptv/storage"
 
 const BUTTON_CLASS =
   "rounded-lg border border-border-strong bg-surface px-3 py-1.5 text-[13px] text-foreground"

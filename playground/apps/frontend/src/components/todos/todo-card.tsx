@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "@arrzdev/adaptv/components"
+import { Pressable, Text, View } from "adaptv/components"
 import { Archive, ArchiveRestore, Clock, Flag, Trash2 } from "lucide-react"
 import { AppSwipeable, Checkbox, IconButton } from "@/components/ui"
 import { dueRelativeLabel, dueTone } from "@/data/collections/todos/dates"
