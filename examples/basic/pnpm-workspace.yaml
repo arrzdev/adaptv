@@ -6,7 +6,7 @@ allowBuilds:
 # adaptv's dependency patches. pnpm applies `patchedDependencies` only from the root of
 # the project it installs, so a package cannot bring its own: the app carries them in
 # `patches/`. They change how native builds and over-the-air updates behave. When you
-# upgrade adaptv, copy `node_modules/@arrzdev/adaptv/patches/` over `patches/` and update
+# upgrade adaptv, copy `node_modules/adaptv/patches/` over `patches/` and update
 # the keys to match.
 patchedDependencies:
   '@capacitor/cli@8.4.3': patches/@capacitor__cli@8.4.3.patch

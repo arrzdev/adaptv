@@ -26,7 +26,7 @@ export const page: DocPage = {
       type: "code",
       label: "adaptv.config.ts",
       lang: "ts",
-      code: `import { defineApp } from "@arrzdev/adaptv/config"
+      code: `import { defineApp } from "adaptv/config"
 
 export default defineApp({
   // ...
@@ -161,13 +161,13 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
     },
     {
       type: "p",
-      text: "`useStoreRelease()` from `@arrzdev/adaptv/hooks` returns `{ buildTag, since }` when the channel is ahead of this binary, and `null` otherwise. `since` is in milliseconds and survives relaunches.",
+      text: "`useStoreRelease()` from `adaptv/hooks` returns `{ buildTag, since }` when the channel is ahead of this binary, and `null` otherwise. `since` is in milliseconds and survives relaunches.",
     },
     {
       type: "code",
       label: "update-nudge.tsx",
       lang: "tsx",
-      code: `import { useStoreRelease } from "@arrzdev/adaptv/hooks"
+      code: `import { useStoreRelease } from "adaptv/hooks"
 
 // Banner is your own component.
 export function UpdateNudge() {

@@ -1,6 +1,6 @@
-import { hideNativeSplash } from "@arrzdev/adaptv/capabilities"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { isInstalledApp, isNativePlatform } from "@arrzdev/adaptv/utils"
+import { hideNativeSplash } from "adaptv/capabilities"
+import { createFileRoute } from "adaptv/router"
+import { isInstalledApp, isNativePlatform } from "adaptv/utils"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

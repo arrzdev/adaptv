@@ -256,7 +256,7 @@ export type AdaptvAppConfig = {
    * serviceWorkers: ["./src/sw/push.ts"]
    * ```
    *
-   * Write them against `@arrzdev/adaptv/sw` (`sendToApp`, `onAppMessage`,
+   * Write them against `adaptv/sw` (`sendToApp`, `onAppMessage`,
    * `cacheRoute`); the app side reads them with `useServiceWorkerMessage()`. You
    * never write registration code — adaptv owns that end to end.
    */
@@ -359,7 +359,7 @@ export type AdaptvAppConfig = {
    * projects, so `myapp://settings/profile?tab=2` opens the app at
    * `/settings/profile?tab=2` — the host is the first path segment. A link that launches
    * the app replaces the screen it was about to show; one that arrives later is an
-   * ordinary navigation. Hear them with `onUrlOpened` from `@arrzdev/adaptv/capabilities`.
+   * ordinary navigation. Hear them with `onUrlOpened` from `adaptv/capabilities`.
    *
    * Lowercase, starting with a letter; `http`/`https` are refused. Dev, preview and
    * release builds declare the same scheme, so with two installed the OS picks one.

@@ -270,7 +270,7 @@ Map lifecycle to what already exists, thinly:
   onLeave })` is sugar over mount/unmount + the route match, for symmetry with the mental model — not a
   new retention mechanism.
 
-  > ✅ **Reachable as of 2026-08-30** — `import { useScreenLifecycle } from "@arrzdev/adaptv/hooks"`.
+  > ✅ **Reachable as of 2026-08-30** — `import { useScreenLifecycle } from "adaptv/hooks"`.
   > It had shipped in the internal `src/hooks/index.ts` while being absent from
   > `src/interface/hooks.index.ts`, the barrel `package.json` `exports` actually points at, so this
   > doc described a contract no consumer could import. It was a barrel omission, not a decision —

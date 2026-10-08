@@ -314,7 +314,7 @@ starts, so the settle is read from `getAnimations()` and completes synchronously
 fallback. WebKit on the iOS 18 floor has no `until-found`; the attribute degrades to plain `hidden`
 with no separate code path.
 **`Slider` shipped** (`src/components/slider.tsx`, 2026-09-02, exported from
-`@arrzdev/adaptv/components`) and passes the two-quirk test with room to spare. iOS WebKit ignores a
+`adaptv/components`) and passes the two-quirk test with room to spare. iOS WebKit ignores a
 touch that starts on a native range *track*: only the thumb drags, and a tap on the track does
 nothing. The painted `Slider.Track` handles the pointer on the whole control, so tap-to-set and
 drag-from-anywhere work on every target. A horizontal drag also competes with `Swipeable`, `Drawer`

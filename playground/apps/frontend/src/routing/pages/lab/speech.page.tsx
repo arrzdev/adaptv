@@ -1,5 +1,5 @@
-import { useSpeech } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useSpeech } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

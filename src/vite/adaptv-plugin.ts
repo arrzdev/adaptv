@@ -73,7 +73,7 @@ import { adaptvPwaRegisterPlugin } from "#adaptv/vite/virtuals.ts"
 const DEFAULT_ROUTER_CONFIG = "./src/routing/config.ts"
 
 /** Default specifier for every generated import. Overridable for aliased installs. */
-const DEFAULT_ROUTER_SPECIFIER = "@arrzdev/adaptv/router"
+const DEFAULT_ROUTER_SPECIFIER = "adaptv/router"
 
 export type AdaptvOptions = {
   /** App root holding `adaptv.config.ts`. Default: `process.cwd()`. */
@@ -88,10 +88,10 @@ export type AdaptvOptions = {
   target?: "web" | "capacitor"
   /**
    * The specifier route files import the route factory from. Default
-   * `"@arrzdev/adaptv/router"`.
+   * `"adaptv/router"`.
    *
    * Exists because the package is not always reachable under its published name:
-   * a monorepo may alias it (`@arrzdev/adaptv`), and the injected import has to be
+   * a monorepo may alias it (`adaptv`), and the injected import has to be
    * something the consumer's own resolver can actually follow. Getting it wrong
    * fails loudly at build time with an unresolved import, which is the right
    * failure mode.
@@ -441,7 +441,7 @@ function deriveStartOptions(
       //autoimport plugin). adaptv redirects the specifier it writes from
       //`@tanstack/<target>-router` to the adaptv barrel by editing the generator's
       //`targetModule` as Node loads it, driven by ADAPTV_ROUTER_PKG (set above). So
-      //route files end up importing `createFileRoute` from `@arrzdev/adaptv/router` —
+      //route files end up importing `createFileRoute` from `adaptv/router` —
       //zero `@tanstack/*` in the consumer's source. → src/vite/router-autoimport.ts,
       //src/vite/engine-hooks.ts
       virtualRouteConfig: router.routerConfig ?? DEFAULT_ROUTER_CONFIG,

@@ -8,7 +8,7 @@ import { adaptvPackageRoot } from "#adaptv/vite/package-files.ts"
 /**
  * adaptv's own dependencies are not the app's (L20).
  *
- * An app imports what its own `package.json` lists and what `@arrzdev/adaptv/*`
+ * An app imports what its own `package.json` lists and what `adaptv/*`
  * exports. The packages adaptv is built on are its business: a direct import of one
  * ties the app to a version adaptv may change in any release, and it teaches the dev
  * the machinery the barrels exist to hide. → docs/decisions/facade-and-opacity.md §1
@@ -124,7 +124,7 @@ export function describeEngineImport(
 ): string {
   return (
     `${file} imports a package missing from the app's package.json — add it there, ` +
-    `or import from an @arrzdev/adaptv subpath.\n` +
+    `or import from an adaptv subpath.\n` +
     `The import is "${source}". adaptv's own dependencies are not part of the app.`
   )
 }

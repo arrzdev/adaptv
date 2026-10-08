@@ -1,4 +1,4 @@
-import { ScrollView } from "@arrzdev/adaptv/components"
+import { ScrollView } from "adaptv/components"
 import { GhostButton } from "@/components/ui"
 import { formatDeckLabel } from "@/data/collections/decks/constants"
 import type { Deck } from "@/data/collections/decks/schema"

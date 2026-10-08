@@ -1,8 +1,4 @@
-import {
-  getOS,
-  isNativePlatform,
-  isStandaloneDisplay,
-} from "@arrzdev/adaptv/utils"
+import { getOS, isNativePlatform, isStandaloneDisplay } from "adaptv/utils"
 import { useEffect, useState } from "react"
 
 /**

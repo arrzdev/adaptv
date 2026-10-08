@@ -1,5 +1,5 @@
-import { Link } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Link } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { ChevronRight } from "lucide-react"
 import type { LabGroup } from "@/components/lab/lab-index"
 import { LAB_GROUPS } from "@/components/lab/lab-index"

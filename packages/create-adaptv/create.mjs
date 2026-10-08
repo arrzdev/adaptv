@@ -115,7 +115,7 @@ export function create({ dir, name, adaptv = ADAPTV_VERSION }) {
     private: true,
     type: "module",
     scripts: SCRIPTS,
-    dependencies: { "@arrzdev/adaptv": adaptv, ...DEPENDENCIES },
+    dependencies: { adaptv, ...DEPENDENCIES },
     devDependencies: DEV_DEPENDENCIES,
   }
   writeFileSync(

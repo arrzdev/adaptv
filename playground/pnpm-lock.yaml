@@ -45,9 +45,6 @@ importers:
 
   apps/frontend:
     dependencies:
-      '@arrzdev/adaptv':
-        specifier: link:../../..
-        version: link:../../..
       '@dnd-kit/core':
         specifier: 6.3.1
         version: 6.3.1(react-dom@node_modules+react-dom)(react@node_modules+react)
@@ -78,6 +75,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.90.16
         version: 5.90.16(react@node_modules+react)
+      adaptv:
+        specifier: link:../../..
+        version: link:../../..
       canvas-confetti:
         specifier: 1.9.4
         version: 1.9.4

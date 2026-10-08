@@ -1,4 +1,4 @@
-import { Image, View } from "@arrzdev/adaptv/components"
+import { Image, View } from "adaptv/components"
 import { useState } from "react"
 import capture from "@/assets/captures/ios-list.png?adaptv-image"
 

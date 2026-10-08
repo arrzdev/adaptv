@@ -111,7 +111,7 @@ describe("adaptvTanstackResolvePlugin", () => {
  * `examples/basic` saw two Reacts. The end-to-end proof is that build, in the checkout.
  *
  * adaptv itself is inlined in both commands: its modules import `virtual:adaptv-*`,
- * which Node refuses, so every app used to carry `ssr.noExternal: ["@arrzdev/adaptv"]`.
+ * which Node refuses, so every app used to carry `ssr.noExternal: ["adaptv"]`.
  */
 describe("adaptvTanstackResolvePlugin noExternal", () => {
   function configFor(command: "serve" | "build") {
@@ -125,7 +125,7 @@ describe("adaptvTanstackResolvePlugin noExternal", () => {
   it("inlines adaptv and the router on the server, so the app's import reaches the redirect", () => {
     expect(configFor("serve")).toMatchObject({
       resolve: {
-        noExternal: ["@arrzdev/adaptv", "@tanstack/react-router"],
+        noExternal: ["adaptv", "@tanstack/react-router"],
       },
     })
   })
@@ -138,9 +138,9 @@ describe("adaptvTanstackResolvePlugin noExternal", () => {
     expect(configFor("serve")).toMatchObject({
       optimizeDeps: {
         include: [
-          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core",
-          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core/isServer",
-          "@arrzdev/adaptv > @tanstack/react-router > @tanstack/router-core/scroll-restoration-script",
+          "adaptv > @tanstack/react-router > @tanstack/router-core",
+          "adaptv > @tanstack/react-router > @tanstack/router-core/isServer",
+          "adaptv > @tanstack/react-router > @tanstack/router-core/scroll-restoration-script",
         ],
       },
     })
@@ -148,7 +148,7 @@ describe("adaptvTanstackResolvePlugin noExternal", () => {
 
   it("inlines adaptv and TanStack in a build, so the server loads one React", () => {
     expect(configFor("build")).toEqual({
-      resolve: { noExternal: ["@arrzdev/adaptv", /^@tanstack\//] },
+      resolve: { noExternal: ["adaptv", /^@tanstack\//] },
     })
   })
 })

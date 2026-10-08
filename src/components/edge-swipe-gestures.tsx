@@ -22,7 +22,7 @@ export interface EdgeSwipeGesturesProps {
   right?: () => void
   /**
    * Off switch. When `false`, no listeners are attached and nothing fires. Gate
-   * this to the installed app (e.g. `isInstalledApp()` from `@arrzdev/adaptv/utils`) so
+   * this to the installed app (e.g. `isInstalledApp()` from `adaptv/utils`) so
    * it doesn't double-fire with the browser's own edge-swipe nav in a tab. Covers
    * both the standalone PWA and a native Capacitor build.
    * @default true
@@ -54,8 +54,8 @@ const DEFAULT_THRESHOLD_PX = 56
  *
  * @example
  * ```tsx
- * import { adaptvBack } from "@arrzdev/adaptv/hooks"
- * import { isInstalledApp } from "@arrzdev/adaptv/utils"
+ * import { adaptvBack } from "adaptv/hooks"
+ * import { isInstalledApp } from "adaptv/utils"
  * <EdgeSwipeGestures enabled={isInstalledApp()} left={() => adaptvBack()} />
  * ```
  */

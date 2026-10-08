@@ -8,13 +8,13 @@ export const page: DocPage = {
     "Foreground and background, screen enter and leave, the back press, keeping the screen awake, and a ready gate for cold start.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useAppState, useOnResume, useOnPause, useScreenLifecycle, useBackHandler, adaptvBack, useKeepAwake, createBootstrapGate } from "@arrzdev/adaptv/hooks"',
+    'import { useAppState, useOnResume, useOnPause, useScreenLifecycle, useBackHandler, adaptvBack, useKeepAwake, createBootstrapGate } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
       type: "demo",
       component: HooksLifecycleDemo,
-      code: `import { useAppState, useOnPause, useOnResume } from "@arrzdev/adaptv/hooks"
+      code: `import { useAppState, useOnPause, useOnResume } from "adaptv/hooks"
 
 const state = useAppState()
 const [resumes, setResumes] = useState(0)
@@ -161,7 +161,7 @@ useOnPause(() => saveDraft(draft))`,
     { type: "h3", text: "BackPriority" },
     {
       type: "p",
-      text: 'Import it from [capabilities](/docs/capabilities): `import { BackPriority } from "@arrzdev/adaptv/capabilities"`.',
+      text: 'Import it from [capabilities](/docs/capabilities): `import { BackPriority } from "adaptv/capabilities"`.',
     },
     {
       type: "table",
@@ -182,8 +182,8 @@ useOnPause(() => saveDraft(draft))`,
       type: "code",
       label: "filters-sheet.tsx",
       lang: "tsx",
-      code: `import { useBackHandler } from "@arrzdev/adaptv/hooks"
-import { BackPriority } from "@arrzdev/adaptv/capabilities"
+      code: `import { useBackHandler } from "adaptv/hooks"
+import { BackPriority } from "adaptv/capabilities"
 
 useBackHandler(() => {
   if (!open) return false // nothing to close, let the router have it
@@ -403,7 +403,7 @@ if (!supported) return null
       type: "code",
       label: "app-ready.ts",
       lang: "ts",
-      code: `import { createBootstrapGate } from "@arrzdev/adaptv/hooks"
+      code: `import { createBootstrapGate } from "adaptv/hooks"
 
 const gate = createBootstrapGate()
 

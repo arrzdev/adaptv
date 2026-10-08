@@ -5,7 +5,7 @@ points at them and names the traps.
 
 ## What this is
 
-A React framework plus its CLI, published (eventually) as `@arrzdev/adaptv`. It is a library: `main`
+A React framework plus its CLI, published (eventually) as `adaptv`. It is a library: `main`
 deploys nothing. `playground/` is a dev app linked against the checkout, not an example, and nothing
 in `playground/` or `scripts/` ships.
 

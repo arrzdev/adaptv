@@ -7,7 +7,7 @@ export const page: DocPage = {
     "Synchronous platform detection, and the helpers the shell uses to stamp the page.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { isNativePlatform, isInstalledApp, getOS } from "@arrzdev/adaptv/utils"',
+    'import { isNativePlatform, isInstalledApp, getOS } from "adaptv/utils"',
   source: "src/utils",
   blocks: [
     {
@@ -95,7 +95,7 @@ export const page: DocPage = {
       type: "code",
       label: "install-hint.tsx",
       lang: "tsx",
-      code: `import { getOS, isInstalledApp } from "@arrzdev/adaptv/utils"
+      code: `import { getOS, isInstalledApp } from "adaptv/utils"
 
 const [showHint, setShowHint] = useState(false)
 
@@ -143,7 +143,7 @@ useEffect(() => {
       type: "code",
       label: "motion.ts",
       lang: "ts",
-      code: `import type { EasingBezier } from "@arrzdev/adaptv/utils"
+      code: `import type { EasingBezier } from "adaptv/utils"
 
 export const SHEET_EASE: EasingBezier = [0.32, 0.72, 0, 1]`,
     },

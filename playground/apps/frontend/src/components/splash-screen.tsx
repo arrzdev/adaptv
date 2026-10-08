@@ -1,5 +1,5 @@
-import { PwaSplashOverlay } from "@arrzdev/adaptv/components"
-import type { SplashScreenProps } from "@arrzdev/adaptv/config"
+import { PwaSplashOverlay } from "adaptv/components"
+import type { SplashScreenProps } from "adaptv/config"
 import type { CSSProperties } from "react"
 import { useEffect, useState } from "react"
 import { SplashMascot } from "@/components/illustrations/splash-mascot"

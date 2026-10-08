@@ -6,13 +6,13 @@ export const page: DocPage = {
   title: "Switch",
   summary: "An on/off toggle with no paint of its own.",
   platforms: ["Web", "PWA", "iOS", "Android"],
-  importLine: 'import { Switch, useSwitch } from "@arrzdev/adaptv/components"',
+  importLine: 'import { Switch, useSwitch } from "adaptv/components"',
   source: "src/components/switch.tsx",
   blocks: [
     {
       type: "demo",
       component: SwitchDemo,
-      code: `import { Switch } from "@arrzdev/adaptv/components"
+      code: `import { Switch } from "adaptv/components"
 
 const [checked, setChecked] = useState(true)
 

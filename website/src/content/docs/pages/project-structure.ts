@@ -55,7 +55,7 @@ export const page: DocPage = {
       type: "code",
       label: "src/routing/config.ts",
       lang: "ts",
-      code: `import { index, rootRoute, route } from "@arrzdev/adaptv/routes"
+      code: `import { index, rootRoute, route } from "adaptv/routes"
 
 export default rootRoute([
   index("pages/home.page.tsx"),
@@ -66,7 +66,7 @@ export default rootRoute([
     { type: "h2", text: "src/styles/main.css" },
     {
       type: "p",
-      text: "The file named by `styles`. Import `@arrzdev/adaptv/styles.css`, then your tokens. With Tailwind, import Tailwind, then `@arrzdev/adaptv/tailwind.css`. See [Styling](/docs/styling) and [Theming](/docs/theming).",
+      text: "The file named by `styles`. Import `adaptv/styles.css`, then your tokens. With Tailwind, import Tailwind, then `adaptv/tailwind.css`. See [Styling](/docs/styling) and [Theming](/docs/theming).",
     },
     { type: "h2", text: "public/" },
     {
@@ -76,7 +76,7 @@ export default rootRoute([
     { type: "h2", text: "src/sw/" },
     {
       type: "p",
-      text: "Optional. For your own service-worker code, write a module with `@arrzdev/adaptv/sw` and list it in `serviceWorkers`. See [Offline](/docs/offline).",
+      text: "Optional. For your own service-worker code, write a module with `adaptv/sw` and list it in `serviceWorkers`. See [Offline](/docs/offline).",
     },
     { type: "h2", text: "tsconfig.json" },
     {
@@ -108,7 +108,7 @@ export default rootRoute([
     {
       type: "ul",
       items: [
-        "Depend on `@arrzdev/adaptv`. Install its peers yourself: `react`, `react-dom`, `vite` and `motion`. Tailwind is optional: add `tailwindcss` and `@tailwindcss/vite` to use it.",
+        "Depend on `adaptv`. Install its peers yourself: `react`, `react-dom`, `vite` and `motion`. Tailwind is optional: add `tailwindcss` and `@tailwindcss/vite` to use it.",
         "Scripts call `adaptv` by name, for example `adaptv dev ios`. See the [CLI](/docs/cli).",
         'A task runner must pass the terminal through. In Turborepo, set `"interactive": true` on the task.',
       ],

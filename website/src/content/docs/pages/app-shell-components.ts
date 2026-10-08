@@ -6,7 +6,7 @@ export const page: DocPage = {
   summary: "Whole-app screens and listeners.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { EdgeSwipeGestures, PwaSplashOverlay, UiNotFound, BootError, UpdateRequired, OrientationGuard } from "@arrzdev/adaptv/components"',
+    'import { EdgeSwipeGestures, PwaSplashOverlay, UiNotFound, BootError, UpdateRequired, OrientationGuard } from "adaptv/components"',
   source: "src/components",
   blocks: [
     {
@@ -61,7 +61,7 @@ export const page: DocPage = {
     },
     {
       type: "p",
-      text: 'Your screen receives these props. It is rendered as is, so it must cover the viewport itself. Import the type with `import type { UpdateRequiredProps } from "@arrzdev/adaptv/config"`.',
+      text: 'Your screen receives these props. It is rendered as is, so it must cover the viewport itself. Import the type with `import type { UpdateRequiredProps } from "adaptv/config"`.',
     },
     {
       type: "props",
@@ -124,7 +124,7 @@ export const page: DocPage = {
           type: '"portrait" | "landscape"',
           required: true,
           description:
-            "The orientation the app requires, from `OrientationGuardProps` in `@arrzdev/adaptv/config`.",
+            "The orientation the app requires, from `OrientationGuardProps` in `adaptv/config`.",
         },
       ],
     },

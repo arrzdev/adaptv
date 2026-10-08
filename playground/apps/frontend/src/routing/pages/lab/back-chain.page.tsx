@@ -2,10 +2,10 @@ import {
   BackPriority,
   registerBackHandler,
   runBackChain,
-} from "@arrzdev/adaptv/capabilities"
-import { useBackHandler } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { isNativePlatform } from "@arrzdev/adaptv/utils"
+} from "adaptv/capabilities"
+import { useBackHandler } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
+import { isNativePlatform } from "adaptv/utils"
 import { useCallback, useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

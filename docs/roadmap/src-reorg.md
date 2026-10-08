@@ -399,7 +399,7 @@ Only the two slices above. Everything not listed stays where it is.
 
 ⚠︎ **The `.d.ts` carries a consumer-facing glob with it.** `virtual-adaptv-ota-config.d.ts` is one
 of seven ambient declarations delivered by the app-side `include` line
-`node_modules/@arrzdev/adaptv/src/virtual-adaptv-*.d.ts` — a flat glob that stops matching the
+`node_modules/adaptv/src/virtual-adaptv-*.d.ts` — a flat glob that stops matching the
 moment one of the seven leaves the root of `src/`. Moving it makes that line
 `src/**/virtual-adaptv-*.d.ts`, in the app's tsconfig **and** in `tsdown.config.ts`'s `copy`
 (where the seven still land flat in `dist/`). One consumer-side character; nothing else in §2.4
@@ -417,7 +417,7 @@ Nuxt's shape — but it is exactly why move **A** should land first. → [§0.1]
 `pnpm-workspace.yaml`:
 
 ```
-'@tanstack/router-generator@1.167.21': node_modules/@arrzdev/adaptv/patches/@tanstack__router-generator@1.167.21.patch
+'@tanstack/router-generator@1.167.21': node_modules/adaptv/patches/@tanstack__router-generator@1.167.21.patch
 ```
 
 That string is generated from `patchInstructions()`, which hardcodes `patches/`. The five

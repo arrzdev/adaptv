@@ -1,5 +1,5 @@
-import { useServiceWorkerUpdate } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { useServiceWorkerUpdate } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useCallback, useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

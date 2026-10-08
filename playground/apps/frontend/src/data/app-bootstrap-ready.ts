@@ -1,4 +1,4 @@
-import { createBootstrapGate } from "@arrzdev/adaptv/hooks"
+import { createBootstrapGate } from "adaptv/hooks"
 
 const gate = createBootstrapGate()
 

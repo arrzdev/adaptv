@@ -1,5 +1,5 @@
-import { Pressable } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Pressable } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { useCallback, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

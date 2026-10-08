@@ -1,4 +1,4 @@
-import { Dropdown, View } from "@arrzdev/adaptv/components"
+import { Dropdown, View } from "adaptv/components"
 import { ChevronDown } from "lucide-react"
 import { useState } from "react"
 

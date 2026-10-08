@@ -1,4 +1,4 @@
-import { index, rootRoute, route } from "@arrzdev/adaptv/routes"
+import { index, rootRoute, route } from "adaptv/routes"
 
 //The android smoke's routes, copied over examples/basic/src/routing before the build:
 //a home with a link, and a form page to type into and go back from.

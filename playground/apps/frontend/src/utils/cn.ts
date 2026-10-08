@@ -10,7 +10,7 @@ import { extendTailwindMerge } from "tailwind-merge"
  */
 
 /*
- * Matches every suffix adaptv's safe-area utilities accept (`@arrzdev/adaptv/tailwind.css`):
+ * Matches every suffix adaptv's safe-area utilities accept (`adaptv/tailwind.css`):
  * the bare inset, the inset plus N spacing units, and the inset floored at N.
  * `[7]` is Tailwind's arbitrary-integer form, which the `--value(integer, [integer])`
  * in the `@utility` rules also accepts — keep the two in step.

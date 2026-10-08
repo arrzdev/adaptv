@@ -10,7 +10,7 @@
 @layer base, adaptv;
 
 @import "@fontsource-variable/inter/wght.css";
-@import "@arrzdev/adaptv/styles.css";
+@import "adaptv/styles.css";
 @import "./animations.css";
 @import "./app.css";
 

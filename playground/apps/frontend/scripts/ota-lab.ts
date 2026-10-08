@@ -235,7 +235,7 @@ function bundleId(device: string): string {
   }
 }
 /** A symlink to the framework, so the bench uses adaptv's OWN code, not a copy. */
-const ADAPTV_ROOT = path.join(HERE, "node_modules/@arrzdev/adaptv")
+const ADAPTV_ROOT = path.join(HERE, "node_modules/adaptv")
 
 /**
  * The channel's address — handed to the BUILD, never to the running device.

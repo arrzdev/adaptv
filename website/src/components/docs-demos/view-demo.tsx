@@ -1,4 +1,4 @@
-import { View } from "@arrzdev/adaptv/components"
+import { View } from "adaptv/components"
 
 const TILE =
   "rounded-lg border border-border bg-raised px-3 py-2 font-mono text-[13px] text-foreground"

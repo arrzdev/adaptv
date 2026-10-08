@@ -1,4 +1,4 @@
-import { Offline, View } from "@arrzdev/adaptv/components"
+import { Offline, View } from "adaptv/components"
 import { useState } from "react"
 
 export function OfflineBoundaryDemo() {

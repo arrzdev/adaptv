@@ -1,8 +1,8 @@
 //adaptv's Link, not TanStack's: `to` here is a plain string, and a route that
 //deliberately does not exist cannot be expressed against the generated tree
-import { Link } from "@arrzdev/adaptv/components"
-import { useOrientation } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Link } from "adaptv/components"
+import { useOrientation } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

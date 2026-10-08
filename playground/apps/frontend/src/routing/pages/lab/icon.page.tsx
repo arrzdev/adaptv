@@ -1,5 +1,5 @@
-import { Icon, Text } from "@arrzdev/adaptv/components"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { Icon, Text } from "adaptv/components"
+import { createFileRoute } from "adaptv/router"
 import { ArrowLeft, Bell, CircleAlert, Star, WifiOff } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"

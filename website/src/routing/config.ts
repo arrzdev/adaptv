@@ -1,4 +1,4 @@
-import { index, rootRoute, route } from "@arrzdev/adaptv/routes"
+import { index, rootRoute, route } from "adaptv/routes"
 
 //adaptv owns the root route — declare only the children.
 export const routes = rootRoute([

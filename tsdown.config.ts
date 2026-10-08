@@ -25,7 +25,7 @@ import { CLI_MODULES } from "./bin/lib/cli-modules.mjs"
  *
  * Everything outside this repo's own `src/` tree: `package.json` `exports` and
  * `files` point here, so an app — the playground and the website included, through
- * `link:` — resolves `@arrzdev/adaptv/*` to this output and needs a build first
+ * `link:` — resolves `adaptv/*` to this output and needs a build first
  * (`scripts/playground.mjs` runs one when `src/` is newer). The modules the `/vite`
  * entry hands the consumer's build are entries below, and
  * `src/vite/package-files.ts` picks the copy that matches the layout it runs from.

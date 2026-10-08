@@ -1,4 +1,4 @@
-import { Switch, View } from "@arrzdev/adaptv/components"
+import { Switch, View } from "adaptv/components"
 import { useState } from "react"
 import { cn } from "@/utils/cn"
 

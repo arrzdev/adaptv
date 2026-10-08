@@ -1,5 +1,5 @@
-import { Text, View } from "@arrzdev/adaptv/components"
-import type { OrientationGuardProps } from "@arrzdev/adaptv/config"
+import { Text, View } from "adaptv/components"
+import type { OrientationGuardProps } from "adaptv/config"
 import { Smartphone } from "lucide-react"
 
 /**

@@ -1,5 +1,5 @@
-import type { InputHandle } from "@arrzdev/adaptv/components"
-import { Pressable, View } from "@arrzdev/adaptv/components"
+import type { InputHandle } from "adaptv/components"
+import { Pressable, View } from "adaptv/components"
 import { Eye, EyeOff } from "lucide-react"
 import { forwardRef, useState } from "react"
 import { TextInput } from "@/components/ui"

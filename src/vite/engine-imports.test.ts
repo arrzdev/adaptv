@@ -56,7 +56,7 @@ describe("isInternalPackage", () => {
   })
 
   it("leaves the app's own packages and adaptv's peers alone", () => {
-    for (const name of ["react", "motion", "zod", "@arrzdev/adaptv"])
+    for (const name of ["react", "motion", "zod", "adaptv"])
       expect(isInternalPackage(name, DEPS), name).toBe(false)
   })
 })
@@ -137,7 +137,7 @@ describe("the refusal", () => {
     expect(first).toMatch(/^src\/routes\/a\.tsx imports a package/)
     expect(first).not.toMatch(/tanstack/i)
     expect(first).toContain("package.json")
-    expect(first).toContain("@arrzdev/adaptv")
+    expect(first).toContain("adaptv")
     expect(rest.join("\n")).toContain('"@tanstack/react-router"')
   })
 })

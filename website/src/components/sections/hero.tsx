@@ -1,4 +1,4 @@
-import { ExternalLink, Link, View } from "@arrzdev/adaptv/components"
+import { ExternalLink, Link, View } from "adaptv/components"
 import { ArrowRight, Github } from "lucide-react"
 import { DeviceStage } from "@/components/sections/device-stage"
 import { GITHUB_URL } from "@/content/site"

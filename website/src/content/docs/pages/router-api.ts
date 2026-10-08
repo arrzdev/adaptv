@@ -4,15 +4,15 @@ export const page: DocPage = {
   slug: "router-api",
   title: "Router API",
   summary:
-    "What @arrzdev/adaptv/router and @arrzdev/adaptv/routes export: route files, loaders, navigation hooks and the route config helpers.",
+    "What adaptv/router and adaptv/routes export: route files, loaders, navigation hooks and the route config helpers.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { createFileRoute, notFound, useNavigate } from "@arrzdev/adaptv/router"',
+    'import { createFileRoute, notFound, useNavigate } from "adaptv/router"',
   source: "src/interface/router.index.ts",
   blocks: [
     {
       type: "p",
-      text: 'Read [Routing](/docs/routing) first. `@arrzdev/adaptv/routes` holds the route config helpers only: use it in `src/routing/config.ts`, which runs in Node at build time. `@arrzdev/adaptv/router` re-exports them with the rest. `@arrzdev/adaptv/server-entry` is the server entry for `render: "ssr"`.',
+      text: 'Read [Routing](/docs/routing) first. `adaptv/routes` holds the route config helpers only: use it in `src/routing/config.ts`, which runs in Node at build time. `adaptv/router` re-exports them with the rest. `adaptv/server-entry` is the server entry for `render: "ssr"`.',
     },
     {
       type: "note",
@@ -194,7 +194,7 @@ function physical(pathPrefix: string, directory: string): PhysicalRouteNode`,
         ["`RegisteredRouter`", "Your app's router, with its route tree."],
         [
           "`UpdatableRouteOptionsExtensions`",
-          "Augment it on `@arrzdev/adaptv/router` to add your own typed route option. adaptv adds `chromeTint` this way.",
+          "Augment it on `adaptv/router` to add your own typed route option. adaptv adds `chromeTint` this way.",
         ],
       ],
     },

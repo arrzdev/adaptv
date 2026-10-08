@@ -8,13 +8,13 @@ export const page: DocPage = {
     "Three tiers, one API: a synchronous store, an async store for large values, and secure storage for secrets.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { kv, store, secure, useKv, useStore } from "@arrzdev/adaptv/storage"',
+    'import { kv, store, secure, useKv, useStore } from "adaptv/storage"',
   source: "src/storage",
   blocks: [
     {
       type: "demo",
       component: StorageDemo,
-      code: `import { useKv } from "@arrzdev/adaptv/storage"
+      code: `import { useKv } from "adaptv/storage"
 
 const [count, setCount] = useKv("count", 0)
 
@@ -284,7 +284,7 @@ if (isLoading) return <Skeleton />
       type: "code",
       label: "session.ts",
       lang: "ts",
-      code: `import { secure } from "@arrzdev/adaptv/storage"
+      code: `import { secure } from "adaptv/storage"
 
 export async function saveSession(token: string) {
   await secure.set("session", token)

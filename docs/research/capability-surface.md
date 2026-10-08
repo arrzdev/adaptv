@@ -199,7 +199,7 @@ Roughly half the modules ship both. `useBatteryLevel` / `useBatteryState` / `use
 Every one is a thin wrapper over an imperative core that remains separately importable.
 
 > `capabilities.index.ts` already says this in prose — *"Platform-branching device capability
-> accessors (no React). Hooks in `@arrzdev/adaptv/hooks` wrap these; import them directly for
+> accessors (no React). Hooks in `adaptv/hooks` wrap these; import them directly for
 > non-React wiring."* Expo arrived at the identical split independently. That is a design worth
 > treating as settled, and worth citing as such.
 

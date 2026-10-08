@@ -293,25 +293,22 @@ Full designs exist; the next step is TDD, not more design.
 | # | Question | Resolution |
 |---|---|---|
 | O10 | **Animation substrate** | **Keep `motion`; adaptv builds no engine.** CSS (`@starting-style` + `allow-discrete`) for enter/exit, `motion` for gesture/interruptible/layout. Accelerated set is `transform`/`opacity`/`filter`/`backdrop-filter` only. **`composite:"add"` is banned** — Baseline-available, but it silently kills the Chromium compositor. **Overlays are ordinary positioned elements, not the top layer** — `overlay` is Chromium-only with no WebKit bug, so `<dialog>`/popover exits break on iOS permanently. → `docs/decisions/animation.md` |
-| O12 | **Ship source vs dist / publishing** | ❌ **This closure is superseded — see the O12 row in §5 above and [`dist-build.md`](dist-build.md).** It read *"stay on raw source + git dependency until there's a second consumer"*, which the repo has since reversed: `tsdown.config.ts` exists, `pnpm build:check` verifies the output, and `package.json` `publishConfig` points at GitHub Packages. The one part still worth keeping is the constraint on the scaffolder, which has moved to [`../design/create-adaptv.md`](../design/create-adaptv.md): **`create-adaptv` is unclaimed on npm** — publish the *scaffolder* publicly (it is just prompts + file copying) and keep `@arrzdev/adaptv` private, which fixes the chicken-and-egg where you would need a PAT configured before you could run the tool that configures your PAT. |
+| O12 | **Ship source vs dist / publishing** | ❌ **This closure is superseded — see the O12 row in §5 above and [`dist-build.md`](dist-build.md).** It read *"stay on raw source + git dependency until there's a second consumer"*, which the repo has since reversed: `tsdown.config.ts` exists, `pnpm build:check` verifies the output, and `package.json` `publishConfig` points at the public npm registry (§5.0.0). The one part still worth keeping is the constraint on the scaffolder, which has moved to [`../design/create-adaptv.md`](../design/create-adaptv.md): **`create-adaptv` is unclaimed on npm** — publish the *scaffolder* publicly (it is just prompts + file copying). The PAT chicken-and-egg this once solved went away when `adaptv` moved to public npm (§5.0.0). |
 | O16 | **Signing/distribution** | **Stop at the artifact.** Confirmed: no fastlane. |
 | — | **IAP / monetization** | **EXCLUDE from core.** RevenueCat already *is* the vendor-neutral abstraction (`@revenuecat/purchases-capacitor` 13.2.3, ~weekly releases); the hard parts are server-side; and the legal surface moves in *weeks* — US link-out commission is being actively litigated right now (9th Cir. affirmed contempt but **vacated** the 0% ban, remanded to set a "reasonable" rate). A framework release would encode a legal snapshot that expires before the release does. Document the regional matrix, don't wrap it. |
 
-### 5.0.0 🔒 Package name — `@arrzdev/adaptv` (decided 2026-07-20)
+### 5.0.0 🔒 Package name — `adaptv`, MIT, public npm (decided 2026-10-08, TUD-85 / TUD-97)
 
-The scope is **not** a style choice: **GitHub Packages requires the npm scope to match the repository
-owner.** Publishing `arrzdev/adaptv` to `npm.pkg.github.com` means the package must be `@arrzdev/*`.
-There is no configuration that publishes `adaptv` or `@adaptv/router` from that account.
+The package is **`adaptv`** on the **public npm registry** (`publishConfig.registry` is
+`https://registry.npmjs.org/`, `access: public`), licensed **MIT**. Consumers write `npm i adaptv`
+and import `adaptv/router`, `adaptv/components` and the rest; the `routerSpecifier` plugin option
+still lets an app point route files elsewhere.
 
-Checked while deciding:
-- **`adaptv` is taken on the public npm registry** (v0.8.10), so plain `adaptv/router` was never available.
-- `@adaptv/*` appears unclaimed, but taking it means going **public** (npm private scopes are paid) and
-  adopting a multi-package layout — which conflicts with **L1** (single-package repo). The equivalent
-  under a `@adaptv` scope would be `@adaptv/adaptv/router`, which is worse than what we have.
-
-A handle in the specifier is normal for a private/org package — Expo apps import `@expo/*`, Ionic apps
-`@ionic/*`. If a public identity is ever wanted, that is the moment to register `@adaptv` and re-scope;
-the `routerSpecifier` plugin option already makes that a one-line change for consumers mid-migration.
+**Supersedes** the 2026-07-20 decision `@arrzdev/adaptv` on GitHub Packages. That scope was forced by
+the registry (GitHub Packages requires the npm scope to match the repository owner) and by `adaptv`
+being taken on npm at the time (v0.8.10). On 2026-10-08 `https://registry.npmjs.org/adaptv` returns
+404, so the unscoped name is free, and the board chose public npm and MIT on TUD-85. Publishing itself
+stays a separate board approval; until then `package.json` keeps `private: true`.
 
 > ⚠︎ **`create-adaptv` is unclaimed on npm.** The scaffolder is built (`packages/create-adaptv/`) and
 > unpublished. The private-framework half of this note was overtaken by the open-source decision →

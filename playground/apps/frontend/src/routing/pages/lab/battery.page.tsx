@@ -1,11 +1,11 @@
-import type { BatteryState } from "@arrzdev/adaptv/capabilities"
+import type { BatteryState } from "adaptv/capabilities"
 import {
   getBatteryState,
   readBattery,
   subscribeBattery,
-} from "@arrzdev/adaptv/capabilities"
-import { useBattery } from "@arrzdev/adaptv/hooks"
-import { createFileRoute } from "@arrzdev/adaptv/router"
+} from "adaptv/capabilities"
+import { useBattery } from "adaptv/hooks"
+import { createFileRoute } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import type { LabLogEntry } from "@/components/lab/lab-kit"

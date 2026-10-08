@@ -1,4 +1,4 @@
-import { createFileRoute } from "@arrzdev/adaptv/router"
+import { createFileRoute } from "adaptv/router"
 import { DocsHome } from "@/components/docs-home"
 
 export const Route = createFileRoute("/docs")({

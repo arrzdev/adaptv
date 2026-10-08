@@ -2,9 +2,9 @@ import {
   applyStatusBar,
   enableEdgeToEdge,
   reprobeAndroidInsets,
-} from "@arrzdev/adaptv/capabilities"
-import { createFileRoute } from "@arrzdev/adaptv/router"
-import { getOS, isNativePlatform } from "@arrzdev/adaptv/utils"
+} from "adaptv/capabilities"
+import { createFileRoute } from "adaptv/router"
+import { getOS, isNativePlatform } from "adaptv/utils"
 import { useCallback, useEffect, useState } from "react"
 import { LabBrief } from "@/components/lab/lab-brief"
 import {

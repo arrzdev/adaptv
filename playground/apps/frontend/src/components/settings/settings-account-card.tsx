@@ -1,4 +1,4 @@
-import { Text, View } from "@arrzdev/adaptv/components"
+import { Text, View } from "adaptv/components"
 import { CloudUpload } from "lucide-react"
 import { PrimaryButton } from "@/components/ui"
 

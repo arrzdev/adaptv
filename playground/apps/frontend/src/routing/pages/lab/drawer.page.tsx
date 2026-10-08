@@ -1,4 +1,4 @@
-import { createFileRoute, useLocation } from "@arrzdev/adaptv/router"
+import { createFileRoute, useLocation } from "adaptv/router"
 import { useEffect, useState } from "react"
 import { LoginDrawer } from "@/components/auth/login-drawer"
 import { DeckFormDrawer } from "@/components/decks/deck-form-drawer"

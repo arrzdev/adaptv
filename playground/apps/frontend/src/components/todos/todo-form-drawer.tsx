@@ -1,4 +1,4 @@
-import { Text, View } from "@arrzdev/adaptv/components"
+import { Text, View } from "adaptv/components"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { DeckPicker } from "@/components/decks/deck-picker"
 import { DueDateField } from "@/components/todos/due-date-field"

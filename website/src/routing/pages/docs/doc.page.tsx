@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from "@arrzdev/adaptv/router"
+import { createFileRoute, notFound } from "adaptv/router"
 import { DocsLayout } from "@/components/docs-layout"
 import { ALL_DOCS } from "@/content/docs"
 
