@@ -28,15 +28,7 @@ import { awaitClientHandover } from "./support/hydrated"
 /**
  * Console errors this spec does NOT fail on. Each entry is a filed, understood
  * error with a reason; there is no wildcard, and a new error is a failure until
- * someone writes its line here. Empty on purpose: the one known handled error in
- * the app — TanStack Router's preload path throwing `_nonReactive` on a
- * react-router/router-core version skew (see link.spec.ts) — fires from a link
- * being hovered or tapped, which nothing here does: a full run on both engines
- * and six repeats of this spec never saw it on these routes. It is not excused
- * ahead of time; if it ever shows up here the failure names it, and the line is
- * one entry — with the follow-on the debug telemetry adds when it forwards that
- * console.error to a log sink that is not running, which is why an entry that
- * matched only the TypeError would not even make the test pass.
+ * someone writes its line here. Empty on purpose.
  */
 const KNOWN_CONSOLE_ERRORS: { pattern: RegExp; reason: string }[] = []
 
