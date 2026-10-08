@@ -103,7 +103,13 @@ export async function capture(
     document.body.append(el)
   }, device.bar)
   await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: out })
+  if (out.endsWith(".webp")) {
+    //WebP at q85 is about a third of the PNG, and the text stays sharp
+    const sharp = createRequire(join(root, "package.json"))("sharp")
+    await sharp(await page.screenshot())
+      .webp({ quality: 85, effort: 6 })
+      .toFile(out)
+  } else await page.screenshot({ path: out })
   process.stdout.write(`${out}\n`)
   await browser.close()
 }
