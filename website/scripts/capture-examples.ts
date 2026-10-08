@@ -19,7 +19,11 @@ if (!url) {
   process.exit(1)
 }
 
-/* Shown at most 280 px wide, so 1.5x is sharp on a 2x screen at a quarter of the phone's bytes. */
+/*
+ * Shown at most 280 px wide, so 1.5x is sharp on a 2x screen at a quarter of the phone's
+ * pixels. WebP, not PNG: the row loads before the visitor scrolls to it, and three PNGs
+ * cost the hero's largest paint about 6 Lighthouse points.
+ */
 const SCALE = 1.5
 
 const TASKS = [
@@ -82,7 +86,7 @@ for (const [name, [phone, setup]] of Object.entries(SCREENS)) {
   await capture(
     phone,
     url,
-    join(root, `website/src/assets/examples/${name}.png`),
+    join(root, `website/src/assets/examples/${name}.webp`),
     setup,
     SCALE,
   )
