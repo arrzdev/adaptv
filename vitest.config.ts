@@ -110,6 +110,7 @@ export default defineConfig({
       "**/dist/**",
       ".project-zero/**",
       "playground/**",
+      "website/**",
       ".claude/**",
     ],
     //Only read when a run asks for it (`pnpm test:coverage`); a plain `pnpm test`
