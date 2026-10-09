@@ -16,21 +16,24 @@ import { Section } from "@/components/section"
 const APPS = [
   {
     name: "ChopChop",
-    line: "A task app that works offline and syncs when you sign in.",
+    line: "A task app for your phone and the web. Add a task, check it off, keep going.",
     platform: "ios",
     image: chopchop,
-    alt: "ChopChop's task list with one task swiped open to Archive and Delete, in an iPhone frame.",
+    alt: "ChopChop's task list, one task half swiped to show its Archive action, in an iPhone frame.",
   },
   {
     name: "Veralens",
-    line: "An API that turns a PDF, scan or photo into typed fields.",
+    line: "Turn documents into structured data. Send a file, get back JSON in the shape you define.",
     platform: "android",
     image: veralens,
     alt: "Veralens' home page, a stack of documents over the line “Any document into clean data in one API call”, in an Android frame.",
   },
 ] as const
 
-/** Two phones side by side; on a phone, one under the other. */
+/**
+ * Two phones side by side; on a phone, a row that scrolls sideways with the next screen
+ * peeking in, so §3 stays one phone tall and the peek is the only hint it scrolls.
+ */
 export function BuiltWith() {
   return (
     <Section
@@ -38,9 +41,12 @@ export function BuiltWith() {
       //so a reader who opens either repo finds no contradiction with the title (TUD-440)
       lede="Both apps run on adaptv's in-repo predecessor (nativ); moving them to the published package is next."
     >
-      <ul className="grid justify-items-center gap-14 sm:grid-cols-2 sm:gap-10 md:mx-auto md:w-full md:max-w-3xl">
+      <ul className="-mx-6 flex snap-x snap-mandatory scroll-px-6 gap-5 overflow-x-auto px-6 pb-2 sm:mx-auto sm:grid sm:w-full sm:max-w-3xl sm:grid-cols-2 sm:justify-items-center sm:gap-10 sm:overflow-visible sm:px-0 sm:pb-0">
         {APPS.map((app, i) => (
-          <li key={app.name} className="w-full max-w-[280px]">
+          <li
+            key={app.name}
+            className="w-[80%] max-w-[280px] shrink-0 snap-start sm:w-full"
+          >
             <Reveal delay={i * 0.08} className="flex flex-col items-center">
               <PhoneFrame
                 platform={app.platform}
