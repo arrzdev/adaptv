@@ -232,20 +232,20 @@ function Pager({ page }: { page: DocPage }) {
   const previous = ALL_DOCS[index - 1]
   const next = ALL_DOCS[index + 1]
   const card =
-    "flex min-w-0 flex-1 flex-col gap-1 rounded-xl border border-border px-5 py-4 hover:border-border-strong hover:bg-surface"
+    "flex min-w-0 flex-1 flex-col gap-0.5 rounded-lg border border-border px-3 py-2 hover:border-border-strong hover:bg-surface"
   return (
-    <View row className="mt-16 gap-4 border-border border-t pt-8">
+    <View row className="mt-12 gap-3 border-border border-t pt-5">
       {previous ? (
         <Link
           to="/docs/$slug"
           params={{ slug: previous.slug }}
           className={card}
         >
-          <span className="flex flex-row items-center gap-1.5 text-[12.5px] text-muted">
-            <ArrowLeft className="size-3.5" />
+          <span className="flex flex-row items-center gap-1.5 text-[12px] text-muted">
+            <ArrowLeft className="size-3" />
             Previous
           </span>
-          <span className="truncate font-medium text-[15px]">
+          <span className="truncate font-medium text-[13.5px]">
             {previous.title}
           </span>
         </Link>
@@ -258,11 +258,13 @@ function Pager({ page }: { page: DocPage }) {
           params={{ slug: next.slug }}
           className={cn(card, "items-end text-right")}
         >
-          <span className="flex flex-row items-center gap-1.5 text-[12.5px] text-muted">
+          <span className="flex flex-row items-center gap-1.5 text-[12px] text-muted">
             Next
-            <ArrowRight className="size-3.5" />
+            <ArrowRight className="size-3" />
           </span>
-          <span className="truncate font-medium text-[15px]">{next.title}</span>
+          <span className="truncate font-medium text-[13.5px]">
+            {next.title}
+          </span>
         </Link>
       ) : (
         <span className="flex-1" />
