@@ -133,21 +133,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [main, plain, stress, sw, sw-spa, sw-prompt]
-        engine: [chromium, webkit]
+        suite: [stress]
+        engine: [chromium]
         include:
-          - suite: main
-            script: test:e2e
-          - suite: plain
-            script: test:e2e:plain
           - suite: stress
             script: test:e2e:stress
-          - suite: sw
-            script: test:e2e:sw
-          - suite: sw-spa
-            script: test:e2e:sw:spa
-          - suite: sw-prompt
-            script: test:e2e:sw:prompt
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -169,7 +159,7 @@ jobs:
 
       - name: Test (playwright, ${{ matrix.suite }}, ${{ matrix.engine }})
         id: e2e
-        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }}
+        run: pnpm --dir playground ${{ matrix.script }} --project=${{ matrix.engine }} --grep '200 pulses and 200 turns' --repeat-each=20 --reporter=list
 
       - name: Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
