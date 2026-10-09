@@ -1,0 +1,120 @@
+name: Publish
+
+# Publishes `adaptv` and `create-adaptv` to the public npm registry, with
+# provenance, when a `v<version>` tag is pushed. Nothing else publishes: no
+# one runs `npm publish` from a laptop.
+#
+# A release is: the release commit is on `main`, it passed the full e2e matrix
+# and the Android smoke (e2e.yml and android-smoke.yml, dispatched on it), then
+#
+#   git tag v0.1.0-alpha.1 <release commit> && git push origin v0.1.0-alpha.1
+#
+# The `check` job refuses a tag that is not on `main`, that does not name the
+# version both package.json files carry, or whose packages are still
+# `private: true`, then runs the full gate on the tagged commit. Only then does
+# `publish` see the token: it lives in the `npm` GitHub Environment, which the
+# gate job never binds, so dependency install scripts in the gate cannot read
+# it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Never two publishes at once, and never cancel one half-way through.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0 # the on-main check needs origin/main
+
+      - name: Tag is on main and names the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$TAG points at $GITHUB_SHA, which is not on main"
+            exit 1
+          fi
+          node -e '
+            const { readFileSync } = require("node:fs")
+            const want = process.env.TAG.replace(/^v/, "")
+            let ok = true
+            for (const file of ["package.json", "packages/create-adaptv/package.json"]) {
+              const pkg = JSON.parse(readFileSync(file, "utf8"))
+              if (pkg.version !== want) {
+                console.log(`::error file=${file}::${pkg.name} is ${pkg.version}, the tag says ${want}`)
+                ok = false
+              }
+              if (pkg.private) {
+                console.log(`::error file=${file}::${pkg.name} is still private: true`)
+                ok = false
+              }
+            }
+            process.exit(ok ? 0 : 1)
+          '
+
+      - name: Gate
+        uses: ./.github/actions/gate
+        with:
+          mode: full
+          base: ${{ github.sha }}
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      # Builds dist/ and runs publint and attw on it: what is packed next is
+      # what was just checked.
+      - name: Build
+        run: pnpm build:check
+
+      - name: Pack
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          pnpm --dir packages/create-adaptv pack --pack-destination "$RUNNER_TEMP/pack"
+          ls -l "$RUNNER_TEMP/pack"
+
+      # `adaptv` first: a created app depends on it, so `create-adaptv` must
+      # never be on the registry without the framework version it names. A
+      # version already on the registry is skipped, so re-running a failed
+      # publish finishes the half that is missing. `--tag latest` is explicit:
+      # `pnpm create adaptv` resolves `latest`, and newer npm refuses to publish
+      # a prerelease without a named tag.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          version="${VERSION#v}"
+          printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' > "$RUNNER_TEMP/.npmrc"
+          export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/.npmrc"
+          for name in adaptv create-adaptv; do
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already on npm, skipped" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            npm publish "$RUNNER_TEMP/pack/$name-$version.tgz" --provenance --access public --tag latest
+            echo "Published $name@$version" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

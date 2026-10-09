@@ -105,11 +105,14 @@ export default defineConfig({
     //worktree is a whole second checkout of this repo, so collecting it runs
     //every suite again against another branch's source. Left in, the gate
     //reports on code the working tree does not contain.
+    //`website/` runs its own suite (`pnpm --dir website test`): it imports the
+    //built framework from `dist/`, which the gate builds only after this runs.
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
       ".project-zero/**",
       "playground/**",
+      "website/**",
       ".claude/**",
     ],
     //Only read when a run asks for it (`pnpm test:coverage`); a plain `pnpm test`

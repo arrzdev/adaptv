@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import type { ReactNode } from "react"
 import { useEffect, useMemo, useState } from "react"
+import { Inline } from "@/components/inline"
 import { headingIds, Prose } from "@/components/prose"
 import { SitePage } from "@/components/site-page"
 import { ALL_DOCS, DOCS, type DocPage } from "@/content/docs"
@@ -95,7 +96,7 @@ function DocsNav({ current }: { current: string }) {
               >
                 <span className="font-medium text-[14px]">{item.title}</span>
                 <span className="line-clamp-2 text-[12.5px] text-muted">
-                  {item.summary}
+                  <Inline text={item.summary} />
                 </span>
               </Link>
             ))
@@ -227,12 +228,12 @@ function OnThisPage({ page }: { page: DocPage }) {
   )
 }
 
-function Pager({ page }: { page: DocPage }) {
+export function Pager({ page }: { page: DocPage }) {
   const index = ALL_DOCS.findIndex((item) => item.slug === page.slug)
   const previous = ALL_DOCS[index - 1]
   const next = ALL_DOCS[index + 1]
   const card =
-    "flex min-w-0 flex-1 flex-col gap-0.5 rounded-lg border border-border px-3 py-2 hover:border-border-strong hover:bg-surface"
+    "flex min-w-0 flex-1 flex-col gap-0.5 rounded-lg border border-border px-3 py-2 text-foreground hover:border-border-strong hover:bg-surface"
   return (
     <View row className="mt-12 gap-3 border-border border-t pt-5">
       {previous ? (
@@ -374,7 +375,7 @@ export function DocsLayout({ page }: { page: DocPage }) {
           {page.title}
         </h1>
         <p className="max-w-2xl text-[18px] text-muted leading-relaxed">
-          {page.summary}
+          <Inline text={page.summary} />
         </p>
         <PageMeta page={page} />
       </View>

@@ -166,6 +166,16 @@ describe("the copies it keeps of the framework", () => {
     expect(ADAPTV_VERSION).toBe(rootPkg.version)
   })
 
+  it("needs the Node the framework needs", () => {
+    const own = JSON.parse(
+      readFileSync(
+        join(ROOT, "packages/create-adaptv/package.json"),
+        "utf8",
+      ),
+    )
+    expect(own.engines.node).toBe(rootPkg.engines.node)
+  })
+
   it("pins every peer at the version the framework pins", () => {
     for (const [name, version] of Object.entries(rootPkg.peerDependencies))
       expect(DEPENDENCIES[name], name).toBe(version)

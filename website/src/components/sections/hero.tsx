@@ -53,6 +53,7 @@ export function Hero() {
           Open source, MIT. Pre-alpha, so expect rough edges.
         </p>
 
+        {/* when the public sample app ("project zero") exists, the phones link to it */}
         <DeviceStage />
       </View>
     </section>

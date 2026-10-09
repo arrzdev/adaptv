@@ -8,10 +8,13 @@ import { page as configPage } from "./pages/config"
 import { page as deployingPage } from "./pages/deploying"
 import { page as drawerPage } from "./pages/drawer"
 import { page as dropdownPage } from "./pages/dropdown"
+import { page as filesystemPage } from "./pages/filesystem"
 import { page as hooksDataPage } from "./pages/hooks-data"
 import { page as hooksDevicePage } from "./pages/hooks-device"
 import { page as hooksFeedbackPage } from "./pages/hooks-feedback"
+import { page as hooksInteractionPage } from "./pages/hooks-interaction"
 import { page as hooksLifecyclePage } from "./pages/hooks-lifecycle"
+import { page as hooksSystemPage } from "./pages/hooks-system"
 import { page as hooksUpdatesPage } from "./pages/hooks-updates"
 import { page as iconsAndSplashPage } from "./pages/icons-and-splash"
 import { page as imagePage } from "./pages/image"
@@ -121,13 +124,21 @@ export const DOCS: DocGroup[] = [
       hooksLifecyclePage,
       hooksFeedbackPage,
       hooksDataPage,
+      hooksSystemPage,
+      hooksInteractionPage,
       hooksUpdatesPage,
     ],
   },
   {
     section: "Reference",
     title: "APIs",
-    pages: [capabilitiesPage, storagePage, routerApiPage, utilsPage],
+    pages: [
+      capabilitiesPage,
+      filesystemPage,
+      storagePage,
+      routerApiPage,
+      utilsPage,
+    ],
   },
   {
     section: "Reference",
