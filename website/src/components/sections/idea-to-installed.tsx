@@ -172,7 +172,7 @@ export function IdeaToInstalled() {
   return (
     <Section
       title="From idea to installed app"
-      lede="Write plain React. Run it everywhere, then ship."
+      lede="Write plain React. Put it on your phone and ship."
     >
       <Reveal>
         <StepTabs />
