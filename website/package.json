@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "../node_modules/.bin/biome format --write .",
     "lint": "../node_modules/.bin/biome check .",
-    "test": "../node_modules/.bin/vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "adaptv": "link:..",
@@ -30,7 +30,8 @@
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "link:../node_modules/vitest"
   },
   "engines": {
     "node": ">=22.12"
