@@ -1,12 +1,12 @@
 import { View } from "adaptv/components"
-import starterAndroid from "@/assets/hero/starter-android.png?adaptv-image"
-import starterIos from "@/assets/hero/starter-ios.png?adaptv-image"
+import chopchopAndroid from "@/assets/hero/chopchop-android.webp?adaptv-image"
+import chopchopIos from "@/assets/hero/chopchop-ios.webp?adaptv-image"
 import { PhoneFrame } from "@/components/frames"
 
 /**
- * The hero's picture: the app `pnpm create adaptv` writes, on two phones. Each screen is
- * one file in src/assets/hero/, today a stand-in rendered by scripts/capture-starter.ts,
- * so a device screenshot of the same screen replaces it without a code change.
+ * The hero's picture: ChopChop, a task app built on adaptv, on two phones. Each screen is
+ * one file in src/assets/hero/, rendered by scripts/capture-chopchop.ts, so a device
+ * screenshot of the same screen replaces it without a code change.
  *
  * A plain <img> rather than adaptv's Image: Image keeps the picture hidden until hydration
  * says it loaded, and the iPhone is the page's largest paint.
@@ -23,8 +23,8 @@ export function DeviceStage() {
           className="mt-8 w-[70vw] shrink-0 -rotate-2 max-sm:absolute max-sm:left-[calc(50%-60vw)] sm:-mr-10 sm:w-[280px]"
         >
           <Screen
-            image={starterAndroid}
-            alt="The adaptv starter app's home screen in an Android frame."
+            image={chopchopAndroid}
+            alt="ChopChop's new-task sheet, a task being added with High priority, in an Android frame."
           />
         </PhoneFrame>
         <PhoneFrame
@@ -32,8 +32,8 @@ export function DeviceStage() {
           className="relative w-[70vw] shrink-0 rotate-2 sm:w-[280px]"
         >
           <Screen
-            image={starterIos}
-            alt="The adaptv starter app's home screen in an iPhone frame."
+            image={chopchopIos}
+            alt="ChopChop's task list, six tasks with priorities and due dates, in an iPhone frame."
             priority
           />
         </PhoneFrame>
@@ -47,7 +47,7 @@ function Screen({
   alt,
   priority = false,
 }: {
-  image: typeof starterIos
+  image: typeof chopchopIos
   alt: string
   /** The page's largest paint: fetched first and decoded in step with the paint. */
   priority?: boolean
