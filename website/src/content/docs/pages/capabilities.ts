@@ -167,6 +167,12 @@ subscribeAppState((state) => dataClient.setFocused(state === "active"))`,
       ],
     },
 
+    { type: "h2", text: "Filesystem" },
+    {
+      type: "p",
+      text: "Write, read, list and delete files the app owns, on every target. See [filesystem](/docs/filesystem).",
+    },
+
     { type: "h2", text: "Geolocation" },
     {
       type: "p",
@@ -479,6 +485,55 @@ useEffect(() => () => gestureController.unregister(id), [id])`,
       ],
     },
 
+    { type: "h2", text: "URL open" },
+    {
+      type: "api",
+      name: "onUrlOpened()",
+      signature:
+        "function onUrlOpened(handler: (opened: UrlOpened) => void): () => void",
+      description:
+        "Run a function each time a link opens the native app, after adaptv has routed it. Returns an unsubscribe. You do not need to navigate, because adaptv already did. Use it for what a route cannot do, such as analytics on the link, or finishing a sign-in whose callback came back through the app's scheme.",
+      params: [
+        {
+          name: "handler",
+          type: "(opened: UrlOpened) => void",
+          required: true,
+          description: "Called with `{ url, path }`.",
+        },
+      ],
+    },
+    {
+      type: "props",
+      rows: [
+        {
+          name: "url",
+          type: "string",
+          description:
+            "The URL as the OS delivered it, such as `myapp://settings?tab=2`.",
+        },
+        {
+          name: "path",
+          type: "string",
+          description:
+            "The in-app location it was routed to, such as `/settings?tab=2`. A custom scheme has no origin, so its host becomes the first path segment. A web link keeps only its path, query and fragment.",
+        },
+      ],
+    },
+    {
+      type: "code",
+      label: "auth-callback.ts",
+      lang: "ts",
+      code: `import { onUrlOpened } from "adaptv/capabilities"
+
+const off = onUrlOpened(({ url, path }) => {
+  if (path.startsWith("/auth/callback")) finishSignIn(new URL(url))
+})`,
+    },
+    {
+      type: "note",
+      tone: "info",
+      text: "The handler hears links that arrive while it is subscribed. The link that launched the app is routed before any component mounts, so read that one from the route it landed on. The handler never fires on the web, where a link is the page's URL. Links reach the app only for the scheme set in [`deepLinks`](/docs/config), and only through a router built by [`createAdaptvRouter`](/docs/router-api).",
+    },
     { type: "h2", text: "Chrome tint" },
     {
       type: "p",
@@ -519,62 +574,6 @@ useEffect(() => () => gestureController.unregister(id), [id])`,
           description: "Hear when the base changes.",
         },
       ],
-    },
-
-    { type: "h2", text: "Filesystem" },
-    {
-      type: "p",
-      text: "Write, read, list and delete files the app owns, on every target. See [filesystem](/docs/filesystem).",
-    },
-
-    { type: "h2", text: "URL open" },
-    {
-      type: "api",
-      name: "onUrlOpened()",
-      signature:
-        "function onUrlOpened(handler: (opened: UrlOpened) => void): () => void",
-      description:
-        "Run a function each time a link opens the native app, after adaptv has routed it. Returns an unsubscribe. You do not need to navigate, because adaptv already did. Use it for what a route cannot do, such as analytics on the link, or finishing a sign-in whose callback came back through the app's scheme.",
-      params: [
-        {
-          name: "handler",
-          type: "(opened: UrlOpened) => void",
-          required: true,
-          description: "Called with `{ url, path }`.",
-        },
-      ],
-    },
-    {
-      type: "props",
-      rows: [
-        {
-          name: "url",
-          type: "string",
-          description:
-            "The URL as the OS delivered it, such as `myapp://settings?tab=2`.",
-        },
-        {
-          name: "path",
-          type: "string",
-          description:
-            "The in-app location it was routed to, such as `/settings?tab=2`. A custom scheme has no origin, so its host becomes the first path segment. A web link keeps only its path, query and fragment.",
-        },
-      ],
-    },
-    {
-      type: "code",
-      label: "auth-callback.ts",
-      lang: "ts",
-      code: `import { onUrlOpened } from "@arrzdev/adaptv/capabilities"
-
-const off = onUrlOpened(({ url, path }) => {
-  if (path.startsWith("/auth/callback")) finishSignIn(new URL(url))
-})`,
-    },
-    {
-      type: "note",
-      tone: "info",
-      text: "The handler hears links that arrive while it is subscribed. The link that launched the app is routed before any component mounts, so read that one from the route it landed on. The handler never fires on the web, where a link is the page's URL. Deep links need the router that [the Vite plugin](/docs/vite-plugin) sets up.",
     },
   ],
 }

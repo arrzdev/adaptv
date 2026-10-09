@@ -7,12 +7,12 @@ export const page: DocPage = {
     "Write, read, list and delete files the app owns. One path-based API on every target.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { getFilesystemSupport, writeFile, readFile, readTextFile, listFiles, statFile, getFileUri, deleteFile } from "@arrzdev/adaptv/capabilities"',
+    'import { getFilesystemSupport, writeFile, readFile, readTextFile, listFiles, statFile, getFileUri, deleteFile } from "adaptv/capabilities"',
   source: "src/capabilities/filesystem.ts",
   blocks: [
     {
       type: "p",
-      text: "These functions store files that belong to the app. On native they live in the app's own container. On the web they live in the browser's origin-private file system (OPFS). The user cannot see them and other apps cannot read them. There is no hook for it. Call the functions from an event handler or an effect. For small values and settings, use [storage](/docs/storage). To hand a file to the share sheet, pass its path to [useShare](/docs/hooks-data) as `storedFiles`.",
+      text: "These functions store files that belong to the app. On native they live in the app's own container. On the web they live in the browser's origin-private file system (OPFS). The user cannot see them and other apps cannot read them. There is no hook for it. Call the functions from an event handler or an effect. For small values and settings, use [storage](/docs/storage). To hand a file to the share sheet, pass `{ path, scope }` in `storedFiles` to `share()` from [useShare](/docs/hooks-data).",
     },
     {
       type: "p",
@@ -45,7 +45,7 @@ export const page: DocPage = {
         ['Status `"ok"`', "The value is in the result."],
         [
           'Status `"missing"`',
-          "No such file. A directory that was never written is missing, not empty.",
+          'No such file. A directory that was never written is missing. The scope\'s root (`""`) is always listable and starts empty.',
         ],
         [
           'Status `"unsupported"`',
@@ -125,7 +125,7 @@ export const page: DocPage = {
       type: "code",
       label: "notes.ts",
       lang: "ts",
-      code: `import { readTextFile, writeFile } from "@arrzdev/adaptv/capabilities"
+      code: `import { readTextFile, writeFile } from "adaptv/capabilities"
 
 export async function saveNote(day: string, text: string) {
   const outcome = await writeFile(\`notes/\${day}.txt\`, text)
@@ -144,7 +144,7 @@ export async function loadNote(day: string) {
       type: "api",
       name: "listFiles()",
       signature:
-        'function listFiles(path = "", options?: FileOptions): Promise<FileListing>',
+        "function listFiles(path?: string, options?: FileOptions): Promise<FileListing>",
       description:
         'The direct children of a directory, sorted by name. `""` is the scope\'s root.',
       returns:
