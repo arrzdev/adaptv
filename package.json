@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/arrzdev/adaptv.git"
+    "url": "git+https://github.com/arrzdev/adaptv.git"
   },
   "bin": {
     "adaptv": "./bin/adaptv.mjs"
