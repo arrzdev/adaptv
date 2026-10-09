@@ -256,7 +256,7 @@ export function ComponentsBento() {
       title="Components with native gestures"
       lede="Sheets, swipe rows, wheels and switches. They are unstyled, so your Tailwind classes apply. Everything below is live."
     >
-      <View className="grid gap-4 md:grid-cols-3">
+      <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card
           className="md:col-span-2"
           title="Swipe actions"
