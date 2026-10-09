@@ -13,6 +13,68 @@ export type Post = {
 
 export const POSTS: Post[] = [
   {
+    slug: "adaptv-alpha",
+    title: "adaptv 0.1.0-alpha.1 is on npm",
+    date: "2026-10-09",
+    kind: "Release",
+    author: "adaptv team",
+    summary:
+      "adaptv, a React framework for one codebase on the web, the home screen, iOS and Android, is out as an alpha. One command starts an app. Here is what works, what does not yet, and what we want to hear.",
+    blocks: [
+      { type: "p", text: "adaptv is now on npm. Start an app with:" },
+      {
+        type: "code",
+        label: "Terminal",
+        lang: "bash",
+        code: `pnpm create adaptv my-app
+cd my-app
+pnpm install
+pnpm dev`,
+      },
+      { type: "p", text: "You need Node 22.15 or newer and pnpm 11." },
+      { type: "h2", text: "What it is" },
+      {
+        type: "p",
+        text: "You write ordinary React against the DOM, and ordinary CSS. adaptv ships it as a desktop site, a mobile site, an installable home-screen app, and iOS and Android apps through Capacitor.",
+      },
+      {
+        type: "p",
+        text: "The idea is not new: wrap the web app. What usually goes wrong is a specific list. Safe areas arrive after first paint. The keyboard covers the input. The whole page rubber-bands. Buttons flash grey on tap. Inputs zoom the page. The text loupe shows up over a button. Two splash screens collide. Each one takes an afternoon to fix, and together they are why a wrapped app feels wrapped. adaptv fixes them in the framework, so your app does not have to.",
+      },
+      { type: "h2", text: "What is in the alpha" },
+      {
+        type: "ul",
+        items: [
+          "**One config file.** `adaptv.config.ts` generates the web manifest, the native projects, launch screens, icons, theme and service worker.",
+          "**Primitives** that carry the platform differences: `View`, `List`, `Drawer`, `Swipeable`, `PullToRefresh`, `Input`, `Select`, `Slider` and more.",
+          "**Capabilities** with the web and native branch already taken: haptics, keyboard, network, share, clipboard, files, geolocation, notifications, status bar, back and more.",
+          "**Offline and updates:** a service worker, and a self-hosted, signed over-the-air update channel for installed apps.",
+          "**Icons from one image,** including iOS dark and tinted variants and the Android themed icon.",
+          "**One CLI:** `adaptv doctor`, `dev`, `preview`, `build`, `icons`, `keys ota`. `adaptv build ios` gives you an unsigned `.ipa`, `adaptv build android` a debug `.apk`. Signing and store submission are still yours.",
+        ],
+      },
+      {
+        type: "p",
+        text: "Tailwind is the default in the starter, not a requirement. Plain CSS works too.",
+      },
+      { type: "h2", text: "What it is not, yet" },
+      {
+        type: "p",
+        text: "This is an alpha. APIs will change before 1.0. The primitive set is small: there is no `Modal` or `Tabs` yet. iOS is checked on the Simulator and in WebKit, not on a wide range of real devices. There is no server side, on any target: adaptv apps are client apps, and a server function is a build error. The full list is in the [roadmap](https://github.com/arrzdev/adaptv/tree/main/docs/roadmap).",
+      },
+      { type: "h2", text: "Why the field notes" },
+      {
+        type: "p",
+        text: "The blog has five posts about single bugs, like [the loupe](/blog/the-loupe) and [iOS 26 ignoring theme-color](/blog/ios-26-browser-bar-tint). They are how adaptv gets built: find the behaviour on a device, read the engine source, write down the rule, then fix it once in the framework. If you build on the web for phones, they are useful even if you never install adaptv.",
+      },
+      { type: "h2", text: "Tell us where it breaks" },
+      {
+        type: "p",
+        text: "Open an issue on [GitHub](https://github.com/arrzdev/adaptv/issues) with the device, the OS version and what you expected. We want to hear most about the places your app still feels like a website.",
+      },
+    ],
+  },
+  {
     slug: "ios-26-browser-bar-tint",
     title: "iOS 26 stopped reading theme-color. Here is what it reads instead",
     date: "2026-10-07",
