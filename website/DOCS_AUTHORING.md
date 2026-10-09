@@ -61,7 +61,8 @@ file and passed to a `demo` block along with a `code` string a reader could past
 Plain, short, second person. Say what it does, then how to use it. No marketing, no "simply",
 "just", "easily", "powerful", "seamless". No rhetorical questions. No "not X, but Y" constructions.
 Prefer a concrete example to an adjective. Text fields accept `` `code` ``, `**bold**` and
-`[label](/docs/slug)` links; link to other pages by slug when you mention them.
+`[label](/docs/slug)` links, and bold may hold code and links; link to other pages by slug
+when you mention them.
 
 ## Mechanics
 

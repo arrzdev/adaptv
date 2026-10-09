@@ -123,7 +123,7 @@ return (
     },
     {
       type: "p",
-      text: "For the language, use `useLocale`.",
+      text: "For the language, use [`useLocale`](/docs/hooks-system).",
     },
     {
       type: "targets",
