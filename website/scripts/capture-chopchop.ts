@@ -78,6 +78,10 @@ async function installed(page: Page) {
   })
 }
 
+//the card held mid-swipe in "Built with adaptv", and how far (CSS px)
+const SWIPED = "Water the plants"
+const SWIPE = Number(process.env.SWIPE ?? 56)
+
 //settle: the drawers and the list animate in
 const settle = (page: Page) => page.waitForTimeout(1000)
 
@@ -122,17 +126,34 @@ const SCREENS: Record<string, [Phone, number, (page: Page) => Promise<void>]> =
       async (page) => {
         await addTasks(page, TASKS)
         await installed(page)
-        //a card swiped left shows its Archive and Delete actions
-        const card = page
-          .getByRole("article")
-          .filter({ has: page.getByText("Call the dentist", { exact: true }) })
-        const box = await card.boundingBox()
-        const y = box.y + box.height / 2
-        await page.mouse.move(box.x + box.width - 20, y)
-        await page.mouse.down()
-        await page.mouse.move(box.x + box.width - 220, y, { steps: 12 })
-        await page.mouse.up()
+        /*
+         * A card held mid-swipe: its actions show and its title still reads. Swiped all
+         * the way open, the title slides out and a still image looks broken.
+         */
+        //the list animates in: a touch that lands mid-animation never locks
         await settle(page)
+        const title = page.getByText(SWIPED, { exact: true })
+        const card = page.getByRole("article").filter({ has: title })
+        const box = await card.boundingBox()
+        const before = (await title.boundingBox()).x
+        //touch, never lifted: a mouse drag lets go and the row snaps open or shut
+        const cdp = await page.context().newCDPSession(page)
+        const touch = (type: string, x: number) =>
+          cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+          })
+        const y = box.y + box.height / 2
+        const from = box.x + box.width - 20
+        await touch("touchStart", from)
+        for (let i = 1; i <= 7; i++)
+          await touch("touchMove", from - (SWIPE * i) / 7)
+        await settle(page)
+        const moved = before - (await title.boundingBox()).x
+        if (Math.abs(moved - SWIPE) > 2)
+          throw new Error(
+            `the row moved ${moved} px, not ${SWIPE}: capture again`,
+          )
       },
     ],
   }

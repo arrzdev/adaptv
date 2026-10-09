@@ -19,7 +19,7 @@ const APPS = [
     line: "A task app that works offline and syncs when you sign in.",
     platform: "ios",
     image: chopchop,
-    alt: "ChopChop's task list with one task swiped open to Archive and Delete, in an iPhone frame.",
+    alt: "ChopChop's task list, one task half swiped to show its Archive action, in an iPhone frame.",
   },
   {
     name: "Veralens",
