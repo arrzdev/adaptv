@@ -6,8 +6,9 @@ import { Section } from "@/components/section"
 
 /*
  * Two apps that run on adaptv, each on a real screen. Both run on `packages/nativ`, the
- * in-repo predecessor of adaptv, not the published package: the lines say what each app
- * does and nothing more (no dates, numbers or customers). Each screen is one file in
+ * in-repo predecessor of adaptv, not the published package, and the lede says so: never
+ * claim either installs `adaptv` or link a package.json that shows nativ. The lines say
+ * what each app does and nothing more (no dates, numbers or customers). Each screen is one file in
  * src/assets/built-with/, rendered by scripts/capture-chopchop.ts and
  * scripts/capture-veralens.ts, so a device screenshot of the same screen replaces it
  * without a code change.
@@ -32,7 +33,11 @@ const APPS = [
 /** Two phones side by side; on a phone, one under the other. */
 export function BuiltWith() {
   return (
-    <Section title="Built with adaptv">
+    <Section
+      title="Built with adaptv"
+      //so a reader who opens either repo finds no contradiction with the title (TUD-440)
+      lede="Both apps run on adaptv's in-repo predecessor (nativ); moving them to the published package is next."
+    >
       <ul className="grid justify-items-center gap-14 sm:grid-cols-2 sm:gap-10 md:mx-auto md:w-full md:max-w-3xl">
         {APPS.map((app, i) => (
           <li key={app.name} className="w-full max-w-[280px]">
