@@ -1,7 +1,7 @@
 import { createFileRoute } from "adaptv/router"
+import { BuiltWith } from "@/components/sections/built-with"
 import { FinalCta } from "@/components/sections/closing"
 import { ComponentsBento } from "@/components/sections/components-bento"
-import { Examples } from "@/components/sections/examples"
 import { Hero } from "@/components/sections/hero"
 import { IdeaToInstalled } from "@/components/sections/idea-to-installed"
 import { Targets } from "@/components/sections/targets"
@@ -16,7 +16,7 @@ function HomePage() {
     <SitePage>
       <Hero />
       <Targets />
-      <Examples />
+      <BuiltWith />
       <ComponentsBento />
       <IdeaToInstalled />
       <FinalCta />
