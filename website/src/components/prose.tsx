@@ -1,8 +1,8 @@
 import { ExternalLink, Link, View } from "adaptv/components"
 import { Check, Minus, TriangleAlert, X } from "lucide-react"
-import type { ReactNode } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { CodePanel } from "@/components/code"
-import type { Block, TargetRow } from "@/content/blocks"
+import type { Block, PropRow, TargetRow } from "@/content/blocks"
 import { cn } from "@/utils/cn"
 
 /** "Drag to dismiss" → "drag-to-dismiss". Headings and the table of contents share it. */
@@ -94,12 +94,91 @@ export function Prose({ blocks }: { blocks: Block[] }) {
 
 const CELL = "border-border border-t px-4 py-3 align-top"
 
-function TableShell({ children }: { children: ReactNode }) {
+/** "`render`", one code token: the only first cell that stays on one line. */
+const CODE_TOKEN = /^`[^`]+`$/
+
+/**
+ * A table too wide for its column scrolls sideways. The fade at the right edge says
+ * so, and goes once the last column is in view.
+ */
+function TableShell({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  const scroller = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const node = scroller.current
+    if (!node) return
+    //a pixel of slack: zoomed layouts report fractional widths
+    const measure = () =>
+      setMore(node.scrollLeft + node.clientWidth < node.scrollWidth - 1)
+    measure()
+    node.addEventListener("scroll", measure, { passive: true })
+    const resize = new ResizeObserver(measure)
+    resize.observe(node)
+    return () => {
+      node.removeEventListener("scroll", measure)
+      resize.disconnect()
+    }
+  }, [])
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full border-collapse text-left text-[14px]">
-        {children}
-      </table>
+    <div className={cn("relative", className)}>
+      <div
+        ref={scroller}
+        className="overflow-x-auto rounded-xl border border-border"
+      >
+        <table className="w-full border-collapse text-left text-[14px]">
+          {children}
+        </table>
+      </div>
+      <div
+        aria-hidden
+        data-testid="scroll-fade"
+        data-more={more}
+        className={cn(
+          "pointer-events-none absolute inset-y-px right-px w-12 rounded-r-xl bg-linear-to-l from-background to-transparent transition-opacity",
+          more ? "opacity-100" : "opacity-0",
+        )}
+      />
+    </div>
+  )
+}
+
+/** Props below `sm`: a table of four columns does not fit a phone, so one card each. */
+function PropCards({ rows }: { rows: PropRow[] }) {
+  return (
+    <div
+      data-props-cards
+      className="overflow-hidden rounded-xl border border-border sm:hidden"
+    >
+      {rows.map((row) => (
+        <div
+          key={row.name}
+          className="flex flex-col gap-1.5 border-border px-4 py-3 [&:not(:first-child)]:border-t"
+        >
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="font-mono text-[13px] text-foreground">
+              {row.name}
+              {row.required ? <span className="text-danger">*</span> : null}
+            </span>
+            <span className="break-words font-mono text-[12.5px] text-brand">
+              {row.type}
+            </span>
+          </div>
+          {row.default ? (
+            <span className="font-mono text-[12.5px] text-muted">
+              Default {row.default}
+            </span>
+          ) : null}
+          <p className="text-[14px] text-subtle leading-relaxed">
+            <Inline text={row.description} />
+          </p>
+        </div>
+      ))}
     </div>
   )
 }
@@ -229,43 +308,50 @@ function ProseBlock({ block, id }: { block: Block; id?: string }) {
     }
     case "props":
       return (
-        <TableShell>
-          <HeadRow cells={["Prop", "Type", "Default", "Description"]} />
-          <tbody>
-            {block.rows.map((row) => (
-              <tr key={row.name}>
-                <td
-                  className={cn(
-                    CELL,
-                    "whitespace-nowrap font-mono text-[13px] text-foreground",
-                  )}
-                >
-                  {row.name}
-                  {row.required ? <span className="text-danger">*</span> : null}
-                </td>
-                <td className={cn(CELL, "font-mono text-[12.5px] text-brand")}>
-                  {row.type}
-                </td>
-                <td
-                  className={cn(
-                    CELL,
-                    "whitespace-nowrap font-mono text-[12.5px] text-muted",
-                  )}
-                >
-                  {row.default ?? "—"}
-                </td>
-                <td
-                  className={cn(
-                    CELL,
-                    "min-w-[16rem] text-subtle leading-relaxed",
-                  )}
-                >
-                  <Inline text={row.description} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </TableShell>
+        <>
+          <PropCards rows={block.rows} />
+          <TableShell className="max-sm:hidden">
+            <HeadRow cells={["Prop", "Type", "Default", "Description"]} />
+            <tbody>
+              {block.rows.map((row) => (
+                <tr key={row.name}>
+                  <td
+                    className={cn(
+                      CELL,
+                      "whitespace-nowrap font-mono text-[13px] text-foreground",
+                    )}
+                  >
+                    {row.name}
+                    {row.required ? (
+                      <span className="text-danger">*</span>
+                    ) : null}
+                  </td>
+                  <td
+                    className={cn(CELL, "font-mono text-[12.5px] text-brand")}
+                  >
+                    {row.type}
+                  </td>
+                  <td
+                    className={cn(
+                      CELL,
+                      "whitespace-nowrap font-mono text-[12.5px] text-muted",
+                    )}
+                  >
+                    {row.default ?? "—"}
+                  </td>
+                  <td
+                    className={cn(
+                      CELL,
+                      "min-w-[16rem] text-subtle leading-relaxed",
+                    )}
+                  >
+                    <Inline text={row.description} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </TableShell>
+        </>
       )
     case "table":
       return (
@@ -281,7 +367,10 @@ function ProseBlock({ block, id }: { block: Block; id?: string }) {
                     className={cn(
                       CELL,
                       "text-subtle leading-relaxed",
-                      index === 0 && "whitespace-nowrap text-foreground",
+                      index === 0 && "text-foreground",
+                      index === 0 &&
+                        CODE_TOKEN.test(cell) &&
+                        "whitespace-nowrap",
                     )}
                   >
                     <Inline text={cell} />

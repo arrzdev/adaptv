@@ -11,7 +11,8 @@
     "build": "adaptv build web",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "../node_modules/.bin/biome format --write .",
-    "lint": "../node_modules/.bin/biome check ."
+    "lint": "../node_modules/.bin/biome check .",
+    "test": "../node_modules/.bin/vitest run"
   },
   "dependencies": {
     "adaptv": "link:..",
