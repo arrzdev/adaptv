@@ -16,7 +16,7 @@
   --raised: #ffffff;
   --foreground: #0a0a0c;
   --subtle: #52525b;
-  --muted: #8b8b94;
+  --muted: #6e6e78; /* AA: 4.67:1 on --sunken, its lowest-contrast background */
   --border: #ececee;
   --border-strong: #dcdce0;
   --brand: #5563d6;
@@ -60,7 +60,7 @@
   --raised: #141418;
   --foreground: #f5f5f7;
   --subtle: #a3a3ad;
-  --muted: #6e6e79;
+  --muted: #80808b; /* AA: 4.71:1 on --raised, its lowest-contrast background */
   --border: #1c1c21;
   --border-strong: #2a2a31;
   --brand: #8b95ff;
