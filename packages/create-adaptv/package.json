@@ -1,12 +1,16 @@
 {
   "name": "create-adaptv",
   "version": "0.1.0-alpha.1",
-  "private": true,
   "description": "Create an adaptv app: pnpm create adaptv my-app",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arrzdev/adaptv.git",
+    "directory": "packages/create-adaptv"
   },
   "bin": {
     "create-adaptv": "./index.mjs"
