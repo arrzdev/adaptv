@@ -12,6 +12,7 @@ import { page as filesystemPage } from "./pages/filesystem"
 import { page as hooksDataPage } from "./pages/hooks-data"
 import { page as hooksDevicePage } from "./pages/hooks-device"
 import { page as hooksFeedbackPage } from "./pages/hooks-feedback"
+import { page as hooksInteractionPage } from "./pages/hooks-interaction"
 import { page as hooksLifecyclePage } from "./pages/hooks-lifecycle"
 import { page as hooksSystemPage } from "./pages/hooks-system"
 import { page as hooksUpdatesPage } from "./pages/hooks-updates"
@@ -124,6 +125,7 @@ export const DOCS: DocGroup[] = [
       hooksFeedbackPage,
       hooksDataPage,
       hooksSystemPage,
+      hooksInteractionPage,
       hooksUpdatesPage,
     ],
   },
