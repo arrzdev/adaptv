@@ -80,7 +80,7 @@ ChopChop only: `Screen` is gone (a page root is `ScrollView` or `View fill`); `S
 | # | Blocker | Blocks | Unblocked by |
 |---|---|---|---|
 | **K1** | **`adaptv` is not on npm.** `package.json` is `"private": true` at `0.1.0-alpha.1`. This item is about the *published* package; a tarball or git dependency would not prove the published artefact works. | Both apps | The alpha publish (TUD-424) |
-| **K2** | **`adaptv/router` lacks two symbols Veralens uses**: `notFound` (thrown in `blog/$slug.page.tsx`) and `Navigate` (`platform/root/redirect-to-jobs.page.tsx`). The surface is curated, so adding them is a decision, not a fix; the alternative is to rewrite both call sites (`redirect` in a loader, a 404 component). | Veralens | A decision on the curated surface, recorded in the register |
+| **K2** | **`adaptv/router` has no `Navigate`**, which Veralens renders in `platform/root/redirect-to-jobs.page.tsx`. `notFound` (thrown in `blog/$slug.page.tsx`) is already exported, so that call site only changes its import. **Decided 2026-10-09 (TUD-441): `Navigate` stays out of the curated surface;** Veralens throws `redirect` from that route's `beforeLoad`, which also redirects before render under SSR. | Veralens | Rewriting the one call site in the switch PR |
 | **K3** | **Per-route `head` reaching server-rendered HTML** is unproven for Veralens. Its `SEO-PLAN.md` already flags that the root route is owned by the framework. adaptv owns the root route too, so the blog and docs pages need a check that their `<title>` and meta tags are in the SSR response, not only after hydration. | Veralens's SEO | A test in the switch PR; a framework fix if it fails |
 | **K4** | **ChopChop's repo has no Actions minutes**; its PRs merge on `.github/scripts/local-gate.sh` (TUD-315). | Nothing technical; the switch PR takes a long local gate run | — |
 
@@ -94,7 +94,7 @@ installed web apps.
 **ChopChop first.** It uses most of the surface (71 imports, drawers, swipe, gestures, wheel, offline
 worker), the playground already holds most of its edits, and it has a full migration report. If the
 published package works for ChopChop, it works for the smaller surface Veralens uses. Veralens follows
-because K2 and K3 are open and its 43 L20 call sites are mechanical but many.
+because K3 is open and its 43 L20 call sites are mechanical but many.
 
 1. **Prep in ChopChop, on `@repo/nativ`, any time**: the app-local `cn` (27 files); the token module
    behind an async-ready read/write pair. Both are in the TUD-423 report §5 (P1, P2).
@@ -103,8 +103,8 @@ because K2 and K3 are open and its 43 L20 call sites are mechanical but many.
    swipe on iOS Safari and the installed PWA).
 3. **Delete `packages/nativ` from ChopChop** in its own PR, once S1 has run on staging. Deleting a
    package is ask-first in that repo.
-4. **Veralens**: settle K2; then `cn`, the L20 imports, config, worker and deploy in one switch PR,
-   with the K3 check in it. Then delete its `packages/nativ`.
+4. **Veralens**: the `Navigate` rewrite (K2), `cn`, the L20 imports, config, worker and deploy in
+   one switch PR, with the K3 check in it. Then delete its `packages/nativ`.
 5. **Landing**: drop the `packages/nativ` caveat from `built-with.tsx` (follows TUD-440). Then move
    this file out of `roadmap/`.
 
