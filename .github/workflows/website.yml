@@ -4,7 +4,7 @@ name: Website
 # https://adaptv.tudu.dev. Production only and public: no staging and no Zero Trust
 # Access (board decision, TUD-86).
 #
-#   · PR touching the site or the framework it links → verify (typecheck, lint, build).
+#   · PR touching the site or the framework it links → verify (build, typecheck, lint, test).
 #   · Push to main, same paths → verify (debounce first) → deploy to `production`.
 #   · Manual dispatch from main → verify → deploy, no debounce. Any other ref fails.
 #
@@ -130,6 +130,11 @@ jobs:
       - name: Lint (biome, website)
         if: steps.tip.outputs.go == 'true'
         run: pnpm --dir website lint
+
+      # The site's own vitest suite: the framework's gate never collects `website/`.
+      - name: Test
+        if: steps.tip.outputs.go == 'true'
+        run: pnpm --dir website test
 
       - name: Keep the build
         if: steps.tip.outputs.go == 'true' && github.event_name != 'pull_request'
