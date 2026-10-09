@@ -1,7 +1,8 @@
 /*
- * Renders the landing page's ChopChop screens: the hero's two phones.
+ * Renders the landing page's ChopChop screens: the hero's two phones and its card in
+ * "Built with adaptv".
  *
- *   node website/scripts/capture-chopchop.ts http://localhost:7171
+ *   node website/scripts/capture-chopchop.ts http://localhost:7171 [hero|built-with]
  *
  * The URL serves ChopChop's frontend built for the web (its repo's `apps/frontend`:
  * `vite build`, then `vite preview` with the committed env/.env.example). No backend
@@ -77,45 +78,95 @@ async function installed(page: Page) {
   })
 }
 
+//the card held mid-swipe in "Built with adaptv", and how far (CSS px)
+const SWIPED = "Water the plants"
+const SWIPE = Number(process.env.SWIPE ?? 56)
+
 //settle: the drawers and the list animate in
 const settle = (page: Page) => page.waitForTimeout(1000)
 
-const SCREENS: Record<string, [Phone, (page: Page) => Promise<void>]> = {
-  "hero/chopchop-ios": [
-    "ios",
-    async (page) => {
-      await addTasks(page, TASKS)
-      await installed(page)
-      await settle(page)
-    },
-  ],
-  "hero/chopchop-android": [
-    "android",
-    async (page) => {
-      await addTasks(page, TASKS.slice(0, 4))
-      await installed(page)
-      await page.getByRole("button", { name: "Create task" }).click()
-      await page
-        .getByRole("dialog")
-        .getByLabel("Task description")
-        .fill("Pick up the bike from the shop")
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "High" })
-        .click()
-      //a blinking caret is either in the shot or not; keep it out
-      await page.addStyleTag({ content: "* { caret-color: transparent }" })
-      await settle(page)
-    },
-  ],
-}
+/*
+ * The hero's phones are the page's largest paint and show up to 280 px wide: 2x. A card
+ * further down shows as wide but loads before the visitor scrolls to it: 1.5x.
+ */
+const SCREENS: Record<string, [Phone, number, (page: Page) => Promise<void>]> =
+  {
+    "hero/chopchop-ios": [
+      "ios",
+      2,
+      async (page) => {
+        await addTasks(page, TASKS)
+        await installed(page)
+        await settle(page)
+      },
+    ],
+    "hero/chopchop-android": [
+      "android",
+      2,
+      async (page) => {
+        await addTasks(page, TASKS.slice(0, 4))
+        await installed(page)
+        await page.getByRole("button", { name: "Create task" }).click()
+        await page
+          .getByRole("dialog")
+          .getByLabel("Task description")
+          .fill("Pick up the bike from the shop")
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "High" })
+          .click()
+        //a blinking caret is either in the shot or not; keep it out
+        await page.addStyleTag({ content: "* { caret-color: transparent }" })
+        await settle(page)
+      },
+    ],
+    "built-with/chopchop": [
+      "ios",
+      1.5,
+      async (page) => {
+        await addTasks(page, TASKS)
+        await installed(page)
+        /*
+         * A card held mid-swipe: its actions show and its title still reads. Swiped all
+         * the way open, the title slides out and a still image looks broken.
+         */
+        //the list animates in: a touch that lands mid-animation never locks
+        await settle(page)
+        const title = page.getByText(SWIPED, { exact: true })
+        const card = page.getByRole("article").filter({ has: title })
+        const box = await card.boundingBox()
+        const before = (await title.boundingBox()).x
+        //touch, never lifted: a mouse drag lets go and the row snaps open or shut
+        const cdp = await page.context().newCDPSession(page)
+        const touch = (type: string, x: number) =>
+          cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+          })
+        const y = box.y + box.height / 2
+        const from = box.x + box.width - 20
+        await touch("touchStart", from)
+        for (let i = 1; i <= 7; i++)
+          await touch("touchMove", from - (SWIPE * i) / 7)
+        await settle(page)
+        const moved = before - (await title.boundingBox()).x
+        if (Math.abs(moved - SWIPE) > 2)
+          throw new Error(
+            `the row moved ${moved} px, not ${SWIPE}: capture again`,
+          )
+      },
+    ],
+  }
 
-for (const [name, [phone, setup]] of Object.entries(SCREENS)) {
+//a second argument renders only the screens under that folder
+const only = process.argv[3]
+for (const [name, [phone, scale, setup]] of Object.entries(SCREENS)) {
+  if (only && !name.startsWith(`${only}/`)) continue
   await capture(
     phone,
     url,
     join(root, `website/src/assets/${name}.webp`),
     setup,
-    2,
+    scale,
   )
 }
