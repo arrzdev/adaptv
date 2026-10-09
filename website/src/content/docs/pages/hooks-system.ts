@@ -7,12 +7,12 @@ export const page: DocPage = {
     "Read the app version, the battery, the language, the motion sensors and the screen reader. Announce a message to assistive technology.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useAppInfo, useBattery, useLocale, useMotion, useScreenReader } from "@arrzdev/adaptv/hooks"',
+    'import { useAppInfo, useBattery, useLocale, useMotion, useScreenReader } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
       type: "p",
-      text: "Each hook reads a fact the system owns and re-renders when it changes. All of them are safe during server rendering. The server and the first client render show a fixed value, so hydration matches. Outside a component, use the matching function from [capabilities](/docs/capabilities).",
+      text: "Each hook reads a fact the system owns and re-renders when it changes. All of them are safe during server rendering. The server and the first client render show a fixed value, so hydration matches. Outside a component, import the matching function from `adaptv/capabilities`.",
     },
 
     { type: "h2", text: "useAppInfo" },
@@ -85,11 +85,11 @@ return (
     {
       type: "note",
       tone: "info",
-      text: "This is the binary, not the JavaScript. An [OTA update](/docs/ota-updates) changes the live bundle without changing `version`.",
+      text: "`version` and `build` describe the installed binary. An [OTA update](/docs/ota-updates) changes the live bundle without changing `version`.",
     },
     {
       type: "p",
-      text: "Outside React, `getAppInfo()` returns the same record as a promise, and `getAppInfoCaveat()` returns the caveat. The promise never rejects. A failed read resolves a record of `null` values.",
+      text: "Outside React, `getAppInfo()` returns the same record as a promise, and `getAppInfoCaveat()` returns the caveat. The promise never rejects. A field it cannot read is `null`.",
     },
     {
       type: "targets",
@@ -105,7 +105,11 @@ return (
           status: "partial",
           note: "Same as desktop.",
         },
-        { target: "iOS", status: "yes", note: "All four fields." },
+        {
+          target: "iOS",
+          status: "yes",
+          note: "All four fields. A binary built before the app plugin falls back to the manifest and `version` and `build` read `null`. A rebuild fixes it.",
+        },
         {
           target: "Android",
           status: "yes",
@@ -151,7 +155,7 @@ return (
       lang: "tsx",
       code: `const { status, level, charging } = useBattery()
 
-if (status !== "ok") return null
+if (status !== "ok" || level === null) return null
 return <Text>{Math.round(level * 100)}%{charging ? " (charging)" : ""}</Text>`,
     },
     {
@@ -262,7 +266,7 @@ return <Text>{Math.round(level * 100)}%{charging ? " (charging)" : ""}</Text>`,
           name: "preferred",
           type: "string[]",
           description:
-            "The ranked language list from `navigator.languages`, or just the tag.",
+            "The ranked language list from `navigator.languages`, or the tag alone when that list is empty.",
         },
       ],
     },
@@ -442,7 +446,7 @@ return <Text>{sample?.gravity?.x.toFixed(2)}</Text>`,
         {
           target: "Desktop web",
           status: "partial",
-          note: "Granted from the start, but a desktop has no sensor, so `silent` becomes `true`.",
+          note: 'Chromium: granted from the start, but a desktop has no sensor, so `silent` becomes `true`. Desktop Safari has no motion API and reads `"unsupported"`.',
         },
         {
           target: "Mobile web",
@@ -528,7 +532,7 @@ async function save() {
     },
     {
       type: "p",
-      text: 'On web, `announce` writes to one polite ARIA live region that adaptv adds to the page. A running reader speaks it. Without a reader it costs nothing. No browser can say whether a reader is running, which is why `status` stays `"unknown"`. On native, adaptv announces only while a reader is on. Outside React, use `getScreenReaderState()`, `readScreenReader()`, `subscribeScreenReader(cb)` and `announce()`. To speak to every user, use [speech](/docs/hooks-interaction).',
+      text: 'On web, `announce` writes to one polite ARIA live region that adaptv adds to the page. A running reader speaks it. Without a reader it costs nothing. No browser can say whether a reader is running, which is why `status` stays `"unknown"`. On native, adaptv announces only while a reader is on. Outside React, use `getScreenReaderState()`, `readScreenReader()`, `subscribeScreenReader(cb)` and `announce()`. To speak to every user, use `useSpeech` from `adaptv/hooks`.',
     },
     {
       type: "targets",
