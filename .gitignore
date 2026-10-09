@@ -16,3 +16,6 @@ coverage/
 
 # `pnpm pack` output, installed by examples/basic.
 /*.tgz
+
+# `pnpm smoke:webkit` screenshots when no out dir is given.
+/webkit-smoke-out/

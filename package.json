@@ -44,6 +44,7 @@
     "preview:ios": "node scripts/playground.mjs preview:ios",
     "preview:web": "node scripts/playground.mjs preview:web",
     "smoke:android": "node scripts/native-plugin-smoke.mjs --app playground/apps/frontend",
+    "smoke:webkit": "bash .github/webkit-smoke/smoke.sh",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.bin.json",
