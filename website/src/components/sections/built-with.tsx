@@ -16,14 +16,14 @@ import { Section } from "@/components/section"
 const APPS = [
   {
     name: "ChopChop",
-    line: "A task app that works offline and syncs when you sign in.",
+    line: "A task app for your phone and the web. Add a task, check it off, keep going.",
     platform: "ios",
     image: chopchop,
     alt: "ChopChop's task list, one task half swiped to show its Archive action, in an iPhone frame.",
   },
   {
     name: "Veralens",
-    line: "An API that turns a PDF, scan or photo into typed fields.",
+    line: "Turn documents into structured data. Send a file, get back JSON in the shape you define.",
     platform: "android",
     image: veralens,
     alt: "Veralens' home page, a stack of documents over the line “Any document into clean data in one API call”, in an Android frame.",
