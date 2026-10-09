@@ -3,7 +3,10 @@ import type { ReactNode } from "react"
 
 const INLINE = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g
 
-/** The three inline marks content may use: `code`, **bold**, [label](href). */
+/**
+ * The three inline marks content may use: `code`, **bold**, [label](href). Bold may
+ * hold the other two: **`render` is static** is bold code.
+ */
 export function Inline({ text }: { text: string }): ReactNode {
   return text.split(INLINE).map((part, index) => {
     //a split string never reorders, so the index is a stable key
@@ -21,7 +24,8 @@ export function Inline({ text }: { text: string }): ReactNode {
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return (
         <strong key={key} className="font-semibold text-foreground">
-          {part.slice(2, -2)}
+          {/* bold holds no `**`, so this goes one level deep: code and links */}
+          <Inline text={part.slice(2, -2)} />
         </strong>
       )
     }

@@ -51,6 +51,9 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+      vitest:
+        specifier: link:../node_modules/vitest
+        version: link:../node_modules/vitest
 
 packages:
 
