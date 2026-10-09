@@ -51,7 +51,7 @@ export function Hero() {
           className="rise mt-5 text-[14px] text-muted"
           style={{ animationDelay: "180ms" }}
         >
-          Open source, MIT. Pre-alpha, so expect rough edges.
+          Open source, MIT. Alpha, so expect rough edges.
         </p>
 
         <DeviceStage />

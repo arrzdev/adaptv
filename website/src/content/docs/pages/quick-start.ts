@@ -3,12 +3,13 @@ import type { DocPage } from "@/content/docs/types"
 export const page: DocPage = {
   slug: "quick-start",
   title: "Quick start",
-  summary: "Run an adaptv app today, and learn the files a minimal app needs.",
+  summary:
+    "Start an adaptv app with one command, and learn the files a minimal app needs.",
   blocks: [
     {
       type: "note",
       tone: "warn",
-      text: "There is no install command yet. `adaptv` is private and not on npm. An app links a local checkout with pnpm's `link:` protocol. The `website/` and `playground/` folders in the repository do this.",
+      text: "adaptv is an alpha. It is on npm as `0.1.0-alpha.1`, and APIs will change before 1.0.",
     },
     { type: "h2", text: "Requirements" },
     {
@@ -22,6 +23,20 @@ export const page: DocPage = {
     {
       type: "p",
       text: "Web needs only Node and pnpm. Run `adaptv doctor` from an app root to check a machine. Its Android and JDK rows are required. They fail on a machine without them, even if you only build web. Set `ANDROID_HOME` and `JAVA_HOME` to fix this.",
+    },
+    { type: "h2", text: "Start an app" },
+    {
+      type: "code",
+      label: "Terminal",
+      lang: "bash",
+      code: `pnpm create adaptv my-app
+cd my-app
+pnpm install
+pnpm dev                    # http://localhost:3000`,
+    },
+    {
+      type: "p",
+      text: "The starter uses Tailwind and carries adaptv's dependency patches. Use pnpm: npm and yarn do not apply the patches. To add adaptv to an app you already have, `npm i adaptv` and write the files below.",
     },
     { type: "h2", text: "Run the repository apps" },
     {
@@ -140,7 +155,7 @@ function Home() {
     { type: "h3", text: "package.json" },
     {
       type: "p",
-      text: "Link the checkout, and link its copies of `react`, `react-dom`, `vite` and `motion`. This gives one copy of each. Two copies of React crash with `Cannot read properties of null (reading 'useEffect')`. These paths fit an app one folder inside the checkout. Change them for other places. The package resolves to the checkout's `dist/`, so run `pnpm build` there first, and again after you change the framework.",
+      text: "Depend on `adaptv`, and on `react`, `react-dom`, `vite` and `motion` at the versions adaptv pins as peers. Other versions can install two copies of React, which crash with `Cannot read properties of null (reading 'useEffect')`.",
     },
     {
       type: "code",
@@ -153,17 +168,17 @@ function Home() {
     "build": "adaptv build web"
   },
   "dependencies": {
-    "adaptv": "link:..",
-    "motion": "link:../node_modules/motion",
-    "react": "link:../node_modules/react",
-    "react-dom": "link:../node_modules/react-dom",
-    "vite": "link:../node_modules/vite"
+    "adaptv": "0.1.0-alpha.1",
+    "motion": "12.35.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "vite": "8.0.11"
   }
 }`,
     },
     {
       type: "p",
-      text: 'The app also needs its own `pnpm-workspace.yaml` with `packages: ["."]`. Without it, pnpm installs the checkout instead of the app. Vite 8 is required.',
+      text: "The app also needs adaptv's dependency patches. Install once, copy `node_modules/adaptv/patches/` to `patches/`, add the `patchedDependencies` block from the starter's `pnpm-workspace.yaml`, then install again. Vite 8 is required.",
     },
     { type: "h3", text: "tsconfig.json" },
     {
