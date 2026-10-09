@@ -6,8 +6,8 @@ export const Route = createFileRoute("/form")({
   component: Form,
 })
 
-//The echo line is what the smoke reads back: the WebView's accessibility tree carries
-//its text, so a keystroke that reached the input shows up in `uiautomator dump`.
+//The echo line is what the smoke reads back: a keystroke that reached the input shows up
+//as `echo:<text>`, which phone.smoke.ts waits for.
 function Form() {
   const [value, setValue] = useState("")
   return (
