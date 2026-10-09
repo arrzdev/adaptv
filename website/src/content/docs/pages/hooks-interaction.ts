@@ -7,12 +7,12 @@ export const page: DocPage = {
     "Open the mail and SMS composers, show and schedule notifications, print, speak text aloud and hide the app from screenshots.",
   platforms: ["Web", "PWA", "iOS", "Android"],
   importLine:
-    'import { useCompose, useNotifications, useNotificationOpened, usePrint, useSpeech, usePrivacyScreen } from "@arrzdev/adaptv/hooks"',
+    'import { useCompose, useNotifications, useNotificationOpened, usePrint, useSpeech, usePrivacyScreen } from "adaptv/hooks"',
   source: "src/hooks",
   blocks: [
     {
       type: "p",
-      text: "These hooks start something outside the page: another app, the OS or the user's attention. Each call resolves an outcome and never rejects. Check the outcome, because a call that did nothing looks the same as one that worked. Outside a component, use the matching function from [capabilities](/docs/capabilities). Call them from a click or a tap.",
+      text: "These hooks start something outside the page: another app, the OS or the user's attention. Each action that can fail resolves an outcome and never rejects. Check the outcome, because a call that did nothing looks the same as one that worked. Outside a component, import the matching function from `adaptv/capabilities`. Call them from a click or a tap.",
     },
 
     { type: "h2", text: "useCompose" },
@@ -106,23 +106,27 @@ export const page: DocPage = {
       lang: "tsx",
       code: `const { mail, composeMail, last } = useCompose()
 
-<Button
-  disabled={mail === "no-handler"}
-  onClick={() =>
-    composeMail({
-      to: ["help@example.com"],
-      subject: "Order 1042",
-      body: "Hi,",
-    })
-  }
->
-  Email support
-</Button>
-{last === "no-handler" && <Text>No mail app is set up.</Text>}`,
+return (
+  <>
+    <Button
+      disabled={mail === "no-handler"}
+      onClick={() =>
+        composeMail({
+          to: ["help@example.com"],
+          subject: "Order 1042",
+          body: "Hi,",
+        })
+      }
+    >
+      Email support
+    </Button>
+    {last === "no-handler" && <Text>No mail app is set up.</Text>}
+  </>
+)`,
     },
     {
       type: "p",
-      text: 'The support value labels a button. It does not gate the call. On the web the draft opens with `window.open(url, "_self")` and the outcome is `"opened"`, because the browser does not say whether a mail app took it. The URL builders `mailUrl(draft)` and `smsUrl(draft)` are public too. The SMS body separator is `&` on iOS and `?` elsewhere. Spaces in SMS numbers are dropped.',
+      text: 'The support value labels a button. It does not gate the call. On the web the draft opens with `window.open(url, "_self")` and the outcome is `"opened"`, because the browser does not say whether a mail app took it. The URL builders `mailUrl(draft)` and `smsUrl(draft)` are exported from `adaptv/capabilities`. The SMS body separator is `&` on iOS and `?` elsewhere. Spaces in SMS numbers are dropped.',
     },
     {
       type: "targets",
@@ -280,7 +284,7 @@ async function remindTomorrow() {
     {
       type: "note",
       tone: "info",
-      text: 'A browser cannot schedule a notification. `schedule` resolves `"unsupported"` there instead of starting a timer that works only while the page is open. On the web, `notify` goes through the app\'s own service worker, and `permission` reads `"unavailable"` until one is registered. On Android a scheduled notification is inexact and can arrive late while the device dozes. Read `caveat` for the sentence for the current target.',
+      text: 'A browser cannot schedule a notification. `schedule` resolves `"unsupported"` there instead of starting a timer that works only while the page is open. On the web, `notify` goes through the app\'s own service worker, and a granted `permission` reads `"unavailable"` until that worker is registered. On Android a scheduled notification is inexact and can arrive late while the device dozes. Read `caveat` for the sentence for the current target.',
     },
     {
       type: "targets",
@@ -316,7 +320,7 @@ async function remindTomorrow() {
       signature:
         "function useNotificationOpened(handler: (opened: OpenedNotification) => void): void",
       description:
-        "Run a function when the user taps a notification. It is a handler, not state, so a tap does not run again on every later render. The latest handler is always used, so an inline function does not resubscribe.",
+        "Run a function when the user taps a notification. It takes a handler, so each tap runs it once and later renders do not run it again. The latest handler is always used, so an inline function does not resubscribe.",
       params: [
         {
           name: "handler",
@@ -337,7 +341,7 @@ async function remindTomorrow() {
     },
     {
       type: "p",
-      text: "On the web the tap can arrive when no page was open. It is what started the app, and the hook asks the service worker for the held tap when it mounts. Mount it once, high in the tree. Outside React, use `onNotificationOpened(handler)`, which returns an unsubscribe. A target that cannot deliver a tap never calls back.",
+      text: "On the web the tap can arrive when no page was open. It is what started the app, and the hook asks the service worker for the held tap when it mounts. Mount it once, high in the tree. Outside React, use `onNotificationOpened(handler)` from `adaptv/capabilities`, which returns an unsubscribe. A target that cannot deliver a tap never calls back.",
     },
     {
       type: "targets",
@@ -480,7 +484,8 @@ return (
         {
           name: "reason",
           type: "string | null",
-          description: 'The engine\'s error code when `last` is `"failed"`.',
+          description:
+            'The engine\'s error code when `last` is `"failed"`, or `"unsupported"` when there is no engine.',
         },
         {
           name: "speak",
@@ -538,7 +543,10 @@ return (
           '`"silent"`',
           "The engine did not start within the window. The API exists and did nothing.",
         ],
-        ['`"failed"`', "The engine reported an error. See `reason`."],
+        [
+          '`"failed"`',
+          'The engine reported an error, or there is no engine (`reason` is `"unsupported"`). See `reason`.',
+        ],
       ],
     },
     {
@@ -556,12 +564,12 @@ return (
     },
     {
       type: "p",
-      text: "Outside React, use `speak(text, options)`, which returns `{ done, reason, cancel }`, plus `stopSpeech()`, `getSpeechStatus()`, `getVoices()`, `listVoices()`, `isSpeaking()` and `subscribeSpeech(cb)`.",
+      text: "Outside React, `adaptv/capabilities` has its own `speak(text, options)`, which returns `{ done, reason, cancel }`, plus `stopSpeech()`, `getSpeechStatus()`, `getVoices()`, `listVoices()`, `isSpeaking()` and `subscribeSpeech(cb)`.",
     },
     {
       type: "note",
       tone: "info",
-      text: "Speech runs on the browser or WebView engine's own `speechSynthesis`, with no native plugin. It works wherever that engine has it and has voices. Check `status` before you offer it.",
+      text: 'Speech runs on the browser or WebView engine\'s own `speechSynthesis`, with no native plugin. It works wherever that engine has it and has voices. The Android WebView has no `speechSynthesis`, so an Android app reads `"unsupported"`. Check `status` before you offer it.',
     },
     {
       type: "targets",
@@ -584,8 +592,8 @@ return (
         },
         {
           target: "Android",
-          status: "partial",
-          note: "Where the WebView has `speechSynthesis`.",
+          status: "no",
+          note: '`status` is `"unsupported"`. The Android WebView has no `speechSynthesis`.',
         },
       ],
     },
@@ -682,7 +690,7 @@ useEffect(() => {
     },
     {
       type: "p",
-      text: "Outside React, use `enablePrivacyScreen(options)`, `disablePrivacyScreen()`, `readPrivacyScreen()`, `getPrivacyScreenSupport()` and `getPrivacyScreenCaveat()`.",
+      text: "Outside React, import from `adaptv/capabilities`: `enablePrivacyScreen(options)`, `disablePrivacyScreen()`, `readPrivacyScreen()`, `getPrivacyScreenSupport()` and `getPrivacyScreenCaveat()`.",
     },
     {
       type: "targets",
