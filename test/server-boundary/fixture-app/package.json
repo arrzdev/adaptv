@@ -1,0 +1,9 @@
+{
+  "name": "server-boundary-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-router": "*",
+    "adaptv": "*"
+  }
+}
