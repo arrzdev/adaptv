@@ -12,11 +12,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "../node_modules/.bin/biome format --write .",
     "lint": "../node_modules/.bin/biome check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "adaptv": "link:..",
     "@tailwindcss/vite": "4.2.4",
+    "adaptv": "link:..",
     "clsx": "2.1.1",
     "lucide-react": "0.544.0",
     "motion": "link:../node_modules/motion",
@@ -27,6 +28,7 @@
     "vite": "link:../node_modules/vite"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",

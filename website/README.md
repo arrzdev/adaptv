@@ -12,6 +12,7 @@ pnpm install        # its own pnpm project — the root install does not cover i
 pnpm dev            # adaptv dev web → http://localhost:41760
 pnpm typecheck
 pnpm lint           # biome, with website/biome.json (the root config ignores this folder)
+pnpm test:e2e       # Playwright smoke on the production build: build, serve, 10 page loads (~3 min)
 pnpm format
 ```
 
