@@ -425,8 +425,8 @@ required, `font-size` doesn't work).
 
 ## 12. Upstream index (was `RESEARCH.md §4` and `§5`)
 
-> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links were last verified
-> 2026-07.** All three Ionic mechanisms below have since been ported — `src/capabilities/
+> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links verified
+> 2026-10.** All three Ionic mechanisms below have since been ported — `src/capabilities/
 > {gesture-controller,back-chain}.ts` and `src/hooks/use-screen-lifecycle.ts` — so this is
 > now the record of *what was read before building them*, which is exactly the thing that is
 > expensive to reconstruct. The OTA survey is likewise settled: the pick is
@@ -439,7 +439,7 @@ required, `font-size` doesn't work).
   only one gesture capture at a time (drag vs scroll vs swipe arbitration) — the reference for adaptv's
   `Drawer`/`Swipeable` and the missing gesture arbiter.
   - Docs: <https://ionicframework.com/docs/utilities/gestures>
-  - Source: <https://github.com/ionic-team/ionic/blob/master/core/src/utils/gesture/gesture-controller.ts>
+  - Source: <https://github.com/ionic-team/ionic-framework/blob/main/core/src/utils/gesture/gesture-controller.ts>
 - **Page lifecycle.** `ionViewWillEnter`/`DidEnter`/`WillLeave`/`DidLeave`, DOM retention until pop, and
   the gotcha that these **don't fire on app resume/background** — informs adaptv's lifecycle design.
   - Docs: <https://ionicframework.com/docs/vue/lifecycle>
@@ -457,7 +457,7 @@ Don't DIY the bundle-swap blindly. Study these, then decide wrap-vs-build:
 - **Capgo** (`@capgo/capacitor-updater`) — remote JS/asset bundle updates; its CLI **detects when a
   bundle is OTA-safe vs needs a native build** (plugin/native change) — a pattern adaptv must replicate.
   - <https://capgo.app/> · <https://github.com/Cap-go/capacitor-updater>
-- **Capawesome Live Update plugin** — alternative: <https://capawesome.io/plugins/live-update/>
+- **Capawesome Live Update plugin** — alternative: <https://capawesome.io/docs/sdks/capacitor/live-update/>
 - **`@capacitor/live-updates`** (Appflow) — the first-party/commercial option.
 - **App Store rule (Apple §3.3.2):** OTA limited to **JavaScript + assets**, no native-code/behavior
   change; Google Play more lenient but policy-bound. Native/plugin changes still need a store build.
