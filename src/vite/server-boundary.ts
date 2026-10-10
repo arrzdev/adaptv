@@ -156,12 +156,15 @@ export function boundaryGraph(
   const relative = (file: string) =>
     path.relative(appRoot, file).split(path.sep).join("/")
 
-  const routeIdsByFile = () => {
-    const byFile = new Map<string, string>()
-    for (const [id, route] of Object.entries(routesManifest()))
-      if (route.filePath)
-        byFile.set(path.resolve(appRoot, route.filePath), id)
-    return byFile
+  let routeIdsByFile: Map<string, string> | undefined
+  const routeIdOf = (file: string) => {
+    if (!routeIdsByFile) {
+      routeIdsByFile = new Map()
+      for (const [id, route] of Object.entries(routesManifest()))
+        if (route.filePath)
+          routeIdsByFile.set(path.resolve(appRoot, route.filePath), id)
+    }
+    return routeIdsByFile.get(file)
   }
 
   /** The app modules a module is, or is imported by first, with the module below each. */
@@ -186,7 +189,6 @@ export function boundaryGraph(
 
   /** The routes whose files import `file`, directly or through other app modules. */
   const routesOf = (file: string) => {
-    const byFile = routeIdsByFile()
     const routes = new Set<string>()
     const stack = [file]
     const seen = new Set<string>()
@@ -195,7 +197,7 @@ export function boundaryGraph(
       const plain = withoutQuery(current)
       if (seen.has(current)) continue
       seen.add(current)
-      const route = byFile.get(plain)
+      const route = routeIdOf(plain)
       if (route !== undefined) {
         routes.add(routeLabel(route))
         continue
@@ -320,7 +322,9 @@ export function adaptvServerBoundaryPlugin(appRoot: string): Plugin[] {
     enforce: "pre",
 
     buildStart() {
-      if (this.environment.name === "client") marked.clear()
+      if (this.environment.name !== "client") return
+      marked.clear()
+      names.clear()
     },
 
     resolveId(source, importer) {
