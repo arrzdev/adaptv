@@ -69,4 +69,7 @@ when you mention them.
 - A page file exports `export const page: DocPage = { ... }`. Slugs are flat and lowercase.
 - Do not edit `src/content/docs/index.ts`, `blocks.ts`, `types.ts`, `prose.tsx` or
   `docs-layout.tsx` when adding a page in a batch; register pages in `index.ts` last.
+- A page in `index.ts` is also published as markdown at `/docs/<slug>.md` and listed in
+  `/llms.txt` (`src/content/docs/markdown.ts`). A demo becomes a link to the page plus its `code`
+  string, so give every demo one.
 - `pnpm typecheck` and `pnpm lint` in `website/` must pass. Run `pnpm format` before finishing.
