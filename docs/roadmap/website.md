@@ -49,7 +49,8 @@ The cross-platform sites add one thing: the hero's second sentence **names the p
   search (Algolia DocSearch, or local — Vite and Svelte use no third party), RSS.
 - **The 2026 table stakes:** `llms.txt`, "Copy page" as markdown, `.md` URLs. Next, Nuxt and Expo go
   further and serve agents a different *homepage* — Expo's includes "common misconceptions" and
-  "when to consider alternatives".
+  "when to consider alternatives". The site has `/llms.txt` and a `.md` URL for every docs page;
+  "Copy page" is still to do.
 - **Per-platform differences** (the part that matters most here): Expo puts platform badges in every
   API page header and tags every method; Tauri has a filterable plugin support matrix; React Native
   has "Developer notes" tabs that explain one concept separately to web, iOS and Android developers.

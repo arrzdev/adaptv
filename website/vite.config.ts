@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite"
 import { adaptv } from "adaptv/vite"
 import { defineConfig } from "vite"
+import { docsMarkdown } from "./scripts/docs-markdown"
 
 //41760 sits clear of the playground's blocks (41730/41740, 41830/41840), so the site
 //and the playground can run side by side. `VITE_APP_PORT` moves it for a second worktree.
@@ -13,5 +14,5 @@ export default defineConfig({
     tsconfigPaths: true,
     dedupe: ["react", "react-dom"],
   },
-  plugins: [adaptv(), tailwindcss()],
+  plugins: [adaptv(), tailwindcss(), docsMarkdown()],
 })
