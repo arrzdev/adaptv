@@ -104,16 +104,16 @@ was never the thing stopping anyone.*
 > and breaks on a phone is not offered on the web either, so adaptv has no server side at all, and a
 > web-only app gets the same rule as every other app.
 >
-> What still changes is **coverage, not the rule**: the ban should read the compiler's own set of
-> server functions instead of matching specifiers, and refuse direct imports of every engine package
-> (**L20**) → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md). Everything below is
-> what runs today.
+> What changed is **coverage, not the rule**: since 2026-10-10 the build also reads the compiler's own
+> server functions and the server build's router, so a server function or route is refused however
+> it was written (`src/vite/server-boundary.ts`) → [`../design/server-boundary.md`](../design/server-boundary.md).
+> The specifier ban below stays as the refusal of the engine's server modules by name.
 
 > ### ✅ BUILT (2026-07-20) — `src/vite/ban-server-apis.ts`, 27 unit tests
 >
 > Shipped as the **first entry** in the array `adaptv()` returns, `enforce: "pre"`. Decision logic is
-> factored into pure functions (`isBannedServerModule`, `isApplicationSource`, `describeServerApiBan`,
-> `findServerRouteHandlers`) so it is testable without standing up a bundler; the hooks are wrappers.
+> factored into pure functions (`isBannedServerModule`, `isApplicationSource`, `describeServerApiBan`)
+> so it is testable without standing up a bundler; the hooks are wrappers.
 >
 > **Verified end-to-end against a real Vite 8 / Rolldown build**, not just in unit tests:
 >
@@ -124,7 +124,11 @@ was never the thing stopping anyone.*
 > | `createFileRoute("/x")({ component })` | exit 0 — no false positive on the router |
 > | `createFileRoute("/x")({ server: { handlers } })` | **exit 1**, caret frame **on the right line** |
 >
-> That last row is the one §2.1 said no import-based technique could ever reach. It is caught by a
+> **Superseded 2026-10-10:** the last row is now refused by the server build's router
+> (`src/vite/server-boundary.ts`), which also catches the indirect shapes below; the brace scan is
+> deleted. What follows is kept as the history of why it existed.
+>
+> That last row is the one §2.1 said no import-based technique could ever reach. It was caught by a
 > brace-depth scan over comment-and-string-stripped source, matching only the **options-object-level**
 > `server` key — so an app's own `server` field inside loader data does not fire. The scan returns a
 > character offset precisely so `this.error()` can render the caret; a boolean would have been
@@ -152,7 +156,31 @@ was never the thing stopping anyone.*
 | `createMiddleware` | `@tanstack/react-start` | banned |
 | `getRequest` / `getRequestHeaders` / `getWebRequest` | `@tanstack/react-start/server` | banned (whole subpath) |
 | `setResponseHeaders` / `setCookie` / `getCookie` | `@tanstack/react-start/server` | banned (whole subpath) |
+| `createServerFn` / `createMiddleware` / `createServerOnlyFn` / `createStart` | `@tanstack/start-client-core` | banned (whole package) |
+| `createServerOnlyFn` / `createIsomorphicFn` / `createClientOnlyFn` | `@tanstack/start-fn-stubs` | banned (whole package) |
+| the same compiler roots, or server functions built on them, under another name | any `@tanstack/*-start` (`solid-start`, `vue-start`, `react-form-start`), the old `@tanstack/start` | banned (whole package) |
+| server RPC, RSC, the server-only marker | `/client-rpc`, `/server-rpc`, `/ssr-rpc`, `/rsc*`, `/server-only`, any other subpath | banned (deny by default) |
 | `server: { handlers }` on `createFileRoute({...})` | — | banned **(see below)** |
+
+> **The ban is a package family, not a specifier list (2026-09-14).** It first held two exact
+> specifiers, `@tanstack/react-start` and `/server`. The Start compiler does not decide by specifier:
+> it seeds its known roots per package — `@tanstack/start-client-core` and `@tanstack/start-fn-stubs`
+> beside `@tanstack/react-start` — and follows re-exports to the binding
+> (start-plugin-core `start-compiler/compiler.js`, `init()` and `resolveKnownImportKind()`). So
+> `import { createServerFn } from "@tanstack/start-client-core"` built clean under any hoisting
+> install, and so did every server subpath. The rule is now every Start package and subpath —
+> any `@tanstack/*-start` (react, solid, vue, and `react-form-start`, whose `getFormData` is a server
+> function Start compiles into the app), the old `@tanstack/start`, and every `@tanstack/*-start-*` /
+> `@tanstack/start-*` package — as a bare specifier, with a query
+> suffix, or as a path into `node_modules`, minus `ALLOWED_START_SPECIFIERS` in `ban-server-apis.ts`.
+> Deny by default means that set holds only what a real importer in the module graph needs:
+> `@tanstack/react-start/client` (imported by `src/routes/client-entry.tsx`) and
+> `@tanstack/react-start/server-entry` (imported by `src/interface/server-entry.ts`, which is also where
+> `router.serverEntry` and a Worker's `main` point). Under the linked playground both files are not
+> under `node_modules`, so the ban governs them like app code. `/plugin/vite` is refused: its one
+> importer, `src/vite/adaptv-plugin.ts`, loads with the Vite config, outside the plugin chain.
+> `biome-shared.json` bans the same names with the same globs (`*` never crosses a `/`) and re-allows
+> the same two; `ban-server-apis.test.ts` compares the two layers' verdicts name by name.
 
 > **⚠︎ Correction to `docs/design/rendering.md §2`.** It lists **`createServerFileRoute`** as a forbidden symbol.
 > **That export does not exist** in the pinned `@tanstack/react-start@1.167.13** — verified by grepping
@@ -176,7 +204,10 @@ function banServerApis() {
     name: "adaptv:ban-server-apis",
     enforce: "pre",
     async resolveId(source, importer) {
-      if (!/^@tanstack\/react-start(\/server)?$/.test(source)) return null
+      // every Start package and subpath, minus the two adaptv's own entries import
+      // (as shipped: `isBannedServerModule` in src/vite/ban-server-apis.ts)
+      if (!/(?:^|\/node_modules\/)@tanstack\/(?:[^/]*-)?start(?:-[^/]*)?(?:\/|$)/.test(source)) return null
+      if (["@tanstack/react-start/client", "@tanstack/react-start/server-entry"].includes(source)) return null
       // let adaptv's own internals and any other dependency resolve normally
       if (!importer || importer.includes(`${path.sep}node_modules${path.sep}`)) return null
       this.error(
@@ -362,9 +393,9 @@ the DX gap: oxlint ships `--lsp` plus an official VS Code extension, with Zed/Je
 - `biome-shared.json` at the package root, added to `files` + `exports`.
 - ~~`plugins/ban-server-apis.grit` — the call-shape rule **plus** a `createFileRoute($opts)`-where-`$opts`-has-`server` pattern.~~
   **Never shipped.** There is no `plugins/` directory in the package. The gap it was for — the
-  `server: { handlers }` config shape — is closed inside the Vite plugin itself by the brace-depth
-  scan (`findServerRouteHandlers`, the BUILT block at the top of §2), which fails the build with a
-  caret on the right line. A GritQL rule would add an editor squiggle for that one shape and nothing
+  `server: { handlers }` config shape — is closed inside `adaptv()` by reading the server build's
+  router (`src/vite/server-boundary.ts`, since 2026-10-10; a brace-depth scan did it before), which
+  fails the build with the route's file and line. A GritQL rule would add an editor squiggle for that one shape and nothing
   else; §2.4's two documented limits (no binding resolution, no bare-specifier `plugins` path) are
   why it has not been worth carrying.
 - Correct `docs/design/rendering.md §2`'s `createServerFileRoute` entry to `server: { handlers }`.

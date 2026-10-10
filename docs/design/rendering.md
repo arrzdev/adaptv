@@ -4,7 +4,7 @@
 > Capacitor app. Captures *why* the boundaries are where they are, and the **hard limitation** that
 > falls out of it: adaptv code must be **isomorphic** — no server-only logic (`createServerFn`, server
 > routes, request/cookie reads). adaptv has no server side, on any target, web included (owner,
-> 2026-10-05; → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
+> 2026-10-05; → [`server-boundary.md`](server-boundary.md)).
 >
 > Locked understanding as of 2026-07-14. Pairs with `VISION.md` §"Build, distribution & updates" and
 > §"Data, offline & storage". This is doctrine, not a changelog.
@@ -80,8 +80,8 @@ the SSR server, the browser, and the Capacitor WebView. Ban *server-only calls*,
 app with `render: "ssr"` included (owner, 2026-10-05; a 2026-09-14 direction to allow it on
 server-backed web was reversed before it was built). Code that works on the web and breaks on a phone
 is the failure adaptv exists to prevent. The import ban in
-[`../decisions/facade-and-opacity.md §2`](../decisions/facade-and-opacity.md) runs today; widening its
-detection to the compiler's own verdict → [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md).
+[`../decisions/facade-and-opacity.md §2`](../decisions/facade-and-opacity.md) runs today, and the
+build reads the compiler's own verdict and the server's router as well → [`server-boundary.md`](server-boundary.md).
 
 ### Why this app leans client-side anyway
 Auth here is a **client-held bearer token** (cookies don't work in a native WebView). A server-side
@@ -1171,7 +1171,7 @@ launches drew it at 337 pt. The Safari-tab and deploy rows were not re-walked on
   Loaders/beforeLoad OK **as long as they're isomorphic**.
 - **Data** (consumer-wired): remote via absolute URL and/or offline-first via IndexedDB / TanStack
   Query persister. **Never `createServerFn`**: every build refuses it, web included
-  (→ [`../roadmap/server-boundary.md`](../roadmap/server-boundary.md)).
+  (→ [`server-boundary.md`](server-boundary.md)).
 - **Delivery/OTA:** web + standalone → adaptv-owned SW (precache + shell fallback + SWR). Capacitor →
   live-update bundle swap (a mechanism adaptv wraps).
 

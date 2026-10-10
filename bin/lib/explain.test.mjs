@@ -181,6 +181,40 @@ describe("a plugin's refusal of a web build names itself on the ✖ line", () =>
   })
 })
 
+/**
+ * The server boundary's refusal (`src/vite/server-boundary.ts`), captured 2026-10-10 from the
+ * playground's SSR build with a route whose `server` option is imported. Its rows say no
+ * "error", so the tail kept only the reason, and the ✖ line named no file at all.
+ */
+const VITE_SERVER_BOUNDARY = [
+  "✗ Build failed in 24.23s",
+  "error during build:",
+  "Build failed with 1 error:",
+  "",
+  "[plugin adaptv:server-boundary]",
+  "RolldownError: this app has 1 server route, and adaptv apps have no server side",
+  "  src/routing/pages/sw-probe-redirect.page.tsx:18   /_providers/sw-probe-redirect",
+  "Move this logic to your API and call it over the network, or into a route 'loader'.",
+  "    at error (file:///w/my-app/node_modules/.pnpm/rolldown@1.0.0-rc.18/node_modules/rolldown/dist/shared/logs-D80CXhvg.mjs:147:24)",
+  "    at PluginContextImpl.writeBundle (file:///w/my-app/node_modules/adaptv/dist/adaptv-plugin-DLwA50AE.mjs:5172:30)",
+]
+
+describe("the server boundary's refusal of a web build", () => {
+  it("puts its reason on the ✖ and every file, line and route under it", () => {
+    const { reason, detail } = explainFailure(
+      "web",
+      "/w/my-app",
+    )(buildFailure(VITE_SERVER_BOUNDARY))
+    expect(reason).toBe(
+      "this app has 1 server route, and adaptv apps have no server side",
+    )
+    expect(detail).toEqual([
+      "src/routing/pages/sw-probe-redirect.page.tsx:18   /_providers/sw-probe-redirect",
+      "Move this logic to your API and call it over the network, or into a route 'loader'.",
+    ])
+  })
+})
+
 describe("a crash inside the web build names itself on the ✖ line", () => {
   it("puts the TypeError's sentence on the ✖, not the trailer above it", () => {
     //Through `errorTail` deliberately: the line was lost twice, once by the tail filter

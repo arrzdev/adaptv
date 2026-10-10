@@ -18,6 +18,11 @@
  * it, and it is the one layer a consumer cannot disable, misconfigure, or forget,
  * because it lives inside the framework's own plugin array.
  *
+ * What the dev wrote is all this module reads. A server function made with a factory
+ * some package re-exports, or a server route whose options live in another module,
+ * imports nothing it can see: `server-boundary.ts` refuses those from what the
+ * compiler and the server's router decided.
+ *
  * The decision logic is factored out as pure functions so it is unit-testable
  * without standing up a bundler — the hooks below are thin wrappers.
  */
@@ -25,22 +30,80 @@
 import type { Plugin } from "vite"
 
 /**
- * Modules banned from application source.
+ * Every Start package and its subpaths: `@tanstack/react-start` and every other
+ * `@tanstack/*-start` (`solid-start`, `vue-start`, `react-form-start`), the old
+ * `@tanstack/start`, and the `@tanstack/*-start-*` and `@tanstack/start-*` packages
+ * behind them.
  *
- * Whole subpaths rather than named symbols: everything on them needs a request or
- * a response, so there is no client-safe surface worth threading a per-symbol
- * allowance for. `@tanstack/react-router` is deliberately absent — routing is
+ * ## Why a package family, not a list of specifiers
+ *
+ * The Start compiler does not recognise a server function by the specifier it was
+ * imported from. It seeds its known roots per package — `@tanstack/start-client-core`
+ * and `@tanstack/start-fn-stubs` beside `@tanstack/react-start` (start-plugin-core
+ * `start-compiler/compiler.js`, `init()`, and `start-compiler/config.ts`) — and then
+ * follows `export *` chains and compares the resolved binding
+ * (`resolveKnownImportKind()`), so any module that reaches one of those exports is a
+ * server function to it. The ban used to hold two exact specifiers, which left
+ * `import { createServerFn } from "@tanstack/start-client-core"` building clean
+ * under any install that resolves the package (npm, yarn, bun, a hoisted pnpm, or
+ * an app that adds it), and every server subpath (`/client-rpc`, `/server-rpc`,
+ * `/ssr-rpc`, `/rsc`) open. A binding-level rule would need the compiler's own
+ * resolver; the family is the closest thing a `resolveId` hook can see, and it is
+ * deny-by-default, so a subpath an upstream release adds stays shut until someone
+ * reads what is behind it. The siblings are in it because the compiler names its
+ * root `@tanstack/${framework}-start` (`start-compiler/config.ts`): an app that adds
+ * one gets the same server functions under another name. `@tanstack/react-router`
+ * and the rest of the router packages are deliberately outside it — routing is
  * isomorphic, and `loader`/`beforeLoad` are Router features that adaptv endorses.
  * **Ban server-only calls, not loaders.**
+ *
+ * The name part is the regex form of `biome-shared.json`'s globs, `start`,
+ * `start-*`, `*-start` and `*-start-*`, with `*` as "anything but `/`", so the two
+ * layers give every package name the same verdict (a parity test holds them to
+ * it). Any number of words may come before `-start`: `@tanstack/react-form-start` is a
+ * framework package whose `getFormData` is a `createServerFn().handler()`, and
+ * start-plugin-core compiles it into the app (`vite/plugin.js`, the framework-package
+ * crawl), so a one-word prefix let it build clean.
+ *
+ * Matched as a bare specifier, or as a path segment after `node_modules/`, because a
+ * file path into the install reaches the same binding and the compiler treats it
+ * the same.
  */
-const BANNED_MODULES = new Set([
-  "@tanstack/react-start",
-  "@tanstack/react-start/server",
+const START_PACKAGE =
+  /(?:^|\/node_modules\/)@tanstack\/(?:[^/]*-)?start(?:-[^/]*)?(?:\/|$)/
+
+/**
+ * The Start specifiers application source may import. Deny by default means each is
+ * here because a real importer in the app's module graph needs it, and neither
+ * carries a server function:
+ *
+ * - `@tanstack/react-start/client` — imported by `src/routes/client-entry.tsx`
+ *   (`StartClient`, the hydration entry), and by an app that ejects
+ *   `src/client.tsx` with the same code.
+ * - `@tanstack/react-start/server-entry` — imported by
+ *   `src/interface/server-entry.ts`, the SSR server entry adaptv re-exports for
+ *   `router.serverEntry` and a Worker's `main`. It holds no server function.
+ *
+ * Both importers are adaptv's own modules, and under a linked install (the
+ * playground's `link:`) they are not under `node_modules`, so the ban governs them
+ * like app code. `@tanstack/react-start/plugin/vite` is NOT here: its one importer,
+ * `src/vite/adaptv-plugin.ts`, is loaded with the Vite config, before and outside
+ * the plugin chain this hook runs in.
+ *
+ * `biome-shared.json` re-allows exactly this set; `ban-server-apis.test.ts` holds the
+ * two in step.
+ */
+export const ALLOWED_START_SPECIFIERS: ReadonlySet<string> = new Set([
+  "@tanstack/react-start/client",
+  "@tanstack/react-start/server-entry",
 ])
 
 /** Whether an import specifier is a banned server-only module. */
 export function isBannedServerModule(source: string): boolean {
-  return BANNED_MODULES.has(source)
+  //Vite resolves `pkg?x` like `pkg`, so a query must not dodge the rule
+  const specifier = (source.split("?")[0] ?? source).replaceAll("\\", "/")
+  if (ALLOWED_START_SPECIFIERS.has(specifier)) return false
+  return START_PACKAGE.test(specifier)
 }
 
 /**
@@ -113,97 +176,14 @@ export function describeServerApiBan(
   )
 }
 
-/* ============================================================================
- * The gap no import rule can reach
- * ========================================================================== */
-
-/** Blank out comments and string/template literals so a scan can't match prose. */
-function stripNonCode(code: string): string {
-  //replace with same-length spaces so every offset stays exact — the whole point
-  //of the scan is to report a position the editor can put a caret on
-  const blank = (m: string) => " ".repeat(m.length)
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/\/\/[^\n]*/g, blank)
-    .replace(/"(?:[^"\\\n]|\\.)*"/g, blank)
-    .replace(/'(?:[^'\\\n]|\\.)*'/g, blank)
-    .replace(/`(?:[^`\\]|\\.)*`/g, blank)
-}
-
 /**
- * Find a `server: { … }` property on a `createFileRoute(…)({ … })` options object.
- * Returns the character offset of the property, or `null`.
- *
- * ## Why this is not an import check
- *
- * `createServerFileRoute` **does not exist** in the pinned
- * `@tanstack/react-start@1.167.13` — that API generation replaced it with a
- * `server` property on `createFileRoute`'s options object. (`docs/design/rendering.md §2` still
- * lists the old symbol and is stale on this point.)
- *
- * A config-object property is not an importable symbol, so *no* import-restriction
- * technique — TypeScript, Biome `noRestrictedImports`, or the `resolveId` hook
- * above — can ever see it. It needs to be found in the syntax.
- *
- * ## Scope, stated honestly
- *
- * This is a brace-depth scan over comment- and string-stripped source, not a
- * parser. It deliberately matches only the **options-object level** `server` key,
- * because an app is entitled to its own data named `server` inside a loader
- * result or component props. It will miss a route assembled indirectly
- * (`const opts = {...}; createFileRoute("/x")(opts)`), which is the accepted cost
- * of not paying for a full parse on every module. The `resolveId` ban above is the
- * layer that must be airtight; this one raises the floor on a shape that would
- * otherwise be invisible.
+ * The imports the compiler writes into a server function, in any environment. They are
+ * its output, not the dev's input: `server-boundary.ts` reads them and names the server
+ * function, where this ban would name an import the dev never wrote.
  */
-export function findServerRouteHandlers(code: string): number | null {
-  //string prefilter first: parsing/scanning is orders of magnitude more expensive
-  //than a substring test, and the overwhelming majority of modules are not routes
-  if (!code.includes("createFileRoute")) return null
-  if (!code.includes("server")) return null
-
-  const source = stripNonCode(code)
-  const callIndex = source.indexOf("createFileRoute")
-  if (callIndex === -1) return null
-
-  //walk to the options object: createFileRoute(<path>)( <options> )
-  const optionsStart = source.indexOf("{", callIndex)
-  if (optionsStart === -1) return null
-
-  let depth = 0
-  for (let i = optionsStart; i < source.length; i++) {
-    const ch = source[i]
-    if (ch === "{") {
-      depth++
-      continue
-    }
-    if (ch === "}") {
-      depth--
-      if (depth === 0) return null //options object closed without a hit
-      continue
-    }
-    //only depth 1 is the options object itself; anything deeper is app data
-    if (depth !== 1) continue
-
-    if (source.startsWith("server", i)) {
-      const after = source.slice(i + "server".length)
-      //must be a property key: `server:` (allowing whitespace before the colon)
-      if (/^\s*:/.test(after)) return i
-    }
-  }
-  return null
+export function isCompilerRpcImport(source: string): boolean {
+  return /^@tanstack\/[^/]+-start\/(?:client|server|ssr)-rpc$/.test(source)
 }
-
-/**
- * The diagnostic for the config-shape gap. Same rule as {@link describeServerApiBan}:
- * the target that breaks is named as what it is to the dev, not as what it is built with.
- */
-export const SERVER_ROUTE_HANDLERS_MESSAGE =
-  "`server: { handlers }` on a route is server-only and cannot be used in an adaptv app.\n" +
-  "It needs a server to run, and the native app has none.\n" +
-  "Move the handler to your API and call it over the network, or use the " +
-  "route's `loader`, which is isomorphic and fully supported.\n" +
-  "See docs/design/rendering.md §2."
 
 /**
  * The unbypassable backstop. Baked into the array `adaptv()` returns, so it is not
@@ -223,19 +203,12 @@ export function adaptvBanServerApisPlugin(): Plugin {
     enforce: "pre",
 
     resolveId(source, importer) {
+      if (isCompilerRpcImport(source)) return null
       const message = describeServerApiBan(source, importer)
       if (message === null) return null
       //`importer` is non-null whenever describeServerApiBan returned a message —
       //isApplicationSource() rejects undefined
       this.error({ message, id: importer })
-    },
-
-    transform(code, id) {
-      if (!isApplicationSource(id)) return null
-      const at = findServerRouteHandlers(code)
-      if (at === null) return null
-
-      this.error({ message: SERVER_ROUTE_HANDLERS_MESSAGE, id }, at)
     },
   }
 }
