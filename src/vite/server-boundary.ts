@@ -400,12 +400,22 @@ export function adaptvServerBoundaryPlugin(appRoot: string): Plugin[] {
             out.type === "chunk" && out.exports.includes("getRouter"),
         )
         if (!chunk) return
-        const { getRouter } = await import(
-          pathToFileURL(path.join(options.dir, chunk.fileName)).href
-        )
-        const hits = boundaryGraph(appRoot, () => []).serverRoutes(
-          await getRouter(),
-        )
+        //a bundle built for another runtime may not load in Node: the build still
+        //fails, but says why in adaptv's words, not the import's
+        let router: Parameters<
+          ReturnType<typeof boundaryGraph>["serverRoutes"]
+        >[0]
+        try {
+          const { getRouter } = await import(
+            pathToFileURL(path.join(options.dir, chunk.fileName)).href
+          )
+          router = await getRouter()
+        } catch (error) {
+          this.error(
+            `could not load the server router to check for server routes: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+        const hits = boundaryGraph(appRoot, () => []).serverRoutes(router)
         if (hits.length > 0)
           this.error(describeBoundary(kinded("server route", hits)))
       },
