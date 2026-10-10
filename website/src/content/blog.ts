@@ -649,4 +649,290 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
       },
     ],
   },
+  {
+    slug: "keyboard-height-cache",
+    title: "The keyboard height is known before the keyboard is",
+    date: "2026-10-10",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "A sheet that waits for the keyboard starts moving one to two frames late. Caching the height from last time fixes that, until a password field raises the keyboard twice.",
+    blocks: [
+      { type: "h2", text: "Symptom" },
+      {
+        type: "p",
+        text: "A bottom sheet with a text field has to rise when the keyboard opens. The signal that says by how much, `visualViewport` on the web, only reports once the keyboard exists. So the sheet starts moving one or two frames after the tap. On an Android emulator (Pixel 7, API 34, WebView 113) the first raise measured 0.85 to 1.1 s after focus.",
+      },
+      {
+        type: "p",
+        text: 'Then a password field makes it worse. On iOS the keyboard for a password field arrives in two steps about 280 ms apart: the keyboard, then the ~45 px AutoFill bar ("Passwords") above it. The sheet grows twice, or bounces from 346 to 301. In one frame-by-frame recording at 120 fps the lift also reversed by about 12 px for a single frame. You do not see that by eye.',
+      },
+      { type: "h2", text: "What failed, in order" },
+      {
+        type: "p",
+        text: "The first four attempts are from the app this framework was extracted from, and they predate the adaptv repository, so they have no links. The last three are in the adaptv history.",
+      },
+      {
+        type: "ol",
+        items: [
+          '**Infer it from `innerHeight`.** Treat a drop of more than 150 px as "keyboard open", debounced. This is the common heuristic, and it was the first one we used (first used February 2026). It is reactive by construction: it cannot fire before the keyboard has shrunk something.',
+          "**A `--keyboard-offset` CSS variable.** June 9. It moved the problem into CSS but kept the same late signal.",
+          "**Aim at the largest height seen and freeze the excess.** July 2. That is what exposed the 12 px reversal. A follow-up on July 10 rounded heights, confirmed a dismiss after 150 ms, and committed a height drop only after it held for 120 ms, because 380, 335, 380 transients were real.",
+          "**Ship a table of device to height.** Rejected in design, no commit. Third-party keyboards, CJK input methods, the suggestion bar, numeric pads and floating iPad keyboards all change the height on one device. The table would be wrong often and need updating forever.",
+          "**Re-aim over the remaining travel and hold small shrinks for 350 ms.** [8ce64d2](https://github.com/arrzdev/adaptv/commit/8ce64d2) (#43), August 7. It worked on the simulator. On a physical iPhone it did not: [171356b](https://github.com/arrzdev/adaptv/commit/171356b) (#47). The second step lands 28 to 40 ms after the first on a device, while the sheet is still sliding, so the sheet teleported open. On the simulator the second step arrives about 250 ms later, after the slide is done, so the bug could not appear there. Separately, native never ran the cache at all: an early return sat before the `focusin` listener.",
+          "**The hold kept only the first absorbed shrink.** [cce2e41](https://github.com/arrzdev/adaptv/commit/cce2e41), September 13. With reports 346, 290, 340 the sheet committed 290. It now lands the last height reported.",
+          "**A 400 ms retract window was too short.** On a slow first raise the sheet grew, eased back and grew again. [a1840dd](https://github.com/arrzdev/adaptv/commit/a1840dd) widened it to 800 ms. [2a53bb4](https://github.com/arrzdev/adaptv/commit/2a53bb4): a height measured while the cache was still loading was overwritten by the stored one.",
+        ],
+      },
+      { type: "h2", text: "The fix: predict on focus, then correct" },
+      {
+        type: "p",
+        text: "A form has the same shape every time it opens on the same device. The height the keyboard took last time is a good guess for this time. So keep a cache, read it synchronously on focus, and start the lift on the same frame as the tap. The real measurement then confirms the guess or corrects it. Source: `src/capabilities/keyboard-height-cache.ts`.",
+      },
+      {
+        type: "p",
+        text: "The key is the part that took longest to get right:",
+      },
+      {
+        type: "code",
+        label: "keyboard-height-cache.ts, simplified",
+        lang: "ts",
+        code: `// {viewportWidth}:{numeric|text}:{af|-}
+export function keyboardCacheKey(el: HTMLElement, viewportWidth = window.innerWidth) {
+  const kind = keyboardKind(el)            // digit pad or full keyboard
+  if (!kind) return null                   // checkbox, range, file...: no keyboard
+  const autofill = raisesAutofillAccessoryBar(el) ? "af" : "-"
+  return \`\${Math.round(viewportWidth)}:\${kind}:\${autofill}\`
+}
+
+export function predictKeyboardHeight(el: HTMLElement): number | null {
+  const key = keyboardCacheKey(el)
+  return key ? (cache.get(key) ?? null) : null   // in-memory map, no await
+}`,
+      },
+      {
+        type: "ul",
+        items: [
+          "**Width instead of device model.** The layout width identifies the device and changes on rotation, so landscape gets its own entry for free.",
+          "**`numeric` versus `text`.** The digit pad is shorter than the full keyboard.",
+          "**`autofill`.** A field that raises the AutoFill bar (a `password` input, or `autocomplete` tokens like `username`, `one-time-code`) has a keyboard ~45 px taller than a plain text field. If both share an entry, each predicts the other's height and the sheet settles, then steps again. The check reads the field's own declared `type` and `autocomplete`, not the surrounding DOM. Looking for a nearby password field would follow WebKit's heuristic more closely, but its answer changes with whatever else is mounted, so one field would key two ways and the cache would thrash.",
+          "**Synchronous lookup.** The durable store (Preferences on native, `localStorage` on the web) is mirrored into a `Map` at boot. The lookup on focus never awaits.",
+          "**A prediction is never stored as a measurement.** Only confirmed heights are recorded, so a wrong guess heals itself. A prediction no keyboard confirms retracts.",
+          "**Asymmetric correction.** Under-lifting is the harmful direction (the field ends up behind the keyboard), so a taller report commits at once and a shorter one waits until it holds.",
+        ],
+      },
+      {
+        type: "p",
+        text: "A wrong key is not fatal. It only chooses which entry a prediction comes from, and the measurement that follows corrects it and re-records the truth.",
+      },
+      { type: "h2", text: "Simulator against device" },
+      {
+        type: "p",
+        text: "The two-step password raise is the part to remember. The simulator and the iPhone disagree about *when* the second step lands, and only the device showed the bug. If you tune keyboard motion on the simulator you will tune it against a timing the user never has. Check on a physical iPhone, and record at 120 fps if you want to see a 12 px reversal.",
+      },
+      { type: "h2", text: "References" },
+      {
+        type: "ul",
+        items: [
+          "[`visualViewport` (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport): resize fires after the keyboard exists.",
+          "[VirtualKeyboard API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/VirtualKeyboard_API): `geometrychange`, Chromium only.",
+          "We found no public write-up of a learned height cache, or of the AutoFill-bar second step. Treat the 280 ms and ~45 px as measured on an iPhone 16 Pro, not as documented behaviour.",
+        ],
+      },
+      { type: "h2", text: "Still open" },
+      {
+        type: "ul",
+        items: [
+          "The iOS version of the two-step measurements was not recorded.",
+          "Third-party and floating keyboards are handled only by the cache learning them, with one late first raise.",
+          "The first open on a fresh install has no cache, so it still follows the keyboard.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "bottom-sheet-keyboard",
+    title: "A bottom sheet that survives the keyboard",
+    date: "2026-10-10",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "Two sheet libraries, a spring that iOS cannot composite, and the FLIP engine that replaced them.",
+    blocks: [
+      { type: "h2", text: "Symptom" },
+      {
+        type: "p",
+        text: "A sheet with inputs fails in five ways: it jumps when the keyboard opens, it closes short if the keyboard dismisses mid-close, it leaves a gap above the keyboard, it never rises when it is already at maximum height (the footer sits under the keyboard, with a keyboard-tall dead spacer below the field), and on iOS it drops frames. After the fix it measures 50 to 62 fps on iOS Safari and Android Chrome.",
+      },
+      { type: "h2", text: "What failed, in order" },
+      {
+        type: "p",
+        text: "Items 1 to 6 and 8 are from the app this framework was extracted from, and they predate the adaptv repository, so they carry dates and no links. Item 7 is in the adaptv history.",
+      },
+      {
+        type: "ol",
+        items: [
+          "**Work around the first library.** A popular drawer library, in an app and in the template before it. The workaround was to blur the field and wait up to 800 ms for the keyboard to close before exiting (June 9). It hid the close-short bug behind a delay the user could feel.",
+          "**Switch to a second sheet library.** June 18, with a custom drawer built beside it as a comparison. Neither library models the keyboard as part of the layout. On June 19 both were removed and the custom one kept.",
+          "**The close stopped short.** June 19. When the keyboard dismissed mid-close the sheet's target moved under it. A `ResizeObserver` re-aim fixed it.",
+          "**A spring written as CSS `linear()`.** June 20. A multi-point `linear()` curve looked right and ran at about 20 fps on iOS Safari. WebKit cannot run an animation with a `linear()` timing function on the compositor, so it runs on the main thread while React and layout compete for it ([WebKit bug 281429](https://bugs.webkit.org/show_bug.cgi?id=281429), closed as a duplicate of the threaded-animation-resolution bug 250970; the report describes 30 fps in low-power mode and a 60 fps cap on 120 Hz screens). It was replaced by a plain `cubic-bezier` tween, which the GPU composites.",
+          "**The keyboard's motion restarted the transition.** June 21. A CSS transition cannot be re-aimed: change the target and the easing restarts from its beginning. The live lift is now folded into `y`.",
+          "**Padding that resized content mid-animation.** June 22. Keyboard-driven padding was removed.",
+          "**A `translateY` lift clamped by the cap.** [79319ef](https://github.com/arrzdev/adaptv/commit/79319ef) (#32), August 2. In the common form case the sheet is already at its cap, so the clamped lift is about zero and the footer stays buried. `max-height` cannot animate a shrink, so shrinks ease through a `min-height` floor. Then [7d04eea](https://github.com/arrzdev/adaptv/commit/7d04eea) (#36): a picker collapsing before the keyboard height arrived dropped the sheet's top and snapped it back. Then [171356b](https://github.com/arrzdev/adaptv/commit/171356b) (#47): `transition: none` assumes the committed transform, not the painted one, so the FLIP threw away the mid-slide position.",
+          "**The pinned footer was unreachable.** July 24. It now scrolls inside the scroller.",
+        ],
+      },
+      { type: "h2", text: "The fix" },
+      {
+        type: "p",
+        text: "Treat the keyboard as an unusable slice of the bottom of the screen. The sheet holds that slice as empty room under its content and grows into its `max-height`. The scroller absorbs the overflow, so layout changes in one step, and a composited FLIP carries the motion. Files: `src/components/drawer/drawer-engine.tsx`, `drawer-keyboard.ts`, `drawer-motion.ts`, `drawer-easing.ts`.",
+      },
+      {
+        type: "p",
+        text: "The part that makes a mid-flight change look continuous is to freeze `y` at the painted value and resume on the rest of the same curve. A cubic Bézier split with de Casteljau is itself a cubic Bézier, so the remainder is a valid `cubic-bezier()`:",
+      },
+      {
+        type: "code",
+        label: "drawer-easing.ts, simplified",
+        lang: "ts",
+        code: `// the controls of the right-hand sub-curve are (F, E, C, P3)
+const s = easingParamAtX(at, x1, x2)
+const ex = lerp(lerp(x1, x2, s), lerp(x2, 1, s), s)
+const fx = lerp(lerp(lerp(0, x1, s), lerp(x1, x2, s), s), ex, s)
+// ...same for y, then renormalise into the unit square:
+const spanX = 1 - fx, spanY = 1 - fy
+return {
+  bezier: [(ex - fx) / spanX, (ey - fy) / spanY, (cx - fx) / spanX, (cy - fy) / spanY],
+  progress: fy,
+}`,
+      },
+      {
+        type: "p",
+        text: "The new curve has the same position and slope at the seam. Feed it the time the original had left and the sheet carries on as if nothing had interrupted it. This is what stops the first open from feeling laggy when iOS reports the keyboard in two steps (see the [previous field note](/blog/keyboard-height-cache)). A pull-down at the top of the scroller dismisses the keyboard (added in the extracted app, so it has no link).",
+      },
+      { type: "h2", text: "Android counts the keyboard twice" },
+      {
+        type: "p",
+        text: "On Android over plain http, and in a WebView, the layout viewport already shrinks when the keyboard opens. A sheet that also adds the keyboard height lifts twice. Under a native system-bars plugin, `innerHeight` went 923 to 587 under a 336 px keyboard. The fix measures the shrink and holds room only for what the viewport did not pay for (`room = keyboard - shrink`): [88fab8a](https://github.com/arrzdev/adaptv/commit/88fab8a) (#40), [3d1a268](https://github.com/arrzdev/adaptv/commit/3d1a268), [401d357](https://github.com/arrzdev/adaptv/commit/401d357), [78516f0](https://github.com/arrzdev/adaptv/commit/78516f0). A platform table was not used. `interactive-widget=overlays-content` was tested and rejected: with it the sheet never lifts. Android Chrome also reports `innerHeight` as rest plus keyboard for about 100 ms (783, 1095, 783), which was misread as a new rest height until 401d357.",
+      },
+      { type: "h2", text: "References" },
+      {
+        type: "ul",
+        items: [
+          "[WebKit bug 281429](https://bugs.webkit.org/show_bug.cgi?id=281429) and bug 250970: `linear()` is not accelerated.",
+          "FLIP, by Paul Lewis.",
+          "[`interactive-widget` viewport meta (Chrome 108)](https://developer.chrome.com/blog/viewport-resize-behavior).",
+          "SwiftUI's drag-the-sheet-to-dismiss-the-keyboard behaviour was the model for the pull-down.",
+        ],
+      },
+      { type: "h2", text: "Still open" },
+      {
+        type: "ul",
+        items: [
+          "The `linear()` claim rests on one WebKit bug thread and our measurement of 20 fps. We have not re-measured on the newest iOS.",
+          "Two other drawer libraries' prior art is compared in the repo, not here.",
+          "Footer reachability on iPad's floating keyboard is untested.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "tailwind-v4-old-webviews",
+    title: "Tailwind v4 draws nothing on Chromium 113 to 118, and says nothing",
+    date: "2026-10-10",
+    kind: "Field note",
+    author: "adaptv team",
+    summary:
+      "Ring, filter, transform and six more utilities compute to none on Chromium 113 to 118. A bisect, and a CSS rewrite that is byte-identical on modern engines.",
+    blocks: [
+      { type: "h2", text: "Symptom" },
+      {
+        type: "p",
+        text: "On an Android 14 emulator (API 34, WebView 113) the focus ring on inputs is gone, and so are checkbox rings and field hairlines. `getComputedStyle` says `box-shadow: none`. The console is quiet. The same page on Chromium 149 is fine.",
+      },
+      {
+        type: "p",
+        text: "The same failure then showed up in six more places: `transform` (rotate and skew parts), `touch-action`, `font-variant-numeric`, `filter`, `backdrop-filter` and `contain`. Tabular digits computed `normal`, a pan-y utility computed `touch-action: auto` (149: `pan-y`), a blur computed `filter: none` (149: `blur(8px)`).",
+      },
+      { type: "h2", text: "Cause" },
+      {
+        type: "p",
+        text: 'Tailwind v4 builds several properties from independent parts. Each part is a custom property registered with `@property` using `syntax: "*"`, `inherits: false` and no `initial-value`. The property reads every part with an empty fallback, so a part nobody set adds nothing:',
+      },
+      {
+        type: "code",
+        label: "compiled output",
+        lang: "text",
+        code: `.x {
+  --tw-blur: blur(8px);
+  filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-drop-shadow,);
+}`,
+      },
+      {
+        type: "p",
+        text: "Chromium 113 to 118 throw away the whole declaration when a `var()` with an empty fallback reads a registered property that has no value. We bisected it across every Chrome-for-Testing milestone: broken in 113 to 118, fixed in 119. Android 7 devices stop at Chromium 119, so apps that support them see this.",
+      },
+      {
+        type: "p",
+        text: '`@supports` cannot detect it. The failure happens at computed-value time, after parsing: `CSS.supports("box-shadow", "var(--x,) 0 0 0 1px red")` returns true on a broken build.',
+      },
+      { type: "h2", text: "What failed, in order" },
+      {
+        type: "ol",
+        items: [
+          "**A version gate at 119.** Rejected. It would refuse hardware the app can render.",
+          "**Rewrite the ring into an outline.** Rejected. It erases the ring wherever `focus-within:outline-none` is used.",
+          "**A first rewrite that covered only the ring.** [9dac9e2](https://github.com/arrzdev/adaptv/commit/9dac9e2) (#30), July 31. It fixed the ring and left six compositions broken until the tabular digits and the blur showed it on September 13.",
+          "**A rewrite that leaked utilities.** [9f9063e](https://github.com/arrzdev/adaptv/commit/9f9063e). The module's own comments and tests named utilities. The app's stylesheet scans its own sources for class names, so every name written there was compiled into every consumer's CSS: 25 utilities and 13 `@property` rules in a first draft, four more through prose and a test helper in a second. The module now spells parts as `--tw-*` names, which the scanner does not read as classes.",
+          "**Rejected on the way:** identity fallbacks such as `var(--tw-blur, blur(0))`, because they turn a `none` filter or transform into a real one (a stacking context, a containing block for fixed descendants) and `touch-action`, `font-variant-numeric` and `contain` have no no-op keyword. Unregistering the parts, because `inherits: false` would then rest on a universal reset that misses `::placeholder`, `::marker` and `::file-selector-button`. Registering the carriers below, because that brings the bug back.",
+        ],
+      },
+      { type: "h2", text: "The fix" },
+      {
+        type: "p",
+        text: "Rewrite Tailwind's compiled output. Each part a declaration reads gets an **unregistered carrier** custom property, declared in the same block:",
+      },
+      {
+        type: "code",
+        label: "after the rewrite",
+        lang: "text",
+        code: `.x {
+  --tw-blur: blur(8px);
+  --adaptv-tw-blur: var(--tw-blur);
+  --adaptv-tw-brightness: var(--tw-brightness);
+  filter: var(--adaptv-tw-blur,) var(--adaptv-tw-brightness,);
+}`,
+      },
+      {
+        type: "p",
+        text: "On 113 an empty fallback over an unregistered property works. The carrier reads its part with no fallback, so an unset part makes the carrier invalid at computed-value time and the empty fallback is taken, as on 119 and later. Two details carry the weight. Tailwind's `@property` rules are left alone, so the parts stay independent and non-inheriting. And every rule that reads a carrier declares it in the same block, because an invalid custom property computes to guaranteed-invalid rather than inheriting, whereas a carrier read without its own declaration would inherit its parent's part.",
+      },
+      {
+        type: "p",
+        text: "It is unconditional. There is no user-agent sniff, because the output computes identically on engines that were never broken. Results on WebView 113.0.5672.136: 10 of 10 rings paint (0 before), and 51 of 51 probes match Chromium 149. A unit test compiles Tailwind's whole class list and requires that none keeps an empty fallback; a browser spec renders every composition both ways in Chromium and WebKit and compares computed values, inheritance included. Source: `src/vite/tailwind-empty-fallback.ts`.",
+      },
+      { type: "h2", text: "A sibling failure: dev and iOS 15" },
+      {
+        type: "p",
+        text: "The same week, two more silent failures. In dev, every `hover:`, `dark:` and breakpoint utility was dead below Safari 16.5 and Chromium 112 (native CSS nesting), and below 16.4 and 104 (range media queries). Production was dead on iOS 15.4 to 16.3. [4ffc669](https://github.com/arrzdev/adaptv/commit/4ffc669) and [215e941](https://github.com/arrzdev/adaptv/commit/215e941) fix it with one `CLIENT_BUILD_TARGETS` constant, plus a serve-only lightningcss pass in dev. The floor is iOS 15.4 because Tailwind v4's `@layer` cannot be lowered below it.",
+      },
+      { type: "h2", text: "References" },
+      {
+        type: "ul",
+        items: [
+          "[Tailwind CSS v4 browser support](https://tailwindcss.com/docs/compatibility): states Chrome 111, Safari 16.4 and Firefox 128 as the floor. Chromium 113 to 118 are inside that range and still break, which is the point of this note.",
+          "[CSS Properties and Values API](https://www.w3.org/TR/css-properties-values-api-1/): registered properties and guaranteed-invalid values.",
+          "We found no Chromium bug id for this in the commits or in a quick search. If you know one, please send it.",
+        ],
+      },
+      { type: "h2", text: "Still open" },
+      {
+        type: "ul",
+        items: [
+          "No upstream Chromium or Tailwind report is filed from adaptv. Filing one is the cleanest way to close this.",
+          "The list of parts is read from the installed Tailwind version (4.2.4). A new part in a later version fails the unit test by name.",
+        ],
+      },
+    ],
+  },
 ]
