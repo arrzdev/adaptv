@@ -1188,8 +1188,8 @@ usually true, and "usually true" is the property the owner has already rejected 
 | 13 | `src/components/style-precedence.test.tsx` | ⟨done⟩ The standalone case is gone with standalone mode. Replaced by: the consumer `className` owns the **root**; a consumer inline `aspectRatio` loses to the reservation; the `<img>` is locked into the stack with `object-fit: cover`; a slot layer is locked into the stack. |
 | 13a | `src/components/image.test.tsx`, `src/vite/adaptv-image.test.ts` | **New.** The §10.2 reservation table, the state machine including a mid-flight `src` swap, the `fit`/`position` mirroring, the plugin's failure policy — and a `@ts-expect-error` fixture that makes `pnpm typecheck` the enforcer of §11.1. |
 | 14 | `src/utils/cn.ts` | **No change** (§9.5). |
-| 15 | `docs/VISION.md` §5 | The `Image` line — *"lazy, placeholder/blur, safe intrinsic sizing (no layout shift)"* — is delivered by this doc; point it here. |
-| 16 | `docs/research/component-surface.md` §6 | The `expo-image` row's `placeholder` entry should note that its blurhash/thumbhash support is a **native-decoder** feature that does not transfer to a WebView (§3.3). |
+| 15 | `docs/VISION.md` §5 | ⟨done⟩ The `Image` line — *"lazy, placeholder/blur, safe intrinsic sizing (no layout shift)"* — is delivered by this doc; point it here. |
+| 16 | `docs/research/component-surface.md` §6 | ⟨done⟩ The `expo-image` row's `placeholder` entry should note that its blurhash/thumbhash support is a **native-decoder** feature that does not transfer to a WebView (§3.3). |
 
 ---
 

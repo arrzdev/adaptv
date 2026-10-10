@@ -448,7 +448,7 @@ The capability-backed views. 123 modules ship in SDK 57; these are the ones that
 
 | Package | Component | Props |
 |---|---|---|
-| **expo-image** | `Image`, `ImageBackground` | `source`, `placeholder` (blurhash/thumbhash/SF Symbol string), `contentFit`, `contentPosition`, `transition`, `cachePolicy`, `priority`, `recyclingKey`, `blurRadius`, `tintColor`, `allowDownscaling`, `decodeFormat`, `preferHighDynamicRange`, `enableLiveTextInteraction`, `autoplay`, `sfEffect`, `responsivePolicy`, `onLoadStart/onLoad/onProgress/onError/onLoadEnd/onDisplay`; hooks `useImage`, `useBlurhash`, `useThumbhash` |
+| **expo-image** | `Image`, `ImageBackground` | `source`, `placeholder` (blurhash/thumbhash/SF Symbol string; blurhash/thumbhash is a **native-decoder** feature that does not carry over to a WebView, see [`../design/image.md` §3.3](../design/image.md)), `contentFit`, `contentPosition`, `transition`, `cachePolicy`, `priority`, `recyclingKey`, `blurRadius`, `tintColor`, `allowDownscaling`, `decodeFormat`, `preferHighDynamicRange`, `enableLiveTextInteraction`, `autoplay`, `sfEffect`, `responsivePolicy`, `onLoadStart/onLoad/onProgress/onError/onLoadEnd/onDisplay`; hooks `useImage`, `useBlurhash`, `useThumbhash` |
 | **expo-blur** | `BlurView`, `BlurTargetView` | `intensity`, `tint`, `blurReductionFactor`, `experimentalBlurMethod`, `blurTarget` |
 | **expo-glass-effect** | `GlassView`, `GlassContainer` | `glassEffectStyle`, `tintColor`, `isInteractive`, `colorScheme`; `isLiquidGlassAvailable()` |
 | **expo-linear-gradient** | `LinearGradient` | `colors`, `locations`, `start`, `end`, `dither` |
