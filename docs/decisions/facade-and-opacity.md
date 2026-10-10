@@ -522,9 +522,8 @@ Text outside the types: devtools still show `tanstack_router_reload` and `__TSR_
 
 ## 5. Upstream reading (was `RESEARCH.md §2`)
 
-> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links were last verified
-> 2026-07** and have not been re-checked since — treat every URL below as a lead, not a
-> citation. The generator-hiding path described here is no longer speculative: it **shipped**
+> Absorbed when `RESEARCH.md` (deleted 2026-08-30 — see git history) was dissolved. **Links verified
+> 2026-10.** The generator-hiding path described here is no longer speculative: it **shipped**
 > as `src/vite/route-tree-opacity.ts` + `router-autoimport.ts` + `thunk-specifiers.ts`,
 > enforced by `bin/lib/opacity.mjs`. Kept for the `createServerFn` nuance in the first
 > paragraph, which is the reasoning behind **L3**.
