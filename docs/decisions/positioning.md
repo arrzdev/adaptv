@@ -119,7 +119,7 @@ Two halves, and **the second is the stronger one**:
   solves this by hand from a blog post. It is **concrete, documented, reproducible, and framework-shaped**
   — exactly where a framework earns its existence. `docs/decisions/facade-and-opacity.md` §2 turns it from a doc rule into a build
   failure, which nobody else does, on every target: adaptv has no server side (owner, 2026-10-05), so
-  the same app code is valid on the web and on a phone → `docs/roadmap/server-boundary.md`.
+  the same app code is valid on the web and on a phone → `docs/design/server-boundary.md`.
 
 > **Consequence for sequencing:** `docs/decisions/facade-and-opacity.md`'s ban mechanism and `docs/design/rendering.md`'s delivery model are the
 > *differentiated* work. The primitive layer is the volume play but the contested one. Ship the wedge

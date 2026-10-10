@@ -2,6 +2,7 @@
   "name": "adaptv",
   "type": "module",
   "exports": {
-    "./server-fn": "./server-fn.js"
+    "./server-fn": "./server-fn.js",
+    "./request": "./request.js"
   }
 }

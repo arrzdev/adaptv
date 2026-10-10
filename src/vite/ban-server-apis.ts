@@ -18,6 +18,11 @@
  * it, and it is the one layer a consumer cannot disable, misconfigure, or forget,
  * because it lives inside the framework's own plugin array.
  *
+ * What the dev wrote is all this module reads. A server function made with a factory
+ * some package re-exports, or a server route whose options live in another module,
+ * imports nothing it can see: `server-boundary.ts` refuses those from what the
+ * compiler and the server's router decided.
+ *
  * The decision logic is factored out as pure functions so it is unit-testable
  * without standing up a bundler — the hooks below are thin wrappers.
  */
@@ -171,97 +176,14 @@ export function describeServerApiBan(
   )
 }
 
-/* ============================================================================
- * The gap no import rule can reach
- * ========================================================================== */
-
-/** Blank out comments and string/template literals so a scan can't match prose. */
-function stripNonCode(code: string): string {
-  //replace with same-length spaces so every offset stays exact — the whole point
-  //of the scan is to report a position the editor can put a caret on
-  const blank = (m: string) => " ".repeat(m.length)
-  return code
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/\/\/[^\n]*/g, blank)
-    .replace(/"(?:[^"\\\n]|\\.)*"/g, blank)
-    .replace(/'(?:[^'\\\n]|\\.)*'/g, blank)
-    .replace(/`(?:[^`\\]|\\.)*`/g, blank)
-}
-
 /**
- * Find a `server: { … }` property on a `createFileRoute(…)({ … })` options object.
- * Returns the character offset of the property, or `null`.
- *
- * ## Why this is not an import check
- *
- * `createServerFileRoute` **does not exist** in the pinned
- * `@tanstack/react-start@1.167.13` — that API generation replaced it with a
- * `server` property on `createFileRoute`'s options object. (`docs/design/rendering.md §2` still
- * lists the old symbol and is stale on this point.)
- *
- * A config-object property is not an importable symbol, so *no* import-restriction
- * technique — TypeScript, Biome `noRestrictedImports`, or the `resolveId` hook
- * above — can ever see it. It needs to be found in the syntax.
- *
- * ## Scope, stated honestly
- *
- * This is a brace-depth scan over comment- and string-stripped source, not a
- * parser. It deliberately matches only the **options-object level** `server` key,
- * because an app is entitled to its own data named `server` inside a loader
- * result or component props. It will miss a route assembled indirectly
- * (`const opts = {...}; createFileRoute("/x")(opts)`), which is the accepted cost
- * of not paying for a full parse on every module. The `resolveId` ban above is the
- * layer that must be airtight; this one raises the floor on a shape that would
- * otherwise be invisible.
+ * The imports the compiler writes into a server function, in any environment. They are
+ * its output, not the dev's input: `server-boundary.ts` reads them and names the server
+ * function, where this ban would name an import the dev never wrote.
  */
-export function findServerRouteHandlers(code: string): number | null {
-  //string prefilter first: parsing/scanning is orders of magnitude more expensive
-  //than a substring test, and the overwhelming majority of modules are not routes
-  if (!code.includes("createFileRoute")) return null
-  if (!code.includes("server")) return null
-
-  const source = stripNonCode(code)
-  const callIndex = source.indexOf("createFileRoute")
-  if (callIndex === -1) return null
-
-  //walk to the options object: createFileRoute(<path>)( <options> )
-  const optionsStart = source.indexOf("{", callIndex)
-  if (optionsStart === -1) return null
-
-  let depth = 0
-  for (let i = optionsStart; i < source.length; i++) {
-    const ch = source[i]
-    if (ch === "{") {
-      depth++
-      continue
-    }
-    if (ch === "}") {
-      depth--
-      if (depth === 0) return null //options object closed without a hit
-      continue
-    }
-    //only depth 1 is the options object itself; anything deeper is app data
-    if (depth !== 1) continue
-
-    if (source.startsWith("server", i)) {
-      const after = source.slice(i + "server".length)
-      //must be a property key: `server:` (allowing whitespace before the colon)
-      if (/^\s*:/.test(after)) return i
-    }
-  }
-  return null
+export function isCompilerRpcImport(source: string): boolean {
+  return /^@tanstack\/[^/]+-start\/(?:client|server|ssr)-rpc$/.test(source)
 }
-
-/**
- * The diagnostic for the config-shape gap. Same rule as {@link describeServerApiBan}:
- * the target that breaks is named as what it is to the dev, not as what it is built with.
- */
-export const SERVER_ROUTE_HANDLERS_MESSAGE =
-  "`server: { handlers }` on a route is server-only and cannot be used in an adaptv app.\n" +
-  "It needs a server to run, and the native app has none.\n" +
-  "Move the handler to your API and call it over the network, or use the " +
-  "route's `loader`, which is isomorphic and fully supported.\n" +
-  "See docs/design/rendering.md §2."
 
 /**
  * The unbypassable backstop. Baked into the array `adaptv()` returns, so it is not
@@ -281,19 +203,12 @@ export function adaptvBanServerApisPlugin(): Plugin {
     enforce: "pre",
 
     resolveId(source, importer) {
+      if (isCompilerRpcImport(source)) return null
       const message = describeServerApiBan(source, importer)
       if (message === null) return null
       //`importer` is non-null whenever describeServerApiBan returned a message —
       //isApplicationSource() rejects undefined
       this.error({ message, id: importer })
-    },
-
-    transform(code, id) {
-      if (!isApplicationSource(id)) return null
-      const at = findServerRouteHandlers(code)
-      if (at === null) return null
-
-      this.error({ message: SERVER_ROUTE_HANDLERS_MESSAGE, id }, at)
     },
   }
 }

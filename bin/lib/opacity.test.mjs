@@ -188,8 +188,9 @@ describe("doctor's diagnostics are a user-facing surface too", () => {
  */
 describe("the server-API ban is a user-facing surface", () => {
   it("names no engine beyond the import the dev wrote", async () => {
-    const { describeServerApiBan, SERVER_ROUTE_HANDLERS_MESSAGE } =
-      await loadAdaptvModule("vite/ban-server-apis.ts")
+    const { describeServerApiBan } = await loadAdaptvModule(
+      "vite/ban-server-apis.ts",
+    )
     //one specifier per door the ban covers: the root, a subpath, another package
     for (const source of [
       "@tanstack/react-start",
@@ -207,10 +208,37 @@ describe("the server-API ban is a user-facing surface", () => {
         .filter((line) => namesPlumbing(line))
       expect(leaks, source).toEqual([])
     }
+  })
+
+  it("names none in the server boundary's report, on any line, so the CLI can print it whole", async () => {
+    const { describeBoundary } = await loadAdaptvModule(
+      "vite/server-boundary.ts",
+    )
+    const report = describeBoundary([
+      {
+        kind: "server function",
+        file: "src/fns/todos.ts",
+        line: 3,
+        what: "getTodos",
+        routes: ["/", "/todos"],
+      },
+      {
+        kind: "server request",
+        file: "src/lib/auth.ts",
+        line: 1,
+        what: "server request",
+        routes: ["every route"],
+      },
+      {
+        kind: "server route",
+        file: "src/routes/api.tsx",
+        line: 5,
+        what: "/api",
+        routes: [],
+      },
+    ])
     expect(
-      SERVER_ROUTE_HANDLERS_MESSAGE.split("\n").filter((line) =>
-        namesPlumbing(line),
-      ),
+      report.split("\n").filter((line) => namesPlumbing(line)),
     ).toEqual([])
   })
 

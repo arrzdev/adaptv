@@ -54,6 +54,7 @@ import {
   stripTanStackAutoImport,
 } from "#adaptv/vite/router-autoimport.ts"
 import { adaptvSecureStoragePlugin } from "#adaptv/vite/secure-storage-module.ts"
+import { adaptvServerBoundaryPlugin } from "#adaptv/vite/server-boundary.ts"
 import { adaptvShellEmitPlugin } from "#adaptv/vite/shell-emit.ts"
 import { stampGeneratedFiles } from "#adaptv/vite/stamp.ts"
 import { adaptvStaticHostPlugin } from "#adaptv/vite/static-host.ts"
@@ -237,6 +238,10 @@ export async function adaptv(
     //modules: an app imports only the packages it lists, and adaptv's dependencies are
     //not among them unless the app says so. → src/vite/engine-imports.ts
     adaptvEngineImportsPlugin(appRoot),
+    //The same rule read from what the engine decided rather than what the dev wrote:
+    //every server function the compiler stubbed, every read of the server's request,
+    //every route the server's router serves. → src/vite/server-boundary.ts
+    ...adaptvServerBoundaryPlugin(appRoot),
     //Also `enforce: "pre"`, and for the same kind of reason: it has to reach the
     //app's stylesheet before @tailwindcss/vite compiles the Tailwind import away.
     //→ src/vite/css-layer-order.ts

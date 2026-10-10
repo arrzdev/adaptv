@@ -313,6 +313,8 @@ export const isRawToolNoise = (line) =>
 // `\w*Error(?: [CODE])?:` is a crash naming its class the way Node prints one —
 // `TypeError [ERR_INVALID_ARG_TYPE]: …` — and there is no word boundary before the `Error`
 // in `TypeError`, so the first alternative never kept the one line that said what broke.
+// ANSI escape (ESC = char 27), built without a literal control char in the source.
+const ANSI_CODES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g")
 const ERROR_LINE =
   /(?:\berror\b[: ]|^\s*\w*Error(?:\s*\[\w+\])?:|\bfatal\b|BUILD FAILED|FAILURE:|\bfailed\b|xcodebuild: error|The sandbox is not in sync)/i
 // "N errors generated" is a COUNT, not the error; keeping it would win the "first error
@@ -324,12 +326,20 @@ const NOT_ERROR =
 // Gradle states the cause on the lines AFTER this header, and those lines need not contain
 // "error"/"failed" themselves ("> Android resource linking failed" does; "Could not find
 // method compile()" does not). So a header drags its next few lines in with it.
-const CAUSE_HEADER =
-  /^\s*(?:\*\s*What went wrong:|The following build commands failed:)/i
+//
+// adaptv's own server-boundary refusal (`src/vite/server-boundary.ts`) is the same shape: its
+// rows are a file, a line and a route each, and none of them says "error".
+const BOUNDARY_HEADER =
+  /\bthis app has .+, and adaptv apps have no server side\s*$/
+const CAUSE_HEADER = new RegExp(
+  `^\\s*(?:\\*\\s*What went wrong:|The following build commands failed:)|${BOUNDARY_HEADER.source}`,
+  "i",
+)
 const CAUSE_WINDOW = 3
 // Where a `* What went wrong:` section stops: gradle's advice sections, or the verdict.
+//A JS stack frame ends one too: the bundler prints the plugin error's stack under it.
 const SECTION_END =
-  /^\s*(?:\*\s*(?:Try|Get more help|Exception is)|BUILD FAILED|FAILURE:)/i
+  /^\s*(?:\*\s*(?:Try|Get more help|Exception is)|BUILD FAILED|FAILURE:|at\s)/i
 
 // Gradle boilerplate that only restates the ✖ already on screen.
 const GRADLE_BOILERPLATE =
@@ -404,6 +414,33 @@ export function portInUse(text) {
       `'lsof -nP -iTCP:${busy[1]} -sTCP:LISTEN' names it. Stop that, then run again.`,
     ],
   }
+}
+
+/**
+ * The server boundary's refusal, as the CLI says it: its first line is the reason, and its
+ * rows (a file and line from the app's root, what is there, the routes that reach it) and
+ * its way out are the detail. Through `errorTail` the rows are only there because the
+ * header drags them in; nothing else in `explainFailure` would keep a line with no "error".
+ *
+ * Returns `{ msg, fix }` like `portInUse`, or null when the text is not this refusal.
+ */
+export function serverBoundary(text) {
+  const lines = String(text)
+    .split("\n")
+    .map((l) => l.replace(ANSI_CODES, ""))
+  const at = lines.findIndex((l) => BOUNDARY_HEADER.test(l))
+  if (at === -1) return null
+  const header = lines[at]
+  const fix = []
+  for (const line of lines.slice(at + 1)) {
+    if (/^\s+\S+:\d+\s/.test(line)) {
+      fix.push(line.replace(/^\s{1,2}/, ""))
+      continue
+    }
+    if (/^Move /.test(line)) fix.push(line)
+    break
+  }
+  return { msg: header.slice(header.indexOf("this app has")).trim(), fix }
 }
 
 /**

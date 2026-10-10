@@ -32,6 +32,7 @@ When something ships, the design moves *in*. When something is only proposed, it
 | [`architecture.md`](architecture.md) | The cross-platform contracts: the shell/frame, `View`, the storage tiers, the escalation ladder. |
 | [`lifecycle.md`](lifecycle.md) | config → build → deploy → CLI. The Vite plugin's deploy decision model. |
 | [`rendering.md`](rendering.md) | The isomorphism boundary, and the full service-worker / offline / update model. |
+| [`server-boundary.md`](server-boundary.md) | How the build refuses server functions, server request reads and server routes, from what the compiler and the server's router decided. |
 | [`ota.md`](ota.md) | Over-the-air updates for the native target, end to end. |
 | [`coordination.md`](coordination.md) | The runtime spine: app state, the back chain, the gesture controller, route lifecycle. |
 | [`behaviors.md`](behaviors.md) | The per-fix catalogue — what adaptv fixes, how, and how to test each. |
