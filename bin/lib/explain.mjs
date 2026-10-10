@@ -11,7 +11,12 @@ import path from "node:path"
 import { ADAPTV_DIR } from "./adaptv-dir.mjs"
 import { explainLaunchFailure } from "./native.mjs"
 import { namesPlumbing, withoutPlumbing } from "./opacity.mjs"
-import { gradleCause, isDestinationEntry, portInUse } from "./tool-log.mjs"
+import {
+  gradleCause,
+  isDestinationEntry,
+  portInUse,
+  serverBoundary,
+} from "./tool-log.mjs"
 
 /** How much captured tool output a failed line expands into — enough to name the problem,
  *  not a log dump (that's `--verbose`). Generous rather than tight: the lines are already
@@ -104,6 +109,11 @@ export function explainFailure(label, appRoot = process.cwd()) {
     if (busy) return settle({ reason: busy.msg, detail: busy.fix })
     const locked = notExecutable(text)
     if (locked) return settle({ reason: locked.msg, detail: locked.fix })
+    //adaptv's refusal of a server function or route: the rows ARE the detail, and none of
+    //them says "error", so the generic pick below would drop every one
+    const boundary = serverBoundary(text)
+    if (boundary)
+      return settle({ reason: boundary.msg, detail: boundary.fix })
 
     const captured = String(err?.tail ?? "")
       .split("\n")
