@@ -689,7 +689,10 @@ function restore(field: HTMLInputElement | HTMLTextAreaElement, moved: boolean) 
         type: "p",
         text: "A form has the same shape every time it opens on the same device. The height the keyboard took last time is a good guess for this time. So keep a cache, read it synchronously on focus, and start the lift on the same frame as the tap. The real measurement then confirms the guess or corrects it. Source: `src/capabilities/keyboard-height-cache.ts`.",
       },
-      { type: "p", text: "The key is the part that took longest to get right:" },
+      {
+        type: "p",
+        text: "The key is the part that took longest to get right:",
+      },
       {
         type: "code",
         label: "keyboard-height-cache.ts, simplified",
