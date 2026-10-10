@@ -9,3 +9,4 @@ dist/
 
 capacitor.config.json
 .wrangler/
+test-results/
